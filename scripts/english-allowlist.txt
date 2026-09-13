@@ -2,6 +2,7 @@
 .gitignore 8
 CLAUDE.md 2
 docs/DESIGN.md 42  # raised 2026-09-13: the dated corrections quote the old Chinese header template and product copy as evidence
+docs/adr/0007-sentence-alignment.md 1  # 2026-09-13: an observed Microsoft output quoted as evidence for the boundary snap
 docs/RESEARCH.md 12
 docs/UI.md 177
 docs/rebuild/INVENTORY.md 1
@@ -9,7 +10,6 @@ docs/rebuild/inventory/core.md 3
 docs/rebuild/inventory/docs.md 33
 docs/rebuild/inventory/runtime.md 11
 docs/rebuild/inventory/ui.md 4
-docs/superpowers/specs/2026-09-10-settings-services-appearance-design.md 52
 helper/README.md 1
 src/cache/key.ts 1
 src/config/appearance.ts 12
