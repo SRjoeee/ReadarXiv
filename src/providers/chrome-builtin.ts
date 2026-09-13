@@ -144,10 +144,8 @@ export function createChromeBuiltinProvider(target: string, deps: ChromeBuiltinD
 
   return {
     id: 'chrome-builtin',
-    displayName: 'Chrome built-in translation (offline)',
     kind: 'builtin',
-    // Measured to keep HTML tags and void / paired placeholders (RESEARCH §6.2); the tags path
-    // RESEARCH §6.2 measured tags and placeholders kept
+    // Measured to keep HTML tags and void / paired placeholders (RESEARCH §6.2): the tags path
     wireFormats: WIRE_FORMATS['chrome-builtin'],
     // Local inference has no network round trip; a larger batch saves scheduling overhead
     maxBatchChars: 4000,
