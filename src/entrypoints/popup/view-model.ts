@@ -8,7 +8,7 @@
 // open at any time, a change while the page is on restarts it in place (data.ts), and only a
 // choice that cannot run leaves the page behind the settings.
 import { activeStyle } from '@/config/appearance'
-import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, type LangCode } from '@/config/languages'
+import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { type Service, chosenService, isBuiltInService, isLlmChosen } from '@/config/services'
 import type { Mode } from '@/core/renderer'
@@ -307,9 +307,6 @@ function serviceItems(config: Config, pack: PackState | null): MenuItem[] {
     { id: MANAGE_SERVICES, name: S.service.manage, selected: false },
   ]
 }
-
-export const LANGUAGE_CODES: readonly LangCode[] = LANG_CODES
-export const DEFAULT_LANGUAGE = DEFAULT_CONFIG.targetLanguage
 
 /** What a failed popup action says (S-P-90): a known failure in the interface language, anything else as it was thrown */
 export function actionErrorText(e: unknown): string {
