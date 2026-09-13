@@ -332,9 +332,10 @@ await openSection(options, 'prompts')
 const promptRow = options.getByRole('radio').last()
 const promptBack = (await options.getByText('e2e 提示词').count()) === 1 && (await promptRow.isChecked())
 check('the settings page: the target language and the custom prompt survive a reload and stay selected', /日语/.test(langBack ?? '') && promptBack, `language ${langBack}, prompt ${promptBack}`)
-// Delete it and choose the default again: the wrong-key part later must go through the default prompt
-options.once('dialog', d => d.accept())
+// Delete it and choose the default again: the wrong-key part later must go through the default prompt.
+// Two clicks, as every destructive action on this page: the first arms the confirmation, the second deletes (ui/Confirm.tsx)
 await options.getByRole('button', { name: '删除', exact: true }).click()
+await options.getByRole('button', { name: '确认删除', exact: true }).click()
 await chooseLanguage(options, '简体中文', '简体中文')
 await openSection(options, 'prompts')
 const promptGone = (await options.getByText('e2e 提示词').count()) === 0
