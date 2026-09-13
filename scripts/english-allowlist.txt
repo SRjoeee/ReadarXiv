@@ -1,6 +1,7 @@
 # Files that may hold lines with CJK characters, and how many (scripts/check-english.mjs). Lower freely; raise with a reason in the PR.
 .gitignore 8
 CLAUDE.md 2
+README.md 1  # the language switch names the Chinese README in its own language
 docs/DESIGN.md 42  # raised 2026-09-13: the dated corrections quote the old Chinese header template and product copy as evidence
 docs/adr/0007-sentence-alignment.md 1  # 2026-09-13: an observed Microsoft output quoted as evidence for the boundary snap
 docs/RESEARCH.md 12
