@@ -52,7 +52,17 @@ Engines report where they think their own sentences end and are occasionally a c
 
 ## Consequences
 
-- Coverage follows the engines: Microsoft and any `tags`-capable engine through markers (Google, the LLMs, the Chrome built-in translator); the `markers` and `runs` paths, reference blocks and any block whose alignment fails verification have no highlight and no peek. This is by design, and the popup and settings say nothing about it.
+- Coverage follows how the boundaries arrive, and the two ways differ in reach. **Microsoft reports natively**, so its
+  alignment comes back on every block it translates — its own render path is `markers`, and `cutsOf` returning
+  `undefined` there withholds only the markers it does not need; reference blocks included, since the exclusions of
+  decision 4 govern what is *injected*, not what an engine reports. **Every other engine is aligned only where a
+  marker can be inserted**: the `tags` path, minus the blocks `cutsOf` excludes (`bibblock` / `bibitem`, whose
+  numbering and abbreviations the splitter has no business cutting). On the `runs` path, and on `markers` for an
+  engine that reports nothing, there is no alignment at all. A block whose alignment fails verification has none
+  either, whatever produced it. All of this is by design, and the popup and settings say nothing about it.
+  (Corrected 2026-09-13: the first draft of this line put Microsoft in the marker group and called the whole
+  `markers` path unaligned; the local review's probe showed Microsoft's own path is `markers` and its blocks,
+  references among them, are registered.)
 - The cache key carries the cuts and the version carries the request shape; a change to the splitter that moves cut points changes keys on its own, a change to the marker syntax needs a version bump.
 - The snap is a correction of the engines' reports, bounded to three characters and to punctuation; it is not a second aligner.
 
