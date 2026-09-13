@@ -43,7 +43,7 @@ tests/config/languages.test.ts 3
 tests/config/storage.test.ts 18
 tests/core/marks.test.ts 8
 tests/e2e/a11y.mjs 2
-tests/e2e/extension.mjs 84
+tests/e2e/extension.mjs 85  # raised 2026-09-13: the prompt deletion now clicks the confirm button, one more locator string
 tests/e2e/image.mjs 16
 tests/e2e/layout.mjs 8
 tests/e2e/local-endpoint.mjs 2
