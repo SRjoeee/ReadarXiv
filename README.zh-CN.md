@@ -14,7 +14,7 @@
 
 </div>
 
-![左右对照模式下的论文，左栏原文、右栏译文](docs/images/hero.png)
+https://github.com/user-attachments/assets/ea7ee16c-feb6-471b-9321-e3bcf0fa3f03
 
 Read arXiv 是一款专为 arXiv HTML 页面打造的阅读翻译扩展。
 
