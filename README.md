@@ -45,7 +45,8 @@ Switch between them whenever you like, and back to the original whenever you wan
 
 **Aligned sentence by sentence.** Rest on any sentence and the matching one lights up on both sides,
 so you never have to count your way through a long paragraph to find which translation belongs to
-which line. Available with Microsoft Translator, which is the service selected by default.
+which line. It works with every service, and the pairing comes from the translation itself rather
+than from guesswork — where a service cannot give one, the sentence simply does not light up.
 
 ![Hovering a sentence bands it on both sides](docs/images/hover.gif)
 
@@ -105,7 +106,7 @@ to build. See [`helper/README.md`](helper/README.md).
 
 | Service | API key | Notes |
 | --- | --- | --- |
-| Microsoft Translator | not needed | The default. The only one that reports sentence boundaries, so hover alignment works here. |
+| Microsoft Translator | not needed | The default. |
 | Google Translate | not needed | |
 | Chrome's built-in translation | not needed | Runs on your machine, offline, once Chrome has downloaded the language pack. |
 | Any OpenAI-compatible endpoint | yours | OpenRouter, DeepSeek, Ollama, LM Studio and the like. Prompts and the glossary apply here. |
