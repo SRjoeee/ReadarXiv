@@ -91,11 +91,6 @@ HTML papers only — PDFs are not translated.
    button, the right-click menu, or the popup. On an abstract page a **Bilingual version** link
    appears beside arXiv's own HTML link, which opens the paper and starts translating in one step.
 
-There is nothing to set up first: the default service needs no account and no key. Choose your
-language in the popup, and change the service there whenever you want.
-
-![The popup while a paper is being translated](docs/images/popup.png)
-
 ### Translating figures (macOS)
 
 Words inside bitmap figures are read by a small helper that runs on your own machine. The popup has
