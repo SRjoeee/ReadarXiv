@@ -15,7 +15,7 @@ figures and the layout keep working.
 
 </div>
 
-![A paper open in side-by-side mode, the original on the left and the translation on the right](docs/images/hero.png)
+https://github.com/user-attachments/assets/ea7ee16c-feb6-471b-9321-e3bcf0fa3f03
 
 Read arXiv is a reading and translation extension built for one kind of page: arXiv's HTML papers.
 
