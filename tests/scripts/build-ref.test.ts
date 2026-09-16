@@ -40,8 +40,15 @@ describe('readBuildRef', () => {
     expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'nightly\nrelease-candidate' }))).toBe(SHA)
     // created locally, not pushed: the repository answers nothing for it (Devin on #218)
     expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'v1.0.0', [`git ls-remote --tags origin refs/tags/v1.0.0`]: '' }))).toBe(SHA)
-    // an annotated tag answers with the tag object too; the peeled line names the same ref
+    // an annotated tag answers with the tag object too; the peeled line names this commit
     expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'v1.0.0', [`git ls-remote --tags origin refs/tags/v1.0.0`]: `deadbeef\trefs/tags/v1.0.0\n${SHA}\trefs/tags/v1.0.0^{}` }))).toBe('v1.0.0')
+    // the repository's tag of that name points at another commit — moved locally over a published one (Codex on #218)
+    const other = 'fedcba9876543210fedcba9876543210fedcba98'
+    expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'v1.0.0', [`git ls-remote --tags origin refs/tags/v1.0.0`]: `${other}\trefs/tags/v1.0.0` }))).toBe(SHA)
+    expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'v1.0.0', [`git ls-remote --tags origin refs/tags/v1.0.0`]: `deadbeef\trefs/tags/v1.0.0\n${other}\trefs/tags/v1.0.0^{}` }))).toBe(SHA)
+    // the lookup cannot reach the repository: the commit, which the branch check vouched for, not main (Codex on #218)
+    const offline = git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'v1.0.0' })
+    expect(readBuildRef((cmd: string) => { if (cmd.startsWith('git ls-remote')) throw new Error('could not read from remote'); return offline(cmd) })).toBe(SHA)
     expect(readBuildRef(git({ ...clean, 'git remote -v': origin, [`git branch -r --contains ${SHA}`]: '', [`git tag --points-at ${SHA}`]: 'v1.0.0' }))).toBe('main')
   })
 

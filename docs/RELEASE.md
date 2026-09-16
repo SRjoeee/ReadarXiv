@@ -10,18 +10,20 @@ How a version of Read arXiv is cut, what is checked first, and the store listing
 
 ## Cutting a release
 
-1. `rebuild/v1` is merged into `main` (owner's request; `--merge`, never squash). `CHANGELOG.md`'s "unreleased" heading gets the date.
-2. On the merge commit, with a clean tree: `pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test && pnpm build` — exit code green — then the browser suites on that build: `pnpm e2e`, `pnpm e2e:layout`, `pnpm e2e:a11y`, `pnpm e2e:local-endpoint`, and `pnpm e2e:image` on a Mac with the helper. Record the counts in PROGRESS.
-3. Tag and push the tag.
-4. `pnpm build && pnpm zip` **after** the tag is pushed: the console line `[build] helper install ref: v1.0.0` is the check (a build before the push stamps the commit instead). The archive is `.output/readarxiv-1.0.0-chrome.zip`.
+The release commit is made **on the branch, before the merge**, so that the tree is clean at every step after it and the tagged commit carries the dated changelog and the recorded results (Codex on #218: dating the changelog after the merge, or recording the suite counts into PROGRESS between the gate and the tag, dirties the tree and the post-tag build stamps `main`).
+
+1. On the release branch: `CHANGELOG.md`'s "unreleased" heading gets the date. `pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test && pnpm build` — exit code green — then the browser suites on that build: `pnpm e2e`, `pnpm e2e:layout`, `pnpm e2e:a11y`, `pnpm e2e:local-endpoint`, and `pnpm e2e:image` on a Mac with the helper. Record the counts in `docs/rebuild/PROGRESS.md` and commit the date and the record together as the release commit.
+2. `rebuild/v1` is merged into `main` (owner's request; `--merge`, never squash). The merge commit is the release.
+3. On the merge commit, with a clean tree, the gate once more (`pnpm typecheck && pnpm lint && pnpm test && pnpm build`); then the annotated tag on it, and push the tag.
+4. `pnpm build && pnpm zip` **after** the tag is pushed and with the tree still clean: the console line `[build] helper install ref: v1.0.0` is the check (a build before the push, or on a dirty tree, stamps the commit or `main` instead). The archive is `.output/readarxiv-1.0.0-chrome.zip`.
 5. A GitHub release for the tag, with the archive attached and the changelog section as its notes.
 6. The Chrome Web Store submission (below). Until it is listed, the README's "load unpacked" path is the install.
 7. `helper/README.md`'s one-line command is the same script the popup shows; a reader on the release reaches it through the popup, stamped with the tag.
 
 ## Before the first release — open items
 
-- The README (the owner's): weight is not a setting; sentence alignment is not Microsoft-only; the seven screenshots under `docs/images/` are not in the repository (PR #217's list).
-- `e2e:image`'s one nondeterministic check (one image of six occasionally not entering the viewport; PROGRESS "Open questions").
+- The README's screenshots under `docs/images/` are not in the repository (the owner's to capture); the two false claims (weight, Microsoft-only alignment) were corrected in #217, in wording the owner may replace.
+- `e2e:image`'s nondeterministic check was a scheduler defect, fixed in #219.
 - The coverage gaps of INVENTORY §4.5 are known and accepted for 1.0 unless one of them turns into a reader-visible fault.
 
 ## The store listing
@@ -70,6 +72,6 @@ Category: Productivity. Language: English, with the Chinese description below. T
 | `https://edge.microsoft.com/*`, `https://translate-pa.googleapis.com/*`, `https://openrouter.ai/*` | The free translators and the most common LLM gateway |
 | `https://*/*`, `http://*/*` (optional) | An endpoint the reader adds in the settings; each origin is asked for on its own when saved |
 
-**Privacy practices** (the store's questionnaire): the extension sends the text of the paper being translated to the translation service the reader selected, and nothing else; it stores settings, API keys and translations locally; it uses no analytics, no remote code, and collects nothing about the reader.
+**Privacy practices** (the store's questionnaire). What leaves the browser, and only when the reader translates a page: the text of the paper's blocks, to the translation service the reader selected. To an LLM service the reader added, each request also carries the selected prompt (a shipped one or the reader's own), the glossary entries that match the passage, and the paper's title, abstract and section heading as context (`providers/prompt.ts`); to Microsoft's and Google's web translators only the text; Chrome's built-in translator and a local endpoint keep everything on the machine. Words recognised inside figures are translated like any other text; the image itself is never uploaded (bitmaps are read by the local helper). The extension stores settings, API keys and translations locally, uses no analytics and no remote code, and collects nothing about the reader.
 
 **Single purpose**: translating arXiv HTML papers in place.
