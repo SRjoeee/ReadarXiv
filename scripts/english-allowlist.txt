@@ -1,10 +1,12 @@
 # Files that may hold lines with CJK characters, and how many (scripts/check-english.mjs). Lower freely; raise with a reason in the PR.
 .gitignore 8
 CLAUDE.md 2
-docs/DESIGN.md 7  # 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) inside English sentences
+docs/DESIGN.md 10  # 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
 docs/adr/0007-sentence-alignment.md 1  # 2026-09-13: an observed Microsoft output quoted as evidence for the boundary snap
 docs/UI.md 177
 docs/rebuild/INVENTORY.md 1
+README.md 1  # 2026-09-17: the link to the Chinese README
+README.zh-CN.md 108  # 2026-09-17: the Chinese README is product copy for readers (the owner's docs/readme branch)
 helper/README.md 1
 src/config/languages.ts 188  # localisation data: the Chinese name table and the native names; four evidence quotes in comments
 src/cache/key.ts 1
