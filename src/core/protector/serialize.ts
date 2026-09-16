@@ -6,6 +6,7 @@
 // its own, and serialisation walks into it as an ordinary paired element — otherwise the whole cell would be one
 // placeholder and its text lost (measured on Table 1 of 2410.00260; Codex on #5).
 import { isInjected } from '@/core/marks'
+import { ELEMENT_NODE, TEXT_NODE } from '@/core/text'
 import { FUNCTIONAL_INLINE, classify, isTableCell } from '@/core/rules/latexml'
 import type { WireSpan } from './offsets'
 import { type WireFormat, writeVoid } from './tokens'
@@ -39,8 +40,6 @@ export interface ProtectedBlock {
 
 export const VOID_DENSE_THRESHOLD = 40
 
-const ELEMENT_NODE = 1
-const TEXT_NODE = 3
 
 const hasText = (el: Element) => /\S/.test(el.textContent ?? '')
 

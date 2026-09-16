@@ -17,11 +17,14 @@ function harness() {
   /** Lookups in flight, in the order they were issued; the test answers them in the order it chooses */
   const lookups: { target: string; answer: ReturnType<typeof deferred<PackState>> }[] = []
   const published: (PackState | null)[] = []
+  /** The downloads of ours the other surfaces were told about (INVENTORY S7) */
+  const announced: string[] = []
   const lookup = createPackLookup({
     publish: state => published.push(state),
     state: target => { const answer = deferred<PackState>(); lookups.push({ target, answer }); return answer.promise },
+    announce: target => announced.push(target),
   })
-  return { lookup, lookups, published, answer: (at: number, state: PackState) => lookups[at]?.answer.resolve(state) }
+  return { lookup, lookups, published, announced, answer: (at: number, state: PackState) => lookups[at]?.answer.resolve(state) }
 }
 
 describe('createPackLookup', () => {
@@ -139,5 +142,59 @@ describe('createPackLookup', () => {
     h.answer(1, 'available')
     await tick()
     expect(h.published.at(-1)).toBe('available')
+  })
+
+  // INVENTORY S7: the popup and the settings page each hold a lookup; a download that ended in one is announced to
+  // the other, which looks the pack up itself — no state travels, so no stale snapshot can win on either side
+
+  it('another surface\'s download ended: the wanted target is looked up again, as the newest lookup, and an older one of ours answering later publishes nothing', async () => {
+    const h = harness()
+    h.lookup.want('cmn')
+    void h.lookup.check('cmn') // answer held: it started before the other surface's download ended
+    h.lookup.receive('cmn')
+    expect(h.lookups.map(l => l.target)).toEqual(['cmn', 'cmn'])
+    h.answer(1, 'available')
+    await tick()
+    expect(h.published).toEqual([null, 'available'])
+    h.answer(0, 'downloadable') // stale: must not put the Download button back
+    await tick()
+    expect(h.published.at(-1)).toBe('available')
+  })
+
+  it('an announcement for another target, or for one this surface is downloading itself, starts no lookup', async () => {
+    const h = harness()
+    h.lookup.want('cmn')
+    h.lookup.receive('jpn')
+    expect(h.lookups).toEqual([])
+    const run = deferred<void>()
+    const download = h.lookup.download('cmn', () => run.promise)
+    h.lookup.receive('cmn')
+    expect(h.lookups).toEqual([])
+    run.resolve()
+    await tick()
+    h.answer(0, 'available')
+    await download
+    expect(h.published.at(-1)).toBe('available')
+  })
+
+  it('a download announces its target whatever the reader here wants by then, and looks up the wanted one as before', async () => {
+    const h = harness()
+    h.lookup.want('cmn')
+    const run = deferred<void>()
+    const download = h.lookup.download('cmn', () => run.promise)
+    h.lookup.want('jpn') // the reader chose another language while the download ran; the other surface may show either
+    run.resolve()
+    await tick()
+    expect(h.announced).toEqual(['cmn'])
+    expect(h.lookups.map(l => l.target)).toEqual(['jpn'])
+    h.answer(0, 'downloadable')
+    await download
+    expect(h.published.at(-1)).toBe('downloadable')
+    // A failed download announces too: the other surface may have installed the pack meanwhile and must re-check
+    const failing = h.lookup.download('jpn', () => Promise.reject(new Error('quota')))
+    await tick()
+    expect(h.announced).toEqual(['cmn', 'jpn'])
+    h.answer(1, 'downloadable') // the lookup that follows every download, failed or not
+    await expect(failing).rejects.toThrow('quota')
   })
 })
