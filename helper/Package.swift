@@ -1,5 +1,5 @@
 // swift-tools-version: 5.9
-// axt-helper: the local OCR helper of arXiv HTML Translator (DESIGN §15).
+// axt-helper: the local OCR helper of Read arXiv (DESIGN §15).
 // No third-party dependencies; Vision and ImageIO are system frameworks, linked by import.
 import PackageDescription
 

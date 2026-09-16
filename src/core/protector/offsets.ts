@@ -12,7 +12,7 @@
 
 import { INJECTED_SELECTOR, isInjected } from '@/core/marks'
 import { NOTE } from '@/core/rules/latexml'
-import { decodeText, ENTITY_PATTERN } from './text'
+import { decodeText, ENTITY_PATTERN } from './escape'
 import { MARKER_RE, TAG_RE, fromAlpha, type WireFormat } from './tokens'
 
 /** One run of wire text and where it came from. Text and slot spans together tile the whole string. */

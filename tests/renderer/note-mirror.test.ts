@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { rangesOf, rehydrate, serialize } from '@/core/protector'
 import { localizeNotes } from '@/core/renderer/notes'
-import { registerSentences, sentenceMapAt } from '@/core/renderer/sentences'
+import { registerSentences, sentenceMapAt } from '@/core/renderer/sentence-map'
 import { splitSentences } from '@/core/sentences'
 
 /**

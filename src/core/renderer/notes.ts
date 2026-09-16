@@ -32,7 +32,7 @@ import { ID_ATTR } from '@/core/extractor'
 import { AXT_ATTR_PREFIX, T_CLASS, isInjected } from '@/core/marks'
 import { DOCUMENT_ROOT, NOTE } from '@/core/rules/latexml'
 import { ERROR_CLASS, IDENTITY_ATTR, MIRROR_CLASS, PENDING_CLASS, SPLIT_CLASS } from './attrs'
-import { mirrorPair } from './sentences'
+import { mirrorPair } from './sentence-map'
 import { squash } from '@/core/text'
 
 /** On the original: its translation was copied into the copy, and the style sheet hides this margin note */

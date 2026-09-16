@@ -10,7 +10,7 @@
 // by the retry button.
 import { type RenderPath, wireFormatOf } from '@/cache/key'
 import { ID_ATTR } from '@/core/extractor'
-import { escapeText, unescapeText } from '@/core/protector/text'
+import { escapeText, unescapeText } from '@/core/protector/escape'
 import { type ImageLabel, type ImageTarget, clearImage, renderImage } from '@/core/renderer/image'
 import { DOCUMENT_ROOT, FIGURE_SELECTORS } from '@/core/rules/latexml'
 import { INJECTED_SELECTOR } from '@/core/marks'

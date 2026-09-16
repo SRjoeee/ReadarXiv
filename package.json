@@ -1,5 +1,6 @@
 {
-  "name": "arxiv-html-translator",
+  "name": "readarxiv",
+  "description": "Read arXiv — a Chrome extension that translates arXiv HTML papers in place: bilingual, structure-preserving, reversible",
   "version": "0.0.0",
   "private": true,
   "type": "module",
