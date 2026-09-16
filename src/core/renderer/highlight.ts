@@ -21,7 +21,7 @@
 // so its bands would be empty; after a dwell its sentence is cloned into a panel beside or next to
 // the visible one (`peek.ts`). Same hit test, same registry, same read-then-write frame.
 
-import { HL_CLASS, PEEK_CLASS } from '@/core/marks'
+import { HL_CLASS } from '@/core/marks'
 import { rangesOf, wireOffsetAt } from '@/core/protector'
 import { DOCUMENT_ROOT } from '@/core/rules/latexml'
 import { createPeek, movesText, type PeekAnchor } from './peek'
@@ -63,12 +63,12 @@ const SCROLL_SETTLE_MS = 120
 
 
 /**
- * Bumped whenever the highlights are cleared from outside this controller — `setMode()` and
- * `restore()` both do it. A running controller caches which sentence it painted and skips the work
- * when the pointer stays on it; without this it would go on believing a cleared sentence is still
- * on screen and never repaint it (Codex pointed this out on #130).
+ * The running controller of each document, by the one thing the outside may ask of it: to drop what
+ * it painted. `setMode()`, `applyStyle()` and `restore()` ask through `clearSentenceHighlights`;
+ * nothing outside the controller touches its layer or its panel (INVENTORY T3 — before, the outside
+ * removed both and the controller found out through a counter and `isConnected`, Codex on #130/#149)
  */
-let epoch = 0
+const controllers = new WeakMap<Document, () => void>()
 
 /**
  * Whether this browser can paint the highlight.
@@ -78,16 +78,6 @@ let epoch = 0
  */
 function supported(doc: Document): boolean {
   return typeof doc.caretPositionFromPoint === 'function'
-}
-
-/** The one container every band lives in, created on first use. */
-function layerOf(doc: Document): Element {
-  const existing = doc.body.querySelector(`:scope > .${HL_CLASS}`)
-  if (existing) return existing
-  const layer = doc.createElement('div')
-  layer.className = HL_CLASS
-  doc.body.append(layer)
-  return layer
 }
 
 /**
@@ -203,13 +193,13 @@ function clipOf(root: Element, view: Window): Clip {
 }
 
 /**
- * Drops whatever is painted right now. Safe to call at any time and on a document that never
- * started a highlight: `restore()` and `setMode()` use it without knowing whether one is running.
+ * Asks the document's running controller to drop what it painted — the bands, an open panel, a dwell
+ * still counting; its layer stays, empty, for the next repaint's origin. Safe to call at any time and
+ * on a document that never started a highlight: with no controller nothing is painted, and
+ * `restore()` and `setMode()` use it without knowing whether one is running.
  */
 export function clearSentenceHighlights(doc: Document): void {
-  epoch++
-  doc.body?.querySelector(`:scope > .${HL_CLASS}`)?.remove()
-  doc.body?.querySelector(`:scope > .${PEEK_CLASS}`)?.remove()
+  controllers.get(doc)?.()
 }
 
 export interface SentenceHighlight {
@@ -233,17 +223,29 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
   let y = 0
   /** Whether the pointer is in the document at all. False until the first move, false again after leaving. */
   let over = false
-  /** The band container, once it exists: mutations inside it are ours and must not feed back */
+  /**
+   * This controller's band container, created on first use and held by reference — not looked up by
+   * class, so a second controller on the same document (a test starting one before stopping the
+   * other) never paints into or removes this one's (Copilot on #210). Mutations inside it are ours
+   * and must not feed back. `restore()` sweeps every injected node, this one included, while a
+   * controller may still run (the session stops it first; a test need not): swept, it is created anew
+   */
   let layer: Element | undefined
+  const ownLayer = (): Element => {
+    if (layer?.isConnected) return layer
+    layer = doc.createElement('div')
+    layer.className = HL_CLASS
+    doc.body.append(layer)
+    return layer
+  }
   let frame = 0
   let missTimer = 0
   let settleTimer = 0
   /**
-   * The sentence currently painted, with the `epoch` it was painted at. The epoch is what makes
-   * this cache safe: anything that clears the highlights from outside bumps it, and a stale entry
-   * then compares unequal instead of suppressing the repaint.
+   * The sentence currently painted. `stale` marks it as painted against a layout that has since
+   * moved: a stale entry compares unequal instead of suppressing the repaint.
    */
-  let shown: { root: Element; index: number; at: number } | null = null
+  let shown: { root: Element; index: number; stale: boolean } | null = null
 
   /**
    * Marks what is painted as stale without forgetting that it is painted.
@@ -251,10 +253,9 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
    * **Not `shown = null`.** The miss path returns early when nothing is on screen, so forgetting the
    * entry means a repaint that finds no sentence under the pointer — a reflow moved it away, a
    * scroll brought blank space under the cursor — leaves the bands there for good (Codex on #138).
-   * An impossible epoch makes the cache compare unequal, which is what invalidation needs, while
+   * The stale mark makes the cache compare unequal, which is what invalidation needs, while
    * `miss()` still sees that there is something to fade out.
    */
-  const STALE = -1
   const invalidate = () => {
     // Nothing to re-measure while the pointer is elsewhere. `x`/`y` keep the last position they were
     // given, so a resize or a scroll arriving after the pointer left the document would hit-test at
@@ -262,15 +263,15 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
     // before the first `pointermove` those coordinates are (0, 0), which a startup resize would test
     // (Codex on #138).
     if (!over) return
-    if (shown) shown = { ...shown, at: STALE }
+    if (shown) shown = { ...shown, stale: true }
     if (frame === 0) frame = view?.requestAnimationFrame(update) ?? 0
   }
 
   const view = doc.defaultView
   const clearTimer = (id: number) => { if (id !== 0) view?.clearTimeout(id) }
-  // A dwell that ends after the highlight was cleared from outside must not render: the epoch is
-  // what those clears bump, and `shown` is what this controller last painted
-  const peek = createPeek(doc, key => shown !== null && shown.at === epoch && shown.root === key.root && shown.index === key.index)
+  // A dwell that ends after a reflow moved the sentence must not render what was measured before it:
+  // `shown` is what this controller last painted, stale once the layout moved under it
+  const peek = createPeek(doc, key => shown !== null && !shown.stale && shown.root === key.root && shown.index === key.index)
   /** The article root, whose right edge is where the margin begins. Static for the page's life. */
   const article = doc.querySelector(DOCUMENT_ROOT)
 
@@ -278,14 +279,20 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
    * Drops what is painted, keeping the (empty) layer.
    *
    * Keeping it is what lets the repaint read its origin without having just written to the DOM:
-   * created once per controller, emptied from then on. `stop()` still takes it away, as does
-   * `clearSentenceHighlights` when `setMode()` or `restore()` calls it from outside.
+   * created once per controller, emptied from then on; only `stop()` takes it away. The same drop
+   * is what the outside asks for through `clearSentenceHighlights` (`setMode`, `applyStyle`,
+   * `restore`) — with a pending fade-out cancelled as well, since there is nothing left to fade
    */
   const clearNow = () => {
     shown = null
-    doc.body?.querySelector(`:scope > .${HL_CLASS}`)?.replaceChildren()
+    layer?.replaceChildren()
     peek.hide()
   }
+  const reset = () => {
+    hit()
+    clearNow()
+  }
+  controllers.set(doc, reset)
 
   const miss = () => {
     if (!shown || missTimer !== 0) return
@@ -374,13 +381,13 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
     hit()
     // The same sentence as last frame: the ranges have not changed and rebuilding them would be
     // pure work. This is the common case — a pointer resting on a line of text hits it every frame.
-    if (shown && shown.at === epoch && shown.root === map.source.root && shown.index === sentence.index) return
-    shown = { root: map.source.root, index: sentence.index, at: epoch }
+    if (shown && !shown.stale && shown.root === map.source.root && shown.index === sentence.index) return
+    shown = { root: map.source.root, index: sentence.index, stale: false }
     // The layer is fetched first because its own rectangle is the origin every band is measured
     // against, and it must be read in the same pass as the ranges. It is created at most once per
     // controller — the miss path empties it rather than removing it — so this is a read, not a
     // write followed by reads.
-    layer = layerOf(doc)
+    const layer = ownLayer()
     const origin = layer.getBoundingClientRect()
     // The side the pointer is not on. When it is not rendered — only mode hides the original — its
     // bands would come out empty, so they are not measured at all; its ranges go to the panel
@@ -597,9 +604,10 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
       hit()
       shown = null
       peek.remove()
-      // Unconditionally, not conditioned on anything being shown: another run of this document may
-      // have left entries behind, and stopping should leave the page clean either way
-      clearSentenceHighlights(doc)
+      // Its own layer goes with the controller — the one owner of both (INVENTORY T3); another controller's stays
+      layer?.remove()
+      layer = undefined
+      if (controllers.get(doc) === reset) controllers.delete(doc)
     },
   }
 }
