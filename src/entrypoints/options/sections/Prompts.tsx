@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { configSchema } from '@/config/schema'
 import { isLlmChosen } from '@/config/services'
 import { type GlossaryEntry, formatGlossaryText, parseGlossary } from '@/providers/glossary'
+import { codeAreaClass } from '@/ui/Field'
 import { O } from '@/ui/strings'
 import { drafts } from '@/ui/drafts'
 import type { OptionsData } from '../data'
@@ -102,7 +103,7 @@ export function Prompts({ data }: { data: OptionsData }) {
               .finally(() => { pending.current-- })
           }
         }}
-        className="w-full rounded-control border border-line bg-card px-3 py-2 font-mono text-[12px] text-fg outline-none focus:border-fg-2"
+        className={codeAreaClass}
       />
       {parsed.issues.map(issue => (
         <p key={issue.line} className="mt-1 text-[11px] text-accent">{O.prompts.glossaryIssue[issue.reason](issue.line)}</p>
