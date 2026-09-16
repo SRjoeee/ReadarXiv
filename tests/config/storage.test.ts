@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
-import { CONFIG_VERSION, DEFAULT_CONFIG, GLOSSARY_LIMITS, normalizeGlossary } from '@/config/schema'
+import { z } from 'zod'
+import { appearanceSchema } from '@/config/appearance'
+import { CONFIG_VERSION, DEFAULT_CONFIG, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
+import { serviceSchema } from '@/config/services'
 import { configItem, getConfig, setConfig } from '@/config/storage'
 
 /** A reader-added service, the shape v12 stores (spec §2.1) */
@@ -307,6 +310,81 @@ describe('provider selection', () => {
     expect(c.services[0]?.apiKey).toBe('sk-keep')
     expect(c.services[0]?.model).toBe(long)
     expect(c.services[0]?.name.length).toBeLessThanOrEqual(40)
+  })
+
+  it('v13 to v14: `reading` missing (added by a schema default alone) is filled, the rest as it was; a hand-edited service without `thinking` is not repaired (ADR-0009)', async () => {
+    const { reading: _reading, ...v13 } = { ...DEFAULT_CONFIG, version: 13, provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-keep' }], targetLanguage: 'jpn' as const }
+    await fakeBrowser.storage.local.set({ config: v13, config$: { v: 13 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const c = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(c.version).toBe(CONFIG_VERSION)
+    expect(c.reading).toEqual({ sentenceHighlight: true })
+    expect(c.services[0]).toMatchObject({ id: SVC.id, apiKey: 'sk-keep', thinking: 'disabled' })
+    expect(c.targetLanguage).toBe('jpn')
+    // `null` is not "absent": a hand edit, and it falls back naming the field, as any wrong value does
+    await fakeBrowser.storage.local.set({ config: { ...v13, reading: null }, config$: { v: 13 } })
+    vi.resetModules()
+    const nulled = await import('@/config/storage')
+    expect(await nulled.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(nulled.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'reading' })
+    // Malformed storage at version 13 reaches the migration before any validation and must not throw there: `null`
+    // is "nothing stored" to WXT (the defaults, no migration, no alarm — a first install looks the same), and any other
+    // wrong value is migrated as it is and then fails the schema, taking the documented fallback (Copilot on #209)
+    await fakeBrowser.storage.local.set({ config: null, config$: { v: 13 } })
+    vi.resetModules()
+    const empty = await import('@/config/storage')
+    expect(await empty.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(empty.configFallbackReason()).toBeNull()
+    await fakeBrowser.storage.local.set({ config: 'garbage', config$: { v: 13 } })
+    vi.resetModules()
+    const broken = await import('@/config/storage')
+    expect(await broken.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(broken.configFallbackReason()).toMatchObject({ kind: 'invalid' })
+    // Nothing legitimately stored lacks `thinking` (the v12 migration and the drawer write it): not repaired, named
+    const { thinking: _thinking, ...bare } = SVC
+    await fakeBrowser.storage.local.set({ config: { ...v13, reading: { sentenceHighlight: true }, services: [bare] }, config$: { v: 13 } })
+    vi.resetModules()
+    const stripped = await import('@/config/storage')
+    expect(await stripped.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(stripped.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'services.0.thinking' })
+    // A v13 value with both present migrates to the same value at 14
+    const full = { ...DEFAULT_CONFIG, version: 13, reading: { sentenceHighlight: false }, provider: SVC.id, services: [{ ...SVC, thinking: 'enabled' as const }] }
+    await fakeBrowser.storage.local.set({ config: full, config$: { v: 13 } })
+    vi.resetModules()
+    const again = await (await import('@/config/storage')).getConfig()
+    expect(again).toEqual({ ...full, version: CONFIG_VERSION })
+  })
+
+  it('no field of the stored shape, at any depth, carries a zod default: the version alone says what is in storage (ADR-0009)', () => {
+    // Every schema node reachable from the root, by zod 4's core definitions: a default inside `prompts` or a profile
+    // would complete part of the stored value just as quietly (Copilot on #209)
+    const defaults = (schema: z.ZodType, path: string, seen = new Set<z.ZodType>()): string[] => {
+      if (seen.has(schema)) return []
+      seen.add(schema)
+      const def = (schema as unknown as { _zod: { def: Record<string, unknown> & { type: string } } })._zod.def
+      const found = def.type === 'default' ? [path] : []
+      const inner = (s: unknown, at: string) => (s ? defaults(s as z.ZodType, at, seen) : [])
+      switch (def.type) {
+        case 'object': return found.concat(...Object.entries(def.shape as Record<string, z.ZodType>).map(([k, s]) => inner(s, `${path}.${k}`)))
+        case 'array': return found.concat(inner(def.element, `${path}[]`))
+        case 'record': return found.concat(inner(def.valueType, `${path}[*]`))
+        case 'tuple': return found.concat(...(def.items as z.ZodType[]).map((s, i) => inner(s, `${path}[${i}]`)))
+        case 'union': return found.concat(...(def.options as z.ZodType[]).map((s, i) => inner(s, `${path}|${i}`)))
+        case 'pipe': return found.concat(inner(def.in, path), inner(def.out, path))
+        case 'lazy': return found.concat(inner((def.getter as () => z.ZodType)(), path))
+        default: return found.concat(inner(def.innerType, path))
+      }
+    }
+    // The walker sees a nested default: without this the assertion below could pass vacuously
+    expect(defaults(z.object({ a: z.object({ b: z.array(z.string().default('x')) }) }), 'probe')).toEqual(['probe.a.b[]'])
+    expect(defaults(configSchema, 'config')).toEqual([])
+    expect(defaults(serviceSchema, 'service')).toEqual([])
+    expect(defaults(appearanceSchema, 'appearance')).toEqual([])
+    // and a value missing a field is not quietly completed
+    const { reading: _reading, ...missing } = DEFAULT_CONFIG
+    expect(configSchema.safeParse(missing).success).toBe(false)
   })
 
   it('the image translation modes accept the three only, an empty array is valid (= off)', async () => {
