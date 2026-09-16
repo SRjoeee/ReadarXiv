@@ -23,8 +23,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 const helperAlive = () => { try { return execSync('pgrep -f axt-helper', { encoding: 'utf8' }).trim() !== '' } catch { return false } }
 
 // Chrome lists targets over HTTP (/json/list); the worker is driven through its own DevTools socket, opened for the
-// evaluation and closed right after — so that no debugger is attached while the idle timer runs. (A browser-level
-// connection held open made the service workers vanish from every target list on this build; not investigated further.)
+// evaluation and closed right after — so that no debugger is attached while the idle timer runs.
 const list = async () => (await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json())
 const workers = async () => (await list()).filter(t => t.type === 'service_worker' && t.url.startsWith('chrome-extension://'))
 const ours = async () => (await workers()).filter(t => t.url.includes(extId))
