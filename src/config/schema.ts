@@ -1,4 +1,5 @@
-// The configuration's shape (DESIGN §9). A change of shape bumps version and gets a migration in storage.ts.
+// The configuration's shape (DESIGN §9). A change of shape bumps `CONFIG_VERSION` and gets a migration in storage.ts — the
+// only way (ADR-0009): no field carries a zod default, so the version alone says what is in storage.
 import { z } from 'zod'
 import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
 import { DEFAULT_PROMPTS_CONFIG } from '@/providers/prompt-library'
@@ -6,7 +7,7 @@ import { DEFAULT_APPEARANCE, appearanceSchema } from './appearance'
 import { BUILT_IN_SERVICES, SERVICE_ID_RE, serviceSchema } from './services'
 import { DEFAULT_LANG_CODE, langCodeSchema } from './languages'
 
-export const CONFIG_VERSION = 13
+export const CONFIG_VERSION = 14
 
 /** The three reading modes (DESIGN §7); `mode` is shared with the image translation's mode gate */
 export const MODE_VALUES = ['stack', 'side', 'only'] as const
@@ -45,7 +46,7 @@ export const configSchema = z.object({
   // The zod messages are diagnostics: the settings page's fallback notice shows the locale pack's sentence for the field (ui/strings.ts fallbackText)
   provider: z.string().refine(v => (BUILT_IN_SERVICES as readonly string[]).includes(v) || SERVICE_ID_RE.test(v), 'not a valid translation service'),
   /** The reader's own services (v12); keys stay local (CLAUDE.md rule 7) */
-  services: z.array(serviceSchema).max(20).default([]),
+  services: z.array(serviceSchema).max(20),
   /** ISO 639-3 (since v4; languages.ts); an LLM gets the English name, Google a BCP-47 conversion */
   targetLanguage: langCodeSchema,
   mode: modeSchema,
@@ -53,7 +54,7 @@ export const configSchema = z.object({
   prompts: z.object({
     promptId: z.string().min(1),
     patterns: z.array(z.object({ id: z.string().min(1), name: z.string(), systemPrompt: z.string(), prompt: z.string() })),
-  }).default(DEFAULT_PROMPTS_CONFIG),
+  }),
   /**
    * The glossary (§8.2): carried by every batch's prompt, so a term is translated the same way throughout a paper. LLMs
    * only; the free engines read no context. Capped at 200 entries — about 2–3 KB, about 700 tokens, of the abstract's order; beyond that, matching per passage is v2's business
@@ -66,36 +67,37 @@ export const configSchema = z.object({
   })).max(GLOSSARY_LIMITS.entries).refine(
     entries => glossaryChars(entries) <= GLOSSARY_LIMITS.totalChars,
     { message: `the glossary exceeds ${GLOSSARY_LIMITS.totalChars} characters in all` },
-  ).default([]),
+  ),
   /** Appearance profiles (§7.5, v12): the reader's style list and band list, and which of each is active */
-  appearance: appearanceSchema.default(DEFAULT_APPEARANCE),
+  appearance: appearanceSchema,
   /** The engine fallback chain (§8.5): a failing first choice switches to the free engines of itself, so the whole page does not stop */
-  fallback: z.object({ enabled: z.boolean() }).default({ enabled: true }),
+  fallback: z.object({ enabled: z.boolean() }),
   /** The viewport translation range (§10, Read Frog's preload): how many pixels below the viewport count as near (0–10000), how much must show to count as entered (0–1) */
   preload: z.object({
     margin: z.number().min(0).max(10_000),
     threshold: z.number().min(0).max(1),
-  }).default({ ...DEFAULT_PRELOAD }),
+  }),
   /**
    * Reading aid (§7.7, since v10): on hover the matching sentence in the original and in the translation is marked
    * with a band (issue #105). On by default — it shows anything only when the engine reported sentence boundaries and
-   * both sides could be rebuilt, silent and free otherwise. With a default, so existing storage without the field passes validation and CONFIG_VERSION needs no bump
+   * both sides could be rebuilt, silent and free otherwise. Added at db38c5d by a schema default alone, without a bump;
+   * v14 wrote it into every stored value (ADR-0009)
    */
-  reading: z.object({ sentenceHighlight: z.boolean() }).default({ sentenceHighlight: true }),
+  reading: z.object({ sentenceHighlight: z.boolean() }),
   /**
    * Image translation (§15). `enabled` is the reader's switch (popup, v11); `modes` says in which
    * display modes the overlays show, a detail kept on the options page. Both are display gates:
    * switching to a mode that is off only hides the overlays, nothing is re-requested. Without the
    * helper the bitmap path does not run; SVG figures need no helper
    */
-  image: z.object({ enabled: z.boolean(), modes: z.array(modeSchema).max(3) }).default({ enabled: true, modes: [...MODE_VALUES] }),
+  image: z.object({ enabled: z.boolean(), modes: z.array(modeSchema).max(3) }),
   /**
    * The **interface's** language (v13), not the paper's: a reader may translate into Japanese and
    * still want the buttons in Japanese, or in English, and neither choice implies the other.
    * `auto` follows the browser. An unknown code falls back at read time rather than failing the
    * whole configuration — a pack removed in a later version must not cost the reader their key
    */
-  uiLanguage: z.string().default('auto'),
+  uiLanguage: z.string(),
 })
 
 export type Config = z.infer<typeof configSchema>
