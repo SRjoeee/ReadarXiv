@@ -13,11 +13,20 @@ Kept current: an item is struck through with the PR that closed it, and a checkp
 
 1. ~~**Identity (checkpoint A)**~~ — done, #216 (ADR-0010; `package.json` `readarxiv`; the four module renames).
 2. ~~**Documents (B)**~~ — done, #217 (DESIGN.md regenerated; RESEARCH.md, the inventory reports and `scripts/phase0` retired; README / LICENSE merged). The README's three owner items are listed in that entry.
-3. **Release (C)**: version, CHANGELOG from this log, the tag plan, store text; the helper install pinned to the tag.
+3. ~~**Release (C)**~~ — done, #218 (version 1.0.0, `CHANGELOG.md`, `docs/RELEASE.md` with the store listing, the install ref follows the tag). The release itself is the owner's act.
 4. **The owner's items**: #167 (the repository's front door) merge path; the Phase-1 wording audit (deferred past the rebuild); #164; the three Phase-0 bugs; the main checkout's leftovers (`codex/research` branch, untracked `research/`, `docs/design/canvas/*.html`).
 5. **Must-look before 1.0**: `e2e:image` determinism (one image of six not entering the viewport in one run of two); the coverage gaps of INVENTORY §4.5 (ProfileEditor fields, the highlight grid, the glossary textarea, PromptManager import / export / token insertion, ServiceDrawer delete / more, `content/index.ts` wiring, the image pipeline).
 6. **Candidates, not commitments**: coalescing the cache's access-time writes (INVENTORY §8.4).
 7. **Non-goals for 1.0, recorded**: #103 (a configurable free-engine chain — no benefit found, 2026-09-17); a `@readarxiv/core` package (not now, ADR-0008); DeepLX and Edge engines.
+
+## 2026-09-17 — release mechanics: version 1.0.0, the changelog, the release guide with the store listing, the helper install pinned to the tag
+
+- Branch `rebuild/release` (PR #218, stacked on #217). Checkpoint C of the 1.0 ledger. Nothing is released by it: the tag on `main` is the owner's act, and `docs/RELEASE.md` says how.
+- `package.json` `version` is `1.0.0` — the manifest's version, and the archive's name (`readarxiv-1.0.0-chrome.zip`). `CHANGELOG.md` is the reader-facing record: 1.0.0 as the first release (reading, services, images, privacy and data, compatibility), `0.3.0-mvp` as the archive mark it grew from.
+- `docs/RELEASE.md`: the version and tag rules; the seven steps of a release (merge into `main`, the gate and the browser suites on the merge commit, the annotated tag, the build **after** the tag, the GitHub release, the store submission, the helper command); the open items before the first release; the store listing — short and long descriptions in English and Chinese, the permission justifications, the privacy answers, the single purpose.
+- **The helper install follows the tag**: `scripts/build-ref.mjs` stamps a release tag (`v<semver>`, `RELEASE_TAG`) pointing at the built commit when one exists and the commit passes the branch check — a local tag on a commit the repository does not hold would send a reader's curl to a 404 — else the commit, else `main`; `helper/install-remote.sh` fetches a `v…` ref under `refs/tags/`. Tests: a release tag, a non-release tag beside it, an untrusted local tag; the tag URL and a pre-release tag.
+- Tests 1 776, of which 1 773 run (+2: the tag cases); gate green by exit code. Nothing on the page changes; the e2e suites were not re-run.
+- Ledger item 3 closes with this; what remains is the owner's items, the two must-looks and the candidates (the standing ledger above).
 
 ## 2026-09-17 — documents: DESIGN.md regenerated as the current design, the MVP records retired, README and LICENSE in
 
