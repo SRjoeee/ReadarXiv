@@ -31,8 +31,9 @@ export function createDiagnostics(deps: DiagnosticsDeps): Diagnostics {
   const now = deps.now ?? Date.now
   const limit = deps.limit ?? DIAGNOSTICS_LIMIT
   const flushMs = deps.flushMs ?? 250
-  const schedule = deps.schedule ?? ((run, ms) => setTimeout(run, ms) as unknown as number)
-  const cancel = deps.cancel ?? (id => clearTimeout(id))
+  // `self.setTimeout`: the worker's own timer, typed as the platform's number handle (the bare global carries Node's type in this build)
+  const schedule = deps.schedule ?? ((run, ms) => self.setTimeout(run, ms))
+  const cancel = deps.cancel ?? (id => self.clearTimeout(id))
   let entries: DiagnosticEntry[] = []
   /** Recorded before the restore finished: they come after what was restored, in the order they were logged */
   let early: DiagnosticEntry[] | null = []

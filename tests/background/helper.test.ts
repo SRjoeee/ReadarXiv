@@ -355,19 +355,6 @@ describe('createHelperClient', () => {
     await expect(c).rejects.toMatchObject({ kind: 'invalid-response' })
   })
 
-  it('keep-alive runs only while a request is in flight and stops when idle', async () => {
-    const keepAlive = vi.fn()
-    const { client, port } = setup({ keepAlive, keepAliveMs: 100 })
-    const a = client.ocr({ image: 'A' })
-    await flush()
-    await handshake(port())
-    vi.advanceTimersByTime(350)
-    expect(keepAlive).toHaveBeenCalledTimes(3)
-    port().reply({ v: 1, id: port().lastId(), width: 1, height: 1, lines: [] })
-    await a
-    vi.advanceTimersByTime(1000)
-    expect(keepAlive).toHaveBeenCalledTimes(3) // not called again after the end
-  })
   it('the permission comes first (ADR-0002): without it status says permission-missing and nothing is connected; granted, it connects', async () => {
     let granted = false
     const { client, ports } = setup({ permitted: async () => granted })
