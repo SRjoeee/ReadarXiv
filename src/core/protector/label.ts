@@ -18,7 +18,7 @@ import { LABEL_FORMATTING } from '@/core/rules/latexml'
 import { cloneWithoutIds } from './clone'
 import { indexSpans, type WireSpan, wireOffsetAt } from './offsets'
 import type { ProtectedBlock } from './serialize'
-import { squash } from '@/core/text'
+import { TEXT_NODE, squash } from '@/core/text'
 
 /** Longer than this is a sentence set in italics, not a label: past what the replay covered. */
 const MAX_LABEL_WORDS = 8
@@ -47,7 +47,6 @@ const bound = (label: number, prefix: string): number => {
   return cjk * 2 >= prefix.replace(/\s/g, '').length ? label + SLACK : label * 2 + SLACK
 }
 const TERMINATOR = new RegExp(`${FULL_STOP.source}|${EXCLAIM.source}`)
-const TEXT_NODE = 3
 
 /** Sentence lengths on each side, as the engine reported them and `verifyAlignment` confirmed. */
 export interface Boundaries { source: readonly number[]; target: readonly number[] }
