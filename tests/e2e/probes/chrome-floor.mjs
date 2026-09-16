@@ -5,7 +5,7 @@
 import { rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
-import { openOptions, openSection } from '../options-page.mjs'
+import { openSection } from '../options-page.mjs'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const CHROME = process.argv[2]
@@ -21,7 +21,13 @@ let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')
 const extId = worker.url().split('/')[2]
 const version = await worker.evaluate(() => navigator.userAgent.match(/Chrome\/(\d+)/)?.[1])
-const options = await openOptions(context, extId)
+// The error listener goes on before the page loads: an exception while the settings page initialises is what this
+// probe exists to see (Codex on #215 — attached after the load, `pageErrors: []` proved nothing)
+const errors = []
+const options = await context.newPage()
+options.on('pageerror', e => errors.push(String(e)))
+await options.goto(`chrome-extension://${extId}/options.html`)
+await options.waitForLoadState('domcontentloaded')
 await openSection(options, 'services')
 await options.waitForTimeout(1500)
 const facts = await options.evaluate(() => ({
@@ -29,8 +35,6 @@ const facts = await options.evaluate(() => ({
   cards: Array.from(document.querySelectorAll('[data-axt-service], article, li, div')).map(el => el.textContent?.trim() ?? '').filter(t => /Chrome/.test(t) && t.length < 200).slice(0, 4),
   downloadButtons: Array.from(document.querySelectorAll('button')).filter(b => /Download|下载/.test(b.textContent ?? '')).length,
 }))
-const errors = []
-options.on('pageerror', e => errors.push(String(e)))
 await options.waitForTimeout(500)
 console.log(JSON.stringify({ chrome: version, ...facts, pageErrors: errors }, null, 2))
 await context.close()
