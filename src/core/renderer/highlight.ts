@@ -80,16 +80,6 @@ function supported(doc: Document): boolean {
   return typeof doc.caretPositionFromPoint === 'function'
 }
 
-/** The one container every band lives in, created on first use. */
-function layerOf(doc: Document): Element {
-  const existing = doc.body.querySelector(`:scope > .${HL_CLASS}`)
-  if (existing) return existing
-  const layer = doc.createElement('div')
-  layer.className = HL_CLASS
-  doc.body.append(layer)
-  return layer
-}
-
 /**
  * Line-level bands for a set of ranges, in document coordinates.
  *
@@ -233,8 +223,21 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
   let y = 0
   /** Whether the pointer is in the document at all. False until the first move, false again after leaving. */
   let over = false
-  /** The band container, once it exists: mutations inside it are ours and must not feed back */
+  /**
+   * This controller's band container, created on first use and held by reference — not looked up by
+   * class, so a second controller on the same document (a test starting one before stopping the
+   * other) never paints into or removes this one's (Copilot on #210). Mutations inside it are ours
+   * and must not feed back. `restore()` sweeps every injected node, this one included, while a
+   * controller may still run (the session stops it first; a test need not): swept, it is created anew
+   */
   let layer: Element | undefined
+  const ownLayer = (): Element => {
+    if (layer?.isConnected) return layer
+    layer = doc.createElement('div')
+    layer.className = HL_CLASS
+    doc.body.append(layer)
+    return layer
+  }
   let frame = 0
   let missTimer = 0
   let settleTimer = 0
@@ -282,7 +285,7 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
    */
   const clearNow = () => {
     shown = null
-    doc.body?.querySelector(`:scope > .${HL_CLASS}`)?.replaceChildren()
+    layer?.replaceChildren()
     peek.hide()
   }
   const reset = () => {
@@ -384,7 +387,7 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
     // against, and it must be read in the same pass as the ranges. It is created at most once per
     // controller — the miss path empties it rather than removing it — so this is a read, not a
     // write followed by reads.
-    layer = layerOf(doc)
+    const layer = ownLayer()
     const origin = layer.getBoundingClientRect()
     // The side the pointer is not on. When it is not rendered — only mode hides the original — its
     // bands would come out empty, so they are not measured at all; its ranges go to the panel
@@ -601,8 +604,9 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
       hit()
       shown = null
       peek.remove()
-      // The layer goes with the controller — the one owner of both (INVENTORY T3); a later controller creates its own
-      doc.body?.querySelector(`:scope > .${HL_CLASS}`)?.remove()
+      // Its own layer goes with the controller — the one owner of both (INVENTORY T3); another controller's stays
+      layer?.remove()
+      layer = undefined
       if (controllers.get(doc) === reset) controllers.delete(doc)
     },
   }

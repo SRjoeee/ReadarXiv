@@ -526,8 +526,8 @@ describe('hover sentence highlight (§7.7)', () => {
 
   it('a second controller does not lose its highlight to the first one fading', () => {
     // Out of contract — `content/index.ts` calls `endRun()`, which stops the running controller,
-    // before starting another — but cheap to hold: both are listening, so the older one repaints
-    // and cancels its own fade on the same pointer move.
+    // before starting another — but cheap to hold: both are listening and each paints its own
+    // layer, so the older one's fade and its stop() touch only its own bands (INVENTORY T3).
     const { doc, source } = page(TWO)
     const browser = stubBrowser(doc)
     const first = startSentenceHighlight(doc)!
@@ -543,9 +543,10 @@ describe('hover sentence highlight (§7.7)', () => {
     browser.caret.mockReturnValue({ offsetNode: text, offset: 3 })
     browser.move()
     browser.flushTimers()
-    expect(browser.bands().length).toBe(2)
     first.stop()
+    expect(browser.bands().length).toBe(2)
     second.stop()
+    expect(browser.bands().length).toBe(0)
   })
 
   it('repaints after setMode cleared the highlights under it', () => {
@@ -722,6 +723,29 @@ describe('hover sentence highlight (§7.7)', () => {
     expect(doc.querySelectorAll('.axt-hl')).toHaveLength(0)
     // Stopped, the controller is no longer the one asked: nothing to drop, nothing touched
     clearSentenceHighlights(doc)
+    expect(doc.querySelectorAll('.axt-hl')).toHaveLength(0)
+  })
+
+  it('each controller owns its own layer: stopping an older one leaves a newer one\'s bands, and a layer swept by restore() is created anew', () => {
+    // Copilot on #210: a layer found by class was shared, and the older controller's stop() took the newer one's
+    const { doc, source } = page(TWO)
+    const browser = stubBrowser(doc)
+    const first = startSentenceHighlight(doc)!
+    browser.caret.mockReturnValue({ offsetNode: source.firstChild!, offset: 3 })
+    browser.move()
+    const second = startSentenceHighlight(doc)!
+    browser.move()
+    expect(doc.querySelectorAll('.axt-hl')).toHaveLength(2)
+    first.stop()
+    expect(doc.querySelectorAll('.axt-hl')).toHaveLength(1)
+    expect(browser.bands().length).toBe(2)
+    // Swept from outside — restore()'s injected-node sweep — while the controller runs: the next paint (another sentence) has a layer again
+    doc.querySelector('.axt-hl')!.remove()
+    browser.caret.mockReturnValue({ offsetNode: source.firstChild!, offset: 25 })
+    browser.move()
+    expect(doc.querySelectorAll('.axt-hl')).toHaveLength(1)
+    expect(browser.bands().length).toBe(2)
+    second.stop()
     expect(doc.querySelectorAll('.axt-hl')).toHaveLength(0)
   })
 
