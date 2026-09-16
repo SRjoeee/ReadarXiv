@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
-import { CONFIG_VERSION, DEFAULT_CONFIG, GLOSSARY_LIMITS, normalizeGlossary } from '@/config/schema'
+import { z } from 'zod'
+import { appearanceSchema } from '@/config/appearance'
+import { CONFIG_VERSION, DEFAULT_CONFIG, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
+import { serviceSchema } from '@/config/services'
 import { configItem, getConfig, setConfig } from '@/config/storage'
 
 /** A reader-added service, the shape v12 stores (spec §2.1) */
@@ -307,6 +310,34 @@ describe('provider selection', () => {
     expect(c.services[0]?.apiKey).toBe('sk-keep')
     expect(c.services[0]?.model).toBe(long)
     expect(c.services[0]?.name.length).toBeLessThanOrEqual(40)
+  })
+
+  it('v13 to v14: `reading` missing (added by a schema default alone) and a service without `thinking` are both filled, the rest as it was (ADR-0009)', async () => {
+    const { reading: _reading, ...v13 } = { ...DEFAULT_CONFIG, version: 13, provider: SVC.id, services: [{ id: SVC.id, kind: SVC.kind, name: SVC.name, baseURL: SVC.baseURL, apiKey: 'sk-keep', model: SVC.model }], targetLanguage: 'jpn' as const }
+    await fakeBrowser.storage.local.set({ config: v13, config$: { v: 13 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const c = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(c.version).toBe(CONFIG_VERSION)
+    expect(c.reading).toEqual({ sentenceHighlight: true })
+    expect(c.services[0]).toMatchObject({ id: SVC.id, apiKey: 'sk-keep', thinking: 'disabled' })
+    expect(c.targetLanguage).toBe('jpn')
+    // A v13 value with both present migrates to the same value at 14
+    const full = { ...DEFAULT_CONFIG, version: 13, reading: { sentenceHighlight: false }, provider: SVC.id, services: [{ ...SVC, thinking: 'enabled' as const }] }
+    await fakeBrowser.storage.local.set({ config: full, config$: { v: 13 } })
+    vi.resetModules()
+    const again = await (await import('@/config/storage')).getConfig()
+    expect(again).toEqual({ ...full, version: CONFIG_VERSION })
+  })
+
+  it('no field of the stored shape carries a zod default: the version alone says what is in storage (ADR-0009)', () => {
+    for (const [schema, name] of [[configSchema, 'config'], [serviceSchema, 'service'], [appearanceSchema, 'appearance']] as const) {
+      for (const [field, shape] of Object.entries(schema.shape)) expect([`${name}.${field}`, shape instanceof z.ZodDefault]).toEqual([`${name}.${field}`, false])
+    }
+    // and a value missing a field is not quietly completed
+    const { reading: _reading, ...missing } = DEFAULT_CONFIG
+    expect(configSchema.safeParse(missing).success).toBe(false)
   })
 
   it('the image translation modes accept the three only, an empty array is valid (= off)', async () => {
