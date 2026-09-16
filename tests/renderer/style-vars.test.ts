@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { applyStyle, enable, restore } from '@/core/renderer/page'
-import { TRANSLATION_SELECTOR, appearanceRule } from '@/core/renderer/style-preset'
+import { TOP_TRANSLATION_SELECTOR, TRANSLATION_SELECTOR, appearanceRule } from '@/core/renderer/style-preset'
 import { sanitizeColor } from '@/core/renderer/style-values'
 import { BUILT_IN_HIGHLIGHTS, type Look } from '@/config/appearance'
 import { docOf } from './helpers'
@@ -47,7 +47,7 @@ describe('sanitizeColor', () => {
 })
 
 describe('appearanceRule', () => {
-  const all = (look: Look) => { const r = appearanceRule(look); return r.base + r.overrides }
+  const all = (look: Look) => appearanceRule(look)
   const band = (over: Partial<(typeof BUILT_IN_HIGHLIGHTS)[number]>) => ({ ...BUILT_IN_HIGHLIGHTS[0]!, ...over })
 
   it('the default appearance writes only the two highlight variables: the translation itself is pixel for pixel as before this feature', () => {
@@ -87,24 +87,26 @@ describe('appearanceRule', () => {
     expect(all(lookWith({ underline: 'wavy', thickness: 1 }))).not.toContain('--axt-deco-thickness')
   })
 
-  it('the opacity uses “top-level real translation”, so a nested footnote translation does not multiply it twice', () => {
+  it('the opacity declaration is static, in presets.css, on “top-level real translation”, so a nested footnote translation does not multiply it twice', () => {
     // side mode's localizeNotes inserts .axt-note-t.axt-t inside the paragraph translation; matched on both levels
     // the lower bound 0.3 would render as 0.09. Chrome, measured with this selector: top level 0.5, nested footnote 1, split copy 1, the real translation inside the copy 0.5
-    expect(appearanceRule(lookWith({ opacity: 0.5 })).base).toContain(':not(:where(')
+    const css = readFileSync(join(import.meta.dirname, '../../src/styles/presets.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(css).toContain(`${TOP_TRANSLATION_SELECTOR} {\n  opacity: var(--axt-opacity, 1);\n}`)
+    // The look sheet carries the value only, as a variable on <html> (INVENTORY T5)
+    expect(appearanceRule(lookWith({ opacity: 0.5 }))).not.toContain('opacity: var(')
     // The colour rule needs no such exclusion: --axt-color is an inherited property, and nesting does not stack it
-    expect(appearanceRule(lookWith({ color: '#1565c0' })).overrides).not.toContain(':not(:where(')
+    expect(appearanceRule(lookWith({ color: '#1565c0' }))).not.toContain(':not(:where(')
   })
 
-  it('the opacity lands in base, the colour and the highlight in overrides: the two parts sit on the two sides of the style sheet', () => {
-    const r = appearanceRule({ style: { ...LOOK.style, color: '#1565c0', opacity: 0.5 }, highlight: band({ color: '#e91e63' }) })
-    // base before presets.css → the blur rule can override the baseline and multiply --axt-opacity in its own formula
-    expect(r.base).toContain('--axt-opacity: 0.5;')
-    expect(r.base).toContain('opacity: var(--axt-opacity, 1);')
-    expect(r.base).not.toContain('--axt-color')
-    // overrides after → wins over any default in the style sheet
-    expect(r.overrides).toContain('--axt-color: #1565c0;')
-    expect(r.overrides).toContain('--axt-hl-color: #e91e63;')
-    expect(r.overrides).not.toContain('opacity: var')
+  it('every value is a variable — on <html>, the colour on the translation selector — and nothing but variables: the static sheets consume them, so the look sheet follows them and is rewritten alone (INVENTORY T5)', () => {
+    const rule = appearanceRule({ style: { ...LOOK.style, color: '#1565c0', opacity: 0.5 }, highlight: band({ color: '#e91e63' }) })
+    const onHtml = /html\[data-axt-on\] \{\n([^}]*)\}/.exec(rule)![1]!
+    expect(onHtml).toContain('--axt-opacity: 0.5;')
+    expect(onHtml).toContain('--axt-hl-color: #e91e63;')
+    expect(onHtml).not.toContain('--axt-color')
+    expect(rule).toContain(`${TRANSLATION_SELECTOR} {\n--axt-color: #1565c0;\n}`)
+    // Not one property that is not a custom one: a real declaration here would depend on where the sheet sits in the cascade
+    for (const line of rule.split('\n')) if (line.includes(':') && !line.includes('{')) expect(line.trimStart().startsWith('--axt-')).toBe(true)
   })
 
   it('an invalid colour is dropped rather than written into the rule as it is', () => {
@@ -117,18 +119,28 @@ describe('appearanceRule', () => {
 })
 
 describe('injection and restore', () => {
-  // In vitest a `?inline` CSS import resolves to an **empty string** (css: false in vitest.config),
-  // so “the generated rules vs presets.css, which comes first” cannot be asserted in a unit test — an indexOf comparison is always -1 and the assertion always true.
-  // Asserted instead are two things that can really be checked: inside the injected sheet base comes before overrides; the text contract of presets.css.
-  // The real cascade is covered by browser measurement (blur with the slider at 0.5 → computed 0.375)
-  it('inside the injected sheet base comes before overrides', () => {
+  // In vitest a `?inline` CSS import resolves to an **empty string** (css: false in vitest.config), so the static sheet's
+  // content cannot be asserted here; asserted are the two sheets' order in the document and the text contract of
+  // presets.css. The real cascade is covered by browser measurement (blur with the slider at 0.5 → computed 0.375)
+  it('two sheets: the static one first, the look sheet right after it (INVENTORY T5)', () => {
     const doc = docOf('<p class="ltx_p" id="p1">Hello.</p>')
+    doc.head.append(doc.createElement('meta')) // something else the head holds after our sheets
     enable(doc, 'stack', lookWith({ blur: true, color: '#1565c0', opacity: 0.5 }))
-    const css = doc.querySelector('style[data-axt-sheet]')!.textContent ?? ''
-    expect(css.indexOf('--axt-opacity: 0.5;')).toBeGreaterThanOrEqual(0)
-    expect(css.indexOf('--axt-opacity: 0.5;')).toBeLessThan(css.indexOf('--axt-color: #1565c0;'))
-    // Dropping the returned object straight into a template string leaves this (measured: it happened on the settings page's preview)
+    const sheets = Array.from(doc.querySelectorAll('style[data-axt-sheet]'), s => s.getAttribute('data-axt-sheet'))
+    expect(sheets).toEqual(['modes', 'look'])
+    expect(doc.querySelector('style[data-axt-sheet="modes"]')!.nextElementSibling).toBe(doc.querySelector('style[data-axt-sheet="look"]'))
+    const css = doc.querySelector('style[data-axt-sheet="look"]')!.textContent ?? ''
+    expect(css).toContain('--axt-opacity: 0.5;')
+    expect(css).toContain('--axt-color: #1565c0;')
+    // Dropping an object straight into a template string leaves this (measured: it happened on the settings page's preview)
     expect(css).not.toContain('[object Object]')
+  })
+
+  it('in presets.css the baseline opacity precedes the blur rule: equal specificity, so the blur wins by order alone', () => {
+    const css = readFileSync(join(import.meta.dirname, '../../src/styles/presets.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const baseline = css.indexOf('opacity: var(--axt-opacity, 1);')
+    expect(baseline).toBeGreaterThanOrEqual(0)
+    expect(baseline).toBeLessThan(css.indexOf('filter: blur(4px);'))
   })
 
   it('stacking declarations act on the top-level translation only; a nested footnote translation is not multiplied a second time', () => {
@@ -163,22 +175,40 @@ describe('injection and restore', () => {
   it('the advanced declaration block still has the last word', () => {
     const doc = docOf('<p class="ltx_p" id="p1">Hello.</p>')
     enable(doc, 'stack', lookWith({ css: 'color: teal;', color: '#1565c0' }))
-    const css = doc.querySelector('style[data-axt-sheet]')!.textContent ?? ''
+    const css = doc.querySelector('style[data-axt-sheet="look"]')!.textContent ?? ''
     expect(css.indexOf('color: teal;')).toBeGreaterThan(css.indexOf('--axt-color: #1565c0'))
   })
 
-  it('applyStyle recomputes that sheet only and touches no node; returns false with translation off', () => {
+  it('applyStyle rewrites the look sheet only and touches no node; returns false with translation off', () => {
     const doc = docOf('<p class="ltx_p" id="p1">Hello.</p>')
     expect(applyStyle(doc, lookWith({ color: '#1565c0' }))).toBe(false)
     enable(doc, 'stack', LOOK)
     const body = doc.body.outerHTML
+    const fixed = doc.querySelector('style[data-axt-sheet="modes"]')!
+    fixed.textContent = 'STATIC' // stands in for the 900 lines vitest's `?inline` leaves empty; any rewrite would show
     expect(applyStyle(doc, lookWith({ underline: 'dotted', color: '#1565c0', opacity: 0.8 }))).toBe(true)
     expect(doc.documentElement.getAttribute('data-axt-underline')).toBe('dotted')
-    expect(doc.querySelector('style[data-axt-sheet]')!.textContent).toContain('--axt-color: #1565c0')
-    // Only the injected sheet and the attributes on <html> change; body does not change by one byte
+    expect(doc.querySelector('style[data-axt-sheet="look"]')!.textContent).toContain('--axt-color: #1565c0')
+    // Only the look sheet and the attributes on <html> change; body does not change by one byte, the static sheet by one either
     expect(doc.body.outerHTML).toBe(body)
-    // Still one sheet only
-    expect(doc.querySelectorAll('style[data-axt-sheet]')).toHaveLength(1)
+    expect(doc.querySelector('style[data-axt-sheet="modes"]')).toBe(fixed)
+    expect(fixed.textContent).toBe('STATIC')
+    // Still two sheets only
+    expect(doc.querySelectorAll('style[data-axt-sheet]')).toHaveLength(2)
+  })
+
+  it('a second enable leaves the static sheet alone and follows the look; without a look it touches neither the attributes nor the look sheet', () => {
+    const doc = docOf('<p class="ltx_p" id="p1">Hello.</p>')
+    enable(doc, 'stack', lookWith({ color: '#1565c0' }))
+    const fixed = doc.querySelector('style[data-axt-sheet="modes"]')!
+    fixed.textContent = 'STATIC'
+    enable(doc, 'side', lookWith({ color: 'teal' }))
+    expect(doc.querySelector('style[data-axt-sheet="modes"]')).toBe(fixed)
+    expect(fixed.textContent).toBe('STATIC')
+    expect(doc.querySelector('style[data-axt-sheet="look"]')!.textContent).toContain('--axt-color: teal;')
+    enable(doc, 'only')
+    expect(doc.querySelector('style[data-axt-sheet="look"]')!.textContent).toContain('--axt-color: teal;')
+    expect(doc.querySelectorAll('style[data-axt-sheet]')).toHaveLength(2)
   })
 
   it('after restoring the original the DOM equals the pre-translation one byte for byte (§7.1 item 4)', () => {
