@@ -33,7 +33,7 @@ describe('SVG glyph extraction (#121)', () => {
 
   it('keeps the spaces the figure actually draws', () => {
     // Spaces are glyphs of their own, so document order is exact and no word segmentation is
-    // needed for the common case (RESEARCH §6.11).
+    // needed for the common case (DESIGN §15.5).
     const runs = runsOf(svgOf(PLOT))
     const label = runs.find(r => r.text.startsWith('wall time'))
     expect(label?.text).toBe('wall time per epoch [ms]')
@@ -46,7 +46,7 @@ describe('SVG glyph extraction (#121)', () => {
     const runs = runsOf(svgOf(PLOT))
     const rotated = runs.filter(r => deg(r.angle) !== 0)
     expect(rotated.length).toBeGreaterThan(0)
-    // The corpus has exactly two orientations, 0 and -90 (RESEARCH §6.11)
+    // The corpus has exactly two orientations, 0 and -90 (DESIGN §15.5)
     expect([...new Set(runs.map(r => deg(r.angle)))].sort((a, b) => a - b)).toEqual([-90, 0])
     for (const r of rotated) expect([r.text, r.size > 0]).toEqual([r.text, true])
   })

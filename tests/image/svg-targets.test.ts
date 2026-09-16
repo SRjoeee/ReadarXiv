@@ -106,7 +106,7 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
   })
 
   it('fails the figure rather than the run when the embedded document is not there', async () => {
-    // Measured as never happening on real papers (RESEARCH §6.11), so this is the graceful
+    // Measured as never happening on real papers (DESIGN §15.5), so this is the graceful
     // degradation path, not a normal one
     const { targets, run, translate } = setup(null)
     await run.translate(targets.filter(t => t.kind === 'svg'))

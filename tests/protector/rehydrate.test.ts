@@ -40,7 +40,7 @@ describe('rehydrate', () => {
 
   it('a node replaced after serialisation: rehydration refuses as `stale` rather than putting back the copy captured then (the audit\'s A03, INVENTORY T6)', () => {
     // The slots record **node references**; a page that swaps the formula while the request is in flight must not have
-    // the translation show x where the page now shows y. arXiv's own JS does not touch the body (RESEARCH §3.3), so
+    // the translation show x where the page now shows y. arXiv's own JS does not touch the body (DESIGN §7.2), so
     // nothing trips this today; the pipeline marks the block failed and a retry serialises it afresh
     const p = el('<p class="ltx_p">Let <math class="ltx_Math"><mi>x</mi></math> be positive, and <math class="ltx_Math"><mi>z</mi></math> too.</p>')
     const b = serialize(p)

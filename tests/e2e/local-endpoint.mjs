@@ -1,7 +1,7 @@
 // The gain of issue #42, as a regression: with translation requests moved back into the background, an **http localhost endpoint that returns no CORS headers** is usable again.
 // Before the change the content script's fetch carried the page's origin and needed a preflight, and an https page could not reach an http endpoint at all
 // (mixed content), so an endpoint like a local Ollama was bound to fail; after it the requests leave from the background, and neither restriction applies.
-// The measurements are in RESEARCH §6.7.
+// The measurements are in DESIGN §8.0.
 //
 // A control experiment (2026-09-06, AXT_EXT_DIR pointing at main's build): before the move the settings page's “Connect” still passed (it has always gone
 // through the background), yet a whole-page translation had 0/12 passages from the local endpoint, the endpoint received 0 requests, and the page itself sent 21 requests blocked

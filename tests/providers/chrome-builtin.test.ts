@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { BUILTIN_MAX_ITEMS, createChromeBuiltinProvider, normalizeSpacing, type TranslatorApi, type TranslatorSession } from '@/providers/chrome-builtin'
 import { ProviderError, type TranslateRequest } from '@/providers/types'
 
-/** A fake Translator global: happy-dom has no such API; the behaviour follows the measurements of RESEARCH §6 */
+/** A fake Translator global: happy-dom has no such API; the behaviour follows the measurements of DESIGN §8.4 */
 function fakeApi(options: {
   availability?: string
   translate?: (input: string) => Promise<string> | string
@@ -42,7 +42,7 @@ describe('createChromeBuiltinProvider', () => {
     const provider = createChromeBuiltinProvider('cmn', { translator: api })
     expect(provider.id).toBe('chrome-builtin')
     expect(provider.kind).toBe('builtin')
-    expect(provider.wireFormats).toEqual(['tags']) // RESEARCH §6.2: measured to keep tags and placeholders
+    expect(provider.wireFormats).toEqual(['tags']) // DESIGN §8.4: measured to keep tags and placeholders
     expect(provider.rateLimit).toEqual({ rate: 20, capacity: 20 })
   })
 
@@ -243,7 +243,7 @@ describe('createChromeBuiltinProvider', () => {
     expect(state.creates).toBe(1)
   })
 
-  it('normalises the extra space after CJK punctuation (the “。 ” measured in RESEARCH §6.2)', () => {
+  it('normalises the extra space after CJK punctuation (the “。 ” measured in DESIGN §8.4)', () => {
     expect(normalizeSpacing('图连通时，定理 1 显然。 证明从略。')).toBe('图连通时，定理 1 显然。证明从略。')
     expect(normalizeSpacing('甲、 乙； 丙： 丁？ 戊！ 己')).toBe('甲、乙；丙：丁？戊！己')
     // The space after English punctuation must not move

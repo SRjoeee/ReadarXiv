@@ -245,7 +245,7 @@ describe('isNumericCell (the calibration boundary cases of Phase 0)', () => {
 describe('fixture invariants', () => {
   const files = readdirSync(FIXTURE_DIR).filter(f => f.endsWith('.html')).sort()
 
-  /** The synthetic-structures fixture: covers template structures no real paper showed (RESEARCH.md §2.12) */
+  /** The synthetic-structures fixture: covers template structures no real paper showed (DESIGN §5.7) */
   const SYNTHETIC = 'synthetic-structures.html'
 
   it('there are 12 real papers + 1 synthetic structure', () => {
