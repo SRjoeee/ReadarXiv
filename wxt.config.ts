@@ -22,8 +22,12 @@ function readBuildRef(): string {
     const run = (cmd: string) => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
     if (run('git status --porcelain') !== '') return 'main'
     const head = run('git rev-parse HEAD')
-    if (!/^[0-9a-f]{40}$/.test(head) || run(`git branch -r --contains ${head}`) === '') return 'main'
-    return head
+    if (!/^[0-9a-f]{40}$/.test(head)) return 'main'
+    // A branch of the remote, not any remote-tracking ref: a pull_request checkout in CI carries `pull/<n>/merge`,
+    // whose merge commit is on no branch and not something a reader's curl should be sent to (measured on #214's
+    // own CI run, which stamped that commit)
+    const branches = run(`git branch -r --contains ${head}`).split('\n').map(l => l.trim()).filter(l => l.startsWith('origin/') && !l.startsWith('origin/HEAD'))
+    return branches.length > 0 ? head : 'main'
   } catch {
     return 'main'
   }
