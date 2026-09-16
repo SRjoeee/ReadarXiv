@@ -14,7 +14,7 @@ import { collectImageTargets, startImageTranslation, type ImageBytes, type Image
 import { startTranslation, type Progress, type TranslationRun } from '@/core/pipeline'
 import { escapeText, unescapeText } from '@/core/protector/text'
 import {
-  applyStyle, clearImageEverywhere, clearMarginNotes, clearPairMargins, createModeController, createPrep,
+  applyStyle, clearImageEverywhere, clearMarginNotes, clearPairMargins, createModeController, createPrep, setSplitDuplicatesHidden,
   installAnchorFallback, type Mode, type ModeController, relabelFailed, restore, type SentenceHighlight, setImageModes,
   startSentenceHighlight,
 } from '@/core/renderer'
@@ -422,12 +422,19 @@ export function createPageSession(deps: SessionDeps): PageSession {
   const prep = createPrep(doc, {
     isSide: () => modes?.effective() === 'side',
     trace,
+    // The split copies' failure widgets retry through the run, as the original's side does (issue #170)
+    retry: blockId => {
+      const block = run?.failed().find(b => b.id === blockId)
+      if (block) void run?.translate([block])
+    },
   })
 
   /** The preparation on entering side: the right column gets its copies of formulas and figures (§7.2), and tables shrink to fit a column */
   function enterSide(effective: Mode): void {
     // The mode gate may have just opened: parked images are released (§15)
     images?.resume()
+    // The split copies' duplicated media speak only where the original does not (§7.4b, issue #170)
+    setSplitDuplicatesHidden(doc, effective === 'side')
     if (effective !== 'side') {
       fitObserver?.disconnect()
       fitObserver = null
