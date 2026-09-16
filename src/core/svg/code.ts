@@ -8,7 +8,7 @@
 // a figure is the same content, and translating it would be wrong for the same reasons. It also
 // happens to sidestep the one place where the glyph data is lossy: a syntax-highlighted listing
 // drops the space between two differently coloured spans, so `if log_counting` arrives as
-// `iflog_counting` (`docs/RESEARCH.md` §6.11). Recovering those spaces needs a per-run advance
+// `iflog_counting` (DESIGN §15.5). Recovering those spaces needs a per-run advance
 // estimate, and skipping code means not needing it.
 //
 // The rules were written against the runs the two fixtures actually produce, and the test asserts

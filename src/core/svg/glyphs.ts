@@ -4,7 +4,7 @@
 // points at a glyph in `<defs>`. What makes them readable anyway is that each of those `<use>`
 // elements is annotated with the character it draws, so the text is *read*, not recognised — the
 // error rate is zero rather than whatever OCR would get wrong. Measured over 58045 glyphs in 316
-// distinct figures, `data-text` is present on every one that is a glyph (`docs/RESEARCH.md` §6.11).
+// distinct figures, `data-text` is present on every one that is a glyph (DESIGN §15.5).
 //
 // The output is `OcrLine[]`, the same shape the OCR helper returns, so everything downstream —
 // `linesToBoxes`, the translate call, the overlay — is shared with the bitmap path and knows
@@ -61,7 +61,7 @@ export interface GlyphRun {
  *
  * A dropped space therefore stays inside its run, which is what should happen — the fix for it is
  * to put the space back, not to cut the line in half, and that needs a per-run advance estimate
- * (`docs/RESEARCH.md` §6.11). Out of scope while code figures are skipped, and the failure it would
+ * (DESIGN §15.5). Out of scope while code figures are skipped, and the failure it would
  * cause here is benign anyway: two very close ticks merging into `0.20.4`, which is numeric and
  * never reaches a translator.
  */

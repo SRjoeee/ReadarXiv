@@ -1,5 +1,6 @@
 // The assertion list follows the upstream reference/read-frog/src/utils/host/translate/api/__tests__/microsoft.test.ts@9b44f82,
 // in the form of tests/providers/google-web.test.ts (fetch injected).
+import { LANG_CODES } from '@/config/languages'
 import { describe, expect, it, vi } from 'vitest'
 import { getRequestErrorMeta } from '@/providers/request/retry-policy'
 import { createMicrosoftProvider, supportsTarget } from '@/providers/microsoft'
@@ -94,7 +95,7 @@ describe('createMicrosoftProvider', () => {
   })
 
   it('the over-limit 400 returns plain text: not parsable as JSON, classified bad-request rather than network', async () => {
-    // The measured response body is exactly this line, not JSON (RESEARCH §5.1)
+    // The measured response body is exactly this line, not JSON (DESIGN §8.3)
     const fetch = vi.fn(async () => new Response('Request exceeds the maximum allowed translation size.', { status: 400, statusText: 'Bad Request' }))
     const error = await provider(fetch).translate(req(['one'])).catch(e => e)
     expect(error).toBeInstanceOf(ProviderError)
@@ -143,7 +144,7 @@ describe('createMicrosoftProvider', () => {
     expect((error as ProviderError).kind).toBe('aborted')
   })
 
-  it('keeps markers only: measured tags 0%, markers 98% (RESEARCH §5.1)', () => {
+  it('keeps markers only: measured tags 0%, markers 98% (DESIGN §8.3)', () => {
     expect(provider(vi.fn()).wireFormats).toEqual(['markers'])
   })
 })
@@ -157,7 +158,8 @@ describe('supportsTarget', () => {
     }
   })
 
-  it('target languages the endpoint does not support are false: 71 of 179 (RESEARCH §5.1)', () => {
+  it('target languages the endpoint does not support are false: 73 of 179 (DESIGN §8.3)', () => {
+    expect(LANG_CODES.filter(code => !supportsTarget(code))).toHaveLength(73)
     // Measured: these all return 400
     for (const code of ['ceb', 'epo', 'tgl', 'nno', 'ckb']) {
       expect([code, supportsTarget(code)]).toEqual([code, false])

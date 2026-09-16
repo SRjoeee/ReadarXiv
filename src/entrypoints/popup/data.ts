@@ -208,7 +208,7 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
 
   // Poll progress every 500 ms while translation is on: scrolling keeps triggering, there is no
   // "finished" (§10). The replaced-service state lives in background and is queried alongside —
-  // measured at millisecond round-trips (RESEARCH §6.7)
+  // measured at millisecond round-trips (DESIGN §8.0)
   const on = page?.progress.state === 'on'
   const session = page?.session ?? null
   // The saved settings' chain is asked whenever the page is not running — at mount, and again when it stops. A page

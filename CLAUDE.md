@@ -10,7 +10,7 @@ The project is being rebuilt toward V1.0 under the owner's mandate of 2026-09-12
 2. `docs/adr/` — one decision per file. ADR-0001 is the governance: baseline, workspace, which MVP conventions survive, which contracts get migrations.
 3. `docs/rebuild/PROGRESS.md` — the checkpoint log. After a context switch, start there.
 4. `docs/rebuild/INVENTORY.md` and `docs/rebuild/BASELINE.md` — what the MVP code actually does (module map, run paths, the guard ledger: what each odd branch originally fixed and which test guards it) and what its suites and measurements protect. The evidence for every trade-off.
-5. `docs/DESIGN.md` — **frozen** record of the v0.1 implementation (tag `v0.3.0-mvp`), with `docs/RESEARCH.md` (Phase 0 measurements) and `docs/UI.md` (the MVP UI contract). Cite them as evidence, not as the spec; edit them only to correct a misleading factual error, with a dated note.
+5. `docs/DESIGN.md` — the current design, regenerated on 2026-09-17 from the ADRs, `docs/UI.md` (the interface contract) and the code; cite it by section (`DESIGN §7.2`). Where it and an ADR disagree the ADR is newer; a structural decision gets an ADR, everything else changes in DESIGN.md in the PR that changes the code. The MVP's frozen record and the Phase 0 research live in git (`git show v0.3.0-mvp:docs/DESIGN.md`, `git show c0c044d:docs/RESEARCH.md`); `docs/rebuild/BASELINE.md` keeps the measured numbers every later claim stands against.
 
 `main` is frozen at the MVP baseline. Rebuild work happens on `rebuild/v1` (worktree `.worktrees/rebuild`). Without the owner's explicit request: nothing merges into `main`, no version is released, no history is rewritten.
 
@@ -78,6 +78,9 @@ pnpm e2e:image           # image translation through the installed helper (SKIP 
 pnpm e2e:placeholders    # placeholder survival per sentence shape against a live engine (DESIGN §6.3)
 pnpm fixtures:stats      # rule coverage audit over the fixtures
 pnpm helper:build        # Swift helper; pnpm helper:smoke talks to the binary over Native Messaging frames
+pnpm zip                 # the store archive; pnpm icons regenerates the icons
+AXT_MEASURE=1 pnpm vitest run tests/perf       # the cost measurements (readings, not assertions)
+AXT_CHROME=<binary> pnpm e2e                   # the e2e suite on a chosen Chrome; probes live in tests/e2e/probes/
 ```
 
 ## Agent skills

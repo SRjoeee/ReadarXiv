@@ -251,7 +251,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
    * **Not yet loaded, its `load` is awaited** rather than failing on the spot: the viewport scheduling is one-shot,
    * and after a failure the `load` event would not hand the figure over again, so it would stay untranslated until
    * the reader retried by hand (Codex on #134). Measured over 44 figures in 4 papers: all reachable after the page's
-   * load, even before any scroll (RESEARCH §6.11), so this path is normally never taken — but a session can start
+   * load, even before any scroll (DESIGN §15.5), so this path is normally never taken — but a session can start
    * while the page is still loading.
    */
   const svgOf = (target: ImageTarget): Element | undefined => {

@@ -3,8 +3,8 @@
 Phase 0 抓取的真实 `https://arxiv.org/html/<id>` 页面，原样保存（未做任何清洗），用于规则、占位符与渲染测试。
 版权归各论文作者所有，此处仅作测试数据；抓取日期 2026-09-03。
 
-抓取与统计脚本：`scripts/phase0/fetch-candidates.sh`（按类别 + 日期查 API 并下载）、`scripts/phase0/candidate-stats.sh`（特征计数）。
-所有 fixture 的生成器均为 `LaTeXML oxide (version 0.7.6)`，包括 2023 年的论文——见 `docs/RESEARCH.md` §1。
+抓取与特征计数当时用的 Phase 0 脚本已于 2026-09-17 随研究记录退役（`git show c0c044d:scripts/phase0/`）；规则覆盖统计用 `pnpm fixtures:stats`。
+所有 fixture 的生成器均为 `LaTeXML oxide (version 0.7.6)`，包括 2023 年的论文——见 DESIGN §5.7。
 
 | id | 提交日期 | 主分类 | 大小 | 特征计数（grep） | 选择理由 |
 |---|---|---|---|---|---|
@@ -21,11 +21,11 @@ Phase 0 抓取的真实 `https://arxiv.org/html/<id>` 页面，原样保存（�
 | 2609.04056 | 2026-09-03 | math.OC | 1.3 MB | math 2084 · eqn 302 · thm 166 · proof 54 · item 58 · note 2 | 2026-09-05 抓（CC BY-SA 4.0）：定理里只含公式的列表项、致谢块挂在右侧沟槽——side 模式版式回归用（DESIGN §7.2） |
 | 2609.03768 | 2026-09-03 | physics.comp-ph | 311 KB | td 267 · math 407 · flex 1（两个 size_1 格子） | 2026-09-05 抓（CC BY 4.0）：表格 + 脚注放在单列 flex 图里——side 模式配对回归用 |
 
-计数口径：`math`=`<math` 出现次数；`eqn`=`ltx_equation`；`listing`=`ltx_listingline`；`algo`=`ltx_float_algorithm|ltx_algorithm`；`td`=`ltx_td`；`note`=`ltx_note_content`；`thm`=`ltx_theorem`；`svg`=`<svg`。粗粒度 grep，仅用于选片，精确审计见 `docs/RESEARCH.md` §2。
+计数口径：`math`=`<math` 出现次数；`eqn`=`ltx_equation`；`listing`=`ltx_listingline`；`algo`=`ltx_float_algorithm|ltx_algorithm`；`td`=`ltx_td`；`note`=`ltx_note_content`；`thm`=`ltx_theorem`；`svg`=`<svg`。粗粒度 grep，仅用于选片，精确审计见 DESIGN §5.7。
 
 ## synthetic-structures.html（合成，非真实论文）
 
-LaTeXML / ar5iv 的样式表里有 145 个类没在抓过的 30 篇真实论文里出现（书稿、CV、索引、题记等模板专用，见 RESEARCH.md §2.12）。
+LaTeXML / ar5iv 的样式表里有 145 个类没在抓过的 30 篇真实论文里出现（书稿、CV、索引、题记等模板专用，见 DESIGN §5.7）。
 这份文件按 LaTeXML 的输出惯例把其中会带正文的结构各写一份：卷/章/小节标题、题记、引用块、description 列表、边注、
 索引词条、CV 条目、子图说明、verbatim、算法框、转换错误提示。它守护的是"没见过的结构不会漏翻"，
-新增结构时同时更新 RESEARCH.md §2.12。
+新增结构时同时更新 DESIGN §5.7。

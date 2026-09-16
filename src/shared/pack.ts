@@ -23,7 +23,7 @@ export async function packState(target: string): Promise<PackState> {
 
 /**
  * Download the pack. **Must run from the click itself**: with availability at `downloadable`,
- * create() without a user gesture throws NotAllowedError (RESEARCH §6.1). During a first download
+ * create() without a user gesture throws NotAllowedError (DESIGN §8.4). During a first download
  * availability() keeps answering `downloadable` and the monitor emits no progress (measured: 67 s),
  * so callers show an indeterminate state until this resolves. Returns false when there is no API
  */

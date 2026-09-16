@@ -182,7 +182,7 @@ interface ProviderQueues {
   fatal: FatalState
   /**
    * Every provider batches. Read Frog's `shouldUseBatchQueue` batches for LLMs only, because its free engines are
-   * **single-item APIs**; ours are not — `translateHtml` takes 150 items at once (RESEARCH §6.6), and the built-in
+   * **single-item APIs**; ours are not — `translateHtml` takes 150 items at once (DESIGN §8.3), and the built-in
    * engine declares 20. Copying that test would throw away the free engines' greatest advantage: measured, 216 blocks
    * went out as 61 requests with a median of 2 items each (cap 100 items / 8000 characters, §8.3). A provider with
    * `maxItemsPerBatch` 1 degenerates in BatchQueue to one request per item of itself, with no separate path

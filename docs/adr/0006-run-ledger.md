@@ -1,7 +1,7 @@
 # ADR-0006: One ledger for the text and image runs
 
 - Status: proposed (2026-09-13); fourth structural change of the rebuild
-- Evidence: `docs/rebuild/INVENTORY.md` P1; `inventory/core.md` §4.1; `src/core/pipeline/run.ts` (358 lines) and `src/core/image/run.ts` (425 lines) read side by side
+- Evidence: `docs/rebuild/INVENTORY.md` P1; `inventory/core.md` §4.1; `src/core/pipeline/run.ts` (358 lines) and `src/core/image/run.ts` (425 lines) read side by side (the `inventory/*` reports were deleted on 2026-09-17; read them at `git show c0c044d:docs/rebuild/inventory/<name>.md`)
 
 ## Context
 

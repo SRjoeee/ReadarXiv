@@ -1,7 +1,7 @@
 # ADR-0003: An acyclic renderer with an explicit surface
 
 - Status: accepted (2026-09-12); first structural change of the rebuild
-- Evidence: `docs/rebuild/INVENTORY.md` T1, S5, S10; `inventory/core.md` §4.1, §4.3
+- Evidence: `docs/rebuild/INVENTORY.md` T1, S5, S10; `inventory/core.md` §4.1, §4.3 (the `inventory/*` reports were deleted on 2026-09-17; read them at `git show c0c044d:docs/rebuild/inventory/<name>.md`)
 
 ## Context
 
