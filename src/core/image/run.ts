@@ -89,6 +89,8 @@ export interface ImageRun {
    * the idle trace: `images idle: 5/5 of 6` says one target never entered the viewport, and only this says which
    */
   waiting(): { target: ImageTarget; parked: boolean }[]
+  /** How many targets the viewport observer still holds */
+  observing(): number
 }
 
 /** Does this inline figure hold a label worth translating: a formula-only TikZ picture (most of the corpus) need not enter the scheduler */
@@ -421,5 +423,6 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     fatal: () => ledger.fatalReason(),
     progress,
     waiting: () => ledger.inState('waiting').map(target => ({ target, parked: parked.has(target) })),
+    observing: () => ledger.observing(),
   }
 }

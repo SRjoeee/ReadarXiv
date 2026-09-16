@@ -370,7 +370,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       const left = images?.waiting() ?? []
       if (left.length === 0) return ''
       const shown = left.slice(0, 8).map(w => `${w.target.id || w.target.kind}${w.parked ? ' (parked)' : ''}`)
-      return `; waiting: ${shown.join(', ')}${left.length > 8 ? `, +${left.length - 8}` : ''}`
+      return `; waiting: ${shown.join(', ')}${left.length > 8 ? `, +${left.length - 8}` : ''}; observer holds ${images?.observing() ?? 0}`
     }
     images = startImageTranslation({
       renderPath,
