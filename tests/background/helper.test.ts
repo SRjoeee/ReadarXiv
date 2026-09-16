@@ -355,18 +355,60 @@ describe('createHelperClient', () => {
     await expect(c).rejects.toMatchObject({ kind: 'invalid-response' })
   })
 
-  it('keep-alive runs only while a request is in flight and stops when idle', async () => {
-    const keepAlive = vi.fn()
-    const { client, port } = setup({ keepAlive, keepAliveMs: 100 })
+  it('an idle port is dropped after the grace period, and the next request starts a fresh connection with its own handshake', async () => {
+    const { client, port, ports } = setup({ idleMs: 100 })
     const a = client.ocr({ image: 'A' })
     await flush()
     await handshake(port())
-    vi.advanceTimersByTime(350)
-    expect(keepAlive).toHaveBeenCalledTimes(3)
     port().reply({ v: 1, id: port().lastId(), width: 1, height: 1, lines: [] })
     await a
-    vi.advanceTimersByTime(1000)
-    expect(keepAlive).toHaveBeenCalledTimes(3) // not called again after the end
+    expect(ports).toHaveLength(1)
+    vi.advanceTimersByTime(99)
+    expect(port().disconnected).toBe(false)
+    vi.advanceTimersByTime(1)
+    expect(port().disconnected).toBe(true) // the helper gets EOF and exits
+    const b = client.ocr({ image: 'B' })
+    await flush()
+    expect(ports).toHaveLength(2)
+    expect(port().sent[0]).toMatchObject({ cmd: 'ping' }) // the fresh connection shakes hands before the OCR
+    await handshake(port(), '0.2.0')
+    expect(await client.status()).toEqual({ state: 'ready', version: '0.2.0' }) // the reconnected port's own version, not the old one
+    port().reply({ v: 1, id: port().lastId(), width: 1, height: 1, lines: [] })
+    await b
+  })
+  it('a request inside the grace period keeps the port, and the period starts over once it is answered', async () => {
+    const { client, port, ports } = setup({ idleMs: 100 })
+    const a = client.ocr({ image: 'A' })
+    await flush()
+    await handshake(port())
+    port().reply({ v: 1, id: port().lastId(), width: 1, height: 1, lines: [] })
+    await a
+    vi.advanceTimersByTime(60)
+    const b = client.ocr({ image: 'B' })
+    await flush()
+    vi.advanceTimersByTime(90) // 150 ms since the first answer: a pending request holds the port
+    expect(port().disconnected).toBe(false)
+    port().reply({ v: 1, id: port().lastId(), width: 1, height: 1, lines: [] })
+    await b
+    vi.advanceTimersByTime(99)
+    expect(port().disconnected).toBe(false)
+    vi.advanceTimersByTime(1)
+    expect(port().disconnected).toBe(true)
+    expect(ports).toHaveLength(1)
+  })
+  it('a status probe alone opens a port that is dropped when idle, so a popup open does not pin the helper for the session', async () => {
+    const { client, port, ports } = setup({ idleMs: 100 })
+    const first = client.status()
+    await flush()
+    port().reply({ v: 1, id: port().lastId(), ok: true, version: '0.1.0' })
+    expect(await first).toEqual({ state: 'ready', version: '0.1.0' })
+    vi.advanceTimersByTime(100)
+    expect(port().disconnected).toBe(true)
+    const again = client.status() // asks the helper afresh rather than trusting the dropped connection's version
+    await flush()
+    expect(ports).toHaveLength(2)
+    port().reply({ v: 1, id: port().lastId(), ok: true, version: '0.1.0' })
+    expect(await again).toEqual({ state: 'ready', version: '0.1.0' })
   })
   it('the permission comes first (ADR-0002): without it status says permission-missing and nothing is connected; granted, it connects', async () => {
     let granted = false

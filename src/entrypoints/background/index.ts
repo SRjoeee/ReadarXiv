@@ -70,13 +70,12 @@ export default defineBackground(() => {
    * cancelled by its scope as before
    */
   /**
-   * The local OCR helper of image translation (DESIGN §15): connected lazily, with a harmless API called on a timer while
-   * a request is in flight, as a keep-alive — an open port does not keep the worker from being reclaimed. Withdrawing a session withdraws its queued recognitions too (the router's onDrop)
+   * The local OCR helper of image translation (DESIGN §15): connected lazily; the open port keeps the worker alive while
+   * a recognition is in flight (measured, helper.ts). Withdrawing a session withdraws its queued recognitions too (the router's onDrop)
    */
   const helper = createHelperClient({
     connect: () => browser.runtime.connectNative(HELPER_HOST),
     lastError: () => browser.runtime.lastError?.message,
-    keepAlive: () => void browser.runtime.getPlatformInfo(),
     // Optional permission (ADR-0002): asked before each connection. The binding is missing in a worker started
     // before the grant; `restarting` is what it reports until the alarm below has brought a fresh one
     permitted: () => browser.permissions.contains({ permissions: ['nativeMessaging'] }),
@@ -160,8 +159,8 @@ export default defineBackground(() => {
     probe: () => ocr.status({ recheck: true }),
     announce: broadcastHelper,
     now: () => Date.now(),
-    schedule: (run, ms) => setTimeout(run, ms) as unknown as number,
-    cancel: id => clearTimeout(id),
+    schedule: (run, ms) => self.setTimeout(run, ms),
+    cancel: id => self.clearTimeout(id),
     load: async () => {
       const stored = await browser.storage.session.get(AWAIT_KEY).catch(() => ({}) as Record<string, unknown>)
       const value = stored[AWAIT_KEY]

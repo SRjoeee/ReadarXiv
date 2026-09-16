@@ -2,14 +2,16 @@
 // Messaging port. It is the helper implementation of `OcrBackend` (ocr-backend.ts, ADR-0002).
 //
 // Facts about MV3 that shape it:
-// - The keep-alive (a harmless API call every 20 s while a request is in flight) was built on the MVP-era belief that
-//   an open port does not keep the service worker alive. Chrome's lifecycle documentation says otherwise for native
-//   messaging since Chrome 105: a `connectNative` port keeps the worker alive, and the worker terminates after its
-//   timers once the host exits (correction 2026-09-13, from the local review). The timer is redundant by that
-//   account and harmless; removing it waits on a measurement on a current Chrome. What stays true: when the worker
-//   is recycled the port closes, the helper sees EOF and exits, and every pending request is voided by
-//   `onDisconnect` — the next request reconnects and pings again (the version is part of the cache key, so a
-//   reconnected port must not reuse the old one).
+// - An open `connectNative` port keeps the worker alive: Chrome's lifecycle documentation says so since Chrome 105,
+//   and it was measured on 2026-09-17 (Chrome for Testing 153, `tests/e2e/probes/keepalive.mjs`: a port opened inside
+//   the worker, no page open and no debugger attached — worker and helper both alive at 75 s, past the 30 s idle
+//   line). The MVP-era keep-alive timer that rested on the opposite belief is gone (ADR-0002 follow-up). The same
+//   fact cuts the other way: a port left open with nothing to do would keep the worker and the helper process alive
+//   for the whole browser session after one popup open (Devin on #215), so **an idle port is dropped** after a grace
+//   period (`idleMs`, 30 s) — the helper exits, and the next request starts a fresh process and shakes hands again.
+//   What stays true: when the worker is recycled the port closes, the helper sees EOF and exits, and every pending
+//   request is voided by `onDisconnect` — the next request reconnects and pings again (the version is part of the
+//   cache key, so a reconnected port must not reuse the old one).
 // - With no host registered, `connectNative` does not throw: the port disconnects at once with "not found" in
 //   `lastError`. That is remembered for the worker's life; nothing reconnects until a `recheck`.
 // - `nativeMessaging` is optional (ADR-0002): `permitted` is asked before any connection, and `bound` says whether
@@ -38,13 +40,12 @@ export interface HelperClientDeps {
   timeoutMs?: number
   /** The timeout of the **first** OCR in this worker: the first Vision run on a machine does a one-time model preparation (measured 26.6 s), and 30 s would misjudge the helper hung */
   firstOcrTimeoutMs?: number
-  /** The keep-alive interval and action while a request is in flight */
-  keepAliveMs?: number
-  keepAlive?: () => void
   /** Whether the optional `nativeMessaging` permission is granted right now (ADR-0002); absent means granted */
   permitted?: () => Promise<boolean>
   /** Whether this worker's context has `runtime.connectNative` — false in a worker that predates the grant */
   bound?: () => boolean
+  /** How long an open port with nothing pending or queued is kept before it is dropped */
+  idleMs?: number
 }
 
 interface Pending {
@@ -61,7 +62,8 @@ interface Queued extends Pending {
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const DEFAULT_FIRST_OCR_TIMEOUT_MS = 120_000
-const DEFAULT_KEEP_ALIVE_MS = 20_000
+/** An open port keeps the worker and the helper alive (measured); with nothing to do it is dropped after this long */
+const DEFAULT_IDLE_MS = 30_000
 const MAX_IN_FLIGHT = 1
 
 /** Recognise “the host is not installed at all” in Chrome's disconnect reason: no retry for this kind */
@@ -72,9 +74,9 @@ function isMissingHost(reason: string | undefined): boolean {
 export function createHelperClient(deps: HelperClientDeps): OcrBackend {
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const firstOcrTimeoutMs = deps.firstOcrTimeoutMs ?? DEFAULT_FIRST_OCR_TIMEOUT_MS
+  const idleMs = deps.idleMs ?? DEFAULT_IDLE_MS
   /** Recognised successfully once in this worker: Vision's one-time preparation has been paid for, and the normal timeout applies from here */
   let warmed = false
-  const keepAliveMs = deps.keepAliveMs ?? DEFAULT_KEEP_ALIVE_MS
   let port: NativePort | null = null
   /** The result of this connection's ping; void on disconnect. A connection that never shook hands sends no OCR — the pump puts a ping at the head first */
   let known: HelperStatus | null = null
@@ -83,16 +85,8 @@ export function createHelperClient(deps: HelperClientDeps): OcrBackend {
   let sequence = 0
   const pending = new Map<string, Pending>()
   const queue: Queued[] = []
-  let keepAliveTimer: ReturnType<typeof setInterval> | null = null
-
+  let idleTimer: ReturnType<typeof setTimeout> | null = null
   const busy = () => pending.size > 0 || queue.length > 0
-  const updateKeepAlive = () => {
-    if (busy() && !keepAliveTimer && deps.keepAlive) keepAliveTimer = setInterval(deps.keepAlive, keepAliveMs)
-    if (!busy() && keepAliveTimer) {
-      clearInterval(keepAliveTimer)
-      keepAliveTimer = null
-    }
-  }
 
   const settle = (id: string): Pending | undefined => {
     const entry = pending.get(id)
@@ -112,7 +106,6 @@ export function createHelperClient(deps: HelperClientDeps): OcrBackend {
   const failAll = (kind: ProviderErrorKind, message: string) => {
     for (const id of Array.from(pending.keys())) settle(id)?.reject(new OcrBackendError(kind, message))
     for (const item of queue.splice(0)) item.reject(new OcrBackendError(kind, message))
-    updateKeepAlive()
   }
 
   /**
@@ -122,6 +115,10 @@ export function createHelperClient(deps: HelperClientDeps): OcrBackend {
    * queue behind it; Codex on #87) and on a failed handshake
    */
   const dropPort = () => {
+    if (idleTimer) {
+      clearTimeout(idleTimer)
+      idleTimer = null
+    }
     const stale = port
     port = null
     known = null
@@ -172,6 +169,19 @@ export function createHelperClient(deps: HelperClientDeps): OcrBackend {
     return opened
   }
 
+  /** Re-armed after every change of the work in hand: an open port with nothing pending or queued is dropped once the grace period passes */
+  const armIdle = () => {
+    if (idleTimer) {
+      clearTimeout(idleTimer)
+      idleTimer = null
+    }
+    if (!port || busy()) return
+    idleTimer = setTimeout(() => {
+      idleTimer = null
+      if (!busy()) dropPort()
+    }, idleMs)
+  }
+
   const pump = () => {
     while (pending.size < MAX_IN_FLIGHT && queue.length > 0) {
       if (missing) {
@@ -206,7 +216,7 @@ export function createHelperClient(deps: HelperClientDeps): OcrBackend {
         break
       }
     }
-    updateKeepAlive()
+    armIdle()
   }
 
   const send = (cmd: string, payload: Record<string, unknown>, scope?: string): Promise<Record<string, unknown>> => {
