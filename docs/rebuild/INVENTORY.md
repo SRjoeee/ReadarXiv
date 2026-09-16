@@ -140,6 +140,8 @@ Consolidated from the four raw lists, deduplicated, grouped by what the charter 
 
 ### 4.5 Test coverage gaps (charter §6 — know what is unprotected before moving it)
 
+> **Closed 2026-09-17 (the follow-ups checkpoint)**: the appearance editors and grid, the service drawer's delete and more-options, the prompt manager's import / export / insertion and the menu's placement rule have component tests; the three costs are measured (§8.4); `content/index.ts` stays an adapter over the tested session. The rows below are the record.
+
 > Re-verified 2026-09-16: #185 gave the settings and popup data layers and the appearance editors their first component tests (`tests/options/*`, `tests/popup/*`, `tests/ui/*`, through `tests/ui/render-hook.ts`); `content/index.ts` is 70 lines of wiring since ADR-0004 and the session it wires is under `tests/session/*`. Still true: the popup's menus are exercised only through `derivePopupView`, nothing measures the highlight `MutationObserver` under a translation burst or `lazy.ts release()` at 880 blocks, and CI runs no e2e — the owner's decision of 2026-09-13 keeps the browser suites local.
 
 - `entrypoints/options/**`: **zero unit tests** (no `@testing-library/react` in the repo); six e2e scripts cover parts. Never exercised by any test: `ProfileEditor.tsx` (colour, opacity, underline, blur, advanced CSS, duplicate, delete), the highlight-profile grid, the glossary textarea, `PromptManager` edit / import / export / token insertion, `ServiceDrawer` "more options / thinking" and **"delete service"**.
