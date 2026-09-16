@@ -47,7 +47,8 @@ rmSync(PROFILE, { recursive: true, force: true })
 mkdirSync(SHOTS, { recursive: true })
 
 const context = await chromium.launchPersistentContext(PROFILE, {
-  channel: 'chromium',
+  // AXT_CHROME: a Chrome binary to run the suite on instead of Playwright's Chromium (a floor-side Chrome, say)
+  ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: !process.env.AXT_HEADED,
   // --expose-gc lets the page force a collection: the sentence-highlight registry has to let a
   // restored page drop its translations, and that is only checkable where GC actually runs
