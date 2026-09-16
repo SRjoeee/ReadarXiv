@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { browser } from 'wxt/browser'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { AxtMessage } from '@/shared/messages'
 import { mountHook } from '../ui/render-hook'
@@ -162,4 +163,27 @@ describe('useOptionsData', () => {
     expect(reload).toHaveBeenCalledTimes(1)
     await hook.unmount()
   })
+
+  it('a pack downloaded on the popup shows installed on the Chrome card without a click; another target starts no lookup (INVENTORY S7)', async () => {
+    const listeners = vi.mocked(browser.runtime.onMessage.addListener).mock.calls.length
+    const hook = await mountHook(useOptionsData)
+    await hook.until(() => hook.current().pack !== null)
+    expect(hook.current().pack).toBe('unsupported') // no Translator API in the test runtime
+    const onMessage = vi.mocked(browser.runtime.onMessage.addListener).mock.calls[listeners]?.[0] as (message: unknown) => void
+    // The other surface's download installed the pack: from here on the API answers, and only a lookup shows it
+    const availability = vi.fn(async () => 'available')
+    ;(globalThis as { Translator?: unknown }).Translator = { availability }
+    try {
+      await hook.run(() => onMessage({ type: 'axt:pack-changed', target: 'jpn' }))
+      expect(availability).not.toHaveBeenCalled()
+      expect(hook.current().pack).toBe('unsupported')
+      await hook.run(() => onMessage({ type: 'axt:pack-changed', target: DEFAULT_CONFIG.targetLanguage }))
+      expect(availability).toHaveBeenCalledTimes(1)
+      expect(hook.current().pack).toBe('available')
+    } finally {
+      delete (globalThis as { Translator?: unknown }).Translator
+    }
+    await hook.unmount()
+  })
+
 })

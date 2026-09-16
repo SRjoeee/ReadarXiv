@@ -112,6 +112,8 @@ export interface AxtMessages {
    * Nobody listening is the normal case, so the send may reject
    */
   'axt:helper-state': { request: { status: HelperStatus }; response: undefined }
+  /** popup ↔ options: a download of this language pack ended on one surface; the other looks it up again (INVENTORY S7) */
+  'axt:pack-changed': { request: { target: string }; response: undefined }
   /**
    * Sent to every tab when a re-probe finds the helper that was missing. A paper parks its bitmaps
    * when the probe at session start came back empty-handed, and nothing else would ever tell it
