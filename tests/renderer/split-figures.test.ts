@@ -205,6 +205,17 @@ describe('splitFigures', () => {
     expect(setSplitDuplicatesHidden(doc, false)).toBe(1)
     expect(svg.getAttribute('aria-hidden')).toBe('true')
     expect(copy.querySelector('img')!.hasAttribute('aria-hidden')).toBe(false)
+    // `aria-hidden="false"` exposes — a token, not a boolean — so such media are duplicates like any other, silenced in
+    // side and given their explicit value back on leaving it (Devin on #213)
+    const exposed = docOf(`<figure class="ltx_figure"><img class="ltx_graphics" src="a.png" aria-hidden="false">
+      <figcaption class="ltx_caption">cap</figcaption><figcaption class="ltx_caption ${T_CLASS}" data-axt-for="c1">translated</figcaption></figure>`)
+    expect(splitFigures(exposed)).toBe(1)
+    const img = exposed.querySelector(`.${SPLIT_CLASS} img`)!
+    expect(img.getAttribute('aria-hidden')).toBe('true')
+    expect(img.hasAttribute('inert')).toBe(true)
+    expect(setSplitDuplicatesHidden(exposed, false)).toBe(1)
+    expect(img.getAttribute('aria-hidden')).toBe('false')
+    expect(img.hasAttribute('inert')).toBe(false)
   })
 
   it('the copy\'s duplicated media are silenced for assistive technology in side mode and speak again outside it (§7.4b, issue #170)', () => {

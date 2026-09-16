@@ -139,10 +139,12 @@ function markDuplicates(clone: Element): void {
   for (const media of Array.from(clone.querySelectorAll(FIGURE_MEDIA))) {
     // Inside a translation or an image overlay (§15.2) it is ours, and the copy's is the one shown in side
     if (media.closest(`.${T_CLASS}, .${IMG_CLASS}`) !== clone) continue
-    // Already silent by the paper's own hand (a decorative `aria-hidden` SVG): not ours to mark, or leaving side
-    // would strip the paper's attributes along with what side added (Devin on #213)
-    if (media.hasAttribute('aria-hidden') || media.hasAttribute('inert')) continue
-    media.setAttribute(DUPLICATE_ATTR, '')
+    // Already silent by the paper's own hand (a decorative `aria-hidden="true"` SVG, an inert one): not ours to mark,
+    // or leaving side would strip the paper's attributes along with what side added. `aria-hidden` is a token, not a
+    // boolean: `"false"` exposes, and such media are duplicates like any other — the value is kept in the mark and put
+    // back when side is left (Devin on #213, twice)
+    if (media.getAttribute('aria-hidden') === 'true' || media.hasAttribute('inert')) continue
+    media.setAttribute(DUPLICATE_ATTR, media.getAttribute('aria-hidden') ?? '')
   }
 }
 
@@ -159,7 +161,10 @@ export function setSplitDuplicatesHidden(root: Document | Element, hidden: boole
       media.setAttribute('aria-hidden', 'true')
       media.setAttribute('inert', '')
     } else {
-      media.removeAttribute('aria-hidden')
+      // Back to what the paper had: an explicit `aria-hidden="false"` returns, an absent attribute stays absent
+      const own = media.getAttribute(DUPLICATE_ATTR) ?? ''
+      if (own === '') media.removeAttribute('aria-hidden')
+      else media.setAttribute('aria-hidden', own)
       media.removeAttribute('inert')
     }
     changed++
