@@ -32,8 +32,10 @@ helper/install.sh <extension-id>
 扩展 id 在 `chrome://extensions` 打开开发者模式后，扩展卡片上的「ID」。脚本会：
 
 1. `swift build -c release`，二进制在 `helper/.build/release/axt-helper`
-2. 把 host manifest 写进 Chrome 与 Chromium 默认用户数据目录下的 `NativeMessagingHosts/io.github.srjoeee.arxivtranslate.json`
-   （`~/Library/Application Support/Google/Chrome/…` 与 `…/Chromium/…`）。Chrome 找的是 **`<用户数据目录>/NativeMessagingHosts/`**，
+2. 运行 `helper/register.sh`——host manifest 唯一的写入者（一键安装最后也走它）：把
+   `NativeMessagingHosts/io.github.srjoeee.arxivtranslate.json` 写进 Chrome 与 Chromium 默认用户数据目录
+   （`~/Library/Application Support/Google/Chrome/…` 与 `…/Chromium/…`）。再次运行会保留之前允许过的扩展 id（另一个 profile、装在旁边的开发版），
+   二进制路径以最后一次为准。Chrome 找的是 **`<用户数据目录>/NativeMessagingHosts/`**，
    所以用 `--user-data-dir` 起的浏览器（Playwright 的 e2e）要把 manifest 复制进它自己的 profile 目录；e2e 脚本会自己做
 
 装完扩展会自动检测到；设置页「图片翻译」一节随即显示 helper 版本。签名、公证与 pkg 分发暂不做（§15.4）。
@@ -47,4 +49,4 @@ pnpm helper:smoke    # 按原生协议喂一张参考图，检查识别行与坐
 
 ## 卸载
 
-删掉上面两个 manifest 文件即可；二进制在仓库目录里，随 `git clean` 或 `rm -rf helper/.build` 走。
+删掉上面两个 manifest 文件即可（要撤掉某次允许过的扩展 id 也是这么做）；二进制在仓库目录里，随 `git clean` 或 `rm -rf helper/.build` 走。
