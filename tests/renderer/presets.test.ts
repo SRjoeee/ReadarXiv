@@ -92,13 +92,13 @@ describe('translation appearance (§7.5)', () => {
   it('the advanced CSS is wrapped in our selector, and a change rewrites the style sheet', () => {
     const doc = docOf('<p class="ltx_p" id="p1">Text.</p>')
     enable(doc, 'stack', lookWith({ css: 'color: #1565c0;' }))
-    const sheet = doc.querySelector('style[data-axt-sheet="modes"]')!
+    const sheet = doc.querySelector('style[data-axt-sheet="look"]')!
     expect(sheet.textContent).toContain(`${CUSTOM_STYLE_SELECTOR} {`)
     expect(sheet.textContent).toContain('color: #1565c0;')
     // enable again with new declarations: the same <style> element is updated, no second copy stacked
     enable(doc, 'stack', lookWith({ css: 'color: teal;' }))
-    expect(doc.querySelectorAll('style[data-axt-sheet="modes"]')).toHaveLength(1)
-    expect(doc.querySelector('style[data-axt-sheet="modes"]')!.textContent).toContain('color: teal;')
+    expect(doc.querySelectorAll('style[data-axt-sheet="look"]')).toHaveLength(1)
+    expect(doc.querySelector('style[data-axt-sheet="look"]')!.textContent).toContain('color: teal;')
   })
 
   it('the declaration block accepts declarations only: braces, @ rules and `<` are refused (against slips, not a security boundary)', () => {

@@ -12,51 +12,72 @@ import { clearSentenceHighlights } from './highlight'
 import { cancelSkeletonsIn } from './skeleton'
 import { appearanceRule, customStyleRule } from './style-preset'
 
-const STYLE_MARK = 'modes'
+/** The two injected sheets, told apart by `STYLE_ATTR`; `restore` removes whatever carries the attribute */
+const STATIC_MARK = 'modes'
+const LOOK_MARK = 'look'
 
-/** What the sheet needs: the reader's active style and band profiles (§7.5). `Look` lives with the profiles */
+/** What the look sheet needs: the reader's active style and band profiles (§7.5). `Look` lives with the profiles */
 export type { Look }
 
 /**
- * The injected sheet's content. Its order is the cascade order, and two things **must** hold:
- * - `appearanceRule`'s `base` (opacity) comes **before** presetsCss, so the blur rule composes with it instead of
- *   overriding it; `overrides` (colour and highlight variables) come **after**
- * - `customStyleRule` comes last: it is the advanced escape hatch and gets the final word
+ * The static sheet: the four style files, the same for every look, written once at the first `enable` and never
+ * again (INVENTORY T5 — a colour change used to rewrite all 900 lines of it). The order is the cascade order:
+ * modes (layout; `.axt-t { color: var(--axt-color) }`), presets (underline, the baseline opacity, blur — consuming
+ * the look's variables), image, highlight
  */
-function styleSheet(look?: Look): string {
-  const vars = look ? appearanceRule(look) : { base: '', overrides: '' }
-  const custom = look ? customStyleRule(look.style.css) : ''
-  return `${modesCss}\n${vars.base}${presetsCss}\n${imageCss}\n${highlightCss}\n${vars.overrides}${custom}`
-}
-
-/** The same sheet the page gets, for the settings preview to put in its iframe */
-export const appearanceSheet = (look: Look): string => styleSheet(look)
+const STATIC_SHEET = `${modesCss}\n${presetsCss}\n${imageCss}\n${highlightCss}`
 
 /**
- * Appearance only, no translation node touched (#47): write the profile's switches and recompute the
- * injected sheet. This is the path a colour change in the settings page takes, and it **does not
+ * The look sheet: the reader's values as variables (`appearanceRule`) and the advanced declarations
+ * (`customStyleRule`), in that order. It follows the static sheet in the document, so the declarations — the escape
+ * hatch — have the final word by cascade order; the variables are set nowhere else. Small, and the only sheet a look
+ * change rewrites
+ */
+function lookSheet(look: Look): string {
+  return appearanceRule(look) + customStyleRule(look.style.css)
+}
+
+/** Rewrite the look sheet when the look changed; says whether it did. Written only when it differs, to spare a needless style recalculation */
+function writeLook(sheet: Element, look: Look): boolean {
+  const css = lookSheet(look)
+  if (sheet.textContent === css) return false
+  sheet.textContent = css
+  return true
+}
+
+function sheetElement(doc: Document, mark: string, css: string): HTMLStyleElement {
+  const el = doc.createElement('style')
+  el.setAttribute(STYLE_ATTR, mark)
+  el.textContent = css
+  return el
+}
+
+const findSheet = (doc: Document, mark: string) => doc.querySelector(`style[${STYLE_ATTR}="${mark}"]`)
+
+/** The same sheets the page gets, as one, for the settings preview to put in its iframe */
+export const appearanceSheet = (look: Look): string => `${STATIC_SHEET}\n${lookSheet(look)}`
+
+/**
+ * Appearance only, no translation node touched (#47): write the profile's switches and rewrite the
+ * look sheet. This is the path a colour change in the settings page takes, and it **does not
  * re-request anything** (§8.5's `chainConfigChanged` ignores `style` already). With translation off
  * there is no injected sheet and nothing to do — the next `enable` carries the new values.
  */
 export function applyStyle(doc: Document, look: Look): boolean {
-  const sheet = doc.querySelector(`style[${STYLE_ATTR}="${STYLE_MARK}"]`)
+  const sheet = findSheet(doc, LOOK_MARK)
   if (!sheet) return false
   setAppearanceAttrs(doc, look)
-  const css = styleSheet(look)
-  if (sheet.textContent !== css) {
-    sheet.textContent = css
-    // Font size, leading and weight can all change here, and then the line is no longer where the
-    // bands were traced. They are absolute boxes in document coordinates and cannot follow a
-    // reflow, so drop them; the next pointer move repaints against the new layout (Codex on #138).
-    clearSentenceHighlights(doc)
-  }
+  // Font size, leading and weight can all change here (the advanced declarations), and then the line is no longer
+  // where the bands were traced. They are absolute boxes in document coordinates and cannot follow a reflow, so
+  // drop them; the next pointer move repaints against the new layout (Codex on #138).
+  if (writeLook(sheet, look)) clearSentenceHighlights(doc)
   return true
 }
 
 /**
  * Enter the translated state: the state attribute on <html>, the mode and the appearance injected (idempotent).
- * Appearance, like the mode, is only attributes on <html> (§7.5); a configuration change touches no DOM; the
- * advanced CSS is recomputed on every injection
+ * Appearance, like the mode, is only attributes on <html> and variables in the look sheet (§7.5); a configuration
+ * change touches no DOM. Without a look, an existing look sheet is left as it is — a mode switch must not touch the appearance
  */
 export function enable(doc: Document, mode: Mode, look?: Look, lang?: string): void {
   doc.documentElement.setAttribute(ON_ATTR, '')
@@ -69,17 +90,12 @@ export function enable(doc: Document, mode: Mode, look?: Look, lang?: string): v
     else doc.documentElement.removeAttribute(DIR_ATTR)
   }
   if (look) setAppearanceAttrs(doc, look)
-  const existing = doc.querySelector(`style[${STYLE_ATTR}="${STYLE_MARK}"]`)
-  const css = styleSheet(look)
-  if (existing) {
-    // The custom CSS may have changed (edited in settings, then translated again): written only when it differs, to spare a needless style recalculation
-    if (existing.textContent !== css) existing.textContent = css
-    return
-  }
-  const el = doc.createElement('style')
-  el.setAttribute(STYLE_ATTR, STYLE_MARK)
-  el.textContent = css
-  doc.head.append(el)
+  const fixed = findSheet(doc, STATIC_MARK) ?? doc.head.appendChild(sheetElement(doc, STATIC_MARK, STATIC_SHEET))
+  const existing = findSheet(doc, LOOK_MARK)
+  // The custom CSS may have changed (edited in settings, then translated again)
+  if (existing) { if (look) writeLook(existing, look); return }
+  // Right after the static sheet, whatever else the head holds: the look sheet wins by order, not by specificity
+  fixed.after(sheetElement(doc, LOOK_MARK, look ? lookSheet(look) : ''))
 }
 
 /**
