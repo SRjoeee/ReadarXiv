@@ -52,6 +52,17 @@ function setup(overrides: Partial<ImageRunOptions> = {}) {
 }
 
 describe('startImageTranslation', () => {
+  it('waiting() names the targets never requested, and whether each is parked behind the gate', async () => {
+    let enabled = false
+    const { targets, run } = setup({ isEnabled: () => enabled })
+    expect(run.waiting().map(w => [w.target.id, w.parked])).toEqual(targets.map(t => [t.id, false]))
+    await run.translate(targets) // the gate refuses: parked, still waiting
+    expect(run.waiting().map(w => w.parked)).toEqual(targets.map(() => true))
+    enabled = true
+    run.resume()
+    await vi.waitFor(() => expect(run.progress().done).toBe(targets.length))
+    expect(run.waiting()).toEqual([])
+  })
   it('the normal path: fetch → OCR → merge and filter boxes → translate → overlay; the caption in the same batch as context; callbacks and progress', async () => {
     const { doc, targets, run, ocr, translate, rendered, progress } = setup()
     await run.translate(targets)

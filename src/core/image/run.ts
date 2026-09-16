@@ -70,6 +70,8 @@ export interface ImageRunOptions {
   fetchBytes?: (url: string) => Promise<ImageBytes>
   onProgress?: (progress: ImageProgress) => void
   onRendered?: (targets: ImageTarget[]) => void
+  /** One line per hand-over from the viewport observer and per gate decision: the record a nondeterministic run is read from */
+  onTrace?: (line: string) => void
 }
 
 export interface ImageRun {
@@ -82,6 +84,11 @@ export interface ImageRun {
   stop(): void
   failed(): ImageTarget[]
   progress(): ImageProgress
+  /**
+   * The targets never requested so far, and whether each is parked behind the mode or helper gate. A diagnostic for
+   * the idle trace: `images idle: 5/5 of 6` says one target never entered the viewport, and only this says which
+   */
+  waiting(): { target: ImageTarget; parked: boolean }[]
 }
 
 /** Does this inline figure hold a label worth translating: a formula-only TikZ picture (most of the corpus) need not enter the scheduler */
@@ -372,6 +379,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     // The gate is asked per target (§15.5): bitmaps wait for the helper, SVG figures do not; the refused ones park
     const { taken: ready, held } = ledger.intake(picked, options.isEnabled)
     for (const t of held) parked.add(t)
+    options.onTrace?.(`images entered: ${picked.map(t => t.id || t.kind).join(', ')} → taken ${ready.length}, parked ${held.length}, unknown ${picked.length - ready.length - held.length}`)
     if (ready.length === 0) return
     for (const t of ready) parked.delete(t)
     ledger.request(ready)
@@ -412,5 +420,6 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     failed: () => ledger.failed(),
     fatal: () => ledger.fatalReason(),
     progress,
+    waiting: () => ledger.inState('waiting').map(target => ({ target, parked: parked.has(target) })),
   }
 }
