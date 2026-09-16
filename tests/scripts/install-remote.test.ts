@@ -16,6 +16,11 @@ describe('helper/install-remote.sh', () => {
     expect(run(ID)).toBe('https://codeload.github.com/SRjoeee/ReadarXiv/tar.gz/refs/heads/main')
   })
 
+  it('a release tag — what a build made after tagging passes — fetches refs/tags/<tag>', () => {
+    expect(run(ID, 'v1.0.0')).toBe('https://codeload.github.com/SRjoeee/ReadarXiv/tar.gz/refs/tags/v1.0.0')
+    expect(run(ID, 'v1.0.0-rc.1')).toBe('https://codeload.github.com/SRjoeee/ReadarXiv/tar.gz/refs/tags/v1.0.0-rc.1')
+  })
+
   it('a commit hash — what a pinned build passes — fetches that commit', () => {
     const sha = '0123456789abcdef0123456789abcdef01234567'
     expect(run(ID, sha)).toBe(`https://codeload.github.com/SRjoeee/ReadarXiv/tar.gz/${sha}`)
