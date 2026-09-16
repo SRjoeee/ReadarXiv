@@ -97,6 +97,8 @@ export interface LocalTransportDeps extends Pick<TranslateServiceDeps, 'queue' |
   cache?: CachePort
   /** Replace the chain building (for tests) */
   buildChain?: (config: Config) => Promise<{ chain: TranslationProvider[]; renderPath: RenderPath }>
+  /** Where the services' warnings go besides the console: the diagnostics log (issue #156) */
+  warn?: (line: string) => void
 }
 
 /**
@@ -126,13 +128,14 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       getModel: async () => (engine.id === chosen?.id ? chosen.model : undefined),
       cancelled: deps.cancelled,
       retired: isRetired,
+      ...(deps.warn ? { warn: deps.warn } : {}),
       ...(deps.cache ? { cache: deps.cache } : {}),
       ...(deps.queue ? { queue: deps.queue } : {}),
       ...(deps.batch ? { batch: deps.batch } : {}),
       ...(deps.cacheReadBudgetMs !== undefined ? { cacheReadBudgetMs: deps.cacheReadBudgetMs } : {}),
     }),
   }))
-  const service = createFallbackService(steps)
+  const service = createFallbackService(steps, deps.warn ? { warn: deps.warn } : {})
 
   /**
    * A service of the reader's that this chain is not built around: the connection test has to answer for the
@@ -145,7 +148,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     const own = serviceOf(config, id)
     if (!own) return undefined
     const engine = createOpenAICompatProvider(own, { prompts: config.prompts })
-    return { provider: engine, service: createTranslateService({ getProvider: async () => engine, getModel: async () => own.model, cancelled: deps.cancelled, retired: isRetired }) }
+    return { provider: engine, service: createTranslateService({ getProvider: async () => engine, getModel: async () => own.model, cancelled: deps.cancelled, retired: isRetired, ...(deps.warn ? { warn: deps.warn } : {}) }) }
   }
 
   /**

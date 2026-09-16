@@ -45,6 +45,22 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+describe('the diagnostics hook (issue #156)', () => {
+  it('a batch failure reaches `warn` as kind and status only — the endpoint\'s message, which may echo a key or the paper, never (Codex on #214)', async () => {
+    const lines: string[] = []
+    const echo = attachRequestErrorMeta(new ProviderError('auth', 'Unauthorized: key=ZZZ-my-secret-shape; request was: the Fourier transform of f'), { statusCode: 401, isRetryable: false })
+    const service = build({ getProvider: async () => provider(async () => { throw echo }), retired: () => false, warn: line => lines.push(line), batch: { maxRetries: 0 } })
+    const res = await service.translate(req(['a']))
+    expect(res.ok).toBe(false)
+    expect(lines.length).toBeGreaterThanOrEqual(1)
+    for (const line of lines) {
+      expect(line).toContain('auth (HTTP 401)')
+      expect(line).not.toContain('my-secret')
+      expect(line).not.toContain('Fourier')
+    }
+  })
+})
+
 describe('sentence alignment through the queue (#105)', () => {
   const withAlignment = (aligned: Record<string, { source: number[]; target: number[] }>) =>
     provider(async r => ({

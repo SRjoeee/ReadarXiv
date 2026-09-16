@@ -81,3 +81,13 @@ describe('the settings drawer issue sentence', () => {
     expect(strings.O.services.issue('thinking', 'Invalid enum')).toBe('thinking：不合法（Invalid enum）')
   })
 })
+
+describe('helperInstallCommand', () => {
+  it('names the same ref twice — the script and the sources come from one place — and that ref is a commit or main (issue #158)', async () => {
+    const { helperInstallCommand } = await import('@/ui/strings')
+    const { BUILD_REF } = await import('@/shared/build')
+    const command = helperInstallCommand('abcdefghijklmnopabcdefghijklmnop')
+    expect(command).toBe(`curl -fsSL https://raw.githubusercontent.com/SRjoeee/ReadarXiv/${BUILD_REF}/helper/install-remote.sh | bash -s -- abcdefghijklmnopabcdefghijklmnop ${BUILD_REF}`)
+    expect(BUILD_REF === 'main' || /^[0-9a-f]{40}$/.test(BUILD_REF)).toBe(true)
+  })
+})

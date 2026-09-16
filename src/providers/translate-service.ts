@@ -19,8 +19,9 @@ import { getRandomUUID } from '@/shared/uuid'
 import { BatchCountMismatchError, BatchQueue, type BatchExecutionMeta, type BatchOptions } from './request/batch-queue'
 import { type CancelledScopeRegistry, isTranslationCancelledError, TranslationCancelledError } from './request/cancellation'
 import { REQUEST_TIMEOUT_ERROR_NAME, RequestQueue, type QueueOptions } from './request/request-queue'
-import { attachRequestErrorMeta } from './request/retry-policy'
+import { attachRequestErrorMeta , getRequestErrorMeta } from './request/retry-policy'
 import { ProviderError, isPermanentErrorKind, type ProviderErrorKind, type TranslatedSegment, type TranslateRequest, type TranslationProvider, type TranslateSegment } from './types'
+import { failureLine } from '@/shared/diagnostics'
 
 /**
  * What one segment's translation carries through the queue. `alignment` is present only when the
@@ -78,6 +79,8 @@ export type TranslateMessageResponse =
 
 export interface TranslateServiceDeps {
   getProvider: (providerId?: string) => Promise<TranslationProvider>
+  /** Where a warning goes besides the console — the background's diagnostics log (issue #156); tests and the chain builder may leave it out */
+  warn?: (line: string) => void
   getModel?: () => Promise<string | undefined>
   cache?: CachePort
   /** Queue parameter overrides (tests): timeoutMs is the base of the batch timeout formula; rate / capacity take provider.rateLimit first, then this, then 8 / 20 */
@@ -208,7 +211,7 @@ const admits = (source: string, translated: string, format: WireFormat): boolean
   validate(translated, expectationsFromText(source, format)).ok
 
 /** Over budget counts as all misses: one more request is cheaper than the whole page stopping here. The OCR service's cache read uses it too (Codex on #87) */
-export async function readWithBudget(store: CachePort, keys: string[], budgetMs: number): Promise<(CachedEntry | null)[]> {
+export async function readWithBudget(store: CachePort, keys: string[], budgetMs: number, warn?: (line: string) => void): Promise<(CachedEntry | null)[]> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const hits = await Promise.race([
     store.getMany(keys),
@@ -216,7 +219,9 @@ export async function readWithBudget(store: CachePort, keys: string[], budgetMs:
   ]).finally(() => clearTimeout(timer))
   // A count that does not match means this response is not paired with the request, and indexing into it would mix things up: the whole batch is a miss
   if (hits !== null && hits.length === keys.length) return hits
-  console.warn(`[axt] cache read ${hits === null ? `did not return within ${budgetMs} ms` : 'returned a count that does not match the request'}; translating as a miss`)
+  const line = `[axt] cache read ${hits === null ? `did not return within ${budgetMs} ms` : 'returned a count that does not match the request'}; translating as a miss`
+  console.warn(line)
+  warn?.(line)
   return keys.map(() => null)
 }
 
@@ -406,7 +411,10 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
         )
       },
       onError: (error, context) => {
-        console.warn(`[axt] batch failed (${context.isFallback ? 'per-item fallback' : `before retry ${context.retryCount}`}): ${error.message}`)
+        const when = context.isFallback ? 'per-item fallback' : `before retry ${context.retryCount}`
+        console.warn(`[axt] batch failed (${when}): ${error.message}`)
+        // The log's copy never quotes a response — a model's raw output is the paper's words (Devin on #214)
+        deps.warn?.(`[axt] batch failed (${when}): ${failureLine(error instanceof ProviderError ? error.kind : 'unknown', error.message, getRequestErrorMeta(error).statusCode)}`)
       },
     })
     const pair: ProviderQueues = { requestQueue, batchQueue, fatal }
@@ -453,7 +461,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
         })
         // A resend writes but does not read: the bad translation is in the store already, and reading it back would only be bad again
         if (!cache.bypass) {
-          const hits = await readWithBudget(store, computed, deps.cacheReadBudgetMs ?? CACHE_READ_BUDGET_MS)
+          const hits = await readWithBudget(store, computed, deps.cacheReadBudgetMs ?? CACHE_READ_BUDGET_MS, deps.warn)
           request.segments.forEach((segment, i) => {
             const hit = hits[i]
             if (hit === null || hit === undefined) return

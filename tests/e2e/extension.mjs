@@ -1125,7 +1125,9 @@ check('the settings page: after deleting the custom prompt the default is chosen
       && afterAuth.length === 0 // not one request more after the 401 (#96)
       && afterIdle.length === 0,
     `${idle?.requested}/${idle?.total} blocks requested, ${requests.length} requests in all (${offsets.join('/')} ms relative to the first 401); ${beforeAuth.length} before the 401, ${afterAuth.length} after (should be 0, #96); ${afterIdle.length} more after scrolling the whole paper once fatal was reported; ${done?.text ?? '(no idle line)'}; DOM ${JSON.stringify(await countDom(page))}`)
-  const widgets = await page.evaluate(() => document.querySelectorAll('.axt-error').length)
+  // One widget per failed block beside the original; a failed caption inside a split figure carries a second, live one in
+  // the right column's copy since #213 (issue #170), which is that block's again, not another block's
+  const widgets = await page.evaluate(() => Array.from(document.querySelectorAll('.axt-error')).filter(w => w.closest('.axt-split') === null).length)
   check('failed blocks have a retry / reason widget beside them (§7.6)', !!idle && widgets > 0 && widgets === idle.failed, `${widgets} widgets, ${idle?.failed ?? '?'} failed blocks`)
   await page.close()
 }

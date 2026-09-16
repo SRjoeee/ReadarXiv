@@ -1,12 +1,27 @@
+import { execSync } from 'node:child_process'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'wxt'
+import { readBuildRef } from './scripts/build-ref.mjs'
+
+/**
+ * The ref the popup's helper install command fetches from (issue #158): the commit this build is made from when a
+ * reader's curl to the installer's repository can find it, `main` otherwise — scripts/build-ref.mjs decides, over git
+ */
+let stamped: string | undefined
+function buildRef(): string {
+  // WXT asks for the vite config once per entrypoint: computed once, printed once
+  if (stamped !== undefined) return stamped
+  stamped = readBuildRef(cmd => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim())
+  console.log(`[build] helper install ref: ${stamped}`)
+  return stamped
+}
 
 // The WXT project configuration.
 export default defineConfig({
   srcDir: 'src',
   modules: ['@wxt-dev/module-react'],
   // In extension pages <link rel="modulepreload" crossorigin> triggers Chrome's "cross-world extension resource mismatch" warning (harmless but noisy); preloading is off
-  vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss()] }),
+  vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss()], define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()) } }),
   // The gallery is for `wxt` (serve) only: a release must not ship a debug page anyone can open
   hooks: {
     'entrypoints:found': (wxt, infos) => {
