@@ -24,7 +24,7 @@ export default defineContentScript({
     console.debug(`[axt] extracted ${blocks.length} blocks in ${Math.round(performance.now() - t0)} ms`)
 
     // The chain, the queues and the requests all live in the background (DESIGN §8.0): a content-script fetch carries the
-    // page's origin and goes through a CORS preflight, and an https page cannot reach an http endpoint (a local Ollama); measured in RESEARCH §6.7. Only a message proxy stays here
+    // page's origin and goes through a CORS preflight, and an https page cannot reach an http endpoint (a local Ollama); measured in DESIGN §8.0. Only a message proxy stays here
     const session = createPageSession({
       doc: document,
       blocks,

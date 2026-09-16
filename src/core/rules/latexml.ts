@@ -1,6 +1,6 @@
 import { LETTER, collectText, squash } from '@/core/text'
 // The LaTeXML rules module. Every ltx_* selector lives in this file only (CLAUDE.md hard rule 2).
-// Based on DESIGN.md §5.1 / §5.2 / §5.3 / §5.6 / §6.1; the measurements are in docs/RESEARCH.md §2.
+// Based on DESIGN.md §5.1 / §5.2 / §5.3 / §5.6 / §6.1; the measurements are in DESIGN §5.7.
 // Data tables and pure functions only, no traversal; the traversal is in src/core/extractor.
 
 /**
@@ -73,7 +73,7 @@ export const UNIT_RULES: readonly Rule[] = [
   // mode's trade-off for all content
   { id: 'personname', selector: '.ltx_personname', note: 'author name; a span inside .ltx_creator, so the translation as a sibling is inline of itself' },
   { id: 'authorinfo', selector: '.ltx_contact, .ltx_role_affiliation, .ltx_role_address, .ltx_dates, .ltx_date', note: 'the authors\' affiliations, contact details and dates' },
-  // The structures below did not occur in any real paper fetched; tests/fixtures/arxiv/synthetic-structures.html guards them (RESEARCH.md §2.12)
+  // The structures below did not occur in any real paper fetched; tests/fixtures/arxiv/synthetic-structures.html guards them (DESIGN §5.7)
   { id: 'dedicatory', selector: '.ltx_role_dedicatory', note: 'dedication' },
   { id: 'item', selector: '.ltx_item', note: 'the bare text of a list item / description term; with a .ltx_p inside, the p rule takes over' },
   // `\intertext`: descriptive text between the equations of a group. LaTeXML renders it as a cell spanning a whole

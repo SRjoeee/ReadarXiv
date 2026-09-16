@@ -7,6 +7,27 @@ Checkpoint log for the rebuild toward V1.0 (mandate: `docs/rebuild/CHARTER.md`; 
 - `pnpm e2e:image` is not deterministic: `stack: all 6 images entered the viewport and were processed` fails run to run on the baseline as well (`5/5 of 6` or `1/1 of 6`, 0 failed — images not requested, not refused), despite the scroll-per-image pass `image.mjs:88` added for exactly this. Look at the viewport scheduling of bitmaps when the image run is next touched (P1). **Re-run 2026-09-17** on the verification-debt build, twice in a row: 13/13, then 12/13 on this same check (`images idle: 5/5 of 6`, 54 s) — still nondeterministic; on the 1.0 ledger as a must-look.
 
 
+## The 1.0 ledger — what remains, in order
+
+Kept current: an item is struck through with the PR that closed it, and a checkpoint entry below says what it did.
+
+1. ~~**Identity (checkpoint A)**~~ — done, #216 (ADR-0010; `package.json` `readarxiv`; the four module renames).
+2. ~~**Documents (B)**~~ — done, #217 (DESIGN.md regenerated; RESEARCH.md, the inventory reports and `scripts/phase0` retired; README / LICENSE merged). The README's three owner items are listed in that entry.
+3. **Release (C)**: version, CHANGELOG from this log, the tag plan, store text; the helper install pinned to the tag.
+4. **The owner's items**: #167 (the repository's front door) merge path; the Phase-1 wording audit (deferred past the rebuild); #164; the three Phase-0 bugs; the main checkout's leftovers (`codex/research` branch, untracked `research/`, `docs/design/canvas/*.html`).
+5. **Must-look before 1.0**: `e2e:image` determinism (one image of six not entering the viewport in one run of two); the coverage gaps of INVENTORY §4.5 (ProfileEditor fields, the highlight grid, the glossary textarea, PromptManager import / export / token insertion, ServiceDrawer delete / more, `content/index.ts` wiring, the image pipeline).
+6. **Candidates, not commitments**: coalescing the cache's access-time writes (INVENTORY §8.4).
+7. **Non-goals for 1.0, recorded**: #103 (a configurable free-engine chain — no benefit found, 2026-09-17); a `@readarxiv/core` package (not now, ADR-0008); DeepLX and Edge engines.
+
+## 2026-09-17 — documents: DESIGN.md regenerated as the current design, the MVP records retired, README and LICENSE in
+
+- Branch `rebuild/docs` (PR #217, stacked on #216). Checkpoint B of the 1.0 ledger.
+- **`docs/DESIGN.md` is the current design again** (717 lines, from 1 041): rewritten from the ten ADRs, UI.md and the code, present tense, what and why, the measured numbers kept where they justify a decision and the chronology dropped. The section numbers the code cites are kept — §1 goals, §2 judgements, §3 terms (+ names, ADR-0010), §4 architecture (+ the platform boundary, the page session, the ledger, the message protocol, diagnostics), §5 rules (+ §5.7 how they were calibrated), §6 placeholders, §7 rendering, §8 providers (+ §8.6 sentence alignment, the section eighteen code sites cited and the record never had), §9 cache and configuration, §10 scheduling, §11 verification, §15 images — so all 156 `DESIGN §x.y` citations in code resolve; §12–§14 are gone (history, THIRD_PARTY, settled risks).
+- **Retired**: `docs/RESEARCH.md` (789 lines), `docs/rebuild/inventory/*.md` (the four agent reports, 1 960 lines, merged into INVENTORY long since), `scripts/phase0/*` (the research scripts RESEARCH cited). The Phase 0 facts the code cited moved into DESIGN §5.7 / §7.2 / §8.0 / §8.3 / §8.4 / §15.5, and the 37 `RESEARCH §…` citations in code, tests and fixtures were rewritten to those sections; INVENTORY's header points at `git show c0c044d:docs/rebuild/inventory/<name>.md`; the English allow-list loses five rows.
+- **UI.md**: §7 ("entries DESIGN.md needs to change") removed, §9 reduced to the four items still open; the "frozen record" banner gone. **THIRD_PARTY.md** gains the borrowing boundary and the licence paragraph that lived in DESIGN §13. **CLAUDE.md**: "where the truth lives" item 5 names the regenerated document and where the MVP record went; the commands list gains `zip`, `icons`, the measurement run and the `AXT_CHROME` switch.
+- **README.md, README.zh-CN.md, LICENSE** (GPL-3.0), the mark and the social preview: merged from the owner's `docs/readme` branch as they were (`8d9f124`), then two mechanical fixes in a commit of their own — the link to the deleted RESEARCH.md replaced by a sentence, and the four `SRjoeee/ArxivTranslate` URLs (the CI badge, the roadmap issue) renamed to `ReadarXiv`. **Three things in the README are the owner's to settle**, listed in the PR and not edited: it says weight is a setting (§7.5: colour, opacity, underline, blur — weight is not); it says only Microsoft reports sentence boundaries, while Google's web endpoint has been aligned through markers since #137 and the LLM services on the `tags` path likewise (§8.6); it embeds seven screenshots under `docs/images/` that the branch does not carry (`mode-side.png`, `mode-stacked.png`, `mode-only.png`, `hover.gif`, `only-peek.png`, `figure.png`, `popup.png`).
+- No behaviour changes: the source edits are comment citations. Tests 1 774 as before; gate green by exit code (the English gate re-counted for DESIGN.md and the two READMEs).
+
 ## 2026-09-17 — identity: one internal name, the names kept by contract, four modules renamed (ADR-0010)
 
 - Branch `rebuild/identity` (PR #216, stacked on #215). The owner's decision of 2026-09-17: the internal name is `readarxiv`; the display name `Read arXiv` and the repository `ReadarXiv` stay as they are.
@@ -24,16 +45,7 @@ Checkpoint log for the rebuild toward V1.0 (mandate: `docs/rebuild/CHARTER.md`; 
 - **Small leftovers**: the two `as unknown as number` timer casts are replaced by the worker's own `self.setTimeout`; `alignment.ts`'s header no longer claims an LLM reports boundaries (ADR-0007 §3 settled); the Microsoft language table was fetched again — identical, both dates in the header; UI.md §4 gains P16; INVENTORY T6 loses its "A03" wording.
 - **Open questions**: the navigating-away e2e check has passed on every build since 2026-09-13 and on Chrome 137 today — closed. The arXiv slow windows are an environment fact, not a question: the suites keep depending on the live site, e2e stays out of CI (owner, 2026-09-13), and a local mirror is not planned for 1.0. `pnpm e2e:image` stays open (see above).
 - Tests 1 774, of which 1 771 run and the 3 measurement cases are skipped without `AXT_MEASURE` (+3 measurement cases, −1 keep-alive case); gate green by exit code; `pnpm e2e` 73/73 on Playwright's Chromium and on Chrome 137.
-
-### The 1.0 ledger — what remains, in order
-
-1. **Identity (checkpoint A)**: `package.json` name `readarxiv`, description and version; sweep `ArxivTranslate`, `arxiv-html-translator`, `arXiv HTML Translator`; a table of the names that stay by contract (the host `io.github.srjoeee.arxivtranslate`, the install dir `~/Library/Application Support/Readarxiv/helper`, the `axt-` prefix, `arxiv-translate_prompts.json`); the ambiguous duplicate module names (`sentences.ts` ×2 beside `core/sentences/`, `text.ts` ×2, `strings.ts` ×2, `transport.ts` ×2, `run.ts` / `runs.ts`, `ocr.ts`, `diagnostics.ts`), each pair read before it is renamed.
-2. **Documents (B)**: a current `docs/DESIGN.md` regenerated from the nine ADRs, UI.md and the sections that survive; delete `DESIGN.md` v0.1, `RESEARCH.md`, `docs/rebuild/inventory/*` and `scripts/phase0/*` once replaced, and rewrite the code comments that cite them; CLAUDE.md; README (EN and ZH) and LICENSE from the owner's `docs/readme` branch.
-3. **Release (C)**: version, CHANGELOG from this log, the tag plan, store text; the helper install pinned to the tag.
-4. **The owner's items**: #167 (the repository's front door) merge path; the Phase-1 wording audit (deferred past the rebuild); #164; the three Phase-0 bugs; the main checkout's leftovers (`codex/research` branch, untracked `research/`, `docs/design/canvas/*.html`).
-5. **Must-look before 1.0**: `e2e:image` determinism (one image of six not entering the viewport in one run of two); the coverage gaps of INVENTORY §4.5 (ProfileEditor fields, the highlight grid, the glossary textarea, PromptManager import / export / token insertion, ServiceDrawer delete / more, `content/index.ts` wiring, the image pipeline).
-6. **Candidates, not commitments**: coalescing the cache's access-time writes (§8.4).
-7. **Non-goals for 1.0, recorded**: #103 (a configurable free-engine chain — no benefit found, 2026-09-17); a `@readarxiv/core` package (not now); DeepLX and Edge engines.
+- The 1.0 ledger — what remains after this checkpoint, in order — was written here and now lives in the standing section at the top of this file, kept current per checkpoint.
 
 ## 2026-09-17 — diagnosable and recoverable: an exportable diagnostics log, the helper install pinned to the build (issues #156, #158)
 

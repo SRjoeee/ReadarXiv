@@ -1,6 +1,6 @@
-// Chrome's built-in translation (DESIGN §8.4; the Phase 0 measurements are in RESEARCH §6). Offline, no key, 10–20 ms
+// Chrome's built-in translation (DESIGN §8.4; the Phase 0 measurements are in DESIGN §8.4). Offline, no key, 10–20 ms
 // a sentence — the one link of the fallback chain that needs no network and costs nothing. The isolated world exposes
-// `Translator` as well (measured 2026-09-05, RESEARCH §6.3).
+// `Translator` as well (measured 2026-09-05, DESIGN §8.4).
 //
 // Hard rule 4: a free API is unreliable by assumption — its errors are classified on their own, and a failure falls back to the next engine on the chain.
 import { toBcp47 } from '@/config/languages'
@@ -31,7 +31,7 @@ export const BUILTIN_MAX_ITEMS = 20
 
 /**
  * The session creation's own timeout. Measured: with the model ready, `create()` still takes about 8.6 s of local
- * loading (RESEARCH §6.1); 60 s leaves ample room. The gate exists because the shared session Promise **takes no
+ * loading (DESIGN §8.4); 60 s leaves ample room. The gate exists because the shared session Promise **takes no
  * batch's signal**: without it a `create()` that never returns would stay in the cache for ever, and every later
  * retry would wait on the same dead Promise (Codex on #50)
  */
@@ -76,7 +76,7 @@ function globalTranslator(): TranslatorApi | null {
 
 /**
  * The extra space after CJK punctuation: the model translates sentence by sentence and joins with spaces, which in
- * Chinese gives “。 我们”. Measured in RESEARCH §6.2. The normalisation is this engine's own business and stays out of the protector — the placeholder protocol cares nothing for layout spaces.
+ * Chinese gives “。 我们”. Measured in DESIGN §8.4. The normalisation is this engine's own business and stays out of the protector — the placeholder protocol cares nothing for layout spaces.
  */
 export function normalizeSpacing(text: string): string {
   return text.replace(/([。，、；：？！）」』】])[ \t]+/g, '$1')
@@ -105,7 +105,7 @@ export function createChromeBuiltinProvider(target: string, deps: ChromeBuiltinD
   const pair = { sourceLanguage: BUILTIN_SOURCE_LANGUAGE, targetLanguage }
   /**
    * Sessions cached per language pair (after KISS's builtinAI.js #translatorMap): with the model ready create() still
-   * takes about 8.6 s of local loading (RESEARCH §6.1), and a new session per batch would drag a 10 ms translation to
+   * takes about 8.6 s of local loading (DESIGN §8.4), and a new session per batch would drag a 10 ms translation to
    * seconds. The Promise is cached, not the instance, and removed on failure so a retry can try again
    */
   const sessions = new Map<string, Promise<TranslatorSession>>()
@@ -145,7 +145,7 @@ export function createChromeBuiltinProvider(target: string, deps: ChromeBuiltinD
   return {
     id: 'chrome-builtin',
     kind: 'builtin',
-    // Measured to keep HTML tags and void / paired placeholders (RESEARCH §6.2): the tags path
+    // Measured to keep HTML tags and void / paired placeholders (DESIGN §8.4): the tags path
     wireFormats: WIRE_FORMATS['chrome-builtin'],
     // Local inference has no network round trip; a larger batch saves scheduling overhead
     maxBatchChars: 4000,

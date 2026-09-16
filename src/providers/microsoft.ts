@@ -34,7 +34,8 @@ const ENDPOINT = 'https://edge.microsoft.com/translate/translatetext'
  *
  *     curl 'https://api.cognitive.microsofttranslator.com/languages?api-version=3.0&scope=translation'
  *
- * 108 of our 179 target languages fall inside this table and 71 outside (RESEARCH §5.1). Neither upstream project has
+ * 106 of our 179 target languages pass `supportsTarget` and 73 do not (DESIGN §8.3; counted 2026-09-17 over every code, the
+ * three script exclusions below included). Neither upstream project has
  * this layer — Read Frog throws when its `ISO6393_TO_6391` map has no entry, failing halfway through a translation.
  */
 const SUPPORTED = new Set(`
@@ -126,7 +127,7 @@ async function translateTexts(
   }
 
   // Before json(): over the limit it returns **plain text**, `Request exceeds the maximum allowed translation size.`,
-  // and JSON.parse straight away would throw as invalid-response and mask the real 400 (RESEARCH §5.1)
+  // and JSON.parse straight away would throw as invalid-response and mask the real 400 (DESIGN §8.3)
   if (!response.ok) {
     const detail = await response.text().catch(() => '')
     throw attachRequestErrorMeta(
@@ -170,7 +171,7 @@ async function translateTexts(
  * classified on their own, and a failure falls back to another provider.
  *
  * **It keeps plain-text markers only**: the tags format measured 0% on it (all 400 placeholders lost, attribute quotes
- * turned full-width, opening tags torn into bare text), the markers format 98% (RESEARCH §5.1), so `wireFormats` is `markers` alone.
+ * turned full-width, opening tags torn into bare text), the markers format 98% (DESIGN §8.3), so `wireFormats` is `markers` alone.
  */
 export function createMicrosoftProvider(targetLanguage: string, deps: MicrosoftDeps = {}): TranslationProvider {
   return {

@@ -1,6 +1,6 @@
 // The transport of the content / options side: every method is one message to the background (DESIGN §8.0).
 // The chain, the queues and the fetches all live in the background — a content script's request carries the page's
-// origin and goes through a CORS preflight, and an https page cannot reach an http endpoint (a local Ollama); measured in RESEARCH §6.7.
+// origin and goes through a CORS preflight, and an https page cannot reach an http endpoint (a local Ollama); measured in DESIGN §8.0.
 import type { TranslationTransport } from '@/providers/transport'
 import { sendMessage, type AxtMessage, type AxtMessageType, type AxtResponse } from './messages'
 

@@ -1,7 +1,7 @@
 # ADR-0005: One registry of cancelled scopes
 
 - Status: accepted (2026-09-12); third structural change of the rebuild
-- Evidence: `docs/rebuild/INVENTORY.md` S3; `inventory/runtime.md` D2; commit dbe0ca4 (a fix for one copy that had been missed)
+- Evidence: `docs/rebuild/INVENTORY.md` S3; `inventory/runtime.md` D2; commit dbe0ca4 (a fix for one copy that had been missed) (the `inventory/*` reports were deleted on 2026-09-17; read them at `git show c0c044d:docs/rebuild/inventory/<name>.md`)
 
 ## Context
 

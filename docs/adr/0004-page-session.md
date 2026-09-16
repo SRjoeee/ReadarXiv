@@ -1,7 +1,7 @@
 # ADR-0004: One page session, one permanent-error policy
 
 - Status: accepted (2026-09-12); second structural change of the rebuild
-- Evidence: `docs/rebuild/INVENTORY.md` T2, S4, S9; `inventory/core.md` §4.3, §5.10; `inventory/ui.md` §7
+- Evidence: `docs/rebuild/INVENTORY.md` T2, S4, S9; `inventory/core.md` §4.3, §5.10; `inventory/ui.md` §7 (the `inventory/*` reports were deleted on 2026-09-17; read them at `git show c0c044d:docs/rebuild/inventory/<name>.md`)
 
 ## Context
 
