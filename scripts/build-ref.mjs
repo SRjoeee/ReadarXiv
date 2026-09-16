@@ -23,8 +23,9 @@ export const RELEASE_TAG = /^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/
  * @param {(cmd: string) => string} run — runs a git command and answers its trimmed stdout; throws when git is not there
  * @returns {string} a release tag, a 40-digit commit, or `main`
  *
- * A tag only when the commit passes the branch check below as well: a tag is pushed with the release, and a local tag
- * on a commit the repository does not hold would send the reader's curl to a 404.
+ * A tag only when the commit passes the branch check below **and the repository lists the tag** (`git ls-remote --tags`,
+ * one round trip, made only when a release tag points at HEAD): the branch check proves the commit is on GitHub, not
+ * the tag, and a tag created locally and not yet pushed would send the reader's curl to a 404 (Devin on #218).
  *
  * `main` for: a dirty tree; a HEAD that is not a commit; no remote whose fetch URL is the installer's repository; a
  * commit on none of that repository's branches — a pull_request checkout in CI carries `pull/<n>/merge`, whose merge
@@ -45,7 +46,9 @@ export function readBuildRef(run) {
       .filter(l => remotes.some(r => l.startsWith(`${r}/`) && l !== `${r}/HEAD` && !l.startsWith(`${r}/HEAD -> `)))
     if (branches.length === 0) return 'main'
     const tag = run(`git tag --points-at ${head}`).split('\n').map(l => l.trim()).find(l => RELEASE_TAG.test(l))
-    return tag ?? head
+    if (!tag) return head
+    const published = remotes.some(remote => run(`git ls-remote --tags ${remote} refs/tags/${tag}`).split('\n').some(l => l.trim().endsWith(`refs/tags/${tag}`)))
+    return published ? tag : head
   } catch {
     return 'main'
   }

@@ -6,14 +6,14 @@ How a version of Read arXiv is cut, what is checked first, and the store listing
 
 - `package.json` `version` is the extension's version (WXT writes it into the manifest); `1.0.0` is set on the rebuild branch and becomes real when the tag lands. Versions follow semver as far as a browser extension can: a change a reader must know about is minor, a fix is patch, a change to a contract (the configuration schema is migrated, the helper protocol version-negotiated — ADR-0001 §6) is what makes a major.
 - The release act is **an annotated tag `v<version>` on `main`**: `git tag -a v1.0.0 -m "Read arXiv 1.0.0"` on the merge commit, `git push origin v1.0.0`.
-- **The helper install follows the tag.** The build stamps the ref the popup's install command fetches from (`scripts/build-ref.mjs`): a tag `v…` pointing at the built commit when there is one, else the commit itself, else `main`. So the archive built *after* the tag exists carries `v1.0.0` in its install command, and a reader who installs the helper gets exactly the helper of the extension they run. Build the archive after tagging, never before.
+- **The helper install follows the tag.** The build stamps the ref the popup's install command fetches from (`scripts/build-ref.mjs`): a tag `v…` pointing at the built commit **that the repository already lists** (`git ls-remote --tags`; a tag created locally and not pushed is not trusted), else the commit itself, else `main`. So the archive built *after* the tag is pushed carries `v1.0.0` in its install command, and a reader who installs the helper gets exactly the helper of the extension they run. Build the archive after tagging, never before.
 
 ## Cutting a release
 
 1. `rebuild/v1` is merged into `main` (owner's request; `--merge`, never squash). `CHANGELOG.md`'s "unreleased" heading gets the date.
 2. On the merge commit, with a clean tree: `pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test && pnpm build` — exit code green — then the browser suites on that build: `pnpm e2e`, `pnpm e2e:layout`, `pnpm e2e:a11y`, `pnpm e2e:local-endpoint`, and `pnpm e2e:image` on a Mac with the helper. Record the counts in PROGRESS.
 3. Tag and push the tag.
-4. `pnpm build && pnpm zip` **after** the tag: the console line `[build] helper install ref: v1.0.0` is the check. The archive is `.output/readarxiv-1.0.0-chrome.zip`.
+4. `pnpm build && pnpm zip` **after** the tag is pushed: the console line `[build] helper install ref: v1.0.0` is the check (a build before the push stamps the commit instead). The archive is `.output/readarxiv-1.0.0-chrome.zip`.
 5. A GitHub release for the tag, with the archive attached and the changelog section as its notes.
 6. The Chrome Web Store submission (below). Until it is listed, the README's "load unpacked" path is the install.
 7. `helper/README.md`'s one-line command is the same script the popup shows; a reader on the release reaches it through the popup, stamped with the tag.
