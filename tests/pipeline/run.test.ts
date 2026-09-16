@@ -175,6 +175,31 @@ describe('startTranslation', () => {
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)?.querySelector('mi')?.textContent).toBe('y')
   })
 
+  it('the page changed under a block whose fragment was already in hand while the batch waited on another block\'s retry: checked again at the commit, it fails as stale (Devin on #212)', async () => {
+    const doc = docOf()
+    const blocks = extract(doc)
+    let corrupted = false
+    const { transport } = makeTransport((_req, seg, calls) => {
+      if (seg.id === 'p2' && !corrupted) { corrupted = true; return 'broken' } // p2 goes to a single resend
+      if (seg.id === 'p2' && calls === 2) {
+        // While that resend is out, the page swaps p1's formula — p1's fragment, built on the first reply, holds the old clone
+        const fresh = doc.createElement('math')
+        fresh.className = 'ltx_Math'
+        fresh.innerHTML = '<mi>y</mi>'
+        doc.querySelector('#p1 math')!.replaceWith(fresh)
+      }
+      return undefined as unknown as string
+    })
+    const run = await start(doc, blocks, transport)
+    await run.translate([byId(blocks, 'p1'), byId(blocks, 'p2')])
+    expect(doc.getElementById('p1')?.getAttribute(STATE_ATTR)).toBe('failed')
+    expect(doc.querySelector(`.${ERROR_CLASS}[${FOR_ATTR}="p1"]`)?.getAttribute('data-axt-reason')).toMatch(/^stale: /)
+    expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p2"]:not(.${ERROR_CLASS})`)).not.toBeNull()
+    expect(run.progress()).toMatchObject({ done: 1, failed: 1 })
+    await run.translate(run.failed())
+    expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)?.querySelector('mi')?.textContent).toBe('y')
+  })
+
   it('placeholders always damaged: the runs fallback; the request no longer carries a validation callback (issue #42: the service derives it from the request text)', async () => {
     const doc = docOf()
     const blocks = extract(doc)

@@ -18,6 +18,13 @@ export interface ProtectedBlock {
   text: string
   /** id → original node: the whole node for a void, the element itself for a paired one (shallow-cloned when filled back) */
   slots: Map<number, Node>
+  /**
+   * id → where the node stood when serialised: its parent, and the sibling before it that is not ours. `staleSlot`
+   * compares against it — a slot still inside the root but moved (Devin on #212: `A x B` → `A B x`) has the wire text
+   * describe a block the page no longer shows, as much as a replaced one does. Our own nodes are skipped on both
+   * sides, since a ring or a localised footnote's translation may appear beside a slot while the request is out
+   */
+  places: Map<number, SlotPlace>
   paired: Set<number>
   /** A block beyond VOID_DENSE_THRESHOLD counts as formula-dense; the pipeline batches it on its own */
   voidCount: number
@@ -50,9 +57,24 @@ export interface ProtectedBlock {
  */
 export function staleSlot(block: ProtectedBlock): string | undefined {
   for (const [id, node] of block.slots) {
-    if (!block.root.contains(node)) return `slot ${id} <${node.nodeType === 1 ? (node as Element).localName : node.nodeName.toLowerCase()}> is no longer in the block`
+    const name = `<${node.nodeType === ELEMENT_NODE ? (node as Element).localName : node.nodeName.toLowerCase()}>`
+    if (!block.root.contains(node)) return `slot ${id} ${name} is no longer in the block`
+    const place = block.places.get(id)
+    if (place && (node.parentNode !== place.parent || realBefore(node) !== place.before)) return `slot ${id} ${name} moved within the block`
   }
   return undefined
+}
+
+export interface SlotPlace {
+  parent: Node | null
+  before: Node | null
+}
+
+/** The sibling before `node` that the page put there — ours (a ring, a translation, a mirror) are stepped over */
+function realBefore(node: Node): Node | null {
+  let prev = node.previousSibling
+  while (prev && prev.nodeType === ELEMENT_NODE && isInjected(prev as Element)) prev = prev.previousSibling
+  return prev
 }
 
 export const VOID_DENSE_THRESHOLD = 40
@@ -144,6 +166,7 @@ function makeTracker(format: WireFormat, parts: string[], spans: WireSpan[]) {
 
 export function serialize(root: Element, format: WireFormat = 'tags'): ProtectedBlock {
   const slots = new Map<number, Node>()
+  const places = new Map<number, SlotPlace>()
   const paired = new Set<number>()
   const parts: string[] = []
   const spans: WireSpan[] = []
@@ -172,6 +195,7 @@ export function serialize(root: Element, format: WireFormat = 'tags'): Protected
         }
         const id = next++
         slots.set(id, el)
+        places.set(id, { parent: el.parentNode, before: realBefore(el) })
         if (isVoid || format === 'markers') {
           voidCount++
           tracker.raw(writeVoid(id, format), el, 'void')
@@ -187,5 +211,5 @@ export function serialize(root: Element, format: WireFormat = 'tags'): Protected
   }
   walk(root)
   // The tracker collapses whitespace as it writes, so the joined parts are already collapsed.
-  return { format, text: parts.join(''), slots, paired, voidCount, offsets: spans, root }
+  return { format, text: parts.join(''), slots, places, paired, voidCount, offsets: spans, root }
 }

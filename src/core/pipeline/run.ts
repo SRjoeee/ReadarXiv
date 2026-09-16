@@ -7,7 +7,7 @@ import { toBcp47 } from '@/config/languages'
 import { type Block, type TextBlock, markBlocks } from '@/core/extractor'
 import type { SentenceAlignment } from '@/providers/alignment'
 import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
-import { PlaceholderIntegrityError, joinRuns, rehydrate, splitRuns, type WireSpan } from '@/core/protector'
+import { PlaceholderIntegrityError, joinRuns, rehydrate, splitRuns, staleSlot, type WireSpan } from '@/core/protector'
 import {
   clearAllPending, enable, markPartial, registerSentences, renderFailed, renderPending, renderTable, renderText, setState, type Look, type Mode,
 } from '@/core/renderer'
@@ -305,6 +305,14 @@ export function startTranslation(options: RunOptions): TranslationRun {
     const out: BatchResult = new Map()
     await translateSegments(batch.segments, batch.sectionTitle, out)
     if (ledger.stopped()) return // stop() has cleared the pending nodes already and reports no more
+    // A fragment was built when its translation came back, and the batch may have waited on another segment's retry
+    // since: the page could have changed under a block whose clone is already in hand (Devin on #212). Asked once
+    // more here, in the same turn as the insertion below, so nothing can move in between
+    for (const [segment, result] of out) {
+      if (!('fragment' in result)) continue
+      const changed = staleSlot(segment.protected)
+      if (changed) out.set(segment, { error: `stale: ${changed}` })
+    }
     if (batch.kind === 'table' && batch.block) {
       const cells = new Map<Element, DocumentFragment>()
       // A cell's source-side offsets and alignment can only be registered once renderTable has built the clone cell (§7.7)
