@@ -37,8 +37,10 @@ helper/install.sh <extension-id>
 The extension id is the “ID” on the extension's card in `chrome://extensions` with developer mode on. The script:
 
 1. runs `swift build -c release`; the binary is `helper/.build/release/axt-helper`
-2. writes the host manifest as `NativeMessagingHosts/io.github.srjoeee.arxivtranslate.json` under the default user data
-   directories of Chrome and Chromium (`~/Library/Application Support/Google/Chrome/…` and `…/Chromium/…`). Chrome looks in
+2. runs `helper/register.sh`, the one writer of the host manifest (the one-click install ends in the same script): it writes
+   `NativeMessagingHosts/io.github.srjoeee.arxivtranslate.json` under the default user data directories of Chrome and Chromium
+   (`~/Library/Application Support/Google/Chrome/…` and `…/Chromium/…`). Re-running keeps the extension ids earlier runs allowed
+   (another profile, a dev build beside the installed one); the binary path follows the last run. Chrome looks in
    **`<user data directory>/NativeMessagingHosts/`**, so a browser started with `--user-data-dir` (Playwright's e2e) has to
    copy the manifest into its own profile directory; the e2e scripts do that themselves
 
@@ -54,5 +56,5 @@ pnpm helper:smoke    # feeds a reference image over the native protocol and chec
 
 ## Uninstall
 
-Delete the two manifest files above; the binary lives in the repository directory and goes with `git clean` or
-`rm -rf helper/.build`.
+Delete the two manifest files above (also the way to drop extension ids a run allowed); the binary lives in the repository
+directory and goes with `git clean` or `rm -rf helper/.build`.
