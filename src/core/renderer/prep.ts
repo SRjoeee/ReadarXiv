@@ -43,6 +43,8 @@ export interface PrepOptions {
   isSide: () => boolean
   /** One line reported at the end of each pass (when something changed); e2e and manual testing rely on it */
   trace?: (line: string) => void
+  /** Retry a failed block by id — the pipeline's `translate([block])`; the split copies' widgets call it (issue #170) */
+  retry?: (blockId: string) => void
   /** Test injection: the column width */
   columnWidth?: (root: Element) => number
   delay?: number
@@ -108,7 +110,7 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
 
     // Figures are split whole first, mirrors filled in after: a split figure takes no part in mirroring (the two would duplicate a copy)
     let split = 0
-    for (const r of roots) split += splitFigures(r)
+    for (const r of roots) split += splitFigures(r, { retry: options.retry })
     const t2 = performance.now()
     // The mirrors run once per session, and only once the block marks are written (or a block is cloned whole,
     // issue #67): the decision reads data-axt-id and .axt-t siblings only, which an arriving translation changes nowhere
