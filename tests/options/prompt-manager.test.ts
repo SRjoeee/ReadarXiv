@@ -97,3 +97,75 @@ describe('PromptManager: changes are updates of the stored prompts', () => {
     await mounted.unmount()
   })
 })
+
+// ── import, export and variable insertion (INVENTORY §4.5) ─────────────────────────────────────────────────────────────
+import { PROMPT_FILE_NAME, serializePrompts } from '@/providers/prompt-file'
+
+const downloads: [string, string, string][] = []
+vi.mock('@/shared/download', () => ({ downloadTextFile: vi.fn((name: string, text: string, type: string) => { downloads.push([name, text, type]) }) }))
+
+const areaOf = (container: HTMLElement, index: number) => Array.from(container.querySelectorAll('textarea'))[index] as HTMLTextAreaElement
+
+describe('PromptManager: import, export and variable insertion', () => {
+  beforeEach(() => { setLocale('en'); downloads.length = 0 })
+
+  it('a variable chip lands at the caret of the text box focused last, and the caret moves past it', async () => {
+    const mounted = await mountElement(createElement(PromptManager, { value: { patterns: [], promptId: 'default' }, onChange: () => {} }))
+    const c = mounted.container
+    buttonNamed(c, O.prompts.manager.create)?.click()
+    await mounted.flush()
+    const user = areaOf(c, 1) // the second box is the user prompt
+    user.focus()
+    user.dispatchEvent(new Event('focus'))
+    const before = user.value
+    const at = before.indexOf('{{input}}')
+    user.setSelectionRange(at, at)
+    buttonNamed(c, '{{paperTitle}}')?.click()
+    await mounted.flush()
+    expect(areaOf(c, 1).value).toBe(`${before.slice(0, at)}{{paperTitle}}${before.slice(at)}`)
+    // a selection is replaced, not appended
+    const system = areaOf(c, 0)
+    system.focus()
+    system.dispatchEvent(new Event('focus'))
+    system.setSelectionRange(0, system.value.length)
+    buttonNamed(c, '{{glossary}}')?.click()
+    await mounted.flush()
+    expect(areaOf(c, 0).value).toBe('{{glossary}}')
+    await mounted.unmount()
+  })
+
+  it('importing a file appends its entries with fresh ids and says how many; a file of the wrong shape says so and adds nothing', async () => {
+    const updates: PromptsUpdate[] = []
+    const mounted = await mountElement(createElement(PromptManager, { value: { patterns: [template('a')], promptId: 'a' }, onChange: (update: PromptsUpdate) => { updates.push(update) } }))
+    const c = mounted.container
+    const input = c.querySelector<HTMLInputElement>('input[type="file"]') as HTMLInputElement
+    const good = new File([JSON.stringify([{ name: 'Imported', prompt: 'Translate {{input}}' }, { name: 'Two', systemPrompt: 'S', prompt: 'P' }])], 'prompts.json', { type: 'application/json' })
+    Object.defineProperty(input, 'files', { configurable: true, value: [good] })
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+    await vi.waitFor(() => expect(updates).toHaveLength(1))
+    const next = updates[0]!({ patterns: [template('a'), template('b')], promptId: 'a' })
+    expect(next.patterns.map(p => p.name)).toEqual(['a', 'b', 'Imported', 'Two'])
+    expect(new Set(next.patterns.map(p => p.id)).size).toBe(4)
+    expect(next.patterns[2]).toMatchObject({ systemPrompt: '', prompt: 'Translate {{input}}' })
+    await mounted.flush()
+    expect(c.textContent).toContain(O.prompts.manager.imported(2))
+    const bad = new File(['{"not": "a list"}'], 'prompts.json', { type: 'application/json' })
+    Object.defineProperty(input, 'files', { configurable: true, value: [bad] })
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+    await vi.waitFor(() => expect(c.textContent).toContain(O.prompts.manager.importFailed.badShape))
+    expect(updates).toHaveLength(1)
+    await mounted.unmount()
+  })
+
+  it('export writes the reader\'s own prompts, without ids, under the file name the importer reads back; with none it is disabled', async () => {
+    const empty = await mountElement(createElement(PromptManager, { value: { patterns: [], promptId: 'default' }, onChange: () => {} }))
+    expect(buttonNamed(empty.container, O.prompts.manager.exportMine)?.disabled).toBe(true)
+    await empty.unmount()
+    const patterns = [template('a', 'Alpha'), template('b', 'Beta')]
+    const mounted = await mountElement(createElement(PromptManager, { value: { patterns, promptId: 'a' }, onChange: () => {} }))
+    buttonNamed(mounted.container, O.prompts.manager.exportMine)?.click()
+    expect(downloads).toEqual([[PROMPT_FILE_NAME, serializePrompts(patterns), 'application/json']])
+    expect(JSON.parse(downloads[0]![1]).every((e: Record<string, unknown>) => !('id' in e))).toBe(true)
+    await mounted.unmount()
+  })
+})
