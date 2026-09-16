@@ -1,7 +1,7 @@
 {
   "name": "readarxiv",
   "description": "Read arXiv — a Chrome extension that translates arXiv HTML papers in place: bilingual, structure-preserving, reversible",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "license": "GPL-3.0",
