@@ -92,6 +92,24 @@ describe('createLazyScheduler', () => {
     expect(io.observed.has(by.c!.el)).toBe(true)
   })
 
+  it('an anchor without a layout box at creation is observed, not dropped: it enters when the observer reports it later', () => {
+    // A boxless anchor is not seeded (there is nothing to measure), but it must stay with the observer — an image
+    // whose subtree is not yet laid out, a container collapsed for now — or it can never be translated
+    document.body.innerHTML = PAGE
+    const blocks = extract(document)
+    markBlocks(blocks)
+    const by = Object.fromEntries(blocks.map(b => [b.id, b]))
+    layout(by.a!.el, 100) // a is seeded; b, c, d have no box
+    const entered: Block[][] = []
+    createLazyScheduler(blocks, { ...DEFAULT_PRELOAD, onEnter: picked => entered.push(picked) })
+    const io = FakeIntersectionObserver.instances[0]!
+    expect(entered.flat().map(b => b.id)).toEqual(['a'])
+    expect(Array.from(io.observed)).toEqual([by.b!.el, by.c!.el, by.d!.el])
+    layout(by.d!.el, 5000) // it gets a box and the browser reports it
+    io.emit([by.d!.el])
+    expect(entered.map(batch => batch.map(b => b.id))).toEqual([['a'], ['d']])
+  })
+
   it('trigger: blocks handed over by hand no longer wait for the observer; waiting decreases; cleared after disconnect', () => {
     document.body.innerHTML = PAGE
     const blocks = extract(document)
