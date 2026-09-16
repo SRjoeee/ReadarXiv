@@ -228,6 +228,7 @@ the rows open at any time.
 | P14a | Helper awaiting permission | `image.enabled` ∧ helper = permission-missing [2026-09-13, ADR-0002] | value | S-P-86b/c under the image row | — | as the state | — |
 | P14b | Helper permission taking effect | `image.enabled` ∧ helper = restarting [2026-09-13, ADR-0002] | value | S-P-86d under the image row | — | as the state | — |
 | P15 | Prompt menu | llm ∧ menu = prompt | value | as the state | — | as the state | — |
+| P16 | Style menu | menu = style | value | as the state | — | as the state | — |
 
 Rules:
 - `runnable` is decided from the settings alone (LLM: a key; Chrome: the pack is `available`;
