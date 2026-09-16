@@ -21,7 +21,7 @@ Phase 0 抓取的真实 `https://arxiv.org/html/<id>` 页面，原样保存（�
 | 2609.04056 | 2026-09-03 | math.OC | 1.3 MB | math 2084 · eqn 302 · thm 166 · proof 54 · item 58 · note 2 | 2026-09-05 抓（CC BY-SA 4.0）：定理里只含公式的列表项、致谢块挂在右侧沟槽——side 模式版式回归用（DESIGN §7.2） |
 | 2609.03768 | 2026-09-03 | physics.comp-ph | 311 KB | td 267 · math 407 · flex 1（两个 size_1 格子） | 2026-09-05 抓（CC BY 4.0）：表格 + 脚注放在单列 flex 图里——side 模式配对回归用 |
 
-计数口径：`math`=`<math` 出现次数；`eqn`=`ltx_equation`；`listing`=`ltx_listingline`；`algo`=`ltx_float_algorithm|ltx_algorithm`；`td`=`ltx_td`；`note`=`ltx_note_content`；`thm`=`ltx_theorem`；`svg`=`<svg`。粗粒度 grep，仅用于选片，精确审计见 `docs/RESEARCH.md` §2。
+计数口径：`math`=`<math` 出现次数；`eqn`=`ltx_equation`；`listing`=`ltx_listingline`；`algo`=`ltx_float_algorithm|ltx_algorithm`；`td`=`ltx_td`；`note`=`ltx_note_content`；`thm`=`ltx_theorem`；`svg`=`<svg`。粗粒度 grep，仅用于选片，精确审计见 DESIGN §5.7。
 
 ## synthetic-structures.html（合成，非真实论文）
 

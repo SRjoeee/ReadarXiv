@@ -1,5 +1,6 @@
 // The assertion list follows the upstream reference/read-frog/src/utils/host/translate/api/__tests__/microsoft.test.ts@9b44f82,
 // in the form of tests/providers/google-web.test.ts (fetch injected).
+import { LANG_CODES } from '@/config/languages'
 import { describe, expect, it, vi } from 'vitest'
 import { getRequestErrorMeta } from '@/providers/request/retry-policy'
 import { createMicrosoftProvider, supportsTarget } from '@/providers/microsoft'
@@ -157,7 +158,8 @@ describe('supportsTarget', () => {
     }
   })
 
-  it('target languages the endpoint does not support are false: 71 of 179 (DESIGN §8.3)', () => {
+  it('target languages the endpoint does not support are false: 73 of 179 (DESIGN §8.3)', () => {
+    expect(LANG_CODES.filter(code => !supportsTarget(code))).toHaveLength(73)
     // Measured: these all return 400
     for (const code of ['ceb', 'epo', 'tgl', 'nno', 'ckb']) {
       expect([code, supportsTarget(code)]).toEqual([code, false])
