@@ -9,6 +9,8 @@ import { defineConfig } from 'wxt'
  * "On the remote" is what the local remote-tracking refs say at build time — true for a fresh CI checkout, which is
  * where a build that ships comes from; a stale local clone could name a commit the remote has since lost (Devin on #214)
  */
+/** The repository the copied install command fetches from (ui/strings.ts writes the same name into the command): only its branches can vouch for a commit */
+const INSTALLER_REPO_URL = /(^|[/:])SRjoeee\/ReadarXiv(\.git)?\/?$/i
 let stamped: string | undefined
 function buildRef(): string {
   // WXT asks for the vite config once per entrypoint: computed once, printed once
@@ -23,11 +25,17 @@ function readBuildRef(): string {
     if (run('git status --porcelain') !== '') return 'main'
     const head = run('git rev-parse HEAD')
     if (!/^[0-9a-f]{40}$/.test(head)) return 'main'
-    // A branch of a configured remote, not any remote-tracking ref: a pull_request checkout in CI carries
-    // `pull/<n>/merge`, whose merge commit is on no branch and not something a reader's curl should be sent to
-    // (measured on #214's own CI run, which stamped that commit). `pull` is no configured remote; `origin` is a
-    // convention only, so the remotes are read, and each one's symbolic `<remote>/HEAD` is the one ref left out (Devin on #214)
-    const remotes = run('git remote').split('\n').map(l => l.trim()).filter(Boolean)
+    // A branch of the installer's own repository, not any remote-tracking ref: a pull_request checkout in CI carries
+    // `pull/<n>/merge`, whose merge commit is on no branch (measured on #214's own CI run, which stamped that commit);
+    // a fork's remote may hold a commit the reader's curl to SRjoeee/ReadarXiv would 404 on (Devin on #214, twice). So
+    // the remotes whose fetch URL names that repository are found by URL — `origin` is a convention only — and only
+    // their branches count, each remote's symbolic `<remote>/HEAD` left out
+    const remotes = run('git remote -v').split('\n')
+      .map(l => l.trim().split(/\s+/))
+      .filter(([, url, kind]) => kind === '(fetch)' && url !== undefined && INSTALLER_REPO_URL.test(url))
+      .map(([name]) => name)
+      .filter((name): name is string => name !== undefined)
+    if (remotes.length === 0) return 'main'
     const branches = run(`git branch -r --contains ${head}`).split('\n').map(l => l.trim())
       .filter(l => remotes.some(r => l.startsWith(`${r}/`) && l !== `${r}/HEAD` && !l.startsWith(`${r}/HEAD -> `)))
     return branches.length > 0 ? head : 'main'
