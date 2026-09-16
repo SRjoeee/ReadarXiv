@@ -63,7 +63,6 @@ export type HelperStatus =
   | { state: 'restarting' }
   | { state: 'not-installed'; reason?: string }
   | { state: 'ready'; version: string }
-export type HelperState = HelperStatus['state']
 
 /** content → background: OCR one image. The bytes were hashed on the content side already; the background looks the cache up by the hash alone */
 export interface OcrCall {
