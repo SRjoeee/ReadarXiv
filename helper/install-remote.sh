@@ -4,13 +4,12 @@
 # <ref> is the branch the sources come from (default main; the popup passes the one it was built from).
 # Downloads this repository's helper/ into ~/Library/Application Support/Readarxiv/helper, builds it
 # with the Swift toolchain of the Xcode Command Line Tools, and registers the Native Messaging host
-# for Chrome and Chromium (DESIGN §15.4). Re-running updates in place. No sudo, nothing outside
-# that directory and the two NativeMessagingHosts folders.
+# for Chrome and Chromium through register.sh, the one writer of the manifest (DESIGN §15.4). Re-running
+# updates in place. No sudo, nothing outside that directory and the two NativeMessagingHosts folders.
 set -euo pipefail
 
 REPO=SRjoeee/ReadarXiv
 REF="${2:-${AXT_HELPER_REF:-main}}"
-NAME=io.github.srjoeee.arxivtranslate
 DIR="$HOME/Library/Application Support/Readarxiv/helper"
 
 id="${1:-}"
@@ -45,34 +44,13 @@ tar -xzf "$tmp/src.tgz" -C "$tmp"
 src="$(find "$tmp" -maxdepth 1 -mindepth 1 -type d | head -1)"
 [ -n "$src" ] || { echo "No source directory found after unpacking" >&2; exit 1; }
 rm -rf "$DIR/Sources" "$DIR/Tests"
-cp -R "$src/helper/Sources" "$src/helper/Package.swift" "$src/helper/LICENSE-macos-vision-ocr.txt" "$DIR/"
+cp -R "$src/helper/Sources" "$src/helper/Package.swift" "$src/helper/LICENSE-macos-vision-ocr.txt" "$src/helper/register.sh" "$DIR/"
 [ -d "$src/helper/Tests" ] && cp -R "$src/helper/Tests" "$DIR/"
 
 echo "Building (about a minute the first time) …"
 (cd "$DIR" && swift build -c release >/dev/null)
 BIN="$DIR/.build/release/axt-helper"
-
-for dir in "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts" \
-           "$HOME/Library/Application Support/Chromium/NativeMessagingHosts"; do
-  mkdir -p "$dir"
-  manifest="$dir/$NAME.json"
-  # Keep the ids an earlier run allowed (another profile, a dev build): union, not overwrite
-  origins="\"chrome-extension://$id/\""
-  if [ -f "$manifest" ]; then
-    while read -r existing; do
-      [ -n "$existing" ] && [ "$existing" != "chrome-extension://$id/" ] && origins="$origins, \"$existing\""
-    done < <(grep -o 'chrome-extension://[a-p]\{32\}/' "$manifest" | sort -u)
-  fi
-  cat > "$manifest" <<JSON
-{
-  "name": "$NAME",
-  "description": "The image recognition helper of Readarxiv (Apple Vision)",
-  "path": "$BIN",
-  "type": "stdio",
-  "allowed_origins": [$origins]
-}
-JSON
-done
+bash "$DIR/register.sh" "$BIN" "$id"
 
 echo "Installed: $("$BIN" --version)"
 echo "Image translation is available now; no need to reload the extension."

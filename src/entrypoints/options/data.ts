@@ -55,7 +55,11 @@ export function useOptionsData(): OptionsData {
    * the popup never acts on, the old language's availability (Codex on #185) — only the newest lookup for it
    * publishes, and none while its download is in flight
    */
-  const [packs] = useState(() => createPackLookup({ publish: setPack }))
+  const [packs] = useState(() => createPackLookup({
+    publish: setPack,
+    // The popup may be open beside this page: tell it the download ended, as the helper's state is told
+    announce: target => void sendMessage({ type: 'axt:pack-changed', target }).catch(() => undefined),
+  }))
   /**
    * Apply the stored interface language the way this page's own change does — a reload — but not under a draft: a
    * service being edited, a profile, a prompt is local until its own save, and the reload would discard it (the
@@ -130,8 +134,10 @@ export function useOptionsData(): OptionsData {
     // The background broadcasts the helper's state when it changes on its own — the install wait found it, or the
     // fresh worker after a runtime grant reported (ADR-0002); the section follows without a reload
     const onHelperState = (message: unknown) => {
-      const m = message as { type?: string; status?: HelperStatus } | null
+      const m = message as { type?: string; status?: HelperStatus; target?: string } | null
       if (m?.type === 'axt:helper-state' && m.status) setHelper(m.status)
+      // A pack downloaded from the popup: the Chrome card here must not keep offering the download (INVENTORY S7)
+      if (m?.type === 'axt:pack-changed' && m.target) packs.receive(m.target)
     }
     browser.runtime.onMessage.addListener(onHelperState)
     void loadCache()

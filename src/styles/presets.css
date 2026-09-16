@@ -45,6 +45,15 @@ html[data-axt-underline] :is(.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .
   text-decoration-thickness: var(--axt-deco-thickness, 1px);
 }
 
+/* ── Opacity: the reader's value arrives as --axt-opacity on <html>, written by the look sheet (style-preset.ts) ──
+   The declaration itself is here, and **before** the blur rule: the two selectors have equal specificity, so the
+   blur's own opacity — which multiplies the reader's value — wins over this baseline by order alone (Codex on #106).
+   Static, the look sheet can follow the four static sheets in the document and be rewritten on its own for a slider
+   move (INVENTORY T5). Top-level real translations only, as the blur: nested ones would multiply */
+html[data-axt-on] .axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split):not(:where(.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)) *) {
+  opacity: var(--axt-opacity, 1);
+}
+
 /* ── Blur until hover: for recitation and self-testing (Read Frog's blur, KISS's fuzzy) ──────────────────────
    The :not(:where(…) *) at the end excludes nested translations: side mode's localizeNotes puts a footnote's
    translation (.axt-note-t.axt-t) inside a paragraph's translation, and opacity and filter both apply to the whole
@@ -70,4 +79,4 @@ html[data-axt-blur] .axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split
 }
 
 /* The advanced CSS declarations are not here: the reader's declaration block is wrapped by style-preset.ts in
-   html[data-axt-on] .axt-t:not(…) { … } and injected with this file, last, with the final word */
+   html[data-axt-on] .axt-t:not(…) { … } and goes into the look sheet, after this file, with the final word */
