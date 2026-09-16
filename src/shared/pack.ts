@@ -40,9 +40,10 @@ export async function downloadPack(target: string): Promise<boolean> {
  * download of it is in flight — `availability()` says `downloadable` until the download ends. The popup and the
  * settings page each hold one; `null` is published while nothing is known for the wanted target.
  *
- * The two surfaces do not share the instance, so a download finished in one is announced to the other
- * (`axt:pack-state`, INVENTORY S7): `announce` sends what a download of ours found, `receive` takes what another
- * surface announced — the same message shape the helper's state travels in
+ * The two surfaces do not share the instance, so a download that ended in one is announced to the other
+ * (`axt:pack-changed`, INVENTORY S7). The announcement names the target only, never a state: the receiver looks the
+ * pack up itself, under the same guards as any lookup of its own, so no snapshot taken on one surface can outrank a
+ * fresher one on the other (the local adversarial review of S7 reproduced both orders)
  */
 export interface PackLookup {
   /** The committed configuration's target. Another target forgets the previous one's state at once (Codex on #185) */
@@ -56,18 +57,18 @@ export interface PackLookup {
    */
   download(target: string, run: (target: string) => Promise<unknown>): Promise<void>
   /**
-   * A state another surface announced for `target`. Published when it is the wanted target and no download of it
-   * is in flight here; it supersedes any lookup of ours still in flight, since it is newer than what that lookup
-   * started from. Another target is ignored — its state is that surface's business until the reader wants it here
+   * Another surface's download of `target` ended: look it up again, as the newest lookup, when it is the wanted
+   * target and no download of it is in flight here. Another target is ignored — when the configuration's change
+   * reaches this surface, the configuration watcher looks the new target up anyway
    */
-  receive(target: string, state: PackState): void
+  receive(target: string): void
 }
 
 export function createPackLookup(deps: {
   publish: (state: PackState | null) => void
   state?: (target: string) => Promise<PackState>
-  /** Tell the other surfaces what a download of ours found; absent, downloads stay local (the tests, a single surface) */
-  announce?: (target: string, state: PackState) => void
+  /** Tell the other surfaces that a download of ours ended, whatever it found; absent, downloads stay local (the tests, a single surface) */
+  announce?: (target: string) => void
 }): PackLookup {
   const state = deps.state ?? packState
   let wanted: string | null = null
@@ -99,18 +100,15 @@ export function createPackLookup(deps: {
         await run(target)
       } finally {
         downloading.delete(target)
-        // The target of the moment is looked up, as before. When it is still the one downloaded, what was found is the
-        // download's result and the other surfaces hear it; a target the reader left behind meanwhile is announced to
-        // nobody — the configuration is shared, so the other surfaces show the new one as well
-        const current = wanted ?? target
-        const found = await check(current)
-        if (current === target) deps.announce?.(target, found)
+        // Announced whatever the reader here wants now: the configuration reaches the surfaces on separate write
+        // chains, so the other one may already show the downloaded target while this one still shows the previous
+        deps.announce?.(target)
+        await check(wanted ?? target)
       }
     },
-    receive(target, state) {
+    receive(target) {
       if (target !== wanted || downloading.has(target)) return
-      lookups++
-      deps.publish(state)
+      void check(target)
     },
   }
 }
