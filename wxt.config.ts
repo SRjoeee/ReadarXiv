@@ -1,47 +1,19 @@
 import { execSync } from 'node:child_process'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'wxt'
+import { readBuildRef } from './scripts/build-ref.mjs'
 
 /**
- * The ref the popup's helper install command fetches from (issue #158): the commit this build is made from, so the
- * reader gets the helper this extension was built against, and `main` for a build that cannot promise that — a dirty
- * tree, a commit not on the remote yet, no git at all. `raw.githubusercontent.com` and `codeload` serve any commit.
- * "On the remote" is what the local remote-tracking refs say at build time — true for a fresh CI checkout, which is
- * where a build that ships comes from; a stale local clone could name a commit the remote has since lost (Devin on #214)
+ * The ref the popup's helper install command fetches from (issue #158): the commit this build is made from when a
+ * reader's curl to the installer's repository can find it, `main` otherwise — scripts/build-ref.mjs decides, over git
  */
-/** The repository the copied install command fetches from (ui/strings.ts writes the same name into the command): only its branches can vouch for a commit */
-const INSTALLER_REPO_URL = /(^|[/:])SRjoeee\/ReadarXiv(\.git)?\/?$/i
 let stamped: string | undefined
 function buildRef(): string {
   // WXT asks for the vite config once per entrypoint: computed once, printed once
   if (stamped !== undefined) return stamped
-  stamped = readBuildRef()
+  stamped = readBuildRef(cmd => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim())
   console.log(`[build] helper install ref: ${stamped}`)
   return stamped
-}
-function readBuildRef(): string {
-  try {
-    const run = (cmd: string) => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-    if (run('git status --porcelain') !== '') return 'main'
-    const head = run('git rev-parse HEAD')
-    if (!/^[0-9a-f]{40}$/.test(head)) return 'main'
-    // A branch of the installer's own repository, not any remote-tracking ref: a pull_request checkout in CI carries
-    // `pull/<n>/merge`, whose merge commit is on no branch (measured on #214's own CI run, which stamped that commit);
-    // a fork's remote may hold a commit the reader's curl to SRjoeee/ReadarXiv would 404 on (Devin on #214, twice). So
-    // the remotes whose fetch URL names that repository are found by URL — `origin` is a convention only — and only
-    // their branches count, each remote's symbolic `<remote>/HEAD` left out
-    const remotes = run('git remote -v').split('\n')
-      .map(l => l.trim().split(/\s+/))
-      .filter(([, url, kind]) => kind === '(fetch)' && url !== undefined && INSTALLER_REPO_URL.test(url))
-      .map(([name]) => name)
-      .filter((name): name is string => name !== undefined)
-    if (remotes.length === 0) return 'main'
-    const branches = run(`git branch -r --contains ${head}`).split('\n').map(l => l.trim())
-      .filter(l => remotes.some(r => l.startsWith(`${r}/`) && l !== `${r}/HEAD` && !l.startsWith(`${r}/HEAD -> `)))
-    return branches.length > 0 ? head : 'main'
-  } catch {
-    return 'main'
-  }
 }
 
 // The WXT project configuration.
