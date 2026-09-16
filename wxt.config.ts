@@ -23,10 +23,13 @@ function readBuildRef(): string {
     if (run('git status --porcelain') !== '') return 'main'
     const head = run('git rev-parse HEAD')
     if (!/^[0-9a-f]{40}$/.test(head)) return 'main'
-    // A branch of the remote, not any remote-tracking ref: a pull_request checkout in CI carries `pull/<n>/merge`,
-    // whose merge commit is on no branch and not something a reader's curl should be sent to (measured on #214's
-    // own CI run, which stamped that commit)
-    const branches = run(`git branch -r --contains ${head}`).split('\n').map(l => l.trim()).filter(l => l.startsWith('origin/') && !l.startsWith('origin/HEAD'))
+    // A branch of a configured remote, not any remote-tracking ref: a pull_request checkout in CI carries
+    // `pull/<n>/merge`, whose merge commit is on no branch and not something a reader's curl should be sent to
+    // (measured on #214's own CI run, which stamped that commit). `pull` is no configured remote; `origin` is a
+    // convention only, so the remotes are read, and each one's symbolic `<remote>/HEAD` is the one ref left out (Devin on #214)
+    const remotes = run('git remote').split('\n').map(l => l.trim()).filter(Boolean)
+    const branches = run(`git branch -r --contains ${head}`).split('\n').map(l => l.trim())
+      .filter(l => remotes.some(r => l.startsWith(`${r}/`) && l !== `${r}/HEAD` && !l.startsWith(`${r}/HEAD -> `)))
     return branches.length > 0 ? head : 'main'
   } catch {
     return 'main'
