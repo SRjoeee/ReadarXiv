@@ -697,9 +697,31 @@ describe('hover sentence highlight (§7.7)', () => {
     browser.move()
     expect(browser.bands().length).toBe(0)
 
-    // An external clear likewise leaves nothing
+    // With no controller running, a clear from outside has nothing to ask and touches nothing
     clearSentenceHighlights(doc)
     expect(browser.bands().length).toBe(0)
+    expect(doc.querySelectorAll('.axt-hl')).toHaveLength(0)
+  })
+
+  it('a clear from outside (setMode, applyStyle) is the controller dropping its own bands: the layer stays, empty, and the next move repaints', () => {
+    // INVENTORY T3: one owner. The outside asks; nothing but the controller touches the layer
+    const { doc, source } = page(TWO)
+    const browser = stubBrowser(doc)
+    const hl = startSentenceHighlight(doc)!
+    browser.caret.mockReturnValue({ offsetNode: source.firstChild!, offset: 3 })
+    browser.move()
+    expect(browser.bands().length).toBe(2)
+    const layer = doc.querySelector('.axt-hl')!
+    clearSentenceHighlights(doc)
+    expect(browser.bands().length).toBe(0)
+    expect(doc.querySelector('.axt-hl')).toBe(layer)
+    // The same sentence, painted again: the cache was dropped with the bands
+    browser.move()
+    expect(browser.bands().length).toBe(2)
+    hl.stop()
+    expect(doc.querySelectorAll('.axt-hl')).toHaveLength(0)
+    // Stopped, the controller is no longer the one asked: nothing to drop, nothing touched
+    clearSentenceHighlights(doc)
     expect(doc.querySelectorAll('.axt-hl')).toHaveLength(0)
   })
 
@@ -1022,7 +1044,7 @@ describe('source peek through the pointer (#141)', () => {
     }
   })
 
-  it('is taken away by clearSentenceHighlights and restore, and comes back cold', () => {
+  it('is hidden by clearSentenceHighlights and comes back cold; restore takes it away', () => {
     const { doc, source, target } = live()
     const browser = stubBrowser(doc)
     const hl = startSentenceHighlight(doc)!
@@ -1030,15 +1052,17 @@ describe('source peek through the pointer (#141)', () => {
     browser.caret.mockReturnValue({ offsetNode: target.firstChild!, offset: 3 })
     browser.move()
     browser.flushTimers(PEEK_DWELL_MS)
-    expect(panel(doc)).not.toBeNull()
+    expect(panel(doc)?.hidden).toBe(false)
 
-    clearSentenceHighlights(doc) // what setMode() and applyStyle() do
-    expect(panel(doc)).toBeNull()
+    // What setMode() and applyStyle() ask of the controller: the panel is its own and stays, hidden, for the next dwell (INVENTORY T3)
+    clearSentenceHighlights(doc)
+    expect(panel(doc)?.hidden).toBe(true)
     browser.move()
-    expect(panel(doc)).toBeNull() // a dwell again, not an instant panel
+    expect(panel(doc)?.hidden).toBe(true) // a dwell again, not an instant panel
     browser.flushTimers(PEEK_DWELL_MS)
-    expect(panel(doc)).not.toBeNull()
+    expect(panel(doc)?.hidden).toBe(false)
 
+    // restore() asks the same, then sweeps every injected node — the panel with them
     restore(doc)
     expect(panel(doc)).toBeNull()
     hl.stop()
