@@ -136,6 +136,21 @@ describe('injection and restore', () => {
     expect(css).not.toContain('[object Object]')
   })
 
+  it('the look sheet is put back right after the static one on every enable: a static sheet lost and re-created, or something inserted between them, must not reverse the cascade', () => {
+    // Reversed, equal-specificity static rules would beat the advanced declarations (the local adversarial review of T5)
+    const doc = docOf('<p class="ltx_p" id="p1">Hello.</p>')
+    enable(doc, 'stack', lookWith({ css: 'opacity: .2;' }))
+    doc.querySelector('style[data-axt-sheet="modes"]')!.remove()
+    enable(doc, 'stack', lookWith({ css: 'opacity: .2;' }))
+    const order = () => Array.from(doc.querySelectorAll('style[data-axt-sheet]'), s => s.getAttribute('data-axt-sheet'))
+    expect(order()).toEqual(['modes', 'look'])
+    expect(doc.querySelector('style[data-axt-sheet="look"]')!.textContent).toContain('opacity: .2;')
+    doc.querySelector('style[data-axt-sheet="modes"]')!.after(doc.createElement('meta'))
+    enable(doc, 'stack')
+    expect(doc.querySelector('style[data-axt-sheet="modes"]')!.nextElementSibling).toBe(doc.querySelector('style[data-axt-sheet="look"]'))
+    expect(order()).toEqual(['modes', 'look'])
+  })
+
   it('in presets.css the baseline opacity precedes the blur rule: equal specificity, so the blur wins by order alone', () => {
     const css = readFileSync(join(import.meta.dirname, '../../src/styles/presets.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
     const baseline = css.indexOf('opacity: var(--axt-opacity, 1);')
