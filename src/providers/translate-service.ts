@@ -210,7 +210,7 @@ const admits = (source: string, translated: string, format: WireFormat): boolean
   validate(translated, expectationsFromText(source, format)).ok
 
 /** Over budget counts as all misses: one more request is cheaper than the whole page stopping here. The OCR service's cache read uses it too (Codex on #87) */
-export async function readWithBudget(store: CachePort, keys: string[], budgetMs: number): Promise<(CachedEntry | null)[]> {
+export async function readWithBudget(store: CachePort, keys: string[], budgetMs: number, warn?: (line: string) => void): Promise<(CachedEntry | null)[]> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const hits = await Promise.race([
     store.getMany(keys),
@@ -218,7 +218,9 @@ export async function readWithBudget(store: CachePort, keys: string[], budgetMs:
   ]).finally(() => clearTimeout(timer))
   // A count that does not match means this response is not paired with the request, and indexing into it would mix things up: the whole batch is a miss
   if (hits !== null && hits.length === keys.length) return hits
-  console.warn(`[axt] cache read ${hits === null ? `did not return within ${budgetMs} ms` : 'returned a count that does not match the request'}; translating as a miss`)
+  const line = `[axt] cache read ${hits === null ? `did not return within ${budgetMs} ms` : 'returned a count that does not match the request'}; translating as a miss`
+  console.warn(line)
+  warn?.(line)
   return keys.map(() => null)
 }
 
@@ -457,7 +459,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
         })
         // A resend writes but does not read: the bad translation is in the store already, and reading it back would only be bad again
         if (!cache.bypass) {
-          const hits = await readWithBudget(store, computed, deps.cacheReadBudgetMs ?? CACHE_READ_BUDGET_MS)
+          const hits = await readWithBudget(store, computed, deps.cacheReadBudgetMs ?? CACHE_READ_BUDGET_MS, deps.warn)
           request.segments.forEach((segment, i) => {
             const hit = hits[i]
             if (hit === null || hit === undefined) return

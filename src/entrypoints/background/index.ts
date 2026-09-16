@@ -86,7 +86,7 @@ export default defineBackground(() => {
     permitted: () => browser.permissions.contains({ permissions: ['nativeMessaging'] }),
     bound: () => typeof browser.runtime.connectNative === 'function',
   })
-  const ocr = createOcrService({ backend: helper, cache, cancelled })
+  const ocr = createOcrService({ backend: helper, cache, cancelled, warn: diag })
   const router = createSessionRouter({
     current: transportOf,
     cancelled,
@@ -269,7 +269,11 @@ export default defineBackground(() => {
         // A failed chain build (a provider constructor throwing) is answered honestly too: unanswered, the caller waits for “message channel closed”
         router.forCall(message.scope, sender.tab?.id)
           .then(t => t.translate(message))
-          .catch((e: unknown) => ({ ok: false as const, error: toErrorInfo(e) }))
+          .catch((e: unknown) => {
+            const error = toErrorInfo(e)
+            diag(`[axt] translate call failed before any request (${error.kind}): ${error.message}`)
+            return { ok: false as const, error }
+          })
           .then(sendResponse)
         return true
       case 'axt:cancel-scope':
@@ -323,7 +327,9 @@ export default defineBackground(() => {
           .then(sendResponse)
         return true
       case 'axt:diag':
-        diagnostics.record(message.src, message.line)
+        // Only our own contexts can reach runtime.onMessage (no externally_connectable), still the shape is checked:
+        // a line is a string, the source one of the pages'; the ring's cap and the coalesced save bound the rest (Devin on #214)
+        if (typeof message.line === 'string' && (message.src === 'content' || message.src === 'popup' || message.src === 'options')) diagnostics.record(message.src, message.line)
         return false
       case 'axt:diag-export':
         // The environment a reader cannot be expected to report: the build, the browser, the platform
