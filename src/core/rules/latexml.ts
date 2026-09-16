@@ -1,4 +1,4 @@
-import { collectText, squash } from '@/core/text'
+import { LETTER, collectText, squash } from '@/core/text'
 // The LaTeXML rules module. Every ltx_* selector lives in this file only (CLAUDE.md hard rule 2).
 // Based on DESIGN.md §5.1 / §5.2 / §5.3 / §5.6 / §6.1; the measurements are in docs/RESEARCH.md §2.
 // Data tables and pure functions only, no traversal; the traversal is in src/core/extractor.
@@ -502,8 +502,6 @@ function textOf(el: Element, drop?: (el: Element) => boolean): string {
     return kind === 'skip' || kind === 'protect' || !!drop?.(node)
   })
 }
-
-const LETTER = /\p{L}/u
 
 /** Translatable = at least one Unicode letter in the visible text; a block of formulas, numbers and punctuation alone is no block */
 export function hasTranslatableText(el: Element): boolean {

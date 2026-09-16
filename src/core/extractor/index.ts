@@ -3,7 +3,7 @@
 // this file decides only “yield or not” and “descend or not”.
 import { isInjected } from '@/core/marks'
 import { YIELDS_TO_OUTER_BLOCK, classify, documentRoot, isNumericCell, tableCells } from '@/core/rules/latexml'
-import { collectText } from '@/core/text'
+import { LETTER, collectText } from '@/core/text'
 
 export interface Cell {
   el: Element
@@ -32,8 +32,6 @@ export type Block = TextBlock | TableBlock
 
 /** The attributes §7.1 allows to be added to an original node */
 export const ID_ATTR = 'data-axt-id'
-
-const LETTER = /\p{L}/u
 
 /**
  * Own text: only the text nodes of subtrees classified null are collected. skip / protect are untranslatable content,
@@ -135,7 +133,7 @@ export function extract(root: Document | Element): Block[] {
   return blocks
 }
 
-/** Write data-axt-id. Idempotent; one of the two attributes §7.1 allows on an original node */
+/** Write data-axt-id on every block — the one writer of that attribute, for the run and for the debug outlines alike. Idempotent */
 export function markBlocks(blocks: Block[]): void {
   for (const b of blocks) b.el.setAttribute(ID_ATTR, b.id)
 }
