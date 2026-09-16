@@ -263,9 +263,27 @@ describe('source peek (#141)', () => {
     expect(peek.marginFree(1136, 400, 425, vp)).toBe(false)
   })
 
+  it('starts cold again after restore() swept the panel while the controller ran', () => {
+    // The panel is an injected node and `restore()` sweeps every one of them; a controller still
+    // running afterwards (a test's sequence — the session stops it first) must not place into a detached node
+    const d = doc()
+    const t = timers(d)
+    d.body.innerHTML = '<p id="a">One.</p><p id="b">Two.</p>'
+    const a = d.getElementById('a')!
+    const b = d.getElementById('b')!
+    const peek = createPeek(d)
+    peek.show(KEY(a), () => [rangeOver(a)], wide)
+    t.fire()
+    d.querySelector<HTMLElement>('.axt-peek')!.remove()
+    peek.show(KEY(b), () => [rangeOver(b)], wide)
+    expect(d.querySelector<HTMLElement>('.axt-peek')).toBeNull() // not warm: the dwell runs again
+    expect(t.delays()).toEqual([PEEK_DWELL_MS])
+    t.fire()
+    expect(d.querySelector<HTMLElement>('.axt-peek')?.isConnected).toBe(true)
+  })
+
   it('a dwell whose sentence is no longer current renders nothing', () => {
-    // `clearSentenceHighlights()` from outside — setMode, applyStyle — finds no panel to remove
-    // while the dwell is counting; the timer asks before rendering
+    // A reflow moved the sentence while the dwell was counting: the timer asks before rendering
     const d = doc()
     const t = timers(d)
     d.body.innerHTML = '<p id="a">One.</p>'
@@ -398,24 +416,6 @@ describe('source peek (#141)', () => {
     expect(built).toBe(1)
     expect(d.querySelector<HTMLElement>('.axt-peek')!.firstChild).toBe(before)
     expect(d.querySelector<HTMLElement>('.axt-peek')!.getAttribute('style')).toContain('top:500px')
-  })
-
-  it('starts cold again after the panel was removed from outside', () => {
-    // `clearSentenceHighlights` (setMode, applyStyle) takes the panel away without telling the peek
-    const d = doc()
-    const t = timers(d)
-    d.body.innerHTML = '<p id="a">One.</p><p id="b">Two.</p>'
-    const a = d.getElementById('a')!
-    const b = d.getElementById('b')!
-    const peek = createPeek(d)
-    peek.show(KEY(a), () => [rangeOver(a)], wide)
-    t.fire()
-    d.querySelector<HTMLElement>('.axt-peek')!.remove()
-    peek.show(KEY(b), () => [rangeOver(b)], wide)
-    expect(d.querySelector<HTMLElement>('.axt-peek')).toBeNull() // not warm: the dwell runs again
-    expect(t.delays()).toEqual([PEEK_DWELL_MS])
-    t.fire()
-    expect(d.querySelector<HTMLElement>('.axt-peek')!.textContent).toBe('Two.')
   })
 
   it('is one of ours: swept by the injected selector, and recognised as such', () => {

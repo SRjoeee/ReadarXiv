@@ -156,9 +156,9 @@ const growsDown = (top: number, bottom: number, viewportHeight: number): boolean
 
 /**
  * @param current Whether a sentence is still the one the highlight shows, asked when its dwell
- * ends. `clearSentenceHighlights()` runs from outside the controller — `setMode()`, `applyStyle()`
- * — and finds no panel to remove while the dwell is still counting; without the question the timer
- * would go on to render a panel for a page that has since changed (Codex on #149).
+ * ends: a reflow may have moved the sentence while the dwell was counting, and the timer would
+ * otherwise render a panel measured against a page that has since changed (Codex on #149). A drop
+ * asked of the controller (`setMode`, `applyStyle`) cancels the dwell itself, through `hide()`.
  */
 export function createPeek(doc: Document, current: (key: PeekKey) => boolean = () => true): Peek {
   const view = doc.defaultView
@@ -244,8 +244,9 @@ export function createPeek(doc: Document, current: (key: PeekKey) => boolean = (
 
   return {
     show(key, ranges, anchor) {
-      // `clearSentenceHighlights` takes the panel out from outside this controller (`setMode`,
-      // `applyStyle`); a detached panel is as good as no panel, and the dwell starts cold
+      // The panel is one of the injected nodes `restore()` sweeps (§7.1 item 4). Swept while this
+      // controller still runs — the session stops it first, a test need not — it is gone, not hidden:
+      // a detached panel is as good as none, and the dwell starts cold (Copilot on #210)
       if (panel && !panel.isConnected) {
         panel = undefined
         open = null
