@@ -37,21 +37,13 @@ export function clearFailed(block: Block): boolean {
 }
 
 /**
- * Failure: remove the pending node or the old translation, mark failed (the red line as before), then insert the
- * widget. Clicking “retry” disables the button and calls retry; renderPending removes the widget before inserting
- * the ring (see there)
+ * The widget itself: a host carrying the class, the reason and the sentence, with the button and the mark in its
+ * shadow root. Built here for the failed block's own side, and again by `splitFigures` for the copy in the right
+ * column — `cloneNode` copies neither a shadow root nor a listener, so a cloned widget is an empty span (issue #170)
  */
-export function renderFailed(block: Block, reason: string, retry: () => void): Element {
-  clearTranslation(block)
-  setState(block, 'failed')
-  const doc = block.el.ownerDocument
+export function failureWidget(doc: Document, reason: string, retry: () => void): HTMLElement {
   const host = doc.createElement('span')
   host.className = `${T_CLASS} ${ERROR_CLASS}`
-  host.setAttribute(FOR_ATTR, block.id)
-  // The widget of a description row cannot be a `<span>` child of `<tbody>`: that breaks the table content model and
-  // the browser moves it out of the table (Codex on #168). Wrap it as `<tr><td>…</td></tr>` with the translation's own shell
-  const { node: outer, slot } = translationShell(block)
-  const widget = outer === slot ? null : outer
   // The reader sees the sentence in the interface's language; the tail of `kind: diagnostic` is kept for diagnosis, not shown (Codex on #161)
   const strings = coreStrings()
   const kind = parseFatal(reason)
@@ -72,6 +64,24 @@ export function renderFailed(block: Block, reason: string, retry: () => void): E
   mark.title = host.title
   mark.textContent = '！'
   root.append(style, button, mark)
+  return host
+}
+
+/**
+ * Failure: remove the pending node or the old translation, mark failed (the red line as before), then insert the
+ * widget. Clicking “retry” disables the button and calls retry; renderPending removes the widget before inserting
+ * the ring (see there)
+ */
+export function renderFailed(block: Block, reason: string, retry: () => void): Element {
+  clearTranslation(block)
+  setState(block, 'failed')
+  const doc = block.el.ownerDocument
+  const host = failureWidget(doc, reason, retry)
+  host.setAttribute(FOR_ATTR, block.id)
+  // The widget of a description row cannot be a `<span>` child of `<tbody>`: that breaks the table content model and
+  // the browser moves it out of the table (Codex on #168). Wrap it as `<tr><td>…</td></tr>` with the translation's own shell
+  const { node: outer, slot } = translationShell(block)
+  const widget = outer === slot ? null : outer
   if (widget) {
     // The shell carries the class / data-axt-for itself: pairing and clean-up go by it; host is only the widget inside
     widget.className = host.className

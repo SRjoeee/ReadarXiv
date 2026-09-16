@@ -17,19 +17,32 @@ import { DOCUMENT_ROOT, FIGURE_MEDIA, SPLIT_ROOTS, isTableRoot, tableCells } fro
 import { ID_ATTR } from '@/core/extractor'
 import { AXT_ATTR_PREFIX, IMG_CLASS, T_CLASS } from '@/core/marks'
 import { hashText } from '@/shared/hash'
-import { ERROR_CLASS, FOR_ATTR, MIRROR_CLASS, PENDING_CLASS, REAL_TRANSLATION, SPLIT_ATTR, SPLIT_CLASS, SPLIT_FOR_ATTR, SPLIT_OF_ATTR } from './attrs'
+import { ERROR_CLASS, FOR_ATTR, MIRROR_CLASS, PENDING_CLASS, SPLIT_ATTR, SPLIT_CLASS, SPLIT_FOR_ATTR, SPLIT_OF_ATTR } from './attrs'
+import { REASON_ATTR, failureWidget } from './failed'
 import { mirrorSentences, sentenceSignatureOf } from './sentences'
 
 
-// The line of a real translation is REAL_TRANSLATION of attrs.ts — rings, failure widgets, **mirrors and split
-// clones** carry .axt-t for pairing only and are no translations. With .axt-mirror left out (issue #46 measured on
-// 2312.17141): a figure whose caption was still pending got its media mirrored, the next full pass took the mirror
-// for “a translation”, removed it and cloned a figure with no translation at all — the right column held a copy of
-// the original. On the baseline's full pass every time, 2 of 7 split figures were such false splits
-/** An image overlay (§15.2) is a real translation too: a figure whose only translation it is splits as well, and its arrival changes the signature and rebuilds the copy */
-const REAL_OR_IMAGE = `${REAL_TRANSLATION}, .${IMG_CLASS}`
-/** The signature of the translated content at clone time, to tell whether translations were added or changed and the copy needs rebuilding */
+// A figure is split as soon as it holds a **pair** — a translation, the ring waiting for one, the widget of a failed
+// one, an image overlay (§15.2) — not only once a translation has arrived (issue #170): split later, the figure spans
+// both columns while its caption is pending and jumps into two columns when the translation lands, and a caption that
+// failed leaves it spanning for good. Mirrors and split copies carry .axt-t for pairing only and never count: with
+// .axt-mirror counted (issue #46, measured on 2312.17141) a figure whose caption was still pending got its media
+// mirrored, the next full pass took the mirror for “a translation”, removed it and cloned a figure with no translation
+// at all — the right column held a copy of the original; 2 of 7 split figures on the baseline were such false splits
+const PAIRED = `.${T_CLASS}:not(.${MIRROR_CLASS}, .${SPLIT_CLASS}), .${IMG_CLASS}`
+/** The signature of the paired content at clone time, to tell whether pairs were added, changed or changed state and the copy needs rebuilding */
 const KEY_ATTR = 'data-axt-split-key'
+/** Marks a node of the copy that duplicates one still visible in the original — media, silenced for assistive technology in side mode (issue #170) */
+export const DUPLICATE_ATTR = 'data-axt-dup'
+
+export interface SplitOptions {
+  /**
+   * Retry the block with this id (the pipeline's `translate([block])`). With it, a failed pair's widget in the copy is
+   * a live one — `cloneNode` gives an empty span for a shadow host, and the original's widget is hidden by side's
+   * styles, so without this the copy's side had no button (issue #170). Absent, the copy keeps the pair's original as before
+   */
+  retry?: (blockId: string) => void
+}
 
 /**
  * A translation node's sentence-registration signature as it stands.
@@ -45,11 +58,15 @@ function signatureOf(t: Element): string {
   return isTableRoot(t) ? `${own}/${tableCells(t).map(sentenceSignatureOf).join(',')}` : own
 }
 
-/** The translation's signature: the same count with changed content (a retranslation into another target language) rebuilds too; counting alone would keep a stale copy for good (Codex on #26) */
+/** What kind of pair member this is; the copy is rebuilt when a pair changes state, not only content (issue #170) */
+const stateOf = (t: Element): string =>
+  t.classList.contains(PENDING_CLASS) ? 'pending' : t.classList.contains(ERROR_CLASS) ? 'error' : t.classList.contains(IMG_CLASS) ? 'image' : 'done'
+
+/** The pairs' signature: the same count with changed content (a retranslation into another target language) rebuilds too; counting alone would keep a stale copy for good (Codex on #26) */
 function translationKey(fig: Element): string {
   // Beyond the text, the **sentence registration**: with the text unchanged but the registration going from “none”
   // to “some”, a copy left as it is would never be mirrored, and hovering it would find nothing (Codex on #148)
-  const texts = Array.from(fig.querySelectorAll(REAL_OR_IMAGE), t => `${t.textContent ?? ''}\u0000${signatureOf(t)}`)
+  const texts = Array.from(fig.querySelectorAll(PAIRED), t => `${stateOf(t)}\u0001${t.textContent ?? ''}\u0000${signatureOf(t)}`)
   return `${texts.length}:${hashText(JSON.stringify(texts))}`
 }
 
@@ -101,8 +118,43 @@ export function outermostFigure(el: Element): Element | null {
 function needsSplit(fig: Element): boolean {
   if (fig.classList.contains(T_CLASS)) return false // the clone itself
   if (fig.parentElement?.closest(SPLIT_ROOTS)) return false // a nested sub-figure, or an equation group inside a figure, is copied with its outermost root
-  if (!fig.querySelector(REAL_OR_IMAGE)) return false // no translation inside (pending does not count): nothing paired in the whole block, left to the mirrors
+  if (!fig.querySelector(PAIRED)) return false // nothing paired in the whole block — pending and failed count, a mirror does not: left to the mirrors
   return hasLooseMedia(fig) // a float without loose media (a table) need not be copied whole: its table has a translation clone already
+}
+
+/**
+ * The copy's media that duplicate the original's — the figure's image, an equation group's formulas — are silenced
+ * for assistive technology in side mode, where the original is visible beside them (the mirrors' treatment, §7.4b,
+ * issue #72); `inert` as well, so a link inside cannot take focus into a copy the screen reader skips. Media inside
+ * a translation are not duplicates: the original's translation is hidden by side's styles, the copy's is the one shown
+ */
+function markDuplicates(clone: Element): void {
+  for (const media of Array.from(clone.querySelectorAll(FIGURE_MEDIA))) {
+    // Inside a translation or an image overlay (§15.2) it is ours, and the copy's is the one shown in side
+    if (media.closest(`.${T_CLASS}, .${IMG_CLASS}`) !== clone) continue
+    media.setAttribute(DUPLICATE_ATTR, '')
+  }
+}
+
+/**
+ * Side mode shows the original beside the copy, so the copy's duplicated media are silenced; in only mode the original
+ * is `display: none` and the copy is the one reading left, so they speak again (stack hides the copy whole). `aria-hidden`
+ * is an attribute and no style sheet can switch it, hence this pass at every mode change. Returns how many nodes changed
+ */
+export function setSplitDuplicatesHidden(root: Document | Element, hidden: boolean): number {
+  let changed = 0
+  for (const media of Array.from(root.querySelectorAll(`.${SPLIT_CLASS} [${DUPLICATE_ATTR}]`))) {
+    if (hidden === media.hasAttribute('inert')) continue
+    if (hidden) {
+      media.setAttribute('aria-hidden', 'true')
+      media.setAttribute('inert', '')
+    } else {
+      media.removeAttribute('aria-hidden')
+      media.removeAttribute('inert')
+    }
+    changed++
+  }
+  return changed
 }
 
 /**
@@ -125,10 +177,11 @@ function stripIds(root: Element): void {
 }
 
 /**
- * Make a translation-only copy of each figure holding pairs inside; idempotent, rebuilt when translations are
- * added or changed. Returns how many copies were made.
+ * Make a translation-only copy of each figure holding pairs inside; idempotent, rebuilt when pairs are added, change
+ * or change state. Returns how many copies were made. Runs in side mode only (prep.ts), so the copy is built with its
+ * duplicated media silenced; `setSplitDuplicatesHidden` follows the mode from then on
  */
-export function splitFigures(root: Document | Element): number {
+export function splitFigures(root: Document | Element, options: SplitOptions = {}): number {
   const scope = root.querySelector(DOCUMENT_ROOT) ?? ('body' in root ? null : (root as Element))
   if (!scope) return 0
   let made = 0
@@ -153,20 +206,44 @@ export function splitFigures(root: Document | Element): number {
     // guessed. The hover highlight relies on this table to move the translation side's spans onto the copy actually
     // shown on screen (issue #139)
     const twins = pairNodes(fig, clone)
-    // Pairs still waiting for a translation / failed: the copy drops the ring and the widget and keeps the original; the key changes when the translation arrives and the copy is rebuilt
-    for (const pending of Array.from(clone.querySelectorAll(`.${PENDING_CLASS}, .${ERROR_CLASS}`))) pending.remove()
-    // The clone keeps the translations only: each pair's original member is taken out (a translation never is)
+    // A pair still waiting keeps its ring in the copy — the right column shows “translating” where the translation will
+    // land, as it does for any block — and the key changes when the translation arrives, rebuilding the copy. A pair that
+    // failed: with a retry at hand the copy gets a live widget of its own (built below, once the marks are stripped);
+    // without one, the cloned widget — an empty span — goes and the pair's original stays, readable at least
+    const failed: { dead: Element; blockId: string; reason: string }[] = []
+    for (const dead of Array.from(clone.querySelectorAll(`.${ERROR_CLASS}`))) {
+      const blockId = dead.getAttribute(FOR_ATTR)
+      const reason = (dead.matches(`[${REASON_ATTR}]`) ? dead : dead.querySelector(`[${REASON_ATTR}]`))?.getAttribute(REASON_ATTR)
+      if (options.retry && blockId && reason !== null && reason !== undefined) failed.push({ dead, blockId, reason })
+      else dead.remove()
+    }
+    // The clone keeps the pairs' our-side members only: each pair's original member is taken out (a translation, a ring, a widget never is)
     for (const original of Array.from(clone.querySelectorAll('*'))) {
       if (original.classList.contains(T_CLASS)) continue
       if (original.nextElementSibling?.classList.contains(T_CLASS)) original.remove()
     }
     stripIds(clone)
+    const doc = fig.ownerDocument
+    for (const { dead, blockId, reason } of failed) {
+      const retry = options.retry
+      if (!retry) break
+      const live = failureWidget(doc, reason, () => retry(blockId))
+      // A description row's widget sits in a `<tr><td>` shell (failed.ts): the shell is kept, the host inside it replaced
+      const spot = dead.matches('span') ? dead : dead.querySelector('span')
+      if (!spot || spot === dead) dead.replaceWith(live)
+      else {
+        live.classList.remove(T_CLASS)
+        spot.replaceWith(live)
+      }
+    }
     clone.classList.add(T_CLASS, SPLIT_CLASS)
     clone.setAttribute(FOR_ATTR, `split:${made}`)
     clone.setAttribute(KEY_ATTR, key)
+    markDuplicates(clone) // after the class: “inside no translation but the copy itself” is asked through .axt-t
 
     fig.setAttribute(SPLIT_ATTR, '')
     fig.after(clone)
+    setSplitDuplicatesHidden(clone.parentElement ?? clone, true)
     // The caption's translation in the right column is this clone; the original's is hidden by side mode. Unregistered,
     // the rectangles computed on the translation side at hover time are empty and not one band is drawn (issue #139,
     // the owner's feedback of 2026-09-10). **Every element is tried, not `.axt-t` alone.** A table's sentences are
