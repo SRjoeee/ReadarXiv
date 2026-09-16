@@ -88,8 +88,8 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
   /** The lookups' bookkeeping (shared/pack.ts): the committed target, the newest lookup, the downloads in flight */
   const [packs] = useState(() => createPackLookup({
     publish: setPack,
-    // The settings page may be open beside this popup: tell it what the download found, as the helper's state is told
-    announce: (target, state) => void sendMessage({ type: 'axt:pack-state', target, state }).catch(() => undefined),
+    // The settings page may be open beside this popup: tell it the download ended, as the helper's state is told
+    announce: target => void sendMessage({ type: 'axt:pack-changed', target }).catch(() => undefined),
   }))
   const settle = useCallback(async (next: Config) => {
     // The committed configuration owns the wanted target: another target forgets the previous one's pack state at
@@ -176,10 +176,10 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
   // reader closed and reopened the popup (§15.4)
   useEffect(() => {
     const onState = (message: unknown) => {
-      const m = message as { type?: string; status?: HelperStatus; target?: string; state?: PackState } | null
+      const m = message as { type?: string; status?: HelperStatus; target?: string } | null
       if (m?.type === 'axt:helper-state' && m.status) setHelper(m.status)
       // A pack downloaded on the settings page: this popup's Download button must not stay over an installed pack (INVENTORY S7)
-      if (m?.type === 'axt:pack-state' && m.target && m.state) packs.receive(m.target, m.state)
+      if (m?.type === 'axt:pack-changed' && m.target) packs.receive(m.target)
     }
     browser.runtime.onMessage.addListener(onState)
     return () => browser.runtime.onMessage.removeListener(onState)

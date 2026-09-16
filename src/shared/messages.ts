@@ -3,7 +3,6 @@ import { browser } from 'wxt/browser'
 import type { Progress } from '@/core/pipeline/run'
 import type { Mode } from '@/core/renderer'
 import type { StartResult } from '@/core/session'
-import type { PackState } from '@/shared/pack'
 import type { ProviderStatus } from '@/providers/transport'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
 import type { HelperStatus, ImageProgress, OcrCall, OcrMessageResponse } from './ocr'
@@ -113,8 +112,8 @@ export interface AxtMessages {
    * Nobody listening is the normal case, so the send may reject
    */
   'axt:helper-state': { request: { status: HelperStatus }; response: undefined }
-  /** popup ↔ options: a language pack's state as one surface just found it after a download; the others follow (INVENTORY S7) */
-  'axt:pack-state': { request: { target: string; state: PackState }; response: undefined }
+  /** popup ↔ options: a download of this language pack ended on one surface; the other looks it up again (INVENTORY S7) */
+  'axt:pack-changed': { request: { target: string }; response: undefined }
   /**
    * Sent to every tab when a re-probe finds the helper that was missing. A paper parks its bitmaps
    * when the probe at session start came back empty-handed, and nothing else would ever tell it
