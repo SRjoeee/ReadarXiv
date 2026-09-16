@@ -12,7 +12,7 @@ import type { Block } from '@/core/extractor'
 import type { PaperContext } from '@/core/extractor/context'
 import { collectImageTargets, startImageTranslation, type ImageBytes, type ImageRun, type ImageTarget } from '@/core/image'
 import { startTranslation, type Progress, type TranslationRun } from '@/core/pipeline'
-import { escapeText, unescapeText } from '@/core/protector/text'
+import { escapeText, unescapeText } from '@/core/protector/escape'
 import {
   applyStyle, clearImageEverywhere, clearMarginNotes, clearPairMargins, createModeController, createPrep, setSplitDuplicatesHidden,
   installAnchorFallback, type Mode, type ModeController, relabelFailed, restore, type SentenceHighlight, setImageModes,

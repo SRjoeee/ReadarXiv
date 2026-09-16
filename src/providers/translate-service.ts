@@ -11,7 +11,7 @@ import { cacheKeyFor, type RenderPath } from '@/cache/key'
 import { type SentenceAlignment, verifyAlignment } from './alignment'
 import { markSentences, stripMarkers, unmarkSentences, type MarkedText } from './sentence-markers'
 // validate is imported deep rather than through the protector's barrel: serialize / rehydrate touch the DOM and must not enter the background bundle
-import { decodeText } from '@/core/protector/text'
+import { decodeText } from '@/core/protector/escape'
 import { tokenize } from '@/core/protector/tokens'
 import { expectationsFromText, validate } from '@/core/protector/validate'
 import { createGlossaryMatcher, type GlossaryEntry } from './glossary'
@@ -204,7 +204,7 @@ function uniqueIds(items: QueueItem[]): string[] {
  * Only a translation that passed placeholder validation is cached: a bad one in the store would be read first every
  * time and cost another request to redo (Codex on #30). The expectations are derived from **the request text** —
  * both formats' escaping guarantees “a placeholder on the wire was written by us” (the unforgeability argument of
- * protector/text.ts), so no validation callback has to cross the message boundary (issue #42). **The format must
+ * protector/escape.ts), so no validation callback has to cross the message boundary (issue #42). **The format must
  * follow renderPath**: the tags tokeniser over markers text recognises no placeholder, the expectations are empty → validation always passes → a torn translation enters the cache silently
  */
 const admits = (source: string, translated: string, format: WireFormat): boolean =>

@@ -4,6 +4,6 @@ export { PlaceholderIntegrityError, expectationsFromText, validate, type Integri
 export { rehydrate } from './rehydrate'
 export { joinRuns, splitRuns, type RunItem, type RunLayout } from './runs'
 export { fromAlpha, toAlpha, tokenize, writeVoid, type Token, type WireFormat } from './tokens'
-export { decodeText, escapeText, unescapeText } from './text'
+export { decodeText, escapeText, unescapeText } from './escape'
 export { MARKER_RE, TAG_RE } from './tokens'
 export { indexSpans, nodeOffsetAt, rangesOf, scanTokens, spanAt, wireOffsetAt, type PositionedToken, type SpanIndex, type WireSpan } from './offsets'
