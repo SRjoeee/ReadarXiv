@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LINE_MAX, redact } from '@/shared/diagnostics'
+import { LINE_MAX, failureLine, normalizeEntries, redact } from '@/shared/diagnostics'
 
 // The diagnostics log's one hard rule (CLAUDE.md rule 7): no key in a line, whatever the line quotes
 
@@ -16,5 +16,29 @@ describe('redact', () => {
     const long = redact(`body: ${'x'.repeat(LINE_MAX * 2)}`)
     expect(long.length).toBe(LINE_MAX + 1)
     expect(long.endsWith('…')).toBe(true)
+  })
+})
+
+describe('failureLine', () => {
+  it('keeps the message for the kinds an endpoint or the transport words, withholds it for the kinds that may quote the paper', () => {
+    expect(failureLine('auth', 'Unauthorized: invalid key')).toBe('auth: Unauthorized: invalid key')
+    expect(failureLine('network', 'fetch failed')).toBe('network: fetch failed')
+    expect(failureLine('invalid-response', 'No object generated; raw model output: the Fourier transform of f is')).toBe('invalid-response (message of 68 chars withheld: may quote the response)')
+    expect(failureLine('unknown', '{"error":"…the request body echoed…"}')).toMatch(/^unknown \(message of \d+ chars withheld/)
+    expect(failureLine('bad-request', 'x')).toMatch(/^bad-request \(message of 1 chars withheld/)
+  })
+})
+
+describe('normalizeEntries', () => {
+  it('drops what is not an entry and redacts what is: storage is not trusted either', () => {
+    const out = normalizeEntries([
+      { t: 1, src: 'content', line: 'key sk-0123456789abcdef in a stored line' },
+      { t: 'x', src: 'content', line: 'bad t' },
+      { t: 2, src: 'elsewhere', line: 'bad src' },
+      { t: 3, src: 'popup' },
+      'not an object',
+    ])
+    expect(out).toEqual([{ t: 1, src: 'content', line: 'key sk-… in a stored line' }])
+    expect(normalizeEntries('nope')).toEqual([])
   })
 })

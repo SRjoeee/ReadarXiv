@@ -9,7 +9,15 @@ import { defineConfig } from 'wxt'
  * "On the remote" is what the local remote-tracking refs say at build time — true for a fresh CI checkout, which is
  * where a build that ships comes from; a stale local clone could name a commit the remote has since lost (Devin on #214)
  */
+let stamped: string | undefined
 function buildRef(): string {
+  // WXT asks for the vite config once per entrypoint: computed once, printed once
+  if (stamped !== undefined) return stamped
+  stamped = readBuildRef()
+  console.log(`[build] helper install ref: ${stamped}`)
+  return stamped
+}
+function readBuildRef(): string {
   try {
     const run = (cmd: string) => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
     if (run('git status --porcelain') !== '') return 'main'
