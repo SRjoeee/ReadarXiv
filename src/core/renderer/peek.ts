@@ -244,6 +244,13 @@ export function createPeek(doc: Document, current: (key: PeekKey) => boolean = (
 
   return {
     show(key, ranges, anchor) {
+      // The panel is one of the injected nodes `restore()` sweeps (§7.1 item 4). Swept while this
+      // controller still runs — the session stops it first, a test need not — it is gone, not hidden:
+      // a detached panel is as good as none, and the dwell starts cold (Copilot on #210)
+      if (panel && !panel.isConnected) {
+        panel = undefined
+        open = null
+      }
       if (dirty.has(key.registration)) {
         this.hide()
         return
