@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 // helper/register.sh is the one writer of the Native Messaging host manifest (INVENTORY P5): both installers end in it.
@@ -50,6 +50,17 @@ describe('helper/register.sh', () => {
     chmodSync(other, 0o755)
     register(dir, other, ID_A)
     for (const path of manifests(dir)) expect(read(path).path).toBe(other)
+  })
+
+  it('an existing manifest with no origins — an empty list, or a file left empty by an interrupted write — does not stop a re-run (Codex on the #207 range)', () => {
+    const { dir, bin } = home()
+    const [chrome, chromium] = manifests(dir)
+    mkdirSync(dirname(chrome as string), { recursive: true })
+    writeFileSync(chrome as string, JSON.stringify({ name: HOST, path: bin, type: 'stdio', allowed_origins: [] }))
+    mkdirSync(dirname(chromium as string), { recursive: true })
+    writeFileSync(chromium as string, '')
+    register(dir, bin, ID_A)
+    for (const path of manifests(dir)) expect(read(path).allowed_origins).toEqual([`chrome-extension://${ID_A}/`])
   })
 
   it('refuses a malformed extension id and a binary that is not there, writing nothing', () => {

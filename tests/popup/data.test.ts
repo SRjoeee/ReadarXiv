@@ -126,7 +126,9 @@ describe('usePopupData', () => {
     expect(hook.current().input.config?.targetLanguage).toBe(DEFAULT_CONFIG.targetLanguage)
     store.config = { ...DEFAULT_CONFIG, uiLanguage: 'en', targetLanguage: 'jpn' }
     await hook.run(() => { for (const watcher of store.watchers) watcher(store.config as Config) })
-    expect(hook.current().input.config?.targetLanguage).toBe('jpn')
+    // The change reaches the hook through a re-read of storage on the serial write chain — one tick locally, more on
+    // a loaded CI runner (#215's CI failed here once with the old value still showing)
+    await hook.until(() => hook.current().input.config?.targetLanguage === 'jpn')
     expect(savedAsks().at(-1)?.message.fresh).toBe(true)
     expect(reload).not.toHaveBeenCalled()
     await hook.unmount()
