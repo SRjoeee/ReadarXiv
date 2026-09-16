@@ -24,5 +24,7 @@ export function squash(text: string | null | undefined): string {
   return (text ?? '').replace(/\s+/g, ' ').trim()
 }
 
-const ELEMENT_NODE = 1
-const TEXT_NODE = 3
+export const ELEMENT_NODE = 1
+export const TEXT_NODE = 3
+/** One Unicode letter: what makes a text translatable, wherever that question is asked */
+export const LETTER = /\p{L}/u

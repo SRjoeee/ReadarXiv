@@ -11,6 +11,7 @@ docs/rebuild/inventory/docs.md 33
 docs/rebuild/inventory/runtime.md 11
 docs/rebuild/inventory/ui.md 4
 helper/README.md 1
+src/config/languages.ts 188  # localisation data: the Chinese name table and the native names; four evidence quotes in comments
 src/cache/key.ts 1
 src/config/appearance.ts 12
 src/config/schema.ts 2

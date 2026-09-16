@@ -24,10 +24,10 @@ describe('languages', () => {
     expect(englishName('klingon')).toBe('klingon')
   })
 
-  it('the settings label: the Chinese name (local spelling), not repeated when the two are the same', () => {
-    expect(label('jpn')).toBe('日语（日本語）')
-    expect(label('cmn')).toBe('简体中文')
-    expect(label('eng')).toBe('英语（English）')
+  it('the settings label: the name in the interface language (local spelling), not repeated when the two are the same', () => {
+    expect(label('jpn', LANG_CODE_TO_ZH_NAME)).toBe('日语（日本語）')
+    expect(label('cmn', LANG_CODE_TO_ZH_NAME)).toBe('简体中文')
+    expect(label('eng', LANG_CODE_TO_ZH_NAME)).toBe('英语（English）')
   })
 
   it('Google takes BCP-47: cmn → zh, cmn-Hant → zh-TW; codes without a two-letter form pass as they are', () => {
