@@ -123,8 +123,8 @@ export function setMode(doc: Document, mode: Mode): void {
 
 /** Restore the original: remove every injected node (translations and image overlays, §7.1 item 4), strip every data-axt-* attribute, remove the injected styles (#axt-debug's included) */
 export function restore(doc: Document): { removedNodes: number; strippedAttrs: number } {
-  // Nothing to undo in the DOM — the highlight only ever lived in `CSS.highlights` — but the
-  // painted ranges point at translation nodes about to be removed (§7.7)
+  // The controller drops what it painted before its targets go: the bands and the panel point at
+  // translation nodes about to be removed (§7.7). Its layer and panel nodes leave with the sweep below
   clearSentenceHighlights(doc)
   let removedNodes = 0
   let strippedAttrs = 0
