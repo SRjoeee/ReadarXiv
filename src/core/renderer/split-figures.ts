@@ -58,9 +58,16 @@ function signatureOf(t: Element): string {
   return isTableRoot(t) ? `${own}/${tableCells(t).map(sentenceSignatureOf).join(',')}` : own
 }
 
-/** What kind of pair member this is; the copy is rebuilt when a pair changes state, not only content (issue #170) */
+/** A failed pair's diagnostic, on the host or on the host inside a description row's shell (failed.ts) */
+const reasonOf = (t: Element): string => (t.matches(`[${REASON_ATTR}]`) ? t : t.querySelector(`[${REASON_ATTR}]`))?.getAttribute(REASON_ATTR) ?? ''
+
+/**
+ * What kind of pair member this is; the copy is rebuilt when a pair changes state, not only content (issue #170). A
+ * failed pair carries its reason as well: the widget's words live in a shadow root, invisible to `textContent`, so
+ * one failure replacing another with a different reason would otherwise leave the copy's widget titled with the old one (Devin on #213)
+ */
 const stateOf = (t: Element): string =>
-  t.classList.contains(PENDING_CLASS) ? 'pending' : t.classList.contains(ERROR_CLASS) ? 'error' : t.classList.contains(IMG_CLASS) ? 'image' : 'done'
+  t.classList.contains(PENDING_CLASS) ? 'pending' : t.classList.contains(ERROR_CLASS) ? `error:${reasonOf(t)}` : t.classList.contains(IMG_CLASS) ? 'image' : 'done'
 
 /** The pairs' signature: the same count with changed content (a retranslation into another target language) rebuilds too; counting alone would keep a stale copy for good (Codex on #26) */
 function translationKey(fig: Element): string {
@@ -132,6 +139,9 @@ function markDuplicates(clone: Element): void {
   for (const media of Array.from(clone.querySelectorAll(FIGURE_MEDIA))) {
     // Inside a translation or an image overlay (§15.2) it is ours, and the copy's is the one shown in side
     if (media.closest(`.${T_CLASS}, .${IMG_CLASS}`) !== clone) continue
+    // Already silent by the paper's own hand (a decorative `aria-hidden` SVG): not ours to mark, or leaving side
+    // would strip the paper's attributes along with what side added (Devin on #213)
+    if (media.hasAttribute('aria-hidden') || media.hasAttribute('inert')) continue
     media.setAttribute(DUPLICATE_ATTR, '')
   }
 }
@@ -213,8 +223,8 @@ export function splitFigures(root: Document | Element, options: SplitOptions = {
     const failed: { dead: Element; blockId: string; reason: string }[] = []
     for (const dead of Array.from(clone.querySelectorAll(`.${ERROR_CLASS}`))) {
       const blockId = dead.getAttribute(FOR_ATTR)
-      const reason = (dead.matches(`[${REASON_ATTR}]`) ? dead : dead.querySelector(`[${REASON_ATTR}]`))?.getAttribute(REASON_ATTR)
-      if (options.retry && blockId && reason !== null && reason !== undefined) failed.push({ dead, blockId, reason })
+      const reason = reasonOf(dead)
+      if (options.retry && blockId && reason !== '') failed.push({ dead, blockId, reason })
       else dead.remove()
     }
     // The clone keeps the pairs' our-side members only: each pair's original member is taken out (a translation, a ring, a widget never is)
