@@ -74,30 +74,36 @@ describe('costs', () => {
     const rounds = 5
     const create: number[] = []
     const burst: number[] = []
+    const claimAll: number[] = []
     const screens: number[] = []
     let observed = 0
     for (let round = 0; round < rounds; round++) {
       FakeIntersectionObserver.instances = []
       let entered = 0
+      const taken: Block[] = []
       let scheduler!: ReturnType<typeof createLazyScheduler<Block>>
       // Creation hands the first screen over at once and observes the rest
-      create.push(timed(() => { scheduler = createLazyScheduler(blocks, { ...DEFAULT_PRELOAD, onEnter: (picked: Block[]) => { entered += picked.length } }) }))
+      create.push(timed(() => { scheduler = createLazyScheduler(blocks, { ...DEFAULT_PRELOAD, onEnter: (picked: Block[]) => { entered += picked.length; taken.push(...picked) } }) }))
       const io = FakeIntersectionObserver.instances[0]!
       observed = io.observed.size
       expect(observed).toBe(blocks.length - entered)
       // One burst: everything left intersects at once (a reader jumping to the end of a paper)
       burst.push(timed(() => io.emit([...io.observed])))
       expect(entered).toBe(blocks.length)
+      // What production does with every hand-over: the ledger's intake claims the taken blocks, and `claim` walks
+      // picked × anchors to release them — the nested scan the inventory asked about (Codex on #215)
+      claimAll.push(timed(() => scheduler.claim(taken)))
       scheduler.disconnect()
-      // Screen by screen: twenty blocks per notification, the way a reader scrolls
+      // Screen by screen: twenty blocks per notification, each claimed as it comes, the way a reader scrolls
       FakeIntersectionObserver.instances = []
-      const paced = createLazyScheduler(blocks, { ...DEFAULT_PRELOAD, onEnter: () => {} })
+      const hold: { s: ReturnType<typeof createLazyScheduler<Block>> | null } = { s: null }
+      hold.s = createLazyScheduler(blocks, { ...DEFAULT_PRELOAD, onEnter: (picked: Block[]) => { hold.s?.claim(picked) } })
       const io2 = FakeIntersectionObserver.instances[0]!
       const all = [...io2.observed]
       screens.push(timed(() => { for (let at = 0; at < all.length; at += 20) io2.emit(all.slice(at, at + 20)) }))
-      paced.disconnect()
+      hold.s.disconnect()
     }
-    report(`lazy scheduler: ${blocks.length} blocks; create (first screen handed over, the rest observed) ${ms(median(create))}; one burst of the observed ${ms(median(burst))}; ${Math.ceil(observed / 20)} screens of 20 ${ms(median(screens))} total`)
+    report(`lazy scheduler: ${blocks.length} blocks; create (first screen handed over, the rest observed) ${ms(median(create))}; one burst of the observed ${ms(median(burst))} + claiming all ${blocks.length} at once ${ms(median(claimAll))}; ${Math.ceil(observed / 20)} screens of 20, each claimed ${ms(median(screens))} total`)
     expect(blocks.length).toBeGreaterThan(0)
   })
 
@@ -125,7 +131,9 @@ describe('costs', () => {
     const callbacks: ((records: MutationRecord[]) => void)[] = []
     view.MutationObserver = class {
       constructor(readonly fn: (records: MutationRecord[]) => void) {}
-      observe() { callbacks.push(this.fn) }
+      // One observer watches both <body> and <html>: registered once, as a real observer delivers one callback for
+      // every target it watches (Codex on #215: registered per observe(), the burst was processed twice)
+      observe() { if (!callbacks.includes(this.fn)) callbacks.push(this.fn) }
       disconnect() {}
       takeRecords() { return [] }
     }
