@@ -45,7 +45,7 @@ Switch between them whenever you like, and back to the original whenever you wan
 
 **Aligned sentence by sentence.** Rest on any sentence and the matching one lights up on both sides,
 so you never have to count your way through a long paragraph to find which translation belongs to
-which line. Available with Microsoft Translator, which is the service selected by default.
+which line. Available with Microsoft Translator (the default), Google Translate, and the LLM services.
 
 ![Hovering a sentence bands it on both sides](docs/images/hover.gif)
 
@@ -64,7 +64,7 @@ Bitmap figures are macOS-only for now.
 
 ![A figure's labels translated in place over the original](docs/images/figure.png)
 
-**The translation looks how you want.** Colour, underline and weight are yours to set, and there is
+**The translation looks how you want.** Colour, opacity and underline are yours to set, and there is
 a blur-until-hovered style for reading the original first and checking yourself afterwards.
 
 Machine translation misreads terminology and will occasionally change a claim. Keeping the original
@@ -104,7 +104,7 @@ to build. See [`helper/README.md`](helper/README.md).
 
 | Service | API key | Notes |
 | --- | --- | --- |
-| Microsoft Translator | not needed | The default. The only one that reports sentence boundaries, so hover alignment works here. |
+| Microsoft Translator | not needed | The default. Reports sentence boundaries itself; the other services get them through markers. |
 | Google Translate | not needed | |
 | Chrome's built-in translation | not needed | Runs on your machine, offline, once Chrome has downloaded the language pack. |
 | Any OpenAI-compatible endpoint | yours | OpenRouter, DeepSeek, Ollama, LM Studio and the like. Prompts and the glossary apply here. |
