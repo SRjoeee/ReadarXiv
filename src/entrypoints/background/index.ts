@@ -18,7 +18,7 @@ import { applyLocaleFrom, resolveLocale } from '@/ui/apply-locale'
 import { setLocale } from '@/ui/strings'
 import { savedFromStatus } from '@/shared/page-action'
 import { BUILD_REF } from '@/shared/build'
-import type { DiagnosticEntry } from '@/shared/diagnostics'
+import { failureLine } from '@/shared/diagnostics'
 import { createDiagnostics } from './diagnostics'
 
 // The background: message routing + the engine chain + the queues + the cache (DESIGN §8.0). WXT ≥0.20 ships no
@@ -30,11 +30,7 @@ export default defineBackground(() => {
   /** The diagnostics log (issue #156): this worker's warnings, the pages' `[axt]` lines; in session storage across workers, for the settings page's export */
   const DIAG_KEY = 'axt-diagnostics'
   const diagnostics = createDiagnostics({
-    load: async () => {
-      const stored = await browser.storage.session.get(DIAG_KEY).catch(() => ({}) as Record<string, unknown>)
-      const value = stored[DIAG_KEY]
-      return Array.isArray(value) ? (value as DiagnosticEntry[]) : undefined
-    },
+    load: async () => (await browser.storage.session.get(DIAG_KEY).catch(() => ({}) as Record<string, unknown>))[DIAG_KEY],
     save: async entries => { await browser.storage.session.set({ [DIAG_KEY]: entries }).catch(() => undefined) },
   })
   const diag = (line: string) => diagnostics.record('background', line)
@@ -271,7 +267,7 @@ export default defineBackground(() => {
           .then(t => t.translate(message))
           .catch((e: unknown) => {
             const error = toErrorInfo(e)
-            diag(`[axt] translate call failed before any request (${error.kind}): ${error.message}`)
+            diag(`[axt] translate call failed before any request: ${failureLine(error.kind, error.message)}`)
             return { ok: false as const, error }
           })
           .then(sendResponse)

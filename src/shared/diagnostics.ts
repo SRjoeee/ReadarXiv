@@ -24,6 +24,32 @@ export interface DiagnosticsExport {
 export const LINE_MAX = 500
 
 /**
+ * The kinds whose message may quote the model's output or echo the request — paper text, which the log never holds
+ * (Devin on #214): `invalid-response` carries a snippet of the raw output for diagnosis, `unknown` and `bad-request`
+ * are an endpoint's body as it came. For them the log keeps the kind and the message's length only
+ */
+const WITHHELD = new Set(['invalid-response', 'unknown', 'bad-request'])
+
+/** A failure as the log may hold it: the kind always, the message only when it cannot be the paper's words */
+export function failureLine(kind: string, message: string): string {
+  return WITHHELD.has(kind) ? `${kind} (message of ${message.length} chars withheld: may quote the response)` : `${kind}: ${message}`
+}
+
+/** What comes back from storage is not trusted either: the shape checked, every line redacted and capped again (Devin on #214) */
+export function normalizeEntries(stored: unknown): DiagnosticEntry[] {
+  if (!Array.isArray(stored)) return []
+  const out: DiagnosticEntry[] = []
+  for (const raw of stored) {
+    if (typeof raw !== 'object' || raw === null) continue
+    const { t, src, line } = raw as { t?: unknown; src?: unknown; line?: unknown }
+    if (typeof t !== 'number' || typeof line !== 'string') continue
+    if (src !== 'background' && src !== 'content' && src !== 'popup' && src !== 'options') continue
+    out.push({ t, src, line: redact(line) })
+  }
+  return out
+}
+
+/**
  * A key never enters the log (CLAUDE.md rule 7), and a line is not trusted to be free of one: an endpoint may echo a
  * request header in an error, a reader may paste a URL with a key into a service's base URL. The shapes: OpenAI-style
  * `sk-…`, Google's `AIza…`, a bearer token, a `key=` / `token=` query parameter

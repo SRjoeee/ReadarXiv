@@ -7,6 +7,7 @@
 // auth trigger scheduler.disconnect()), the reader waiting over half a translation. Hard rule 4: a failure must be recoverable and trigger the fallback chain.
 import type { TranslateCall, TranslateMessageResponse, TranslateService } from './translate-service'
 import { isPermanentErrorKind, type ProviderErrorKind, type TranslatedSegment, type TranslationProvider } from './types'
+import { failureLine } from '@/shared/diagnostics'
 
 export interface FallbackStep {
   provider: TranslationProvider
@@ -100,9 +101,8 @@ export function createFallbackService(
       ...(isPermanentErrorKind(error.kind) ? {} : { until: now() + cooldownMs }),
     })
     lastDemoted = info
-    const line = `[axt] ${step.provider.id} demoted (${error.kind}): ${error.message}`
-    console.warn(line)
-    opts.warn?.(line)
+    console.warn(`[axt] ${step.provider.id} demoted (${error.kind}): ${error.message}`)
+    opts.warn?.(`[axt] ${step.provider.id} demoted: ${failureLine(error.kind, error.message)}`)
   }
 
   const translate = async (call: TranslateCall): Promise<TranslateMessageResponse> => {

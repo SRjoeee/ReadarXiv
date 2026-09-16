@@ -37,7 +37,8 @@ export function translateTitle(doc: Document, options: TitleOptions): TitleTrans
       // A rejection after the session was cancelled is expected, not noise
       if (request === version && options.isCurrent()) {
         console.warn('[axt] title translation failed', error)
-        options.warn?.(`title translation failed: ${error instanceof Error ? error.message : String(error)}`)
+        // Withheld from the log: the message may carry the endpoint's words on the title's text (Devin on #214)
+        options.warn?.(`title translation failed (${error instanceof Error ? error.name : typeof error}; message withheld)`)
       }
     }
   }

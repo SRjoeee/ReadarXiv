@@ -3,10 +3,10 @@
 // the browser closing is where a session's diagnostics end. Fed by the background itself (request failures,
 // hand-overs, withdrawals) and by the content script's `[axt]` lines through `axt:diag`; read by the settings
 // page's export. Never an API key (redact), never page text — the lines carry block ids, counts and paper ids only
-import { type DiagnosticEntry, type DiagnosticSource, type DiagnosticsExport, redact } from '@/shared/diagnostics'
+import { type DiagnosticEntry, type DiagnosticSource, type DiagnosticsExport, normalizeEntries, redact } from '@/shared/diagnostics'
 
 export interface DiagnosticsDeps {
-  load(): Promise<DiagnosticEntry[] | undefined>
+  load(): Promise<unknown>
   save(entries: DiagnosticEntry[]): Promise<void>
   now?: () => number
   /** How many lines are kept; the oldest go first */
@@ -49,7 +49,7 @@ export function createDiagnostics(deps: DiagnosticsDeps): Diagnostics {
   }
 
   const restored = deps.load()
-    .then(stored => { entries = Array.isArray(stored) ? stored : [] }, () => { entries = [] })
+    .then(stored => { entries = normalizeEntries(stored) }, () => { entries = [] })
     .then(() => {
       // What arrived while the load was out goes after what was loaded, and is saved now: a flush before the merge
       // would have written an empty buffer over the previous worker's lines (Devin on #214)
