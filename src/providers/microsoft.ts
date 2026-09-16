@@ -29,7 +29,8 @@ import { type SentenceAlignment, verifyAlignment } from './alignment'
 const ENDPOINT = 'https://edge.microsoft.com/translate/translatetext'
 
 /**
- * The target languages the endpoint supports (BCP-47). From its own public language table, 2026-09-08:
+ * The target languages the endpoint supports (BCP-47). From its own public language table, 2026-09-08 (fetched again
+ * 2026-09-17: the same 138 codes, nothing added or removed):
  *
  *     curl 'https://api.cognitive.microsofttranslator.com/languages?api-version=3.0&scope=translation'
  *
