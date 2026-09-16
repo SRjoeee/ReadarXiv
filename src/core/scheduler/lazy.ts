@@ -139,7 +139,13 @@ export function createLazyScheduler<T extends { el: Element } = Block>(blocks: T
   const seeded: Element[] = []
   for (const anchor of byAnchor.keys()) {
     const rect = anchor.getBoundingClientRect()
-    if (!(rect.width || rect.height)) continue
+    // No box yet (an image whose subtree is not laid out, a collapsed container): nothing to seed from, but the
+    // observer still has to hold it — it reports the element once it has a box and intersects. Skipped here, such
+    // an anchor could never enter at all
+    if (!(rect.width || rect.height)) {
+      observer?.observe(anchor)
+      continue
+    }
     const top = Math.max(rect.top, -options.margin)
     const bottom = Math.min(rect.bottom, height + options.margin)
     const visible = Math.max(0, bottom - top)

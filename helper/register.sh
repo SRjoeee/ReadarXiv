@@ -35,7 +35,7 @@ for dir in "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts
   origins=""
   for id in "$@"; do origins="$origins chrome-extension://$id/"; done
   if [ -f "$manifest" ]; then
-    origins="$origins $(grep -o 'chrome-extension://[a-p]\{32\}/' "$manifest" | tr '\n' ' ')"
+    origins="$origins $(grep -o 'chrome-extension://[a-p]\{32\}/' "$manifest" | tr '\n' ' ' || true)"
   fi
   list=""
   for origin in $(printf '%s\n' $origins | awk '!seen[$0]++'); do list="$list\"$origin\", "; done

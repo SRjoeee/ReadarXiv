@@ -53,6 +53,8 @@ export interface RunLedger<T extends { el: Element }> {
   progress(): RunProgress
   /** Targets in a state, in document order */
   inState(state: Outcome): T[]
+  /** How many targets the viewport observer is still waiting for — differs from the waiting outcomes when a hand-over was dropped */
+  observing(): number
   /** Targets that failed, in document order — the popup's "retry failed" hands them back to the run */
   failed(): T[]
 }
@@ -88,6 +90,7 @@ export function createRunLedger<T extends { el: Element }>(targets: readonly T[]
       else reasons.delete(target)
     },
     outcomeOf: target => outcome.get(target),
+    observing: () => scheduler?.waiting() ?? 0,
     reasonOf: target => reasons.get(target),
     fatal(kind, message) {
       if (fatal !== undefined) return false

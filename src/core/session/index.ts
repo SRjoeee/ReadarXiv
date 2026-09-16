@@ -364,7 +364,14 @@ export function createPageSession(deps: SessionDeps): PageSession {
      * probe comes back.
      */
     let helperReady = false
-    const traceIdle = createIdleTrace<ImageProgress>({ now, trace }, p => p.requested - p.done - p.failed > 0, (p, ms) => `images idle: ${p.done}/${p.requested} of ${p.total}, ${p.failed} failed, ${ms} ms`)
+    const traceIdle = createIdleTrace<ImageProgress>({ now, trace }, p => p.requested - p.done - p.failed > 0, (p, ms) => `images idle: ${p.done}/${p.requested} of ${p.total}, ${p.failed} failed, ${ms} ms${waitingNote()}`)
+    /** Names the targets never requested when idle arrives with some left over — the e2e's one nondeterministic check, `5/5 of 6`, needs to say which image and whether it was parked */
+    const waitingNote = () => {
+      const left = images?.waiting() ?? []
+      if (left.length === 0) return ''
+      const shown = left.slice(0, 8).map(w => `${w.target.id || w.target.kind}${w.parked ? ' (parked)' : ''}`)
+      return `; waiting: ${shown.join(', ')}${left.length > 8 ? `, +${left.length - 8}` : ''}; observer holds ${images?.observing() ?? 0}`
+    }
     images = startImageTranslation({
       renderPath,
       doc,
@@ -377,6 +384,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       context,
       ocr: call => deps.ocr(call),
       translate: request => backend.translate(request),
+      onTrace: line => trace(line),
       ...(deps.fetchImage ? { fetchBytes: deps.fetchImage } : {}),
       // The mode gate is the same for both kinds of image; a bitmap additionally waits for the helper (§15.5)
       isEnabled: t => config.image.enabled && config.image.modes.includes(modes?.effective() ?? config.mode) && (t.kind !== 'raster' || helperReady),
