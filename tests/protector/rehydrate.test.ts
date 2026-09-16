@@ -61,6 +61,24 @@ describe('rehydrate', () => {
     expect(htmlOf(rehydrate(fresh.text, fresh, document))).toContain('<mi>y</mi>')
   })
 
+  it('a slot moved within the block is stale (`A x B` → `A B x`: the wire order no longer describes the page); one of our own nodes appearing beside it is not (Devin on #212)', () => {
+    const p = el('<p class="ltx_p">A <math class="ltx_Math"><mi>x</mi></math> B.</p>')
+    const b = serialize(p)
+    const x = p.querySelector('math')!
+    // A ring or a localised footnote's translation may land beside a slot while the request is out: not a move
+    const ours = el('<span class="axt-t axt-pending"></span>')
+    x.before(ours)
+    expect(htmlOf(rehydrate(b.text, b, document))).toContain('<mi>x</mi>')
+    ours.remove()
+    // The page moved the formula after the text that followed it
+    p.append(x)
+    let caught: unknown
+    try { rehydrate(b.text, b, document) } catch (e) { caught = e }
+    expect(caught).toBeInstanceOf(PlaceholderIntegrityError)
+    expect((caught as PlaceholderIntegrityError).reason).toBe('stale')
+    expect((caught as PlaceholderIntegrityError).detail).toBe('slot 1 <math> moved within the block')
+  })
+
   it('a validation failure throws PlaceholderIntegrityError', () => {
     const p = el('<p class="ltx_p">a <math class="ltx_Math"><mi>x</mi></math></p>')
     const b = serialize(p)
