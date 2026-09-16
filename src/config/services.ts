@@ -17,7 +17,7 @@ export const serviceSchema = z.object({
   /** Stored locally only; never in logs, cache keys or fixtures (CLAUDE.md rule 7) */
   apiKey: z.string(),
   model: z.string().min(1),
-  /** Absent in the services the v12 migration built from an endpoint without it; v14 filled `disabled` (ADR-0009) */
+  /** Every stored service has it — the v12 migration and the settings drawer both write it; the default it carried masked hand edits only (ADR-0009) */
   thinking: z.enum(['enabled', 'disabled']),
 })
 export type Service = z.infer<typeof serviceSchema>

@@ -6,7 +6,7 @@ import { DEFAULT_PROMPTS_CONFIG } from '@/providers/prompt-library'
 import { fromBcp47 } from './languages'
 import { type Appearance, BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, DEFAULT_APPEARANCE, type StyleProfile, newProfileId } from './appearance'
 import { CONFIG_VERSION, DEFAULT_CONFIG, MODE_VALUES, configSchema, normalizeGlossary, type Config } from './schema'
-import { type Service, defaultServiceName, newServiceId } from './services'
+import { defaultServiceName, newServiceId } from './services'
 
 export const configItem = storage.defineItem<Config>('local:config', {
   fallback: DEFAULT_CONFIG,
@@ -61,15 +61,12 @@ export const configItem = storage.defineItem<Config>('local:config', {
     },
     // v13: the interface's own language. `auto` is what every existing reader had in effect
     13: (v12: Omit<Config, 'version' | 'uiLanguage'> & { version: 12 }) => ({ ...v12, version: 13 as const, uiLanguage: 'auto' }),
-    // v13 -> v14: nothing new to the reader. Two fields had come in without the version knowing — `reading` by a schema
-    // default alone (db38c5d), `services[].thinking` left absent by the v12 migration when the endpoint had none and
-    // filled by a default on every read. ADR-0009 ends that: the version says what is stored, so v14 writes both
-    14: (v13: Omit<Config, 'version' | 'reading' | 'services'> & { version: 13; reading?: Config['reading']; services: (Omit<Service, 'thinking'> & { thinking?: Service['thinking'] })[] }) => ({
-      ...v13,
-      version: 14 as const,
-      reading: v13.reading ?? { sentenceHighlight: true },
-      services: v13.services.map(s => ({ ...s, thinking: s.thinking ?? ('disabled' as const) })),
-    }),
+    // v13 -> v14: nothing new to the reader. `reading` had come in by a schema default alone (db38c5d), so a value
+    // migrated to 13 and never saved since has none; ADR-0009 ends evolution by default — the version says what is
+    // stored — and v14 writes the field every such reader had in effect. Only an **absent** field: `null` or any other
+    // wrong value is a hand edit and fails validation, named, as before (Copilot on #209)
+    14: (v13: Omit<Config, 'version' | 'reading'> & { version: 13; reading?: Config['reading'] }) =>
+      ({ ...v13, version: 14 as const, reading: v13.reading === undefined ? { sentenceHighlight: true } : v13.reading }),
   },
 })
 

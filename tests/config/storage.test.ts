@@ -312,8 +312,8 @@ describe('provider selection', () => {
     expect(c.services[0]?.name.length).toBeLessThanOrEqual(40)
   })
 
-  it('v13 to v14: `reading` missing (added by a schema default alone) and a service without `thinking` are both filled, the rest as it was (ADR-0009)', async () => {
-    const { reading: _reading, ...v13 } = { ...DEFAULT_CONFIG, version: 13, provider: SVC.id, services: [{ id: SVC.id, kind: SVC.kind, name: SVC.name, baseURL: SVC.baseURL, apiKey: 'sk-keep', model: SVC.model }], targetLanguage: 'jpn' as const }
+  it('v13 to v14: `reading` missing (added by a schema default alone) is filled, the rest as it was; a hand-edited service without `thinking` is not repaired (ADR-0009)', async () => {
+    const { reading: _reading, ...v13 } = { ...DEFAULT_CONFIG, version: 13, provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-keep' }], targetLanguage: 'jpn' as const }
     await fakeBrowser.storage.local.set({ config: v13, config$: { v: 13 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
@@ -323,6 +323,19 @@ describe('provider selection', () => {
     expect(c.reading).toEqual({ sentenceHighlight: true })
     expect(c.services[0]).toMatchObject({ id: SVC.id, apiKey: 'sk-keep', thinking: 'disabled' })
     expect(c.targetLanguage).toBe('jpn')
+    // `null` is not "absent": a hand edit, and it falls back naming the field, as any wrong value does
+    await fakeBrowser.storage.local.set({ config: { ...v13, reading: null }, config$: { v: 13 } })
+    vi.resetModules()
+    const nulled = await import('@/config/storage')
+    expect(await nulled.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(nulled.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'reading' })
+    // Nothing legitimately stored lacks `thinking` (the v12 migration and the drawer write it): not repaired, named
+    const { thinking: _thinking, ...bare } = SVC
+    await fakeBrowser.storage.local.set({ config: { ...v13, reading: { sentenceHighlight: true }, services: [bare] }, config$: { v: 13 } })
+    vi.resetModules()
+    const stripped = await import('@/config/storage')
+    expect(await stripped.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(stripped.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'services.0.thinking' })
     // A v13 value with both present migrates to the same value at 14
     const full = { ...DEFAULT_CONFIG, version: 13, reading: { sentenceHighlight: false }, provider: SVC.id, services: [{ ...SVC, thinking: 'enabled' as const }] }
     await fakeBrowser.storage.local.set({ config: full, config$: { v: 13 } })
