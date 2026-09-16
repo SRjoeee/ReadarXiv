@@ -182,6 +182,31 @@ describe('splitFigures', () => {
     expect(doc.querySelector(`.${SPLIT_CLASS}`)!.textContent).toContain('translated')
   })
 
+  it('a failure replacing another with a different reason rebuilds the copy: the widget\'s words are in a shadow root, invisible to the key\'s text (Devin on #213)', () => {
+    const widget = (reason: string) => `<span class="${T_CLASS} axt-error" data-axt-for="c1" data-axt-reason="${reason}"></span>`
+    const doc = docOf(`<figure class="ltx_figure"><img class="ltx_graphics" src="a.png"><figcaption class="ltx_caption">cap</figcaption>${widget('network: timeout')}</figure>`)
+    const retry = () => undefined
+    expect(splitFigures(doc, { retry })).toBe(1)
+    expect(doc.querySelector(`.${SPLIT_CLASS} .axt-error`)!.getAttribute('data-axt-reason')).toBe('network: timeout')
+    expect(splitFigures(doc, { retry })).toBe(0)
+    doc.querySelector('figure:not(.axt-split) .axt-error')!.setAttribute('data-axt-reason', 'auth: bad key')
+    expect(splitFigures(doc, { retry })).toBe(1)
+    expect(doc.querySelector(`.${SPLIT_CLASS} .axt-error`)!.getAttribute('data-axt-reason')).toBe('auth: bad key')
+  })
+
+  it('media the paper itself hides (aria-hidden, inert) are not marked as duplicates: leaving side must not strip the paper\'s attributes (Devin on #213)', () => {
+    const doc = docOf(`<figure class="ltx_figure"><img class="ltx_graphics" src="a.png"><svg aria-hidden="true"></svg>
+      <figcaption class="ltx_caption">cap</figcaption><figcaption class="ltx_caption ${T_CLASS}" data-axt-for="c1">translated</figcaption></figure>`)
+    expect(splitFigures(doc)).toBe(1)
+    const copy = doc.querySelector(`.${SPLIT_CLASS}`)!
+    expect(copy.querySelector('img')!.hasAttribute(DUPLICATE_ATTR)).toBe(true)
+    const svg = copy.querySelector('svg')!
+    expect(svg.hasAttribute(DUPLICATE_ATTR)).toBe(false)
+    expect(setSplitDuplicatesHidden(doc, false)).toBe(1)
+    expect(svg.getAttribute('aria-hidden')).toBe('true')
+    expect(copy.querySelector('img')!.hasAttribute('aria-hidden')).toBe(false)
+  })
+
   it('the copy\'s duplicated media are silenced for assistive technology in side mode and speak again outside it (§7.4b, issue #170)', () => {
     // The image duplicates the original's, visible beside the copy in side; the formula inside the translated caption
     // does not — the original's translation is hidden by side's styles, the copy's is the one shown
