@@ -4,7 +4,7 @@
 // preload distance) is batched and requested, with a pending node carrying a ring inserted first (§7.6). There is no
 // “whole paper done” end: what is scrolled to is translated.
 import { toBcp47 } from '@/config/languages'
-import { ID_ATTR, type Block, type TextBlock } from '@/core/extractor'
+import { type Block, type TextBlock, markBlocks } from '@/core/extractor'
 import type { SentenceAlignment } from '@/providers/alignment'
 import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
 import { joinRuns, rehydrate, splitRuns, validate, type WireSpan } from '@/core/protector'
@@ -138,7 +138,7 @@ export function startTranslation(options: RunOptions): TranslationRun {
   // writes freezing the page” (Read Frog's #1881), but the sum does not add up: the loop is attribute writes only with
   // no layout read, and Chromium measured 979 blocks written in 1.2 ms with a forced layout of 0 ms afterwards.
   // Writing synchronously also settles the halted() race along the way — no await in between, restore cannot get in
-  for (const block of blocks) block.el.setAttribute(ID_ATTR, block.id)
+  markBlocks(blocks)
 
   // The state attribute is still sliced: it carries styling (the pending skeleton) and does not affect side prep's decisions
   const ready = (async () => {
