@@ -9,7 +9,7 @@ const git = (answers: Record<string, string>) => (cmd: string) => {
   if (cmd in answers) return answers[cmd]!
   throw new Error(`unexpected: ${cmd}`)
 }
-const clean = { 'git status --porcelain': '', 'git rev-parse HEAD': SHA }
+const clean = { 'git status --porcelain': '', 'git rev-parse HEAD': SHA, [`git tag --points-at ${SHA}`]: '' }
 
 describe('isInstallerRemote', () => {
   it('accepts the repository on github.com in the https, git@ and ssh:// spellings, with or without .git', () => {
@@ -30,6 +30,14 @@ describe('readBuildRef', () => {
 
   it('a clean tree whose commit is on a branch of the repository stamps the commit', () => {
     expect(readBuildRef(git({ ...clean, 'git remote -v': origin, [`git branch -r --contains ${SHA}`]: '  origin/rebuild/v1' }))).toBe(SHA)
+  })
+
+  it('a release tag pointing at that commit stamps the tag; other tags do not count, and a tag on a commit the repository does not hold is not trusted', () => {
+    const onBranch = { ...clean, 'git remote -v': origin, [`git branch -r --contains ${SHA}`]: '  origin/main' }
+    expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'v1.0.0' }))).toBe('v1.0.0')
+    expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'v0.3.0-mvp\nv1.0.0' }))).toBe('v0.3.0-mvp')
+    expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'nightly\nrelease-candidate' }))).toBe(SHA)
+    expect(readBuildRef(git({ ...clean, 'git remote -v': origin, [`git branch -r --contains ${SHA}`]: '', [`git tag --points-at ${SHA}`]: 'v1.0.0' }))).toBe('main')
   })
 
   it('a dirty tree, a commit on no branch, a pull_request merge ref, a fork-only commit, a foreign remote, and no git all say main', () => {

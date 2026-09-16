@@ -2,7 +2,7 @@
 # One-line install of the recognition helper (macOS), the command the popup copies:
 #   curl -fsSL https://raw.githubusercontent.com/SRjoeee/ReadarXiv/<ref>/helper/install-remote.sh | bash -s -- <extension-id> [<ref>]
 # <ref> is where the sources come from: the commit the extension was built from (the popup passes it, issue #158) or
-# a branch name (default main). AXT_HELPER_DRY_RUN=1 prints the tarball URL and stops, for the tests.
+# a branch name, a release tag (v1.0.0) or a commit (default main). AXT_HELPER_DRY_RUN=1 prints the tarball URL and stops, for the tests.
 # Downloads this repository's helper/ into ~/Library/Application Support/Readarxiv/helper, builds it
 # with the Swift toolchain of the Xcode Command Line Tools, and registers the Native Messaging host
 # for Chrome and Chromium through register.sh, the one writer of the manifest (DESIGN §15.4). Re-running
@@ -23,10 +23,13 @@ if ! [[ "$id" =~ ^[a-p]{32}$ ]]; then
   echo "Not a valid extension id: $id (expected 32 lowercase letters a–p)" >&2
   exit 2
 fi
-# A 40-digit hash is a commit; anything else a branch. codeload serves a commit at its bare path, a branch under refs/heads.
-# A branch that happens to be named like a hash is tried second, under refs/heads (Devin on #214)
+# A 40-digit hash is a commit; `v` and a digit is a release tag; anything else a branch. codeload serves a commit at its
+# bare path, a tag under refs/tags, a branch under refs/heads. A branch that happens to be named like a hash or a tag is
+# tried second, under refs/heads (Devin on #214)
 BRANCH_TARBALL="https://codeload.github.com/$REPO/tar.gz/refs/heads/$REF"
-if [[ "$REF" =~ ^[0-9a-f]{40}$ ]]; then TARBALL="https://codeload.github.com/$REPO/tar.gz/$REF"; else TARBALL="$BRANCH_TARBALL"; fi
+if [[ "$REF" =~ ^[0-9a-f]{40}$ ]]; then TARBALL="https://codeload.github.com/$REPO/tar.gz/$REF"
+elif [[ "$REF" =~ ^v[0-9] ]]; then TARBALL="https://codeload.github.com/$REPO/tar.gz/refs/tags/$REF"
+else TARBALL="$BRANCH_TARBALL"; fi
 if [ "${AXT_HELPER_DRY_RUN:-}" = "1" ]; then
   echo "$TARBALL"
   exit 0
