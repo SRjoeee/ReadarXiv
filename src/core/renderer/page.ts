@@ -93,9 +93,12 @@ export function enable(doc: Document, mode: Mode, look?: Look, lang?: string): v
   const fixed = findSheet(doc, STATIC_MARK) ?? doc.head.appendChild(sheetElement(doc, STATIC_MARK, STATIC_SHEET))
   const existing = findSheet(doc, LOOK_MARK)
   // The custom CSS may have changed (edited in settings, then translated again)
-  if (existing) { if (look) writeLook(existing, look); return }
-  // Right after the static sheet, whatever else the head holds: the look sheet wins by order, not by specificity
-  fixed.after(sheetElement(doc, LOOK_MARK, look ? lookSheet(look) : ''))
+  if (existing && look) writeLook(existing, look)
+  const sheet = existing ?? sheetElement(doc, LOOK_MARK, look ? lookSheet(look) : '')
+  // Right after the static sheet, on every enable — whatever else the head holds, and whichever of the two a page
+  // script's rewrite of the head left standing: the look sheet wins by order, not by specificity (the local
+  // adversarial review of T5 reversed the two by removing the static sheet between two enables)
+  if (fixed.nextElementSibling !== sheet) fixed.after(sheet)
 }
 
 /**
