@@ -19,7 +19,7 @@ import { AXT_ATTR_PREFIX, IMG_CLASS, T_CLASS } from '@/core/marks'
 import { hashText } from '@/shared/hash'
 import { ERROR_CLASS, FOR_ATTR, MIRROR_CLASS, PENDING_CLASS, SPLIT_ATTR, SPLIT_CLASS, SPLIT_FOR_ATTR, SPLIT_OF_ATTR } from './attrs'
 import { REASON_ATTR, failureWidget } from './failed'
-import { mirrorSentences, sentenceSignatureOf } from './sentences'
+import { mirrorSentences, sentenceSignatureOf } from './sentence-map'
 
 
 // A figure is split as soon as it holds a **pair** — a translation, the ring waiting for one, the widget of a failed

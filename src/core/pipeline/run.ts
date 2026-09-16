@@ -17,7 +17,7 @@ import { createWorkPacer, pauseIfBudgetSpent } from '@/core/scheduler/pacer'
 import type { RenderPath } from '@/cache/key'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
 import { planBatches, sectionTitles, type Batch, type Segment } from './batches'
-import { cutsOf } from './sentences'
+import { cutsOf } from './cuts'
 
 export interface Progress {
   /** on: the session is open and scrolling keeps triggering; stopped: the reader restored the original, or a fatal error stopped it */

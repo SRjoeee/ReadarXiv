@@ -25,7 +25,7 @@ import { HL_CLASS } from '@/core/marks'
 import { rangesOf, wireOffsetAt } from '@/core/protector'
 import { DOCUMENT_ROOT } from '@/core/rules/latexml'
 import { createPeek, movesText, type PeekAnchor } from './peek'
-import { rendered, sentenceAt, sentenceMapAt } from './sentences'
+import { rendered, sentenceAt, sentenceMapAt } from './sentence-map'
 
 /** Which side a band belongs to, so the stylesheet can tell them apart if it ever needs to. */
 const SIDE_ATTR = 'data-axt-hl-side'

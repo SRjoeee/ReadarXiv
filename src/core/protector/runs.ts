@@ -10,7 +10,7 @@ import { FUNCTIONAL_INLINE } from '@/core/rules/latexml'
 import { cloneWithoutIds } from './clone'
 import { type ProtectedBlock, staleSlot } from './serialize'
 import { PlaceholderIntegrityError } from './validate'
-import { decodeText } from './text'
+import { decodeText } from './escape'
 import { tokenize } from './tokens'
 
 export type RunItem =

@@ -98,7 +98,7 @@ tests/renderer/pending.test.ts 1
 tests/renderer/prep.test.ts 15
 tests/renderer/render.test.ts 12
 tests/renderer/restore.test.ts 3
-tests/renderer/sentences.test.ts 1
+tests/renderer/sentence-map.test.ts 1
 tests/renderer/side-layout.test.ts 5
 tests/renderer/split-figures.test.ts 18
 tests/renderer/table-fit.test.ts 1
