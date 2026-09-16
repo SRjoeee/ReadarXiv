@@ -5,7 +5,7 @@ import { T_CLASS } from '@/core/marks'
 import { FOR_ATTR, MIRROR_CLASS, SPLIT_ATTR, SPLIT_CLASS, SPLIT_FOR_ATTR } from '@/core/renderer/attrs'
 import { renderImage } from '@/core/renderer/image'
 import { restore } from '@/core/renderer/page'
-import { dropStaleSplits, splitFigures } from '@/core/renderer/split-figures'
+import { DUPLICATE_ATTR, dropStaleSplits, setSplitDuplicatesHidden, splitFigures } from '@/core/renderer/split-figures'
 import { IMG_CLASS } from '@/core/marks'
 import { ID_ATTR } from '@/core/extractor'
 import { docOf } from './helpers'
@@ -131,28 +131,81 @@ describe('splitFigures', () => {
       .toBe(before.replace(new RegExp(`<figcaption class="ltx_caption ${T_CLASS}"[^>]*>[^<]*</figcaption>`), '').replace(/\s+/g, ' ').trim())
   })
 
-  it('a waiting pending node is no translation: no split; mixed, the copy drops the skeleton and keeps the source, and when the translation arrives the key changes and it is rebuilt (§7.6)', () => {
-    const pendingOnly = docOf(`<figure class="ltx_figure"><img class="ltx_graphics" src="a.png">
-      <figcaption class="ltx_caption">cap</figcaption><figcaption class="ltx_caption ${T_CLASS} axt-pending" data-axt-for="c1"><span class="axt-skel"><span class="axt-skel-line" style="width: 62%;"></span></span></figcaption></figure>`)
-    expect(splitFigures(pendingOnly)).toBe(0)
-
-    const mixed = docOf(`<figure class="ltx_figure"><img class="ltx_graphics" src="a.png">
-      <figcaption class="ltx_caption">cap A</figcaption><figcaption class="ltx_caption ${T_CLASS}" data-axt-for="c1">说明 A</figcaption>
-      <figcaption class="ltx_caption">cap B</figcaption><figcaption class="ltx_caption ${T_CLASS} axt-pending" data-axt-for="c2"><span class="axt-skel"><span class="axt-skel-line" style="width: 62%;"></span></span></figcaption></figure>`)
-    expect(splitFigures(mixed)).toBe(1)
-    const clone = mixed.querySelector(`.${SPLIT_CLASS}`)!
-    expect(clone.querySelector('.axt-pending, .axt-skel')).toBeNull()
-    expect(clone.textContent).toContain('说明 A')
-    expect(clone.textContent).toContain('cap B')
-    // B's translation arrived: the signature changed, rebuild
-    const pending = mixed.querySelector('.axt-pending')!
-    const done = mixed.createElement('figcaption')
+  it('a pending pair splits the figure too, the ring kept in the copy where the translation will land; the translation arriving changes the key and rebuilds (issue #170, §7.6)', () => {
+    // Before #170 a pending caption did not count and the figure spanned both columns until the translation landed — a
+    // jump in the layout — and a caption that failed left it spanning for good
+    const ring = `<figcaption class="ltx_caption ${T_CLASS} axt-pending" data-axt-for="c1"><span class="axt-skel" aria-hidden="true"><span class="axt-skel-line" style="width:80%"></span></span></figcaption>`
+    const pendingOnly = docOf(`<figure class="ltx_figure"><img class="ltx_graphics" src="a.png"><figcaption class="ltx_caption">cap</figcaption>${ring}</figure>`)
+    expect(splitFigures(pendingOnly)).toBe(1)
+    const copy = pendingOnly.querySelector(`.${SPLIT_CLASS}`)!
+    expect(copy.querySelector('.axt-pending .axt-skel')).not.toBeNull()
+    expect(copy.textContent).not.toContain('cap')
+    expect(splitFigures(pendingOnly)).toBe(0) // still pending: nothing to rebuild
+    const done = pendingOnly.createElement('figcaption')
     done.className = `ltx_caption ${T_CLASS}`
-    done.setAttribute('data-axt-for', 'c2')
-    done.textContent = '说明 B'
-    pending.replaceWith(done)
+    done.setAttribute('data-axt-for', 'c1')
+    done.textContent = 'translated'
+    pendingOnly.querySelector('.axt-pending')!.replaceWith(done)
+    expect(splitFigures(pendingOnly)).toBe(1)
+    expect(pendingOnly.querySelector(`.${SPLIT_CLASS}`)!.textContent).toContain('translated')
+    expect(pendingOnly.querySelector(`.${SPLIT_CLASS} .axt-skel`)).toBeNull()
+
+    // Mixed: one caption translated, one still waiting — the copy shows the translation and the ring, neither original
+    const mixed = docOf(`<figure class="ltx_figure"><img class="ltx_graphics" src="a.png">
+      <figcaption class="ltx_caption">cap A</figcaption><figcaption class="ltx_caption ${T_CLASS}" data-axt-for="c1">translated A</figcaption>
+      <figcaption class="ltx_caption">cap B</figcaption>${ring.replace('c1', 'c2')}</figure>`)
     expect(splitFigures(mixed)).toBe(1)
-    expect(mixed.querySelector(`.${SPLIT_CLASS}`)!.textContent).toContain('说明 B')
+    const both = mixed.querySelector(`.${SPLIT_CLASS}`)!
+    expect(both.textContent).toContain('translated A')
+    expect(both.textContent).not.toContain('cap B')
+    expect(both.querySelector('.axt-pending')).not.toBeNull()
+  })
+
+  it('a pair changing state rebuilds the copy: failed → pending (a retry) → translated (issue #170)', () => {
+    const widget = `<span class="${T_CLASS} axt-error" data-axt-for="c1" data-axt-reason="network: boom"></span>`
+    const doc = docOf(`<figure class="ltx_figure"><img class="ltx_graphics" src="a.png"><figcaption class="ltx_caption">cap</figcaption>${widget}</figure>`)
+    expect(splitFigures(doc)).toBe(1)
+    expect(doc.querySelector(`.${SPLIT_CLASS}`)!.textContent).toContain('cap') // no retry given: the original stays
+    expect(splitFigures(doc)).toBe(0)
+    const pending = doc.createElement('span')
+    pending.className = `${T_CLASS} axt-pending`
+    pending.setAttribute('data-axt-for', 'c1')
+    doc.querySelector('.axt-error')!.replaceWith(pending)
+    expect(splitFigures(doc)).toBe(1) // the same count of pairs, another state: rebuilt
+    expect(doc.querySelector(`.${SPLIT_CLASS}`)!.textContent).not.toContain('cap')
+    const done = doc.createElement('figcaption')
+    done.className = `ltx_caption ${T_CLASS}`
+    done.setAttribute('data-axt-for', 'c1')
+    done.textContent = 'translated'
+    pending.replaceWith(done)
+    expect(splitFigures(doc)).toBe(1)
+    expect(doc.querySelector(`.${SPLIT_CLASS}`)!.textContent).toContain('translated')
+  })
+
+  it('the copy\'s duplicated media are silenced for assistive technology in side mode and speak again outside it (§7.4b, issue #170)', () => {
+    // The image duplicates the original's, visible beside the copy in side; the formula inside the translated caption
+    // does not — the original's translation is hidden by side's styles, the copy's is the one shown
+    const doc = docOf(`<figure class="ltx_figure"><img class="ltx_graphics" src="a.png">
+      <figcaption class="ltx_caption">cap <math><mi>x</mi></math></figcaption>
+      <figcaption class="ltx_caption ${T_CLASS}" data-axt-for="c1">translated <math><mi>x</mi></math></figcaption></figure>`)
+    expect(splitFigures(doc)).toBe(1)
+    const copy = doc.querySelector(`.${SPLIT_CLASS}`)!
+    const img = copy.querySelector('img')!
+    expect(img.hasAttribute(DUPLICATE_ATTR)).toBe(true)
+    expect(img.getAttribute('aria-hidden')).toBe('true')
+    expect(img.hasAttribute('inert')).toBe(true)
+    const formula = copy.querySelector('math')!
+    expect(formula.hasAttribute(DUPLICATE_ATTR)).toBe(false)
+    expect(formula.hasAttribute('aria-hidden')).toBe(false)
+    // Leaving side (only: the original is display: none, the copy is the one reading left): the media speak again
+    expect(setSplitDuplicatesHidden(doc, false)).toBe(1)
+    expect(img.hasAttribute('aria-hidden')).toBe(false)
+    expect(img.hasAttribute('inert')).toBe(false)
+    expect(setSplitDuplicatesHidden(doc, false)).toBe(0)
+    expect(setSplitDuplicatesHidden(doc, true)).toBe(1)
+    expect(img.getAttribute('aria-hidden')).toBe('true')
+    // The original's image is never touched
+    expect(doc.querySelector(`figure:not(.${SPLIT_CLASS}) img`)!.hasAttribute('aria-hidden')).toBe(false)
   })
 })
 

@@ -72,12 +72,32 @@ describe('renderFailed', () => {
     expect(doc.documentElement.outerHTML).toBe(before)
   })
 
-  it('splitting a figure does not take the widget for a translation', () => {
-    const doc = docOf(`<figure class="ltx_figure"><img class="ltx_graphics" src="a.png"><figcaption class="ltx_caption" id="c1">cap</figcaption></figure>`)
+  it('a failed caption splits the figure (issue #170): with a retry at hand the copy gets a live widget of its own; without one it keeps the caption\'s original', () => {
+    const figure = `<figure class="ltx_figure"><img class="ltx_graphics" src="a.png"><figcaption class="ltx_caption" id="c1">cap</figcaption></figure>`
+    const doc = docOf(figure)
     const caption = extract(doc)[0] as TextBlock
-    renderFailed(caption, 'x', () => {})
-    expect(splitFigures(doc)).toBe(0)
-    expect(doc.querySelector(`.${SPLIT_CLASS}`)).toBeNull()
+    renderFailed(caption, 'network: boom', () => {})
+    const retry = vi.fn()
+    expect(splitFigures(doc, { retry })).toBe(1)
+    const copy = doc.querySelector(`.${SPLIT_CLASS}`)!
+    // The cloned widget would be an empty span (no shadow root, no listener): the copy holds a live one, standing where the translation will
+    const widget = copy.querySelector<HTMLElement>(`.${ERROR_CLASS}`)!
+    expect(widget.shadowRoot?.querySelector('button')).not.toBeNull()
+    expect(widget.getAttribute(REASON_ATTR)).toBe('network: boom')
+    expect(copy.textContent).not.toContain('cap')
+    widget.shadowRoot!.querySelector('button')!.click()
+    expect(retry).toHaveBeenCalledWith(caption.id)
+    // The original's own widget is untouched and still live
+    expect(doc.querySelectorAll(`.${ERROR_CLASS}`)).toHaveLength(2)
+    expect(caption.el.nextElementSibling?.classList.contains(ERROR_CLASS)).toBe(true)
+
+    // Without a retry (a caller that has none): no dead widget in the copy, the caption's original kept, readable at least
+    const plain = docOf(figure)
+    renderFailed(extract(plain)[0] as TextBlock, 'network: boom', () => {})
+    expect(splitFigures(plain)).toBe(1)
+    const bare = plain.querySelector(`.${SPLIT_CLASS}`)!
+    expect(bare.querySelector(`.${ERROR_CLASS}`)).toBeNull()
+    expect(bare.textContent).toContain('cap')
   })
 })
 
