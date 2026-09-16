@@ -31,7 +31,8 @@ export function expectationsFromText(text: string, format: WireFormat = 'tags'):
   return { format, slots, paired }
 }
 
-export type IntegrityReason = 'missing' | 'duplicate' | 'unknown' | 'unbalanced' | 'kind-mismatch'
+/** `stale` is raised on the DOM side only (`rehydrate`, `joinRuns`): the page changed under the block since it was serialised */
+export type IntegrityReason = 'missing' | 'duplicate' | 'unknown' | 'unbalanced' | 'kind-mismatch' | 'stale'
 
 export type ValidationResult = { ok: true } | { ok: false; reason: IntegrityReason; detail: string }
 

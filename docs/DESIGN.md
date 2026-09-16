@@ -300,6 +300,7 @@ Failure handling: one retry of the single block (the prompt gains an emphasis th
 - Cloning strips every `id` attribute in the subtree, so duplicate ids do not break anchors; `href` is kept
 - **A clone carries no behaviour** (2026-09-11, the independent audit's B17 + Codex on #163): `stripInjected` also removes `on*` event attributes, and the script-running URLs (`javascript:`, `data:text/html`) in `href` / `src` / `action`. The copy inside a translation is for reading and must not be a second control that can fire. The scheme is judged after normalising by the URL standard — tabs and newlines removed anywhere, C0 controls and spaces stripped from the front — or a scheme with control characters inside, like `href="java&#10;script:…"`, would not match while the browser still runs it as `javascript:` once parsed. `data:image/...` stays: real inline images exist in papers. arXiv's LaTeXML emits no event attributes today; this pins the invariant, it does not fix a known fault
 - All three modes use the clone; the original node is never touched (only mode hides the original block, it does not move the node)
+- **Refused when the page changed under the block** [decided 2026-09-17, #212]: the slots are references to the live nodes; a slot no longer inside the block's root at fill-back time (replaced, moved) makes `rehydrate` and the runs path throw `stale`, the block is marked failed and a retry serialises it afresh. The independent audit's A03; nothing on arXiv trips it today
 
 ### 6.5 The runs path
 

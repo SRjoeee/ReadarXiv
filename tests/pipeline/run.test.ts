@@ -145,6 +145,61 @@ describe('startTranslation', () => {
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p2"]`)?.querySelector('math')).not.toBeNull()
   })
 
+  it('the page replaced a formula while the request was out: the block fails as `stale`, nothing is inserted, no resend; a retry serialises it afresh and succeeds (INVENTORY T6)', async () => {
+    const doc = docOf()
+    const blocks = extract(doc)
+    let swapped = false
+    const { transport, requests } = makeTransport((_req, seg) => {
+      if (seg.id === 'p1' && !swapped) {
+        swapped = true
+        // While the translation is out, the page swaps x for y
+        const fresh = doc.createElement('math')
+        fresh.className = 'ltx_Math'
+        fresh.innerHTML = '<mi>y</mi>'
+        doc.querySelector('#p1 math')!.replaceWith(fresh)
+      }
+      return undefined as unknown as string
+    })
+    const run = await start(doc, blocks, transport)
+    await run.translate([byId(blocks, 'p1')])
+    expect(doc.getElementById('p1')?.getAttribute(STATE_ATTR)).toBe('failed')
+    expect(run.progress()).toMatchObject({ done: 0, failed: 1 })
+    // No translation carrying the stale copy; the widget names the cause, and `parseFatal` reads it as unknown, not as the engine's fault
+    expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]:not(.${ERROR_CLASS})`)).toBeNull()
+    expect(doc.querySelector(`.${ERROR_CLASS}`)?.getAttribute('data-axt-reason')).toBe('stale: slot 1 <math> is not the node it was')
+    // Resending the same wire text would only fail the same way: one request carried p1
+    expect(requests.filter(r => r.request.segments.some(s => s.id === 'p1'))).toHaveLength(1)
+    // The Retry path serialises the block afresh: the translation shows what the page shows now
+    await run.translate(run.failed())
+    expect(run.progress()).toMatchObject({ done: 1, failed: 0 })
+    expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)?.querySelector('mi')?.textContent).toBe('y')
+  })
+
+  it('the page changed under a block whose fragment was already in hand while the batch waited on another block\'s retry: checked again at the commit, it fails as stale (Devin on #212)', async () => {
+    const doc = docOf()
+    const blocks = extract(doc)
+    let corrupted = false
+    const { transport } = makeTransport((_req, seg, calls) => {
+      if (seg.id === 'p2' && !corrupted) { corrupted = true; return 'broken' } // p2 goes to a single resend
+      if (seg.id === 'p2' && calls === 2) {
+        // While that resend is out, the page swaps p1's formula — p1's fragment, built on the first reply, holds the old clone
+        const fresh = doc.createElement('math')
+        fresh.className = 'ltx_Math'
+        fresh.innerHTML = '<mi>y</mi>'
+        doc.querySelector('#p1 math')!.replaceWith(fresh)
+      }
+      return undefined as unknown as string
+    })
+    const run = await start(doc, blocks, transport)
+    await run.translate([byId(blocks, 'p1'), byId(blocks, 'p2')])
+    expect(doc.getElementById('p1')?.getAttribute(STATE_ATTR)).toBe('failed')
+    expect(doc.querySelector(`.${ERROR_CLASS}[${FOR_ATTR}="p1"]`)?.getAttribute('data-axt-reason')).toMatch(/^stale: /)
+    expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p2"]:not(.${ERROR_CLASS})`)).not.toBeNull()
+    expect(run.progress()).toMatchObject({ done: 1, failed: 1 })
+    await run.translate(run.failed())
+    expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)?.querySelector('mi')?.textContent).toBe('y')
+  })
+
   it('placeholders always damaged: the runs fallback; the request no longer carries a validation callback (issue #42: the service derives it from the request text)', async () => {
     const doc = docOf()
     const blocks = extract(doc)
