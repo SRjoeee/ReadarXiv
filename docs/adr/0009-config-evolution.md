@@ -1,7 +1,7 @@
 # ADR-0009: The version number says what is stored
 
 - Status: accepted (2026-09-16); implemented in the same PR (`CONFIG_VERSION` 13 → 14).
-- Evidence: `docs/rebuild/INVENTORY.md` P6; `docs/rebuild/inventory/runtime.md` §2d (the version table) and D29; `src/config/schema.ts`, `src/config/storage.ts`, `src/config/services.ts` as of 4ebd4b6.
+- Evidence: `docs/rebuild/INVENTORY.md` P6; `docs/rebuild/inventory/runtime.md` §2d (the version table) and D29; `src/config/schema.ts`, `src/config/storage.ts`, `src/config/services.ts` as of 4ebd4b6. (the `inventory/*` reports were deleted on 2026-09-17; read them at `git show c0c044d:docs/rebuild/inventory/<name>.md`)
 
 ## Context
 

@@ -3,7 +3,7 @@
 Phase 0 抓取的真实 `https://arxiv.org/html/<id>` 页面，原样保存（未做任何清洗），用于规则、占位符与渲染测试。
 版权归各论文作者所有，此处仅作测试数据；抓取日期 2026-09-03。
 
-抓取与统计脚本：`scripts/phase0/fetch-candidates.sh`（按类别 + 日期查 API 并下载）、`scripts/phase0/candidate-stats.sh`（特征计数）。
+抓取与特征计数当时用的 Phase 0 脚本已于 2026-09-17 随研究记录退役（`git show c0c044d:scripts/phase0/`）；规则覆盖统计用 `pnpm fixtures:stats`。
 所有 fixture 的生成器均为 `LaTeXML oxide (version 0.7.6)`，包括 2023 年的论文——见 DESIGN §5.7。
 
 | id | 提交日期 | 主分类 | 大小 | 特征计数（grep） | 选择理由 |
