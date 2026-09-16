@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { joinRuns, serialize, splitRuns } from '@/core/protector'
+import { PlaceholderIntegrityError, joinRuns, serialize, splitRuns } from '@/core/protector'
 import { el, htmlOf, stripIds } from './helpers'
 
 describe('the runs path', () => {
@@ -18,6 +18,17 @@ describe('the runs path', () => {
     const layout = splitRuns(b)
     expect(layout.runs).toEqual([])
     expect(layout.items).toEqual([{ kind: 'void', id: 1 }, { kind: 'raw', text: ' ' }, { kind: 'void', id: 2 }])
+  })
+
+  it('a void the page replaced while the runs were out: joining refuses as `stale`, the same gate as rehydrate (INVENTORY T6)', () => {
+    const p = para()
+    const b = serialize(p)
+    const layout = splitRuns(b)
+    p.querySelector('math')!.replaceWith(el('<math class="ltx_Math"><mi>y</mi></math>'))
+    let caught: unknown
+    try { joinRuns(layout.runs, layout, b, document) } catch (e) { caught = e }
+    expect(caught).toBeInstanceOf(PlaceholderIntegrityError)
+    expect((caught as PlaceholderIntegrityError).reason).toBe('stale')
   })
 
   it('joined back: on identity the styling is lost but the text is complete, the voids in place', () => {
