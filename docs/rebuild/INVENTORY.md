@@ -4,6 +4,8 @@ What the code at the baseline actually does, what holds it together, and where t
 
 ## How this was produced, and how to read it
 
+> The four raw reports named below (`inventory/core.md`, `runtime.md`, `ui.md`, `docs.md`) were deleted on 2026-09-17 once this file and the ADRs had absorbed them; read them at `git show c0c044d:docs/rebuild/inventory/<name>.md`. Their section numbers cited below are historical pointers into that revision.
+
 Four read-only agents each read their slice of `main @ e6de3e1` in full (every file, not entry points), traced call sites with `grep -rlw`, and ran `git log -S` on every guard that looked redundant to find the commit, issue and test behind it. Their raw output is kept verbatim under `docs/rebuild/inventory/` (Chinese; 1 960 lines):
 
 | Raw file | Scope | Size of the evidence |
@@ -149,6 +151,8 @@ Consolidated from the four raw lists, deduplicated, grouped by what the charter 
 ### 4.6 Documentation (the part Phase 2 was explicitly asked to clean)
 
 > Re-verified 2026-09-16: closed by #199 (the contradictions, the SVG conclusion, RESEARCH §7's status column, UI.md's ids and open questions), #198 (the §8.6 design as ADR-0007), the English sweep (CLAUDE.md, the header template) and #196 (`docs/superpowers`; `docs/phase0` is gone too). Still open: no `LICENSE` at the repository root (the owner's item on `docs/readme`, decision C of 2026-09-12) and `package.json`'s name `arxiv-html-translator` with no description.
+
+> **Closed 2026-09-17 (checkpoint B)**: `docs/DESIGN.md` regenerated as the current design from the ADRs, UI.md and the code, with the section numbers the code cites kept; `docs/RESEARCH.md`, the four inventory reports and `scripts/phase0/*` deleted, their facts that code cited moved into DESIGN §5.7 / §7.2 / §8.0 / §8.3 / §8.4 / §15.5 and the citations rewritten; UI.md §7 ("entries DESIGN.md needs to change") removed and §9 reduced to what is still open; CLAUDE.md's "where the truth lives" points at the regenerated document; `LICENSE`, `README.md` and `README.zh-CN.md` merged from the owner's `docs/readme` branch. The rows below are the record of what was found.
 
 - **"DESIGN.md is the single source of truth" is refuted by the code** it describes: default mode is `side` (doc: `stack`), default service `microsoft` (UI.md §7 still proposes `google-web`), `CACHE_KEY_VERSION` 6 (doc: 4), config v13 (doc: v12), §8.3 "instant engine" marked [decided] was never implemented, §8.4 `FallbackService.reset()` does not exist (§8.5 says so), §7.1's attribute list (three) vs the six-plus the code writes, §5.2 lists protect rules under "skip", §8.0 "content sends three messages" (it sends more), §10 "markers are sliced" (they are not, #67). Full list: `inventory/docs.md` §2 (❌ rows) and §3 (37 contradictions).
 - **A whole design lives only in code comments**: 18 references to "§8.6" (sentence alignment, sentence markers, why `CACHE_KEY_VERSION` went 5→6). Reconstruct it into an ADR from `cache/key.ts:49-65`, `providers/{alignment,sentence-markers}.ts`, `translate-service.ts:244-261`, `core/sentences/index.ts`. → ADR-0007, 2026-09-13

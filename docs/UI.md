@@ -1,8 +1,6 @@
 # UI contract — copy, states and tokens
 
-> Translated into English on 2026-09-13 as part of the repository-wide English sweep; the content is the frozen record and is unchanged.
-
-The single basis for the interface implementation. The design canvas (`docs/design/canvas/`) is reference only; where the two conflict this document wins, and a change starts here.
+The single basis for the interface implementation; a change to the interface starts here. The design canvas that preceded it is not in the repository.
 Numbering: `P` popup states, `O` the options page, `I` in-page components; copy ids are `S-<surface>-<number>`. Cite the ids directly in feedback.
 
 Status: **implemented** — the copy of §3, the tokens of §5 and the language of §6 are in `src/ui/strings.ts`, `src/locales/` and `src/styles/ui.css`; the [open] marks of §1, §2, §3 and §5 dated from the drafting and were changed to [implemented] on 2026-09-13. Settled sections are marked [decided].
@@ -337,20 +335,6 @@ a paper reader can mostly get by in English for a while. So adding a language ha
   and voiding the whole LLM cache, not worth it for a name. Directional words that really distinguish (`Western Frisian`, `Northern Sotho`) stay; parentheses
   naming a script (`Uzbek (Cyrillic)`, `Malay (Jawi)`) stay too — the reader really does get that script.
 
-## 7. Entries DESIGN.md needs to change
-
-> 2026-09-13: items (2), (3) and (5) below are now reflected in DESIGN §8.4, §8.0 and §10 (corrections dated the same day); item (1) is stale — the shipped default is Microsoft (S-P-46, `DEFAULT_CONFIG.provider`); the rest stand as listed.
-
-- ~~§8.1 the default provider becomes `google-web` (usable on first open)~~ — stale, the default is Microsoft
-- §8.4 language pack download entry: the popup's service list + the options page's service card, both click gestures
-- §9 “测试连接” folds into “连接”: `setConfig` first, then a one-sentence test translation naming the current provider; what is tested is the form's values
-- §9 configuration writes: every control but the AI model form saves as it changes; the global save goes
-- §10 the preload parameters appear in the UI as steps, mapped internally to margin / threshold
-- §7.6 a new in-page “switched” notice (single instance, Shadow DOM)
-- The error reason mapping table (§3.4) goes next to `providers/types.ts`
-- §15.4 when `nativeMessaging` becomes an optional permission, the options page gains the S-O-86 permission button (decided, to be done at distribution) → [2026-09-13] done during the rebuild (ADR-0002): one “允许” on the popup card and one on the options page
-- #47 typography settings enter the config schema (new field, version bump), stored apart from §7.5's translation styles
-
 ## 8. Feature coverage list
 
 Every feature added on the main line is registered here first; a feature without a place is not designed yet.
@@ -383,13 +367,11 @@ Every feature added on the main line is registered here first; a feature without
 | Reading toolbar | canvas proposal | undecided | in page | — |
 | Background connectivity / block statistics | existing popup | removed | nowhere — the gallery never showed them, and `axt:ping` / `axt:stats` had no sender (noted 2026-09-13; pruned with INVENTORY §4.4) | — |
 
-## 9. Open for discussion
+## 9. Open
 
-1. ~~The product name.~~ [decided] Display name **Read arXiv** (named 2026-09-10, changed to two words on 09-11, upheld on the 09-12 re-check); the repository and the domain use the unspaced `ReadarXiv` / readarxiv.org. Three places name one product; changing one does not change another.
-2. The name “AI 模型” vs “AI 翻译”.
-3. ~~P8 paused: primary button “重新翻译” + secondary “显示原文”, or one only?~~ [decided] Both: S-P-52 and S-P-53 shipped (marked 2026-09-13).
-4. ~~Whether the language row opens a native `<select>` (first-letter jump) or a searchable list — measure the native one inside the popup first.~~ [decided] A searchable list: S-P-22 / S-P-23 shipped (marked 2026-09-13).
-5. Whether to build the in-page “switched” notice; without it the user only learns the translation quality changed by opening the popup.
-6. ~~The name “识别助手”.~~ [decided] Kept; it is the name throughout the shipped copy (marked 2026-09-13).
-7. The field range and preset names of the typography card (#47); re-check against the issue's acceptance items before implementing.
-8. Whether to bundle Manrope (about 60 KB woff2, Latin glyphs only); currently the system font stack.
+1. The name "AI 模型" versus "AI 翻译" for the reader-added services.
+2. Whether to build the in-page "switched" notice (S-I-03); without it the reader learns that the service changed only by opening the popup.
+3. The field range and preset names of the typography card (#47), against the issue's acceptance items, if it is built.
+4. Whether to bundle Manrope (about 60 KB woff2, Latin glyphs only); the system font stack today.
+
+Decided and shipped, for the record: the product name (Read arXiv; ADR-0010), the paused state's two buttons (S-P-52 / S-P-53), the searchable language list (S-P-22 / S-P-23), the name 识别助手 for the helper.
