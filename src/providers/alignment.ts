@@ -3,10 +3,10 @@
 // guesswork, because machine translation merges and splits sentences — so every provider that can
 // report it does, through this one shape, and the pipeline never branches on how it was obtained.
 //
-// Three engines, three mechanisms, one contract:
+// Two mechanisms, one contract (ADR-0007 §3):
 //   - Microsoft returns `sentLen` natively, measured on the exact strings we sent.
-//   - Google has no boundaries of its own, so we segment the source and inject markers.
-//   - An LLM reports them through its structured output schema.
+//   - Every other engine, Google and the LLM services alike, has no boundaries of its own, so we
+//     segment the source, inject markers, and read the sentence lengths back off the reply.
 //
 // **Whatever the source, the alignment is accepted only if it reconstructs.** The sentence lengths
 // must partition their text exactly. Anything else is dropped, and a dropped alignment costs only

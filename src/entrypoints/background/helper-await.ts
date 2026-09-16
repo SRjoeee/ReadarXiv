@@ -11,8 +11,8 @@
 // Two MV3 constraints shape it:
 // - `setTimeout` **cannot** keep the service worker from being reclaimed; only messages and extension API calls
 //   reset the idle timer. Every round here calls `connectNative` (the probe is itself an API call), and a 2-second
-//   round is far under the 30-second idle line, so no separate keep-alive is needed — the in-flight keep-alive of
-//   helper.ts is for “one request taking tens of seconds”, a different shape.
+//   round is far under the 30-second idle line, so no keep-alive is needed (a recognition in flight is kept by the
+//   open port itself, helper.ts).
 // - the worker may still be reclaimed for other reasons (the browser reclaiming memory, the extension reloaded). The
 //   deadline is therefore written to session storage, and the next worker picks up a wait not yet expired; session
 //   rather than local storage: once the browser is closed, this install need not be waited for any more.

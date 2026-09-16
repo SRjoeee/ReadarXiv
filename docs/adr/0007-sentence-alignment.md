@@ -28,7 +28,7 @@ Two mechanisms, one contract:
 
 The markers enter and leave at the service layer, not in each provider, because the mechanism is engine-independent — any engine that keeps `tags` qualifies, and one copy per provider would be one bug per provider (`translate-service.ts`, the `markedItem` note). Only the `tags` render path is marked: `markers` has no marker that survives the wire, and `runs` sends fragments of a block that `joinRuns` reassembles without wire offsets, so an alignment there would have nothing to attach to. A segment whose marked text would exceed the engine's per-request character cap is sent unmarked: BatchQueue's cap stops only the merging, an oversized single task goes out all the same, and over the cap is a whole batch failed where no marker is only no highlight (Codex on #137). A one-sentence block gets no marker and a whole-for-whole alignment.
 
-`alignment.ts`'s header also says an LLM "reports them through its structured output schema". **Unverified in the code as of 2026-09-13**: no LLM provider (`openai-compat.ts`) reads or returns boundaries; LLM engines take the marker path like Google. The sentence is the intended third mechanism, not an implemented one.
+`alignment.ts`'s header also says an LLM "reports them through its structured output schema". **Unverified in the code as of 2026-09-13**: no LLM provider (`openai-compat.ts`) reads or returns boundaries; LLM engines take the marker path like Google. The sentence is the intended third mechanism, not an implemented one. **Settled 2026-09-17**: the header now describes the two mechanisms as implemented; an engine-reported alignment from an LLM remains a possibility, not a claim.
 
 ### 4. Where the cuts are chosen, and why the choice is the pipeline's
 
