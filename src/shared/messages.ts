@@ -6,6 +6,7 @@ import type { StartResult } from '@/core/session'
 import type { ProviderStatus } from '@/providers/transport'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
 import type { HelperStatus, ImageProgress, OcrCall, OcrMessageResponse } from './ocr'
+import type { DiagnosticSource, DiagnosticsExport } from '@/shared/diagnostics'
 
 export interface PageStatus {
   /** The current page's arXiv id; null when this is not an arXiv HTML page */
@@ -82,6 +83,10 @@ export interface AxtMessages {
   /** Clear the cache, or one paper only */
   'axt:cache-clear': { request: { paper?: string }; response: { ok: true; removed: number } | { ok: false; message: string } }
   'axt:cache-stats': { request: Record<never, never>; response: { ok: true; entries: number; bytes: number } | { ok: false; message: string } }
+  /** content / popup / options → background: one line for the diagnostics log (issue #156); the background records its own directly */
+  'axt:diag': { request: { src: Exclude<DiagnosticSource, 'background'>; line: string }; response: undefined }
+  /** options → background: the diagnostics log with the environment, for the reader to download */
+  'axt:diag-export': { request: Record<never, never>; response: DiagnosticsExport }
   /** popup → content: translate the failed blocks once more (§7.6) */
   'axt:retry-failed': { request: Record<never, never>; response: { retried: number } }
   /**

@@ -78,6 +78,8 @@ export type TranslateMessageResponse =
 
 export interface TranslateServiceDeps {
   getProvider: (providerId?: string) => Promise<TranslationProvider>
+  /** Where a warning goes besides the console — the background's diagnostics log (issue #156); tests and the chain builder may leave it out */
+  warn?: (line: string) => void
   getModel?: () => Promise<string | undefined>
   cache?: CachePort
   /** Queue parameter overrides (tests): timeoutMs is the base of the batch timeout formula; rate / capacity take provider.rateLimit first, then this, then 8 / 20 */
@@ -406,7 +408,9 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
         )
       },
       onError: (error, context) => {
-        console.warn(`[axt] batch failed (${context.isFallback ? 'per-item fallback' : `before retry ${context.retryCount}`}): ${error.message}`)
+        const line = `[axt] batch failed (${context.isFallback ? 'per-item fallback' : `before retry ${context.retryCount}`}): ${error.message}`
+        console.warn(line)
+        deps.warn?.(line)
       },
     })
     const pair: ProviderQueues = { requestQueue, batchQueue, fatal }
