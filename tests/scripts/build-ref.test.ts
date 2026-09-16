@@ -32,11 +32,16 @@ describe('readBuildRef', () => {
     expect(readBuildRef(git({ ...clean, 'git remote -v': origin, [`git branch -r --contains ${SHA}`]: '  origin/rebuild/v1' }))).toBe(SHA)
   })
 
-  it('a release tag pointing at that commit stamps the tag; other tags do not count, and a tag on a commit the repository does not hold is not trusted', () => {
+  it('a release tag pointing at that commit stamps the tag once the repository lists it; other tags do not count; an unpushed tag and a tag on a commit the repository does not hold are not trusted', () => {
     const onBranch = { ...clean, 'git remote -v': origin, [`git branch -r --contains ${SHA}`]: '  origin/main' }
-    expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'v1.0.0' }))).toBe('v1.0.0')
-    expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'v0.3.0-mvp\nv1.0.0' }))).toBe('v0.3.0-mvp')
+    const listed = (tag: string) => ({ [`git ls-remote --tags origin refs/tags/${tag}`]: `${SHA}\trefs/tags/${tag}` })
+    expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'v1.0.0', ...listed('v1.0.0') }))).toBe('v1.0.0')
+    expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'v0.3.0-mvp\nv1.0.0', ...listed('v0.3.0-mvp') }))).toBe('v0.3.0-mvp')
     expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'nightly\nrelease-candidate' }))).toBe(SHA)
+    // created locally, not pushed: the repository answers nothing for it (Devin on #218)
+    expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'v1.0.0', [`git ls-remote --tags origin refs/tags/v1.0.0`]: '' }))).toBe(SHA)
+    // an annotated tag answers with the tag object too; the peeled line names the same ref
+    expect(readBuildRef(git({ ...onBranch, [`git tag --points-at ${SHA}`]: 'v1.0.0', [`git ls-remote --tags origin refs/tags/v1.0.0`]: `deadbeef\trefs/tags/v1.0.0\n${SHA}\trefs/tags/v1.0.0^{}` }))).toBe('v1.0.0')
     expect(readBuildRef(git({ ...clean, 'git remote -v': origin, [`git branch -r --contains ${SHA}`]: '', [`git tag --points-at ${SHA}`]: 'v1.0.0' }))).toBe('main')
   })
 
