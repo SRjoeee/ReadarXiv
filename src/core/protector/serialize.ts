@@ -38,6 +38,31 @@ export interface ProtectedBlock {
   root: Element
 }
 
+/**
+ * Why this block can no longer be filled back, or undefined while it can. `slots` are references to the live nodes,
+ * and a page that swapped a formula while the translation was out would otherwise have the copy captured then put
+ * back — the translation showing what the page no longer does, silently (INVENTORY T6; the independent audit's A03).
+ * The block is serialised again and compared with what was sent: the wire text (the words, and the order of every
+ * slot among them — a formula moved past its neighbours, alone or with them, changes it; Devin on #212) and the
+ * identity of each slot's node (a replacement of the same shape serialises the same, and is a different node). What
+ * the page can do without changing either — split a text node, add a comment, and our own nodes appearing beside a
+ * slot, which the serialiser steps over — is not a change. One serialisation per commit, the same cost as the one
+ * that made the block. arXiv's own scripts do not touch the body (RESEARCH §3.3), so today nothing trips this: it is
+ * the boundary, and a retry serialises afresh
+ */
+export function staleSlot(block: ProtectedBlock): string | undefined {
+  const now = serialize(block.root, block.format)
+  if (now.text !== block.text) return "the block's text changed"
+  const then = Array.from(block.slots)
+  const fresh = Array.from(now.slots.values())
+  if (fresh.length !== then.length) return `the block has ${fresh.length} slots, had ${then.length}`
+  for (let i = 0; i < then.length; i++) {
+    const [id, node] = then[i]!
+    if (node !== fresh[i]) return `slot ${id} <${node.nodeType === ELEMENT_NODE ? (node as Element).localName : node.nodeName.toLowerCase()}> is not the node it was`
+  }
+  return undefined
+}
+
 export const VOID_DENSE_THRESHOLD = 40
 
 

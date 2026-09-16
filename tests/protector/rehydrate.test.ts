@@ -38,21 +38,55 @@ describe('rehydrate', () => {
     expect(htmlOf(rehydrate('&lt;b&gt; &amp; &quot;c&quot; &#39;d&#39; &#65;&#x42;&nbsp;e', b, document))).toBe('&lt;b&gt; &amp; "c" \'d\' AB&nbsp;e')
   })
 
-  it('[known behaviour, pending A03] a node replaced after serialisation: rehydration puts back the copy captured then (independent audit B12 / B18-mutate)', () => {
-    // The slots record **node references**; if the page swaps the formula while the request is in flight, rehydration does not notice.
-    // arXiv is a static page and its own JS does not change the body (RESEARCH §3.3), so there is no trigger path today;
-    // this pins the boundary down: the real fix would be “keep a source snapshot at serialisation, re-check before committing” (A03 of the research audit),
-    // and then this test's expectation changes to “refuse and mark stale”, not a silent change of semantics
-    const p = el('<p class="ltx_p">Let <math class="ltx_Math"><mi>x</mi></math> be positive.</p>')
+  it('a node replaced after serialisation: rehydration refuses as `stale` rather than putting back the copy captured then (the audit\'s A03, INVENTORY T6)', () => {
+    // The slots record **node references**; a page that swaps the formula while the request is in flight must not have
+    // the translation show x where the page now shows y. arXiv's own JS does not touch the body (RESEARCH §3.3), so
+    // nothing trips this today; the pipeline marks the block failed and a retry serialises it afresh
+    const p = el('<p class="ltx_p">Let <math class="ltx_Math"><mi>x</mi></math> be positive, and <math class="ltx_Math"><mi>z</mi></math> too.</p>')
     const b = serialize(p)
     const before = p.querySelector('math')!
     // The page swapped x for y (same position, same tag)
     before.replaceWith(el('<math class="ltx_Math"><mi>y</mi></math>'))
     expect(p.querySelector('math')!.textContent).toBe('y')
-    const out = htmlOf(rehydrate(b.text, b, document))
-    // Rehydration uses the copy captured then, so the translation shows x, not the y now on the page
-    expect(out).toContain('<mi>x</mi>')
-    expect(out).not.toContain('<mi>y</mi>')
+    let caught: unknown
+    try { rehydrate(b.text, b, document) } catch (e) { caught = e }
+    expect(caught).toBeInstanceOf(PlaceholderIntegrityError)
+    expect((caught as PlaceholderIntegrityError).reason).toBe('stale')
+    expect((caught as PlaceholderIntegrityError).detail).toBe('slot 1 <math> is not the node it was')
+    // A slot moved out of the block, still in the document, is stale as well; the block serialised afresh is not
+    const again = serialize(p)
+    p.parentElement!.append(p.querySelectorAll('math')[1]!)
+    expect(() => rehydrate(again.text, again, document)).toThrow(/stale/)
+    const fresh = serialize(p)
+    expect(htmlOf(rehydrate(fresh.text, fresh, document))).toContain('<mi>y</mi>')
+  })
+
+  it('stale is “serialises differently, or a slot is another node”: a move alone or grouped and edited text are stale; a split text node, a comment, our own node beside a slot are not (Devin on #212, twice)', () => {
+    const stale = (block: ReturnType<typeof serialize>) => { try { rehydrate(block.text, block, document) } catch (e) { return (e as PlaceholderIntegrityError).detail } return undefined }
+    // What the page can do without changing what was sent: our ring beside a slot, a comment, a text node split in two
+    const p = el('<p class="ltx_p">A <math class="ltx_Math"><mi>x</mi></math> B.</p>')
+    const b = serialize(p)
+    const x = p.querySelector('math')!
+    const ours = el('<span class="axt-t axt-pending"></span>')
+    x.before(ours)
+    p.insertBefore(document.createComment('note'), x)
+    ;(p.firstChild as Text).splitText(1)
+    expect(stale(b)).toBeUndefined()
+    ours.remove()
+    // The formula moved after the text that followed it: the wire order no longer describes the page
+    const one = serialize(p)
+    p.append(x)
+    expect(stale(one)).toBe("the block's text changed")
+    // Two slots moved together with their text (`A x B y` → `B y A x`): each keeps its neighbour, the order still changed
+    const grouped = el('<p class="ltx_p">A <math class="ltx_Math"><mi>x</mi></math> B <math class="ltx_Math"><mi>y</mi></math></p>')
+    const g = serialize(grouped)
+    grouped.append(grouped.firstChild!, grouped.querySelector('math')!)
+    expect(stale(g)).toBe("the block's text changed")
+    // The words changed under the translation
+    const edited = el('<p class="ltx_p">A <math class="ltx_Math"><mi>x</mi></math> B.</p>')
+    const e = serialize(edited)
+    ;(edited.firstChild as Text).data = 'Not A '
+    expect(stale(e)).toBe("the block's text changed")
   })
 
   it('a validation failure throws PlaceholderIntegrityError', () => {

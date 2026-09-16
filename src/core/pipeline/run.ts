@@ -7,7 +7,7 @@ import { toBcp47 } from '@/config/languages'
 import { type Block, type TextBlock, markBlocks } from '@/core/extractor'
 import type { SentenceAlignment } from '@/providers/alignment'
 import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
-import { joinRuns, rehydrate, splitRuns, validate, type WireSpan } from '@/core/protector'
+import { PlaceholderIntegrityError, joinRuns, rehydrate, splitRuns, staleSlot, type WireSpan } from '@/core/protector'
 import {
   clearAllPending, enable, markPartial, registerSentences, renderFailed, renderPending, renderTable, renderText, setState, type Look, type Mode,
 } from '@/core/renderer'
@@ -95,6 +95,12 @@ type BatchResult = Map<Segment, SegmentResult>
  */
 const CANCELLED: SegmentResult = { error: 'aborted: cancelled' }
 const MISMATCH: SegmentResult = { error: 'invalid-response: the translation placeholders do not match the source' }
+/**
+ * The page changed under the block while its translation was out (a slot node replaced or moved; INVENTORY T6). Not
+ * the translation's fault, so no resend; `parseFatal` reads an unfamiliar prefix as `unknown`, and the widget's Retry
+ * serialises the block afresh, which is the cure
+ */
+const stale = (e: PlaceholderIntegrityError): SegmentResult => ({ error: `stale: ${e.detail}` })
 const errorOf = (res: Extract<TranslateMessageResponse, { ok: false }>): SegmentResult => ({ error: `${res.error.kind}: ${res.error.message}` })
 
 export function startTranslation(options: RunOptions): TranslationRun {
@@ -180,11 +186,34 @@ export function startTranslation(options: RunOptions): TranslationRun {
     if (isPermanentErrorKind(res.error.kind)) ledger.fatal(res.error.kind, res.error.message)
   }
 
+  /**
+   * The translation filled back into its block, or why it cannot be. `rehydrate` is the one gate (INVENTORY T4 —
+   * validating here first checked the same text twice): an integrity failure of the translation's own comes back as
+   * `undefined` for the caller to resend; a block the page changed under (`stale`) is a result, since resending the
+   * same wire text could only fail the same way
+   */
+  const filled = (hit: { text: string; alignment?: SentenceAlignment }, segment: Segment): SegmentResult | undefined => {
+    try {
+      return { fragment: rehydrate(hit.text, segment.protected, doc, hit.alignment), alignment: hit.alignment }
+    } catch (e) {
+      if (!(e instanceof PlaceholderIntegrityError)) throw e
+      return e.reason === 'stale' ? stale(e) : undefined
+    }
+  }
+  /** The runs joined back into their block; a count that does not match is the translation's fault, a stale block is not */
+  const joined = (texts: string[], layout: ReturnType<typeof splitRuns>, segment: Segment): SegmentResult => {
+    try {
+      return { fragment: joinRuns(texts, layout, segment.protected, doc) }
+    } catch (e) {
+      return e instanceof PlaceholderIntegrityError && e.reason === 'stale' ? stale(e) : MISMATCH
+    }
+  }
+
   /** The runs fallback (§6.5): cut into runs at voids, translated run by run and joined back */
   async function viaRuns(segment: Segment, sectionTitle?: string): Promise<SegmentResult> {
     if (halted()) return CANCELLED
     const layout = splitRuns(segment.protected)
-    if (layout.runs.length === 0) return { fragment: joinRuns([], layout, segment.protected, doc) }
+    if (layout.runs.length === 0) return joined([], layout, segment)
     const res = await send(layout.runs.map((text, i) => ({ id: `${segment.id}#r${i}`, text })), 'runs', sectionTitle)
     if (!res.ok) {
       noteFatal(res)
@@ -195,11 +224,7 @@ export function startTranslation(options: RunOptions): TranslationRun {
     const byId = new Map(res.result.segments.map(s => [s.id, s.text]))
     const texts = layout.runs.map((_, i) => byId.get(`${segment.id}#r${i}`))
     if (texts.some(t => t === undefined)) return { error: 'invalid-response: the translation count does not match the source' }
-    try {
-      return { fragment: joinRuns(texts as string[], layout, segment.protected, doc) }
-    } catch {
-      return MISMATCH
-    }
+    return joined(texts as string[], layout, segment)
   }
 
   /**
@@ -214,7 +239,8 @@ export function startTranslation(options: RunOptions): TranslationRun {
       cached += res.cached
       served(res.result.provider)
       const hit = res.result.segments[0]
-      if (hit !== undefined && validate(hit.text, segment.protected).ok) return { fragment: rehydrate(hit.text, segment.protected, doc, hit.alignment), alignment: hit.alignment }
+      const result = hit === undefined ? undefined : filled(hit, segment)
+      if (result) return result
     } else {
       noteFatal(res)
     }
@@ -238,8 +264,9 @@ export function startTranslation(options: RunOptions): TranslationRun {
       const done = new Map((res.partial ?? []).map(s => [s.id, s]))
       const left = segments.filter(segment => {
         const hit = done.get(segment.id)
-        if (hit === undefined || !validate(hit.text, segment.protected).ok) return true
-        out.set(segment, { fragment: rehydrate(hit.text, segment.protected, doc, hit.alignment), alignment: hit.alignment })
+        const result = hit === undefined ? undefined : filled(hit, segment)
+        if (!result) return true
+        out.set(segment, result)
         return false
       })
       if (left.length === 0) return
@@ -262,8 +289,8 @@ export function startTranslation(options: RunOptions): TranslationRun {
     const byId = new Map(res.result.segments.map(s => [s.id, s]))
     for (const segment of segments) {
       const hit = byId.get(segment.id)
-      if (hit !== undefined && validate(hit.text, segment.protected).ok) out.set(segment, { fragment: rehydrate(hit.text, segment.protected, doc, hit.alignment), alignment: hit.alignment })
-      else out.set(segment, await retrySingle(segment, sectionTitle))
+      const result = hit === undefined ? undefined : filled(hit, segment)
+      out.set(segment, result ?? await retrySingle(segment, sectionTitle))
     }
   }
 
@@ -278,6 +305,14 @@ export function startTranslation(options: RunOptions): TranslationRun {
     const out: BatchResult = new Map()
     await translateSegments(batch.segments, batch.sectionTitle, out)
     if (ledger.stopped()) return // stop() has cleared the pending nodes already and reports no more
+    // A fragment was built when its translation came back, and the batch may have waited on another segment's retry
+    // since: the page could have changed under a block whose clone is already in hand (Devin on #212). Asked once
+    // more here, in the same turn as the insertion below, so nothing can move in between
+    for (const [segment, result] of out) {
+      if (!('fragment' in result)) continue
+      const changed = staleSlot(segment.protected)
+      if (changed) out.set(segment, { error: `stale: ${changed}` })
+    }
     if (batch.kind === 'table' && batch.block) {
       const cells = new Map<Element, DocumentFragment>()
       // A cell's source-side offsets and alignment can only be registered once renderTable has built the clone cell (§7.7)

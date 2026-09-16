@@ -2,7 +2,7 @@
 import { cloneWithoutIds } from './clone'
 import { type Boundaries, restoreLeadingLabel } from './label'
 import { scanTokens, type WireSpan } from './offsets'
-import type { ProtectedBlock } from './serialize'
+import { type ProtectedBlock, staleSlot } from './serialize'
 import { PlaceholderIntegrityError, validate } from './validate'
 
 /**
@@ -32,6 +32,11 @@ import { PlaceholderIntegrityError, validate } from './validate'
  * that ends in a period (`label.ts`); the fragment itself does not.
  */
 export function rehydrate(translated: string, block: ProtectedBlock, doc: Document, alignment?: Boundaries): DocumentFragment & { offsets: WireSpan[] } {
+  // The one gate before a translation reaches the page (INVENTORY T4): the block still the one serialised, the
+  // placeholders intact. Stale first — a translation of a block that changed is not worth validating, and the caller
+  // treats the two differently (resend vs. leave it to a retry)
+  const stale = staleSlot(block)
+  if (stale) throw new PlaceholderIntegrityError('stale', stale)
   const v = validate(translated, block)
   if (!v.ok) throw new PlaceholderIntegrityError(v.reason, v.detail)
 
