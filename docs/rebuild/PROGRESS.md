@@ -7,6 +7,14 @@ Checkpoint log for the rebuild toward V1.0 (mandate: `docs/rebuild/CHARTER.md`; 
 - `pnpm e2e:image` is not deterministic: `stack: all 6 images entered the viewport and were processed` fails run to run on the baseline as well (`5/5 of 6` or `1/1 of 6`, 0 failed — images not requested, not refused), despite the scroll-per-image pass `image.mjs:88` added for exactly this. Look at the viewport scheduling of bitmaps when the image run is next touched (P1). **Re-run 2026-09-17** on the verification-debt build, twice in a row: 13/13, then 12/13 on this same check (`images idle: 5/5 of 6`, 54 s) — still nondeterministic; on the 1.0 ledger as a must-look.
 
 
+## 2026-09-17 — identity: one internal name, the names kept by contract, four modules renamed (ADR-0010)
+
+- Branch `rebuild/identity` (PR #PRNUM, stacked on #215). The owner's decision of 2026-09-17: the internal name is `readarxiv`; the display name `Read arXiv` and the repository `ReadarXiv` stay as they are.
+- **ADR-0010** writes the rule down, with the table of names that stay by contract and the reason beside each: the Native Messaging host `io.github.srjoeee.arxivtranslate` (in every installed reader's manifest), the install directory `~/Library/Application Support/Readarxiv/helper` (INVENTORY §5 D), the `axt-` prefix on everything the extension writes, and `arxiv-translate_prompts.json` (readers may hold exported files). Nothing installed changes.
+- `package.json` is `readarxiv` with a description (`version` waits for checkpoint C; no workflow or script consumed the old name); `helper/Package.swift`'s header says Read arXiv. The old spellings now appear only in history, in the frozen DESIGN.md (checkpoint B's) and in the contracts above.
+- **Four modules renamed**, each pair read first: `pipeline/sentences.ts` → `cuts.ts`, `renderer/sentences.ts` → `sentence-map.ts`, `protector/text.ts` → `escape.ts`, `svg/runs.ts` → `code.ts`, their tests with them; ADR-0007's citations, a comment in `translate-service.ts` and the English allow-list path follow. The same-named pairs of one concern at two layers keep their names — `shared` / `background` `ocr.ts` and `diagnostics.ts`, `providers` / `shared` `transport.ts`, `core` / `ui` `strings.ts`, the two pipelines' `run.ts` — by ADR-0010 §4.
+- Tests 1 774 as before (renames only); gate green by exit code; `pnpm e2e` 73/73 on the final build.
+
 ## 2026-09-17 — verification debt settled: three costs measured, the floor-side Chrome, the port that keeps the worker, and the 1.0 ledger
 
 - Branch `rebuild/verification-debt` (PR #215). Every question in INVENTORY §8 now carries a dated answer with its evidence — a test, a probe or a line reference; none was closed by reasoning alone. The Codex re-review of the ranges merged while it was offline (#204–#213) is the other half of this debt and is run separately when its quota returns.
