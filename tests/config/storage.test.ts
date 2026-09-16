@@ -329,6 +329,19 @@ describe('provider selection', () => {
     const nulled = await import('@/config/storage')
     expect(await nulled.getConfig()).toEqual(DEFAULT_CONFIG)
     expect(nulled.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'reading' })
+    // Malformed storage at version 13 reaches the migration before any validation and must not throw there: `null`
+    // is "nothing stored" to WXT (the defaults, no migration, no alarm — a first install looks the same), and any other
+    // wrong value is migrated as it is and then fails the schema, taking the documented fallback (Copilot on #209)
+    await fakeBrowser.storage.local.set({ config: null, config$: { v: 13 } })
+    vi.resetModules()
+    const empty = await import('@/config/storage')
+    expect(await empty.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(empty.configFallbackReason()).toBeNull()
+    await fakeBrowser.storage.local.set({ config: 'garbage', config$: { v: 13 } })
+    vi.resetModules()
+    const broken = await import('@/config/storage')
+    expect(await broken.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(broken.configFallbackReason()).toMatchObject({ kind: 'invalid' })
     // Nothing legitimately stored lacks `thinking` (the v12 migration and the drawer write it): not repaired, named
     const { thinking: _thinking, ...bare } = SVC
     await fakeBrowser.storage.local.set({ config: { ...v13, reading: { sentenceHighlight: true }, services: [bare] }, config$: { v: 13 } })
@@ -344,10 +357,31 @@ describe('provider selection', () => {
     expect(again).toEqual({ ...full, version: CONFIG_VERSION })
   })
 
-  it('no field of the stored shape carries a zod default: the version alone says what is in storage (ADR-0009)', () => {
-    for (const [schema, name] of [[configSchema, 'config'], [serviceSchema, 'service'], [appearanceSchema, 'appearance']] as const) {
-      for (const [field, shape] of Object.entries(schema.shape)) expect([`${name}.${field}`, shape instanceof z.ZodDefault]).toEqual([`${name}.${field}`, false])
+  it('no field of the stored shape, at any depth, carries a zod default: the version alone says what is in storage (ADR-0009)', () => {
+    // Every schema node reachable from the root, by zod 4's core definitions: a default inside `prompts` or a profile
+    // would complete part of the stored value just as quietly (Copilot on #209)
+    const defaults = (schema: z.ZodType, path: string, seen = new Set<z.ZodType>()): string[] => {
+      if (seen.has(schema)) return []
+      seen.add(schema)
+      const def = (schema as unknown as { _zod: { def: Record<string, unknown> & { type: string } } })._zod.def
+      const found = def.type === 'default' ? [path] : []
+      const inner = (s: unknown, at: string) => (s ? defaults(s as z.ZodType, at, seen) : [])
+      switch (def.type) {
+        case 'object': return found.concat(...Object.entries(def.shape as Record<string, z.ZodType>).map(([k, s]) => inner(s, `${path}.${k}`)))
+        case 'array': return found.concat(inner(def.element, `${path}[]`))
+        case 'record': return found.concat(inner(def.valueType, `${path}[*]`))
+        case 'tuple': return found.concat(...(def.items as z.ZodType[]).map((s, i) => inner(s, `${path}[${i}]`)))
+        case 'union': return found.concat(...(def.options as z.ZodType[]).map((s, i) => inner(s, `${path}|${i}`)))
+        case 'pipe': return found.concat(inner(def.in, path), inner(def.out, path))
+        case 'lazy': return found.concat(inner((def.getter as () => z.ZodType)(), path))
+        default: return found.concat(inner(def.innerType, path))
+      }
     }
+    // The walker sees a nested default: without this the assertion below could pass vacuously
+    expect(defaults(z.object({ a: z.object({ b: z.array(z.string().default('x')) }) }), 'probe')).toEqual(['probe.a.b[]'])
+    expect(defaults(configSchema, 'config')).toEqual([])
+    expect(defaults(serviceSchema, 'service')).toEqual([])
+    expect(defaults(appearanceSchema, 'appearance')).toEqual([])
     // and a value missing a field is not quietly completed
     const { reading: _reading, ...missing } = DEFAULT_CONFIG
     expect(configSchema.safeParse(missing).success).toBe(false)

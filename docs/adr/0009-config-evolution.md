@@ -35,5 +35,5 @@ Considered and not taken:
 
 - A value missing a field falls back whole, as one with a wrong field does today, and the notice names the field. Whoever edits storage by hand edits a complete value.
 - `Config`'s TypeScript type is unchanged (zod's output type was already required); its input type now equals the output type, which is what every caller passed.
-- Each migration function's parameter type is again a true description of the version it came from.
+- A migration function's parameter type can again be a true description of the version it came from; the 13 → 14 one is. The older ones lean on `Omit<Config, …>` and inherit fields added later — a habit this decision does not rewrite retroactively (Copilot on #209).
 - `runtime.md` §2d and D29 describe the state before this decision and stay as the record; INVENTORY P6 closes on this ADR.
