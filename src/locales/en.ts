@@ -282,6 +282,10 @@ const O: Locale['O'] = {
     clear: 'Clear',
     clearConfirm: 'Confirm clear',
     cleared: 'Cleared',
+    diagnostics: 'Diagnostics log',
+    diagnosticsHint: 'The last few hundred events: failed requests, service hand-overs, page events. No API key and no paper text; attach it to an issue',
+    diagnosticsExport: 'Export',
+    diagnosticsError: 'Could not export',
   },
 }
 

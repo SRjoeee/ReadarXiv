@@ -26,6 +26,7 @@ import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
 import type { PageStatus } from '@/shared/messages'
 import type { HelperStatus, ImageProgress, OcrCall, OcrMessageResponse } from '@/shared/ocr'
 import { createIdleTrace } from './idle-trace'
+import { parseFatal } from '@/core/pipeline/fatal'
 
 export interface SessionDeps {
   doc: Document
@@ -133,7 +134,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
   void deps.config.get()
     .then(config => { savedMode = config.mode; adoptLocale(config.uiLanguage); adoptStyle(lookOf(config)) })
     // A failed read lets it through too: the popup would show “reading” for ever without an answer, and the defaults are at least a usable one
-    .catch(e => trace(`configuration read failed, answering with the defaults for now: ${e instanceof Error ? e.message : String(e)}`))
+    .catch(e => trace(`configuration read failed (${e instanceof Error ? e.name : typeof e}), answering with the defaults for now`))
     .finally(() => configRead())
 
   let run: TranslationRun | null = null
@@ -268,7 +269,8 @@ export function createPageSession(deps: SessionDeps): PageSession {
     enterSide(modes.effective())
     // Each busy → idle transition is one line the e2e suites read (idle-trace.ts)
     const traceIdle = createIdleTrace<Progress>({ now, trace }, p => p.inFlight > 0, (p, ms) =>
-      `session idle: ${p.done}/${p.requested} requested of ${p.total}, ${p.failed} failed, ${p.cached} cached, ${ms} ms${p.fatal ? `, fatal: ${p.fatal}` : ''}`)
+      // The fatal's kind only: the message is the endpoint's, and the trace reaches the diagnostics log (Codex on #214)
+      `session idle: ${p.done}/${p.requested} requested of ${p.total}, ${p.failed} failed, ${p.cached} cached, ${ms} ms${p.fatal ? `, fatal: ${parseFatal(p.fatal).kind}` : ''}`)
     run = startTranslation({
       doc,
       blocks,
@@ -315,10 +317,14 @@ export function createPageSession(deps: SessionDeps): PageSession {
         traceIdle(p)
       },
     })
-    run.ready.catch(e => console.error('[axt] translation crashed', e))
+    run.ready.catch(e => {
+      console.error('[axt] translation crashed', e)
+      trace(`translation crashed (${e instanceof Error ? e.name : typeof e}; message withheld)`)
+    })
     // The tab title is translated too (§10): the same service, the same cache; the title is plain text, escaped and decoded by the placeholder protocol
     title = translateTitle(doc, {
       isCurrent: alive,
+      warn: trace,
       translate: async text => {
         const res = await backend.translate({
           request: { segments: [{ id: 'document.title', text: escapeText(text, wireFormatOf(status.renderPath)) }], source: 'en', target, context },
@@ -408,7 +414,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
     }
     deps.helperStatus()
       .then(helper => settleRaster(helper.state === 'ready'))
-      .catch(e => { trace(`helper-status failed: ${e instanceof Error ? e.message : String(e)}`); settleRaster(false) })
+      .catch(e => { trace(`helper-status failed (${e instanceof Error ? e.name : typeof e})`); settleRaster(false) })
   }
 
   let fitObserver: ResizeObserver | null = null

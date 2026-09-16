@@ -14,6 +14,8 @@ export interface TitleOptions {
   translate: (text: string) => Promise<string | null>
   /** Is the session still there: a result arriving after the session ended is dropped */
   isCurrent: () => boolean
+  /** A failure, worded, besides the console: the session's trace (issue #156) */
+  warn?: (line: string) => void
 }
 
 export function translateTitle(doc: Document, options: TitleOptions): TitleTranslator {
@@ -33,7 +35,11 @@ export function translateTitle(doc: Document, options: TitleOptions): TitleTrans
       if (doc.title !== next) doc.title = next
     } catch (error) {
       // A rejection after the session was cancelled is expected, not noise
-      if (request === version && options.isCurrent()) console.warn('[axt] title translation failed', error)
+      if (request === version && options.isCurrent()) {
+        console.warn('[axt] title translation failed', error)
+        // Withheld from the log: the message may carry the endpoint's words on the title's text (Devin on #214)
+        options.warn?.(`title translation failed (${error instanceof Error ? error.name : typeof error}; message withheld)`)
+      }
     }
   }
 

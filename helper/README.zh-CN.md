@@ -14,6 +14,8 @@
 curl -fsSL https://raw.githubusercontent.com/SRjoeee/ReadarXiv/main/helper/install-remote.sh | bash -s -- <扩展 id>
 ```
 
+扩展弹窗复制出来的命令里，`main` 的位置是**这个扩展构建时的 commit**（出现两次：脚本与源码取自同一处），装到的就是它对应的 helper——比扩展新的 helper 会握手失败。开发构建若不能保证 commit 已推到远端，则写 `main`。
+
 第二个参数可以指定分支（默认 main），引导里复制的命令会带上它自己所在的分支。
 
 脚本会把 helper 的源码放到 `~/Library/Application Support/Readarxiv/helper`，用 Xcode Command Line Tools 编译（首次约 1 分钟；没装的话先运行 `xcode-select --install`），并注册 Chrome / Chromium 的 Native Messaging host。**执行完成后扩展会自动检测到，无需重新加载扩展、也无需回到引导确认**（DESIGN §15.4）。不需要 sudo。

@@ -7,6 +7,8 @@
 // auth trigger scheduler.disconnect()), the reader waiting over half a translation. Hard rule 4: a failure must be recoverable and trigger the fallback chain.
 import type { TranslateCall, TranslateMessageResponse, TranslateService } from './translate-service'
 import { isPermanentErrorKind, type ProviderErrorKind, type TranslatedSegment, type TranslationProvider } from './types'
+import { failureLine } from '@/shared/diagnostics'
+import { getRequestErrorMeta } from './request/retry-policy'
 
 export interface FallbackStep {
   provider: TranslationProvider
@@ -68,7 +70,7 @@ interface Demotion {
 
 export function createFallbackService(
   steps: readonly FallbackStep[],
-  opts: { cooldownMs?: number; now?: () => number } = {},
+  opts: { cooldownMs?: number; now?: () => number; warn?: (line: string) => void } = {},
 ): FallbackService {
   if (steps.length === 0) throw new Error('a fallback chain needs at least one engine')
   const cooldownMs = opts.cooldownMs ?? DEFAULT_COOLDOWN_MS
@@ -101,6 +103,7 @@ export function createFallbackService(
     })
     lastDemoted = info
     console.warn(`[axt] ${step.provider.id} demoted (${error.kind}): ${error.message}`)
+    opts.warn?.(`[axt] ${step.provider.id} demoted: ${failureLine(error.kind, error.message, getRequestErrorMeta(error).statusCode)}`)
   }
 
   const translate = async (call: TranslateCall): Promise<TranslateMessageResponse> => {

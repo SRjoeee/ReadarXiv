@@ -35,7 +35,11 @@ export default defineContentScript({
       helperStatus: () => sendMessage({ type: 'axt:helper-status' }),
       config: { get: getConfig, set: setConfig },
       applyLocale: applyLocaleFrom,
-      trace: line => console.debug(`[axt] ${line}`),
+      // The same line goes to the diagnostics log (issue #156): a reader's export then shows what this page did
+      trace: line => {
+        console.debug(`[axt] ${line}`)
+        void sendMessage({ type: 'axt:diag', src: 'content', line }).catch(() => undefined)
+      },
     })
     // watchConfig rather than a message: the settings page is itself the active tab and cannot reach the content page; the subscription also updates every open paper at once
     watchConfig(config => session.onConfig(config))

@@ -16,6 +16,8 @@ command already carries your extension id:
 curl -fsSL https://raw.githubusercontent.com/SRjoeee/ReadarXiv/main/helper/install-remote.sh | bash -s -- <extension id>
 ```
 
+The command the popup copies names the **commit the extension was built from** in place of `main` (twice: the script and the sources come from the same place), so the helper installed is the one that extension was built against — a helper newer than the extension would fail the handshake. A development build that cannot promise a pushed commit says `main`.
+
 A second argument names a branch (default main); the command copied from the guide carries the branch it came from.
 
 The script puts the helper's sources under `~/Library/Application Support/Readarxiv/helper`, builds them with the Xcode

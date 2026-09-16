@@ -17,6 +17,9 @@ import { installContextMenu, refreshContextMenu, installToggleCommand } from './
 import { applyLocaleFrom, resolveLocale } from '@/ui/apply-locale'
 import { setLocale } from '@/ui/strings'
 import { savedFromStatus } from '@/shared/page-action'
+import { BUILD_REF } from '@/shared/build'
+import { failureLine } from '@/shared/diagnostics'
+import { createDiagnostics } from './diagnostics'
 
 // The background: message routing + the engine chain + the queues + the cache (DESIGN §8.0). WXT ≥0.20 ships no
 // polyfill, so an asynchronous response needs sendResponse + return true.
@@ -24,12 +27,19 @@ export default defineBackground(() => {
   const cache = cachePortOf(translationCache)
   /** Scopes ended for certain — one registry (ADR-0005): the session router writes it, the chain's services and OCR read it */
   const cancelled = new CancelledScopeRegistry()
+  /** The diagnostics log (issue #156): this worker's warnings, the pages' `[axt]` lines; in session storage across workers, for the settings page's export */
+  const DIAG_KEY = 'axt-diagnostics'
+  const diagnostics = createDiagnostics({
+    load: async () => (await browser.storage.session.get(DIAG_KEY).catch(() => ({}) as Record<string, unknown>))[DIAG_KEY],
+    save: async entries => { await browser.storage.session.set({ [DIAG_KEY]: entries }).catch(() => undefined) },
+  })
+  const diag = (line: string) => diagnostics.record('background', line)
 
   /** The chain in force, one per worker (./chain.ts): built lazily, rebuilt when the configuration that shapes it changes */
   const chain = createChainHolder({
     load: async config => {
       const resolved = config ?? await getConfig()
-      return { config: resolved, transport: await createLocalTransport(resolved, { cache, cancelled }) }
+      return { config: resolved, transport: await createLocalTransport(resolved, { cache, cancelled, warn: diag }) }
     },
     // The router is created below; a superseded chain is only ever swept after a build, long after that
     owned: transport => router.sessionsOn(transport) > 0,
@@ -72,7 +82,7 @@ export default defineBackground(() => {
     permitted: () => browser.permissions.contains({ permissions: ['nativeMessaging'] }),
     bound: () => typeof browser.runtime.connectNative === 'function',
   })
-  const ocr = createOcrService({ backend: helper, cache, cancelled })
+  const ocr = createOcrService({ backend: helper, cache, cancelled, warn: diag })
   const router = createSessionRouter({
     current: transportOf,
     cancelled,
@@ -110,7 +120,11 @@ export default defineBackground(() => {
   // Both lifecycle hooks give only tabId / status, needing no "tabs" permission
   const dropTab = (tabId: number, why: string) => {
     void router.dropTab(tabId).then(n => {
-      if (n > 0) console.debug(`[axt] tab ${tabId} ${why}: ${n} queued / in-flight requests withdrawn`)
+      if (n > 0) {
+        const line = `[axt] tab ${tabId} ${why}: ${n} queued / in-flight requests withdrawn`
+        console.debug(line)
+        diag(line)
+      }
     })
   }
   // The context menu (issue #146): the second entry, the same message as the popup's action.
@@ -251,7 +265,11 @@ export default defineBackground(() => {
         // A failed chain build (a provider constructor throwing) is answered honestly too: unanswered, the caller waits for “message channel closed”
         router.forCall(message.scope, sender.tab?.id)
           .then(t => t.translate(message))
-          .catch((e: unknown) => ({ ok: false as const, error: toErrorInfo(e) }))
+          .catch((e: unknown) => {
+            const error = toErrorInfo(e)
+            diag(`[axt] translate call failed before any request: ${failureLine(error.kind, error.message)}`)
+            return { ok: false as const, error }
+          })
           .then(sendResponse)
         return true
       case 'axt:cancel-scope':
@@ -303,6 +321,21 @@ export default defineBackground(() => {
         ocr.ocr(message)
           .catch((e: unknown) => ({ ok: false as const, error: { kind: 'unknown' as const, message: e instanceof Error ? e.message : String(e) } }))
           .then(sendResponse)
+        return true
+      case 'axt:diag':
+        // Only our own contexts can reach runtime.onMessage (no externally_connectable), still the shape is checked:
+        // a line is a string, the source one of the pages'; the ring's cap and the coalesced save bound the rest (Devin on #214)
+        if (typeof message.line === 'string' && (message.src === 'content' || message.src === 'popup' || message.src === 'options')) diagnostics.record(message.src, message.line)
+        return false
+      case 'axt:diag-export':
+        // The environment a reader cannot be expected to report: the build, the browser, the platform
+        void Promise.all([diagnostics.restored, browser.runtime.getPlatformInfo().catch(() => ({ os: 'unknown' }))]).then(([, info]) =>
+          sendResponse(diagnostics.export({
+            extension: { version: browser.runtime.getManifest().version, buildRef: BUILD_REF },
+            browser: navigator.userAgent,
+            platform: info.os,
+          })),
+        )
         return true
       case 'axt:cache-stats':
         // The same protocol as cache-clear: a failure is reported as it is, and “IndexedDB unusable” must not show as “the
