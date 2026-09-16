@@ -9,7 +9,7 @@ figures and the layout keep working.
 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![Chrome 131+](https://img.shields.io/badge/Chrome-131%2B-4285F4.svg)](#start-reading)
-[![CI](https://github.com/SRjoeee/ArxivTranslate/actions/workflows/ci.yml/badge.svg)](https://github.com/SRjoeee/ArxivTranslate/actions/workflows/ci.yml)
+[![CI](https://github.com/SRjoeee/ReadarXiv/actions/workflows/ci.yml/badge.svg)](https://github.com/SRjoeee/ReadarXiv/actions/workflows/ci.yml)
 
 [简体中文](README.zh-CN.md)
 
@@ -154,14 +154,14 @@ for this project; the request queue, the retry policy, the cache and the languag
 from the projects credited below.
 
 [`docs/DESIGN.md`](docs/DESIGN.md) is the source of truth — the DOM invariants are §7.1, the
-placeholder protocol §6, the service interface §8, and image translation §15.
-[`docs/RESEARCH.md`](docs/RESEARCH.md) holds the measurements the design rests on.
+placeholder protocol §6, the service interface §8, and image translation §15 — and the
+measurements the design rests on are recorded beside the decisions they justify.
 
 ## Status
 
 Pre-release, and in active development. Translating, the three modes, restoring, caching, the four
 services, hover alignment, image translation and the settings all work today; the roadmap to a 1.0
-and a web reader is [issue #155](https://github.com/SRjoeee/ArxivTranslate/issues/155).
+and a web reader is [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155).
 
 Out of scope for now: other paper sites, PDFs, Firefox and Safari, and image translation anywhere
 but macOS.

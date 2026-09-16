@@ -8,7 +8,7 @@
 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![Chrome 131+](https://img.shields.io/badge/Chrome-131%2B-4285F4.svg)](#开始阅读)
-[![CI](https://github.com/SRjoeee/ArxivTranslate/actions/workflows/ci.yml/badge.svg)](https://github.com/SRjoeee/ArxivTranslate/actions/workflows/ci.yml)
+[![CI](https://github.com/SRjoeee/ReadarXiv/actions/workflows/ci.yml/badge.svg)](https://github.com/SRjoeee/ReadarXiv/actions/workflows/ci.yml)
 
 [English](README.md)
 
@@ -137,12 +137,12 @@ flowchart LR
 请求队列、重试策略、缓存与语言表移植自下面致谢的项目。
 
 [`docs/DESIGN.md`](docs/DESIGN.md) 是唯一事实来源——DOM 不变量见 §7.1，占位符协议见 §6，服务接口见 §8，
-图片翻译见 §15。[`docs/RESEARCH.md`](docs/RESEARCH.md) 记录着设计所依据的实测数据。
+图片翻译见 §15。设计所依据的实测数据记在各项决定旁边。
 
 ## 状态
 
 尚未发布，仍在活跃开发中。翻译、三种模式、恢复原文、缓存、四种服务、悬停对照、图片翻译与设置页今天都可用；
-通往 1.0 与网页版阅读器的路线图见 [issue #155](https://github.com/SRjoeee/ArxivTranslate/issues/155)。
+通往 1.0 与网页版阅读器的路线图见 [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155)。
 
 暂不考虑：其他论文站点、PDF、Firefox 与 Safari、以及 macOS 以外平台的图片翻译。
 
