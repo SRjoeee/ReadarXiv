@@ -38,6 +38,23 @@ export interface ProtectedBlock {
   root: Element
 }
 
+/**
+ * Why this block can no longer be filled back, or undefined while it can: every slot still sits inside the root it
+ * was serialised from. `slots` are references to the live nodes, and a page that swapped a formula while the
+ * translation was out would otherwise have the copy captured then put back — the translation showing what the page
+ * no longer does, silently (INVENTORY T6; the independent audit's A03). arXiv's own scripts do not touch the body
+ * (RESEARCH §3.3), so today nothing trips this; it is the boundary, checked where the fill-back commits. A retry
+ * serialises the block afresh (`planBatches`), so the failure heals itself. One `contains` per slot — microseconds
+ * on the densest block. A root replaced wholesale keeps its slots and is not seen: the translation would then be
+ * rendered beside a detached element, which shows nothing wrong
+ */
+export function staleSlot(block: ProtectedBlock): string | undefined {
+  for (const [id, node] of block.slots) {
+    if (!block.root.contains(node)) return `slot ${id} <${node.nodeType === 1 ? (node as Element).localName : node.nodeName.toLowerCase()}> is no longer in the block`
+  }
+  return undefined
+}
+
 export const VOID_DENSE_THRESHOLD = 40
 
 

@@ -8,7 +8,8 @@
 // by the rules layer already), so this is a structural guarantee and a fallback for other sites in v2.
 import { FUNCTIONAL_INLINE } from '@/core/rules/latexml'
 import { cloneWithoutIds } from './clone'
-import type { ProtectedBlock } from './serialize'
+import { type ProtectedBlock, staleSlot } from './serialize'
+import { PlaceholderIntegrityError } from './validate'
 import { decodeText } from './text'
 import { tokenize } from './tokens'
 
@@ -75,6 +76,10 @@ export function splitRuns(block: ProtectedBlock): RunLayout {
 }
 
 export function joinRuns(translatedRuns: string[], layout: RunLayout, block: ProtectedBlock, doc: Document): DocumentFragment {
+  // The same gate as rehydrate's (INVENTORY T6): the voids are clones of the live slots, and a slot the page swapped
+  // while the runs were out must not be put back as it was
+  const stale = staleSlot(block)
+  if (stale) throw new PlaceholderIntegrityError('stale', stale)
   if (translatedRuns.length !== layout.runs.length) {
     throw new Error(`runs count mismatch: expected ${layout.runs.length}, got ${translatedRuns.length}`)
   }
