@@ -47,7 +47,7 @@ export interface ProtectedBlock {
  * identity of each slot's node (a replacement of the same shape serialises the same, and is a different node). What
  * the page can do without changing either — split a text node, add a comment, and our own nodes appearing beside a
  * slot, which the serialiser steps over — is not a change. One serialisation per commit, the same cost as the one
- * that made the block. arXiv's own scripts do not touch the body (RESEARCH §3.3), so today nothing trips this: it is
+ * that made the block. arXiv's own scripts do not touch the body (DESIGN §7.2), so today nothing trips this: it is
  * the boundary, and a retry serialises afresh
  */
 export function staleSlot(block: ProtectedBlock): string | undefined {

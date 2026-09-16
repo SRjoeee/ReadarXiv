@@ -1,6 +1,6 @@
 // Ported from reference/read-frog/src/utils/host/translate/api/google.ts@9b44f82 (GPL-3.0), 2026-09-04, modified:
 // the endpoint, the API key constant, the request body shape and the response parsing are taken as is; changed to send
-// many items per request (upstream sends one; the endpoint accepts an array — 150 items in 556 ms, RESEARCH.md §6.6);
+// many items per request (upstream sends one; the endpoint accepts an array — 150 items in 556 ms, DESIGN §8.3);
 // the preserveLineBreaks markers are dropped (we send placeholder-marked text in html format as is) and so is the
 // escapeText dependency (the protector already escapes).
 import { toBcp47 } from '@/config/languages'
@@ -65,7 +65,7 @@ async function translateHtml(items: string[], from: string, to: string, deps: Go
 
 /**
  * The free endpoint of Google Translate's web app. Taken as liable to break any time (DESIGN §8.3): its errors are
- * classified on their own, and a failure falls back to another provider. It keeps placeholder tags, so the tags path (RESEARCH.md §6.6).
+ * classified on their own, and a failure falls back to another provider. It keeps placeholder tags, so the tags path (DESIGN §8.3).
  */
 export function createGoogleWebProvider(deps: GoogleWebDeps = {}): TranslationProvider {
   return {
