@@ -17,11 +17,14 @@ function harness() {
   /** Lookups in flight, in the order they were issued; the test answers them in the order it chooses */
   const lookups: { target: string; answer: ReturnType<typeof deferred<PackState>> }[] = []
   const published: (PackState | null)[] = []
+  /** What our downloads told the other surfaces (INVENTORY S7) */
+  const announced: [string, PackState][] = []
   const lookup = createPackLookup({
     publish: state => published.push(state),
     state: target => { const answer = deferred<PackState>(); lookups.push({ target, answer }); return answer.promise },
+    announce: (target, state) => announced.push([target, state]),
   })
-  return { lookup, lookups, published, answer: (at: number, state: PackState) => lookups[at]?.answer.resolve(state) }
+  return { lookup, lookups, published, announced, answer: (at: number, state: PackState) => lookups[at]?.answer.resolve(state) }
 }
 
 describe('createPackLookup', () => {
@@ -140,4 +143,57 @@ describe('createPackLookup', () => {
     await tick()
     expect(h.published.at(-1)).toBe('available')
   })
+
+  // INVENTORY S7: the popup and the settings page each hold a lookup; a download finished in one is announced to the other
+
+  it('a state another surface announced for the wanted target publishes, and outranks a lookup of ours still in flight', async () => {
+    const h = harness()
+    h.lookup.want('cmn')
+    void h.lookup.check('cmn') // answer held
+    h.lookup.receive('cmn', 'available')
+    expect(h.published).toEqual([null, 'available'])
+    h.answer(0, 'downloadable') // older than what was announced: must not put the Download button back
+    await tick()
+    expect(h.published.at(-1)).toBe('available')
+  })
+
+  it('an announcement for another target, or for one this surface is downloading itself, is ignored', async () => {
+    const h = harness()
+    h.lookup.want('cmn')
+    h.lookup.receive('jpn', 'available')
+    expect(h.published).toEqual([null])
+    const run = deferred<void>()
+    const download = h.lookup.download('cmn', () => run.promise)
+    h.lookup.receive('cmn', 'available')
+    expect(h.published).toEqual([null, 'downloading'])
+    run.resolve()
+    await tick()
+    h.answer(0, 'available')
+    await download
+    expect(h.published.at(-1)).toBe('available')
+  })
+
+  it('a download announces what it found while its target is still the wanted one; a target the reader left behind is not announced', async () => {
+    const h = harness()
+    h.lookup.want('cmn')
+    const run = deferred<void>()
+    const download = h.lookup.download('cmn', () => run.promise)
+    run.resolve()
+    await tick()
+    h.answer(0, 'available')
+    await download
+    expect(h.announced).toEqual([['cmn', 'available']])
+    // The reader chose another language while a second download ran: the other surfaces show that language as well
+    const again = deferred<void>()
+    const second = h.lookup.download('cmn', () => again.promise)
+    h.lookup.want('jpn')
+    again.resolve()
+    await tick()
+    expect(h.lookups.map(l => l.target)).toEqual(['cmn', 'jpn'])
+    h.answer(1, 'downloadable')
+    await second
+    expect(h.announced).toEqual([['cmn', 'available']])
+    expect(h.published.at(-1)).toBe('downloadable')
+  })
+
 })

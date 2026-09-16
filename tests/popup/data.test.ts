@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { browser } from 'wxt/browser'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { ProviderStatus } from '@/providers/transport'
 import type { AxtMessage, PageStatus } from '@/shared/messages'
@@ -130,4 +131,18 @@ describe('usePopupData', () => {
     expect(reload).not.toHaveBeenCalled()
     await hook.unmount()
   })
+
+  it('a pack downloaded on the settings page shows installed here without a click; another target is ignored (INVENTORY S7)', async () => {
+    const listeners = vi.mocked(browser.runtime.onMessage.addListener).mock.calls.length
+    const hook = await mountHook(usePopupData)
+    await hook.until(() => hook.current().input.pack !== null)
+    expect(hook.current().input.pack).toBe('unsupported') // no Translator API in the test runtime
+    const onMessage = vi.mocked(browser.runtime.onMessage.addListener).mock.calls[listeners]?.[0] as (message: unknown) => void
+    await hook.run(() => onMessage({ type: 'axt:pack-state', target: 'jpn', state: 'available' }))
+    expect(hook.current().input.pack).toBe('unsupported')
+    await hook.run(() => onMessage({ type: 'axt:pack-state', target: DEFAULT_CONFIG.targetLanguage, state: 'available' }))
+    expect(hook.current().input.pack).toBe('available')
+    await hook.unmount()
+  })
+
 })
