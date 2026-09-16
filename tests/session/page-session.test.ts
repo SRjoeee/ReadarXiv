@@ -335,6 +335,23 @@ describe('page session', () => {
     expect(h.session.retryFailed()).toBe(0)
   })
 
+  it('a fatal error reaches the idle line as its kind only: the message is the endpoint\'s, and the trace feeds the diagnostics log (Codex on #214)', async () => {
+    const h = harness()
+    live = h.session
+    h.deps.backend.translate = async () => ({ ok: false, error: { kind: 'auth', message: 'Unauthorized: key=ZZZ-my-secret; request was: the Fourier transform of f', isolatable: false } })
+    await h.session.start()
+    await settle()
+    await h.session.translate(h.blocks.slice(1))
+    await settle()
+    const idle = h.trace().filter(line => line.startsWith('session idle:'))
+    expect(idle.length).toBeGreaterThanOrEqual(1)
+    expect(idle[idle.length - 1]).toMatch(/, fatal: auth$/)
+    for (const line of h.trace()) {
+      expect(line).not.toContain('my-secret')
+      expect(line).not.toContain('Fourier')
+    }
+  })
+
   it('restoring the page while an automatic restart awaits the backend refuses that restart and sends nothing more', async () => {
     // the restart's own status read (the second one) is held so the restore can land in the middle of it (Codex on #157)
     const h = harness({ holdStatusAt: 2 })

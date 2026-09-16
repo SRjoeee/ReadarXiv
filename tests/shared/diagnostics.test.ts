@@ -20,12 +20,11 @@ describe('redact', () => {
 })
 
 describe('failureLine', () => {
-  it('keeps the message for the kinds an endpoint or the transport words, withholds it for the kinds that may quote the paper', () => {
-    expect(failureLine('auth', 'Unauthorized: invalid key')).toBe('auth: Unauthorized: invalid key')
-    expect(failureLine('network', 'fetch failed')).toBe('network: fetch failed')
-    expect(failureLine('invalid-response', 'No object generated; raw model output: the Fourier transform of f is')).toBe('invalid-response (message of 68 chars withheld: may quote the response)')
-    expect(failureLine('unknown', '{"error":"…the request body echoed…"}')).toMatch(/^unknown \(message of \d+ chars withheld/)
-    expect(failureLine('bad-request', 'x')).toMatch(/^bad-request \(message of 1 chars withheld/)
+  it('never carries the message, whatever the kind: the kind, the HTTP status when known, the length (Codex on #214)', () => {
+    expect(failureLine('auth', 'Unauthorized: key=ZZZ-my-secret echoed, paper: the Fourier transform of f', 401)).toMatch(/^auth \(HTTP 401\) — message withheld \(\d+ chars\)$/)
+    expect(failureLine('network', 'fetch failed')).toBe('network — message withheld (12 chars)')
+    expect(failureLine('invalid-response', 'No object generated; raw model output: the Fourier transform of f is')).toBe('invalid-response — message withheld (68 chars)')
+    for (const kind of ['unknown', 'bad-request', 'rate-limit', 'timeout', 'aborted', 'no-key']) expect(failureLine(kind, 'anything')).not.toContain('anything')
   })
 })
 

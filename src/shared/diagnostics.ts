@@ -24,15 +24,14 @@ export interface DiagnosticsExport {
 export const LINE_MAX = 500
 
 /**
- * The kinds whose message may quote the model's output or echo the request — paper text, which the log never holds
- * (Devin on #214): `invalid-response` carries a snippet of the raw output for diagnosis, `unknown` and `bad-request`
- * are an endpoint's body as it came. For them the log keeps the kind and the message's length only
+ * A failure as the log may hold it: the kind, the HTTP status when there was one, and the message's length — never
+ * the message. Any message an endpoint had a hand in can carry the paper's words or a key in a shape no regex knows:
+ * a 401 body echoing the request, a 500 page, a model's raw output quoted by `invalid-response` (Codex on #214,
+ * reproduced through the real SDK for an auth error; Devin on the response-quoting kinds). The console keeps the
+ * full text for whoever is looking at it; the log is what a reader hands to strangers
  */
-const WITHHELD = new Set(['invalid-response', 'unknown', 'bad-request'])
-
-/** A failure as the log may hold it: the kind always, the message only when it cannot be the paper's words */
-export function failureLine(kind: string, message: string): string {
-  return WITHHELD.has(kind) ? `${kind} (message of ${message.length} chars withheld: may quote the response)` : `${kind}: ${message}`
+export function failureLine(kind: string, message: string, status?: number): string {
+  return `${kind}${status !== undefined ? ` (HTTP ${status})` : ''} — message withheld (${message.length} chars)`
 }
 
 /** What comes back from storage is not trusted either: the shape checked, every line redacted and capped again (Devin on #214) */

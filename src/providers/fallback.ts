@@ -8,6 +8,7 @@
 import type { TranslateCall, TranslateMessageResponse, TranslateService } from './translate-service'
 import { isPermanentErrorKind, type ProviderErrorKind, type TranslatedSegment, type TranslationProvider } from './types'
 import { failureLine } from '@/shared/diagnostics'
+import { getRequestErrorMeta } from './request/retry-policy'
 
 export interface FallbackStep {
   provider: TranslationProvider
@@ -102,7 +103,7 @@ export function createFallbackService(
     })
     lastDemoted = info
     console.warn(`[axt] ${step.provider.id} demoted (${error.kind}): ${error.message}`)
-    opts.warn?.(`[axt] ${step.provider.id} demoted: ${failureLine(error.kind, error.message)}`)
+    opts.warn?.(`[axt] ${step.provider.id} demoted: ${failureLine(error.kind, error.message, getRequestErrorMeta(error).statusCode)}`)
   }
 
   const translate = async (call: TranslateCall): Promise<TranslateMessageResponse> => {

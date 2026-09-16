@@ -19,7 +19,7 @@ import { getRandomUUID } from '@/shared/uuid'
 import { BatchCountMismatchError, BatchQueue, type BatchExecutionMeta, type BatchOptions } from './request/batch-queue'
 import { type CancelledScopeRegistry, isTranslationCancelledError, TranslationCancelledError } from './request/cancellation'
 import { REQUEST_TIMEOUT_ERROR_NAME, RequestQueue, type QueueOptions } from './request/request-queue'
-import { attachRequestErrorMeta } from './request/retry-policy'
+import { attachRequestErrorMeta , getRequestErrorMeta } from './request/retry-policy'
 import { ProviderError, isPermanentErrorKind, type ProviderErrorKind, type TranslatedSegment, type TranslateRequest, type TranslationProvider, type TranslateSegment } from './types'
 import { failureLine } from '@/shared/diagnostics'
 
@@ -414,7 +414,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
         const when = context.isFallback ? 'per-item fallback' : `before retry ${context.retryCount}`
         console.warn(`[axt] batch failed (${when}): ${error.message}`)
         // The log's copy never quotes a response — a model's raw output is the paper's words (Devin on #214)
-        deps.warn?.(`[axt] batch failed (${when}): ${failureLine(error instanceof ProviderError ? error.kind : 'unknown', error.message)}`)
+        deps.warn?.(`[axt] batch failed (${when}): ${failureLine(error instanceof ProviderError ? error.kind : 'unknown', error.message, getRequestErrorMeta(error).statusCode)}`)
       },
     })
     const pair: ProviderQueues = { requestQueue, batchQueue, fatal }
