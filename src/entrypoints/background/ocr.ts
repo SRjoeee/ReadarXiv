@@ -10,6 +10,8 @@ import { type OcrBackend, OcrBackendError } from './ocr-backend'
 export interface OcrServiceDeps {
   backend: OcrBackend
   cache: CachePort
+  /** Where a warning goes besides the console: the diagnostics log (issue #156) */
+  warn?: (line: string) => void
   /**
    * Scopes the session router has ended for certain (ADR-0005), the same registry the translate services read.
    * Checked at entry and again after the cache read: a drop can land in that window, when the request is not yet in
@@ -58,7 +60,7 @@ export function createOcrService(deps: OcrServiceDeps): OcrService {
       if (status.state !== 'ready') return { ok: false, error: { kind: 'network', message: unavailable(status) } }
       const key = await ocrCacheKey(call.imageHash, status.version)
       // IndexedDB may hang rather than reject: over budget counts as a miss, or the helper's timeout could never start and the message channel would stay open (Codex on #87)
-      const [hit] = await readWithBudget(deps.cache, [key], deps.cacheReadBudgetMs ?? CACHE_READ_BUDGET_MS)
+      const [hit] = await readWithBudget(deps.cache, [key], deps.cacheReadBudgetMs ?? CACHE_READ_BUDGET_MS, deps.warn)
       // Dropped while the status or the cache was being read: a hit is not returned either, and nothing goes to
       // the helper (Codex on #87)
       if (call.scope && deps.cancelled.has(call.scope)) return aborted()
@@ -70,7 +72,7 @@ export function createOcrService(deps: OcrServiceDeps): OcrService {
         // The port broke during the cache read and the reconnected helper is another version: the result is cached under
         // the version of the connection it came on, not the old key. Writing the cache is an optimisation and is not awaited: with IndexedDB hung the recognition result goes back all the same (Codex on #87)
         const storeKey = version === status.version ? key : await ocrCacheKey(call.imageHash, version)
-        deps.cache.putMany([{ key: storeKey, translation: JSON.stringify(result), paper: call.paper }]).catch((e: unknown) => console.warn('[axt] OCR result cache write failed', e))
+        deps.cache.putMany([{ key: storeKey, translation: JSON.stringify(result), paper: call.paper }]).catch((e: unknown) => { console.warn('[axt] OCR result cache write failed', e); deps.warn?.(`[axt] OCR result cache write failed: ${e instanceof Error ? e.message : String(e)}`) })
         return { ok: true, result, cached: false }
       } catch (e) {
         if (e instanceof OcrBackendError) return { ok: false, error: { kind: e.kind, message: e.message } }

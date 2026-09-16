@@ -51,20 +51,24 @@ export function createDiagnostics(deps: DiagnosticsDeps): Diagnostics {
   const restored = deps.load()
     .then(stored => { entries = Array.isArray(stored) ? stored : [] }, () => { entries = [] })
     .then(() => {
-      entries = entries.concat(early ?? [])
+      // What arrived while the load was out goes after what was loaded, and is saved now: a flush before the merge
+      // would have written an empty buffer over the previous worker's lines (Devin on #214)
+      const pending = early ?? []
+      entries = entries.concat(pending)
       early = null
       trim()
+      if (pending.length > 0) later()
     })
 
   return {
     record(src, line) {
       const entry: DiagnosticEntry = { t: now(), src, line: redact(line) }
-      if (early) early.push(entry)
+      if (early) early.push(entry) // saved by the restore, once the buffer is whole
       else {
         entries.push(entry)
         trim()
+        later()
       }
-      later()
     },
     entries: () => entries.slice(),
     restored,

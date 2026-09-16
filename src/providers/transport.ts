@@ -148,7 +148,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     const own = serviceOf(config, id)
     if (!own) return undefined
     const engine = createOpenAICompatProvider(own, { prompts: config.prompts })
-    return { provider: engine, service: createTranslateService({ getProvider: async () => engine, getModel: async () => own.model, cancelled: deps.cancelled, retired: isRetired }) }
+    return { provider: engine, service: createTranslateService({ getProvider: async () => engine, getModel: async () => own.model, cancelled: deps.cancelled, retired: isRetired, ...(deps.warn ? { warn: deps.warn } : {}) }) }
   }
 
   /**

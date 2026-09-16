@@ -31,6 +31,26 @@ describe('createDiagnostics', () => {
     expect(d.entries().map(e => e.src)).toEqual(['content', 'background', 'content'])
   })
 
+  it('nothing is saved before the restore, and what arrived meanwhile is saved once the buffer is whole (Devin on #214)', async () => {
+    let release!: (v: DiagnosticEntry[]) => void
+    const saves: DiagnosticEntry[][] = []
+    const timers: (() => void)[] = []
+    const d = createDiagnostics({
+      load: () => new Promise(resolve => { release = resolve }),
+      save: async entries => { saves.push(entries) },
+      schedule: run => { timers.push(run); return timers.length },
+      cancel: id => { timers[id - 1] = () => undefined },
+    })
+    d.record('background', 'new')
+    for (const run of timers.splice(0)) run()
+    expect(saves).toEqual([]) // a flush here would have written [] over the previous worker's lines
+    release([{ t: 1, src: 'content', line: 'old' }])
+    await d.restored
+    for (const run of timers.splice(0)) run()
+    expect(saves).toHaveLength(1)
+    expect(saves[0]!.map(e => e.line)).toEqual(['old', 'new'])
+  })
+
   it('a burst is saved once, after the last line; a key in a line is blanked before it is stored', async () => {
     const { d, saves, fire } = harness(undefined, 10)
     await d.restored

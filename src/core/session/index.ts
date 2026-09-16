@@ -315,10 +315,14 @@ export function createPageSession(deps: SessionDeps): PageSession {
         traceIdle(p)
       },
     })
-    run.ready.catch(e => console.error('[axt] translation crashed', e))
+    run.ready.catch(e => {
+      console.error('[axt] translation crashed', e)
+      trace(`translation crashed: ${e instanceof Error ? e.message : String(e)}`)
+    })
     // The tab title is translated too (§10): the same service, the same cache; the title is plain text, escaped and decoded by the placeholder protocol
     title = translateTitle(doc, {
       isCurrent: alive,
+      warn: trace,
       translate: async text => {
         const res = await backend.translate({
           request: { segments: [{ id: 'document.title', text: escapeText(text, wireFormatOf(status.renderPath)) }], source: 'en', target, context },

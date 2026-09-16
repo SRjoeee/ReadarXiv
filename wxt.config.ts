@@ -5,7 +5,9 @@ import { defineConfig } from 'wxt'
 /**
  * The ref the popup's helper install command fetches from (issue #158): the commit this build is made from, so the
  * reader gets the helper this extension was built against, and `main` for a build that cannot promise that — a dirty
- * tree, a commit not on the remote yet, no git at all. `raw.githubusercontent.com` and `codeload` serve any commit
+ * tree, a commit not on the remote yet, no git at all. `raw.githubusercontent.com` and `codeload` serve any commit.
+ * "On the remote" is what the local remote-tracking refs say at build time — true for a fresh CI checkout, which is
+ * where a build that ships comes from; a stale local clone could name a commit the remote has since lost (Devin on #214)
  */
 function buildRef(): string {
   try {
