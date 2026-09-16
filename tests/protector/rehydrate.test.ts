@@ -52,7 +52,7 @@ describe('rehydrate', () => {
     try { rehydrate(b.text, b, document) } catch (e) { caught = e }
     expect(caught).toBeInstanceOf(PlaceholderIntegrityError)
     expect((caught as PlaceholderIntegrityError).reason).toBe('stale')
-    expect((caught as PlaceholderIntegrityError).detail).toBe('slot 1 <math> is no longer in the block')
+    expect((caught as PlaceholderIntegrityError).detail).toBe('slot 1 <math> is not the node it was')
     // A slot moved out of the block, still in the document, is stale as well; the block serialised afresh is not
     const again = serialize(p)
     p.parentElement!.append(p.querySelectorAll('math')[1]!)
@@ -61,22 +61,32 @@ describe('rehydrate', () => {
     expect(htmlOf(rehydrate(fresh.text, fresh, document))).toContain('<mi>y</mi>')
   })
 
-  it('a slot moved within the block is stale (`A x B` → `A B x`: the wire order no longer describes the page); one of our own nodes appearing beside it is not (Devin on #212)', () => {
+  it('stale is “serialises differently, or a slot is another node”: a move alone or grouped and edited text are stale; a split text node, a comment, our own node beside a slot are not (Devin on #212, twice)', () => {
+    const stale = (block: ReturnType<typeof serialize>) => { try { rehydrate(block.text, block, document) } catch (e) { return (e as PlaceholderIntegrityError).detail } return undefined }
+    // What the page can do without changing what was sent: our ring beside a slot, a comment, a text node split in two
     const p = el('<p class="ltx_p">A <math class="ltx_Math"><mi>x</mi></math> B.</p>')
     const b = serialize(p)
     const x = p.querySelector('math')!
-    // A ring or a localised footnote's translation may land beside a slot while the request is out: not a move
     const ours = el('<span class="axt-t axt-pending"></span>')
     x.before(ours)
-    expect(htmlOf(rehydrate(b.text, b, document))).toContain('<mi>x</mi>')
+    p.insertBefore(document.createComment('note'), x)
+    ;(p.firstChild as Text).splitText(1)
+    expect(stale(b)).toBeUndefined()
     ours.remove()
-    // The page moved the formula after the text that followed it
+    // The formula moved after the text that followed it: the wire order no longer describes the page
+    const one = serialize(p)
     p.append(x)
-    let caught: unknown
-    try { rehydrate(b.text, b, document) } catch (e) { caught = e }
-    expect(caught).toBeInstanceOf(PlaceholderIntegrityError)
-    expect((caught as PlaceholderIntegrityError).reason).toBe('stale')
-    expect((caught as PlaceholderIntegrityError).detail).toBe('slot 1 <math> moved within the block')
+    expect(stale(one)).toBe("the block's text changed")
+    // Two slots moved together with their text (`A x B y` → `B y A x`): each keeps its neighbour, the order still changed
+    const grouped = el('<p class="ltx_p">A <math class="ltx_Math"><mi>x</mi></math> B <math class="ltx_Math"><mi>y</mi></math></p>')
+    const g = serialize(grouped)
+    grouped.append(grouped.firstChild!, grouped.querySelector('math')!)
+    expect(stale(g)).toBe("the block's text changed")
+    // The words changed under the translation
+    const edited = el('<p class="ltx_p">A <math class="ltx_Math"><mi>x</mi></math> B.</p>')
+    const e = serialize(edited)
+    ;(edited.firstChild as Text).data = 'Not A '
+    expect(stale(e)).toBe("the block's text changed")
   })
 
   it('a validation failure throws PlaceholderIntegrityError', () => {

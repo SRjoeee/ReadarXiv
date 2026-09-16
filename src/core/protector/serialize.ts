@@ -18,13 +18,6 @@ export interface ProtectedBlock {
   text: string
   /** id → original node: the whole node for a void, the element itself for a paired one (shallow-cloned when filled back) */
   slots: Map<number, Node>
-  /**
-   * id → where the node stood when serialised: its parent, and the sibling before it that is not ours. `staleSlot`
-   * compares against it — a slot still inside the root but moved (Devin on #212: `A x B` → `A B x`) has the wire text
-   * describe a block the page no longer shows, as much as a replaced one does. Our own nodes are skipped on both
-   * sides, since a ring or a localised footnote's translation may appear beside a slot while the request is out
-   */
-  places: Map<number, SlotPlace>
   paired: Set<number>
   /** A block beyond VOID_DENSE_THRESHOLD counts as formula-dense; the pipeline batches it on its own */
   voidCount: number
@@ -46,35 +39,28 @@ export interface ProtectedBlock {
 }
 
 /**
- * Why this block can no longer be filled back, or undefined while it can: every slot still sits inside the root it
- * was serialised from. `slots` are references to the live nodes, and a page that swapped a formula while the
- * translation was out would otherwise have the copy captured then put back — the translation showing what the page
- * no longer does, silently (INVENTORY T6; the independent audit's A03). arXiv's own scripts do not touch the body
- * (RESEARCH §3.3), so today nothing trips this; it is the boundary, checked where the fill-back commits. A retry
- * serialises the block afresh (`planBatches`), so the failure heals itself. One `contains` per slot — microseconds
- * on the densest block. A root replaced wholesale keeps its slots and is not seen: the translation would then be
- * rendered beside a detached element, which shows nothing wrong
+ * Why this block can no longer be filled back, or undefined while it can. `slots` are references to the live nodes,
+ * and a page that swapped a formula while the translation was out would otherwise have the copy captured then put
+ * back — the translation showing what the page no longer does, silently (INVENTORY T6; the independent audit's A03).
+ * The block is serialised again and compared with what was sent: the wire text (the words, and the order of every
+ * slot among them — a formula moved past its neighbours, alone or with them, changes it; Devin on #212) and the
+ * identity of each slot's node (a replacement of the same shape serialises the same, and is a different node). What
+ * the page can do without changing either — split a text node, add a comment, and our own nodes appearing beside a
+ * slot, which the serialiser steps over — is not a change. One serialisation per commit, the same cost as the one
+ * that made the block. arXiv's own scripts do not touch the body (RESEARCH §3.3), so today nothing trips this: it is
+ * the boundary, and a retry serialises afresh
  */
 export function staleSlot(block: ProtectedBlock): string | undefined {
-  for (const [id, node] of block.slots) {
-    const name = `<${node.nodeType === ELEMENT_NODE ? (node as Element).localName : node.nodeName.toLowerCase()}>`
-    if (!block.root.contains(node)) return `slot ${id} ${name} is no longer in the block`
-    const place = block.places.get(id)
-    if (place && (node.parentNode !== place.parent || realBefore(node) !== place.before)) return `slot ${id} ${name} moved within the block`
+  const now = serialize(block.root, block.format)
+  if (now.text !== block.text) return "the block's text changed"
+  const then = Array.from(block.slots)
+  const fresh = Array.from(now.slots.values())
+  if (fresh.length !== then.length) return `the block has ${fresh.length} slots, had ${then.length}`
+  for (let i = 0; i < then.length; i++) {
+    const [id, node] = then[i]!
+    if (node !== fresh[i]) return `slot ${id} <${node.nodeType === ELEMENT_NODE ? (node as Element).localName : node.nodeName.toLowerCase()}> is not the node it was`
   }
   return undefined
-}
-
-export interface SlotPlace {
-  parent: Node | null
-  before: Node | null
-}
-
-/** The sibling before `node` that the page put there — ours (a ring, a translation, a mirror) are stepped over */
-function realBefore(node: Node): Node | null {
-  let prev = node.previousSibling
-  while (prev && prev.nodeType === ELEMENT_NODE && isInjected(prev as Element)) prev = prev.previousSibling
-  return prev
 }
 
 export const VOID_DENSE_THRESHOLD = 40
@@ -166,7 +152,6 @@ function makeTracker(format: WireFormat, parts: string[], spans: WireSpan[]) {
 
 export function serialize(root: Element, format: WireFormat = 'tags'): ProtectedBlock {
   const slots = new Map<number, Node>()
-  const places = new Map<number, SlotPlace>()
   const paired = new Set<number>()
   const parts: string[] = []
   const spans: WireSpan[] = []
@@ -195,7 +180,6 @@ export function serialize(root: Element, format: WireFormat = 'tags'): Protected
         }
         const id = next++
         slots.set(id, el)
-        places.set(id, { parent: el.parentNode, before: realBefore(el) })
         if (isVoid || format === 'markers') {
           voidCount++
           tracker.raw(writeVoid(id, format), el, 'void')
@@ -211,5 +195,5 @@ export function serialize(root: Element, format: WireFormat = 'tags'): Protected
   }
   walk(root)
   // The tracker collapses whitespace as it writes, so the joined parts are already collapsed.
-  return { format, text: parts.join(''), slots, places, paired, voidCount, offsets: spans, root }
+  return { format, text: parts.join(''), slots, paired, voidCount, offsets: spans, root }
 }

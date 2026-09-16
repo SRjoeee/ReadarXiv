@@ -166,7 +166,7 @@ describe('startTranslation', () => {
     expect(run.progress()).toMatchObject({ done: 0, failed: 1 })
     // No translation carrying the stale copy; the widget names the cause, and `parseFatal` reads it as unknown, not as the engine's fault
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]:not(.${ERROR_CLASS})`)).toBeNull()
-    expect(doc.querySelector(`.${ERROR_CLASS}`)?.getAttribute('data-axt-reason')).toBe('stale: slot 1 <math> is no longer in the block')
+    expect(doc.querySelector(`.${ERROR_CLASS}`)?.getAttribute('data-axt-reason')).toBe('stale: slot 1 <math> is not the node it was')
     // Resending the same wire text would only fail the same way: one request carried p1
     expect(requests.filter(r => r.request.segments.some(s => s.id === 'p1'))).toHaveLength(1)
     // The Retry path serialises the block afresh: the translation shows what the page shows now
