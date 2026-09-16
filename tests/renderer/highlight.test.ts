@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { rehydrate, serialize } from '@/core/protector'
 import { clearSentenceHighlights, startSentenceHighlight } from '@/core/renderer/highlight'
 import { restore, setMode } from '@/core/renderer/page'
-import { registerSentences } from '@/core/renderer/sentences'
+import { registerSentences } from '@/core/renderer/sentence-map'
 import { PEEK_DWELL_MS } from '@/core/renderer/peek'
 import { splitSentences } from '@/core/sentences'
 

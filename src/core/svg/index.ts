@@ -1,3 +1,3 @@
 export * from './foreign'
 export * from './glyphs'
-export * from './runs'
+export * from './code'
