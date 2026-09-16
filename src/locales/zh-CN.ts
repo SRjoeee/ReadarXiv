@@ -297,6 +297,10 @@ const O = {
     clear: '清空',
     clearConfirm: '确认清空',
     cleared: '已清空',
+    diagnostics: '诊断日志',
+    diagnosticsHint: '最近几百条运行记录：请求失败、服务切换、页面事件。不含 API 密钥与论文正文，可随问题反馈一并附上',
+    diagnosticsExport: '导出',
+    diagnosticsError: '没能导出',
   },
 } as const
 

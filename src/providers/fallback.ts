@@ -68,7 +68,7 @@ interface Demotion {
 
 export function createFallbackService(
   steps: readonly FallbackStep[],
-  opts: { cooldownMs?: number; now?: () => number } = {},
+  opts: { cooldownMs?: number; now?: () => number; warn?: (line: string) => void } = {},
 ): FallbackService {
   if (steps.length === 0) throw new Error('a fallback chain needs at least one engine')
   const cooldownMs = opts.cooldownMs ?? DEFAULT_COOLDOWN_MS
@@ -100,7 +100,9 @@ export function createFallbackService(
       ...(isPermanentErrorKind(error.kind) ? {} : { until: now() + cooldownMs }),
     })
     lastDemoted = info
-    console.warn(`[axt] ${step.provider.id} demoted (${error.kind}): ${error.message}`)
+    const line = `[axt] ${step.provider.id} demoted (${error.kind}): ${error.message}`
+    console.warn(line)
+    opts.warn?.(line)
   }
 
   const translate = async (call: TranslateCall): Promise<TranslateMessageResponse> => {

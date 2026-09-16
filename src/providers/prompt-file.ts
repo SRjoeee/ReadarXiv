@@ -2,6 +2,7 @@
 // rewritten 2026-09-05: the same file shape (an array of { name, systemPrompt, prompt } without ids, so the two can
 // import each other's files), validated with zod, downloaded without file-saver (<a download> works in an extension page as it is).
 import { z } from 'zod'
+import { downloadTextFile } from '@/shared/download'
 import type { PromptTemplate } from './prompt-library'
 
 export const PROMPT_FILE_NAME = 'arxiv-translate_prompts.json'
@@ -50,13 +51,5 @@ export function serializePrompts(patterns: PromptTemplate[]): string {
 }
 
 export function downloadPromptFile(patterns: PromptTemplate[], doc: Document = document): void {
-  const blob = new Blob([serializePrompts(patterns)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = doc.createElement('a')
-  a.href = url
-  a.download = PROMPT_FILE_NAME
-  doc.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+  downloadTextFile(PROMPT_FILE_NAME, serializePrompts(patterns), 'application/json', doc)
 }

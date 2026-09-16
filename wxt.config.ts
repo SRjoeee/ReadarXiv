@@ -1,12 +1,30 @@
+import { execSync } from 'node:child_process'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'wxt'
+
+/**
+ * The ref the popup's helper install command fetches from (issue #158): the commit this build is made from, so the
+ * reader gets the helper this extension was built against, and `main` for a build that cannot promise that — a dirty
+ * tree, a commit not on the remote yet, no git at all. `raw.githubusercontent.com` and `codeload` serve any commit
+ */
+function buildRef(): string {
+  try {
+    const run = (cmd: string) => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    if (run('git status --porcelain') !== '') return 'main'
+    const head = run('git rev-parse HEAD')
+    if (!/^[0-9a-f]{40}$/.test(head) || run(`git branch -r --contains ${head}`) === '') return 'main'
+    return head
+  } catch {
+    return 'main'
+  }
+}
 
 // The WXT project configuration.
 export default defineConfig({
   srcDir: 'src',
   modules: ['@wxt-dev/module-react'],
   // In extension pages <link rel="modulepreload" crossorigin> triggers Chrome's "cross-world extension resource mismatch" warning (harmless but noisy); preloading is off
-  vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss()] }),
+  vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss()], define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()) } }),
   // The gallery is for `wxt` (serve) only: a release must not ship a debug page anyone can open
   hooks: {
     'entrypoints:found': (wxt, infos) => {

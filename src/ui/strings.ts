@@ -15,6 +15,7 @@ import type { FallbackReason } from '@/config/storage'
 import { FALLBACK_LOCALE, LOCALES, type Locale, type LocaleCode } from '@/locales'
 import type { ProviderErrorKind } from '@/providers/types'
 import { setCoreStrings } from '@/core/strings'
+import { BUILD_REF } from '@/shared/build'
 
 export { PREVIEW_SOURCE, PREVIEW_TARGET } from '@/locales/preview'
 
@@ -148,14 +149,14 @@ export function serviceName(id: string, services: readonly { id: string; name: s
 }
 
 /**
- * The helper's one-line install for this extension (helper/install-remote.sh, documented in
- * helper/README.md). The ref names the branch the script and the sources are fetched from; it is
- * `main` once this work is there, and a branch name while a change to the helper is under review
+ * The helper's one-line install for this extension (helper/install-remote.sh, documented in helper/README.md). The
+ * ref names where the script and the sources are fetched from: the commit this build was made from (issue #158 —
+ * `main` moves, and a helper newer than the extension fails the handshake with no way back), `main` for a build that
+ * cannot promise a pushed commit (shared/build.ts)
  */
-const HELPER_REF = 'main'
-export const HELPER_GUIDE_URL = `https://github.com/SRjoeee/ReadarXiv/blob/${HELPER_REF}/helper/README.md`
+export const HELPER_GUIDE_URL = `https://github.com/SRjoeee/ReadarXiv/blob/${BUILD_REF}/helper/README.md`
 export function helperInstallCommand(extensionId: string): string {
-  return `curl -fsSL https://raw.githubusercontent.com/SRjoeee/ReadarXiv/${HELPER_REF}/helper/install-remote.sh | bash -s -- ${extensionId} ${HELPER_REF}`
+  return `curl -fsSL https://raw.githubusercontent.com/SRjoeee/ReadarXiv/${BUILD_REF}/helper/install-remote.sh | bash -s -- ${extensionId} ${BUILD_REF}`
 }
 
 installCoreStrings()
