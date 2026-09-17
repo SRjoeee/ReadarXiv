@@ -21,6 +21,7 @@ import { ERROR_CLASS, FOR_ATTR, MIRROR_CLASS, PENDING_CLASS, SPLIT_ATTR, SPLIT_C
 import { REASON_ATTR, failureWidget } from './failed'
 import { markAnchor } from './image'
 import { dropMirror } from './mirror'
+import { markTranslatedCopies } from './notes'
 import { markTail } from './side-layout'
 import { mirrorSentences, sentenceSignatureOf } from './sentence-map'
 
@@ -241,8 +242,10 @@ export function splitFigures(root: Document | Element, options: SplitOptions = {
       if (original.nextElementSibling?.classList.contains(T_CLASS)) original.remove()
     }
     stripIds(clone)
-    // The anchor marks went with the other data-axt-*; the copy's overlays anchor to the copy's images (§15.2)
+    // The marks went with the other data-axt-*: the copy's overlays anchor to the copy's images again (§15.2), and a
+    // footnote copy that kept its translation says so again, or only mode would show its original too (Devin on #221)
     for (const overlay of Array.from(clone.querySelectorAll(`.${IMG_CLASS}`))) markAnchor(overlay)
+    markTranslatedCopies(clone)
     const doc = fig.ownerDocument
     for (const { dead, blockId, reason } of failed) {
       const retry = options.retry
