@@ -1,9 +1,9 @@
-// The cache key (DESIGN §9): sha256(providerId | model | PROMPT_VERSION | promptKey | context | RULES_VERSION | target | renderPath | normalizedText).
+// The cache key (DESIGN §9): sha256(CACHE_KEY_VERSION | providerId | model | PROMPT_VERSION | promptKey | context | RULES_VERSION | target | renderPath | normalizedText | cuts).
 // The prompt and the context enter the payload as **structured source text**, not squeezed into a 32-bit hash first:
 // a DJB2 collision cannot be told apart by the outer SHA-256 (Codex on #28 gave the instance: the titles
 // 19k04n01vcr73f and 1efm0uaep90s9 share a DJB2). After FluentRead: identity is a structured, deterministic
 // serialisation (a JSON array), never user text joined with separators, so keys cannot collide.
-// ./store is not imported here: the content side computes keys but must not bundle Dexie (DESIGN §8.0).
+// ./store is not imported here: the content side takes `RenderPath` and `wireFormatOf` from this file and must not bundle Dexie (DESIGN §8.0).
 import { RULES_VERSION } from '@/core/rules/latexml'
 import { PROMPT_VERSION } from '@/providers/prompt'
 import type { WireFormat } from '@/core/protector/tokens'
@@ -106,7 +106,7 @@ function contextPayload(context: CacheContext | undefined): unknown[] {
 }
 
 /** Bumped when the OCR result's stored shape or the line-filtering premises change */
-export const OCR_KEY_VERSION = 1
+const OCR_KEY_VERSION = 1
 
 /**
  * The OCR result's cache key (DESIGN §15.2): recognition is deterministic and varies with the image bytes and the

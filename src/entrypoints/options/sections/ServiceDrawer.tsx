@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import { getConfig } from '@/config/storage'
 import type { Config } from '@/config/schema'
-import { type Service, defaultServiceName, newServiceId, serviceSchema } from '@/config/services'
+import { type Service, defaultServiceName, isLoopback, newServiceId, serviceSchema } from '@/config/services'
 import { wireFormatOfProvider } from '@/providers/wire-formats'
 import { sendMessage } from '@/shared/messages'
 import { Button } from '@/ui/Button'
@@ -21,14 +21,6 @@ const SAMPLE_MARKERS = 'Let @a# be a connected graph; see @b#.'
 
 const BLANK: Omit<Service, 'id'> = { kind: 'openai-compat', name: '', baseURL: 'https://openrouter.ai/api/v1', apiKey: '', model: '', thinking: 'disabled' }
 
-const isLoopback = (baseURL: string): boolean => {
-  try {
-    const host = new URL(baseURL).hostname
-    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
-  } catch {
-    return false
-  }
-}
 
 export function ServiceDrawer({ service, patch, onClose }: {
   /** null = a new one */

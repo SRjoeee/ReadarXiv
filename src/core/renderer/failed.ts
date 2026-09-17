@@ -1,8 +1,7 @@
 // The failure widget (DESIGN §7.6): a “retry” button beside the failed block and an exclamation mark carrying the reason, in a
 // Shadow DOM out of the site's styles. The counterpart of Read Frog's components/translation/error/* (React + jotai
 // + @tabler/icons + base-ui, one React root per failed block); those dependencies and a root per block are a burden
-// (it took the leak of its own #1831), so a few dozen lines of plain DOM make the same two controls (the trade-off
-// of §12). In keeping with §7.1: it is only the original block's next sibling, and restore removing the host is all
+// (it took the leak of its own #1831), so a few dozen lines of plain DOM make the same two controls. In keeping with §7.1: it is only the original block's next sibling, and restore removing the host is all
 // the clean-up there is.
 import type { Block } from '@/core/extractor'
 import { T_CLASS } from '@/core/marks'
@@ -22,21 +21,6 @@ button { font: inherit; padding: 0 6px; border: 1px solid var(--axt-failed-color
 button:disabled { opacity: 0.5; cursor: default; }
 .mark { color: var(--axt-failed-color, rgba(220, 38, 38, 0.9)); font-weight: 700; cursor: help; }
 `
-
-/** Remove the failure widget beside a block (when a retry starts); returns whether one was removed */
-export function clearFailed(block: Block): boolean {
-  const parent = block.el.parentElement
-  if (!parent) return false
-  let removed = false
-  for (const sibling of Array.from(parent.children)) {
-    if (sibling.classList.contains(ERROR_CLASS) && sibling.getAttribute(FOR_ATTR) === block.id) {
-      sibling.remove()
-      markTail(block.el)
-      removed = true
-    }
-  }
-  return removed
-}
 
 /**
  * The widget itself: a host carrying the class, the reason and the sentence, with the button and the mark in its

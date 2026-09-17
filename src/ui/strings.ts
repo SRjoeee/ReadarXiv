@@ -24,7 +24,7 @@ export { PREVIEW_SOURCE, PREVIEW_TARGET } from '@/locales/preview'
  * does not carry its own copy of 179 language names — adding a language must stay one small file —
  * so it points at a table instead, and a language without one reads them in English
  */
-export const LOCALE_LANGUAGE_NAMES: Record<LocaleCode, Partial<Record<LangCode, string>>> = {
+const LOCALE_LANGUAGE_NAMES: Record<LocaleCode, Partial<Record<LangCode, string>>> = {
   'zh-CN': LANG_CODE_TO_ZH_NAME,
   en: LANG_CODE_TO_EN_UI_NAME,
 }

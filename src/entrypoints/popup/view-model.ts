@@ -11,7 +11,7 @@ import { activeStyle } from '@/config/appearance'
 import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { CONFIG_UNREADABLE } from '@/config/storage'
-import { type Service, chosenService, isBuiltInService, isLlmChosen } from '@/config/services'
+import { chosenService, isBuiltInService, isLlmChosen, serviceRuns } from '@/config/services'
 import type { Mode } from '@/core/renderer'
 import { supportsTarget } from '@/providers/microsoft'
 import { BUILT_IN_PROMPTS } from '@/providers/prompt-library'
@@ -115,17 +115,6 @@ const empty = (): PopupView => ({
   secondary: null,
   mode: { value: DEFAULT_CONFIG.mode, note: null },
 })
-
-/** A local endpoint needs no key: Ollama and LM Studio answer without one */
-const isLoopback = (baseURL: string): boolean => {
-  try {
-    const host = new URL(baseURL).hostname
-    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
-  } catch {
-    return false
-  }
-}
-const serviceRuns = (service: Service): boolean => service.apiKey.trim() !== '' || isLoopback(service.baseURL)
 
 /** Whether the chosen service can run on its own, decided from the settings (no round trip, no stale chain) */
 export function runnable(config: Config, pack: PackState | null): boolean {

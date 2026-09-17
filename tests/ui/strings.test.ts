@@ -92,3 +92,41 @@ describe('helperInstallCommand', () => {
     expect(BUILD_REF === 'main' || /^[0-9a-f]{40}$/.test(BUILD_REF) || /^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(BUILD_REF)).toBe(true)
   })
 })
+
+describe('the built-in appearance profiles and the packs', () => {
+  it('every pack names every built-in profile, and the Chinese pack\'s names are the ones the configuration ships', async () => {
+    // A built-in is stored with its shipped (Chinese) name and shown by id in the interface language as long as the
+    // reader has not renamed it (`profileName` compares the stored name with the shipped one). An id without a name in
+    // a pack would show Chinese in that language; a shipped name that drifted from the Chinese pack's would show two
+    // names for one profile — in the settings' list and in a copy made from it
+    const { BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES } = await import('@/config/appearance')
+    const { LOCALES } = await import('@/locales')
+    for (const [code, pack] of Object.entries(LOCALES)) {
+      expect(Object.keys(pack.O.reading.builtInStyles).sort(), code).toEqual(BUILT_IN_STYLES.map(p => p.id).sort())
+      expect(Object.keys(pack.O.reading.builtInHighlights).sort(), code).toEqual(BUILT_IN_HIGHLIGHTS.map(p => p.id).sort())
+    }
+    const zh = LOCALES['zh-CN'].O.reading
+    for (const p of BUILT_IN_STYLES) expect([p.id, (zh.builtInStyles as Record<string, string>)[p.id]]).toEqual([p.id, p.name])
+    for (const p of BUILT_IN_HIGHLIGHTS) expect([p.id, (zh.builtInHighlights as Record<string, string>)[p.id]]).toEqual([p.id, p.name])
+  })
+})
+
+describe('the English pack', () => {
+  it('speaks to a reader: no word that names how the extension is built (issue #155\'s first principle)', async () => {
+    const { LOCALES } = await import('@/locales')
+    const texts: { path: string; text: string }[] = []
+    const walk = (value: unknown, path: string) => {
+      if (typeof value === 'string') texts.push({ path, text: value })
+      else if (typeof value === 'function') {
+        // A sentence built from arguments: any arguments will do, the words around them are what is read
+        try { walk((value as (...args: unknown[]) => unknown)('x', 'y', 'z'), path) } catch { /* a function that needs a real argument says nothing here */ }
+      } else if (value && typeof value === 'object') for (const [k, v] of Object.entries(value)) walk(v, `${path}.${k}`)
+    }
+    walk(LOCALES.en, 'en')
+    expect(texts.length).toBeGreaterThan(200)
+    const BUILT = /\bhelper\b|\bendpoints?\b|\bproviders?\b|\bfallback chain\b|\bwire format\b|\bbackground\b|\bbatch(es)?\b|\bengines?\b|\bsessions?\b|\bcache key\b|\bcontent script\b|\bservice worker\b/i
+    const found = texts.filter(t => BUILT.test(t.text)).map(t => `${t.path}: ${t.text}`)
+    expect(found).toEqual([])
+  })
+})
+

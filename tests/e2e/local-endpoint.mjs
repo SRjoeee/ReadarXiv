@@ -128,7 +128,7 @@ await page.waitForFunction(mark => [...document.querySelectorAll('.axt-t')].some
 await sleep(2_000)
 
 const dom = await page.evaluate(mark => {
-  const nodes = [...document.querySelectorAll('.axt-t:not(.axt-mirror):not(.axt-pending):not(.axt-error)')]
+  const nodes = [...document.querySelectorAll('.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)')]
   return {
     translations: nodes.length,
     fromLocal: nodes.filter(el => el.textContent?.includes(mark)).length,

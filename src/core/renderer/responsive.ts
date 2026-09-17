@@ -4,7 +4,7 @@ import type { Mode } from './attrs'
 import { setMode } from './page'
 
 /** Aligned with the breakpoint at which the arXiv theme collapses its navigation bar; ar5iv also has 46/52/96/109rem breakpoints (DESIGN §7.2) */
-export const NARROW_QUERY = '(max-width: 1279px)'
+const NARROW_QUERY = '(max-width: 1279px)'
 
 export interface ModeController {
   /** The mode the reader chose */

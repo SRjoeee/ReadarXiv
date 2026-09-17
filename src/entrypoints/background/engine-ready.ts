@@ -9,10 +9,10 @@ import type { SessionRouter } from './sessions'
  * chains they started on. A passive configuration change never moves anyone (see sessions.ts).
  *
  * Whatever becomes of **this** rebuild, the movers act on the chain in force: a rebuild that fails after a newer
- * one succeeded must not skip the deletion's clean-up, or the deleted service's chain stays alive (the local
- * review of DESIGN §8.5, eighth pass); and this rebuild is not waited for at all — `current()` answers with the
+ * one succeeded must not skip the deletion's clean-up, or the deleted service's chain stays alive (local review); and
+ * this rebuild is not waited for at all — `current()` answers with the
  * build in force and stops waiting for one the moment it is superseded, so a build that never settles cannot
- * hold the clean-up up once another one takes over (tenth pass). `reset` says whether the engine is on the chain
+ * hold the clean-up up once another one takes over. `reset` says whether the engine is on the chain
  * in force
  */
 export async function engineReady(chain: ChainHolder, router: SessionRouter, message: { id: string; scope?: string; rebindAll?: boolean }): Promise<{ reset: boolean }> {

@@ -1,7 +1,7 @@
 import type { PageStatus } from './messages'
 import type { ProviderStatus } from '@/providers/transport'
 
-// One decision for the popup's main button, the context menu and the keyboard command (INVENTORY S2). The key does
+// One decision for the popup's main button, the context menu and the keyboard command. The key does
 // what the button shows (user 2026-09-11), so the two must not decide separately: they had, and diverged twice — the
 // menu restored a page the button offered to re-translate (the page behind the settings), and the button's own
 // "behind" test compared the page with the chain it was itself running on, which is never behind.
@@ -52,7 +52,7 @@ export interface PageDecision {
  * The action and whether it is open. A running page always restores. A page behind the settings re-translates only
  * on settings that run on their own — a fallback is not what the reader chose, and the reader is told to fix the
  * choice (popup P13). Anything else starts when something can run, the fallback included (§8.5). The toggle applies
- * this too (the local review of INVENTORY S2): the keyboard command must not restart a page the button refuses to
+ * this too (local review): the keyboard command must not restart a page the button refuses to
  */
 export function pageDecision(page: Pick<PageStatus, 'progress' | 'running'> | undefined, saved: SavedSettings): PageDecision | undefined {
   const action = pageAction(page, saved.revision)
@@ -65,7 +65,7 @@ export function pageDecision(page: Pick<PageStatus, 'progress' | 'running'> | un
 /**
  * The saved settings as the background reads them — all three from **one** status of the chain in force, which is
  * built from the stored configuration (`fresh` / `offers`): a revision from one read paired with availability from
- * another could enable what the popup disables (the local review of S2, second pass). `canRun` is the popup's
+ * another could enable what the popup disables (local review). `canRun` is the popup's
  * `runnable` seen from the chain: the chosen service resolved to itself (a saved id naming nothing resolves to a
  * built-in) and is available (a language pack present, a key set)
  */
@@ -76,7 +76,7 @@ export function savedFromStatus(status: Pick<ProviderStatus, 'revision' | 'avail
 /**
  * The message each action is, the way the popup's buttons send them: a re-translation restarts the session in place.
  * `epoch` is the page's action epoch the decision was made on (`PageStatus.epoch`); the page refuses a command from
- * an earlier epoch — the reader acted in between (sixth and twelfth passes of the local review). Every action
+ * an earlier epoch — the reader acted in between (local review). Every action
  * carries it, a translate decided on an idle page included: the page may have been translated and restored since
  */
 export function messageFor(action: PageAction, epoch?: string): { type: 'axt:translate-page'; restart?: true; epoch?: string } | { type: 'axt:restore-page'; epoch?: string } {

@@ -233,7 +233,7 @@ async function scrollThrough(page) {
   }
 }
 const countDom = page => page.evaluate(() => ({
-  translations: document.querySelectorAll('.axt-t:not(.axt-mirror):not(.axt-pending):not(.axt-error)').length,
+  translations: document.querySelectorAll('.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)').length,
   errorWidgets: document.querySelectorAll('.axt-error').length,
   pendingNodes: document.querySelectorAll('.axt-pending').length,
   failed: document.querySelectorAll('[data-axt-state="failed"]').length,
@@ -300,7 +300,7 @@ await setPreload(options, { range: '一屏' })
   }
 }
 
-// ── The target language changed on the settings page follows into an open popup without reopening it (INVENTORY S1) ──────────────────────
+// ── The target language changed on the settings page follows into an open popup without reopening it ──────────────────────
 // The popup and the settings page each hold a copy of the configuration and used to echo only their own writes. The paper tab stays in front (the popup looks at the active tab),
 // the settings page is driven by Playwright in the background
 {
@@ -315,7 +315,7 @@ await setPreload(options, { range: '一屏' })
   await chooseLanguage(options, '日语', '日语')
   await popup.waitForTimeout(1_200)
   const after = (await languageRow.textContent()) ?? ''
-  check('the target language changed on the settings page follows into the open popup without reopening it (S1)', /简体中文/.test(before) && /日语/.test(after), `${before.trim()} → ${after.trim()}`)
+  check('the target language changed on the settings page follows into the open popup without reopening it', /简体中文/.test(before) && /日语/.test(after), `${before.trim()} → ${after.trim()}`)
   await popup.close()
   await paperTab.close()
 }
@@ -464,7 +464,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   const orphans = await page.evaluate(() => [...document.querySelectorAll('[data-axt-state="translated"]')]
     .filter(el => {
       const id = el.getAttribute('data-axt-id')
-      return !id || !document.querySelector(`.axt-t[data-axt-for="${CSS.escape(id)}"]:not(.axt-mirror, .axt-pending, .axt-error)`)
+      return !id || !document.querySelector(`.axt-t[data-axt-for="${CSS.escape(id)}"]:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)`)
     })
     .map(el => `${el.tagName}.${[...el.classList].filter(c => c.startsWith('ltx_'))[0] ?? ''}`)
     .slice(0, 5))
@@ -858,7 +858,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await page.close()
 }
 
-// ── After a service worker restart the popup does not misreport the page as “behind the settings” (INVENTORY S8, open question 2) ──────
+// ── After a service worker restart the popup does not misreport the page as “behind the settings” ──────
 // The chain's revision used to be a build counter inside the worker: with the worker reclaimed and restarted the counter began at 1 again, while the page remembered the old
 // worker's number, and the popup took it for “the settings changed” — the main button became “Translate again”. Now the revision is a digest of the settings, the same
 // on whichever worker the settings are built. With Playwright's debugger attached the worker never idles into reclamation, so its target is closed from browser-level
@@ -896,7 +896,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   const bornAgain = freshWorker ? await freshWorker.evaluate(() => { globalThis.__axtBorn ??= Date.now(); return globalThis.__axtBorn }).catch(() => born) : born
   check('precondition: after CDP closes the target a new worker starts', bornAgain !== born, `${born} → ${bornAgain}`)
   const after = await again.locator('main').innerText()
-  check('after the worker restart: same settings, the popup still says “Show original” and does not misreport the page as behind the settings (S8)',
+  check('after the worker restart: same settings, the popup still says “Show original” and does not misreport the page as behind the settings',
     bornAgain !== born && /显示原文/.test(after) && !/重新翻译/.test(after), after.replace(/\n+/g, ' | ').slice(0, 120))
   await again.close()
   await page.close()
@@ -1028,7 +1028,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await page.click('.axt-abs-link')
   await page.waitForURL(/\/html\/.*#axt-translate/, { timeout: 30_000 })
   const idle = idleOf(await waitForLog(logs, IDLE, 120_000))
-  const rendered = await page.evaluate(() => document.querySelectorAll('.axt-t:not(.axt-pending, .axt-error)').length)
+  const rendered = await page.evaluate(() => document.querySelectorAll('.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)').length)
   await page.close()
   check('the abstract page: clicked through, it is translating without touching the popup (#146)',
     !!idle && idle.requested > 0 && rendered > 0,
@@ -1232,7 +1232,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
     const before = scrollY
     a.click()
     const id = t.getAttribute('data-axt-id') ?? t.closest('[data-axt-id]')?.getAttribute('data-axt-id')
-    const node = document.querySelector(`.axt-t[data-axt-for="${id}"]:not(.axt-mirror):not(.axt-pending):not(.axt-error)`)
+    const node = document.querySelector(`.axt-t[data-axt-for="${id}"]:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)`)
     const rect = node?.getBoundingClientRect()
     return {
       candidates: hidden.length,

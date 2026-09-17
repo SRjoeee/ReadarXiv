@@ -91,9 +91,13 @@ HTML papers only — PDFs are not translated.
    button, the right-click menu, or the popup. On an abstract page a **Bilingual version** link
    appears beside arXiv's own HTML link, which opens the paper and starts translating in one step.
 
+**Updating.** Pull, run `pnpm build` again, then press the reload button on the extension's card in
+`chrome://extensions`. Restarting Chrome is not enough: it keeps running the previous build's
+background beside the new pages. Your settings are kept and carried over to the new version.
+
 ### Translating figures (macOS)
 
-Words inside bitmap figures are read by a small helper that runs on your own machine. The popup has
+Words inside bitmap figures are read by a small recognition tool that runs on your own machine. The popup has
 a one-command installer under **Images**; it needs Xcode Command Line Tools and takes about a minute
 to build. See [`helper/README.md`](helper/README.md).
 
@@ -104,9 +108,9 @@ to build. See [`helper/README.md`](helper/README.md).
 | Microsoft Translator | not needed | The default. |
 | Google Translate | not needed | |
 | Chrome's built-in translation | not needed | Runs on your machine, offline, once Chrome has downloaded the language pack. |
-| Any OpenAI-compatible endpoint | yours | OpenRouter, DeepSeek, Ollama, LM Studio and the like. Prompts and the glossary apply here. |
+| Any OpenAI-compatible API | yours | OpenRouter, DeepSeek, Ollama, LM Studio and the like. Prompts and the glossary apply here. |
 
-Add up to twenty endpoints in the settings; each is saved with its own key and model. When
+Add up to twenty of them in the settings; each is saved with its own key and model. When
 the chosen service fails mid-paper — an expired key, a spent quota, a dropped connection — the rest
 of the page falls back to a free one rather than stopping, and the popup says what happened.
 
@@ -117,7 +121,7 @@ the same throughout a paper. Both apply only to the LLM services. The target lan
 ## Where the text goes
 
 Paragraphs are sent to whichever service is selected, so the paper's text reaches Microsoft's or
-Google's endpoint, or the endpoint you configured yourself. An LLM service also receives the prompt
+Google's servers, or the API address you configured yourself. An LLM service also receives the prompt
 you selected, the glossary entries that match the passage, and the paper's title, abstract and section
 heading as context. Two arrangements keep the text on your machine: Chrome's built-in translation,
 and a local LLM such as Ollama or LM Studio.
@@ -211,7 +215,7 @@ Read arXiv ports code from three GPL-3.0 translation extensions, and is grateful
   viewport scheduling, the prompt library and the language tables
 - [FluentRead](https://github.com/Bistutu/FluentRead) — the Dexie cache
 
-The OCR helper is ported from [macos-vision-ocr](https://github.com/bytefer/macos-vision-ocr) (MIT),
+The image recognition tool (`helper/`) is ported from [macos-vision-ocr](https://github.com/bytefer/macos-vision-ocr) (MIT),
 and the figure-overlay rendering follows
 [ImageTrans](https://github.com/xulihang/ImageTrans_chrome_extension). Every ported file names its
 source in its header; [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md) is the register.
@@ -220,11 +224,10 @@ source in its header; [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md) is the regist
 
 Copyright © 2026 SRjoeee. [GPL-3.0](LICENSE), the same licence as the projects it is built on.
 
-This program is free software: you can redistribute it and modify it under the terms of the GNU
-General Public License as published by the Free Software Foundation, either version 3 of the
-License or, at your option, any later version. It is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the [licence](LICENSE) for details.
+This program is free software: you can redistribute it and modify it under the terms of version 3
+of the GNU General Public License as published by the Free Software Foundation. It is distributed in
+the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the [licence](LICENSE) for details.
 
 ---
 

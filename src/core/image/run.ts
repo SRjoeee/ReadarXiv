@@ -66,8 +66,8 @@ export interface ImageRunOptions {
   isCurrent: () => boolean
   /** Test injection: the concurrency cap */
   maxConcurrent?: number
-  /** Test injection: fetching the bytes */
-  fetchBytes?: (url: string) => Promise<ImageBytes>
+  /** Fetching the bytes; a test injects its own, production uses `fetch`. The signal is the run's: aborted when the run stops or halts */
+  fetchBytes?: (url: string, signal?: AbortSignal) => Promise<ImageBytes>
   onProgress?: (progress: ImageProgress) => void
   onRendered?: (targets: ImageTarget[]) => void
   /** One line per hand-over from the viewport observer and per gate decision: the record a nondeterministic run is read from */
@@ -163,9 +163,9 @@ export async function readImageResponse(res: Response, max = MAX_IMAGE_BYTES): P
   return { bytes: out.buffer, mime }
 }
 
-async function defaultFetchBytes(url: string): Promise<ImageBytes> {
+async function defaultFetchBytes(url: string, signal?: AbortSignal): Promise<ImageBytes> {
   // force-cache: the page has loaded this image already; the browser's image cache is reused rather than downloading again
-  const res = await fetch(url, { cache: 'force-cache' })
+  const res = await fetch(url, { cache: 'force-cache', ...(signal ? { signal } : {}) })
   if (!res.ok) throw new Error(`image fetch failed: HTTP ${res.status}`)
   return readImageResponse(res)
 }
@@ -202,6 +202,13 @@ export function captionOf(el: Element): string | undefined {
 
 export function startImageTranslation(options: ImageRunOptions): ImageRun {
   const fetchBytes = options.fetchBytes ?? defaultFetchBytes
+  /**
+   * The fetches in flight end with the run — stopped (a restore, a new session) or halted by a permanent error, after
+   * which the run takes nothing more and settles what it had requested as failed: a restored page keeps no request of
+   * ours going, and neither does a run that has given up (Devin on #230). The catch below asks `alive()` first, so an
+   * aborted fetch does not overwrite the failure's reason with its own
+   */
+  const aborter = new AbortController()
   /** Targets that entered the viewport while the mode gate was shut */
   const parked = new Set<ImageTarget>()
   // The bookkeeping shared with the text run (DESIGN §4.4): outcomes, the permanent-error record, stop, the scheduler
@@ -209,7 +216,9 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     preload: options.preload,
     onEnter: entered => { void translate(entered) },
     isCurrent: options.isCurrent,
+    onFatal: () => aborter.abort(),
     onStop: () => {
+      aborter.abort()
       parked.clear()
       // Those queued but not started are settled at once; their translate() only returns then
       for (const entry of queue.splice(0)) entry.done()
@@ -303,7 +312,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
         lines = read
       } else {
         const el = target.el as HTMLImageElement
-        const { bytes, mime } = await fetchBytes(el.currentSrc || el.src)
+        const { bytes, mime } = await fetchBytes(el.currentSrc || el.src, aborter.signal)
         if (!alive()) return
         if (!IMAGE_TYPES.test(mime)) return fail(target, `not a bitmap (${mime || 'unknown type'})`)
         if (bytes.byteLength > MAX_IMAGE_BYTES) return fail(target, `image over ${MAX_IMAGE_BYTES / 1024 / 1024} MB`)

@@ -5,7 +5,7 @@ import type { FallbackReason } from '@/config/storage'
 import type { AxtMessage } from '@/shared/messages'
 import { mountHook } from '../ui/render-hook'
 
-// The settings page's data layer (INVENTORY S1), mounted in a real React root: a change saved elsewhere shows, and
+// The settings page's data layer, mounted in a real React root: a change saved elsewhere shows, and
 // the reload an interface language takes waits for the page's drafts
 
 const store = vi.hoisted(() => ({
@@ -236,7 +236,7 @@ describe('useOptionsData', () => {
     await hook.unmount()
   })
 
-  it('a pack downloaded on the popup shows installed on the Chrome card without a click; another target starts no lookup (INVENTORY S7)', async () => {
+  it('a pack downloaded on the popup shows installed on the Chrome card without a click; another target starts no lookup', async () => {
     const listeners = vi.mocked(browser.runtime.onMessage.addListener).mock.calls.length
     const hook = await mountHook(useOptionsData)
     await hook.until(() => hook.current().pack !== null)

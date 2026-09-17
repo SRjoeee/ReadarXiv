@@ -15,7 +15,7 @@ import { Field, codeAreaClass, inputClass } from '@/ui/Field'
 // reading a built-in one, copying it into an editable one, new / edit / delete, import / export, and
 // the variable buttons that insert at the caret. Read Frog builds it on base-ui + jotai + Tailwind;
 // a whole UI stack for a dozen fields is not worth it, so this is the settings page's plain React, dressed
-// like every other section — the shared Button / Field / Confirm and Tailwind classes (INVENTORY P8).
+// like every other section — the shared Button / Field / Confirm and Tailwind classes.
 // A change is handed to the parent, which writes it to storage straight away — the page has no save button.
 
 export type EditorMode = 'view' | 'copy' | 'edit' | 'new'
@@ -39,7 +39,7 @@ const noteClass = 'block text-[11px] text-fg-2'
  * The list with the draft saved into it. An edit replaces its template in place — or, when the template is no longer
  * in the list (deleted in another tab while this editor was open, and the list followed), appends it: the save is the
  * reader's later word on that prompt, and a save that persisted nothing while reporting success would have lost the
- * draft without a trace (the local review of S1, sixth pass). A new template and a copy always append
+ * draft without a trace (local review). A new template and a copy always append
  */
 export function withSaved(patterns: readonly PromptTemplate[], mode: EditorMode, draft: PromptTemplate): PromptTemplate[] {
   if (mode === 'edit' && patterns.some(p => p.id === draft.id)) return patterns.map(p => (p.id === draft.id ? draft : p))
@@ -67,7 +67,7 @@ export function PromptManager({ value, onChange }: { value: PromptsConfig; onCha
   const builtIns = Object.values(BUILT_IN_PROMPTS)
   // A choice made from a stale list must not store an id that names nothing: deleted in another tab before this
   // one's refresh ran, the prompt would resolve to the default silently, and neither it nor the previous choice would
-  // translate (the local review of S1, thirteenth pass). Such a choice keeps what is stored
+  // translate (local review). Such a choice keeps what is stored
   const select = (promptId: string) => onChange(current => (
     builtIns.some(t => t.id === promptId) || current.patterns.some(p => p.id === promptId) ? { ...current, promptId } : current
   ))

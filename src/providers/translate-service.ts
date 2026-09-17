@@ -3,7 +3,7 @@
 // bucket), timeouts, retries, the 429 pause and the single probe after it, draining the whole queue on 401 / no-key,
 // cancellation by scope; BatchQueue collects segments of one batch key into a batch, and its dispatch gate makes it
 // collect more and send less under a rate limit. Assembled after Read Frog's background/translation-queues.ts; it runs
-// in the background (§8.0). Independent of the run context: the cache comes through a CachePort — the background uses the local Dexie, the content side a message proxy.
+// in the background (§8.0). Independent of the store: the cache comes through a CachePort — the background passes the local Dexie, a test a double.
 import type { WireFormat } from '@/core/protector'
 import { wireFormatOf } from '@/cache/key'
 import type { CachedEntry } from '@/cache/store'
@@ -113,12 +113,12 @@ export interface TranslateService {
 }
 
 /** Read Frog's default queue parameters (DEFAULT_CONFIG.pageTranslation.requestQueueConfig and the constants of translation-queues.ts) */
-export const DEFAULT_RATE_LIMIT = { rate: 8, capacity: 20 } as const
+const DEFAULT_RATE_LIMIT = { rate: 8, capacity: 20 } as const
 
 /**
  * The cache read's waiting cap. The cache is an optimisation, not a dependency: the service **waits for the cache
  * before requesting**, and a read that hangs stops the whole page's translation right there (experiment 2 of issue
- * #45). The content side's message port has its own 1.5 s budget; this is the last gate — with any CachePort (the background's direct Dexie, a test double) the translation cannot be dragged down by the cache
+ * #45). This is the gate — with any CachePort (the background's direct Dexie, a test double) the translation cannot be dragged down by the cache
  */
 export const CACHE_READ_BUDGET_MS = 2_000
 
@@ -292,7 +292,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
     // stored thunk without re-entering the batch queue, so a chain retired between two attempts must stop here.
     // Non-retryable, so the queue does not try a third time (DESIGN §8.5). The chain only, never the scopes: the items
     // carry the first subscriber's scope, and a deduplicated peer — another tab, an unscoped connection test, a late
-    // joiner during a retry backoff — is known to the queue alone, which drains by refcount (eighteenth pass)
+    // joiner during a retry backoff — is known to the queue alone, which drains by refcount
     if (deps.retired?.()) throw attachRequestErrorMeta(new TranslationCancelledError(items[0]?.scope), { isRetryable: false })
     const first = items[0]!
     try {
@@ -355,8 +355,8 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
     /**
      * What a request-queue task subscribes for this batch: the batch's scope union as flushed, minus the scopes
      * that died since. A batch retry reuses the meta of its first flush, and re-subscribing a dead scope keeps the
-     * task alive after its last live subscriber is drained — the endpoint is then called for nobody (the local
-     * review of DESIGN §8.5, nineteenth pass). `null`: every subscriber died, there is nothing to send for.
+     * task alive after its last live subscriber is drained — the endpoint is then called for nobody (local review).
+     * `null`: every subscriber died, there is nothing to send for.
      * `undefined` stays `undefined` — an unscoped member keeps the batch alive, as in the queues' refcount
      */
     const liveScopes = (meta: BatchExecutionMeta): readonly string[] | undefined | null => {
@@ -544,8 +544,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
         // The last word, after every batch has settled: the scope died or the chain was retired meanwhile, and
         // nothing of this call goes back — no cache write (a batch that finished before the drain would land in
         // the cache after "restore the page"; Codex on #33), no `partial` for the caller to render, no result
-        // from a task an unscoped subscriber kept alive through the drain (the local review of DESIGN §8.5,
-        // fifteenth pass)
+        // from a task an unscoped subscriber kept alive through the drain (local review)
         if (refused(scope)) return refusal()
         if (store && writes.length > 0) {
           await store.putMany(writes)

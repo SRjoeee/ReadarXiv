@@ -4,7 +4,7 @@
 // the services rather than living inside them.
 //
 // The problem solved: an expired key, an exhausted quota or a network blip made run.ts stop the whole page (no-key /
-// auth trigger scheduler.disconnect()), the reader waiting over half a translation. Hard rule 4: a failure must be recoverable and trigger the fallback chain.
+// auth trigger scheduler.disconnect()), the reader waiting over half a translation. Hard rule 3: a failure must be recoverable and trigger the fallback chain.
 import type { TranslateCall, TranslateMessageResponse, TranslateService } from './translate-service'
 import { isPermanentErrorKind, type ProviderErrorKind, type TranslatedSegment, type TranslationProvider } from './types'
 import { failureLine } from '@/shared/diagnostics'
@@ -116,7 +116,7 @@ export function createFallbackService(
     const gathered = new Map<string, TranslatedSegment>()
     const withGathered = (response: TranslateMessageResponse): TranslateMessageResponse => {
       // An aborted answer is the call's refusal — its scope died or its chain was retired — and carries nothing
-      // back, not even what an earlier engine on the chain translated (the local review of DESIGN §8.5, sixteenth pass)
+      // back, not even what an earlier engine on the chain translated (local review)
       if (response.ok || gathered.size === 0 || response.error.kind === 'aborted') return response
       return { ...response, partial: [...gathered.values()] }
     }

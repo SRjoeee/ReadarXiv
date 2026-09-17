@@ -145,7 +145,7 @@ describe('startTranslation', () => {
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p2"]`)?.querySelector('math')).not.toBeNull()
   })
 
-  it('the page replaced a formula while the request was out: the block fails as `stale`, nothing is inserted, no resend; a retry serialises it afresh and succeeds (INVENTORY T6)', async () => {
+  it('the page replaced a formula while the request was out: the block fails as `stale`, nothing is inserted, no resend; a retry serialises it afresh and succeeds', async () => {
     const doc = docOf()
     const blocks = extract(doc)
     let swapped = false

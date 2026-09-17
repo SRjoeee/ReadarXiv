@@ -70,7 +70,7 @@ const SCROLL_SETTLE_MS = 120
 /**
  * The running controller of each document, by the one thing the outside may ask of it: to drop what
  * it painted. `setMode()`, `applyStyle()` and `restore()` ask through `clearSentenceHighlights`;
- * nothing outside the controller touches its layer or its panel (INVENTORY T3 — before, the outside
+ * nothing outside the controller touches its layer or its panel (before, the outside
  * removed both and the controller found out through a counter and `isConnected`, Codex on #130/#149)
  */
 const controllers = new WeakMap<Document, () => void>()
@@ -640,7 +640,7 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
       hit()
       shown = null
       peek.remove()
-      // Its own layer goes with the controller — the one owner of both (INVENTORY T3); another controller's stays
+      // Its own layer goes with the controller — the one owner of both; another controller's stays
       layer?.remove()
       layer = undefined
       if (controllers.get(doc) === reset) controllers.delete(doc)

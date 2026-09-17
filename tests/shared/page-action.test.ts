@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Progress } from '@/core/pipeline/run'
 import { behindSettings, messageFor, pageAction, pageDecision, savedFromStatus } from '@/shared/page-action'
 
-// One decision for the popup's main button and the toggle (INVENTORY S2)
+// One decision for the popup's main button and the toggle
 
 const progress = (state: Progress['state'], fatal?: string): Progress => ({ state, total: 10, requested: 0, done: 0, failed: 0, cached: 0, inFlight: 0, ...(fatal ? { fatal } : {}) })
 const running = (revision: string) => ({ provider: 'microsoft', target: 'cmn', engine: 'microsoft', revision })

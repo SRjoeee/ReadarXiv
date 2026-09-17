@@ -30,8 +30,8 @@ export interface PageStatus {
    * The page's action epoch: bumped by every start that commits and every restore. A command carries the epoch it
    * was decided on, and the page refuses one from an earlier epoch — a decision that took a while (the toggle waits
    * for the chain's probes) must not undo what the reader did in between, a translate decided on an idle page that
-   * was translated and restored meanwhile included (the local review of INVENTORY S2, sixth and twelfth passes).
-   * Opaque: the document's own id and the count, so another document's epoch never matches (thirteenth pass)
+   * was translated and restored meanwhile included (local review).
+   * Opaque: the document's own id and the count, so another document's epoch never matches
    */
   epoch?: string
   /**
@@ -51,7 +51,7 @@ export interface AxtMessages {
    * by paragraph as each is requested again (cached ones at once).
    * `epoch` is the page's action epoch the command was decided on (`PageStatus.epoch`): the page refuses it once the
    * page has moved — the reader restored, restarted or translated meanwhile — so a decision that took a while (the
-   * toggle waits for the chain's probes) cannot undo what the reader did in between (sixth and twelfth passes)
+   * toggle waits for the chain's probes) cannot undo what the reader did in between
    */
   'axt:translate-page': { request: { mode?: Mode; restart?: boolean; epoch?: string }; response: StartResult }
   /** popup → content: stop and restore the original. `epoch` as above: a restore decided on an earlier epoch is `refused` */
@@ -107,8 +107,8 @@ export interface AxtMessages {
    */
   'axt:engine-ready': { request: { id: string; scope?: string; rebindAll?: boolean }; response: { reset: boolean } }
   /**
-   * options / popup / content → background: where the recognition helper stands (DESIGN §15.4's ping, the four
-   * states of DESIGN §15.3). `recheck` re-probes a host that was reported missing; see OcrBackend.status
+   * options / popup / content → background: where the recognition helper stands (DESIGN §15.3: the ping, the four
+   * states). `recheck` re-probes a host that was reported missing; see OcrBackend.status
    */
   'axt:helper-status': { request: { recheck?: boolean }; response: HelperStatus }
   /**
@@ -117,7 +117,7 @@ export interface AxtMessages {
    * Nobody listening is the normal case, so the send may reject
    */
   'axt:helper-state': { request: { status: HelperStatus }; response: undefined }
-  /** popup ↔ options: a download of this language pack ended on one surface; the other looks it up again (INVENTORY S7) */
+  /** popup ↔ options: a download of this language pack ended on one surface; the other looks it up again */
   'axt:pack-changed': { request: { target: string }; response: undefined }
   /**
    * Sent to every tab when a re-probe finds the helper that was missing. A paper parks its bitmaps

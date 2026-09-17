@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { extract } from '@/core/extractor'
 import {
   PROTECT_RULES, RULES_VERSION, SKIP_RULES, TABLE_RULES, UNIT_RULES,
-  classify, documentRoot, hasTranslatableText, isNamedTag, isNumericCell, visibleText,
+  classify, documentRoot, isNamedTag, isNumericCell, visibleText,
 } from '@/core/rules/latexml'
 
 const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/arxiv')
@@ -198,7 +198,7 @@ describe('classify: precedence skip > table > unit > protect', () => {
   })
 })
 
-describe('visibleText / hasTranslatableText', () => {
+describe('visibleText', () => {
   const para = () => el(
     '<p class="ltx_p">Let <math class="ltx_Math" alttext="\\alpha"><semantics><mi>α</mi>'
     + '<annotation encoding="application/x-tex">\\alpha</annotation></semantics></math> be a graph; see '
@@ -222,17 +222,6 @@ describe('visibleText / hasTranslatableText', () => {
     expect(visibleText(el('<p class="ltx_p">a\u2009<math class="ltx_Math"><mi>x</mi></math>\u2009b</p>'))).toBe('a\u2009\u2009b')
   })
 
-  it('a paragraph of formulas, digits or punctuation only has no translatable text', () => {
-    expect(hasTranslatableText(el('<p class="ltx_p"><math class="ltx_Math"><mi>x</mi></math> = 1.</p>'))).toBe(false)
-    expect(hasTranslatableText(el('<p class="ltx_p">12.5 (3)</p>'))).toBe(false)
-    expect(hasTranslatableText(el('<p class="ltx_p">   </p>'))).toBe(false)
-  })
-
-  it('any Unicode letter counts as translatable', () => {
-    expect(hasTranslatableText(para())).toBe(true)
-    expect(hasTranslatableText(el('<p class="ltx_p">证明。</p>'))).toBe(true)
-    expect(hasTranslatableText(el('<p class="ltx_p">λ</p>'))).toBe(true)
-  })
 })
 
 describe('isNumericCell (the calibration boundary cases of Phase 0)', () => {

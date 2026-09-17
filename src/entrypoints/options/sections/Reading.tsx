@@ -22,7 +22,7 @@ const marginStop = (value: number | 'all'): string => (value === 'all' ? 'all' :
 
 /**
  * The list with the profile written into it — in place, or appended when the profile is no longer there: deleted in
- * another tab while its drawer was open here, and the list followed (INVENTORY S1). The reader's change is their later
+ * another tab while its drawer was open here, and the list followed. The reader's change is their later
  * word on that profile; a write that found nothing to replace would have dropped it without a trace
  */
 const withProfile = <T extends { id: string }>(list: readonly T[], next: T): T[] =>
@@ -45,9 +45,9 @@ export function Reading({ data }: { data: OptionsData }) {
 
   // The profile being edited as the configuration has it — or, not there, as this tab last saw it under that id: one
   // deleted in another tab while its drawer is open here (the drawer stays with the reader's draft, and their next
-  // change writes the profile back — `withProfile`; the local review of S1, eighth pass), or one just added or
+  // change writes the profile back — `withProfile`; local review), or one just added or
   // duplicated here whose write is still out (`addStyle`, `onDuplicate` seed it). Never another profile's: a copy
-  // still out would otherwise open on its original, and the first keystroke would rename that (ninth pass)
+  // still out would otherwise open on its original, and the first keystroke would rename that
   const cached = <T extends { id: string }>(last: T | undefined, id: string) => (last?.id === id ? last : undefined)
   const editingStyle = editing?.list === 'style' ? (a.styles.find(s => s.id === editing.id) ?? cached(lastStyle.current, editing.id)) : undefined
   const editingBand = editing?.list === 'highlight' ? (a.highlights.find(h => h.id === editing.id) ?? cached(lastBand.current, editing.id)) : undefined
@@ -136,7 +136,7 @@ export function Reading({ data }: { data: OptionsData }) {
       {editingStyle && (
         <StyleEditor
           // One editor per profile: a duplicate opens its own, not the original's boxes with their drafts and the
-          // writes they have out (the local review of S1, twelfth pass)
+          // writes they have out (local review)
           key={editingStyle.id}
           value={editingStyle}
           highlight={highlight}

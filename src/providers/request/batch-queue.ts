@@ -449,7 +449,7 @@ export class BatchQueue<T, R> {
           }
           // This item's own subscribers — its scope and the peers deduplicated onto it — not the batch's union:
           // subscribing every item to every scope of the batch let an unrelated live tab keep a closed tab's items
-          // running and retrying (DESIGN §8.5, twentieth review pass)
+          // running and retrying (local review)
           const result = await this.executeIndividual(task.data, { ...meta, scopes: task.cancelScopes === null ? undefined : [...task.cancelScopes] })
           task.resolve(result)
         } catch (error) {

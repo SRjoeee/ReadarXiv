@@ -12,7 +12,7 @@
 //
 // **Read-only.** Nothing here writes to the embedded document. The overlay is built in the main
 // document from normalised coordinates, which works because a figure's `viewBox` maps linearly onto
-// its `<object>` element box (measured to four decimal places, §6.11). §7.1's DOM invariant and
+// its `<object>` element box (measured to four decimal places, DESIGN §15.5). §7.1's DOM invariant and
 // `restore()` are untouched, and there is no second document to define restore semantics for.
 
 import type { OcrLine, Quad } from '@/shared/ocr'
@@ -72,7 +72,7 @@ const RUN_BREAK = 1.5
  *
  * The size is `hypot(a,b)` and the angle `atan2(b,a)` — **not** `a`, which is only the size when
  * the glyph is upright. Reading `a` puts every rotated axis label at size 0 and loses its
- * orientation, and 8.95% of glyphs in the corpus are rotated (§6.11).
+ * orientation, and 8.95% of glyphs in the surveyed figures are rotated.
  */
 function decompose(transform: string | null): { x: number; y: number; size: number; angle: number } | undefined {
   const m = /matrix\(([^)]*)\)/.exec(transform ?? '')
@@ -143,7 +143,7 @@ function sameLine(run: { angle: number; size: number; across: number }, g: Glyph
  *
  * The converter emits every glyph as a direct child of `<svg>` with no grouping whatsoever — one
  * figure is a flat list where ticks, axis titles and legend entries run together as
- * `"110100Number of terms N1015…"` (§6.11). Document order within a run is exact, including the
+ * `"110100Number of terms N1015…"`. Document order within a run is exact, including the
  * spaces, which are glyphs of their own; all that has to be recovered is where one run ends.
  */
 export function runsOf(svg: Element): GlyphRun[] {

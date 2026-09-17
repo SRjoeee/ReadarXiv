@@ -93,7 +93,7 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
 
   it('lays a label a fraction of a degree off horizontal out as a horizontal one', async () => {
     // The overlay's rotated geometry swaps the two axes, so it is only right at an exact quarter
-    // turn. `quarterTurn` tolerates 1.8° of slop, and that residual used to reach `labelStyle`
+    // turn. `drawAngle` tolerates 1.8° of slop (`UPRIGHT_TOLERANCE`), and that residual used to reach `labelStyle`
     // as a truthy angle and select that layout — a wide axis label came out a tall narrow strip
     // (Codex on #134). Two runs in the corpus are translatable and sit off horizontal by 1e-5°.
     const { targets, run, doc } = setup(tilted('Energy', 0.5))

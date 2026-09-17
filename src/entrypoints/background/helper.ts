@@ -1,11 +1,11 @@
-// The client of the local OCR helper (DESIGN §15.2 / §15.4): request / response correlation over a Chrome Native
+// The client of the local OCR helper (DESIGN §15.2–§15.4): request / response correlation over a Chrome Native
 // Messaging port. It is the helper implementation of `OcrBackend` (ocr-backend.ts, DESIGN §15.3).
 //
 // Facts about MV3 that shape it:
 // - An open `connectNative` port keeps the worker alive: Chrome's lifecycle documentation says so since Chrome 105,
 //   and it was measured on 2026-09-17 (Chrome for Testing 153, `tests/e2e/probes/keepalive.mjs`: a port opened inside
 //   the worker, no page open and no debugger attached — worker and helper both alive at 75 s, past the 30 s idle
-//   line). The MVP-era keep-alive timer that rested on the opposite belief is gone (DESIGN §15.3 follow-up). The same
+//   line). The MVP-era keep-alive timer that rested on the opposite belief is gone (DESIGN §15.3). The same
 //   fact cuts the other way: a port left open with nothing to do would keep the worker and the helper process alive
 //   for the whole browser session after one popup open (Devin on #215), so **an idle port is dropped** after a grace
 //   period (`idleMs`, 30 s) — the helper exits, and the next request starts a fresh process and shakes hands again.

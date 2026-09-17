@@ -74,7 +74,7 @@ describe('Prompts: the glossary text', () => {
     const mounted = await mountElement(createElement(Prompts, { data: data(stored, patches, land) }))
     type(box(mounted.container), 'weights, weights')
     await mounted.flush()
-    // A write out is a draft: the page's reload waits for it (the ninth local pass)
+    // A write out is a draft: the page's reload waits for it (local review)
     expect(drafts.any()).toBe(true)
     // The store has not moved yet; the page re-renders with it as it stands
     await mounted.rerender(createElement(Prompts, { data: data(stored, patches, land) }))

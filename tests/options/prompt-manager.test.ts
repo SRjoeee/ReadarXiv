@@ -98,7 +98,7 @@ describe('PromptManager: changes are updates of the stored prompts', () => {
   })
 })
 
-// ── import, export and variable insertion (INVENTORY §4.5) ─────────────────────────────────────────────────────────────
+// ── import, export and variable insertion ─────────────────────────────────────────────────────────────
 import { PROMPT_FILE_NAME, serializePrompts } from '@/providers/prompt-file'
 
 const downloads: [string, string, string][] = []

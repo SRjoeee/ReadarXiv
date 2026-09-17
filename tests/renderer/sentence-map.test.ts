@@ -7,7 +7,7 @@ import { SPLIT_CLASS } from '@/core/renderer/attrs'
 import { pairAt, registerSentences, sentenceAt, sentenceMapAt, sentenceMapOf } from '@/core/renderer/sentence-map'
 import { splitFigures } from '@/core/renderer/split-figures'
 import { docOf } from './helpers'
-import { splitSentences } from '@/core/sentences'
+import { splitSentences } from '../sentences/lengths'
 import { verifyAlignment } from '@/providers/alignment'
 
 const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/arxiv')
@@ -266,8 +266,8 @@ describe('sentence registry (#105)', () => {
     expect(sentenceMapAt(cell.firstChild!)?.map.target.root).toBe(rebuilt)
   })
 
-  it('registers nothing without an alignment, so those blocks simply do not highlight', () => {
-    // Every Google and LLM block today. A guessed pairing would light up the wrong sentence.
+  it('registers no sentences without an alignment: a guessed pairing would light up the wrong sentence', () => {
+    // A block on the runs path, markers that came back damaged (a reference is aligned whole, not unaligned). The pair as a whole still highlights (`pairAt`, below)
     const { source, target, block, spans } = render('<p class="ltx_p">One. Two.</p>')
     registerSentences(source, target, block.offsets, spans, undefined)
     expect(sentenceMapAt(source.firstChild!)).toBeUndefined()

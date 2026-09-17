@@ -86,7 +86,7 @@ function wireText(el: Element, slots: ReadonlyMap<number, Node>): string {
  * The formatting element a block opens with, if the block is shaped like `label: rest`, `label.
  * rest`, or is nothing but the label. Read from the original, which translation never changes.
  */
-export function leadingLabel(root: Element, slots: ReadonlyMap<number, Node>): Label | undefined {
+function leadingLabel(root: Element, slots: ReadonlyMap<number, Node>): Label | undefined {
   const first = root.firstElementChild
   if (!first?.matches(LABEL_FORMATTING)) return undefined
   for (let n = root.firstChild; n && n !== first; n = n.nextSibling) if (/\S/.test(n.textContent ?? '')) return undefined

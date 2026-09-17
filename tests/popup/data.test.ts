@@ -5,7 +5,7 @@ import type { ProviderStatus } from '@/providers/transport'
 import type { AxtMessage, PageStatus } from '@/shared/messages'
 import { deferred, mountHook } from '../ui/render-hook'
 
-// The popup's data layer (INVENTORY S1), mounted in a real React root: which ask publishes, and when the page reloads
+// The popup's data layer, mounted in a real React root: which ask publishes, and when the page reloads
 
 const store = vi.hoisted(() => ({
   config: null as Config | null,
@@ -81,7 +81,7 @@ describe('usePopupData', () => {
     expect(hook.current().input.page?.progress.state).toBe('stopped')
     expect(savedAsks()).toHaveLength(2)
     // With the barrier, as every saved ask: made while a configuration change's ask waits on its read, an ask without
-    // it would answer first from the previous chain and, being the newer ask, keep the answer (sixth and eighth passes)
+    // it would answer first from the previous chain and, being the newer ask, keep the answer
     expect(savedAsks().every(a => a.message.fresh === true)).toBe(true)
     await hook.run(() => savedAsks()[1]?.answer.resolve(status('google-web')))
     expect(hook.current().input.saved?.providerId).toBe('google-web')
@@ -134,7 +134,7 @@ describe('usePopupData', () => {
     await hook.unmount()
   })
 
-  it('a pack downloaded on the settings page shows installed here without a click; another target starts no lookup (INVENTORY S7)', async () => {
+  it('a pack downloaded on the settings page shows installed here without a click; another target starts no lookup', async () => {
     const listeners = vi.mocked(browser.runtime.onMessage.addListener).mock.calls.length
     const hook = await mountHook(usePopupData)
     await hook.until(() => hook.current().input.pack !== null)

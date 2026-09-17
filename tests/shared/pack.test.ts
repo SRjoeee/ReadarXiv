@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { type PackState, createPackLookup } from '@/shared/pack'
 
-// The pack lookups' bookkeeping shared by the popup and the settings page (INVENTORY S1): the committed target owns
+// The pack lookups' bookkeeping shared by the popup and the settings page: the committed target owns
 // what is shown, only the newest lookup publishes, none while a download of its target is in flight
 
 function deferred<T>() {
@@ -17,7 +17,7 @@ function harness() {
   /** Lookups in flight, in the order they were issued; the test answers them in the order it chooses */
   const lookups: { target: string; answer: ReturnType<typeof deferred<PackState>> }[] = []
   const published: (PackState | null)[] = []
-  /** The downloads of ours the other surfaces were told about (INVENTORY S7) */
+  /** The downloads of ours the other surfaces were told about */
   const announced: string[] = []
   const lookup = createPackLookup({
     publish: state => published.push(state),
@@ -144,7 +144,7 @@ describe('createPackLookup', () => {
     expect(h.published.at(-1)).toBe('available')
   })
 
-  // INVENTORY S7: the popup and the settings page each hold a lookup; a download that ended in one is announced to
+  // The popup and the settings page each hold a lookup; a download that ended in one is announced to
   // the other, which looks the pack up itself — no state travels, so no stale snapshot can win on either side
 
   it('another surface\'s download ended: the wanted target is looked up again, as the newest lookup, and an older one of ours answering later publishes nothing', async () => {

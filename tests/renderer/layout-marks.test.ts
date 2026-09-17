@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { extract, markBlocks, PAIRS_ATTR, type TextBlock } from '@/core/extractor'
 import { IMG_CLASS, T_CLASS } from '@/core/marks'
 import { MIRRORED_ATTR, MIRROR_CLASS, NOTE_TRANSLATED_ATTR, PANELS_ATTR, SPLIT_ATTR, SPLIT_CLASS, TAGGED_ATTR, TAIL_ATTR, TRANSLATED_ATTR } from '@/core/renderer/attrs'
-import { clearFailed, renderFailed } from '@/core/renderer/failed'
+import { renderFailed } from '@/core/renderer/failed'
 import { renderImage } from '@/core/renderer/image'
 import { createMirrors } from '@/core/renderer/mirror'
 import { localizeNotes } from '@/core/renderer/notes'
@@ -82,7 +82,7 @@ describe('data-axt-tail: the original whose translation-side node closes its con
     expect(tail(doc, 'p2')).toBe(false)
     renderFailed(p2, 'network: offline', () => {})
     expect(tail(doc, 'p2')).toBe(true)
-    expect(clearFailed(p2)).toBe(true)
+    clearTranslation(p2)
     expect(tail(doc, 'p2')).toBe(false)
     renderText(p2, frag(doc, '二。'))
     expect(tail(doc, 'p2')).toBe(true)

@@ -2,16 +2,19 @@
 // The English gate: no Chinese (CJK) text may enter developer-visible files beyond what the allow-list already
 // grants. The allow-list is a ratchet: each entry names a file and the number of lines with CJK characters it may
 // hold — product copy quoted as evidence, multilingual test inputs, observed machine-translation outputs, the CJK
-// ranges of regexes. A file over its allowance, or a file with CJK and no entry, fails the check; lowering an entry
-// when lines go away is welcome, raising one is a review question. Locale packs, localisation data, fixtures and the
-// read-only reference checkouts are outside the check altogether (they are product data, not prose).
+// ranges of regexes. A file over its allowance, or a file with CJK and no entry, fails the check — and so does an
+// entry granting more than its file holds, or naming a file that holds none: the list says what is there, exactly, so
+// the slack a removed line leaves cannot be spent on a new one unseen. Raising an entry is a review question. Locale
+// packs, localisation data, fixtures and the read-only reference checkouts are outside the check altogether (they
+// are product data, not prose). A pack's comments are English by convention like every other comment; telling a
+// comment from a string exactly needs a parser, and the repository's TypeScript (7, native) exposes none to scripts,
+// so review holds that line rather than a guess (Devin on #230).
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 
 const CJK = /[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uff00-\uffef]/
 const OUTSIDE = [/^src\/locales\//, /^public\/_locales\//, /^tests\/fixtures\//, /^reference\//, /\.zh-CN\.md$/, /^README\.zh/, /^scripts\/check-english\.mjs$/, /\.(png|jpg|jpeg|gif|webp|svg|ico|pdf|woff2?)$/]
 const ALLOW_FILE = 'scripts/english-allowlist.txt'
-
 const writing = process.argv.includes('--write')
 const allow = new Map()
 for (const raw of writing ? [] : readFileSync(ALLOW_FILE, 'utf8').split('\n')) {
@@ -35,11 +38,15 @@ for (const file of files) {
   seen.add(file)
   const allowed = allow.get(file) ?? 0
   if (hits.length > allowed) problems.push(`${file}: ${hits.length} lines with CJK, ${allowed} allowed (lines ${hits.slice(0, 8).join(', ')}${hits.length > 8 ? ', …' : ''})`)
+  else if (hits.length < allowed) problems.push(`${ALLOW_FILE}: ${file} holds ${hits.length} lines with CJK, the entry grants ${allowed}; lower it to ${hits.length}`)
 }
-for (const file of allow.keys()) if (!seen.has(file) && !files.includes(file)) problems.push(`${ALLOW_FILE}: ${file} no longer exists; drop its entry`)
+for (const file of allow.keys()) {
+  if (seen.has(file)) continue
+  problems.push(files.includes(file) ? `${ALLOW_FILE}: ${file} holds no CJK any more; drop its entry` : `${ALLOW_FILE}: ${file} no longer exists; drop its entry`)
+}
 if (writing) {
   // Regenerate the allow-list from the current tree (for the sweep that establishes the ratchet)
-  const out = ['# Files that may hold lines with CJK characters, and how many (scripts/check-english.mjs). Lower freely; raise with a reason in the PR.']
+  const out = ['# Files that hold lines with CJK characters, and how many — exactly (scripts/check-english.mjs). Raise an entry only with a reason beside it.']
   for (const file of files) {
     if (OUTSIDE.some(re => re.test(file))) continue
     let n = 0

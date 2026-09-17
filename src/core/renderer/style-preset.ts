@@ -21,7 +21,7 @@ export const TRANSLATION_SELECTOR = `html[${ON_ATTR}] ${REAL_TRANSLATION}`
  * barely visible (Codex on #106). The inner layer uses :where() to add no specificity. A split copy itself is
  * excluded, so a real translation **inside** the copy still gets its opacity once.
  *
- * Since INVENTORY T5 the opacity declaration itself is static, in presets.css (its copy of this selector is guarded
+ * The opacity declaration itself is static, in presets.css (its copy of this selector is guarded
  * by tests/renderer/translation-boundary.test.ts); this constant remains the name of the line for the tests
  */
 export const TOP_TRANSLATION_SELECTOR = `${TRANSLATION_SELECTOR}:not(:where(${REAL_TRANSLATION}) *)`
@@ -44,7 +44,7 @@ export function customStyleRule(css: string): string {
  * The look sheet's rules for one look: every value a variable, and nothing but variables. The static sheets consume
  * them — `--axt-opacity` in presets.css's baseline and blur rules, `--axt-color` in modes.css's `.axt-t { color }` and
  * the underline, the band variables in highlight.css — and set none of them, so the look sheet follows the four
- * static sheets in the document and is the only one rewritten when the reader moves a slider (INVENTORY T5; before,
+ * static sheets in the document and is the only one rewritten when the reader moves a slider (before,
  * the opacity declaration itself was generated and had to precede presets.css, Codex on #106).
  *
  * The variables go on `<html>`, where they inherit; the colour on `TRANSLATION_SELECTOR`: `--axt-color` is read by

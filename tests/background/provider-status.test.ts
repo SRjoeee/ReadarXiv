@@ -4,7 +4,7 @@ import { createChainHolder } from '@/entrypoints/background/chain'
 import { createConfigOffers, providerStatus, statusInForce } from '@/entrypoints/background/provider-status'
 import type { TranslationTransport } from '@/providers/transport'
 
-// The provider-status action (INVENTORY P4): a session's chain, the chain in force, or — after a save — a chain
+// The provider-status action: a session's chain, the chain in force, or — after a save — a chain
 // built from what is stored now, without the popup polling for it
 
 const chainOf = (provider: string): TranslationTransport => ({
@@ -81,7 +81,7 @@ describe('providerStatus', () => {
     expect(h.builds.at(-1)).toBe('chrome-builtin')
   })
 
-  it('fresh with a scope binds the session to the chain it is told about, on the sender\'s tab (seventh pass)', async () => {
+  it('fresh with a scope binds the session to the chain it is told about, on the sender\'s tab', async () => {
     const h = harness()
     h.save({ ...DEFAULT_CONFIG, provider: 'google-web' })
     const status = await providerStatus(h.deps, { scope: 's-new', fresh: true }, 7)
@@ -119,7 +119,7 @@ describe('statusInForce', () => {
   }
   const never = (name: string): TranslationTransport => ({ ...chainOf(name), status: () => new Promise<never>(() => {}) })
 
-  it('a chain replaced while its probes answer is not the answer: the status describes the chain in force afterwards (S2 review, third pass)', async () => {
+  it('a chain replaced while its probes answer is not the answer: the status describes the chain in force afterwards (local review)', async () => {
     let release: () => void = () => undefined
     const slow: TranslationTransport = { ...chainOf('old'), status: async () => { await new Promise<void>(resolve => { release = resolve }); return { ...(await chainOf('old').status()) } } }
     const h = holderOf(slow)
@@ -130,7 +130,7 @@ describe('statusInForce', () => {
     expect((await status).status.providerId).toBe('new')
   })
 
-  it('a probe that never settles on a chain that was replaced is not waited for: the replacement answers (fourth pass)', async () => {
+  it('a probe that never settles on a chain that was replaced is not waited for: the replacement answers', async () => {
     const h = holderOf(never('stalled'))
     const status = statusInForce(h.chain)
     await new Promise(resolve => setTimeout(resolve, 0))
@@ -138,7 +138,7 @@ describe('statusInForce', () => {
     expect((await status).status.providerId).toBe('healthy')
   })
 
-  it('a replacement landing after the transport was taken but before its status is awaited is not missed (fifth pass)', async () => {
+  it('a replacement landing after the transport was taken but before its status is awaited is not missed', async () => {
     // current() hands over the old chain and the replacement lands in the same turn, before the caller subscribes
     let inForce = never('stalled')
     let fire: () => void = () => undefined

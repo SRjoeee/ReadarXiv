@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { LINE_MAX, failureLine, normalizeEntries, redact } from '@/shared/diagnostics'
 
-// The diagnostics log's one hard rule (CLAUDE.md rule 7): no key in a line, whatever the line quotes
+// The diagnostics log's one hard rule (CLAUDE.md hard rule 5): no key in a line, whatever the line quotes
 
 describe('redact', () => {
   it('blanks the key shapes an error may quote: OpenAI-style, Google, a bearer token, a key query parameter', () => {

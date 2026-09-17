@@ -32,10 +32,10 @@ export const STATUS_DEADLINE_MS = 5_000
 /**
  * The status of the chain in force — still in force once the status has come back. `status()` waits for the
  * engines' availability probes, and a configuration change can replace the chain meanwhile; the answer would then
- * describe a superseded chain, and a decision made on it would be the previous settings' (the local review of
- * INVENTORY S2, third pass). Re-asked until the chain that answered is the one in force. A probe is not waited for
+ * describe a superseded chain, and a decision made on it would be the previous settings' (local review). Re-asked
+ * until the chain that answered is the one in force. A probe is not waited for
  * past its chain's replacement — a stalled native probe on a chain nobody wants any more must not hold the toggle
- * (fourth pass) — nor past the deadline, which rejects: an obsolete status is not an answer, and the callers treat
+ * — nor past the deadline, which rejects: an obsolete status is not an answer, and the callers treat
  * "unknown" as they did before there was a status to ask
  */
 export async function statusInForce(chain: Pick<ChainHolder, 'current' | 'replaced'>, deadlineMs = STATUS_DEADLINE_MS): Promise<{ transport: TranslationTransport; status: ProviderStatus }> {
@@ -46,7 +46,7 @@ export async function statusInForce(chain: Pick<ChainHolder, 'current' | 'replac
   try {
     for (;;) {
       // The signal first, then the transport: a replacement landing between the two would otherwise be missed —
-      // the old chain's probe would be raced against the replacement after the one already underway (fifth pass)
+      // the old chain's probe would be raced against the replacement after the one already underway
       const replaced = chain.replaced().then(() => null)
       const transport = await Promise.race([chain.current(), deadline])
       const status = await Promise.race([transport.status(), replaced, deadline])
@@ -71,7 +71,7 @@ export interface ProviderStatusDeps {
  * storage event that rebuilds the chain races the page's message (Codex on #157), so the handler offers the stored
  * configuration itself (`ConfigOffers`, in order with the watcher's). An offer that matches what the chain was last
  * built from starts nothing (`onConfig` compares the chain fields); `current()` waits for the build in force to land.
- * Until INVENTORY P4 the popup polled this message ten times, comparing a field of its own choosing each time
+ * Before this, the popup polled the message ten times, comparing a field of its own choosing each time
  */
 export async function providerStatus(deps: ProviderStatusDeps, message: { scope?: string; fresh?: boolean }, tabId?: number): Promise<ProviderStatus> {
   if (!message.fresh) {
@@ -81,7 +81,7 @@ export async function providerStatus(deps: ProviderStatusDeps, message: { scope?
   if (message.fresh) await deps.offers.offer()
   const { transport, status } = await statusInForce(deps.chain)
   // A session starting on freshly saved settings is bound to the chain it is told about: what it records and what
-  // serves it are one chain, however the store moves afterwards (the local review of S2, seventh pass)
+  // serves it are one chain, however the store moves afterwards (local review)
   if (message.fresh && message.scope) deps.router.bindTo(message.scope, transport, tabId)
   return status
 }

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-// helper/register.sh is the one writer of the Native Messaging host manifest (INVENTORY P5): both installers end in it.
+// helper/register.sh is the one writer of the Native Messaging host manifest: both installers end in it.
 // Run against a throwaway HOME, so the machine's own manifests are never touched
 
 const SCRIPT = join(import.meta.dirname, '../../helper/register.sh')

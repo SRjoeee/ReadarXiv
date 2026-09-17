@@ -31,7 +31,7 @@ export function renderPending(block: Block): Element {
   //     line stays through the retry (#76);
   //   - **a half-translated table**: the `cells.size > 0` path goes through `renderTable` + `markPartial`, which
   //     **builds no widget** yet records the block as failed (run.ts:240-246). So the reset cannot hang on “a widget
-  //     was removed” — for such a block `clearFailed` returns false, and the old clone, `data-axt-partial` and the
+  //     was removed” — such a block has none, and the old clone, `data-axt-partial` and the
   //     translated state would stay as they were (#81).
   // `clearTranslation` clears the translation / the half-finished one / the widget of the same id together, and
   // `setState` clears the partial mark along the way

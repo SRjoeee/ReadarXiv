@@ -159,7 +159,7 @@ describe('page session', () => {
     expect(status.images).toBeUndefined()
   })
 
-  it('the session runs on the chain it is told about, bound to it: target and revision come from the status, asked fresh with the session\'s own scope (S2 review)', async () => {
+  it('the session runs on the chain it is told about, bound to it: target and revision come from the status, asked fresh with the session\'s own scope (local review)', async () => {
     // The chain in force was built from a save the configuration read here does not see yet (target jpn); the
     // session runs on the chain's settings, which is what the status, asked fresh, reports
     const h = harness({ holdStatusAt: 1, status: (_scope, _call, statusOptions) => providerStatus(statusOptions?.fresh ? { targetLanguage: 'jpn', revision: 'r-jpn' } : {}) })
@@ -180,7 +180,7 @@ describe('page session', () => {
     expect(h.calls.every(c => c.request.target === 'jpn')).toBe(true)
   })
 
-  it('the action epoch moves with every start and restore; a command from an earlier epoch is refused, a translate decided on an idle page included (S2 review, sixth, seventh and twelfth passes)', async () => {
+  it('the action epoch moves with every start and restore; a command from an earlier epoch is refused, a translate decided on an idle page included (local review)', async () => {
     const h = harness()
     live = h.session
     const idle = (await h.session.status()).epoch!
@@ -205,7 +205,7 @@ describe('page session', () => {
     expect(await h.session.start(undefined, false, undefined, (await h.session.status()).epoch)).toEqual({ started: true })
   })
 
-  it('an epoch belongs to its document: the same tab reloaded starts a new document whose epochs never match the old one\'s (thirteenth pass)', async () => {
+  it('an epoch belongs to its document: the same tab reloaded starts a new document whose epochs never match the old one\'s', async () => {
     // Both documents at the same count: the old one translated once (count 1), the new one translated once (count 1)
     const before = harness()
     await before.session.start()
@@ -226,7 +226,7 @@ describe('page session', () => {
     expect(kept).not.toBeNull()
   })
 
-  it('a start made obsolete while it waits does not swallow the different start asked for after it (thirteenth pass)', async () => {
+  it('a start made obsolete while it waits does not swallow the different start asked for after it', async () => {
     const h = harness({ holdStatusAt: 2 })
     live = h.session
     await h.session.start()
@@ -264,7 +264,7 @@ describe('page session', () => {
     expect(moved.cancelled).toContain(moved.statusCalls[1])
   })
 
-  it('overlapping starts are one start: a second click while the first is asking its status mints no second session (S2 review, tenth pass)', async () => {
+  it('overlapping starts are one start: a second click while the first is asking its status mints no second session (local review)', async () => {
     const h = harness({ holdStatusAt: 1 })
     live = h.session
     const first = h.session.start()

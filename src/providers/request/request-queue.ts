@@ -135,7 +135,6 @@ export class RequestQueue {
   ): Promise<T> {
     const duplicateTask = this.duplicateTask(hash)
     if (duplicateTask) {
-      // console.info(`🔄 Found duplicate task for hash: ${hash}, returning existing promise`)
       if (!scopes?.length) {
         duplicateTask.cancelScopes = null
       } else if (duplicateTask.cancelScopes !== null) {
@@ -170,8 +169,6 @@ export class RequestQueue {
 
     this.waitingTasks.set(hash, task)
     this.waitingQueue.push(task, scheduleAt)
-
-    // console.info(`✅ Task ${task.id} added to queue. Queue size: ${this.waitingQueue.size()}, waiting: ${this.waitingTasks.size}, executing: ${this.executingTasks.size}`)
 
     this.schedule()
     return promise
@@ -402,7 +399,6 @@ export class RequestQueue {
   }
 
   private async executeTask(task: QueuedRequestTask) {
-    // console.info(`🏃 Starting execution of task ${task.id} (attempt ${task.retryCount + 1}) at ${Date.now()}`)
 
     let timeoutId: ReturnType<typeof setTimeout> | null = null
     // The thunk's own Promise is kept: the timeout won a race, the thunk may still be running, and the concurrency slot
@@ -421,7 +417,6 @@ export class RequestQueue {
       // Create a timeout promise
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
-          // console.info(`⏰ Task ${task.id} timed out after ${timeoutMs}ms`)
           const timeoutError = new Error(`Task ${task.id} timed out after ${timeoutMs}ms`)
           timeoutError.name = REQUEST_TIMEOUT_ERROR_NAME
           // Reject before aborting: the race must settle with the timeout error
@@ -445,7 +440,6 @@ export class RequestQueue {
         timeoutId = null
       }
 
-      // console.info(`✅ Task ${task.id} completed successfully at ${Date.now()}`)
       // Any completed request proves the provider recovered from rate limiting.
       this.consecutiveRateLimits = 0
       if (!task.drained) {
@@ -457,8 +451,6 @@ export class RequestQueue {
         clearTimeout(timeoutId)
         timeoutId = null
       }
-
-      // console.error(`❌ Task ${task.id} failed at ${Date.now()}:`, error)
 
       if (task.drained) {
         return
@@ -495,8 +487,6 @@ export class RequestQueue {
         const retryAt = now + decision.delayMs
         task.scheduleAt = retryAt
 
-        // console.warn(`🔄 Retrying task ${task.id} (attempt ${task.retryCount}/${this.options.maxRetries}) after ${Math.round(decision.delayMs)}ms`)
-
         // Move task back to waiting queue for retry
         this.waitingTasks.set(task.hash, task)
         this.waitingQueue.push(task, retryAt)
@@ -515,7 +505,6 @@ export class RequestQueue {
         this.schedule()
       } else {
         // Max retries exceeded, reject the promise
-        // console.error(`💀 Task ${task.id} failed permanently after ${this.options.maxRetries} retries`)
         if (decision.failQueue) {
           this.failCurrentBacklog(error)
         } else {

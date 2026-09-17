@@ -38,7 +38,7 @@ import { squash } from '@/core/text'
 /** On the original: its translation was copied into the copy, and the style sheet hides this margin note */
 const LOCALIZED_ATTR = 'data-axt-note'
 /** The class the translation copied into the copy takes: the ar5iv footnote-box shell comes off (below) */
-export const NOTE_T_CLASS = 'axt-note-t'
+const NOTE_T_CLASS = 'axt-note-t'
 /**
  * The wrapper around the copy's **own original text**. The copy is a clone rebuilt from the
  * placeholder and carries no block mark, so only mode's hiding rule (`[data-axt-state="translated"]`)
@@ -47,7 +47,7 @@ export const NOTE_T_CLASS = 'axt-note-t'
  * the marks — go into this span and the stylesheet hides it per mode; only next to a translation
  * that actually arrived (`:has(> .axt-note-t)`), so a copy without one keeps showing its text.
  */
-export const NOTE_S_CLASS = 'axt-note-s'
+const NOTE_S_CLASS = 'axt-note-s'
 
 /** The translation placed inside the copy: the footnote-box shell off, the number it carries removed (the copy's outer layer has one already) */
 function localizedCopy(translated: Element): Element {
@@ -205,7 +205,7 @@ export function localizeNotes(root: Document | Element): number {
         // it, and after a failure the widget the reader retries from (Codex on #153).
         // The mark goes on only while the copy reproduces the original word for word; against a copy
         // the engine mangled both stay on screen — a duplicate beats a note gone missing.
-        // Nor against a copy some mode hides whole (`hidableCopy`): hiding the original too would
+        // Nor against a copy some mode hides whole (`hidable`): hiding the original too would
         // take the footnote off the page altogether (Codex on #163, in two rounds — first the
         // identity clone, then the split-figure one). Keeping the original leaves one note in the
         // mode that hides the clone and two in the mode that shows it — the same
