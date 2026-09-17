@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,7 +11,7 @@ import { ensureFixtures, readManifest } from '../../scripts/fetch-fixtures.mjs'
 
 const BODY = Buffer.from('<html>the pinned bytes</html>')
 const sha = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
-const ENTRY = { path: 'tests/fixtures/arxiv/0000.00000.html', url: 'https://arxiv.org/html/0000.00000v1', sha256: sha(BODY), bytes: BODY.length }
+const ENTRY = { path: 'tests/fixtures/arxiv/0000.00000.html', url: 'https://arxiv.org/html/0000.00000v1', sha256: sha(BODY), bytes: BODY.length, for: 'tests' }
 
 let root: string
 const file = () => join(root, ENTRY.path)
@@ -64,13 +64,85 @@ describe('ensureFixtures', () => {
     expect(existsSync(file())).toBe(false)
   })
 
-  it('a 404 is final — the pinned version is gone — and a 503 is tried again', async () => {
+  it('a 404 is final and says the pin needs moving, not that the network is missing — and a 503 is tried again', async () => {
     const gone = serving(BODY, 404)
-    await expect(ensureFixtures({ root, fetchImpl: gone, gapMs: 0 })).rejects.toThrow(/HTTP 404/)
-    expect(gone).toHaveBeenCalledTimes(1)
+    const refusal = ensureFixtures({ root, fetchImpl: gone, gapMs: 0 })
+    await expect(refusal).rejects.toThrow(/HTTP 404.*nothing was written.*the pin needs moving/s)
+    await expect(ensureFixtures({ root, fetchImpl: gone, gapMs: 0 })).rejects.not.toThrow(/Once arXiv can be reached/)
+    expect(gone).toHaveBeenCalledTimes(2)
     let calls = 0
     const flaky = vi.fn(async () => (++calls === 1 ? new Response('', { status: 503 }) : new Response(new Uint8Array(BODY)))) as unknown as typeof fetch
     expect((await ensureFixtures({ root, fetchImpl: flaky, gapMs: 0 })).downloaded).toEqual([ENTRY.path])
+  })
+
+  it('a 429 waits as long as its Retry-After asks, then tries again', async () => {
+    // The ordinary backoff is 0 here (gapMs), so the second one second can only be the header's
+    let calls = 0
+    const at: number[] = []
+    const limited = vi.fn(async () => {
+      at.push(performance.now())
+      return ++calls === 1 ? new Response('', { status: 429, headers: { 'retry-after': '1' } }) : new Response(new Uint8Array(BODY))
+    }) as unknown as typeof fetch
+    expect((await ensureFixtures({ root, fetchImpl: limited, gapMs: 0 })).downloaded).toEqual([ENTRY.path])
+    expect(at).toHaveLength(2)
+    expect(at[1]! - at[0]!).toBeGreaterThanOrEqual(990)
+  })
+
+  it('a redirect that leaves arXiv is refused and nothing is written', async () => {
+    const response = new Response(new Uint8Array(BODY))
+    Object.defineProperty(response, 'redirected', { value: true })
+    Object.defineProperty(response, 'url', { value: 'https://mirror.example.com/0000.00000v1' })
+    const fetchImpl = vi.fn(async () => response) as unknown as typeof fetch
+    await expect(ensureFixtures({ root, fetchImpl, gapMs: 0 })).rejects.toThrow(/redirected to https:\/\/mirror\.example\.com.*outside arXiv/s)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(existsSync(file())).toBe(false)
+  })
+
+  it('bytes of the right hash but not the recorded size cannot exist; bytes of the right size but another hash are refused as another page', async () => {
+    const same = Buffer.from('<html>the pinned bytez</html>')
+    expect(same.length).toBe(BODY.length)
+    await expect(ensureFixtures({ root, fetchImpl: serving(same), gapMs: 0 })).rejects.toThrow(/a new rendering of the paper, or a page in its place/)
+  })
+
+  it('a symbolic link in the fixture tree does not carry the write outside it', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'axt-outside-'))
+    try {
+      symlinkSync(outside, join(root, 'tests/fixtures/arxiv'))
+      await expect(ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })).rejects.toThrow(/outside the fixture directories; nothing was written/)
+      expect(readdirSync(outside)).toEqual([])
+    } finally {
+      rmSync(outside, { recursive: true, force: true })
+    }
+  })
+
+  it('a partial file someone left is never written through: each run writes a name of its own, exclusively', async () => {
+    mkdirSync(join(root, 'tests/fixtures/arxiv'), { recursive: true })
+    const victim = join(root, 'victim.txt')
+    writeFileSync(victim, 'keep me')
+    symlinkSync(victim, `${file()}.partial`)
+    expect((await ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })).downloaded).toEqual([ENTRY.path])
+    expect(readFileSync(victim, 'utf8')).toBe('keep me')
+    expect(readFileSync(file())).toEqual(BODY)
+  })
+
+  it('two runs fetching the same missing file at once both succeed, and the file is whole', async () => {
+    const [a, b] = await Promise.all([
+      ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 }),
+      ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 }),
+    ])
+    expect([...a.downloaded, ...a.verified]).toEqual([ENTRY.path])
+    expect([...b.downloaded, ...b.verified]).toEqual([ENTRY.path])
+    expect(readFileSync(file())).toEqual(BODY)
+    expect(readdirSync(join(root, 'tests/fixtures/arxiv'))).toEqual(['0000.00000.html'])
+  })
+
+  it('a consumer fetches only what it reads', async () => {
+    const helper = { ...ENTRY, path: 'helper/Tests/Fixtures/x.png', for: 'helper-smoke' }
+    writeFileSync(join(root, 'tests/fixtures/remote.json'), JSON.stringify({ fixtures: [ENTRY, helper] }))
+    const fetchImpl = serving(BODY)
+    expect((await ensureFixtures({ root, fetchImpl, gapMs: 0, for: 'tests' })).downloaded).toEqual([ENTRY.path])
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(existsSync(join(root, helper.path))).toBe(false)
   })
 })
 
@@ -86,6 +158,23 @@ describe('a manifest that names anything but a fixture of arXiv\'s is refused be
     })
   }
 
+  it('a malformed manifest says what is wrong with it', async () => {
+    const cases: [unknown, RegExp][] = [
+      [{}, /no "fixtures" array/],
+      [{ fixtures: [{ ...ENTRY, sha256: 42 }] }, /as strings/],
+      [{ fixtures: [{ ...ENTRY, sha256: 'abc' }] }, /64 lowercase hex digits/],
+      [{ fixtures: [{ ...ENTRY, bytes: '12' }] }, /"bytes" is not a positive integer/],
+      [{ fixtures: [{ ...ENTRY, for: 'e2e' }] }, /"for" is not one of tests, helper-smoke/],
+      [{ fixtures: [ENTRY, ENTRY] }, /is named twice/],
+    ]
+    for (const [manifest, message] of cases) {
+      writeFileSync(join(root, 'tests/fixtures/remote.json'), JSON.stringify(manifest))
+      const fetchImpl = serving(BODY)
+      await expect(ensureFixtures({ root, fetchImpl, gapMs: 0 })).rejects.toThrow(message)
+      expect(fetchImpl).not.toHaveBeenCalled()
+    }
+  })
+
   it('an address that is not arxiv.org over https', async () => {
     for (const url of ['http://arxiv.org/html/0000.00000v1', 'https://arxiv.org.example.com/html/0000.00000v1', 'file:///etc/hosts']) {
       withEntry({ url })
@@ -97,7 +186,7 @@ describe('a manifest that names anything but a fixture of arXiv\'s is refused be
 })
 
 describe('the manifest', () => {
-  it('pins a version in every URL, and every path is one git ignores and CI keeps between runs', async () => {
+  it('pins a version in every URL; every path is one git ignores, and every one the tests read is one CI keeps between runs', async () => {
     const root = join(import.meta.dirname, '../..')
     const ignored = readFileSync(join(root, '.gitignore'), 'utf8').split('\n')
     const cached = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8').split('\n').map(line => line.trim())
@@ -107,7 +196,8 @@ describe('the manifest', () => {
       expect(entry.url, entry.path).toMatch(/^https:\/\/arxiv\.org\/html\/\d{4}\.\d{5}v\d+(\/|$)/)
       expect(entry.sha256, entry.path).toMatch(/^[0-9a-f]{64}$/)
       expect(ignored, entry.path).toContain(`/${entry.path}`)
-      expect(cached, entry.path).toContain(entry.path)
+      // Only the tests' fixtures are fetched in CI; the helper's image is for a smoke test CI cannot run
+      expect(cached.includes(entry.path), entry.path).toBe(entry.for === 'tests')
     }
   })
 

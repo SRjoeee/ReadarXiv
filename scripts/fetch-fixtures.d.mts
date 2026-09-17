@@ -7,7 +7,11 @@ export interface RemoteFixture {
   url: string
   sha256: string
   bytes: number
+  /** The one consumer that reads it */
+  for: 'tests' | 'helper-smoke'
 }
+
+export const CONSUMERS: readonly ['tests', 'helper-smoke']
 
 export function readManifest(root?: string): Promise<RemoteFixture[]>
 
@@ -17,4 +21,6 @@ export function ensureFixtures(options?: {
   log?: (line: string) => void
   /** Between two downloads and before a retry; the tests pass 0 */
   gapMs?: number
+  /** Only the fixtures this consumer reads; all of them when absent */
+  for?: 'tests' | 'helper-smoke'
 }): Promise<{ verified: string[]; downloaded: string[] }>
