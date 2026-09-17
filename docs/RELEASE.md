@@ -12,12 +12,12 @@ How a version of Read arXiv is cut, what is checked first, and the store listing
 
 The release commit is made **on the branch, before the merge**, so that the tree is clean at every step after it and the tagged commit carries the dated changelog and the recorded results.
 
-1. On the release branch: `CHANGELOG.md`'s "unreleased" heading gets the date. `pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test && pnpm build` — exit code green — then the browser suites on that build: `pnpm e2e`, `pnpm e2e:layout`, `pnpm e2e:a11y`, `pnpm e2e:local-endpoint`, and `pnpm e2e:image` on a Mac with the helper. Record the counts in the pull request that cuts the release; the dated changelog is the release commit.
+1. On the release branch: `CHANGELOG.md`'s "unreleased" heading gets the date, and so does `PRIVACY.md`'s "Effective" line when the policy changed in this release. `pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test && pnpm build` — exit code green — then the browser suites on that build: `pnpm e2e`, `pnpm e2e:layout`, `pnpm e2e:a11y`, `pnpm e2e:local-endpoint`, and `pnpm e2e:image` on a Mac with the helper. Record the counts in the pull request that cuts the release; the dated changelog is the release commit.
 2. The release branch is merged into `main` with a merge commit (never squash). The merge commit is the release.
 3. On the merge commit, with a clean tree, the gate once more (`pnpm typecheck && pnpm lint && pnpm test && pnpm build`); then the annotated tag on it, and push the tag.
 4. `pnpm build && pnpm zip` **after** the tag is pushed and with the tree still clean: the console line `[build] helper install ref: v0.4.0` is the check (a build before the push, or on a dirty tree, stamps the commit or `main` instead). The archive is `.output/readarxiv-0.4.0-chrome.zip`.
 5. A GitHub release for the tag, with the archive attached and the changelog section as its notes.
-6. The Chrome Web Store submission (below). Until it is listed, the README's "load unpacked" path is the install.
+6. The Chrome Web Store submission (below), with the privacy policy URL. Until it is listed, the README's "load unpacked" path is the install.
 7. `helper/README.md`'s one-line command is the same script the popup shows; a reader on the release reaches it through the popup, stamped with the tag.
 
 ## The store listing
@@ -67,5 +67,7 @@ Category: Productivity. Language: English, with the Chinese description below. T
 | `https://*/*`, `http://*/*` (optional) | An endpoint the reader adds in the settings; each origin is asked for on its own when saved |
 
 **Privacy practices** (the store's questionnaire). What leaves the browser, and only when the reader translates a page: the text of the paper's blocks, to the translation service the reader selected. To an LLM service the reader added, each request also carries the selected prompt (a shipped one or the reader's own), the glossary entries that match the passage, and the paper's title, abstract and section heading as context (`providers/prompt.ts`); to Microsoft's and Google's web translators only the text; Chrome's built-in translator and a local endpoint keep everything on the machine. Words recognised inside figures are translated like any other text; the image itself is never uploaded (bitmaps are read by the local helper). The extension stores settings, API keys and translations locally, uses no analytics and no remote code, and collects nothing about the reader.
+
+**Privacy policy URL** (required: the extension handles website content and stores API keys): `https://github.com/SRjoeee/ReadarXiv/blob/main/PRIVACY.md`. It points at `main` so the listing always shows the policy in force; the file's history records every change. The questionnaire above and `PRIVACY.md` describe the same practices, and change together.
 
 **Single purpose**: translating arXiv HTML papers in place.
