@@ -1,4 +1,4 @@
-// The client of the local OCR helper (DESIGN §15.2 / §15.4): request / response correlation over a Chrome Native
+// The client of the local OCR helper (DESIGN §15.2–§15.4): request / response correlation over a Chrome Native
 // Messaging port. It is the helper implementation of `OcrBackend` (ocr-backend.ts, DESIGN §15.3).
 //
 // Facts about MV3 that shape it:

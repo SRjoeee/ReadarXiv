@@ -350,7 +350,7 @@ Every feature added on the main line is registered here first; a feature without
 | Thinking switch | §8.2 | done | Settings · 更多选项 | S-O-30 |
 | Skeleton while loading / failed block retry | §7.6 | done | in page | S-I-01…02 |
 | **Image translation**: helper detection, multi-select modes, progress, pause, retry | §15, PR #87–89 | done | Settings · a section under 翻译服务; popup failure line and card note; in-page overlay | S-O-24…27d, S-P-35 / 60, S-I-04, P11, P14…P14b |
-| Helper permission button | §15.4, DESIGN §15.3 | done [2026-09-13] | popup card; Settings · 图片翻译 | S-O-86…86b, S-P-86b…d |
+| Helper permission button | DESIGN §15.3 | done [2026-09-13] | popup card; Settings · 图片翻译 | S-O-86…86b, S-P-86b…d |
 | **Reading typography** (font size / line height / width / spacing / colour / presets / reset) | #47 | decided, not built | Settings · 阅读 · typography card | — (no id yet; S-O-47 names the advanced CSS box since the renumbering) |
 | Split-view dragging | #83 | experimental | in-page handle; one “恢复居中” in settings | S-I-05 (the settings entry has no id yet) |
 | Free AI translation (hosted) | #97 | candidate | fourth item of the service list | — (no ids yet) |

@@ -107,8 +107,8 @@ export interface AxtMessages {
    */
   'axt:engine-ready': { request: { id: string; scope?: string; rebindAll?: boolean }; response: { reset: boolean } }
   /**
-   * options / popup / content → background: where the recognition helper stands (DESIGN §15.3's ping, the four
-   * states of DESIGN §15.3). `recheck` re-probes a host that was reported missing; see OcrBackend.status
+   * options / popup / content → background: where the recognition helper stands (DESIGN §15.3: the ping, the four
+   * states). `recheck` re-probes a host that was reported missing; see OcrBackend.status
    */
   'axt:helper-status': { request: { recheck?: boolean }; response: HelperStatus }
   /**

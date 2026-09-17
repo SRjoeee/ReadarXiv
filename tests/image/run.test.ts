@@ -253,7 +253,7 @@ describe('startImageTranslation', () => {
     // Asserted before awaiting the run: without the abort the second fetch never settles, and the failure is this line
     expect(signals[1]?.aborted).toBe(true)
     await pending
-    // Both settled once, as failed — the abort added no second failure and left nothing requested
+    // Both settled as failed, nothing left requested
     expect(run.failed()).toHaveLength(2)
     expect(run.progress().failed).toBe(2)
   })
