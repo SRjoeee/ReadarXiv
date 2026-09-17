@@ -57,6 +57,12 @@ export interface RunLedger<T extends { el: Element }> {
   observing(): number
   /** Targets that failed, in document order — the popup's "retry failed" hands them back to the run */
   failed(): T[]
+  /**
+   * Hand every target still waiting for the viewport to the run now: the reader chose the whole paper while this
+   * session runs (§10). Before `observe()` it is remembered and done as the scheduler is made; nothing when halted.
+   * Returns how many were handed over
+   */
+  release(): number
 }
 
 export function createRunLedger<T extends { el: Element }>(targets: readonly T[], deps: LedgerDeps<T>): RunLedger<T> {
@@ -67,11 +73,25 @@ export function createRunLedger<T extends { el: Element }>(targets: readonly T[]
   let scheduler: LazyScheduler<T> | null = null
 
   const halted = () => stopped || fatal !== undefined || deps.isCurrent?.() === false
+  const inState = (state: Outcome) => targets.filter(target => outcome.get(target) === state)
+  /** The reader asked for the whole paper before the scheduler existed: honoured the moment it does */
+  let releaseAll = false
+  const releaseWaiting = (): number => {
+    const pending = inState('waiting')
+    if (pending.length > 0) scheduler?.trigger(pending)
+    return pending.length
+  }
 
   return {
     observe() {
       if (halted() || scheduler) return
       scheduler = createLazyScheduler([...targets], { ...deps.preload, onEnter: deps.onEnter })
+      if (releaseAll) releaseWaiting()
+    },
+    release() {
+      if (halted()) return 0
+      releaseAll = true
+      return scheduler ? releaseWaiting() : 0
     },
     intake(picked, admit) {
       if (halted()) return { taken: [], held: [] }
@@ -121,7 +141,7 @@ export function createRunLedger<T extends { el: Element }>(targets: readonly T[]
       }
       return { total: outcome.size, requested, done, failed, ...(fatal !== undefined ? { fatal } : {}) }
     },
-    inState: state => targets.filter(target => outcome.get(target) === state),
+    inState,
     failed: () => targets.filter(target => outcome.get(target) === 'failed'),
   }
 }

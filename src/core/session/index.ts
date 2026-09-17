@@ -529,6 +529,14 @@ export function createPageSession(deps: SessionDeps): PageSession {
         highlight = null
       }
     }
+    // The preload range (UI.md S-O-50): the whole-paper stop reaches an open paper at once — everything still waiting
+    // for the viewport is handed to both runs now. Any other change applies from the next session: a running
+    // observer's distance cannot be moved, and what was requested cannot be taken back (Devin on #222)
+    if (run && current && config.preload.margin === 'all' && current.config.preload.margin !== 'all') {
+      run.release()
+      images?.release()
+    }
+    if (current) current = { ...current, config: { ...current.config, preload: config.preload } }
     // Image translation, both the switch (popup) and the per-mode list (settings): on starts the
     // image run for this session, off stops it and hides every overlay through the display gate,
     // and a change to the modes has to reach both the gate and the run that reads it — otherwise
