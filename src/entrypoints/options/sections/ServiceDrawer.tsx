@@ -1,10 +1,10 @@
-// Add or edit one of the reader's services. The form is local until 「连接」: that click saves it,
+// Add or edit one of the reader's services. The form is local until “Connect”: that click saves it,
 // asks for the endpoint's origin if it is not one the manifest already has (a permission request
 // needs a user gesture), and then translates one sample sentence through that service by name.
 import { useState } from 'react'
 import { getConfig } from '@/config/storage'
 import type { Config } from '@/config/schema'
-import { type Service, defaultServiceName, newServiceId, serviceSchema } from '@/config/services'
+import { type Service, defaultServiceName, isLoopback, newServiceId, serviceSchema } from '@/config/services'
 import { wireFormatOfProvider } from '@/providers/wire-formats'
 import { sendMessage } from '@/shared/messages'
 import { Button } from '@/ui/Button'
@@ -21,14 +21,6 @@ const SAMPLE_MARKERS = 'Let @a# be a connected graph; see @b#.'
 
 const BLANK: Omit<Service, 'id'> = { kind: 'openai-compat', name: '', baseURL: 'https://openrouter.ai/api/v1', apiKey: '', model: '', thinking: 'disabled' }
 
-const isLoopback = (baseURL: string): boolean => {
-  try {
-    const host = new URL(baseURL).hostname
-    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
-  } catch {
-    return false
-  }
-}
 
 export function ServiceDrawer({ service, patch, onClose }: {
   /** null = a new one */
@@ -38,7 +30,7 @@ export function ServiceDrawer({ service, patch, onClose }: {
 }) {
   const [form, setForm] = useState<Omit<Service, 'id'>>(service ? { ...service } : BLANK)
   /**
-   * The id this drawer is editing. A drawer opened with 添加服务 has none until the first 连接
+   * The id this drawer is editing. A drawer opened with “Add a service” has none until the first “Connect”
    * saves one — and it has to keep that id, or a second press would generate another and append a
    * duplicate instead of updating what was just saved (Codex on #157)
    */
@@ -52,9 +44,9 @@ export function ServiceDrawer({ service, patch, onClose }: {
   const [result, setResult] = useState('')
   /**
    * The key the form would save right now. An empty box means "leave the stored one alone", so the
-   * fallback has to be the **form's** key, not the one this drawer opened with: 清除 empties the
+   * fallback has to be the **form's** key, not the one this drawer opened with: “Clear” empties the
    * form, and reading the prop instead would write the old key straight back (and after a save,
-   * a second 连接 would undo the new one).
+   * a second “Connect” would undo the new one).
    */
   const keyToSave = () => keyInput || form.apiKey
 
@@ -70,9 +62,9 @@ export function ServiceDrawer({ service, patch, onClose }: {
       const saving = id ?? newServiceId()
       const next: Service = { ...form, id: saving, name: form.name.trim() || defaultServiceName(form.model), apiKey: keyToSave() }
       const parsed = serviceSchema.safeParse(next)
-      if (!parsed.success) throw new Error(parsed.error.issues.map(i => `${i.path.join('.')}：${i.message}`).join('；'))
+      if (!parsed.success) throw new Error(parsed.error.issues.map(i => O.services.issue(i.path.join('.'), i.message)).join(O.services.issueSeparator))
       const value = parsed.data
-      // 先校验再申请权限：字段有错时不该先把 host 权限拿到手（Codex 在 #6 指出）
+      // Validate before asking for the permission: with a field wrong, the host permission must not be taken first (Codex on #6)
       granted = await ensureHostPermission(value.baseURL)
       await patch(latest => {
         const known = latest.services.some(s => s.id === saving)
@@ -80,14 +72,14 @@ export function ServiceDrawer({ service, patch, onClose }: {
           ? latest.services.map(s => (s.id === saving ? value : s))
           : [...latest.services, value]
         // Adding one selects it; editing one does not. The radio beside each row is what chooses,
-        // and 连接 only promises to save and test the endpoint named here — editing a spare service
+        // and “Connect” only promises to save and test the endpoint named here — editing a spare service
         // must not quietly change what the next page translates with (Codex on #157)
         return { ...latest, services, provider: known ? latest.provider : saving }
       })
       granted = false // the save went through; the permission belongs to a stored service now
       setId(saving)
       setSavedURL(value.baseURL)
-      // The form now holds what storage holds, so a second 连接 saves the same thing
+      // The form now holds what storage holds, so a second “Connect” saves the same thing
       setForm(value)
       setKeyInput('')
 
@@ -108,7 +100,7 @@ export function ServiceDrawer({ service, patch, onClose }: {
       // Nothing was stored, so an origin this attempt asked for should not stay granted — the
       // schema's service limit and any storage failure both land here (Codex on #157)
       if (granted) await releaseHostPermission(form.baseURL, (await getConfig()).services.map(s => s.baseURL)).catch(() => undefined)
-      // 权限申请只说是哪一种，句子在语言包里（Codex 在 #161 指出）
+      // The permission request only says which kind; the sentence is in the locale pack (Codex on #161)
       setResult(e instanceof PermissionError
         ? (e.kind === 'badURL' ? O.services.permission.badURL : O.services.permission.denied(e.origin ?? ''))
         : e instanceof Error ? e.message : String(e))

@@ -217,26 +217,6 @@ function project(text: string, format: WireFormat, context: SplitContext): { vis
   return { visible, toWire, openEnds, tokens }
 }
 
-/**
- * Sentence lengths, in order, summing exactly to `text.length`.
- *
- * The exact partition is the contract: `verifyAlignment` rejects anything that does not reconstruct
- * the text it describes, so a splitter that lost or duplicated a character would simply produce no
- * highlight. Returns a single length for text with no interior boundary.
- */
-export function splitSentences(text: string, format: WireFormat = 'tags', context: SplitContext = {}): number[] {
-  if (text.length === 0) return []
-  const cuts = sentenceCuts(text, format, context)
-  const lengths: number[] = []
-  let prev = 0
-  for (const cut of cuts) {
-    lengths.push(cut - prev)
-    prev = cut
-  }
-  lengths.push(text.length - prev)
-  return lengths
-}
-
 /** Cut points inside the text, i.e. the boundaries between sentences, excluding 0 and `length`. */
 export function sentenceCuts(text: string, format: WireFormat = 'tags', context: SplitContext = {}): number[] {
   if (text.length === 0) return []

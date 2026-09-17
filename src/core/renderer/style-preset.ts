@@ -6,28 +6,25 @@
 // instead of twenty and every value arrives as a variable.
 import type { Look } from '@/config/appearance'
 import { HL_OPACITY_MAX, HL_OPACITY_MIN } from '@/config/appearance'
+import { ON_ATTR, REAL_TRANSLATION } from './attrs'
 import { OPACITY_MAX, OPACITY_MIN, sanitizeColor, sanitizeCustomCss } from './style-values'
 
 export { COLOR_MAX, OPACITY_MAX, OPACITY_MIN, sanitizeColor, sanitizeCustomCss } from './style-values'
 
-/** The active profile's underline, absent when it has none */
-export const UNDERLINE_ATTR = 'data-axt-underline'
-/** Present when the active profile blurs the translation until it is hovered */
-export const BLUR_ATTR = 'data-axt-blur'
-
-/** 自定义 CSS 的选择器由我们给出，用户只填花括号里的声明 */
-// 与 presets.css 同一条界线：加载圆环、失败控件、side 模式的镜像与拆分克隆都带 .axt-t，但都不是译文
-/** 「真正的译文」这条界线：与 presets.css 每一行、split-figures.ts 的 REAL_TRANSLATION 必须一致 */
-export const TRANSLATION_SELECTOR = 'html[data-axt-on] .axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)'
+/** The line “a real translation” is REAL_TRANSLATION of attrs.ts; every copy of it in presets.css is guarded by tests/renderer/translation-boundary.test.ts */
+export const TRANSLATION_SELECTOR = `html[${ON_ATTR}] ${REAL_TRANSLATION}`
 
 /**
- * 「不是任何**真**译文的后代」的真译文。透明度必须用它，不能用 TRANSLATION_SELECTOR：
- * side 模式的 `localizeNotes()` 会把脚注译文（`.axt-note-t.axt-t`）插进段落译文内部，
- * 两层都匹配的话 opacity 会相乘——下限 0.3 会渲染成 0.09，几乎看不见（Codex 在 #106 指出）。
- * 内层用 :where() 压掉特异度贡献。拆图副本本身被排除，所以副本**里**的真译文仍然拿到一次透明度
+ * A real translation “that is no descendant of any **real** translation”. Opacity must use it, never
+ * TRANSLATION_SELECTOR: side mode's `localizeNotes()` puts a footnote's translation (`.axt-note-t.axt-t`) inside a
+ * paragraph's translation, and with both layers matching the opacities multiply — the floor of 0.3 renders as 0.09,
+ * barely visible (Codex on #106). The inner layer uses :where() to add no specificity. A split copy itself is
+ * excluded, so a real translation **inside** the copy still gets its opacity once.
+ *
+ * The opacity declaration itself is static, in presets.css (its copy of this selector is guarded
+ * by tests/renderer/translation-boundary.test.ts); this constant remains the name of the line for the tests
  */
-const NESTED = '.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)'
-export const TOP_TRANSLATION_SELECTOR = `${TRANSLATION_SELECTOR}:not(:where(${NESTED}) *)`
+export const TOP_TRANSLATION_SELECTOR = `${TRANSLATION_SELECTOR}:not(:where(${REAL_TRANSLATION}) *)`
 
 /**
  * The reader's own declarations apply to the active profile whatever else it sets: v12 made them a
@@ -36,7 +33,7 @@ export const TOP_TRANSLATION_SELECTOR = `${TRANSLATION_SELECTOR}:not(:where(${NE
 export const CUSTOM_STYLE_SELECTOR = TRANSLATION_SELECTOR
 
 
-/** 拼成可注入的规则；空串返回空串（不产生空规则） */
+/** Assemble an injectable rule; an empty string gives an empty string (no empty rule) */
 export function customStyleRule(css: string): string {
   const sanitized = sanitizeCustomCss(css)
   if (!sanitized.ok || sanitized.css === '') return ''
@@ -44,33 +41,27 @@ export function customStyleRule(css: string): string {
 }
 
 /**
- * The injected rules for one look, **in two pieces** — they belong on either side of presets.css
- * (Codex on #106):
+ * The look sheet's rules for one look: every value a variable, and nothing but variables. The static sheets consume
+ * them — `--axt-opacity` in presets.css's baseline and blur rules, `--axt-color` in modes.css's `.axt-t { color }` and
+ * the underline, the band variables in highlight.css — and set none of them, so the look sheet follows the four
+ * static sheets in the document and is the only one rewritten when the reader moves a slider (before,
+ * the opacity declaration itself was generated and had to precede presets.css, Codex on #106).
  *
- * - `base` goes **before** presets.css: `--axt-opacity` and the baseline `opacity` declaration, so
- *   the blur rule (which has an opacity of its own) can multiply the reader's value into its own
- *   formula instead of having the slider silently do nothing.
- * - `overrides` goes **after**: the colour and the band variables, so they win over anything the
- *   sheet sets by cascade order rather than by specificity.
- *
- * Opacity uses `TOP_TRANSLATION_SELECTOR` (the outermost real translation), the colour
- * `TRANSLATION_SELECTOR`: `--axt-color` is inherited and does not stack, `opacity` multiplies.
+ * The variables go on `<html>`, where they inherit; the colour on `TRANSLATION_SELECTOR`: `--axt-color` is read by
+ * every `.axt-t`, and the mirrors and split copies — visual clones of the source — must not wear it.
  */
-export function appearanceRule(look: Look): { base: string; overrides: string } {
+export function appearanceRule(look: Look): string {
   const color = sanitizeColor(look.style.color)
   const band = sanitizeColor(look.highlight.color)
   const opacity = look.style.opacity
-  const dimmed = Number.isFinite(opacity) && opacity < OPACITY_MAX
-  const base = dimmed
-    ? `${TOP_TRANSLATION_SELECTOR} {\n--axt-opacity: ${Math.max(OPACITY_MIN, opacity)};\nopacity: var(--axt-opacity, 1);\n}\n`
-    : ''
-
+  const on: string[] = []
+  if (Number.isFinite(opacity) && opacity < OPACITY_MAX) on.push(`--axt-opacity: ${Math.max(OPACITY_MIN, opacity)};`)
   // The band's strength is a percentage for `color-mix`, clamped the way the schema clamps it
   const mix = Math.round(Math.min(HL_OPACITY_MAX, Math.max(HL_OPACITY_MIN, look.highlight.opacity)) * 100)
-  const on = [`--axt-hl-mix: ${mix}%;`]
+  on.push(`--axt-hl-mix: ${mix}%;`)
   if (band.ok && band.color !== '') on.push(`--axt-hl-color: ${band.color};`)
   if (look.style.underline !== 'none' && look.style.thickness === 2) on.push('--axt-deco-thickness: 2px;')
-  let overrides = `html[data-axt-on] {\n${on.join('\n')}\n}\n`
-  if (color.ok && color.color !== '') overrides += `${TRANSLATION_SELECTOR} {\n--axt-color: ${color.color};\n}\n`
-  return { base, overrides }
+  let rule = `html[${ON_ATTR}] {\n${on.join('\n')}\n}\n`
+  if (color.ok && color.color !== '') rule += `${TRANSLATION_SELECTOR} {\n--axt-color: ${color.color};\n}\n`
+  return rule
 }

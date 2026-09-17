@@ -1,4 +1,4 @@
-// Appearance profiles (spec §3): the reader's own list of translation styles and hover bands.
+// Appearance profiles (DESIGN §7.5): the reader's own list of translation styles and hover bands.
 // The built-ins are ordinary entries with fixed ids, so they can be edited, deleted and restored.
 import { z } from 'zod'
 import { COLOR_MAX, OPACITY_MAX, OPACITY_MIN, sanitizeColor, sanitizeCustomCss } from '@/core/renderer/style-values'
@@ -9,10 +9,11 @@ export type Underline = (typeof UNDERLINES)[number]
 export const HL_OPACITY_MIN = 0.05
 export const HL_OPACITY_MAX = 0.6
 
-const colorField = z.string().max(COLOR_MAX).refine(v => sanitizeColor(v).ok, '不是有效的颜色值')
+// The zod messages are diagnostics; the reader sees the locale pack's sentence for the field (ui/strings.ts fallbackText)
+const colorField = z.string().max(COLOR_MAX).refine(v => sanitizeColor(v).ok, 'not a valid colour value')
 const idField = z.string().min(1).max(40)
 
-export const styleProfileSchema = z.object({
+const styleProfileSchema = z.object({
   id: idField,
   name: z.string().min(1).max(40),
   /** '' = follow the original text */
@@ -22,12 +23,12 @@ export const styleProfileSchema = z.object({
   thickness: z.union([z.literal(1), z.literal(2)]),
   /** Blurred until hovered */
   blur: z.boolean(),
-  /** 高级: declarations only; the selector is the extension's */
-  css: z.string().max(2000).refine(v => sanitizeCustomCss(v).ok, '只填声明，不写选择器和花括号'),
+  /** Advanced: declarations only; the selector is the extension's */
+  css: z.string().max(2000).refine(v => sanitizeCustomCss(v).ok, 'declarations only, no selector and no braces'),
 })
 export type StyleProfile = z.infer<typeof styleProfileSchema>
 
-export const highlightProfileSchema = z.object({
+const highlightProfileSchema = z.object({
   id: idField,
   name: z.string().min(1).max(40),
   /** '' = the default green */
@@ -54,7 +55,7 @@ const style = (id: string, name: string, over: Partial<StyleProfile> = {}): Styl
   ({ id, name, color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: '', ...over })
 
 /** Read Frog's green (custom-translation-node.css); the others were picked against arXiv's white and its dark theme */
-export const GREEN = 'oklch(0.693 0.17 162.48)'
+const GREEN = 'oklch(0.693 0.17 162.48)'
 export const BUILT_IN_STYLES: readonly StyleProfile[] = [
   style('follow', '与原文相同'),
   style('green', '绿色', { color: GREEN }),
@@ -88,7 +89,7 @@ export function newProfileId(prefix: 'style' | 'hl'): string {
 
 /**
  * Built-ins back to their shipped values, in their shipped order, the reader's own after them.
- * **One list at a time**: the two grids have a 重置 each, and resetting styles must not quietly
+ * **One list at a time**: the two grids have a reset each, and resetting styles must not quietly
  * discard edits to the bands (Codex on #157)
  */
 export function resetBuiltIns(a: Appearance, list: 'styles' | 'highlights'): Appearance {
@@ -101,9 +102,9 @@ export function resetBuiltIns(a: Appearance, list: 'styles' | 'highlights'): App
 }
 
 /**
- * 复制一份。**名字由调用方给**：它要按界面语言写（「绿色 副本」/「Green copy」），而随扩展一起发的
- * 那几份的显示名也跟着语言走——这些都是 UI 层的事，配置层不认识语言包（Codex 在 #161 指出）。
- * 名字仍然在这里夹进 schema 的上限：超了整份配置就存不下，读者只会看到「没保存」（Codex 在 #157 指出）
+ * Duplicate. **The name is the caller's**: it has to be written in the interface language (“绿色 副本” / “Green
+ * copy”), and the display names of the profiles shipped with the extension follow the language too — all matters of
+ * the UI layer, and the configuration layer knows no locale pack (Codex on #161). The name is still held to the schema's cap here: over it the whole configuration cannot be stored, and the reader only sees “not saved” (Codex on #157)
  */
 export const NAME_MAX = 40
 export const duplicateStyle = (p: StyleProfile, name: string): StyleProfile => ({ ...p, id: newProfileId('style'), name: name.slice(0, NAME_MAX) })

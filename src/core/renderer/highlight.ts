@@ -17,15 +17,20 @@
 // the paired nodes, and `restore()` removes the container with every other injected node because it
 // carries `HL_CLASS`.
 //
+// **Two resolutions, one painter.** A block the engine gave sentence boundaries for resolves to the
+// sentence under the pointer; any other paired block resolves to the whole pair — the pairing of a
+// block with its own translation is certain, only the sentence pairing needs the engine — so no
+// translated block is dead to the pointer, whichever engine or wire path produced it.
+//
 // **A side with no boxes is shown instead of tinted** (issue #141). Only mode hides the original,
 // so its bands would be empty; after a dwell its sentence is cloned into a panel beside or next to
 // the visible one (`peek.ts`). Same hit test, same registry, same read-then-write frame.
 
-import { HL_CLASS, PEEK_CLASS } from '@/core/marks'
-import { rangesOf, wireOffsetAt } from '@/core/protector'
+import { HL_CLASS } from '@/core/marks'
+import { rangesOf, wholeRanges, wireOffsetAt } from '@/core/protector'
 import { DOCUMENT_ROOT } from '@/core/rules/latexml'
 import { createPeek, movesText, type PeekAnchor } from './peek'
-import { rendered, sentenceAt, sentenceMapAt } from './sentences'
+import { pairAt, rendered, sentenceAt, sentenceMapAt } from './sentence-map'
 
 /** Which side a band belongs to, so the stylesheet can tell them apart if it ever needs to. */
 const SIDE_ATTR = 'data-axt-hl-side'
@@ -63,12 +68,12 @@ const SCROLL_SETTLE_MS = 120
 
 
 /**
- * Bumped whenever the highlights are cleared from outside this controller — `setMode()` and
- * `restore()` both do it. A running controller caches which sentence it painted and skips the work
- * when the pointer stays on it; without this it would go on believing a cleared sentence is still
- * on screen and never repaint it (Codex pointed this out on #130).
+ * The running controller of each document, by the one thing the outside may ask of it: to drop what
+ * it painted. `setMode()`, `applyStyle()` and `restore()` ask through `clearSentenceHighlights`;
+ * nothing outside the controller touches its layer or its panel (before, the outside
+ * removed both and the controller found out through a counter and `isConnected`, Codex on #130/#149)
  */
-let epoch = 0
+const controllers = new WeakMap<Document, () => void>()
 
 /**
  * Whether this browser can paint the highlight.
@@ -78,16 +83,6 @@ let epoch = 0
  */
 function supported(doc: Document): boolean {
   return typeof doc.caretPositionFromPoint === 'function'
-}
-
-/** The one container every band lives in, created on first use. */
-function layerOf(doc: Document): Element {
-  const existing = doc.body.querySelector(`:scope > .${HL_CLASS}`)
-  if (existing) return existing
-  const layer = doc.createElement('div')
-  layer.className = HL_CLASS
-  doc.body.append(layer)
-  return layer
 }
 
 /**
@@ -203,13 +198,13 @@ function clipOf(root: Element, view: Window): Clip {
 }
 
 /**
- * Drops whatever is painted right now. Safe to call at any time and on a document that never
- * started a highlight: `restore()` and `setMode()` use it without knowing whether one is running.
+ * Asks the document's running controller to drop what it painted — the bands, an open panel, a dwell
+ * still counting; its layer stays, empty, for the next repaint's origin. Safe to call at any time and
+ * on a document that never started a highlight: with no controller nothing is painted, and
+ * `restore()` and `setMode()` use it without knowing whether one is running.
  */
 export function clearSentenceHighlights(doc: Document): void {
-  epoch++
-  doc.body?.querySelector(`:scope > .${HL_CLASS}`)?.remove()
-  doc.body?.querySelector(`:scope > .${PEEK_CLASS}`)?.remove()
+  controllers.get(doc)?.()
 }
 
 export interface SentenceHighlight {
@@ -233,17 +228,29 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
   let y = 0
   /** Whether the pointer is in the document at all. False until the first move, false again after leaving. */
   let over = false
-  /** The band container, once it exists: mutations inside it are ours and must not feed back */
+  /**
+   * This controller's band container, created on first use and held by reference — not looked up by
+   * class, so a second controller on the same document (a test starting one before stopping the
+   * other) never paints into or removes this one's (Copilot on #210). Mutations inside it are ours
+   * and must not feed back. `restore()` sweeps every injected node, this one included, while a
+   * controller may still run (the session stops it first; a test need not): swept, it is created anew
+   */
   let layer: Element | undefined
+  const ownLayer = (): Element => {
+    if (layer?.isConnected) return layer
+    layer = doc.createElement('div')
+    layer.className = HL_CLASS
+    doc.body.append(layer)
+    return layer
+  }
   let frame = 0
   let missTimer = 0
   let settleTimer = 0
   /**
-   * The sentence currently painted, with the `epoch` it was painted at. The epoch is what makes
-   * this cache safe: anything that clears the highlights from outside bumps it, and a stale entry
-   * then compares unequal instead of suppressing the repaint.
+   * The sentence currently painted. `stale` marks it as painted against a layout that has since
+   * moved: a stale entry compares unequal instead of suppressing the repaint.
    */
-  let shown: { root: Element; index: number; at: number } | null = null
+  let shown: { root: Element; index: number; stale: boolean } | null = null
 
   /**
    * Marks what is painted as stale without forgetting that it is painted.
@@ -251,10 +258,9 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
    * **Not `shown = null`.** The miss path returns early when nothing is on screen, so forgetting the
    * entry means a repaint that finds no sentence under the pointer — a reflow moved it away, a
    * scroll brought blank space under the cursor — leaves the bands there for good (Codex on #138).
-   * An impossible epoch makes the cache compare unequal, which is what invalidation needs, while
+   * The stale mark makes the cache compare unequal, which is what invalidation needs, while
    * `miss()` still sees that there is something to fade out.
    */
-  const STALE = -1
   const invalidate = () => {
     // Nothing to re-measure while the pointer is elsewhere. `x`/`y` keep the last position they were
     // given, so a resize or a scroll arriving after the pointer left the document would hit-test at
@@ -262,15 +268,15 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
     // before the first `pointermove` those coordinates are (0, 0), which a startup resize would test
     // (Codex on #138).
     if (!over) return
-    if (shown) shown = { ...shown, at: STALE }
+    if (shown) shown = { ...shown, stale: true }
     if (frame === 0) frame = view?.requestAnimationFrame(update) ?? 0
   }
 
   const view = doc.defaultView
   const clearTimer = (id: number) => { if (id !== 0) view?.clearTimeout(id) }
-  // A dwell that ends after the highlight was cleared from outside must not render: the epoch is
-  // what those clears bump, and `shown` is what this controller last painted
-  const peek = createPeek(doc, key => shown !== null && shown.at === epoch && shown.root === key.root && shown.index === key.index)
+  // A dwell that ends after a reflow moved the sentence must not render what was measured before it:
+  // `shown` is what this controller last painted, stale once the layout moved under it
+  const peek = createPeek(doc, key => shown !== null && !shown.stale && shown.root === key.root && shown.index === key.index)
   /** The article root, whose right edge is where the margin begins. Static for the page's life. */
   const article = doc.querySelector(DOCUMENT_ROOT)
 
@@ -278,14 +284,20 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
    * Drops what is painted, keeping the (empty) layer.
    *
    * Keeping it is what lets the repaint read its origin without having just written to the DOM:
-   * created once per controller, emptied from then on. `stop()` still takes it away, as does
-   * `clearSentenceHighlights` when `setMode()` or `restore()` calls it from outside.
+   * created once per controller, emptied from then on; only `stop()` takes it away. The same drop
+   * is what the outside asks for through `clearSentenceHighlights` (`setMode`, `applyStyle`,
+   * `restore`) — with a pending fade-out cancelled as well, since there is nothing left to fade
    */
   const clearNow = () => {
     shown = null
-    doc.body?.querySelector(`:scope > .${HL_CLASS}`)?.replaceChildren()
+    layer?.replaceChildren()
     peek.hide()
   }
+  const reset = () => {
+    hit()
+    clearNow()
+  }
+  controllers.set(doc, reset)
 
   const miss = () => {
     if (!shown || missTimer !== 0) return
@@ -354,43 +366,74 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
     return inside(before, HIT_SLACK_PX) ? offset - 1 : undefined
   }
 
+  /**
+   * What the pointer is on, as what to paint: the sentence of a registered block, or the whole pair
+   * of one without a sentence map. `index` −1 names the whole pair; `registration` is what the peek
+   * keys its panel by — the map, or the one pair object the registry keeps per translation node
+   */
+  interface Resolved {
+    root: Element
+    index: number
+    side: 'source' | 'target'
+    registration: object
+    source: { root: Element; ranges: () => Range[] }
+    target: { root: Element; ranges: () => Range[] }
+  }
+  const resolve = (node: Node, at: number): Resolved | undefined => {
+    const found = sentenceMapAt(node)
+    if (found) {
+      const { map, side } = found
+      const wire = wireOffsetAt(map[side].index, node, at)
+      // A node the map does not index is a nested unit of its own inside the registered block — a footnote that took
+      // the runs path, or lost its markers — and pairs on its own below (Devin on #226). A node the map does index but
+      // no sentence covers is the gap between two sentences: nothing to pair, and no fallback to the whole block
+      if (wire === undefined) return wholePair(node)
+      const sentence = sentenceAt(map.pairs, side, wire)
+      if (!sentence) return undefined
+      const ranges = (which: 'source' | 'target') => () => rangesOf(map[which].spans, sentence[which].from, sentence[which].to)
+      return { root: map.source.root, index: sentence.index, side, registration: map, source: { root: map.source.root, ranges: ranges('source') }, target: { root: map.target.root, ranges: ranges('target') } }
+    }
+    return wholePair(node)
+  }
+  /** The whole pair the node sits in, when it sits in one */
+  const wholePair = (node: Node): Resolved | undefined => {
+    const paired = pairAt(node)
+    if (!paired) return undefined
+    const { pair, side } = paired
+    return { root: pair.source, index: -1, side, registration: pair, source: { root: pair.source, ranges: () => wholeRanges(pair.source) }, target: { root: pair.target, ranges: () => wholeRanges(pair.target) } }
+  }
+
   const update = () => {
     frame = 0
     const caret = doc.caretPositionFromPoint(x, y)
     const node = caret?.offsetNode
-    const found = node ? sentenceMapAt(node) : undefined
-    const at = found && node ? offsetOn(node, caret.offset) : undefined
-    if (!found || !node || at === undefined) {
-      miss()
-      return
-    }
-    const { map, side } = found
-    const wire = wireOffsetAt(map[side].index, node, at)
-    const sentence = wire === undefined ? undefined : sentenceAt(map.pairs, side, wire)
-    if (!sentence) {
+    const at = node ? offsetOn(node, caret.offset) : undefined
+    const target = node && at !== undefined ? resolve(node, at) : undefined
+    if (!target) {
       miss()
       return
     }
     hit()
     // The same sentence as last frame: the ranges have not changed and rebuilding them would be
     // pure work. This is the common case — a pointer resting on a line of text hits it every frame.
-    if (shown && shown.at === epoch && shown.root === map.source.root && shown.index === sentence.index) return
-    shown = { root: map.source.root, index: sentence.index, at: epoch }
+    if (shown && !shown.stale && shown.root === target.root && shown.index === target.index) return
+    shown = { root: target.root, index: target.index, stale: false }
+    const { side } = target
     // The layer is fetched first because its own rectangle is the origin every band is measured
     // against, and it must be read in the same pass as the ranges. It is created at most once per
     // controller — the miss path empties it rather than removing it — so this is a read, not a
     // write followed by reads.
-    layer = layerOf(doc)
+    const layer = ownLayer()
     const origin = layer.getBoundingClientRect()
     // The side the pointer is not on. When it is not rendered — only mode hides the original — its
     // bands would come out empty, so they are not measured at all; its ranges go to the panel
     // instead, built only once the panel actually renders (issue #141)
     const other = side === 'source' ? 'target' : 'source'
-    const hidden = !rendered(map[other].root)
+    const hidden = !rendered(target[other].root)
     // The visible side's clip is read once: its bands are cut to it, and so is the panel's width
-    const ownClip = view ? clipOf(map[side].root, view) : undefined
+    const ownClip = view ? clipOf(target[side].root, view) : undefined
     const bandsFor = (which: 'source' | 'target') =>
-      view ? bandsOf(origin, rangesOf(map[which].spans, sentence[which].from, sentence[which].to), which === side && ownClip ? ownClip : clipOf(map[which].root, view)) : []
+      view ? bandsOf(origin, target[which].ranges(), which === side && ownClip ? ownClip : clipOf(target[which].root, view)) : []
     // Every side is measured before anything is written: reads and writes never interleave
     const sides = [{ side, bands: bandsFor(side) }, ...(hidden ? [] : [{ side: other, bands: bandsFor(other) }])]
     // What the panel needs is read in the same pass — the sentence's own lines, the block they sit
@@ -402,11 +445,11 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
       const first = own[0]
       const last = own[own.length - 1]
       if (first && last) {
-        const block = map[side].root.getBoundingClientRect()
+        const block = target[side].root.getBoundingClientRect()
         // Set as the page sets the *hidden* side — it is that side's text the panel shows — and not
         // as a style preset dresses the visible translation. Computed style resolves for a
         // `display: none` element as for any other; only layout values are missing
-        const counterpart = map[other].root
+        const counterpart = target[other].root
         const articleRight = article?.getBoundingClientRect().right
         // Anchored to the part of the sentence that is on screen. A long sentence can start above
         // the viewport while the pointer is on one of its later lines, and its first line's
@@ -442,7 +485,7 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
         layer.append(el)
       }
     }
-    if (anchor) peek.show({ root: map.source.root, index: sentence.index, shown: map[other].root, registration: map }, () => rangesOf(map[other].spans, sentence[other].from, sentence[other].to), anchor)
+    if (anchor) peek.show({ root: target.root, index: target.index, shown: target[other].root, registration: target.registration }, target[other].ranges, anchor)
     else peek.hide()
   }
 
@@ -597,9 +640,10 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
       hit()
       shown = null
       peek.remove()
-      // Unconditionally, not conditioned on anything being shown: another run of this document may
-      // have left entries behind, and stopping should leave the page clean either way
-      clearSentenceHighlights(doc)
+      // Its own layer goes with the controller — the one owner of both; another controller's stays
+      layer?.remove()
+      layer = undefined
+      if (controllers.get(doc) === reset) controllers.delete(doc)
     },
   }
 }

@@ -17,7 +17,7 @@ const actions: PopupActions = {
   translate: log('translate'), retranslate: log('retranslate'), restore: log('restore'), chooseMode: log('chooseMode'), retryFailed: log('retryFailed'),
   openMenu: log('openMenu'), closeMenu: log('closeMenu'), chooseService: log('chooseService'), chooseLanguage: log('chooseLanguage'), choosePrompt: log('choosePrompt'), chooseStyle: log('chooseStyle'),
   setHighlight: log('setHighlight'), setImages: log('setImages'), downloadPack: log('downloadPack'),
-  openOptions: log('openOptions'),
+  openOptions: log('openOptions'), helperStatus: log('helperStatus'),
 }
 
 // The gallery reviews the copy, so it reads the same pack the popup would
@@ -26,7 +26,7 @@ await applyLocale(brand => `${brand} · ${GALLERY_TITLE}`)
 function Gallery() {
   return (
     <div className="min-h-screen bg-bg p-8 font-ui text-fg">
-      <h1 className="mb-6 text-[18px] font-bold">Popup · 状态表（docs/UI.md §4）</h1>
+      <h1 className="mb-6 text-[18px] font-bold">Popup · state table (docs/UI.md §4)</h1>
       <div className="flex flex-col gap-8">
         {POPUP_FIXTURES.map(f => {
           const view = derivePopupView(f.input)

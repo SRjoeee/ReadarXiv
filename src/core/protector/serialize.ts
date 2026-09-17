@@ -1,22 +1,25 @@
-// 序列化（DESIGN §6.2）：块 → 带占位符的文本 + 槽位表。纯读，不改 DOM。
-// void / paired 的判定完全复用规则模块：classify() 命中任何类别（skip / protect / unit / table）即 void——
-// 这同时覆盖了嵌套单元（脚注容器、段内 .ltx_p）；未命中且含文本的元素是 paired，未命中且无文本的也作 void。
-// 唯一例外是表格单元格（§5.3）：extractor 不下钻表格，格里的 .ltx_p / 标题不会另成块，
-// 序列化时要当普通 paired 走进去，否则整格只剩一个占位符、文字全丢（实测 2410.00260 表 1；Codex 在 #5 指出）。
+// Serialisation (DESIGN §6.2): a block → text with placeholders + the slot table. Read only, the DOM untouched.
+// The void / paired decision reuses the rules module entirely: an element classify() puts in any category (skip /
+// protect / unit / table) is a void — which covers nested units (footnote containers, a .ltx_p inside a paragraph) as
+// well; an unmatched element with text is paired, an unmatched one without text is a void too. The one exception is a
+// table cell (§5.3): the extractor does not descend into tables, so a .ltx_p or a heading inside a cell is no block of
+// its own, and serialisation walks into it as an ordinary paired element — otherwise the whole cell would be one
+// placeholder and its text lost (measured on Table 1 of 2410.00260; Codex on #5).
 import { isInjected } from '@/core/marks'
+import { ELEMENT_NODE, TEXT_NODE } from '@/core/text'
 import { FUNCTIONAL_INLINE, classify, isTableCell } from '@/core/rules/latexml'
 import type { WireSpan } from './offsets'
 import { type WireFormat, writeVoid } from './tokens'
 
 export interface ProtectedBlock {
-  /** 这个块是按哪种线上格式序列化的；validate / rehydrate / splitRuns 据此分词 */
+  /** Which wire format this block was serialised in; validate / rehydrate / splitRuns tokenise by it */
   format: WireFormat
-  /** 带占位符的文本；文本节点按 format 转义过（tags 转 & < >，markers 转会引起歧义的 @） */
+  /** The text with placeholders; text nodes escaped by format (tags escape & < >, markers escape the @ that would be ambiguous) */
   text: string
-  /** id → 原节点：void 为整个节点，paired 为元素本身（回填时浅克隆） */
+  /** id → original node: the whole node for a void, the element itself for a paired one (shallow-cloned when filled back) */
   slots: Map<number, Node>
   paired: Set<number>
-  /** 超过 VOID_DENSE_THRESHOLD 的块视为公式密集，由 pipeline 单独成批 */
+  /** A block beyond VOID_DENSE_THRESHOLD counts as formula-dense; the pipeline batches it on its own */
   voidCount: number
   /**
    * Wire offset to DOM position, one span per run of the text (§6.2, issue #105). Always produced:
@@ -35,14 +38,35 @@ export interface ProtectedBlock {
   root: Element
 }
 
+/**
+ * Why this block can no longer be filled back, or undefined while it can. `slots` are references to the live nodes,
+ * and a page that swapped a formula while the translation was out would otherwise have the copy captured then put
+ * back — the translation showing what the page no longer does, silently.
+ * The block is serialised again and compared with what was sent: the wire text (the words, and the order of every
+ * slot among them — a formula moved past its neighbours, alone or with them, changes it; Devin on #212) and the
+ * identity of each slot's node (a replacement of the same shape serialises the same, and is a different node). What
+ * the page can do without changing either — split a text node, add a comment, and our own nodes appearing beside a
+ * slot, which the serialiser steps over — is not a change. One serialisation per commit, the same cost as the one
+ * that made the block. arXiv's own scripts do not touch the body (DESIGN §7.2), so today nothing trips this: it is
+ * the boundary, and a retry serialises afresh
+ */
+export function staleSlot(block: ProtectedBlock): string | undefined {
+  const now = serialize(block.root, block.format)
+  if (now.text !== block.text) return "the block's text changed"
+  const then = Array.from(block.slots)
+  const fresh = Array.from(now.slots.values())
+  if (fresh.length !== then.length) return `the block has ${fresh.length} slots, had ${then.length}`
+  for (let i = 0; i < then.length; i++) {
+    const [id, node] = then[i]!
+    if (node !== fresh[i]) return `slot ${id} <${node.nodeType === ELEMENT_NODE ? (node as Element).localName : node.nodeName.toLowerCase()}> is not the node it was`
+  }
+  return undefined
+}
+
 export const VOID_DENSE_THRESHOLD = 40
 
-const ELEMENT_NODE = 1
-const TEXT_NODE = 3
 
 const hasText = (el: Element) => /\S/.test(el.textContent ?? '')
-
-
 
 /**
  * Writes the wire text character by character, escaping and collapsing whitespace as it goes, and
@@ -142,13 +166,13 @@ export function serialize(root: Element, format: WireFormat = 'tags'): Protected
         tracker.text(child as Text)
       } else if (child.nodeType === ELEMENT_NODE) {
         const el = child as Element
-        // 我们自己插的译文 / 镜像不是原文：再次翻译时它们已经在原块内部（Codex 在 #8 指出）
+        // The translations / mirrors we inserted are not original text: on a retranslation they are already inside the block (Codex on #8)
         if (isInjected(el)) continue
         const c = classify(el)
         const isVoid = c ? !(inCell && c.kind === 'unit' && hasText(el)) : !hasText(el)
-        // markers 没有成对记号（实测 Google 只有 70.6%，见 tokens.ts）：除了「带功能的元素」按 void
-        // 整块保留以保住可点击（issue #44 在 runs 路径上的同一条判断），其余成对元素拍平成纯文本，
-        // 丢的是内联包装的样式，不是内容
+        // markers have no paired markers (Google measured at only 70.6%, see tokens.ts): except for “elements with
+        // behaviour”, kept whole as voids so they stay clickable (the same decision issue #44 made on the runs path),
+        // every paired element is flattened to plain text — inline styling is lost, content is not
         const flatten = format === 'markers' && !isVoid && !el.matches(FUNCTIONAL_INLINE)
         if (flatten) {
           walk(el)
@@ -166,7 +190,7 @@ export function serialize(root: Element, format: WireFormat = 'tags'): Protected
           tracker.raw('</t>', el, 'close')
         }
       }
-      // 注释等其他节点忽略
+      // Comments and other node kinds are ignored
     }
   }
   walk(root)

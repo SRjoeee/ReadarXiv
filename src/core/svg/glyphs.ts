@@ -4,7 +4,7 @@
 // points at a glyph in `<defs>`. What makes them readable anyway is that each of those `<use>`
 // elements is annotated with the character it draws, so the text is *read*, not recognised — the
 // error rate is zero rather than whatever OCR would get wrong. Measured over 58045 glyphs in 316
-// distinct figures, `data-text` is present on every one that is a glyph (`docs/RESEARCH.md` §6.11).
+// distinct figures, `data-text` is present on every one that is a glyph (DESIGN §15.5).
 //
 // The output is `OcrLine[]`, the same shape the OCR helper returns, so everything downstream —
 // `linesToBoxes`, the translate call, the overlay — is shared with the bitmap path and knows
@@ -12,7 +12,7 @@
 //
 // **Read-only.** Nothing here writes to the embedded document. The overlay is built in the main
 // document from normalised coordinates, which works because a figure's `viewBox` maps linearly onto
-// its `<object>` element box (measured to four decimal places, §6.11). §7.1's DOM invariant and
+// its `<object>` element box (measured to four decimal places, DESIGN §15.5). §7.1's DOM invariant and
 // `restore()` are untouched, and there is no second document to define restore semantics for.
 
 import type { OcrLine, Quad } from '@/shared/ocr'
@@ -61,7 +61,7 @@ export interface GlyphRun {
  *
  * A dropped space therefore stays inside its run, which is what should happen — the fix for it is
  * to put the space back, not to cut the line in half, and that needs a per-run advance estimate
- * (`docs/RESEARCH.md` §6.11). Out of scope while code figures are skipped, and the failure it would
+ * (DESIGN §15.5). Out of scope while code figures are skipped, and the failure it would
  * cause here is benign anyway: two very close ticks merging into `0.20.4`, which is numeric and
  * never reaches a translator.
  */
@@ -72,7 +72,7 @@ const RUN_BREAK = 1.5
  *
  * The size is `hypot(a,b)` and the angle `atan2(b,a)` — **not** `a`, which is only the size when
  * the glyph is upright. Reading `a` puts every rotated axis label at size 0 and loses its
- * orientation, and 8.95% of glyphs in the corpus are rotated (§6.11).
+ * orientation, and 8.95% of glyphs in the surveyed figures are rotated.
  */
 function decompose(transform: string | null): { x: number; y: number; size: number; angle: number } | undefined {
   const m = /matrix\(([^)]*)\)/.exec(transform ?? '')
@@ -143,7 +143,7 @@ function sameLine(run: { angle: number; size: number; across: number }, g: Glyph
  *
  * The converter emits every glyph as a direct child of `<svg>` with no grouping whatsoever — one
  * figure is a flat list where ticks, axis titles and legend entries run together as
- * `"110100Number of terms N1015…"` (§6.11). Document order within a run is exact, including the
+ * `"110100Number of terms N1015…"`. Document order within a run is exact, including the
  * spaces, which are glyphs of their own; all that has to be recovered is where one run ends.
  */
 export function runsOf(svg: Element): GlyphRun[] {
@@ -216,9 +216,9 @@ function drawAngle(angle: number): number {
 function cornersOf(run: GlyphRun): [number, number][] {
   const cos = Math.cos(run.angle)
   const sin = Math.sin(run.angle)
-  // 最后一个字形自己的宽度没有记录，用一个名义宽度顶上。0.70 em 是量出来的：白框要盖住它译的
-  // 那段原文字，0.55 em 时结尾是大写字母的标签会露出约 0.7% 图宽（`training cost C`），
-  // 0.70 降到 0.09%（亚像素），再放大到 0.80 没有任何改善，只会让窄结尾的框多外扩
+  // The last glyph's own width is not recorded; a nominal width stands in. 0.70 em was measured: the white box has to
+  // cover the source text it translates, and at 0.55 em a label ending in a capital showed about 0.7% of the figure width
+  // (`training cost C`); 0.70 brings it to 0.09% (sub-pixel), and going up to 0.80 improves nothing and only makes the box of a narrow ending stick out more
   const end = run.to + 0.7 * run.size
   const top = run.across - run.size * 0.78
   const bottom = run.across + run.size * 0.22

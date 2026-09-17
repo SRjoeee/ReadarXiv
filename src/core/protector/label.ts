@@ -18,6 +18,7 @@ import { LABEL_FORMATTING } from '@/core/rules/latexml'
 import { cloneWithoutIds } from './clone'
 import { indexSpans, type WireSpan, wireOffsetAt } from './offsets'
 import type { ProtectedBlock } from './serialize'
+import { TEXT_NODE, squash } from '@/core/text'
 
 /** Longer than this is a sentence set in italics, not a label: past what the replay covered. */
 const MAX_LABEL_WORDS = 8
@@ -46,7 +47,6 @@ const bound = (label: number, prefix: string): number => {
   return cjk * 2 >= prefix.replace(/\s/g, '').length ? label + SLACK : label * 2 + SLACK
 }
 const TERMINATOR = new RegExp(`${FULL_STOP.source}|${EXCLAIM.source}`)
-const TEXT_NODE = 3
 
 /** Sentence lengths on each side, as the engine reported them and `verifyAlignment` confirmed. */
 export interface Boundaries { source: readonly number[]; target: readonly number[] }
@@ -79,14 +79,14 @@ function wireText(el: Element, slots: ReadonlyMap<number, Node>): string {
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     if (!protectedNodes.some(slot => slot.contains(node))) out += (node as Text).data
   }
-  return out.replace(/\s+/g, ' ').trim()
+  return squash(out)
 }
 
 /**
  * The formatting element a block opens with, if the block is shaped like `label: rest`, `label.
  * rest`, or is nothing but the label. Read from the original, which translation never changes.
  */
-export function leadingLabel(root: Element, slots: ReadonlyMap<number, Node>): Label | undefined {
+function leadingLabel(root: Element, slots: ReadonlyMap<number, Node>): Label | undefined {
   const first = root.firstElementChild
   if (!first?.matches(LABEL_FORMATTING)) return undefined
   for (let n = root.firstChild; n && n !== first; n = n.nextSibling) if (/\S/.test(n.textContent ?? '')) return undefined
@@ -128,10 +128,6 @@ function splitSpan(spans: WireSpan[], node: Text, at: number): void {
   spans.splice(i, 1, head, tail)
 }
 
-/**
- * Puts the label's element back around its translation, if the translation is shaped as the
- * original was. Returns whether it did. `spans` is updated in place where a text node is split.
- */
 /** The wire offset a cut in a text node stands at, before the node is split. */
 function wireOffsetOfCut(spans: readonly WireSpan[], node: Text, at: number): number | undefined {
   const span = spans.find(s => s.kind === 'text' && s.node === node)
@@ -159,6 +155,10 @@ function endsSentences(alignment: Boundaries | undefined, labelEnd: number, cut:
   return s0 >= labelEnd && s0 <= labelEnd + BOUNDARY_SLACK && t0 >= cut && t0 <= cut + BOUNDARY_SLACK
 }
 
+/**
+ * Puts the label's element back around its translation, if the translation is shaped as the
+ * original was. Returns whether it did. `spans` is updated in place where a text node is split.
+ */
 export function restoreLeadingLabel(fragment: DocumentFragment, spans: WireSpan[], block: ProtectedBlock, doc: Document, ids: ReadonlyMap<Node, number>, alignment?: Boundaries): boolean {
   const label = leadingLabel(block.root, block.slots)
   if (!label) return false

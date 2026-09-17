@@ -1,8 +1,22 @@
-// 简体中文：本项目的第一套界面文案，也是所有语言包的类型来源（其余语言包必须与它同形，缺一个键就编译不过）。
-// 语气是产品的语气，不是聊天的语气：状态用名词，按钮用动词，出错要说清发生了什么、该怎么办。
-// 文案编号见 docs/UI.md §3。
+// Simplified Chinese: the project's first set of interface copy, and the type every other pack is checked against
+// (a pack must have its shape; one missing key does not compile).
+// The voice is the product's, not a conversation's: a state is a noun, a button a verb, and an error says what
+// happened and what to do. The copy ids are those of docs/UI.md §3. Comments here are for developers and are in
+// English like the rest of the code; only the strings are Chinese.
 import type { ProviderErrorKind } from '@/providers/types'
 import { PREVIEW_SOURCE, PREVIEW_TARGET } from './preview'
+
+/** What the settings page says about a field the schema refused (config/schema.ts, config/appearance.ts, config/services.ts) */
+const FIELD: Record<string, string> = {
+  provider: '不是有效的翻译服务',
+  glossary: '术语表总长超过上限，会显著增加每次请求的 token',
+  color: '不是有效的颜色值',
+  css: '只填声明，不写选择器和花括号',
+  baseURL: '不是有效的地址',
+  apiKey: 'API Key 不合法',
+  model: '模型名不能为空',
+  name: '名称长度不合法',
+}
 
 const S = {
   brand: 'Read arXiv', // S-P-01
@@ -15,8 +29,8 @@ const S = {
     highlight: '对照高亮', // S-P-80
     highlightTitle: '悬停时高亮对应句子；仅译文模式下停留可查看原文', // S-P-81
     images: '图片翻译', // S-P-85
-    style: '译文样式', // S-P-82；与设置页「阅读 · 译文样式」同名，两处是同一件事
-    manageStyles: '管理译文样式…', // S-P-83：样式菜单的最后一行，直接开到设置页的「阅读」
+    style: '译文样式', // S-P-82; the same name as “Reading · Translation style” in the settings: the two are one thing
+    manageStyles: '管理译文样式…', // S-P-83: the last row of the style menu, opening the settings at “Reading”
   },
   service: {
     microsoft: 'Microsoft 翻译',
@@ -52,12 +66,16 @@ const S = {
     imagesPaused: (reason: string) => `图片翻译已暂停：${reason}`, // S-P-35
   },
   helper: {
+    permission: '图片翻译需要允许扩展与识别助手通信', // S-P-86b, macOS: nativeMessaging is optional (DESIGN §15.3)
+    allow: '允许', // S-P-86c / S-O-86: Chrome's own prompt follows this click
+    denied: '未允许。允许后才能识别图中的文字', // S-O-86a
+    enabling: '已允许，稍后自动生效', // S-P-86d / S-O-86b: a fresh background worker is on its way (DESIGN §15.3)
     install: '图片翻译需要安装识别助手', // S-P-86, macOS
     macOnly: '图片翻译目前仅支持 macOS', // S-P-87
-    start: '安装', // S-P-88：展开引导；引导本身的文案在 setup
+    start: '安装', // S-P-88: opens the guide; the guide's own copy is in setup
     copy: '复制安装命令', // S-P-88
     copied: '已复制',
-    guide: '教程', // 引导内的链接（S-O-27 / S-P-88）
+    guide: '教程', // the link inside the guide (S-O-27 / S-P-88)
   },
   /** The guided install on the settings page (S-O-30…36). The popup keeps the one-line version above */
   setup: {
@@ -67,7 +85,7 @@ const S = {
     step1Hint: '⌘ 空格，输入 Terminal 后回车',
     step2: '在终端中执行以下命令', // S-O-27b
     step2Hint: '点击复制',
-    // S-O-27c：取代了原来的「我已经装好了」按钮——装完由扩展自己检测（DESIGN §15.4）
+    // S-O-27c: replaced the old “I have installed it” button — the extension detects the install by itself (DESIGN §15.4)
     waiting: '执行完成后自动生效，无需返回此处',
     notYet: '尚未检测到识别助手。请确认命令已执行完毕且未出现报错。',
     copyFailed: '无法复制，请手动选中命令后复制',
@@ -83,7 +101,7 @@ const S = {
     retry: '重试', // S-P-61
   },
   mode: {
-    stack: '上下', // S-P-70；顺序见 MODE_ORDER
+    stack: '上下', // S-P-70; the order is MODE_ORDER's
     side: '左右',
     only: '仅译文',
     stackTitle: '译文紧跟在原文下方', // S-P-71
@@ -92,16 +110,21 @@ const S = {
     narrow: '窗口较窄，暂按上下显示', // S-P-74
   },
   actionFailed: (message: string) => message, // S-P-90
-  /** 论文页里的文字（S-I）与右键菜单，与 popup 用同一套语言包 */
+  /** The popup action found no active tab to talk to (shared/messages.ts throws NoActiveTabError) */
+  noActiveTab: '没有活动标签页',
+  /** A change the store refused because the saved settings cannot be read (config/storage.ts ConfigUnreadableError); S-O-02 is where the reader acts */
+  settingsUnreadable: '设置读取失败，更改未保存，请到设置页处理',
+  /** The text inside the paper page (S-I) and the context menu, from the same pack as the popup */
   page: {
     retry: '重试', // S-I-02
-    menuToggle: '翻译本页 / 显示原文', // 右键菜单（issue #146）
+    menuToggle: '翻译本页 / 显示原文', // the context menu (issue #146)
     alreadyOn: '翻译已开启，滚动会继续翻',
     sessionOver: '这次翻译已经停止',
     notPaper: '不是 arXiv HTML 页面',
     nothingToTranslate: '这一页没有可翻译的内容',
-    abstractLink: (brand: string) => `双语版本（${brand}）`, // 摘要页的入口（issue #146）
+    abstractLink: (brand: string) => `双语版本（${brand}）`, // the entry on the abstract page (issue #146)
     backendSilent: '扩展后台没有响应',
+    backendSilentWith: (detail: string) => `扩展后台没有响应：${detail}`,
     noService: '未配置 API key，请先到设置页填写',
   },
 } as const
@@ -109,17 +132,26 @@ const S = {
 const O = {
   title: '设置',
   nav: { services: '翻译服务', reading: '阅读', prompts: '提示词与术语', data: '数据' },
-  /** S-O-05：界面语言。与「目标语言」是两件事，所以放在导航下面，离得远一点 */
+  /** S-O-05: the interface language. Not the target language, so it sits under the navigation, away from it */
   uiLanguage: '界面语言',
   uiLanguageAuto: '跟随浏览器',
-  /** 配置读不出来时那条说明的下半句（config/storage.ts 只报成因，不写句子） */
+  /** The second half of the notice shown when the settings cannot be read (config/storage.ts reports the cause, not a sentence) */
   fallbackWhy: {
     tooNew: (stored: number, supported: number) => `存储里的配置是 v${stored}，这个版本只认到 v${supported}（可能装过更新的版本）`,
+    upgradeFailed: (stored: number, supported: number) => `存储里的配置是 v${stored}，升级到 v${supported} 时出错。之后的版本或许仍能读出；重置会覆盖它们`,
     invalid: (where: string, message: string) => (where ? `${where}：${message}` : message),
+    /** The sentence for a field the schema refused, by the field's name; the zod message itself is the diagnostic */
+    field: FIELD,
     unknown: '未知原因',
   },
-  fallbackNotice: '设置读取失败，当前使用默认设置；已保存的 API Key 与服务选择均未生效。请重新填写。',
+  fallbackNotice: '设置读取失败，当前使用默认设置；已保存的 API Key 与服务选择均未生效。原设置保留未动，重置后可重新填写。',
+  fallbackReset: '重置设置',
+  fallbackResetConfirm: '确认重置',
+  fallbackResetFailed: '重置没有成功，请再试一次',
   services: {
+    /** One validation failure of the drawer's form, and what joins several, in this language's punctuation */
+    issue: (field: string, message: string) => `${field}：${FIELD[String(field).split('.').pop() ?? ''] ?? `不合法（${message}）`}`,
+    issueSeparator: '；',
     builtIn: '内置服务',
     mine: '我的服务',
     empty: '还没有添加服务。添加后即可使用 LLM 翻译。',
@@ -136,14 +168,13 @@ const O = {
     baseURL: '接口地址',
     baseURLHint: 'OpenRouter、DeepSeek、Ollama 等 OpenAI 兼容接口',
     apiKey: 'API Key',
-    apiKeyStored: '已保存',
     apiKeyClear: '清除',
     apiKeyLocalHint: '本机地址可以不填',
     model: '模型',
     more: '更多选项',
     thinking: '深度思考',
     thinkingHint: '翻译不需要推理，开启会明显变慢',
-    /** 申请接口地址的访问权限失败（entrypoints/options/permissions.ts 只报是哪一种） */
+    /** Asking for access to the endpoint's address failed (entrypoints/options/permissions.ts reports which way) */
     permission: {
       badURL: '接口地址不合法',
       denied: (origin: string) => `没有拿到访问 ${origin} 的权限，浏览器的弹窗里需要点「允许」`,
@@ -167,6 +198,7 @@ const O = {
     reset: '重置',
     resetHint: '把内置配置恢复原样，自己添加的保留',
     editTitle: '编辑配置',
+    editAria: (name: string) => `编辑配置：${name}`,
     name: '名称',
     color: '文字颜色',
     bandColor: '底色',
@@ -180,7 +212,7 @@ const O = {
     blurHint: '译文先糊着，鼠标停上去才清晰，适合自测',
     advanced: '高级',
     advancedHint: '只填声明，不写选择器和花括号；字体与字号仍随论文',
-    /** 高级 CSS 被拒的四种情形（core/renderer/style-values.ts 只报是哪一种） */
+    /** The four ways advanced CSS is refused (core/renderer/style-values.ts reports which) */
     advancedRejected: {
       closeBrace: '不要写右花括号：这里只填声明，选择器由扩展补上',
       openBrace: '不要写左花括号：这里只填声明，选择器由扩展补上',
@@ -188,18 +220,18 @@ const O = {
       angle: '不能包含 <',
     },
     duplicate: '复制一份',
-    /** 复制出来的那份叫什么：显示名 + 这个后缀（config/appearance.ts 的 duplicateStyle） */
+    /** What a copy is called: the shown name + this suffix (duplicateStyle in config/appearance.ts) */
     copySuffix: '副本',
     delete: '删除',
     done: '完成',
     preloadRange: '提前翻译的范围',
-    preloadRangeHint: '屏幕下方多远的段落先翻；越近越省费用',
-    preloadStops: ['半屏', '一屏', '两屏', '三屏'],
+    preloadRangeHint: '屏幕下方多远的段落先翻；越近越省费用，整篇则一开始就全部请求',
+    preloadStops: ['一屏', '两屏', '三屏', '整篇'],
     threshold: '开始翻译的时机',
     thresholdHint: '段落露出多少才开始翻',
     thresholdStops: ['刚露出', '露出一半', '完全露出'],
-    /** 随扩展一起发的那几份配置的名字（`BUILT_IN_STYLES` / `BUILT_IN_HIGHLIGHTS`）：它们是我们的，
-     *  不是读者写的，所以跟着界面语言走；读者改过名字之后就用读者的 */
+    /** The names of the profiles shipped with the extension (`BUILT_IN_STYLES` / `BUILT_IN_HIGHLIGHTS`): they are ours,
+     *  not the reader's writing, so they follow the interface language; once the reader renames one, the reader's name shows */
     builtInStyles: { follow: '与原文相同', green: '绿色', blue: '蓝色', amber: '琥珀', muted: '淡一档', blur: '模糊' },
     builtInHighlights: { 'soft-green': '柔和绿', sand: '淡黄', sky: '淡蓝' },
     preview: '预览',
@@ -207,22 +239,22 @@ const O = {
     previewTarget: PREVIEW_TARGET,
   },
   prompts: {
-    /** 提示词管理（S-O-6x）：内置一份、读者自己一份，变量按钮插到光标处 */
+    /** Prompt management (S-O-6x): the built-in one, the reader's own, and variable buttons that insert at the caret */
     manager: {
       view: '查看',
       viewTitle: '查看内置提示词',
       copy: '复制并自定义',
-      /** 复制内置提示词时新的那份叫什么（与外观配置的 copySuffix 是同一件事，标点各随各的语言） */
+      /** What a copy of the built-in prompt is called (the same thing as the appearance profiles' copySuffix; each language keeps its own punctuation) */
       copyOf: (name: string) => `${name}（副本）`,
       copyTitle: '复制并自定义',
       custom: '自定义',
       edit: '编辑',
       editTitle: '编辑提示词',
       remove: '删除',
-      removeConfirm: (name: string) => `删除提示词「${name}」？`,
+      removeConfirm: '确认删除',
       create: '新建',
       createTitle: '新建提示词',
-      /** 导入提示词文件失败的两种情形（providers/prompt-file.ts 只报是哪一种） */
+      /** The two ways importing a prompt file fails (providers/prompt-file.ts reports which) */
       importFailed: {
         notJson: '这个文件不是合法的 JSON',
         badShape: '文件格式不对：应是 [{ "name", "systemPrompt", "prompt" }] 这样的数组，name 与 prompt 必填',
@@ -241,7 +273,7 @@ const O = {
       userPrompt: '用户提示词',
       name: '名称',
       insert: '插入变量：',
-      /** 随扩展一起发的两份提示词的说明，按 id 取（`BUILT_IN_PROMPT_DESCRIPTIONS` 的位置） */
+      /** The descriptions of the two prompts shipped with the extension, by id */
       builtIn: {
         default: '通用学术翻译：术语用既定译法，人名、期刊名、代码与链接保留原文',
         'precision-rewrite': '"翻译即改写"：摆脱原文句法、消除翻译腔，按目标语言的表达习惯重写，术语与格式照旧',
@@ -256,9 +288,9 @@ const O = {
       },
     },
     title: '提示词', glossaryTooBig: '术语表太长，超出上限后没有保存；请减少条目或缩短内容', glossary: '术语表', glossaryHint: '每行「原文, 译文」，让同一篇里的译法一致', glossaryCount: (n: number) => `${n} 条`, onlyLlm: '只对 LLM 服务生效',
-    /** 术语表逐行的问题（providers/glossary.ts 只报是哪一种） */
+    /** The glossary's line-by-line problems (providers/glossary.ts reports which) */
     glossaryIssue: {
-      /** 整句由包来拼：标点是语言的一部分，「第 1 行缺少分隔符」与 "Line 1: ..." 拼法不同 */
+      /** The whole sentence is the pack's to assemble: punctuation is part of a language, and the Chinese sentence is not built the way "Line 1: ..." is */
       noSeparator: (n: number) => `第 ${n} 行缺少分隔符，应写成「原文, 译文」`,
       emptySource: (n: number) => `第 ${n} 行原文为空`,
       emptyTarget: (n: number) => `第 ${n} 行译文为空`,
@@ -273,6 +305,10 @@ const O = {
     clear: '清空',
     clearConfirm: '确认清空',
     cleared: '已清空',
+    diagnostics: '诊断日志',
+    diagnosticsHint: '最近几百条运行记录：请求失败、服务切换、页面事件。不含 API 密钥与论文正文，可随问题反馈一并附上',
+    diagnosticsExport: '导出',
+    diagnosticsError: '没能导出',
   },
 } as const
 

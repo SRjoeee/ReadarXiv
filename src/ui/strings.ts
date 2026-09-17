@@ -14,6 +14,8 @@ import { LANG_CODE_TO_EN_UI_NAME, LANG_CODE_TO_ZH_NAME, type LangCode, label } f
 import type { FallbackReason } from '@/config/storage'
 import { FALLBACK_LOCALE, LOCALES, type Locale, type LocaleCode } from '@/locales'
 import type { ProviderErrorKind } from '@/providers/types'
+import { setCoreStrings } from '@/core/strings'
+import { BUILD_REF } from '@/shared/build'
 
 export { PREVIEW_SOURCE, PREVIEW_TARGET } from '@/locales/preview'
 
@@ -22,7 +24,7 @@ export { PREVIEW_SOURCE, PREVIEW_TARGET } from '@/locales/preview'
  * does not carry its own copy of 179 language names — adding a language must stay one small file —
  * so it points at a table instead, and a language without one reads them in English
  */
-export const LOCALE_LANGUAGE_NAMES: Record<LocaleCode, Partial<Record<LangCode, string>>> = {
+const LOCALE_LANGUAGE_NAMES: Record<LocaleCode, Partial<Record<LangCode, string>>> = {
   'zh-CN': LANG_CODE_TO_ZH_NAME,
   en: LANG_CODE_TO_EN_UI_NAME,
 }
@@ -41,6 +43,12 @@ export function setLocale(code: LocaleCode): void {
   current = LOCALES[code]
   S = current.S
   O = current.O
+  installCoreStrings()
+}
+
+/** The core renders the failure widget itself and knows no pack (DESIGN §4.2): hand it this locale's sentences, at load and on every switch */
+function installCoreStrings(): void {
+  setCoreStrings({ retry: S.page.retry, failureTitle: kind => reasonText(kind) })
 }
 
 /** Which pack is in use; the settings page marks it in its menu */
@@ -78,8 +86,13 @@ export function fallbackText(reason: FallbackReason): string {
   switch (reason.kind) {
     case 'tooNew':
       return O.fallbackWhy.tooNew(reason.stored, reason.supported)
-    case 'invalid':
-      return O.fallbackWhy.invalid(reason.where, reason.message)
+    case 'upgradeFailed':
+      return O.fallbackWhy.upgradeFailed(reason.stored, reason.supported)
+    case 'invalid': {
+      // The field's own sentence when the pack has one; the zod diagnostic otherwise (it is English developer text)
+      const key = reason.where.split('.').filter(s => !/^\d+$/.test(s)).pop() ?? ''
+      return O.fallbackWhy.invalid(reason.where, O.fallbackWhy.field[key] ?? reason.message)
+    }
     default:
       return O.fallbackWhy.unknown
   }
@@ -105,7 +118,7 @@ export function profileName(profile: { id: string; name: string }, kind: 'styles
 }
 
 /**
- * The order the three modes are offered in (UI.md S-P-70). 左右 comes first: on a wide screen it is
+ * The order the three modes are offered in (UI.md S-P-70). “Side by side” comes first: on a wide screen it is
  * the layout most readers stay in. Presentation only — `MODE_VALUES` (config/schema.ts) stays the
  * data order, and both the popup's mode bar and the settings page's image modes read this one
  */
@@ -113,26 +126,13 @@ export const MODE_ORDER = ['side', 'stack', 'only'] as const
 
 /** The settings page (docs/UI.md §3.2). Same register as `S`: nouns for states, verbs for buttons */
 
-
 /** §3.4: ProviderErrorKind → a reader's sentence. `aborted` is the reader's own doing and shows nothing. */
-
-
 export function reasonText(kind: ProviderErrorKind): string {
   return current.REASON[kind]
 }
 
-/** The kinds themselves are the same in every pack; the sentences are what differ */
-const KINDS = new Set<string>(Object.keys(LOCALES[FALLBACK_LOCALE].REASON))
-
-/** run.ts writes a fatal error as `${kind}: ${message}`; only a kind from the table counts, anything else is the whole message. */
-export function parseFatal(fatal: string): { kind: ProviderErrorKind; message: string } {
-  const at = fatal.indexOf(': ')
-  if (at > 0) {
-    const kind = fatal.slice(0, at)
-    if (KINDS.has(kind)) return { kind: kind as ProviderErrorKind, message: fatal.slice(at + 2) }
-  }
-  return { kind: 'unknown', message: fatal }
-}
+/** `kind: diagnostic` → its parts; lives in the core now (pipeline/fatal.ts), re-exported for the popup and the tests */
+export { parseFatal } from '@/core/pipeline/fatal'
 
 /** service id → the name a reader sees (§2): built-ins by id, the reader's own by the name they gave */
 export function serviceName(id: string, services: readonly { id: string; name: string }[] = []): string {
@@ -151,12 +151,14 @@ export function serviceName(id: string, services: readonly { id: string; name: s
 }
 
 /**
- * The helper's one-line install for this extension (helper/install-remote.sh, documented in
- * helper/README.md). The ref names the branch the script and the sources are fetched from; it is
- * `main` once this work is there, and a branch name while a change to the helper is under review
+ * The helper's one-line install for this extension (helper/install-remote.sh, documented in helper/README.md). The
+ * ref names where the script and the sources are fetched from: the commit this build was made from (issue #158 —
+ * `main` moves, and a helper newer than the extension fails the handshake with no way back), `main` for a build that
+ * cannot promise a pushed commit (shared/build.ts)
  */
-const HELPER_REF = 'main'
-export const HELPER_GUIDE_URL = `https://github.com/SRjoeee/ReadarXiv/blob/${HELPER_REF}/helper/README.md`
+export const HELPER_GUIDE_URL = `https://github.com/SRjoeee/ReadarXiv/blob/${BUILD_REF}/helper/README.md`
 export function helperInstallCommand(extensionId: string): string {
-  return `curl -fsSL https://raw.githubusercontent.com/SRjoeee/ReadarXiv/${HELPER_REF}/helper/install-remote.sh | bash -s -- ${extensionId} ${HELPER_REF}`
+  return `curl -fsSL https://raw.githubusercontent.com/SRjoeee/ReadarXiv/${BUILD_REF}/helper/install-remote.sh | bash -s -- ${extensionId} ${BUILD_REF}`
 }
+
+installCoreStrings()

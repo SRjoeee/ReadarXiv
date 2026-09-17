@@ -26,3 +26,5 @@ export function Row({ label, hint, children }: { label: string; hint?: ReactNode
 }
 
 export const inputClass = 'w-full rounded-control border border-line bg-card px-3 py-2 text-[13px] text-fg outline-none focus:border-fg-2'
+/** A text box for code-like text — the glossary table, the advanced CSS, a prompt: monospace, one size down */
+export const codeAreaClass = 'w-full rounded-control border border-line bg-card px-3 py-2 font-mono text-[12px] text-fg outline-none focus:border-fg-2'

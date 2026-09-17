@@ -1,0 +1,54 @@
+{
+  "about": "Fixtures that are not in the repository: their papers are under arXiv’s non-exclusive licence, which lets arXiv distribute them and nobody else. scripts/fetch-fixtures.mjs downloads each from the pinned version and refuses a copy whose size or SHA-256 differs; `for` names the one consumer that reads it (tests/fixtures/README.md).",
+  "fixtures": [
+    {
+      "path": "tests/fixtures/arxiv/2312.17527.html",
+      "url": "https://arxiv.org/html/2312.17527v1",
+      "sha256": "d82e276b9ad812188d8776650218c5e4c6e33e5a254bc3b5a9caaeeb516d6336",
+      "bytes": 322636,
+      "for": "tests"
+    },
+    {
+      "path": "tests/fixtures/arxiv/2401.00418.html",
+      "url": "https://arxiv.org/html/2401.00418v1",
+      "sha256": "e191b85c6b25d882f484d636eeef3240b27c7040827102ebaa11fb2925d1c21b",
+      "bytes": 923346,
+      "for": "tests"
+    },
+    {
+      "path": "tests/fixtures/arxiv/2401.00596.html",
+      "url": "https://arxiv.org/html/2401.00596v3",
+      "sha256": "a848e49fbcf946ad9c5ecdc0e3bc2fb8d54ed207826b769054e0c6d4b8801e40",
+      "bytes": 299706,
+      "for": "tests"
+    },
+    {
+      "path": "tests/fixtures/arxiv/2608.29808.html",
+      "url": "https://arxiv.org/html/2608.29808v1",
+      "sha256": "1e68d4244b1a93f469c5ee6ebed0a9a21bd2c2b99f645e4986747a5e92828dab",
+      "bytes": 907788,
+      "for": "tests"
+    },
+    {
+      "path": "tests/fixtures/arxiv/2609.00245.html",
+      "url": "https://arxiv.org/html/2609.00245v1",
+      "sha256": "cc4faa72cfaacb951d0a1b0f91ea093fd5e2ede4d30fc38a7291979d60abb427",
+      "bytes": 1811493,
+      "for": "tests"
+    },
+    {
+      "path": "tests/fixtures/svg/2608.29808-bounter-case.svg",
+      "url": "https://arxiv.org/html/2608.29808v1/bounter-case.svg",
+      "sha256": "fc3f907a33901c6e39b9775534ec2e0900a058c560444c929b40e1c6236f11b5",
+      "bytes": 266963,
+      "for": "tests"
+    },
+    {
+      "path": "helper/Tests/Fixtures/qed3d-string-breaking.png",
+      "url": "https://arxiv.org/html/2609.04114v1/QED3Dstringbreaking.png",
+      "sha256": "9df0af7414517862bf8bceb3b4a67807241592059f995175a636df8509cf159e",
+      "bytes": 106469,
+      "for": "helper-smoke"
+    }
+  ]
+}

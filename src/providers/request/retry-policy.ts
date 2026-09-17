@@ -1,5 +1,7 @@
-// 移植自 reference/read-frog/src/utils/request/retry-policy.ts@9b44f82（GPL-3.0），2026-09-03 移植、有修改：仅调整以通过本项目的严格类型检查。
-// 请求错误分类、Retry-After 解析与限流退避策略；由本目录的 request-queue 驱动（2026-09-05 起，此前是 src/providers/retry.ts 的 withRetry）。
+// Ported from reference/read-frog/src/utils/request/retry-policy.ts@9b44f82 (GPL-3.0), 2026-09-03, modified: only what
+// this project's strict type checking required.
+// Request error classification, Retry-After parsing and the rate-limit backoff policy; driven by this directory's
+// request-queue (since 2026-09-05; before that by src/providers/retry.ts's withRetry).
 
 export type RequestErrorKind =
   | "rate-limit"
@@ -38,7 +40,7 @@ export interface RequestRetryPolicy {
   decide: (error: unknown, context: RequestRetryContext) => RetryDecision
 }
 
-export const REQUEST_ERROR_META = Symbol("requestErrorMeta")
+const REQUEST_ERROR_META = Symbol("requestErrorMeta")
 
 export const MAX_RETRY_AFTER_MS = 5 * 60_000
 // Base queue pause after a 429 with no Retry-After header. Doubles per
@@ -118,7 +120,7 @@ export function getRequestErrorMeta(error: unknown): RequestErrorMeta {
   })
 }
 
-export function getRetryAfterMs(meta: RequestErrorMeta, now = Date.now()): number | undefined {
+function getRetryAfterMs(meta: RequestErrorMeta, now = Date.now()): number | undefined {
   const directRetryAfterMs = normalizeNonNegativeNumber(meta.retryAfterMs)
   if (directRetryAfterMs !== undefined) {
     return directRetryAfterMs
@@ -127,7 +129,7 @@ export function getRetryAfterMs(meta: RequestErrorMeta, now = Date.now()): numbe
   return getRetryAfterMsFromHeaders(meta.responseHeaders, now)
 }
 
-export function getHeaderValue(headers: unknown, key: string): string | undefined {
+function getHeaderValue(headers: unknown, key: string): string | undefined {
   if (!headers) {
     return undefined
   }
@@ -159,11 +161,6 @@ export function getHeaderValue(headers: unknown, key: string): string | undefine
   }
 
   return undefined
-}
-
-export function isRateLimitRequestError(error: unknown): boolean {
-  const meta = getRequestErrorMeta(error)
-  return meta.kind === "rate-limit" || meta.statusCode === 429
 }
 
 export const defaultRequestRetryPolicy: RequestRetryPolicy = {

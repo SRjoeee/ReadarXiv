@@ -1,52 +1,55 @@
-// 翻译请求的执行位置抽象（DESIGN §8.0）。同一个接口两种实现，页面翻译与设置页的连接测试共用一条路径，
-// 不可能再出现「测试通过、翻译失败」（issue #42）：
-// - createLocalTransport（本文件）：在 background 里建链、排队、发请求；
-// - createMessageTransport（src/shared/transport.ts）：在 content / options 里把每个方法变成一条消息。
-// 两个实现分文件是为了包体积：本文件会拉进三个 provider 与 AI SDK，content script 每打开一篇论文都要解析它。
+// The abstraction of where a translation request runs (DESIGN §8.0). One interface, two implementations, so page
+// translation and the settings page's connection test share one path and “the test passes, the translation fails”
+// (issue #42) cannot recur:
+// - createLocalTransport (this file): builds the chain, queues and sends in the background;
+// - createMessageTransport (src/shared/transport.ts): turns every method into a message in content / options.
+// Two files for bundle size: this one pulls in three providers and the AI SDK, which the content script would parse on every paper opened.
 import type { Config } from '@/config/schema'
 import { chosenService, serviceOf } from '@/config/services'
 import type { RenderPath } from '@/cache/key'
 import { buildChain } from '.'
 import { createOpenAICompatProvider } from './openai-compat'
 import { createFallbackService } from './fallback'
-import { createTranslateService, type CachePort, type CancelOptions, type TranslateCall, type TranslateMessageResponse, type TranslateServiceDeps } from './translate-service'
+import type { CancelledScopeRegistry } from './request/cancellation'
+import { createTranslateService, type CachePort, type TranslateCall, type TranslateMessageResponse, type TranslateService, type TranslateServiceDeps } from './translate-service'
 import type { ProviderErrorKind, TranslationProvider } from './types'
 
-/** 此刻实际在用的引擎与最近一次降级原因（§8.5）；popup 据此解释译文为什么换了引擎 */
+/** The engine actually in use right now and the latest hand-over reason (§8.5); the popup explains by it why the translation changed engine */
 export interface EngineStatus {
   id: string
-  displayName: string
   /** The engine that was put aside for this one; `id` lets the popup name it the way it names services (UI.md §2) */
-  demoted?: { id: string; displayName: string; kind: ProviderErrorKind; message: string }
+  demoted?: { id: string; kind: ProviderErrorKind; message: string }
 }
 
 export interface ProviderStatus {
-  /** 配置里选的那个引擎 */
+  /** The engine at the head of the chain — what the chosen service resolved to */
   providerId: string
-  /** 它能不能用 */
+  /**
+   * The service id as saved. Differs from `providerId` when the saved id names nothing (a service deleted from
+   * another tab): `getProvider` then substitutes a built-in, and the toggle must not call that runnable when the
+   * popup, deciding from the settings, says it is not (`savedFromStatus`, shared/page-action.ts)
+   */
+  chosen: string
+  /** Can it be used */
   available: boolean
   /**
-   * 首选不可用时，降级链上第一个能用的引擎（§8.5）。有它就能翻——
-   * popup 的「翻译」按钮据此判断，否则会出现「链上有 Google 兜底、按钮却是灰的」（Codex 在 #50 指出）
+   * With the first choice unavailable, the first usable engine on the fallback chain (§8.5). With it a translation can
+   * run — the popup's “translate” button decides by it, or “Google on the chain as fallback, yet the button greyed out” shows up (Codex on #50)
    */
-  fallback?: { id: string; displayName: string }
+  fallback?: { id: string }
   model?: string
-  /** content 侧规划批次与选择渲染路径要用（§2 第 3 条） */
+  /** What the content side needs to plan batches and choose the render path (§2 item 3) */
   maxBatchChars: number
   maxBatchItems: number
-  /** 协商出的渲染路径（§8.5）：一次会话只有一个，content 侧据此序列化与算缓存键 */
+  /** The negotiated render path (§8.5): one per session; the content side serialises and computes cache keys by it */
   renderPath: RenderPath
   /** The config this chain was built from: the popup waits for these to match what it just saved before restarting a page */
   targetLanguage: string
   promptId: string
-  /**
-   * Which build of the chain this is. A page records it at session start, so the popup can say
-   * "this page is on an older chain" for **any** change — a new key, model, endpoint or prompt keeps
-   * the service id and the target, and comparing those alone missed all of them (Codex on #157)
-   */
-  revision: number
+  /** `chainRevision` of the configuration this chain was built from; the toggle compares a page's revision with it */
+  revision: string
   engine: EngineStatus
-  /** 链上引擎的 id，按优先级。popup 用它判断刚下好语言包的引擎有没有进链，e2e 用它断言降级 */
+  /** The ids of the engines on the chain, by priority. The popup tells by it whether an engine whose pack just downloaded joined the chain; e2e asserts hand-overs by it */
   chain: string[]
   /**
    * Every hand-over still in force, by engine. The page uses it to ask about **the engine its own
@@ -59,49 +62,83 @@ export interface ProviderStatus {
 
 export interface TranslationTransport {
   translate(call: TranslateCall): Promise<TranslateMessageResponse>
-  /** 撤掉该 scope 排队与在飞的请求，返回撤掉的条数。`remember: false` 只排空、不判死（见 `CancelOptions`） */
-  cancel(scope: string, options?: CancelOptions): Promise<number>
+  /** Drain the scope's queued and in-flight requests; returns how many. Whether the scope is dead afterwards is the session router's decision (DESIGN §8.5) */
+  cancel(scope: string): Promise<number>
   /** `scope` asks about that session's own chain rather than the current global one (§8.5) */
-  status(scope?: string): Promise<ProviderStatus>
+  /**
+   * `scope`: the session's own chain. `fresh` (with a scope, over the message transport): a chain built from the
+   * configuration as stored now, and the session bound to it — what a session starting on freshly saved settings asks
+   * for, so what it records and what serves it are one chain (background/provider-status.ts). The local transport
+   * is one chain and ignores the option
+   */
+  status(scope?: string, options?: { fresh?: boolean }): Promise<ProviderStatus>
+  /**
+   * Local chains only (absent on the content side). Every scoped request queued or in flight on the chain is
+   * drained, whichever session left it here — a session moved on by a language pack leaves its earlier requests
+   * behind — and returned as the count; after this, a call still inside the chain (suspended on its cache read,
+   * outside every queue, or a connection test's retry) is refused when it wakes and caches nothing. The chain
+   * holder retires the chains a deletion replaces: the scope stays live, on the replacement (DESIGN §8.5)
+   */
+  retire?(): number
+  /** Local chains only: whether retire() has been called — the router never binds a session to such a chain */
+  isRetired?(): boolean
+  /**
+   * Local chains only: a call is still inside the chain — suspended on its cache read, at the endpoint, in a
+   * retry backoff. The chain holder keeps a superseded chain while this is true, so a deleted service's chain
+   * can still be retired (DESIGN §8.5)
+   */
+  busy?(): boolean
 }
 
 export interface LocalTransportDeps extends Pick<TranslateServiceDeps, 'queue' | 'batch' | 'cacheReadBudgetMs'> {
-  /** 缓存端口。background 传本地 Dexie；不传就不缓存（测试） */
+  /** The registry of scopes ended for certain, shared with the session router that writes it (DESIGN §8.5); every service built here reads it */
+  cancelled: Pick<CancelledScopeRegistry, 'has'>
+  /** The cache port. The background passes the local Dexie; without it nothing is cached (tests) */
   cache?: CachePort
-  /** 换掉建链（测试用） */
+  /** Replace the chain building (for tests) */
   buildChain?: (config: Config) => Promise<{ chain: TranslationProvider[]; renderPath: RenderPath }>
+  /** Where the services' warnings go besides the console: the diagnostics log (issue #156) */
+  warn?: (line: string) => void
 }
 
 /**
- * 全浏览器共用一条链、一套队列（issue #43 的跨标签页额度策略）。限流是按 API key 算的，不是按标签页：
- * 两个标签页各起一套队列，对同一端点的实际并发就是 2×8，正是招 429 的配方。共享之后两篇论文
- * 分享同一份并发预算，同时翻两篇的吞吐减半，但不会互相把对方打进限流。
+ * One chain and one set of queues for the whole browser (the cross-tab quota policy of issue #43). Rate limits are
+ * per API key, not per tab: two tabs each with a queue of their own make the real concurrency against one endpoint
+ * 2×8, the recipe for 429. Shared, two papers split one concurrency budget — translating both at once halves the
+ * throughput, but neither pushes the other into the limit.
  */
-/** Bumped by every build, so a session can tell whether the chain moved on without it */
-let revision = 0
-
-export async function createLocalTransport(config: Config, deps: LocalTransportDeps = {}): Promise<TranslationTransport> {
-  const built = ++revision
+export async function createLocalTransport(config: Config, deps: LocalTransportDeps): Promise<TranslationTransport> {
+  const revision = await chainRevision(config)
   const { chain, renderPath } = await (deps.buildChain ?? buildChain)(config)
   const primary = chain[0]!
   const chosen = chosenService(config)
   const model = chosen?.model
+  /**
+   * Set by retire(): this chain has been replaced. A scope moved to the replacement stays live in the registry,
+   * so a call of it suspended in one of these services would go on to the deleted provider when it wakes; and a
+   * connection test has no scope at all. The services read this gate next to the registry and stop both (#157)
+   */
+  let retired = false
+  const isRetired = () => retired
   const steps = chain.map(engine => ({
     provider: engine,
     service: createTranslateService({
       getProvider: async () => engine,
-      // 模型名只对 LLM 有意义；免费引擎不带，免得换模型时白白让它的缓存失效
+      // The model name means something for an LLM only; the free engines carry none, so a model change does not invalidate their cache for nothing
       getModel: async () => (engine.id === chosen?.id ? chosen.model : undefined),
+      cancelled: deps.cancelled,
+      retired: isRetired,
+      ...(deps.warn ? { warn: deps.warn } : {}),
       ...(deps.cache ? { cache: deps.cache } : {}),
       ...(deps.queue ? { queue: deps.queue } : {}),
       ...(deps.batch ? { batch: deps.batch } : {}),
       ...(deps.cacheReadBudgetMs !== undefined ? { cacheReadBudgetMs: deps.cacheReadBudgetMs } : {}),
     }),
   }))
-  const service = createFallbackService(steps)
+  const service = createFallbackService(steps, deps.warn ? { warn: deps.warn } : {})
 
   /**
-   * A service of the reader's that this chain is not built around: 连接 has to answer for the
+   * A service of the reader's that this chain is not built around: the connection test has to answer for the
    * endpoint named in the drawer, and editing a service no longer makes it the chosen one, so the
    * one being tested is usually **not** on the chain (Codex on #157). It gets a provider of its own,
    * with no cache behind it — the question is whether the endpoint answers, and a cached sample
@@ -111,30 +148,49 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     const own = serviceOf(config, id)
     if (!own) return undefined
     const engine = createOpenAICompatProvider(own, { prompts: config.prompts })
-    return { provider: engine, service: createTranslateService({ getProvider: async () => engine, getModel: async () => own.model }) }
+    return { provider: engine, service: createTranslateService({ getProvider: async () => engine, getModel: async () => own.model, cancelled: deps.cancelled, retired: isRetired, ...(deps.warn ? { warn: deps.warn } : {}) }) }
   }
 
   /**
-   * 指名引擎的调用**不走降级链**：设置页的「测试连接」问的是「我配的这个端点通不通」，
-   * 链上有免费兜底就把它显示成成功，等于把 issue #42 抱怨的「两条路径不一致」换个方向再犯一次——
-   * 用户会以为端点没问题，实际整页都在用 Google 翻
+   * A call naming an engine **takes no fallback chain**: the settings page's “test connection” asks “does the endpoint
+   * I configured work”, and a free fallback on the chain showing as success would be issue #42's “two inconsistent
+   * paths” committed the other way round — the reader would think the endpoint fine while the whole page translated through Google
    */
-  const translate = (call: TranslateCall): Promise<TranslateMessageResponse> => {
+  /** Off-chain services with a call inside: built per named call, they are drained and retired with the chain */
+  const offChainLive = new Set<TranslateService>()
+  const route = async (call: TranslateCall): Promise<TranslateMessageResponse> => {
     if (call.providerId === undefined) return service.translate(call)
-    const step = steps.find(s => s.provider.id === call.providerId) ?? offChain(call.providerId)
-    // 这一条与段落无关，拆小了也还是同一个引擎不在链上
-    if (!step) return Promise.resolve({ ok: false, error: { kind: 'unknown', message: `引擎 ${call.providerId} 不在当前链上`, isolatable: false } })
-    return step.service.translate(call)
+    const step = steps.find(s => s.provider.id === call.providerId)
+    if (step) return step.service.translate(call)
+    const own = offChain(call.providerId)
+    // This one has nothing to do with the segments; split smaller, the engine is still not on the chain
+    if (!own) return { ok: false, error: { kind: 'unknown', message: `engine ${call.providerId} is not on the current chain`, isolatable: false } }
+    offChainLive.add(own.service)
+    try {
+      return await own.service.translate(call)
+    } finally {
+      offChainLive.delete(own.service)
+    }
+  }
+  /** Calls inside this chain right now; `busy()` reports it to the chain holder */
+  let inFlight = 0
+  const translate = async (call: TranslateCall): Promise<TranslateMessageResponse> => {
+    inFlight++
+    try {
+      return await route(call)
+    } finally {
+      inFlight--
+    }
   }
 
   const status = async (): Promise<ProviderStatus> => {
     const available = await primary.isAvailable()
-    // 首选不可用时看看链上还有没有能用的：有就照样能翻，只是走降级引擎
+    // The first choice unavailable, look for a usable one on the chain: with one the translation runs as usual, on the fallback engine
     let fallback: ProviderStatus['fallback']
     if (!available) {
       for (const engine of chain.slice(1)) {
         if (await engine.isAvailable()) {
-          fallback = { id: engine.id, displayName: engine.displayName }
+          fallback = { id: engine.id }
           break
         }
       }
@@ -143,6 +199,8 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     const active = chain.find(engine => engine.id === live.activeId) ?? primary
     return {
       providerId: primary.id,
+      chosen: config.provider,
+      revision,
       available,
       ...(fallback ? { fallback } : {}),
       model,
@@ -151,14 +209,12 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       renderPath,
       targetLanguage: config.targetLanguage,
       promptId: config.prompts.promptId,
-      revision: built,
       chain: chain.map(engine => engine.id),
       demotions: live.demotions.map(d => ({ id: d.id, kind: d.kind })),
       engine: {
         id: active.id,
-        displayName: active.displayName,
         ...(live.activeId !== live.configuredId && live.demoted
-          ? { demoted: { id: live.demoted.id, displayName: live.demoted.displayName, kind: live.demoted.kind, message: live.demoted.message } }
+          ? { demoted: { id: live.demoted.id, kind: live.demoted.kind, message: live.demoted.message } }
           : {}),
       },
     }
@@ -166,30 +222,23 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
 
   return {
     translate,
-    cancel: async (scope, options) => service.cancel(scope, options),
+    cancel: async scope => {
+      let cancelled = service.cancel(scope)
+      for (const own of offChainLive) cancelled += own.cancel(scope)
+      return cancelled
+    },
     status,
+    retire: () => {
+      retired = true
+      let cancelled = service.cancelAll()
+      for (const own of offChainLive) cancelled += own.cancelAll()
+      return cancelled
+    },
+    isRetired: () => retired,
+    busy: () => inFlight > 0,
   }
 }
 
-/**
- * 建链要读的配置字段。其余字段（模式、样式、预加载、术语表）改了**不能**重建：
- * content 每切一次显示模式就写一次配置，而那时页面往往正在翻，重建会把令牌桶和降级记录一起清掉。
- * `tests/providers/transport.test.ts` 守着这张表：新增配置字段必须显式归类。
- */
-export const CHAIN_CONFIG_FIELDS = ['provider', 'services', 'prompts', 'targetLanguage', 'fallback'] as const
-/** 与 CHAIN_CONFIG_FIELDS 互补，两者之和必须覆盖 Config 的全部字段 */
-export const VOLATILE_CONFIG_FIELDS = ['version', 'mode', 'glossary', 'appearance', 'preload', 'image', 'reading', 'uiLanguage'] as const
-
-export function chainConfigChanged(a: Config, b: Config): boolean {
-  return CHAIN_CONFIG_FIELDS.some(field => !deepEqual(a[field], b[field]))
-}
-
-/** 逐字段比较而不是序列化：配置里有 API key，不给它多留一份副本（硬规则 7） */
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true
-  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
-  if (Array.isArray(a) !== Array.isArray(b)) return false
-  const keys = Object.keys(a)
-  if (keys.length !== Object.keys(b).length) return false
-  return keys.every(key => deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
-}
+// The chain-config table and the digest live in config/revision.ts: the popup and the toggle compare a page with the
+// saved settings through the same digest, and neither may pull this module's providers into its bundle
+import { chainRevision } from '@/config/revision'

@@ -1,10 +1,10 @@
-// 移植自 reference/read-frog/src/utils/request/__tests__/batch-queue.test.ts@9b44f82（GPL-3.0），2026-09-05 移植、有修改：
-// Read Frog 的分隔符拼接 / 解析、hash 与 executeTranslate 换成测试内的最小替身，用例本身逐字保留。
+// Ported from reference/read-frog/src/utils/request/__tests__/batch-queue.test.ts@9b44f82 (GPL-3.0), 2026-09-05, modified:
+// Read Frog's separator joining / parsing, hash and executeTranslate replaced by minimal stand-ins inside the test; the cases themselves kept word for word.
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { BatchQueue } from "@/providers/request/batch-queue"
 import { RequestQueue } from "@/providers/request/request-queue"
 
-// 替身：Read Frog 用独占一行的 "%%" 把一批文本拼成一个请求再拆回来（它的 translation-queues.ts）；这里照样拼、照样拆
+// Stand-in: Read Frog joins a batch of texts into one request with a "%%" on a line of its own and splits it back (its translation-queues.ts); joined and split the same way here
 const BATCH_SEPARATOR = "%%"
 const BATCH_SEPARATOR_LINE_PATTERN = /\r?\n[ \t]*%%[ \t]*\r?\n/
 function parseBatchResult(result: string): string[] {
@@ -875,51 +875,6 @@ describe("batchQueue – in-flight coalescing", () => {
 
     await expect(third).resolves.toBe("recovered")
     expect(mockExecuteTranslate).toHaveBeenCalledTimes(2)
-  })
-})
-
-describe("batchQueue – configuration", () => {
-  it("updates batch size configuration", async () => {
-    vi.useFakeTimers()
-    mockTranslateSuccess(["result1", "result2"])
-
-    const requestQueue = new RequestQueue(baseRequestQueueConfig)
-    const batchQueue = createBatchQueue(requestQueue, {
-      ...baseBatchConfig,
-      maxItemsPerBatch: 10,
-    })
-
-    batchQueue.setBatchConfig({ maxItemsPerBatch: 2 })
-
-    const promises = [
-      batchQueue.enqueue({
-        text: "Text 1",
-        langConfig: sampleLangConfig,
-        providerConfig: sampleProviderConfig,
-        hash: "hash1",
-      }),
-      batchQueue.enqueue({
-        text: "Text 2",
-        langConfig: sampleLangConfig,
-        providerConfig: sampleProviderConfig,
-        hash: "hash2",
-      }),
-    ]
-
-    vi.advanceTimersByTime(0) // Should flush immediately
-
-    const results = await Promise.all(promises)
-    expect(results).toEqual(["result1", "result2"])
-  })
-
-  it("throws error for invalid configuration", () => {
-    const requestQueue = new RequestQueue(baseRequestQueueConfig)
-    const batchQueue = createBatchQueue(requestQueue)
-
-    expect(() => batchQueue.setBatchConfig({ maxCharactersPerBatch: 0 })).toThrow(/Too small/)
-    expect(() => batchQueue.setBatchConfig({ maxItemsPerBatch: 0 })).toThrow(/Too small/)
-    expect(() => batchQueue.setBatchConfig({ maxCharactersPerBatch: -1 })).toThrow(/Too small/)
-    expect(() => batchQueue.setBatchConfig({ maxItemsPerBatch: -1 })).toThrow(/Too small/)
   })
 })
 

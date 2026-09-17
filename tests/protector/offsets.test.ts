@@ -14,7 +14,7 @@ const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/arxiv')
  * offset arithmetic and the span resolution, which are pure data; `Range` behaviour is verified in
  * the browser by `pnpm e2e`, which is where the highlight lives anyway.
  *
- * `textOf` slices the node data directly, which is what `rangeOf(...).toString()` should produce in
+ * `textOf` slices the node data directly, which is what `rangesOf(...)`'s ranges should produce in
  * a real browser for an interval that stays within text spans.
  */
 function textOf(spans: readonly WireSpan[], from: number, to: number): string {
@@ -31,8 +31,8 @@ function textOf(spans: readonly WireSpan[], from: number, to: number): string {
 const textSpans = (spans: readonly WireSpan[]) => spans.filter(s => s.kind === 'text')
 
 /**
- * Records which boundary calls `rangeOf` makes, so the decision can be asserted without relying on
- * happy-dom's Range. Stubs `createRange` on the nodes' own document, which is where `rangeOf` gets
+ * Records which boundary calls `rangesOf` makes, so the decision can be asserted without relying on
+ * happy-dom's Range. Stubs `createRange` on the nodes' own document, which is where `rangesOf` gets
  * it from.
  */
 function boundaryCalls(root: Element, spans: readonly WireSpan[], from: number, to: number): string[] {
@@ -55,7 +55,7 @@ function boundaryCalls(root: Element, spans: readonly WireSpan[], from: number, 
 
 
 describe('wire offsets to DOM (#105)', () => {
-  // 同上：整套 fixture × 两种格式，CPU 密集，与全局 30s 的余量赛跑
+  // As above: the whole fixture set × two formats, CPU-bound, racing the global 30 s margin
   it('emits byte-identical wire text on both paths across every fixture and format', { timeout: 120_000 }, () => {
     // The two paths are deliberately separate: the default one escapes the whole string at once and
     // collapses once, touching not one extra character; only the tracked one walks per character so

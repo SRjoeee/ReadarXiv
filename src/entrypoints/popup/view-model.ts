@@ -8,18 +8,22 @@
 // open at any time, a change while the page is on restarts it in place (data.ts), and only a
 // choice that cannot run leaves the page behind the settings.
 import { activeStyle } from '@/config/appearance'
-import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, type LangCode } from '@/config/languages'
+import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
-import { type Service, chosenService, isBuiltInService, isLlmChosen } from '@/config/services'
+import { CONFIG_UNREADABLE } from '@/config/storage'
+import { chosenService, isBuiltInService, isLlmChosen, serviceRuns } from '@/config/services'
 import type { Mode } from '@/core/renderer'
 import { supportsTarget } from '@/providers/microsoft'
 import { BUILT_IN_PROMPTS } from '@/providers/prompt-library'
 import type { ProviderStatus } from '@/providers/transport'
 import type { PageStatus } from '@/shared/messages'
+import type { StartResult } from '@/core/session'
+import { pageDecision } from '@/shared/page-action'
 import type { HelperStatus } from '@/shared/ocr'
 import type { PackState } from '@/shared/pack'
 import type { MenuItem } from '@/ui/Menu'
 import { styleTile } from '@/ui/appearance/tiles'
+import { NoActiveTabError } from '@/shared/messages'
 import { PREVIEW_TARGET, S, languageLabel, languageName, parseFatal, profileName, reasonText, serviceName } from '@/ui/strings'
 
 export type { PackState }
@@ -29,15 +33,33 @@ export const MANAGE_SERVICES = '__manage'
 export const MANAGE_STYLES = '__manage-styles'
 export type MenuKind = 'service' | 'language' | 'prompt' | 'style'
 
+/**
+ * Whether the popup's 500 ms loop may ask the background for the provider line. Not while a grant is taking effect
+ * (DESIGN §15.3): the stale worker is replaced only once it has idled out, and every message to it resets the idle
+ * timer — a popup left open on a translating page would keep it alive, and the grant pending, for as long as it
+ * stayed open (Codex, local review of #179). The page-status half of the loop goes to the content script and is
+ * unaffected
+ */
+export const pollsBackground = (helper: HelperStatus | null): boolean => helper?.state !== 'restarting'
+
 export interface PopupInput {
   page: PageStatus | null
-  provider: ProviderStatus | null
+  /** The saved settings' chain: what a translation started now would run on; null until asked or when the ask failed */
+  saved: ProviderStatus | null
+  /**
+   * The running session's own chain — its engine, its hand-overs — while the page is on; null when the page is off
+   * or its status has not come back. Never stood in for by `saved`: the two can describe different chains after a
+   * change saved elsewhere, and an unknown session shows as unknown (Codex on #185)
+   */
+  session: ProviderStatus | null
   config: Config | null
   /** The offline service's language pack; null until asked */
   pack: PackState | null
   /** The image-recognition helper; null until asked */
   helper: HelperStatus | null
   platform: 'mac' | 'other' | null
+  /** `chainRevision` of the saved configuration; null until computed. A page whose `running.revision` differs is behind */
+  savedRevision: string | null
   /** Which menu is open (the popup's own state) */
   menu: MenuKind | null
   /** The translate shortcut as Chrome reports it; null when unbound or unknown */
@@ -61,10 +83,11 @@ export interface PopupView {
   images: boolean
   menu: { kind: MenuKind; label: string; items: MenuItem[]; search: boolean } | null
   /**
-   * Under the image row when the helper is missing. `extensionId` present means the guided install
-   * can run here (macOS); without it the line is the macOS-only notice and there is nothing to press
+   * Under the image row while the helper is not ready: the line, and the step the reader can take — `allow` asks
+   * for the permission (S-P-86c), `install` opens the guided install, whose command needs `extensionId` (S-P-88);
+   * null is a line with nothing to press (macOS only, or a grant still taking effect — S-P-87 / 86d)
    */
-  helper: { text: string; extensionId?: string } | null
+  helper: { text: string; step: 'allow' | 'install' | null; extensionId?: string } | null
   note: Note | null
   failed: string | null
   primary: { label: string; action: 'translate' | 'restore' | 'retranslate'; disabled: boolean; shortcut?: string }
@@ -73,8 +96,8 @@ export interface PopupView {
 }
 
 /**
- * 「不是论文页」那一屏。**按调用时算，不在模块加载时算**：这个模块在 `applyLocale` 之前就被导入，
- * 常量会把兜底语言冻在里面，于是中文界面上会出现一个英文按钮（Codex 在 #161 指出）
+ * The “not a paper page” screen. **Computed at call time, not at module load**: this module is imported before
+ * `applyLocale`, a constant would freeze the fallback language into it, and a Chinese interface would show one English button (Codex on #161)
  */
 const empty = (): PopupView => ({
   empty: true,
@@ -92,17 +115,6 @@ const empty = (): PopupView => ({
   secondary: null,
   mode: { value: DEFAULT_CONFIG.mode, note: null },
 })
-
-/** A local endpoint needs no key: Ollama and LM Studio answer without one */
-const isLoopback = (baseURL: string): boolean => {
-  try {
-    const host = new URL(baseURL).hostname
-    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
-  } catch {
-    return false
-  }
-}
-const serviceRuns = (service: Service): boolean => service.apiKey.trim() !== '' || isLoopback(service.baseURL)
 
 /** Whether the chosen service can run on its own, decided from the settings (no round trip, no stale chain) */
 export function runnable(config: Config, pack: PackState | null): boolean {
@@ -137,7 +149,7 @@ function cannotRunWhy(config: Config, pack: PackState | null): string {
 }
 
 export function derivePopupView(input: PopupInput): PopupView {
-  const { page, provider, config, pack, helper, platform, menu, shortcut, extensionId } = input
+  const { page, saved, session, config, pack, helper, platform, menu, shortcut, extensionId, savedRevision } = input
   if (page === null) return empty()
   if (config === null) return { ...empty(), empty: false, mode: { value: page.preference, note: null } }
 
@@ -145,22 +157,18 @@ export function derivePopupView(input: PopupInput): PopupView {
   const on = progress.state === 'on'
   const paused = progress.state === 'stopped' && progress.fatal !== undefined
   const canRun = runnable(config, pack)
-  const demoted = on ? provider?.engine.demoted : undefined
+  const demoted = on ? session?.engine.demoted : undefined
   // The page runs on settings other than the saved ones. A change made here restarts the page at
   // once (data.ts), so this is what is left: a choice that cannot start, and a change made from
   // another tab, which leaves this page pinned to the session it began (Codex on #157). Either way
-  // the reader is offered 重新翻译 — enabled when the saved settings can actually run
-  // The chain's revision catches every change, including the ones that keep the service id and the
-  // target: a new key, model, endpoint, thinking mode or prompt (Codex on #157). The other two are
-  // kept for the case where the chain has not been rebuilt yet
-  const behind = on && page.running !== undefined && provider !== null
-    && (page.running.provider !== config.provider
-      || page.running.target !== config.targetLanguage
-      || page.running.revision !== provider.revision)
+  // the reader is offered “Translate again” — enabled when the saved settings can actually run. The rule is
+  // the toggle's too (shared/page-action.ts): the page's revision against the saved settings' digest
+  const decision = pageDecision(page, { revision: savedRevision, canRun, fallback: !!saved?.fallback }) ?? { action: 'translate' as const, behind: false, enabled: canRun || !!saved?.fallback }
+  const { action, behind } = decision
   const named = (id: string) => serviceName(id, config.services)
 
-  const service: Row = demoted && provider
-    ? { value: named(provider.engine.id), replaced: named(demoted.id) }
+  const service: Row = demoted && session
+    ? { value: named(session.engine.id), replaced: named(demoted.id) }
     : { value: named(config.provider) }
   const language: Row = { value: languageName(config.targetLanguage) }
   // The prompt decides how an LLM translates; the free services do not read it
@@ -169,30 +177,27 @@ export function derivePopupView(input: PopupInput): PopupView {
   const style: Row = { value: profileName(activeStyle(config.appearance)) }
 
   const note: Note | null = paused ? { text: S.note.paused(reasonText(parseFatal(progress.fatal ?? '').kind)), settings: true }
-    : demoted && provider ? { text: S.note.replaced(named(demoted.id), reasonText(demoted.kind), named(provider.engine.id)), settings: true }
+    : demoted && session ? { text: S.note.replaced(named(demoted.id), reasonText(demoted.kind), named(session.engine.id)), settings: true }
     : page.images?.fatal ? { text: S.note.imagesPaused(reasonText(parseFatal(page.images.fatal).kind)), settings: true }
     : !canRun && (!on || behind)
-      ? { text: !on && provider?.fallback ? S.note.willFallback(cannotRunWhy(config, pack), named(provider.fallback.id)) : S.note.cannotRun(cannotRunWhy(config, pack)), settings: true }
+      ? { text: !on && saved?.fallback ? S.note.willFallback(cannotRunWhy(config, pack), named(saved.fallback.id)) : S.note.cannotRun(cannotRunWhy(config, pack)), settings: true }
       : null
 
   const failedCount = progress.failed + (page.images?.failed ?? 0)
   const failed = failedCount > 0 && progress.state !== 'idle' && !progress.fatal && !page.images?.fatal ? S.failed.text(failedCount) : null
 
-  const primary: PopupView['primary'] = on && !behind ? { label: S.primary.restore, action: 'restore', disabled: false }
-    : behind ? { label: S.primary.retranslate, action: 'retranslate', disabled: !canRun }
-    : paused ? { label: S.primary.retranslate, action: 'retranslate', disabled: !canRun && !provider?.fallback }
-    : { label: S.primary.translate, action: 'translate', disabled: !canRun && !provider?.fallback }
-  // On every action the key actually performs, 显示原文 included: ⌥T translates a page that is not
+  const primary: PopupView['primary'] = { label: action === 'restore' ? S.primary.restore : action === 'retranslate' ? S.primary.retranslate : S.primary.translate, action, disabled: !decision.enabled }
+  // On every action the key actually performs, “Show original” included: ⌥T translates a page that is not
   // translated and restores one that is, so the badge belongs on both faces of the same button
   // (user 2026-09-11). A paused session retries rather than restores, which is what its label says
   if (!primary.disabled && shortcut) primary.shortcut = shortcut
   const secondary = behind || paused ? { label: S.primary.restore, action: 'restore' as const } : null
 
-  const helperHint: PopupView['helper'] = config.image.enabled && helper !== null && !helper.available && platform !== null
-    ? platform === 'mac'
-      ? { text: S.helper.install, extensionId }
-      : { text: S.helper.macOnly }
-    : null
+  const helperHint: PopupView['helper'] = !config.image.enabled || helper === null || helper.state === 'ready' || platform === null ? null
+    : platform !== 'mac' ? { text: S.helper.macOnly, step: null }
+    : helper.state === 'permission-missing' ? { text: S.helper.permission, step: 'allow' }
+    : helper.state === 'restarting' ? { text: S.helper.enabling, step: null }
+    : { text: S.helper.install, step: 'install', extensionId }
 
   return {
     empty: false,
@@ -244,7 +249,7 @@ function menuOf(kind: MenuKind, config: Config, pack: PackState | null): NonNull
       // Whatever the settings page holds, in its order: the reader's own profiles sit among the
       // built-in ones there, and a second order here would make the same list read as two lists.
       // Each name carries the same sample sentence the settings tiles use, drawn in that style —
-      // the names alone ("淡一档", "模糊") do not show what they do
+      // the names alone ("Muted", "Blurred") do not show what they do
       return {
         kind,
         label: S.rows.style,
@@ -257,7 +262,7 @@ function menuOf(kind: MenuKind, config: Config, pack: PackState | null): NonNull
             preview: styleTile(p),
             selected: p.id === config.appearance.activeStyle,
           })),
-          // 与服务菜单同一个位置、同一种角色：最后一行不是样式，是去管理它们的入口（S-P-83）
+          // The same position and role as in the service menu: the last row is not a style but the way in to managing them (S-P-83)
           { id: MANAGE_STYLES, name: S.rows.manageStyles, selected: false },
         ],
       }
@@ -294,5 +299,22 @@ function serviceItems(config: Config, pack: PackState | null): MenuItem[] {
   ]
 }
 
-export const LANGUAGE_CODES: readonly LangCode[] = LANG_CODES
-export const DEFAULT_LANGUAGE = DEFAULT_CONFIG.targetLanguage
+/** What a failed popup action says (S-P-90): a known failure in the interface language, anything else as it was thrown */
+export function actionErrorText(e: unknown): string {
+  if (e instanceof NoActiveTabError) return S.noActiveTab
+  // By name: thrown here by a write of the popup's own, or in the page by the mode's save and carried back as a failure reply
+  if (e instanceof Error && e.name === CONFIG_UNREADABLE) return S.settingsUnreadable
+  return e instanceof Error ? e.message : String(e)
+}
+
+/** A refused start, in the interface's language: the session answers with a code (core/session StartRefusal), the popup with the sentence */
+export function startRefusalText(result: Extract<StartResult, { started: false }>): string {
+  switch (result.reason) {
+    case 'already-on': return S.page.alreadyOn
+    case 'session-over': return S.page.sessionOver
+    case 'not-paper': return S.page.notPaper
+    case 'nothing-to-translate': return S.page.nothingToTranslate
+    case 'backend-silent': return S.page.backendSilentWith(result.detail ?? '')
+    case 'no-service': return S.page.noService
+  }
+}

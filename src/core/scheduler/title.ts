@@ -1,17 +1,21 @@
-// 标签页标题翻译（DESIGN §10）：Read Frog page-translation.ts 里 document.title 那一段的改写。
-// 开始时翻一次 document.title；<head> 上的观察器盯着标题被页面改成"既非原文也非我们写的值"时重翻；
-// 停止时恢复原文（§7.1：恢复后逐节点相等，<title> 的文本也要回去）。
-// arXiv 页面是静态的，观察器几乎不会触发，但它没有负担，照搬（CLAUDE.md 的搬运判定）。
+// Ported from reference/read-frog/src/entrypoints/host.content/translation-control/page-translation.ts@9b44f82 (GPL-3.0),
+// 2026-09-05, modified: only its document.title part, rewritten around this project's session and transport (DESIGN §10).
+// document.title is translated once at the start; an observer on <head> watches for the page changing the title to
+// “neither the original nor the value we wrote” and translates again; on stop the original is restored (§7.1: equal
+// node by node after restore, the <title> text included). arXiv pages are static and the observer almost never
+// fires, but it costs nothing, so it was ported as it was (CLAUDE.md's porting rule).
 
 export interface TitleTranslator {
   stop(): void
 }
 
 export interface TitleOptions {
-  /** 翻一段纯文本；拿不到译文返回 null（保持原标题） */
+  /** Translate a run of plain text; null when no translation could be had (the original title stays) */
   translate: (text: string) => Promise<string | null>
-  /** 会话还在不在：结果回来时会话已结束就丢掉 */
+  /** Is the session still there: a result arriving after the session ended is dropped */
   isCurrent: () => boolean
+  /** A failure, worded, besides the console: the session's trace (issue #156) */
+  warn?: (line: string) => void
 }
 
 export function translateTitle(doc: Document, options: TitleOptions): TitleTranslator {
@@ -30,8 +34,12 @@ export function translateTitle(doc: Document, options: TitleOptions): TitleTrans
       applied = next
       if (doc.title !== next) doc.title = next
     } catch (error) {
-      // 会话取消后的拒绝是预期的，不算噪音
-      if (request === version && options.isCurrent()) console.warn('[axt] 标题翻译失败', error)
+      // A rejection after the session was cancelled is expected, not noise
+      if (request === version && options.isCurrent()) {
+        console.warn('[axt] title translation failed', error)
+        // Withheld from the log: the message may carry the endpoint's words on the title's text (Devin on #214)
+        options.warn?.(`title translation failed (${error instanceof Error ? error.name : typeof error}; message withheld)`)
+      }
     }
   }
 
@@ -51,7 +59,7 @@ export function translateTitle(doc: Document, options: TitleOptions): TitleTrans
 
   return {
     stop() {
-      // 页面自己改过标题（不是我们写的）：以它为准恢复
+      // The page changed the title itself (not our write): restore to that
       const current = doc.title || ''
       if (current !== applied) source = current
       observer?.disconnect()

@@ -12,7 +12,7 @@
 
 import { INJECTED_SELECTOR, isInjected } from '@/core/marks'
 import { NOTE } from '@/core/rules/latexml'
-import { decodeText, ENTITY_PATTERN } from './text'
+import { decodeText, ENTITY_PATTERN } from './escape'
 import { MARKER_RE, TAG_RE, fromAlpha, type WireFormat } from './tokens'
 
 /** One run of wire text and where it came from. Text and slot spans together tile the whole string. */
@@ -54,7 +54,7 @@ export type WireSpan =
  * The result is clamped to the next anchor because an expanded escape is indivisible: `&` occupies
  * five wire characters but one node character, and interpolating through them walks the node
  * offset past where the escape ends. Without the clamp the mapping is not monotone — for `&Z`,
- * wire 4 gave node 2 while wire 5 gave node 1, which collapsed `rangeOf(4, 6)` and dropped the `Z`
+ * wire 4 gave node 2 while wire 5 gave node 1, which collapsed `rangesOf(4, 6)` and dropped the `Z`
  * (Codex pointed this out on #123). Clamping snaps any offset inside an escape to the position just
  * after the character it encodes.
  */
@@ -208,22 +208,6 @@ function carveOut(node: Element): Range[] {
   return out
 }
 
-/**
- * Wire interval `[from, to)` as ranges.
- *
- * **Usually one range, but not always.** `serialize` skips nodes we injected ourselves, so when an
- * inner block finished translating first its translation sits in the DOM between two runs that are
- * adjacent in wire coordinates. One range spanning that gap would contain the inner translation and
- * highlight it as if it were source text (Codex pointed this out on #123), so the interval is cut
- * at every such discontinuity. `Highlight` takes any number of ranges, so the caller just spreads
- * them.
- *
- * A boundary inside a placeholder resolves to that node's own boundary, so a sentence that opens or
- * closes on a formula still contains it.
- *
- * Returns an empty array when there is nothing to select: no spans, an empty interval, or an
- * interval past the end of the wire text.
- */
 /** The next node in document order after this whole subtree, never leaving `scope`. */
 function afterSubtree(node: Node, scope: Node): Node | undefined {
   let current: Node | null = node
@@ -407,5 +391,44 @@ export function scanTokens(s: string, format: WireFormat): PositionedToken[] {
     last = end
   }
   pushText(last, s.length)
+  return out
+}
+
+/**
+ * An element's own content as ranges, cut at every node we injected inside it — a nested block's
+ * translation, a skeleton, a footnote copy — and at a footnote's margin box, so that none of them
+ * is painted as if it were the element's text. What the hover highlight paints for a block that has no sentence map (§7.7): a
+ * translation and its original pair by construction, so the whole block is a safe unit wherever
+ * the engine reported no sentence boundaries. One range per stretch of own content, in order.
+ */
+export function wholeRanges(el: Element): Range[] {
+  const doc = el.ownerDocument
+  const out: Range[] = []
+  let open: Range | null = null
+  const close = () => {
+    if (open) out.push(open)
+    open = null
+  }
+  const walk = (node: Node) => {
+    for (const child of Array.from(node.childNodes)) {
+      // Our own nodes, and a footnote's box (`.ltx_note_outer`, floated into the margin, a unit of its own): cut
+      // around, as `rangesOf` carves them out — the note's mark stays inline in the text (Devin on #226)
+      if (child.nodeType === 1 && (isInjected(child as Element) || (child as Element).matches(NOTE.outer))) {
+        close()
+        continue
+      }
+      if (child.nodeType === 3) {
+        if (!open) {
+          open = doc.createRange()
+          open.setStart(child, 0)
+        }
+        open.setEnd(child, (child as Text).data.length)
+        continue
+      }
+      if (child.nodeType === 1) walk(child)
+    }
+  }
+  walk(el)
+  close()
   return out
 }

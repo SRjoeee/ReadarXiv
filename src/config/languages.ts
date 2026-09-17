@@ -1,10 +1,11 @@
-// 移植自 @read-frog/definitions@0.4.4（reference/read-frog 的依赖包，GPL-3.0）的语言表，2026-09-05 移植、有修改：
-// 只搬 LANG_CODE_ISO6393_OPTIONS 与四张名称 / 映射表，其余（SRS、电子书 schema）不搬；辅助函数是本项目的。
-// 语言码用 ISO 639-3（与 Read Frog 一致），配置 v4 起 targetLanguage 存这个码；
-// LLM prompt 里填英文名，Google 网页翻译按 BCP-47 收，各自经这里的函数转换。
+// Ported from @read-frog/definitions@0.4.4 (the dependency package of reference/read-frog, GPL-3.0): the language
+// tables, 2026-09-05, modified: only LANG_CODE_ISO6393_OPTIONS and the four name / mapping tables are taken (the SRS
+// and e-book schemas are not); the helper functions are this project's.
+// Language codes are ISO 639-3 (as in Read Frog); config v4 stores targetLanguage as that code. LLM prompts get the
+// English name and Google's web translator takes BCP-47; both conversions go through the functions here.
 import { z } from 'zod'
 
-/** 179 个 ISO 639-3 码，顺序照 Read Frog（常用语言在前） */
+/** 179 ISO 639-3 codes, in Read Frog's order (the common languages first) */
 export const LANG_CODES = [
   "eng",
   "cmn",
@@ -191,7 +192,7 @@ export type LangCode = (typeof LANG_CODES)[number]
 
 export const langCodeSchema = z.enum(LANG_CODES)
 
-/** 英文语言名：填进 LLM prompt 的 {{targetLanguage}}（Read Frog translate-text.ts 的做法） */
+/** The English language names: what fills the LLM prompt's {{targetLanguage}} (Read Frog translate-text.ts's way) */
 export const LANG_CODE_TO_EN_NAME = {
   "eng": "English",
   "cmn": "Simplified Mandarin Chinese",
@@ -374,7 +375,7 @@ export const LANG_CODE_TO_EN_NAME = {
   "hif": "Fiji Hindi",
 } as const satisfies Record<LangCode, string>
 
-/** 中文语言名：设置页显示用 */
+/** The Chinese language names, for the settings page */
 export const LANG_CODE_TO_ZH_NAME = {
   "eng": "英语",
   "cmn": "简体中文",
@@ -557,7 +558,7 @@ export const LANG_CODE_TO_ZH_NAME = {
   "hif": "斐济印地语",
 } as const satisfies Record<LangCode, string>
 
-/** 该语言自己的写法 */
+/** The language's own name for itself */
 export const LANG_CODE_TO_LOCALE_NAME = {
   "eng": "English",
   "cmn": "简体中文",
@@ -740,7 +741,7 @@ export const LANG_CODE_TO_LOCALE_NAME = {
   "hif": "फ़िजी हिंदी",
 } as const satisfies Record<LangCode, string>
 
-/** ISO 639-3 → BCP-47（Google 等按 BCP-47 收目标语言）；38 个码没有对应的两字母码 */
+/** ISO 639-3 → BCP-47 (Google and others take the target language as BCP-47); 38 codes have no two-letter equivalent */
 export const ISO6393_TO_6391 = {
   "eng": "en",
   "cmn": "zh",
@@ -891,21 +892,21 @@ export function isLangCode(value: string): value is LangCode {
   return (LANG_CODES as readonly string[]).includes(value)
 }
 
-/** 填进 prompt 的语言名；不认识的码原样返回（自定义或旧配置） */
+/** The language name that fills the prompt; an unknown code is returned as it is (a custom or an old configuration) */
 export function englishName(code: string): string {
   return isLangCode(code) ? LANG_CODE_TO_EN_NAME[code] : code
 }
 
 /**
- * 界面里显示的英文语言名。上面那张表是 ISO 639-3 的**学名**（编的是「语言个体」），
- * 对模型正好——`Simplified Mandarin Chinese` 半点不含糊；对读者就太拗口了，
- * 没有哪个产品把简体中文写成这样（用户 2026-09-11 反馈：「这种整这么复杂干嘛」）。
+ * The English language names shown in the interface. The table above holds the ISO 639-3 **scholarly** names (they
+ * code “individual languages”) — exactly right for the model: `Simplified Mandarin Chinese` leaves no doubt — and far too
+ * stiff for a reader; no product writes Simplified Chinese like that (the owner, 2026-09-11: “why make it this complicated”).
  *
- * **只覆盖界面这一侧**，prompt 仍用学名：两个受众要的不是同一样东西，
- * 而且改 prompt 会动 `PROMPT_VERSION`、让全站 LLM 缓存作废，为一个名字不值当。
- * 只列读起来不像产品名的那些；`Western Frisian`、`Northern Sotho` 这类方位词是真区分，保留。
- * 带文字的括号也保留（`Uzbek (Cyrillic)`、`Malay (Jawi)`）——读者拿到的确实是那种文字，
- * 去掉就成了惊吓。改完全表零重名（脚本核过）
+ * **Covers the interface side only**; the prompt keeps the scholarly name: the two audiences want different things,
+ * and changing the prompt would bump `PROMPT_VERSION` and void every LLM cache on the site, which no name is worth.
+ * Only the names that do not read like product names are listed; direction words such as `Western Frisian` and
+ * `Northern Sotho` are real distinctions and stay. Parentheses that name a script stay too (`Uzbek (Cyrillic)`,
+ * `Malay (Jawi)`) — the reader really gets that script, and dropping it would be a surprise. Zero duplicates after the change (checked by script)
  */
 const EN_UI_OVERRIDES: Partial<Record<LangCode, string>> = {
   cmn: 'Chinese (Simplified)',
@@ -927,35 +928,35 @@ const EN_UI_OVERRIDES: Partial<Record<LangCode, string>> = {
 export const LANG_CODE_TO_EN_UI_NAME: Record<LangCode, string> = { ...LANG_CODE_TO_EN_NAME, ...EN_UI_OVERRIDES }
 
 /**
- * 语言名：先按界面语言写一遍，再补上它自己的写法——「日语（日本語）」。对应 Read Frog
- * language-labels.ts 的 getLanguageLabel。
+ * A language's label: its name in the interface language, then its own name for itself — “Japanese (日本語)”. After
+ * Read Frog language-labels.ts's getLanguageLabel.
  *
- * `inLocale` 是界面语言的名字表；不给就用中文表。**目标语言与界面语言是两件事**（UI.md §6）：
- * 英文界面下这一行要读作 "Japanese (日本語)"，否则读者会以为界面没换干净
+ * `inLocale` is the interface language's name table. **The target language and the interface language are two
+ * different things** (UI.md §6): on an English interface this line has to read "Japanese (日本語)", or the reader thinks the interface did not switch cleanly
  */
-export function label(code: LangCode, inLocale: Partial<Record<LangCode, string>> = LANG_CODE_TO_ZH_NAME): string {
-  // 兜底走**界面用的**那张表，与 `languageName` 同一条（Codex 在 #165 指出）：名字表可以是半张
-  //（`Partial`，见 UI.md §6「没有语言名表时读英文名」），两处兜底若不一样，同一种语言会在行里
-  // 写 `Chinese (Simplified)`、在菜单里写回 `Simplified Mandarin Chinese`
+export function label(code: LangCode, inLocale: Partial<Record<LangCode, string>>): string {
+  // The fallback is the table **the interface uses**, the same one `languageName` falls back to (Codex on #165): a name
+  // table may be partial (`Partial`; UI.md §6 “without a name table, read the English name”), and with two different
+  // fallbacks one language would read `Chinese (Simplified)` on the row and `Simplified Mandarin Chinese` in the menu
   const named = inLocale[code] ?? LANG_CODE_TO_EN_UI_NAME[code]
   const local = LANG_CODE_TO_LOCALE_NAME[code]
   if (named === local) return named
-  // 括号跟着外面那半句走：中文用全角，其余用半角。「Japanese（日本語）」两种括号混在一句里最难看
+  // The parentheses follow the half outside them: full-width for Chinese, ASCII otherwise. “Japanese（日本語）” with the two kinds mixed in one line is the ugliest
   return /\p{Script=Han}/u.test(named) ? `${named}（${local}）` : `${named} (${local})`
 }
 
-/** 给按 BCP-47 收目标语言的引擎（google-web）；没有两字母码的语言原样传 ISO 639-3 码 */
+/** For the engines that take the target as BCP-47 (google-web); a language without a two-letter code is passed as its ISO 639-3 code */
 const BCP47: Partial<Record<LangCode, string>> = ISO6393_TO_6391
 
 /**
- * 两字母码丢掉了语言身份或文字，而端点其实分得清的，改发别的标签（Codex 在 #39 三轮指出，逐条实测）：
- * - yue 与 cmn 都是 zh，发 zh 就成了普通话（实测 yue 返回"巴士站喺邊"，zh 返回"公交车站在哪里"）
- * - ckb（索拉尼）与 kmr（库尔曼吉）都是 ku，发 ku 就成了库尔曼吉（实测 ckb 返回阿拉伯字母 "وێستگەی پاس"，ku 返回拉丁字母 "Rawestgeha"）
- * - zlm 在表里就叫 "Malay (individual language) (Arabic)"，发 ms 得到拉丁字母的马来语（实测 ms-Arab 返回爪夷文 "دمان ڤرهنتين بس؟"）
+ * Where a two-letter code loses the language's identity or its script and the endpoint can in fact tell them apart, a different tag is sent (Codex on #39, three rounds; each measured):
+ * - yue and cmn are both zh, and zh means Mandarin (measured: yue returned “巴士站喺邊”, zh returned “公交车站在哪里”)
+ * - ckb (Sorani) and kmr (Kurmanji) are both ku, and ku means Kurmanji (measured: ckb returned the Arabic-script “وێستگەی پاس”, ku the Latin “Rawestgeha”)
+ * - zlm is listed as "Malay (individual language) (Arabic)", and ms yields Latin-script Malay (measured: ms-Arab returned Jawi “دمان ڤرهنتين بس؟”)
  *
- * 表里另外三个带文字标注的条目**端点做不到**，只能维持现状（实测 bs / bs-Cyrl、uz / uz-Cyrl、az / az-Cyrl 返回完全相同的拉丁字母结果）：
- * bos "Bosnian (Cyrillic)"、uzn "Northern Uzbek (Cyrillic)"、azj "North Azerbaijani (Cyrillic)"。
- * srp "Serbian (Cyrillic)" 本来就对（sr 一律返回西里尔字母）。LLM 路径不受影响：它拿的是英文名，文字标注在名字里
+ * Three other script-annotated entries **the endpoint cannot serve** and stay as they are (measured: bs / bs-Cyrl, uz / uz-Cyrl, az / az-Cyrl return identical Latin-script results):
+ * bos "Bosnian (Cyrillic)", uzn "Northern Uzbek (Cyrillic)", azj "North Azerbaijani (Cyrillic)".
+ * srp "Serbian (Cyrillic)" was right already (sr always returns Cyrillic). The LLM path is unaffected: it gets the English name, with the script in the name
  */
 const BCP47_OVERRIDES: Partial<Record<LangCode, string>> = { yue: 'yue', ckb: 'ckb', zlm: 'ms-Arab' }
 
@@ -965,39 +966,39 @@ export function toBcp47(code: string): string {
 }
 
 /**
- * 从右往左书写的目标语言（ISO 639-3）。译文节点要按这个写 `dir`——**只写 `lang` 不够**：
- * 浏览器的双向算法按 `dir` 定段落的基方向，而 arXiv 的 `<html>` 是 ltr，译文节点继承下来之后，
- * 句末的标点、数字、拉丁词、公式全排在错的一侧（实测 2509.10652v3 译成阿拉伯语：
- * 「مساهمات متساوية.」渲染成「مساهمات .متساوية」，句号跑到了词前面），整段还靠左。
- * 我们表里 178 种语言里有这 13 种（Read Frog 用同一套做法，见 utils/content/language-direction.ts）
+ * The right-to-left target languages (ISO 639-3). A translation node has to carry `dir` for them — **`lang` alone is not
+ * enough**: the browser's bidi algorithm takes a paragraph's base direction from `dir`, and arXiv's `<html>` is ltr, so a
+ * translation node that inherits it puts final punctuation, digits, Latin words and formulas all on the wrong side
+ * (measured on 2509.10652v3 translated into Arabic: “مساهمات متساوية.” rendered as “مساهمات .متساوية”, the full stop before the word), with the whole paragraph still left-aligned.
+ * Of the 178 languages in our table these 13 (Read Frog does the same, see utils/content/language-direction.ts)
  */
 export const RTL_LANGUAGES: ReadonlySet<LangCode> = new Set<LangCode>([
-  'arb', // 阿拉伯语
-  'urd', // 乌尔都语
-  'pes', // 波斯语
-  'prs', // 达里语
-  'ckb', // 中库尔德语（索拉尼）
-  'skr', // 西赖基语
-  'pbu', // 北普什图语
-  'heb', // 希伯来语
-  'div', // 迪维希语
-  'snd', // 信德语
-  'uig', // 维吾尔语
-  'ydd', // 东意第绪语
-  'zlm', // 马来语（爪夷文，即阿拉伯字母；标签 ms-Arab，见 BCP47_OVERRIDES）
+  'arb', // // Arabic
+  'urd', // // Urdu
+  'pes', // // Persian
+  'prs', // // Dari
+  'ckb', // // Central Kurdish (Sorani)
+  'skr', // // Saraiki
+  'pbu', // // Northern Pashto
+  'heb', // // Hebrew
+  'div', // // Dhivehi
+  'snd', // // Sindhi
+  'uig', // // Uyghur
+  'ydd', // // Eastern Yiddish
+  'zlm', // // Malay in Jawi, the Arabic script; its tag is ms-Arab, see BCP47_OVERRIDES
 ])
 
-/** 从右往左写的文字子标签（BCP-47 的 script，四个字母，Unicode script code） */
+/** The right-to-left script subtags (BCP-47 script, four letters, a Unicode script code) */
 const RTL_SCRIPTS: ReadonlySet<string> = new Set(['adlm', 'arab', 'aran', 'hebr', 'mand', 'nkoo', 'rohg', 'samr', 'syrc', 'thaa', 'yezi'])
 
-/** BCP-47 里的文字子标签：四个字母全是字母的那一段（变体子标签是 5–8 位，或四位以数字开头） */
+/** The script subtag of a BCP-47 tag: the four-letter all-alphabetic segment (a variant subtag is 5–8 characters, or four starting with a digit) */
 const scriptOf = (parts: string[]): string | undefined => parts.slice(1).find(p => /^[a-z]{4}$/.test(p))
 
 /**
- * 主子标签单独就能定向的 RTL 语言，由上表派生——**只收标签里不带文字子标签的**。
- * zlm 的标签是 `ms-Arab`，而 `ms` 同时也是拉丁字母的马来语：把 `ms` 放进这张表会把拉丁马来语
- * 误判成 rtl，只按主子标签判又会把爪夷文漏成 ltr（Codex 在 #163 指出漏判那一半）。
- * 带文字子标签的交给 `RTL_SCRIPTS`——文字比语言更能定方向，`ur-Latn` 这种也跟着正确地算 ltr
+ * The RTL languages whose primary subtag alone settles the direction, derived from the table above — **only the tags
+ * without a script subtag**. zlm's tag is `ms-Arab`, while `ms` is also Latin-script Malay: putting `ms` into this set
+ * would misjudge Latin Malay as rtl, and judging by the primary subtag alone would miss Jawi as ltr (Codex on #163 pointed
+ * out the missed half). Tags with a script subtag are left to `RTL_SCRIPTS` — a script settles direction better than a language, and `ur-Latn` and its kind correctly come out ltr
  */
 const RTL_PRIMARY: ReadonlySet<string> = new Set(
   [...RTL_LANGUAGES]
@@ -1006,12 +1007,7 @@ const RTL_PRIMARY: ReadonlySet<string> = new Set(
     .map(parts => parts[0]!),
 )
 
-/** 目标语言是不是从右往左写的。收 ISO 639-3 码 */
-export function isRtl(code: string): boolean {
-  return isLangCode(code) && RTL_LANGUAGES.has(code)
-}
-
-/** 同上，收已经转成 BCP-47 的标签（`<html>` 上记的是它）。有文字子标签就由它说话，否则看主子标签 */
+/** The same for a tag already converted to BCP-47 (what `<html>` records). A script subtag decides when present, otherwise the primary subtag */
 export function isRtlTag(tag: string): boolean {
   const parts = tag.toLowerCase().split('-')
   const script = scriptOf(parts)
@@ -1020,11 +1016,11 @@ export function isRtlTag(tag: string): boolean {
 }
 
 /**
- * BCP-47 → ISO 639-3，配置 v3→v4 迁移用。BCP-47 不分大小写（Codex 在 #39 指出）。
- * 依次：精确反查（zh-TW → cmn-Hant）；子标签相交——表里同主语言的条目中，取地区 / 文字子标签有交集的
- * （zh-Hant-TW ∩ zh-TW → cmn-Hant）；中文的繁体文字标签或港澳台地区（zh-Hant、zh-HK、zh-MO）表里没有对应条目，
- * 归 cmn-Hant（Codex 在 #39 第二轮指出：只按主语言回退会把繁体悄悄换成简体）；再按主语言回退
- * （zh-CN → zh → cmn，表里 cmn 排在 yue 前面）；都没有回退简体中文
+ * BCP-47 → ISO 639-3, for the configuration's v3 → v4 migration. BCP-47 is case-insensitive (Codex on #39).
+ * In order: an exact reverse lookup (zh-TW → cmn-Hant); subtag intersection — among the table's entries with the same primary language, the one whose region / script subtags intersect
+ * (zh-Hant-TW ∩ zh-TW → cmn-Hant); Chinese with a Traditional script tag or a Hong Kong / Macao / Taiwan region (zh-Hant, zh-HK, zh-MO) has no entry in the table and
+ * goes to cmn-Hant (Codex on #39, second round: falling back on the primary language alone would quietly turn Traditional into Simplified); then the primary-language fallback
+ * (zh-CN → zh → cmn, cmn being listed before yue); with nothing found, Simplified Chinese
  */
 export function fromBcp47(tag: string): LangCode {
   if (isLangCode(tag)) return tag
@@ -1040,5 +1036,5 @@ export function fromBcp47(tag: string): LangCode {
   return sameLanguage[0]?.[0] ?? DEFAULT_LANG_CODE
 }
 
-/** 繁体中文的文字 / 地区子标签（小写） */
+/** The script / region subtags of Traditional Chinese (lower case) */
 const TRADITIONAL_CHINESE_SUBTAGS = new Set(['hant', 'tw', 'hk', 'mo'])

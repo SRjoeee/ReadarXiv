@@ -1,9 +1,10 @@
 {
-  "name": "arxiv-html-translator",
-  "version": "0.0.0",
+  "name": "readarxiv",
+  "description": "Read arXiv — a Chrome extension that translates arXiv HTML papers in place: bilingual, structure-preserving, reversible",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
-  "license": "GPL-3.0",
+  "license": "GPL-3.0-only",
   "packageManager": "pnpm@10.15.0",
   "scripts": {
     "dev": "wxt",
@@ -13,7 +14,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "postinstall": "wxt prepare",
-    "fixtures:stats": "tsx scripts/fixtures-stats.ts",
+    "fixtures:fetch": "node scripts/fetch-fixtures.mjs",
+    "fixtures:stats": "node scripts/fetch-fixtures.mjs --for tests && tsx scripts/fixtures-stats.ts",
     "icons": "node scripts/icons.mjs",
     "check:output": "node scripts/check-output.mjs",
     "e2e": "node tests/e2e/extension.mjs",
@@ -24,7 +26,9 @@
     "e2e:placeholders": "node tests/e2e/placeholders.mjs",
     "helper:build": "swift build -c release --package-path helper",
     "helper:smoke": "node scripts/helper-smoke.mjs",
-    "lint": "biome lint .",
+    "lint": "biome lint . && node scripts/check-english.mjs && node scripts/check-boundary.mjs",
+    "check:boundary": "node scripts/check-boundary.mjs",
+    "check:english": "node scripts/check-english.mjs",
     "lint:fix": "biome lint --write ."
   },
   "devDependencies": {

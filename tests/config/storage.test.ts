@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
-import { CONFIG_VERSION, DEFAULT_CONFIG, GLOSSARY_LIMITS, normalizeGlossary } from '@/config/schema'
+import { z } from 'zod'
+import { appearanceSchema } from '@/config/appearance'
+import { CONFIG_VERSION, DEFAULT_CONFIG, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
+import { serviceSchema } from '@/config/services'
 import { configItem, getConfig, setConfig } from '@/config/storage'
 
-/** A reader-added service, the shape v12 stores (spec §2.1) */
+/** A reader-added service, the shape v12 stores */
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
 
 describe('config storage', () => {
@@ -11,13 +14,13 @@ describe('config storage', () => {
     fakeBrowser.reset()
   })
 
-  it('空存储返回默认配置', async () => {
+  it('empty storage returns the default configuration', async () => {
     expect(await getConfig()).toEqual(DEFAULT_CONFIG)
     expect(DEFAULT_CONFIG.services).toEqual([])
     expect(DEFAULT_CONFIG.provider).toBe('microsoft')
   })
 
-  it('写入后读回', async () => {
+  it('reads back what was written', async () => {
     await setConfig({ ...DEFAULT_CONFIG, provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-test' }], targetLanguage: 'jpn' })
     const c = await getConfig()
     expect(c.services[0]?.apiKey).toBe('sk-test')
@@ -25,17 +28,17 @@ describe('config storage', () => {
     expect(c.targetLanguage).toBe('jpn')
   })
 
-  it('回退不是静默的：版本比扩展新时说清楚是装了旧版本（2026-09-06 实测撞到）', async () => {
-    // WXT 拒绝降级迁移后 getValue() 原样返回 v8 对象，schema 的 version 字面量不匹配
+  it('the fallback is not silent: a version newer than the extension says plainly that an older build is installed (met 2026-09-06)', async () => {
+    // After WXT refuses the downgrade migration getValue() returns the v8 object as it is, and the schema's version literal does not match
     await fakeBrowser.storage.local.set({ config: { ...DEFAULT_CONFIG, version: CONFIG_VERSION + 1 }, config$: { v: CONFIG_VERSION + 1 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
     expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
-    // 回的是成因，不是句子：句子按界面语言写（UI.md §6）
+    // Returned is the cause, not a sentence: the sentence is written in the interface language (UI.md §6)
     expect(fresh.configFallbackReason()).toEqual({ kind: 'tooNew', stored: CONFIG_VERSION + 1, supported: CONFIG_VERSION })
   })
 
-  it('结构坏掉时指出是哪个字段，不只说「不合法」', async () => {
+  it('a broken structure names the field, not just “invalid”', async () => {
     await fakeBrowser.storage.local.set({ config: { ...DEFAULT_CONFIG, targetLanguage: 'nope' }, config$: { v: CONFIG_VERSION } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
@@ -43,7 +46,78 @@ describe('config storage', () => {
     expect(fresh.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'targetLanguage' })
   })
 
-  it('配置正常时不留回退原因：不能对着好配置报警', async () => {
+  describe('a stored value this build cannot read is never written over', () => {
+    const KEPT = { provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-reader-key' }] }
+    const CASES = [
+      { name: 'a newer build’s configuration', stored: { ...DEFAULT_CONFIG, ...KEPT, version: CONFIG_VERSION + 1 }, v: CONFIG_VERSION + 1, kind: 'tooNew' },
+      { name: 'a broken structure', stored: { ...DEFAULT_CONFIG, ...KEPT, mode: 'sideways' }, v: CONFIG_VERSION, kind: 'invalid' },
+    ] as const
+
+    for (const c of CASES) {
+      it(`${c.name}: read, patch, write — the way the popup, the settings page and the page session do — is refused and storage is as it was`, async () => {
+        await fakeBrowser.storage.local.set({ config: c.stored, config$: { v: c.v } })
+        vi.resetModules()
+        const fresh = await import('@/config/storage')
+        const latest = await fresh.getConfig()
+        await expect(fresh.setConfig({ ...latest, mode: 'stack' })).rejects.toMatchObject({ name: 'ConfigUnreadableError', reason: { kind: c.kind } })
+        expect(await fakeBrowser.storage.local.get(['config', 'config$'])).toEqual({ config: c.stored, config$: { v: c.v } })
+      })
+
+      it(`${c.name}: a writer that never read is refused too, and the reason is on record for the interface`, async () => {
+        await fakeBrowser.storage.local.set({ config: c.stored, config$: { v: c.v } })
+        vi.resetModules()
+        const fresh = await import('@/config/storage')
+        await expect(fresh.setConfig(DEFAULT_CONFIG)).rejects.toBeInstanceOf(fresh.ConfigUnreadableError)
+        expect(fresh.configFallbackReason()).toMatchObject({ kind: c.kind })
+      })
+
+      it(`${c.name}: the reader’s reset is the way out — defaults stored under this build’s version marker, writes accepted again`, async () => {
+        await fakeBrowser.storage.local.set({ config: c.stored, config$: { v: c.v } })
+        vi.resetModules()
+        const fresh = await import('@/config/storage')
+        await fresh.getConfig()
+        const writes = vi.spyOn(fakeBrowser.storage.local, 'set')
+        await fresh.resetConfig()
+        // The marker too: left at N+1 beside a vN value, the real upgrade to N+1 would skip its migration. And in the
+        // **same write** as the value: cut short between two, the newer build would migrate its own value again
+        expect(writes.mock.calls.map(([items]) => Object.keys(items as object).sort())).toEqual([['config', 'config$']])
+        expect(await fakeBrowser.storage.local.get(['config', 'config$'])).toEqual({ config: DEFAULT_CONFIG, config$: { v: CONFIG_VERSION } })
+        expect(fresh.configFallbackReason()).toBeNull()
+        writes.mockRestore()
+        await fresh.setConfig({ ...DEFAULT_CONFIG, mode: 'stack' })
+        expect((await fresh.getConfig()).mode).toBe('stack')
+      })
+    }
+
+    it('an older version the migrations did not carry here is its own reason, not a broken field: a later build may still read it', async () => {
+      // What WXT leaves when a migration step throws: the value at its old version. The marker at this build's version
+      // stands in for the throw here — WXT then runs no step, and the value arrives unmigrated all the same
+      const v14 = { ...DEFAULT_CONFIG, version: CONFIG_VERSION - 1 }
+      await fakeBrowser.storage.local.set({ config: v14, config$: { v: CONFIG_VERSION } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
+      expect(fresh.configFallbackReason()).toEqual({ kind: 'upgradeFailed', stored: CONFIG_VERSION - 1, supported: CONFIG_VERSION })
+      await expect(fresh.setConfig(DEFAULT_CONFIG)).rejects.toMatchObject({ reason: { kind: 'upgradeFailed' } })
+      expect((await fakeBrowser.storage.local.get('config')).config).toEqual(v14)
+    })
+
+    it('the warning names the cause and the field, never a stored value (hard rule 5)', async () => {
+      await fakeBrowser.storage.local.set({ config: CASES[1].stored, config$: { v: CONFIG_VERSION } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      await fresh.getConfig()
+      const line = warn.mock.calls.map(c => c.join(' ')).join('\n')
+      warn.mockRestore()
+      expect(line).toContain('invalid at mode')
+      expect(line).not.toContain('[object Object]')
+      expect(line).not.toContain('sk-reader-key')
+      expect(line).not.toContain('sideways')
+    })
+  })
+
+  it('a sound configuration leaves no fallback reason: no alarm over a good configuration', async () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     await fresh.setConfig({ ...DEFAULT_CONFIG, services: [{ ...SVC, apiKey: 'sk-ok' }] })
@@ -51,32 +125,59 @@ describe('config storage', () => {
     expect(fresh.configFallbackReason()).toBeNull()
   })
 
-  it('空存储读到默认值，同样不算回退（首次安装不该报警）', async () => {
+  it('empty storage reading the defaults is no fallback either (a first install must not alarm)', async () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
     expect(fresh.configFallbackReason()).toBeNull()
   })
 
-  it('存储里是坏数据时回退默认', async () => {
+  it('bad data in storage falls back to the defaults', async () => {
     await configItem.setValue({ nonsense: true } as never)
     expect(await getConfig()).toEqual(DEFAULT_CONFIG)
   })
 
-  it('setConfig 拒绝非法值', async () => {
+  it('setConfig refuses an invalid value', async () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, services: [{ ...SVC, model: '' }] })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, services: [{ ...SVC, baseURL: 'not a url' }] })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, provider: 'svc-nope' })).rejects.toThrow()
   })
 })
 
-describe('provider 选择', () => {
-  it('两个 provider 都能存取，getProvider 返回对应实现', async () => {
+describe('the v14 → v15 migration: the preload range', () => {
+  beforeEach(() => {
+    fakeBrowser.reset()
+  })
+
+  it('a margin below one screen — the retired half-screen stop — becomes one screen; the threshold and the rest stay', async () => {
+    const v14 = { ...DEFAULT_CONFIG, version: 14, preload: { margin: 450, threshold: 0.5 } }
+    await fakeBrowser.storage.local.set({ config: v14, config$: { v: 14 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const c = await fresh.getConfig()
+    expect(c.version).toBe(CONFIG_VERSION)
+    expect(c.preload).toEqual({ margin: 900, threshold: 0.5 })
+    expect(c.mode).toBe(DEFAULT_CONFIG.mode)
+  })
+
+  it('a margin of one screen or more stays as it was, and the whole paper (`all`) is a value the schema accepts', async () => {
+    const v14 = { ...DEFAULT_CONFIG, version: 14, preload: { margin: 1800, threshold: 0 } }
+    await fakeBrowser.storage.local.set({ config: v14, config$: { v: 14 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const c = await fresh.getConfig()
+    expect(c.preload).toEqual({ margin: 1800, threshold: 0 })
+    await fresh.setConfig({ ...c, preload: { margin: 'all', threshold: 0 } })
+    expect((await fresh.getConfig()).preload.margin).toBe('all')
+  })
+})
+
+describe('provider selection', () => {
+  it('both providers can be stored and read, getProvider returns the matching implementation', async () => {
     const { getProvider } = await import('@/providers')
     // A reader's service becomes an engine carrying that service's id and name
     const llm = getProvider({ ...DEFAULT_CONFIG, provider: SVC.id, services: [SVC] })
     expect(llm.id).toBe(SVC.id)
-    expect(llm.displayName).toBe(SVC.name)
     expect(llm.kind).toBe('llm')
     // A service the reader deleted while it was chosen: the shipped default, not a crash
     expect(getProvider({ ...DEFAULT_CONFIG, provider: 'svc-gone0000', services: [] }).id).toBe('microsoft')
@@ -91,12 +192,12 @@ describe('provider 选择', () => {
     expect((await getConfig()).provider).toBe('google-web')
   })
 
-  it('未知 provider 被 schema 拒绝', async () => {
+  it('an unknown provider is refused by the schema', async () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, provider: 'nope' } as never)).rejects.toThrow()
   })
 
-  it('v1 配置一路升到最新：补上提示词库与预翻译范围、语言码换成 ISO 639-3，API key 与其他字段原样保留', async () => {
-    // WXT 在 defineItem 时就跑迁移，所以要先写入 v1 数据再重新加载模块
+  it('a v1 configuration climbs all the way to the latest: the prompt library and the preload range added, the language code converted to ISO 639-3, the API key and the other fields kept as they were', async () => {
+    // WXT runs the migrations at defineItem time, so the v1 data is written first and the module reloaded
     const v1 = {
       version: 1, provider: 'openai-compat',
       openaiCompat: { baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-keep', model: 'x/y', thinking: 'disabled' },
@@ -113,7 +214,7 @@ describe('provider 选择', () => {
     expect(c.preload).toEqual({ margin: 1000, threshold: 0 })
   })
 
-  it('v2 配置升级到最新：补上预翻译范围（Read Frog 默认 1000px / 0）、zh-TW 变 cmn-Hant，其余原样', async () => {
+  it('a v2 configuration upgrades to the latest: the preload range added (Read Frog\'s default 1000px / 0), zh-TW becomes cmn-Hant, the rest as it was', async () => {
     const v2 = {
       version: 2, provider: 'google-web',
       openaiCompat: { baseURL: 'https://openrouter.ai/api/v1', apiKey: '', model: 'x/y', thinking: 'enabled' },
@@ -131,7 +232,7 @@ describe('provider 选择', () => {
     expect(c.services[0]?.thinking).toBe('enabled')
   })
 
-  it('v3 配置升级到最新：zh-CN 变 cmn，认不出的语言码回退 cmn', async () => {
+  it('a v3 configuration upgrades to the latest: zh-CN becomes cmn, an unrecognised language code falls back to cmn', async () => {
     const base = {
       version: 3, provider: 'openai-compat',
       openaiCompat: { baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-keep', model: 'x/y', thinking: 'disabled' },
@@ -146,15 +247,16 @@ describe('provider 选择', () => {
       expect(c.version).toBe(CONFIG_VERSION)
       expect(c.targetLanguage).toBe(expected)
       expect(c.services[0]?.apiKey).toBe('sk-keep')
-      expect(c.preload).toEqual({ margin: 300, threshold: 0.5 })
+      // 300 px is below one screen: v15 lifts it to the one-screen stop (the half-screen stop retired); the threshold rides through
+      expect(c.preload).toEqual({ margin: 900, threshold: 0.5 })
     }
   })
 
-  it('目标语言必须是语言表里的 ISO 639-3 码', async () => {
+  it('the target language must be an ISO 639-3 code from the language table', async () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, targetLanguage: 'zh-CN' as never })).rejects.toThrow()
   })
 
-  it('v4 配置升级到 v5：补上降级链开关，默认开启', async () => {
+  it('a v4 configuration upgrades to v5: the fallback chain switch added, on by default', async () => {
     const v4 = {
       version: 4, provider: 'openai-compat',
       openaiCompat: { baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-keep', model: 'x/y', thinking: 'disabled' },
@@ -170,7 +272,7 @@ describe('provider 选择', () => {
     expect(c.targetLanguage).toBe('jpn')
   })
 
-  it('v5 配置升级到 v6：补上空术语表，其余原样', async () => {
+  it('a v5 configuration upgrades to v6: an empty glossary added, the rest as it was', async () => {
     const v5 = {
       version: 5, provider: 'openai-compat',
       openaiCompat: { baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-keep', model: 'x/y', thinking: 'disabled' },
@@ -187,7 +289,7 @@ describe('provider 选择', () => {
     expect(c.services[0]?.apiKey).toBe('sk-keep')
   })
 
-  it('v6 配置升级到 v7：补上默认样式（none，与实现之前的外观一致）', async () => {
+  it('a v6 configuration upgrades to v7: the default style added (none, the appearance as before the feature)', async () => {
     const v6 = {
       version: 6, provider: 'openai-compat',
       openaiCompat: { baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-keep', model: 'x/y', thinking: 'disabled' },
@@ -203,8 +305,8 @@ describe('provider 选择', () => {
     expect(c.glossary).toEqual([{ term: 'weights', translation: '权重' }])
   })
 
-  it('v6 里超限的术语表在迁移时被规整，配置的其余部分（含 API key）不受牵连（Codex 在 #52 指出）', async () => {
-    // v6 没有单条与总长限额，这些值当时是合法的；照抄进 v7 会让整份配置校验失败、回退默认值
+  it('an over-limit glossary in v6 is tidied by the migration, and the rest of the configuration (API key included) is not dragged down (Codex on #52)', async () => {
+    // v6 had no per-entry or total limit, so these values were valid then; copied into v7 as they were, the whole configuration would fail validation and fall back to the defaults
     const v6 = {
       version: 6, provider: 'openai-compat',
       openaiCompat: { baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-keep', model: 'x/y', thinking: 'disabled' },
@@ -223,20 +325,20 @@ describe('provider 选择', () => {
     expect(c.glossary).toEqual([{ term: 'weights', translation: '权重' }])
   })
 
-  it('规整只丢不合法的条目，合法的一条不少', () => {
+  it('tidying drops only the invalid entries, not one valid entry lost', () => {
     const ok = Array.from({ length: 200 }, (_, i) => ({ term: `t${i}`, translation: `译${i}` }))
     expect(normalizeGlossary(ok)).toHaveLength(200)
-    // 超出条数上限的截断，不是整表作废
+    // Beyond the entry cap it truncates rather than voiding the whole table
     expect(normalizeGlossary([...ok, { term: 'extra', translation: '多的' }])).toHaveLength(200)
     expect(normalizeGlossary('不是数组')).toEqual([])
     expect(normalizeGlossary([{ term: 1, translation: '译' }, null, { term: 'a', translation: '甲' }])).toEqual([{ term: 'a', translation: '甲' }])
-    // 总长上限：单条都合法但加起来超了，从超出的那条起截断
+    // The total cap: every entry valid on its own but too long together, truncated from the entry that goes over
     const long = Array.from({ length: 30 }, (_, i) => ({ term: `${i}`.padEnd(120, 'x'), translation: '译'.repeat(200) }))
     expect(normalizeGlossary(long).length).toBeLessThan(30)
     expect(normalizeGlossary(long).reduce((n, e) => n + e.term.length + e.translation.length, 0)).toBeLessThanOrEqual(GLOSSARY_LIMITS.totalChars)
   })
 
-  it('v7 配置升级到 v8：补上图片翻译的模式闸（默认三种都开），其余含 API key 原样', async () => {
+  it('a v7 configuration upgrades to v8: the image translation\'s mode gate added (all three on by default), the rest with the API key as it was', async () => {
     const v7 = {
       version: 7, provider: 'openai-compat',
       openaiCompat: { baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-keep', model: 'x/y', thinking: 'disabled' },
@@ -249,7 +351,7 @@ describe('provider 选择', () => {
     const c = await fresh.getConfig()
     expect(c.version).toBe(CONFIG_VERSION)
     expect(c.image).toEqual({ enabled: true, modes: ['stack', 'side', 'only'] })
-    // `quote` is one of the effects v12 dropped: the colour and opacity survive on 与原文相同
+    // `quote` is one of the effects v12 dropped: the colour and opacity survive on “Same as the original”
     expect(c.appearance.activeStyle).toBe('follow')
     expect(c.services[0]?.apiKey).toBe('sk-keep')
   })
@@ -310,10 +412,153 @@ describe('provider 选择', () => {
     expect(c.services[0]?.name.length).toBeLessThanOrEqual(40)
   })
 
-  it('图片翻译的模式只认三种，空数组合法（= 关闭）', async () => {
+  it('v13 to v14: `reading` missing (added by a schema default alone) is filled, the rest as it was; a hand-edited service without `thinking` is not repaired (DESIGN §9)', async () => {
+    const { reading: _reading, ...v13 } = { ...DEFAULT_CONFIG, version: 13, provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-keep' }], targetLanguage: 'jpn' as const }
+    await fakeBrowser.storage.local.set({ config: v13, config$: { v: 13 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const c = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(c.version).toBe(CONFIG_VERSION)
+    expect(c.reading).toEqual({ sentenceHighlight: true })
+    expect(c.services[0]).toMatchObject({ id: SVC.id, apiKey: 'sk-keep', thinking: 'disabled' })
+    expect(c.targetLanguage).toBe('jpn')
+    // `null` is not "absent": a hand edit, and it falls back naming the field, as any wrong value does
+    await fakeBrowser.storage.local.set({ config: { ...v13, reading: null }, config$: { v: 13 } })
+    vi.resetModules()
+    const nulled = await import('@/config/storage')
+    expect(await nulled.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(nulled.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'reading' })
+    // Malformed storage at version 13 reaches the migration before any validation and must not throw there: `null`
+    // is "nothing stored" to WXT (the defaults, no migration, no alarm — a first install looks the same), and any other
+    // wrong value is migrated as it is and then fails the schema, taking the documented fallback (Copilot on #209)
+    await fakeBrowser.storage.local.set({ config: null, config$: { v: 13 } })
+    vi.resetModules()
+    const empty = await import('@/config/storage')
+    expect(await empty.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(empty.configFallbackReason()).toBeNull()
+    await fakeBrowser.storage.local.set({ config: 'garbage', config$: { v: 13 } })
+    vi.resetModules()
+    const broken = await import('@/config/storage')
+    expect(await broken.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(broken.configFallbackReason()).toMatchObject({ kind: 'invalid' })
+    // Nothing legitimately stored lacks `thinking` (the v12 migration and the drawer write it): not repaired, named
+    const { thinking: _thinking, ...bare } = SVC
+    await fakeBrowser.storage.local.set({ config: { ...v13, reading: { sentenceHighlight: true }, services: [bare] }, config$: { v: 13 } })
+    vi.resetModules()
+    const stripped = await import('@/config/storage')
+    expect(await stripped.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(stripped.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'services.0.thinking' })
+    // A v13 value with both present migrates to the same value at 14
+    const full = { ...DEFAULT_CONFIG, version: 13, reading: { sentenceHighlight: false }, provider: SVC.id, services: [{ ...SVC, thinking: 'enabled' as const }] }
+    await fakeBrowser.storage.local.set({ config: full, config$: { v: 13 } })
+    vi.resetModules()
+    const again = await (await import('@/config/storage')).getConfig()
+    expect(again).toEqual({ ...full, version: CONFIG_VERSION })
+  })
+
+  it('no field of the stored shape, at any depth, carries a zod default: the version alone says what is in storage (DESIGN §9)', () => {
+    // Every schema node reachable from the root, by zod 4's core definitions: a default inside `prompts` or a profile
+    // would complete part of the stored value just as quietly (Copilot on #209)
+    const defaults = (schema: z.ZodType, path: string, seen = new Set<z.ZodType>()): string[] => {
+      if (seen.has(schema)) return []
+      seen.add(schema)
+      const def = (schema as unknown as { _zod: { def: Record<string, unknown> & { type: string } } })._zod.def
+      const found = def.type === 'default' ? [path] : []
+      const inner = (s: unknown, at: string) => (s ? defaults(s as z.ZodType, at, seen) : [])
+      switch (def.type) {
+        case 'object': return found.concat(...Object.entries(def.shape as Record<string, z.ZodType>).map(([k, s]) => inner(s, `${path}.${k}`)))
+        case 'array': return found.concat(inner(def.element, `${path}[]`))
+        case 'record': return found.concat(inner(def.valueType, `${path}[*]`))
+        case 'tuple': return found.concat(...(def.items as z.ZodType[]).map((s, i) => inner(s, `${path}[${i}]`)))
+        case 'union': return found.concat(...(def.options as z.ZodType[]).map((s, i) => inner(s, `${path}|${i}`)))
+        case 'pipe': return found.concat(inner(def.in, path), inner(def.out, path))
+        case 'lazy': return found.concat(inner((def.getter as () => z.ZodType)(), path))
+        default: return found.concat(inner(def.innerType, path))
+      }
+    }
+    // The walker sees a nested default: without this the assertion below could pass vacuously
+    expect(defaults(z.object({ a: z.object({ b: z.array(z.string().default('x')) }) }), 'probe')).toEqual(['probe.a.b[]'])
+    expect(defaults(configSchema, 'config')).toEqual([])
+    expect(defaults(serviceSchema, 'service')).toEqual([])
+    expect(defaults(appearanceSchema, 'appearance')).toEqual([])
+    // and a value missing a field is not quietly completed
+    const { reading: _reading, ...missing } = DEFAULT_CONFIG
+    expect(configSchema.safeParse(missing).success).toBe(false)
+  })
+
+  it('the image translation modes accept the three only, an empty array is valid (= off)', async () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, image: { enabled: true, modes: ['split' as never] } })).rejects.toThrow()
     await setConfig({ ...DEFAULT_CONFIG, image: { enabled: true, modes: [] } })
     expect((await getConfig()).image.modes).toEqual([])
+  })
+
+  // DESIGN §9 asks for a test from every previous version's stored shape. v8, v9 and v12 were only ever passed through
+  // by the tests that start lower; each starts here from the shape that version really stored
+  it('a v8 configuration climbs to the latest: the style gains its three parameters with the appearance unchanged, the key and the modes as they were', async () => {
+    const v8 = {
+      version: 8, provider: 'openai-compat',
+      openaiCompat: { baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-keep', model: 'x/y', thinking: 'disabled' },
+      targetLanguage: 'jpn', mode: 'stack', prompts: { promptId: 'default', patterns: [] },
+      preload: { margin: 1000, threshold: 0 }, fallback: { enabled: false }, glossary: [{ term: 'weights', translation: '权重' }],
+      style: { preset: 'none', customCss: '' }, image: { modes: ['side'] },
+    }
+    await fakeBrowser.storage.local.set({ config: v8, config$: { v: 8 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const c = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(c.version).toBe(CONFIG_VERSION)
+    expect(c.services).toHaveLength(1)
+    expect(c.services[0]).toMatchObject({ apiKey: 'sk-keep', model: 'x/y', baseURL: 'https://openrouter.ai/api/v1' })
+    expect(c.provider).toBe(c.services[0]?.id)
+    expect([c.targetLanguage, c.mode, c.fallback.enabled]).toEqual(['jpn', 'stack', false])
+    expect(c.glossary).toEqual([{ term: 'weights', translation: '权重' }])
+    expect(c.image).toEqual({ enabled: true, modes: ['side'] })
+    // `none` was “as the original”: the profile of that name, untouched
+    expect(c.appearance.activeStyle).toBe('follow')
+    expect(c.appearance.styles.find(p => p.id === 'follow')).toEqual(DEFAULT_CONFIG.appearance.styles.find(p => p.id === 'follow'))
+    expect([c.uiLanguage, c.reading.sentenceHighlight]).toEqual(['auto', true])
+  })
+
+  it('a v9 configuration climbs to the latest: a free engine chosen and the endpoint never touched — no service is invented, the choice stays', async () => {
+    const v9 = {
+      version: 9, provider: 'google-web',
+      openaiCompat: { baseURL: 'https://openrouter.ai/api/v1', apiKey: '', model: 'deepseek/deepseek-v4-flash', thinking: 'disabled' },
+      targetLanguage: 'cmn', mode: 'side', prompts: { promptId: 'default', patterns: [] },
+      preload: { margin: 1000, threshold: 0 }, fallback: { enabled: true }, glossary: [],
+      style: { preset: 'none', customCss: '', color: '', opacity: 1, accent: '' }, image: { modes: [] },
+    }
+    await fakeBrowser.storage.local.set({ config: v9, config$: { v: 9 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const c = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(c.version).toBe(CONFIG_VERSION)
+    expect(c.provider).toBe('google-web')
+    expect(c.services).toEqual([])
+    // Every mode unticked was “off”: the switch says so, the list stays what the reader left
+    expect(c.image).toEqual({ enabled: false, modes: [] })
+  })
+
+  it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a preload margin under one screen becoming one screen', async () => {
+    const v12 = {
+      ...DEFAULT_CONFIG, version: 12, provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-keep' }],
+      preload: { margin: 450, threshold: 0 },
+      appearance: { ...DEFAULT_CONFIG.appearance, activeStyle: 'green' },
+    } as Record<string, unknown>
+    delete v12.uiLanguage
+    await fakeBrowser.storage.local.set({ config: v12, config$: { v: 12 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const c = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(c.version).toBe(CONFIG_VERSION)
+    expect(c.uiLanguage).toBe('auto')
+    expect(c.services).toEqual([{ ...SVC, apiKey: 'sk-keep' }])
+    expect(c.provider).toBe(SVC.id)
+    expect(c.appearance.activeStyle).toBe('green')
+    expect(c.preload).toEqual({ margin: 900, threshold: 0 })
   })
 
   it('v10 to v11: the image switch is derived from the mode list, on when any mode was ticked, off when none', async () => {
@@ -335,50 +580,50 @@ describe('provider 选择', () => {
     }
   })
 
-  it('样式预设只认清单里的 id，自定义 CSS 有长度上限', async () => {
+  it('the style preset accepts only the ids on the list, and the custom CSS has a length cap', async () => {
     const a = DEFAULT_CONFIG.appearance
     await expect(setConfig({ ...DEFAULT_CONFIG, appearance: { ...a, styles: [{ ...a.styles[0]!, underline: 'rainbow' as never }] } })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, appearance: { ...a, styles: [{ ...a.styles[0]!, css: 'x'.repeat(2001) }] } })).rejects.toThrow()
   })
 
-  it('术语表超过 200 条被 schema 拒绝，条目缺字段也拒绝', async () => {
+  it('a glossary over 200 entries is refused by the schema, an entry missing a field too', async () => {
     const many = Array.from({ length: 201 }, (_, i) => ({ term: `t${i}`, translation: `译${i}` }))
     await expect(setConfig({ ...DEFAULT_CONFIG, glossary: many })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, glossary: [{ term: '', translation: '空' }] })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, glossary: [{ term: 'x', translation: '' }] })).rejects.toThrow()
   })
 
-  it('单条与总长都有上限：整篇文档被当成一条粘进来要拒掉（Codex 在 #52 指出）', async () => {
+  it('both the entry and the total have caps: a whole document pasted in as one entry must be refused (Codex on #52)', async () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, glossary: [{ term: 'x'.repeat(121), translation: '译' }] })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, glossary: [{ term: 'x', translation: '译'.repeat(201) }] })).rejects.toThrow()
-    // 100 条 × 每条 60 字符 = 6000，正好在线上；再多一条就超
+    // 100 entries × 60 characters each = 6000, right on the line; one more goes over
     const at = Array.from({ length: 100 }, () => ({ term: 'a'.repeat(30), translation: '译'.repeat(30) }))
     await expect(setConfig({ ...DEFAULT_CONFIG, glossary: at })).resolves.toBeUndefined()
     await expect(setConfig({ ...DEFAULT_CONFIG, glossary: [...at, { term: 'a', translation: '译' }] })).rejects.toThrow()
   })
 
-  it('降级链：配置引擎在前，免费引擎兜底；关掉开关时只剩配置的那个', async () => {
+  it('the fallback chain: the configured engine first, the free engines behind it; with the switch off only the configured one remains', async () => {
     const { buildChain } = await import('@/providers')
     const withKey = { ...DEFAULT_CONFIG, provider: SVC.id, services: [SVC] }
-    // 没有内置翻译 API 的环境（happy-dom、旧 Chrome）：内置引擎被 isAvailable 过滤掉
+    // An environment without the built-in translation API (happy-dom, an old Chrome): the built-in engine is filtered out by isAvailable
     expect((await buildChain(withKey)).chain.map(p => p.id)).toEqual([SVC.id, 'google-web'])
     expect((await buildChain({ ...withKey, fallback: { enabled: false } })).chain.map(p => p.id)).toEqual([SVC.id])
-    // 免费引擎自己当首选时不重复出现
+    // A free engine as the first choice does not appear twice
     expect((await buildChain({ ...withKey, provider: 'google-web' })).chain.map(p => p.id)).toEqual(['google-web'])
-    // 首选没配 key 也留在链首：popup 要据此提示去设置页，而不是悄悄换引擎
+    // A first choice without a key stays at the head of the chain: the popup points to the settings page by it rather than swapping the engine quietly
     expect((await buildChain({ ...DEFAULT_CONFIG, provider: SVC.id, services: [{ ...SVC, apiKey: '' }] })).chain.map(p => p.id)).toEqual([SVC.id, 'google-web'])
     // The shipped default is the free service that needs no key (UI.md §2)
     expect((await buildChain(DEFAULT_CONFIG)).chain.map(p => p.id)).toEqual(['microsoft', 'google-web'])
   })
 
-  it('语言包就绪时内置引擎排在 google-web 之前；未就绪时被跳过', async () => {
+  it('with the language pack ready the built-in engine comes before google-web; not ready, it is skipped', async () => {
     const { buildChain } = await import('@/providers')
     const withKey = { ...DEFAULT_CONFIG, provider: SVC.id, services: [SVC] }
     const stub = (availability: string) => ({ availability: async () => availability, create: async () => ({ translate: async () => '' }) })
 
     vi.stubGlobal('Translator', stub('available'))
     expect((await buildChain(withKey)).chain.map(p => p.id)).toEqual([SVC.id, 'chrome-builtin', 'google-web'])
-    // 内置当首选时不在兜底里重复出现
+    // The built-in as the first choice does not appear again in the fallback
     expect((await buildChain({ ...withKey, provider: 'chrome-builtin' })).chain.map(p => p.id)).toEqual(['chrome-builtin', 'google-web'])
 
     vi.stubGlobal('Translator', stub('downloadable'))
@@ -386,7 +631,7 @@ describe('provider 选择', () => {
     vi.unstubAllGlobals()
   })
 
-  it('预翻译范围越界被 schema 拒绝', async () => {
+  it('an out-of-range preload range is refused by the schema', async () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, preload: { margin: -1, threshold: 0 } })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, preload: { margin: 1000, threshold: 1.5 } })).rejects.toThrow()
   })

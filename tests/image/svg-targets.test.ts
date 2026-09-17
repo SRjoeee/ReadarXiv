@@ -8,7 +8,7 @@ import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
 import type { OcrCall } from '@/shared/ocr'
 import { docOf } from '../renderer/helpers'
 
-// SVG 图（DESIGN §15.5）：不取字节、不发 OCR，直接读 contentDocument 里的字形
+// SVG figures (DESIGN §15.5): no bytes fetched, no OCR sent; the glyphs are read straight from the contentDocument
 
 const PLOT = readFileSync(join(import.meta.dirname, '../fixtures/svg/2609.03768-fig_closure.svg'), 'utf8')
 
@@ -55,7 +55,7 @@ function setup(markup: string | null, extra: Partial<ImageRunOptions> = {}) {
   const options: ImageRunOptions = {
     doc, targets: targets.filter(t => t.kind === 'svg'), paper: '2609.03768', target: 'cmn', scope: 's1',
     renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
-    fetchBytes: async () => { throw new Error('SVG 路径不该取字节') },
+    fetchBytes: async () => { throw new Error('the SVG path must not fetch bytes') },
     ocr, translate, isEnabled: () => true, isCurrent: () => true,
     ...extra,
   }
@@ -93,7 +93,7 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
 
   it('lays a label a fraction of a degree off horizontal out as a horizontal one', async () => {
     // The overlay's rotated geometry swaps the two axes, so it is only right at an exact quarter
-    // turn. `quarterTurn` tolerates 1.8° of slop, and that residual used to reach `labelStyle`
+    // turn. `drawAngle` tolerates 1.8° of slop (`UPRIGHT_TOLERANCE`), and that residual used to reach `labelStyle`
     // as a truthy angle and select that layout — a wide axis label came out a tall narrow strip
     // (Codex on #134). Two runs in the corpus are translatable and sit off horizontal by 1e-5°.
     const { targets, run, doc } = setup(tilted('Energy', 0.5))
@@ -106,7 +106,7 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
   })
 
   it('fails the figure rather than the run when the embedded document is not there', async () => {
-    // Measured as never happening on real papers (RESEARCH §6.11), so this is the graceful
+    // Measured as never happening on real papers (DESIGN §15.5), so this is the graceful
     // degradation path, not a normal one
     const { targets, run, translate } = setup(null)
     await run.translate(targets.filter(t => t.kind === 'svg'))
@@ -135,12 +135,12 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
     }))
     const run = startImageTranslation({
       doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
-      fetchBytes: async () => { throw new Error('不该取字节') },
+      fetchBytes: async () => { throw new Error('must not fetch bytes') },
       ocr: vi.fn(async () => ({ ok: true as const, result: { width: 1, height: 1, lines: [] }, cached: false })),
       translate, isEnabled: () => true, isCurrent: () => true,
     })
     const pending = run.translate(targets)
-    // 加载完成之后才有内容，然后派 load 事件
+    // The content exists only after loading, then the load event is dispatched
     markup = PLOT
     el.dispatchEvent(new Event('load'))
     await pending
@@ -179,7 +179,7 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
 
     helperReady = true
     run.resume()
-    // `resume` 交给 `translate` 是不等待的，满载时一个 tick 不够
+    // `resume` hands over to `translate` without waiting; at full load one tick is not enough
     for (let i = 0; i < 50 && ocr.mock.calls.length === 0; i++) await new Promise(r => setTimeout(r, 5))
     expect(ocr).toHaveBeenCalledTimes(1)
   })

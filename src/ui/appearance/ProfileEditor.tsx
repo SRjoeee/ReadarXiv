@@ -17,7 +17,8 @@ import { UnderlineField } from './UnderlineField'
 export function StyleEditor({ value, highlight, onChange, onDuplicate, onDelete, onClose }: {
   value: StyleProfile
   highlight: HighlightProfile
-  onChange: (next: StyleProfile) => void
+  /** Answers with the write, for the boxes that wait for their own (AdvancedCss) */
+  onChange: (next: StyleProfile) => unknown
   onDuplicate: () => void
   onDelete: () => void
   onClose: () => void
@@ -36,7 +37,7 @@ export function StyleEditor({ value, highlight, onChange, onDuplicate, onDelete,
       <Preview style={value} highlight={highlight} />
       {/* The shipped profiles are stored under their Chinese names and displayed in the reader's
           language (`profileName`); the field has to show what the grid shows, or an English drawer
-          opens on 与原文相同. Typing is a rename and writes what was typed (Codex on #161) */}
+          opens on “Same as the original”. Typing is a rename and writes what was typed (Codex on #161) */}
       <Field label={O.reading.name}>
         <input className={inputClass} value={profileName(value, 'styles')} onChange={e => onChange({ ...value, name: e.target.value })} />
       </Field>
@@ -58,7 +59,7 @@ export function StyleEditor({ value, highlight, onChange, onDuplicate, onDelete,
 export function HighlightEditor({ value, style, onChange, onDuplicate, onDelete, onClose }: {
   value: HighlightProfile
   style: StyleProfile
-  onChange: (next: HighlightProfile) => void
+  onChange: (next: HighlightProfile) => unknown
   onDuplicate: () => void
   onDelete: () => void
   onClose: () => void

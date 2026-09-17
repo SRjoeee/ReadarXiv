@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { setLocale } from '@/ui/strings'
 import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
-import { MANAGE_STYLES, derivePopupView, runnable } from '@/entrypoints/popup/view-model'
+import { MANAGE_STYLES, derivePopupView, pollsBackground, runnable } from '@/entrypoints/popup/view-model'
 
 const input = (id: string) => POPUP_FIXTURES.find(f => f.id === id)!.input
 const view = (id: string) => derivePopupView(input(id))
@@ -73,7 +73,7 @@ describe('derivePopupView (UI.md §4)', () => {
   })
   it('P4 translating: the button says it and keeps the shortcut, the rows stay open, no counts anywhere', () => {
     const v = view('P4')
-    // ⌥T restores a translated page, so the badge stays on this face of the button too（用户 2026-09-11）
+    // ⌥T restores a translated page, so the badge stays on this face of the button too (the owner, 2026-09-11)
     expect(v.primary).toEqual({ label: '显示原文', action: 'restore', disabled: false, shortcut: '⌥T' })
     expect(v.note).toBeNull()
     expect(JSON.stringify(v)).not.toMatch(/24|31/)
@@ -123,13 +123,54 @@ describe('derivePopupView (UI.md §4)', () => {
     expect(v.primary).toEqual({ label: '重新翻译', action: 'retranslate', disabled: true })
     expect(v.secondary).toEqual({ label: '显示原文', action: 'restore' })
   })
+  it('behind is the page\'s revision against the saved settings\' digest: a key or model change alone puts the page behind, the page\'s own chain never does', () => {
+    // The old test compared the page with the chain it was itself running on (the scoped provider status) — never
+    // behind after the first poll. The digest of the saved settings is what the toggle compares with too
+    const on = { ...input('P1'), page: { ...input('P1').page!, progress: { ...input('P1').page!.progress, state: 'on' as const, requested: 10, done: 10 }, running: { provider: 'microsoft', target: 'cmn', engine: 'microsoft', revision: 'r1' } } }
+    expect(derivePopupView(on).primary).toMatchObject({ label: '显示原文', action: 'restore' })
+    const behind = derivePopupView({ ...on, savedRevision: 'r2' })
+    expect(behind.primary).toMatchObject({ label: '重新翻译', action: 'retranslate', disabled: false })
+    expect(behind.secondary).toEqual({ label: '显示原文', action: 'restore' })
+    expect(derivePopupView({ ...on, savedRevision: null }).primary).toMatchObject({ action: 'restore' })
+  })
+  it('the session chain and the saved chain are never confused: an unknown session shows as unknown, the decision reads the saved one', () => {
+    // Codex on #185: the popup used to hand the view one status, the saved chain standing in for a session that had
+    // not answered — its hand-over would have been shown as the running page's
+    const demoted = { id: 'svc-1', kind: 'auth' as const, message: 'User not found.' }
+    const handedOver = { ...input('P6').session!, engine: { id: 'google-web', demoted } }
+    const on = { ...input('P6'), saved: handedOver, session: null }
+    const unknown = derivePopupView(on)
+    expect(unknown.note).toBeNull()
+    expect(unknown.service).toEqual({ value: input('P6').config!.services[0]!.name })
+    const known = derivePopupView({ ...on, session: handedOver })
+    expect(known.note?.text).toContain('Google')
+    expect(known.service.replaced).toBeDefined()
+    // Whether a start is enabled without a runnable choice is the saved chain's fallback, whatever a session says
+    const idle = input('P7')
+    expect(derivePopupView({ ...idle, session: { ...idle.saved!, fallback: undefined } }).primary.disabled).toBe(false)
+    expect(derivePopupView({ ...idle, saved: { ...idle.saved!, fallback: undefined }, session: idle.saved }).primary.disabled).toBe(true)
+  })
   it('P14 helper missing on macOS: install text plus the id the guided install needs', () => {
     const v = view('P14')
-    // 带着 extensionId 才有得装：命令要按这个 id 拼（引导本身在 HelperSetup 里，§15.4）
-    expect(v.helper).toEqual({ text: '图片翻译需要安装识别助手', extensionId: 'abcdefghijklmnopabcdefghijklmnop' })
-    // 非 macOS 只有一行说明，没有可按的东西——安装脚本在别处会立刻退出
-    expect(derivePopupView({ ...input('P14'), platform: 'other' }).helper).toEqual({ text: '图片翻译目前仅支持 macOS' })
+    // Only with an extensionId is there anything to install: the command is built from that id (the guide itself is in HelperSetup, §15.4)
+    expect(v.helper).toEqual({ text: '图片翻译需要安装识别助手', step: 'install', extensionId: 'abcdefghijklmnopabcdefghijklmnop' })
+    // Outside macOS there is one line of explanation and nothing to press — the install script exits at once elsewhere
+    expect(derivePopupView({ ...input('P14'), platform: 'other' }).helper).toEqual({ text: '图片翻译目前仅支持 macOS', step: null })
     expect(derivePopupView({ ...input('P14'), config: { ...input('P14').config!, image: { enabled: false, modes: [] } } }).helper).toBeNull()
+  })
+  it('P14a / P14b the permission comes before the install (DESIGN §15.3): the allow step, then a line while the grant takes effect', () => {
+    expect(view('P14a').helper).toEqual({ text: '图片翻译需要允许扩展与识别助手通信', step: 'allow' })
+    expect(view('P14b').helper).toEqual({ text: '已允许，稍后自动生效', step: null })
+    // Other platforms are told so before anything is asked of them
+    expect(derivePopupView({ ...input('P14a'), platform: 'other' }).helper).toEqual({ text: '图片翻译目前仅支持 macOS', step: null })
+    expect(derivePopupView({ ...input('P14a'), config: { ...input('P14a').config!, image: { enabled: false, modes: [] } } }).helper).toBeNull()
+  })
+  it('the provider poll leaves the background alone while a grant takes effect, so the stale worker can idle out (DESIGN §15.3)', () => {
+    expect(pollsBackground({ state: 'restarting' })).toBe(false)
+    expect(pollsBackground({ state: 'permission-missing' })).toBe(true)
+    expect(pollsBackground({ state: 'not-installed' })).toBe(true)
+    expect(pollsBackground({ state: 'ready', version: '0.1.0' })).toBe(true)
+    expect(pollsBackground(null)).toBe(true)
   })
   it('P16 the style menu is what the settings page holds, in its order, with the chosen one marked', () => {
     const v = view('P16')
@@ -137,11 +178,11 @@ describe('derivePopupView (UI.md §4)', () => {
     expect(v.style.value).toBe('与原文相同')
     expect(v.menu!.kind).toBe('style')
     expect(v.menu!.search).toBe(false)
-    // 最后一行不是样式，是去设置页管理它们的入口（S-P-83），与服务菜单的「管理翻译服务…」同一个角色
+    // The last row is not a style but the way in to managing them on the settings page (S-P-83), the same role as the service menu's “Manage services…”
     expect(v.menu!.items.map(i => i.id)).toEqual([...c.appearance.styles.map(p => p.id), MANAGE_STYLES])
     expect(v.menu!.items.at(-1)).toMatchObject({ id: MANAGE_STYLES, selected: false })
     expect(v.menu!.items.filter(i => i.selected).map(i => i.id)).toEqual([c.appearance.activeStyle])
-    // 入口不带预览：它不是一种样式
+    // The entry has no preview: it is not a style
     expect(v.menu!.items.at(-1)!.preview).toBeUndefined()
   })
   it('P15 prompt menu lists the built-ins and the reader\'s own', () => {
@@ -162,5 +203,63 @@ describe('derivePopupView (UI.md §4)', () => {
     expect(runnable({ ...c, provider: svc.id, services: [svc] }, null)).toBe(true)
     expect(runnable({ ...c, provider: svc.id, services: [{ ...svc, apiKey: '' }] }, null)).toBe(false)
     expect(runnable({ ...c, provider: svc.id, services: [{ ...svc, apiKey: '', baseURL: 'http://127.0.0.1:11434/v1' }] }, null)).toBe(true)
+  })
+})
+
+describe('actionErrorText (S-P-90)', () => {
+  it('names a missing active tab in the interface language and passes any other error through as thrown', async () => {
+    const { actionErrorText } = await import('@/entrypoints/popup/view-model')
+    const { NoActiveTabError } = await import('@/shared/messages')
+    const strings = await import('@/ui/strings')
+    setLocale('zh-CN')
+    expect(actionErrorText(new NoActiveTabError())).toBe(strings.S.noActiveTab)
+    expect(actionErrorText(new NoActiveTabError())).toMatch(/标签页/)
+    setLocale('en')
+    expect(actionErrorText(new NoActiveTabError())).toBe('No active tab')
+    setLocale('zh-CN')
+    expect(actionErrorText(new Error('the page did not answer'))).toBe('the page did not answer')
+    expect(actionErrorText('plain')).toBe('plain')
+  })
+
+  it('a save the store refused has a sentence of its own, thrown here or carried back from the page as a failure reply', async () => {
+    const { actionErrorText } = await import('@/entrypoints/popup/view-model')
+    const { ConfigUnreadableError } = await import('@/config/storage')
+    const { decodeReply, failure } = await import('@/shared/messages')
+    const strings = await import('@/ui/strings')
+    const refused = new ConfigUnreadableError({ kind: 'tooNew', stored: 99, supported: 15 })
+    setLocale('en')
+    expect(actionErrorText(refused)).toBe(strings.S.settingsUnreadable)
+    expect(actionErrorText(refused)).toMatch(/not saved/)
+    let carried: unknown
+    try { decodeReply(failure(refused)) } catch (e) { carried = e }
+    expect(actionErrorText(carried)).toBe(strings.S.settingsUnreadable)
+    setLocale('zh-CN')
+  })
+})
+
+describe('startRefusalText', () => {
+  it('turns every refusal code the session can answer into the sentence of the interface language', async () => {
+    const { startRefusalText } = await import('@/entrypoints/popup/view-model')
+    const strings = await import('@/ui/strings')
+    setLocale('zh-CN')
+    expect(startRefusalText({ started: false, reason: 'already-on' })).toBe(strings.S.page.alreadyOn)
+    expect(startRefusalText({ started: false, reason: 'not-paper' })).toBe(strings.S.page.notPaper)
+    expect(startRefusalText({ started: false, reason: 'backend-silent', detail: 'gone' })).toBe(strings.S.page.backendSilentWith('gone'))
+    setLocale('en')
+    expect(startRefusalText({ started: false, reason: 'no-service' })).toBe('No API key yet. Add one in the settings')
+    setLocale('zh-CN')
+  })
+})
+
+describe('the core strings seam (DESIGN §4.2)', () => {
+  it('setLocale hands the core the retry label and the failure sentences of that locale', async () => {
+    const { coreStrings } = await import('@/core/strings')
+    const strings = await import('@/ui/strings')
+    setLocale('en')
+    expect(coreStrings().retry).toBe('Retry')
+    expect(coreStrings().failureTitle('auth')).toBe(strings.reasonText('auth'))
+    setLocale('zh-CN')
+    expect(coreStrings().retry).toBe(strings.S.page.retry)
+    expect(coreStrings().failureTitle('no-key')).toBe(strings.reasonText('no-key'))
   })
 })

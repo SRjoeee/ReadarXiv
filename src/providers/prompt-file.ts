@@ -1,23 +1,26 @@
-// 提示词文件的导入 / 导出。功能对应 Read Frog components/prompt-configurator/utils/prompt-file.ts@9b44f82，
-// 2026-09-05 重写：文件形状相同（不带 id 的 { name, systemPrompt, prompt } 数组，所以两边的文件可以互相导入），
-// 校验用 zod、下载不用 file-saver（扩展页面里 <a download> 直接可用）。
+// Ported from reference/read-frog/src/components/prompt-configurator/utils/prompt-file.ts@9b44f82 (GPL-3.0), 2026-09-05,
+// modified — rewritten around the same file shape. Import / export of prompt files: an array of
+// { name, systemPrompt, prompt } without ids, so the two projects can import each other's files; validated with zod,
+// downloaded without file-saver (<a download> works in an extension page as it is).
 import { z } from 'zod'
+import { downloadTextFile } from '@/shared/download'
 import type { PromptTemplate } from './prompt-library'
 
 export const PROMPT_FILE_NAME = 'arxiv-translate_prompts.json'
 
-/** 文件里的一条：与 Read Frog 一样 name 与 prompt 必填，systemPrompt 缺省为空（兼容它的旧文件） */
-export const promptFileEntrySchema = z.object({
+/** One entry of the file: as in Read Frog, name and prompt are required and systemPrompt defaults to empty (its older files) */
+const promptFileEntrySchema = z.object({
   name: z.string().min(1),
   prompt: z.string().min(1),
   systemPrompt: z.string().default(''),
 })
-export const promptFileSchema = z.array(promptFileEntrySchema)
+const promptFileSchema = z.array(promptFileEntrySchema)
 export type PromptFileEntry = z.infer<typeof promptFileEntrySchema>
 
 /**
- * 解析失败只报**是哪一种**，不报句子：句子在语言包里，而这个模块不认识界面语言（Codex 在 #161 指出）。
- * `notJson` 与 `badShape` 对读者是两件不同的事——文件根本不是 JSON，还是 JSON 但不是这个格式
+ * A parse failure reports **which kind** only, no sentence: the sentences live in the locale pack, and this module
+ * knows no interface language (Codex on #161). `notJson` and `badShape` are two different things to a reader — not
+ * JSON at all, or JSON in another format
  */
 export type PromptFileError = 'notJson' | 'badShape'
 export class PromptFileFormatError extends Error {
@@ -43,19 +46,11 @@ export async function readPromptFile(file: File): Promise<PromptFileEntry[]> {
   return parsePromptFile(await file.text())
 }
 
-/** 导出时去掉 id：导入方会重新分配，避免两台机器的 id 撞上 */
+/** Exported without ids: the importer assigns fresh ones, so two machines' ids cannot collide */
 export function serializePrompts(patterns: PromptTemplate[]): string {
   return JSON.stringify(patterns.map(({ id: _id, ...entry }) => entry), null, 2)
 }
 
 export function downloadPromptFile(patterns: PromptTemplate[], doc: Document = document): void {
-  const blob = new Blob([serializePrompts(patterns)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = doc.createElement('a')
-  a.href = url
-  a.download = PROMPT_FILE_NAME
-  doc.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+  downloadTextFile(PROMPT_FILE_NAME, serializePrompts(patterns), 'application/json', doc)
 }

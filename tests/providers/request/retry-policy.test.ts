@@ -1,10 +1,9 @@
-// 移植自 reference/read-frog/src/utils/request/__tests__/retry-policy.test.ts@9b44f82（GPL-3.0），2026-09-05 移植、有修改：仅改 import 路径。
+// Ported from reference/read-frog/src/utils/request/__tests__/retry-policy.test.ts@9b44f82 (GPL-3.0), 2026-09-05, modified: import paths only.
 import { describe, expect, it } from "vitest"
 import {
   attachRequestErrorMeta,
   defaultRequestRetryPolicy,
   getRequestErrorMeta,
-  isRateLimitRequestError,
   MAX_CONSECUTIVE_RATE_LIMIT_PAUSES,
   MAX_RATE_LIMIT_RETRIES_PER_TASK,
   MAX_RETRY_AFTER_MS,
@@ -83,7 +82,6 @@ describe("request retry policy", () => {
       action: "fail",
       failQueue: true,
     })
-    expect(isRateLimitRequestError(error)).toBe(false)
   })
 
   it("preserves explicit bad-request metadata precedence", () => {

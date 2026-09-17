@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PromptFileFormatError, downloadPromptFile, readPromptFile } from '@/providers/prompt-file'
 import {
   BUILT_IN_PROMPTS, DEFAULT_PROMPT_ID, PROMPT_TOKENS, getTokenCellText,
@@ -6,46 +6,78 @@ import {
 } from '@/providers/prompt-library'
 import { getRandomUUID as uuid } from '@/shared/uuid'
 import { O } from '@/ui/strings'
+import { Button } from '@/ui/Button'
+import { Confirm } from '@/ui/Confirm'
+import { drafts } from '@/ui/drafts'
+import { Field, codeAreaClass, inputClass } from '@/ui/Field'
 
 // The prompt library: the same features as Read Frog's components/prompt-configurator/* — the list,
 // reading a built-in one, copying it into an editable one, new / edit / delete, import / export, and
 // the variable buttons that insert at the caret. Read Frog builds it on base-ui + jotai + Tailwind;
-// a whole UI stack for a dozen fields is not worth it, so this is the settings page's plain React.
+// a whole UI stack for a dozen fields is not worth it, so this is the settings page's plain React, dressed
+// like every other section — the shared Button / Field / Confirm and Tailwind classes.
 // A change is handed to the parent, which writes it to storage straight away — the page has no save button.
 
-type EditorMode = 'view' | 'copy' | 'edit' | 'new'
-type Field = 'systemPrompt' | 'prompt'
+export type EditorMode = 'view' | 'copy' | 'edit' | 'new'
+type PromptField = 'systemPrompt' | 'prompt'
 
 /** Read at render, not at import: this module is evaluated before the pack is chosen (ui/strings.ts) */
 const tokenHint = (token: (typeof PROMPT_TOKENS)[number]): string => O.prompts.manager.tokens[token]
 /** The shipped prompts' one-line descriptions, in the interface's language (Codex on #161) */
 const builtInDescription = (id: string): string => (O.prompts.manager.builtIn as Record<string, string>)[id] ?? ''
 
-/** 新建提示词的起点：点名目标语言并带上原文，只填名称也能用（Codex 在 #39 指出只有 {{input}} 的模板不知道译成哪种语言） */
+/** The starting point of a new prompt: names the target language and carries the source text, so it works with only a name filled in (Codex on #39: a template of `{{input}}` alone does not know which language to translate into) */
 const NEW_SYSTEM_PROMPT = `You are a professional ${getTokenCellText('targetLanguage')} translator of academic papers.`
 const NEW_USER_PROMPT = `Translate the following into ${getTokenCellText('targetLanguage')}:\n\n${getTokenCellText('input')}`
 
-const field = { display: 'block', width: '100%', boxSizing: 'border-box' as const, padding: '6px 8px', font: 'inherit', marginTop: 4 }
-const small = { display: 'block', color: 'var(--axt-fg-2)', fontSize: 12 }
-const row = { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--axt-line)' }
-const button = { font: 'inherit', fontSize: 12 }
+/** One prompt of the list: the radio and the name, the actions at the end */
+const rowClass = 'flex items-center gap-2 border-b border-line py-1.5'
+const nameClass = 'flex flex-1 cursor-pointer items-center gap-1.5 text-[13px]'
+const noteClass = 'block text-[11px] text-fg-2'
 
-export function PromptManager({ value, onChange }: { value: PromptsConfig; onChange: (next: PromptsConfig) => void }) {
+/**
+ * The list with the draft saved into it. An edit replaces its template in place — or, when the template is no longer
+ * in the list (deleted in another tab while this editor was open, and the list followed), appends it: the save is the
+ * reader's later word on that prompt, and a save that persisted nothing while reporting success would have lost the
+ * draft without a trace (local review). A new template and a copy always append
+ */
+export function withSaved(patterns: readonly PromptTemplate[], mode: EditorMode, draft: PromptTemplate): PromptTemplate[] {
+  if (mode === 'edit' && patterns.some(p => p.id === draft.id)) return patterns.map(p => (p.id === draft.id ? draft : p))
+  return [...patterns, draft]
+}
+
+/**
+ * A change to the prompts, as an update of the configuration **as stored when the write runs** — not of `value`, which
+ * is what this tab last saw: a prompt added or deleted in another tab while its refresh was still queued would
+ * otherwise be dropped or brought back by a list built from the stale copy (Codex on #185)
+ */
+export type PromptsUpdate = (current: PromptsConfig) => PromptsConfig
+
+export function PromptManager({ value, onChange }: { value: PromptsConfig; onChange: (update: PromptsUpdate) => unknown }) {
   const [editor, setEditor] = useState<{ mode: EditorMode; draft: PromptTemplate } | null>(null)
+  // The editor's draft is local until “Save”: the page must not reload under it (ui/drafts.ts). Keyed on whether an
+  // editor is open, not on the draft — every keystroke would otherwise end one hold and begin another
+  const editing = editor !== null
+  useEffect(() => (editing ? drafts.hold() : undefined), [editing])
   const [message, setMessage] = useState('')
-  const areas = useRef<Record<Field, HTMLTextAreaElement | null>>({ systemPrompt: null, prompt: null })
-  const lastFocused = useRef<Field>('prompt')
+  const areas = useRef<Record<PromptField, HTMLTextAreaElement | null>>({ systemPrompt: null, prompt: null })
+  const lastFocused = useRef<PromptField>('prompt')
   const fileInput = useRef<HTMLInputElement>(null)
 
   const builtIns = Object.values(BUILT_IN_PROMPTS)
-  const select = (promptId: string) => onChange({ ...value, promptId })
+  // A choice made from a stale list must not store an id that names nothing: deleted in another tab before this
+  // one's refresh ran, the prompt would resolve to the default silently, and neither it nor the previous choice would
+  // translate (local review). Such a choice keeps what is stored
+  const select = (promptId: string) => onChange(current => (
+    builtIns.some(t => t.id === promptId) || current.patterns.some(p => p.id === promptId) ? { ...current, promptId } : current
+  ))
 
   function open(mode: EditorMode, template?: PromptTemplate) {
     setMessage('')
     setEditor({ mode, draft: template ?? { id: uuid(), name: '', systemPrompt: NEW_SYSTEM_PROMPT, prompt: NEW_USER_PROMPT } })
   }
 
-  /** 内置只读；"复制并自定义"给一份新 id 的副本，保存后直接选用（Read Frog 的做法） */
+  /** A built-in is read-only; “Duplicate and customise” gives a copy with a new id, selected as soon as it is saved (Read Frog's way) */
   function copyBuiltIn(template: PromptTemplate) {
     setEditor({ mode: 'copy', draft: { ...template, id: uuid(), name: O.prompts.manager.copyOf(template.name) } })
   }
@@ -55,18 +87,16 @@ export function PromptManager({ value, onChange }: { value: PromptsConfig; onCha
     const { mode, draft } = editor
     if (!draft.name.trim()) return setMessage(O.prompts.manager.nameEmpty)
     if (!draft.prompt.trim()) return setMessage(O.prompts.manager.promptEmpty)
-    const patterns = mode === 'edit' ? value.patterns.map(p => (p.id === draft.id ? draft : p)) : [...value.patterns, draft]
-    onChange({ patterns, promptId: mode === 'copy' ? draft.id : value.promptId })
+    onChange(current => ({ patterns: withSaved(current.patterns, mode, draft), promptId: mode === 'copy' ? draft.id : current.promptId }))
     setEditor(null)
     setMessage(mode === 'edit' ? O.prompts.manager.saved : O.prompts.manager.added)
   }
 
   function remove(template: PromptTemplate) {
-    if (!window.confirm(O.prompts.manager.removeConfirm(template.name))) return
-    onChange({
-      patterns: value.patterns.filter(p => p.id !== template.id),
-      promptId: value.promptId === template.id ? DEFAULT_PROMPT_ID : value.promptId,
-    })
+    onChange(current => ({
+      patterns: current.patterns.filter(p => p.id !== template.id),
+      promptId: current.promptId === template.id ? DEFAULT_PROMPT_ID : current.promptId,
+    }))
     if (editor?.draft.id === template.id) setEditor(null)
   }
 
@@ -74,17 +104,18 @@ export function PromptManager({ value, onChange }: { value: PromptsConfig; onCha
     if (!file) return
     try {
       const entries = await readPromptFile(file)
-      onChange({ ...value, patterns: [...value.patterns, ...entries.map(entry => ({ ...entry, id: uuid() }))] })
+      const added = entries.map(entry => ({ ...entry, id: uuid() }))
+      onChange(current => ({ ...current, patterns: [...current.patterns, ...added] }))
       setMessage(O.prompts.manager.imported(entries.length))
     } catch (e) {
-      // 解析器只说是哪一种，句子在语言包里（Codex 在 #161 指出）
+      // The parser only says which kind; the sentence is in the locale pack (Codex on #161)
       setMessage(e instanceof PromptFileFormatError ? O.prompts.manager.importFailed[e.kind] : e instanceof Error ? e.message : String(e))
     } finally {
       if (fileInput.current) fileInput.current.value = ''
     }
   }
 
-  /** 把变量插到最后聚焦的那个文本框的光标处（对应 Read Frog 的 QuickInsertableTextarea） */
+  /** Insert a variable at the caret of the text box focused last (Read Frog's QuickInsertableTextarea) */
   function insertToken(token: (typeof PROMPT_TOKENS)[number]) {
     if (!editor) return
     const which = lastFocused.current
@@ -108,69 +139,67 @@ export function PromptManager({ value, onChange }: { value: PromptsConfig; onCha
   return (
     <div>
       {builtIns.map(template => (
-        <div key={template.id} style={row}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-            <input type="radio" name="axt-prompt" checked={value.promptId === template.id} onChange={() => select(template.id)} />
+        <div key={template.id} className={rowClass}>
+          <label className={nameClass}>
+            <input type="radio" name="axt-prompt" className="accent-accent" checked={value.promptId === template.id} onChange={() => select(template.id)} />
             <span>
               {template.name}
-              <small style={small}>{builtInDescription(template.id)}</small>
+              <small className={noteClass}>{builtInDescription(template.id)}</small>
             </span>
           </label>
-          <button type="button" style={button} onClick={() => open('view', template)}>{O.prompts.manager.view}</button>
+          <Button variant="text" onClick={() => open('view', template)}>{O.prompts.manager.view}</Button>
         </div>
       ))}
       {value.patterns.map(template => (
-        <div key={template.id} style={row}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-            <input type="radio" name="axt-prompt" checked={value.promptId === template.id} onChange={() => select(template.id)} />
-            <span>{template.name}<small style={small}>{O.prompts.manager.custom}</small></span>
+        <div key={template.id} className={rowClass}>
+          <label className={nameClass}>
+            <input type="radio" name="axt-prompt" className="accent-accent" checked={value.promptId === template.id} onChange={() => select(template.id)} />
+            <span>{template.name}<small className={noteClass}>{O.prompts.manager.custom}</small></span>
           </label>
-          <button type="button" style={button} onClick={() => open('edit', template)}>{O.prompts.manager.edit}</button>
-          <button type="button" style={button} onClick={() => remove(template)}>{O.prompts.manager.remove}</button>
+          <Button variant="text" onClick={() => open('edit', template)}>{O.prompts.manager.edit}</Button>
+          <Confirm label={O.prompts.manager.remove} confirmLabel={O.prompts.manager.removeConfirm} cancelLabel={O.prompts.manager.cancel} onConfirm={() => remove(template)} />
         </div>
       ))}
 
-      <p style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0' }}>
-        <button type="button" style={button} onClick={() => open('new')}>{O.prompts.manager.create}</button>
-        <button type="button" style={button} onClick={() => fileInput.current?.click()}>{O.prompts.manager.importFile}</button>
+      <p className="my-2 flex items-center gap-3">
+        <Button variant="text" onClick={() => open('new')}>{O.prompts.manager.create}</Button>
+        <Button variant="text" onClick={() => fileInput.current?.click()}>{O.prompts.manager.importFile}</Button>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={e => importFile(e.target.files?.[0])} />
-        <button type="button" style={button} disabled={value.patterns.length === 0} onClick={() => downloadPromptFile(value.patterns)}>{O.prompts.manager.exportMine}</button>
-        <span style={{ color: 'var(--axt-fg-2)', fontSize: 12 }}>{message}</span>
+        <Button variant="text" className="disabled:opacity-50" disabled={value.patterns.length === 0} onClick={() => downloadPromptFile(value.patterns)}>{O.prompts.manager.exportMine}</Button>
+        <span className="text-[11px] text-fg-2">{message}</span>
       </p>
 
       {editor && (
-        <div style={{ border: '1px solid var(--axt-line)', borderRadius: 4, padding: 12, marginTop: 4 }}>
-          <strong>{titles[editor.mode]}</strong>
-          <label style={{ display: 'block', marginTop: 8 }}>
-            {O.prompts.manager.name}
-            <input style={field} value={editor.draft.name} readOnly={readOnly} onChange={e => setEditor({ ...editor, draft: { ...editor.draft, name: e.target.value } })} />
-          </label>
-          {(['systemPrompt', 'prompt'] as Field[]).map(which => (
-            <label key={which} style={{ display: 'block', marginTop: 8 }}>
-              {which === 'systemPrompt' ? O.prompts.manager.systemPrompt : O.prompts.manager.userPrompt}
+        <div className="mt-1 rounded-control border border-line p-3">
+          <strong className="mb-3 block text-[13px] font-semibold">{titles[editor.mode]}</strong>
+          <Field label={O.prompts.manager.name}>
+            <input className={inputClass} value={editor.draft.name} readOnly={readOnly} onChange={e => setEditor({ ...editor, draft: { ...editor.draft, name: e.target.value } })} />
+          </Field>
+          {(['systemPrompt', 'prompt'] as PromptField[]).map(which => (
+            <Field key={which} label={which === 'systemPrompt' ? O.prompts.manager.systemPrompt : O.prompts.manager.userPrompt}>
               <textarea
                 ref={el => { areas.current[which] = el }}
-                style={{ ...field, minHeight: which === 'systemPrompt' ? 140 : 100, fontFamily: 'ui-monospace, monospace', fontSize: 12 }}
+                className={`${codeAreaClass} ${which === 'systemPrompt' ? 'min-h-[140px]' : 'min-h-[100px]'}`}
                 value={editor.draft[which]}
                 readOnly={readOnly}
                 onFocus={() => { lastFocused.current = which }}
                 onChange={e => setEditor({ ...editor, draft: { ...editor.draft, [which]: e.target.value } })}
               />
-            </label>
+            </Field>
           ))}
           {!readOnly && (
-            <p style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '8px 0' }}>
-              <span style={{ color: 'var(--axt-fg-2)', fontSize: 12 }}>{O.prompts.manager.insert}</span>
+            <p className="mb-4 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-fg-2">{O.prompts.manager.insert}</span>
               {PROMPT_TOKENS.map(token => (
-                <button type="button" key={token} style={button} title={tokenHint(token)} onClick={() => insertToken(token)}>{getTokenCellText(token)}</button>
+                <Button variant="chip" key={token} title={tokenHint(token)} onClick={() => insertToken(token)}>{getTokenCellText(token)}</Button>
               ))}
             </p>
           )}
-          <p style={{ display: 'flex', gap: 8, margin: '8px 0 0' }}>
+          <p className="flex items-center gap-3">
             {readOnly
-              ? <button type="button" style={button} onClick={() => copyBuiltIn(editor.draft)}>{O.prompts.manager.copy}</button>
-              : <button type="button" style={button} onClick={save}>{O.prompts.manager.addToList}</button>}
-            <button type="button" style={button} onClick={() => setEditor(null)}>{readOnly ? O.prompts.manager.close : O.prompts.manager.cancel}</button>
+              ? <Button variant="solid" onClick={() => copyBuiltIn(editor.draft)}>{O.prompts.manager.copy}</Button>
+              : <Button variant="solid" onClick={save}>{O.prompts.manager.addToList}</Button>}
+            <Button variant="text" onClick={() => setEditor(null)}>{readOnly ? O.prompts.manager.close : O.prompts.manager.cancel}</Button>
           </p>
         </div>
       )}

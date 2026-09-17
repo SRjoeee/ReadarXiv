@@ -1,5 +1,7 @@
-// 移植自 reference/read-frog/src/utils/request/cancellation.ts@9b44f82（GPL-3.0），2026-09-05 移植、有修改：仅加文件头。
-// 取消错误按 name 识别（跨消息边界原型链会丢）；CancelledScopeRegistry 记住已取消的 scope，堵住"请求暂时不在任何可取消结构里"的窗口。
+// Ported from reference/read-frog/src/utils/request/cancellation.ts@9b44f82 (GPL-3.0), 2026-09-05, modified: header only;
+// 2026-09-12 (DESIGN §8.5): CancelledScopeRegistry rewritten — no prefix marks, no expiry (its comment says why); the error class is as ported.
+// The cancellation error is recognised by name (prototype chains do not survive a message boundary);
+// CancelledScopeRegistry remembers cancelled scopes to close the window in which a request sits in no cancellable structure.
 export const TRANSLATION_CANCELLED_ERROR_NAME = "TranslationCancelledError"
 
 /**
@@ -21,52 +23,24 @@ export function isTranslationCancelledError(error: unknown): boolean {
 }
 
 /**
- * Remembers cancelled scopes so an enqueue handler that was suspended on an
- * await (e.g. the IndexedDB cache lookup) when the cancel drained the queues
- * can refuse to enqueue afterwards — otherwise the request enters the queue
- * with a dead scope that no future cancel will ever drain (#1881).
+ * The scopes ended for certain (DESIGN §8.5): the session router marks, every service that takes a scope reads, so a
+ * call that was suspended on an await (the cache read, a chain build) when its scope was drained is refused when it
+ * wakes instead of entering a queue with a dead scope that no future cancel will ever drain (#1881).
  *
- * Session ids are never reused, so remembering a scope can never wrongly
- * reject a live request; the TTL and size cap exist purely to bound memory.
+ * Session ids are never reused, so remembering a scope can never wrongly reject a live request. Forgetting one can
+ * revive a dead session whose call was still suspended — the ported registry's TTL and size cap did exactly that
+ * under the local review's probe (a forCall held on a chain build while its tab closed, then 256 other drops) —
+ * so nothing here expires: an entry is a few dozen bytes per ended session, and the worker's own life bounds the
+ * set (it is recycled after thirty idle seconds).
  */
 export class CancelledScopeRegistry {
-  private readonly scopes = new Map<string, number>()
-  private readonly prefixes = new Map<string, number>()
-
-  constructor(
-    private readonly ttlMs: number = 10 * 60_000,
-    private readonly maxEntries: number = 256,
-  ) {}
+  private readonly scopes = new Set<string>()
 
   markScope(scopeKey: string): void {
-    this.scopes.set(scopeKey, Date.now())
-    this.prune()
-  }
-
-  /** Mark every scope of a tab (tab close sweep), e.g. `${tabId}:`. */
-  markPrefix(scopePrefix: string): void {
-    this.prefixes.set(scopePrefix, Date.now())
-    this.prune()
+    this.scopes.add(scopeKey)
   }
 
   has(scopeKey: string): boolean {
-    if (this.scopes.has(scopeKey)) return true
-    for (const prefix of this.prefixes.keys()) {
-      if (scopeKey.startsWith(prefix)) return true
-    }
-    return false
-  }
-
-  private prune(): void {
-    const cutoff = Date.now() - this.ttlMs
-    for (const map of [this.scopes, this.prefixes]) {
-      for (const [key, markedAt] of map) {
-        if (markedAt < cutoff) map.delete(key)
-      }
-      // Maps iterate in insertion order, so overflow evicts the oldest first.
-      while (map.size > this.maxEntries) {
-        map.delete(map.keys().next().value!)
-      }
-    }
+    return this.scopes.has(scopeKey)
   }
 }

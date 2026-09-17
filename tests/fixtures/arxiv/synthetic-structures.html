@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <!--
-  合成 fixture，不是真实论文。用途见 docs/RESEARCH.md §2.12：
-  LaTeXML / ar5iv 的样式表里有 145 个类没在我们抓的 30 篇真实论文里出现过（书稿、CV、索引、题记等模板专用）。
-  这里按 LaTeXML 的输出惯例把其中会带正文的结构各写一份，让规则审计能守住这些没见过的情况。
-  新增结构时请同时在 docs/RESEARCH.md §2.12 登记来源。
+  A synthetic fixture, not a real paper (DESIGN §5.7, tests/fixtures/README.md).
+  LaTeXML's and ar5iv's style sheets name 145 classes that none of the 30 real papers surveyed uses (book, CV, index
+  and epigraph templates). Each of those that carries prose is written out here by LaTeXML's output conventions, so
+  the rule audit guards cases never met in a real paper. A structure added here is recorded in DESIGN §5.7 too.
 -->
 <html lang="en"><head><meta charset="utf-8"><title>Synthetic LaTeXML structures</title></head>
 <body>
@@ -87,11 +87,14 @@
 <div class="ltx_cv_item"><span class="ltx_cv_item_label">Languages</span><span class="ltx_cv_item_content">English, Chinese</span></div>
 </div>
 
-<!-- \intertext（issue #152）：方程组里夹在公式之间的说明文字。整段是从 arxiv.org/html/2609.09360v1
-     逐字节抄来的真实 LaTeXML 输出，只截到第二个说明行为止。12 篇真实 fixture 一个都没有这个形状，
-     而整篇收进来会把语料测试压过堆上限（2026-09-12 实测），所以放在这里。
-     要点：说明行是 tr.ltx_eqn_row **不带** .ltx_equation，整行一个 td（colspan + white-space:normal），
-     里面是正文 + 行内公式；间隔行同形但格是空的，不该成块 -->
+<!-- \intertext (issue #152): prose between the formulas of an equation group. The block below is real LaTeXML
+     output copied byte for byte from arXiv:2609.09360v1 — Alexander Meiners, Hannes Uecker, "Breathing and moving
+     vesicles in a geometric mechanochemical model", CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/) —
+     cut after the second prose row. None of the 12 real fixtures has this shape, and the whole paper would push the
+     corpus tests past the heap limit (measured 2026-09-12), so it lives here.
+     The point: a prose row is tr.ltx_eqn_row **without** .ltx_equation, one td spanning the row (colspan +
+     white-space: normal) holding text and inline formulas; a spacer row has the same shape with an empty cell and
+     must not become a block -->
 <div class="ltx_para">
 <table id="S1.E2" class="ltx_equationgroup ltx_eqn_table">
 <tbody><tr id="S1.EGx1" class="ltx_eqn_row"><td class="ltx_eqn_cell" colspan="5"></td></tr>

@@ -1,8 +1,8 @@
-// 回填（DESIGN §6.4）：译文 → DocumentFragment。占位符换成原节点的克隆，按译文顺序放置；原节点不动。
+// Filling back (DESIGN §6.4): translation → DocumentFragment. Placeholders become clones of the original nodes, placed in the translation's order; the original nodes are untouched.
 import { cloneWithoutIds } from './clone'
 import { type Boundaries, restoreLeadingLabel } from './label'
 import { scanTokens, type WireSpan } from './offsets'
-import type { ProtectedBlock } from './serialize'
+import { type ProtectedBlock, staleSlot } from './serialize'
 import { PlaceholderIntegrityError, validate } from './validate'
 
 /**
@@ -26,13 +26,17 @@ import { PlaceholderIntegrityError, validate } from './validate'
  * The spans hang off the fragment rather than changing the return shape, so the callers that only
  * want the nodes are untouched. They reference the nodes, not the fragment, so they stay valid
  * after the fragment has been appended and emptied.
- */
-/**
+ *
  * `alignment` is the engine's sentence boundaries for this translation, when it reported them and
  * they verified (`providers/alignment.ts`). The label restore needs them as evidence for a label
  * that ends in a period (`label.ts`); the fragment itself does not.
  */
 export function rehydrate(translated: string, block: ProtectedBlock, doc: Document, alignment?: Boundaries): DocumentFragment & { offsets: WireSpan[] } {
+  // The one gate before a translation reaches the page: the block still the one serialised, the
+  // placeholders intact. Stale first — a translation of a block that changed is not worth validating, and the caller
+  // treats the two differently (resend vs. leave it to a retry)
+  const stale = staleSlot(block)
+  if (stale) throw new PlaceholderIntegrityError('stale', stale)
   const v = validate(translated, block)
   if (!v.ok) throw new PlaceholderIntegrityError(v.reason, v.detail)
 

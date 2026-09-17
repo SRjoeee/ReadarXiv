@@ -1,4 +1,4 @@
-// User-added translation services (spec §2). One kind today; the field is there so native kinds
+// User-added translation services (DESIGN §8.5). One kind today; the field is there so native kinds
 // can be added without a migration.
 import { z } from 'zod'
 import type { Config } from './schema'
@@ -14,10 +14,11 @@ export const serviceSchema = z.object({
   kind: z.literal('openai-compat'),
   name: z.string().min(1).max(40),
   baseURL: z.url(),
-  /** Stored locally only; never in logs, cache keys or fixtures (CLAUDE.md rule 7) */
+  /** Stored locally only; never in logs, cache keys or fixtures (CLAUDE.md hard rule 5) */
   apiKey: z.string(),
   model: z.string().min(1),
-  thinking: z.enum(['enabled', 'disabled']).default('disabled'),
+  /** Every stored service has it — the v12 migration and the settings drawer both write it; the default it carried masked hand edits only (DESIGN §9) */
+  thinking: z.enum(['enabled', 'disabled']),
 })
 export type Service = z.infer<typeof serviceSchema>
 
@@ -32,6 +33,23 @@ export function serviceOf(config: Pick<Config, 'services'>, id: string): Service
 }
 export const chosenService = (config: Pick<Config, 'services' | 'provider'>): Service | undefined => serviceOf(config, config.provider)
 export const isLlmChosen = (config: Pick<Config, 'services' | 'provider'>): boolean => chosenService(config) !== undefined
+
+/**
+ * A local endpoint (Ollama, LM Studio): it needs no key, and the SDK sends no Authorization header when the key is
+ * empty; any other endpoint without a key must not be asked (Codex on #6). The one test the engine, the popup's
+ * “can this run” and the drawer's hint all read
+ */
+export function isLoopback(baseURL: string): boolean {
+  try {
+    const { hostname } = new URL(baseURL)
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]'
+  } catch {
+    return false
+  }
+}
+
+/** Whether a service can be asked at all: a key, or an endpoint that needs none */
+export const serviceRuns = (service: Pick<Service, 'apiKey' | 'baseURL'>): boolean => service.apiKey.trim().length > 0 || isLoopback(service.baseURL)
 
 /** As long as `serviceSchema.name` allows; a longer one would make the whole config invalid */
 export const NAME_MAX = 40
