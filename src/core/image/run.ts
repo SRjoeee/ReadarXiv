@@ -206,7 +206,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
    * The fetches in flight end with the run — stopped (a restore, a new session) or halted by a permanent error, after
    * which the run takes nothing more and settles what it had requested as failed: a restored page keeps no request of
    * ours going, and neither does a run that has given up (Devin on #230). The catch below asks `alive()` first, so an
-   * aborted fetch is not recorded as a second failure
+   * aborted fetch does not overwrite the failure's reason with its own
    */
   const aborter = new AbortController()
   /** Targets that entered the viewport while the mode gate was shut */
