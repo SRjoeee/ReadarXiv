@@ -17,15 +17,20 @@
 // the paired nodes, and `restore()` removes the container with every other injected node because it
 // carries `HL_CLASS`.
 //
+// **Two resolutions, one painter.** A block the engine gave sentence boundaries for resolves to the
+// sentence under the pointer; any other paired block resolves to the whole pair — the pairing of a
+// block with its own translation is certain, only the sentence pairing needs the engine — so no
+// translated block is dead to the pointer, whichever engine or wire path produced it.
+//
 // **A side with no boxes is shown instead of tinted** (issue #141). Only mode hides the original,
 // so its bands would be empty; after a dwell its sentence is cloned into a panel beside or next to
 // the visible one (`peek.ts`). Same hit test, same registry, same read-then-write frame.
 
 import { HL_CLASS } from '@/core/marks'
-import { rangesOf, wireOffsetAt } from '@/core/protector'
+import { rangesOf, wholeRanges, wireOffsetAt } from '@/core/protector'
 import { DOCUMENT_ROOT } from '@/core/rules/latexml'
 import { createPeek, movesText, type PeekAnchor } from './peek'
-import { rendered, sentenceAt, sentenceMapAt } from './sentence-map'
+import { pairAt, rendered, sentenceAt, sentenceMapAt } from './sentence-map'
 
 /** Which side a band belongs to, so the stylesheet can tell them apart if it ever needs to. */
 const SIDE_ATTR = 'data-axt-hl-side'
@@ -361,28 +366,52 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
     return inside(before, HIT_SLACK_PX) ? offset - 1 : undefined
   }
 
+  /**
+   * What the pointer is on, as what to paint: the sentence of a registered block, or the whole pair
+   * of one without a sentence map. `index` −1 names the whole pair; `registration` is what the peek
+   * keys its panel by — the map, or the one pair object the registry keeps per translation node
+   */
+  interface Resolved {
+    root: Element
+    index: number
+    side: 'source' | 'target'
+    registration: object
+    source: { root: Element; ranges: () => Range[] }
+    target: { root: Element; ranges: () => Range[] }
+  }
+  const resolve = (node: Node, at: number): Resolved | undefined => {
+    const found = sentenceMapAt(node)
+    if (found) {
+      const { map, side } = found
+      const wire = wireOffsetAt(map[side].index, node, at)
+      const sentence = wire === undefined ? undefined : sentenceAt(map.pairs, side, wire)
+      // Between two sentences of a registered block there is nothing to pair: no fallback to the whole block here
+      if (!sentence) return undefined
+      const ranges = (which: 'source' | 'target') => () => rangesOf(map[which].spans, sentence[which].from, sentence[which].to)
+      return { root: map.source.root, index: sentence.index, side, registration: map, source: { root: map.source.root, ranges: ranges('source') }, target: { root: map.target.root, ranges: ranges('target') } }
+    }
+    const paired = pairAt(node)
+    if (!paired) return undefined
+    const { pair, side } = paired
+    return { root: pair.source, index: -1, side, registration: pair, source: { root: pair.source, ranges: () => wholeRanges(pair.source) }, target: { root: pair.target, ranges: () => wholeRanges(pair.target) } }
+  }
+
   const update = () => {
     frame = 0
     const caret = doc.caretPositionFromPoint(x, y)
     const node = caret?.offsetNode
-    const found = node ? sentenceMapAt(node) : undefined
-    const at = found && node ? offsetOn(node, caret.offset) : undefined
-    if (!found || !node || at === undefined) {
-      miss()
-      return
-    }
-    const { map, side } = found
-    const wire = wireOffsetAt(map[side].index, node, at)
-    const sentence = wire === undefined ? undefined : sentenceAt(map.pairs, side, wire)
-    if (!sentence) {
+    const at = node ? offsetOn(node, caret.offset) : undefined
+    const target = node && at !== undefined ? resolve(node, at) : undefined
+    if (!target) {
       miss()
       return
     }
     hit()
     // The same sentence as last frame: the ranges have not changed and rebuilding them would be
     // pure work. This is the common case — a pointer resting on a line of text hits it every frame.
-    if (shown && !shown.stale && shown.root === map.source.root && shown.index === sentence.index) return
-    shown = { root: map.source.root, index: sentence.index, stale: false }
+    if (shown && !shown.stale && shown.root === target.root && shown.index === target.index) return
+    shown = { root: target.root, index: target.index, stale: false }
+    const { side } = target
     // The layer is fetched first because its own rectangle is the origin every band is measured
     // against, and it must be read in the same pass as the ranges. It is created at most once per
     // controller — the miss path empties it rather than removing it — so this is a read, not a
@@ -393,11 +422,11 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
     // bands would come out empty, so they are not measured at all; its ranges go to the panel
     // instead, built only once the panel actually renders (issue #141)
     const other = side === 'source' ? 'target' : 'source'
-    const hidden = !rendered(map[other].root)
+    const hidden = !rendered(target[other].root)
     // The visible side's clip is read once: its bands are cut to it, and so is the panel's width
-    const ownClip = view ? clipOf(map[side].root, view) : undefined
+    const ownClip = view ? clipOf(target[side].root, view) : undefined
     const bandsFor = (which: 'source' | 'target') =>
-      view ? bandsOf(origin, rangesOf(map[which].spans, sentence[which].from, sentence[which].to), which === side && ownClip ? ownClip : clipOf(map[which].root, view)) : []
+      view ? bandsOf(origin, target[which].ranges(), which === side && ownClip ? ownClip : clipOf(target[which].root, view)) : []
     // Every side is measured before anything is written: reads and writes never interleave
     const sides = [{ side, bands: bandsFor(side) }, ...(hidden ? [] : [{ side: other, bands: bandsFor(other) }])]
     // What the panel needs is read in the same pass — the sentence's own lines, the block they sit
@@ -409,11 +438,11 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
       const first = own[0]
       const last = own[own.length - 1]
       if (first && last) {
-        const block = map[side].root.getBoundingClientRect()
+        const block = target[side].root.getBoundingClientRect()
         // Set as the page sets the *hidden* side — it is that side's text the panel shows — and not
         // as a style preset dresses the visible translation. Computed style resolves for a
         // `display: none` element as for any other; only layout values are missing
-        const counterpart = map[other].root
+        const counterpart = target[other].root
         const articleRight = article?.getBoundingClientRect().right
         // Anchored to the part of the sentence that is on screen. A long sentence can start above
         // the viewport while the pointer is on one of its later lines, and its first line's
@@ -449,7 +478,7 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
         layer.append(el)
       }
     }
-    if (anchor) peek.show({ root: map.source.root, index: sentence.index, shown: map[other].root, registration: map }, () => rangesOf(map[other].spans, sentence[other].from, sentence[other].to), anchor)
+    if (anchor) peek.show({ root: target.root, index: target.index, shown: target[other].root, registration: target.registration }, target[other].ranges, anchor)
     else peek.hide()
   }
 
