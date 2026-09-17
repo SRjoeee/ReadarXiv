@@ -2,7 +2,7 @@
 
 The current design of the extension: what it does, how it is built, and why each choice that is not obvious was made. Cite it by section (`DESIGN §7.2`); a decision that changes goes into its section, in the pull request that changes the code. What the extension does for a reader is in the README; how a version is cut is in `RELEASE.md`.
 
-Where this document and an ADR disagree, the ADR is newer and wins. Where this document and the code disagree, one of them is wrong; the same PR settles which. A structural decision gets an ADR; everything else changes here, in the PR that changes the code.
+Where this document and the code disagree, one of them is wrong; the same pull request settles which. A decision — structural or not — changes here, in its section, in the pull request that changes the code; the measurements that justified it stay beside it.
 
 ---
 
