@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { browser } from 'wxt/browser'
 import { LOCALE_CODES, LOCALE_NAMES, type LocaleCode } from '@/locales'
 import { BrandMark } from '@/ui/BrandMark'
+import { Confirm } from '@/ui/Confirm'
 import { MenuField } from '@/ui/MenuField'
 import { O, fallbackText } from '@/ui/strings'
 import { useOptionsData } from './data'
@@ -49,8 +50,9 @@ export function App() {
           {/* The interface's own language, under the nav rather than in a section: it belongs to
               none of them, and it must not sit next to the target language, which is a different choice
               (S-O-05). Changing it reloads the page — the words are read once, before the first
-              paint, so that nothing is ever half translated */}
-          {data.config && (
+              paint, so that nothing is ever half translated. A setting like the rest: not offered over a configuration
+              that cannot be read (S-O-02) */}
+          {data.config && !data.fallbackReason && (
             <div className="mt-6 px-3">
               <p className="mb-1.5 text-[11px] font-semibold text-fg-2">{O.uiLanguage}</p>
               <MenuField
@@ -72,14 +74,21 @@ export function App() {
 
         <main className="min-w-0 flex-1">
           {data.fallbackReason && (
-            <p className="mb-6 rounded-card bg-accent-soft px-3.5 py-3 text-[12px] leading-relaxed text-accent">
-              {O.fallbackNotice}
-              <span className="mt-1 block text-fg-2">{fallbackText(data.fallbackReason)}</span>
-            </p>
+            <div className="mb-6 rounded-card bg-accent-soft px-3.5 py-3 text-[12px] leading-relaxed text-accent">
+              <p>
+                {O.fallbackNotice}
+                <span className="mt-1 block text-fg-2">{fallbackText(data.fallbackReason)}</span>
+              </p>
+              <div className="mt-2 flex justify-end">
+                <Confirm label={O.fallbackReset} confirmLabel={O.fallbackResetConfirm} cancelLabel={O.services.cancel} onConfirm={() => void data.reset()} />
+              </div>
+            </div>
           )}
-          {section === 'services' && <Services data={data} extensionId={browser.runtime.id} />}
-          {section === 'reading' && <Reading data={data} />}
-          {section === 'prompts' && <Prompts data={data} />}
+          {/* The three sections that write are not shown over a configuration that cannot be read: what they would show is
+              the defaults, not the reader's settings, and the store refuses their saves (S-O-02). “Data” writes none */}
+          {!data.fallbackReason && section === 'services' && <Services data={data} extensionId={browser.runtime.id} />}
+          {!data.fallbackReason && section === 'reading' && <Reading data={data} />}
+          {!data.fallbackReason && section === 'prompts' && <Prompts data={data} />}
           {section === 'data' && <Data data={data} />}
         </main>
       </div>

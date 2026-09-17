@@ -3,7 +3,7 @@
 // now — the popup and the page it is translating write the same object (Codex on #39).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { browser } from 'wxt/browser'
-import { type FallbackReason, configFallbackReason, getConfig, setConfig, watchConfig } from '@/config/storage'
+import { ConfigUnreadableError, type FallbackReason, configFallbackReason, getConfig, resetConfig, setConfig, watchConfig } from '@/config/storage'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { sendMessage } from '@/shared/messages'
 import type { HelperStatus } from '@/shared/ocr'
@@ -22,7 +22,10 @@ export interface OptionsData {
   config: Config | null
   /** Why the stored config fell back to defaults, if it did; worded by the page (ui/strings.ts) */
   fallbackReason: FallbackReason | null
+  /** Change the stored configuration. While it cannot be read the store refuses (config/storage.ts): resolves with what is in effect, unchanged */
   patch(fn: (latest: Config) => Config): Promise<Config>
+  /** Replace a stored configuration that cannot be read with the defaults — the reader's explicit choice (S-O-02) */
+  reset(): Promise<Config>
   pack: PackState | null
   /** Re-query the pack for a language the reader just chose (the Chrome card would otherwise show the old one) */
   checkPack(target: string): Promise<PackState>
@@ -163,13 +166,37 @@ export function useOptionsData(): OptionsData {
     // `then(run, run)`: a write that throws must not poison the chain — every later change would
     // be skipped and the page would silently stop saving
     const run = async () => {
-      const next = fn(await getConfig())
-      await setConfig(next)
+      const latest = await getConfig()
+      const next = fn(latest)
+      try {
+        await setConfig(next)
+      } catch (e) {
+        if (!(e instanceof ConfigUnreadableError)) throw e
+        // Refused, storage as it was (config/storage.ts): the page goes on showing what is in effect, under the
+        // notice that says why and offers the reset. The sections are not rendered in this state (App.tsx), so
+        // this is the race only — the stored value turned unreadable while a section was open
+        setLocal(latest)
+        setFallbackReason(e.reason)
+        return latest
+      }
       packs.want(next.targetLanguage)
       setLocal(next)
-      // A valid write **is** the repair: leaving the warning up would go on telling the reader that
-      // the key and service they just fixed are not in effect (Codex on #157)
+      // An accepted write proves the stored value readable: a notice still up is from before a repair made elsewhere
       setFallbackReason(null)
+      return next
+    }
+    writes.current = writes.current.then(run, run)
+    return writes.current
+  }, [packs])
+
+  /** S-O-02's way out, on the same chain as every other write: the defaults replace what could not be read */
+  const reset = useCallback((): Promise<Config> => {
+    const run = async () => {
+      await resetConfig()
+      const next = await getConfig()
+      packs.want(next.targetLanguage)
+      setLocal(next)
+      setFallbackReason(configFallbackReason())
       return next
     }
     writes.current = writes.current.then(run, run)
@@ -196,5 +223,5 @@ export function useOptionsData(): OptionsData {
     await loadCache()
   }, [loadCache])
 
-  return { config, fallbackReason, patch, pack, checkPack: packs.check, fetchPack, helper, setHelper, platform, cache, cacheError, clearCache, cacheCleared }
+  return { config, fallbackReason, patch, reset, pack, checkPack: packs.check, fetchPack, helper, setHelper, platform, cache, cacheError, clearCache, cacheCleared }
 }

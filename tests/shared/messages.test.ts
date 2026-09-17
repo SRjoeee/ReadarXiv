@@ -5,12 +5,25 @@ import { decodeReply, failure, isFailure, replyWith } from '@/shared/messages'
 // a request whose work failed must settle, not wait for the worker to die
 
 describe('failure replies', () => {
-  it('replyWith answers with the value, or with a typed failure carrying the error\'s message', async () => {
+  it('replyWith answers with the value, or with a typed failure carrying the error\'s message and name', async () => {
     const replies: unknown[] = []
     replyWith(Promise.resolve({ ok: 1 }), reply => replies.push(reply))
     replyWith(Promise.reject(new Error('the chain\'s status did not settle')), reply => replies.push(reply))
     await new Promise(resolve => setTimeout(resolve, 0))
-    expect(replies).toEqual([{ ok: 1 }, { axtError: 'the chain\'s status did not settle' }])
+    expect(replies).toEqual([{ ok: 1 }, { axtError: 'the chain\'s status did not settle', name: 'Error' }])
+  })
+
+  it('the error\'s name survives the boundary: the sender tells a failure it has a sentence for from one it can only quote', () => {
+    class Refused extends Error {
+      constructor() { super('refused'); this.name = 'ConfigUnreadableError' }
+    }
+    let caught: unknown
+    try { decodeReply(failure(new Refused())) } catch (e) { caught = e }
+    expect(caught).toBeInstanceOf(Error)
+    expect((caught as Error).name).toBe('ConfigUnreadableError')
+    expect((caught as Error).message).toBe('refused')
+    // Something that was not an Error has no name to carry
+    expect(failure('plain')).toEqual({ axtError: 'plain' })
   })
 
   it('decodeReply hands a value through and turns a failure reply into a rejection', () => {
