@@ -125,8 +125,10 @@ export function useOptionsData(): OptionsData {
         if (staleLocale(stored)) reload()
         packs.want(stored.targetLanguage)
         setLocal(stored)
-        // A valid write elsewhere is the repair of a configuration this page had to fall back from (Codex on #185)
+        // A valid write elsewhere is the repair of a configuration this page had to fall back from (Codex on #185); the
+        // line about a refused reset goes with it, or it would come back with the next fallback nobody reset
         setFallbackReason(configFallbackReason())
+        if (configFallbackReason() === null) setResetFailed(false)
         void packs.check(stored.targetLanguage)
         return stored
       }
@@ -186,6 +188,7 @@ export function useOptionsData(): OptionsData {
       setLocal(next)
       // An accepted write proves the stored value readable: a notice still up is from before a repair made elsewhere
       setFallbackReason(null)
+      setResetFailed(false)
       return next
     }
     writes.current = writes.current.then(run, run)

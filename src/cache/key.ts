@@ -67,11 +67,10 @@ export interface CacheIdentity {
  * sent changed** — the same text now goes out with `<x id="N"/>` boundary markers — so an old entry no longer
  * describes the same request. Unbumped, every paper translated within the 30-day TTL would hit the old entries
  * without alignment, and the highlight would stay dark on those pages (Codex on #137).
- * 7: a service's thinking switch entered the identity (`cacheId`, providers/openai-compat.ts). Entries written with
- * the switch on had been stored under the identity that now means off; unbumped, a reader who turns thinking off would
- * be served the reasoning model's translations for up to 30 days.
+ * The thinking switch of a service did not move this number: it entered that provider's own identity with both states
+ * named (`cacheId`, providers/openai-compat.ts), which retires the ambiguous entries of that provider alone.
  */
-export const CACHE_KEY_VERSION = 7
+export const CACHE_KEY_VERSION = 6
 
 /** NFC + runs of whitespace collapsed to one space + trimmed. For the key only; the text sent for translation is untouched */
 export function normalizeText(text: string): string {

@@ -535,9 +535,22 @@ describe('page session', () => {
     const stored = { ...h.config(), mode: 'only' as const }
     await h.deps.config.set(stored)
     h.session.onConfig(stored)
+    await settle()
     expect((await h.session.status()).preference).toBe('only')
     await h.session.start()
     expect(document.documentElement.getAttribute(MODE_ATTR)).toBe('only')
+  })
+
+  it('a late event for an earlier write does not put an older mode back: the page re-reads the store, it does not trust the event', async () => {
+    const h = harness({ config: { mode: 'side' } })
+    live = h.session
+    await h.session.status()
+    await h.session.setMode('stack')
+    await h.session.setMode('only')
+    // Storage events carry no order: the one for the first write arrives last, carrying `stack`
+    h.session.onConfig({ ...h.config(), mode: 'stack' })
+    await settle()
+    expect((await h.session.status()).preference).toBe('only')
   })
 
   it('a save the store refuses rejects after the page has switched: the mode holds here, and the caller learns it was not saved', async () => {
