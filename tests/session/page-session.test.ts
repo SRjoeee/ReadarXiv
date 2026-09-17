@@ -507,6 +507,39 @@ describe('page session', () => {
     expect(h.config().mode).toBe('side')
   })
 
+  it('a save the store refuses on an untranslated page changes nothing: the preference reported, and the next start, stay the stored ones', async () => {
+    const h = harness({ config: { mode: 'side' } })
+    live = h.session
+    h.refuseWrites(new Error('refused'))
+    await expect(h.session.setMode('stack')).rejects.toThrow('refused')
+    expect((await h.session.status()).preference).toBe('side')
+    await h.session.start()
+    // The preference, not the attribute: the test window is narrow, where side is shown stacked
+    expect((await h.session.status()).preference).toBe('side')
+  })
+
+  it('two choices in quick succession are saved in order: the store ends on the last one, as the page does', async () => {
+    const h = harness({ config: { mode: 'side' } })
+    live = h.session
+    await h.session.status()
+    // Not awaited one by one: both would read `side` before either wrote, and the second would skip its write
+    await Promise.all([h.session.setMode('stack'), h.session.setMode('side')])
+    expect(h.config().mode).toBe('side')
+    expect((await h.session.status()).preference).toBe('side')
+  })
+
+  it('a mode saved in another tab reaches an untranslated page: it reports that preference and starts in it', async () => {
+    const h = harness({ config: { mode: 'side' } })
+    live = h.session
+    await h.session.status()
+    const stored = { ...h.config(), mode: 'only' as const }
+    await h.deps.config.set(stored)
+    h.session.onConfig(stored)
+    expect((await h.session.status()).preference).toBe('only')
+    await h.session.start()
+    expect(document.documentElement.getAttribute(MODE_ATTR)).toBe('only')
+  })
+
   it('a save the store refuses rejects after the page has switched: the mode holds here, and the caller learns it was not saved', async () => {
     const h = harness({ config: { mode: 'side' } })
     live = h.session
