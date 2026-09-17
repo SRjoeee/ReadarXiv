@@ -1,7 +1,7 @@
 import { ID_ATTR } from '@/core/extractor'
 import { T_CLASS } from '@/core/marks'
-import { SIDE_LAYOUT } from '@/core/rules/latexml'
-import { SPLIT_ATTR, SPLIT_CLASS } from './attrs'
+import { NOTE, SIDE_LAYOUT } from '@/core/rules/latexml'
+import { MIRRORED_ATTR, PANELS_ATTR, REAL_TRANSLATION, SPLIT_ATTR, SPLIT_CLASS, TAGGED_ATTR, TAIL_ATTR, TRANSLATED_ATTR } from './attrs'
 // The structural decisions of side mode (DESIGN §7.2). This is the single source of truth; the lists of the same
 // names in modes.css are guarded by tests. Every `ltx_*` literal comes from the rules module's SIDE_LAYOUT
 // (CLAUDE.md hard rule 2); this file only composes them.
@@ -53,8 +53,23 @@ export const SIDE_DENY_SUBTREE = [
 ].join(', ')
 
 /**
+ * The same subtree list as the style sheet reads it: a multi-panel figure is known there by the mark
+ * `markStructure` writes from MULTI_PANEL_FLEX, not by `:has()` (ADR-0011). The two lists are held together by
+ * tests/renderer/side-layout.test.ts
+ */
+export const SIDE_DENY_SUBTREE_CSS = SIDE_DENY_SUBTREE.replace(MULTI_PANEL_FLEX, `[${PANELS_ATTR}]`)
+
+/**
+ * The originals that take the left column: a block, an original a mirror follows, a figure with a split copy — each
+ * marked by the code that gave it its right-hand partner. The style sheet quotes this list (guarded by tests)
+ */
+export const SIDE_ORIGINAL = `[${ID_ATTR}], [${MIRRORED_ATTR}], [${SPLIT_ATTR}]`
+
+/**
  * The elements CSS turns into two-column grids: those holding a translation **or a block mark** inside (minus the
- * exclusions). The block marks are set at the very start of a session (§10), so the whole page goes two-column at
+ * exclusions). The style sheet reads the mark the extractor writes on every ancestor of a block (`data-axt-pairs`,
+ * markBlocks, ADR-0011); this query keeps asking the structure itself, so it needs no mark and stays right for a
+ * document marked by hand — tests/renderer/side-layout.test.ts holds the two answers equal on every fixture. The block marks are set at the very start of a session (§10), so the whole page goes two-column at
  * once and never jumps sideways afterwards; keyed on translations alone, blocks beyond the preload distance under
  * lazy loading stayed full width and shrank into the left column only on entering the margin (the owner's
  * feedback, revised 2026-09-05)
@@ -89,3 +104,50 @@ export function isMirrorContainer(el: Element): boolean {
 export const SIDE_STACK = [
   SIDE_LAYOUT.stack, // containers nested inside a paragraph
 ].join(', ')
+
+/**
+ * The structural marks side mode's style sheet reads instead of `:has()` (ADR-0011), written once per session
+ * right after the block marks: a multi-panel flex figure (`data-axt-panels`, its subtree is no container) and a
+ * list item whose marker is its child (`data-axt-tagged`, the marker leaves the grid flow). Both are facts of the
+ * page's own structure and never change; `restore()` sweeps them with every other `data-axt-*`. Idempotent.
+ * Returns how many elements were marked
+ */
+export function markStructure(root: Document | Element): number {
+  let marked = 0
+  for (const [selector, attr] of [[MULTI_PANEL_FLEX, PANELS_ATTR], [SIDE_LAYOUT.taggedItem, TAGGED_ATTR]] as const) {
+    for (const el of Array.from(root.querySelectorAll(selector))) {
+      if (el.hasAttribute(attr)) continue
+      el.setAttribute(attr, '')
+      marked++
+    }
+  }
+  return marked
+}
+
+/**
+ * Whether this original closes its container: its translation-side node — translation, skeleton, widget, mirror
+ * or split copy, whatever carries `axt-t` — is the container's last child. The last grid row's bottom margins
+ * become blank a block layout would have collapsed, so the style sheet drops them (§7.2); it used to know the row
+ * by `:nth-last-child(2):has(+ .axt-t)`. Called by everything that inserts or removes such a node, with the
+ * original it belongs to; an original whose node is not last, or has none, loses the mark
+ */
+export function markTail(original: Element): void {
+  const next = original.nextElementSibling
+  original.toggleAttribute(TAIL_ATTR, !!next && next.classList.contains(T_CLASS) && next.nextElementSibling === null)
+}
+
+/**
+ * Whether the frontmatter note this element sits in holds a real translation — the skeleton and the failure widget
+ * do not count (Codex on #73): the note leaves arXiv's gutter and pairs only once a translation has actually
+ * arrived, and returns there when it is taken away. Marked on the note and on the box whose direct child the
+ * translation is (`.ltx_note_outer`, which becomes the pair's grid). Called after a translation is inserted or
+ * removed; an element outside any frontmatter note costs one `closest()`
+ */
+export function markTranslatedNote(el: Element): void {
+  const note = el.closest(NOTE.frontmatter)
+  if (!note) return
+  note.toggleAttribute(TRANSLATED_ATTR, note.querySelector(REAL_TRANSLATION) !== null)
+  for (const outer of Array.from(note.querySelectorAll(NOTE.outer))) {
+    outer.toggleAttribute(TRANSLATED_ATTR, outer.querySelector(`:scope > ${REAL_TRANSLATION}`) !== null)
+  }
+}

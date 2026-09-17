@@ -11,8 +11,8 @@
 import { DOCUMENT_ROOT, MARGIN_ASIDE } from '@/core/rules/latexml'
 import { ID_ATTR } from '@/core/extractor'
 import { INJECTED_SELECTOR, T_CLASS, isInjected, stripInjected } from '@/core/marks'
-import { FOR_ATTR, MIRROR_CLASS } from './attrs'
-import { MIRROR_CONTAINER, SIDE_STACK, isMirrorContainer } from './side-layout'
+import { FOR_ATTR, MIRRORED_ATTR, MIRROR_CLASS } from './attrs'
+import { MIRROR_CONTAINER, SIDE_STACK, isMirrorContainer, markTail } from './side-layout'
 
 /** The data-axt-for prefix of a mirror, so it cannot collide with a real block id */
 const MIRROR_ID_PREFIX = 'mirror:'
@@ -71,9 +71,25 @@ export function createMirrors(root: Document | Element): number {
       clone.setAttribute('aria-hidden', 'true')
       clone.setAttribute('inert', '')
       clone.setAttribute(FOR_ATTR, `${MIRROR_ID_PREFIX}${made}`)
+      // The original takes the left column by this mark, the mirror the right (§7.2, ADR-0011)
+      child.setAttribute(MIRRORED_ATTR, '')
       child.after(clone)
+      markTail(child)
       made++
     }
   }
   return made
+}
+
+/**
+ * Remove a mirror and the marks its original carried for it: an image overlay arriving, or a figure being split,
+ * takes the mirror's place in the right column, and an original still marked as mirrored would keep the left
+ * column with nothing beside it (§7.2)
+ */
+export function dropMirror(mirror: Element): void {
+  const original = mirror.previousElementSibling
+  mirror.remove()
+  if (!original) return
+  original.removeAttribute(MIRRORED_ATTR)
+  markTail(original)
 }

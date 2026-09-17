@@ -381,6 +381,8 @@ export const ANNOTATION_SELECTOR = '.ltx_note, .ltx_note_mark, .ltx_note_type'
 
 export const NOTE = {
   root: '.ltx_note',
+  /** A note of the title area (thanks, affiliations): with a translation it returns to the article's flow and pairs (§7.2) */
+  frontmatter: '.ltx_note.ltx_note_frontmatter',
   content: '.ltx_note_content',
   contentClass: 'ltx_note_content',
   marks: '.ltx_note_mark, .ltx_tag',
@@ -424,6 +426,8 @@ export const MARGIN_ASIDE_BOXES = '.ltx_pubnotes, .ltx_note_content'
 export const SIDE_LAYOUT = {
   /** A multi-panel flex figure: a `.ltx_flex_figure` with any cell that is not full width (`ltx_flex_size_1`) */
   multiPanelFlex: '.ltx_flex_figure:has(> .ltx_flex_cell:not(.ltx_flex_size_1))',
+  /** A list item with its marker as a child: the marker leaves the pairing grid's flow and hangs in each column (§7.2) */
+  taggedItem: '.ltx_item:has(> .ltx_tag)',
   /**
    * Inline and preformatted contexts: turned into grids they are ruined.
    * **The `\resizebox` wrapper excepted** (`.ltx_transformed_outer`, measured 2026-09-07 on 2606.07636v2): though it

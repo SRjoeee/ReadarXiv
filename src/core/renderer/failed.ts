@@ -10,6 +10,7 @@ import { parseFatal } from '@/core/pipeline/fatal'
 import { coreStrings } from '@/core/strings'
 import { ERROR_CLASS, FOR_ATTR } from './attrs'
 import { translationShell } from './shell'
+import { markTail } from './side-layout'
 import { clearTranslation, setState } from './translation'
 
 /** The raw diagnostic stays in an attribute: `restore()` clears it with the injected marks as a whole, and it never reaches the interface */
@@ -30,6 +31,7 @@ export function clearFailed(block: Block): boolean {
   for (const sibling of Array.from(parent.children)) {
     if (sibling.classList.contains(ERROR_CLASS) && sibling.getAttribute(FOR_ATTR) === block.id) {
       sibling.remove()
+      markTail(block.el)
       removed = true
     }
   }
@@ -90,9 +92,11 @@ export function renderFailed(block: Block, reason: string, retry: () => void): E
     host.removeAttribute(FOR_ATTR)
     slot.append(host)
     block.el.after(widget)
+    markTail(block.el)
     return widget
   }
   block.el.after(host)
+  markTail(block.el)
   return host
 }
 

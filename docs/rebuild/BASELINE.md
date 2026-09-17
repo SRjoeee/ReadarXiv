@@ -44,6 +44,7 @@ Translation (2410.00260, 292 blocks):
 Reading aids:
 
 - Hover highlight: one band per line (3 lines → 3 bands), 0 bands in the 423 px of trailing whitespace, DOM untouched, layer on `<body>`; removing 16 translations leaves 0 registry entries alive.
+- Style recalculation per DOM insertion, settled page, side mode (`tests/e2e/probes/insert-recalc.mjs`, ADR-0011, 2026-09-17): a hover band written into the layer visits **1 element, 0.1–0.2 ms** on 2410.00260 (4 531 elements), 2312.17141 (59 046) and 2609.00080v1 (56 132); a translation node landing after a paragraph **1.1 / 3.3 / 3.0 ms**. Before the marks replaced `:has()`: the whole document each time, 14 / 165 / 146 ms for the band and 16 / 164 / 145 ms for the translation. Pointer event to band update p50 8–13 ms, hit test 0.1–0.25 ms (`highlight-lag.mjs`).
 - only-mode peek: dwell 600 ms honoured; margin placement at 1600 px, below-sentence at 1100 px with width = block width; **0.005 ms per paragraph clone**; closes on scroll.
 - SVG figures: 10 overlays, 12 / 12 nested documents readable, 5 rotated axis labels, max uncovered fraction 0.0007.
 - Anchors in only mode: 128 targets hidden, the click lands on the translation.
@@ -55,7 +56,7 @@ Accessibility: stack 572 axe findings, side 592, only 402 — **all present on t
 - The options page below the section level: `ProfileEditor` (every field), the highlight-profile grid, the glossary textarea, `PromptManager` edit / import / export / token insertion, `ServiceDrawer` "delete service" and "more options / thinking".
 - Popup menus clicked end to end (only the pure view-model is unit-tested; the options-page twins are clicked instead).
 - `entrypoints/content/index.ts`, `popup/data.ts`, `options/data.ts` under vitest — their guards have no assertions.
-- Cost of the highlight `MutationObserver` during translation bursts; `lazy.ts release()` at 880 blocks; `putMany` per batch.
+- `lazy.ts release()` at 880 blocks and `putMany` per batch are measured by `tests/perf/costs.test.ts` (AXT_MEASURE=1; readings in DESIGN §10 / §9); the highlight observer's cost under a burst is in DESIGN §7.7.
 - Service-worker recycle during a session (the `revision` misreport, INVENTORY S8); the image pipeline on this run.
 
 ## Core user tasks the rebuild keeps verifying (charter §6)

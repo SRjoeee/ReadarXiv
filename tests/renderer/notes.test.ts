@@ -97,6 +97,7 @@ describe('localizeNotes', () => {
   it('does not wrap before the translation arrives: the stylesheet hides an original only beside a translation, so nothing is lost', () => {
     const doc = withNote(false)
     localizeNotes(doc)
+    expect(copy(doc).hasAttribute('data-axt-note-translated')).toBe(false)
     expect(copy(doc).querySelector('.axt-note-s')).toBeNull()
   })
 
@@ -127,11 +128,14 @@ describe('localizeNotes', () => {
   it('undo the placement before deleting the footnote translation: the copy\'s translation inside the outer paragraph translation goes too, and the original shows', () => {
     const doc = withNote()
     localizeNotes(doc)
+    // The copy is marked as carrying its translation: only mode hides the copy's own original by it (ADR-0011)
+    expect(copy(doc).hasAttribute('data-axt-note-translated')).toBe(true)
     doc.querySelector(`.ltx_p:not(.${T_CLASS})`)!.setAttribute('data-axt-id', 'p1')
     const noteBlock = sourceNote(doc).querySelector(`.ltx_note_content:not(.${T_CLASS})`)!
     expect(delocalizeNotes(noteBlock)).toBe(1)
     expect(sourceNote(doc).hasAttribute('data-axt-note')).toBe(false)
     expect(doc.querySelector('.axt-note-t')).toBeNull()
+    expect(copy(doc).hasAttribute('data-axt-note-translated')).toBe(false)
     // A block never placed: nothing happens
     expect(delocalizeNotes(noteBlock)).toBe(0)
   })

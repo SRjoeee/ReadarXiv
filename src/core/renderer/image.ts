@@ -4,7 +4,8 @@
 // (marks.ts says why under IMG_CLASS) and is inserted on success only; pending and failure have no DOM node. In
 // keeping with §7.1: the <img> itself gains no attribute; restore removes the whole layer by INJECTED_SELECTOR.
 import { IMG_CLASS } from '@/core/marks'
-import { DIR_ATTR, FOR_ATTR, LANG_ATTR, MIRROR_CLASS, SPLIT_FOR_ATTR } from './attrs'
+import { ANCHORS_ATTR, ANCHOR_ATTR, DIR_ATTR, FOR_ATTR, LANG_ATTR, MIRROR_CLASS, SPLIT_FOR_ATTR } from './attrs'
+import { dropMirror } from './mirror'
 
 /** The mode gate on <html>: the set of modes the reader ticked, space-separated; CSS matches the current mode with ~= (the §15 setting) */
 export const IMG_MODES_ATTR = 'data-axt-img-modes'
@@ -56,8 +57,26 @@ export function overlayOf(target: ImageTarget): Element | null {
 export function clearImage(target: ImageTarget): boolean {
   const existing = overlayOf(target)
   if (!existing) return false
-  existing.remove()
+  dropOverlay(existing)
   return true
+}
+
+/**
+ * The anchor marks the style sheet positions the overlay by (§15.2, ADR-0011): the image before the overlay is the
+ * anchor, their parent the positioned ancestor that scopes the anchor name. Written when an overlay is inserted,
+ * here and inside a split copy, whose clone lost them with every other data-axt-*
+ */
+export function markAnchor(overlay: Element): void {
+  overlay.previousElementSibling?.setAttribute(ANCHOR_ATTR, '')
+  overlay.parentElement?.setAttribute(ANCHORS_ATTR, '')
+}
+
+/** Remove an overlay and the anchor marks that served it; the parent keeps its mark while another overlay is inside */
+function dropOverlay(overlay: Element): void {
+  const parent = overlay.parentElement
+  overlay.previousElementSibling?.removeAttribute(ANCHOR_ATTR)
+  overlay.remove()
+  if (parent && !parent.querySelector(`:scope > .${IMG_CLASS}`)) parent.removeAttribute(ANCHORS_ATTR)
 }
 
 /**
@@ -74,7 +93,7 @@ export function clearImageEverywhere(target: ImageTarget): number {
   // by `data-axt-for` alone would leave the copy's overlay there for good (Codex on #134)
   const id = CSS.escape(target.id)
   const stale = Array.from(doc.querySelectorAll(`.${IMG_CLASS}[${FOR_ATTR}="${id}"], .${IMG_CLASS}[${SPLIT_FOR_ATTR}="${id}"]`))
-  for (const node of stale) node.remove()
+  for (const node of stale) dropOverlay(node)
   return stale.length
 }
 
@@ -139,7 +158,7 @@ export function labelStyle(label: ImageLabel): string {
 export function renderImage(target: ImageTarget, labels: readonly ImageLabel[]): Element {
   clearImage(target)
   const next = target.el.nextElementSibling
-  if (next?.classList.contains(MIRROR_CLASS)) next.remove()
+  if (next?.classList.contains(MIRROR_CLASS)) dropMirror(next)
   const doc = target.el.ownerDocument
   const node = doc.createElement('div')
   node.className = IMG_CLASS
@@ -157,5 +176,6 @@ export function renderImage(target: ImageTarget, labels: readonly ImageLabel[]):
     node.append(span)
   }
   target.el.after(node)
+  markAnchor(node)
   return node
 }

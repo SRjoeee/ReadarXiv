@@ -6,6 +6,7 @@ import type { Block, TableBlock, TextBlock } from '@/core/extractor'
 import { T_CLASS, isInjected, stripInjected } from '@/core/marks'
 import { tableCells } from '@/core/rules/latexml'
 import { type BlockState, DIR_ATTR, FOR_ATTR, IDENTITY_ATTR, INLINE_ATTR, LANG_ATTR, PARTIAL_ATTR, STATE_ATTR } from './attrs'
+import { markTail, markTranslatedNote } from './side-layout'
 import { delocalizeNotes } from './notes'
 import { shouldInline, translationClass, translationShell } from './shell'
 import { cancelSkeletonsIn } from './skeleton'
@@ -40,6 +41,9 @@ export function clearTranslation(block: Block): void {
       sibling.remove()
     }
   }
+  // The layout marks that described the removed node go with it (ADR-0011)
+  markTail(block.el)
+  markTranslatedNote(block.el)
 }
 
 /**
@@ -104,6 +108,8 @@ export function renderText(block: TextBlock, content: DocumentFragment): Element
   if (squash(ownText(node)) === squash(ownText(block.el))) node.setAttribute(IDENTITY_ATTR, '')
   block.el.after(node)
   setState(block, 'translated')
+  markTail(block.el)
+  markTranslatedNote(block.el)
   return node
 }
 
@@ -151,5 +157,7 @@ export function renderTable(block: TableBlock, cells: Map<Element, DocumentFragm
   clone.setAttribute(FOR_ATTR, block.id)
   block.el.after(clone)
   setState(block, 'translated')
+  markTail(block.el)
+  markTranslatedNote(block.el)
   return clone
 }

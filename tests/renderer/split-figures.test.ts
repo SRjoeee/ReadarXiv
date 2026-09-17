@@ -279,6 +279,9 @@ describe('a mirror is no translation (issue #46, measured on 2312.17141)', () =>
       expect(overlay.getAttribute(SPLIT_FOR_ATTR)).toBe('F1.g1')
       expect(overlay.getAttributeNames().filter(n => n.startsWith('data-axt-'))).toEqual([SPLIT_FOR_ATTR])
       expect(clone.querySelector(`.${IMG_CLASS}`)!.textContent).toBe('静态电荷')
+      // The anchor marks the sheet positions the overlay by were stripped with the other data-axt-* and written again for the copy (§15.2, ADR-0011)
+      expect(img.hasAttribute('data-axt-anchor')).toBe(true)
+      expect(img.parentElement!.hasAttribute('data-axt-anchors')).toBe(true)
     })
 
     it('the overlay arriving later: the signature changed, the copy is rebuilt with the overlay', () => {
