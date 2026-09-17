@@ -15,7 +15,7 @@ figures and the layout keep working.
 
 </div>
 
-![A paper open in side-by-side mode, the original on the left and the translation on the right](docs/images/hero.png)
+https://github.com/user-attachments/assets/ea7ee16c-feb6-471b-9321-e3bcf0fa3f03
 
 Read arXiv is a reading and translation extension built for one kind of page: arXiv's HTML papers.
 
@@ -45,18 +45,20 @@ Switch between them whenever you like, and back to the original whenever you wan
 
 **Aligned sentence by sentence.** Rest on any sentence and the matching one lights up on both sides,
 so you never have to count your way through a long paragraph to find which translation belongs to
-which line. Available with Microsoft Translator (the default), Google Translate, and the LLM services.
+which line. It works with every service, and the pairing comes from the translation itself rather
+than from guesswork — where a service cannot give one, the sentence simply does not light up.
 
 ![Hovering a sentence bands it on both sides](docs/images/hover.gif)
 
 In translation-only mode there is no second column, so resting on a sentence brings its original to
-you instead — in the margin where there is room, otherwise just below the line.
-
-![The original of a sentence shown in the margin in translation-only mode](docs/images/only-peek.png)
+you instead — in the margin where there is room, otherwise just below the line, as in the third
+screenshot above.
 
 **The paper still works.** Formulas are still formulas, citations are still clickable, and tables,
 footnotes and the table of contents are all where the author left them. Translating a paper does not
 cost you the ability to read it.
+
+![Numbered display equations and inline mathematics intact in a translated paper](docs/images/formulas.png)
 
 **The words inside figures are translated too.** Labels and axes in vector charts, and text inside
 bitmap images, with the translation laid over the original; hover to see what was underneath.
@@ -64,7 +66,7 @@ Bitmap figures are macOS-only for now.
 
 ![A figure's labels translated in place over the original](docs/images/figure.png)
 
-**The translation looks how you want.** Colour, opacity and underline are yours to set, and there is
+**The translation looks how you want.** Colour, underline and weight are yours to set, and there is
 a blur-until-hovered style for reading the original first and checking yourself afterwards.
 
 Machine translation misreads terminology and will occasionally change a claim. Keeping the original
@@ -89,11 +91,6 @@ HTML papers only — PDFs are not translated.
    button, the right-click menu, or the popup. On an abstract page a **Bilingual version** link
    appears beside arXiv's own HTML link, which opens the paper and starts translating in one step.
 
-There is nothing to set up first: the default service needs no account and no key. Choose your
-language in the popup, and change the service there whenever you want.
-
-![The popup while a paper is being translated](docs/images/popup.png)
-
 ### Translating figures (macOS)
 
 Words inside bitmap figures are read by a small helper that runs on your own machine. The popup has
@@ -104,7 +101,7 @@ to build. See [`helper/README.md`](helper/README.md).
 
 | Service | API key | Notes |
 | --- | --- | --- |
-| Microsoft Translator | not needed | The default. Reports sentence boundaries itself; the other services get them through markers. |
+| Microsoft Translator | not needed | The default. |
 | Google Translate | not needed | |
 | Chrome's built-in translation | not needed | Runs on your machine, offline, once Chrome has downloaded the language pack. |
 | Any OpenAI-compatible endpoint | yours | OpenRouter, DeepSeek, Ollama, LM Studio and the like. Prompts and the glossary apply here. |
@@ -153,33 +150,43 @@ placeholder engine, the three render modes and the restore path are the parts wr
 for this project; the request queue, the retry policy, the cache and the language tables are ported
 from the projects credited below.
 
-[`docs/DESIGN.md`](docs/DESIGN.md) is the source of truth — the DOM invariants are §7.1, the
-placeholder protocol §6, the service interface §8, and image translation §15 — and the
-measurements the design rests on are recorded beside the decisions they justify.
+[`docs/rebuild/CHARTER.md`](docs/rebuild/CHARTER.md) states what is being built and under what
+constraints, and [`docs/adr/`](docs/adr/) holds one decision per file.
+[`docs/DESIGN.md`](docs/DESIGN.md) is the frozen record of the first implementation — the DOM
+invariants are §7.1, the placeholder protocol §6 and image translation §15 — with the measurements
+behind it in [`docs/RESEARCH.md`](docs/RESEARCH.md). Cite the frozen documents as evidence rather
+than as the specification.
 
 ## Status
 
-Pre-release, and in active development. Translating, the three modes, restoring, caching, the four
-services, hover alignment, image translation and the settings all work today; the roadmap to a 1.0
-and a web reader is [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155).
+Pre-release. Everything above works today — translating, the three layouts, showing the original,
+the four services, sentence alignment, figure translation and the settings.
 
-Out of scope for now: other paper sites, PDFs, Firefox and Safari, and image translation anywhere
-but macOS.
+The extension is being rebuilt toward 1.0 on the `rebuild/v1` branch; `main` is frozen at the tag
+`v0.3.0-mvp`, which is what the instructions above build. The roadmap is
+[issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155).
+
+Out of scope for now: other paper sites, PDFs, Firefox and Safari, and translating bitmap figures
+anywhere but macOS.
 
 ## Development
 
 ```sh
 pnpm dev                 # WXT dev build, loads into Chrome
+pnpm typecheck           # tsc --noEmit; vitest does not type-check
+pnpm lint                # Biome, plus the English and platform-boundary checks
 pnpm test                # Vitest, happy-dom
-pnpm lint                # Biome
 pnpm build
 
 pnpm e2e                 # real Chromium with the extension loaded
 pnpm e2e:layout          # side-mode layout contracts
 pnpm e2e:a11y            # A/B axe audit: only what the extension introduces
+pnpm e2e:image           # figure translation through the installed helper
 pnpm e2e:placeholders    # placeholder survival through the real services
 pnpm fixtures:stats      # rule coverage across the fixture papers
 ```
+
+The first four are what CI runs, and what a change has to pass before review.
 
 The unit tests run on happy-dom; the end-to-end suites drive a real browser with the extension
 loaded. Real arXiv papers are committed as fixtures and are what the rules and the renderer are
