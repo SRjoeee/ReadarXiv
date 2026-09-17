@@ -290,7 +290,7 @@ export default defineBackground(() => {
       // With IndexedDB unavailable an answer still goes back, or the caller waits for “message channel closed” (Codex on #7)
       case 'axt:cache-clear':
         // A failure is reported as it is: swallowing the exception into { removed: 0 } would let the reader believe the cache cleared when IndexedDB is unusable (Codex on #52)
-        translationCache.clear(message.paper)
+        translationCache.clear()
           .then(removed => sendResponse({ ok: true, removed }))
           .catch((e: unknown) => sendResponse({ ok: false, message: e instanceof Error ? e.message : String(e) }))
         return true
