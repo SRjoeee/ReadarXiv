@@ -78,6 +78,7 @@ export function App() {
               <p>
                 {O.fallbackNotice}
                 <span className="mt-1 block text-fg-2">{fallbackText(data.fallbackReason)}</span>
+                {data.resetFailed && <span role="alert" className="mt-1 block">{O.fallbackResetFailed}</span>}
               </p>
               <div className="mt-2 flex justify-end">
                 <Confirm label={O.fallbackReset} confirmLabel={O.fallbackResetConfirm} cancelLabel={O.services.cancel} onConfirm={() => void data.reset()} />

@@ -127,6 +127,7 @@ const O: Locale['O'] = {
   uiLanguageAuto: 'Follow the browser',
   fallbackWhy: {
     tooNew: (stored, supported) => `The stored settings are v${stored}; this build reads up to v${supported} (a newer build may have been installed)`,
+    upgradeFailed: (stored, supported) => `The stored settings are v${stored} and could not be upgraded to v${supported}. A later version may still read them; a reset replaces them`,
     invalid: (where, message) => (where ? `${where}: ${message}` : message),
     field: FIELD,
     unknown: 'Reason unknown',
@@ -134,6 +135,7 @@ const O: Locale['O'] = {
   fallbackNotice: 'The settings could not be read, so the defaults are in use. Your saved API key and service are not in effect. What was saved is left as it is; reset the settings to enter them again.',
   fallbackReset: 'Reset settings',
   fallbackResetConfirm: 'Confirm reset',
+  fallbackResetFailed: 'The reset did not go through. Try again',
   services: {
     issue: (field, message) => `${field}: ${FIELD[String(field).split('.').pop() ?? ''] ?? message}`,
     issueSeparator: '; ',

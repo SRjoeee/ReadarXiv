@@ -61,6 +61,8 @@ context.setDefaultNavigationTimeout(90_000)
 let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')
 const extId = worker.url().split('/')[2]
+/** This extension's service worker as it is now, by its origin: a paper page may register a worker of its own */
+const extensionWorker = () => context.serviceWorkers().find(w => w.url().startsWith(`chrome-extension://${extId}/`))
 console.log(`extension ${extId} loaded from ${EXT}`)
 
 /**
@@ -1138,11 +1140,17 @@ check('the settings page: after deleting the custom prompt the default is chosen
     if (Number.isFinite(firstAuthFailure)) return
     firstAuthFailure = Date.now()
   }
+  // Counted here, not read from openPaper's list: that list exists only once openPaper returns, and a line may come
+  // earlier. A line before this page's first request belongs to an earlier block and is no boundary of this one
+  let sent = 0
+  const onEndpointRequest = request => { if (request.url().includes('openrouter.ai')) sent += 1 }
   const onWorkerConsole = message => {
-    if (sentAtAuth < 0 && message.text().includes('[axt] batch failed')) sentAtAuth = requests.length
+    if (sentAtAuth < 0 && sent > 0 && message.text().includes('[axt] batch failed')) sentAtAuth = sent
   }
-  // The worker as it is now: an earlier block replaced the one the suite started with
-  const [authWorker] = context.serviceWorkers()
+  // The extension's worker as it is now — an earlier block replaced the one the suite started with — and never a
+  // worker a page registered
+  const authWorker = extensionWorker()
+  context.on('request', onEndpointRequest)
   context.on('response', onAuthResponse)
   authWorker?.on('console', onWorkerConsole)
   const { page, logs, requests } = await openPaper(PAPER, 'openrouter.ai')
@@ -1163,23 +1171,25 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await scrollThrough(page)
   await sleep(3_000)
   context.off('response', onAuthResponse)
+  context.off('request', onEndpointRequest)
   authWorker?.off('console', onWorkerConsole)
   // The stretch between the first 401 and idle (Codex adding on #95). Since #96 this is **zero**:
   // before it `failQueue` drained only the tasks queued in the RequestQueue at the time, and the remaining blocks were still batching in the BatchQueue, absent,
   // dispatched as usual once batched, so one more wave was certain (measured +75~279 ms, 7 requests). Now the fatal state sticks to the engine's queue pair,
   // and a batch arriving later is refused on the spot in executeBatch, without one endpoint request.
   // This one catches two regressions at once: with the queue undrained the batches spread out as slots free; with a batch retried the backoff is at least 1 second.
-  // Either makes afterAuth non-empty.
-  const beforeAuth = requests.slice(0, Math.max(sentAtAuth, 0))
-  const afterAuth = requests.slice(Math.max(sentAtAuth, 0))
+  // Either makes afterAuth above zero.
+  // By this block's own count, the one the boundary was taken from
+  const beforeAuth = Math.max(sentAtAuth, 0)
+  const afterAuth = sent - beforeAuth
   const afterIdle = requests.filter(r => r.t > (done?.t ?? 0) + EVENT_JITTER_MS)
   const offsets = requests.map(r => Math.round(r.t - firstAuthFailure)).sort((a, b) => a - b)
   check('a wrong key + the fallback off: after the 401 the whole session stops, and scrolling to the bottom sends no more requests',
     Number.isFinite(firstAuthFailure) && sentAtAuth >= 0 && /fatal: auth/.test(done?.text ?? '')
       && (idle?.requested ?? 0) < (idle?.total ?? 0) // blocks not yet requested remain; only a scroll can falsify it
-      && afterAuth.length === 0 // not one request more after the 401 (#96)
+      && afterAuth === 0 // not one request more after the 401 (#96)
       && afterIdle.length === 0,
-    `${idle?.requested}/${idle?.total} blocks requested, ${requests.length} requests in all (${offsets.join('/')} ms relative to the first 401's response); ${beforeAuth.length} before the extension reported the failure, ${afterAuth.length} after (should be 0, #96); ${afterIdle.length} more after scrolling the whole paper once fatal was reported; ${done?.text ?? '(no idle line)'}; DOM ${JSON.stringify(await countDom(page))}`)
+    `${idle?.requested}/${idle?.total} blocks requested, ${requests.length} requests in all (${offsets.join('/')} ms relative to the first 401's response); ${beforeAuth} before the extension reported the failure, ${afterAuth} after (should be 0, #96); ${afterIdle.length} more after scrolling the whole paper once fatal was reported; ${done?.text ?? '(no idle line)'}; DOM ${JSON.stringify(await countDom(page))}`)
   // One widget per failed block beside the original; a failed caption inside a split figure carries a second, live one in
   // the right column's copy since #213 (issue #170), which is that block's again, not another block's
   const widgets = await page.evaluate(() => Array.from(document.querySelectorAll('.axt-error')).filter(w => w.closest('.axt-split') === null).length)
@@ -1367,7 +1377,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
 // the defaults: before the gate one mode switch replaced the reader's services and API keys with them.
 // The configuration is put back at the end, so the blocks that follow see the settings this suite built
 {
-  const [gateWorker] = context.serviceWorkers()
+  const gateWorker = extensionWorker()
   const stored = () => gateWorker.evaluate(() => chrome.storage.local.get(['config', 'config$']))
   const before = await stored()
   await gateWorker.evaluate(async () => {
