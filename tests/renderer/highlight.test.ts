@@ -1092,3 +1092,104 @@ describe('source peek through the pointer (#141)', () => {
     hl.stop()
   })
 })
+
+describe('a pair without a sentence map: the whole block (§7.7)', () => {
+  const PAIR = '<p class="ltx_p" data-axt-id="p1">Hello there.</p><p class="ltx_p axt-t" data-axt-for="p1">你好。</p>'
+  const unregistered = (html: string, doc = new DOMParser().parseFromString('<html><body></body></html>', 'text/html')) => {
+    doc.body.innerHTML = html
+    return doc
+  }
+
+  it('tints both blocks whole where the engine reported no boundaries', () => {
+    const doc = unregistered(PAIR)
+    const browser = stubBrowser(doc)
+    const hl = startSentenceHighlight(doc)!
+    const translation = doc.querySelector('.axt-t')!.firstChild as Text
+    browser.caret.mockReturnValue({ offsetNode: translation, offset: 1 })
+    browser.move()
+    // The pointer's own side is painted first, as for a sentence
+    expect(browser.bands().map(b => b.getAttribute('data-axt-hl-side'))).toEqual(['target', 'source'])
+    // One range per block, from its first character to its last (the hit test's own one-character ranges are recorded too)
+    const built = browser.starts()
+    expect(built).toContainEqual([0, 3])
+    expect(built).toContainEqual([0, 12])
+    // From the original's side it is the same pair: the cache keeps what is painted, nothing is rebuilt
+    browser.caret.mockReturnValue({ offsetNode: doc.querySelector('[data-axt-id]')!.firstChild as Text, offset: 2 })
+    browser.starts()
+    browser.move()
+    expect(browser.bands()).toHaveLength(2)
+    expect(browser.starts().filter(([from, to]) => to - from > 1)).toEqual([])
+    hl.stop()
+  })
+
+  it('the nearest unit wins: a footnote block inside a paragraph pairs as the footnote, and the paragraph\'s own text as the paragraph with the footnote\'s translation cut out', () => {
+    const doc = unregistered('<p class="ltx_p" data-axt-id="p1">Alpha <span class="ltx_note_content" data-axt-id="n1">note</span><span class="ltx_note_content axt-t" data-axt-for="n1">注</span> omega.</p>'
+      + '<p class="ltx_p axt-t" data-axt-for="p1">甲 乙。</p>')
+    const browser = stubBrowser(doc)
+    const hl = startSentenceHighlight(doc)!
+    browser.caret.mockReturnValue({ offsetNode: doc.querySelector('.axt-t[data-axt-for="n1"]')!.firstChild as Text, offset: 0 })
+    browser.move()
+    // The note's own text ('note', 4) and its translation, not the paragraph's tail (' omega.', 7)
+    let built = browser.starts()
+    expect(built).toContainEqual([0, 4])
+    expect(built).not.toContainEqual([0, 7])
+    // The paragraph's own text: the injected note translation splits the original into two ranges (`wholeRanges`, tested in tests/protector); the tail is the second
+    browser.caret.mockReturnValue({ offsetNode: doc.querySelector('[data-axt-id="p1"]')!.firstChild as Text, offset: 1 })
+    browser.move()
+    built = browser.starts()
+    expect(built).toContainEqual([0, 7])
+    expect(built).toContainEqual([0, 4]) // the translation '甲 乙。'
+    hl.stop()
+  })
+
+  it('a nested unit the registered block\'s map does not index pairs on its own; the gap between two sentences still pairs nothing (Devin on #226)', () => {
+    // The paragraph is registered with sentence boundaries; its footnote took another path and has no map of its own
+    const { doc, source } = page('<p class="ltx_p">First sentence here. Second sentence here.</p>')
+    source.setAttribute('data-axt-id', 'p1')
+    const note = doc.createElement('span')
+    note.className = 'ltx_note_content'
+    note.setAttribute('data-axt-id', 'n1')
+    note.textContent = 'note'
+    const noteT = doc.createElement('span')
+    noteT.className = 'ltx_note_content axt-t'
+    noteT.setAttribute('data-axt-for', 'n1')
+    noteT.textContent = '注'
+    source.append(note, noteT)
+    const browser = stubBrowser(doc)
+    const hl = startSentenceHighlight(doc)!
+    browser.caret.mockReturnValue({ offsetNode: noteT.firstChild as Text, offset: 0 })
+    browser.move()
+    expect(browser.bands().map(b => b.getAttribute('data-axt-hl-side'))).toEqual(['target', 'source'])
+    expect(browser.starts()).toContainEqual([0, 4])
+    hl.stop()
+  })
+
+  it('a mirror, a skeleton and a failure widget are no translation: nothing is painted for them', () => {
+    const doc = unregistered('<p class="ltx_p" data-axt-id="p1">Hello.</p><p class="ltx_p axt-t axt-pending" data-axt-for="p1">…</p><div class="axt-t axt-mirror" data-axt-for="mirror:0">copy</div>')
+    const browser = stubBrowser(doc)
+    const hl = startSentenceHighlight(doc)!
+    browser.caret.mockReturnValue({ offsetNode: doc.querySelector('.axt-mirror')!.firstChild as Text, offset: 1 })
+    browser.move()
+    expect(browser.bands()).toHaveLength(0)
+    // The original whose translation is still a skeleton has no counterpart yet
+    browser.caret.mockReturnValue({ offsetNode: doc.querySelector('[data-axt-id]')!.firstChild as Text, offset: 1 })
+    browser.move()
+    expect(browser.bands()).toHaveLength(0)
+    hl.stop()
+  })
+
+  it('in only mode the hidden original of an unregistered pair is shown whole after the dwell', () => {
+    const doc = unregistered(PAIR, document)
+    const browser = stubBrowser(doc)
+    const hl = startSentenceHighlight(doc)!
+    const source = doc.querySelector('[data-axt-id]')!
+    Object.assign(source, { checkVisibility: () => false })
+    browser.caret.mockReturnValue({ offsetNode: doc.querySelector('.axt-t')!.firstChild as Text, offset: 1 })
+    browser.move()
+    expect(browser.bands().map(b => b.getAttribute('data-axt-hl-side'))).toEqual(['target'])
+    browser.flushTimers(PEEK_DWELL_MS)
+    expect(doc.querySelector('.axt-peek')?.textContent?.trim()).toBe('Hello there.')
+    hl.stop()
+    doc.body.innerHTML = ''
+  })
+})

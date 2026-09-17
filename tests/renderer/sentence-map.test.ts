@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { extract } from '@/core/extractor'
 import { nodeOffsetAt, rehydrate, serialize, wireOffsetAt } from '@/core/protector'
 import { SPLIT_CLASS } from '@/core/renderer/attrs'
-import { registerSentences, sentenceAt, sentenceMapAt, sentenceMapOf } from '@/core/renderer/sentence-map'
+import { pairAt, registerSentences, sentenceAt, sentenceMapAt, sentenceMapOf } from '@/core/renderer/sentence-map'
 import { splitFigures } from '@/core/renderer/split-figures'
 import { docOf } from './helpers'
 import { splitSentences } from '@/core/sentences'
@@ -421,5 +421,49 @@ describe('sentence lookup round trip (#105)', () => {
     }
     expect(violations.slice(0, 5)).toEqual([])
     expect([violations.length, blocks > 900, chars > 500_000]).toEqual([0, true, true])
+  })
+})
+
+describe('pairAt: the block pair by construction, for a node no sentence map covers (§7.7)', () => {
+  it('pairs the nearest marked original with its real translation, from either side, and keeps one pair object per translation', () => {
+    const doc = docOf('<div class="ltx_para"><p class="ltx_p" data-axt-id="p1">Hello <span class="ltx_note_content" data-axt-id="n1">note</span><span class="ltx_note_content axt-t" data-axt-for="n1">注</span></p><p class="ltx_p axt-t" data-axt-for="p1">你好</p></div>')
+    const p1 = doc.querySelector('[data-axt-id="p1"]')!
+    const t1 = doc.querySelector('.axt-t[data-axt-for="p1"]')!
+    const fromTarget = pairAt(t1.firstChild!)
+    expect(fromTarget?.side).toBe('target')
+    expect(fromTarget?.pair).toEqual({ source: p1, target: t1 })
+    const fromSource = pairAt(p1.firstChild!)
+    expect(fromSource?.side).toBe('source')
+    expect(fromSource?.pair).toBe(fromTarget?.pair)
+    // The nearest unit: the footnote inside the paragraph
+    const note = pairAt(doc.querySelector('.axt-t[data-axt-for="n1"]')!.firstChild!)
+    expect(note?.pair.source).toBe(doc.querySelector('[data-axt-id="n1"]'))
+  })
+
+  it('finds nothing for a mirror, a skeleton, a failure widget or an unmarked node, and nothing for an original whose translation has not arrived', () => {
+    const doc = docOf('<p class="ltx_p" data-axt-id="p1">Hello.</p><p class="ltx_p axt-t axt-pending" data-axt-for="p1">…</p><div class="axt-t axt-mirror" data-axt-for="mirror:0">copy</div><p class="ltx_p">plain</p>')
+    expect(pairAt(doc.querySelector('.axt-mirror')!.firstChild!)).toBeUndefined()
+    expect(pairAt(doc.querySelector('.axt-pending')!.firstChild!)).toBeUndefined()
+    expect(pairAt(doc.querySelector('[data-axt-id="p1"]')!.firstChild!)).toBeUndefined()
+    expect(pairAt(doc.querySelector('p:not([class])')?.firstChild ?? doc.body)).toBeUndefined()
+  })
+})
+
+describe('pairAt and split copies (Devin on #226)', () => {
+  it('the copy\'s translation pairs with the block it translates, and from the original\'s side the copy on screen is the counterpart while its own translation is hidden', () => {
+    const doc = docOf('<figure class="ltx_figure" id="F1"><img class="ltx_graphics" src="a.png"><figcaption class="ltx_caption" data-axt-id="cap">Caption.</figcaption>'
+      + '<figcaption class="ltx_caption axt-t" data-axt-for="cap">题注。</figcaption></figure>')
+    expect(splitFigures(doc)).toBe(1)
+    const original = doc.querySelector('[data-axt-id="cap"]')!
+    const own = doc.querySelector('figure:not(.axt-split) .axt-t[data-axt-for="cap"]')!
+    const copy = doc.querySelector(`.${SPLIT_CLASS} figcaption`)!
+    expect(copy.getAttribute('data-axt-for')).toBeNull() // the copy's marks are stripped
+    expect(pairAt(copy.firstChild!)?.pair).toEqual({ source: original, target: copy })
+    // Side mode hides the original's own translation and shows the copy
+    Object.assign(own, { checkVisibility: () => false })
+    expect(pairAt(original.firstChild!)?.pair.target).toBe(copy)
+    // With its own translation rendered (any other mode) the original pairs with it
+    Object.assign(own, { checkVisibility: () => true })
+    expect(pairAt(original.firstChild!)?.pair.target).toBe(own)
   })
 })
