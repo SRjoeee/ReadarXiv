@@ -1,5 +1,5 @@
-// HTTP status → ProviderError kind. Shared by google-web and microsoft: both free endpoints need this judgement, and
-// it carries a piece of reasoning that cannot be re-derived (below), so it lives in one place.
+// HTTP status → ProviderError kind. Shared by every HTTP engine (google-web, microsoft, openai-compat): each needs this
+// judgement, and it carries a piece of reasoning that cannot be re-derived (below), so it lives in one place.
 
 import type { ProviderErrorKind } from './types'
 

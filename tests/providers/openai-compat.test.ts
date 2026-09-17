@@ -86,6 +86,30 @@ describe('openai-compat provider', () => {
     expect(await kindOf(createOpenAICompatProvider(cfg, { model: modelThrowing(new TypeError('fetch failed')) }).translate(req))).toBe('network')
   })
 
+  it('an HTTP failure is classified by status like every HTTP engine: a deterministic 4xx is not split, a 5xx is retried, not split', async () => {
+    const failing = async (statusCode: number, isRetryable: boolean) => {
+      const error = new APICallError({ message: `HTTP ${statusCode}`, url: 'u', requestBodyValues: {}, statusCode, isRetryable })
+      return createOpenAICompatProvider(cfg, { model: modelThrowing(error) }).translate(req).then(() => undefined, (e: unknown) => e)
+    }
+    // A wrong model name, a request shape the endpoint rejects, an unprocessable body: the same answer however small
+    // the batch, so the content side must not halve and resend it (DESIGN §8.2) and the chain takes over at once
+    for (const status of [400, 404, 422]) {
+      const e = await failing(status, false)
+      expect(e, `HTTP ${status}`).toBeInstanceOf(ProviderError)
+      expect((e as ProviderError).kind, `HTTP ${status}`).toBe('bad-request')
+      expect((e as ProviderError).isolatable, `HTTP ${status}`).toBe(false)
+      expect(getRequestErrorMeta(e).statusCode, `HTTP ${status}`).toBe(status)
+    }
+    // A server error is transient: the queue retries it by status, and no segment caused it
+    for (const status of [500, 503]) {
+      const e = await failing(status, true)
+      expect((e as ProviderError).kind, `HTTP ${status}`).toBe('network')
+      expect((e as ProviderError).isolatable, `HTTP ${status}`).toBe(false)
+      expect(getRequestErrorMeta(e).isRetryable, `HTTP ${status}`).toBe(true)
+    }
+    expect(((await failing(403, false)) as ProviderError).kind).toBe('auth')
+  })
+
   it('an already aborted signal is aborted outright', async () => {
     const model = new MockLanguageModelV4({
       doGenerate: async (options) => {
