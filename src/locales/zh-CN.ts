@@ -138,6 +138,7 @@ const O = {
   /** The second half of the notice shown when the settings cannot be read (config/storage.ts reports the cause, not a sentence) */
   fallbackWhy: {
     tooNew: (stored: number, supported: number) => `存储里的配置是 v${stored}，这个版本只认到 v${supported}（可能装过更新的版本）`,
+    upgradeFailed: (stored: number, supported: number) => `存储里的配置是 v${stored}，升级到 v${supported} 时出错。之后的版本或许仍能读出；重置会覆盖它们`,
     invalid: (where: string, message: string) => (where ? `${where}：${message}` : message),
     /** The sentence for a field the schema refused, by the field's name; the zod message itself is the diagnostic */
     field: FIELD,
@@ -146,6 +147,7 @@ const O = {
   fallbackNotice: '设置读取失败，当前使用默认设置；已保存的 API Key 与服务选择均未生效。原设置保留未动，重置后可重新填写。',
   fallbackReset: '重置设置',
   fallbackResetConfirm: '确认重置',
+  fallbackResetFailed: '重置没有成功，请再试一次',
   services: {
     /** One validation failure of the drawer's form, and what joins several, in this language's punctuation */
     issue: (field: string, message: string) => `${field}：${FIELD[String(field).split('.').pop() ?? ''] ?? `不合法（${message}）`}`,
