@@ -112,7 +112,7 @@ states, verbs for buttons, no spoken phrases (去填 / 去修 are out), every no
 | S-P-86d | Under the image translation row · permission taking effect | 已允许，稍后自动生效 | [2026-09-13, DESIGN §15.3] The transitional state while the grant lands in an already running background; nothing to press, the card follows up by itself once the new worker is up |
 | S-P-87 | Under the image translation row · not macOS | 图片翻译目前仅支持 macOS | |
 | S-P-88 | Helper hint action | 安装 | [decided, 2026-09-12] Unfolds the S-O-27 guide in place, without jumping to the options page or opening a new window. Replaces the former two buttons “复制安装命令 · 教程” — the guide carries the command block and the tutorial link itself |
-| S-P-90 | Action failed | {原始信息} | Red line under the primary button (`role=alert`), cleared before the next action |
+| S-P-90 | Action failed | {原始信息} · 设置读取失败，更改未保存，请到设置页处理 | Red line under the primary button (`role=alert`), cleared before the next action. The second wording is for a change the store refused because the saved settings cannot be read (DESIGN §9): the popup's own write, or the mode's save on the page |
 
 Removed 2026-09-10: the state pills (S-P-12…18) and the config-fallback note (S-P-34; the options page announces it).
 
@@ -125,7 +125,7 @@ changes, and the two drawers commit with one button.
 | Id | Where | Copy | Notes |
 |---|---|---|---|
 | S-O-01 | Navigation | 翻译服务 · 阅读 · 提示词与术语 · 数据 | The hash keeps the place (`#services` …) |
-| S-O-02 | Settings could not be read | 设置读取失败，当前使用默认设置；已保存的 API Key 与服务选择均未生效。请重新填写。 | Top of every section, with the reason under it; the popup no longer carries this state |
+| S-O-02 | Settings could not be read | 设置读取失败，当前使用默认设置；已保存的 API Key 与服务选择均未生效。原设置保留未动，重置后可重新填写。 · 重置设置 → 确认重置 / 取消 · 重置没有成功，请再试一次 | Top of the page, with the reason under it and the reset (two clicks, the pattern of S-O-72's clear) at its right end. While it shows, “翻译服务”, “阅读”, “提示词与术语” and the interface language are not rendered: they would show the defaults as if they were the reader's, and nothing they save is accepted — what is stored is never written over except by this reset (DESIGN §9). “数据” stays. The popup carries no notice of its own; a change made there is answered by S-P-90 |
 | S-O-05 | Sidebar · interface language | 界面语言 / 跟随浏览器 | [decided, 2026-09-11] Under the navigation, away from the target language: the two are two different things (§6). A change reloads the whole page |
 | S-O-10 | Built-in services | 内置服务 | Three cards with a radio each: Microsoft 翻译 · Google 翻译 · Chrome 翻译, the popup's names and hints (S-P-44…46) |
 | S-O-11 | Chrome card action | 下载 | While the pack is `downloadable`; the card cannot be chosen until it is there (S-P-40…43) |

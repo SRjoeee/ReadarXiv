@@ -10,6 +10,7 @@
 import { activeStyle } from '@/config/appearance'
 import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
+import { CONFIG_UNREADABLE } from '@/config/storage'
 import { type Service, chosenService, isBuiltInService, isLlmChosen } from '@/config/services'
 import type { Mode } from '@/core/renderer'
 import { supportsTarget } from '@/providers/microsoft'
@@ -312,6 +313,8 @@ function serviceItems(config: Config, pack: PackState | null): MenuItem[] {
 /** What a failed popup action says (S-P-90): a known failure in the interface language, anything else as it was thrown */
 export function actionErrorText(e: unknown): string {
   if (e instanceof NoActiveTabError) return S.noActiveTab
+  // By name: thrown here by a write of the popup's own, or in the page by the mode's save and carried back as a failure reply
+  if (e instanceof Error && e.name === CONFIG_UNREADABLE) return S.settingsUnreadable
   return e instanceof Error ? e.message : String(e)
 }
 

@@ -67,6 +67,8 @@ export interface CacheIdentity {
  * sent changed** — the same text now goes out with `<x id="N"/>` boundary markers — so an old entry no longer
  * describes the same request. Unbumped, every paper translated within the 30-day TTL would hit the old entries
  * without alignment, and the highlight would stay dark on those pages (Codex on #137).
+ * The thinking switch of a service did not move this number: it entered that provider's own identity with both states
+ * named (`cacheId`, providers/openai-compat.ts), which retires the ambiguous entries of that provider alone.
  */
 export const CACHE_KEY_VERSION = 6
 

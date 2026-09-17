@@ -9,7 +9,9 @@ import { type Appearance, BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, DEFAULT_APPEARAN
 import { CONFIG_VERSION, DEFAULT_CONFIG, MODE_VALUES, configSchema, normalizeGlossary, type Config } from './schema'
 import { defaultServiceName, newServiceId } from './services'
 
-export const configItem = storage.defineItem<Config>('local:config', {
+const CONFIG_KEY = 'local:config'
+
+export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
   fallback: DEFAULT_CONFIG,
   version: CONFIG_VERSION,
   migrations: {
@@ -135,9 +137,15 @@ export function configFallbackReason(): FallbackReason | null {
   return fallbackReason
 }
 
-/** `tooNew`: the stored version is newer than this extension; `invalid`: the structure fails the schema, `where` being the failing field */
+/**
+ * `tooNew`: the stored version is newer than this extension. `upgradeFailed`: older, so a migration should have
+ * carried it here and did not — WXT runs every step before it writes anything, so a step that threw left the value as
+ * it was (a later build that fixes the step may still read it; a reset replaces it). `invalid`: the structure fails
+ * the schema, `where` being the failing field
+ */
 export type FallbackReason =
   | { kind: 'tooNew'; stored: number; supported: number }
+  | { kind: 'upgradeFailed'; stored: number; supported: number }
   | { kind: 'invalid'; where: string; message: string }
   | { kind: 'unknown' }
 
@@ -150,6 +158,9 @@ function describeFallback(stored: unknown, issues: readonly { path: PropertyKey[
   const version = (stored as { version?: unknown } | null)?.version
   if (typeof version === 'number' && version > CONFIG_VERSION) {
     return { kind: 'tooNew', stored: version, supported: CONFIG_VERSION }
+  }
+  if (typeof version === 'number' && version < CONFIG_VERSION) {
+    return { kind: 'upgradeFailed', stored: version, supported: CONFIG_VERSION }
   }
   const issue = issues[0]
   if (!issue) return { kind: 'unknown' }
@@ -169,12 +180,53 @@ export async function getConfig(): Promise<Config> {
     return parsed.data
   }
   fallbackReason = describeFallback(stored, parsed.error.issues)
-  console.warn(`[axt] invalid configuration, defaults in use: ${fallbackReason}`)
+  // The cause and the failing field's path only: a validation message is not ours to vouch for, and the log never holds a stored value (hard rule 5)
+  console.warn(`[axt] the stored configuration cannot be read, defaults in use: ${fallbackReason.kind}${fallbackReason.kind === 'invalid' ? ` at ${fallbackReason.where}` : ''}${'stored' in fallbackReason ? ` (v${fallbackReason.stored}, this build v${fallbackReason.supported})` : ''}`)
   return DEFAULT_CONFIG
 }
 
+/** The refusal's `name`, a string of its own: it crosses the message boundary (shared/messages.ts `failure`), and a class's own name does not survive minification */
+export const CONFIG_UNREADABLE = 'ConfigUnreadableError'
+
+/** Thrown by `setConfig` while the stored value cannot be read: the write was refused and storage is as it was */
+export class ConfigUnreadableError extends Error {
+  constructor(readonly reason: FallbackReason) {
+    super('the stored settings cannot be read, so nothing was saved')
+    this.name = CONFIG_UNREADABLE
+  }
+}
+
+/**
+ * The one gate every write passes. **A stored value this build cannot read is never written over**: every writer
+ * reads, patches and writes, and what it read was `DEFAULT_CONFIG` — one mode switch in the popup would replace the
+ * reader's services and API keys with the defaults. A newer build's configuration is valid for that build, and a
+ * broken one may be recoverable; the only way past is `resetConfig()`, which the reader chooses knowing what goes
+ */
 export async function setConfig(config: Config): Promise<void> {
-  await configItem.setValue(configSchema.parse(config))
+  const next = configSchema.parse(config)
+  const stored = await configItem.getValue()
+  const readable = configSchema.safeParse(stored)
+  if (!readable.success) {
+    fallbackReason = describeFallback(stored, readable.error.issues)
+    throw new ConfigUnreadableError(fallbackReason)
+  }
+  await configItem.setValue(next)
+}
+
+/**
+ * The reader's explicit way out of an unreadable configuration (S-O-02): the stored value is replaced by the defaults.
+ * **The value and WXT's version marker go in one write**, the way WXT's own migration writes them (one
+ * `storage.local.set` of both keys; the marker lives at the item's key + `$`). `setValue` would not do: it writes the
+ * marker only for an item that was empty, so a reset after `tooNew` would leave a v(N+1) marker beside a vN value and
+ * the real upgrade to N+1 would skip its migration. Two writes would not do either: cut short between them, a vN
+ * marker beside the newer build's value would make that build migrate a value already migrated (Devin on #228)
+ */
+export async function resetConfig(): Promise<void> {
+  await storage.setItems([
+    { key: CONFIG_KEY, value: DEFAULT_CONFIG },
+    { key: `${CONFIG_KEY}$`, value: { v: CONFIG_VERSION } },
+  ])
+  fallbackReason = null
 }
 
 export function watchConfig(callback: (config: Config) => void) {

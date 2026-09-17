@@ -49,6 +49,9 @@ export function createOpenAICompatProvider(
   deps: { model?: LanguageModel; prompts?: PromptsConfig } = {},
 ): TranslationProvider {
   const hasKey = () => config.apiKey.trim().length > 0 || isLoopback(config.baseURL)
+  // The thinking switch changes the request only where an endpoint has an adapter (thinking.ts); where it sends
+  // nothing, on and off are the same request and the same identity
+  const adapted = JSON.stringify(thinkingBodyFields(config.baseURL, 'enabled')) !== JSON.stringify(thinkingBodyFields(config.baseURL, 'disabled'))
   return {
     id: config.id ?? 'openai-compat',
     kind: 'llm',
@@ -60,8 +63,13 @@ export function createOpenAICompatProvider(
     // A local endpoint gets a lower rate: Ollama runs 4 in parallel by default, the rest queue on the server, hit our timeout and get retried — idle churn
     ...(isLoopback(config.baseURL) ? { rateLimit: LOOPBACK_RATE_LIMIT } : {}),
     promptKey: promptKey(deps.prompts),
-    // The endpoint enters the cache identity: a model of the same name on different endpoints is a different thing (issue #45). Origin only, with neither path nor key
-    cacheId: `openai-compat:${endpointIdentity(config.baseURL)}`,
+    // The endpoint enters the cache identity: a model of the same name on different endpoints is a different thing
+    // (issue #45) — origin and path, never the key. So does the thinking switch wherever it is sent: a reasoning
+    // model's translation is another output (hard rule 4). Both states are named, on and off, so neither is the
+    // unmarked identity entries were written under before the switch entered it, when on and off shared one — those
+    // entries are simply never found again, and no other engine's cache is touched. Where nothing is sent, on and off
+    // are one request and the identity carries no switch
+    cacheId: `openai-compat:${endpointIdentity(config.baseURL)}${adapted ? `|thinking=${config.thinking === 'enabled' ? 'on' : 'off'}` : ''}`,
     async isAvailable() {
       return hasKey()
     },

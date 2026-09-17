@@ -110,6 +110,8 @@ const S = {
   actionFailed: (message: string) => message, // S-P-90
   /** The popup action found no active tab to talk to (shared/messages.ts throws NoActiveTabError) */
   noActiveTab: '没有活动标签页',
+  /** A change the store refused because the saved settings cannot be read (config/storage.ts ConfigUnreadableError); S-O-02 is where the reader acts */
+  settingsUnreadable: '设置读取失败，更改未保存，请到设置页处理',
   /** 论文页里的文字（S-I）与右键菜单，与 popup 用同一套语言包 */
   page: {
     retry: '重试', // S-I-02
@@ -134,12 +136,16 @@ const O = {
   /** 配置读不出来时那条说明的下半句（config/storage.ts 只报成因，不写句子） */
   fallbackWhy: {
     tooNew: (stored: number, supported: number) => `存储里的配置是 v${stored}，这个版本只认到 v${supported}（可能装过更新的版本）`,
+    upgradeFailed: (stored: number, supported: number) => `存储里的配置是 v${stored}，升级到 v${supported} 时出错。之后的版本或许仍能读出；重置会覆盖它们`,
     invalid: (where: string, message: string) => (where ? `${where}：${message}` : message),
     /** The sentence for a field the schema refused, by the field's name; the zod message itself is the diagnostic */
     field: FIELD,
     unknown: '未知原因',
   },
-  fallbackNotice: '设置读取失败，当前使用默认设置；已保存的 API Key 与服务选择均未生效。请重新填写。',
+  fallbackNotice: '设置读取失败，当前使用默认设置；已保存的 API Key 与服务选择均未生效。原设置保留未动，重置后可重新填写。',
+  fallbackReset: '重置设置',
+  fallbackResetConfirm: '确认重置',
+  fallbackResetFailed: '重置没有成功，请再试一次',
   services: {
     /** One validation failure of the drawer's form, and what joins several, in this language's punctuation */
     issue: (field: string, message: string) => `${field}：${FIELD[String(field).split('.').pop() ?? ''] ?? `不合法（${message}）`}`,

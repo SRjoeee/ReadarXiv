@@ -54,14 +54,13 @@ describe('TranslationCache', () => {
     expect((await c.stats()).entries).toBe(2)
   })
 
-  it('clear(paper) deletes that paper only, clear() everything', async () => {
+  it('clear() deletes everything, the hot layer included, and says how many', async () => {
     const c = make()
     await c.set('k1', 'v1', 'A')
     await c.set('k2', 'v2', 'B')
-    expect(await c.clear('A')).toBe(1)
+    expect(await c.clear()).toBe(2)
     expect(await text(c, 'k1')).toBeNull()
-    expect(await text(c, 'k2')).toBe('v2')
-    expect(await c.clear()).toBe(1)
+    expect(await text(c, 'k2')).toBeNull()
     expect((await c.stats()).entries).toBe(0)
   })
 
@@ -141,8 +140,8 @@ describe('the correctness of the totals (Codex on #14)', () => {
     // Two existing records first, so the first count has a non-zero result
     await c.set('seed-1', 'v', 'p')
     await c.set('seed-2', 'v', 'p')
-    // Void the totals to imitate the worker just woken: then write 6 concurrently
-    await c.clear('不存在的论文')
+    // Void the totals to imitate the worker just woken (a cleanup with nothing expired deletes nothing and voids them): then write 6 concurrently
+    await c.cleanup()
     expect(totalsOf(c)).toBeNull()
     await Promise.all(Array.from({ length: 6 }, (_, i) => c.set(`k${i}`, `译文${i}`, 'p')))
     expect(totalsOf(c)!.count).toBe((await c.stats()).entries)

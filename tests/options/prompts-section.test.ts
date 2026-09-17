@@ -18,7 +18,7 @@ const llm: Config = { ...DEFAULT_CONFIG, provider: 'svc-1', services: [{ id: 'sv
 function data(config: Config, patches: Config[] = [], land: () => Promise<void> = async () => undefined): OptionsData {
   return {
     config,
-    fallbackReason: null,
+    fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
     patch: async fn => { const next = fn(config); await land(); patches.push(next); return next },
     pack: null,
     checkPack: async () => 'unsupported',

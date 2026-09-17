@@ -104,6 +104,8 @@ export function createPageSession(deps: SessionDeps): PageSession {
    * guessing itself). The default is only the fallback for a failed read
    */
   let savedMode: Mode = DEFAULT_CONFIG.mode
+  /** The chain `setMode`'s saves run on, one after another */
+  let modeSaves: Promise<void> = Promise.resolve()
   let configRead: () => void = () => undefined
   const ready = new Promise<void>(resolve => { configRead = resolve })
   /** Set by startImages: once the recognition helper is installed later, the parked bitmaps of this page are released */
@@ -479,14 +481,41 @@ export function createPageSession(deps: SessionDeps): PageSession {
   }
 
   async function setMode(mode: Mode): Promise<{ mode: Mode; effective: Mode }> {
-    // Switching is allowed while not translating too: the controller writes the attribute onto <html>, and the styles apply at once
-    if (!modes) modes = createModeController(doc, mode, { onChange: enterSide })
-    const effective = modes.choose(mode)
-    enterSide(effective)
-    savedMode = mode
-    const config = await deps.config.get()
-    if (config.mode !== mode) await deps.config.set({ ...config, mode })
+    // With no translation on the page there is nothing to lay out: the choice is a preference, saved for the start
+    // that reads it. No controller, no attribute on <html> — nothing is written before a translation starts
+    // (DESIGN §4.1), and nothing would take a controller made here down again. On a translated page the switch is
+    // immediate; only the save below waits
+    const effective = modes ? modes.choose(mode) : mode
+    if (modes) enterSide(effective)
+    // **Saved in order**: each save reads the store and compares, so two choices in quick succession, both reading
+    // before either wrote, would leave the store on the first while the page shows the second
+    const save = async () => {
+      // After the first configuration read, which writes the same variable: a choice made before it came back would
+      // be overwritten by the stored mode it carries
+      await ready
+      const config = await deps.config.get()
+      if (config.mode !== mode) await deps.config.set({ ...config, mode })
+      // Recorded once stored. A refused save (the stored settings cannot be read, config/storage.ts) rejects above
+      // and leaves the preference as it was: on a translated page the switch holds for the page, on an untranslated
+      // one nothing changed, and the caller tells the reader it was not saved
+      savedMode = mode
+    }
+    const saved = modeSaves.then(save, save)
+    modeSaves = saved.catch(() => undefined)
+    await saved
     return { mode, effective }
+  }
+
+  /**
+   * Re-read the stored mode on the chain the saves run on, after the first read: whatever order the events and the
+   * first read's snapshot arrive in, the last word is a read made after every write this page knows of
+   */
+  function refreshSavedMode(): void {
+    const refresh = async () => {
+      await ready
+      savedMode = (await deps.config.get()).mode
+    }
+    modeSaves = modeSaves.then(refresh, refresh).catch(() => undefined)
   }
 
   function restorePage(epoch?: string): { removedNodes: number; refused?: true } {
@@ -519,6 +548,11 @@ export function createPageSession(deps: SessionDeps): PageSession {
     // restore defaults” takes the equal-value fast path, the gate is not raised, and the old snapshot from the
     // following getConfig() puts the non-default appearance back (Codex on #106)
     styleFromWatcher = true
+    // The stored mode, changed here or in another tab: an untranslated page reports it and its next start uses it.
+    // A translated page keeps its own switch (the controller's preference) until it is restored. **Read from the store,
+    // not taken from the event**: storage events carry no order (#182), and one for an earlier write arriving late
+    // would put an older mode back
+    refreshSavedMode()
     // The hover highlight is a front-page toggle (UI.md S-P-80), so it takes effect on this page
     // at once: installed or torn down mid-session, no translation node touched. Outside a session
     // there is nothing to pair, and start() reads the setting itself

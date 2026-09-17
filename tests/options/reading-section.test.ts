@@ -20,7 +20,7 @@ const withMine: Config = { ...DEFAULT_CONFIG, appearance: { ...DEFAULT_CONFIG.ap
 function data(config: Config, patches: Config[] = []): OptionsData {
   return {
     config,
-    fallbackReason: null,
+    fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
     patch: async fn => { const next = fn(config); patches.push(next); return next },
     pack: null,
     checkPack: async () => 'unsupported',

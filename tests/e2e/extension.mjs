@@ -61,6 +61,8 @@ context.setDefaultNavigationTimeout(90_000)
 let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')
 const extId = worker.url().split('/')[2]
+/** This extension's service worker as it is now, by its origin: a paper page may register a worker of its own */
+const extensionWorker = () => context.serviceWorkers().find(w => w.url().startsWith(`chrome-extension://${extId}/`))
 console.log(`extension ${extId} loaded from ${EXT}`)
 
 /**
@@ -1120,7 +1122,15 @@ check('the settings page: after deleting the custom prompt the default is chosen
   let firstAuthFailure = Number.POSITIVE_INFINITY
   // **A few requests were out already at the moment** the 401 arrived. Cut by sequence number, not by time (Codex on #95):
   // any tolerance in time puts the ones “resent the moment a slot frees” before the 401, out of reach of both criteria.
-  // The requests already in flight had their `request` event necessarily before this 401's `response` event, so the sequence number is the exact boundary
+  //
+  // The boundary is **the extension's own report of the failure** — the service worker's `[axt] batch failed` line —
+  // not the network's `response` event (issue #223). The response event is the browser's network layer receiving the
+  // headers; the extension's code learns of the 401 some milliseconds later, once the body is read and the error
+  // classified, and a batch-delay timer firing inside that gap sends one more wave nothing could have held back:
+  // seen once with a 401 that took 100 ms — the batch delay — as four requests 1–2 ms “after” the response. At the
+  // service level the promise holds exactly (0 requests after the provider's rejection at 14 endpoint latencies
+  // around the batch delay, measured 2026-09-17). Requests and console lines of the worker come over one CDP
+  // session, in order, so the sequence number at the line is the exact boundary in the extension's own time
   let sentAtAuth = -1
   // 401 and 403 both count (Codex on #95): when the gateway rejects a fake key with 403, `openai-compat` classes it as auth all the same,
   // and retry-policy drains the whole queue all the same; listening for 401 alone would turn this assertion red while the product behaves correctly
@@ -1129,9 +1139,20 @@ check('the settings page: after deleting the custom prompt the default is chosen
     if (response.status() !== 401 && response.status() !== 403) return
     if (Number.isFinite(firstAuthFailure)) return
     firstAuthFailure = Date.now()
-    sentAtAuth = requests.length
   }
+  // Counted here, not read from openPaper's list: that list exists only once openPaper returns, and a line may come
+  // earlier. A line before this page's first request belongs to an earlier block and is no boundary of this one
+  let sent = 0
+  const onEndpointRequest = request => { if (request.url().includes('openrouter.ai')) sent += 1 }
+  const onWorkerConsole = message => {
+    if (sentAtAuth < 0 && sent > 0 && message.text().includes('[axt] batch failed')) sentAtAuth = sent
+  }
+  // The extension's worker as it is now — an earlier block replaced the one the suite started with — and never a
+  // worker a page registered
+  const authWorker = extensionWorker()
+  context.on('request', onEndpointRequest)
   context.on('response', onAuthResponse)
+  authWorker?.on('console', onWorkerConsole)
   const { page, logs, requests } = await openPaper(PAPER, 'openrouter.ai')
   const done = await waitForLog(logs, IDLE, 60_000)
   // After fatal is reported **scroll the whole paper**: that is the falsifiable way (Codex on #95: the old 1-second window was too loose).
@@ -1150,22 +1171,25 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await scrollThrough(page)
   await sleep(3_000)
   context.off('response', onAuthResponse)
+  context.off('request', onEndpointRequest)
+  authWorker?.off('console', onWorkerConsole)
   // The stretch between the first 401 and idle (Codex adding on #95). Since #96 this is **zero**:
   // before it `failQueue` drained only the tasks queued in the RequestQueue at the time, and the remaining blocks were still batching in the BatchQueue, absent,
   // dispatched as usual once batched, so one more wave was certain (measured +75~279 ms, 7 requests). Now the fatal state sticks to the engine's queue pair,
   // and a batch arriving later is refused on the spot in executeBatch, without one endpoint request.
   // This one catches two regressions at once: with the queue undrained the batches spread out as slots free; with a batch retried the backoff is at least 1 second.
-  // Either makes afterAuth non-empty.
-  const beforeAuth = requests.slice(0, Math.max(sentAtAuth, 0))
-  const afterAuth = requests.slice(Math.max(sentAtAuth, 0))
+  // Either makes afterAuth above zero.
+  // By this block's own count, the one the boundary was taken from
+  const beforeAuth = Math.max(sentAtAuth, 0)
+  const afterAuth = sent - beforeAuth
   const afterIdle = requests.filter(r => r.t > (done?.t ?? 0) + EVENT_JITTER_MS)
   const offsets = requests.map(r => Math.round(r.t - firstAuthFailure)).sort((a, b) => a - b)
   check('a wrong key + the fallback off: after the 401 the whole session stops, and scrolling to the bottom sends no more requests',
     Number.isFinite(firstAuthFailure) && sentAtAuth >= 0 && /fatal: auth/.test(done?.text ?? '')
       && (idle?.requested ?? 0) < (idle?.total ?? 0) // blocks not yet requested remain; only a scroll can falsify it
-      && afterAuth.length === 0 // not one request more after the 401 (#96)
+      && afterAuth === 0 // not one request more after the 401 (#96)
       && afterIdle.length === 0,
-    `${idle?.requested}/${idle?.total} blocks requested, ${requests.length} requests in all (${offsets.join('/')} ms relative to the first 401); ${beforeAuth.length} before the 401, ${afterAuth.length} after (should be 0, #96); ${afterIdle.length} more after scrolling the whole paper once fatal was reported; ${done?.text ?? '(no idle line)'}; DOM ${JSON.stringify(await countDom(page))}`)
+    `${idle?.requested}/${idle?.total} blocks requested, ${requests.length} requests in all (${offsets.join('/')} ms relative to the first 401's response); ${beforeAuth} before the extension reported the failure, ${afterAuth} after (should be 0, #96); ${afterIdle.length} more after scrolling the whole paper once fatal was reported; ${done?.text ?? '(no idle line)'}; DOM ${JSON.stringify(await countDom(page))}`)
   // One widget per failed block beside the original; a failed caption inside a split figure carries a second, live one in
   // the right column's copy since #213 (issue #170), which is that block's again, not another block's
   const widgets = await page.evaluate(() => Array.from(document.querySelectorAll('.axt-error')).filter(w => w.closest('.axt-split') === null).length)
@@ -1345,6 +1369,57 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await options.bringToFront()
   const cleared = await clearKeyAndReconnect(options)
   check('the settings page: after clearing the API key the connection reports “not configured” rather than writing the old key back', /尚未配置/.test(cleared ?? ''), cleared)
+}
+
+// ── Saved settings this build cannot read are never written over (DESIGN §9) ──────────────────────
+// The stored configuration is made a newer build's — the version and WXT's marker one higher — which is what an older
+// build installed over a newer one meets. Every writer reads, patches and writes, and what it reads in this state is
+// the defaults: before the gate one mode switch replaced the reader's services and API keys with them.
+// The configuration is put back at the end, so the blocks that follow see the settings this suite built
+{
+  const gateWorker = extensionWorker()
+  const stored = () => gateWorker.evaluate(() => chrome.storage.local.get(['config', 'config$']))
+  const before = await stored()
+  await gateWorker.evaluate(async () => {
+    const s = await chrome.storage.local.get(['config', 'config$'])
+    await chrome.storage.local.set({ config: { ...s.config, version: s.config.version + 1 }, config$: { ...s.config$, v: s.config.version + 1 } })
+  })
+  const newer = await stored()
+
+  // A page that is not translated, and the message the popup's mode bar sends. No tabs permission, so ids only: the
+  // paper's tab is the one whose content script answers
+  const page = await context.newPage()
+  await page.goto(`https://arxiv.org/html/${PAPER}`, { waitUntil: 'domcontentloaded' })
+  await sleep(1_500)
+  const replies = await gateWorker.evaluate(async () => {
+    const tabs = await chrome.tabs.query({})
+    const answers = await Promise.allSettled(tabs.map(tab => chrome.tabs.sendMessage(tab.id, { type: 'axt:set-mode', mode: 'stack' })))
+    return answers.filter(a => a.status === 'fulfilled' && a.value).map(a => a.value)
+  })
+  const marks = await page.evaluate(() => document.documentElement.getAttributeNames().filter(n => n.startsWith('data-axt')))
+  check('settings this build cannot read: a mode chosen on a page is refused by name, storage is as it was, and the untranslated page is written nothing',
+    replies.length === 1 && replies[0].name === 'ConfigUnreadableError' && JSON.stringify(await stored()) === JSON.stringify(newer) && marks.length === 0,
+    `${JSON.stringify(replies)}; services kept ${newer.config.services.length}; <html> marks [${marks.join(',')}]`)
+  await page.close()
+
+  await options.bringToFront()
+  await options.reload({ waitUntil: 'domcontentloaded' })
+  const reset = options.getByRole('button', { name: '重置设置', exact: true })
+  await reset.waitFor({ timeout: 10_000 })
+  const shown = (await options.locator('main').innerText()).replace(/\n+/g, ' | ')
+  check('the settings page says why, offers the reset, and shows no section that would present the defaults as the reader’s',
+    /设置读取失败/.test(shown) && /v\d+/.test(shown) && !/添加服务/.test(shown) && JSON.stringify(await stored()) === JSON.stringify(newer), shown.slice(0, 160))
+  await reset.click()
+  await options.getByRole('button', { name: '确认重置', exact: true }).click()
+  await options.getByRole('button', { name: '添加服务', exact: true }).waitFor({ timeout: 10_000 })
+  const after = await stored()
+  check('the reset is the way out: the defaults under this build’s version and marker, and the sections are back',
+    after.config.version === before.config.version && after.config$.v === before.config$.v && after.config.services.length === 0,
+    `version ${after.config.version}, marker ${JSON.stringify(after.config$)}, ${after.config.services.length} services`)
+
+  await gateWorker.evaluate(saved => chrome.storage.local.set(saved), before)
+  await options.reload({ waitUntil: 'domcontentloaded' })
+  await options.getByRole('button', { name: '添加服务', exact: true }).waitFor({ timeout: 10_000 })
 }
 
 // ── The interface language (UI.md §6) ─────────────────────────────────────────────

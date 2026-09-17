@@ -81,7 +81,7 @@ export interface AxtMessages {
    */
   'axt:provider-status': { request: { scope?: string; fresh?: boolean }; response: ProviderStatus }
   /** Clear the cache, or one paper only */
-  'axt:cache-clear': { request: { paper?: string }; response: { ok: true; removed: number } | { ok: false; message: string } }
+  'axt:cache-clear': { request: Record<never, never>; response: { ok: true; removed: number } | { ok: false; message: string } }
   'axt:cache-stats': { request: Record<never, never>; response: { ok: true; entries: number; bytes: number } | { ok: false; message: string } }
   /** content / popup / options → background: one line for the diagnostics log (issue #156); the background records its own directly */
   'axt:diag': { request: { src: Exclude<DiagnosticSource, 'background'>; line: string }; response: undefined }
@@ -152,14 +152,17 @@ export function isAxtMessage(value: unknown): value is AxtMessage {
 /**
  * What a handler replies when the work behind a message failed. A handler that returns `true` and never replies
  * leaves the sender waiting for as long as the worker lives — a rejection logged in the background is invisible to
- * the page that asked (the local review of INVENTORY S2, fifth pass). `sendMessage` turns this reply back into a
- * rejection, so a caller's `.catch` sees the failure it would have seen from a local call
+ * the page that asked. `sendMessage` and `sendToActiveTab` turn this reply back into a rejection, so a caller's
+ * `.catch` sees the failure it would have seen from a local call — the error's `name` included, which is how a
+ * caller tells a failure it has a sentence for (`CONFIG_UNREADABLE`) from one it can only quote
  */
 export interface FailureReply {
   axtError: string
+  name?: string
 }
 
-export const failure = (error: unknown): FailureReply => ({ axtError: error instanceof Error ? error.message : String(error) })
+export const failure = (error: unknown): FailureReply =>
+  error instanceof Error ? { axtError: error.message, name: error.name } : { axtError: String(error) }
 
 export const isFailure = (value: unknown): value is FailureReply =>
   typeof value === 'object' && value !== null && typeof (value as { axtError?: unknown }).axtError === 'string'
@@ -171,8 +174,10 @@ export function replyWith<T>(promise: Promise<T>, sendResponse: (reply: T | Fail
 
 /** The sender's side of `replyWith`: a failure reply becomes a rejection */
 export function decodeReply<T>(reply: T | FailureReply): T {
-  if (isFailure(reply)) throw new Error(reply.axtError)
-  return reply
+  if (!isFailure(reply)) return reply
+  const error = new Error(reply.axtError)
+  if (reply.name) error.name = reply.name
+  throw error
 }
 
 /** Send to the background; under MV3 sendMessage returns a Promise when called without a callback */
@@ -188,9 +193,17 @@ export class NoActiveTabError extends Error {
   }
 }
 
-/** Send to the active tab's content script; the Promise rejects when the tab has no receiver. Reads no url, so no tabs permission */
+/**
+ * Send to one tab's content script — the only place a tab is written to, so every reply is decoded: the Promise
+ * rejects when the tab has no receiver, and when the page answered with a failure
+ */
+export function sendToTab<R = unknown>(tabId: number, message: { type: string }): Promise<R> {
+  return (browser.tabs.sendMessage(tabId, message) as Promise<R | FailureReply>).then(decodeReply)
+}
+
+/** Send to the active tab's content script. Reads no url, so no tabs permission */
 export async function sendToActiveTab<T extends AxtMessageType>(message: AxtMessage<T>): Promise<AxtResponse<T>> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
   if (tab?.id == null) throw new NoActiveTabError()
-  return browser.tabs.sendMessage(tab.id, message) as Promise<AxtResponse<T>>
+  return sendToTab<AxtResponse<T>>(tab.id, message)
 }

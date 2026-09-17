@@ -3,7 +3,7 @@
 // now — the popup and the page it is translating write the same object (Codex on #39).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { browser } from 'wxt/browser'
-import { type FallbackReason, configFallbackReason, getConfig, setConfig, watchConfig } from '@/config/storage'
+import { ConfigUnreadableError, type FallbackReason, configFallbackReason, getConfig, resetConfig, setConfig, watchConfig } from '@/config/storage'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { sendMessage } from '@/shared/messages'
 import type { HelperStatus } from '@/shared/ocr'
@@ -22,7 +22,12 @@ export interface OptionsData {
   config: Config | null
   /** Why the stored config fell back to defaults, if it did; worded by the page (ui/strings.ts) */
   fallbackReason: FallbackReason | null
+  /** Change the stored configuration. While it cannot be read the store refuses (config/storage.ts): resolves with what is in effect, unchanged */
   patch(fn: (latest: Config) => Config): Promise<Config>
+  /** Replace a stored configuration that cannot be read with the defaults — the reader's explicit choice (S-O-02) */
+  reset(): Promise<Config>
+  /** The last reset was refused by storage; the notice says so */
+  resetFailed: boolean
   pack: PackState | null
   /** Re-query the pack for a language the reader just chose (the Chrome card would otherwise show the old one) */
   checkPack(target: string): Promise<PackState>
@@ -41,6 +46,7 @@ export interface OptionsData {
 export function useOptionsData(): OptionsData {
   const [config, setLocal] = useState<Config | null>(null)
   const [fallbackReason, setFallbackReason] = useState<FallbackReason | null>(null)
+  const [resetFailed, setResetFailed] = useState(false)
   const [pack, setPack] = useState<PackState | null>(null)
   const [helper, setHelper] = useState<HelperStatus | null>(null)
   const [platform, setPlatform] = useState<'mac' | 'other' | null>(null)
@@ -119,8 +125,10 @@ export function useOptionsData(): OptionsData {
         if (staleLocale(stored)) reload()
         packs.want(stored.targetLanguage)
         setLocal(stored)
-        // A valid write elsewhere is the repair of a configuration this page had to fall back from (Codex on #185)
+        // A valid write elsewhere is the repair of a configuration this page had to fall back from (Codex on #185); the
+        // line about a refused reset goes with it, or it would come back with the next fallback nobody reset
         setFallbackReason(configFallbackReason())
+        if (configFallbackReason() === null) setResetFailed(false)
         void packs.check(stored.targetLanguage)
         return stored
       }
@@ -163,13 +171,46 @@ export function useOptionsData(): OptionsData {
     // `then(run, run)`: a write that throws must not poison the chain — every later change would
     // be skipped and the page would silently stop saving
     const run = async () => {
-      const next = fn(await getConfig())
-      await setConfig(next)
+      const latest = await getConfig()
+      const next = fn(latest)
+      try {
+        await setConfig(next)
+      } catch (e) {
+        if (!(e instanceof ConfigUnreadableError)) throw e
+        // Refused, storage as it was (config/storage.ts): the page goes on showing what is in effect, under the
+        // notice that says why and offers the reset. The sections are not rendered in this state (App.tsx), so
+        // this is the race only — the stored value turned unreadable while a section was open
+        setLocal(latest)
+        setFallbackReason(e.reason)
+        return latest
+      }
       packs.want(next.targetLanguage)
       setLocal(next)
-      // A valid write **is** the repair: leaving the warning up would go on telling the reader that
-      // the key and service they just fixed are not in effect (Codex on #157)
+      // An accepted write proves the stored value readable: a notice still up is from before a repair made elsewhere
       setFallbackReason(null)
+      setResetFailed(false)
+      return next
+    }
+    writes.current = writes.current.then(run, run)
+    return writes.current
+  }, [packs])
+
+  /** S-O-02's way out, on the same chain as every other write: the defaults replace what could not be read */
+  const reset = useCallback((): Promise<Config> => {
+    const run = async () => {
+      try {
+        await resetConfig()
+      } catch {
+        // Storage refused the write (IO, quota): the notice stays, and says the reset did not go through — a click
+        // that changes nothing and says nothing reads as a button that does not work
+        setResetFailed(true)
+        return getConfig()
+      }
+      setResetFailed(false)
+      const next = await getConfig()
+      packs.want(next.targetLanguage)
+      setLocal(next)
+      setFallbackReason(configFallbackReason())
       return next
     }
     writes.current = writes.current.then(run, run)
@@ -189,12 +230,12 @@ export function useOptionsData(): OptionsData {
   }, [packs])
 
   const clearCache = useCallback(async () => {
-    const res = await sendMessage({ type: 'axt:cache-clear', paper: undefined })
+    const res = await sendMessage({ type: 'axt:cache-clear' })
     if (!res.ok) { setCacheError(res.message); return }
     setCacheCleared(true)
     setTimeout(() => setCacheCleared(false), 2000)
     await loadCache()
   }, [loadCache])
 
-  return { config, fallbackReason, patch, pack, checkPack: packs.check, fetchPack, helper, setHelper, platform, cache, cacheError, clearCache, cacheCleared }
+  return { config, fallbackReason, patch, reset, resetFailed, pack, checkPack: packs.check, fetchPack, helper, setHelper, platform, cache, cacheError, clearCache, cacheCleared }
 }

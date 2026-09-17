@@ -220,6 +220,21 @@ describe('actionErrorText (S-P-90)', () => {
     expect(actionErrorText(new Error('the page did not answer'))).toBe('the page did not answer')
     expect(actionErrorText('plain')).toBe('plain')
   })
+
+  it('a save the store refused has a sentence of its own, thrown here or carried back from the page as a failure reply', async () => {
+    const { actionErrorText } = await import('@/entrypoints/popup/view-model')
+    const { ConfigUnreadableError } = await import('@/config/storage')
+    const { decodeReply, failure } = await import('@/shared/messages')
+    const strings = await import('@/ui/strings')
+    const refused = new ConfigUnreadableError({ kind: 'tooNew', stored: 99, supported: 15 })
+    setLocale('en')
+    expect(actionErrorText(refused)).toBe(strings.S.settingsUnreadable)
+    expect(actionErrorText(refused)).toMatch(/not saved/)
+    let carried: unknown
+    try { decodeReply(failure(refused)) } catch (e) { carried = e }
+    expect(actionErrorText(carried)).toBe(strings.S.settingsUnreadable)
+    setLocale('zh-CN')
+  })
 })
 
 describe('startRefusalText', () => {

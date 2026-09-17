@@ -46,6 +46,77 @@ describe('config storage', () => {
     expect(fresh.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'targetLanguage' })
   })
 
+  describe('a stored value this build cannot read is never written over', () => {
+    const KEPT = { provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-reader-key' }] }
+    const CASES = [
+      { name: 'a newer build’s configuration', stored: { ...DEFAULT_CONFIG, ...KEPT, version: CONFIG_VERSION + 1 }, v: CONFIG_VERSION + 1, kind: 'tooNew' },
+      { name: 'a broken structure', stored: { ...DEFAULT_CONFIG, ...KEPT, mode: 'sideways' }, v: CONFIG_VERSION, kind: 'invalid' },
+    ] as const
+
+    for (const c of CASES) {
+      it(`${c.name}: read, patch, write — the way the popup, the settings page and the page session do — is refused and storage is as it was`, async () => {
+        await fakeBrowser.storage.local.set({ config: c.stored, config$: { v: c.v } })
+        vi.resetModules()
+        const fresh = await import('@/config/storage')
+        const latest = await fresh.getConfig()
+        await expect(fresh.setConfig({ ...latest, mode: 'stack' })).rejects.toMatchObject({ name: 'ConfigUnreadableError', reason: { kind: c.kind } })
+        expect(await fakeBrowser.storage.local.get(['config', 'config$'])).toEqual({ config: c.stored, config$: { v: c.v } })
+      })
+
+      it(`${c.name}: a writer that never read is refused too, and the reason is on record for the interface`, async () => {
+        await fakeBrowser.storage.local.set({ config: c.stored, config$: { v: c.v } })
+        vi.resetModules()
+        const fresh = await import('@/config/storage')
+        await expect(fresh.setConfig(DEFAULT_CONFIG)).rejects.toBeInstanceOf(fresh.ConfigUnreadableError)
+        expect(fresh.configFallbackReason()).toMatchObject({ kind: c.kind })
+      })
+
+      it(`${c.name}: the reader’s reset is the way out — defaults stored under this build’s version marker, writes accepted again`, async () => {
+        await fakeBrowser.storage.local.set({ config: c.stored, config$: { v: c.v } })
+        vi.resetModules()
+        const fresh = await import('@/config/storage')
+        await fresh.getConfig()
+        const writes = vi.spyOn(fakeBrowser.storage.local, 'set')
+        await fresh.resetConfig()
+        // The marker too: left at N+1 beside a vN value, the real upgrade to N+1 would skip its migration. And in the
+        // **same write** as the value: cut short between two, the newer build would migrate its own value again
+        expect(writes.mock.calls.map(([items]) => Object.keys(items as object).sort())).toEqual([['config', 'config$']])
+        expect(await fakeBrowser.storage.local.get(['config', 'config$'])).toEqual({ config: DEFAULT_CONFIG, config$: { v: CONFIG_VERSION } })
+        expect(fresh.configFallbackReason()).toBeNull()
+        writes.mockRestore()
+        await fresh.setConfig({ ...DEFAULT_CONFIG, mode: 'stack' })
+        expect((await fresh.getConfig()).mode).toBe('stack')
+      })
+    }
+
+    it('an older version the migrations did not carry here is its own reason, not a broken field: a later build may still read it', async () => {
+      // What WXT leaves when a migration step throws: the value at its old version. The marker at this build's version
+      // stands in for the throw here — WXT then runs no step, and the value arrives unmigrated all the same
+      const v14 = { ...DEFAULT_CONFIG, version: CONFIG_VERSION - 1 }
+      await fakeBrowser.storage.local.set({ config: v14, config$: { v: CONFIG_VERSION } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
+      expect(fresh.configFallbackReason()).toEqual({ kind: 'upgradeFailed', stored: CONFIG_VERSION - 1, supported: CONFIG_VERSION })
+      await expect(fresh.setConfig(DEFAULT_CONFIG)).rejects.toMatchObject({ reason: { kind: 'upgradeFailed' } })
+      expect((await fakeBrowser.storage.local.get('config')).config).toEqual(v14)
+    })
+
+    it('the warning names the cause and the field, never a stored value (hard rule 5)', async () => {
+      await fakeBrowser.storage.local.set({ config: CASES[1].stored, config$: { v: CONFIG_VERSION } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      await fresh.getConfig()
+      const line = warn.mock.calls.map(c => c.join(' ')).join('\n')
+      warn.mockRestore()
+      expect(line).toContain('invalid at mode')
+      expect(line).not.toContain('[object Object]')
+      expect(line).not.toContain('sk-reader-key')
+      expect(line).not.toContain('sideways')
+    })
+  })
+
   it('a sound configuration leaves no fallback reason: no alarm over a good configuration', async () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')

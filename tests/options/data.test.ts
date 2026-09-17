@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { browser } from 'wxt/browser'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
+import type { FallbackReason } from '@/config/storage'
 import type { AxtMessage } from '@/shared/messages'
 import { mountHook } from '../ui/render-hook'
 
@@ -8,6 +9,13 @@ import { mountHook } from '../ui/render-hook'
 // the reload an interface language takes waits for the page's drafts
 
 const store = vi.hoisted(() => ({
+  /** Set: the stored value cannot be read — reads give the defaults, the store refuses writes (config/storage.ts) */
+  unreadable: null as FallbackReason | null,
+  /** Set: storage refuses the reset's write */
+  resetRefused: false,
+  ConfigUnreadableError: class extends Error {
+    constructor(readonly reason: FallbackReason) { super('refused') }
+  },
   config: null as Config | null,
   watchers: [] as ((config: Config) => void)[],
   /** When set, every write waits for it: the test decides when a save lands */
@@ -24,9 +32,20 @@ vi.mock('wxt/browser', () => ({
 }))
 vi.mock('@/config/storage', () => ({
   getConfig: async () => { if (!store.config) throw new Error('no config'); return store.config },
-  setConfig: async (config: Config) => { if (store.gate) await store.gate; store.config = config; store.log.push(`set:${config.targetLanguage}`) },
+  setConfig: async (config: Config) => {
+    if (store.gate) await store.gate
+    if (store.unreadable) { store.log.push('refused'); throw new store.ConfigUnreadableError(store.unreadable) }
+    store.config = config
+    store.log.push(`set:${config.targetLanguage}`)
+  },
+  resetConfig: async () => {
+    if (store.resetRefused) { store.log.push('reset refused'); throw new Error('QUOTA_BYTES quota exceeded') }
+    store.unreadable = null
+    store.log.push('reset')
+  },
+  ConfigUnreadableError: store.ConfigUnreadableError,
   watchConfig: (callback: (config: Config) => void) => { store.watchers.push(callback); return () => { store.watchers = store.watchers.filter(w => w !== callback) } },
-  configFallbackReason: () => null,
+  configFallbackReason: () => store.unreadable,
 }))
 vi.mock('@/shared/messages', async importOriginal => ({
   ...(await importOriginal<typeof import('@/shared/messages')>()),
@@ -50,12 +69,65 @@ describe('useOptionsData', () => {
   let reload: ReturnType<typeof vi.fn>
   beforeEach(() => {
     store.config = { ...DEFAULT_CONFIG, uiLanguage: 'en' }
+    store.unreadable = null
+    store.resetRefused = false
     store.watchers = []
     store.gate = null
     store.log = []
     applyLocaleFrom('en')
     reload = vi.fn(() => { store.log.push('reload') })
     vi.spyOn(location, 'reload').mockImplementation(reload as () => void)
+  })
+
+  it('a stored configuration that cannot be read: a save is refused, the page stays on what is in effect and says why; the reset is the way out', async () => {
+    store.unreadable = { kind: 'tooNew', stored: 99, supported: DEFAULT_CONFIG.version }
+    const hook = await mountHook(useOptionsData)
+    await hook.until(() => hook.current().config !== null)
+    expect(hook.current().fallbackReason).toEqual(store.unreadable)
+
+    let kept: Config | null = null
+    await hook.run(async () => { kept = await hook.current().patch(latest => ({ ...latest, targetLanguage: 'jpn' })) })
+    expect((kept as Config | null)?.targetLanguage).toBe(DEFAULT_CONFIG.targetLanguage)
+    expect(hook.current().config?.targetLanguage).toBe(DEFAULT_CONFIG.targetLanguage)
+    expect(hook.current().fallbackReason).toMatchObject({ kind: 'tooNew' })
+    expect(store.log).toEqual(['refused'])
+
+    await hook.run(async () => { await hook.current().reset() })
+    expect(hook.current().fallbackReason).toBeNull()
+    await hook.run(async () => { await hook.current().patch(latest => ({ ...latest, targetLanguage: 'jpn' })) })
+    expect(hook.current().config?.targetLanguage).toBe('jpn')
+    expect(store.log).toEqual(['refused', 'reset', 'set:jpn'])
+    await hook.unmount()
+  })
+
+  it('a reset storage refuses leaves the notice up and says the reset did not go through; the next one that succeeds clears both', async () => {
+    store.unreadable = { kind: 'invalid', where: 'mode', message: 'x' }
+    store.resetRefused = true
+    const hook = await mountHook(useOptionsData)
+    await hook.until(() => hook.current().config !== null)
+    await hook.run(async () => { await hook.current().reset() })
+    expect(hook.current().resetFailed).toBe(true)
+    expect(hook.current().fallbackReason).toMatchObject({ kind: 'invalid' })
+    // Repaired without an event reaching this page, then a save here: the accepted save clears the line too
+    store.unreadable = null
+    await hook.run(async () => { await hook.current().patch(latest => ({ ...latest, targetLanguage: 'jpn' })) })
+    expect(hook.current().resetFailed).toBe(false)
+    store.unreadable = { kind: 'invalid', where: 'mode', message: 'x' }
+    store.resetRefused = true
+    await hook.run(async () => { await hook.current().reset() })
+    expect(hook.current().resetFailed).toBe(true)
+    // Repaired elsewhere: the refused-reset line goes with the notice, and does not return with a later fallback
+    store.unreadable = null
+    store.resetRefused = false
+    await hook.run(() => saveElsewhere({ ...DEFAULT_CONFIG, uiLanguage: 'en' }))
+    await hook.until(() => hook.current().fallbackReason === null)
+    expect(hook.current().resetFailed).toBe(false)
+    store.unreadable = { kind: 'invalid', where: 'mode', message: 'x' }
+    await hook.run(async () => { await hook.current().reset() })
+    expect(hook.current().resetFailed).toBe(false)
+    expect(hook.current().fallbackReason).toBeNull()
+    expect(store.log).toEqual(['reset refused', 'set:jpn', 'reset refused', 'reset'])
+    await hook.unmount()
   })
 
   it('a change saved elsewhere shows without a reload', async () => {

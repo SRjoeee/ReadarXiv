@@ -34,13 +34,13 @@ src/ui/appearance/ProfileGrid.tsx 1
 src/ui/strings.ts 3
 tests/background/helper.test.ts 1
 tests/cache/key.test.ts 3
-tests/cache/store.test.ts 11
+tests/cache/store.test.ts 10
 tests/config/appearance.test.ts 1
 tests/config/languages.test.ts 3
 tests/config/storage.test.ts 18
 tests/core/marks.test.ts 8
 tests/e2e/a11y.mjs 2
-tests/e2e/extension.mjs 88  # raised 2026-09-17: the whole-paper preload check clicks two more stop labels (the whole-paper stop, then one screen again), and the cache check waits for the zero-count line
+tests/e2e/extension.mjs 93  # raised 2026-09-17: the whole-paper preload check clicks two more stop labels and the cache check waits for the zero-count line; the unreadable-settings check locates the notice, its reset and the section that must be absent by their labels
 tests/e2e/image.mjs 16
 tests/e2e/layout.mjs 8
 tests/e2e/local-endpoint.mjs 2
