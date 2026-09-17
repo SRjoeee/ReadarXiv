@@ -4,10 +4,11 @@
 import { describe, expect, it } from 'vitest'
 import { extract, markBlocks, PAIRS_ATTR, type TextBlock } from '@/core/extractor'
 import { IMG_CLASS, T_CLASS } from '@/core/marks'
-import { MIRRORED_ATTR, MIRROR_CLASS, PANELS_ATTR, SPLIT_ATTR, TAGGED_ATTR, TAIL_ATTR, TRANSLATED_ATTR } from '@/core/renderer/attrs'
+import { MIRRORED_ATTR, MIRROR_CLASS, NOTE_TRANSLATED_ATTR, PANELS_ATTR, SPLIT_ATTR, SPLIT_CLASS, TAGGED_ATTR, TAIL_ATTR, TRANSLATED_ATTR } from '@/core/renderer/attrs'
 import { clearFailed, renderFailed } from '@/core/renderer/failed'
 import { renderImage } from '@/core/renderer/image'
 import { createMirrors } from '@/core/renderer/mirror'
+import { localizeNotes } from '@/core/renderer/notes'
 import { clearAllPending, renderPending } from '@/core/renderer/pending'
 import { markStructure } from '@/core/renderer/side-layout'
 import { splitFigures } from '@/core/renderer/split-figures'
@@ -172,5 +173,30 @@ describe('data-axt-translated: a frontmatter note holding a real translation', (
     markBlocks(extract(doc))
     renderText(blockOf(doc, 'p1'), frag(doc, '一。'))
     expect(doc.querySelector(`[${TRANSLATED_ATTR}]`)).toBeNull()
+  })
+})
+
+describe('data-axt-note-translated: a footnote copy that carries its translation', () => {
+  /** A figure whose caption has a footnote: the source caption with the note and the note's translation, the caption's translation with the rebuilt copy, and loose media so the figure splits */
+  const FIGURE = '<figure class="ltx_figure" id="F1"><img class="ltx_graphics" src="a.png" id="F1.g1">'
+    + '<figcaption class="ltx_caption" id="cap" data-axt-id="cap">Caption<span class="ltx_note ltx_role_footnote"><sup class="ltx_note_mark">1</sup>'
+    + '<span class="ltx_note_outer"><span class="ltx_note_content" data-axt-id="n1"><sup class="ltx_note_mark">1</sup>English note</span>'
+    + `<span class="ltx_note_content ${T_CLASS}" data-axt-for="n1"><sup class="ltx_note_mark">1</sup>中文脚注</span></span></span></figcaption>`
+    + `<figcaption class="ltx_caption ${T_CLASS}" data-axt-for="cap">题注<span class="ltx_note ltx_role_footnote"><sup class="ltx_note_mark">1</sup>`
+    + '<span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup>English note</span></span></span></figcaption></figure>'
+
+  it('a split figure\'s clone keeps the mark the strip took off, and a later localisation pass keeps it too (Devin on #221)', () => {
+    const doc = docOf(FIGURE)
+    expect(localizeNotes(doc)).toBe(1)
+    const original = doc.querySelector(`.${T_CLASS} .ltx_note_content`)!
+    expect(original.hasAttribute(NOTE_TRANSLATED_ATTR)).toBe(true)
+    expect(splitFigures(doc)).toBe(1)
+    const copy = doc.querySelector(`.${SPLIT_CLASS} .ltx_note_content`)!
+    expect(copy.querySelector(':scope > .axt-note-t')).not.toBeNull()
+    expect(copy.getAttributeNames().filter(n => n.startsWith('data-axt-'))).toEqual([NOTE_TRANSLATED_ATTR])
+    // The copy is placed already and its content unchanged: the pass returns early, and the mark stands
+    expect(localizeNotes(doc)).toBe(0)
+    expect(copy.hasAttribute(NOTE_TRANSLATED_ATTR)).toBe(true)
+    expect(original.hasAttribute(NOTE_TRANSLATED_ATTR)).toBe(true)
   })
 })

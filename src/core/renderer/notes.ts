@@ -219,7 +219,12 @@ export function localizeNotes(root: Document | Element): number {
       const translated = sibling
       const fresh = localizedCopy(translated)
       const existing = copy.querySelector(`:scope > .${NOTE_T_CLASS}`)
-      if (existing?.textContent === fresh.textContent) return // placed already, content unchanged
+      if (existing?.textContent === fresh.textContent) {
+        // Placed already, content unchanged. The mark is asserted again all the same: a copy rebuilt from a clone that
+        // lost every data-axt-* (a split figure's) still holds its `.axt-note-t` and must say so (Devin on #221)
+        copy.setAttribute(NOTE_TRANSLATED_ATTR, '')
+        return
+      }
       existing?.remove()
       // The copy keeps its own original with the translation appended: one margin note, English
       // above, Chinese below. The original goes into a wrapper first, which is what only mode can
@@ -268,4 +273,19 @@ export function delocalizeNotes(block: Element): number {
   copy?.querySelector(`:scope > .${NOTE_T_CLASS}`)?.remove()
   copy?.removeAttribute(NOTE_TRANSLATED_ATTR)
   return undone
+}
+
+/**
+ * Restores the copies' marks inside a subtree rebuilt without them: a split figure's clone loses every `data-axt-*`
+ * with its ids, but keeps the `.axt-note-t` a copy was given, so the copy must be marked again or only mode would
+ * show its original beside the translation (Devin on #221). Idempotent; returns how many copies are marked
+ */
+export function markTranslatedCopies(root: Element): number {
+  let marked = 0
+  for (const copy of Array.from(root.querySelectorAll(NOTE.content))) {
+    const translated = copy.querySelector(`:scope > .${NOTE_T_CLASS}`) !== null
+    copy.toggleAttribute(NOTE_TRANSLATED_ATTR, translated)
+    if (translated) marked++
+  }
+  return marked
 }

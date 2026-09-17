@@ -102,6 +102,7 @@ tests/renderer/side-layout.test.ts 5
 tests/renderer/split-figures.test.ts 18
 tests/renderer/table-fit.test.ts 1
 tests/renderer/table.test.ts 10
+tests/renderer/layout-marks.test.ts 14  # 2026-09-17: translated text placed by the renderer, the same inputs the sibling renderer tests use
 tests/rules/latexml.test.ts 4
 tests/rules/selector-boundary.test.ts 6
 tests/scheduler/title.test.ts 6
