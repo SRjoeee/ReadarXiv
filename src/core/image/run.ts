@@ -91,6 +91,8 @@ export interface ImageRun {
   waiting(): { target: ImageTarget; parked: boolean }[]
   /** How many targets the viewport observer still holds */
   observing(): number
+  /** Every target still waiting for the viewport is taken now (the whole-paper range chosen mid-session, §10); the parked ones stay behind their gate */
+  release(): number
 }
 
 /** Does this inline figure hold a label worth translating: a formula-only TikZ picture (most of the corpus) need not enter the scheduler */
@@ -424,5 +426,6 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     progress,
     waiting: () => ledger.inState('waiting').map(target => ({ target, parked: parked.has(target) })),
     observing: () => ledger.observing(),
+    release: () => ledger.release(),
   }
 }

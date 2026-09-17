@@ -335,6 +335,26 @@ describe('page session', () => {
     expect(h.session.retryFailed()).toBe(0)
   })
 
+  it('the whole-paper range chosen mid-session releases everything still waiting in the run; any other range applies from the next session (Devin on #222)', async () => {
+    const h = harness()
+    live = h.session
+    await h.session.start()
+    await settle()
+    // happy-dom has no IntersectionObserver and no layout: nothing enters the viewport by itself
+    expect((await h.session.status()).progress).toMatchObject({ state: 'on', requested: 0 })
+    h.session.onConfig({ ...h.config(), preload: { margin: 1800, threshold: 0 } })
+    await settle()
+    expect((await h.session.status()).progress).toMatchObject({ requested: 0 })
+    h.session.onConfig({ ...h.config(), preload: { margin: 'all', threshold: 0 } })
+    await settle()
+    expect((await h.session.status()).progress).toMatchObject({ requested: h.blocks.length, done: h.blocks.length, failed: 0 })
+    // Chosen again: nothing is left to release, and nothing is requested twice
+    const calls = h.calls.length
+    h.session.onConfig({ ...h.config(), preload: { margin: 'all', threshold: 0 } })
+    await settle()
+    expect(h.calls.length).toBe(calls)
+  })
+
   it('a fatal error reaches the idle line as its kind only: the message is the endpoint\'s, and the trace feeds the diagnostics log (Codex on #214)', async () => {
     const h = harness()
     live = h.session

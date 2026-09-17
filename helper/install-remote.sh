@@ -2,7 +2,7 @@
 # One-line install of the recognition helper (macOS), the command the popup copies:
 #   curl -fsSL https://raw.githubusercontent.com/SRjoeee/ReadarXiv/<ref>/helper/install-remote.sh | bash -s -- <extension-id> [<ref>]
 # <ref> is where the sources come from: the commit the extension was built from (the popup passes it, issue #158) or
-# a branch name, a release tag (v1.0.0) or a commit (default main). AXT_HELPER_DRY_RUN=1 prints the tarball URL and stops, for the tests.
+# a branch name, a release tag (v0.4.0) or a commit (default main). AXT_HELPER_DRY_RUN=1 prints the tarball URL and stops, for the tests.
 # Downloads this repository's helper/ into ~/Library/Application Support/Readarxiv/helper, builds it
 # with the Swift toolchain of the Xcode Command Line Tools, and registers the Native Messaging host
 # for Chrome and Chromium through register.sh, the one writer of the manifest (DESIGN §15.4). Re-running

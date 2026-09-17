@@ -15,8 +15,10 @@ import { Switch } from '@/ui/Switch'
 import { O, copyName, S } from '@/ui/strings'
 import type { OptionsData } from '../data'
 
-/** The preload margin as screens rather than pixels: a number of pixels means nothing to a reader */
-const MARGINS = [450, 900, 1800, 2700]
+/** The preload margin as screens rather than pixels — a number of pixels means nothing to a reader — and the whole paper (`all`, v15) */
+const MARGINS: readonly (number | 'all')[] = [900, 1800, 2700, 'all']
+/** The stop a stored margin shows as: `all` is its own stop, a number snaps to the nearest screen count */
+const marginStop = (value: number | 'all'): string => (value === 'all' ? 'all' : String(nearest(MARGINS.filter((m): m is number => m !== 'all'), value)))
 
 /**
  * The list with the profile written into it — in place, or appended when the profile is no longer there: deleted in
@@ -117,9 +119,9 @@ export function Reading({ data }: { data: OptionsData }) {
       <p className="mb-2 text-[11px] text-fg-2">{O.reading.preloadRangeHint}</p>
       <div className="mb-6">
         <Segmented
-          value={String(nearest(MARGINS, config.preload.margin))}
+          value={marginStop(config.preload.margin)}
           options={MARGINS.map((m, i) => ({ value: String(m), label: O.reading.preloadStops[i]!, title: O.reading.preloadStops[i]! }))}
-          onChange={next => void patch(latest => ({ ...latest, preload: { ...latest.preload, margin: Number(next) } }))}
+          onChange={next => void patch(latest => ({ ...latest, preload: { ...latest.preload, margin: next === 'all' ? 'all' : Number(next) } }))}
         />
       </div>
 

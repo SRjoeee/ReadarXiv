@@ -62,6 +62,19 @@ describe('createLazyScheduler', () => {
     document.body.innerHTML = ''
   })
 
+  it('the whole paper (margin: all, v15): every block enters at creation as one batch, boxless anchors included, and no observer is made', () => {
+    document.body.innerHTML = PAGE
+    const blocks = extract(document)
+    // Two blocks far below any distance a margin would cover: the whole-paper stop ignores distance altogether
+    layout(document.getElementById('a')!, 100)
+    layout(document.getElementById('d')!, 50_000)
+    const entered: Block[][] = []
+    createLazyScheduler(blocks, { margin: 'all', threshold: 0, onEnter: picked => entered.push(picked) })
+    expect(FakeIntersectionObserver.instances).toHaveLength(0)
+    expect(entered).toHaveLength(1)
+    expect(entered[0]!.map(b => b.el.id).sort()).toEqual(blocks.map(b => b.el.id).sort())
+  })
+
   it('parameters as in Read Frog: rootMargin takes the preload distance, threshold the visibility threshold', () => {
     const { io } = setup()
     expect(io.options).toEqual({ rootMargin: '1000px 0px', threshold: 0 })

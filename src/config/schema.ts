@@ -7,7 +7,7 @@ import { DEFAULT_APPEARANCE, appearanceSchema } from './appearance'
 import { BUILT_IN_SERVICES, SERVICE_ID_RE, serviceSchema } from './services'
 import { DEFAULT_LANG_CODE, langCodeSchema } from './languages'
 
-export const CONFIG_VERSION = 14
+export const CONFIG_VERSION = 15
 
 /** The three reading modes (DESIGN §7); `mode` is shared with the image translation's mode gate */
 export const MODE_VALUES = ['stack', 'side', 'only'] as const
@@ -72,9 +72,13 @@ export const configSchema = z.object({
   appearance: appearanceSchema,
   /** The engine fallback chain (§8.5): a failing first choice switches to the free engines of itself, so the whole page does not stop */
   fallback: z.object({ enabled: z.boolean() }),
-  /** The viewport translation range (§10, Read Frog's preload): how many pixels below the viewport count as near (0–10000), how much must show to count as entered (0–1) */
+  /**
+   * The viewport translation range (§10, Read Frog's preload): how many pixels below the viewport count as near
+   * (0–10000), or `all` — the whole paper is requested as the session starts (v15); how much must show to count as
+   * entered (0–1). The settings page offers the margin as one, two or three screens, or the whole paper
+   */
   preload: z.object({
-    margin: z.number().min(0).max(10_000),
+    margin: z.union([z.number().min(0).max(10_000), z.literal('all')]),
     threshold: z.number().min(0).max(1),
   }),
   /**

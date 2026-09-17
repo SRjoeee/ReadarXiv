@@ -34,7 +34,7 @@ Layout and prep (2312.17141, 392 equation tables, side mode):
 
 Translation (2410.00260, 292 blocks):
 
-- Google web, first screen (viewport + the half-screen preload margin the suite sets): 11 of 292 blocks requested, 56 ms with cache, 0 failed. Scheduling numbers depend on `preload`; hold them at the same setting. Full page: 290 / 290 blocks in 6 989 ms; **45 requests carrying 329 segments (7.3 per request)**; in-flight peak 2 (= `maxConcurrent`), 9 per second.
+- Google web, first screen (viewport + the one-screen preload margin the suite sets — it was always one screen at that point; the half-screen stop no longer exists, v15): 11 of 292 blocks requested, 56 ms with cache, 0 failed. The whole-paper stop on the same cached paper: 292 of 292 requested at the start without a scroll, one passage to the endpoint (never near the viewport during the scroll-through), 356 ms. Scheduling numbers depend on `preload`; hold them at the same setting. Full page: 290 / 290 blocks in 6 989 ms; **45 requests carrying 329 segments (7.3 per request)**; in-flight peak 2 (= `maxConcurrent`), 9 per second.
 - Refresh: 0 endpoint requests, 49 ms.
 - Microsoft, first screen: 655 ms; 21 / 21 protected nodes preserved across 14 pairs; 0 marker residue.
 - Restore: 0 translations, 0 `data-axt-*` attributes after a full attribute sweep; 83 nodes removed; 0 new requests within 0.5 s.
