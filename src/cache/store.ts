@@ -289,21 +289,14 @@ export class TranslationCache {
     }
   }
 
-  /** Clear everything, or one paper only; returns how many were deleted */
-  async clear(paper?: string): Promise<number> {
+  /** Clear everything; returns how many were deleted. There is no per-paper clear: the key carries every setting, so a changed one misses the old entry by itself (DESIGN §9) */
+  async clear(): Promise<number> {
     this.invalidateTotals()
-    if (paper === undefined) {
-      const total = await this.db.entries.count()
-      this.memory.clear()
-      await this.db.entries.clear()
-      this.invalidateTotals()
-      return total
-    }
-    const keys = await this.db.entries.where('paper').equals(paper).primaryKeys()
-    await this.db.entries.bulkDelete(keys)
+    const total = await this.db.entries.count()
+    this.memory.clear()
+    await this.db.entries.clear()
     this.invalidateTotals()
-    for (const key of keys) this.forget(key)
-    return keys.length
+    return total
   }
 
   /** Reads index keys only, like ensureTotals, so opening the popup need not read the whole store */

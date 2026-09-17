@@ -81,7 +81,7 @@ export interface AxtMessages {
    */
   'axt:provider-status': { request: { scope?: string; fresh?: boolean }; response: ProviderStatus }
   /** Clear the cache, or one paper only */
-  'axt:cache-clear': { request: { paper?: string }; response: { ok: true; removed: number } | { ok: false; message: string } }
+  'axt:cache-clear': { request: Record<never, never>; response: { ok: true; removed: number } | { ok: false; message: string } }
   'axt:cache-stats': { request: Record<never, never>; response: { ok: true; entries: number; bytes: number } | { ok: false; message: string } }
   /** content / popup / options → background: one line for the diagnostics log (issue #156); the background records its own directly */
   'axt:diag': { request: { src: Exclude<DiagnosticSource, 'background'>; line: string }; response: undefined }

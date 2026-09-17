@@ -189,7 +189,7 @@ export function useOptionsData(): OptionsData {
   }, [packs])
 
   const clearCache = useCallback(async () => {
-    const res = await sendMessage({ type: 'axt:cache-clear', paper: undefined })
+    const res = await sendMessage({ type: 'axt:cache-clear' })
     if (!res.ok) { setCacheError(res.message); return }
     setCacheCleared(true)
     setTimeout(() => setCacheCleared(false), 2000)
