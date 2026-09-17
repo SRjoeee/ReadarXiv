@@ -23,4 +23,4 @@ BIN="$(pwd)/.build/release/axt-helper"
 ./register.sh "$BIN" "$@"
 
 echo "helper $("$BIN" --version), binary $BIN"
-echo "Image translation is available now; no need to reload the extension."
+echo "Image translation is available now."
