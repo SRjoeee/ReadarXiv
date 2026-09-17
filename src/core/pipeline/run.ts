@@ -76,6 +76,8 @@ export interface TranslationRun {
   progress(): Progress
   /** The blocks whose translation failed (document order); the popup's “retry failed” hands them to translate again */
   failed(): Block[]
+  /** Every block still waiting for the viewport is queued now (the whole-paper range chosen mid-session, §10); returns how many */
+  release(): number
 }
 
 /**
@@ -379,5 +381,5 @@ export function startTranslation(options: RunOptions): TranslationRun {
     await Promise.all(batches.map(processBatch))
   }
 
-  return { ready, translate, stop: () => ledger.stop(), progress, failed: () => ledger.failed() }
+  return { ready, translate, stop: () => ledger.stop(), progress, failed: () => ledger.failed(), release: () => ledger.release() }
 }

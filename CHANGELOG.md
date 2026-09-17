@@ -2,18 +2,19 @@
 
 Reader-facing changes, newest first. The engineering record is `docs/rebuild/PROGRESS.md`; the design is `docs/DESIGN.md`.
 
-## 1.0.0 — unreleased
+## 0.4.0 — unreleased
 
-The first release. Read arXiv translates arXiv's HTML papers in place and keeps them working.
+The first release. Numbered 0.4.0 rather than 1.0.0 (the owner, 2026-09-17): the number continues the line of the MVP's tags (`v0.1.0-phase1`, `v0.2.0-phase2`, `v0.3.0-mvp`), and small numbers suit a project that still changes often — fixes go to 0.4.x, features to 0.5.0. Read arXiv translates arXiv's HTML papers in place and keeps them working.
 
 ### Reading
 
-- Three modes — side by side, stacked, translation only — switched at any time; restoring the original is lossless (the page is node for node what it was).
+- Three modes — split, stacked, translation only — switched at any time; restoring the original is lossless (the page is node for node what it was).
 - Formulas, citations, cross-references, code, links, footnotes and tables survive translation; a footnote appears once, in the margin, original above translation; figures split into both columns in side mode.
 - Sentence highlight on hover, on both sides at once; in translation-only mode the original sentence floats beside the translation. In-page links to a hidden original land on its translation.
 - Long papers stay smooth: the highlight follows the pointer and translations land without the page pausing — no style rule makes the browser re-examine the whole document any more (a 160 ms pause per sentence on a 60 000-element paper before).
 - The translation's appearance is yours: colour, opacity, underline, blur-until-hover, advanced CSS; background highlights likewise; built-ins are ordinary entries you can change or reset.
 - Translate from the popup, the toolbar button, the right-click menu, Alt+T, or the **Bilingual version** link on a paper's abstract page.
+- Translation follows your reading: paragraphs one to three screens ahead are requested as you scroll, or the whole paper at once if you prefer; a paragraph never scrolled to costs nothing.
 
 ### Services
 

@@ -124,3 +124,22 @@ describe('Reading: the profile drawer', () => {
     await mounted.unmount()
   })
 })
+
+describe('Reading: the preload range', () => {
+  beforeEach(() => { setLocale('en') })
+  const stops = (root: HTMLElement) => Array.from(root.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')).filter(b => (O.reading.preloadStops as readonly string[]).includes(b.textContent?.trim() ?? ''))
+
+  it('offers one to three screens and the whole paper (v15); the whole paper writes `all`, and a stored margin below one screen shows as one screen', async () => {
+    const patches: Config[] = []
+    const mounted = await mountElement(createElement(Reading, { data: data({ ...DEFAULT_CONFIG, preload: { margin: 450, threshold: 0 } }, patches) }))
+    const before = stops(mounted.container)
+    expect(before.map(b => b.textContent?.trim())).toEqual(['1 screen', '2 screens', '3 screens', 'Whole paper'])
+    expect(before.map(b => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false', 'false'])
+    before[3]!.click()
+    await mounted.flush()
+    expect(patches.at(-1)?.preload.margin).toBe('all')
+    await mounted.rerender(createElement(Reading, { data: data({ ...DEFAULT_CONFIG, preload: { margin: 'all', threshold: 0 } }, patches) }))
+    expect(stops(mounted.container).map(b => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'false', 'true'])
+    await mounted.unmount()
+  })
+})

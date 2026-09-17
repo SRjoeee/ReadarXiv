@@ -157,7 +157,7 @@ decisions they justify; [`docs/adr/`](docs/adr/) holds one decision per file, an
 
 ## Status
 
-Version 1.0 ([`CHANGELOG.md`](CHANGELOG.md)); the Chrome Web Store listing is pending, so it is built
+Version 0.4.0 ([`CHANGELOG.md`](CHANGELOG.md)); the Chrome Web Store listing is pending, so it is built
 from source for now. Everything above works today — translating, the three layouts, showing the
 original, the four services, sentence alignment, figure translation and the settings. The roadmap is
 [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155).

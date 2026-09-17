@@ -38,7 +38,7 @@ Status: **implemented** — the copy of §3, the tokens of §5 and the language 
 | prompt | **提示词** | The common word among AI users |
 | glossary | **术语表** | |
 | cache | **已缓存的译文** | Never “缓存” on its own |
-| preload margin | **提前翻译的范围** | Steps: 半屏 / 一屏 / 两屏 / 三屏 |
+| preload margin | **提前翻译的范围** | Steps: 一屏 / 两屏 / 三屏 / 整篇 (the owner, 2026-09-17: the half-screen stop dropped, the whole paper added) |
 | preload threshold | **开始翻译的时机** | Steps: 刚露出 / 露出一半 / 完全露出 |
 | thinking | **深度思考** | The common name in Chinese AI products |
 | baseURL | **接口地址** | |
@@ -162,7 +162,7 @@ changes, and the two drawers commit with one button.
 | S-O-47 | Advanced | 高级 / 只填声明，不写选择器和花括号；字体与字号仍随论文 | Folded; an invalid block says why on the spot |
 | S-O-48 | Drawer actions | 复制一份 · 删除 · 完成 | |
 | S-O-49 | Background highlight | 背景高亮 / 悬停时来标出对应句子的底色 | Same grid and editor, fields 底色 + 透明度; built-ins: 柔和绿 · 淡黄 · 淡蓝 |
-| S-O-50 | Preload range | 提前翻译的范围 / 屏幕下方多远的段落先翻；越近越省费用 | 半屏 · 一屏 · 两屏 · 三屏 |
+| S-O-50 | Preload range | 提前翻译的范围 / 屏幕下方多远的段落先翻；越近越省费用，整篇则一开始就全部请求 | 一屏 · 两屏 · 三屏 · 整篇. 整篇 reaches an open paper at once (everything still waiting is requested); the other stops apply from the next session |
 | S-O-51 | When translation starts | 开始翻译的时机 / 段落露出多少才开始翻 | 刚露出 · 露出一半 · 完全露出 |
 | S-O-60 | Prompts and glossary · not an LLM | 只对 LLM 服务生效 | A line at the top; the section stays usable |
 | S-O-61 | Prompts | 提示词 | The existing prompt manager on the tokens |
