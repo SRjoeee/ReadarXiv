@@ -4,6 +4,7 @@
 import { APICallError, Output, generateText, type LanguageModel } from 'ai'
 import { z } from 'zod'
 import { isLoopback, serviceRuns } from '@/config/services'
+import { kindOfStatus } from './http-errors'
 import { createModel, type OpenAICompatConfig } from './model'
 import { buildPrompts } from './prompt'
 import { promptKey, type PromptsConfig } from './prompt-library'
@@ -108,7 +109,10 @@ function toProviderError(e: unknown): ProviderError {
   if (name === 'AbortError') return new ProviderError('aborted', 'request aborted', { cause: e })
   if (APICallError.isInstance(e)) {
     const status = e.statusCode
-    const kind = status === 429 ? 'rate-limit' : status === 401 || status === 403 ? 'auth' : status === undefined ? 'network' : 'unknown'
+    // Classified like the web engines (`kindOfStatus`): a deterministic 4xx (wrong model, rejected request shape) is
+    // `bad-request` and a 5xx `network`, neither split into smaller batches; before, both were `unknown`, which the
+    // content side halves and resends — a wrong model name cost several paid requests per batch before the chain took over
+    const kind = status === undefined ? 'network' : kindOfStatus(status)
     const err = new ProviderError(kind, e.message, { cause: e })
     return attachRequestErrorMeta(err, { statusCode: status, responseHeaders: e.responseHeaders, isRetryable: e.isRetryable })
   }
