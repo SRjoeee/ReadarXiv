@@ -84,7 +84,7 @@ export const configSchema = z.object({
   /**
    * Reading aid (§7.7, since v10): on hover the matching sentence in the original and in the translation is marked
    * with a band (issue #105). On by default — it shows anything only when the engine reported sentence boundaries and
-   * both sides could be rebuilt, silent and free otherwise. Added at db38c5d by a schema default alone, without a bump;
+   * both sides could be rebuilt, silent and free otherwise. Added at 7c02d83 by a schema default alone, without a bump;
    * v14 wrote it into every stored value (DESIGN §9)
    */
   reading: z.object({ sentenceHighlight: z.boolean() }),

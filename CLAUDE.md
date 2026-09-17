@@ -9,7 +9,7 @@ Chrome extension (MV3) that translates `https://arxiv.org/html/*` in place: stru
 - `docs/RELEASE.md` — how a version is cut, and the store listing.
 - `docs/THIRD_PARTY.md` — what was ported from which project, under which licence.
 - `CHANGELOG.md` — reader-facing changes.
-- The design's history — the rebuild's charter, checkpoint log, inventory, baseline numbers and one-decision-per-file records — was archived from the tree on 2026-09-17 and stays in the repository's history: `git show 48cdd9f:docs/rebuild/PROGRESS.md`, `git show 48cdd9f:docs/adr/`.
+- The design's history — the rebuild's charter, checkpoint log, inventory, baseline numbers and one-decision-per-file records — was archived from the tree on 2026-09-17 and stays in the repository's history: `git show d91debb:docs/rebuild/PROGRESS.md`, `git show d91debb:docs/adr/`.
 
 ## Hard rules
 
