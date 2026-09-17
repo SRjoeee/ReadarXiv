@@ -9,7 +9,7 @@
 // `pnpm test` runs the same thing first (tests/global-setup.ts), as do `pnpm fixtures:stats` and `pnpm helper:smoke`.
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -24,9 +24,26 @@ const ATTEMPTS = 3
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-/** @returns {Promise<{ path: string; url: string; sha256: string; bytes: number }[]>} */
+/** Where a fixture may be written: the two fixture directories, nowhere else */
+const FIXTURE_DIRS = ['tests/fixtures', 'helper/Tests/Fixtures']
+
+/**
+ * The manifest, refused whole if an entry could write outside the fixture directories or fetch from anywhere but
+ * arXiv: the file is data a pull request can change, and what it names is written to disk and cached by CI
+ * (Devin on #229)
+ *
+ * @returns {Promise<{ path: string; url: string; sha256: string; bytes: number }[]>}
+ */
 export async function readManifest(root = ROOT) {
-  return JSON.parse(await readFile(join(root, MANIFEST), 'utf8')).fixtures
+  const entries = JSON.parse(await readFile(join(root, MANIFEST), 'utf8')).fixtures
+  for (const entry of entries) {
+    const inside = relative(root, resolve(root, String(entry.path))).split('\\').join('/')
+    if (isAbsolute(String(entry.path)) || inside !== entry.path || !FIXTURE_DIRS.some(dir => inside.startsWith(`${dir}/`))) {
+      throw new Error(`${MANIFEST}: "${entry.path}" is not a plain path inside ${FIXTURE_DIRS.join(' or ')}`)
+    }
+    if (!/^https:\/\/arxiv\.org\//.test(String(entry.url))) throw new Error(`${MANIFEST}: "${entry.url}" is not an https://arxiv.org/ address`)
+  }
+  return entries
 }
 
 /** The file's bytes, or null when it is not there */

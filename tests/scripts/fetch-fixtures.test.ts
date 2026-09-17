@@ -74,6 +74,28 @@ describe('ensureFixtures', () => {
   })
 })
 
+describe('a manifest that names anything but a fixture of arXiv\'s is refused before a byte is fetched (Devin on #229)', () => {
+  const withEntry = (entry: Partial<typeof ENTRY>) => writeFileSync(join(root, 'tests/fixtures/remote.json'), JSON.stringify({ fixtures: [{ ...ENTRY, ...entry }] }))
+
+  for (const path of ['../outside.html', 'tests/fixtures/../../outside.html', '/tmp/outside.html', 'src/core/rules/latexml.ts', 'tests/fixtures/./arxiv/x.html']) {
+    it(`the path ${path}`, async () => {
+      withEntry({ path })
+      const fetchImpl = serving(BODY)
+      await expect(ensureFixtures({ root, fetchImpl, gapMs: 0 })).rejects.toThrow(/is not a plain path inside/)
+      expect(fetchImpl).not.toHaveBeenCalled()
+    })
+  }
+
+  it('an address that is not arxiv.org over https', async () => {
+    for (const url of ['http://arxiv.org/html/0000.00000v1', 'https://arxiv.org.example.com/html/0000.00000v1', 'file:///etc/hosts']) {
+      withEntry({ url })
+      const fetchImpl = serving(BODY)
+      await expect(ensureFixtures({ root, fetchImpl, gapMs: 0 })).rejects.toThrow(/is not an https:\/\/arxiv\.org\/ address/)
+      expect(fetchImpl).not.toHaveBeenCalled()
+    }
+  })
+})
+
 describe('the manifest', () => {
   it('pins a version in every URL, and every path is one git ignores and CI keeps between runs', async () => {
     const root = join(import.meta.dirname, '../..')
