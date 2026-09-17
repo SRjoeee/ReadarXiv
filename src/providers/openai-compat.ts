@@ -66,7 +66,8 @@ export function createOpenAICompatProvider(
     // The endpoint enters the cache identity: a model of the same name on different endpoints is a different thing
     // (issue #45) — origin and path, never the key. So does a thinking switch that is on and sent: a reasoning model's
     // translation is another output, and without it the switch would show nothing for the entry's 30 days (hard rule
-    // 4). Off keeps the identity it always had, so no stored entry changes meaning and no version is bumped
+    // 4). Off keeps the identity it had — which, before this, also held what was written with the switch on; hence
+    // CACHE_KEY_VERSION 7
     cacheId: `openai-compat:${endpointIdentity(config.baseURL)}${thinks ? '|thinking' : ''}`,
     async isAvailable() {
       return hasKey()

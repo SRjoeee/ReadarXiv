@@ -137,9 +137,15 @@ export function configFallbackReason(): FallbackReason | null {
   return fallbackReason
 }
 
-/** `tooNew`: the stored version is newer than this extension; `invalid`: the structure fails the schema, `where` being the failing field */
+/**
+ * `tooNew`: the stored version is newer than this extension. `upgradeFailed`: older, so a migration should have
+ * carried it here and did not — WXT runs every step before it writes anything, so a step that threw left the value as
+ * it was (a later build that fixes the step may still read it; a reset replaces it). `invalid`: the structure fails
+ * the schema, `where` being the failing field
+ */
 export type FallbackReason =
   | { kind: 'tooNew'; stored: number; supported: number }
+  | { kind: 'upgradeFailed'; stored: number; supported: number }
   | { kind: 'invalid'; where: string; message: string }
   | { kind: 'unknown' }
 
@@ -152,6 +158,9 @@ function describeFallback(stored: unknown, issues: readonly { path: PropertyKey[
   const version = (stored as { version?: unknown } | null)?.version
   if (typeof version === 'number' && version > CONFIG_VERSION) {
     return { kind: 'tooNew', stored: version, supported: CONFIG_VERSION }
+  }
+  if (typeof version === 'number' && version < CONFIG_VERSION) {
+    return { kind: 'upgradeFailed', stored: version, supported: CONFIG_VERSION }
   }
   const issue = issues[0]
   if (!issue) return { kind: 'unknown' }
@@ -172,7 +181,7 @@ export async function getConfig(): Promise<Config> {
   }
   fallbackReason = describeFallback(stored, parsed.error.issues)
   // The cause and the failing field's path only: a validation message is not ours to vouch for, and the log never holds a stored value (hard rule 5)
-  console.warn(`[axt] the stored configuration cannot be read, defaults in use: ${fallbackReason.kind}${fallbackReason.kind === 'invalid' ? ` at ${fallbackReason.where}` : ''}`)
+  console.warn(`[axt] the stored configuration cannot be read, defaults in use: ${fallbackReason.kind}${fallbackReason.kind === 'invalid' ? ` at ${fallbackReason.where}` : ''}${'stored' in fallbackReason ? ` (v${fallbackReason.stored}, this build v${fallbackReason.supported})` : ''}`)
   return DEFAULT_CONFIG
 }
 
