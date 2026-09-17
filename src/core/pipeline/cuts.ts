@@ -15,24 +15,29 @@ import { wireFormatOf, type RenderPath } from '@/cache/key'
 
 /**
  * Reference units. The sentence splitter has no precision guarantee here — journal abbreviations (`Sci. Rep. 14
- * (2024)`, `Theor. Comput. Sci.`) cut false boundaries, and a false boundary puts the highlight on half a sentence, worse than none.
+ * (2024)`, `Theor. Comput. Sci.`) cut false boundaries, and a false boundary puts the highlight on half a sentence,
+ * worse than none. So they are never cut — but they are aligned **whole**: a fragment (the authors, the title, the
+ * venue) or an undivided entry pairs with its translation as one sentence does, which needs no splitter and no
+ * marker. Left unaligned they had no highlight at all under every engine that reports no boundaries of its own
+ * (Google, the LLM services), while Microsoft's `sentLen` covered them (measured 2026-09-17: 0 of 13 fragments
+ * under Google, 13 of 13 under Microsoft; the owner's report)
  */
-const NO_SENTENCES = new Set(['bibblock', 'bibitem'])
+const WHOLE_ONLY = new Set(['bibblock', 'bibitem'])
 
 /**
  * This block's sentence boundaries.
  *
  * **An empty array and undefined are not the same**: an empty array says “this block is aligned, and it is one
  * sentence” — whole block to whole block is a safe alignment needing no marker, and single-sentence blocks are most
- * of a body; undefined says “this block is not aligned”, which is where references and the non-`tags` paths fall
- * (Codex on #137 pointed out that I had conflated the two).
+ * of a body; undefined says “this block is not aligned”, which is where the non-`tags` paths fall (Codex on #137
+ * pointed out that I had conflated the two). A reference unit is the first kind: never cut, aligned whole.
  *
  * The `runs` and `markers` paths are not cut: the former sends fragmented plain-text runs and joining them back
  * yields no wire offsets, the latter has no marker that survives the wire.
  */
 export function cutsOf(segment: Segment, renderPath: RenderPath): number[] | undefined {
   if (renderPath !== 'tags') return undefined
-  if (segment.block.kind === 'text' && NO_SENTENCES.has(segment.block.unit)) return undefined
+  if (segment.block.kind === 'text' && WHOLE_ONLY.has(segment.block.unit)) return []
   const slots = segment.protected.slots
   const cuts = sentenceCuts(segment.protected.text, wireFormatOf(renderPath), {
     isAnnotation: id => {
