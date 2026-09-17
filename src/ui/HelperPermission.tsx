@@ -1,4 +1,4 @@
-// The permission step before the guided install (ADR-0002 §1; UI.md S-O-86, S-P-86c). `nativeMessaging` is optional,
+// The permission step before the guided install (DESIGN §15.3; UI.md S-O-86, S-P-86c). `nativeMessaging` is optional,
 // so it is requested from the reader's own click: Chrome shows its prompt and says whether it was granted. Denial is
 // a state with its own line, not an error — the button stays for another try. Shared by the popup and the settings
 // page, as HelperSetup is: one step, one wording. The line above the button is each surface's own (the popup derives

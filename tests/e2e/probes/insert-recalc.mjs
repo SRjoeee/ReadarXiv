@@ -1,4 +1,4 @@
-// Probe for ADR-0011: what one DOM insertion costs the page in style recalculation once a paper is translated — a hover
+// Probe for DESIGN §7.2: what one DOM insertion costs the page in style recalculation once a paper is translated — a hover
 // band written into the highlight layer, and a translation-shaped node landing after a paragraph — and how many elements
 // that recalculation visits (`UpdateLayoutTree.elementCount` from a CDP trace). With a `:has()` in the injected sheet
 // Chrome recalculated the whole document on every insertion: 14 ms on 2410.00260 (4 531 elements), 161–165 ms on

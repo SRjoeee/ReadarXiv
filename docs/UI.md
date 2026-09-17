@@ -107,9 +107,9 @@ states, verbs for buttons, no spoken phrases (去填 / 去修 are out), every no
 | S-P-83 | Translation style menu · last row | 管理译文样式… | [decided, 2026-09-11, proposed by the reader] The same role as the service menu's “管理翻译服务…”: the menu's last row is not a style but the way in to managing them, so it carries no preview and takes no part in selection. Styles live in the options page's **阅读** section, so this row opens straight onto that section (`options.html#reading`) — `openOptionsPage` passes no hash, and landing in the “翻译服务” section is worse than one extra tab; the entries without a section (the gear at the top right, the “设置” in a note) still use `openOptionsPage`, which brings the tab already open to the front |
 | S-P-85 | Image translation row | 图片翻译 | Switch in the card (`image.enabled`, v11); saved at once, live on the page; the per-mode list stays on the options page |
 | S-P-86 | Under the image translation row · helper not installed (macOS) | 图片翻译需要安装识别助手 | Only while the switch is on and the helper is not detected |
-| S-P-86b | Under the image translation row · awaiting permission (macOS) | 图片翻译需要允许扩展与识别助手通信 | [2026-09-13, ADR-0002] `nativeMessaging` became an optional permission; this row appears before S-P-86 |
-| S-P-86c | Permission action | 允许 | [2026-09-13, ADR-0002] This click starts Chrome's permission prompt (`src/ui/HelperPermission.tsx`, shared with the options page); after a refusal the button stays |
-| S-P-86d | Under the image translation row · permission taking effect | 已允许，稍后自动生效 | [2026-09-13, ADR-0002] The transitional state while the grant lands in an already running background; nothing to press, the card follows up by itself once the new worker is up |
+| S-P-86b | Under the image translation row · awaiting permission (macOS) | 图片翻译需要允许扩展与识别助手通信 | [2026-09-13, DESIGN §15.3] `nativeMessaging` became an optional permission; this row appears before S-P-86 |
+| S-P-86c | Permission action | 允许 | [2026-09-13, DESIGN §15.3] This click starts Chrome's permission prompt (`src/ui/HelperPermission.tsx`, shared with the options page); after a refusal the button stays |
+| S-P-86d | Under the image translation row · permission taking effect | 已允许，稍后自动生效 | [2026-09-13, DESIGN §15.3] The transitional state while the grant lands in an already running background; nothing to press, the card follows up by itself once the new worker is up |
 | S-P-87 | Under the image translation row · not macOS | 图片翻译目前仅支持 macOS | |
 | S-P-88 | Helper hint action | 安装 | [decided, 2026-09-12] Unfolds the S-O-27 guide in place, without jumping to the options page or opening a new window. Replaces the former two buttons “复制安装命令 · 教程” — the guide carries the command block and the tutorial link itself |
 | S-P-90 | Action failed | {原始信息} | Red line under the primary button (`role=alert`), cleared before the next action |
@@ -148,7 +148,7 @@ changes, and the two drawers commit with one button.
 | S-O-27b | Step two | 在终端中执行以下命令 / 点击复制 → 已复制 | The whole command is one button; a click anywhere copies it. **Wrapped rather than scrolled sideways**: this is a `curl \| bash`, and with the end out of sight there is no telling whether to run it |
 | S-O-27c | Waiting | 执行完成后自动生效，无需返回此处 | [decided, 2026-09-12] **Replaces the former “我已经装好了” button**: after the install the background detects it by itself (DESIGN §15.4), and the reader need not come back to the extension. Copying starts the wait |
 | S-O-27d | Not detected after 3 minutes | 尚未检测到识别助手。请确认命令已执行完毕且未出现报错。 | Replaces S-O-27c in place, no change of interface; the command block stays clickable and can be copied again at any time |
-| S-O-86 | Helper · awaiting permission (macOS) | 图片翻译需要允许扩展与识别助手通信 / 允许 | [2026-09-13, ADR-0002] The permission button, before S-O-27; `src/ui/HelperPermission.tsx` shared with the popup |
+| S-O-86 | Helper · awaiting permission (macOS) | 图片翻译需要允许扩展与识别助手通信 / 允许 | [2026-09-13, DESIGN §15.3] The permission button, before S-O-27; `src/ui/HelperPermission.tsx` shared with the popup |
 | S-O-86a | Permission refused | 未允许。允许后才能识别图中的文字 | One line of explanation in place; the button stays |
 | S-O-86b | Permission taking effect | 已允许，稍后自动生效 | Transitional; the background's new worker broadcasts the state once up, and this section follows by itself |
 | S-O-26 | Image modes | 在这些模式下显示图片译文 / 只影响显示：切到没勾的模式时叠加层隐藏，切回来再显示，不重新识别 | 上下 · 左右 · 仅译文 |
@@ -223,8 +223,8 @@ the rows open at any time.
 | P12 | Narrow window | `mode !== preference` | value | as the state | — | as the state | — |
 | P13 | Page behind the settings | on ∧ `running` ≠ settings ∧ !runnable | value (the saved one) | S-P-32 + 设置 | — | 重新翻译 **disabled** | 显示原文 |
 | P14 | Helper not installed | `image.enabled` ∧ helper = not-installed | value | S-P-86/87 under the image row | — | as the state | — |
-| P14a | Helper awaiting permission | `image.enabled` ∧ helper = permission-missing [2026-09-13, ADR-0002] | value | S-P-86b/c under the image row | — | as the state | — |
-| P14b | Helper permission taking effect | `image.enabled` ∧ helper = restarting [2026-09-13, ADR-0002] | value | S-P-86d under the image row | — | as the state | — |
+| P14a | Helper awaiting permission | `image.enabled` ∧ helper = permission-missing [2026-09-13, DESIGN §15.3] | value | S-P-86b/c under the image row | — | as the state | — |
+| P14b | Helper permission taking effect | `image.enabled` ∧ helper = restarting [2026-09-13, DESIGN §15.3] | value | S-P-86d under the image row | — | as the state | — |
 | P15 | Prompt menu | llm ∧ menu = prompt | value | as the state | — | as the state | — |
 | P16 | Style menu | menu = style | value | as the state | — | as the state | — |
 
@@ -354,7 +354,7 @@ Every feature added on the main line is registered here first; a feature without
 | Thinking switch | §8.2 | done | Settings · 更多选项 | S-O-30 |
 | Skeleton while loading / failed block retry | §7.6 | done | in page | S-I-01…02 |
 | **Image translation**: helper detection, multi-select modes, progress, pause, retry | §15, PR #87–89 | done | Settings · a section under 翻译服务; popup failure line and card note; in-page overlay | S-O-24…27d, S-P-35 / 60, S-I-04, P11, P14…P14b |
-| Helper permission button | §15.4, ADR-0002 | done [2026-09-13] | popup card; Settings · 图片翻译 | S-O-86…86b, S-P-86b…d |
+| Helper permission button | §15.4, DESIGN §15.3 | done [2026-09-13] | popup card; Settings · 图片翻译 | S-O-86…86b, S-P-86b…d |
 | **Reading typography** (font size / line height / width / spacing / colour / presets / reset) | #47 | decided, not built | Settings · 阅读 · typography card | — (no id yet; S-O-47 names the advanced CSS box since the renumbering) |
 | Split-view dragging | #83 | experimental | in-page handle; one “恢复居中” in settings | S-I-05 (the settings entry has no id yet) |
 | Free AI translation (hosted) | #97 | candidate | fourth item of the service list | — (no ids yet) |
@@ -374,4 +374,4 @@ Every feature added on the main line is registered here first; a feature without
 3. The field range and preset names of the typography card (#47), against the issue's acceptance items, if it is built.
 4. Whether to bundle Manrope (about 60 KB woff2, Latin glyphs only); the system font stack today.
 
-Decided and shipped, for the record: the product name (Read arXiv; ADR-0010), the paused state's two buttons (S-P-52 / S-P-53), the searchable language list (S-P-22 / S-P-23), the name 识别助手 for the helper.
+Decided and shipped, for the record: the product name (Read arXiv; DESIGN §3), the paused state's two buttons (S-P-52 / S-P-53), the searchable language list (S-P-22 / S-P-23), the name 识别助手 for the helper.

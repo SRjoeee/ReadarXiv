@@ -25,7 +25,7 @@ import { createDiagnostics } from './diagnostics'
 // polyfill, so an asynchronous response needs sendResponse + return true.
 export default defineBackground(() => {
   const cache = cachePortOf(translationCache)
-  /** Scopes ended for certain — one registry (ADR-0005): the session router writes it, the chain's services and OCR read it */
+  /** Scopes ended for certain — one registry (DESIGN §8.5): the session router writes it, the chain's services and OCR read it */
   const cancelled = new CancelledScopeRegistry()
   /** The diagnostics log (issue #156): this worker's warnings, the pages' `[axt]` lines; in session storage across workers, for the settings page's export */
   const DIAG_KEY = 'axt-diagnostics'
@@ -76,7 +76,7 @@ export default defineBackground(() => {
   const helper = createHelperClient({
     connect: () => browser.runtime.connectNative(HELPER_HOST),
     lastError: () => browser.runtime.lastError?.message,
-    // Optional permission (ADR-0002): asked before each connection. The binding is missing in a worker started
+    // Optional permission (DESIGN §15.3): asked before each connection. The binding is missing in a worker started
     // before the grant; `restarting` is what it reports until the alarm below has brought a fresh one
     permitted: () => browser.permissions.contains({ permissions: ['nativeMessaging'] }),
     bound: () => typeof browser.runtime.connectNative === 'function',
@@ -140,7 +140,7 @@ export default defineBackground(() => {
   }
   /**
    * The helper's state changed on the background's own initiative — the install wait found it, or the fresh worker
-   * after a runtime grant reported (ADR-0002). Papers only need to hear "ready" (they park bitmaps until then); the
+   * after a runtime grant reported (DESIGN §15.3). Papers only need to hear "ready" (they park bitmaps until then); the
    * extension pages take the state as is. Extension pages are not content scripts and get nothing from
    * `tabs.sendMessage`, hence the second send; nobody listening is the normal case and it rejects
    */
@@ -242,7 +242,7 @@ export default defineBackground(() => {
    * and the translations of its second half all come back aborted (reported by the owner on 2026-09-09). So the router
    * holds it for a while: one more request from this tab means the page is still there, and the withdrawal is cancelled
    */
-  // Named, because it comes off while a grant takes effect (ADR-0002): a tab whose title ticks — a clock, a chat
+  // Named, because it comes off while a grant takes effect (DESIGN §15.3): a tab whose title ticks — a clock, a chat
   // app's unread count — is an event every few seconds from a tab that is not ours, and each one resets the worker's
   // idle timer, which would keep the stale worker alive for good (Codex, local review pass 2). The fresh worker
   // registers it again at start-up. Until then a tab that closes still drops its sessions (onRemoved); a tab that
@@ -299,7 +299,7 @@ export default defineBackground(() => {
           // A re-probe that finds it has to reach the papers already open, which parked their
           // bitmaps when the probe at their session start found nothing (Codex on #161)
           if (message.recheck && status.state === 'ready') void tellTabs({ type: 'axt:helper-ready' })
-          // Granted a moment ago into this running worker: arrange the fresh one (ADR-0002)
+          // Granted a moment ago into this running worker: arrange the fresh one (DESIGN §15.3)
           helperRestart.noticed(status)
           sendResponse(status)
         })

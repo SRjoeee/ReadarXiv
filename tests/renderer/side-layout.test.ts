@@ -20,7 +20,7 @@ const RULES = CSS.replace(/\/\*[\s\S]*?\*\//g, '')
 /**
  * The exclusion list of **every** container check in the style sheet. The same list is written more than once in modes.css (one for the grid declaration, one for the pairing rule);
  * only the first used to be checked, and the second could drift silently (issue #46). Whitespace is normalised to single spaces, so the multi-line copy compares.
- * The container itself is known to the sheet by the mark the extractor writes (`data-axt-pairs`, ADR-0011), not by `:has()`
+ * The container itself is known to the sheet by the mark the extractor writes (`data-axt-pairs`, DESIGN §7.2), not by `:has()`
  */
 function denyListsFromCss(): string[] {
   const re = /:where\(\[data-axt-pairs\]:not\(:is\(([\s\S]*?)\)\)\)/g
@@ -70,7 +70,7 @@ describe('side mode\'s container coverage', () => {
     for (const [i, list] of lists.entries()) expect({ copy: i + 1, deny: normalize(parts(list)) }).toEqual({ copy: i + 1, deny: expected })
   })
 
-  it('no :has() anywhere in the sheet: every structural condition is a mark the renderer writes (ADR-0011)', () => {
+  it('no :has() anywhere in the sheet: every structural condition is a mark the renderer writes (DESIGN §7.2)', () => {
     // A `:has()` in an injected sheet makes Chrome recalculate the whole document's styles on every DOM insertion: 14 ms on a
     // 4 500-element paper, 165 ms on a 59 000-element one, for every hover band and every arriving translation (measured 2026-09-17)
     expect(RULES).not.toContain(':has(')
@@ -213,7 +213,7 @@ describe('side mode\'s container coverage', () => {
       const total = fakeTranslate(doc)
       expect(total).toBeGreaterThan(0)
 
-      // The mark the sheet reads and the structural query the code asks name the same containers, element for element (ADR-0011):
+      // The mark the sheet reads and the structural query the code asks name the same containers, element for element (DESIGN §7.2):
       // every ancestor of a block is marked, and nothing the renderer inserts creates a container the blocks did not
       const disagree = Array.from(root.querySelectorAll('*')).filter(el => el.hasAttribute(PAIRS_ATTR) !== el.matches(SIDE_CONTAINER.replace(/:not\(.*$/, '')))
       expect(disagree.map(el => `${el.tagName.toLowerCase()}.${el.className}`)).toEqual([])

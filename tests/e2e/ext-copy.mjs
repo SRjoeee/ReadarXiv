@@ -1,7 +1,7 @@
 // A copy of the build with permissions pre-granted through its manifest. Chrome's permission prompts are native
 // dialogs Playwright cannot click, and the grant flow is not what the suites test: local-endpoint pre-grants a host
 // permission this way; image and the guided-install section of extension pre-grant `nativeMessaging`, optional since
-// ADR-0002. **The build in .output is not touched**: the copy lives next to the profiles and is remade every run
+// DESIGN §15.3. **The build in .output is not touched**: the copy lives next to the profiles and is remade every run
 import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 
 export function copyWithGrants(src, dest, { permissions = [], hostPermissions = [] } = {}) {

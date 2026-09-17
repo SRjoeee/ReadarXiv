@@ -1,4 +1,4 @@
-// The renderer's public surface (ADR-0003): exactly what the content entry, the pipeline, the popup
+// The renderer's public surface (DESIGN §7.1): exactly what the content entry, the pipeline, the popup
 // and the appearance UI use. Nothing inside `src/core/renderer/` imports this file — the module
 // graph test keeps it that way — and tests import the module that defines what they test.
 export type { BlockState, Mode } from './attrs'

@@ -511,7 +511,7 @@ describe('createSessionRouter', () => {
   it('a certain drop is never forgotten: hundreds of later drops and ten minutes on, a forCall held on the chain build still finds the scope dead', async () => {
     // The ported registry expired entries (a TTL and a size cap). Under that, a forCall held on a chain build while
     // its tab closed could wake after the mark had been evicted, bind the dead session and let its request through
-    // (the local Codex review of ADR-0005 reproduced it with 256 further drops); nothing expires now
+    // (the local Codex review of DESIGN §8.5 reproduced it with 256 further drops); nothing expires now
     vi.useFakeTimers()
     const transport = fakeTransport('chain')
     let release: () => void = () => {}
@@ -541,7 +541,7 @@ describe('createSessionRouter', () => {
   it('a text scope is registered before the chain build: a tab closed during the build drops it — nothing bound, the scope marked', async () => {
     // Text requests do not bind first the way OCR does. While the first forCall awaited the chain, the scope was
     // in no session, so dropTab marked nothing and the continuation bound the dead scope and let its request out
-    // (the local review of ADR-0005 reproduced it with the real service; inherited from the MVP)
+    // (the local review of DESIGN §8.5 reproduced it with the real service; inherited from the MVP)
     const transport = fakeTransport('chain')
     let release: () => void = () => {}
     const held = new Promise<void>(resolve => { release = resolve })
@@ -583,7 +583,7 @@ describe('createSessionRouter', () => {
   it('dropAndRebindAll moves every session before it drains: a build landing during a drain binds the replacement, not the chain being replaced', async () => {
     // A is on the old chain, B is still building on it. Draining A yields; if B were moved only when the loop
     // reached it, B's forCall would land in that gap, bind the old chain and send its request to the deleted
-    // service, while the loop then recorded the replacement over it (the local review of ADR-0005, third pass)
+    // service, while the loop then recorded the replacement over it (the local review of DESIGN §8.5, third pass)
     const first = fakeTransport('old chain')
     const second = fakeTransport('new chain')
     let release: () => void = () => {}
@@ -612,7 +612,7 @@ describe('createSessionRouter', () => {
   it('dropAndRebindAll never retires the chain in force: a caller whose own rebuild is already obsolete changes nothing', async () => {
     // Two engine-ready rebuilds can finish newer-first, and the configuration watcher rebuilds too. Moving onto
     // the caller's build would retire the chain current() answers, and every fresh page would bind to a retired
-    // chain and get nothing but aborted (the local review of ADR-0005, fifth pass). The destination is current()
+    // chain and get nothing but aborted (the local review of DESIGN §8.5, fifth pass). The destination is current()
     const inForce = fakeTransport('new chain')
     // The holder spares the build in force; the router must neither drain it nor take it off its sessions
     const router = routerOver(async () => inForce, { retireOthers: () => 0 })
@@ -625,7 +625,7 @@ describe('createSessionRouter', () => {
 
   it('dropAndRebindAll stops the deleted service before its replacement exists: retired and drained at once, the sessions bound again when it lands', async () => {
     // A rebuild can hang in an engine probe. Waiting for it before retiring let the deleted service's chain go on
-    // serving the sessions pinned to it (the local review of ADR-0005, thirteenth pass)
+    // serving the sessions pinned to it (the local review of DESIGN §8.5, thirteenth pass)
     const first = fakeTransport('old chain')
     const second = fakeTransport('new chain')
     let release: () => void = () => {}
@@ -667,7 +667,7 @@ describe('createSessionRouter', () => {
   it('a navigation probe superseded by a newer session on the tab stops: it must not re-arm its stale scopes over the newer timer', async () => {
     // A's probe is awaiting the page when B replaces A on the tab and arms a probe of its own. A's answer comes
     // back "still here" while the tab loads: re-arming A would clear B's timer, and B's navigation away would
-    // then escape cancellation (the local review of ADR-0005, fourth pass; inherited from the MVP)
+    // then escape cancellation (the local review of DESIGN §8.5, fourth pass; inherited from the MVP)
     vi.useFakeTimers()
     const transport = fakeTransport('chain')
     const asked: string[] = []
@@ -692,7 +692,7 @@ describe('createSessionRouter', () => {
 
   it('drop drains the scope from every chain the holder still has, not only the one it is bound to', async () => {
     // A language pack moved the session; its earlier requests are still on the old chain, which other sessions
-    // may use and which is therefore not retired (the local review of ADR-0005, seventeenth pass)
+    // may use and which is therefore not retired (the local review of DESIGN §8.5, seventeenth pass)
     const first = fakeTransport('old chain')
     const second = fakeTransport('new chain')
     let current = first
@@ -709,7 +709,7 @@ describe('createSessionRouter', () => {
 
   it('a certain drop marks every scope before any chain is asked to drain', async () => {
     // The mark is what a call suspended on its cache read sees when it wakes; draining may await a chain build, so
-    // every scope of the drop is marked up front, not one by one between drains (ADR-0005)
+    // every scope of the drop is marked up front, not one by one between drains (DESIGN §8.5)
     const registry = new CancelledScopeRegistry()
     const seen: Record<string, boolean[]> = {}
     const transport = fakeTransport('chain')

@@ -454,7 +454,7 @@ html[data-axt-mode="side"] body {
    set on any `.axt-t` inside would make the note leave the gutter the moment the request goes out and stay misplaced
    for ever after a failure, the opposite of the promise above (Codex on #73). The mark is `data-axt-translated`,
    kept by `markTranslatedNote` (side-layout.ts) on the note and on the box the translation is a direct child of, after
-   every insertion and removal of a translation (ADR-0011). A frontmatter note is always visible and has no
+   every insertion and removal of a translation (DESIGN §7.2). A frontmatter note is always visible and has no
    collapsed state, so the concern behind “the `.ltx_note` subtree is excluded from pairing” does not apply — that
    rule is for body footnotes. */
 html[data-axt-mode="side"] .ltx_note.ltx_note_frontmatter[data-axt-translated] {

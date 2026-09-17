@@ -108,7 +108,7 @@ export function createHelperWaiter(deps: HelperWaitDeps): HelperWaiter {
         await clear()
         await deps.announce(status)
       } else if (status.state === 'permission-missing') {
-        // Nothing can be found without the permission (ADR-0002): this wait is over. The pages ask for the permission
+        // Nothing can be found without the permission (DESIGN §15.3): this wait is over. The pages ask for the permission
         // before they show the install command, so this only catches a grant withdrawn meanwhile
         await clear()
       } else if (status.state === 'restarting') {

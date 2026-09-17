@@ -62,7 +62,7 @@ export function clearImage(target: ImageTarget): boolean {
 }
 
 /**
- * The anchor marks the style sheet positions the overlay by (§15.2, ADR-0011): the image before the overlay is the
+ * The anchor marks the style sheet positions the overlay by (§15.2, DESIGN §7.2): the image before the overlay is the
  * anchor, their parent the positioned ancestor that scopes the anchor name. Written when an overlay is inserted,
  * here and inside a split copy, whose clone lost them with every other data-axt-*
  */

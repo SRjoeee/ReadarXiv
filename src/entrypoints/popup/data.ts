@@ -172,7 +172,7 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
   }, [refresh, packs, loadProvider, settle])
 
   // The background broadcasts the helper's state when it changes on its own — the guided install's wait found it,
-  // or the fresh worker after a runtime grant reported (ADR-0002). Without this the card would stay up until the
+  // or the fresh worker after a runtime grant reported (DESIGN §15.3). Without this the card would stay up until the
   // reader closed and reopened the popup (§15.4)
   useEffect(() => {
     const onState = (message: unknown) => {

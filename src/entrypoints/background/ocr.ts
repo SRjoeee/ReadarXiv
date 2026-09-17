@@ -1,6 +1,6 @@
 // The OCR service (DESIGN §15.2): the OCR cache first, the backend only on a miss, the result written back. The
 // cache is the Dexie store the translations use (cachePortOf); `ocrCacheKey` derives the key from the image bytes
-// and the recognizer's version alone. Which backend answers is `OcrBackend`'s business (ADR-0002).
+// and the recognizer's version alone. Which backend answers is `OcrBackend`'s business (DESIGN §15.3).
 import { ocrCacheKey } from '@/cache/key'
 import type { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { CACHE_READ_BUDGET_MS, type CachePort, readWithBudget } from '@/providers/translate-service'
@@ -13,7 +13,7 @@ export interface OcrServiceDeps {
   /** Where a warning goes besides the console: the diagnostics log (issue #156) */
   warn?: (line: string) => void
   /**
-   * Scopes the session router has ended for certain (ADR-0005), the same registry the translate services read.
+   * Scopes the session router has ended for certain (DESIGN §8.5), the same registry the translate services read.
    * Checked at entry and again after the cache read: a drop can land in that window, when the request is not yet in
    * the helper's queue and `helper.cancel` finds nothing (seen on a real machine)
    */
@@ -81,7 +81,7 @@ export function createOcrService(deps: OcrServiceDeps): OcrService {
     },
 
     // Drain only: whether the scope is dead from now on is the session router's decision, recorded in the shared
-    // registry (ADR-0005) — a guessed end (`tabs.onUpdated` cannot tell a hash change from a navigation) must not
+    // registry (DESIGN §8.5) — a guessed end (`tabs.onUpdated` cannot tell a hash change from a navigation) must not
     // leave every image the page scrolls to afterwards aborted (Codex on #143)
     cancel: scope => deps.backend.cancel(scope),
   }

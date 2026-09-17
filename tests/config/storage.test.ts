@@ -341,7 +341,7 @@ describe('provider selection', () => {
     expect(c.services[0]?.name.length).toBeLessThanOrEqual(40)
   })
 
-  it('v13 to v14: `reading` missing (added by a schema default alone) is filled, the rest as it was; a hand-edited service without `thinking` is not repaired (ADR-0009)', async () => {
+  it('v13 to v14: `reading` missing (added by a schema default alone) is filled, the rest as it was; a hand-edited service without `thinking` is not repaired (DESIGN §9)', async () => {
     const { reading: _reading, ...v13 } = { ...DEFAULT_CONFIG, version: 13, provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-keep' }], targetLanguage: 'jpn' as const }
     await fakeBrowser.storage.local.set({ config: v13, config$: { v: 13 } })
     vi.resetModules()
@@ -386,7 +386,7 @@ describe('provider selection', () => {
     expect(again).toEqual({ ...full, version: CONFIG_VERSION })
   })
 
-  it('no field of the stored shape, at any depth, carries a zod default: the version alone says what is in storage (ADR-0009)', () => {
+  it('no field of the stored shape, at any depth, carries a zod default: the version alone says what is in storage (DESIGN §9)', () => {
     // Every schema node reachable from the root, by zod 4's core definitions: a default inside `prompts` or a profile
     // would complete part of the stored value just as quietly (Copilot on #209)
     const defaults = (schema: z.ZodType, path: string, seen = new Set<z.ZodType>()): string[] => {
