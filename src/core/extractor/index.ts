@@ -2,7 +2,7 @@
 // The traversal is decoupled from the classification: classification comes from classify() of rules/latexml, and
 // this file decides only “yield or not” and “descend or not”.
 import { isInjected } from '@/core/marks'
-import { YIELDS_TO_OUTER_BLOCK, classify, documentRoot, isNumericCell, tableCells } from '@/core/rules/latexml'
+import { DOCUMENT_ROOT, YIELDS_TO_OUTER_BLOCK, classify, documentRoot, isNumericCell, tableCells } from '@/core/rules/latexml'
 import { LETTER, collectText } from '@/core/text'
 
 export interface Cell {
@@ -32,6 +32,13 @@ export type Block = TextBlock | TableBlock
 
 /** The attributes §7.1 allows to be added to an original node */
 export const ID_ATTR = 'data-axt-id'
+/**
+ * On every element between a block and the translation root: it holds pairs, and side mode lays it out as a
+ * pairing container (DESIGN §7.2). Written with the block marks, by the same function, so the two are complete
+ * together — a container "with unmarked blocks still inside" is exactly what the first side prep must never see
+ * (issue #67), and a marked block inside an unmarked container would pair against a stack.
+ */
+export const PAIRS_ATTR = 'data-axt-pairs'
 
 /**
  * Own text: only the text nodes of subtrees classified null are collected. skip / protect are untranslatable content,
@@ -133,9 +140,25 @@ export function extract(root: Document | Element): Block[] {
   return blocks
 }
 
-/** Write data-axt-id on every block — the one writer of that attribute, for the run and for the debug outlines alike. Idempotent */
+/**
+ * Write data-axt-id on every block and data-axt-pairs on every element between a block and the translation root —
+ * the one writer of both, for the run and for the debug outlines alike. Idempotent.
+ *
+ * The container mark replaces `:has(.axt-t, [data-axt-id])` in the style sheet (ADR-0011): a `:has()` in an
+ * injected sheet makes Chrome recalculate the whole document's styles on every DOM insertion, 165 ms per hover band
+ * and per arriving translation on 2312.17141 (measured 2026-09-17). Nothing but blocks creates containers — every
+ * node the renderer inserts lands next to a block, next to a child of a container, or inside a translation — so
+ * the ancestors of the blocks are the whole set. The walk stops at the first ancestor already marked: everything
+ * above it was marked from that block's chain.
+ */
 export function markBlocks(blocks: Block[]): void {
-  for (const b of blocks) b.el.setAttribute(ID_ATTR, b.id)
+  for (const b of blocks) {
+    b.el.setAttribute(ID_ATTR, b.id)
+    for (let el = b.el.parentElement; el && !el.matches(DOCUMENT_ROOT); el = el.parentElement) {
+      if (el.hasAttribute(PAIRS_ATTR)) break
+      el.setAttribute(PAIRS_ATTR, '')
+    }
+  }
 }
 
 export * from './context'

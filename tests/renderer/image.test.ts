@@ -18,7 +18,7 @@ function setup(html = FIGURE) {
 }
 
 describe('renderImage', () => {
-  it('the overlay is the <img>\'s next sibling with data-axt-for and without axt-t; the <img> itself gains not one attribute', () => {
+  it('the overlay is the <img>\'s next sibling with data-axt-for and without axt-t; the <img> gains the anchor mark and nothing else, its parent the scope mark', () => {
     const { doc, target } = setup()
     const before = target.el.outerHTML
     const node = renderImage(target, [label('静态电荷', 'Static charge')])
@@ -26,8 +26,16 @@ describe('renderImage', () => {
     expect(node.classList.contains(IMG_CLASS)).toBe(true)
     expect(node.classList.contains(T_CLASS)).toBe(false)
     expect(node.getAttribute(FOR_ATTR)).toBe('F1.g1')
+    // The style sheet anchors the overlay by these marks (§15.2, ADR-0011); a `data-axt-*` attribute is what §7.1 allows an original to gain
+    expect(target.el.getAttribute('data-axt-anchor')).toBe('')
+    expect(target.el.parentElement!.getAttribute('data-axt-anchors')).toBe('')
+    target.el.removeAttribute('data-axt-anchor')
     expect(target.el.outerHTML).toBe(before)
     expect(doc.querySelectorAll(`.${IMG_CLASS}`)).toHaveLength(1)
+    // The marks go with the overlay
+    expect(clearImage(target)).toBe(true)
+    expect(target.el.hasAttribute('data-axt-anchor')).toBe(false)
+    expect(target.el.parentElement!.hasAttribute('data-axt-anchors')).toBe(false)
   })
 
   it('a label: the translation as content, the source as title, lang from <html data-axt-lang>; the inline style uses percentages and container units only', () => {

@@ -6,10 +6,10 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { extract, markBlocks } from '@/core/extractor'
 import { DOCUMENT_ROOT } from '@/core/rules/latexml'
 import { T_CLASS } from '@/core/marks'
-import { MULTI_PANEL_FLEX, SIDE_DENY, SIDE_DENY_SUBTREE, SIDE_STACK, isSideContainer } from '@/core/renderer/side-layout'
+import { extract, markBlocks, PAIRS_ATTR } from '@/core/extractor'
+import { MULTI_PANEL_FLEX, SIDE_CONTAINER, SIDE_DENY, SIDE_DENY_SUBTREE_CSS, SIDE_ORIGINAL, SIDE_STACK, isSideContainer, markStructure } from '@/core/renderer/side-layout'
 import { docOf } from './helpers'
 
 const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/arxiv')
@@ -19,16 +19,21 @@ const RULES = CSS.replace(/\/\*[\s\S]*?\*\//g, '')
 
 /**
  * The exclusion list of **every** container check in the style sheet. The same list is written more than once in modes.css (one for the grid declaration, one for the pairing rule);
- * only the first used to be checked, and the second could drift silently (issue #46). Whitespace is normalised to single spaces, so the multi-line copy compares
+ * only the first used to be checked, and the second could drift silently (issue #46). Whitespace is normalised to single spaces, so the multi-line copy compares.
+ * The container itself is known to the sheet by the mark the extractor writes (`data-axt-pairs`, ADR-0011), not by `:has()`
  */
 function denyListsFromCss(): string[] {
-  const re = /:where\(:has\(\.axt-t, \[data-axt-id\]\):not\(:is\(([\s\S]*?)\)\)\)/g
+  const re = /:where\(\[data-axt-pairs\]:not\(:is\(([\s\S]*?)\)\)\)/g
   const lists = [...RULES.matchAll(re)].map(m => m[1]!.replace(/\s+/g, ' ').trim())
   if (lists.length === 0) throw new Error('no container-check selector found in modes.css')
   return lists
 }
 
-/** The container selector is the style sheet's first copy; every copy agreeing with the TS is guarded by the tests below */
+/**
+ * The container test as the style sheet's first copy states it, asked of the structure (`:has()`, as SIDE_CONTAINER does) rather than of the mark —
+ * the walk below is about which exclusion blocks a pair; every copy agreeing with the TS is guarded by the tests below. The sheet's exclusion list
+ * names a multi-panel figure by its mark, so `markStructure` must have run on the document first
+ */
 function containerFromCss(): string {
   return `:has(.${T_CLASS}, [data-axt-id]):not(:is(${denyListsFromCss()[0]!}))`
 }
@@ -56,13 +61,25 @@ describe('side mode\'s container coverage', () => {
     const normalize = (v: string[]) => [...new Set(v)].sort().join(',')
     // A subtree exclusion is written as two entries `X, X *` in the style sheet; on the TS side isSideContainer implements it with closest
     // (happy-dom's :is(X *) is always false, and folding it into SIDE_CONTAINER would make the test disagree with the live behaviour)
-    const subtrees = parts(SIDE_DENY_SUBTREE).flatMap(x => [x, `${x} *`])
+    const subtrees = parts(SIDE_DENY_SUBTREE_CSS).flatMap(x => [x, `${x} *`])
     const expected = normalize([...parts(SIDE_DENY), ...subtrees])
     const lists = denyListsFromCss()
     // The count is pinned: today it is two (grid declaration + pairing rule). Becoming 1 means either they were merged (update this),
     // or one copy was broken and slipped past the regex above — without this line the one that slipped would go unchecked
     expect(lists).toHaveLength(2)
     for (const [i, list] of lists.entries()) expect({ copy: i + 1, deny: normalize(parts(list)) }).toEqual({ copy: i + 1, deny: expected })
+  })
+
+  it('no :has() anywhere in the sheet: every structural condition is a mark the renderer writes (ADR-0011)', () => {
+    // A `:has()` in an injected sheet makes Chrome recalculate the whole document's styles on every DOM insertion: 14 ms on a
+    // 4 500-element paper, 165 ms on a 59 000-element one, for every hover band and every arriving translation (measured 2026-09-17)
+    expect(RULES).not.toContain(':has(')
+    // The left column: the originals list the sheet quotes is the TS one
+    expect(RULES).toContain(`& > :is(${SIDE_ORIGINAL}) {`)
+    expect(RULES).toContain(`> :where(${SIDE_ORIGINAL}, .axt-t):not(.ltx_tag) {`)
+    // The last row's original is known by the mark markTail keeps, the multi-panel figure and the tagged item by markStructure's
+    expect(RULES).toMatch(/& > :last-child,\s*& > \[data-axt-tail\] \{\s*margin-block-end: 0/)
+    expect(RULES).toMatch(/\.ltx_flex_figure:not\(\[data-axt-panels\]\) > \.ltx_flex_break/)
   })
 
   it('an exclusion may only be an element that forms no grid of its own: ar5iv\'s own grids must be taken over, not excluded', () => {
@@ -112,22 +129,22 @@ describe('side mode\'s container coverage', () => {
   it('list indentation may only go on the cell content: a subgrid container\'s own inline padding eats the first track', () => {
     // On the list container / list item it makes the left column a stretch narrower and the right flush (measured on 2312.17141: left 444 / right 484)
     expect(RULES).toMatch(/&:is\(\.ltx_itemize, \.ltx_enumerate, \.ltx_description\) \{\s*padding-inline-start: 0/)
-    expect(RULES).toMatch(/&\.ltx_item:has\(> \.ltx_tag\) \{[^}]*padding-inline-start: 0/)
+    expect(RULES).toMatch(/&\.ltx_item\[data-axt-tagged\] \{[^}]*padding-inline-start: 0/)
     // Indent only the container's direct children: a descendant selector would indent the translation inside a footnote too (measured)
-    expect(RULES).toMatch(/&:is\(\.ltx_item, \.ltx_item \*\) > :where\(\[data-axt-id\], :has\(\+ \.axt-t\), \.axt-t\):not\(\.ltx_tag\) \{\s*padding-inline-start: 2\.5rem/)
-    expect(RULES).not.toMatch(/&\.ltx_item :where\(:has\(\+ \.axt-t\), \.axt-t\)/)
+    expect(RULES).toMatch(/&:is\(\.ltx_item, \.ltx_item \*\) > :where\(\[data-axt-id\], \[data-axt-mirrored\], \[data-axt-split\], \.axt-t\):not\(\.ltx_tag\) \{\s*padding-inline-start: 2\.5rem/)
+    expect(RULES).not.toMatch(/&\.ltx_item :where\(\[data-axt-id\]/)
   })
 
   it('unpaired list items and their mirrors use the same marker slot: an item that is no grid keeping ar5iv\'s hanging marker sticks out of the column', () => {
     // Measured on 2609.04056v1 Definition 1.2: the formula-only first item's marker at x=208, the sibling's at 248, pressed onto the navigation bar
     // The slot width has to follow the marker: hard-coded at 2.5rem, a wide marker like \item[(Assumption 1)] covers the body text (Codex on #40)
-    expect(RULES).toMatch(/&:is\(\.ltx_itemize, \.ltx_enumerate, \.ltx_description\) > \.ltx_item:not\(:has\(\.axt-t, \[data-axt-id\]\)\) \{[^}]*grid-template-columns: minmax\(2\.5rem, max-content\)/)
-    expect(RULES).toMatch(/&:is\(\.ltx_itemize, \.ltx_enumerate, \.ltx_description\) > \.ltx_item:not\(:has\(\.axt-t, \[data-axt-id\]\)\) \{[\s\S]*?& > \.ltx_tag \{[^}]*grid-column: 1/)
+    expect(RULES).toMatch(/&:is\(\.ltx_itemize, \.ltx_enumerate, \.ltx_description\) > \.ltx_item:not\(\[data-axt-pairs\]\) \{[^}]*grid-template-columns: minmax\(2\.5rem, max-content\)/)
+    expect(RULES).toMatch(/&:is\(\.ltx_itemize, \.ltx_enumerate, \.ltx_description\) > \.ltx_item:not\(\[data-axt-pairs\]\) \{[\s\S]*?& > \.ltx_tag \{[^}]*grid-column: 1/)
   })
 
   it('the stacked-area list: the style sheet agrees with side-layout.ts (the TS is the source of truth)', () => {
     // The stacked-area rule in the style sheet quotes the TS list verbatim (order and spelling must agree; the selectors have nested parentheses, so no regex digging any more)
-    expect(RULES).toContain(`:is(${SIDE_STACK}) :is(.ltx_para, .ltx_abstract, :has(.axt-t, [data-axt-id]))`)
+    expect(RULES).toContain(`:is(${SIDE_STACK}) :is(.ltx_para, .ltx_abstract, [data-axt-pairs])`)
   })
 
   it('the stacked-area rule leaves a nested .ltx_flex_figure alone: it is flex itself, and squeezed to block its panels would stack vertically (Codex on #25)', () => {
@@ -191,8 +208,15 @@ describe('side mode\'s container coverage', () => {
       const doc = new DOMParser().parseFromString(readFileSync(join(FIXTURE_DIR, file), 'utf8'), 'text/html')
       const root = doc.querySelector(DOCUMENT_ROOT)
       if (!root) return
+      markBlocks(extract(doc))
+      markStructure(root)
       const total = fakeTranslate(doc)
       expect(total).toBeGreaterThan(0)
+
+      // The mark the sheet reads and the structural query the code asks name the same containers, element for element (ADR-0011):
+      // every ancestor of a block is marked, and nothing the renderer inserts creates a container the blocks did not
+      const disagree = Array.from(root.querySelectorAll('*')).filter(el => el.hasAttribute(PAIRS_ATTR) !== el.matches(SIDE_CONTAINER.replace(/:not\(.*$/, '')))
+      expect(disagree.map(el => `${el.tagName.toLowerCase()}.${el.className}`)).toEqual([])
 
       // A pair really splits into two columns only when every level of the ancestor chain is a container;
       // an excluded element on the chain degrades it to stacking. The snapshot records how many each kind of exclusion blocked,
@@ -235,6 +259,6 @@ describe('side mode\'s container coverage', () => {
     expect(isSideContainer(doc.querySelector('.ltx_section')!)).toBe(true)
     expect(isSideContainer(doc.querySelector('.ltx_para')!)).toBe(true)
     // The pairing rule: a marked block takes the left column, no longer requiring a translation right after it
-    expect(RULES).toMatch(/& > :is\(\[data-axt-id\], :has\(\+ \.axt-t\)\) \{\s*grid-column: 1/)
+    expect(RULES).toMatch(/& > :is\(\[data-axt-id\], \[data-axt-mirrored\], \[data-axt-split\]\) \{\s*grid-column: 1/)
   })
 })
