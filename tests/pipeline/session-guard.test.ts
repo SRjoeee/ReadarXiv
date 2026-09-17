@@ -124,16 +124,20 @@ describe('the cache identity includes the endpoint (issue #45, experiment 3)', (
     expect(await keyOf(a)).toBe(await keyOf(b))
   })
 
-  it('a thinking switch that is on and sent is another identity; off, or on an endpoint that is sent nothing, is the identity it always was', async () => {
+  it('the thinking switch is part of the identity wherever it is sent, both states named; where nothing is sent there is no switch in it', async () => {
     const at = (baseURL: string, thinking?: 'enabled' | 'disabled') =>
       createOpenAICompatProvider({ baseURL, apiKey: 'dummy', model: 'same-model', ...(thinking ? { thinking } : {}) })
-    // OpenRouter has an adapter (providers/thinking.ts): the two requests differ, and so do the entries
+    // OpenRouter has an adapter (providers/thinking.ts): two requests, two entries
     const off = at('https://openrouter.ai/api/v1', 'disabled')
     const on = at('https://openrouter.ai/api/v1', 'enabled')
     expect(await keyOf(on)).not.toBe(await keyOf(off))
-    expect(off.cacheId).toBe('openai-compat:https://openrouter.ai/api/v1')
+    expect([on.cacheId, off.cacheId]).toEqual(['openai-compat:https://openrouter.ai/api/v1|thinking=on', 'openai-compat:https://openrouter.ai/api/v1|thinking=off'])
+    // Neither is the unmarked identity on and off shared before: those entries are not found again
+    expect(await keyOf(off)).not.toBe(await keyOf({ id: 'svc', cacheId: 'openai-compat:https://openrouter.ai/api/v1' }))
+    // Absent means off, as the request does
     expect(await keyOf(at('https://openrouter.ai/api/v1'))).toBe(await keyOf(off))
-    // An endpoint without one is sent no field either way: one request, one identity
+    // An endpoint without an adapter is sent no field either way: one request, one identity, no suffix
+    expect(at('https://one.example/v1', 'enabled').cacheId).toBe('openai-compat:https://one.example/v1')
     expect(await keyOf(at('https://one.example/v1', 'enabled'))).toBe(await keyOf(at('https://one.example/v1', 'disabled')))
   })
 

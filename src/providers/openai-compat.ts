@@ -51,7 +51,7 @@ export function createOpenAICompatProvider(
   const hasKey = () => config.apiKey.trim().length > 0 || isLoopback(config.baseURL)
   // The thinking switch changes the request only where an endpoint has an adapter (thinking.ts); where it sends
   // nothing, on and off are the same request and the same identity
-  const thinks = config.thinking === 'enabled' && Object.keys(thinkingBodyFields(config.baseURL, 'enabled')).length > 0
+  const adapted = Object.keys(thinkingBodyFields(config.baseURL, 'enabled')).length > 0
   return {
     id: config.id ?? 'openai-compat',
     kind: 'llm',
@@ -64,11 +64,12 @@ export function createOpenAICompatProvider(
     ...(isLoopback(config.baseURL) ? { rateLimit: LOOPBACK_RATE_LIMIT } : {}),
     promptKey: promptKey(deps.prompts),
     // The endpoint enters the cache identity: a model of the same name on different endpoints is a different thing
-    // (issue #45) — origin and path, never the key. So does a thinking switch that is on and sent: a reasoning model's
-    // translation is another output, and without it the switch would show nothing for the entry's 30 days (hard rule
-    // 4). Off keeps the identity it had — which, before this, also held what was written with the switch on; hence
-    // CACHE_KEY_VERSION 7
-    cacheId: `openai-compat:${endpointIdentity(config.baseURL)}${thinks ? '|thinking' : ''}`,
+    // (issue #45) — origin and path, never the key. So does the thinking switch wherever it is sent: a reasoning
+    // model's translation is another output (hard rule 4). Both states are named, on and off, so neither is the
+    // unmarked identity entries were written under before the switch entered it, when on and off shared one — those
+    // entries are simply never found again, and no other engine's cache is touched. Where nothing is sent, on and off
+    // are one request and the identity carries no switch
+    cacheId: `openai-compat:${endpointIdentity(config.baseURL)}${adapted ? `|thinking=${config.thinking === 'enabled' ? 'on' : 'off'}` : ''}`,
     async isAvailable() {
       return hasKey()
     },

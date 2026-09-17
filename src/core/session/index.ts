@@ -506,6 +506,18 @@ export function createPageSession(deps: SessionDeps): PageSession {
     return { mode, effective }
   }
 
+  /**
+   * Re-read the stored mode on the chain the saves run on, after the first read: whatever order the events and the
+   * first read's snapshot arrive in, the last word is a read made after every write this page knows of
+   */
+  function refreshSavedMode(): void {
+    const refresh = async () => {
+      await ready
+      savedMode = (await deps.config.get()).mode
+    }
+    modeSaves = modeSaves.then(refresh, refresh).catch(() => undefined)
+  }
+
   function restorePage(epoch?: string): { removedNodes: number; refused?: true } {
     if (epoch !== undefined && epoch !== epochNow()) return { removedNodes: 0, refused: true }
     actions++
@@ -537,8 +549,10 @@ export function createPageSession(deps: SessionDeps): PageSession {
     // following getConfig() puts the non-default appearance back (Codex on #106)
     styleFromWatcher = true
     // The stored mode, changed here or in another tab: an untranslated page reports it and its next start uses it.
-    // A translated page keeps its own switch (the controller's preference) until it is restored
-    savedMode = config.mode
+    // A translated page keeps its own switch (the controller's preference) until it is restored. **Read from the store,
+    // not taken from the event**: storage events carry no order (#182), and one for an earlier write arriving late
+    // would put an older mode back
+    refreshSavedMode()
     // The hover highlight is a front-page toggle (UI.md S-P-80), so it takes effect on this page
     // at once: installed or torn down mid-session, no translation node touched. Outside a session
     // there is nothing to pair, and start() reads the setting itself
