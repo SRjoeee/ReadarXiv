@@ -59,6 +59,30 @@ export const SPLIT_OF_ATTR = 'data-axt-split-of'
 /** In the copy, an image overlay remembers which image it belongs to (the copy's data-axt-for is stripped) */
 export const SPLIT_FOR_ATTR = 'data-axt-split-for'
 
+/*
+ * The marks the style sheets read where they once asked `:has()` (ADR-0011). Chrome answers a `:has()` in an
+ * injected sheet by recalculating the whole document's styles on every DOM insertion — 165 ms per hover band and
+ * per arriving translation on a 59 000-element paper (measured 2026-09-17) — so every structural condition the
+ * layout needs is written by the code that creates the structure, at the moment it does. `data-axt-pairs`, the
+ * container mark, lives with the block marks in the extractor.
+ */
+/** On an original a mirror follows (§7.2): it takes the left column, the mirror the right */
+export const MIRRORED_ATTR = 'data-axt-mirrored'
+/** On the original whose translation-side node is its container's last child (§7.2): the last row's bottom margin is dropped, or a grid keeps it as blank */
+export const TAIL_ATTR = 'data-axt-tail'
+/** On a multi-panel flex figure (§7.2): its subtree is no pairing container; taken over as a grid its panels would stack */
+export const PANELS_ATTR = 'data-axt-panels'
+/** On a list item whose marker is its child (§7.2): the marker leaves the grid flow and the item's own padding goes */
+export const TAGGED_ATTR = 'data-axt-tagged'
+/** On a frontmatter note, and on its box, holding a real translation (§7.2): it returns from the gutter to the article's flow and pairs */
+export const TRANSLATED_ATTR = 'data-axt-translated'
+/** On a footnote's margin copy once its translation is placed inside (§7.4): only mode may then hide the copy's own original */
+export const NOTE_TRANSLATED_ATTR = 'data-axt-note-translated'
+/** On an image an overlay follows (§15.2): it is the overlay's anchor */
+export const ANCHOR_ATTR = 'data-axt-anchor'
+/** On the parent of an anchored image (§15.2): the positioned ancestor that scopes the anchor name */
+export const ANCHORS_ATTR = 'data-axt-anchors'
+
 /**
  * The classes an `.axt-t` node can carry that make it **not** a translation: the skeleton, the
  * failure widget, side mode's mirror and its split-figure copy. Everything that asks "is this a
