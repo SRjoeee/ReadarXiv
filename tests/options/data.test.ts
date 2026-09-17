@@ -108,7 +108,13 @@ describe('useOptionsData', () => {
     await hook.run(async () => { await hook.current().reset() })
     expect(hook.current().resetFailed).toBe(true)
     expect(hook.current().fallbackReason).toMatchObject({ kind: 'invalid' })
+    // Repaired elsewhere: the refused-reset line goes with the notice, and does not return with a later fallback
+    store.unreadable = null
     store.resetRefused = false
+    await hook.run(() => saveElsewhere({ ...DEFAULT_CONFIG, uiLanguage: 'en' }))
+    await hook.until(() => hook.current().fallbackReason === null)
+    expect(hook.current().resetFailed).toBe(false)
+    store.unreadable = { kind: 'invalid', where: 'mode', message: 'x' }
     await hook.run(async () => { await hook.current().reset() })
     expect(hook.current().resetFailed).toBe(false)
     expect(hook.current().fallbackReason).toBeNull()

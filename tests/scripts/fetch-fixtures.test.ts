@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -88,31 +88,80 @@ describe('ensureFixtures', () => {
     expect(at[1]! - at[0]!).toBeGreaterThanOrEqual(990)
   })
 
-  it('a redirect that leaves arXiv is refused and nothing is written', async () => {
+  it('a response whose final address is off arXiv is refused and nothing is written', async () => {
     const response = new Response(new Uint8Array(BODY))
     Object.defineProperty(response, 'redirected', { value: true })
     Object.defineProperty(response, 'url', { value: 'https://mirror.example.com/0000.00000v1' })
     const fetchImpl = vi.fn(async () => response) as unknown as typeof fetch
-    await expect(ensureFixtures({ root, fetchImpl, gapMs: 0 })).rejects.toThrow(/redirected to https:\/\/mirror\.example\.com.*outside arXiv/s)
+    await expect(ensureFixtures({ root, fetchImpl, gapMs: 0 })).rejects.toThrow(/ended at https:\/\/mirror\.example\.com.*outside arXiv/s)
     expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(existsSync(file())).toBe(false)
   })
 
-  it('bytes of the right hash but not the recorded size cannot exist; bytes of the right size but another hash are refused as another page', async () => {
+  it('bytes of the right size but another hash are refused as another page', async () => {
     const same = Buffer.from('<html>the pinned bytez</html>')
     expect(same.length).toBe(BODY.length)
     await expect(ensureFixtures({ root, fetchImpl: serving(same), gapMs: 0 })).rejects.toThrow(/a new rendering of the paper, or a page in its place/)
   })
 
-  it('a symbolic link in the fixture tree does not carry the write outside it', async () => {
+  it('a manifest whose size is wrong for the right hash says the manifest is wrong — downloaded or already on disk', async () => {
+    writeFileSync(join(root, 'tests/fixtures/remote.json'), JSON.stringify({ fixtures: [{ ...ENTRY, bytes: BODY.length + 1 }] }))
+    await expect(ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })).rejects.toThrow(/records \d+ bytes .* the manifest's "bytes" is wrong/)
+    expect(existsSync(file())).toBe(false)
+    mkdirSync(join(root, 'tests/fixtures/arxiv'), { recursive: true })
+    writeFileSync(file(), BODY)
+    const fetchImpl = serving(BODY)
+    await expect(ensureFixtures({ root, fetchImpl, gapMs: 0 })).rejects.toThrow(/the manifest's "bytes" is wrong/)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('403 is final and called a refusal, not a pin to move; 408 is tried again', async () => {
+    const refused = serving(BODY, 403)
+    await expect(ensureFixtures({ root, fetchImpl: refused, gapMs: 0 })).rejects.toThrow(/HTTP 403.*A refusal, not a missing file/s)
+    expect(refused).toHaveBeenCalledTimes(1)
+    let calls = 0
+    const slow = vi.fn(async () => (++calls === 1 ? new Response('', { status: 408 }) : new Response(new Uint8Array(BODY)))) as unknown as typeof fetch
+    expect((await ensureFixtures({ root, fetchImpl: slow, gapMs: 0 })).downloaded).toEqual([ENTRY.path])
+  })
+
+  it('a Retry-After longer than a minute stops the download and says so; a short one never shortens the gap', async () => {
+    const tooLong = vi.fn(async () => new Response('', { status: 503, headers: { 'retry-after': '120' } })) as unknown as typeof fetch
+    await expect(ensureFixtures({ root, fetchImpl: tooLong, gapMs: 0 })).rejects.toThrow(/asks to wait 120 s/)
+    expect(tooLong).toHaveBeenCalledTimes(1)
+    let calls = 0
+    const at: number[] = []
+    const zero = vi.fn(async () => {
+      at.push(performance.now())
+      return ++calls === 1 ? new Response('', { status: 429, headers: { 'retry-after': '0' } }) : new Response(new Uint8Array(BODY))
+    }) as unknown as typeof fetch
+    expect((await ensureFixtures({ root, fetchImpl: zero, gapMs: 300 })).downloaded).toEqual([ENTRY.path])
+    expect(at[1]! - at[0]!).toBeGreaterThanOrEqual(290)
+  })
+
+  it('a symbolic link in the fixture tree does not carry the write outside it — not the file, not a directory on the way', async () => {
     const outside = mkdtempSync(join(tmpdir(), 'axt-outside-'))
     try {
       symlinkSync(outside, join(root, 'tests/fixtures/arxiv'))
       await expect(ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })).rejects.toThrow(/outside the fixture directories; nothing was written/)
+      writeFileSync(join(root, 'tests/fixtures/remote.json'), JSON.stringify({ fixtures: [{ ...ENTRY, path: 'tests/fixtures/arxiv/new/x.html' }] }))
+      await expect(ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })).rejects.toThrow(/outside the fixture directories/)
       expect(readdirSync(outside)).toEqual([])
     } finally {
       rmSync(outside, { recursive: true, force: true })
     }
+  })
+
+  it('a crashed run\'s old temporary file is cleared; a concurrent run\'s fresh one is left alone', async () => {
+    mkdirSync(join(root, 'tests/fixtures/arxiv'), { recursive: true })
+    const old = `${file()}.123.aaaaaaaa.partial`
+    const fresh = `${file()}.456.bbbbbbbb.partial`
+    writeFileSync(old, 'half')
+    writeFileSync(fresh, 'half')
+    const hourAgo = new Date(Date.now() - 3_600_000)
+    utimesSync(old, hourAgo, hourAgo)
+    await ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })
+    expect(existsSync(old)).toBe(false)
+    expect(existsSync(fresh)).toBe(true)
   })
 
   it('a partial file someone left is never written through: each run writes a name of its own, exclusively', async () => {
@@ -198,6 +247,30 @@ describe('the manifest', () => {
       expect(ignored, entry.path).toContain(`/${entry.path}`)
       // Only the tests' fixtures are fetched in CI; the helper's image is for a smoke test CI cannot run
       expect(cached.includes(entry.path), entry.path).toBe(entry.for === 'tests')
+    }
+  })
+
+  it('CI restores and saves the same cache: one key, one path list — two that differ never hit', () => {
+    const ci = readFileSync(join(import.meta.dirname, '../../.github/workflows/ci.yml'), 'utf8')
+    const blockOf = (action: string) => {
+      const at = ci.indexOf(`uses: ${action}`)
+      expect(at, action).toBeGreaterThan(-1)
+      const rest = ci.slice(at).split('\n').slice(1)
+      const end = rest.findIndex(line => /^\s*- /.test(line))
+      return rest.slice(0, end < 0 ? undefined : end).join('\n').trim()
+    }
+    expect(blockOf('actions/cache/save@v4')).toBe(blockOf('actions/cache/restore@v4'))
+  })
+
+  it('the script refuses arguments it does not understand, rather than fetching everything', () => {
+    for (const args of [['--fro', 'tests'], ['--for'], ['--for=tests'], ['--for', 'helper']]) {
+      let status: number | null = 0
+      try {
+        execFileSync(process.execPath, [join(import.meta.dirname, '../../scripts/fetch-fixtures.mjs'), ...args], { stdio: 'pipe' })
+      } catch (e) {
+        status = (e as { status: number | null }).status
+      }
+      expect([args.join(' '), status]).toEqual([args.join(' '), 2])
     }
   })
 

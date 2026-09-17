@@ -11,8 +11,8 @@
 // fetch theirs.
 import { createHash, randomBytes } from 'node:crypto'
 import { realpathSync } from 'node:fs'
-import { mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -23,8 +23,10 @@ const USER_AGENT = 'ReadarXiv-fixtures/1 (+https://github.com/SRjoeee/ReadarXiv)
 const GAP_MS = 3_000
 const TIMEOUT_MS = 60_000
 const ATTEMPTS = 3
-/** The longest `Retry-After` honoured before giving up on the attempt */
+/** The longest `Retry-After` waited for; asked to wait longer, the download stops and says so */
 const MAX_RETRY_AFTER_MS = 60_000
+/** A temporary file older than this is a crashed run's, not a concurrent one's (a download gives up well within it) */
+const STALE_PARTIAL_MS = 10 * 60_000
 
 /** Where a fixture may be written: the two fixture directories, nowhere else */
 const FIXTURE_DIRS = ['tests/fixtures', 'helper/Tests/Fixtures']
@@ -80,16 +82,48 @@ function retryAfterMs(response) {
   const value = response.headers.get('retry-after')
   if (!value) return undefined
   const ms = /^\d+$/.test(value) ? Number(value) * 1000 : Date.parse(value) - Date.now()
-  return Number.isFinite(ms) && ms >= 0 && ms <= MAX_RETRY_AFTER_MS ? ms : undefined
+  return Number.isFinite(ms) && ms >= 0 ? ms : undefined
 }
 
 /** A failure no retry can change */
 class FinalError extends Error {}
 
+/** The hash is right and the size is not: the manifest's `bytes` is what is wrong */
+const sizeMismatch = (entry, length) =>
+  `${MANIFEST} records ${entry.bytes} bytes for ${entry.path}, whose SHA-256 matches a ${length}-byte file: the manifest's "bytes" is wrong`
+
+/** The directory itself, or the nearest ancestor of it that exists */
+async function nearestExisting(dir) {
+  for (let at = dir; ; at = dirname(at)) {
+    try {
+      await stat(at)
+      return at
+    } catch (e) {
+      if (e?.code !== 'ENOENT' || dirname(at) === at) throw e
+    }
+  }
+}
+
+/** A crashed run's temporary files for this fixture: removed once old enough not to be a concurrent run's */
+async function dropStalePartials(file) {
+  const prefix = `${basename(file)}.`
+  for (const name of await readdir(dirname(file))) {
+    if (!name.startsWith(prefix) || !name.endsWith('.partial')) continue
+    const path = join(dirname(file), name)
+    const info = await stat(path).catch(() => null)
+    if (info && Date.now() - info.mtimeMs > STALE_PARTIAL_MS) await rm(path, { force: true })
+  }
+}
+
+/** The statuses a later attempt can change: a timeout the server reports, a rate limit, a server error */
+const retryable = status => status === 408 || status === 429 || status >= 500
+
 /**
- * One download. Retried on what a retry can help with — a network error, a timeout, a 5xx, a 429 (after its
- * `Retry-After` when it gives one). Any other answer is final and says so: an HTTP 404 is a pin that needs moving,
- * not a missing connection. A redirect is followed only within arXiv
+ * One download. Retried on what a retry can help with — a network error, a timeout, 408, 429, a 5xx — never sooner
+ * than the gap between downloads, and not sooner than a `Retry-After` asks; asked to wait longer than a minute, it
+ * stops and says so. Any other answer is final and says what it means: 404 or 410 is a pin that needs moving, anything
+ * else a refusal to look into — neither is a missing connection. The final address must be on arXiv; the content is
+ * checked by its hash whatever the route
  */
 async function download(entry, fetchImpl, gapMs) {
   let last
@@ -98,14 +132,21 @@ async function download(entry, fetchImpl, gapMs) {
     try {
       const response = await fetchImpl(entry.url, { headers: { 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(TIMEOUT_MS), redirect: 'follow' })
       if (response.redirected && !response.url.startsWith(ARXIV)) {
-        throw new FinalError(`${entry.url} redirected to ${response.url}, outside arXiv; nothing was written. The pin needs checking (tests/fixtures/README.md)`)
+        throw new FinalError(`${entry.url} ended at ${response.url}, outside arXiv; nothing was written. The pin needs checking (tests/fixtures/README.md)`)
       }
       if (response.ok) return Buffer.from(await response.arrayBuffer())
-      if (response.status < 500 && response.status !== 429) {
+      if (response.status === 404 || response.status === 410) {
         throw new FinalError(`arXiv answered HTTP ${response.status} for ${entry.url}; nothing was written. The pinned version is not served there any more: the pin needs moving (tests/fixtures/README.md)`)
       }
+      if (!retryable(response.status)) {
+        throw new FinalError(`arXiv answered HTTP ${response.status} for ${entry.url}; nothing was written. A refusal, not a missing file: a retry will not change it`)
+      }
       last = new Error(`HTTP ${response.status}`)
-      wait = retryAfterMs(response) ?? wait
+      const asked = retryAfterMs(response)
+      if (asked !== undefined && asked > MAX_RETRY_AFTER_MS) {
+        throw new FinalError(`arXiv asks to wait ${Math.round(asked / 1000)} s before ${entry.url} is fetched again (HTTP ${response.status}); nothing was written. Try later`)
+      }
+      wait = Math.max(wait, asked ?? 0)
     } catch (e) {
       if (e instanceof FinalError) throw e
       last = e
@@ -134,6 +175,7 @@ export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () 
     const file = join(root, entry.path)
     const present = await existing(file)
     if (present) {
+      if (sha256(present) === entry.sha256 && present.length !== entry.bytes) throw new Error(sizeMismatch(entry, present.length))
       // A file that is there but is not the pinned one is never replaced silently: it may be a maintainer's candidate for a new pin
       if (sha256(present) !== entry.sha256) {
         throw new Error(`${entry.path} is not the pinned fixture (SHA-256 ${sha256(present).slice(0, 12)}…, the manifest records ${entry.sha256.slice(0, 12)}…). Delete it to download the pinned copy, or see tests/fixtures/README.md for moving the pin.`)
@@ -143,19 +185,22 @@ export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () 
     }
     if (downloaded.length > 0) await sleep(gapMs)
     const bytes = await download(entry, fetchImpl, gapMs)
-    if (bytes.length !== entry.bytes || sha256(bytes) !== entry.sha256) {
+    if (sha256(bytes) === entry.sha256 && bytes.length !== entry.bytes) throw new Error(sizeMismatch(entry, bytes.length))
+    if (sha256(bytes) !== entry.sha256) {
       throw new Error(
         `${entry.url} now serves other bytes than the pinned fixture (SHA-256 ${sha256(bytes).slice(0, 12)}…, ${bytes.length} bytes; the manifest records ${entry.sha256.slice(0, 12)}…, ${entry.bytes} bytes): a new rendering of the paper, or a page in its place. `
         + 'Nothing was written: the snapshots and measurements were taken from the pinned bytes, and moving the pin is a maintainer\'s decision (tests/fixtures/README.md).',
       )
     }
     const dir = dirname(file)
-    await mkdir(dir, { recursive: true })
-    // The directory as it really is: a symbolic link inside the fixture tree must not carry the write elsewhere
-    const realDir = await realpath(dir)
+    // The directory as it really is, checked before anything is created in it: a symbolic link inside the fixture
+    // tree must not carry a directory or the file elsewhere
+    const realDir = await realpath(await nearestExisting(dir))
     if (!FIXTURE_DIRS.some(fixtures => `${realDir}/`.startsWith(`${join(realRoot, fixtures)}/`))) {
       throw new Error(`${entry.path}: its directory resolves to ${realDir}, outside the fixture directories; nothing was written`)
     }
+    await mkdir(dir, { recursive: true })
+    await dropStalePartials(file)
     // Written beside the target under a name of this run's own, created exclusively (never through a link someone left
     // there), then renamed over the target: two runs fetching at once each land a whole file, and an interrupted run
     // leaves no half file for the next one to reject
@@ -183,8 +228,13 @@ const invoked = () => {
 }
 
 if (invoked()) {
-  const at = process.argv.indexOf('--for')
-  const consumer = at >= 0 ? process.argv[at + 1] : undefined
+  const args = process.argv.slice(2)
+  // Nothing, or exactly `--for <consumer>`: anything else is a mistake that would otherwise fetch everything
+  if (!(args.length === 0 || (args.length === 2 && args[0] === '--for' && CONSUMERS.includes(args[1])))) {
+    console.error(`usage: fetch-fixtures.mjs [--for ${CONSUMERS.join('|')}]`)
+    process.exit(2)
+  }
+  const consumer = args[1]
   try {
     const { verified, downloaded } = await ensureFixtures({ log: line => console.log(line), ...(consumer ? { for: consumer } : {}) })
     console.log(`remote fixtures${consumer ? ` for ${consumer}` : ''}: ${downloaded.length} downloaded, ${verified.length} already there, all verified`)
