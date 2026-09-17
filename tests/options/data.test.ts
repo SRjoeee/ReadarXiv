@@ -11,6 +11,8 @@ import { mountHook } from '../ui/render-hook'
 const store = vi.hoisted(() => ({
   /** Set: the stored value cannot be read — reads give the defaults, the store refuses writes (config/storage.ts) */
   unreadable: null as FallbackReason | null,
+  /** Set: storage refuses the reset's write */
+  resetRefused: false,
   ConfigUnreadableError: class extends Error {
     constructor(readonly reason: FallbackReason) { super('refused') }
   },
@@ -36,7 +38,11 @@ vi.mock('@/config/storage', () => ({
     store.config = config
     store.log.push(`set:${config.targetLanguage}`)
   },
-  resetConfig: async () => { store.unreadable = null; store.log.push('reset') },
+  resetConfig: async () => {
+    if (store.resetRefused) { store.log.push('reset refused'); throw new Error('QUOTA_BYTES quota exceeded') }
+    store.unreadable = null
+    store.log.push('reset')
+  },
   ConfigUnreadableError: store.ConfigUnreadableError,
   watchConfig: (callback: (config: Config) => void) => { store.watchers.push(callback); return () => { store.watchers = store.watchers.filter(w => w !== callback) } },
   configFallbackReason: () => store.unreadable,
@@ -64,6 +70,7 @@ describe('useOptionsData', () => {
   beforeEach(() => {
     store.config = { ...DEFAULT_CONFIG, uiLanguage: 'en' }
     store.unreadable = null
+    store.resetRefused = false
     store.watchers = []
     store.gate = null
     store.log = []
@@ -90,6 +97,22 @@ describe('useOptionsData', () => {
     await hook.run(async () => { await hook.current().patch(latest => ({ ...latest, targetLanguage: 'jpn' })) })
     expect(hook.current().config?.targetLanguage).toBe('jpn')
     expect(store.log).toEqual(['refused', 'reset', 'set:jpn'])
+    await hook.unmount()
+  })
+
+  it('a reset storage refuses leaves the notice up and says the reset did not go through; the next one that succeeds clears both', async () => {
+    store.unreadable = { kind: 'invalid', where: 'mode', message: 'x' }
+    store.resetRefused = true
+    const hook = await mountHook(useOptionsData)
+    await hook.until(() => hook.current().config !== null)
+    await hook.run(async () => { await hook.current().reset() })
+    expect(hook.current().resetFailed).toBe(true)
+    expect(hook.current().fallbackReason).toMatchObject({ kind: 'invalid' })
+    store.resetRefused = false
+    await hook.run(async () => { await hook.current().reset() })
+    expect(hook.current().resetFailed).toBe(false)
+    expect(hook.current().fallbackReason).toBeNull()
+    expect(store.log).toEqual(['reset refused', 'reset'])
     await hook.unmount()
   })
 

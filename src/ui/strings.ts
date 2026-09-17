@@ -86,6 +86,8 @@ export function fallbackText(reason: FallbackReason): string {
   switch (reason.kind) {
     case 'tooNew':
       return O.fallbackWhy.tooNew(reason.stored, reason.supported)
+    case 'upgradeFailed':
+      return O.fallbackWhy.upgradeFailed(reason.stored, reason.supported)
     case 'invalid': {
       // The field's own sentence when the pack has one; the zod diagnostic otherwise (it is English developer text)
       const key = reason.where.split('.').filter(s => !/^\d+$/.test(s)).pop() ?? ''

@@ -89,6 +89,19 @@ describe('config storage', () => {
       })
     }
 
+    it('an older version the migrations did not carry here is its own reason, not a broken field: a later build may still read it', async () => {
+      // What WXT leaves when a migration step throws: the value at its old version. The marker at this build's version
+      // stands in for the throw here — WXT then runs no step, and the value arrives unmigrated all the same
+      const v14 = { ...DEFAULT_CONFIG, version: CONFIG_VERSION - 1 }
+      await fakeBrowser.storage.local.set({ config: v14, config$: { v: CONFIG_VERSION } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
+      expect(fresh.configFallbackReason()).toEqual({ kind: 'upgradeFailed', stored: CONFIG_VERSION - 1, supported: CONFIG_VERSION })
+      await expect(fresh.setConfig(DEFAULT_CONFIG)).rejects.toMatchObject({ reason: { kind: 'upgradeFailed' } })
+      expect((await fakeBrowser.storage.local.get('config')).config).toEqual(v14)
+    })
+
     it('the warning names the cause and the field, never a stored value (hard rule 5)', async () => {
       await fakeBrowser.storage.local.set({ config: CASES[1].stored, config$: { v: CONFIG_VERSION } })
       vi.resetModules()
