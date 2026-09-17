@@ -66,7 +66,7 @@ Bitmap figures are macOS-only for now.
 
 ![A figure's labels translated in place over the original](docs/images/figure.png)
 
-**The translation looks how you want.** Colour, underline and weight are yours to set, and there is
+**The translation looks how you want.** Colour, opacity and underline are yours to set, and there is
 a blur-until-hovered style for reading the original first and checking yourself afterwards.
 
 Machine translation misreads terminology and will occasionally change a claim. Keeping the original
@@ -106,7 +106,7 @@ to build. See [`helper/README.md`](helper/README.md).
 | Chrome's built-in translation | not needed | Runs on your machine, offline, once Chrome has downloaded the language pack. |
 | Any OpenAI-compatible endpoint | yours | OpenRouter, DeepSeek, Ollama, LM Studio and the like. Prompts and the glossary apply here. |
 
-Add as many endpoints as you like in the settings; each is saved with its own key and model. When
+Add up to twenty endpoints in the settings; each is saved with its own key and model. When
 the chosen service fails mid-paper — an expired key, a spent quota, a dropped connection — the rest
 of the page falls back to a free one rather than stopping, and the popup says what happened.
 
@@ -117,8 +117,10 @@ the same throughout a paper. Both apply only to the LLM services. The target lan
 ## Where the text goes
 
 Paragraphs are sent to whichever service is selected, so the paper's text reaches Microsoft's or
-Google's endpoint, or the endpoint you configured yourself. Two arrangements keep the text on your
-machine: Chrome's built-in translation, and a local LLM such as Ollama or LM Studio.
+Google's endpoint, or the endpoint you configured yourself. An LLM service also receives the prompt
+you selected, the glossary entries that match the passage, and the paper's title, abstract and section
+heading as context. Two arrangements keep the text on your machine: Chrome's built-in translation,
+and a local LLM such as Ollama or LM Studio.
 
 Falling back to a free service when the chosen one fails is on by default, which means a failure can
 send the rest of a paper somewhere you did not pick. Turn it off in the settings to stay with one
@@ -137,10 +139,8 @@ so a change to them does not leave stale translations behind.
 ```mermaid
 flowchart LR
   A["extractor<br/>LaTeXML rules"] --> B["scheduler<br/>what is on screen"]
-  B --> C{"cached?"}
-  C -->|hit| G
-  C -->|miss| D["protector<br/>formulas out,<br/>placeholders in"]
-  D --> E["queue<br/>batch, retry, fall back"]
+  B --> D["protector<br/>formulas out,<br/>placeholders in"]
+  D --> E["background<br/>cache, batch, retry, fall back"]
   E --> F["validate + rehydrate<br/>placeholders back to nodes"]
   F --> G["renderer<br/>inserted as a sibling"]
 ```
@@ -150,20 +150,16 @@ placeholder engine, the three render modes and the restore path are the parts wr
 for this project; the request queue, the retry policy, the cache and the language tables are ported
 from the projects credited below.
 
-[`docs/rebuild/CHARTER.md`](docs/rebuild/CHARTER.md) states what is being built and under what
-constraints, and [`docs/adr/`](docs/adr/) holds one decision per file.
-[`docs/DESIGN.md`](docs/DESIGN.md) is the frozen record of the first implementation — the DOM
-invariants are §7.1, the placeholder protocol §6 and image translation §15 — with the measurements
-behind it in [`docs/RESEARCH.md`](docs/RESEARCH.md). Cite the frozen documents as evidence rather
-than as the specification.
+[`docs/DESIGN.md`](docs/DESIGN.md) is the current design — the DOM invariants are §7.1, the
+placeholder protocol §6, the services §8 and image translation §15 — with the measurements beside the
+decisions they justify; [`docs/adr/`](docs/adr/) holds one decision per file, and
+[`docs/rebuild/CHARTER.md`](docs/rebuild/CHARTER.md) states the constraints the 1.0 rebuild was done under.
 
 ## Status
 
-Pre-release. Everything above works today — translating, the three layouts, showing the original,
-the four services, sentence alignment, figure translation and the settings.
-
-The extension is being rebuilt toward 1.0 on the `rebuild/v1` branch; `main` is frozen at the tag
-`v0.3.0-mvp`, which is what the instructions above build. The roadmap is
+Version 1.0 ([`CHANGELOG.md`](CHANGELOG.md)); the Chrome Web Store listing is pending, so it is built
+from source for now. Everything above works today — translating, the three layouts, showing the
+original, the four services, sentence alignment, figure translation and the settings. The roadmap is
 [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155).
 
 Out of scope for now: other paper sites, PDFs, Firefox and Safari, and translating bitmap figures

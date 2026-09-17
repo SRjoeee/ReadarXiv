@@ -60,7 +60,7 @@ Read arXiv 是一款专为 arXiv HTML 页面打造的阅读翻译扩展。
 
 ![图中的标签在原位被译文覆盖](docs/images/figure.png)
 
-**译文长什么样由你定。** 颜色、下划线、字重都可以自己配；还有一种「悬停前模糊」的样式，
+**译文长什么样由你定。** 颜色、透明度、下划线都可以自己配；还有一种「悬停前模糊」的样式，
 先读原文、再移上去对答案。
 
 机器翻译会认错术语，偶尔也会改变一句话的意思。把原文留在身边不是锦上添花，而是你发现这些问题的方式。
@@ -97,7 +97,7 @@ Read arXiv 是一款专为 arXiv HTML 页面打造的阅读翻译扩展。
 | Chrome 内置翻译 | 不需要 | 在本机运行，语言包下载后可离线使用。 |
 | 任意 OpenAI 兼容接口 | 你自己的 | OpenRouter、DeepSeek、Ollama、LM Studio 等。提示词与术语表只对这类服务生效。 |
 
-服务可以加任意多个，各自保存自己的 Key 与模型。选定的服务在翻译途中失效时——Key 过期、额度用尽、连接中断——
+最多可以加二十个服务，各自保存自己的 Key 与模型。选定的服务在翻译途中失效时——Key 过期、额度用尽、连接中断——
 页面剩下的部分会改用免费服务继续，而不是停下，popup 会说明发生了什么。
 
 扩展自带提示词，可复制后编辑；术语表让同一个术语在整篇论文里译法一致。两者只对 AI 模型生效。
@@ -106,6 +106,7 @@ Read arXiv 是一款专为 arXiv HTML 页面打造的阅读翻译扩展。
 ## 文字送到哪里去
 
 段落会发给当前选中的服务，因此论文的文字会到达微软或 Google 的端点，或者你自己填的那个端点。
+AI 模型服务还会收到你选的提示词、与这段文字匹配的术语表条目，以及论文标题、摘要和所在章节标题作为上下文。
 有两种组合能让文字不离开你的机器：Chrome 内置翻译，以及 Ollama、LM Studio 这类本机运行的模型。
 
 选中的服务出问题时自动改用免费服务，这个开关默认是开的——也就是说一次失败可能把论文剩下的部分
@@ -122,10 +123,8 @@ arXiv 的 HTML 由 LaTeXML 生成，页面上每个元素都标注了自己是�
 ```mermaid
 flowchart LR
   A["extractor<br/>LaTeXML 规则"] --> B["scheduler<br/>屏幕上有什么"]
-  B --> C{"缓存命中？"}
-  C -->|命中| G
-  C -->|未命中| D["protector<br/>取出公式，<br/>换上占位符"]
-  D --> E["queue<br/>攒批、重试、降级"]
+  B --> D["protector<br/>取出公式，<br/>换上占位符"]
+  D --> E["background<br/>缓存、攒批、重试、降级"]
   E --> F["validate + rehydrate<br/>占位符换回原节点"]
   F --> G["renderer<br/>作为兄弟节点插入"]
 ```
@@ -133,17 +132,15 @@ flowchart LR
 「什么算一个可翻译块」的规则只写在一个模块里，别处没有。占位符引擎、三种渲染模式与恢复路径是本项目原创的部分；
 请求队列、重试策略、缓存与语言表移植自下面致谢的项目。
 
-[`docs/rebuild/CHARTER.md`](docs/rebuild/CHARTER.md) 写明在建的是什么、受哪些约束，
-[`docs/adr/`](docs/adr/) 一个决定一个文件。[`docs/DESIGN.md`](docs/DESIGN.md) 是第一版实现的冻结记录——
-DOM 不变量见 §7.1，占位符协议见 §6，图片翻译见 §15——实测数据在
-[`docs/RESEARCH.md`](docs/RESEARCH.md)。冻结的文档作为证据引用，不作为规格。
+[`docs/DESIGN.md`](docs/DESIGN.md) 是当前的设计——DOM 不变量见 §7.1，占位符协议见 §6，翻译服务见 §8，
+图片翻译见 §15——实测数据记在各项决定旁边；[`docs/adr/`](docs/adr/) 一个决定一个文件，
+[`docs/rebuild/CHARTER.md`](docs/rebuild/CHARTER.md) 写明 1.0 重建所遵守的约束。
 
 ## 状态
 
-尚未发布。上面写到的功能今天都可用——翻译、三种读法、显示原文、四种服务、逐句对齐、图片翻译与设置页。
-
-扩展正在 `rebuild/v1` 分支上朝 1.0 重建；`main` 冻结在 `v0.3.0-mvp` 这个 tag 上，
-上面的构建步骤装的就是它。路线图见 [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155)。
+1.0 版（见 [`CHANGELOG.md`](CHANGELOG.md)）；Chrome 应用商店上架待办，目前从源码构建。
+上面写到的功能今天都可用——翻译、三种读法、显示原文、四种服务、逐句对齐、图片翻译与设置页。
+路线图见 [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155)。
 
 暂不考虑：其他论文站点、PDF、Firefox 与 Safari、以及 macOS 以外平台的位图图片翻译。
 
