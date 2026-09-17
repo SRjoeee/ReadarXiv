@@ -448,3 +448,22 @@ describe('pairAt: the block pair by construction, for a node no sentence map cov
     expect(pairAt(doc.querySelector('p:not([class])')?.firstChild ?? doc.body)).toBeUndefined()
   })
 })
+
+describe('pairAt and split copies (Devin on #226)', () => {
+  it('the copy\'s translation pairs with the block it translates, and from the original\'s side the copy on screen is the counterpart while its own translation is hidden', () => {
+    const doc = docOf('<figure class="ltx_figure" id="F1"><img class="ltx_graphics" src="a.png"><figcaption class="ltx_caption" data-axt-id="cap">Caption.</figcaption>'
+      + '<figcaption class="ltx_caption axt-t" data-axt-for="cap">题注。</figcaption></figure>')
+    expect(splitFigures(doc)).toBe(1)
+    const original = doc.querySelector('[data-axt-id="cap"]')!
+    const own = doc.querySelector('figure:not(.axt-split) .axt-t[data-axt-for="cap"]')!
+    const copy = doc.querySelector(`.${SPLIT_CLASS} figcaption`)!
+    expect(copy.getAttribute('data-axt-for')).toBeNull() // the copy's marks are stripped
+    expect(pairAt(copy.firstChild!)?.pair).toEqual({ source: original, target: copy })
+    // Side mode hides the original's own translation and shows the copy
+    Object.assign(own, { checkVisibility: () => false })
+    expect(pairAt(original.firstChild!)?.pair.target).toBe(copy)
+    // With its own translation rendered (any other mode) the original pairs with it
+    Object.assign(own, { checkVisibility: () => true })
+    expect(pairAt(original.firstChild!)?.pair.target).toBe(own)
+  })
+})

@@ -80,7 +80,7 @@ tests/providers/request/concurrency-cap.test.ts 10
 tests/providers/sentence-markers.test.ts 9
 tests/providers/translate-service.test.ts 54
 tests/providers/transport.test.ts 6
-tests/renderer/highlight.test.ts 4  # 2026-09-17: the whole-block fallback tests place translations, the same inputs the sibling renderer tests use
+tests/renderer/highlight.test.ts 5  # 2026-09-17: the whole-block fallback tests place translations, the same inputs the sibling renderer tests use
 tests/renderer/a11y.test.ts 5
 tests/renderer/anchors.test.ts 7
 tests/renderer/authors.test.ts 6
@@ -98,7 +98,7 @@ tests/renderer/pending.test.ts 1
 tests/renderer/prep.test.ts 15
 tests/renderer/render.test.ts 12
 tests/renderer/restore.test.ts 3
-tests/renderer/sentence-map.test.ts 2  # 2026-09-17: the block-pair test places a translated note and paragraph
+tests/renderer/sentence-map.test.ts 3  # 2026-09-17: the block-pair tests place a translated note, paragraph and caption
 tests/renderer/side-layout.test.ts 5
 tests/renderer/split-figures.test.ts 18
 tests/renderer/table-fit.test.ts 1

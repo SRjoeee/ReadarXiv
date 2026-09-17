@@ -1142,6 +1142,28 @@ describe('a pair without a sentence map: the whole block (§7.7)', () => {
     hl.stop()
   })
 
+  it('a nested unit the registered block\'s map does not index pairs on its own; the gap between two sentences still pairs nothing (Devin on #226)', () => {
+    // The paragraph is registered with sentence boundaries; its footnote took another path and has no map of its own
+    const { doc, source } = page('<p class="ltx_p">First sentence here. Second sentence here.</p>')
+    source.setAttribute('data-axt-id', 'p1')
+    const note = doc.createElement('span')
+    note.className = 'ltx_note_content'
+    note.setAttribute('data-axt-id', 'n1')
+    note.textContent = 'note'
+    const noteT = doc.createElement('span')
+    noteT.className = 'ltx_note_content axt-t'
+    noteT.setAttribute('data-axt-for', 'n1')
+    noteT.textContent = '注'
+    source.append(note, noteT)
+    const browser = stubBrowser(doc)
+    const hl = startSentenceHighlight(doc)!
+    browser.caret.mockReturnValue({ offsetNode: noteT.firstChild as Text, offset: 0 })
+    browser.move()
+    expect(browser.bands().map(b => b.getAttribute('data-axt-hl-side'))).toEqual(['target', 'source'])
+    expect(browser.starts()).toContainEqual([0, 4])
+    hl.stop()
+  })
+
   it('a mirror, a skeleton and a failure widget are no translation: nothing is painted for them', () => {
     const doc = unregistered('<p class="ltx_p" data-axt-id="p1">Hello.</p><p class="ltx_p axt-t axt-pending" data-axt-for="p1">…</p><div class="axt-t axt-mirror" data-axt-for="mirror:0">copy</div>')
     const browser = stubBrowser(doc)
