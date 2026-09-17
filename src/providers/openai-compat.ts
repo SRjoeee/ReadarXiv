@@ -42,7 +42,7 @@ export function createOpenAICompatProvider(
   const hasKey = () => serviceRuns(config)
   // The thinking switch changes the request only where an endpoint has an adapter (thinking.ts); where it sends
   // nothing, on and off are the same request and the same identity
-  const adapted = Object.keys(thinkingBodyFields(config.baseURL, 'enabled')).length > 0
+  const adapted = JSON.stringify(thinkingBodyFields(config.baseURL, 'enabled')) !== JSON.stringify(thinkingBodyFields(config.baseURL, 'disabled'))
   return {
     id: config.id ?? 'openai-compat',
     kind: 'llm',
