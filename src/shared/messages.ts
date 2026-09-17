@@ -30,7 +30,7 @@ export interface PageStatus {
    * The page's action epoch: bumped by every start that commits and every restore. A command carries the epoch it
    * was decided on, and the page refuses one from an earlier epoch — a decision that took a while (the toggle waits
    * for the chain's probes) must not undo what the reader did in between, a translate decided on an idle page that
-   * was translated and restored meanwhile included (the local review of INVENTORY S2, sixth and twelfth passes).
+   * was translated and restored meanwhile included (local review).
    * Opaque: the document's own id and the count, so another document's epoch never matches (thirteenth pass)
    */
   epoch?: string
@@ -117,7 +117,7 @@ export interface AxtMessages {
    * Nobody listening is the normal case, so the send may reject
    */
   'axt:helper-state': { request: { status: HelperStatus }; response: undefined }
-  /** popup ↔ options: a download of this language pack ended on one surface; the other looks it up again (INVENTORY S7) */
+  /** popup ↔ options: a download of this language pack ended on one surface; the other looks it up again */
   'axt:pack-changed': { request: { target: string }; response: undefined }
   /**
    * Sent to every tab when a re-probe finds the helper that was missing. A paper parks its bitmaps

@@ -124,7 +124,7 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
   /**
    * `provisional`: bound to a chain at status time (`bindTo`), before the session has made a request. Such a binding
    * takes nothing from the tab's other sessions yet — a restart whose status came back late must not cancel the
-   * restart that won (the local review of INVENTORY S2, eighth pass); the first request makes it the tab's session
+   * restart that won (local review); the first request makes it the tab's session
    */
   const sessions = new Map<string, { transport?: TranslationTransport; tabId?: number; provisional?: true }>()
   /** The held “may have navigated away”, per tab; one more request from the tab cancels it */
@@ -230,7 +230,7 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
    * The tab's sessions a newly registering scope supersedes: not the provisional ones. A provisional entry is a
    * replacement whose status is on its way to the page; the page's session of the moment may still send a request
    * meanwhile — after a worker restart it has no entry here and registers anew — and must not cancel the
-   * replacement it is about to hand over to (the local review of INVENTORY S2, eleventh pass). A replacement's own
+   * replacement it is about to hand over to (local review). A replacement's own
    * first request drops everything else on the tab
    */
   const supersededOn = (tabId: number, by: string): string[] =>

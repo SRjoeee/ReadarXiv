@@ -1,7 +1,7 @@
-// The three costs INVENTORY §8 asked to be measured rather than argued about (2026-09-17): the lazy scheduler
+// Three costs measured rather than argued about (2026-09-17): the lazy scheduler
 // observing a whole paper, the cache port writing a batch one record at a time, and the sentence highlight's
-// MutationObserver taking a pipeline burst. Readings, not assertions, are the product — they are recorded in
-// PROGRESS.md — so the tests are skipped unless asked for: AXT_MEASURE=1 pnpm vitest run tests/perf
+// MutationObserver taking a pipeline burst. Readings, not assertions, are the product — they are recorded beside the
+// decisions they bear on (DESIGN §9, §10, §7.7) — so the tests are skipped unless asked for: AXT_MEASURE=1 pnpm vitest run tests/perf
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'

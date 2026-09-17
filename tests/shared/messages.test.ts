@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeReply, failure, isFailure, replyWith } from '@/shared/messages'
+import { decodeReply, failure, isAxtMessage, isFailure, replyWith } from '@/shared/messages'
 
 // A handler's failure travels back as a typed reply and becomes the sender's rejection (S2 review, fifth pass):
 // a request whose work failed must settle, not wait for the worker to die
@@ -32,5 +32,13 @@ describe('failure replies', () => {
     expect(isFailure({ axtError: 'x' })).toBe(true)
     expect(isFailure({ ok: false, error: { kind: 'network', message: 'x' } })).toBe(false)
     expect(isFailure(null)).toBe(false)
+  })
+})
+
+describe('isAxtMessage', () => {
+  it('knows our messages by their prefix and lets everything else pass the listener by', () => {
+    expect(isAxtMessage({ type: 'axt:page-status' })).toBe(true)
+    expect(isAxtMessage({ type: 'other' })).toBe(false)
+    expect(isAxtMessage(null)).toBe(false)
   })
 })

@@ -18,7 +18,7 @@ curl -fsSL https://raw.githubusercontent.com/SRjoeee/ReadarXiv/main/helper/insta
 
 The command the popup copies names the **commit the extension was built from** in place of `main` (twice: the script and the sources come from the same place), so the helper installed is the one that extension was built against — a helper newer than the extension would fail the handshake. A development build that cannot promise a pushed commit says `main`.
 
-A second argument names a branch (default main); the command copied from the guide carries the branch it came from.
+The second argument is a ref — a commit hash, a release tag (`v0.4.0`) or a branch; without it, `main`. The command copied from the guide carries the ref of the build it came from.
 
 The script puts the helper's sources under `~/Library/Application Support/Readarxiv/helper`, builds them with the Xcode
 Command Line Tools (about a minute the first time; without them, run `xcode-select --install` first) and registers the
@@ -58,5 +58,6 @@ pnpm helper:smoke    # feeds a reference image over the native protocol and chec
 
 ## Uninstall
 
-Delete the two manifest files above (also the way to drop extension ids a run allowed); the binary lives in the repository
-directory and goes with `git clean` or `rm -rf helper/.build`.
+Delete the two manifest files above (also the way to drop extension ids a run allowed), then the helper itself: the one
+the popup's command installed is `~/Library/Application Support/Readarxiv/helper` (`rm -rf` it); a developer build lives in
+the repository directory and goes with `git clean` or `rm -rf helper/.build`.

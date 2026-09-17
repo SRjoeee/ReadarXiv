@@ -8,15 +8,15 @@ import type { AxtMessage } from '@/shared/messages'
  * How long a session ask is waited for before the next poll asks again. The background gives the chain in force this
  * long to settle (provider-status.ts, `STATUS_DEADLINE_MS`); a session's own chain has no deadline there, and a probe
  * that stalls inside it would otherwise hold this popup's polling — the engine shown, the hand-over warning — for as
- * long as the popup stays open (the local review of S1, third pass)
+ * long as the popup stays open (local review)
  */
-export const SESSION_ASK_TTL_MS = 5_000
+const SESSION_ASK_TTL_MS = 5_000
 
 export interface ProviderAsks {
   /**
    * The saved settings' chain, built from what is stored now — every ask carries the `fresh` barrier: an ask without it,
    * made while one with it waited on its read, would answer first from the previous chain and, as the newer ask, keep
-   * the answer (the local review of S1, sixth and eighth passes). Only the newest ask publishes: a stale answer would
+   * the answer (local review). Only the newest ask publishes: a stale answer would
    * undo a newer
    */
   saved(): Promise<void>

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The one writer of the Native Messaging host manifest (DESIGN §15.4; INVENTORY P5). `install.sh` (the developer build inside the
+# The one writer of the Native Messaging host manifest (DESIGN §15.4). `install.sh` (the developer build inside the
 # repository) and `install-remote.sh` (the one-click install under ~/Library/Application Support) both end here, so the two paths
 # cannot disagree on the manifest's shape, its description or its policy — they did, and running them alternately on one machine
 # flipped the manifest back and forth. Chrome reads <user data directory>/NativeMessagingHosts/<host>.json; written into the default

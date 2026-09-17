@@ -241,5 +241,4 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
 
 // The chain-config table and the digest live in config/revision.ts: the popup and the toggle compare a page with the
 // saved settings through the same digest, and neither may pull this module's providers into its bundle
-export { CHAIN_CONFIG_FIELDS, VOLATILE_CONFIG_FIELDS, chainConfigChanged, chainRevision } from '@/config/revision'
 import { chainRevision } from '@/config/revision'

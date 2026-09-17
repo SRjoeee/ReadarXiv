@@ -73,7 +73,7 @@ describe('the context menu\'s translation toggle (#146)', () => {
     expect(current.sent[1]).toEqual({ tabId: 7, type: 'axt:restore-page' })
   })
 
-  it('a page behind settings that cannot run on their own is left alone, as the button it mirrors is disabled — a fallback does not make the toggle restart it (the local review of S2)', async () => {
+  it('a page behind settings that cannot run on their own is left alone, as the button it mirrors is disabled — a fallback does not make the toggle restart it (local review)', async () => {
     const running = { provider: 'microsoft', target: 'cmn', engine: 'microsoft', revision: 'r1' }
     const menu = fakeMenu({ ...progress('on'), running }, { revision: 'r2', canRun: false, fallback: true })
     menu.click(7)

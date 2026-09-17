@@ -1,4 +1,4 @@
-// Appearance profiles (spec §3): the reader's own list of translation styles and hover bands.
+// Appearance profiles (DESIGN §7.5): the reader's own list of translation styles and hover bands.
 // The built-ins are ordinary entries with fixed ids, so they can be edited, deleted and restored.
 import { z } from 'zod'
 import { COLOR_MAX, OPACITY_MAX, OPACITY_MIN, sanitizeColor, sanitizeCustomCss } from '@/core/renderer/style-values'
@@ -13,7 +13,7 @@ export const HL_OPACITY_MAX = 0.6
 const colorField = z.string().max(COLOR_MAX).refine(v => sanitizeColor(v).ok, 'not a valid colour value')
 const idField = z.string().min(1).max(40)
 
-export const styleProfileSchema = z.object({
+const styleProfileSchema = z.object({
   id: idField,
   name: z.string().min(1).max(40),
   /** '' = follow the original text */
@@ -28,7 +28,7 @@ export const styleProfileSchema = z.object({
 })
 export type StyleProfile = z.infer<typeof styleProfileSchema>
 
-export const highlightProfileSchema = z.object({
+const highlightProfileSchema = z.object({
   id: idField,
   name: z.string().min(1).max(40),
   /** '' = the default green */
@@ -55,7 +55,7 @@ const style = (id: string, name: string, over: Partial<StyleProfile> = {}): Styl
   ({ id, name, color: '', opacity: 1, underline: 'none', thickness: 1, blur: false, css: '', ...over })
 
 /** Read Frog's green (custom-translation-node.css); the others were picked against arXiv's white and its dark theme */
-export const GREEN = 'oklch(0.693 0.17 162.48)'
+const GREEN = 'oklch(0.693 0.17 162.48)'
 export const BUILT_IN_STYLES: readonly StyleProfile[] = [
   style('follow', '与原文相同'),
   style('green', '绿色', { color: GREEN }),

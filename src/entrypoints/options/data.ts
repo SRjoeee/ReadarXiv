@@ -65,8 +65,8 @@ export function useOptionsData(): OptionsData {
   }))
   /**
    * Apply the stored interface language the way this page's own change does — a reload — but not under a draft: a
-   * service being edited, a profile, a prompt is local until its own save, and the reload would discard it (the
-   * local review of S1, fourth pass). It waits for the last draft to close, then for the page's own writes: a draft's
+   * service being edited, a profile, a prompt is local until its own save, and the reload would discard it (local
+   * review). It waits for the last draft to close, then for the page's own writes: a draft's
    * save is queued on the chain in the same breath as its editor closes, and a reload issued at once would cut it off
    * before its read of the store came back — and it looks again after the wait, since a draft opened or a save queued
    * meanwhile is owed the same (fifth pass). A second change while it waits adds nothing
@@ -97,7 +97,7 @@ export function useOptionsData(): OptionsData {
 
   useEffect(() => {
     // Queued on the write chain with the watcher reloads that follow: a slow first read must not land after one of
-    // them showed newer settings (the local review of S1)
+    // them showed newer settings (local review)
     const init = async () => {
       const c = await getConfig()
       // A change landing between the locale's read (main.tsx) and this one would otherwise show its settings in the
@@ -110,7 +110,7 @@ export function useOptionsData(): OptionsData {
       return c
     }
     writes.current = writes.current.then(init, init)
-    // A change saved elsewhere — the popup, another settings tab — shows here without a reload (INVENTORY S1). The
+    // A change saved elsewhere — the popup, another settings tab — shows here without a reload. The
     // store is re-read on the same serialized chain the page's own writes use, not taken from the event: events
     // carry no order, and one for an earlier write can arrive after a later write was already shown (#182)
     const unwatch = watchConfig(() => {
@@ -139,7 +139,7 @@ export function useOptionsData(): OptionsData {
     const onHelperState = (message: unknown) => {
       const m = message as { type?: string; status?: HelperStatus; target?: string } | null
       if (m?.type === 'axt:helper-state' && m.status) setHelper(m.status)
-      // A pack downloaded from the popup: the Chrome card here must not keep offering the download (INVENTORY S7)
+      // A pack downloaded from the popup: the Chrome card here must not keep offering the download
       if (m?.type === 'axt:pack-changed' && m.target) packs.receive(m.target)
     }
     browser.runtime.onMessage.addListener(onHelperState)

@@ -21,7 +21,7 @@ const HIDDEN_MATH_META = new Set(['annotation', 'annotation-xml'])
  * - the rules' skip items (publication metadata, conversion errors …): 2507.00150 nests .ltx_pubnotes inside the
  *   document title, and unskipped the whole acknowledgement would pass for the title, sent with every batch and
  *   entering the cache key (Codex on #28)
- * - our own injected nodes (class starting with axt-, hard rule 5): taken after a translation, the previous round's
+ * - our own injected nodes (class starting with axt-, hard rule 2): taken after a translation, the previous round's
  *   translations would mix into the abstract
  */
 function excluded(el: Element): boolean {

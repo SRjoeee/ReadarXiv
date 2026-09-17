@@ -27,16 +27,16 @@ import { FOR_ATTR } from './attrs'
 /** An original node may only gain data-axt-* attributes (§7.1), so the ratio is an attribute, not an inline style */
 export const FIT_ATTR = 'data-axt-fit'
 /** Discrete stops: a few CSS rules cover them, and no new value is written on every window resize */
-export const FIT_BUCKETS = [95, 90, 85, 80, 75, 70] as const
+const FIT_BUCKETS = [95, 90, 85, 80, 75, 70] as const
 /** Below this ratio the text is too small; scrolling within the column instead */
-export const MIN_FIT = 0.7
+const MIN_FIT = 0.7
 export const FIT_SCROLL = 'scroll'
 /**
  * The slack a loosening (removing the mark, or a larger stop) requires. When an equation table fits, its natural
  * width can only be estimated (see measureNatural), and the estimate runs 1–2% under the real value (a maximum of
  * 28px measured over 145 tables); without slack it would flip between “loosen → overflow → tighten” for ever
  */
-export const LOOSEN_SLACK = 0.05
+const LOOSEN_SLACK = 0.05
 
 export interface NaturalWidth {
   width: number

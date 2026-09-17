@@ -21,7 +21,7 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
     3: (v2: Omit<Config, 'version' | 'preload' | 'targetLanguage'> & { version: 2; targetLanguage: string }) => ({ ...v2, version: 3 as const, preload: { ...DEFAULT_PRELOAD } }),
     // v3 -> v4: the target language from BCP-47 to ISO 639-3 (zh-CN → cmn, zh-TW → cmn-Hant, ja → jpn)
     4: (v3: Omit<Config, 'version' | 'targetLanguage' | 'fallback'> & { version: 3; targetLanguage: string }) => ({ ...v3, version: 4 as const, targetLanguage: fromBcp47(v3.targetLanguage) }),
-    // v4 -> v5: the engine fallback chain added, on by default (hard rule 4: a failure must be recoverable and never take the extension down)
+    // v4 -> v5: the engine fallback chain added, on by default (hard rule 3: a failure must be recoverable and never take the extension down)
     5: (v4: Omit<Config, 'version' | 'fallback' | 'glossary'> & { version: 4 }) => ({ ...v4, version: 5 as const, fallback: { enabled: true } }),
     // v5 -> v6: the glossary added, empty by default (an empty glossary enters neither the prompt nor the cache key, so the behaviour is as before)
     6: (v5: Omit<Config, 'version' | 'glossary' | 'style'> & { version: 5 }) => ({ ...v5, version: 6 as const, glossary: [] }),
@@ -51,7 +51,7 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
     11: (v10: Omit<Config, 'version' | 'image'> & { version: 10; image: { modes: Config['image']['modes'] } }) =>
       ({ ...v10, version: 11 as const, image: { enabled: v10.image.modes.length > 0, modes: v10.image.modes } }),
     // v11 -> v12: user-added services replace the single endpoint; appearance profiles replace the
-    // preset. Total: every v11 value maps somewhere (spec §5), so nothing falls back to defaults
+    // preset. Total: every v11 value maps somewhere, so nothing falls back to defaults
     12: (v11: Omit<Config, 'version' | 'services' | 'appearance'> & { version: 11; openaiCompat: V11Endpoint; style: V11Style }) => {
       const { openaiCompat, style, ...rest } = v11
       const edited = openaiCompat.apiKey !== '' || openaiCompat.baseURL !== 'https://openrouter.ai/api/v1' || openaiCompat.model !== 'deepseek/deepseek-v4-flash'
@@ -88,7 +88,7 @@ interface V11Endpoint { baseURL: string; apiKey: string; model: string; thinking
 interface V11Style { preset: string; customCss: string; color: string; opacity: number; accent: string }
 
 /**
- * v11 `style` → the profile lists (spec §5). An underline preset becomes a copy of “Same as the original” with
+ * v11 `style` → the profile lists (DESIGN §9). An underline preset becomes a copy of “Same as the original” with
  * that underline; `custom` keeps its declarations; the removed effects keep their colour on the
  * follow-original profile; an accent colour becomes the reader's own band profile
  */

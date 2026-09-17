@@ -1,6 +1,7 @@
 // One definition of "a real translation node" (DESIGN §7.1): `TRANSLATION_EXCLUDED_CLASSES` in attrs.ts.
 // The style sheets cannot import it, so every `.axt-t:not(…)` they write that names `.axt-pending`
-// must list exactly the same classes — issue #46 was this list drifting between two copies.
+// must list exactly the same classes — issue #46 was this list drifting between two copies. The browser suites
+// cannot import it either (their selectors run inside the page), and are held to it the same way.
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -8,6 +9,7 @@ import { REAL_TRANSLATION, TRANSLATION_EXCLUDED_CLASSES } from '@/core/renderer/
 import { TOP_TRANSLATION_SELECTOR, TRANSLATION_SELECTOR } from '@/core/renderer/style-preset'
 
 const STYLES = join(import.meta.dirname, '../../src/styles')
+const E2E = join(import.meta.dirname, '../e2e')
 const canonical = TRANSLATION_EXCLUDED_CLASSES.map(c => `.${c}`).join(', ')
 
 describe('the translation boundary', () => {
@@ -31,5 +33,21 @@ describe('the translation boundary', () => {
     }
     // the sheets do carry the boundary — a regex that matched nothing would pass vacuously
     expect(seen.length).toBeGreaterThanOrEqual(6)
+  })
+
+  it('every copy in the browser suites lists the same classes: a count of “real translations” that forgot one kind of copy counts copies', () => {
+    const seen: string[] = []
+    for (const file of readdirSync(E2E).filter(f => f.endsWith('.mjs'))) {
+      const script = readFileSync(join(E2E, file), 'utf8')
+      // Chains (`:not(.a):not(.b)`) are not a way round the rule: the list is written once, as production writes it
+      expect(script, `${file} chains :not() over our classes`).not.toMatch(/(?::not\(\.axt-[^)]*\)){2,}/)
+      for (const m of script.matchAll(/:not\((\.axt-[^)]*)\)/g)) {
+        const list = m[1]!
+        if (!list.includes('.axt-pending')) continue
+        seen.push(`${file}: ${list}`)
+        expect(list, `${file} writes a different boundary`).toBe(canonical)
+      }
+    }
+    expect(seen.length).toBeGreaterThan(5)
   })
 })

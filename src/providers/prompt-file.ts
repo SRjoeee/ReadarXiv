@@ -1,6 +1,7 @@
-// Import / export of prompt files. The counterpart of Read Frog's components/prompt-configurator/utils/prompt-file.ts@9b44f82,
-// rewritten 2026-09-05: the same file shape (an array of { name, systemPrompt, prompt } without ids, so the two can
-// import each other's files), validated with zod, downloaded without file-saver (<a download> works in an extension page as it is).
+// Ported from reference/read-frog/src/components/prompt-configurator/utils/prompt-file.ts@9b44f82 (GPL-3.0), 2026-09-05,
+// modified — rewritten around the same file shape. Import / export of prompt files: an array of
+// { name, systemPrompt, prompt } without ids, so the two projects can import each other's files; validated with zod,
+// downloaded without file-saver (<a download> works in an extension page as it is).
 import { z } from 'zod'
 import { downloadTextFile } from '@/shared/download'
 import type { PromptTemplate } from './prompt-library'
@@ -8,12 +9,12 @@ import type { PromptTemplate } from './prompt-library'
 export const PROMPT_FILE_NAME = 'arxiv-translate_prompts.json'
 
 /** One entry of the file: as in Read Frog, name and prompt are required and systemPrompt defaults to empty (its older files) */
-export const promptFileEntrySchema = z.object({
+const promptFileEntrySchema = z.object({
   name: z.string().min(1),
   prompt: z.string().min(1),
   systemPrompt: z.string().default(''),
 })
-export const promptFileSchema = z.array(promptFileEntrySchema)
+const promptFileSchema = z.array(promptFileEntrySchema)
 export type PromptFileEntry = z.infer<typeof promptFileEntrySchema>
 
 /**

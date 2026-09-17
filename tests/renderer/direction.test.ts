@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { RTL_LANGUAGES, isRtl, isRtlTag, toBcp47 } from '@/config/languages'
+import { RTL_LANGUAGES, isRtlTag, toBcp47 } from '@/config/languages'
 import { extract, type TableBlock, type TextBlock } from '@/core/extractor'
 import { DIR_ATTR, LANG_ATTR } from '@/core/renderer/attrs'
 import { enable } from '@/core/renderer/page'
@@ -16,13 +16,11 @@ describe('the RTL language table', () => {
   it('13 right-to-left languages, recognised in both spellings', () => {
     expect(RTL_LANGUAGES.size).toBe(13)
     for (const code of ['arb', 'heb', 'pes', 'urd', 'uig', 'ckb']) {
-      expect([code, isRtl(code)]).toEqual([code, true])
       expect([code, isRtlTag(toBcp47(code))]).toEqual([code, true])
     }
     // The three without a two-letter code (sent to the engine as 639-3) must be recognised too
     for (const code of ['prs', 'pbu', 'skr']) expect([code, isRtlTag(toBcp47(code))]).toEqual([code, true])
     for (const code of ['cmn', 'eng', 'jpn', 'rus', 'kmr']) {
-      expect([code, isRtl(code)]).toEqual([code, false])
       expect([code, isRtlTag(toBcp47(code))]).toEqual([code, false])
     }
   })
@@ -37,7 +35,6 @@ describe('the RTL language table', () => {
   // treating ms itself as an RTL primary subtag would misjudge Latin-script Malay as rtl. With a script subtag present it decides
   it('the script subtag decides direction over the primary language: ms-Arab is rtl, ms is not', () => {
     expect(toBcp47('zlm')).toBe('ms-Arab')
-    expect(isRtl('zlm')).toBe(true)
     expect(isRtlTag('ms-Arab')).toBe(true)
     expect(isRtlTag('MS-ARAB')).toBe(true)
     expect(isRtlTag('ms')).toBe(false)

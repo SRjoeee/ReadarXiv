@@ -1,6 +1,6 @@
-import type { Block } from './index'
+import type { Block } from '@/core/extractor'
 
-/** The block statistics shared by the popup and the test snapshots */
+/** The block statistics the fixture snapshots record: what the rules make of a whole paper, in numbers */
 export interface BlockStats {
   total: number
   text: number

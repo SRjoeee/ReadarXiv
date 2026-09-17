@@ -22,7 +22,7 @@ export function chainConfigChanged(a: Config, b: Config): boolean {
  * The identity of the settings a chain is built from: a digest of the chain fields above, so a page can tell whether
  * the settings moved on since its session started. Not a build counter — that restarted with the worker, so a page
  * that outlived one worker looked "behind the settings" once the next had rebuilt the same chain, and a rebuild from
- * unchanged settings bumped it too (INVENTORY S8, open question 2). API keys go in as their own digests: the
+ * unchanged settings bumped it too. API keys go in as their own digests: the
  * serialised document never holds one, the rule `deepEqual` keeps. Sixteen hex digits are plenty for "same or not"
  */
 export async function chainRevision(config: Config): Promise<string> {
@@ -39,7 +39,7 @@ function canonical(value: unknown): unknown {
   return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical((value as Record<string, unknown>)[key])]))
 }
 
-/** Compared field by field rather than serialised: the configuration holds an API key, and it gets no extra copy (hard rule 7) */
+/** Compared field by field rather than serialised: the configuration holds an API key, and it gets no extra copy (hard rule 5) */
 function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true
   if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false

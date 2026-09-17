@@ -54,7 +54,7 @@ export type WireSpan =
  * The result is clamped to the next anchor because an expanded escape is indivisible: `&` occupies
  * five wire characters but one node character, and interpolating through them walks the node
  * offset past where the escape ends. Without the clamp the mapping is not monotone — for `&Z`,
- * wire 4 gave node 2 while wire 5 gave node 1, which collapsed `rangeOf(4, 6)` and dropped the `Z`
+ * wire 4 gave node 2 while wire 5 gave node 1, which collapsed `rangesOf(4, 6)` and dropped the `Z`
  * (Codex pointed this out on #123). Clamping snaps any offset inside an escape to the position just
  * after the character it encodes.
  */

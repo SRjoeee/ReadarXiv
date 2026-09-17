@@ -35,7 +35,7 @@ export const BUILTIN_MAX_ITEMS = 20
  * batch's signal**: without it a `create()` that never returns would stay in the cache for ever, and every later
  * retry would wait on the same dead Promise (Codex on #50)
  */
-export const SESSION_CREATE_TIMEOUT_MS = 60_000
+const SESSION_CREATE_TIMEOUT_MS = 60_000
 
 /**
  * A minimal semaphore. The concurrency gate of local inference has to hold **across calls**: the provider declares

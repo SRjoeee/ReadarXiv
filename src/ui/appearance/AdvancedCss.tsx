@@ -12,10 +12,10 @@ export function AdvancedCss({ value, onChange }: { value: string; onChange: (nex
    * The box holds a draft of its own. A rejected block never reaches the stored profile, so a
    * `value` fed straight back from it would snap the text away before the reason beneath it could
    * be read (Codex on #157). The draft follows the profile when that changes underneath — a change
-   * saved elsewhere (INVENTORY S1) — but never while a write of its own is out: the store is behind
+   * saved elsewhere — but never while a write of its own is out: the store is behind
    * the reader then, and what it says lands before their block does. `onChange` answers with the
    * write, so the box knows when its own have landed — the prop cannot tell it: a block equal to the
-   * stored one, or written twice, changes no prop (the local review of S1, eighth to eleventh passes).
+   * stored one, or written twice, changes no prop (local review).
    * A refused block, and a write the store refused, are the reader's to finish
    */
   const [draft, setDraft] = useState(value)

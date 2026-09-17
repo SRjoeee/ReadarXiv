@@ -4,7 +4,7 @@ import { clearSentenceHighlights, startSentenceHighlight } from '@/core/renderer
 import { restore, setMode } from '@/core/renderer/page'
 import { registerSentences } from '@/core/renderer/sentence-map'
 import { PEEK_DWELL_MS } from '@/core/renderer/peek'
-import { splitSentences } from '@/core/sentences'
+import { splitSentences } from '../sentences/lengths'
 
 /**
  * happy-dom has none of the highlight machinery, so the browser side is stubbed: a Map standing in
@@ -527,7 +527,7 @@ describe('hover sentence highlight (§7.7)', () => {
   it('a second controller does not lose its highlight to the first one fading', () => {
     // Out of contract — `content/index.ts` calls `endRun()`, which stops the running controller,
     // before starting another — but cheap to hold: both are listening and each paints its own
-    // layer, so the older one's fade and its stop() touch only its own bands (INVENTORY T3).
+    // layer, so the older one's fade and its stop() touch only its own bands.
     const { doc, source } = page(TWO)
     const browser = stubBrowser(doc)
     const first = startSentenceHighlight(doc)!
@@ -589,7 +589,7 @@ describe('hover sentence highlight (§7.7)', () => {
     // `caretPositionFromPoint` answers "which caret is nearest", not "is there text here", so a
     // pointer out in the right-hand margin still resolves to the last character of a line. Without
     // a hit test the whole gutter of a paper highlights the paragraph beside it — reported from
-    // real use, and the reason `onTheText` exists. The stub puts every character in one 200×20 box.
+    // real use, and the reason the hit test (`hit`, `inside`) exists. The stub puts every character in one 200×20 box.
     const { doc, source } = page(TWO)
     const browser = stubBrowser(doc)
     const hl = startSentenceHighlight(doc)!
@@ -705,7 +705,7 @@ describe('hover sentence highlight (§7.7)', () => {
   })
 
   it('a clear from outside (setMode, applyStyle) is the controller dropping its own bands: the layer stays, empty, and the next move repaints', () => {
-    // INVENTORY T3: one owner. The outside asks; nothing but the controller touches the layer
+    // One owner. The outside asks; nothing but the controller touches the layer
     const { doc, source } = page(TWO)
     const browser = stubBrowser(doc)
     const hl = startSentenceHighlight(doc)!
@@ -1078,7 +1078,7 @@ describe('source peek through the pointer (#141)', () => {
     browser.flushTimers(PEEK_DWELL_MS)
     expect(panel(doc)?.hidden).toBe(false)
 
-    // What setMode() and applyStyle() ask of the controller: the panel is its own and stays, hidden, for the next dwell (INVENTORY T3)
+    // What setMode() and applyStyle() ask of the controller: the panel is its own and stays, hidden, for the next dwell
     clearSentenceHighlights(doc)
     expect(panel(doc)?.hidden).toBe(true)
     browser.move()

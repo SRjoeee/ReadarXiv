@@ -1,5 +1,6 @@
 import type { Config } from '@/config/schema'
-import { chainConfigChanged, type TranslationTransport } from '@/providers/transport'
+import { chainConfigChanged } from '@/config/revision'
+import type { TranslationTransport } from '@/providers/transport'
 
 export interface Built {
   config: Config

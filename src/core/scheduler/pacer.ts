@@ -3,7 +3,7 @@
 // freezes it (its #1881).
 
 /** The time budget of one slice of synchronous DOM work */
-export const DEFAULT_WALK_BUDGET_MS = 12
+const DEFAULT_WALK_BUDGET_MS = 12
 
 interface SchedulerLike {
   yield?: () => Promise<void>
@@ -15,7 +15,7 @@ interface SchedulerLike {
  * scheduler.yield (Chrome 129+) → scheduler.postTask (Chrome 94+ / Firefox 101+) → MessageChannel (everywhere; unlike
  * setTimeout it has no nested 4ms floor) → setTimeout(0).
  */
-export function yieldToMain(): Promise<void> {
+function yieldToMain(): Promise<void> {
   const scheduler = (globalThis as { scheduler?: SchedulerLike }).scheduler
   if (typeof scheduler?.yield === 'function') {
     return scheduler.yield()

@@ -5,7 +5,7 @@ import type { ProviderStatus } from '@/providers/transport'
 import type { AxtMessage, PageStatus } from '@/shared/messages'
 import { deferred, mountHook } from '../ui/render-hook'
 
-// The popup's data layer (INVENTORY S1), mounted in a real React root: which ask publishes, and when the page reloads
+// The popup's data layer, mounted in a real React root: which ask publishes, and when the page reloads
 
 const store = vi.hoisted(() => ({
   config: null as Config | null,
@@ -134,7 +134,7 @@ describe('usePopupData', () => {
     await hook.unmount()
   })
 
-  it('a pack downloaded on the settings page shows installed here without a click; another target starts no lookup (INVENTORY S7)', async () => {
+  it('a pack downloaded on the settings page shows installed here without a click; another target starts no lookup', async () => {
     const listeners = vi.mocked(browser.runtime.onMessage.addListener).mock.calls.length
     const hook = await mountHook(usePopupData)
     await hook.until(() => hook.current().input.pack !== null)

@@ -4,7 +4,7 @@ import { createChainHolder } from '@/entrypoints/background/chain'
 import { createConfigOffers, providerStatus, statusInForce } from '@/entrypoints/background/provider-status'
 import type { TranslationTransport } from '@/providers/transport'
 
-// The provider-status action (INVENTORY P4): a session's chain, the chain in force, or — after a save — a chain
+// The provider-status action: a session's chain, the chain in force, or — after a save — a chain
 // built from what is stored now, without the popup polling for it
 
 const chainOf = (provider: string): TranslationTransport => ({

@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { attachRequestErrorMeta, defaultRequestRetryPolicy, getRequestErrorMeta } from '@/providers/request/retry-policy'
-import { ProviderError, type ProviderErrorKind } from '@/providers/types'
+import { PROVIDER_ERROR_KINDS, ProviderError, isPermanentErrorKind, type ProviderErrorKind } from '@/providers/types'
 
 const decide = (error: unknown) =>
   defaultRequestRetryPolicy.decide(error, { retryCount: 0, maxRetries: 2, baseRetryDelayMs: 1000, now: 0, rateLimitRetryCount: 0, consecutiveRateLimits: 0 })
 
 // The ported retry-policy knows only its own kinds; ProviderError attaches metadata by kind at construction so the policy decides right
 describe('ProviderError\'s retry metadata', () => {
+  it('the kinds a session stops on are exactly the kinds the queue drains on: one notion of “only a changed setting can help”, written in two tables', () => {
+    // PERMANENT_ERROR_KINDS (the chain, the service, both runs, the session) and META_BY_KIND's `access-denied` (the
+    // request queue's failQueue) are kept apart by a module boundary; a kind added to one and not the other would
+    // stop the session and keep firing the queue, or drain the queue and leave the session running
+    for (const kind of PROVIDER_ERROR_KINDS) {
+      const drains = decide(new ProviderError(kind, kind)).action === 'fail' && (decide(new ProviderError(kind, kind)) as { failQueue?: boolean }).failQueue === true
+      expect([kind, drains]).toEqual([kind, isPermanentErrorKind(kind)])
+    }
+  })
+
   it('no-key / auth: no retry, and the whole queue drains (as with 401 / 403)', () => {
     for (const kind of ['no-key', 'auth'] as const) {
       const decision = decide(new ProviderError(kind, kind))
