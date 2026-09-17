@@ -4,7 +4,7 @@
 // the services rather than living inside them.
 //
 // The problem solved: an expired key, an exhausted quota or a network blip made run.ts stop the whole page (no-key /
-// auth trigger scheduler.disconnect()), the reader waiting over half a translation. Hard rule 4: a failure must be recoverable and trigger the fallback chain.
+// auth trigger scheduler.disconnect()), the reader waiting over half a translation. Hard rule 3: a failure must be recoverable and trigger the fallback chain.
 import type { TranslateCall, TranslateMessageResponse, TranslateService } from './translate-service'
 import { isPermanentErrorKind, type ProviderErrorKind, type TranslatedSegment, type TranslationProvider } from './types'
 import { failureLine } from '@/shared/diagnostics'

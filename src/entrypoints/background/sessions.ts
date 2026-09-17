@@ -326,8 +326,8 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
     },
     async dropAndRebindAll() {
       // Stopping the deleted service must not wait for its replacement: a rebuild can hang in an engine probe,
-      // fail, or be superseded (local review). 1. Before anything is awaited: the holder retires every chain but the
-      // build in force — every
+      // fail, or be superseded (local review).
+      // 1. Before anything is awaited: the holder retires every chain but the build in force — every
       //    chain, while that build has not landed — draining each chain's scoped work, whichever session left it
       //    there (a session moved on by a language pack leaves its earlier requests behind; the registry does not
       //    mark it, so nothing else would stop them). The sessions on a retired chain lose it, keeping their

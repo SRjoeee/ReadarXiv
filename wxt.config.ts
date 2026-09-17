@@ -53,10 +53,10 @@ export default defineConfig({
     description: '__MSG_description__',
     // contextMenus: the translate toggle in the context menu (issue #146) — it registers a menu item, not access to
     // page content. alarms: wakes a fresh service worker after the reader grants `nativeMessaging` at runtime — a
-    // running worker never gains the API (DESIGN §15.4, verified 2026-09-13); no install warning
+    // running worker never gains the API (DESIGN §15.3, verified 2026-09-13); no install warning
     permissions: ['storage', 'contextMenus', 'alarms'],
     // nativeMessaging: image translation on a Mac reads figures through the local helper (DESIGN §15). Optional (DESIGN
-    // §15.4): requested from the reader's own click in the popup or on the settings page, so the store listing does
+    // §15.3): requested from the reader's own click in the popup or on the settings page, so the store listing does
     // not name a native component to readers who never install it. The image e2e pre-grants it in a patched copy
     optional_permissions: ['nativeMessaging'],
     // The keyboard entry (UI.md S-P-50): the same toggle as the context menu. The popup shows the

@@ -1,7 +1,11 @@
-// One definition of "a real translation node" (DESIGN §7.1): `TRANSLATION_EXCLUDED_CLASSES` in attrs.ts.
-// The style sheets cannot import it, so every `.axt-t:not(…)` they write that names `.axt-pending`
-// must list exactly the same classes — issue #46 was this list drifting between two copies. The browser suites
-// cannot import it either (their selectors run inside the page), and are held to it the same way.
+// One definition of "a real translation node" (DESIGN §7.1): `TRANSLATION_EXCLUDED_CLASSES` in attrs.ts — issue #46
+// was this list drifting between copies. Two kinds of copy cannot import it, and are held to it here:
+// - the style sheets: every `.axt-t:not(…)` that names `.axt-pending` lists exactly the same classes (a sheet may write a
+//   deliberately narrower list, `:not(.axt-error)` alone, for a rule about one kind of node);
+// - the browser suites (their selectors run inside the page): every `:not(…)` that names any of the four classes lists
+//   exactly the same, unless the selector it qualifies is itself one of those kinds (`.axt-error:not(.axt-split)`, an
+//   error widget outside a split copy). A list built by interpolation (`:not(${x})`) cannot be read here.
+import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -36,23 +40,22 @@ describe('the translation boundary', () => {
   })
 
   it('every copy in the browser suites lists the same classes: a count of “real translations” that forgot one kind of copy counts copies', () => {
-    const seen: string[] = []
-    // The suites and their probes; the dot-directories are build copies, not scripts
-    const scripts = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
-      entry.isDirectory() ? (entry.name.startsWith('.') ? [] : scripts(join(dir, entry.name))) : entry.name.endsWith('.mjs') ? [join(dir, entry.name)] : [])
+    const root = join(import.meta.dirname, '../..')
+    const tracked = execFileSync('git', ['ls-files', 'tests/e2e'], { cwd: root, encoding: 'utf8' }).split('\n').filter(f => f.endsWith('.mjs'))
     const excluded = TRANSLATION_EXCLUDED_CLASSES.map(c => `.${c}`)
-    for (const path of scripts(E2E)) {
-      const file = path.slice(E2E.length + 1)
-      const script = readFileSync(path, 'utf8')
+    const seen: string[] = []
+    for (const file of tracked) {
+      const script = readFileSync(join(root, file), 'utf8')
       // Chains (`:not(.a):not(.b)`) are not a way round the rule: the list is written once, as production writes it
-      expect(script, `${file} chains :not() over our classes`).not.toMatch(/(?::not\(\.axt-[^)]*\)){2,}/)
-      for (const m of script.matchAll(/:not\((\.axt-[^)]*)\)/g)) {
-        const list = m[1]!
-        // Any list naming one of the four is a boundary, and must be the whole one: `:not(.axt-mirror)` alone would count
-        // rings and widgets as translations. `:not(.axt-t)` — “not ours” — names none of them and is another question
-        if (!excluded.some(c => list.split(/,\s*/).includes(c))) continue
-        seen.push(`${file}: ${list}`)
-        expect(list, `${file} writes a different boundary`).toBe(canonical)
+      expect(script, `${file} chains :not() over our classes`).not.toMatch(/(?::not\([^()]*\.axt-[^()]*\)){2,}/)
+      for (const m of script.matchAll(/((?:\.[\w-]+|\[[^\]]*\])*):not\(([^()]*)\)/g)) {
+        const items = m[2]!.split(',').map(item => item.trim())
+        if (!items.some(item => excluded.includes(item))) continue
+        // The qualified selector is itself one of the four kinds: a rule about that kind, not a count of translations
+        const subject = m[1]!.match(/\.[\w-]+/g) ?? []
+        if (subject.some(c => excluded.includes(c))) continue
+        seen.push(`${file}: ${m[0]}`)
+        expect(items.join(', '), `${file} writes a different boundary: ${m[0]}`).toBe(canonical)
       }
     }
     expect(seen.length).toBeGreaterThan(5)
