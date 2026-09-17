@@ -1045,6 +1045,9 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await options.getByRole('button', { name: '清空', exact: true }).click()
   await options.getByRole('button', { name: '确认清空', exact: true }).click()
   await options.getByText('已清空', { exact: true }).waitFor({ timeout: 10_000 })
+  // The statistics line refreshes after the confirmation, not with it: read once it says zero, or the last count is read back (seen once, 2026-09-17,
+  // right after the whole-paper check above had just hit the cache 351 times and the access-time writes were still landing)
+  await options.getByText(/^0 条 · /).waitFor({ timeout: 15_000 }).catch(() => undefined)
   const after = await options.getByText(/^\d+ 条 · /).textContent()
   check('cache management: shows the entry count, zero after clearing', /^[1-9]/.test(before ?? '') && /^0 条/.test(after ?? ''), `before clearing “${before}”, after “${after}”`)
 }
