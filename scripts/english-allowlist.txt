@@ -1,7 +1,7 @@
 # Files that may hold lines with CJK characters, and how many (scripts/check-english.mjs). The numbers are exact: the gate asks for an entry to be lowered when lines go, and raised only with a reason beside it.
 docs/DESIGN.md 10  # 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
 docs/RELEASE.md 6  # 2026-09-17: the Chinese store listing (product copy the owner submits)
-docs/UI.md 174
+docs/UI.md 175  # 2026-09-18: +1 for S-I-06, the PDF page entry's copy (issue #169)
 README.md 1  # 2026-09-17: the link to the Chinese README
 helper/README.md 1
 src/config/languages.ts 188  # localisation data: the Chinese name table and the native names; four evidence quotes in comments

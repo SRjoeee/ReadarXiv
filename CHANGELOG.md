@@ -2,6 +2,10 @@
 
 Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
+## 0.5.0 — unreleased
+
+- Opening a paper's PDF on arXiv now offers its bilingual version: one link, bottom right, straight to the HTML full text already translating. It appears only for papers that have an HTML version.
+
 ## 0.4.0 — 2026-09-17
 
 The first release. Numbered 0.4.0 rather than 1.0.0 (the owner, 2026-09-17): the number continues the line of the MVP's tags (`v0.1.0-phase1`, `v0.2.0-phase2`, `v0.3.0-mvp`), and small numbers suit a project that still changes often — fixes go to 0.4.x, features to 0.5.0. Read arXiv translates arXiv's HTML papers in place and keeps them working.

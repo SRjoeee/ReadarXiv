@@ -1,6 +1,6 @@
 {
   "name": "readarxiv",
-  "description": "Read arXiv — a Chrome extension that translates arXiv HTML papers in place: bilingual, structure-preserving, reversible",
+  "description": "Read arXiv \u2014 a Chrome extension that translates arXiv HTML papers in place: bilingual, structure-preserving, reversible",
   "version": "0.4.0",
   "private": true,
   "type": "module",
@@ -22,6 +22,7 @@
     "e2e:layout": "node tests/e2e/layout.mjs",
     "e2e:a11y": "node tests/e2e/a11y.mjs",
     "e2e:local-endpoint": "node tests/e2e/local-endpoint.mjs",
+    "e2e:pdf": "node tests/e2e/pdf-entry.mjs",
     "e2e:image": "node tests/e2e/image.mjs",
     "e2e:placeholders": "node tests/e2e/placeholders.mjs",
     "helper:build": "swift build -c release --package-path helper",

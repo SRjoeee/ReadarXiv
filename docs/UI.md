@@ -181,6 +181,7 @@ changes, and the two drawers commit with one button.
 | S-I-03 | Switched notice (bottom right of the viewport) | 已改用 Google 翻译 · 去查看 | Appears once, dismissable, fades after 8 seconds; “去查看” → Settings · 翻译服务 |
 | S-I-04 | Image overlay | (the translation itself) | A white translucent rounded box over the original text; hover shows the original; no node while waiting or failed (§15) |
 | S-I-05 | Split-view handle (#83, experimental) | (no text) | Appears on hovering the gutter; drag changes the column width, double-click resets |
+| S-I-06 | PDF page entry (bottom right) | 双语版本（Read arXiv） | The same sentence as the abstract page's entry (`page.abstractLink`): one offer, made on two pages, so there is one string to keep true. A plain link in a shadow root, opening the HTML full text already translating; shown only when that paper has an HTML version, so a click is never offered that leads nowhere (the maintainer, 2026-09-18: the lowest-friction path is the one with nothing in the way — no dialog, nothing to dismiss). Bottom right, clear of Chrome's viewer toolbar |
 
 ### 3.4 Error reasons (S-E)
 

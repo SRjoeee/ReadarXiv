@@ -59,6 +59,7 @@ pnpm e2e                 # real Chromium with the extension (pnpm build first; o
 pnpm e2e:layout          # side-mode layout contract in a real browser
 pnpm e2e:a11y            # A/B axe audit: only differences the extension introduces
 pnpm e2e:local-endpoint  # an http endpoint without CORS headers can translate a whole page
+pnpm e2e:pdf             # the bilingual entry on arXiv's PDF page, and none where the paper has no HTML
 pnpm e2e:image           # image translation through the installed helper (SKIP without it)
 pnpm e2e:placeholders    # placeholder survival per sentence shape against a live engine (DESIGN §6.3)
 pnpm fixtures:fetch      # download and verify the fixtures the repository may not hold (tests/fixtures/README.md); pnpm test does it too

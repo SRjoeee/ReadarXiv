@@ -104,15 +104,16 @@ pages: popup · options · gallery (dev)     abstract-page script     │   cont
 5. Back in the page, the pipeline re-checks that the block is still what was serialised (§6.4), rehydrates the placeholders into clones of the protected nodes, and the renderer inserts the translation as the block's next sibling (§7.1). A block that fails gets a widget with the reason and a retry (§7.6).
 6. Mode switches and restore touch none of the above: a mode is one attribute on `<html>`; restore deletes what was inserted and strips what was marked.
 
-### 4.0b Five entry points
+### 4.0b Six entry points
 
-Translation starts only on the reader's action, and every road lands on the same pair of page commands, `axt:translate-page` / `axt:restore-page` — one implementation, five doors:
+Translation starts only on the reader's action, and every road lands on the same pair of page commands, `axt:translate-page` / `axt:restore-page` — one implementation, six doors:
 
 - **The popup**: translate / restore, mode, service, language, prompt, progress; the most complete one.
 - **The keyboard command** `axt-toggle` (suggested Alt+T): the same toggle as the context menu. The popup shows the key as Chrome reports it (`commands.getAll()`), so a rebound or removed shortcut is never advertised wrongly.
 - **The context menu**: one item, translate or show the original, limited to `https://arxiv.org/html/*`. It asks `axt:page-status` before deciding which command to send; its label does not follow the page, since `contextMenus.update` is global and would be wrong the moment the tab changes.
 - **`#axt-translate` in the URL**: the content script starts translating on entering the page. A debugging hook that became a product interface. Its sibling stayed a developer's tool and is no door: `#axt-debug` marks the extracted blocks and outlines them — text blocks red, tables blue — to see what the rules make of a page (`content/debug.ts`); the style is its own, injected only then, and a restore or a reload without the hash leaves nothing.
 - **The abstract page**: a separate content script on `arxiv.org/abs/*` inserts one line after arXiv's own HTML link, pointing at **the href arXiv gives** plus `#axt-translate`. The href is arXiv's, never built by hand — it carries the paper's version; a paper without an HTML version gets nothing inserted. This script loads none of the translation pipeline.
+- **The PDF page** (issue #169): a content script on `arxiv.org/pdf/*` shows one link to the HTML full text plus `#axt-translate`. Chrome puts a PDF into a synthetic host document at the paper's own URL, and a content script matching that URL runs in it; the viewer is a separate `chrome-extension://` frame and is untouched, while a `position: fixed` element in the host document draws above it (measured 2026-09-18, Chromium 153). Whether an HTML version exists is one `HEAD` on `arxiv.org/html/<id>` — **same-origin, so no host permission is involved** (measured: 200 for a paper with one, 404 for a paper without); without one, nothing is shown, because there is nothing to offer. The id comes from the path, with the version the reader opened, and the entry is the same sentence as the abstract page's (UI.md S-I-06). This script loads none of the translation pipeline either.
 
 ### 4.1 Block model
 
