@@ -1,9 +1,11 @@
 // The helper's smoke test (DESIGN §15): talks to the binary in Chrome Native Messaging's frame format (a 4-byte native-endian
 // length + JSON) — ping for the version, then send the reference image to OCR and check the recognised lines, confidences and normalised coordinates.
 // Meaningful on a Mac only; CI has no helper, so it is not part of pnpm test.
-import { spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { ensureFixtures } from './fetch-fixtures.mjs'
 
 const ROOT = join(import.meta.dirname, '..')
 const BIN = process.env.AXT_HELPER ?? ['release', 'debug'].map(c => join(ROOT, 'helper/.build', c, 'axt-helper')).find(existsSync)
@@ -14,6 +16,47 @@ const EXPECTED = ['Dynamical', 'charge', 'Static', 'Electric', 'membrane', 'Plaq
 if (!BIN) {
   console.error('helper binary not found; run pnpm helper:build first')
   process.exit(2)
+}
+// The reference image is a paper's figure and is not in the repository (tests/fixtures/README.md)
+await ensureFixtures({ log: line => console.log(line) })
+
+/**
+ * The reference image as a JPEG stored on its side: the pixels rotated 90° counter-clockwise, and an EXIF orientation
+ * of 6 ("rotate 90° clockwise to display"), so a browser shows it exactly as it shows the PNG. Made here rather than
+ * kept as a file, the image not being ours to keep: `sips` (part of macOS, as the helper itself is macOS only) turns
+ * the pixels, and its own EXIF segment is replaced by the smallest one that says orientation 6 — one IFD, one entry
+ */
+function exifRotated(png) {
+  const dir = mkdtempSync(join(tmpdir(), 'axt-smoke-'))
+  try {
+    const out = join(dir, 'rotated.jpg')
+    execFileSync('sips', ['-r', '270', '-s', 'format', 'jpeg', png, '--out', out], { stdio: 'ignore' })
+    const jpeg = readFileSync(out)
+    const exif = Buffer.from([
+      0xff, 0xe1, 0x00, 0x22, // APP1, 34 bytes
+      0x45, 0x78, 0x69, 0x66, 0x00, 0x00, // "Exif\0\0"
+      0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x00, 0x00, 0x08, // TIFF, big-endian, IFD0 at 8
+      0x00, 0x01, // one entry
+      0x01, 0x12, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x06, 0x00, 0x00, // Orientation, SHORT, count 1, value 6
+      0x00, 0x00, 0x00, 0x00, // no next IFD
+    ])
+    // SOI, then the segments: every APP1 that is EXIF goes, ours goes in after the JFIF header
+    const parts = [jpeg.subarray(0, 2)]
+    let at = 2
+    let placed = false
+    while (at + 4 <= jpeg.length && jpeg[at] === 0xff && jpeg[at + 1] >= 0xe0 && jpeg[at + 1] <= 0xef) {
+      const end = at + 2 + jpeg.readUInt16BE(at + 2)
+      const isExif = jpeg[at + 1] === 0xe1 && jpeg.subarray(at + 4, at + 8).toString('latin1') === 'Exif'
+      if (!isExif) parts.push(jpeg.subarray(at, end))
+      if (jpeg[at + 1] === 0xe0 && !placed) { parts.push(exif); placed = true }
+      at = end
+    }
+    if (!placed) parts.push(exif)
+    parts.push(jpeg.subarray(at))
+    return Buffer.concat(parts)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 const child = spawn(BIN, [], { stdio: ['pipe', 'pipe', 'inherit'] })
@@ -87,7 +130,7 @@ check('the second recognition agrees', (again.lines ?? []).length === lines.leng
 
 // EXIF orientation (Codex on #87): the same image stored as a JPEG with the pixels rotated 90° and orientation 6 displays the same as the PNG in a browser,
 // and the size and coordinates the helper reports must agree with the PNG run (Vision normalises by the upright image)
-const jpeg = readFileSync(join(ROOT, 'helper/Tests/Fixtures/qed3d-string-breaking-exif6.jpg')).toString('base64')
+const jpeg = exifRotated(FIXTURE).toString('base64')
 const exif = await send({ v: 1, cmd: 'ocr', id: 'o3', image: jpeg })
 check('a JPEG with EXIF orientation 6: the size is reported in display orientation', exif.width === 579 && exif.height === 699, `${exif.width}×${exif.height}`)
 const near = (a, b) => Math.abs(a - b) < 0.02

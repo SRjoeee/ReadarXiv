@@ -184,9 +184,11 @@ pnpm fixtures:stats      # rule coverage across the fixture papers
 The first four are what CI runs, and what a change has to pass before review.
 
 The unit tests run on happy-dom; the end-to-end suites drive a real browser with the extension
-loaded. Real arXiv papers are committed as fixtures and are what the rules and the renderer are
-tested against, chosen between them to cover dense inline mathematics, theorem environments,
-algorithm and code blocks, large tables, footnotes, SVG figures, LaTeXML output from 2023 onwards,
+loaded. Real arXiv papers are the fixtures the rules and the renderer are tested against: the ones
+under a Creative Commons licence are committed, the others are downloaded from a pinned version and
+verified before the first test (`tests/fixtures/README.md`). Between them they cover dense inline
+mathematics, theorem environments, algorithm and code blocks, large tables, footnotes, SVG figures,
+LaTeXML output from 2023 onwards,
 and pages where arXiv's own conversion failed and the extension has to survive rather than
 translate. One further fixture is synthetic, holding the structures LaTeXML can emit that none of
 the sampled papers happened to use.

@@ -1,0 +1,46 @@
+# Test fixtures
+
+Real pages and figures from arXiv, byte for byte as arXiv served them — a fixture that was edited is no longer evidence of what the extension meets — plus one synthetic page. The copyright of every paper is its authors'; what may be kept in this repository depends on the licence each was submitted under, which the paper's HTML page states.
+
+## In the repository
+
+Papers under a Creative Commons licence, redistributed here unchanged, as test data, under that licence. All were rendered by `LaTeXML oxide (version 0.7.6)`, the 2023 papers included (DESIGN §5.7).
+
+| File | Paper | Licence | Captured | Why this one |
+|---|---|---|---|---|
+| `arxiv/2312.17141.html` | Dario Stein, Sam Staton, *Probabilistic Programming with Exact Conditions*, [arXiv:2312.17141](https://arxiv.org/abs/2312.17141) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | 2026-09-03 | dense inline mathematics, theorems and proofs, SVG figures; the heaviest page, which the performance numbers are measured on |
+| `arxiv/2410.00260.html` | Vinayak Arannil, Neha Narwal, Sourav Sanjukta Bhabesh et al., *DoPAMine: Domain-specific Pre-training Adaptation from seed-guided data Mining*, [arXiv:2410.00260](https://arxiv.org/abs/2410.00260) | CC BY 4.0 | 2026-09-03 | a 2024 paper; code and tables |
+| `arxiv/2507.00150.html` | Julio A. Carballo-Bello, Pau Ramos, Jesús M. Corral-Santana, Camila Navarrete et al., *Searching for new hypervelocity stars with Gaia DR3 and VLT/FORS2 spectroscopy*, [arXiv:2507.00150](https://arxiv.org/abs/2507.00150) | CC BY 4.0 | 2026-09-03 | a 2025 paper; numeric tables, footnotes, bitmap figures |
+| `arxiv/2608.30667.html` | Thomas Depian, Simon D. Fink, Alexander Firbas, Robert Ganian, Martin Nöllenburg, Marie Diana Sieper, *The (Parameterized) Complexity of Ordering a Graph While Avoiding a Forbidden Pattern*, [arXiv:2608.30667](https://arxiv.org/abs/2608.30667) | CC BY 4.0 | 2026-09-03 | a failed conversion — `.ltx_ERROR`, one `.ltx_p`, the title "Untitled Document": the extension must not fall over |
+| `arxiv/2609.00246.html` | Daniel Bund, Julian Erhard, Michael Petter, Michael Schwarz, *Beyond Locks and Thread IDs: Static Data Race Detection Off The Beaten Path*, [arXiv:2609.00246](https://arxiv.org/abs/2609.00246) | CC BY 4.0 | 2026-09-03 | code-dense, large tables |
+| `arxiv/2609.03768.html`, `svg/2609.03768-fig_closure.svg` | Fumihiro Imoto, *Computing high-order mixed derivatives in physics-informed neural networks using multi-index Bell polynomials*, [arXiv:2609.03768](https://arxiv.org/abs/2609.03768) | CC BY 4.0 | 2026-09-05, the figure 2026-09-09 | a table and a footnote inside a one-column flex figure (side-mode pairing); the figure is a plot with 64 glyphs, 24 of them rotated, numeric ticks, and a `&#x00d7;` entity inside a `data-text` attribute |
+| `arxiv/2609.04056.html` | Karine Beauchard, Frédéric Marbach, *Factor-parity Hall sets and controllability: a classification of good and bad brackets*, [arXiv:2609.04056](https://arxiv.org/abs/2609.04056) | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | 2026-09-05 | list items holding only a formula inside theorems, an acknowledgement block in the right gutter (side-mode layout) |
+
+Also in the repository:
+
+- `arxiv/synthetic-structures.html` — **ours, not a paper.** LaTeXML's and ar5iv's style sheets name 145 classes that none of the 30 papers surveyed uses (book, CV, index and epigraph templates; DESIGN §5.7). This page writes out, by LaTeXML's output conventions, each of those that carries prose: part, chapter and subsection titles, epigraphs, quotations, description lists, margin notes, index entries, CV entries, subfigure captions, verbatim, algorithm floats, conversion-error notices. It guards "a structure never seen is still translated"; a structure added here is added to DESIGN §5.7 too.
+- `abs/1706.03762.html` — arXiv's abstract page of [arXiv:1706.03762](https://arxiv.org/abs/1706.03762), captured 2026-09-10: the bilingual link's insertion point relies on arXiv's own markup (`core/rules/abstract.ts`). The page is arXiv's template — [`arxiv-browse`](https://github.com/arXiv/arxiv-browse), MIT — filled with the paper's metadata, which arXiv releases under [CC0 1.0](https://info.arxiv.org/help/api/tou.html); the paper itself is not in it.
+- `ocr/qed3d-string-breaking.json` — what the recognition helper returned for the reference image below (`AXT_SMOKE_DUMP=<path> pnpm helper:smoke`): 27 lines, their confidences and corner coordinates, 212 characters of labels in all. The box merging and filtering rules were set against it (`core/image/boxes.ts`). The image is not here; its labels' positions are a measurement of ours.
+- `helper/Tests/Fixtures/two-frames.gif` — ours: two 120 × 40 frames, for the helper's frame count.
+
+## Not in the repository
+
+Five papers, one figure of one of them and the recognition helper's reference image were submitted under [arXiv's non-exclusive licence](https://arxiv.org/licenses/nonexclusive-distrib/1.0/license.html), which lets arXiv distribute them and nobody else. They are not redistributed: `remote.json` pins each to a **version** of the paper and the SHA-256 of what arXiv served, and `scripts/fetch-fixtures.mjs` downloads a missing one into the path the tests read and accepts only those bytes.
+
+| Path | Source | Why this one |
+|---|---|---|
+| `arxiv/2312.17527.html` | [arXiv:2312.17527v1](https://arxiv.org/abs/2312.17527v1), *Data-Driven Template-Free Invariant Generation* | algorithm floats and code listings |
+| `arxiv/2401.00418.html` | [arXiv:2401.00418v1](https://arxiv.org/abs/2401.00418v1), *Bounds on the minimum distance of locally recoverable codes* | mathematics with large tables |
+| `arxiv/2401.00596.html` | [arXiv:2401.00596v3](https://arxiv.org/abs/2401.00596v3), *Bulk medium properties of heavy-ion collisions from the beam energy scan with a multistage hydrodynamic model* | dense footnotes, 248 citations, 89 references |
+| `arxiv/2608.29808.html`, `svg/2608.29808-bounter-case.svg` | [arXiv:2608.29808v1](https://arxiv.org/abs/2608.29808v1), *PolyFlow: A Neuro-Symbolic Framework for Static Cross-Language Information Flow Analysis* | code, algorithms, large tables, `.ltx_ERROR` and SVG figures in one page; the figure is a syntax-highlighted listing of 913 glyphs — the one that showed the dropped-space problem (`if log_counting` arriving as `iflog_counting`), and the one the code filter has to reject |
+| `arxiv/2609.00245.html` | [arXiv:2609.00245v1](https://arxiv.org/abs/2609.00245v1), *Higher-order Gaussian bounds for maximally subelliptic boundary value problems* | the densest mathematics (2 131 formulas), theorems, footnotes, 1 827 cross-references |
+| `helper/Tests/Fixtures/qed3d-string-breaking.png` | Figure 1 of [arXiv:2609.04114v1](https://arxiv.org/abs/2609.04114v1), *Real-Time String Dynamics in 3+1D Lattice Quantum Electrodynamics* | the helper's reference image: labels wrapped over two lines, labels beside symbols, four panels. `pnpm helper:smoke` also needs it as a JPEG stored on its side with EXIF orientation 6, which the script makes from it on the spot |
+
+- `pnpm test` fetches what is missing before the first test file (`tests/global-setup.ts`), once — the files stay on disk, ignored by git; `pnpm fixtures:fetch` does the same on its own, and `pnpm fixtures:stats` and `pnpm helper:smoke` call it first. Seven requests to arxiv.org, one second apart, identified by a `User-Agent`. CI keeps them in a cache keyed by `remote.json`.
+- **No network and no files: the run fails**, saying which file is missing and why it is not in the repository. It does not skip: a suite that left five papers out in silence would report rule coverage it does not have.
+- **arXiv serves other bytes** (a paper rendered again by a newer LaTeXML): the download is refused and nothing is written. The rule-coverage snapshots and the numbers in DESIGN were taken from the pinned bytes, so moving a pin is a maintainer's change: put the new file in place, update `sha256` and `bytes` in `remote.json`, run the suite, and review every snapshot that moved as a change in what arXiv produces. A file on disk that is not the pinned one is never overwritten, for the same reason.
+- Measured 2026-09-17: all seven were byte-identical to the copies captured between 2026-09-03 and 2026-09-09; four papers at v1, `2401.00596` at v3.
+
+## Adding a fixture
+
+Check the licence line on the paper's HTML page first. CC BY, CC BY-SA or CC0: the file may go into the repository, with a row in the first table (title, authors, link, licence — that row is the attribution the licence asks for). Anything else — arXiv's non-exclusive licence, CC BY-NC-ND — goes into `remote.json` and the second table, with its path added to `.gitignore` (a test holds the two lists together). `pnpm fixtures:stats` prints the rule coverage over whatever is in `arxiv/`.
