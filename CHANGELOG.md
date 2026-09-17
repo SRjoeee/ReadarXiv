@@ -10,7 +10,7 @@ The first release. Numbered 0.4.0 rather than 1.0.0 (the owner, 2026-09-17): the
 
 - Three modes — split, stacked, translation only — switched at any time; restoring the original is lossless (the page is node for node what it was).
 - Formulas, citations, cross-references, code, links, footnotes and tables survive translation; a footnote appears once, in the margin, original above translation; figures split into both columns in side mode.
-- Sentence highlight on hover, on both sides at once, reference entries included; in translation-only mode the original sentence floats beside the translation. In-page links to a hidden original land on its translation.
+- Sentence highlight on hover, on both sides at once — every paired block lights up, sentence by sentence where the service reports boundaries and as a whole where it does not; in translation-only mode the original sentence floats beside the translation. In-page links to a hidden original land on its translation.
 - Long papers stay smooth: the highlight follows the pointer and translations land without the page pausing — no style rule makes the browser re-examine the whole document any more (a 160 ms pause per sentence on a 60 000-element paper before).
 - The translation's appearance is yours: colour, opacity, underline, blur-until-hover, advanced CSS; background highlights likewise; built-ins are ordinary entries you can change or reset.
 - Translate from the popup, the toolbar button, the right-click menu, Alt+T, or the **Bilingual version** link on a paper's abstract page.
