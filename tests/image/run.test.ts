@@ -227,6 +227,33 @@ describe('startImageTranslation', () => {
     expect(run.progress().requested).toBe(1)
   })
 
+  it('a configuration-level error aborts the sibling fetch still in flight: a run that has given up keeps no request going (Devin on #230)', async () => {
+    const doc = docOf(FIGURE + FIGURE.replace(/F1/g, 'F2'))
+    markBlocks(extract(doc))
+    const targets = collectImageTargets(doc)
+    const signals: (AbortSignal | undefined)[] = []
+    let calls = 0
+    const run = startImageTranslation({
+      doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
+      // The first image's bytes come at once; the second's hang until the signal aborts them
+      fetchBytes: (_url, signal) => {
+        signals.push(signal)
+        if (calls++ === 0) return Promise.resolve({ bytes: PNG, mime: 'image/png' })
+        return new Promise((_resolve, reject) => signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))))
+      },
+      ocr: async () => ({ ok: true as const, result: { width: 1, height: 1, lines: LINES }, cached: false }),
+      translate: async () => ({ ok: false, error: { kind: 'auth', message: 'User not found.', isolatable: false } }),
+      isEnabled: () => true, isCurrent: () => true,
+    })
+    await run.translate(targets)
+    expect(run.fatal()).toContain('auth')
+    expect(signals).toHaveLength(2)
+    expect(signals[1]?.aborted).toBe(true)
+    // Both settled once, as failed — the abort added no second failure and left nothing requested
+    expect(run.failed()).toHaveLength(2)
+    expect(run.progress().failed).toBe(2)
+  })
+
   it('an ordinary failure (network) is not fatal: the next image is processed as usual', async () => {
     const doc = docOf(FIGURE + FIGURE.replace(/F1/g, 'F2'))
     markBlocks(extract(doc))
