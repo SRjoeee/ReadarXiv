@@ -23,14 +23,14 @@ export interface ChainHolderDeps {
  * Builds overlap: a rebuild can start while another is still probing engines. `current()` therefore answers
  * with the build in force **at the moment it resolves**, not the one in force when it was asked — a mover that
  * awaited a superseded build would move the sessions back onto it and retire the chain actually in force
- * (the local review of ADR-0005, sixth pass)
+ * (the local review of DESIGN §8.5, sixth pass)
  */
 export interface ChainHolder {
   current(): Promise<TranslationTransport>
   /**
    * Retire every build but the one in force, and forget them. A service was deleted: every chain other than the
    * build in force — including one only a connection test used, which no session leads to — is drained of its
-   * scoped work and refuses whatever wakes or retries inside it (ADR-0005). While the build in force has not
+   * scoped work and refuses whatever wakes or retries inside it (DESIGN §8.5). While the build in force has not
    * landed (or failed), everything is retired: its sessions bind the replacement when it lands. Returns how many
    * requests the retired chains drained
    */
@@ -38,7 +38,7 @@ export interface ChainHolder {
   /**
    * Drain one scope from every chain still around — the one it is bound to and any it left work on when a
    * language pack moved it (that chain may serve other sessions and is not retired). Returns how many requests
-   * were cancelled (ADR-0005)
+   * were cancelled (DESIGN §8.5)
    */
   cancelScope(scope: string): Promise<number>
   /** Rebuild and make the result the chain in force: the reader's explicit actions (`axt:engine-ready`) */
@@ -53,7 +53,7 @@ export interface ChainHolder {
    * configuration on every display-mode switch, usually while a page is translating, and an indiscriminate
    * rebuild would clear the token bucket and the hand-over records with it (`chainConfigChanged` has the table).
    * The change is compared with what the chain was last asked to be built from, not with a finished build, so a
-   * build that never settles cannot keep the next one from starting (the local review of ADR-0005, eleventh
+   * build that never settles cannot keep the next one from starting (the local review of DESIGN §8.5, eleventh
    * pass). A failed build is retried by the next change. Nothing happens before the first build — that one reads
    * the stored configuration itself
    */
@@ -87,7 +87,7 @@ export function createChainHolder(deps: ChainHolderDeps): ChainHolder {
    * with a call still inside (a connection test in its retry backoff) that nothing else leads to. Superseded
    * chains with none of that are let go at the next `current()` — a worker that lives through many configuration
    * changes must not keep every chain it ever built, with its queues and native translator sessions
-   * (the local review of ADR-0005, eighth pass)
+   * (the local review of DESIGN §8.5, eighth pass)
    */
   const built = new Set<TranslationTransport>()
   /**
@@ -130,7 +130,7 @@ export function createChainHolder(deps: ChainHolderDeps): ChainHolder {
         const signal = replaced.promise
         try {
           // A build superseded while it is awaited is no longer waited for — one that never settles must not hold
-          // up whoever asked, least of all a deletion's clean-up (the local review of ADR-0005, ninth pass)
+          // up whoever asked, least of all a deletion's clean-up (the local review of DESIGN §8.5, ninth pass)
           const result = await Promise.race([promise, signal.then(() => null)])
           if (result === null) continue
           if (promise === active) {

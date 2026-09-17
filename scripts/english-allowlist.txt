@@ -2,10 +2,8 @@
 .gitignore 8
 CLAUDE.md 2
 docs/DESIGN.md 10  # 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
-docs/adr/0007-sentence-alignment.md 1  # 2026-09-13: an observed Microsoft output quoted as evidence for the boundary snap
 docs/RELEASE.md 6  # 2026-09-17: the Chinese store listing (product copy the owner submits)
 docs/UI.md 177
-docs/rebuild/INVENTORY.md 1
 README.md 1  # 2026-09-17: the link to the Chinese README
 README.zh-CN.md 111  # 2026-09-17: the Chinese README is product copy for readers (the owner's docs/readme-v1 branch)
 helper/README.md 1

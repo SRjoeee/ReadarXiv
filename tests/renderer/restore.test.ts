@@ -45,7 +45,7 @@ describe('restore', () => {
     expect(document.documentElement.outerHTML).toBe(before)
     expect(result.removedNodes).toBe(4)
     // data-axt-id ×4 + data-axt-state ×4 + the original heading's data-axt-inline + data-axt-on + data-axt-mode + data-axt-debug
-    // + the layout marks (ADR-0011): data-axt-pairs on the paragraph container, data-axt-tail on the second paragraph and on the table (each pair closes its container)
+    // + the layout marks (DESIGN §7.2): data-axt-pairs on the paragraph container, data-axt-tail on the second paragraph and on the table (each pair closes its container)
     expect(result.strippedAttrs).toBe(15)
   })
 
@@ -60,7 +60,7 @@ describe('restore', () => {
     const result = restore(document)
     expect(document.documentElement.outerHTML).toBe(before)
     expect(result.removedNodes).toBe(1)
-    // data-axt-on + data-axt-mode + data-axt-img-modes + the anchor marks on the image and the figure (§15.2, ADR-0011)
+    // data-axt-on + data-axt-mode + data-axt-img-modes + the anchor marks on the image and the figure (§15.2, DESIGN §7.2)
     expect(result.strippedAttrs).toBe(5)
   })
 })

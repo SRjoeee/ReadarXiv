@@ -1,4 +1,4 @@
-// No `:has()` in the injected style sheets (ADR-0011).
+// No `:has()` in the injected style sheets (DESIGN §7.2).
 //
 // Chrome answers a `:has()` in an author sheet by recalculating the whole document's styles on every DOM insertion,
 // wherever it lands — into the hover highlight's band layer, into `<head>`, next to a paragraph. Measured 2026-09-17

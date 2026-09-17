@@ -3,7 +3,7 @@ import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import { createChainHolder } from '@/entrypoints/background/chain'
 import type { TranslationTransport } from '@/providers/transport'
 
-// The chain in force (ADR-0005): one build at a time is the answer, and it is the one in force when the answer arrives
+// The chain in force (DESIGN §8.5): one build at a time is the answer, and it is the one in force when the answer arrives
 
 const transport = (name: string) => ({ name }) as unknown as TranslationTransport
 const nameOf = (t: TranslationTransport) => (t as unknown as { name: string }).name
@@ -29,7 +29,7 @@ describe('createChainHolder', () => {
 
   it('current() answers with the build in force when it resolves, not the one in force when it was asked', async () => {
     // A rebuild held on its engine probes while a newer one finishes: a mover that awaited the older build would
-    // move the sessions back onto it and retire the chain in force (the local review of ADR-0005, sixth pass)
+    // move the sessions back onto it and retire the chain in force (the local review of DESIGN §8.5, sixth pass)
     const gates = new Map<string, () => void>()
     const holder = createChainHolder({
       owned: () => false,
@@ -50,7 +50,7 @@ describe('createChainHolder', () => {
 
   it('a superseded build that never settles does not hold current() up', async () => {
     // An engine probe can hang. A caller that awaited that build — a deletion's clean-up among them — must get the
-    // build that took over instead (the local review of ADR-0005, ninth pass)
+    // build that took over instead (the local review of DESIGN §8.5, ninth pass)
     const gates = new Map<string, () => void>()
     const holder = createChainHolder({
       owned: () => false,
@@ -70,7 +70,7 @@ describe('createChainHolder', () => {
   it('a superseded build that fails is ignored: current() follows the build in force', async () => {
     // B was awaited, C took over and finished, then B failed: the failure is nobody's answer any more — a mover
     // that took it would abort the deletion's drain although a replacement is there (the local review of
-    // ADR-0005, seventh pass)
+    // DESIGN §8.5, seventh pass)
     const gates = new Map<string, { ok: () => void; fail: () => void }>()
     const holder = createChainHolder({
       owned: () => false,
@@ -104,7 +104,7 @@ describe('createChainHolder', () => {
 
   it('retireOthers() while the build in force has not landed retires every build there is', async () => {
     // A deletion whose replacement is still building: nothing may be spared, the sessions bind the replacement
-    // when it lands (the local review of ADR-0005, thirteenth pass)
+    // when it lands (the local review of DESIGN §8.5, thirteenth pass)
     const retired: string[] = []
     const gates = new Map<number, () => void>()
     let n = 0
@@ -150,7 +150,7 @@ describe('createChainHolder', () => {
 
   it('a configuration change starts its rebuild without waiting for a build that never settles', async () => {
     // The configuration watcher's rebuild used to chain onto the build in force; a deletion's hung build then kept
-    // every later rebuild from starting, and the clean-up with it (the local review of ADR-0005, eleventh pass)
+    // every later rebuild from starting, and the clean-up with it (the local review of DESIGN §8.5, eleventh pass)
     const gates = new Map<string, () => void>()
     const holder = createChainHolder({
       owned: () => false,
@@ -170,7 +170,7 @@ describe('createChainHolder', () => {
   it('a build from storage learns what it built from: a setting repaired after a fallback build rebuilds', async () => {
     // The watcher ignores an invalid stored value; an engine-ready rebuild then builds from storage and lands on the
     // fallback. Repairing the setting must rebuild — comparing with what was asked for before the storage build
-    // would miss it (the local review of ADR-0005, twelfth pass)
+    // would miss it (the local review of DESIGN §8.5, twelfth pass)
     let builds = 0
     const holder = createChainHolder({ owned: () => false, load: async config => { builds++; const built = config ?? DEFAULT_CONFIG; return { config: built, transport: transport(built.targetLanguage) } } })
     await holder.activate({ ...DEFAULT_CONFIG, targetLanguage: 'afr' })

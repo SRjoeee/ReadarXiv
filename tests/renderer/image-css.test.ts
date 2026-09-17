@@ -10,7 +10,7 @@ const RULES = CSS.replace(/\/\*[\s\S]*?\*\//g, '')
 describe('image.css', () => {
   it('anchor positioning: the image declares an anchor name, the parent scopes it and is the positioned ancestor, the overlay attaches with anchor() / anchor-size()', () => {
     // One rule for all three kinds of image: <object> (external SVG, §15.5) and an inline <svg> (TikZ, §15.6) are overlay anchors too
-    // The image and its parent are known by the marks renderImage writes (ADR-0011), not by `:has()`: an insertion anywhere would recalculate the whole document
+    // The image and its parent are known by the marks renderImage writes (DESIGN §7.2), not by `:has()`: an insertion anywhere would recalculate the whole document
     expect(RULES).toMatch(/:is\(img, object, svg\)\[data-axt-anchor\] \{\s*anchor-name: --axt-img;/)
     expect(RULES).toMatch(/\[data-axt-anchors\] \{\s*position: relative;\s*anchor-scope: --axt-img;/)
     expect(RULES).not.toContain(':has(')

@@ -74,7 +74,7 @@ export function PopupView({ view, error, actions }: { view: View; error: string 
             </Bubble>
           )}
           {/* The card while the helper is not ready: one line and the step it calls for — “Allow” for the permission
-              (ADR-0002), “Install” to unfold the guided install in place (UI.md S-P-86…88). Both steps are the components
+              (DESIGN §15.3), “Install” to unfold the guided install in place (UI.md S-P-86…88). Both steps are the components
               the settings page uses: two surfaces, one wording */}
           {view.helper && (
             <div className={`${CARD} flex flex-col gap-2 px-3.5 py-3 text-[12px] leading-relaxed`}>

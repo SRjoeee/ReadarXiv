@@ -1,5 +1,5 @@
 // Configuration storage: WXT's storage item with versioned migrations + zod validation on read and write (after Read Frog's config/storage.ts).
-// The migrations are the only way the stored shape changes (ADR-0009). A migration's parameter type is meant to describe the version it
+// The migrations are the only way the stored shape changes (DESIGN §9). A migration's parameter type is meant to describe the version it
 // came from; the older ones lean on `Omit<Config, …>` and so inherit fields added later — left as they are, the v13 → v14 one is exact.
 import { storage } from 'wxt/utils/storage'
 import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
@@ -63,7 +63,7 @@ export const configItem = storage.defineItem<Config>('local:config', {
     // v13: the interface's own language. `auto` is what every existing reader had in effect
     13: (v12: Omit<Config, 'version' | 'uiLanguage'> & { version: 12 }) => ({ ...v12, version: 13 as const, uiLanguage: 'auto' }),
     // v13 -> v14: nothing new to the reader. `reading` had come in by a schema default alone (db38c5d), so a value
-    // migrated to 13 and never saved since has none; ADR-0009 ends evolution by default — the version says what is
+    // migrated to 13 and never saved since has none; DESIGN §9 ends evolution by default — the version says what is
     // stored — and v14 writes the field every such reader had in effect. Only an **absent** field: `null` or any other
     // wrong value is a hand edit and fails validation, named, as before. The value itself may be anything a hand edit
     // left at version 13 — `null` included — and a migration must not throw on it: what it builds fails the schema

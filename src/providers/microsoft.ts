@@ -108,7 +108,7 @@ async function translateTexts(
 ): Promise<{ text: string; alignment?: SentenceAlignment }[]> {
   const doFetch = deps.fetch ?? globalThis.fetch
   // Upstream also accepted 'auto' (an empty `from` lets the endpoint detect); `TranslateRequest.source` is the literal
-  // `'en'` here (arXiv is English throughout), so that branch went (ADR-0001 §9)
+  // `'en'` here (arXiv is English throughout), so that branch went (the porting policy: only what is called stays)
   const query = new URLSearchParams({ from, to, isEnterpriseClient: 'false' })
   let response: Response
   try {

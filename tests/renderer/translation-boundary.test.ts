@@ -1,4 +1,4 @@
-// One definition of "a real translation node" (ADR-0003): `TRANSLATION_EXCLUDED_CLASSES` in attrs.ts.
+// One definition of "a real translation node" (DESIGN §7.1): `TRANSLATION_EXCLUDED_CLASSES` in attrs.ts.
 // The style sheets cannot import it, so every `.axt-t:not(…)` they write that names `.axt-pending`
 // must list exactly the same classes — issue #46 was this list drifting between two copies.
 import { readFileSync, readdirSync } from 'node:fs'

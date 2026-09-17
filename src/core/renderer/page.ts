@@ -1,4 +1,4 @@
-// The document's translation state (DESIGN §7; ADR-0003): the attributes on <html>, the injected
+// The document's translation state (DESIGN §7; DESIGN §7.1): the attributes on <html>, the injected
 // style sheet, the mode, and the restore that undoes all of it. Global state lives on <html> only (§7.1).
 import type { Look } from '@/config/appearance'
 import { isRtlTag } from '@/config/languages'

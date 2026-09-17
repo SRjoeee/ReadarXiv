@@ -1,4 +1,4 @@
-// A permission granted while the background worker runs (ADR-0002). Chrome adds an API to a context when the context
+// A permission granted while the background worker runs (DESIGN §15.3). Chrome adds an API to a context when the context
 // is created, never later: `runtime.connectNative` stays undefined in a worker that predates the grant (probe of
 // 2026-09-13 — `permissions.remove` in a live worker left the function in place; the bindings code refreshes
 // namespaces on a permission change, not objects already instantiated). The way out is a fresh worker: an alarm set

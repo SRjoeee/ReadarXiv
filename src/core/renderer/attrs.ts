@@ -1,4 +1,4 @@
-// The renderer's names (ADR-0003): every `data-axt-*` attribute, every injected sub-class that more than one module
+// The renderer's names (DESIGN §7.1): every `data-axt-*` attribute, every injected sub-class that more than one module
 // reads, and the one definition of the translation boundary. A leaf on purpose — it imports nothing from the
 // renderer, so any module can read a name without joining a cycle. The injected *node* classes
 // (`axt-t`, `axt-img`, `axt-hl`, `axt-peek`) stay in `core/marks.ts`, which the extractor and the
@@ -60,7 +60,7 @@ export const SPLIT_OF_ATTR = 'data-axt-split-of'
 export const SPLIT_FOR_ATTR = 'data-axt-split-for'
 
 /*
- * The marks the style sheets read where they once asked `:has()` (ADR-0011). Chrome answers a `:has()` in an
+ * The marks the style sheets read where they once asked `:has()` (DESIGN §7.2). Chrome answers a `:has()` in an
  * injected sheet by recalculating the whole document's styles on every DOM insertion — 165 ms per hover band and
  * per arriving translation on a 59 000-element paper (measured 2026-09-17) — so every structural condition the
  * layout needs is written by the code that creates the structure, at the moment it does. `data-axt-pairs`, the

@@ -1,4 +1,4 @@
-// Keep-alive probe (ADR-0002 follow-up, run 2026-09-17): does an open `connectNative` port by itself keep an MV3
+// Keep-alive probe (DESIGN §15.3 follow-up, run 2026-09-17): does an open `connectNative` port by itself keep an MV3
 // service worker past its 30 s idle limit? The port is opened inside the worker over CDP, the debugger is detached and
 // no page of the extension is open, so nothing but the port is in the picture. Needs the helper installed
 // (helper/install.sh) and a build in .output. Usage: node tests/e2e/probes/keepalive.mjs <chrome binary> [seconds]

@@ -1,5 +1,5 @@
 // Ported from reference/read-frog/src/utils/request/__tests__/cancellation.test.ts@9b44f82 (GPL-3.0), 2026-09-05, modified:
-// import path; 2026-09-12 (ADR-0005) the prefix, TTL and size-cap cases are gone with the registry's rewrite — it no longer expires.
+// import path; 2026-09-12 (DESIGN §8.5) the prefix, TTL and size-cap cases are gone with the registry's rewrite — it no longer expires.
 import { describe, expect, it } from "vitest"
 import {
   CancelledScopeRegistry,

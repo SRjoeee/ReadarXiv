@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createIdleTrace } from '@/core/session/idle-trace'
 
-// The one detection both runs use (ADR-0006's follow-up): a line per busy → idle transition, nothing else
+// The one detection both runs use (DESIGN §4.4's follow-up): a line per busy → idle transition, nothing else
 
 type P = { inFlight: number; done: number }
 

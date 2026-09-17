@@ -48,7 +48,7 @@ export interface OcrResult {
 }
 
 /**
- * Where the recognition helper stands (ADR-0002 §3, plus the one state the implementation needed):
+ * Where the recognition helper stands (DESIGN §15.3, plus the one state the implementation needed):
  * - `permission-missing`: the optional `nativeMessaging` permission is not granted, so nothing can be asked of the
  *   helper. The popup and the settings page request it from the reader's own click.
  * - `restarting`: granted a moment ago, while the background worker was already running. Chrome adds an API to a

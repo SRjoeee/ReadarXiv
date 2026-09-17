@@ -158,14 +158,14 @@ describe('derivePopupView (UI.md §4)', () => {
     expect(derivePopupView({ ...input('P14'), platform: 'other' }).helper).toEqual({ text: '图片翻译目前仅支持 macOS', step: null })
     expect(derivePopupView({ ...input('P14'), config: { ...input('P14').config!, image: { enabled: false, modes: [] } } }).helper).toBeNull()
   })
-  it('P14a / P14b the permission comes before the install (ADR-0002): the allow step, then a line while the grant takes effect', () => {
+  it('P14a / P14b the permission comes before the install (DESIGN §15.3): the allow step, then a line while the grant takes effect', () => {
     expect(view('P14a').helper).toEqual({ text: '图片翻译需要允许扩展与识别助手通信', step: 'allow' })
     expect(view('P14b').helper).toEqual({ text: '已允许，稍后自动生效', step: null })
     // Other platforms are told so before anything is asked of them
     expect(derivePopupView({ ...input('P14a'), platform: 'other' }).helper).toEqual({ text: '图片翻译目前仅支持 macOS', step: null })
     expect(derivePopupView({ ...input('P14a'), config: { ...input('P14a').config!, image: { enabled: false, modes: [] } } }).helper).toBeNull()
   })
-  it('the provider poll leaves the background alone while a grant takes effect, so the stale worker can idle out (ADR-0002)', () => {
+  it('the provider poll leaves the background alone while a grant takes effect, so the stale worker can idle out (DESIGN §15.3)', () => {
     expect(pollsBackground({ state: 'restarting' })).toBe(false)
     expect(pollsBackground({ state: 'permission-missing' })).toBe(true)
     expect(pollsBackground({ state: 'not-installed' })).toBe(true)
@@ -236,7 +236,7 @@ describe('startRefusalText', () => {
   })
 })
 
-describe('the core strings seam (ADR-0008)', () => {
+describe('the core strings seam (DESIGN §4.2)', () => {
   it('setLocale hands the core the retry label and the failure sentences of that locale', async () => {
     const { coreStrings } = await import('@/core/strings')
     const strings = await import('@/ui/strings')

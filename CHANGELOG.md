@@ -1,6 +1,6 @@
 # Changelog
 
-Reader-facing changes, newest first. The engineering record is `docs/rebuild/PROGRESS.md`; the design is `docs/DESIGN.md`.
+Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## 0.4.0 — unreleased
 
@@ -40,4 +40,4 @@ The first release. Numbered 0.4.0 rather than 1.0.0 (the owner, 2026-09-17): the
 
 ## 0.3.0-mvp — 2026-09-12
 
-An archive mark, not a release: the MVP as it stood when the rebuild toward 1.0 began (`main` is frozen there; `docs/rebuild/CHARTER.md`). Everything above is what the rebuild made of it.
+An archive mark, not a release: the MVP as it stood when the rebuild toward 1.0 began (`main` is frozen there). Everything above is what the rebuild made of it.

@@ -1,4 +1,4 @@
-// The platform boundary's checker (ADR-0008, scripts/check-boundary.mjs). The first version matched `@/…` spellings
+// The platform boundary's checker (DESIGN §4.2, scripts/check-boundary.mjs). The first version matched `@/…` spellings
 // only, and the adversarial review of 2026-09-13 walked past it with a relative path; every bypass it named is a case
 // here, so the next rewrite cannot lose one.
 import { describe, expect, it } from 'vitest'

@@ -71,7 +71,7 @@ export function createMirrors(root: Document | Element): number {
       clone.setAttribute('aria-hidden', 'true')
       clone.setAttribute('inert', '')
       clone.setAttribute(FOR_ATTR, `${MIRROR_ID_PREFIX}${made}`)
-      // The original takes the left column by this mark, the mirror the right (§7.2, ADR-0011)
+      // The original takes the left column by this mark, the mirror the right (§7.2, DESIGN §7.2)
       child.setAttribute(MIRRORED_ATTR, '')
       child.after(clone)
       markTail(child)

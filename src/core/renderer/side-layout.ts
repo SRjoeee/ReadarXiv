@@ -54,7 +54,7 @@ export const SIDE_DENY_SUBTREE = [
 
 /**
  * The same subtree list as the style sheet reads it: a multi-panel figure is known there by the mark
- * `markStructure` writes from MULTI_PANEL_FLEX, not by `:has()` (ADR-0011). The two lists are held together by
+ * `markStructure` writes from MULTI_PANEL_FLEX, not by `:has()` (DESIGN §7.2). The two lists are held together by
  * tests/renderer/side-layout.test.ts
  */
 export const SIDE_DENY_SUBTREE_CSS = SIDE_DENY_SUBTREE.replace(MULTI_PANEL_FLEX, `[${PANELS_ATTR}]`)
@@ -68,7 +68,7 @@ export const SIDE_ORIGINAL = `[${ID_ATTR}], [${MIRRORED_ATTR}], [${SPLIT_ATTR}]`
 /**
  * The elements CSS turns into two-column grids: those holding a translation **or a block mark** inside (minus the
  * exclusions). The style sheet reads the mark the extractor writes on every ancestor of a block (`data-axt-pairs`,
- * markBlocks, ADR-0011); this query keeps asking the structure itself, so it needs no mark and stays right for a
+ * markBlocks, DESIGN §7.2); this query keeps asking the structure itself, so it needs no mark and stays right for a
  * document marked by hand — tests/renderer/side-layout.test.ts holds the two answers equal on every fixture. The block marks are set at the very start of a session (§10), so the whole page goes two-column at
  * once and never jumps sideways afterwards; keyed on translations alone, blocks beyond the preload distance under
  * lazy loading stayed full width and shrank into the left column only on entering the margin (the owner's
@@ -106,7 +106,7 @@ export const SIDE_STACK = [
 ].join(', ')
 
 /**
- * The structural marks side mode's style sheet reads instead of `:has()` (ADR-0011), written once per session
+ * The structural marks side mode's style sheet reads instead of `:has()` (DESIGN §7.2), written once per session
  * right after the block marks: a multi-panel flex figure (`data-axt-panels`, its subtree is no container) and a
  * list item whose marker is its child (`data-axt-tagged`, the marker leaves the grid flow). Both are facts of the
  * page's own structure and never change; `restore()` sweeps them with every other `data-axt-*`. Idempotent.

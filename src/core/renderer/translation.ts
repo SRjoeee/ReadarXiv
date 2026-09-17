@@ -1,4 +1,4 @@
-// A block's translation node (DESIGN §7; ADR-0003). Original work: all three reference projects change, wrap or
+// A block's translation node (DESIGN §7; DESIGN §7.1). Original work: all three reference projects change, wrap or
 // replace the original node, against the DOM invariant of §7.1.
 // The invariant: a translation node is inserted only as the original block's next sibling; the original node only
 // gains data-axt-* attributes; after restore the DOM equals the pre-translation DOM node by node.
@@ -41,7 +41,7 @@ export function clearTranslation(block: Block): void {
       sibling.remove()
     }
   }
-  // The layout marks that described the removed node go with it (ADR-0011)
+  // The layout marks that described the removed node go with it (DESIGN §7.2)
   markTail(block.el)
   markTranslatedNote(block.el)
 }
