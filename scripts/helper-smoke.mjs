@@ -18,7 +18,7 @@ if (!BIN) {
   process.exit(2)
 }
 // The reference image is a paper's figure and is not in the repository (tests/fixtures/README.md)
-await ensureFixtures({ log: line => console.log(line) })
+await ensureFixtures({ for: 'helper-smoke', log: line => console.log(line) })
 
 /**
  * The reference image as a JPEG stored on its side: the pixels rotated 90° counter-clockwise, and an EXIF orientation

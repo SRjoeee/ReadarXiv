@@ -26,6 +26,8 @@ export interface OptionsData {
   patch(fn: (latest: Config) => Config): Promise<Config>
   /** Replace a stored configuration that cannot be read with the defaults — the reader's explicit choice (S-O-02) */
   reset(): Promise<Config>
+  /** The last reset was refused by storage; the notice says so */
+  resetFailed: boolean
   pack: PackState | null
   /** Re-query the pack for a language the reader just chose (the Chrome card would otherwise show the old one) */
   checkPack(target: string): Promise<PackState>
@@ -44,6 +46,7 @@ export interface OptionsData {
 export function useOptionsData(): OptionsData {
   const [config, setLocal] = useState<Config | null>(null)
   const [fallbackReason, setFallbackReason] = useState<FallbackReason | null>(null)
+  const [resetFailed, setResetFailed] = useState(false)
   const [pack, setPack] = useState<PackState | null>(null)
   const [helper, setHelper] = useState<HelperStatus | null>(null)
   const [platform, setPlatform] = useState<'mac' | 'other' | null>(null)
@@ -192,7 +195,15 @@ export function useOptionsData(): OptionsData {
   /** S-O-02's way out, on the same chain as every other write: the defaults replace what could not be read */
   const reset = useCallback((): Promise<Config> => {
     const run = async () => {
-      await resetConfig()
+      try {
+        await resetConfig()
+      } catch {
+        // Storage refused the write (IO, quota): the notice stays, and says the reset did not go through — a click
+        // that changes nothing and says nothing reads as a button that does not work
+        setResetFailed(true)
+        return getConfig()
+      }
+      setResetFailed(false)
       const next = await getConfig()
       packs.want(next.targetLanguage)
       setLocal(next)
@@ -223,5 +234,5 @@ export function useOptionsData(): OptionsData {
     await loadCache()
   }, [loadCache])
 
-  return { config, fallbackReason, patch, reset, pack, checkPack: packs.check, fetchPack, helper, setHelper, platform, cache, cacheError, clearCache, cacheCleared }
+  return { config, fallbackReason, patch, reset, resetFailed, pack, checkPack: packs.check, fetchPack, helper, setHelper, platform, cache, cacheError, clearCache, cacheCleared }
 }
