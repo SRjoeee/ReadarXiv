@@ -19,6 +19,11 @@ Kept current: an item is struck through with the PR that closed it, and a checkp
 6. **Candidates, not commitments**: coalescing the cache's access-time writes (INVENTORY §8.4).
 7. **Non-goals for 1.0, recorded**: #103 (a configurable free-engine chain — no benefit found, 2026-09-17); a `@readarxiv/core` package (not now, ADR-0008); DeepLX and Edge engines.
 
+## 2026-09-17 — the README from the owner's `docs/readme-v1`, checked against the code
+
+- Branch `rebuild/readme-v1` (PR #PRNUM). #217 had merged the older `docs/readme` (2026-09-12); the owner's current branch is `docs/readme-v1` (2026-09-14), which carries the seven screenshots and its own wording (sentence alignment "works with every service"). Merged as it is, then — on the owner's instruction to fix the rest myself — every statement checked against the code, in both languages: weight is not a setting (colour, opacity, underline); services are capped at twenty; an LLM service also receives the prompt, the matching glossary entries and the paper's title, abstract and section heading (the disclosure of `docs/RELEASE.md`); the pipeline diagram no longer shows a cache lookup in the content script (it lives in the background beside the queues, DESIGN §8.0); the documents it points at are the current DESIGN.md and the ADRs, not a frozen record with RESEARCH.md; the status reads as 1.0 with the store listing pending, not as a rebuild in progress on a frozen `main`.
+- The English allow-list rows for the two READMEs recounted; `docs/RELEASE.md`'s open item on the README closed.
+
 ## 2026-09-17 — follow-ups: the image flake found and fixed, the coverage gaps of INVENTORY §4.5 closed
 
 - Branch `rebuild/followups` (PR #219, stacked on #218). Ledger item 5.

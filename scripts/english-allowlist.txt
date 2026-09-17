@@ -7,7 +7,7 @@ docs/RELEASE.md 6  # 2026-09-17: the Chinese store listing (product copy the own
 docs/UI.md 177
 docs/rebuild/INVENTORY.md 1
 README.md 1  # 2026-09-17: the link to the Chinese README
-README.zh-CN.md 108  # 2026-09-17: the Chinese README is product copy for readers (the owner's docs/readme branch)
+README.zh-CN.md 111  # 2026-09-17: the Chinese README is product copy for readers (the owner's docs/readme-v1 branch)
 helper/README.md 1
 src/config/languages.ts 188  # localisation data: the Chinese name table and the native names; four evidence quotes in comments
 src/cache/key.ts 1
