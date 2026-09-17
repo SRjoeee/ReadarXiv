@@ -87,7 +87,7 @@ describe('the context menu\'s translation toggle (#146)', () => {
     expect(idle.sent[1]).toEqual({ tabId: 8, type: 'axt:translate-page' })
   })
 
-  it('the command carries the page epoch it was decided on, a translate on an idle page included, so a page that moved while the settings were read refuses it (sixth and twelfth passes)', async () => {
+  it('the command carries the page epoch it was decided on, a translate on an idle page included, so a page that moved while the settings were read refuses it', async () => {
     const running = { provider: 'microsoft', target: 'cmn', engine: 'microsoft', revision: 'r1' }
     const behind = fakeMenu({ ...progress('on'), running, epoch: 'd#4' }, { revision: 'r2', canRun: true, fallback: false })
     behind.click(7)

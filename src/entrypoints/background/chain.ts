@@ -24,7 +24,7 @@ export interface ChainHolderDeps {
  * Builds overlap: a rebuild can start while another is still probing engines. `current()` therefore answers
  * with the build in force **at the moment it resolves**, not the one in force when it was asked — a mover that
  * awaited a superseded build would move the sessions back onto it and retire the chain actually in force
- * (the local review of DESIGN §8.5, sixth pass)
+ * (local review)
  */
 export interface ChainHolder {
   current(): Promise<TranslationTransport>
@@ -54,8 +54,8 @@ export interface ChainHolder {
    * configuration on every display-mode switch, usually while a page is translating, and an indiscriminate
    * rebuild would clear the token bucket and the hand-over records with it (`chainConfigChanged` has the table).
    * The change is compared with what the chain was last asked to be built from, not with a finished build, so a
-   * build that never settles cannot keep the next one from starting (the local review of DESIGN §8.5, eleventh
-   * pass). A failed build is retried by the next change. Nothing happens before the first build — that one reads
+   * build that never settles cannot keep the next one from starting (local review). A failed build is retried by the
+   * next change. Nothing happens before the first build — that one reads
    * the stored configuration itself
    */
   onConfig(next: Config): void
@@ -88,7 +88,7 @@ export function createChainHolder(deps: ChainHolderDeps): ChainHolder {
    * with a call still inside (a connection test in its retry backoff) that nothing else leads to. Superseded
    * chains with none of that are let go at the next `current()` — a worker that lives through many configuration
    * changes must not keep every chain it ever built, with its queues and native translator sessions
-   * (the local review of DESIGN §8.5, eighth pass)
+   * (local review)
    */
   const built = new Set<TranslationTransport>()
   /**
@@ -131,7 +131,7 @@ export function createChainHolder(deps: ChainHolderDeps): ChainHolder {
         const signal = replaced.promise
         try {
           // A build superseded while it is awaited is no longer waited for — one that never settles must not hold
-          // up whoever asked, least of all a deletion's clean-up (the local review of DESIGN §8.5, ninth pass)
+          // up whoever asked, least of all a deletion's clean-up (local review)
           const result = await Promise.race([promise, signal.then(() => null)])
           if (result === null) continue
           if (promise === active) {

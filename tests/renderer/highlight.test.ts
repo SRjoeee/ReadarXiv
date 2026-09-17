@@ -589,7 +589,7 @@ describe('hover sentence highlight (§7.7)', () => {
     // `caretPositionFromPoint` answers "which caret is nearest", not "is there text here", so a
     // pointer out in the right-hand margin still resolves to the last character of a line. Without
     // a hit test the whole gutter of a paper highlights the paragraph beside it — reported from
-    // real use, and the reason the hit test (`hit`, `inside`) exists. The stub puts every character in one 200×20 box.
+    // real use, and the reason the hit test (`offsetOn`, `inside`, `charRect`) exists. The stub puts every character in one 200×20 box.
     const { doc, source } = page(TWO)
     const browser = stubBrowser(doc)
     const hl = startSentenceHighlight(doc)!

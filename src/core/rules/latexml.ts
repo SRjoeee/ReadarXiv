@@ -420,7 +420,7 @@ export const MARGIN_ASIDE_BOXES = '.ltx_pubnotes, .ltx_note_content'
  * The LaTeXML selectors the structural decisions of side mode need (DESIGN §7.2). The rule tables answer “which
  * content is translated”; these answer “what structure that content has” — LaTeXML knowledge all the same, placed
  * here by CLAUDE.md's selector default, and the renderer (`renderer/side-layout.ts`) only composes them and writes no
- * `ltx_` (Codex on #22). `styles/modes.css` holds the same list (the one exception the hard rule allows), and tests
+ * `ltx_` (Codex on #22). `styles/modes.css` holds the same list (the one place the selector default lets a style sheet name `ltx_`), and tests
  * keep the two in step.
  */
 export const SIDE_LAYOUT = {

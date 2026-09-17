@@ -66,7 +66,7 @@ export interface ImageRunOptions {
   isCurrent: () => boolean
   /** Test injection: the concurrency cap */
   maxConcurrent?: number
-  /** Fetching the bytes (the host's, or a test's). The signal is the run's: aborted when the run stops */
+  /** Fetching the bytes; a test injects its own, production uses `fetch`. The signal is the run's: aborted when the run stops or halts */
   fetchBytes?: (url: string, signal?: AbortSignal) => Promise<ImageBytes>
   onProgress?: (progress: ImageProgress) => void
   onRendered?: (targets: ImageTarget[]) => void

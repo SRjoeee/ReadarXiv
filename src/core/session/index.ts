@@ -198,7 +198,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
   function start(requested?: Mode, restart = false, from?: string, epoch?: string): Promise<StartResult> {
     // The same request twice is one start; a different one — another epoch, a restart over a plain start — waits for
     // the one in flight and is then judged on its own terms against the page as it is by then: a restart made
-    // obsolete by a restore must not swallow the translate the reader asked for after it (thirteenth pass)
+    // obsolete by a restore must not swallow the translate the reader asked for after it
     const key = `${requested ?? ''}|${restart}|${from ?? ''}|${epoch ?? ''}`
     if (starting?.key === key) return starting.promise
     const run = () => begin(requested, restart, from, epoch)

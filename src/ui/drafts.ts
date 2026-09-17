@@ -1,7 +1,6 @@
 // Drafts in progress on a page — a service being edited in its drawer, an appearance profile, a prompt, a glossary
 // that does not parse yet — are local until their own save. The page must not reload under one: a change saved
-// elsewhere that takes a reload to apply (the interface language) waits for the last draft to close (the local review
-// of S1, fourth pass).
+// elsewhere that takes a reload to apply (the interface language) waits for the last draft to close (local review).
 
 export interface Drafts {
   /** A draft begins; the returned function ends it, once */

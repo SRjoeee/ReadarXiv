@@ -72,7 +72,7 @@ export function useOptionsData(): OptionsData {
    * review). It waits for the last draft to close, then for the page's own writes: a draft's
    * save is queued on the chain in the same breath as its editor closes, and a reload issued at once would cut it off
    * before its read of the store came back — and it looks again after the wait, since a draft opened or a save queued
-   * meanwhile is owed the same (fifth pass). A second change while it waits adds nothing
+   * meanwhile is owed the same. A second change while it waits adds nothing
    */
   const reloadDue = useRef(false)
   const reload = useCallback(() => {

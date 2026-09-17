@@ -35,7 +35,7 @@ export const STATUS_DEADLINE_MS = 5_000
  * describe a superseded chain, and a decision made on it would be the previous settings' (local review). Re-asked
  * until the chain that answered is the one in force. A probe is not waited for
  * past its chain's replacement — a stalled native probe on a chain nobody wants any more must not hold the toggle
- * (fourth pass) — nor past the deadline, which rejects: an obsolete status is not an answer, and the callers treat
+ * — nor past the deadline, which rejects: an obsolete status is not an answer, and the callers treat
  * "unknown" as they did before there was a status to ask
  */
 export async function statusInForce(chain: Pick<ChainHolder, 'current' | 'replaced'>, deadlineMs = STATUS_DEADLINE_MS): Promise<{ transport: TranslationTransport; status: ProviderStatus }> {
@@ -46,7 +46,7 @@ export async function statusInForce(chain: Pick<ChainHolder, 'current' | 'replac
   try {
     for (;;) {
       // The signal first, then the transport: a replacement landing between the two would otherwise be missed —
-      // the old chain's probe would be raced against the replacement after the one already underway (fifth pass)
+      // the old chain's probe would be raced against the replacement after the one already underway
       const replaced = chain.replaced().then(() => null)
       const transport = await Promise.race([chain.current(), deadline])
       const status = await Promise.race([transport.status(), replaced, deadline])
