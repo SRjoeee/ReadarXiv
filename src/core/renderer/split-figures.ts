@@ -19,6 +19,10 @@ import { AXT_ATTR_PREFIX, IMG_CLASS, T_CLASS } from '@/core/marks'
 import { hashText } from '@/shared/hash'
 import { ERROR_CLASS, FOR_ATTR, MIRROR_CLASS, PENDING_CLASS, SPLIT_ATTR, SPLIT_CLASS, SPLIT_FOR_ATTR, SPLIT_OF_ATTR } from './attrs'
 import { REASON_ATTR, failureWidget } from './failed'
+import { markAnchor } from './image'
+import { dropMirror } from './mirror'
+import { markTranslatedCopies } from './notes'
+import { markTail } from './side-layout'
 import { mirrorSentences, sentenceSignatureOf } from './sentence-map'
 
 
@@ -211,9 +215,9 @@ export function splitFigures(root: Document | Element, options: SplitOptions = {
     // Mirrors and whole-block copies are two schemes; a mirror left inside the figure duplicates a copy (all our own
     // nodes, removable). A figure without a caption is mirrored whole when the session starts (the figure's next
     // sibling) and removed along with the split once the overlay arrives, or the right column holds three
-    for (const stale of Array.from(fig.querySelectorAll(`.${MIRROR_CLASS}`))) stale.remove()
+    for (const stale of Array.from(fig.querySelectorAll(`.${MIRROR_CLASS}`))) dropMirror(stale)
     const figureMirror = fig.nextElementSibling
-    if (figureMirror?.classList.contains(MIRROR_CLASS)) figureMirror.remove()
+    if (figureMirror?.classList.contains(MIRROR_CLASS)) dropMirror(figureMirror)
 
     const clone = fig.cloneNode(true) as Element
     // **While the two trees are still identical**, record each node's counterpart. The steps below remove each pair's
@@ -238,6 +242,10 @@ export function splitFigures(root: Document | Element, options: SplitOptions = {
       if (original.nextElementSibling?.classList.contains(T_CLASS)) original.remove()
     }
     stripIds(clone)
+    // The marks went with the other data-axt-*: the copy's overlays anchor to the copy's images again (§15.2), and a
+    // footnote copy that kept its translation says so again, or only mode would show its original too (Devin on #221)
+    for (const overlay of Array.from(clone.querySelectorAll(`.${IMG_CLASS}`))) markAnchor(overlay)
+    markTranslatedCopies(clone)
     const doc = fig.ownerDocument
     for (const { dead, blockId, reason } of failed) {
       const retry = options.retry
@@ -258,6 +266,7 @@ export function splitFigures(root: Document | Element, options: SplitOptions = {
 
     fig.setAttribute(SPLIT_ATTR, '')
     fig.after(clone)
+    markTail(fig)
     setSplitDuplicatesHidden(clone.parentElement ?? clone, true)
     // The caption's translation in the right column is this clone; the original's is hidden by side mode. Unregistered,
     // the rectangles computed on the translation side at hover time are empty and not one band is drawn (issue #139,
@@ -291,6 +300,7 @@ export function dropStaleSplits(root: Document | Element): number {
     if (existing && existing.getAttribute(KEY_ATTR) === translationKey(fig)) continue
     existing?.remove()
     fig.removeAttribute(SPLIT_ATTR)
+    markTail(fig)
     dropped++
   }
   return dropped

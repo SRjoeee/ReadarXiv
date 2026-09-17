@@ -9,7 +9,7 @@ import type { SentenceAlignment } from '@/providers/alignment'
 import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
 import { PlaceholderIntegrityError, joinRuns, rehydrate, splitRuns, staleSlot, type WireSpan } from '@/core/protector'
 import {
-  clearAllPending, enable, markPartial, registerSentences, renderFailed, renderPending, renderTable, renderText, setState, type Look, type Mode,
+  clearAllPending, enable, markPartial, markStructure, registerSentences, renderFailed, renderPending, renderTable, renderText, setState, type Look, type Mode,
 } from '@/core/renderer'
 import { createRunLedger } from '@/core/run/ledger'
 import type { PreloadOptions } from '@/core/scheduler/lazy'
@@ -145,6 +145,8 @@ export function startTranslation(options: RunOptions): TranslationRun {
   // no layout read, and Chromium measured 979 blocks written in 1.2 ms with a forced layout of 0 ms afterwards.
   // Writing synchronously also settles the halted() race along the way — no await in between, restore cannot get in
   markBlocks(blocks)
+  // The structural marks the side-mode style sheet reads (multi-panel figures, tagged list items) go with them (ADR-0011)
+  markStructure(doc)
 
   // The state attribute is still sliced: it carries styling (the pending skeleton) and does not affect side prep's decisions
   const ready = (async () => {

@@ -140,8 +140,8 @@ html[data-axt-mode="side"] .ltx_document {
    (.ltx_transformed_outer) is not: ar5iv flattens its size and the inner transform, it is only a shell around one
    thing, and excluding it keeps the table pair inside from reaching the column lines, spanning the divider
    (measured on 2606.07636v2); a footnote is excluded **with its whole subtree** — ar5iv keeps the collapsed state in
-   display:none on .ltx_note_outer, and the moment a translation is inserted inside, the container rule matches
-   :has(.axt-t), turns it into a grid, the collapsed footnote flips open, 165px tall and 781px wide across the body,
+   display:none on .ltx_note_outer, and the moment a translation is inserted inside, the container rule reaches it
+   (it holds a pair), turns it into a grid, the collapsed footnote flips open, 165px tall and 781px wide across the body,
    interfering with the middle column's translation (measured on 2312.17141, the owner's feedback);
    .ltx_p / .ltx_title / .ltx_caption / .ltx_bibblock are pair members themselves, and a translation inside them
    (the footnote kind of nesting) must not open another two columns.
@@ -157,7 +157,7 @@ html[data-axt-mode="side"] .ltx_document {
    strip (measured on 2609.00097); such grids must be taken over, not excluded.
    Wrapped in :where() for zero weight, or it overrides the pairing rules below (this trap was measured).
    column-gap must be written explicitly — .ltx_biblist carries a 3em gap, subgrid would use the container's own value, and the right column would be 12px off */
-html[data-axt-mode="side"] .ltx_document :where(:has(.axt-t, [data-axt-id]):not(:is(.axt-t, table, thead, tbody, tr, td, th, .ltx_inline-block:not(.ltx_transformed_outer), .ltx_note, .ltx_note *, .ltx_listing, .ltx_p, .ltx_title, .ltx_caption, .ltx_bibblock, [data-axt-split], [data-axt-split] *, .axt-split, .axt-split *, .ltx_flex_figure:has(> .ltx_flex_cell:not(.ltx_flex_size_1)), .ltx_flex_figure:has(> .ltx_flex_cell:not(.ltx_flex_size_1)) *))) {
+html[data-axt-mode="side"] .ltx_document :where([data-axt-pairs]:not(:is(.axt-t, table, thead, tbody, tr, td, th, .ltx_inline-block:not(.ltx_transformed_outer), .ltx_note, .ltx_note *, .ltx_listing, .ltx_p, .ltx_title, .ltx_caption, .ltx_bibblock, [data-axt-split], [data-axt-split] *, .axt-split, .axt-split *, [data-axt-panels], [data-axt-panels] *))) {
   display: grid;
   grid-template-columns: subgrid;
   grid-column: 1 / -1;
@@ -171,8 +171,8 @@ html[data-axt-mode="side"] .ltx_document :where(:has(.axt-t, [data-axt-id]):not(
    fragments need no rule each. The layout follows “this block is in the translation session”, not “has its
    translation arrived” (§7.2). The build compiles the nesting into flat selectors */
 html[data-axt-mode="side"] .ltx_document,
-html[data-axt-mode="side"] .ltx_document :where(:has(.axt-t, [data-axt-id]):not(:is(.axt-t, table, thead, tbody, tr, td, th,
-  .ltx_inline-block:not(.ltx_transformed_outer), .ltx_note, .ltx_note *, .ltx_listing, .ltx_p, .ltx_title, .ltx_caption, .ltx_bibblock, [data-axt-split], [data-axt-split] *, .axt-split, .axt-split *, .ltx_flex_figure:has(> .ltx_flex_cell:not(.ltx_flex_size_1)), .ltx_flex_figure:has(> .ltx_flex_cell:not(.ltx_flex_size_1)) *))) {
+html[data-axt-mode="side"] .ltx_document :where([data-axt-pairs]:not(:is(.axt-t, table, thead, tbody, tr, td, th,
+  .ltx_inline-block:not(.ltx_transformed_outer), .ltx_note, .ltx_note *, .ltx_listing, .ltx_p, .ltx_title, .ltx_caption, .ltx_bibblock, [data-axt-split], [data-axt-split] *, .axt-split, .axt-split *, [data-axt-panels], [data-axt-panels] *))) {
   & > * {
     grid-column: 1 / -1;
   }
@@ -184,7 +184,7 @@ html[data-axt-mode="side"] .ltx_document :where(:has(.axt-t, [data-axt-id]):not(
     grid-column: 1;
   }
 
-  & > :is([data-axt-id], :has(+ .axt-t)) {
+  & > :is([data-axt-id], [data-axt-mirrored], [data-axt-split]) {
     grid-column: 1;
   }
 
@@ -196,7 +196,7 @@ html[data-axt-mode="side"] .ltx_document :where(:has(.axt-t, [data-axt-id]):not(
      the container's own, in a grid it becomes a real stretch of blank (measured: the abstract block 24px taller for
      it). The last row = the last child, plus the original before it when “the translation happens to be last” */
   & > :last-child,
-  & > :nth-last-child(2):has(+ .axt-t) {
+  & > [data-axt-tail] {
     margin-block-end: 0;
   }
 
@@ -215,7 +215,7 @@ html[data-axt-mode="side"] .ltx_document :where(:has(.axt-t, [data-axt-id]):not(
      absolutely positioned child is no grid item and is not blockified; 50% lands on the centre between the columns,
      and half a gap more is exactly the right column's start (the item spans both columns, width = 2 × column + gap,
      so 50% + gap/2 ≡ column + gap; measured to land exactly on 732px) */
-  &.ltx_item:has(> .ltx_tag) {
+  &.ltx_item[data-axt-tagged] {
     position: relative;
     padding-inline-start: 0;
   }
@@ -248,7 +248,7 @@ html[data-axt-mode="side"] .ltx_document :where(:has(.axt-t, [data-axt-id]):not(
      the item would be indented, the one buried in a footnote included — measured on 2312.17141, the footnote's
      translation was given the 40px marker slot and sat indented next to the original in the margin (the owner: “the
      position is a mess”). The pair placement applies to direct children only as well; this keeps to it */
-  &:is(.ltx_item, .ltx_item *) > :where([data-axt-id], :has(+ .axt-t), .axt-t):not(.ltx_tag) {
+  &:is(.ltx_item, .ltx_item *) > :where([data-axt-id], [data-axt-mirrored], [data-axt-split], .axt-t):not(.ltx_tag) {
     padding-inline-start: 2.5rem;
   }
 
@@ -257,7 +257,7 @@ html[data-axt-mode="side"] .ltx_document :where(:has(.axt-t, [data-axt-id]):not(
      zeroed, so the hanging marker sticks out of the article column over the navigation (measured on Definition 1.2
      of 2609.04056v1: marker x=208, sibling item 248; the mirror hangs into the column gap the same way).
      display: block leaves the grid ar5iv gives enumerate items */
-  &:is(.ltx_itemize, .ltx_enumerate, .ltx_description) > .ltx_item:not(:has(.axt-t, [data-axt-id])) {
+  &:is(.ltx_itemize, .ltx_enumerate, .ltx_description) > .ltx_item:not([data-axt-pairs]) {
     display: grid;
     /* The marker column is **at least** 2.5rem (as wide as the paired items' slot, so narrow markers align on both
        sides), and grows to the marker's real width when needed: fixed at 2.5rem a wide marker like
@@ -307,13 +307,13 @@ html[data-axt-mode="side"] [data-axt-fit="scroll"] {
    The inner part is :is(...), not :where(...): it has to beat the (0,2,1) container rule above.
    The footnote subtree is excluded: changing its display flips open the footnote ar5iv collapsed.
    A nested .ltx_flex_figure is excluded too: it is flex itself (panels side by side), and holding a translation it
-   would match :has(.axt-t) and be forced to block, stacking the inner panels (2312.17141 has such nesting; Codex on #25) */
-html[data-axt-mode="side"] :is(.ltx_td, .ltx_inline-block:not(.ltx_transformed_outer)) :is(.ltx_para, .ltx_abstract, :has(.axt-t, [data-axt-id])):not(:is(.ltx_note, .ltx_note *, .ltx_flex_figure)) {
+   would count as a container and be forced to block, stacking the inner panels (2312.17141 has such nesting; Codex on #25) */
+html[data-axt-mode="side"] :is(.ltx_td, .ltx_inline-block:not(.ltx_transformed_outer)) :is(.ltx_para, .ltx_abstract, [data-axt-pairs]):not(:is(.ltx_note, .ltx_note *, .ltx_flex_figure)) {
   display: block;
 }
 
 /* Once a single-column flex figure is taken over as a subgrid, ar5iv's line-break placeholder .ltx_flex_break is an empty zero-height grid item; hidden */
-html[data-axt-mode="side"] .ltx_flex_figure:not(.ltx_flex_figure:has(> .ltx_flex_cell:not(.ltx_flex_size_1))) > .ltx_flex_break {
+html[data-axt-mode="side"] .ltx_flex_figure:not([data-axt-panels]) > .ltx_flex_break {
   display: none;
 }
 
@@ -450,20 +450,22 @@ html[data-axt-mode="side"] body {
 
    So a note with a translation returns to the article column and goes two-column; **one without keeps the gutter as
    it is** (the translation not yet arrived, or failed, is no reason to touch arXiv's own layout). The test reads
-   **real translations** only — the ring is `.axt-t.axt-pending`, the failure widget `.axt-t.axt-error`, and a bare
-   `:has(.axt-t)` would make the note leave the gutter the moment the request goes out and stay misplaced for ever
-   after a failure, the opposite of the promise above (Codex on #73). A frontmatter note is always visible and has no
+   **real translations** only — the ring is `.axt-t.axt-pending`, the failure widget `.axt-t.axt-error`, and a mark
+   set on any `.axt-t` inside would make the note leave the gutter the moment the request goes out and stay misplaced
+   for ever after a failure, the opposite of the promise above (Codex on #73). The mark is `data-axt-translated`,
+   kept by `markTranslatedNote` (side-layout.ts) on the note and on the box the translation is a direct child of, after
+   every insertion and removal of a translation (ADR-0011). A frontmatter note is always visible and has no
    collapsed state, so the concern behind “the `.ltx_note` subtree is excluded from pairing” does not apply — that
    rule is for body footnotes. */
-html[data-axt-mode="side"] .ltx_note.ltx_note_frontmatter:has(.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)) {
+html[data-axt-mode="side"] .ltx_note.ltx_note_frontmatter[data-axt-translated] {
   /* ar5iv positions it absolutely at the page edge at ≥96rem; with a translation it returns to the body flow to pair */
   position: static;
   inline-size: auto;
 }
-html[data-axt-mode="side"] .ltx_note.ltx_note_frontmatter:has(.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)) > .ltx_note_outer {
+html[data-axt-mode="side"] .ltx_note.ltx_note_frontmatter[data-axt-translated] > .ltx_note_outer {
   inline-size: 100%;
 }
-html[data-axt-mode="side"] .ltx_note.ltx_note_frontmatter > .ltx_note_outer:has(> .axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)) {
+html[data-axt-mode="side"] .ltx_note.ltx_note_frontmatter > .ltx_note_outer[data-axt-translated] {
   display: grid;
   grid-template-columns: 1fr 1fr;
   column-gap: var(--axt-gap);
@@ -518,7 +520,7 @@ html[data-axt-mode="side"] .ltx_note:not(.ltx_note_frontmatter) > .ltx_note_oute
   }
   /* Only those **without a translation**: with one they have returned to the article column and gone two-column (see
      above), and a gutter width here would squeeze them to 192px (measured: 76px left for the original and for the translation each) */
-  html[data-axt-mode="side"] .ltx_note.ltx_note_frontmatter.ltx_role_thanks:not(:has(.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split))) {
+  html[data-axt-mode="side"] .ltx_note.ltx_note_frontmatter.ltx_role_thanks:not([data-axt-translated]) {
     width: calc(var(--axt-side-w) - 2rem);
     inset-inline-end: calc(1rem - var(--axt-side-w));
   }
@@ -580,6 +582,6 @@ html[data-axt-mode="only"] .axt-t[data-axt-inline] {
    2026-09-10). localizeNotes gathers the original into .axt-note-s; it is hidden per mode here, and
    **only next to a translation that actually arrived** — a copy without one holds nothing but the
    original, and hiding it would lose content. The marks stay outside, so the number still shows */
-html[data-axt-mode="only"] .ltx_note_content:has(> .axt-note-t) > .axt-note-s {
+html[data-axt-mode="only"] .ltx_note_content[data-axt-note-translated] > .axt-note-s {
   display: none;
 }

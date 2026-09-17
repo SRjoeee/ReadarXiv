@@ -6,6 +6,7 @@ import type { Block, TextBlock } from '@/core/extractor'
 import { FOR_ATTR, INLINE_ATTR, PENDING_CLASS } from './attrs'
 import { shouldInline, translationClass, translationShell } from './shell'
 import { cancelSkeletonsIn, createSkeletonInside } from './skeleton'
+import { markTail } from './side-layout'
 import { clearTranslation, setState } from './translation'
 
 
@@ -47,6 +48,7 @@ export function renderPending(block: Block): Element {
   // The bars are estimated from the original's length (skeleton.ts says why nothing is measured); a short heading on the same line gets one bar
   createSkeletonInside(slot as HTMLElement, { chars: block.el.textContent?.length ?? 0, inline: node.hasAttribute(INLINE_ATTR) })
   block.el.after(node)
+  markTail(block.el)
   return node
 }
 
@@ -55,7 +57,9 @@ export function clearAllPending(doc: Document): number {
   const nodes = Array.from(doc.querySelectorAll(`.${PENDING_CLASS}`))
   for (const node of nodes) {
     cancelSkeletonsIn(node)
+    const original = node.previousElementSibling
     node.remove()
+    if (original) markTail(original)
   }
   return nodes.length
 }
