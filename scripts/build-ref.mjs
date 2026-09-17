@@ -24,8 +24,9 @@ export const RELEASE_TAG = /^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/
  * @returns {string} a release tag, a 40-digit commit, or `main`
  *
  * A tag only when the commit passes the branch check below **and the repository's copy of the tag points at this
- * commit** (`git ls-remote --tags`, one round trip, made only when a release tag points at HEAD): the branch check
- * proves the commit is on GitHub, not the tag — a tag created locally and not yet pushed would send the reader's curl
+ * commit** (`git ls-remote --tags` for the tag and its peeled `^{}` form — asked for the tag alone, git prints only
+ * the tag object's line, so an annotated tag never matched and v0.4.0 was stamped with its commit — one round trip,
+ * made only when a release tag points at HEAD): the branch check proves the commit is on GitHub, not the tag — a tag created locally and not yet pushed would send the reader's curl
  * to a 404 (Devin on #218), and one moved locally over an older published one would fetch the wrong sources (Codex).
  *
  * `main` for: a dirty tree; a HEAD that is not a commit; no remote whose fetch URL is the installer's repository; a
@@ -54,7 +55,7 @@ export function readBuildRef(run) {
     // reach the repository (offline) keeps the commit, which the branch check has already vouched for
     let published = false
     try {
-      published = remotes.some(remote => run(`git ls-remote --tags ${remote} refs/tags/${tag}`).split('\n')
+      published = remotes.some(remote => run(`git ls-remote --tags ${remote} refs/tags/${tag} 'refs/tags/${tag}^{}'`).split('\n')
         .map(l => l.trim().split(/\s+/))
         .some(([sha, ref]) => sha === head && (ref === `refs/tags/${tag}` || ref === `refs/tags/${tag}^{}`)))
     } catch {
