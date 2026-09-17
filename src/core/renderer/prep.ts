@@ -33,7 +33,7 @@ export interface Prep {
   touchAll(): void
   /** Cancel the scheduled pass (leaving side) */
   cancel(): void
-  /** A new session: the mirrors may run once more, the width cache is cleared, the column width is re-read */
+  /** A session starts or ends: the mirrors may run once more, the width cache is cleared, the column width is re-read, and the font subscription is dropped until the next touch */
   reset(): void
   /** The column width may have changed (window resized): re-read at the start of the next pass */
   refreshColumn(): void
@@ -157,17 +157,25 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
     const moved = applyMarginNotes(planMarginNotes(doc))
     if (moved) options.trace?.(`margin notes: ${moved} stacked`)
   }, { delay: options.delay ?? 150, maxWait: options.maxWait ?? 1000 })
-  // Fonts finished loading: natural widths changed (the cache is cleared by watchFontLoads); the column width is re-read along the way, then one full tidy pass
-  watchFontLoads(doc, () => {
-    columnStale = true
-    coalescer.schedule()
-  })
+  // Fonts finished loading: natural widths changed (the cache is cleared by watchFontLoads); the column width is re-read
+  // along the way, then one full tidy pass. **Subscribed from a session's first touch until the next reset**: a prep
+  // lives as long as the page, and a listener of its own lifetime would go on scheduling whole-document passes on a
+  // restored page, which is to hold nothing of ours
+  let unwatchFonts: (() => void) | null = null
+  const watchFonts = () => {
+    unwatchFonts ??= watchFontLoads(doc, () => {
+      columnStale = true
+      coalescer.schedule()
+    })
+  }
 
   return {
     touch(items) {
+      watchFonts()
       for (const item of items) coalescer.schedule(item.el)
     },
     touchAll() {
+      watchFonts()
       coalescer.schedule()
     },
     cancel() {
@@ -177,6 +185,8 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
     reset() {
       coalescer.cancel()
       restack.cancel()
+      unwatchFonts?.()
+      unwatchFonts = null
       mirrorsDone = false
       columnStale = true
       resetFitCache()

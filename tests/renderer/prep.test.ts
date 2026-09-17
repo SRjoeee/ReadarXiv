@@ -177,6 +177,34 @@ describe('createPrep', () => {
     expect(columnWidth).toHaveBeenCalledTimes(2)
   })
 
+  it('the font subscription lasts from a session\'s first touch to the next reset: a restored page is left with no listener of ours', () => {
+    const columnWidth = vi.fn(() => 484)
+    const doc = docOf(TWO_FIGURES)
+    const fonts = new EventTarget()
+    const add = vi.spyOn(fonts, 'addEventListener')
+    const remove = vi.spyOn(fonts, 'removeEventListener')
+    Object.defineProperty(doc, 'fonts', { value: fonts, configurable: true })
+    const blocks = extract(doc)
+    markBlocks(blocks)
+    const prep = createPrep(doc, { isSide: () => true, columnWidth })
+    // Created with the page, long before any translation: nothing subscribed yet
+    expect(add).not.toHaveBeenCalled()
+    prep.touchAll()
+    prep.touch([blocks[0] as TextBlock])
+    expect(add).toHaveBeenCalledTimes(1)
+    flush()
+    const passes = columnWidth.mock.calls.length
+    prep.reset()
+    expect(remove).toHaveBeenCalledTimes(1)
+    expect(remove.mock.calls[0]?.[1]).toBe(add.mock.calls[0]?.[1])
+    fonts.dispatchEvent(new Event('loadingdone'))
+    flush()
+    expect(columnWidth).toHaveBeenCalledTimes(passes)
+    // The next session subscribes again
+    prep.touchAll()
+    expect(add).toHaveBeenCalledTimes(2)
+  })
+
   it('cancel withdraws the queued pass', () => {
     const { doc, prep, byId } = setup(TWO_FIGURES)
     renderText(byId('c1'), frag(doc, '图 1。'))

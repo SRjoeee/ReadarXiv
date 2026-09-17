@@ -479,12 +479,18 @@ export function createPageSession(deps: SessionDeps): PageSession {
   }
 
   async function setMode(mode: Mode): Promise<{ mode: Mode; effective: Mode }> {
-    // Switching is allowed while not translating too: the controller writes the attribute onto <html>, and the styles apply at once
-    if (!modes) modes = createModeController(doc, mode, { onChange: enterSide })
-    const effective = modes.choose(mode)
-    enterSide(effective)
+    // With no translation on the page there is nothing to lay out: the choice is a preference, saved for the start
+    // that reads it. No controller, no attribute on <html> — nothing is written before a translation starts
+    // (DESIGN §4.1), and nothing would take a controller made here down again
+    const effective = modes ? modes.choose(mode) : mode
+    if (modes) enterSide(effective)
+    // After the first configuration read, which writes the same variable: a choice made before it came back would
+    // be overwritten by the stored mode it carries
+    await ready
     savedMode = mode
     const config = await deps.config.get()
+    // A refused save (the stored settings cannot be read, config/storage.ts) rejects here, after the page has
+    // switched: the mode holds for this page, and the caller tells the reader it was not saved
     if (config.mode !== mode) await deps.config.set({ ...config, mode })
     return { mode, effective }
   }
