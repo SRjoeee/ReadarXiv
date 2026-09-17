@@ -31,6 +31,7 @@ The first release. Numbered 0.4.0 rather than 1.0.0 (the owner, 2026-09-17): the
 
 - Paragraphs go to the service you chose; Chrome's built-in translation and a local endpoint keep them on your machine. API keys stay in the browser's extension storage and never enter logs, the cache or the diagnostics export.
 - Translations are cached locally (30 days) so a paper reopens at once; the settings page shows the cache and clears it.
+- Saved settings this version cannot read — written by a newer version, or damaged — are left exactly as they are: the defaults are used, the settings page says why, and nothing overwrites what was saved until you choose to reset it.
 - A diagnostics log — request failures, hand-overs, the extension's own trace lines, never page text or a key — can be exported from the settings page to attach to an issue.
 
 ### Compatibility
@@ -40,4 +41,4 @@ The first release. Numbered 0.4.0 rather than 1.0.0 (the owner, 2026-09-17): the
 
 ## 0.3.0-mvp — 2026-09-12
 
-An archive mark, not a release: the MVP as it stood when the rebuild toward 1.0 began (`main` is frozen there). Everything above is what the rebuild made of it.
+An archive mark, not a release: the MVP as it stood when the rebuild began (`main` is frozen there). Everything above is what the rebuild made of it.
