@@ -23,7 +23,7 @@ export interface LedgerDeps<T extends { el: Element }> {
   onEnter: (targets: T[]) => void
   /** The session is still the current one; the image run asks the session, the text run is stopped by it instead */
   isCurrent?: () => boolean
-  /** A permanent error was just recorded: the run's consequence beyond the scheduler stopping (the image run fails the rest) */
+  /** A permanent error was just recorded: the run's consequence beyond the scheduler stopping (the image run aborts its fetches) */
   onFatal?: () => void
   /** The run was stopped: its clean-up beyond the scheduler stopping (pending nodes, a parked set, a queue) */
   onStop?: () => void

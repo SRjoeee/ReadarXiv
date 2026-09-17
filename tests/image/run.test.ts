@@ -244,11 +244,15 @@ describe('startImageTranslation', () => {
       ocr: async () => ({ ok: true as const, result: { width: 1, height: 1, lines: LINES }, cached: false }),
       translate: async () => ({ ok: false, error: { kind: 'auth', message: 'User not found.', isolatable: false } }),
       isEnabled: () => true, isCurrent: () => true,
+      // Two at once, so the second fetch is out when the first image's translation fails
+      maxConcurrent: 2,
     })
-    await run.translate(targets)
-    expect(run.fatal()).toContain('auth')
+    const pending = run.translate(targets)
+    await vi.waitFor(() => expect(run.fatal()).toContain('auth'))
     expect(signals).toHaveLength(2)
+    // Asserted before awaiting the run: without the abort the second fetch never settles, and the failure is this line
     expect(signals[1]?.aborted).toBe(true)
+    await pending
     // Both settled once, as failed — the abort added no second failure and left nothing requested
     expect(run.failed()).toHaveLength(2)
     expect(run.progress().failed).toBe(2)

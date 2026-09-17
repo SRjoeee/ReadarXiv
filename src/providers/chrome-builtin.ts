@@ -2,7 +2,7 @@
 // a sentence — the one link of the fallback chain that needs no network and costs nothing. The isolated world exposes
 // `Translator` as well (measured 2026-09-05, DESIGN §8.4).
 //
-// Hard rule 4: a free API is unreliable by assumption — its errors are classified on their own, and a failure falls back to the next engine on the chain.
+// Hard rule 3: a free API is unreliable by assumption — its errors are classified on their own, and a failure falls back to the next engine on the chain.
 import { toBcp47 } from '@/config/languages'
 import { ProviderError, type TranslateRequest, type TranslateResult, type TranslationProvider } from './types'
 import { WIRE_FORMATS } from './wire-formats'

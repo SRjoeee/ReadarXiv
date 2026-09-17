@@ -100,7 +100,7 @@ describe('AdvancedCss', () => {
   })
 
   it('a block written twice, or equal to the stored one, is waited for by its write and not by the prop', async () => {
-    // A local review: an undo to the saved block, and a block typed twice around a rejected
+    // Found in a local review: an undo to the saved block, and a block typed twice around a rejected
     // one, changed no prop when they landed; the wait keyed on the prop never ended, and every later change elsewhere
     // was taken for the store lagging the box
     const p = parent('color: red;')
