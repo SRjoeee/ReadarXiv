@@ -131,6 +131,7 @@ send the rest of a paper somewhere you did not pick. Turn it off in the settings
 service. Your API keys are held in the browser's extension storage and are never written to logs or
 to the translation cache; saved translations stay on your machine. A figure is read locally and the
 image itself is never uploaded, but the words found in it are then translated like any other text.
+The full account is the [privacy policy](PRIVACY.md).
 
 ## How it works
 
