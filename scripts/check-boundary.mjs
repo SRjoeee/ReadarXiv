@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The platform boundary (ADR-0008): the core of the extension — `src/core`, `src/providers`, `src/cache` — is pure
+// The platform boundary (DESIGN §4.2): the core of the extension — `src/core`, `src/providers`, `src/cache` — is pure
 // DOM, fetch and IndexedDB, so another host (a web reader, a test harness) can run it. It must not import the
 // extension's platform layer: WXT / chrome.* wrappers, the entry points, the UI, the locale packs, the WXT-backed
 // configuration store, or the runtime-messaging modules. Type-only imports are allowed (they compile away).
@@ -119,7 +119,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const files = coreFiles()
   const problems = files.flatMap(file => platformImportsOf(file, readFileSync(file, 'utf8')).map(({ spec, why }) => `${file}: imports ${spec} (${why})`))
   if (problems.length > 0) {
-    console.error('The core imports the platform layer (ADR-0008 forbids it; inject the dependency instead):')
+    console.error('The core imports the platform layer (DESIGN §4.2 forbids it; inject the dependency instead):')
     for (const p of problems) console.error(`  ${p}`)
     process.exit(1)
   }

@@ -1,4 +1,4 @@
-// A block's translation container (ADR-0003): the element that carries a translation, a skeleton
+// A block's translation container (DESIGN §7.1): the element that carries a translation, a skeleton
 // or a failure widget as the block's next sibling. Shared by translation.ts, pending.ts and
 // failed.ts so the three never disagree about what a translation node looks like.
 import type { Block, TextBlock } from '@/core/extractor'

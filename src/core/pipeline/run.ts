@@ -107,7 +107,7 @@ const errorOf = (res: Extract<TranslateMessageResponse, { ok: false }>): Segment
 
 export function startTranslation(options: RunOptions): TranslationRun {
   const { doc, blocks, transport } = options
-  // The bookkeeping shared with the image run (ADR-0006): outcomes, the permanent-error record, stop, the scheduler
+  // The bookkeeping shared with the image run (DESIGN §4.4): outcomes, the permanent-error record, stop, the scheduler
   const ledger = createRunLedger(blocks, {
     preload: options.preload,
     onEnter: entered => { void translate(entered) },
@@ -147,7 +147,7 @@ export function startTranslation(options: RunOptions): TranslationRun {
   // no layout read, and Chromium measured 979 blocks written in 1.2 ms with a forced layout of 0 ms afterwards.
   // Writing synchronously also settles the halted() race along the way — no await in between, restore cannot get in
   markBlocks(blocks)
-  // The structural marks the side-mode style sheet reads (multi-panel figures, tagged list items) go with them (ADR-0011)
+  // The structural marks the side-mode style sheet reads (multi-panel figures, tagged list items) go with them (DESIGN §7.2)
   markStructure(doc)
 
   // The state attribute is still sliced: it carries styling (the pending skeleton) and does not affect side prep's decisions

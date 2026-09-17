@@ -1,6 +1,6 @@
 // Ported from reference/read-frog/src/types/config/translate.ts@9b44f82 (GPL-3.0), 2026-09-05, modified: only the
 // request-queue fields and their lower bounds, not the whole config module; the batch-queue schema went with the
-// hot-update setters (ADR-0001 §9), the batch limits are the provider's to set.
+// hot-update setters (the porting policy: only what is called stays), the batch limits are the provider's to set.
 import { z } from 'zod'
 
 export const MIN_TRANSLATE_RATE = 0.01

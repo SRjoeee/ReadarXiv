@@ -204,7 +204,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
   const fetchBytes = options.fetchBytes ?? defaultFetchBytes
   /** Targets that entered the viewport while the mode gate was shut */
   const parked = new Set<ImageTarget>()
-  // The bookkeeping shared with the text run (ADR-0006): outcomes, the permanent-error record, stop, the scheduler
+  // The bookkeeping shared with the text run (DESIGN §4.4): outcomes, the permanent-error record, stop, the scheduler
   const ledger = createRunLedger(options.targets, {
     preload: options.preload,
     onEnter: entered => { void translate(entered) },

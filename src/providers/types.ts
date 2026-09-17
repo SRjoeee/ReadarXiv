@@ -99,7 +99,7 @@ export const PROVIDER_ERROR_KINDS = ['no-key', 'network', 'rate-limit', 'auth', 
 export type ProviderErrorKind = (typeof PROVIDER_ERROR_KINDS)[number]
 
 /**
- * The kinds that continuing can only repeat: a missing or rejected key. The one definition (ADR-0004) behind the
+ * The kinds that continuing can only repeat: a missing or rejected key. The one definition (DESIGN §4.3) behind the
  * fallback chain's permanent demotion, the translate service's per-scope stop, both pipelines' halt and the page's
  * restart-on-hand-over decision. A new key rebuilds the chain (`chainConfigChanged`), which is what clears them.
  */

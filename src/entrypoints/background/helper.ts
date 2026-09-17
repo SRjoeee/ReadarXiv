@@ -1,11 +1,11 @@
 // The client of the local OCR helper (DESIGN §15.2 / §15.4): request / response correlation over a Chrome Native
-// Messaging port. It is the helper implementation of `OcrBackend` (ocr-backend.ts, ADR-0002).
+// Messaging port. It is the helper implementation of `OcrBackend` (ocr-backend.ts, DESIGN §15.3).
 //
 // Facts about MV3 that shape it:
 // - An open `connectNative` port keeps the worker alive: Chrome's lifecycle documentation says so since Chrome 105,
 //   and it was measured on 2026-09-17 (Chrome for Testing 153, `tests/e2e/probes/keepalive.mjs`: a port opened inside
 //   the worker, no page open and no debugger attached — worker and helper both alive at 75 s, past the 30 s idle
-//   line). The MVP-era keep-alive timer that rested on the opposite belief is gone (ADR-0002 follow-up). The same
+//   line). The MVP-era keep-alive timer that rested on the opposite belief is gone (DESIGN §15.3 follow-up). The same
 //   fact cuts the other way: a port left open with nothing to do would keep the worker and the helper process alive
 //   for the whole browser session after one popup open (Devin on #215), so **an idle port is dropped** after a grace
 //   period (`idleMs`, 30 s) — the helper exits, and the next request starts a fresh process and shakes hands again.
@@ -14,7 +14,7 @@
 //   cache key, so a reconnected port must not reuse the old one).
 // - With no host registered, `connectNative` does not throw: the port disconnects at once with "not found" in
 //   `lastError`. That is remembered for the worker's life; nothing reconnects until a `recheck`.
-// - `nativeMessaging` is optional (ADR-0002): `permitted` is asked before any connection, and `bound` says whether
+// - `nativeMessaging` is optional (DESIGN §15.3): `permitted` is asked before any connection, and `bound` says whether
 //   this worker's context has `connectNative` at all — a worker started before the grant never gets it (Chrome adds
 //   an API to a context when the context is created, verified 2026-09-13) and reports `restarting` until a fresh one
 //   takes over (helper-restart.ts).
@@ -40,7 +40,7 @@ export interface HelperClientDeps {
   timeoutMs?: number
   /** The timeout of the **first** OCR in this worker: the first Vision run on a machine does a one-time model preparation (measured 26.6 s), and 30 s would misjudge the helper hung */
   firstOcrTimeoutMs?: number
-  /** Whether the optional `nativeMessaging` permission is granted right now (ADR-0002); absent means granted */
+  /** Whether the optional `nativeMessaging` permission is granted right now (DESIGN §15.3); absent means granted */
   permitted?: () => Promise<boolean>
   /** Whether this worker's context has `runtime.connectNative` — false in a worker that predates the grant */
   bound?: () => boolean

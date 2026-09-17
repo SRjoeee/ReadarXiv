@@ -11,7 +11,7 @@ import { enableDebug } from './debug'
 // Injected into arxiv.org/html/*. On page load it only extracts (no DOM writes) and keeps the Block[] in memory;
 // translation starts when the popup sends axt:translate-page (DESIGN §4.1). A URL with #axt-debug draws outlines, one with #axt-translate starts of itself — for debugging and automated checks.
 //
-// This file is an adapter (ADR-0004): the session's state and decisions live in core/session; here
+// This file is an adapter (DESIGN §4.3): the session's state and decisions live in core/session; here
 // the browser's messages, the configuration subscription and the URL hash are mapped onto it.
 export default defineContentScript({
   matches: ['https://arxiv.org/html/*'],

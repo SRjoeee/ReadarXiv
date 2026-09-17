@@ -133,8 +133,7 @@ flowchart LR
 请求队列、重试策略、缓存与语言表移植自下面致谢的项目。
 
 [`docs/DESIGN.md`](docs/DESIGN.md) 是当前的设计——DOM 不变量见 §7.1，占位符协议见 §6，翻译服务见 §8，
-图片翻译见 §15——实测数据记在各项决定旁边；[`docs/adr/`](docs/adr/) 一个决定一个文件，
-[`docs/rebuild/CHARTER.md`](docs/rebuild/CHARTER.md) 写明 1.0 重建所遵守的约束。
+图片翻译见 §15——实测数据记在各项决定旁边。
 
 ## 状态
 

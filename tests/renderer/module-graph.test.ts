@@ -1,4 +1,4 @@
-// The renderer's module graph (ADR-0003): nothing inside the renderer imports the façade, and the
+// The renderer's module graph (DESIGN §7.1): nothing inside the renderer imports the façade, and the
 // sibling imports form no cycle. Both held only by convention before; `notes.ts` once had to build a
 // selector inside a function body because reading a constant at module-initialisation time hit
 // `undefined` on an `index ↔ notes` cycle.

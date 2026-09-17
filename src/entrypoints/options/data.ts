@@ -132,7 +132,7 @@ export function useOptionsData(): OptionsData {
     sendMessage({ type: 'axt:helper-status', recheck: true }).then(setHelper).catch(() => setHelper({ state: 'not-installed', reason: S.page.backendSilent }))
     browser.runtime.getPlatformInfo().then(info => setPlatform(info.os === 'mac' ? 'mac' : 'other')).catch(() => setPlatform('other'))
     // The background broadcasts the helper's state when it changes on its own — the install wait found it, or the
-    // fresh worker after a runtime grant reported (ADR-0002); the section follows without a reload
+    // fresh worker after a runtime grant reported (DESIGN §15.3); the section follows without a reload
     const onHelperState = (message: unknown) => {
       const m = message as { type?: string; status?: HelperStatus; target?: string } | null
       if (m?.type === 'axt:helper-state' && m.status) setHelper(m.status)

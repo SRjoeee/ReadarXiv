@@ -4,78 +4,61 @@ Chrome extension (MV3) that translates `https://arxiv.org/html/*` in place: stru
 
 ## Where the truth lives
 
-The project is being rebuilt toward V1.0 under the owner's mandate of 2026-09-12. Read in this order:
-
-1. `docs/rebuild/CHARTER.md` — the mandate: goals, freedoms, risk boundaries, how work is organized. It overrides habits recorded anywhere else.
-2. `docs/adr/` — one decision per file. ADR-0001 is the governance: baseline, workspace, which MVP conventions survive, which contracts get migrations.
-3. `docs/rebuild/PROGRESS.md` — the checkpoint log. After a context switch, start there.
-4. `docs/rebuild/INVENTORY.md` and `docs/rebuild/BASELINE.md` — what the MVP code actually does (module map, run paths, the guard ledger: what each odd branch originally fixed and which test guards it) and what its suites and measurements protect. The evidence for every trade-off.
-5. `docs/DESIGN.md` — the current design, regenerated on 2026-09-17 from the ADRs, `docs/UI.md` (the interface contract) and the code; cite it by section (`DESIGN §7.2`). Where it and an ADR disagree the ADR is newer; a structural decision gets an ADR, everything else changes in DESIGN.md in the PR that changes the code. The MVP's frozen record and the Phase 0 research live in git (`git show v0.3.0-mvp:docs/DESIGN.md`, `git show c0c044d:docs/RESEARCH.md`); `docs/rebuild/BASELINE.md` keeps the measured numbers every later claim stands against.
-
-`main` is frozen at the MVP baseline. Rebuild work happens on `rebuild/v1` (worktree `.worktrees/rebuild`). Without the owner's explicit request: nothing merges into `main`, no version is released, no history is rewritten.
+- `docs/DESIGN.md` — the current design: what the extension does, how it is built, why each non-obvious choice was made, with the measurements beside the decisions. Cite it by section (`DESIGN §7.2`). A decision that changes goes into its section in the same pull request as the code.
+- `docs/UI.md` — the interface contract: every control and string of the popup and the settings page, by id (`S-P-80`), with the reasons behind them.
+- `docs/RELEASE.md` — how a version is cut, and the store listing.
+- `docs/THIRD_PARTY.md` — what was ported from which project, under which licence.
+- `CHANGELOG.md` — reader-facing changes.
+- The design's history — the rebuild's charter, checkpoint log, inventory, baseline numbers and one-decision-per-file records — was archived from the tree on 2026-09-17 and stays in the repository's history: `git show 48cdd9f:docs/rebuild/PROGRESS.md`, `git show 48cdd9f:docs/adr/`.
 
 ## Hard rules
 
-Each is a product promise, a legal requirement, or a contract with something outside this repository. They survive the rebuild unchanged.
+Each is a product promise, a legal requirement, or a contract with something outside this repository.
 
 1. **DOM invariants** (DESIGN §7.1, guarded by tests): a translation node is inserted only as the next sibling of its original block; an original node gains `data-axt-*` attributes and nothing else; global state lives only on `<html>`; after restore the DOM equals the pre-translation DOM node by node.
 2. **Prefixes**: every injected class, data attribute and CSS variable starts with `axt-` / `data-axt-` / `--axt-`.
 3. **Free and built-in translation APIs are unreliable by assumption**: their failure must be recoverable and must trigger the fallback chain; it must never take the extension down.
 4. **Cache key** carries every input that changes a translation — today `CACHE_KEY_VERSION | providerId | model | PROMPT_VERSION | promptKey | context | RULES_VERSION | target | renderPath | normalizedText | cuts` (`src/cache/key.ts`); bump the matching version whenever a prompt, a rule or the request shape changes meaning.
-5. **Secrets**: API keys live only in WXT storage — never in logs, cache keys, fixtures or git. A third party's public client constant (the Google web translator's key in `providers/google-web.ts`) is not a secret — ADR-0001 §10.
-6. **Attribution**: code ported from `reference/` (KISS Translator, Read Frog, FluentRead — GPL-3.0, read-only, git-ignored) keeps the header `// Ported from reference/<repo>/<path>@<commit> (GPL-3.0), <YYYY-MM-DD>, modified` and an entry in `docs/THIRD_PARTY.md`.
-7. **External contracts** (ADR-0001 §6) get migration or compatibility handling, never silent replacement: the saved configuration schema, the Native Messaging protocol with the installed `axt-helper`, the installer surface.
+5. **Secrets**: API keys live only in WXT storage — never in logs, cache keys, fixtures or git. A third party's public client constant (the Google web translator's key in `providers/google-web.ts`) is not a secret.
+6. **Attribution**: code ported from the reference projects (KISS Translator, Read Frog, FluentRead — GPL-3.0) keeps the header `// Ported from reference/<repo>/<path>@<commit> (GPL-3.0), <YYYY-MM-DD>, modified` and an entry in `docs/THIRD_PARTY.md`.
+7. **External contracts** get migration or compatibility handling, never silent replacement: the saved configuration schema (`CONFIG_VERSION` and a migration, DESIGN §9), the Native Messaging protocol with the installed `axt-helper` (DESIGN §15.3), the installer surface (`helper/`).
+8. **The platform boundary** (DESIGN §4.2, checked by `pnpm lint` through `scripts/check-boundary.mjs`): `src/core`, `src/providers` and `src/cache` import nothing from `wxt`, the entry points, the UI, the locale packs, the WXT configuration store or runtime messaging; what the core needs from the host enters as a dependency, and what it shows a reader is a code the host turns into a sentence.
+9. **No `:has()` in the injected style sheets** (DESIGN §7.2, gate `tests/styles/no-has.test.ts`): Chrome answers a `:has()` in an author sheet by recalculating the whole document's styles on every DOM insertion. Every structural condition the layout needs is a `data-axt-*` mark written by the code that creates the structure; `:has()` stays available to TypeScript queries.
 
-Two MVP design rules stay as defaults, open to re-evaluation with evidence: `ltx_*` selectors live only in `src/core/rules/latexml.ts` (style sheets may use them for layout only); the wire format (tags / markers / runs) is negotiated from the provider's declared `wireFormats`, never chosen by provider identity in the renderer.
-
-
-8. **The platform boundary** (ADR-0008, checked by `pnpm lint` through `scripts/check-boundary.mjs`): `src/core`, `src/providers` and `src/cache` import nothing from `wxt`, the entry points, the UI, the locale packs, the WXT configuration store or runtime messaging; what the core needs from the host enters as a dependency (`createPageSession(deps)`, a provider's `fetch`), and what it shows a reader is a code the host turns into a sentence, or a string the host installs (`core/strings.ts`).
-9. **No `:has()` in the injected style sheets** (ADR-0011, gate `tests/styles/no-has.test.ts`): Chrome answers a `:has()` in an author sheet by recalculating the whole document's styles on every DOM insertion (165 ms per hover band and per arriving translation on a 59 000-element paper, measured 2026-09-17). Every structural condition the layout needs is a `data-axt-*` mark written by the code that creates the structure; `:has()` stays available to TypeScript queries.
+Two defaults, open to re-evaluation with evidence: `ltx_*` selectors live only in `src/core/rules/latexml.ts` (style sheets may use them for layout only); the wire format (tags / markers / runs) is negotiated from the provider's declared `wireFormats`, never chosen by provider identity in the renderer.
 
 ## Stack
 
 WXT + React + TypeScript with pnpm · Vercel AI SDK for LLM providers (structured output via `generateText` + `Output.object` + zod) · Dexie for the translation cache · WXT storage with schema versions and migrations · Vitest + happy-dom for unit tests, Playwright for e2e · Biome, linter only · Swift for the macOS image-recognition helper. Target is Chrome MV3 (`minimum_chrome_version` in `wxt.config.ts`); no cross-browser branches or polyfills; runtime feature detection stays because a free API can be absent on the same Chrome.
 
-This is the current stack, not a fixed one: a change is allowed with evidence of real benefit and an ADR (charter §5).
-
 ## Working rules
 
-- **A PR is one complete, explainable, verifiable design change.** Cross-module changes update the interface and every caller together. Keep unrelated changes out; never split a coherent change to make it small. The MVP-era measurement (ADR-0001 §8) shows large PRs cost five to six Codex rounds — the local review before opening is how that cost is paid down.
-- **Gate before every PR** — the same four steps CI runs: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`, plus the e2e scripts relevant to the change. `pnpm test` is vitest and does not type-check (#115 went red in CI after a green local run for exactly this reason).
-- **Self-review before asking for review.** On 2026-09-08 about a quarter of the review rounds went to "fixing A broke B": after adding a constraint, grep for everyone else on that path; read your own diff as someone else's code and ask what used to work and now does not.
-- **Local Codex review, then the PR.** Run `/codex:adversarial-review` (or `/codex:review`; both wrap `node <codex plugin>/scripts/codex-companion.mjs … --base rebuild/v1 --scope branch`) and pass it before opening the PR. End the PR body with a line `@codex review` above the attribution line — opening a PR alone does not reliably start the round. Then wait for CI and the Codex GitHub review's terminal signal — 👍, review comments, or a usage-limit notice; 👀 means still reviewing. Verify every comment against a fixture, a probe or the code before adopting it; write down what you declined and why. One review request per fix batch, not per commit. Details: `docs/agents/codex-review.md`.
-- **Merge gate into `rebuild/v1`** (ADR-0001 §7): local adversarial review passed with findings addressed, CI green, Codex's terminal signal on the PR — then merge (`gh pr merge <N> --merge`, never squash) without asking again; retarget any PR stacked on the branch **before** deleting it. Merging into `main` needs the owner's explicit request.
-- **Do not wait on review to start the next independent PR** — stack it on the branch it depends on and keep working; review is the bottleneck, not authorship. Disjoint files are necessary but not sufficient for independence: a branch that consumes a type, a schema value or a behaviour a pending PR introduces depends on it — branch from the pending branch or wait. Two branches editing the same file is the case to avoid outright.
-- **Parallel agents for measurement and reading, not for implementation.** Probes, inventories and multi-angle reviews are independent and self-verifying; run them concurrently and re-check their conclusions here. Implementation correctness comes from holding the whole context; cross-module interface changes are single-threaded.
-- **Verify before relying.** A claim in a frozen document or an old comment is a hypothesis: check it with a fixture, a probe or `git log -S` before building on it, and record what you found in the ADR that depends on it.
-- **Ported code.** The MVP's "port the whole directory, clean up later" policy is over (ADR-0001 §9). Keep only what is called; when a ported module is touched, its unused parts go.
+- **A pull request is one complete, explainable, verifiable change.** Cross-module changes update the interface and every caller together; unrelated changes stay out; a coherent change is not split to look small.
+- **Gate before every pull request** — the same four steps CI runs: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`, judged by the exit code, plus the e2e scripts relevant to the change. `pnpm test` is vitest and does not type-check.
+- **Self-review before asking for review**: after adding a constraint, grep for everyone else on that path; read your own diff as someone else's code and ask what used to work and now does not.
+- **Wait for CI and the review's terminal signal before merging**; verify every review comment against a fixture, a probe or the code before adopting it, and write down what was declined and why. Merge with a merge commit, never squash. Nothing merges into `main` and no version is released without the maintainer's explicit request.
+- **Measure before deciding**: a performance claim comes with a probe or a measurement (`tests/e2e/probes/`, `AXT_MEASURE=1 pnpm vitest run tests/perf`); a claim in a document or an old comment is a hypothesis until checked.
+- **Ported code**: keep only what is called; when a ported module is touched, its unused parts go.
 
 ## Language
 
-Everything written for developers is English, and the repository holds no Chinese outside product data: identifiers, comments, docs (the frozen ones included — they were converted whole on 2026-09-13, content unchanged), test names and assertion messages, scripts and their output, commit messages (`type(scope): summary`), PR descriptions, issues. `pnpm check:english` (`scripts/check-english.mjs`, part of `pnpm lint`) is the gate: a file may hold no more lines with CJK characters than `scripts/english-allowlist.txt` grants it — lower an entry freely when lines go away, raise one only with a reason in the PR.
+Everything written for developers is English: identifiers, comments, docs, test names, scripts, commit messages (`type(scope): summary`), pull requests, issues. `pnpm check:english` (`scripts/check-english.mjs`, part of `pnpm lint`) is the gate: a file may hold no more lines with CJK characters than `scripts/english-allowlist.txt` grants it — lower an entry freely, raise one only with a reason.
 
-Four kinds of Chinese are product data, not prose, and stay:
-
-1. **Product copy** — the locale packs (`src/locales/*`, `public/_locales`) are the product; a few strings reach the reader from outside the packs (the zod messages of `config/schema.ts` / `config/appearance.ts`, the popup's "no active tab" error) and are marked as such where they live until they move into the packs. A comment that refers to product copy quotes the English locale wording (“Translate this page”), not the Chinese.
-2. **Localization data** — `config/languages.ts` feeds the language labels shown in settings.
-3. **Multilingual test inputs and expectations** — `weights -> 权重` in the prompt tests, `证明。` in the rules tests and the Chinese UI strings the e2e scripts locate buttons by are the non-Latin coverage itself; translating them silently deletes it.
-4. **Evidence** — an observed machine-translation output (`state explosion` → 「州级爆炸性质」) or a Chinese example inside an English sentence is quoted as it was seen.
-
-Conversation with the owner is in Chinese.
+Chinese that is product data stays: the locale packs (`src/locales/*`, `public/_locales`) and the few reader-facing strings marked as such outside them; the language table (`config/languages.ts`); multilingual test inputs and expectations, and the Chinese labels the e2e scripts locate controls by; an observed machine-translation output quoted as evidence.
 
 ## Commands
 
 ```
 pnpm install
-pnpm dev                 # WXT dev mode, loads into Chrome
+pnpm dev                 # WXT dev mode; load .output/chrome-mv3-dev unpacked
 pnpm typecheck           # tsc --noEmit — vitest does not type-check
-pnpm lint                # Biome linter; pnpm lint:fix applies safe fixes
+pnpm lint                # Biome linter, the English gate, the boundary gate; pnpm lint:fix applies safe fixes
 pnpm test                # vitest; pnpm test:watch
-pnpm build               # wxt build + scripts/check-output.mjs (rejects non-characters Chrome refuses to load)
+pnpm build               # wxt build + scripts/check-output.mjs
 pnpm e2e                 # real Chromium with the extension (pnpm build first; once: npx playwright install chromium)
 pnpm e2e:layout          # side-mode layout contract in a real browser
 pnpm e2e:a11y            # A/B axe audit: only differences the extension introduces
-pnpm e2e:local-endpoint  # an http endpoint without CORS headers can translate a whole page (#42)
+pnpm e2e:local-endpoint  # an http endpoint without CORS headers can translate a whole page
 pnpm e2e:image           # image translation through the installed helper (SKIP without it)
 pnpm e2e:placeholders    # placeholder survival per sentence shape against a live engine (DESIGN §6.3)
 pnpm fixtures:stats      # rule coverage audit over the fixtures
@@ -84,13 +67,3 @@ pnpm zip                 # the store archive; pnpm icons regenerates the icons
 AXT_MEASURE=1 pnpm vitest run tests/perf       # the cost measurements (readings, not assertions)
 AXT_CHROME=<binary> pnpm e2e                   # the e2e suite on a chosen Chrome; probes live in tests/e2e/probes/
 ```
-
-## Agent skills
-
-### Issue tracker
-
-Issues, the roadmap (#155) and the rebuild's open items live in this repository's GitHub Issues, read and written through the `gh` CLI. See `docs/agents/issue-tracker.md`.
-
-### Codex review
-
-Merge only after Codex's terminal signal (👍 / review comments / usage-limit notice; 👀 means still reviewing); verify every comment. See `docs/agents/codex-review.md`.

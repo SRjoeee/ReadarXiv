@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createHelperRestart } from '@/entrypoints/background/helper-restart'
 import type { HelperStatus } from '@/shared/ocr'
 
-// A grant into a running worker (ADR-0002): the alarm brings a fresh worker, and the pages hear what it found
+// A grant into a running worker (DESIGN §15.3): the alarm brings a fresh worker, and the pages hear what it found
 
 const ready: HelperStatus = { state: 'ready', version: '0.1.0' }
 

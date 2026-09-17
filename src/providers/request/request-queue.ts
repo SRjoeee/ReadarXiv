@@ -114,7 +114,7 @@ export class RequestQueue {
   private consecutiveRateLimits = 0
 
   constructor(private options: QueueOptions) {
-    // Validated at construction, the one entrance since the hot-update setter went (ADR-0001 §9)
+    // Validated at construction, the one entrance since the hot-update setter went (the porting policy: only what is called stays)
     const { retryPolicy: _policy, ...validated } = options
     const parsed = requestQueueConfigSchema.safeParse(validated)
     if (parsed.error) {

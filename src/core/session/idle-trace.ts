@@ -1,4 +1,4 @@
-// Busy → idle detection for one run (ADR-0006's follow-up). Translation has no end (§10): each transition from busy
+// Busy → idle detection for one run (DESIGN §4.4's follow-up). Translation has no end (§10): each transition from busy
 // to idle traces one line, and the e2e suites read those lines (`session idle`, `images idle`). Each run keeps its
 // own notion of busy — the text run counts requests in flight, the image run what is requested and not yet settled —
 // and its own line; the detection is what they share.

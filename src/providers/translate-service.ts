@@ -90,14 +90,14 @@ export interface TranslateServiceDeps {
   /** Batching parameter overrides (tests) */
   batch?: Partial<Pick<BatchOptions<QueueItem, TranslationOutcome>, 'batchDelay' | 'maxRetries' | 'enableFallbackToIndividual'>>
   /**
-   * Scopes the session router has ended for certain (ADR-0005). Read after the cache read, before the cache write
+   * Scopes the session router has ended for certain (DESIGN §8.5). Read after the cache read, before the cache write
    * and by the batch queue's liveness hook, so a call that was suspended when its scope was drained never enters a
    * queue and never writes a result (#1881)
    */
   cancelled: Pick<CancelledScopeRegistry, 'has'>
   /**
    * Whether the chain this service belongs to has been retired — a service on it deleted, the sessions moved on
-   * (ADR-0005). Unlike the registry this is not about a scope: a connection test carries none, and it must not
+   * (DESIGN §8.5). Unlike the registry this is not about a scope: a connection test carries none, and it must not
    * reach the endpoint with a deleted key either (#157), so every call is refused after its awaits and every
    * batch at dispatch
    */
@@ -108,7 +108,7 @@ export interface TranslateService {
   translate(call: TranslateCall): Promise<TranslateMessageResponse>
   /** Drain the scope's queued and in-flight requests; returns how many. Refusing the scope's later calls is the registry's job, not this method's */
   cancel(scope: string): number
-  /** Drain every scoped request, queued or in flight, whichever session left it here; returns how many. Retirement of the chain (ADR-0005) */
+  /** Drain every scoped request, queued or in flight, whichever session left it here; returns how many. Retirement of the chain (DESIGN §8.5) */
   cancelAll(): number
 }
 
@@ -290,7 +290,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
   const translateItems = async (items: QueueItem[], ids: string[], signal: AbortSignal | undefined): Promise<TranslationOutcome[]> => {
     // The last check before the endpoint, and the only one a retry passes through: the request queue retries the
     // stored thunk without re-entering the batch queue, so a chain retired between two attempts must stop here.
-    // Non-retryable, so the queue does not try a third time (ADR-0005). The chain only, never the scopes: the items
+    // Non-retryable, so the queue does not try a third time (DESIGN §8.5). The chain only, never the scopes: the items
     // carry the first subscriber's scope, and a deduplicated peer — another tab, an unscoped connection test, a late
     // joiner during a retry backoff — is known to the queue alone, which drains by refcount (eighteenth pass)
     if (deps.retired?.()) throw attachRequestErrorMeta(new TranslationCancelledError(items[0]?.scope), { isRetryable: false })
@@ -356,7 +356,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
      * What a request-queue task subscribes for this batch: the batch's scope union as flushed, minus the scopes
      * that died since. A batch retry reuses the meta of its first flush, and re-subscribing a dead scope keeps the
      * task alive after its last live subscriber is drained — the endpoint is then called for nobody (the local
-     * review of ADR-0005, nineteenth pass). `null`: every subscriber died, there is nothing to send for.
+     * review of DESIGN §8.5, nineteenth pass). `null`: every subscriber died, there is nothing to send for.
      * `undefined` stays `undefined` — an unscoped member keeps the batch alive, as in the queues' refcount
      */
     const liveScopes = (meta: BatchExecutionMeta): readonly string[] | undefined | null => {
@@ -544,7 +544,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
         // The last word, after every batch has settled: the scope died or the chain was retired meanwhile, and
         // nothing of this call goes back — no cache write (a batch that finished before the drain would land in
         // the cache after "restore the page"; Codex on #33), no `partial` for the caller to render, no result
-        // from a task an unscoped subscriber kept alive through the drain (the local review of ADR-0005,
+        // from a task an unscoped subscriber kept alive through the drain (the local review of DESIGN §8.5,
         // fifteenth pass)
         if (refused(scope)) return refusal()
         if (store && writes.length > 0) {
@@ -588,7 +588,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
 
   /**
    * Drain only: whether the scope is dead from now on is the session router's decision, written to the registry
-   * this service reads before anything here is drained (ADR-0005). Batch queue before request queue — the other
+   * this service reads before anything here is drained (DESIGN §8.5). Batch queue before request queue — the other
    * way round, a batch still gathering flushes new tasks between the two drains (Read Frog translation-queues.ts:616)
    */
   const cancel = (scope: string): number => {

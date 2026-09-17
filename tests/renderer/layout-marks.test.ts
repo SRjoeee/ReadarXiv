@@ -1,4 +1,4 @@
-// The marks side mode's style sheet reads where it once asked `:has()` (ADR-0011): who writes each, when it appears
+// The marks side mode's style sheet reads where it once asked `:has()` (DESIGN §7.2): who writes each, when it appears
 // and when it goes. The style's effect is measured in a real browser (tests/e2e/layout.mjs); what is guarded here
 // is that every insertion and removal keeps the marks telling the truth about the structure around it.
 import { describe, expect, it } from 'vitest'

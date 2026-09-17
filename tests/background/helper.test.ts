@@ -410,7 +410,7 @@ describe('createHelperClient', () => {
     port().reply({ v: 1, id: port().lastId(), ok: true, version: '0.1.0' })
     expect(await again).toEqual({ state: 'ready', version: '0.1.0' })
   })
-  it('the permission comes first (ADR-0002): without it status says permission-missing and nothing is connected; granted, it connects', async () => {
+  it('the permission comes first (DESIGN §15.3): without it status says permission-missing and nothing is connected; granted, it connects', async () => {
     let granted = false
     const { client, ports } = setup({ permitted: async () => granted })
     expect(await client.status()).toEqual({ state: 'permission-missing' })

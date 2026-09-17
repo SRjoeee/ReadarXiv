@@ -6,7 +6,7 @@ import { createSessionRouter } from '@/entrypoints/background/sessions'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import type { TranslationTransport } from '@/providers/transport'
 
-// The engine-ready action acts on the chain in force, whatever became of its own rebuild (ADR-0005)
+// The engine-ready action acts on the chain in force, whatever became of its own rebuild (DESIGN §8.5)
 
 const chainOf = (name: string, engines: string[], retired: string[]): TranslationTransport => {
   let gone = false
@@ -23,7 +23,7 @@ describe('engineReady', () => {
   it('a deletion whose own rebuild fails after a newer one succeeded still moves every session and retires the old chains', async () => {
     // The configuration watcher rebuilt as well and finished first; this handler's rebuild then failed. Acting only
     // on its own success would skip the move and the retirement, and the deleted service's chain would go on
-    // serving the next request (the local review of ADR-0005, eighth pass)
+    // serving the next request (the local review of DESIGN §8.5, eighth pass)
     const retired: string[] = []
     const gates = new Map<string, { ok: () => void; fail: () => void }>()
     let n = 0
@@ -51,7 +51,7 @@ describe('engineReady', () => {
   it('a deletion whose rebuild fails outright still retires every chain; the sessions keep their tabs, lose their chains', async () => {
     // Nothing to move onto, but the deleted service must stop: every chain is retired and drained. The scope → tab
     // entries stay, unmarked — a tab closing later must still find them (image recognition queues by scope too),
-    // and their next request binds whatever chain is in force by then (the local review of ADR-0005, ninth and
+    // and their next request binds whatever chain is in force by then (the local review of DESIGN §8.5, ninth and
     // tenth passes)
     const retired: string[] = []
     const drained: string[] = []
@@ -83,7 +83,7 @@ describe('engineReady', () => {
   it('a deletion whose replacement never settles stops the deleted service at once, with nothing else happening', async () => {
     // No other rebuild comes to the rescue: the old chain is retired and drained before the replacement is awaited,
     // the sessions keep their tab entries and bind the replacement if it ever lands (the local review of
-    // ADR-0005, thirteenth pass)
+    // DESIGN §8.5, thirteenth pass)
     const retired: string[] = []
     const gates = new Map<string, () => void>()
     let n = 0
@@ -112,7 +112,7 @@ describe('engineReady', () => {
   it('a deletion whose own rebuild never settles is carried out once the configuration watcher rebuilds', async () => {
     // The handler does not wait for its own build: the movers follow current(), which stops waiting for a build the
     // moment it is superseded — and the watcher's rebuild starts without waiting for the hung one (the local review
-    // of ADR-0005, tenth and eleventh passes)
+    // of DESIGN §8.5, tenth and eleventh passes)
     const retired: string[] = []
     const gates = new Map<string, () => void>()
     let n = 0

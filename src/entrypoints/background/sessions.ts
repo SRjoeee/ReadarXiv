@@ -66,7 +66,7 @@ export interface SessionRouterDeps {
   /** The chain of the moment; after a configuration change it returns the new one, sessions already bound keep theirs */
   current: () => Promise<TranslationTransport>
   /**
-   * The one registry of scopes ended for certain (ADR-0005). This router is its only writer; the translate services
+   * The one registry of scopes ended for certain (DESIGN §8.5). This router is its only writer; the translate services
    * and the OCR service read it, so a request that was suspended when its scope was drained is refused wherever it
    * wakes up — including on a chain built after the drop
    */
@@ -95,7 +95,7 @@ export interface SessionRouterDeps {
    */
   stillLoading?: (tabId: number) => Promise<boolean>
   /**
-   * Retire every chain other than the build in force, or every chain while that build has not landed (ADR-0005),
+   * Retire every chain other than the build in force, or every chain while that build has not landed (DESIGN §8.5),
    * draining each of its scoped work — whichever session left it there — and returning the count. `dropAndRebindAll`
    * calls it first, before anything is awaited: a chain only a connection test used has no session that leads to
    * it, and a retired chain refuses every call that wakes or retries inside it, scoped or not. The router then
@@ -105,7 +105,7 @@ export interface SessionRouterDeps {
   /**
    * Drain a scope from every chain still holding its work, not only the one it is bound to: a session moved on
    * by a language pack leaves its earlier requests on a chain other sessions may still use, which is therefore
-   * not retired (the local review of ADR-0005, seventeenth pass). Returns how many requests were cancelled
+   * not retired (the local review of DESIGN §8.5, seventeenth pass). Returns how many requests were cancelled
    */
   cancelScope?: (scope: string) => Promise<number>
 }
@@ -133,7 +133,7 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
   /**
    * Per tab, the number of the navigation probe in force. A probe that awaited the page and finds itself
    * superseded — the tab closed, or a newer session on it armed a probe of its own — stops, instead of
-   * re-arming its stale scopes over the newer timer (the local review of ADR-0005, fourth pass)
+   * re-arming its stale scopes over the newer timer (the local review of DESIGN §8.5, fourth pass)
    */
   const probes = new Map<number, number>()
   /** This tab is alive: the held withdrawal is cancelled */
@@ -161,7 +161,7 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
    */
   const drop = async (scopes: readonly string[], { remember = true }: { remember?: boolean } = {}): Promise<number> => {
     // Mark before anything is awaited: a call suspended on its cache read wakes up to a scope already dead, on
-    // this chain or on one built after the drop (ADR-0005)
+    // this chain or on one built after the drop (DESIGN §8.5)
     if (remember) for (const scope of scopes) deps.cancelled.markScope(scope)
     let cancelled = 0
     for (const scope of scopes) {
@@ -271,7 +271,7 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
         // Register before the first await, as bind() does for OCR: a tab closed while the chain is being built
         // must find this scope among its sessions, or dropTab marks nothing and the continuation below binds a
         // dead scope and lets its request out — one paid batch per request suspended here, and the binding
-        // stays behind (the local review of ADR-0005 reproduced it; inherited from the MVP)
+        // stays behind (the local review of DESIGN §8.5 reproduced it; inherited from the MVP)
         sessions.set(scope, tabId !== undefined ? { tabId } : {})
         if (stale.length > 0) await drop(stale)
       }
@@ -289,7 +289,7 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
         const entry = sessions.get(scope)
         const chosen = entry?.transport && !entry.transport.isRetired?.() ? entry.transport : built
         // Retired while the build was awaited (a service deleted, its replacement still building): nobody's chain.
-        // Wait for the replacement instead of binding it (the local review of ADR-0005, thirteenth pass)
+        // Wait for the replacement instead of binding it (the local review of DESIGN §8.5, thirteenth pass)
         if (chosen.isRetired?.()) continue
         sessions.set(scope, { ...entry, transport: chosen, ...(tabId !== undefined ? { tabId } : {}) })
         return chosen
@@ -326,7 +326,7 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
     },
     async dropAndRebindAll() {
       // Stopping the deleted service must not wait for its replacement: a rebuild can hang in an engine probe,
-      // fail, or be superseded (the local review of ADR-0005, fourth, fifth, ninth, thirteenth and fourteenth
+      // fail, or be superseded (the local review of DESIGN §8.5, fourth, fifth, ninth, thirteenth and fourteenth
       // passes). 1. Before anything is awaited: the holder retires every chain but the build in force — every
       //    chain, while that build has not landed — draining each chain's scoped work, whichever session left it
       //    there (a session moved on by a language pack leaves its earlier requests behind; the registry does not

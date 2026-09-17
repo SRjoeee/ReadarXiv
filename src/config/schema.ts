@@ -1,5 +1,5 @@
 // The configuration's shape (DESIGN §9). A change of shape bumps `CONFIG_VERSION` and gets a migration in storage.ts — the
-// only way (ADR-0009): no field carries a zod default, so the version alone says what is in storage.
+// only way (DESIGN §9): no field carries a zod default, so the version alone says what is in storage.
 import { z } from 'zod'
 import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
 import { DEFAULT_PROMPTS_CONFIG } from '@/providers/prompt-library'
@@ -85,7 +85,7 @@ export const configSchema = z.object({
    * Reading aid (§7.7, since v10): on hover the matching sentence in the original and in the translation is marked
    * with a band (issue #105). On by default — it shows anything only when the engine reported sentence boundaries and
    * both sides could be rebuilt, silent and free otherwise. Added at db38c5d by a schema default alone, without a bump;
-   * v14 wrote it into every stored value (ADR-0009)
+   * v14 wrote it into every stored value (DESIGN §9)
    */
   reading: z.object({ sentenceHighlight: z.boolean() }),
   /**

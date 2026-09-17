@@ -62,7 +62,7 @@ export interface ProviderStatus {
 
 export interface TranslationTransport {
   translate(call: TranslateCall): Promise<TranslateMessageResponse>
-  /** Drain the scope's queued and in-flight requests; returns how many. Whether the scope is dead afterwards is the session router's decision (ADR-0005) */
+  /** Drain the scope's queued and in-flight requests; returns how many. Whether the scope is dead afterwards is the session router's decision (DESIGN §8.5) */
   cancel(scope: string): Promise<number>
   /** `scope` asks about that session's own chain rather than the current global one (§8.5) */
   /**
@@ -77,7 +77,7 @@ export interface TranslationTransport {
    * drained, whichever session left it here — a session moved on by a language pack leaves its earlier requests
    * behind — and returned as the count; after this, a call still inside the chain (suspended on its cache read,
    * outside every queue, or a connection test's retry) is refused when it wakes and caches nothing. The chain
-   * holder retires the chains a deletion replaces: the scope stays live, on the replacement (ADR-0005)
+   * holder retires the chains a deletion replaces: the scope stays live, on the replacement (DESIGN §8.5)
    */
   retire?(): number
   /** Local chains only: whether retire() has been called — the router never binds a session to such a chain */
@@ -85,13 +85,13 @@ export interface TranslationTransport {
   /**
    * Local chains only: a call is still inside the chain — suspended on its cache read, at the endpoint, in a
    * retry backoff. The chain holder keeps a superseded chain while this is true, so a deleted service's chain
-   * can still be retired (ADR-0005)
+   * can still be retired (DESIGN §8.5)
    */
   busy?(): boolean
 }
 
 export interface LocalTransportDeps extends Pick<TranslateServiceDeps, 'queue' | 'batch' | 'cacheReadBudgetMs'> {
-  /** The registry of scopes ended for certain, shared with the session router that writes it (ADR-0005); every service built here reads it */
+  /** The registry of scopes ended for certain, shared with the session router that writes it (DESIGN §8.5); every service built here reads it */
   cancelled: Pick<CancelledScopeRegistry, 'has'>
   /** The cache port. The background passes the local Dexie; without it nothing is cached (tests) */
   cache?: CachePort
