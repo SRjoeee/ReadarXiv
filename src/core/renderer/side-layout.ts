@@ -4,7 +4,7 @@ import { NOTE, SIDE_LAYOUT } from '@/core/rules/latexml'
 import { MIRRORED_ATTR, PANELS_ATTR, REAL_TRANSLATION, SPLIT_ATTR, SPLIT_CLASS, TAGGED_ATTR, TAIL_ATTR, TRANSLATED_ATTR } from './attrs'
 // The structural decisions of side mode (DESIGN §7.2). This is the single source of truth; the lists of the same
 // names in modes.css are guarded by tests. Every `ltx_*` literal comes from the rules module's SIDE_LAYOUT
-// (CLAUDE.md hard rule 2); this file only composes them.
+// (CLAUDE.md: `ltx_*` selectors live in the rules module); this file only composes them.
 //
 // A pairing container = an element holding a translation inside, minus the handful below.
 // flex can be excluded: a descendant has to be a grid item before it can subgrid, and a flex parent keeps it from
@@ -43,7 +43,7 @@ export const SIDE_DENY = [
  *
  * The style sheet writes it as `.ltx_note *` in the exclusion list; it is not merged into SIDE_CONTAINER here
  * because happy-dom's `:is(.ltx_note *)` is always false (the native `.ltx_note *` works), and merging it would make
- * the tests and the live behaviour disagree. At run time isSideContainer() decides instead.
+ * the tests and the live behaviour disagree. At run time isSideContainer() — the mirrors' gate — decides instead.
  */
 export const SIDE_DENY_SUBTREE = [
   SIDE_LAYOUT.note, // footnotes (above)
@@ -76,24 +76,20 @@ export const SIDE_ORIGINAL = `[${ID_ATTR}], [${MIRRORED_ATTR}], [${SPLIT_ATTR}]`
  */
 export const SIDE_CONTAINER = `:has(.${T_CLASS}, [${ID_ATTR}]):not(:is(${SIDE_DENY}))`
 
-/** Is this a pairing container (subtree exclusions included). At run time always ask here; never matches(SIDE_CONTAINER) directly */
+/**
+ * Is this a pairing container (subtree exclusions included) — the one test the mirrors ask; never
+ * matches(SIDE_CONTAINER) directly.
+ *
+ * An element whose translation **has not arrived** but whose blocks are marked (data-axt-id) counts too. Formulas and
+ * figures have no translation of their own; waiting for their paragraph's translation before mirroring them was
+ * waiting for nothing — measured on 2312.17141, all 413 mirrors appeared together the moment the translation
+ * finished, and until then the formulas sat centred across both columns. The block marks are written the first moment
+ * a translation starts, so the first side prep can mirror them all. The safety boundary is unchanged: a child carrying
+ * a block mark or holding blocks inside is still not mirrored (gate 2 of mirror.ts), so the whole-block copy accident
+ * cannot recur.
+ */
 export function isSideContainer(el: Element): boolean {
   return el.matches(SIDE_CONTAINER) && el.closest(SIDE_DENY_SUBTREE) === null
-}
-
-/**
- * The container test the mirrors use: an element whose translation **has not arrived** but whose blocks are marked
- * (data-axt-id) counts too. Formulas and figures have no translation of their own; waiting for their paragraph's
- * translation before mirroring them was waiting for nothing — measured on 2312.17141, all 413 mirrors appeared
- * together the moment the translation finished, and until then the formulas sat centred across both columns. The
- * block marks are written the first moment a translation starts, so the first side prep can mirror them all. The
- * safety boundary is unchanged: a child carrying a block mark or holding blocks inside is still not mirrored
- * (gate 2 of mirror.ts), so the whole-block copy accident cannot recur.
- */
-export const MIRROR_CONTAINER = SIDE_CONTAINER
-
-export function isMirrorContainer(el: Element): boolean {
-  return el.matches(MIRROR_CONTAINER) && el.closest(SIDE_DENY_SUBTREE) === null
 }
 
 // Stack regions: no left / right split inside these cells; the pairs fall back to stacking (modes.css holds the

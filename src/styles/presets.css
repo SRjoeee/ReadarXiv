@@ -49,7 +49,7 @@ html[data-axt-underline] :is(.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .
    The declaration itself is here, and **before** the blur rule: the two selectors have equal specificity, so the
    blur's own opacity — which multiplies the reader's value — wins over this baseline by order alone (Codex on #106).
    Static, the look sheet can follow the four static sheets in the document and be rewritten on its own for a slider
-   move (INVENTORY T5). Top-level real translations only, as the blur: nested ones would multiply */
+   move. Top-level real translations only, as the blur: nested ones would multiply */
 html[data-axt-on] .axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split):not(:where(.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)) *) {
   opacity: var(--axt-opacity, 1);
 }

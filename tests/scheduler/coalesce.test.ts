@@ -1,6 +1,6 @@
 // Progress event coalescing (DESIGN §10): a maximum wait on top of the debounce, so continuous events cannot starve the tidy pass.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createCoalescer } from '@/core/scheduler'
+import { createCoalescer } from '@/core/scheduler/coalesce'
 
 describe('createCoalescer', () => {
   beforeEach(() => vi.useFakeTimers())

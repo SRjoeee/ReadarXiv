@@ -12,7 +12,7 @@ import { DOCUMENT_ROOT, MARGIN_ASIDE } from '@/core/rules/latexml'
 import { ID_ATTR } from '@/core/extractor'
 import { INJECTED_SELECTOR, T_CLASS, isInjected, stripInjected } from '@/core/marks'
 import { FOR_ATTR, MIRRORED_ATTR, MIRROR_CLASS } from './attrs'
-import { MIRROR_CONTAINER, SIDE_STACK, isMirrorContainer, markTail } from './side-layout'
+import { SIDE_CONTAINER, SIDE_STACK, isSideContainer, markTail } from './side-layout'
 
 /** The data-axt-for prefix of a mirror, so it cannot collide with a real block id */
 const MIRROR_ID_PREFIX = 'mirror:'
@@ -49,8 +49,8 @@ export function createMirrors(root: Document | Element): number {
   // The translation root must also hold “a translation or a marked block inside” to count as a container. Without
   // that, a call before the translation starts copies the abstract and the sections, whole, into the right column —
   // at that moment they have neither a translation nor a block mark (measured: the whole page repeated)
-  if (!isMirrorContainer(scope)) return 0
-  const containers = [scope, ...Array.from(scope.querySelectorAll(MIRROR_CONTAINER))].filter(isMirrorContainer)
+  if (!isSideContainer(scope)) return 0
+  const containers = [scope, ...Array.from(scope.querySelectorAll(SIDE_CONTAINER))].filter(isSideContainer)
   let made = 0
   for (const container of containers) {
     if (container.classList.contains(MIRROR_CLASS)) continue

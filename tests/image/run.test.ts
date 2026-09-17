@@ -117,6 +117,24 @@ describe('startImageTranslation', () => {
     expect(doc.querySelector(`.${IMG_CLASS}`)).toBeNull()
   })
 
+  it('stop() aborts the fetch in flight, and the abort is no failure: nothing rendered, nothing recorded as failed', async () => {
+    let signal: AbortSignal | undefined
+    const { doc, targets, run, progress } = setup({
+      fetchBytes: (_url, s) => new Promise((_resolve, reject) => {
+        signal = s
+        s?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+      }),
+    })
+    const pending = run.translate(targets)
+    await Promise.resolve()
+    expect(signal?.aborted).toBe(false)
+    run.stop()
+    expect(signal?.aborted).toBe(true)
+    await pending
+    expect(doc.querySelector(`.${IMG_CLASS}`)).toBeNull()
+    expect(progress.every(p => p.failed === 0)).toBe(true)
+  })
+
   it('the session changed (isCurrent false): a translation result arriving is dropped too', async () => {
     let current = true
     const { doc, targets, run } = setup({

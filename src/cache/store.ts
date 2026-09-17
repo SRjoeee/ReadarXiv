@@ -50,9 +50,9 @@ const DEFAULT_CACHE_LIMITS: CacheLimits = {
   memoryEntries: 256,
 }
 
-export const CACHE_DB_NAME = 'axt-translation-cache'
+const CACHE_DB_NAME = 'axt-translation-cache'
 
-export class CacheDatabase extends Dexie {
+class CacheDatabase extends Dexie {
   entries!: Table<CacheRecord, string>
 
   constructor(name = CACHE_DB_NAME, options?: DexieOptions) {

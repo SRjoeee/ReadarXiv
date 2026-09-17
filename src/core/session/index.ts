@@ -42,7 +42,7 @@ export interface SessionDeps {
   /** Is the recognition helper reachable (`axt:helper-status`) */
   helperStatus: () => Promise<HelperStatus>
   /** Bytes of one bitmap; the image pipeline's own `fetch` through the HTTP cache when absent (tests inject) */
-  fetchImage?: (url: string) => Promise<ImageBytes>
+  fetchImage?: (url: string, signal?: AbortSignal) => Promise<ImageBytes>
   config: { get(): Promise<Config>; set(config: Config): Promise<void> }
   /** Switch the words this script puts on the page to the interface's language (UI.md §6) */
   applyLocale: (uiLanguage: string) => void
@@ -160,7 +160,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
   /**
    * The page's action epoch (PageStatus.epoch): every start that commits and every restore moves the counter, and
    * the document's own id keeps a command decided on another document — the same tab before a reload — from
-   * matching by count alone (the local review of INVENTORY S2, thirteenth pass)
+   * matching by count alone (local review)
    */
   const documentId = newSessionId()
   let actions = 0
@@ -190,7 +190,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
    * Overlapping starts are one start. A second click or key press while the first is still asking its status must
    * not mint a second session: both would be bound provisionally, the first's first request would drop the second
    * as the tab's stale scope, and the second would then take the page over with a dead scope — every request of
-   * it aborted (the local review of INVENTORY S2, tenth pass). The later caller gets the earlier start's outcome
+   * it aborted (local review). The later caller gets the earlier start's outcome
    */
   let starting: { key: string; promise: Promise<StartResult> } | null = null
   function start(requested?: Mode, restart = false, from?: string, epoch?: string): Promise<StartResult> {
@@ -225,7 +225,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
     // the session to the chain it answers about — a chain built from the configuration as stored now (`fresh`). The
     // target and the revision the session runs on come from that chain, not from the configuration read above: a
     // save between the two would otherwise leave the session pinned to a chain other than the settings it records
-    // (the local review of INVENTORY S2, seventh pass). Nothing awaits after the state below is committed
+    // (local review). Nothing awaits after the state below is committed
     const session = newSessionId()
     let status: Awaited<ReturnType<typeof backend.status>>
     try {

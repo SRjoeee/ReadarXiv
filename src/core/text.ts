@@ -1,5 +1,5 @@
 // The text of a subtree, and the whitespace rule most of `core` applies to it. Seven walkers used to do this, each
-// with its own barrier (INVENTORY S11); what differs between them is only which elements a caller refuses to enter,
+// with its own barrier; what differs between them is only which elements a caller refuses to enter,
 // so that is the parameter. No `ltx_*` knowledge here — a caller builds its barrier where `classify` lives.
 
 /**

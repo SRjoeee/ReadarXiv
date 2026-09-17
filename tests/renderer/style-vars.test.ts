@@ -92,13 +92,13 @@ describe('appearanceRule', () => {
     // the lower bound 0.3 would render as 0.09. Chrome, measured with this selector: top level 0.5, nested footnote 1, split copy 1, the real translation inside the copy 0.5
     const css = readFileSync(join(import.meta.dirname, '../../src/styles/presets.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
     expect(css).toContain(`${TOP_TRANSLATION_SELECTOR} {\n  opacity: var(--axt-opacity, 1);\n}`)
-    // The look sheet carries the value only, as a variable on <html> (INVENTORY T5)
+    // The look sheet carries the value only, as a variable on <html>
     expect(appearanceRule(lookWith({ opacity: 0.5 }))).not.toContain('opacity: var(')
     // The colour rule needs no such exclusion: --axt-color is an inherited property, and nesting does not stack it
     expect(appearanceRule(lookWith({ color: '#1565c0' }))).not.toContain(':not(:where(')
   })
 
-  it('every value is a variable — on <html>, the colour on the translation selector — and nothing but variables: the static sheets consume them, so the look sheet follows them and is rewritten alone (INVENTORY T5)', () => {
+  it('every value is a variable — on <html>, the colour on the translation selector — and nothing but variables: the static sheets consume them, so the look sheet follows them and is rewritten alone', () => {
     const rule = appearanceRule({ style: { ...LOOK.style, color: '#1565c0', opacity: 0.5 }, highlight: band({ color: '#e91e63' }) })
     const onHtml = /html\[data-axt-on\] \{\n([^}]*)\}/.exec(rule)![1]!
     expect(onHtml).toContain('--axt-opacity: 0.5;')
@@ -122,7 +122,7 @@ describe('injection and restore', () => {
   // In vitest a `?inline` CSS import resolves to an **empty string** (css: false in vitest.config), so the static sheet's
   // content cannot be asserted here; asserted are the two sheets' order in the document and the text contract of
   // presets.css. The real cascade is covered by browser measurement (blur with the slider at 0.5 → computed 0.375)
-  it('two sheets: the static one first, the look sheet right after it (INVENTORY T5)', () => {
+  it('two sheets: the static one first, the look sheet right after it', () => {
     const doc = docOf('<p class="ltx_p" id="p1">Hello.</p>')
     doc.head.append(doc.createElement('meta')) // something else the head holds after our sheets
     enable(doc, 'stack', lookWith({ blur: true, color: '#1565c0', opacity: 0.5 }))

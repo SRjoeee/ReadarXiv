@@ -1,16 +1,12 @@
-# Files that may hold lines with CJK characters, and how many (scripts/check-english.mjs). Lower freely; raise with a reason in the PR.
-.gitignore 8
-CLAUDE.md 2
+# Files that may hold lines with CJK characters, and how many (scripts/check-english.mjs). The numbers are exact: the gate asks for an entry to be lowered when lines go, and raised only with a reason beside it.
 docs/DESIGN.md 10  # 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
 docs/RELEASE.md 6  # 2026-09-17: the Chinese store listing (product copy the owner submits)
-docs/UI.md 177
+docs/UI.md 174
 README.md 1  # 2026-09-17: the link to the Chinese README
-README.zh-CN.md 111  # 2026-09-17: the Chinese README is product copy for readers (the owner's docs/readme-v1 branch)
 helper/README.md 1
 src/config/languages.ts 188  # localisation data: the Chinese name table and the native names; four evidence quotes in comments
 src/cache/key.ts 1
-src/config/appearance.ts 12
-src/config/schema.ts 2
+src/config/appearance.ts 10
 src/config/storage.ts 3
 src/core/protector/label.ts 9
 src/core/protector/serialize.ts 1
@@ -18,26 +14,22 @@ src/core/renderer/failed.ts 1
 src/core/renderer/highlight.ts 1
 src/core/renderer/image.ts 1
 src/core/rules/latexml.ts 8
-src/core/session/index.ts 1
 src/core/svg/foreign.ts 2
 src/entrypoints/background/helper.ts 1
 src/entrypoints/options/index.html 1
-src/entrypoints/options/sections/ServiceDrawer.tsx 1
 src/entrypoints/popup/PopupView.tsx 1
 src/providers/alignment.ts 4
 src/providers/chrome-builtin.ts 2
 src/providers/glossary.ts 3
 src/providers/microsoft.ts 1
-src/shared/messages.ts 1
 src/ui/appearance/Preview.tsx 1
-src/ui/appearance/ProfileGrid.tsx 1
 src/ui/strings.ts 3
 tests/background/helper.test.ts 1
 tests/cache/key.test.ts 3
 tests/cache/store.test.ts 10
 tests/config/appearance.test.ts 1
 tests/config/languages.test.ts 3
-tests/config/storage.test.ts 18
+tests/config/storage.test.ts 20  # raised 2026-09-17: the migration test starting from v8 carries a glossary entry with a Chinese translation in and out — the non-Latin value a migration must not mangle
 tests/core/marks.test.ts 8
 tests/e2e/a11y.mjs 2
 tests/e2e/extension.mjs 93  # raised 2026-09-17: the whole-paper preload check clicks two more stop labels and the cache check waits for the zero-count line; the unreadable-settings check locates the notice, its reset and the section that must be absent by their labels
@@ -50,11 +42,10 @@ tests/e2e/probes/chrome-floor.mjs 1  # 2026-09-17: the settings page's download 
 tests/e2e/probes/highlight-lag.mjs 8  # 2026-09-17: the settings switches and the popup's mode buttons, located by their reader-visible labels
 tests/e2e/probes/ref-highlight.mjs 2  # 2026-09-17: the highlight switch and the two engine cards, located by their reader-visible labels
 tests/extractor/context.test.ts 1
-tests/extractor/extract.test.ts 1
+tests/extractor/extract.test.ts 2  # raised 2026-09-17: “any Unicode letter makes a block” moved here from the rules tests with its Chinese input, the rule being the extractor's
 tests/image/run.test.ts 11
 tests/image/svg-targets.test.ts 3
 tests/options/prompts-section.test.ts 13
-tests/options/reading-section.test.ts 1
 tests/pipeline/run.test.ts 3
 tests/pipeline/session-guard.test.ts 5
 tests/popup/view-model.test.ts 35  # raised 2026-09-13: expectations for the locale-pack sentences (fallback text, drawer issue, popup action error)
@@ -100,14 +91,13 @@ tests/renderer/render.test.ts 12
 tests/renderer/restore.test.ts 3
 tests/renderer/sentence-map.test.ts 3  # 2026-09-17: the block-pair tests place a translated note, paragraph and caption
 tests/renderer/side-layout.test.ts 5
-tests/renderer/split-figures.test.ts 18
+tests/renderer/split-figures.test.ts 14
 tests/renderer/table-fit.test.ts 1
 tests/renderer/table.test.ts 10
 tests/renderer/layout-marks.test.ts 14  # 2026-09-17: translated text placed by the renderer, the same inputs the sibling renderer tests use
-tests/rules/latexml.test.ts 4
+tests/rules/latexml.test.ts 3
 tests/rules/selector-boundary.test.ts 6
 tests/scheduler/title.test.ts 6
-tests/session/page-session.test.ts 1
 tests/shared/digest.test.ts 1
 tests/shared/transport.test.ts 1
 tests/svg/foreign.test.ts 1

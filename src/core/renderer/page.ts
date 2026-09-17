@@ -21,7 +21,7 @@ export type { Look }
 
 /**
  * The static sheet: the four style files, the same for every look, written once at the first `enable` and never
- * again (INVENTORY T5 — a colour change used to rewrite all 900 lines of it). The order is the cascade order:
+ * again (a colour change used to rewrite all 900 lines of it). The order is the cascade order:
  * modes (layout; `.axt-t { color: var(--axt-color) }`), presets (underline, the baseline opacity, blur — consuming
  * the look's variables), image, highlight
  */

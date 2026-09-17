@@ -6,7 +6,7 @@ import { T_CLASS } from '@/core/marks'
 import { eqnProseCell, isInlineTitleCandidate, visibleText } from '@/core/rules/latexml'
 
 /** A heading whose visible text is at most this long shares its line with the translation */
-export const INLINE_TITLE_MAX_CHARS = 60
+const INLINE_TITLE_MAX_CHARS = 60
 
 /** The translation node's classes: the original block's plus axt-t, keeping the site's styles (§7.1) */
 export function translationClass(el: Element): string {

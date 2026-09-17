@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { sentenceCuts, splitSentences, visibleTextOf, type SplitContext } from '@/core/sentences'
+import { sentenceCuts, visibleTextOf, type SplitContext } from '@/core/sentences'
+import { splitSentences } from './lengths'
 
 const parts = (text: string, format?: 'tags' | 'markers', context?: SplitContext) => {
   const out: string[] = []

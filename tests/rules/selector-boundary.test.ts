@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-// CLAUDE.md hard rule 2: any ltx_* selector may be written only in src/core/rules/latexml.ts,
+// CLAUDE.md's selector default: any ltx_* selector may be written only in src/core/rules/latexml.ts,
 // and other TS files go through the rule module; the one exception is src/styles/*.css (layout is written declaratively in the style sheets).
 // The rule used to live in the documentation only, and renderer/side-layout.ts quietly accumulated 5 of them (Codex on #22).
 
@@ -122,7 +122,7 @@ function walk(dir: string): string[] {
   })
 }
 
-describe('ltx_* selectors may appear only in the rule module (CLAUDE.md hard rule 2)', () => {
+describe('ltx_* selectors may appear only in the rule module (CLAUDE.md, the selector default)', () => {
   const files = walk(SRC).filter(f => f !== RULES_MODULE)
 
   it('no ltx_ literal in TS / TSX code outside the rule module', () => {

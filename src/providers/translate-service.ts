@@ -3,7 +3,7 @@
 // bucket), timeouts, retries, the 429 pause and the single probe after it, draining the whole queue on 401 / no-key,
 // cancellation by scope; BatchQueue collects segments of one batch key into a batch, and its dispatch gate makes it
 // collect more and send less under a rate limit. Assembled after Read Frog's background/translation-queues.ts; it runs
-// in the background (§8.0). Independent of the run context: the cache comes through a CachePort — the background uses the local Dexie, the content side a message proxy.
+// in the background (§8.0). Independent of the store: the cache comes through a CachePort — the background passes the local Dexie, a test a double.
 import type { WireFormat } from '@/core/protector'
 import { wireFormatOf } from '@/cache/key'
 import type { CachedEntry } from '@/cache/store'
@@ -113,12 +113,12 @@ export interface TranslateService {
 }
 
 /** Read Frog's default queue parameters (DEFAULT_CONFIG.pageTranslation.requestQueueConfig and the constants of translation-queues.ts) */
-export const DEFAULT_RATE_LIMIT = { rate: 8, capacity: 20 } as const
+const DEFAULT_RATE_LIMIT = { rate: 8, capacity: 20 } as const
 
 /**
  * The cache read's waiting cap. The cache is an optimisation, not a dependency: the service **waits for the cache
  * before requesting**, and a read that hangs stops the whole page's translation right there (experiment 2 of issue
- * #45). The content side's message port has its own 1.5 s budget; this is the last gate — with any CachePort (the background's direct Dexie, a test double) the translation cannot be dragged down by the cache
+ * #45). This is the gate — with any CachePort (the background's direct Dexie, a test double) the translation cannot be dragged down by the cache
  */
 export const CACHE_READ_BUDGET_MS = 2_000
 

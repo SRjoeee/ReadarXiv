@@ -1007,11 +1007,6 @@ const RTL_PRIMARY: ReadonlySet<string> = new Set(
     .map(parts => parts[0]!),
 )
 
-/** Is the target language written right to left; takes an ISO 639-3 code */
-export function isRtl(code: string): boolean {
-  return isLangCode(code) && RTL_LANGUAGES.has(code)
-}
-
 /** The same for a tag already converted to BCP-47 (what `<html>` records). A script subtag decides when present, otherwise the primary subtag */
 export function isRtlTag(tag: string): boolean {
   const parts = tag.toLowerCase().split('-')

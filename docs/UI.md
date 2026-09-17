@@ -265,10 +265,6 @@ Names and the two value sets first; Tailwind v4 `@theme` and the in-page Shadow 
 | `--axt-control` | #e9e9ee | #3a3a3c | Segmented control ground |
 | `--axt-accent` | #b31b1b | #d63c3c | arXiv red; primary button, selected state |
 | `--axt-accent-soft` | #fbecec | #3b1f1f | Red pill ground, failure line ground |
-| `--axt-ok` | #1f8a4c | #30d158 | Ready |
-| `--axt-ok-soft` | #e8f5ec | #1f3a29 | Ready pill ground |
-| `--axt-warn` | #b8860b | #ffd60a | Will switch |
-| `--axt-warn-soft` | #fbf3dc | #3a3214 | Will-switch note ground |
 | `--axt-radius-card` | 14px | | |
 | `--axt-radius-control` | 10px | | Segments, inputs |
 | `--axt-radius-pill` | 999px | | The implementation uses `rounded-full` directly |
@@ -365,7 +361,7 @@ Every feature added on the main line is registered here first; a feature without
 | Configuration lists for translation appearance and background highlight | §7.5 | done (2026-09-10, config v12) | Settings · 阅读 | S-O-40…49 |
 | In-page “switched” notice | proposed here | undecided | in page | S-I-03 |
 | Reading toolbar | canvas proposal | undecided | in page | — |
-| Background connectivity / block statistics | existing popup | removed | nowhere — the gallery never showed them, and `axt:ping` / `axt:stats` had no sender (noted 2026-09-13; pruned with INVENTORY §4.4) | — |
+| Background connectivity / block statistics | existing popup | removed | nowhere — the gallery never showed them, and `axt:ping` / `axt:stats` had no sender (noted 2026-09-13 and pruned) | — |
 
 ## 9. Open
 

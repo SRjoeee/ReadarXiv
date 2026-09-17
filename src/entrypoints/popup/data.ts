@@ -23,8 +23,6 @@ import { pickLocale } from '@/locales'
 import { browserLanguages } from '@/ui/apply-locale'
 import { createProviderAsks } from './provider-asks'
 
-const scriptStart = performance.now()
-
 /** The stored interface language resolves to another pack than the one in use (chosen once, before the first paint) */
 const staleLocale = (c: Config) => pickLocale(c.uiLanguage, browserLanguages()) !== localeInUse()
 
@@ -68,7 +66,7 @@ function openOptions(section?: OptionsSection): void {
 export function usePopupData(): { input: PopupInput; error: string | null; actions: PopupActions } {
   const [page, setPage] = useState<PageStatus | null>(null)
   /**
-   * Two provider statuses, published by two kinds of ask and never confused (the local review of S1): the saved
+   * Two provider statuses, published by two kinds of ask and never confused (local review): the saved
    * settings' chain — asked at mount, after a save, after a configuration change (fresh) — and the running
    * session's own chain, polled while the page is on. A poll that answers late must not overwrite what the saved
    * settings say once the page has stopped, so a stopped page reads the saved one
@@ -78,7 +76,7 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
   /**
    * The configuration this popup shows, with the digest of its chain settings — **one** state, set once the digest
    * is known: a configuration shown beside the previous one's digest would call a page current that is behind it,
-   * and the button would restore where the toggle refuses (the local review of INVENTORY S2, third pass)
+   * and the button would restore where the toggle refuses (local review)
    */
   const [local, setLocal] = useState<{ config: Config; revision: string } | null>(null)
   const config = local?.config ?? null
@@ -131,9 +129,8 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
   }, [asks])
 
   useEffect(() => {
-    console.debug(`[axt] popup mounted ${Math.round(performance.now() - scriptStart)} ms after script start`)
     // The first read is queued on the write chain with everything that follows it: a slow first digest must not
-    // land after a watcher reload settled newer settings (the local review of S1)
+    // land after a watcher reload settled newer settings (local review)
     const init = async () => {
       const c = await getConfig()
       // A change landing between the locale's read (main.tsx) and this one would otherwise show its settings in the
@@ -151,7 +148,7 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
       .catch(() => setShortcut(null))
     sendMessage({ type: 'axt:helper-status', recheck: true }).then(setHelper).catch(() => setHelper({ state: 'not-installed' }))
     browser.runtime.getPlatformInfo().then(info => setPlatform(info.os === 'mac' ? 'mac' : 'other')).catch(() => setPlatform('other'))
-    // A change saved elsewhere — the settings page, another tab's popup — shows here without reopening (INVENTORY S1).
+    // A change saved elsewhere — the settings page, another tab's popup — shows here without reopening.
     // Re-read on the serialized write chain rather than taken from the event, which carries no order (#182)
     const unwatch = watchConfig(() => {
       const follow = async () => {
@@ -178,7 +175,7 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
     const onState = (message: unknown) => {
       const m = message as { type?: string; status?: HelperStatus; target?: string } | null
       if (m?.type === 'axt:helper-state' && m.status) setHelper(m.status)
-      // A pack downloaded on the settings page: this popup's Download button must not stay over an installed pack (INVENTORY S7)
+      // A pack downloaded on the settings page: this popup's Download button must not stay over an installed pack
       if (m?.type === 'axt:pack-changed' && m.target) packs.receive(m.target)
     }
     browser.runtime.onMessage.addListener(onState)
@@ -213,7 +210,7 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
   const session = page?.session ?? null
   // The saved settings' chain is asked whenever the page is not running — at mount, and again when it stops. A page
   // that is on shows its session's chain and the polling below stops with it: had the first ask failed, nothing would
-  // ask again, and the button would stay disabled after “Show original” (the local review of S1, fourth pass)
+  // ask again, and the button would stay disabled after “Show original” (local review)
   useEffect(() => {
     if (!on) void loadProvider()
   }, [on, loadProvider])
@@ -273,13 +270,13 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
   const actions: PopupActions = {
     translate: () => void guard(async () => {
       // The epoch at the click, as for the other two: a translate delivered late must not translate a page the reader
-      // translated and restored meanwhile (the local review of S2, fourteenth pass)
+      // translated and restored meanwhile (local review)
       const { epoch } = await sendToActiveTab({ type: 'axt:page-status' })
       const r = await sendToActiveTab({ type: 'axt:translate-page', ...(epoch !== undefined ? { epoch } : {}) })
       if (!r.started) throw new Error(startRefusalText(r))
     }),
     // The epoch a click acts on is read at the click, not from the last poll: an automatic hand-over restart between
-    // polls would make the poll's stale and the command refused (the local review of S2, seventh pass)
+    // polls would make the poll's stale and the command refused (local review)
     retranslate: () => void guard(async () => {
       const { epoch } = await sendToActiveTab({ type: 'axt:page-status' })
       const r = await sendToActiveTab({ type: 'axt:translate-page', restart: true, ...(epoch !== undefined ? { epoch } : {}) })

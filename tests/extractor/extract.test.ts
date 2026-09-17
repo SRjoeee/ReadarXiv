@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { extract, markBlocks, type Block } from '@/core/extractor'
-import { statsOf } from '@/core/extractor/stats'
+import { statsOf } from './stats'
 import { classify } from '@/core/rules/latexml'
 
 const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/arxiv')
@@ -26,6 +26,13 @@ describe('extract: text blocks', () => {
   it('a paragraph of formulas, digits or numbering only is no block', () => {
     expect(extract(docOf('<p class="ltx_p"><math class="ltx_Math"><mi>x</mi></math> = 1</p>'))).toHaveLength(0)
     expect(extract(docOf('<p class="ltx_p">(12)</p>'))).toHaveLength(0)
+    expect(extract(docOf('<p class="ltx_p">12.5 (3)</p>'))).toHaveLength(0)
+    expect(extract(docOf('<p class="ltx_p">   </p>'))).toHaveLength(0)
+  })
+
+  it('any Unicode letter makes a block: the rule is a letter, not a Latin one', () => {
+    expect(extract(docOf('<p class="ltx_p">证明。</p>'))).toHaveLength(1)
+    expect(extract(docOf('<p class="ltx_p">λ</p>'))).toHaveLength(1)
   })
 
   it('a footnote inside a paragraph: the paragraph first, the footnote body after; a footnote without id is numbered by block order', () => {

@@ -137,7 +137,7 @@ describe('the cache identity includes the endpoint (issue #45, experiment 3)', (
     expect(await keyOf(at('https://one.example/v1', 'enabled'))).toBe(await keyOf(at('https://one.example/v1', 'disabled')))
   })
 
-  it('the cache identity holds no API key (hard rule 7)', () => {
+  it('the cache identity holds no API key (hard rule 5)', () => {
     const provider = createOpenAICompatProvider({ baseURL: 'https://one.example/v1', apiKey: 'sk-secret-value', model: 'm' })
     expect(provider.cacheId).not.toContain('sk-secret-value')
     expect(provider.cacheId).toBe('openai-compat:https://one.example/v1')

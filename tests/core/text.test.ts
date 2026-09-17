@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { collectText, squash } from '@/core/text'
 
-// One walker for the seven that were (INVENTORY S11): what a caller refuses to enter is the parameter
+// One walker for the seven that were: what a caller refuses to enter is the parameter
 
 const parse = (html: string): Element => {
   const div = document.createElement('div')

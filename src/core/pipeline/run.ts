@@ -98,7 +98,7 @@ type BatchResult = Map<Segment, SegmentResult>
 const CANCELLED: SegmentResult = { error: 'aborted: cancelled' }
 const MISMATCH: SegmentResult = { error: 'invalid-response: the translation placeholders do not match the source' }
 /**
- * The page changed under the block while its translation was out (a slot node replaced or moved; INVENTORY T6). Not
+ * The page changed under the block while its translation was out (a slot node replaced or moved). Not
  * the translation's fault, so no resend; `parseFatal` reads an unfamiliar prefix as `unknown`, and the widget's Retry
  * serialises the block afresh, which is the cure
  */
@@ -191,8 +191,8 @@ export function startTranslation(options: RunOptions): TranslationRun {
   }
 
   /**
-   * The translation filled back into its block, or why it cannot be. `rehydrate` is the one gate (INVENTORY T4 —
-   * validating here first checked the same text twice): an integrity failure of the translation's own comes back as
+   * The translation filled back into its block, or why it cannot be. `rehydrate` is the one gate (validating
+   * here first checked the same text twice): an integrity failure of the translation's own comes back as
    * `undefined` for the caller to resend; a block the page changed under (`stale`) is a result, since resending the
    * same wire text could only fail the same way
    */

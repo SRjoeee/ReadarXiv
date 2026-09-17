@@ -3,7 +3,7 @@ import { createProviderAsks } from '@/entrypoints/popup/provider-asks'
 import type { ProviderStatus } from '@/providers/transport'
 import type { AxtMessage } from '@/shared/messages'
 
-// The popup's two provider-status asks (INVENTORY S1): the newest saved ask publishes; one session ask in flight,
+// The popup's two provider-status asks: the newest saved ask publishes; one session ask in flight,
 // given up on after the ttl so a stalled one cannot hold the polling
 
 function deferred<T>() {

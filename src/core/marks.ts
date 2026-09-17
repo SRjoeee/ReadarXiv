@@ -1,5 +1,5 @@
 // The marks shared by injected nodes: translations, mirrors and split copies all carry axt-t (the prefix of CLAUDE.md
-// hard rule 5). At the top of core: the extractor and the protector have to treat these nodes as air (on a
+// hard rule 2). At the top of core: the extractor and the protector have to treat these nodes as air (on a
 // retranslation they are already inside the original block), yet must not depend on the renderer in turn.
 export const T_CLASS = 'axt-t'
 /**
@@ -28,7 +28,7 @@ export function isInjected(el: Element): boolean {
   return el.classList.contains(T_CLASS) || el.classList.contains(IMG_CLASS) || el.classList.contains(HL_CLASS) || el.classList.contains(PEEK_CLASS)
 }
 
-/** The prefix of every injected attribute (CLAUDE.md hard rule 5) */
+/** The prefix of every injected attribute (CLAUDE.md hard rule 2) */
 export const AXT_ATTR_PREFIX = 'data-axt-'
 /** The prefix of every injected class (the same rule); the paper context excludes our own nodes by it */
 export const AXT_CLASS_PREFIX = 'axt-'

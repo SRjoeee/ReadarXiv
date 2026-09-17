@@ -108,10 +108,10 @@ function remember(source: Element, target: Element): void {
 /**
  * Registers a translated block, if it has everything the highlight needs.
  *
- * Blocks without an alignment — today every Google and LLM block, since only Microsoft reports
- * sentence boundaries — are simply not registered. Hovering them does nothing, which is the
- * intended outcome: a guessed pairing would put the highlight on the wrong sentence, and no
- * highlight is better than a wrong one (`alignment.ts`).
+ * A block without an alignment — a reference, a block on the runs path, one whose markers came back
+ * damaged (DESIGN §8.6) — registers no sentences: a guessed pairing would put the highlight on the
+ * wrong sentence (`alignment.ts`). It is still a pair, and the highlight lights it as a whole
+ * (`pairAt`, DESIGN §7.7).
  */
 export function registerSentences(source: Element, target: Element, sourceSpans: readonly WireSpan[], targetSpans: readonly WireSpan[] | undefined, alignment: SentenceAlignment | undefined): void {
   if (!alignment || !targetSpans) {

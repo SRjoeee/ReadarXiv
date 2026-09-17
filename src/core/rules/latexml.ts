@@ -1,5 +1,5 @@
-import { LETTER, collectText, squash } from '@/core/text'
-// The LaTeXML rules module. Every ltx_* selector lives in this file only (CLAUDE.md hard rule 2).
+import { collectText, squash } from '@/core/text'
+// The LaTeXML rules module. Every ltx_* selector lives in this file only (CLAUDE.md, the first of the two defaults).
 // Based on DESIGN.md §5.1 / §5.2 / §5.3 / §5.6 / §6.1; the measurements are in DESIGN §5.7.
 // Data tables and pure functions only, no traversal; the traversal is in src/core/extractor.
 
@@ -37,10 +37,10 @@ export interface ProtectRule extends Rule {
  * equation rows could change places in the translation clone (Codex on #168). Only rendering and splitting are
  * limited to the table form (see EQUATION_GROUP_TABLE)
  */
-export const EQUATION_GROUP = '.ltx_equationgroup'
+const EQUATION_GROUP = '.ltx_equationgroup'
 
 /** The equation group in table form: the only one with `<tr>` rows, and the only one worth splitting in two */
-export const EQUATION_GROUP_TABLE = 'table.ltx_equationgroup'
+const EQUATION_GROUP_TABLE = 'table.ltx_equationgroup'
 
 /**
  * The description row inside an equation group (`\intertext`): `tr.ltx_eqn_row` **without** `.ltx_equation`.
@@ -175,7 +175,7 @@ export const SKIP_RULES: readonly Rule[] = [
  * Codex on #53). Translated, these get rewritten or reordered by the model, and the correspondence to the panels
  * breaks. So a content test is added: a tag is translated only when it holds a **word**.
  */
-export const NAMED_TAGS = [
+const NAMED_TAGS = [
   '.ltx_tag_theorem', // Definition 1.1 / Theorem 2 / Lemma 3
   '.ltx_tag_figure', // Figure 1.
   '.ltx_tag_table', // Table 1:
@@ -419,7 +419,7 @@ export const MARGIN_ASIDE_BOXES = '.ltx_pubnotes, .ltx_note_content'
 /**
  * The LaTeXML selectors the structural decisions of side mode need (DESIGN §7.2). The rule tables answer “which
  * content is translated”; these answer “what structure that content has” — LaTeXML knowledge all the same, placed
- * here by CLAUDE.md hard rule 2, and the renderer (`renderer/side-layout.ts`) only composes them and writes no
+ * here by CLAUDE.md's selector default, and the renderer (`renderer/side-layout.ts`) only composes them and writes no
  * `ltx_` (Codex on #22). `styles/modes.css` holds the same list (the one exception the hard rule allows), and tests
  * keep the two in step.
  */
@@ -449,7 +449,7 @@ export const SIDE_LAYOUT = {
 
 export const DOCUMENT_TITLE = '.ltx_title_document'
 /** The document subtitle (`\subtitle`): part of the centred title area like the document title, and likewise no same-line candidate */
-export const DOCUMENT_SUBTITLE = '.ltx_subtitle'
+const DOCUMENT_SUBTITLE = '.ltx_subtitle'
 
 /** The abstract block and its own heading ("Abstract"); the paper-level context drops the heading when it takes the body */
 export const ABSTRACT = { root: '.ltx_abstract', title: '.ltx_title' } as const
@@ -505,11 +505,6 @@ function textOf(el: Element, drop?: (el: Element) => boolean): string {
     const kind = classify(node)?.kind
     return kind === 'skip' || kind === 'protect' || !!drop?.(node)
   })
-}
-
-/** Translatable = at least one Unicode letter in the visible text; a block of formulas, numbers and punctuation alone is no block */
-export function hasTranslatableText(el: Element): boolean {
-  return LETTER.test(visibleText(el))
 }
 
 // §5.3 numeric cells: a digit required (so that a word starting with E, like ERROR, is not taken for an exponent); symbol-only cells; N/A; blank

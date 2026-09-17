@@ -6,7 +6,8 @@ import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { attachRequestErrorMeta } from '@/providers/request/retry-policy'
 import { createChainHolder } from '@/entrypoints/background/chain'
 import { createSessionRouter } from '@/entrypoints/background/sessions'
-import { CHAIN_CONFIG_FIELDS, VOLATILE_CONFIG_FIELDS, chainConfigChanged, chainRevision, createLocalTransport } from '@/providers/transport'
+import { CHAIN_CONFIG_FIELDS, VOLATILE_CONFIG_FIELDS, chainConfigChanged, chainRevision } from '@/config/revision'
+import { createLocalTransport } from '@/providers/transport'
 import type { CachePort } from '@/providers/translate-service'
 import { ProviderError, type TranslateRequest, type TranslationProvider } from '@/providers/types'
 
@@ -715,7 +716,7 @@ describe('chainConfigChanged: which configuration changes rebuild the chain', ()
   })
 })
 
-describe('chainRevision (INVENTORY S8: the identity of the settings a chain is built from)', () => {
+describe('chainRevision: the identity of the settings a chain is built from', () => {
   const base: Config = { ...DEFAULT_CONFIG, provider: SVC.id, services: [SVC] }
 
   it('is the same for the same chain settings — across builds, and whatever order the fields come back in', async () => {

@@ -41,7 +41,7 @@ export interface ProtectedBlock {
 /**
  * Why this block can no longer be filled back, or undefined while it can. `slots` are references to the live nodes,
  * and a page that swapped a formula while the translation was out would otherwise have the copy captured then put
- * back — the translation showing what the page no longer does, silently (INVENTORY T6; the independent audit's A03).
+ * back — the translation showing what the page no longer does, silently.
  * The block is serialised again and compared with what was sent: the wire text (the words, and the order of every
  * slot among them — a formula moved past its neighbours, alone or with them, changes it; Devin on #212) and the
  * identity of each slot's node (a replacement of the same shape serialises the same, and is a different node). What

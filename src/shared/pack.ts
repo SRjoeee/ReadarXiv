@@ -35,15 +35,15 @@ export async function downloadPack(target: string): Promise<boolean> {
 }
 
 /**
- * What a surface shows for the pack, kept honest across lookups that answer in any order (the local review of S1):
+ * What a surface shows for the pack, kept honest across lookups that answer in any order (local review):
  * the committed configuration owns the wanted target, only the newest lookup for it publishes, and none while a
  * download of it is in flight — `availability()` says `downloadable` until the download ends. The popup and the
  * settings page each hold one; `null` is published while nothing is known for the wanted target.
  *
  * The two surfaces do not share the instance, so a download that ended in one is announced to the other
- * (`axt:pack-changed`, INVENTORY S7). The announcement names the target only, never a state: the receiver looks the
+ * (`axt:pack-changed`). The announcement names the target only, never a state: the receiver looks the
  * pack up itself, under the same guards as any lookup of its own, so no snapshot taken on one surface can outrank a
- * fresher one on the other (the local adversarial review of S7 reproduced both orders)
+ * fresher one on the other (a local adversarial review reproduced both orders)
  */
 export interface PackLookup {
   /** The committed configuration's target. Another target forgets the previous one's state at once (Codex on #185) */
@@ -75,7 +75,7 @@ export function createPackLookup(deps: {
   /**
    * The newest lookup. An older one that answers later publishes nothing: while A downloaded, a configuration change
    * looked A up; the download ended and its own lookup said `available`; the earlier answer, `downloadable`, would
-   * have put the Download button back over an installed pack (the local review of S1, third pass)
+   * have put the Download button back over an installed pack (local review)
    */
   let lookups = 0
   /** The targets whose download is in flight, every one of them: a reader can start B while A downloads and come back to A (Codex on #185) */

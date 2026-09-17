@@ -90,7 +90,7 @@ export interface TranslationProvider {
    * **Non-secret configuration that changes the output** under one id belongs here: the openai-compat id is the same
    * for every OpenAI-compatible endpoint, and with id + model name alone a model of that name on OpenRouter and on a
    * local Ollama would share cache entries and pollute each other's translations (experiment 3 of issue #45). **Never
-   * the API key** (hard rule 7)
+   * the API key** (hard rule 5)
    */
   cacheId?: string
 }

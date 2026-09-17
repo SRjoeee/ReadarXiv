@@ -53,7 +53,7 @@ export interface CommandDeps extends ToggleDeps {
  * settings are read for every toggle: the page's revision against their digest is the "behind" test, so ⌥T on a
  * page left behind by a change in another tab re-translates it, as the button it is badged on offers to
  */
-export async function toggleTranslation(deps: ToggleDeps, tabId: number): Promise<void> {
+async function toggleTranslation(deps: ToggleDeps, tabId: number): Promise<void> {
   try {
     const [status, saved] = await Promise.all([
       deps.send<Pick<PageStatus, 'progress' | 'running' | 'epoch'>>(tabId, { type: 'axt:page-status' }),

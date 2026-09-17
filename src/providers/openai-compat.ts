@@ -3,6 +3,7 @@
 // plus the ported retry policy (the SDK's own maxRetries is 0).
 import { APICallError, Output, generateText, type LanguageModel } from 'ai'
 import { z } from 'zod'
+import { isLoopback, serviceRuns } from '@/config/services'
 import { createModel, type OpenAICompatConfig } from './model'
 import { buildPrompts } from './prompt'
 import { promptKey, type PromptsConfig } from './prompt-library'
@@ -16,24 +17,14 @@ const outputSchema = z.object({
 })
 
 /** The rate of a local endpoint: 2 a second, at most 4 accumulated (Ollama's default OLLAMA_NUM_PARALLEL=4) */
-export const LOOPBACK_RATE_LIMIT = { rate: 2, capacity: 4 } as const
-
-/** A local endpoint (Ollama, LM Studio) needs no key, and the SDK sends no Authorization header when the key is empty; any other endpoint without a key must not be asked (Codex on #6) */
-function isLoopback(baseURL: string): boolean {
-  try {
-    const { hostname } = new URL(baseURL)
-    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]'
-  } catch {
-    return false
-  }
-}
+const LOOPBACK_RATE_LIMIT = { rate: 2, capacity: 4 } as const
 
 /**
  * The endpoint's identity: origin + path. **The path cannot be dropped** — different paths on one domain may be
  * different gateway routes to different back ends (Codex on #54), and origin alone would make two routes share cache
  * entries. The trailing slash is normalised away, so `/v1` and `/v1/` are one identity; the query string and hash are
  * dropped (they choose no back end). Unparseable, the raw string is used — better than mixing endpoints into one.
- * **Never the API key** (hard rule 7)
+ * **Never the API key** (hard rule 5)
  */
 function endpointIdentity(baseURL: string): string {
   try {
@@ -48,7 +39,7 @@ export function createOpenAICompatProvider(
   config: OpenAICompatConfig,
   deps: { model?: LanguageModel; prompts?: PromptsConfig } = {},
 ): TranslationProvider {
-  const hasKey = () => config.apiKey.trim().length > 0 || isLoopback(config.baseURL)
+  const hasKey = () => serviceRuns(config)
   // The thinking switch changes the request only where an endpoint has an adapter (thinking.ts); where it sends
   // nothing, on and off are the same request and the same identity
   const thinks = config.thinking === 'enabled' && Object.keys(thinkingBodyFields(config.baseURL, 'enabled')).length > 0

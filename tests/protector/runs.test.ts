@@ -20,7 +20,7 @@ describe('the runs path', () => {
     expect(layout.items).toEqual([{ kind: 'void', id: 1 }, { kind: 'raw', text: ' ' }, { kind: 'void', id: 2 }])
   })
 
-  it('a void the page replaced while the runs were out: joining refuses as `stale`, the same gate as rehydrate (INVENTORY T6)', () => {
+  it('a void the page replaced while the runs were out: joining refuses as `stale`, the same gate as rehydrate', () => {
     const p = para()
     const b = serialize(p)
     const layout = splitRuns(b)

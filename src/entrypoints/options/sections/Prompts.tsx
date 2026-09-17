@@ -26,7 +26,7 @@ export function Prompts({ data }: { data: OptionsData }) {
   /**
    * The draft hold of the writes themselves (ui/drafts.ts), taken the moment a write starts and kept until the latest
    * text has landed: a refused write leaves the text unsaved, and a reload asked for elsewhere in the gap before
-   * React renders the refusal would otherwise find no draft (the local review of S1, ninth pass)
+   * React renders the refusal would otherwise find no draft (local review)
    */
   const writing = useRef<(() => void) | null>(null)
   /** The entries of the newest write issued: the hold ends when that one has landed, not when an older one has */
@@ -34,7 +34,7 @@ export function Prompts({ data }: { data: OptionsData }) {
   useEffect(() => () => { writing.current?.(); writing.current = null }, [])
   // The text follows the stored glossary: the first read, and a change saved elsewhere (Codex on #185) — never the
   // reader's own typing coming back to them. What this box wrote is not news when it lands; while a write is still
-  // out, whatever the store says is older than the text (the local review of S1, seventh pass: the earlier version
+  // out, whatever the store says is older than the text (local review: the earlier version
   // took every difference for a change made elsewhere and put back, mid-word, the letter the reader had just typed).
   // A draft that does not parse or fit yet is the reader's to finish; the entries it saves later are their later word
   useEffect(() => {

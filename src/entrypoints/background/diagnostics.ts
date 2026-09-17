@@ -25,7 +25,7 @@ export interface Diagnostics {
   export(env: Omit<DiagnosticsExport, 'entries' | 'exportedAt'>): DiagnosticsExport
 }
 
-export const DIAGNOSTICS_LIMIT = 500
+const DIAGNOSTICS_LIMIT = 500
 
 export function createDiagnostics(deps: DiagnosticsDeps): Diagnostics {
   const now = deps.now ?? Date.now

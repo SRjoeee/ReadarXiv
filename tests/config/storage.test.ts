@@ -6,7 +6,7 @@ import { CONFIG_VERSION, DEFAULT_CONFIG, GLOSSARY_LIMITS, configSchema, normaliz
 import { serviceSchema } from '@/config/services'
 import { configItem, getConfig, setConfig } from '@/config/storage'
 
-/** A reader-added service, the shape v12 stores (spec §2.1) */
+/** A reader-added service, the shape v12 stores */
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
 
 describe('config storage', () => {
@@ -478,6 +478,74 @@ describe('provider selection', () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, image: { enabled: true, modes: ['split' as never] } })).rejects.toThrow()
     await setConfig({ ...DEFAULT_CONFIG, image: { enabled: true, modes: [] } })
     expect((await getConfig()).image.modes).toEqual([])
+  })
+
+  // DESIGN §9 asks for a test from every previous version's stored shape. v8, v9 and v12 were only ever passed through
+  // by the tests that start lower; each starts here from the shape that version really stored
+  it('a v8 configuration climbs to the latest: the style gains its three parameters with the appearance unchanged, the key and the modes as they were', async () => {
+    const v8 = {
+      version: 8, provider: 'openai-compat',
+      openaiCompat: { baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-keep', model: 'x/y', thinking: 'disabled' },
+      targetLanguage: 'jpn', mode: 'stack', prompts: { promptId: 'default', patterns: [] },
+      preload: { margin: 1000, threshold: 0 }, fallback: { enabled: false }, glossary: [{ term: 'weights', translation: '权重' }],
+      style: { preset: 'none', customCss: '' }, image: { modes: ['side'] },
+    }
+    await fakeBrowser.storage.local.set({ config: v8, config$: { v: 8 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const c = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(c.version).toBe(CONFIG_VERSION)
+    expect(c.services).toHaveLength(1)
+    expect(c.services[0]).toMatchObject({ apiKey: 'sk-keep', model: 'x/y', baseURL: 'https://openrouter.ai/api/v1' })
+    expect(c.provider).toBe(c.services[0]?.id)
+    expect([c.targetLanguage, c.mode, c.fallback.enabled]).toEqual(['jpn', 'stack', false])
+    expect(c.glossary).toEqual([{ term: 'weights', translation: '权重' }])
+    expect(c.image).toEqual({ enabled: true, modes: ['side'] })
+    // `none` was “as the original”: the profile of that name, untouched
+    expect(c.appearance.activeStyle).toBe('follow')
+    expect(c.appearance.styles.find(p => p.id === 'follow')).toEqual(DEFAULT_CONFIG.appearance.styles.find(p => p.id === 'follow'))
+    expect([c.uiLanguage, c.reading.sentenceHighlight]).toEqual(['auto', true])
+  })
+
+  it('a v9 configuration climbs to the latest: a free engine chosen and the endpoint never touched — no service is invented, the choice stays', async () => {
+    const v9 = {
+      version: 9, provider: 'google-web',
+      openaiCompat: { baseURL: 'https://openrouter.ai/api/v1', apiKey: '', model: 'deepseek/deepseek-v4-flash', thinking: 'disabled' },
+      targetLanguage: 'cmn', mode: 'side', prompts: { promptId: 'default', patterns: [] },
+      preload: { margin: 1000, threshold: 0 }, fallback: { enabled: true }, glossary: [],
+      style: { preset: 'none', customCss: '', color: '', opacity: 1, accent: '' }, image: { modes: [] },
+    }
+    await fakeBrowser.storage.local.set({ config: v9, config$: { v: 9 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const c = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(c.version).toBe(CONFIG_VERSION)
+    expect(c.provider).toBe('google-web')
+    expect(c.services).toEqual([])
+    // Every mode unticked was “off”: the switch says so, the list stays what the reader left
+    expect(c.image).toEqual({ enabled: false, modes: [] })
+  })
+
+  it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a preload margin under one screen becoming one screen', async () => {
+    const v12 = {
+      ...DEFAULT_CONFIG, version: 12, provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-keep' }],
+      preload: { margin: 450, threshold: 0 },
+      appearance: { ...DEFAULT_CONFIG.appearance, activeStyle: 'green' },
+    } as Record<string, unknown>
+    delete v12.uiLanguage
+    await fakeBrowser.storage.local.set({ config: v12, config$: { v: 12 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const c = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(c.version).toBe(CONFIG_VERSION)
+    expect(c.uiLanguage).toBe('auto')
+    expect(c.services).toEqual([{ ...SVC, apiKey: 'sk-keep' }])
+    expect(c.provider).toBe(SVC.id)
+    expect(c.appearance.activeStyle).toBe('green')
+    expect(c.preload).toEqual({ margin: 900, threshold: 0 })
   })
 
   it('v10 to v11: the image switch is derived from the mode list, on when any mode was ticked, off when none', async () => {

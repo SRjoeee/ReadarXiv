@@ -1,4 +1,4 @@
-// Probe for INVENTORY §8.8: the extension on a Chrome between the manifest's floor (131, anchor positioning) and the
+// Probe for the manifest's floor (DESIGN §1): the extension on a Chrome between the manifest's floor (131, anchor positioning) and the
 // built-in translator's arrival (138). Expected: `Translator` absent, the Chrome card on the settings page says it is
 // unavailable with no download button, and nothing else complains. Run 2026-09-17 on Chrome for Testing 137.0.7151.119
 // (`npx @puppeteer/browsers install chrome@137`). Usage: node tests/e2e/probes/chrome-floor.mjs <chrome binary>

@@ -37,7 +37,7 @@ export const IDENTITY_ATTR = 'data-axt-identity'
  * translated only, so the original and the half clone would both show (Codex on #30)
  */
 export const PARTIAL_ATTR = 'data-axt-partial'
-/** The mark of the injected <style>; restore removes it whole by this. Once `data-axt`, which broke hard rule 5's `data-axt-` prefix (Codex on #3) */
+/** The mark of the injected <style>; restore removes it whole by this. Once `data-axt`, which broke hard rule 2's `data-axt-` prefix (Codex on #3) */
 export const STYLE_ATTR = 'data-axt-sheet'
 /** The active style profile's underline on <html> (§7.5), absent when it has none */
 export const UNDERLINE_ATTR = 'data-axt-underline'

@@ -15,7 +15,7 @@ export class PermissionError extends Error {
 }
 
 
-export function originPattern(url: string): string | null {
+function originPattern(url: string): string | null {
   try {
     return `${new URL(url).origin}/*`
   } catch {

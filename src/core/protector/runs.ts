@@ -76,7 +76,7 @@ export function splitRuns(block: ProtectedBlock): RunLayout {
 }
 
 export function joinRuns(translatedRuns: string[], layout: RunLayout, block: ProtectedBlock, doc: Document): DocumentFragment {
-  // The same gate as rehydrate's (INVENTORY T6): the voids are clones of the live slots, and a slot the page swapped
+  // The same gate as rehydrate's: the voids are clones of the live slots, and a slot the page swapped
   // while the runs were out must not be put back as it was
   const stale = staleSlot(block)
   if (stale) throw new PlaceholderIntegrityError('stale', stale)

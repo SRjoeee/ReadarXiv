@@ -38,7 +38,7 @@ describe('rehydrate', () => {
     expect(htmlOf(rehydrate('&lt;b&gt; &amp; &quot;c&quot; &#39;d&#39; &#65;&#x42;&nbsp;e', b, document))).toBe('&lt;b&gt; &amp; "c" \'d\' AB&nbsp;e')
   })
 
-  it('a node replaced after serialisation: rehydration refuses as `stale` rather than putting back the copy captured then (the audit\'s A03, INVENTORY T6)', () => {
+  it('a node replaced after serialisation: rehydration refuses as `stale` rather than putting back the copy captured then', () => {
     // The slots record **node references**; a page that swaps the formula while the request is in flight must not have
     // the translation show x where the page now shows y. arXiv's own JS does not touch the body (DESIGN §7.2), so
     // nothing trips this today; the pipeline marks the block failed and a retry serialises it afresh

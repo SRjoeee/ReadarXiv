@@ -3,8 +3,8 @@
 // hot-update setters (the porting policy: only what is called stays), the batch limits are the provider's to set.
 import { z } from 'zod'
 
-export const MIN_TRANSLATE_RATE = 0.01
-export const MIN_TRANSLATE_CAPACITY = 1
+const MIN_TRANSLATE_RATE = 0.01
+const MIN_TRANSLATE_CAPACITY = 1
 
 export const requestQueueConfigSchema = z.object({
   capacity: z.number().gte(MIN_TRANSLATE_CAPACITY),
