@@ -49,6 +49,9 @@ export function createOpenAICompatProvider(
   deps: { model?: LanguageModel; prompts?: PromptsConfig } = {},
 ): TranslationProvider {
   const hasKey = () => config.apiKey.trim().length > 0 || isLoopback(config.baseURL)
+  // The thinking switch changes the request only where an endpoint has an adapter (thinking.ts); where it sends
+  // nothing, on and off are the same request and the same identity
+  const thinks = config.thinking === 'enabled' && Object.keys(thinkingBodyFields(config.baseURL, 'enabled')).length > 0
   return {
     id: config.id ?? 'openai-compat',
     kind: 'llm',
@@ -60,8 +63,11 @@ export function createOpenAICompatProvider(
     // A local endpoint gets a lower rate: Ollama runs 4 in parallel by default, the rest queue on the server, hit our timeout and get retried — idle churn
     ...(isLoopback(config.baseURL) ? { rateLimit: LOOPBACK_RATE_LIMIT } : {}),
     promptKey: promptKey(deps.prompts),
-    // The endpoint enters the cache identity: a model of the same name on different endpoints is a different thing (issue #45). Origin only, with neither path nor key
-    cacheId: `openai-compat:${endpointIdentity(config.baseURL)}`,
+    // The endpoint enters the cache identity: a model of the same name on different endpoints is a different thing
+    // (issue #45) — origin and path, never the key. So does a thinking switch that is on and sent: a reasoning model's
+    // translation is another output, and without it the switch would show nothing for the entry's 30 days (hard rule
+    // 4). Off keeps the identity it always had, so no stored entry changes meaning and no version is bumped
+    cacheId: `openai-compat:${endpointIdentity(config.baseURL)}${thinks ? '|thinking' : ''}`,
     async isAvailable() {
       return hasKey()
     },

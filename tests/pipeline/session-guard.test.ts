@@ -124,6 +124,19 @@ describe('the cache identity includes the endpoint (issue #45, experiment 3)', (
     expect(await keyOf(a)).toBe(await keyOf(b))
   })
 
+  it('a thinking switch that is on and sent is another identity; off, or on an endpoint that is sent nothing, is the identity it always was', async () => {
+    const at = (baseURL: string, thinking?: 'enabled' | 'disabled') =>
+      createOpenAICompatProvider({ baseURL, apiKey: 'dummy', model: 'same-model', ...(thinking ? { thinking } : {}) })
+    // OpenRouter has an adapter (providers/thinking.ts): the two requests differ, and so do the entries
+    const off = at('https://openrouter.ai/api/v1', 'disabled')
+    const on = at('https://openrouter.ai/api/v1', 'enabled')
+    expect(await keyOf(on)).not.toBe(await keyOf(off))
+    expect(off.cacheId).toBe('openai-compat:https://openrouter.ai/api/v1')
+    expect(await keyOf(at('https://openrouter.ai/api/v1'))).toBe(await keyOf(off))
+    // An endpoint without one is sent no field either way: one request, one identity
+    expect(await keyOf(at('https://one.example/v1', 'enabled'))).toBe(await keyOf(at('https://one.example/v1', 'disabled')))
+  })
+
   it('the cache identity holds no API key (hard rule 7)', () => {
     const provider = createOpenAICompatProvider({ baseURL: 'https://one.example/v1', apiKey: 'sk-secret-value', model: 'm' })
     expect(provider.cacheId).not.toContain('sk-secret-value')
