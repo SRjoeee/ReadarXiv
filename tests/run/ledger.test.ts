@@ -36,6 +36,24 @@ describe('createRunLedger', () => {
     spy.mockRestore()
   })
 
+  it('release hands every waiting target to the scheduler at once; asked before observe it is honoured as the scheduler is made; nothing once halted', () => {
+    const [a, b, c] = three()
+    const trigger = vi.fn()
+    const spy = vi.spyOn(lazy, 'createLazyScheduler').mockReturnValue({ trigger, claim: vi.fn(), waiting: () => 0, disconnect: vi.fn() })
+    const ledger = createRunLedger([a, b, c], { preload: lazy.DEFAULT_PRELOAD, onEnter: () => undefined })
+    // Before the scheduler exists: remembered, nothing handed over yet
+    expect(ledger.release()).toBe(0)
+    ledger.observe()
+    expect(trigger).toHaveBeenCalledWith([a, b, c])
+    // Later, with one requested already: only the waiting ones
+    ledger.request([a])
+    expect(ledger.release()).toBe(2)
+    expect(trigger).toHaveBeenLastCalledWith([b, c])
+    ledger.stop()
+    expect(ledger.release()).toBe(0)
+    spy.mockRestore()
+  })
+
   it('a permanent error is recorded once, stops the scheduler and tells the run; nothing is taken afterwards', () => {
     const [a, b] = three()
     const disconnect = vi.fn()
