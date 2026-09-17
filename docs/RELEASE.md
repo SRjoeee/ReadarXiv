@@ -22,7 +22,7 @@ The release commit is made **on the branch, before the merge**, so that the tree
 
 ## Before the first release — open items
 
-- The README's screenshots under `docs/images/` are not in the repository (the owner's to capture); the two false claims (weight, Microsoft-only alignment) were corrected in #217, in wording the owner may replace.
+- The README: the owner's `docs/readme-v1` is merged with its screenshots; the statements were checked against the code on 2026-09-17 (weight, the service cap, what an LLM service receives, the pipeline diagram, the documents it points at, the status).
 - `e2e:image`'s nondeterministic check was a scheduler defect, fixed in #219.
 - The coverage gaps of INVENTORY §4.5 are known and accepted for 1.0 unless one of them turns into a reader-visible fault.
 

@@ -14,7 +14,7 @@
 
 </div>
 
-![左右对照模式下的论文，左栏原文、右栏译文](docs/images/hero.png)
+https://github.com/user-attachments/assets/ea7ee16c-feb6-471b-9321-e3bcf0fa3f03
 
 Read arXiv 是一款专为 arXiv HTML 页面打造的阅读翻译扩展。
 
@@ -42,17 +42,18 @@ Read arXiv 是一款专为 arXiv HTML 页面打造的阅读翻译扩展。
 三种读法随时切换，也随时切回原文。
 
 **逐句对齐。** 停在任意一句上，另一侧对应的那句同时亮起，不必再在长段落里一句一句数
-「这句译文对着哪一句原文」。微软翻译（默认）、Google 翻译和各 LLM 服务下都可用。
+「这句译文对着哪一句原文」。所有翻译服务都支持；配对来自翻译过程本身，不靠猜——
+万一某一句拿不到配对，那一句就不亮，不会亮错。
 
 ![悬停一句，两侧同时出现底色](docs/images/hover.gif)
 
 仅译文模式下没有并排的原文，这时停在一句译文上，原文会自己过来——页边距放得下就放在页边距，
-否则贴在这一行下方。
-
-![仅译文模式下，页边距里显示某句的原文](docs/images/only-peek.png)
+否则贴在这一行下方，就像上面第三张图里那样。
 
 **论文照常能用。** 公式仍然是公式，引用仍然点得动，表格、脚注与目录都还在作者放的位置。
 翻译一篇论文，不必以失去阅读它的能力为代价。
+
+![译文里带编号的行间公式与行内公式都完好](docs/images/formulas.png)
 
 **图里的文字也能翻。** SVG 图表里的标注与坐标轴、位图图片里的文字都能翻译，译文盖在原处；
 把鼠标移上去就能看回底下的原文。位图图片目前仅支持 macOS。
@@ -82,10 +83,6 @@ Read arXiv 是一款专为 arXiv HTML 页面打造的阅读翻译扩展。
    也可以用工具栏按钮、右键菜单或 popup。摘要页上，arXiv 自己的 HTML 链接旁会多一条**双语版**入口，
    点它即可打开论文并直接开始翻译。
 
-不需要先配置什么：默认的翻译服务不用注册、也不用填 Key。在 popup 里选好语言，服务随时可以换。
-
-![翻译进行中的 popup](docs/images/popup.png)
-
 ### 翻译图片（macOS）
 
 位图图片里的文字，由一个跑在你自己机器上的小程序读出来。popup 的「图片翻译」下有一条一键安装命令；
@@ -95,12 +92,12 @@ Read arXiv 是一款专为 arXiv HTML 页面打造的阅读翻译扩展。
 
 | 服务 | API Key | 说明 |
 | --- | --- | --- |
-| 微软翻译 | 不需要 | 默认。自己上报句边界；其他服务通过标记取得。 |
+| 微软翻译 | 不需要 | 默认。 |
 | Google 翻译 | 不需要 | |
 | Chrome 内置翻译 | 不需要 | 在本机运行，语言包下载后可离线使用。 |
 | 任意 OpenAI 兼容接口 | 你自己的 | OpenRouter、DeepSeek、Ollama、LM Studio 等。提示词与术语表只对这类服务生效。 |
 
-服务可以加任意多个，各自保存自己的 Key 与模型。选定的服务在翻译途中失效时——Key 过期、额度用尽、连接中断——
+最多可以加二十个服务，各自保存自己的 Key 与模型。选定的服务在翻译途中失效时——Key 过期、额度用尽、连接中断——
 页面剩下的部分会改用免费服务继续，而不是停下，popup 会说明发生了什么。
 
 扩展自带提示词，可复制后编辑；术语表让同一个术语在整篇论文里译法一致。两者只对 AI 模型生效。
@@ -109,6 +106,7 @@ Read arXiv 是一款专为 arXiv HTML 页面打造的阅读翻译扩展。
 ## 文字送到哪里去
 
 段落会发给当前选中的服务，因此论文的文字会到达微软或 Google 的端点，或者你自己填的那个端点。
+AI 模型服务还会收到你选的提示词、与这段文字匹配的术语表条目，以及论文标题、摘要和所在章节标题作为上下文。
 有两种组合能让文字不离开你的机器：Chrome 内置翻译，以及 Ollama、LM Studio 这类本机运行的模型。
 
 选中的服务出问题时自动改用免费服务，这个开关默认是开的——也就是说一次失败可能把论文剩下的部分
@@ -125,10 +123,8 @@ arXiv 的 HTML 由 LaTeXML 生成，页面上每个元素都标注了自己是�
 ```mermaid
 flowchart LR
   A["extractor<br/>LaTeXML 规则"] --> B["scheduler<br/>屏幕上有什么"]
-  B --> C{"缓存命中？"}
-  C -->|命中| G
-  C -->|未命中| D["protector<br/>取出公式，<br/>换上占位符"]
-  D --> E["queue<br/>攒批、重试、降级"]
+  B --> D["protector<br/>取出公式，<br/>换上占位符"]
+  D --> E["background<br/>缓存、攒批、重试、降级"]
   E --> F["validate + rehydrate<br/>占位符换回原节点"]
   F --> G["renderer<br/>作为兄弟节点插入"]
 ```
@@ -136,30 +132,36 @@ flowchart LR
 「什么算一个可翻译块」的规则只写在一个模块里，别处没有。占位符引擎、三种渲染模式与恢复路径是本项目原创的部分；
 请求队列、重试策略、缓存与语言表移植自下面致谢的项目。
 
-[`docs/DESIGN.md`](docs/DESIGN.md) 是唯一事实来源——DOM 不变量见 §7.1，占位符协议见 §6，服务接口见 §8，
-图片翻译见 §15。设计所依据的实测数据记在各项决定旁边。
+[`docs/DESIGN.md`](docs/DESIGN.md) 是当前的设计——DOM 不变量见 §7.1，占位符协议见 §6，翻译服务见 §8，
+图片翻译见 §15——实测数据记在各项决定旁边；[`docs/adr/`](docs/adr/) 一个决定一个文件，
+[`docs/rebuild/CHARTER.md`](docs/rebuild/CHARTER.md) 写明 1.0 重建所遵守的约束。
 
 ## 状态
 
-尚未发布，仍在活跃开发中。翻译、三种模式、恢复原文、缓存、四种服务、悬停对照、图片翻译与设置页今天都可用；
-通往 1.0 与网页版阅读器的路线图见 [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155)。
+1.0 版（见 [`CHANGELOG.md`](CHANGELOG.md)）；Chrome 应用商店上架待办，目前从源码构建。
+上面写到的功能今天都可用——翻译、三种读法、显示原文、四种服务、逐句对齐、图片翻译与设置页。
+路线图见 [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155)。
 
-暂不考虑：其他论文站点、PDF、Firefox 与 Safari、以及 macOS 以外平台的图片翻译。
+暂不考虑：其他论文站点、PDF、Firefox 与 Safari、以及 macOS 以外平台的位图图片翻译。
 
 ## 开发
 
 ```sh
 pnpm dev                 # WXT 开发构建，自动加载到 Chrome
+pnpm typecheck           # tsc --noEmit；vitest 不查类型
+pnpm lint                # Biome，外加英文与平台边界两项检查
 pnpm test                # Vitest + happy-dom
-pnpm lint                # Biome
 pnpm build
 
 pnpm e2e                 # 真实 Chromium 加载扩展跑
 pnpm e2e:layout          # 左右对照模式的版式契约
 pnpm e2e:a11y            # A/B 无障碍审计，只报由扩展引入的差集
+pnpm e2e:image           # 经已安装的识别助手跑图片翻译
 pnpm e2e:placeholders    # 占位符在真实服务上的存活率
 pnpm fixtures:stats      # fixture 上的规则覆盖率
 ```
+
+前四条就是 CI 跑的，也是改动进审查之前必须过的。
 
 单元测试跑在 happy-dom 上；端到端测试驱动真实浏览器并加载扩展。仓库里存了若干篇真实 arXiv 论文作为
 fixture，规则与渲染都以它们为准，合起来覆盖行内公式密集、定理环境、算法框与代码块、大表格、脚注、
