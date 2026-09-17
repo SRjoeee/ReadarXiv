@@ -9,7 +9,9 @@ import { type Appearance, BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, DEFAULT_APPEARAN
 import { CONFIG_VERSION, DEFAULT_CONFIG, MODE_VALUES, configSchema, normalizeGlossary, type Config } from './schema'
 import { defaultServiceName, newServiceId } from './services'
 
-export const configItem = storage.defineItem<Config>('local:config', {
+const CONFIG_KEY = 'local:config'
+
+export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
   fallback: DEFAULT_CONFIG,
   version: CONFIG_VERSION,
   migrations: {
@@ -204,13 +206,17 @@ export async function setConfig(config: Config): Promise<void> {
 
 /**
  * The reader's explicit way out of an unreadable configuration (S-O-02): the stored value is replaced by the defaults.
- * The version marker is written by hand, and first: WXT's `setValue` writes it only for an item that was empty, so a
- * reset after `tooNew` would leave a v(N+1) marker beside a vN value and the real upgrade to N+1 would skip its
- * migration. Marker first, so that a write cut short between the two leaves the state the reader started from
+ * **The value and WXT's version marker go in one write**, the way WXT's own migration writes them (one
+ * `storage.local.set` of both keys; the marker lives at the item's key + `$`). `setValue` would not do: it writes the
+ * marker only for an item that was empty, so a reset after `tooNew` would leave a v(N+1) marker beside a vN value and
+ * the real upgrade to N+1 would skip its migration. Two writes would not do either: cut short between them, a vN
+ * marker beside the newer build's value would make that build migrate a value already migrated (Devin on #228)
  */
 export async function resetConfig(): Promise<void> {
-  await configItem.setMeta({ v: CONFIG_VERSION })
-  await configItem.setValue(DEFAULT_CONFIG)
+  await storage.setItems([
+    { key: CONFIG_KEY, value: DEFAULT_CONFIG },
+    { key: `${CONFIG_KEY}$`, value: { v: CONFIG_VERSION } },
+  ])
   fallbackReason = null
 }
 
