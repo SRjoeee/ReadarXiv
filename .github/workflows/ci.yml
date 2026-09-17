@@ -18,5 +18,32 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm test
       - run: pnpm build
+      # The fixtures the repository may not hold (tests/fixtures/README.md): restored from the cache, fetched from arXiv
+      # only when missing, and saved the moment they are verified — not at the end of the job, which a failing test
+      # would skip. Last but the tests, which alone read them, so arXiv being unreachable costs the tests only. One path
+      # per entry `for` tests, the same list in both steps — a test holds them together
+      - id: fixtures-cache
+        uses: actions/cache/restore@v4
+        with:
+          key: remote-fixtures-${{ hashFiles('tests/fixtures/remote.json') }}
+          path: |
+            tests/fixtures/arxiv/2312.17527.html
+            tests/fixtures/arxiv/2401.00418.html
+            tests/fixtures/arxiv/2401.00596.html
+            tests/fixtures/arxiv/2608.29808.html
+            tests/fixtures/arxiv/2609.00245.html
+            tests/fixtures/svg/2608.29808-bounter-case.svg
+      - run: pnpm fixtures:fetch --for tests
+      - if: steps.fixtures-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: remote-fixtures-${{ hashFiles('tests/fixtures/remote.json') }}
+          path: |
+            tests/fixtures/arxiv/2312.17527.html
+            tests/fixtures/arxiv/2401.00418.html
+            tests/fixtures/arxiv/2401.00596.html
+            tests/fixtures/arxiv/2608.29808.html
+            tests/fixtures/arxiv/2609.00245.html
+            tests/fixtures/svg/2608.29808-bounter-case.svg
+      - run: pnpm test

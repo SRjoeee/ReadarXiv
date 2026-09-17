@@ -61,6 +61,7 @@ pnpm e2e:a11y            # A/B axe audit: only differences the extension introdu
 pnpm e2e:local-endpoint  # an http endpoint without CORS headers can translate a whole page
 pnpm e2e:image           # image translation through the installed helper (SKIP without it)
 pnpm e2e:placeholders    # placeholder survival per sentence shape against a live engine (DESIGN §6.3)
+pnpm fixtures:fetch      # download and verify the fixtures the repository may not hold (tests/fixtures/README.md); pnpm test does it too
 pnpm fixtures:stats      # rule coverage audit over the fixtures
 pnpm helper:build        # Swift helper; pnpm helper:smoke talks to the binary over Native Messaging frames
 pnpm zip                 # the store archive; pnpm icons regenerates the icons

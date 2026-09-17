@@ -55,9 +55,10 @@ tar -xzf "$tmp/src.tgz" -C "$tmp"
 # `ArxivTranslate-*`, and the one-click install broke whole). The tarball has a single top-level directory; take it
 src="$(find "$tmp" -maxdepth 1 -mindepth 1 -type d | head -1)"
 [ -n "$src" ] || { echo "No source directory found after unpacking" >&2; exit 1; }
+# Only what the build needs. `Tests` is removed and not copied: it holds the smoke test's images, which the package
+# does not build — and earlier versions of this script put a paper's figure on every reader's machine with it
 rm -rf "$DIR/Sources" "$DIR/Tests"
 cp -R "$src/helper/Sources" "$src/helper/Package.swift" "$src/helper/LICENSE-macos-vision-ocr.txt" "$src/helper/register.sh" "$DIR/"
-[ -d "$src/helper/Tests" ] && cp -R "$src/helper/Tests" "$DIR/"
 
 echo "Building (about a minute the first time) …"
 (cd "$DIR" && swift build -c release >/dev/null)
