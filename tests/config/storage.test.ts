@@ -76,10 +76,14 @@ describe('config storage', () => {
         vi.resetModules()
         const fresh = await import('@/config/storage')
         await fresh.getConfig()
+        const writes = vi.spyOn(fakeBrowser.storage.local, 'set')
         await fresh.resetConfig()
-        // The marker too: left at N+1 beside a vN value, the real upgrade to N+1 would skip its migration
+        // The marker too: left at N+1 beside a vN value, the real upgrade to N+1 would skip its migration. And in the
+        // **same write** as the value: cut short between two, the newer build would migrate its own value again
+        expect(writes.mock.calls.map(([items]) => Object.keys(items as object).sort())).toEqual([['config', 'config$']])
         expect(await fakeBrowser.storage.local.get(['config', 'config$'])).toEqual({ config: DEFAULT_CONFIG, config$: { v: CONFIG_VERSION } })
         expect(fresh.configFallbackReason()).toBeNull()
+        writes.mockRestore()
         await fresh.setConfig({ ...DEFAULT_CONFIG, mode: 'stack' })
         expect((await fresh.getConfig()).mode).toBe('stack')
       })
