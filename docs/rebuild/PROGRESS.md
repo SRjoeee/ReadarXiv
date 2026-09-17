@@ -18,7 +18,13 @@ Kept current: an item is struck through with the PR that closed it, and a checkp
 5. ~~**Must-look before 1.0**~~ — done, #219: `e2e:image`'s nondeterminism was a scheduler defect, fixed with its test; the §4.5 coverage gaps got their component tests (the appearance editors and grid, the service drawer, the prompt manager's import / export / insertion, the menu's placement). Accepted as is: `content/index.ts` is a 70-line adapter over the tested session (ADR-0004); the image pipeline's end-to-end coverage is `e2e:image`.
 6. **Candidates, not commitments**: coalescing the cache's access-time writes (INVENTORY §8.4).
 7. **Non-goals for 1.0, recorded**: #103 (a configurable free-engine chain — no benefit found, 2026-09-17); a `@readarxiv/core` package (not now, ADR-0008); DeepLX and Edge engines.
+9. ~~**References without a highlight under Google** (the owner, 2026-09-17)~~ — done, `rebuild/ref-highlight`: reference units were never cut and, being uncut, never aligned; they are aligned whole now, as single-sentence blocks are.
 8. ~~**The hover highlight's lag** (the owner's report of 2026-09-17, seen on 2609.00080v1)~~ — done, #221 (ADR-0011): not the highlight's cost but the sheet's `:has()`, which made every DOM insertion recalculate the whole document; the sheets now read marks the renderer writes.
+
+## 2026-09-17 — references highlight under every engine: a reference unit is aligned whole (the owner's report)
+
+- Branch `rebuild/ref-highlight`. The owner saw no highlight on reference entries under Google. Measured first (`tests/e2e/probes/ref-highlight.mjs`, a real Chromium, 2410.00260): Google 0 of 13 fragments lit, Microsoft 13 of 13; paragraphs and the title lit under both. The cause: `cutsOf` returned *undefined* for `bibblock` / `bibitem` — the splitter has no precision on journal abbreviations, so the units were never cut, and being uncut they were never aligned either, while Microsoft's own `sentLen` covered them. Whole-to-whole is the alignment the design already gives a single-sentence block; a reference fragment (authors, title, venue) gets it now: `cutsOf` returns `[]` for the two units. One line in `pipeline/cuts.ts`; the cut tests updated; a new e2e check points at a reference fragment under Google.
+- Not done, proposed to the owner: a block-level fallback for every pair without an alignment (the `runs` path, an LLM that mangled a marker), pairing by `data-axt-for` when no sentence map exists.
 
 ## 2026-09-17 — settings and popup wording: the preload range's stops, the split label (the owner's three items)
 

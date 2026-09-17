@@ -31,7 +31,9 @@ describe('which blocks get sentence-cut (§8.6)', () => {
     const all = segmentsOf()
     const bib = all.filter(s => s.unit === 'bibblock' || s.unit === 'bibitem')
     expect(bib.length).toBeGreaterThan(20)
-    expect(bib.filter(s => cutsOf(s.segment, 'tags') !== undefined)).toEqual([])
+    // Never cut — the splitter has no precision guarantee on journal abbreviations — but aligned whole, so a fragment
+    // highlights with its translation under every engine (the owner's report of 2026-09-17: none did under Google)
+    expect(bib.filter(s => cutsOf(s.segment, 'tags')?.length !== 0)).toEqual([])
     // While the body text does have what should be cut
     expect(all.filter(s => s.unit === 'para' || s.unit === 'p').some(s => cutsOf(s.segment, 'tags') !== undefined)).toBe(true)
   })
@@ -43,7 +45,8 @@ describe('which blocks get sentence-cut (§8.6)', () => {
     const single = all.filter(s => s.unit !== 'bibblock' && s.unit !== 'bibitem' && cutsOf(s.segment, 'tags')?.length === 0)
     expect(single.length).toBeGreaterThan(20)
     const bib = all.find(s => s.unit === 'bibblock' || s.unit === 'bibitem')!
-    expect(cutsOf(bib.segment, 'tags')).toBeUndefined()
+    expect(cutsOf(bib.segment, 'tags')).toEqual([])
+    expect(cutsOf(bib.segment, 'markers')).toBeUndefined()
   })
 
   it('a citation is content, not an annotation — it can be the subject of its sentence', () => {

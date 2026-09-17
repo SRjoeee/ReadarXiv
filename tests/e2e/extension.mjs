@@ -470,6 +470,33 @@ check('the settings page: after deleting the custom prompt the default is chosen
     !!last && last.requested > first.requested && last.done === last.requested && last.failed === 0
     && dom.pendingNodes === 0 && orphans.length === 0,
     `${last?.text ?? '(no idle after scroll)'}; finished blocks without a translation ${JSON.stringify(orphans)}; DOM ${JSON.stringify(dom)}`)
+
+  // The hover highlight on a reference fragment, on this fully translated google-web page (the highlight itself is proved under Microsoft below):
+  // Google reports no boundaries, so the fragment is aligned whole (pipeline/cuts.ts); before 2026-09-17 it
+  // was left unaligned and never lit (the owner's report; measured 0 of 13 fragments under Google, 13 of 13 under Microsoft)
+  const reference = await page.evaluate(async () => {
+    document.querySelector('.ltx_bibliography')?.scrollIntoView()
+    await new Promise(r => setTimeout(r, 500))
+    const fragments = [...document.querySelectorAll('.ltx_bibblock.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)')]
+    for (const t of fragments) {
+      const walk = document.createTreeWalker(t, NodeFilter.SHOW_TEXT)
+      let point = null
+      for (let n = walk.nextNode(); n && !point; n = walk.nextNode()) for (let i = 0; i < n.data.length && !point; i++) {
+        if (/\s/.test(n.data[i])) continue
+        const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + 1); const b = r.getBoundingClientRect()
+        if (b.width > 0 && b.height > 0 && b.top > 0 && b.bottom < innerHeight) point = { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+      }
+      if (!point) continue
+      document.dispatchEvent(new PointerEvent('pointermove', { clientX: point.x, clientY: point.y, bubbles: true }))
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+      const bands = [...document.querySelectorAll('.axt-hl > div')]
+      return { fragments: fragments.length, source: bands.filter(b => b.getAttribute('data-axt-hl-side') === 'source').length, target: bands.filter(b => b.getAttribute('data-axt-hl-side') === 'target').length, text: (t.textContent ?? '').slice(0, 40) }
+    }
+    return { fragments: fragments.length, reason: 'no reference fragment with a glyph on screen' }
+  })
+  check('the hover highlight reaches a reference fragment under an engine that reports no boundaries: aligned whole (the owner\'s 2026-09-17 report)',
+    reference.source > 0 && reference.target > 0,
+    reference.reason ?? `${reference.fragments} translated fragments; on “${reference.text}” source ${reference.source} bands, translation ${reference.target}`)
   const peak = peakPerSecond(requests)
   // Batching (§8.3): the whole paper's passages have to be gathered into big requests. Before 2026-09-06 only the LLM batched; google-web made one request per call,
   // measured 213 blocks sending 65 requests, 4.2 passages per request on average; fixed, 190 blocks take only 21, 11.2 passages on average
