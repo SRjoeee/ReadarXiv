@@ -64,7 +64,7 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
     },
     // v13: the interface's own language. `auto` is what every existing reader had in effect
     13: (v12: Omit<Config, 'version' | 'uiLanguage'> & { version: 12 }) => ({ ...v12, version: 13 as const, uiLanguage: 'auto' }),
-    // v13 -> v14: nothing new to the reader. `reading` had come in by a schema default alone (db38c5d), so a value
+    // v13 -> v14: nothing new to the reader. `reading` had come in by a schema default alone (7c02d83), so a value
     // migrated to 13 and never saved since has none; DESIGN §9 ends evolution by default — the version says what is
     // stored — and v14 writes the field every such reader had in effect. Only an **absent** field: `null` or any other
     // wrong value is a hand edit and fails validation, named, as before. The value itself may be anything a hand edit
