@@ -278,31 +278,57 @@ export interface BlockPair { source: Element; target: Element }
 
 /** One object per translation node, so the peek can tell "the same pair again" from "another" by identity */
 const pairs = new WeakMap<Element, BlockPair>()
+/** A split copy's translation node → the block it translates: the copy's own marks were stripped with its ids */
+const copyPairs = new WeakMap<Element, Element>()
+/** A block → the copies of its translation on the page, for the source side to pick the one on screen */
+const copiesOf = new WeakMap<Element, WeakRef<Element>[]>()
 
 /** The value of an attribute selector: block ids carry dots and colons, never quotes, but a quote must not break the selector */
 const quoted = (value: string) => `"${value.replace(/["\\]/g, '\\$&')}"`
 
+const sourceOf = (translation: Element): Element | null => {
+  const id = translation.getAttribute(FOR_ATTR)
+  return id === null ? null : translation.ownerDocument.querySelector(`[${ID_ATTR}=${quoted(id)}]`)
+}
+
+/**
+ * Registers a split copy's translation node as the copy of its block's translation (§7.7): `splitFigures` strips
+ * every mark off the clone, so the copy on screen could not be paired by the marks. Same idea as `mirrorSentences`,
+ * at the block level; called with the original translation node and its counterpart in the copy
+ */
+export function mirrorBlock(target: Element, copy: Element): void {
+  const source = sourceOf(target)
+  if (!source) return
+  copyPairs.set(copy, source)
+  copiesOf.set(source, [...(copiesOf.get(source) ?? []).filter(ref => ref.deref()?.isConnected), new WeakRef(copy)])
+}
+
 /**
  * The block pair a node sits in, for a node no sentence map covers: the nearest real translation
- * (`data-axt-for`) or marked original (`data-axt-id`) above it, and its counterpart by id. The pairing
- * of a block with its own translation is ours by construction — only the sentence pairing needs the
- * engine — so where the engine reported no boundaries, or a marker did not survive, the hover
+ * (`data-axt-for`), split copy of one, or marked original (`data-axt-id`) above it, and its counterpart.
+ * The pairing of a block with its own translation is ours by construction — only the sentence pairing
+ * needs the engine — so where the engine reported no boundaries, or a marker did not survive, the hover
  * highlight paints the whole pair instead of nothing (§7.7). The nearest unit wins: a footnote block
- * inside a paragraph pairs as the footnote. A mirror, a skeleton, a failure widget or a split copy
- * is no translation and finds nothing on its own.
+ * inside a paragraph pairs as the footnote. A mirror, a skeleton, a failure widget or a split copy's
+ * root is no translation and finds nothing on its own. From the original's side the counterpart is the
+ * translation on screen: its own when rendered, else the copy side mode shows in its place (Devin on #226)
  */
 export function pairAt(node: Node): { pair: BlockPair; side: 'source' | 'target' } | undefined {
-  const el = node.nodeType === 1 ? (node as Element) : node.parentElement
-  const hit = el?.closest(`${REAL_TRANSLATION}[${FOR_ATTR}], [${ID_ATTR}]`)
-  if (!hit) return undefined
-  const doc = hit.ownerDocument
-  if (hit.hasAttribute(FOR_ATTR) && hit.classList.contains('axt-t')) {
-    const source = doc.querySelector(`[${ID_ATTR}=${quoted(hit.getAttribute(FOR_ATTR)!)}]`)
-    if (!source) return undefined
-    return { pair: remembered(source, hit), side: 'target' }
+  for (let el = node.nodeType === 1 ? (node as Element) : node.parentElement; el; el = el.parentElement) {
+    const copied = copyPairs.get(el)
+    if (copied) return { pair: remembered(copied, el), side: 'target' }
+    if (el.hasAttribute(FOR_ATTR) && el.matches(REAL_TRANSLATION)) {
+      const source = sourceOf(el)
+      return source ? { pair: remembered(source, el), side: 'target' } : undefined
+    }
+    if (el.hasAttribute(ID_ATTR)) {
+      const own = el.ownerDocument.querySelector(`${REAL_TRANSLATION}[${FOR_ATTR}=${quoted(el.getAttribute(ID_ATTR)!)}]`)
+      const copy = own && !rendered(own) ? (copiesOf.get(el) ?? []).map(ref => ref.deref()).find(c => c?.isConnected && rendered(c)) : undefined
+      const target = copy ?? own
+      return target ? { pair: remembered(el, target), side: 'source' } : undefined
+    }
   }
-  const target = doc.querySelector(`${REAL_TRANSLATION}[${FOR_ATTR}=${quoted(hit.getAttribute(ID_ATTR)!)}]`)
-  return target ? { pair: remembered(hit, target), side: 'source' } : undefined
+  return undefined
 }
 
 function remembered(source: Element, target: Element): BlockPair {

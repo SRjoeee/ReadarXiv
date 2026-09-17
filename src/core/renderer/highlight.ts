@@ -384,12 +384,19 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
     if (found) {
       const { map, side } = found
       const wire = wireOffsetAt(map[side].index, node, at)
-      const sentence = wire === undefined ? undefined : sentenceAt(map.pairs, side, wire)
-      // Between two sentences of a registered block there is nothing to pair: no fallback to the whole block here
+      // A node the map does not index is a nested unit of its own inside the registered block — a footnote that took
+      // the runs path, or lost its markers — and pairs on its own below (Devin on #226). A node the map does index but
+      // no sentence covers is the gap between two sentences: nothing to pair, and no fallback to the whole block
+      if (wire === undefined) return wholePair(node)
+      const sentence = sentenceAt(map.pairs, side, wire)
       if (!sentence) return undefined
       const ranges = (which: 'source' | 'target') => () => rangesOf(map[which].spans, sentence[which].from, sentence[which].to)
       return { root: map.source.root, index: sentence.index, side, registration: map, source: { root: map.source.root, ranges: ranges('source') }, target: { root: map.target.root, ranges: ranges('target') } }
     }
+    return wholePair(node)
+  }
+  /** The whole pair the node sits in, when it sits in one */
+  const wholePair = (node: Node): Resolved | undefined => {
     const paired = pairAt(node)
     if (!paired) return undefined
     const { pair, side } = paired

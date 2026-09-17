@@ -17,13 +17,13 @@ import { DOCUMENT_ROOT, FIGURE_MEDIA, SPLIT_ROOTS, isTableRoot, tableCells } fro
 import { ID_ATTR } from '@/core/extractor'
 import { AXT_ATTR_PREFIX, IMG_CLASS, T_CLASS } from '@/core/marks'
 import { hashText } from '@/shared/hash'
-import { ERROR_CLASS, FOR_ATTR, MIRROR_CLASS, PENDING_CLASS, SPLIT_ATTR, SPLIT_CLASS, SPLIT_FOR_ATTR, SPLIT_OF_ATTR } from './attrs'
+import { ERROR_CLASS, FOR_ATTR, MIRROR_CLASS, PENDING_CLASS, REAL_TRANSLATION, SPLIT_ATTR, SPLIT_CLASS, SPLIT_FOR_ATTR, SPLIT_OF_ATTR } from './attrs'
 import { REASON_ATTR, failureWidget } from './failed'
 import { markAnchor } from './image'
 import { dropMirror } from './mirror'
 import { markTranslatedCopies } from './notes'
 import { markTail } from './side-layout'
-import { mirrorSentences, sentenceSignatureOf } from './sentence-map'
+import { mirrorBlock, mirrorSentences, sentenceSignatureOf } from './sentence-map'
 
 
 // A figure is split as soon as it holds a **pair** — a translation, the ring waiting for one, the widget of a failed
@@ -277,6 +277,11 @@ export function splitFigures(root: Document | Element, options: SplitOptions = {
     for (const original of [fig, ...Array.from(fig.querySelectorAll('*'))]) {
       const copy = twins.get(original)
       if (copy?.nodeType === 1 && copy.isConnected) mirrorSentences(original, copy as Element, node => twins.get(node))
+    }
+    // The block level as well: a translation without sentence boundaries pairs whole, and on screen that is the copy (§7.7)
+    for (const translation of Array.from(fig.querySelectorAll(`${REAL_TRANSLATION}[${FOR_ATTR}]`))) {
+      const copy = twins.get(translation)
+      if (copy?.nodeType === 1 && copy.isConnected) mirrorBlock(translation, copy as Element)
     }
     made++
   }

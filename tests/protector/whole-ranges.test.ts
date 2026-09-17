@@ -20,6 +20,12 @@ describe('wholeRanges', () => {
     expect(ranges.map(r => r.toString())).toEqual(['Alpha note', ' omega.'])
   })
 
+  it('cuts around a footnote\'s margin box and keeps the mark inline, as the sentence ranges do (Devin on #226)', () => {
+    const doc = docOf('<p class="ltx_p" id="p">Result<span class="ltx_note ltx_role_footnote"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content" data-axt-id="n1">A note.</span></span></span> stands.</p>')
+    const ranges = wholeRanges(doc.getElementById('p')!)
+    expect(ranges.map(r => r.toString())).toEqual(['Result1', ' stands.'])
+  })
+
   it('an element with no text of its own gives no range; a skeleton or an overlay inside is skipped', () => {
     const doc = docOf('<figure id="f"><img src="a.png"><div class="axt-img" data-axt-for="g"><span>label</span></div></figure><p id="q"><span class="axt-t axt-pending" data-axt-for="q">…</span></p>')
     expect(wholeRanges(doc.getElementById('f')!)).toEqual([])

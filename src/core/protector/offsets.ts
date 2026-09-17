@@ -396,8 +396,8 @@ export function scanTokens(s: string, format: WireFormat): PositionedToken[] {
 
 /**
  * An element's own content as ranges, cut at every node we injected inside it — a nested block's
- * translation, a skeleton, a footnote copy — so that none of them is painted as if it were the
- * element's text. What the hover highlight paints for a block that has no sentence map (§7.7): a
+ * translation, a skeleton, a footnote copy — and at a footnote's margin box, so that none of them
+ * is painted as if it were the element's text. What the hover highlight paints for a block that has no sentence map (§7.7): a
  * translation and its original pair by construction, so the whole block is a safe unit wherever
  * the engine reported no sentence boundaries. One range per stretch of own content, in order.
  */
@@ -411,7 +411,9 @@ export function wholeRanges(el: Element): Range[] {
   }
   const walk = (node: Node) => {
     for (const child of Array.from(node.childNodes)) {
-      if (child.nodeType === 1 && isInjected(child as Element)) {
+      // Our own nodes, and a footnote's box (`.ltx_note_outer`, floated into the margin, a unit of its own): cut
+      // around, as `rangesOf` carves them out — the note's mark stays inline in the text (Devin on #226)
+      if (child.nodeType === 1 && (isInjected(child as Element) || (child as Element).matches(NOTE.outer))) {
         close()
         continue
       }
