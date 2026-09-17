@@ -108,6 +108,14 @@ describe('useOptionsData', () => {
     await hook.run(async () => { await hook.current().reset() })
     expect(hook.current().resetFailed).toBe(true)
     expect(hook.current().fallbackReason).toMatchObject({ kind: 'invalid' })
+    // Repaired without an event reaching this page, then a save here: the accepted save clears the line too
+    store.unreadable = null
+    await hook.run(async () => { await hook.current().patch(latest => ({ ...latest, targetLanguage: 'jpn' })) })
+    expect(hook.current().resetFailed).toBe(false)
+    store.unreadable = { kind: 'invalid', where: 'mode', message: 'x' }
+    store.resetRefused = true
+    await hook.run(async () => { await hook.current().reset() })
+    expect(hook.current().resetFailed).toBe(true)
     // Repaired elsewhere: the refused-reset line goes with the notice, and does not return with a later fallback
     store.unreadable = null
     store.resetRefused = false
@@ -118,7 +126,7 @@ describe('useOptionsData', () => {
     await hook.run(async () => { await hook.current().reset() })
     expect(hook.current().resetFailed).toBe(false)
     expect(hook.current().fallbackReason).toBeNull()
-    expect(store.log).toEqual(['reset refused', 'reset'])
+    expect(store.log).toEqual(['reset refused', 'set:jpn', 'reset refused', 'reset'])
     await hook.unmount()
   })
 
