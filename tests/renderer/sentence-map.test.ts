@@ -267,7 +267,7 @@ describe('sentence registry (#105)', () => {
   })
 
   it('registers no sentences without an alignment: a guessed pairing would light up the wrong sentence', () => {
-    // A reference, a block on the runs path, markers that came back damaged. The pair as a whole still highlights (`pairAt`, below)
+    // A block on the runs path, markers that came back damaged (a reference is aligned whole, not unaligned). The pair as a whole still highlights (`pairAt`, below)
     const { source, target, block, spans } = render('<p class="ltx_p">One. Two.</p>')
     registerSentences(source, target, block.offsets, spans, undefined)
     expect(sentenceMapAt(source.firstChild!)).toBeUndefined()

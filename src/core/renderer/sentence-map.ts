@@ -108,7 +108,7 @@ function remember(source: Element, target: Element): void {
 /**
  * Registers a translated block, if it has everything the highlight needs.
  *
- * A block without an alignment — a reference, a block on the runs path, one whose markers came back
+ * A block without an alignment — a block on the runs path, one whose markers came back
  * damaged (DESIGN §8.6) — registers no sentences: a guessed pairing would put the highlight on the
  * wrong sentence (`alignment.ts`). It is still a pair, and the highlight lights it as a whole
  * (`pairAt`, DESIGN §7.7).

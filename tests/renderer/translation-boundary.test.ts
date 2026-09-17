@@ -37,13 +37,20 @@ describe('the translation boundary', () => {
 
   it('every copy in the browser suites lists the same classes: a count of “real translations” that forgot one kind of copy counts copies', () => {
     const seen: string[] = []
-    for (const file of readdirSync(E2E).filter(f => f.endsWith('.mjs'))) {
-      const script = readFileSync(join(E2E, file), 'utf8')
+    // The suites and their probes; the dot-directories are build copies, not scripts
+    const scripts = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
+      entry.isDirectory() ? (entry.name.startsWith('.') ? [] : scripts(join(dir, entry.name))) : entry.name.endsWith('.mjs') ? [join(dir, entry.name)] : [])
+    const excluded = TRANSLATION_EXCLUDED_CLASSES.map(c => `.${c}`)
+    for (const path of scripts(E2E)) {
+      const file = path.slice(E2E.length + 1)
+      const script = readFileSync(path, 'utf8')
       // Chains (`:not(.a):not(.b)`) are not a way round the rule: the list is written once, as production writes it
       expect(script, `${file} chains :not() over our classes`).not.toMatch(/(?::not\(\.axt-[^)]*\)){2,}/)
       for (const m of script.matchAll(/:not\((\.axt-[^)]*)\)/g)) {
         const list = m[1]!
-        if (!list.includes('.axt-pending')) continue
+        // Any list naming one of the four is a boundary, and must be the whole one: `:not(.axt-mirror)` alone would count
+        // rings and widgets as translations. `:not(.axt-t)` — “not ours” — names none of them and is another question
+        if (!excluded.some(c => list.split(/,\s*/).includes(c))) continue
         seen.push(`${file}: ${list}`)
         expect(list, `${file} writes a different boundary`).toBe(canonical)
       }

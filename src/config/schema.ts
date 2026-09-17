@@ -45,7 +45,7 @@ export const configSchema = z.object({
   /** A built-in id or the id of one of `services` (since v12; DESIGN §8.5) */
   // The zod messages are diagnostics: the settings page's fallback notice shows the locale pack's sentence for the field (ui/strings.ts fallbackText)
   provider: z.string().refine(v => (BUILT_IN_SERVICES as readonly string[]).includes(v) || SERVICE_ID_RE.test(v), 'not a valid translation service'),
-  /** The reader's own services (v12); keys stay local (CLAUDE.md rule 7) */
+  /** The reader's own services (v12); keys stay local (CLAUDE.md hard rule 5) */
   services: z.array(serviceSchema).max(20),
   /** ISO 639-3 (since v4; languages.ts); an LLM gets the English name, Google a BCP-47 conversion */
   targetLanguage: langCodeSchema,

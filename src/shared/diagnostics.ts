@@ -49,7 +49,7 @@ export function normalizeEntries(stored: unknown): DiagnosticEntry[] {
 }
 
 /**
- * A key never enters the log (CLAUDE.md rule 7), and a line is not trusted to be free of one: an endpoint may echo a
+ * A key never enters the log (CLAUDE.md hard rule 5), and a line is not trusted to be free of one: an endpoint may echo a
  * request header in an error, a reader may paste a URL with a key into a service's base URL. The shapes: OpenAI-style
  * `sk-…`, Google's `AIza…`, a bearer token, a `key=` / `token=` query parameter
  */

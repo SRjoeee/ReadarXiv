@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { decodeReply, failure, isAxtMessage, isFailure, replyWith } from '@/shared/messages'
 
-// A handler's failure travels back as a typed reply and becomes the sender's rejection (S2 review, fifth pass):
+// A handler's failure travels back as a typed reply and becomes the sender's rejection (local review):
 // a request whose work failed must settle, not wait for the worker to die
 
 describe('failure replies', () => {

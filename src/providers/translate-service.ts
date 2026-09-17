@@ -292,7 +292,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
     // stored thunk without re-entering the batch queue, so a chain retired between two attempts must stop here.
     // Non-retryable, so the queue does not try a third time (DESIGN §8.5). The chain only, never the scopes: the items
     // carry the first subscriber's scope, and a deduplicated peer — another tab, an unscoped connection test, a late
-    // joiner during a retry backoff — is known to the queue alone, which drains by refcount (eighteenth pass)
+    // joiner during a retry backoff — is known to the queue alone, which drains by refcount
     if (deps.retired?.()) throw attachRequestErrorMeta(new TranslationCancelledError(items[0]?.scope), { isRetryable: false })
     const first = items[0]!
     try {
@@ -355,8 +355,8 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
     /**
      * What a request-queue task subscribes for this batch: the batch's scope union as flushed, minus the scopes
      * that died since. A batch retry reuses the meta of its first flush, and re-subscribing a dead scope keeps the
-     * task alive after its last live subscriber is drained — the endpoint is then called for nobody (the local
-     * review of DESIGN §8.5, nineteenth pass). `null`: every subscriber died, there is nothing to send for.
+     * task alive after its last live subscriber is drained — the endpoint is then called for nobody (local review).
+     * `null`: every subscriber died, there is nothing to send for.
      * `undefined` stays `undefined` — an unscoped member keeps the batch alive, as in the queues' refcount
      */
     const liveScopes = (meta: BatchExecutionMeta): readonly string[] | undefined | null => {
@@ -544,8 +544,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
         // The last word, after every batch has settled: the scope died or the chain was retired meanwhile, and
         // nothing of this call goes back — no cache write (a batch that finished before the drain would land in
         // the cache after "restore the page"; Codex on #33), no `partial` for the caller to render, no result
-        // from a task an unscoped subscriber kept alive through the drain (the local review of DESIGN §8.5,
-        // fifteenth pass)
+        // from a task an unscoped subscriber kept alive through the drain (local review)
         if (refused(scope)) return refusal()
         if (store && writes.length > 0) {
           await store.putMany(writes)

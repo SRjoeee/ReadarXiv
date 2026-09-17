@@ -31,7 +31,7 @@ export interface PageStatus {
    * was decided on, and the page refuses one from an earlier epoch — a decision that took a while (the toggle waits
    * for the chain's probes) must not undo what the reader did in between, a translate decided on an idle page that
    * was translated and restored meanwhile included (local review).
-   * Opaque: the document's own id and the count, so another document's epoch never matches (thirteenth pass)
+   * Opaque: the document's own id and the count, so another document's epoch never matches
    */
   epoch?: string
   /**
@@ -51,7 +51,7 @@ export interface AxtMessages {
    * by paragraph as each is requested again (cached ones at once).
    * `epoch` is the page's action epoch the command was decided on (`PageStatus.epoch`): the page refuses it once the
    * page has moved — the reader restored, restarted or translated meanwhile — so a decision that took a while (the
-   * toggle waits for the chain's probes) cannot undo what the reader did in between (sixth and twelfth passes)
+   * toggle waits for the chain's probes) cannot undo what the reader did in between
    */
   'axt:translate-page': { request: { mode?: Mode; restart?: boolean; epoch?: string }; response: StartResult }
   /** popup → content: stop and restore the original. `epoch` as above: a restore decided on an earlier epoch is `refused` */

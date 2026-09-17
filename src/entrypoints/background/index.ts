@@ -245,7 +245,7 @@ export default defineBackground(() => {
    */
   // Named, because it comes off while a grant takes effect (DESIGN §15.3): a tab whose title ticks — a clock, a chat
   // app's unread count — is an event every few seconds from a tab that is not ours, and each one resets the worker's
-  // idle timer, which would keep the stale worker alive for good (Codex, local review pass 2). The fresh worker
+  // idle timer, which would keep the stale worker alive for good (Codex, local review). The fresh worker
   // registers it again at start-up. Until then a tab that closes still drops its sessions (onRemoved); a tab that
   // navigates away is not noticed — the old session's queued batches run until they finish or this worker dies with
   // them, and the fresh worker starts with no sessions and learns them from the pages' next calls

@@ -125,8 +125,7 @@ describe('the English pack', () => {
     walk(LOCALES.en, 'en')
     expect(texts.length).toBeGreaterThan(200)
     const BUILT = /\bhelper\b|\bendpoints?\b|\bproviders?\b|\bfallback chain\b|\bwire format\b|\bbackground\b|\bbatch(es)?\b|\bengines?\b|\bsessions?\b|\bcache key\b|\bcontent script\b|\bservice worker\b/i
-    // The reading section's “Background highlight” is the reader's word for a coloured band, not the extension's background
-    const found = texts.filter(t => BUILT.test(t.text) && !/highlight/i.test(t.text)).map(t => `${t.path}: ${t.text}`)
+    const found = texts.filter(t => BUILT.test(t.text)).map(t => `${t.path}: ${t.text}`)
     expect(found).toEqual([])
   })
 })

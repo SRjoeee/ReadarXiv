@@ -19,8 +19,8 @@ export function Prompts({ data }: { data: OptionsData }) {
   /** Writes of this box not seen landing yet. While one is out the store is behind the reader, not ahead of them */
   const pending = useRef(0)
   /**
-   * The last write was refused: the text is a draft the store does not have, and stays until a later write lands
-   * (eighth pass). State, not a ref: the refusal arrives after the render that read it (Codex on #185)
+   * The last write was refused: the text is a draft the store does not have, and stays until a later write lands.
+   * State, not a ref: the refusal arrives after the render that read it (Codex on #185)
    */
   const [failed, setFailed] = useState(false)
   /**

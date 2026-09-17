@@ -47,7 +47,7 @@ export function Reading({ data }: { data: OptionsData }) {
   // deleted in another tab while its drawer is open here (the drawer stays with the reader's draft, and their next
   // change writes the profile back — `withProfile`; local review), or one just added or
   // duplicated here whose write is still out (`addStyle`, `onDuplicate` seed it). Never another profile's: a copy
-  // still out would otherwise open on its original, and the first keystroke would rename that (ninth pass)
+  // still out would otherwise open on its original, and the first keystroke would rename that
   const cached = <T extends { id: string }>(last: T | undefined, id: string) => (last?.id === id ? last : undefined)
   const editingStyle = editing?.list === 'style' ? (a.styles.find(s => s.id === editing.id) ?? cached(lastStyle.current, editing.id)) : undefined
   const editingBand = editing?.list === 'highlight' ? (a.highlights.find(h => h.id === editing.id) ?? cached(lastBand.current, editing.id)) : undefined

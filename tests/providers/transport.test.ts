@@ -150,7 +150,7 @@ describe('createLocalTransport: translation', () => {
     expect(calls).toEqual([SVC.id])
   })
 
-  it('retire(): a call suspended in the chain\'s cache read is refused when it wakes and caches nothing; the scope itself is not marked (DESIGN §8.5, fourth review pass)', async () => {
+  it('retire(): a call suspended in the chain\'s cache read is refused when it wakes and caches nothing; the scope itself is not marked (local review)', async () => {
     // A service was deleted while a request of a live session sat in its chain's cache read — outside every
     // queue, so draining reaches nothing. Retiring the chain stops it there; the session goes on, on the replacement
     const calls: string[] = []
@@ -174,7 +174,7 @@ describe('createLocalTransport: translation', () => {
     expect(registry.has('live')).toBe(false)
   })
 
-  it('retire() also refuses work without a scope: a pending connection test must not use a deleted service\'s key (DESIGN §8.5, fifth review pass)', async () => {
+  it('retire() also refuses work without a scope: a pending connection test must not use a deleted service\'s key (local review)', async () => {
     // The settings drawer's connection test names its service and carries no scope; the registry cannot cover
     // it, the retirement gate must
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('no network in tests'))
@@ -227,7 +227,7 @@ describe('createLocalTransport: translation', () => {
     expect(writes).toEqual([])
   })
 
-  it('after retirement nothing of a call goes back: a scoped call sharing its task with an unscoped one gets aborted, not the shared result (DESIGN §8.5, fifteenth review pass)', async () => {
+  it('after retirement nothing of a call goes back: a scoped call sharing its task with an unscoped one gets aborted, not the shared result (local review)', async () => {
     // Deduplication merges the two calls into one queue task; the unscoped subscriber keeps that task alive
     // through the drain, so it completes — the answer must still not reach the scoped caller
     const writes: unknown[] = []
@@ -268,7 +268,7 @@ describe('createLocalTransport: translation', () => {
     expect(writes).toEqual([])
   })
 
-  it('retire() during the cache write: the result does not go back either (DESIGN §8.5, sixteenth review pass)', async () => {
+  it('retire() during the cache write: the result does not go back either (local review)', async () => {
     // The last check before the write is followed by one more wait, the write itself; a retirement landing there
     // must be seen too. What was written stays — sound translations under content-derived keys
     let releaseWrite: () => void = () => {}
@@ -345,7 +345,7 @@ describe('createLocalTransport: translation', () => {
 
   it('retire() between two attempts: the request queue retries the stored thunk, so the gate sits in front of every provider call', async () => {
     // An unscoped request failed with a retryable error and is waiting out its backoff when the chain is retired;
-    // the retry must not reach the endpoint with the deleted key (the local review of DESIGN §8.5, sixth pass)
+    // the retry must not reach the endpoint with the deleted key (local review)
     vi.useFakeTimers()
     let calls = 0
     const t = await withChain([mockProvider(async r => {
@@ -361,7 +361,7 @@ describe('createLocalTransport: translation', () => {
     expect(await pending).toMatchObject({ ok: false, error: { kind: 'aborted' } })
   })
 
-  it('deleting a service retires the chain a pending connection test is on, through activate() and dropAndRebindAll(): the retry never reaches the endpoint (DESIGN §8.5, seventh review pass)', async () => {
+  it('deleting a service retires the chain a pending connection test is on, through activate() and dropAndRebindAll(): the retry never reaches the endpoint (local review)', async () => {
     // The connection test has no scope and no session, so nothing leads the router to its chain; the holder knows
     // every chain it built and retires all but the one in force when the router asks
     vi.useFakeTimers()
@@ -389,7 +389,7 @@ describe('createLocalTransport: translation', () => {
     expect(await pending).toMatchObject({ ok: false, error: { kind: 'aborted' } })
   })
 
-  it('a deletion drains a chain its session left earlier: the request still in flight there is cancelled, never returned late (DESIGN §8.5, fourteenth review pass)', async () => {
+  it('a deletion drains a chain its session left earlier: the request still in flight there is cancelled, never returned late (local review)', async () => {
     // A language pack moved the session to a new chain while its request was still at the old chain's endpoint;
     // the registry does not mark a live session, so only draining the chain itself stops that request
     let release: () => void = () => {}
@@ -417,7 +417,7 @@ describe('createLocalTransport: translation', () => {
     release()
   })
 
-  it('closing the tab after a language pack moved the session drains its work from the old chain too: the request at the endpoint is aborted, the waiting ones never sent (DESIGN §8.5, seventeenth review pass)', async () => {
+  it('closing the tab after a language pack moved the session drains its work from the old chain too: the request at the endpoint is aborted, the waiting ones never sent (local review)', async () => {
     let release: () => void = () => {}
     const held = new Promise<void>(resolve => { release = resolve })
     let entered: () => void = () => {}
@@ -449,7 +449,7 @@ describe('createLocalTransport: translation', () => {
   it('dropping one tab before dispatch keeps a deduplicated peer alive: the same paragraph requested by two tabs is sent once, for the one still there', async () => {
     // Deduplication needs cache keys (the dedup key is the cache key). The queue items carry the first subscriber's
     // scope only; the second tab is known to the queues' refcount. Refusing by the items' scopes at attempt time
-    // aborted the live peer (the local review of DESIGN §8.5, eighteenth pass); the drain is by refcount, and the
+    // aborted the live peer (local review); the drain is by refcount, and the
     // attempt-time gate looks at the chain only
     let releaseBlocker: () => void = () => {}
     const blocking = new Promise<void>(resolve => { releaseBlocker = resolve })
@@ -473,7 +473,7 @@ describe('createLocalTransport: translation', () => {
     expect(calls).toBe(2)
   })
 
-  it('a batch retry does not resurrect a subscriber that died meanwhile: after both tabs closed, no third attempt (DESIGN §8.5, nineteenth review pass)', async () => {
+  it('a batch retry does not resurrect a subscriber that died meanwhile: after both tabs closed, no third attempt (local review)', async () => {
     // Two tabs share a paragraph. The first attempt comes back with the wrong count (the batch queue retries), tab A
     // closes meanwhile; the retry used to re-subscribe A from the frozen batch meta, so when tab B closed during
     // the second attempt the task survived on the dead A and a third attempt reached the endpoint for nobody
@@ -511,7 +511,7 @@ describe('createLocalTransport: translation', () => {
     expect(calls).toBe(2)
   })
 
-  it('the individual fallback keeps each item\'s own subscribers: closing one tab aborts its items while the other tab\'s go on (DESIGN §8.5, twentieth review pass)', async () => {
+  it('the individual fallback keeps each item\'s own subscribers: closing one tab aborts its items while the other tab\'s go on (local review)', async () => {
     // One batch from two tabs (A1, A2 from tab A; B1 from tab B) fails and splits into items. Subscribing every
     // item to the batch's union let tab B keep A1 running and A2 queued after tab A closed
     const registry = new CancelledScopeRegistry()
@@ -542,7 +542,7 @@ describe('createLocalTransport: translation', () => {
     expect(calls).toBe(3) // the batch, A1, B1
   })
 
-  it('router and chain together: a tab closed while the first chain builds leaves no request out and nothing bound (DESIGN §8.5, second review pass)', async () => {
+  it('router and chain together: a tab closed while the first chain builds leaves no request out and nothing bound (local review)', async () => {
     // The scope's first request arrived on a fresh worker (the chain still building) and the reader closed the
     // tab before it finished: the request must come back aborted, the provider untouched, the session unbound
     const calls: string[] = []
@@ -593,7 +593,7 @@ describe('createLocalTransport: status', () => {
     })
   })
 
-  it('a saved service id naming nothing: the status says which service was chosen and which engine it resolved to, so the toggle can tell them apart (S2 review)', async () => {
+  it('a saved service id naming nothing: the status says which service was chosen and which engine it resolved to, so the toggle can tell them apart (local review)', async () => {
     // The chain head is whatever the saved id resolved to (a built-in, from getProvider's default); the status keeps the saved id beside it
     const engine = mockProvider(async r => ({ segments: r.segments, provider: 'mock' }), { id: 'microsoft' })
     const transport = await createLocalTransport({ ...DEFAULT_CONFIG, provider: 'svc-deleted-elsewhere', services: [] }, { cancelled: new CancelledScopeRegistry(), buildChain: async () => ({ chain: [engine], renderPath: 'tags' as const }) })

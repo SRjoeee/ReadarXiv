@@ -474,7 +474,7 @@ async function measureFrame(page) {
       .filter(src => src && (src.hasAttribute('data-axt-id') || src.querySelector('[data-axt-id]')))
     return {
       mirrors: document.querySelectorAll('.axt-mirror').length,
-      translations: document.querySelectorAll('.axt-t:not(.axt-mirror)').length,
+      translations: document.querySelectorAll('.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)').length,
       cloned: bad.slice(0, 4).map(el => `${el.tagName}.${[...el.classList].join('.')}`),
       clonedCount: bad.length,
     }
