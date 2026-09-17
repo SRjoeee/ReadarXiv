@@ -91,6 +91,10 @@ HTML papers only — PDFs are not translated.
    button, the right-click menu, or the popup. On an abstract page a **Bilingual version** link
    appears beside arXiv's own HTML link, which opens the paper and starts translating in one step.
 
+**Updating.** Pull, run `pnpm build` again, then press the reload button on the extension's card in
+`chrome://extensions`. Restarting Chrome is not enough: it keeps running the previous build's
+background beside the new pages. Your settings are kept and carried over to the new version.
+
 ### Translating figures (macOS)
 
 Words inside bitmap figures are read by a small helper that runs on your own machine. The popup has

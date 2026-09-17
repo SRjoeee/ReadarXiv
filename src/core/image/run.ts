@@ -202,7 +202,11 @@ export function captionOf(el: Element): string | undefined {
 
 export function startImageTranslation(options: ImageRunOptions): ImageRun {
   const fetchBytes = options.fetchBytes ?? defaultFetchBytes
-  /** The fetches in flight end with the run: a restored page keeps no request of ours going (the catch below asks `alive()` first, so an abort is no failure) */
+  /**
+   * The fetches in flight end with the run — stopped (a restore, a new session) or halted by a permanent error, whose
+   * targets are all settled as failed at that moment: a restored page keeps no request of ours going, and neither does
+   * a run that has already given up (Devin on #230). The catch below asks `alive()` first, so an abort is no failure
+   */
   const aborter = new AbortController()
   /** Targets that entered the viewport while the mode gate was shut */
   const parked = new Set<ImageTarget>()
@@ -211,6 +215,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     preload: options.preload,
     onEnter: entered => { void translate(entered) },
     isCurrent: options.isCurrent,
+    onFatal: () => aborter.abort(),
     onStop: () => {
       aborter.abort()
       parked.clear()
