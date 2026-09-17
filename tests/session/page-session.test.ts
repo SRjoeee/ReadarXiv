@@ -56,6 +56,8 @@ function harness(options: HarnessOptions = {}) {
   document.body.innerHTML = `<article class="ltx_document">${options.page ?? PAGE}</article>`
   const blocks = extract(document)
   let config: Config = { ...DEFAULT_CONFIG, ...options.config }
+  /** Set: the store refuses every write with this (config/storage.ts does while the stored value cannot be read) */
+  let refusal: Error | null = null
   const calls: TranslateCall[] = []
   const cancelled: string[] = []
   const statusCalls: (string | undefined)[] = []
@@ -94,7 +96,10 @@ function harness(options: HarnessOptions = {}) {
         if (reads === 1 && options.holdFirstConfig) await new Promise<void>(resolve => { releaseConfig = resolve })
         return config
       },
-      set: async next => { config = next },
+      set: async next => {
+        if (refusal) throw refusal
+        config = next
+      },
     },
     applyLocale: vi.fn(),
     trace: vi.fn(),
@@ -103,6 +108,7 @@ function harness(options: HarnessOptions = {}) {
   return {
     session, blocks, calls, cancelled, statusCalls, ocrCalls, deps,
     config: () => config,
+    refuseWrites: (error: Error) => { refusal = error },
     releaseConfig: () => releaseConfig(),
     releaseStatus: () => releaseStatus(),
     trace: () => (deps.trace as ReturnType<typeof vi.fn>).mock.calls.map(c => String(c[0])),
@@ -477,11 +483,13 @@ describe('page session', () => {
     expect(document.documentElement.getAttribute(UNDERLINE_ATTR)).toBe('solid')
   })
 
-  it('setMode switches the attribute at once, persists the preference, and works before any session', async () => {
+  it('setMode before any session is a saved preference and writes nothing on the page; on a translated page it switches the attribute at once', async () => {
     const h = harness({ config: { mode: 'side' } })
     live = h.session
+    const before = document.documentElement.outerHTML
     expect(await h.session.setMode('stack')).toEqual({ mode: 'stack', effective: 'stack' })
-    expect(document.documentElement.getAttribute(MODE_ATTR)).toBe('stack')
+    // Nothing is written before a translation starts (DESIGN §4.1): no attribute, and no controller left listening
+    expect(document.documentElement.outerHTML).toBe(before)
     expect(h.config().mode).toBe('stack')
     const status = await h.session.status()
     expect(status.preference).toBe('stack')
@@ -491,6 +499,22 @@ describe('page session', () => {
     await h.session.setMode('only')
     expect(document.documentElement.getAttribute(MODE_ATTR)).toBe('only')
     expect((await h.session.status()).preference).toBe('only')
+    // After a restore the page is untranslated again: the same rule
+    h.session.restore()
+    const restored = document.documentElement.outerHTML
+    await h.session.setMode('side')
+    expect(document.documentElement.outerHTML).toBe(restored)
+    expect(h.config().mode).toBe('side')
+  })
+
+  it('a save the store refuses rejects after the page has switched: the mode holds here, and the caller learns it was not saved', async () => {
+    const h = harness({ config: { mode: 'side' } })
+    live = h.session
+    await h.session.start()
+    h.refuseWrites(new Error('refused'))
+    await expect(h.session.setMode('stack')).rejects.toThrow('refused')
+    expect(document.documentElement.getAttribute(MODE_ATTR)).toBe('stack')
+    expect(h.config().mode).toBe('side')
   })
 
   it('a configuration change re-applies the interface language and nothing else is required to see it', async () => {
