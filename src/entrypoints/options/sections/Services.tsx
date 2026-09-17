@@ -119,7 +119,7 @@ export function Services({ data, extensionId }: { data: OptionsData; extensionId
             // The installer exits at once on anything but macOS, so offering it elsewhere would be
             // an actionable-looking path that cannot work (Codex on #157)
             : platform !== 'mac' ? S.helper.macOnly
-            // The permission comes before the install command (ADR-0002); a grant into a running worker takes a moment
+            // The permission comes before the install command (DESIGN §15.3); a grant into a running worker takes a moment
             : helper.state === 'permission-missing' ? <div className="flex flex-col gap-2"><span>{S.helper.permission}</span><HelperPermission onStatus={setHelper} /></div>
             : helper.state === 'restarting' ? S.helper.enabling
             : <HelperSetup extensionId={extensionId} />}

@@ -1,6 +1,6 @@
 import { createLazyScheduler, type LazyScheduler, type PreloadOptions } from '@/core/scheduler/lazy'
 
-// The bookkeeping the text run and the image run share (ADR-0006): what each target is up to, whether the run may
+// The bookkeeping the text run and the image run share (DESIGN §4.4): what each target is up to, whether the run may
 // still work, the permanent-error record, the viewport scheduler, and the counts both progress shapes are built
 // from. What a run does with a target — render, batch, fetch, park — stays in the run.
 

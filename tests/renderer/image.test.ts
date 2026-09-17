@@ -26,7 +26,7 @@ describe('renderImage', () => {
     expect(node.classList.contains(IMG_CLASS)).toBe(true)
     expect(node.classList.contains(T_CLASS)).toBe(false)
     expect(node.getAttribute(FOR_ATTR)).toBe('F1.g1')
-    // The style sheet anchors the overlay by these marks (§15.2, ADR-0011); a `data-axt-*` attribute is what §7.1 allows an original to gain
+    // The style sheet anchors the overlay by these marks (§15.2, DESIGN §7.2); a `data-axt-*` attribute is what §7.1 allows an original to gain
     expect(target.el.getAttribute('data-axt-anchor')).toBe('')
     expect(target.el.parentElement!.getAttribute('data-axt-anchors')).toBe('')
     target.el.removeAttribute('data-axt-anchor')

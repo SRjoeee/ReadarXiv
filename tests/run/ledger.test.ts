@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createRunLedger } from '@/core/run/ledger'
 import * as lazy from '@/core/scheduler/lazy'
 
-// The bookkeeping both runs share (ADR-0006): outcomes, the permanent-error record, stop, the scheduler, the counts
+// The bookkeeping both runs share (DESIGN §4.4): outcomes, the permanent-error record, stop, the scheduler, the counts
 
 type Target = { id: string; el: HTMLParagraphElement }
 const target = (id: string): Target => ({ id, el: document.createElement('p') })

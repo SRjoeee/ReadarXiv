@@ -1371,7 +1371,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   check('switched back to Chinese, the settings page follows back too', /翻译服务/.test(back), back.replace(/\n+/g, ' ').slice(0, 40))
 }
 
-// ── The recognition helper's guided install (DESIGN §15.4, issue #102) and the permission step before it (ADR-0002) ───────────────
+// ── The recognition helper's guided install (DESIGN §15.4, issue #102) and the permission step before it (DESIGN §15.3) ───────────────
 // macOS only: on other platforms the install script exits at once, and the card is a single “macOS only” line.
 // `nativeMessaging` is an optional permission: Playwright's fresh profile has not granted it, so in the main context the card is the **permission** step
 // (S-P-86b/c, S-O-86), and Chrome's permission prompt is a native dialog that cannot be clicked. The guide itself (two steps, the wait) runs in a second context:

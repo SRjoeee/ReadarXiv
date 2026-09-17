@@ -84,7 +84,7 @@ describe('createOcrService', () => {
     expect(getMany).not.toHaveBeenCalled()
   })
 
-  it('no permission (ADR-0002): a network error that says so, no cache read, no backend call', async () => {
+  it('no permission (DESIGN §15.3): a network error that says so, no cache read, no backend call', async () => {
     const { backend, ocr } = fakeBackend({ status: async () => ({ state: 'permission-missing' }) })
     const cache = memoryCache()
     const getMany = vi.spyOn(cache.port, 'getMany')
@@ -104,7 +104,7 @@ describe('createOcrService', () => {
 
   it('cancel drains only: a scope the router did not mark keeps working afterwards', async () => {
     // `tabs.onUpdated` cannot tell a hash change from a navigation, so a session may be drained on a guess. The
-    // service keeps no record of its own (ADR-0005) — it used to, and a wrong guess left every image the living
+    // service keeps no record of its own (DESIGN §8.5) — it used to, and a wrong guess left every image the living
     // page scrolled to aborted (Codex on #143)
     const { backend, ocr } = fakeBackend()
     const cache = memoryCache()

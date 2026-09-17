@@ -1,5 +1,5 @@
 // Ported from reference/read-frog/src/utils/request/cancellation.ts@9b44f82 (GPL-3.0), 2026-09-05, modified: header only;
-// 2026-09-12 (ADR-0005): CancelledScopeRegistry rewritten — no prefix marks, no expiry (its comment says why); the error class is as ported.
+// 2026-09-12 (DESIGN §8.5): CancelledScopeRegistry rewritten — no prefix marks, no expiry (its comment says why); the error class is as ported.
 // The cancellation error is recognised by name (prototype chains do not survive a message boundary);
 // CancelledScopeRegistry remembers cancelled scopes to close the window in which a request sits in no cancellable structure.
 export const TRANSLATION_CANCELLED_ERROR_NAME = "TranslationCancelledError"
@@ -23,7 +23,7 @@ export function isTranslationCancelledError(error: unknown): boolean {
 }
 
 /**
- * The scopes ended for certain (ADR-0005): the session router marks, every service that takes a scope reads, so a
+ * The scopes ended for certain (DESIGN §8.5): the session router marks, every service that takes a scope reads, so a
  * call that was suspended on an await (the cache read, a chain build) when its scope was drained is refused when it
  * wakes instead of entering a queue with a dead scope that no future cancel will ever drain (#1881).
  *

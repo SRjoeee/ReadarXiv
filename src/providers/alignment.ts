@@ -3,7 +3,7 @@
 // guesswork, because machine translation merges and splits sentences — so every provider that can
 // report it does, through this one shape, and the pipeline never branches on how it was obtained.
 //
-// Two mechanisms, one contract (ADR-0007 §3):
+// Two mechanisms, one contract (DESIGN §8.6):
 //   - Microsoft returns `sentLen` natively, measured on the exact strings we sent.
 //   - Every other engine, Google and the LLM services alike, has no boundaries of its own, so we
 //     segment the source, inject markers, and read the sentence lengths back off the reply.

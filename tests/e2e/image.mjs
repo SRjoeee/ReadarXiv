@@ -14,7 +14,7 @@ import { chooseBuiltIn, openOptions, setImageMode, setSwitch } from './options-p
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const SRC = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
-/** The build with `nativeMessaging` pre-granted: optional since ADR-0002, and Chrome's prompt cannot be clicked here */
+/** The build with `nativeMessaging` pre-granted: optional since DESIGN §15.3, and Chrome's prompt cannot be clicked here */
 const EXT = copyWithGrants(SRC, `${HERE}.ext-image`, { permissions: ['nativeMessaging'] })
 const PROFILE = `${HERE}.profile-image`
 const SHOTS = `${HERE}.shots`

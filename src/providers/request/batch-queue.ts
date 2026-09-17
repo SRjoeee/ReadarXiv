@@ -1,5 +1,5 @@
 // Ported from reference/read-frog/src/utils/request/batch-queue.ts@9b44f82 (GPL-3.0), 2026-09-05, modified: only the
-// config-schema and UUID imports and the timer type; 2026-09-12 (ADR-0005): the per-item fallback hands each item its
+// config-schema and UUID imports and the timer type; 2026-09-12 (DESIGN §8.5): the per-item fallback hands each item its
 // own subscriber scopes, not the batch's. Batches by batch key (characters / items / hold time), a dispatch
 // gate, batch-level retry then per-item fallback when the result count is off, cancellation by scope; assembled by
 // translate-service (DESIGN §8.2, §10).
@@ -449,7 +449,7 @@ export class BatchQueue<T, R> {
           }
           // This item's own subscribers — its scope and the peers deduplicated onto it — not the batch's union:
           // subscribing every item to every scope of the batch let an unrelated live tab keep a closed tab's items
-          // running and retrying (ADR-0005, twentieth review pass)
+          // running and retrying (DESIGN §8.5, twentieth review pass)
           const result = await this.executeIndividual(task.data, { ...meta, scopes: task.cancelScopes === null ? undefined : [...task.cancelScopes] })
           task.resolve(result)
         } catch (error) {

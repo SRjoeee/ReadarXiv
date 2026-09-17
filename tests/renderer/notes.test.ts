@@ -128,7 +128,7 @@ describe('localizeNotes', () => {
   it('undo the placement before deleting the footnote translation: the copy\'s translation inside the outer paragraph translation goes too, and the original shows', () => {
     const doc = withNote()
     localizeNotes(doc)
-    // The copy is marked as carrying its translation: only mode hides the copy's own original by it (ADR-0011)
+    // The copy is marked as carrying its translation: only mode hides the copy's own original by it (DESIGN §7.2)
     expect(copy(doc).hasAttribute('data-axt-note-translated')).toBe(true)
     doc.querySelector(`.ltx_p:not(.${T_CLASS})`)!.setAttribute('data-axt-id', 'p1')
     const noteBlock = sourceNote(doc).querySelector(`.ltx_note_content:not(.${T_CLASS})`)!

@@ -1,4 +1,4 @@
-// The page's translation session (ADR-0004): everything the content entry used to hold, behind one
+// The page's translation session (DESIGN §4.3): everything the content entry used to hold, behind one
 // object whose dependencies are injected so the whole lifecycle runs under vitest against a
 // happy-dom document and fake backends. The content entry only maps browser messages onto it.
 //
@@ -50,7 +50,7 @@ export interface SessionDeps {
   trace?: (line: string) => void
 }
 
-/** Why a start was refused; the popup turns the code into the interface's sentence (ADR-0008: the core knows no locale pack) */
+/** Why a start was refused; the popup turns the code into the interface's sentence (DESIGN §4.2: the core knows no locale pack) */
 export type StartRefusal = 'already-on' | 'session-over' | 'not-paper' | 'nothing-to-translate' | 'backend-silent' | 'no-service'
 
 export type StartResult = { started: true; reason?: undefined; detail?: undefined } | { started: false; reason: StartRefusal; detail?: string }

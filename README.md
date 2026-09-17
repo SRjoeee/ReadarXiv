@@ -152,8 +152,7 @@ from the projects credited below.
 
 [`docs/DESIGN.md`](docs/DESIGN.md) is the current design — the DOM invariants are §7.1, the
 placeholder protocol §6, the services §8 and image translation §15 — with the measurements beside the
-decisions they justify; [`docs/adr/`](docs/adr/) holds one decision per file, and
-[`docs/rebuild/CHARTER.md`](docs/rebuild/CHARTER.md) states the constraints the 1.0 rebuild was done under.
+decisions they justify.
 
 ## Status
 

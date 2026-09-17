@@ -256,7 +256,7 @@ describe('createHelperWaiter', () => {
     expect(waiter.until()).not.toBeNull()
     expect(h.armed()).toBe(0)
   })
-  it('a probe without the permission ends the wait: nothing can be found until the pages get it granted (ADR-0002)', async () => {
+  it('a probe without the permission ends the wait: nothing can be found until the pages get it granted (DESIGN §15.3)', async () => {
     const h = harness({ probe: async () => ({ state: 'permission-missing' }) })
     const waiter = createHelperWaiter(h.deps)
     await waiter.start()

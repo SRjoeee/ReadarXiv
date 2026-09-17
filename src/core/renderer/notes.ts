@@ -231,7 +231,7 @@ export function localizeNotes(root: Document | Element): number {
       // hide (the marks stay outside: the note's number must show in every mode)
       const wrapper = wrapSource(copy)
       copy.append(fresh)
-      // Only mode hides the copy's own original by this mark, and only next to a translation that arrived (ADR-0011)
+      // Only mode hides the copy's own original by this mark, and only next to a translation that arrived (DESIGN §7.2)
       copy.setAttribute(NOTE_TRANSLATED_ATTR, '')
       // The copy is what is on screen: its sentence registration comes along, so pointing at the
       // note tints the note's own sentence

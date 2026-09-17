@@ -1,4 +1,4 @@
-// The page session (ADR-0004): what the content entry did before it became an adapter, fixed here
+// The page session (DESIGN §4.3): what the content entry did before it became an adapter, fixed here
 // before anything about it is simplified. The pipeline, renderer and scheduler run for real against
 // the test document; only the browser-side dependencies (backend, OCR, helper probe, config store,
 // locale) are fakes.

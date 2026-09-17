@@ -144,7 +144,7 @@ export function extract(root: Document | Element): Block[] {
  * Write data-axt-id on every block and data-axt-pairs on every element between a block and the translation root —
  * the one writer of both, for the run and for the debug outlines alike. Idempotent.
  *
- * The container mark replaces `:has(.axt-t, [data-axt-id])` in the style sheet (ADR-0011): a `:has()` in an
+ * The container mark replaces `:has(.axt-t, [data-axt-id])` in the style sheet (DESIGN §7.2): a `:has()` in an
  * injected sheet makes Chrome recalculate the whole document's styles on every DOM insertion, 165 ms per hover band
  * and per arriving translation on 2312.17141 (measured 2026-09-17). Nothing but blocks creates containers — every
  * node the renderer inserts lands next to a block, next to a child of a container, or inside a translation — so

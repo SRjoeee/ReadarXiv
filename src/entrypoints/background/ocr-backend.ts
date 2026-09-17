@@ -1,7 +1,7 @@
-// The seam the image pipeline reads through (ADR-0002 §2): one interface, today one implementation — the Native
+// The seam the image pipeline reads through (DESIGN §15.3): one interface, today one implementation — the Native
 // Messaging helper (`helper.ts`). A hosted recognition service plugs in here when it is built; the OCR service
 // (`ocr.ts`) and the cache key do not know which one answers. Cancellation is by scope, as everywhere in the
-// background (ADR-0005): a backend that works over `fetch` keeps its own scope → controller map behind `cancel`.
+// background (DESIGN §8.5): a backend that works over `fetch` keeps its own scope → controller map behind `cancel`.
 import type { ProviderErrorKind } from '@/providers/types'
 import type { HelperStatus, OcrResult } from '@/shared/ocr'
 
