@@ -115,9 +115,9 @@ describe('ensureFixtures', () => {
     expect(fetchImpl).not.toHaveBeenCalled()
   })
 
-  it('403 is final and called a refusal, not a pin to move; 408 is tried again', async () => {
+  it('403 is final and not called a pin to move; 408 is tried again', async () => {
     const refused = serving(BODY, 403)
-    await expect(ensureFixtures({ root, fetchImpl: refused, gapMs: 0 })).rejects.toThrow(/HTTP 403.*A refusal, not a missing file/s)
+    await expect(ensureFixtures({ root, fetchImpl: refused, gapMs: 0 })).rejects.toThrow(/HTTP 403.*a retry will not change the answer/s)
     expect(refused).toHaveBeenCalledTimes(1)
     let calls = 0
     const slow = vi.fn(async () => (++calls === 1 ? new Response('', { status: 408 }) : new Response(new Uint8Array(BODY)))) as unknown as typeof fetch
@@ -142,26 +142,52 @@ describe('ensureFixtures', () => {
     const outside = mkdtempSync(join(tmpdir(), 'axt-outside-'))
     try {
       symlinkSync(outside, join(root, 'tests/fixtures/arxiv'))
-      await expect(ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })).rejects.toThrow(/outside the fixture directories; nothing was written/)
+      await expect(ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })).rejects.toThrow(/through a symbolic link; nothing was written/)
       writeFileSync(join(root, 'tests/fixtures/remote.json'), JSON.stringify({ fixtures: [{ ...ENTRY, path: 'tests/fixtures/arxiv/new/x.html' }] }))
-      await expect(ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })).rejects.toThrow(/outside the fixture directories/)
+      await expect(ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })).rejects.toThrow(/through a symbolic link; nothing was written/)
       expect(readdirSync(outside)).toEqual([])
     } finally {
       rmSync(outside, { recursive: true, force: true })
     }
   })
 
-  it('a crashed run\'s old temporary file is cleared; a concurrent run\'s fresh one is left alone', async () => {
+  it('a crashed run\'s old temporary file is cleared — even beside a file another run landed — and nothing but that exact name', async () => {
     mkdirSync(join(root, 'tests/fixtures/arxiv'), { recursive: true })
-    const old = `${file()}.123.aaaaaaaa.partial`
-    const fresh = `${file()}.456.bbbbbbbb.partial`
-    writeFileSync(old, 'half')
-    writeFileSync(fresh, 'half')
+    writeFileSync(file(), BODY)
     const hourAgo = new Date(Date.now() - 3_600_000)
-    utimesSync(old, hourAgo, hourAgo)
-    await ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })
+    const at = (name: string, dir = false) => {
+      const path = join(root, 'tests/fixtures/arxiv', name)
+      if (dir) mkdirSync(path)
+      else writeFileSync(path, 'half')
+      utimesSync(path, hourAgo, hourAgo)
+      return path
+    }
+    const old = at('0000.00000.html.123.aaaaaaaa.partial')
+    const others = [at('0000.00000.html.partial'), at('0000.00000.html.bak.partial'), at('0000.00000.html.v2.html.9.bbbbbbbb.partial'), at('0000.00000.html.7.cccccccc.partial', true)]
+    const fresh = join(root, 'tests/fixtures/arxiv/0000.00000.html.456.dddddddd.partial')
+    writeFileSync(fresh, 'half')
+    expect((await ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })).verified).toEqual([ENTRY.path])
     expect(existsSync(old)).toBe(false)
-    expect(existsSync(fresh)).toBe(true)
+    for (const path of [...others, fresh]) expect(existsSync(path), path).toBe(true)
+  })
+
+  it('a fixture directory that does not exist yet is created, not taken for a link out of the tree', async () => {
+    writeFileSync(join(root, 'tests/fixtures/remote.json'), JSON.stringify({ fixtures: [{ ...ENTRY, path: 'helper/Tests/Fixtures/x.png', for: 'helper-smoke' }] }))
+    expect((await ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })).downloaded).toEqual(['helper/Tests/Fixtures/x.png'])
+    expect(readFileSync(join(root, 'helper/Tests/Fixtures/x.png'))).toEqual(BODY)
+  })
+
+  it('a Retry-After in neither of its forms is ignored, not read as a date; an answer that is not the file has its body cancelled', async () => {
+    let calls = 0
+    let cancelled = false
+    const odd = vi.fn(async () => {
+      if (++calls > 1) return new Response(new Uint8Array(BODY))
+      const body = new ReadableStream({ pull() {}, cancel() { cancelled = true } })
+      return new Response(body, { status: 503, headers: { 'retry-after': 'hello 2030' } })
+    }) as unknown as typeof fetch
+    expect((await ensureFixtures({ root, fetchImpl: odd, gapMs: 0 })).downloaded).toEqual([ENTRY.path])
+    expect(odd).toHaveBeenCalledTimes(2)
+    expect(cancelled).toBe(true)
   })
 
   it('a partial file someone left is never written through: each run writes a name of its own, exclusively', async () => {
@@ -263,7 +289,7 @@ describe('the manifest', () => {
   })
 
   it('the script refuses arguments it does not understand, rather than fetching everything', () => {
-    for (const args of [['--fro', 'tests'], ['--for'], ['--for=tests'], ['--for', 'helper']]) {
+    for (const args of [['--fro', 'tests'], ['--for'], ['--for=tests'], ['--for', 'helper'], ['--', '--for', 'helper'], ['--', '--']]) {
       let status: number | null = 0
       try {
         execFileSync(process.execPath, [join(import.meta.dirname, '../../scripts/fetch-fixtures.mjs'), ...args], { stdio: 'pipe' })

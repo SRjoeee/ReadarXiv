@@ -93,8 +93,11 @@ function harness(options: HarnessOptions = {}) {
     config: {
       get: async () => {
         reads += 1
+        // What a read returns is what was stored when it was made: a held read hands back that snapshot, not the store
+        // at release — the slow first read that races a write elsewhere
+        const snapshot = config
         if (reads === 1 && options.holdFirstConfig) await new Promise<void>(resolve => { releaseConfig = resolve })
-        return config
+        return snapshot
       },
       set: async next => {
         if (refusal) throw refusal
@@ -539,6 +542,19 @@ describe('page session', () => {
     expect((await h.session.status()).preference).toBe('only')
     await h.session.start()
     expect(document.documentElement.getAttribute(MODE_ATTR)).toBe('only')
+  })
+
+  it('a slow first read does not put back the mode another tab saved while it was out', async () => {
+    const h = harness({ config: { mode: 'side' }, holdFirstConfig: true })
+    live = h.session
+    await settle()
+    // Another tab saves `only`; its event lands before the first read, which took its snapshot of `side`, comes back
+    const stored = { ...h.config(), mode: 'only' as const }
+    await h.deps.config.set(stored)
+    h.session.onConfig(stored)
+    h.releaseConfig()
+    await settle()
+    expect((await h.session.status()).preference).toBe('only')
   })
 
   it('a late event for an earlier write does not put an older mode back: the page re-reads the store, it does not trust the event', async () => {
