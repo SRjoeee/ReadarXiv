@@ -70,6 +70,15 @@ export const configItem = storage.defineItem<Config>('local:config', {
     // and takes the documented fallback (Copilot on #209, twice)
     14: (v13: (Omit<Config, 'version' | 'reading'> & { version: 13; reading?: Config['reading'] }) | null) =>
       ({ ...v13, version: 14 as const, reading: v13?.reading === undefined ? { sentenceHighlight: true } : v13.reading }),
+    // v14 -> v15: the preload margin may be `all` (the whole paper at once), and the half-screen stop is gone from the
+    // settings page (the owner, 2026-09-17). A margin below one screen was that stop; it becomes one screen, the
+    // nearest stop that remains, rather than a value the page would show as one screen and run as half. Any other
+    // value stays. A hand-edited value of the wrong type is left for the schema to name, as before
+    15: (v14: (Omit<Config, 'version' | 'preload'> & { version: 14; preload?: unknown }) | null) => {
+      const preload = v14?.preload as { margin?: unknown; threshold?: unknown } | undefined
+      const margin = typeof preload?.margin === 'number' && preload.margin < 900 ? 900 : preload?.margin
+      return { ...v14, version: 15 as const, preload: { ...preload, margin } }
+    },
   },
 })
 

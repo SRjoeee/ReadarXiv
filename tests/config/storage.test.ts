@@ -73,6 +73,34 @@ describe('config storage', () => {
   })
 })
 
+describe('the v14 → v15 migration: the preload range', () => {
+  beforeEach(() => {
+    fakeBrowser.reset()
+  })
+
+  it('a margin below one screen — the retired half-screen stop — becomes one screen; the threshold and the rest stay', async () => {
+    const v14 = { ...DEFAULT_CONFIG, version: 14, preload: { margin: 450, threshold: 0.5 } }
+    await fakeBrowser.storage.local.set({ config: v14, config$: { v: 14 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const c = await fresh.getConfig()
+    expect(c.version).toBe(CONFIG_VERSION)
+    expect(c.preload).toEqual({ margin: 900, threshold: 0.5 })
+    expect(c.mode).toBe(DEFAULT_CONFIG.mode)
+  })
+
+  it('a margin of one screen or more stays as it was, and the whole paper (`all`) is a value the schema accepts', async () => {
+    const v14 = { ...DEFAULT_CONFIG, version: 14, preload: { margin: 1800, threshold: 0 } }
+    await fakeBrowser.storage.local.set({ config: v14, config$: { v: 14 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const c = await fresh.getConfig()
+    expect(c.preload).toEqual({ margin: 1800, threshold: 0 })
+    await fresh.setConfig({ ...c, preload: { margin: 'all', threshold: 0 } })
+    expect((await fresh.getConfig()).preload.margin).toBe('all')
+  })
+})
+
 describe('provider selection', () => {
   it('both providers can be stored and read, getProvider returns the matching implementation', async () => {
     const { getProvider } = await import('@/providers')
@@ -148,7 +176,8 @@ describe('provider selection', () => {
       expect(c.version).toBe(CONFIG_VERSION)
       expect(c.targetLanguage).toBe(expected)
       expect(c.services[0]?.apiKey).toBe('sk-keep')
-      expect(c.preload).toEqual({ margin: 300, threshold: 0.5 })
+      // 300 px is below one screen: v15 lifts it to the one-screen stop (the half-screen stop retired); the threshold rides through
+      expect(c.preload).toEqual({ margin: 900, threshold: 0.5 })
     }
   })
 

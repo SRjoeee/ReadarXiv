@@ -13,8 +13,8 @@
 import { ID_ATTR, type Block } from '@/core/extractor'
 
 export interface PreloadOptions {
-  /** How many pixels below the viewport count as “near” (Read Frog's default 1000) */
-  margin: number
+  /** How many pixels below the viewport count as “near” (Read Frog's default 1000), or `all`: every block enters as the run starts */
+  margin: number | 'all'
   /** How much of a block has to show to count as entered (Read Frog's default 0) */
   threshold: number
 }
@@ -59,7 +59,7 @@ export function quantizeThreshold(value: number): number {
   return Math.floor(value / THRESHOLD_STEP + 1e-9) * THRESHOLD_STEP
 }
 
-export const DEFAULT_PRELOAD: PreloadOptions = { margin: 1000, threshold: 0 }
+export const DEFAULT_PRELOAD = { margin: 1000, threshold: 0 } satisfies PreloadOptions
 
 export interface LazyScheduler<T extends { el: Element } = Block> {
   /** Hand blocks over by hand (an environment without IntersectionObserver, retries); already handed over ones are not repeated */
@@ -113,8 +113,12 @@ export function createLazyScheduler<T extends { el: Element } = Block>(blocks: T
     return options.threshold <= reachable ? options.threshold : quantizeThreshold(reachable)
   }
 
+  // The whole paper: no observer, no distance — every anchor enters at creation as one batch, boxless ones included,
+  // and the run's own caps and pacing (§8.2) take it from there. The reader chose to pay for everything up front
+  const whole = options.margin === 'all'
+  const margin = options.margin === 'all' ? 0 : options.margin
   const Observer = globalThis.IntersectionObserver
-  const observer = typeof Observer === 'function'
+  const observer = typeof Observer === 'function' && !whole
     ? new Observer((entries, io) => {
         const anchors: Element[] = []
         for (const entry of entries) {
@@ -128,7 +132,7 @@ export function createLazyScheduler<T extends { el: Element } = Block>(blocks: T
           anchors.push(entry.target)
         }
         enterAnchors(anchors)
-      }, { rootMargin: `${options.margin}px 0px`, threshold: observerThresholds(options.threshold) })
+      }, { rootMargin: `${margin}px 0px`, threshold: observerThresholds(options.threshold) })
     : null
 
   // Seeding: the anchors on the first screen and within the margin fire once synchronously, the rest go to the
@@ -138,6 +142,10 @@ export function createLazyScheduler<T extends { el: Element } = Block>(blocks: T
   const height = globalThis.innerHeight ?? 0
   const seeded: Element[] = []
   for (const anchor of byAnchor.keys()) {
+    if (whole) {
+      seeded.push(anchor)
+      continue
+    }
     const rect = anchor.getBoundingClientRect()
     // No box yet (an image whose subtree is not laid out, a collapsed container): nothing to seed from, but the
     // observer still has to hold it — it reports the element once it has a box and intersects. Skipped here, such
@@ -146,11 +154,11 @@ export function createLazyScheduler<T extends { el: Element } = Block>(blocks: T
       observer?.observe(anchor)
       continue
     }
-    const top = Math.max(rect.top, -options.margin)
-    const bottom = Math.min(rect.bottom, height + options.margin)
+    const top = Math.max(rect.top, -margin)
+    const bottom = Math.min(rect.bottom, height + margin)
     const visible = Math.max(0, bottom - top)
     // The same meaning as IntersectionObserver's intersectionRatio: intersecting height ÷ the element's own height
-    if (visible > 0 && visible / rect.height >= effectiveThreshold(rect.height, height + 2 * options.margin) - 1e-6) seeded.push(anchor)
+    if (visible > 0 && visible / rect.height >= effectiveThreshold(rect.height, height + 2 * margin) - 1e-6) seeded.push(anchor)
     else observer?.observe(anchor)
   }
   enterAnchors(seeded)

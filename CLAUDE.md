@@ -28,9 +28,9 @@ Each is a product promise, a legal requirement, or a contract with something out
 
 Two MVP design rules stay as defaults, open to re-evaluation with evidence: `ltx_*` selectors live only in `src/core/rules/latexml.ts` (style sheets may use them for layout only); the wire format (tags / markers / runs) is negotiated from the provider's declared `wireFormats`, never chosen by provider identity in the renderer.
 
-9. **No `:has()` in the injected style sheets** (ADR-0011, gate `tests/styles/no-has.test.ts`): Chrome answers a `:has()` in an author sheet by recalculating the whole document's styles on every DOM insertion (165 ms per hover band and per arriving translation on a 59 000-element paper, measured 2026-09-17). Every structural condition the layout needs is a `data-axt-*` mark written by the code that creates the structure; `:has()` stays available to TypeScript queries.
 
 8. **The platform boundary** (ADR-0008, checked by `pnpm lint` through `scripts/check-boundary.mjs`): `src/core`, `src/providers` and `src/cache` import nothing from `wxt`, the entry points, the UI, the locale packs, the WXT configuration store or runtime messaging; what the core needs from the host enters as a dependency (`createPageSession(deps)`, a provider's `fetch`), and what it shows a reader is a code the host turns into a sentence, or a string the host installs (`core/strings.ts`).
+9. **No `:has()` in the injected style sheets** (ADR-0011, gate `tests/styles/no-has.test.ts`): Chrome answers a `:has()` in an author sheet by recalculating the whole document's styles on every DOM insertion (165 ms per hover band and per arriving translation on a 59 000-element paper, measured 2026-09-17). Every structural condition the layout needs is a `data-axt-*` mark written by the code that creates the structure; `:has()` stays available to TypeScript queries.
 
 ## Stack
 
