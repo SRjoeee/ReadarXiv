@@ -23,6 +23,8 @@ export default defineConfig({
       },
     },
     include: ['tests/**/*.test.ts'],
+    // The fixtures the repository may not hold are downloaded and verified once, before the first test file (tests/fixtures/README.md)
+    globalSetup: ['tests/global-setup.ts'],
     setupFiles: ['tests/setup.ts'],
     // Fixture-level tests walk every element of a 1.8 MB page, up to 6 s per case on a CI machine; the default 5 s would misreport
     testTimeout: 30_000,

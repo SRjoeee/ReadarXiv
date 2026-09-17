@@ -16,6 +16,20 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The fixtures the repository may not hold (tests/fixtures/README.md) are kept between runs: arXiv is asked again
+      # only when remote.json changes. One path per entry of the manifest — a test holds the lists together
+      - uses: actions/cache@v4
+        with:
+          key: remote-fixtures-${{ hashFiles('tests/fixtures/remote.json') }}
+          path: |
+            tests/fixtures/arxiv/2312.17527.html
+            tests/fixtures/arxiv/2401.00418.html
+            tests/fixtures/arxiv/2401.00596.html
+            tests/fixtures/arxiv/2608.29808.html
+            tests/fixtures/arxiv/2609.00245.html
+            tests/fixtures/svg/2608.29808-bounter-case.svg
+            helper/Tests/Fixtures/qed3d-string-breaking.png
+      - run: pnpm fixtures:fetch
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test

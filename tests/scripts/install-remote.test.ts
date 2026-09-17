@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -24,6 +25,15 @@ describe('helper/install-remote.sh', () => {
   it('a commit hash — what a pinned build passes — fetches that commit', () => {
     const sha = '0123456789abcdef0123456789abcdef01234567'
     expect(run(ID, sha)).toBe(`https://codeload.github.com/SRjoeee/ReadarXiv/tar.gz/${sha}`)
+  })
+
+  it('copies onto the reader\'s machine only what the build needs: the smoke test\'s images stay out, and an earlier install\'s copy of them goes', () => {
+    const script = readFileSync(SCRIPT, 'utf8')
+    const copies = script.split('\n').filter(line => /^\s*(\[.*\]\s*&&\s*)?cp\b/.test(line))
+    expect(copies).toHaveLength(1)
+    expect(copies[0]).toContain('"$src/helper/Sources" "$src/helper/Package.swift" "$src/helper/LICENSE-macos-vision-ocr.txt" "$src/helper/register.sh"')
+    expect(copies[0]).not.toContain('Tests')
+    expect(script).toContain('rm -rf "$DIR/Sources" "$DIR/Tests"')
   })
 
   it('a malformed extension id is refused before anything else', () => {
