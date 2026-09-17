@@ -66,6 +66,14 @@ Category: Productivity. Language: English, with the Chinese description below. T
 | `https://edge.microsoft.com/*`, `https://translate-pa.googleapis.com/*`, `https://openrouter.ai/*` | The free translators and the most common LLM gateway |
 | `https://*/*`, `http://*/*` (optional) | An endpoint the reader adds in the settings; each origin is asked for on its own when saved |
 
+The dashboard asks for each **named** permission separately, but for **all host permissions at once**, in one "host permission justification" field (1 000 characters), and warns that host permissions may mean an in-depth review. What was pasted there for 0.4.0, covering every match pattern in the manifest:
+
+> Content scripts match https://arxiv.org/html/* , the papers this extension translates, and https://arxiv.org/abs/* , where it only adds a link to the bilingual version. No other site is matched.
+>
+> The three host permissions are the translation endpoints the service worker calls: https://edge.microsoft.com/* (Microsoft's web translator, the default engine), https://translate-pa.googleapis.com/* (Google's web translator) and https://openrouter.ai/* (a common OpenAI-compatible gateway). An MV3 background fetch is still subject to CORS, so each endpoint needs its host permission.
+>
+> https://*/* and http://*/* are optional_host_permissions, never granted at install. A reader may add any OpenAI-compatible service, including one on their own machine over http such as Ollama or LM Studio, so the origin is not known in advance. When the reader saves such a service, Chrome asks for that single origin on the reader's own click.
+
 **Privacy practices** (the store's questionnaire). What leaves the browser, and only when the reader translates a page: the text of the paper's blocks, to the translation service the reader selected. To an LLM service the reader added, each request also carries the selected prompt (a shipped one or the reader's own), the glossary entries that match the passage, and the paper's title, abstract and section heading as context (`providers/prompt.ts`); to Microsoft's and Google's web translators only the text; Chrome's built-in translator and a local endpoint keep everything on the machine. Words recognised inside figures are translated like any other text; the image itself is never uploaded (bitmaps are read by the local helper). The extension stores settings, API keys and translations locally, uses no analytics and no remote code, and collects nothing about the reader.
 
 **Privacy policy URL** (required: the extension handles website content and stores API keys): `https://github.com/SRjoeee/ReadarXiv/blob/main/PRIVACY.md`. It points at `main` so the listing always shows the policy in force; the file's history records every change. The questionnaire above and `PRIVACY.md` describe the same practices, and change together.
