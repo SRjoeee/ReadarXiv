@@ -169,12 +169,49 @@ export async function getConfig(): Promise<Config> {
     return parsed.data
   }
   fallbackReason = describeFallback(stored, parsed.error.issues)
-  console.warn(`[axt] invalid configuration, defaults in use: ${fallbackReason}`)
+  // The cause and the failing field's path only: a validation message is not ours to vouch for, and the log never holds a stored value (hard rule 5)
+  console.warn(`[axt] the stored configuration cannot be read, defaults in use: ${fallbackReason.kind}${fallbackReason.kind === 'invalid' ? ` at ${fallbackReason.where}` : ''}`)
   return DEFAULT_CONFIG
 }
 
+/** The refusal's `name`, a string of its own: it crosses the message boundary (shared/messages.ts `failure`), and a class's own name does not survive minification */
+export const CONFIG_UNREADABLE = 'ConfigUnreadableError'
+
+/** Thrown by `setConfig` while the stored value cannot be read: the write was refused and storage is as it was */
+export class ConfigUnreadableError extends Error {
+  constructor(readonly reason: FallbackReason) {
+    super('the stored settings cannot be read, so nothing was saved')
+    this.name = CONFIG_UNREADABLE
+  }
+}
+
+/**
+ * The one gate every write passes. **A stored value this build cannot read is never written over**: every writer
+ * reads, patches and writes, and what it read was `DEFAULT_CONFIG` — one mode switch in the popup would replace the
+ * reader's services and API keys with the defaults. A newer build's configuration is valid for that build, and a
+ * broken one may be recoverable; the only way past is `resetConfig()`, which the reader chooses knowing what goes
+ */
 export async function setConfig(config: Config): Promise<void> {
-  await configItem.setValue(configSchema.parse(config))
+  const next = configSchema.parse(config)
+  const stored = await configItem.getValue()
+  const readable = configSchema.safeParse(stored)
+  if (!readable.success) {
+    fallbackReason = describeFallback(stored, readable.error.issues)
+    throw new ConfigUnreadableError(fallbackReason)
+  }
+  await configItem.setValue(next)
+}
+
+/**
+ * The reader's explicit way out of an unreadable configuration (S-O-02): the stored value is replaced by the defaults.
+ * The version marker is written by hand, and first: WXT's `setValue` writes it only for an item that was empty, so a
+ * reset after `tooNew` would leave a v(N+1) marker beside a vN value and the real upgrade to N+1 would skip its
+ * migration. Marker first, so that a write cut short between the two leaves the state the reader started from
+ */
+export async function resetConfig(): Promise<void> {
+  await configItem.setMeta({ v: CONFIG_VERSION })
+  await configItem.setValue(DEFAULT_CONFIG)
+  fallbackReason = null
 }
 
 export function watchConfig(callback: (config: Config) => void) {

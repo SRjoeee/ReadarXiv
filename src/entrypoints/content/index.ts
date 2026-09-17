@@ -3,7 +3,7 @@ import { AUTO_TRANSLATE_HASH } from '@/core/abstract/link'
 import { extract, paperContext } from '@/core/extractor'
 import { paperIdFromUrl } from '@/core/pipeline'
 import { createPageSession } from '@/core/session'
-import { isAxtMessage, sendMessage } from '@/shared/messages'
+import { isAxtMessage, replyWith, sendMessage } from '@/shared/messages'
 import { createMessageTransport } from '@/shared/transport'
 import { applyLocaleFrom } from '@/ui/apply-locale'
 import { enableDebug } from './debug'
@@ -48,13 +48,14 @@ export default defineContentScript({
       if (!isAxtMessage(message)) return
       switch (message.type) {
         case 'axt:translate-page':
-          session.start(message.mode, message.restart === true, undefined, message.epoch).then(sendResponse)
+          replyWith(session.start(message.mode, message.restart === true, undefined, message.epoch), sendResponse)
           return true
         case 'axt:restore-page':
           sendResponse(session.restore(message.epoch))
           return true
         case 'axt:set-mode':
-          session.setMode(message.mode).then(r => sendResponse({ mode: r.effective, preference: r.mode }))
+          // A refused save (the stored settings unreadable, config/storage.ts) rejects after the page has switched: the popup says why
+          replyWith(session.setMode(message.mode).then(r => ({ mode: r.effective, preference: r.mode })), sendResponse)
           return true
         case 'axt:retry-failed':
           sendResponse({ retried: session.retryFailed() })
@@ -63,7 +64,7 @@ export default defineContentScript({
           sendResponse({ resumed: session.resumeRaster() })
           return true
         case 'axt:page-status':
-          void session.status().then(sendResponse)
+          replyWith(session.status(), sendResponse)
           return true
       }
     })

@@ -105,6 +105,7 @@ const S: Locale['S'] = {
   },
   actionFailed: message => message,
   noActiveTab: 'No active tab',
+  settingsUnreadable: 'The settings could not be read, so the change was not saved. See the settings page',
   page: {
     retry: 'Retry',
     menuToggle: 'Translate this page / show the original',
@@ -130,7 +131,9 @@ const O: Locale['O'] = {
     field: FIELD,
     unknown: 'Reason unknown',
   },
-  fallbackNotice: 'The settings could not be read, so the defaults are in use. Your saved API key and service are not in effect. Please enter them again.',
+  fallbackNotice: 'The settings could not be read, so the defaults are in use. Your saved API key and service are not in effect. What was saved is left as it is; reset the settings to enter them again.',
+  fallbackReset: 'Reset settings',
+  fallbackResetConfirm: 'Confirm reset',
   services: {
     issue: (field, message) => `${field}: ${FIELD[String(field).split('.').pop() ?? ''] ?? message}`,
     issueSeparator: '; ',

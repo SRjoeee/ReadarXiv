@@ -3,7 +3,7 @@ import { getConfig, watchConfig } from '@/config/storage'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport } from '@/providers/transport'
 import { toErrorInfo } from '@/providers/translate-service'
-import { isAxtMessage, replyWith } from '@/shared/messages'
+import { isAxtMessage, replyWith, sendToTab } from '@/shared/messages'
 import { HELPER_HOST, type HelperStatus } from '@/shared/ocr'
 import { createChainHolder } from './chain'
 import { engineReady } from './engine-ready'
@@ -107,8 +107,9 @@ export default defineBackground(() => {
     },
     stillThere: async (tabId, scope) => {
       try {
-        const status = await browser.tabs.sendMessage(tabId, { type: 'axt:page-status' })
-        return (status as { session?: string | null } | undefined)?.session === scope ? 'same' : 'other'
+        // A page that answered with a failure said nothing about which page it is: `sendToTab` rejects, and that is `unknown`, not `other`
+        const status = await sendToTab<{ session?: string | null } | undefined>(tabId, { type: 'axt:page-status' })
+        return status?.session === scope ? 'same' : 'other'
       } catch {
         // The message did not arrive: the page may be gone, or the new document's content script may not be installed yet. Indistinguishable, so no death sentence
         return 'unknown'
@@ -136,7 +137,7 @@ export default defineBackground(() => {
    */
   const tellTabs = async (message: { type: 'axt:helper-ready' }) => {
     const tabs = await browser.tabs.query({}).catch(() => [])
-    for (const tab of tabs) if (tab.id !== undefined) void browser.tabs.sendMessage(tab.id, message).catch(() => undefined)
+    for (const tab of tabs) if (tab.id !== undefined) void sendToTab(tab.id, message).catch(() => undefined)
   }
   /**
    * The helper's state changed on the background's own initiative — the install wait found it, or the fresh worker
@@ -209,7 +210,7 @@ export default defineBackground(() => {
       browser.contextMenus.create(options as Parameters<typeof browser.contextMenus.create>[0]),
     removeAll: () => browser.contextMenus.removeAll(),
     onClicked: (handler: Parameters<typeof browser.contextMenus.onClicked.addListener>[0]) => browser.contextMenus.onClicked.addListener(handler),
-    send: (tabId: number, message: unknown) => browser.tabs.sendMessage(tabId, message as never),
+    send: sendToTab,
     saved,
   }
   installContextMenu(menuDeps)
@@ -226,7 +227,7 @@ export default defineBackground(() => {
   installToggleCommand({
     onCommand: handler => browser.commands.onCommand.addListener(handler),
     activeTab: async () => (await browser.tabs.query({ active: true, currentWindow: true }))[0],
-    send: (tabId, message) => browser.tabs.sendMessage(tabId, message),
+    send: sendToTab,
     saved,
   })
 
@@ -285,7 +286,7 @@ export default defineBackground(() => {
       case 'axt:engine-ready':
         // Rebuild and move whom the sender says (./engine-ready.ts): a downloaded language pack moves one tab, a
         // deleted service moves everyone and retires its chain — the movers act on the chain in force
-        void engineReady(chain, router, message).then(sendResponse)
+        replyWith(engineReady(chain, router, message), sendResponse)
         return true
       // With IndexedDB unavailable an answer still goes back, or the caller waits for “message channel closed” (Codex on #7)
       case 'axt:cache-clear':
@@ -295,23 +296,23 @@ export default defineBackground(() => {
           .catch((e: unknown) => sendResponse({ ok: false, message: e instanceof Error ? e.message : String(e) }))
         return true
       case 'axt:helper-status':
-        ocr.status(message.recheck ? { recheck: true } : undefined).then(status => {
+        replyWith(ocr.status(message.recheck ? { recheck: true } : undefined).then(status => {
           // A re-probe that finds it has to reach the papers already open, which parked their
           // bitmaps when the probe at their session start found nothing (Codex on #161)
           if (message.recheck && status.state === 'ready') void tellTabs({ type: 'axt:helper-ready' })
           // Granted a moment ago into this running worker: arrange the fresh one (DESIGN §15.3)
           helperRestart.noticed(status)
-          sendResponse(status)
-        })
+          return status
+        }), sendResponse)
         return true
       case 'axt:helper-await':
         // One message, two uses: with start it is “copied, start waiting”, without it “still waiting?” — the popup is
         // destroyed on losing focus and picks the same wait up again with the latter on reopening (DESIGN §15.4)
         if (message.start) {
-          void helperWaiter.start().then(() => sendResponse({ until: helperWaiter.until() }))
+          replyWith(helperWaiter.start().then(() => ({ until: helperWaiter.until() })), sendResponse)
           return true
         }
-        void helperRestored.then(() => sendResponse({ until: helperWaiter.until() }))
+        replyWith(helperRestored.then(() => ({ until: helperWaiter.until() })), sendResponse)
         return true
       case 'axt:ocr':
         // The scope is bound to the sender's tab first: this may be the tab's first message carrying a scope, and unbound,
@@ -328,13 +329,13 @@ export default defineBackground(() => {
         return false
       case 'axt:diag-export':
         // The environment a reader cannot be expected to report: the build, the browser, the platform
-        void Promise.all([diagnostics.restored, browser.runtime.getPlatformInfo().catch(() => ({ os: 'unknown' }))]).then(([, info]) =>
-          sendResponse(diagnostics.export({
+        replyWith(Promise.all([diagnostics.restored, browser.runtime.getPlatformInfo().catch(() => ({ os: 'unknown' }))]).then(([, info]) =>
+          diagnostics.export({
             extension: { version: browser.runtime.getManifest().version, buildRef: BUILD_REF },
             browser: navigator.userAgent,
             platform: info.os,
-          })),
-        )
+          }),
+        ), sendResponse)
         return true
       case 'axt:cache-stats':
         // The same protocol as cache-clear: a failure is reported as it is, and “IndexedDB unusable” must not show as “the
