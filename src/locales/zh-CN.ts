@@ -125,6 +125,15 @@ const S = {
     notPaper: '不是 arXiv HTML 页面',
     nothingToTranslate: '这一页没有可翻译的内容',
     abstractLink: (brand: string) => `双语版本（${brand}）`, // the entry on the abstract page (issue #146)
+    /** The floating button on the PDF page (UI.md S-I-06); the wording follows Read Frog's, whose button it is */
+    floating: {
+      options: '悬浮按钮选项',
+      lock: '锁定位置',
+      unlock: '解锁位置',
+      feedback: '发送反馈',
+      hideForNow: '本次隐藏',
+      hideAlways: '不再显示',
+    },
     backendSilent: '扩展后台没有响应',
     backendSilentWith: (detail: string) => `扩展后台没有响应：${detail}`,
     noService: '未配置 API key，请先到设置页填写',
@@ -232,6 +241,8 @@ const O = {
     openIn: '译文在哪里打开',
     openInHint: '从论文的摘要页或 PDF 打开时，译文是这篇论文的 HTML 版本',
     openInStops: ['新标签页', '当前标签页'],
+    floatingEntry: '在 PDF 页显示悬浮按钮',
+    floatingEntryHint: '贴在窗口边缘，点击打开这篇论文的双语版本',
     threshold: '开始翻译的时机',
     thresholdHint: '段落露出多少才开始翻',
     thresholdStops: ['刚露出', '露出一半', '完全露出'],

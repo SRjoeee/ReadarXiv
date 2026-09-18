@@ -1,5 +1,5 @@
 import { cachePortOf, translationCache } from '@/cache'
-import { getConfig, watchConfig } from '@/config/storage'
+import { getConfig, setConfig, watchConfig } from '@/config/storage'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport } from '@/providers/transport'
 import { toErrorInfo } from '@/providers/translate-service'
@@ -322,6 +322,23 @@ export default defineBackground(() => {
           .catch((e: unknown) => ({ ok: false as const, error: { kind: 'unknown' as const, message: e instanceof Error ? e.message : String(e) } }))
           .then(sendResponse)
         return true
+      case 'axt:open-settings':
+        // A content script cannot open the settings page itself; `openOptionsPage` brings an open one to the front
+        replyWith(browser.runtime.openOptionsPage().then(() => ({ opened: true })).catch(() => ({ opened: false })), sendResponse)
+        return true
+      case 'axt:set-floating-entry': {
+        // The reader dragged, locked or turned off the PDF page's entry (§4.0b). Written here so it passes the one
+        // write gate: `setConfig` parses the result and refuses while the stored value is one this build cannot read
+        const patch = message.patch
+        replyWith(
+          getConfig()
+            .then(config => setConfig({ ...config, floatingEntry: { ...config.floatingEntry, ...patch } }))
+            .then(() => ({ saved: true }))
+            .catch(() => ({ saved: false })),
+          sendResponse,
+        )
+        return true
+      }
       case 'axt:diag':
         // Only our own contexts can reach runtime.onMessage (no externally_connectable), still the shape is checked:
         // a line is a string, the source one of the pages'; the ring's cap and the coalesced save bound the rest (Devin on #214)

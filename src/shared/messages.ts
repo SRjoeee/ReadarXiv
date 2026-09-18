@@ -5,6 +5,7 @@ import type { Mode } from '@/core/renderer'
 import type { StartResult } from '@/core/session'
 import type { ProviderStatus } from '@/providers/transport'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
+import type { Config } from '@/config/schema'
 import type { HelperStatus, ImageProgress, OcrCall, OcrMessageResponse } from './ocr'
 import type { DiagnosticSource, DiagnosticsExport } from '@/shared/diagnostics'
 
@@ -77,6 +78,17 @@ export interface AxtMessages {
   'axt:entry-status': { request: Record<never, never>; response: EntryStatus }
   /** popup → content, on those pages: go to the HTML version and translate it. The page navigates itself, so no tabs permission is involved */
   'axt:open-html': { request: Record<never, never>; response: { opened: boolean } }
+  /** content → background: open the settings page. A content script cannot call `openOptionsPage` itself */
+  'axt:open-settings': { request: Record<never, never>; response: { opened: boolean } }
+  /**
+   * content → background: the reader dragged, locked or turned off the PDF page's floating entry (§4.0b). A patch,
+   * merged into the stored value: a drag in one tab must not write back the switch another page just turned.
+   *
+   * Through the background so the write passes the one gate every other write passes (`setConfig`, DESIGN §9): a
+   * content script writing `local:config` itself would bypass the schema, the version and the refusal a value this
+   * build cannot read earns
+   */
+  'axt:set-floating-entry': { request: { patch: Partial<Config['floatingEntry']> }; response: { saved: boolean } }
   /** content / options → background: translate a batch of segments (§8.0: the chain, the queues and the requests all live in the background) */
   'axt:translate': { request: TranslateCall; response: TranslateMessageResponse }
   /** content → background: withdraw a session's queued and in-flight requests (restore, restart) */

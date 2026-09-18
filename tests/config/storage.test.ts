@@ -554,6 +554,20 @@ describe('provider selection', () => {
     expect(config.reading).toEqual({ sentenceHighlight: false, openIn: 'new-tab' })
   })
 
+  it('a v16 configuration climbs to v17: the PDF page\'s floating button, shown, in its default place', async () => {
+    const { floatingEntry: _absent, ...rest } = DEFAULT_CONFIG
+    const v16 = { ...rest, version: 16, reading: { sentenceHighlight: false, openIn: 'same-tab' } } as Record<string, unknown>
+    await fakeBrowser.storage.local.set({ config: v16, config$: { v: 16 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const config = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(config.version).toBe(CONFIG_VERSION)
+    expect(config.floatingEntry).toEqual({ enabled: true, side: 'right', position: 0.66, locked: false })
+    // Nothing the reader chose before is touched
+    expect(config.reading).toEqual({ sentenceHighlight: false, openIn: 'same-tab' })
+  })
+
   it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a preload margin under one screen becoming one screen', async () => {
     const v12 = {
       ...DEFAULT_CONFIG, version: 12, provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-keep' }],

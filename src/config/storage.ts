@@ -92,6 +92,9 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
         : reading
       return { ...v15, version: 16 as const, reading: filled }
     },
+    // v16 -> v17: the PDF page's floating entry. Nobody has one yet, so everyone gets it shown, in the default place
+    17: (v16: (Omit<Config, 'version' | 'floatingEntry'> & { version: 16 }) | null) =>
+      ({ ...v16, version: 17 as const, floatingEntry: { enabled: true, side: 'right' as const, position: 0.66, locked: false } }),
   },
 })
 

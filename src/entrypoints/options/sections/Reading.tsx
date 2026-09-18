@@ -125,6 +125,16 @@ export function Reading({ data }: { data: OptionsData }) {
         />
       </div>
 
+      <div className="mb-6 rounded-card border border-line bg-card px-3.5">
+        <Row label={O.reading.floatingEntry} hint={O.reading.floatingEntryHint}>
+          <Switch
+            checked={config.floatingEntry.enabled}
+            onChange={on => void patch(latest => ({ ...latest, floatingEntry: { ...latest.floatingEntry, enabled: on } }))}
+            label={O.reading.floatingEntry}
+          />
+        </Row>
+      </div>
+
       <h3 className="mb-1 text-[14px] font-bold">{O.reading.preloadRange}</h3>
       <p className="mb-2 text-[11px] text-fg-2">{O.reading.preloadRangeHint}</p>
       <div className="mb-6">
