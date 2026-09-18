@@ -1,6 +1,6 @@
 {
   "name": "readarxiv",
-  "description": "Read arXiv \u2014 a Chrome extension that translates arXiv HTML papers in place: bilingual, structure-preserving, reversible",
+  "description": "Read arXiv — a Chrome extension that translates arXiv HTML papers in place: bilingual, structure-preserving, reversible",
   "version": "0.4.0",
   "private": true,
   "type": "module",
@@ -23,6 +23,7 @@
     "e2e:a11y": "node tests/e2e/a11y.mjs",
     "e2e:local-endpoint": "node tests/e2e/local-endpoint.mjs",
     "e2e:pdf": "node tests/e2e/pdf-entry.mjs",
+    "e2e:floating": "node tests/e2e/floating-button.mjs",
     "e2e:image": "node tests/e2e/image.mjs",
     "e2e:placeholders": "node tests/e2e/placeholders.mjs",
     "helper:build": "swift build -c release --package-path helper",
@@ -42,6 +43,7 @@
     "@wxt-dev/module-react": "^1.2.2",
     "fake-indexeddb": "^6.2.5",
     "happy-dom": "^20.13.2",
+    "lucide": "1.47.0",
     "playwright": "^1.63.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.13",

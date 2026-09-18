@@ -5,7 +5,7 @@ import type { Mode } from '@/core/renderer'
 import type { StartResult } from '@/core/session'
 import type { ProviderStatus } from '@/providers/transport'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
-import type { Config } from '@/config/schema'
+import type { EntrySettings, FloatingEntryState } from '@/shared/entry-settings'
 import type { HelperStatus, ImageProgress, OcrCall, OcrMessageResponse } from './ocr'
 import type { DiagnosticSource, DiagnosticsExport } from '@/shared/diagnostics'
 
@@ -78,17 +78,28 @@ export interface AxtMessages {
   'axt:entry-status': { request: Record<never, never>; response: EntryStatus }
   /** popup → content, on those pages: go to the HTML version and translate it. The page navigates itself, so no tabs permission is involved */
   'axt:open-html': { request: Record<never, never>; response: { opened: boolean } }
+  /**
+   * content → background: the floating button's main button on the full text (§4.0c). The background decides as it
+   * does for the keyboard command and the context menu — one toggle, four doors — and tells this tab what to do.
+   * `acted: false` when nothing could be done (no service can run): the page opens its control panel, which says why
+   */
+  'axt:toggle': { request: Record<never, never>; response: { acted: boolean } }
+  /**
+   * content / options → background: what a page needs of the settings, read once and validated by the background
+   * (shared/entry-settings.ts): the interface language, where a translation opens, this tab's zoom, the floating
+   * button's state
+   */
+  'axt:entry-settings': { request: Record<never, never>; response: EntrySettings }
+  /** background → content: the reader changed this tab's zoom (`tabs.onZoomChange`) */
+  'axt:zoom-changed': { request: { zoom: number }; response: undefined }
   /** content → background: open the settings page. A content script cannot call `openOptionsPage` itself */
   'axt:open-settings': { request: Record<never, never>; response: { opened: boolean } }
   /**
-   * content → background: the reader dragged, locked or turned off the PDF page's floating entry (§4.0b). A patch,
-   * merged into the stored value: a drag in one tab must not write back the switch another page just turned.
-   *
-   * Through the background so the write passes the one gate every other write passes (`setConfig`, DESIGN §9): a
-   * content script writing `local:config` itself would bypass the schema, the version and the refusal a value this
-   * build cannot read earns
+   * content / options → background: the reader dragged, locked, hid or switched the floating button (§4.0c). A patch,
+   * merged by the background — its only writer — into what is stored at that moment, under the button's own key.
+   * The answer carries the state stored now: on a failure that is the old one, and the page shows it again
    */
-  'axt:set-floating-entry': { request: { patch: Partial<Config['floatingEntry']> }; response: { saved: boolean } }
+  'axt:set-floating-entry': { request: { patch: Partial<FloatingEntryState> }; response: { saved: boolean; floating: FloatingEntryState } }
   /** content / options → background: translate a batch of segments (§8.0: the chain, the queues and the requests all live in the background) */
   'axt:translate': { request: TranslateCall; response: TranslateMessageResponse }
   /** content → background: withdraw a session's queued and in-flight requests (restore, restart) */

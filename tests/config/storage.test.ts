@@ -554,18 +554,24 @@ describe('provider selection', () => {
     expect(config.reading).toEqual({ sentenceHighlight: false, openIn: 'new-tab' })
   })
 
-  it('a v16 configuration climbs to v17: the PDF page\'s floating button, shown, in its default place', async () => {
-    const { floatingEntry: _absent, ...rest } = DEFAULT_CONFIG
-    const v16 = { ...rest, version: 16, reading: { sentenceHighlight: false, openIn: 'same-tab' } } as Record<string, unknown>
-    await fakeBrowser.storage.local.set({ config: v16, config$: { v: 16 } })
+  it('v17 put the floating button\'s state into the configuration and v18 takes it out again: a test build\'s v17 value reads, without it', async () => {
+    const v17 = { ...DEFAULT_CONFIG, version: 17, reading: { sentenceHighlight: false, openIn: 'same-tab' }, floatingEntry: { enabled: false, side: 'left', position: 0.3, locked: true } } as Record<string, unknown>
+    await fakeBrowser.storage.local.set({ config: v17, config$: { v: 17 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
     const config = await fresh.getConfig()
     expect(fresh.configFallbackReason()).toBeNull()
     expect(config.version).toBe(CONFIG_VERSION)
-    expect(config.floatingEntry).toEqual({ enabled: true, side: 'right', position: 0.66, locked: false })
-    // Nothing the reader chose before is touched
+    expect('floatingEntry' in config).toBe(false)
+    // Nothing the reader chose is touched
     expect(config.reading).toEqual({ sentenceHighlight: false, openIn: 'same-tab' })
+    // A v16 value passes through both and ends the same
+    const v16: Record<string, unknown> = { ...v17, version: 16 }
+    delete v16.floatingEntry
+    await fakeBrowser.storage.local.set({ config: v16, config$: { v: 16 } })
+    vi.resetModules()
+    const again = await (await import('@/config/storage')).getConfig()
+    expect(again).toEqual(config)
   })
 
   it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a preload margin under one screen becoming one screen', async () => {

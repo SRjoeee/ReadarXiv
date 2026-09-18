@@ -4,9 +4,9 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## 0.4.1 — unreleased
 
-- Opening a paper's PDF on arXiv now offers its bilingual version: one link, bottom right, straight to the HTML full text already translating. It appears only for papers that have an HTML version.
+- Opening a paper's PDF on arXiv now offers its bilingual version: straight to the HTML full text, already translating. Where arXiv has no HTML version of a paper, the button says so.
 - The extension's popup now works on a paper's abstract and PDF pages as well: the same settings, and a translate button that opens the paper's HTML version and translates it there. Where arXiv has no HTML version of a paper, the button says so instead of being a dead end.
-- On a PDF, the entry is now a floating button tucked into the edge of the window: point at it and it comes out with a few controls. Drag it to either edge and it stays there, lock it in place, or hide it for now or for good; the settings page, under Reading, brings it back.
+- A floating button on every arXiv page — abstract, PDF and full text — docked to the edge of the window. Click it to translate the page you are on (a green tick shows a translated page; click again for the original), or, from an abstract or a PDF, to open the paper's bilingual version. Point at it for two more buttons: the control panel, which is the extension's popup, and the settings. Drag it to either edge and it stays there, lock it in place, or hide it for now or for good; the settings page, under Reading, brings it back.
 - The translation opens in a new tab, so the abstract page or PDF you were reading stays where it is. The settings page has the choice, under Reading, if you would rather it opened in the tab you are on.
 
 ## 0.4.0 — 2026-09-17

@@ -15,6 +15,10 @@ const wire = vi.hoisted(() => ({
   /** Every `axt:provider-status` ask, in order, with its answer held for the test */
   asks: [] as { message: { scope?: string; fresh?: boolean }; answer: { resolve: (s: unknown) => void; reject: (e: unknown) => void } }[],
   page: null as (() => Promise<unknown>) | null,
+  /** What an abstract or PDF page answers `axt:entry-status`; null on any other page */
+  entry: null as { paper: string; html: string | null } | null,
+  /** Every message sent to the active tab, in order */
+  toTab: [] as string[],
 }))
 
 vi.mock('wxt/browser', () => ({
@@ -43,7 +47,11 @@ vi.mock('@/shared/messages', async importOriginal => ({
     return Promise.resolve(undefined)
   },
   sendToActiveTab: (message: AxtMessage) => {
+    wire.toTab.push(message.type)
     if (message.type === 'axt:page-status') return wire.page ? wire.page() : Promise.reject(new Error('no page'))
+    // An entry page ignores every message but its own two, and an ignored message resolves `undefined`
+    if (message.type === 'axt:entry-status') return Promise.resolve(wire.entry ?? undefined)
+    if (wire.entry) return Promise.resolve(undefined)
     if (message.type === 'axt:restore-page') return Promise.resolve({ removedNodes: 1 })
     return Promise.resolve({ started: true })
   },
@@ -62,6 +70,8 @@ describe('usePopupData', () => {
     store.config = { ...DEFAULT_CONFIG, uiLanguage: 'en' }
     store.watchers = []
     wire.asks = []
+    wire.entry = null
+    wire.toTab = []
     wire.page = async () => page('stopped', null)
     applyLocaleFrom('en')
     reload = vi.fn()
@@ -131,6 +141,27 @@ describe('usePopupData', () => {
     await hook.until(() => hook.current().input.config?.targetLanguage === 'jpn')
     expect(savedAsks().at(-1)?.message.fresh).toBe(true)
     expect(reload).not.toHaveBeenCalled()
+    await hook.unmount()
+  })
+
+  it('on an abstract or PDF page a mode is saved here, not sent to a page that has no listener for it (Devin on #247)', async () => {
+    wire.page = async () => undefined
+    wire.entry = { paper: '2501.07202', html: 'https://arxiv.org/html/2501.07202#axt-translate' }
+    const hook = await mountHook(usePopupData)
+    await hook.until(() => hook.current().input.entry !== null && hook.current().input.config !== null)
+    await hook.run(() => hook.current().actions.chooseMode('only'))
+    await hook.until(() => store.config?.mode === 'only')
+    expect(wire.toTab).not.toContain('axt:set-mode')
+    expect(hook.current().error).toBeNull()
+    await hook.unmount()
+  })
+
+  it('on the full text the page switches its own layout and saves the preference: the popup only asks it to', async () => {
+    const hook = await mountHook(usePopupData)
+    await hook.until(() => hook.current().input.config !== null)
+    await hook.run(() => hook.current().actions.chooseMode('only'))
+    await hook.until(() => wire.toTab.includes('axt:set-mode'))
+    expect(store.config?.mode).toBe(DEFAULT_CONFIG.mode)
     await hook.unmount()
   })
 

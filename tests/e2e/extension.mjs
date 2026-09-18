@@ -1025,14 +1025,21 @@ check('the settings page: after deleting the custom prompt the default is chosen
     link.exists && link.afterHtmlLink && link.inSameList && link.count === 1 && /\/html\/.*#axt-translate$/.test(link.href ?? ''),
     `“${link.text}” → ${link.href}; right after the HTML link ${link.afterHtmlLink}, same list ${link.inSameList}, ${link.count} in all`)
 
+  // The translation opens in a new tab by default (config `reading.openIn`, v16), and the abstract page stays where
+  // it was: the new tab is the one watched, its console from the first line on
+  context.once('page', opened => opened.on('console', m => { const t = m.text(); if (t.includes('[axt]')) logs.push({ t: Date.now(), text: t }) }))
+  const arriving = context.waitForEvent('page', { timeout: 30_000 })
   await page.click('.axt-abs-link')
-  await page.waitForURL(/\/html\/.*#axt-translate/, { timeout: 30_000 })
+  const paper = await arriving
+  await paper.waitForURL(/\/html\/.*#axt-translate/, { timeout: 30_000 })
   const idle = idleOf(await waitForLog(logs, IDLE, 120_000))
-  const rendered = await page.evaluate(() => document.querySelectorAll('.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)').length)
+  const rendered = await paper.evaluate(() => document.querySelectorAll('.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)').length)
+  const stayed = /\/abs\//.test(page.url())
+  await paper.close()
   await page.close()
-  check('the abstract page: clicked through, it is translating without touching the popup (#146)',
-    !!idle && idle.requested > 0 && rendered > 0,
-    `${idle?.text ?? '(no idle)'}; ${rendered} translation nodes on the page`)
+  check('the abstract page: clicked through, the paper opens in a new tab already translating, without touching the popup, and the abstract page stays (#146, S-O-49b)',
+    !!idle && idle.requested > 0 && rendered > 0 && stayed,
+    `${idle?.text ?? '(no idle)'}; ${rendered} translation nodes on the page; the abstract page still open: ${stayed}`)
 }
 
 // ── An in-page jump is not navigating away (the reader's 2026-09-09 report: clicking a citation jumps to the references, and that whole block fails) ──

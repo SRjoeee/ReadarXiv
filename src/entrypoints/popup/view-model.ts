@@ -162,10 +162,15 @@ function cannotRunWhy(config: Config, pack: PackState | null): string {
  * version**: a reader who came for the translation is told the answer instead of finding a control that does nothing.
  */
 function entryView(entry: EntryStatus, config: Config, input: PopupInput): PopupView {
-  const { pack, menu } = input
+  const { pack, menu, saved } = input
   const canRun = runnable(config, pack)
+  // The rule that starts a translation on the full text (`pageDecision`): the chosen service, or the free one that
+  // takes over from it. The page this button opens starts by that rule, so the button must not refuse what the page
+  // would do (Devin on #247: with a fallback the full text's button was enabled and this one was not)
+  const canStart = canRun || !!saved?.fallback
   const named = (id: string) => serviceName(id, config.services)
   const noHtml = entry.html === null
+  const why = () => cannotRunWhy(config, pack)
 
   return {
     empty: false,
@@ -178,11 +183,13 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
     menu: menu === null ? null : menuOf(menu, config, pack),
     // The helper's prompt belongs where images are translated, which is the full text
     helper: null,
-    note: noHtml ? { text: S.note.noHtml, settings: false } : !canRun ? { text: S.note.cannotRun(cannotRunWhy(config, pack)), settings: true } : null,
+    note: noHtml
+      ? { text: S.note.noHtml, settings: false }
+      : canRun ? null : { text: saved?.fallback ? S.note.willFallback(why(), named(saved.fallback.id)) : S.note.cannotRun(why()), settings: true },
     failed: null,
     // No shortcut badge: ⌥T toggles a translated page, and there is none here yet (UI.md S-P-50)
     // Not the paper page's label: this page is not what gets translated (UI.md S-P-50b, the owner 2026-09-18)
-    primary: { label: S.primary.bilingual, action: 'openHtml', disabled: noHtml || !canRun },
+    primary: { label: S.primary.bilingual, action: 'openHtml', disabled: noHtml || !canStart },
     secondary: null,
     mode: { value: config.mode, note: null },
   }

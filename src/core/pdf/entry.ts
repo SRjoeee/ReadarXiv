@@ -1,6 +1,5 @@
-// The bilingual entry on arXiv's PDF page (issue #169): one line that leads to the HTML full text, already
-// translating. The counterpart of `core/abstract/link.ts`, and deliberately the same wording, because it is the same
-// offer made on another page.
+// arXiv's PDF page (issue #169): which paper it is, and where that paper's HTML full text is. What is drawn there
+// is the floating button (`core/floating/button.ts`), whose main button follows these URLs.
 //
 // **Chrome's PDF page can be written to.** Chrome renders `arxiv.org/pdf/<id>` by putting the file into a synthetic
 // host document at the paper's own URL (`document.contentType === 'application/pdf'`), and a content script matching
@@ -9,9 +8,6 @@
 
 import { AUTO_TRANSLATE_HASH } from '@/core/abstract/link'
 import { paperIdFrom } from '@/core/paper-id'
-
-/** The element we insert; the mark makes the insertion idempotent and recognisable */
-export const PDF_ENTRY_CLASS = 'axt-pdf-entry'
 
 /** The paper id in a `/pdf/…` path, or null; the shapes live in `core/paper-id.ts`, which the abstract page reads too */
 export function paperIdFromPdfPath(pathname: string): string | null {

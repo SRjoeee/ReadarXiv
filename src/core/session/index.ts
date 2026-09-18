@@ -48,6 +48,11 @@ export interface SessionDeps {
   applyLocale: (uiLanguage: string) => void
   /** Debug lines; the e2e suites read some of them (`session idle`, `translation stopped`) */
   trace?: (line: string) => void
+  /**
+   * The page began or stopped showing its translation (`progress.state` moved): whatever on the page says which of
+   * the two it is — the floating button's tick (DESIGN §4.0c) — follows from here, whoever asked for the change
+   */
+  onState?: (state: Progress['state']) => void
 }
 
 /** Why a start was refused; the popup turns the code into the interface's sentence (DESIGN §4.2: the core knows no locale pack) */
@@ -169,6 +174,12 @@ export function createPageSession(deps: SessionDeps): PageSession {
   const epochNow = () => `${documentId}#${actions}`
   const idle = (): Progress => ({ state: 'idle', total: blocks.length, requested: 0, done: 0, failed: 0, cached: 0, inFlight: 0 })
   let progress: Progress = idle()
+  /** The one place `progress` is written, so a change of state is told exactly once (`deps.onState`) */
+  const setProgress = (next: Progress) => {
+    const moved = next.state !== progress.state
+    progress = next
+    if (moved) deps.onState?.(next.state)
+  }
 
   /** End the current session: disconnect the observers, remove the pending nodes, withdraw the queued and in-flight requests; the translations on the page stay */
   function endRun(): void {
@@ -261,7 +272,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
     active = session
     actions++
     const alive = () => active === session
-    progress = { ...idle(), state: 'on' }
+    setProgress({ ...idle(), state: 'on' })
     restarted = false
     const startEngine = status.engine.id
     const target = status.targetLanguage
@@ -315,7 +326,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       onProgress: p => {
         // The session has ended (restore / restart): an old run's callbacks are ignored
         if (!alive()) return
-        progress = p
+        setProgress(p)
         traceIdle(p)
       },
     })
@@ -530,7 +541,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
     uninstallAnchors?.()
     uninstallAnchors = null
     const result = restore(doc)
-    progress = idle()
+    setProgress(idle())
     running = null
     current = null
     restarted = false

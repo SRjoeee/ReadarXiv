@@ -325,6 +325,31 @@ describe('page session', () => {
     expect((await h.session.status()).session).toBeNull()
   })
 
+  it('tells its state once per change, whoever asked for it: on at a start, stopped by a fatal error, idle at a restore (the floating button\'s tick)', async () => {
+    const h = harness()
+    const states: string[] = []
+    h.deps.onState = state => states.push(state)
+    await h.session.start()
+    await settle()
+    // Progress moves many times while the page is on; the state was told once
+    await h.session.translate(h.blocks.slice(1))
+    await settle()
+    expect(states).toEqual(['on'])
+    h.session.restore()
+    expect(states).toEqual(['on', 'idle'])
+    // A restore with nothing on the page changes no state, and tells nothing
+    h.session.restore()
+    expect(states).toEqual(['on', 'idle'])
+
+    h.deps.backend.translate = async () => ({ ok: false, error: { kind: 'auth', message: 'refused', isolatable: false } })
+    live = h.session
+    await h.session.start()
+    await settle()
+    await h.session.translate(h.blocks.slice(1))
+    await settle()
+    expect(states).toEqual(['on', 'idle', 'on', 'stopped'])
+  })
+
   it('translates the blocks it is handed and reports progress', async () => {
     const h = harness()
     live = h.session

@@ -1,9 +1,9 @@
 import { cachePortOf, translationCache } from '@/cache'
-import { getConfig, setConfig, watchConfig } from '@/config/storage'
+import { getConfig, watchConfig } from '@/config/storage'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport } from '@/providers/transport'
 import { toErrorInfo } from '@/providers/translate-service'
-import { isAxtMessage, replyWith, sendToTab } from '@/shared/messages'
+import { type AxtMessage, isAxtMessage, replyWith, sendToTab } from '@/shared/messages'
 import { HELPER_HOST, type HelperStatus } from '@/shared/ocr'
 import { createChainHolder } from './chain'
 import { engineReady } from './engine-ready'
@@ -13,7 +13,8 @@ import { createHelperRestart } from './helper-restart'
 import { createConfigOffers, providerStatus, statusInForce } from './provider-status'
 import { createOcrService } from './ocr'
 import { createSessionRouter } from './sessions'
-import { installContextMenu, refreshContextMenu, installToggleCommand } from './context-menu'
+import { installContextMenu, refreshContextMenu, installToggleCommand, toggleTranslation } from './context-menu'
+import { getFloatingEntry, patchFloatingEntry } from './floating-entry'
 import { applyLocaleFrom, resolveLocale } from '@/ui/apply-locale'
 import { setLocale } from '@/ui/strings'
 import { savedFromStatus } from '@/shared/page-action'
@@ -231,6 +232,13 @@ export default defineBackground(() => {
     saved,
   })
 
+  // The floating button undoes the page's zoom (§4.0c): every tab is told when its zoom changes. A tab with none of
+  // our scripts has nobody listening, and that rejection is nothing to report
+  browser.tabs.onZoomChange.addListener(({ tabId, newZoomFactor }) => {
+    const message: AxtMessage<'axt:zoom-changed'> = { type: 'axt:zoom-changed', zoom: newZoomFactor }
+    void sendToTab(tabId, message).catch(() => undefined)
+  })
+
   browser.tabs.onRemoved.addListener(tabId => dropTab(tabId, 'closed'))
   /**
    * Navigating away withdraws too (Codex on #59): `onRemoved` covers closing only, and a tab moving to another URL
@@ -322,23 +330,35 @@ export default defineBackground(() => {
           .catch((e: unknown) => ({ ok: false as const, error: { kind: 'unknown' as const, message: e instanceof Error ? e.message : String(e) } }))
           .then(sendResponse)
         return true
-      case 'axt:open-settings':
-        // A content script cannot open the settings page itself; `openOptionsPage` brings an open one to the front
-        replyWith(browser.runtime.openOptionsPage().then(() => ({ opened: true })).catch(() => ({ opened: false })), sendResponse)
+      case 'axt:toggle': {
+        // The floating button on the full text (§4.0c): the same toggle as the key and the menu, for the tab that asked
+        const tab = sender.tab
+        if (tab?.id === undefined) return
+        replyWith(toggleTranslation({ send: sendToTab, saved }, tab.id).then(acted => ({ acted })), sendResponse)
         return true
-      case 'axt:set-floating-entry': {
-        // The reader dragged, locked or turned off the PDF page's entry (§4.0b). Written here so it passes the one
-        // write gate: `setConfig` parses the result and refuses while the stored value is one this build cannot read
-        const patch = message.patch
+      }
+      case 'axt:entry-settings': {
+        // What a page needs of the settings (shared/entry-settings.ts): the configuration as this build reads it —
+        // the defaults, when it cannot — never the raw stored value; the tab's zoom is the browser's to know
+        const tabId = sender.tab?.id
         replyWith(
-          getConfig()
-            .then(config => setConfig({ ...config, floatingEntry: { ...config.floatingEntry, ...patch } }))
-            .then(() => ({ saved: true }))
-            .catch(() => ({ saved: false })),
+          Promise.all([
+            getConfig(),
+            getFloatingEntry(),
+            tabId === undefined ? 1 : browser.tabs.getZoom(tabId).catch(() => 1),
+          ]).then(([config, floating, zoom]) => ({ uiLanguage: config.uiLanguage, openIn: config.reading.openIn, zoom, floating })),
           sendResponse,
         )
         return true
       }
+      case 'axt:open-settings':
+        // A content script cannot open the settings page itself; `openOptionsPage` brings an open one to the front
+        replyWith(browser.runtime.openOptionsPage().then(() => ({ opened: true })).catch(() => ({ opened: false })), sendResponse)
+        return true
+      case 'axt:set-floating-entry':
+        // The floating button's state has one writer, this one, under a key of its own (background/floating-entry.ts)
+        replyWith(patchFloatingEntry(message.patch), sendResponse)
+        return true
       case 'axt:diag':
         // Only our own contexts can reach runtime.onMessage (no externally_connectable), still the shape is checked:
         // a line is a string, the source one of the pages'; the ring's cap and the coalesced save bound the rest (Devin on #214)

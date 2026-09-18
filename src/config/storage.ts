@@ -92,9 +92,18 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
         : reading
       return { ...v15, version: 16 as const, reading: filled }
     },
-    // v16 -> v17: the PDF page's floating entry. Nobody has one yet, so everyone gets it shown, in the default place
-    17: (v16: (Omit<Config, 'version' | 'floatingEntry'> & { version: 16 }) | null) =>
+    // v16 -> v17: the floating button's state, inside the configuration. Test builds of 0.4.1 stored this shape
+    17: (v16: (Omit<Config, 'version'> & { version: 16 }) | null) =>
       ({ ...v16, version: 17 as const, floatingEntry: { enabled: true, side: 'right' as const, position: 0.66, locked: false } }),
+    // v17 -> v18: and out of it again, before any release: it is written by a drag, from any tab, and a whole-object
+    // write from one more context could put back a snapshot older than another context's save (Devin on #250). It
+    // lives under its own key with one writer (background/floating-entry.ts); where a test build had dragged it to
+    // is not carried over — a button back in its default place is no loss
+    18: (v17: (Omit<Config, 'version'> & { version: 17; floatingEntry?: unknown }) | null) => {
+      if (typeof v17 !== 'object' || v17 === null) return v17
+      const { floatingEntry: _moved, ...rest } = v17
+      return { ...rest, version: 18 as const }
+    },
   },
 })
 

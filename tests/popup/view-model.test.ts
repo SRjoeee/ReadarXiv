@@ -46,11 +46,19 @@ describe('derivePopupView (UI.md §4)', () => {
     // Nothing to open in the settings about a paper arXiv never converted
     expect(v.note?.settings).toBe(false)
   })
-  it('P17b a service that cannot run disables the button there too, as it does on the paper page', () => {
+  it('P17b a service that cannot run, with nothing to take over, disables the button there too, as it does on the paper page', () => {
     const v = view('P17b')
     expect(v.primary.disabled).toBe(true)
     expect(v.note?.text).toContain('API Key')
     expect(v.note?.settings).toBe(true)
+  })
+  it('P17c a free service takes over: the button is enabled and says which, exactly as the paper page\'s does (P7) — the page it opens starts by that rule (Devin on #247)', () => {
+    const v = view('P17c')
+    const paperPage = view('P7')
+    expect(v.primary).toEqual({ label: '双语版本', action: 'openHtml', disabled: false })
+    expect(paperPage.primary.disabled).toBe(false)
+    expect(v.note).toEqual(paperPage.note)
+    expect(v.note?.text).toContain('Microsoft')
   })
   it('P1 ready: the default service, no note, translate with the shortcut, both switches on', () => {
     const v = view('P1')

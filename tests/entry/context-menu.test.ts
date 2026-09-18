@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { COMMAND_ID, MENU_CONTEXTS, MENU_ID, MENU_PATTERNS, installContextMenu, installToggleCommand, menuTitle } from '@/entrypoints/background/context-menu'
+import { COMMAND_ID, MENU_CONTEXTS, MENU_ID, MENU_PATTERNS, installContextMenu, installToggleCommand, menuTitle, toggleTranslation } from '@/entrypoints/background/context-menu'
 import type { Progress } from '@/core/pipeline/run'
 
 /** Progress in its real shape: the first version wrote an improvised `{ state: 'off' }` here, a value `Progress` does not have at all,
@@ -171,5 +171,41 @@ describe('the keyboard command (S-P-50)', () => {
     cmd.fire(COMMAND_ID)
     await new Promise(r => setTimeout(r, 20))
     expect(cmd.sent).toEqual([])
+  })
+})
+
+// The floating button's main button on the full text (issue #169): a fourth door on the same toggle, which has to
+// know whether anything was done — a click met with silence is what the popup opens to explain
+describe('the toggle tells whether it acted (the floating button, DESIGN §4.0c)', () => {
+  const deps = (status: { progress: Progress } | undefined, saved: { revision: string | null; canRun: boolean; fallback: boolean } | null) => {
+    const sent: string[] = []
+    return {
+      sent,
+      saved: async () => saved,
+      send: vi.fn(async (_tabId: number, message: { type: string }) => {
+        sent.push(message.type)
+        if (message.type === 'axt:page-status') {
+          if (status === undefined) throw new Error('Receiving end does not exist')
+          return status
+        }
+        return {}
+      }),
+    }
+  }
+
+  it('true when a command went to the page: a translate on an idle page, a restore on a running one', async () => {
+    const idle = deps(progress('idle'), { revision: 'r1', canRun: true, fallback: false })
+    expect(await toggleTranslation(idle as never, 7)).toBe(true)
+    expect(idle.sent).toEqual(['axt:page-status', 'axt:translate-page'])
+    const on = deps(progress('on'), null)
+    expect(await toggleTranslation(on as never, 7)).toBe(true)
+    expect(on.sent).toEqual(['axt:page-status', 'axt:restore-page'])
+  })
+
+  it('false when nothing can run, and when the page does not answer: nothing was sent, and the caller says why', async () => {
+    const stuck = deps(progress('idle'), { revision: 'r1', canRun: false, fallback: false })
+    expect(await toggleTranslation(stuck as never, 7)).toBe(false)
+    expect(stuck.sent).toEqual(['axt:page-status'])
+    expect(await toggleTranslation(deps(undefined, { revision: 'r1', canRun: true, fallback: false }) as never, 7)).toBe(false)
   })
 })
