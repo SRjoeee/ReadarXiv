@@ -3,7 +3,14 @@
 // failed.ts so the three never disagree about what a translation node looks like.
 import type { Block, TextBlock } from '@/core/extractor'
 import { T_CLASS } from '@/core/marks'
+import { FOR_ATTR, PENDING_CLASS } from './attrs'
 import { eqnProseCell, isInlineTitleCandidate, visibleText } from '@/core/rules/latexml'
+
+/** The block's pending node (§7.6): its next sibling, when that is the skeleton inserted for it */
+export function pendingOf(block: Block): Element | null {
+  const next = block.el.nextElementSibling
+  return next?.classList.contains(PENDING_CLASS) && next.getAttribute(FOR_ATTR) === block.id ? next : null
+}
 
 /** A heading whose visible text is at most this long shares its line with the translation */
 const INLINE_TITLE_MAX_CHARS = 60
@@ -28,10 +35,18 @@ export function shouldInline(block: TextBlock): boolean {
  * The translation, the skeleton and the failure widget **all three come through here**: an exception for the
  * translation alone would hang the waiting ring under `<tr>` directly and make the failure widget a `<span>` child of
  * `<tbody>`, both against the table content model (Codex on #168)
+ *
+ * `reuse` is a node of ours already in the page — the skeleton's, when its translation arrives (`renderText`): it is
+ * emptied, stripped of its attributes and used as the shell's node, so the block's parent sees no child come or go
  */
-export function translationShell(block: Block, tagName?: string): { node: Element; slot: Element } {
+export function translationShell(block: Block, tagName?: string, reuse?: Element): { node: Element; slot: Element } {
   const doc = block.el.ownerDocument
-  const node = doc.createElement(tagName ?? block.el.tagName)
+  const node = reuse ?? doc.createElement(tagName ?? block.el.tagName)
+  if (reuse) {
+    // Emptied and bare, the node differs from a new one in nothing but being in the page already
+    reuse.replaceChildren()
+    for (const name of reuse.getAttributeNames()) reuse.removeAttribute(name)
+  }
   const cell = eqnProseCell(block.el)
   if (!cell) return { node, slot: node }
   const shell = cell.cloneNode(false) as Element

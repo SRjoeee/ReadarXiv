@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { extract, markBlocks, type Block } from '@/core/extractor'
-import { DEFAULT_PRELOAD, THRESHOLD_STEP, createLazyScheduler, observerThresholds, quantizeThreshold } from '@/core/scheduler/lazy'
+import { DEFAULT_PRELOAD, THRESHOLD_STEP, createLazyScheduler, observerThresholds, quantizeThreshold, readViewport } from '@/core/scheduler/lazy'
 
 /** happy-dom has no IntersectionObserver: a fake records observe / unobserve, and the tests emit by hand */
 class FakeIntersectionObserver {
@@ -153,6 +153,70 @@ describe('createLazyScheduler', () => {
     expect(entered[0]!.map(b => b.id)).toEqual(['a'])
     scheduler.trigger(blocks)
     expect(scheduler.waiting()).toBe(0)
+  })
+})
+
+// A geometry read after a write makes the browser recalculate styles and lay the whole paper out in the middle of the
+// script (DESIGN §10): a run reads where its blocks are first, writes, and starts the scheduler from that reading
+describe('the viewport is read apart from the scheduler\'s start', () => {
+  const g = globalThis as { IntersectionObserver?: unknown; innerHeight?: number }
+  beforeEach(() => {
+    FakeIntersectionObserver.instances = []
+    g.IntersectionObserver = FakeIntersectionObserver
+    g.innerHeight = 800
+  })
+  afterEach(() => {
+    delete g.IntersectionObserver
+    document.body.innerHTML = ''
+    vi.restoreAllMocks()
+  })
+
+  function page(): { blocks: Block[]; by: Record<string, Block> } {
+    document.body.innerHTML = PAGE
+    const blocks = extract(document)
+    markBlocks(blocks)
+    const by = Object.fromEntries(blocks.map(b => [b.id, b]))
+    layout(by.a!.el, 100)
+    layout(by.b!.el, 900 + 500)
+    layout(by.c!.el, 5000)
+    layout(by.d!.el, 5100)
+    return { blocks, by }
+  }
+
+  it('a scheduler started from a reading asks the layout nothing: the first screen is the one that was read', () => {
+    const { blocks, by } = page()
+    const reading = readViewport(blocks, DEFAULT_PRELOAD)
+    // The page is written to: everything moves, the way a paper does when its second column appears
+    layout(by.a!.el, 9000)
+    layout(by.c!.el, 100)
+    const asked = vi.spyOn(Element.prototype, 'getBoundingClientRect')
+    for (const block of blocks) vi.spyOn(block.el, 'getBoundingClientRect')
+    const entered: Block[][] = []
+    createLazyScheduler(blocks, { ...DEFAULT_PRELOAD, onEnter: picked => entered.push(picked), reading })
+    expect(asked).not.toHaveBeenCalled()
+    for (const block of blocks) expect(block.el.getBoundingClientRect).not.toHaveBeenCalled()
+    expect(entered).toEqual([[by.a, by.b]])
+    // What the reading did not seed is the observer's, which reports a block the write brought into view by itself
+    const io = FakeIntersectionObserver.instances[0]!
+    expect([...io.observed]).toEqual([by.c!.el, by.d!.el])
+  })
+
+  it('the reading carries the anchors: a footnote without a box enters with the paragraph that was read as its anchor', () => {
+    const { blocks, by } = page()
+    const reading = readViewport(blocks, DEFAULT_PRELOAD)
+    expect(reading.byAnchor.get(by.c!.el)).toEqual([by.c, by.n])
+    const entered: Block[][] = []
+    createLazyScheduler(blocks, { ...DEFAULT_PRELOAD, onEnter: picked => entered.push(picked), reading })
+    FakeIntersectionObserver.instances[0]!.emit([by.c!.el])
+    expect(entered[1]).toEqual([by.c, by.n])
+  })
+
+  it('the whole paper asks the layout nothing at all: every block enters whatever its box', () => {
+    const { blocks } = page()
+    const asked = blocks.map(block => vi.spyOn(block.el, 'getBoundingClientRect'))
+    const reading = readViewport(blocks, { margin: 'all', threshold: 0 })
+    for (const spy of asked) expect(spy).not.toHaveBeenCalled()
+    expect(reading.seeded).toEqual(blocks.map(b => b.el))
   })
 })
 

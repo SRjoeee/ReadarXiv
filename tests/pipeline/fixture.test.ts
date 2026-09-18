@@ -19,7 +19,6 @@ describe('pipeline × fixture', () => {
     }
     const t0 = performance.now()
     const run = startTranslation({ doc, blocks, target: 'zh-CN', mode: 'stack', paper: '2410.00260', transport, capabilities: { maxBatchChars: 1000, maxBatchItems: 4, renderPath: 'tags' }, preload: DEFAULT_PRELOAD })
-    await run.ready
     // happy-dom has neither layout nor IntersectionObserver: the whole paper is handed over by hand, as if scrolled to the bottom
     await run.translate(blocks)
     const progress = run.progress()

@@ -1,4 +1,4 @@
-import { createLazyScheduler, type LazyScheduler, type PreloadOptions } from '@/core/scheduler/lazy'
+import { createLazyScheduler, readViewport, type LazyScheduler, type PreloadOptions, type ViewportReading } from '@/core/scheduler/lazy'
 
 // The bookkeeping the text run and the image run share (DESIGN §4.4): what each target is up to, whether the run may
 // still work, the permanent-error record, the viewport scheduler, and the counts both progress shapes are built
@@ -30,7 +30,12 @@ export interface LedgerDeps<T extends { el: Element }> {
 }
 
 export interface RunLedger<T extends { el: Element }> {
-  /** Start observing the viewport. The text run does it after its sliced marking, the image run at once */
+  /**
+   * Read where the targets are, ahead of `observe()`. A run about to write to the page asks first: after a write the
+   * same read makes the browser lay the whole paper out in the middle of the script (DESIGN §10). Nothing when halted
+   */
+  measure(): void
+  /** Start observing the viewport, from the reading `measure()` took or one taken now; the first screen enters at once */
   observe(): void
   /**
    * The targets the run may take now: known, not yet requested and — when a gate is given — admitted. `taken`
@@ -71,6 +76,7 @@ export function createRunLedger<T extends { el: Element }>(targets: readonly T[]
   let fatal: string | undefined
   let stopped = false
   let scheduler: LazyScheduler<T> | null = null
+  let reading: ViewportReading<T> | undefined
 
   const halted = () => stopped || fatal !== undefined || deps.isCurrent?.() === false
   const inState = (state: Outcome) => targets.filter(target => outcome.get(target) === state)
@@ -83,9 +89,15 @@ export function createRunLedger<T extends { el: Element }>(targets: readonly T[]
   }
 
   return {
+    measure() {
+      if (halted() || scheduler) return
+      reading = readViewport(targets, deps.preload)
+    },
     observe() {
       if (halted() || scheduler) return
-      scheduler = createLazyScheduler([...targets], { ...deps.preload, onEnter: deps.onEnter })
+      scheduler = createLazyScheduler([...targets], { ...deps.preload, onEnter: deps.onEnter, reading })
+      // The reading holds every target's element; the scheduler has its own copy of what it needs
+      reading = undefined
       if (releaseAll) releaseWaiting()
     },
     release() {
