@@ -48,19 +48,19 @@ const dockState = (on = page) => on.evaluate(() => {
     return r ? { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2), width: Math.round(r.width) } : null
   }
   const look = (selector, property) => (root.querySelector(selector) ? getComputedStyle(root.querySelector(selector))[property] : null)
-  const dock = root.querySelector('.dock')
-  const main = root.querySelector('.main')
+  const dock = root.querySelector('.axt-fb-dock')
+  const main = root.querySelector('.axt-fb-main')
   return {
-    side: dock.dataset.side, lit: dock.dataset.lit, expanded: dock.dataset.expanded, active: dock.dataset.active, width: window.innerWidth,
-    main: rect('.main'), disc: rect('.disc'), panel: rect('.panel'), settings: rect('.settings'), options: rect('.options'),
-    mainOpacity: Number(look('.main', 'opacity')), panelOpacity: Number(look('.panel', 'opacity')), panelVisibility: look('.panel', 'visibility'),
+    side: dock.dataset.axtSide, lit: dock.dataset.axtLit, expanded: dock.dataset.axtExpanded, active: dock.dataset.axtActive, width: window.innerWidth,
+    main: rect('.axt-fb-main'), disc: rect('.axt-fb-disc'), panel: rect('.axt-fb-panel'), settings: rect('.axt-fb-settings'), options: rect('.axt-fb-options'),
+    mainOpacity: Number(look('.axt-fb-main', 'opacity')), panelOpacity: Number(look('.axt-fb-panel', 'opacity')), panelVisibility: look('.axt-fb-panel', 'visibility'),
     // The tick is scaled to nothing until the page is translated
-    tickShown: look('.tick', 'transform') !== 'matrix(0, 0, 0, 0, 0, 0)', discRadius: look('.disc', 'borderRadius'),
+    tickShown: look('.axt-fb-tick', 'transform') !== 'matrix(0, 0, 0, 0, 0, 0)', discRadius: look('.axt-fb-disc', 'borderRadius'),
     label: main.getAttribute('aria-label'), tag: main.tagName, href: main.getAttribute('href'),
-    order: [...root.querySelectorAll('.column > *')].map(e => e.className),
+    order: [...root.querySelectorAll('.axt-fb-column > *')].map(e => e.className),
     // In the screen's own pixels: what the reader's eye gets, whatever the page's zoom
     device: (() => { const r = main.getBoundingClientRect(); const k = window.devicePixelRatio; return { ratio: k, width: r.width * k, height: r.height * k, top: r.top * k, left: r.left * k } })(),
-    vector: root.querySelector('.disc svg.mark') !== null && root.querySelector('img') === null,
+    vector: root.querySelector('.axt-fb-disc svg.axt-fb-mark') !== null && root.querySelector('img') === null,
   }
 })
 
@@ -79,16 +79,16 @@ async function openPanel() {
   const text = frame ? await frame.evaluate(() => document.body.innerText.replace(/\s+/g, ' ')).catch(() => null) : null
   const state = await page.evaluate(() => {
     const root = document.querySelector('.axt-floating').shadowRoot
-    const box = root.querySelector('.panel-box')
+    const box = root.querySelector('.axt-fb-panel-box')
     const r = box.getBoundingClientRect()
-    const m = root.querySelector('.main').getBoundingClientRect()
-    return { ready: box.dataset.ready, box: { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), height: Math.round(r.height) }, main: { left: Math.round(m.left), y: Math.round(m.y + m.height / 2) }, innerHeight: window.innerHeight, expanded: root.querySelector('.panel').getAttribute('aria-expanded') }
+    const m = root.querySelector('.axt-fb-main').getBoundingClientRect()
+    return { ready: box.dataset.axtReady, box: { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), height: Math.round(r.height) }, main: { left: Math.round(m.left), y: Math.round(m.y + m.height / 2) }, innerHeight: window.innerHeight, expanded: root.querySelector('.axt-fb-panel').getAttribute('aria-expanded') }
   })
   await page.screenshot({ path: `${SHOTS}/floating-panel.png` })
   // Between the two places the panel can be — the dock may be docked to either side by now — and on the paper's text
   await page.mouse.click(640, 430)
   await sleep(500)
-  const closedByPress = await page.evaluate(() => document.querySelector('.axt-floating').shadowRoot.querySelector('.panel-box').hidden)
+  const closedByPress = await page.evaluate(() => document.querySelector('.axt-floating').shadowRoot.querySelector('.axt-fb-panel-box').hidden)
   await page.mouse.move(640, 10)
   await sleep(600)
   return { ...state, loaded: frame !== undefined, text, closedByPress }
@@ -99,7 +99,7 @@ await page.goto(`https://arxiv.org/pdf/${PAPER}`, { waitUntil: 'load' })
 await sleep(6000)
 const rest = await dockState()
 check('three buttons in a column: the control panel, the main button, the settings (no feedback button)',
-  JSON.stringify(rest?.order) === JSON.stringify(['hidden-button panel', 'anchor', 'hidden-button settings']),
+  JSON.stringify(rest?.order) === JSON.stringify(['axt-fb-hidden-button axt-fb-panel', 'axt-fb-anchor', 'axt-fb-hidden-button axt-fb-settings']),
   `${rest?.order?.join(' · ')}`)
 /** Every edge of the main button on a whole pixel of the screen: half a pixel is a soft edge */
 const onTheGrid = device => [device.width, device.height, device.top, device.left].every(v => Math.abs(v - Math.round(v)) < 0.01)
@@ -188,12 +188,13 @@ check('it folds and dims again after the pointer has left for the PDF viewer', f
   await page.mouse.click(close.x, close.y)
   await sleep(300)
   const item = await page.evaluate(() => {
-    const r = document.querySelector('.axt-floating')?.shadowRoot?.querySelector('.hide-always')?.getBoundingClientRect()
+    const r = document.querySelector('.axt-floating')?.shadowRoot?.querySelector('.axt-fb-hide-always')?.getBoundingClientRect()
     return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null
   })
   if (item) await page.mouse.click(item.x, item.y)
   await sleep(1000)
-  const stored = await worker.evaluate(() => chrome.storage.local.get('config')).then(v => v.config?.floatingEntry)
+  // Under its own key, not in the configuration: a drag's write can touch nothing else (Devin on #250)
+  const stored = await worker.evaluate(() => chrome.storage.local.get(['config', 'floatingEntry'])).then(v => ({ ...v.floatingEntry, inConfig: 'floatingEntry' in (v.config ?? {}) }))
   const gone = await page.evaluate(() => document.querySelectorAll('.axt-floating').length)
   const options = await context.newPage()
   await options.goto(`chrome-extension://${extensionId}/options.html#reading`, { waitUntil: 'load' })
@@ -204,7 +205,7 @@ check('it folds and dims again after the pointer has left for the PDF viewer', f
   await page.bringToFront()
   const back = await page.evaluate(() => document.querySelectorAll('.axt-floating').length)
   check('“don\'t show again” takes it away and turns the setting off; the settings switch brings it back without a reload',
-    item !== null && gone === 0 && stored?.enabled === false && stored?.side === 'left' && wasOn === 'false' && back === 1,
+    item !== null && gone === 0 && stored?.enabled === false && stored?.side === 'left' && stored?.inConfig === false && wasOn === 'false' && back === 1,
     `menu item ${item ? 'found' : 'missing'}, ${gone} buttons after hiding, stored enabled ${stored?.enabled} (side kept: ${stored?.side}), switch ${wasOn} before, ${back} button after turning it on`)
   await options.close()
 }
@@ -228,13 +229,13 @@ await sleep(3000)
   await sleep(700)
   await page.evaluate(() => {
     const root = document.querySelector('.axt-floating').shadowRoot
-    const parts = ['.panel', '.settings', '.options', '.lock', '.main .tip'].map(selector => root.querySelector(selector))
-    const dock = root.querySelector('.dock')
-    const main = root.querySelector('.main')
+    const parts = ['.axt-fb-panel', '.axt-fb-settings', '.axt-fb-options', '.axt-fb-lock', '.axt-fb-main .axt-fb-tip'].map(selector => root.querySelector(selector))
+    const dock = root.querySelector('.axt-fb-dock')
+    const main = root.querySelector('.axt-fb-main')
     window.__frames = []
     let from = null
     const read = () => {
-      if (from === null && dock.dataset.expanded === 'yes') from = performance.now()
+      if (from === null && dock.dataset.axtExpanded === 'yes') from = performance.now()
       if (from !== null) {
         const m = main.getBoundingClientRect()
         const d = dock.getBoundingClientRect()
@@ -275,7 +276,7 @@ await sleep(3000)
   const inward = docked === 'right' ? 1 : -1
   const watch = () => page.evaluate(() => {
     const root = document.querySelector('.axt-floating').shadowRoot
-    const parts = ['.main', '.main .tip', '.panel', '.options'].map(selector => root.querySelector(selector))
+    const parts = ['.axt-fb-main', '.axt-fb-main .axt-fb-tip', '.axt-fb-panel', '.axt-fb-options'].map(selector => root.querySelector(selector))
     window.__looks = []
     window.__watching = true
     const read = () => {

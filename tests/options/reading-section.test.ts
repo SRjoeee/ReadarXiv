@@ -8,6 +8,11 @@ import { mountElement } from '../ui/render-hook'
 // drawer is open here keeps the drawer, and the reader's next change writes the profile back
 
 vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getURL: (path: string) => path } } }))
+// The floating button's switch asks the background, its state's only writer (options/floating-entry.ts): stood in for here
+const floating = vi.hoisted(() => ({ enabled: true as boolean | null, asked: [] as boolean[] }))
+vi.mock('@/entrypoints/options/floating-entry', () => ({
+  useFloatingEntry: () => ({ enabled: floating.enabled, setEnabled: (next: boolean) => { floating.asked.push(next) } }),
+}))
 
 import { Reading } from '@/entrypoints/options/sections/Reading'
 import type { OptionsData } from '@/entrypoints/options/data'
@@ -140,6 +145,23 @@ describe('Reading: the preload range', () => {
     expect(patches.at(-1)?.preload.margin).toBe('all')
     await mounted.rerender(createElement(Reading, { data: data({ ...DEFAULT_CONFIG, preload: { margin: 'all', threshold: 0 } }, patches) }))
     expect(stops(mounted.container).map(b => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'false', 'true'])
+    await mounted.unmount()
+  })
+})
+
+describe('Reading: the floating button\'s switch (S-O-49c)', () => {
+  beforeEach(() => { setLocale('en'); floating.enabled = true; floating.asked = [] })
+
+  it('shows what the background says and asks it to change: the configuration is not written', async () => {
+    const patches: Config[] = []
+    floating.enabled = false
+    const mounted = await mountElement(createElement(Reading, { data: data(DEFAULT_CONFIG, patches) }))
+    const toggle = Array.from(mounted.container.querySelectorAll('[role="switch"]')).find(el => el.getAttribute('aria-label') === O.reading.floatingEntry) as HTMLElement
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    toggle.click()
+    await mounted.flush()
+    expect(floating.asked).toEqual([true])
+    expect(patches).toEqual([])
     await mounted.unmount()
   })
 })

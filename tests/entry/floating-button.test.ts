@@ -38,8 +38,8 @@ function mount(overrides: Partial<FloatingButtonOptions> = {}) {
   })
   const root = host.shadowRoot!
   const q = <T extends Element = HTMLElement>(selector: string) => root.querySelector(selector) as T
-  const dock = q('.dock')
-  const main = q('.main')
+  const dock = q('.axt-fb-dock')
+  const main = q('.axt-fb-main')
   return { host, entry, root, q, dock, main, onPlacement, onSettings, onHide }
 }
 
@@ -76,19 +76,19 @@ describe('the floating button: what it is made of', () => {
   it('is a column of three: the control panel, the main button with its two corner controls, the settings', () => {
     const { root, q } = mount()
     // The dock places; the column inside it is what is seen, and what undoes the page's zoom
-    expect([...root.querySelectorAll('.dock > *')].map(e => e.className)).toEqual(['column', 'panel-box', 'shield'])
-    expect([...q('.column').children].map(e => e.className)).toEqual(['hidden-button panel', 'anchor', 'hidden-button settings'])
-    expect([...q('.anchor').children].map(e => e.className)).toEqual(['main', 'control options', 'control lock', 'menu'])
+    expect([...root.querySelectorAll('.axt-fb-dock > *')].map(e => e.className)).toEqual(['axt-fb-column', 'axt-fb-panel-box', 'axt-fb-shield'])
+    expect([...q('.axt-fb-column').children].map(e => e.className)).toEqual(['axt-fb-hidden-button axt-fb-panel', 'axt-fb-anchor', 'axt-fb-hidden-button axt-fb-settings'])
+    expect([...q('.axt-fb-anchor').children].map(e => e.className)).toEqual(['axt-fb-main', 'axt-fb-control axt-fb-options', 'axt-fb-control axt-fb-lock', 'axt-fb-menu'])
     // Our mark in its disc, inline vector and decorative: the button carries the name, and no image file is fetched
-    const mark = q<SVGElement>('.main .disc svg.mark')
+    const mark = q<SVGElement>('.axt-fb-main .axt-fb-disc svg.axt-fb-mark')
     expect([mark.getAttribute('aria-hidden'), mark.getAttribute('viewBox'), mark.querySelector('circle')?.getAttribute('fill')]).toEqual(['true', '10.6 6.6 47 47', '#fff'])
     expect(root.querySelector('img')).toBeNull()
-    expect(q('.main .disc .tick')).not.toBeNull()
+    expect(q('.axt-fb-main .axt-fb-disc .axt-fb-tick')).not.toBeNull()
   })
 
   it('on an abstract or PDF page the main button is a link to the bilingual version, in a new tab unless told otherwise', () => {
     const { entry, q } = mount()
-    const link = q<HTMLAnchorElement>('a.main')
+    const link = q<HTMLAnchorElement>('a.axt-fb-main')
     expect([link.getAttribute('href'), link.target, link.rel, link.getAttribute('aria-label')]).toEqual([HREF, '_blank', 'noopener', STRINGS.main])
     entry.retarget(false)
     expect([link.getAttribute('target'), link.getAttribute('rel')]).toEqual([null, null])
@@ -99,15 +99,15 @@ describe('the floating button: what it is made of', () => {
   it('on the full text the main button is a button that runs the toggle, and the tick says the page is translated', () => {
     const run = vi.fn<() => void>()
     const { entry, q, dock } = mount({ main: { kind: 'toggle', run } })
-    const main = q<HTMLButtonElement>('button.main')
-    expect([main.type, main.getAttribute('aria-label'), dock.dataset.active]).toEqual(['button', STRINGS.main, 'no'])
+    const main = q<HTMLButtonElement>('button.axt-fb-main')
+    expect([main.type, main.getAttribute('aria-label'), dock.dataset.axtActive]).toEqual(['button', STRINGS.main, 'no'])
     main.dispatchEvent(click())
     expect(run).toHaveBeenCalledOnce()
     entry.activate(true)
     entry.relabel({ ...STRINGS, main: 'Show the original' })
-    expect([dock.dataset.active, main.getAttribute('aria-label'), q('.main .tip').textContent]).toEqual(['yes', 'Show the original', 'Show the original'])
+    expect([dock.dataset.axtActive, main.getAttribute('aria-label'), q('.axt-fb-main .axt-fb-tip').textContent]).toEqual(['yes', 'Show the original', 'Show the original'])
     entry.activate(false)
-    expect(dock.dataset.active).toBe('no')
+    expect(dock.dataset.axtActive).toBe('no')
     // A link has nothing to retarget here, and says nothing about it
     entry.retarget(false)
     expect(main.hasAttribute('target')).toBe(false)
@@ -115,8 +115,8 @@ describe('the floating button: what it is made of', () => {
 
   it('a paper with no HTML version keeps the button, disabled, its tooltip saying why', () => {
     const { q } = mount({ main: { kind: 'none' }, strings: { ...STRINGS, main: 'arXiv has no HTML version of this paper' } })
-    const main = q<HTMLButtonElement>('button.main')
-    expect([main.getAttribute('aria-disabled'), main.getAttribute('aria-label'), q('.main .tip').textContent])
+    const main = q<HTMLButtonElement>('button.axt-fb-main')
+    expect([main.getAttribute('aria-disabled'), main.getAttribute('aria-label'), q('.axt-fb-main .axt-fb-tip').textContent])
       .toEqual(['true', 'arXiv has no HTML version of this paper', 'arXiv has no HTML version of this paper'])
     // A click does nothing, and the other two buttons still work
     expect(() => main.dispatchEvent(click())).not.toThrow()
@@ -124,17 +124,17 @@ describe('the floating button: what it is made of', () => {
 
   it('names every control; the tooltips are the same words for the eye only; the settings ask the host', () => {
     const { q, root, onSettings } = mount()
-    expect([q('.panel').getAttribute('aria-label'), q('.settings').getAttribute('aria-label'), q('.options').getAttribute('aria-label'), q('.lock').getAttribute('aria-label')])
+    expect([q('.axt-fb-panel').getAttribute('aria-label'), q('.axt-fb-settings').getAttribute('aria-label'), q('.axt-fb-options').getAttribute('aria-label'), q('.axt-fb-lock').getAttribute('aria-label')])
       .toEqual([STRINGS.panel, STRINGS.settings, STRINGS.options, STRINGS.lock])
-    expect([q('.panel .tip').textContent, q('.settings .tip').textContent, q('.main .tip').textContent]).toEqual([STRINGS.panel, STRINGS.settings, STRINGS.main])
-    expect([...root.querySelectorAll('.tip')].every(tip => tip.getAttribute('aria-hidden') === 'true')).toBe(true)
-    q('.settings').dispatchEvent(click())
+    expect([q('.axt-fb-panel .axt-fb-tip').textContent, q('.axt-fb-settings .axt-fb-tip').textContent, q('.axt-fb-main .axt-fb-tip').textContent]).toEqual([STRINGS.panel, STRINGS.settings, STRINGS.main])
+    expect([...root.querySelectorAll('.axt-fb-tip')].every(tip => tip.getAttribute('aria-hidden') === 'true')).toBe(true)
+    q('.axt-fb-settings').dispatchEvent(click())
     expect(onSettings).toHaveBeenCalledOnce()
   })
 
   it('the icons are one set on one grid: Lucide\'s, each a 24 px box with round strokes', () => {
     const { root } = mount()
-    const icons = [...root.querySelectorAll('svg:not(.mark)')]
+    const icons = [...root.querySelectorAll('svg:not(.axt-fb-mark)')]
     expect(icons.length).toBeGreaterThanOrEqual(5)
     for (const icon of icons) {
       expect([icon.getAttribute('viewBox'), icon.getAttribute('stroke-linecap'), icon.getAttribute('stroke-linejoin'), icon.getAttribute('fill')])
@@ -146,8 +146,26 @@ describe('the floating button: what it is made of', () => {
   it('follows a change of interface language while the page stays open', () => {
     const { entry, q } = mount()
     entry.relabel({ ...STRINGS, main: 'Zweisprachige Fassung', panel: 'Bedienfeld', lock: 'Position sperren', hideForNow: 'Vorerst ausblenden' })
-    expect([q('.main').getAttribute('aria-label'), q('.panel .tip').textContent, q('.lock').getAttribute('aria-label'), q('.hide-now').textContent])
+    expect([q('.axt-fb-main').getAttribute('aria-label'), q('.axt-fb-panel .axt-fb-tip').textContent, q('.axt-fb-lock').getAttribute('aria-label'), q('.axt-fb-hide-now').textContent])
       .toEqual(['Zweisprachige Fassung', 'Bedienfeld', 'Position sperren', 'Vorerst ausblenden'])
+  })
+
+  it('everything it injects carries the prefix, inside its shadow root too: classes, data attributes, CSS variables (hard rule 2; Devin on #250)', () => {
+    const { root, q, entry } = mount({ zoom: 1.25 })
+    q('.axt-fb-panel').dispatchEvent(click())
+    entry.activate(true)
+    for (const element of root.querySelectorAll('*')) {
+      for (const name of element.classList) expect([element.tagName, name, name.startsWith('axt-')]).toEqual([element.tagName, name, true])
+      for (const attribute of element.getAttributeNames().filter(n => n.startsWith('data-'))) expect([attribute, attribute.startsWith('data-axt-')]).toEqual([attribute, true])
+    }
+    const sheet = root.querySelector('style')!.textContent!.replace(/\/\*[\s\S]*?\*\//g, '')
+    const classes = [...sheet.matchAll(/\.([A-Za-z][\w-]*)/g)].map(m => m[1]!)
+    const variables = [...sheet.matchAll(/(--[\w-]+)/g)].map(m => m[1]!)
+    const attributes = [...sheet.matchAll(/\[(data-[\w-]+)/g)].map(m => m[1]!)
+    expect(classes.filter(name => !name.startsWith('axt-'))).toEqual([])
+    expect(variables.filter(name => !name.startsWith('--axt-'))).toEqual([])
+    expect(attributes.filter(name => !name.startsWith('data-axt-'))).toEqual([])
+    expect(q('.axt-fb-dock').style.getPropertyValue('--axt-unzoom')).toBe('0.8')
   })
 
   it('leaves the rest of the document alone', () => {
@@ -164,13 +182,13 @@ describe('the floating button: at rest, lit, open', () => {
     vi.useFakeTimers()
     const { dock, main } = mount()
     // 0.66 of happy-dom's 768 px window, on a whole pixel rather than at 66vh
-    expect([dock.dataset.side, dock.dataset.lit, dock.dataset.expanded, dock.style.top]).toEqual(['right', 'no', 'no', '507px'])
+    expect([dock.dataset.axtSide, dock.dataset.axtLit, dock.dataset.axtExpanded, dock.style.top]).toEqual(['right', 'no', 'no', '507px'])
     main.dispatchEvent(new MouseEvent('mouseenter'))
-    expect([dock.dataset.lit, dock.dataset.expanded]).toEqual(['yes', 'no'])
+    expect([dock.dataset.axtLit, dock.dataset.axtExpanded]).toEqual(['yes', 'no'])
     vi.advanceTimersByTime(399)
-    expect(dock.dataset.expanded).toBe('no')
+    expect(dock.dataset.axtExpanded).toBe('no')
     vi.advanceTimersByTime(1)
-    expect([dock.dataset.lit, dock.dataset.expanded]).toEqual(['yes', 'yes'])
+    expect([dock.dataset.axtLit, dock.dataset.axtExpanded]).toEqual(['yes', 'yes'])
   })
 
   it('a pointer that only crosses it opens nothing, and the light goes out 200 ms after it has left', () => {
@@ -180,12 +198,12 @@ describe('the floating button: at rest, lit, open', () => {
     vi.advanceTimersByTime(150)
     dock.dispatchEvent(new MouseEvent('mouseleave'))
     vi.advanceTimersByTime(199)
-    expect([dock.dataset.lit, dock.dataset.expanded]).toEqual(['yes', 'no'])
+    expect([dock.dataset.axtLit, dock.dataset.axtExpanded]).toEqual(['yes', 'no'])
     vi.advanceTimersByTime(1)
-    expect([dock.dataset.lit, dock.dataset.expanded]).toEqual(['no', 'no'])
+    expect([dock.dataset.axtLit, dock.dataset.axtExpanded]).toEqual(['no', 'no'])
     // The dwell that was under way died with the leave
     vi.advanceTimersByTime(1000)
-    expect(dock.dataset.expanded).toBe('no')
+    expect(dock.dataset.axtExpanded).toBe('no')
   })
 
   it('leaving is forgiven for 200 ms: back inside in time, it stays open', () => {
@@ -197,53 +215,53 @@ describe('the floating button: at rest, lit, open', () => {
     vi.advanceTimersByTime(150)
     main.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
     vi.advanceTimersByTime(1000)
-    expect([dock.dataset.lit, dock.dataset.expanded]).toEqual(['yes', 'yes'])
+    expect([dock.dataset.axtLit, dock.dataset.axtExpanded]).toEqual(['yes', 'yes'])
     dock.dispatchEvent(new MouseEvent('mouseleave'))
     vi.advanceTimersByTime(200)
-    expect([dock.dataset.lit, dock.dataset.expanded]).toEqual(['no', 'no'])
+    expect([dock.dataset.axtLit, dock.dataset.axtExpanded]).toEqual(['no', 'no'])
   })
 
   it('on a PDF the document never hears the pointer leave for the viewer: a layer behind the lit button hears it instead', () => {
     vi.useFakeTimers()
     Object.defineProperty(document, 'contentType', { configurable: true, get: () => 'application/pdf' })
     const { dock, main, q } = mount()
-    const catcher = q('.catcher')
+    const catcher = q('.axt-fb-catcher')
     expect(catcher.hidden).toBe(true)
     main.dispatchEvent(new MouseEvent('mouseenter'))
     main.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
     expect(catcher.hidden).toBe(false)
     vi.advanceTimersByTime(400)
-    expect(dock.dataset.expanded).toBe('yes')
+    expect(dock.dataset.axtExpanded).toBe('yes')
     // Off the buttons and onto the layer, then back within the grace: still open
     catcher.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
     vi.advanceTimersByTime(150)
-    q('.panel').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    q('.axt-fb-panel').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
     vi.advanceTimersByTime(1000)
-    expect(dock.dataset.expanded).toBe('yes')
+    expect(dock.dataset.axtExpanded).toBe('yes')
     // Off for good: folded, dim, and the layer is gone with it, so the viewer has the pointer again
     catcher.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
     vi.advanceTimersByTime(200)
-    expect([dock.dataset.expanded, dock.dataset.lit, catcher.hidden]).toEqual(['no', 'no', true])
+    expect([dock.dataset.axtExpanded, dock.dataset.axtLit, catcher.hidden]).toEqual(['no', 'no', true])
   })
 
   it('an ordinary page has no such layer', () => {
-    expect(mount().root.querySelector('.catcher')).toBeNull()
+    expect(mount().root.querySelector('.axt-fb-catcher')).toBeNull()
   })
 
   it('the lock says what it will do next, and the host saves it', () => {
     const { q, onPlacement } = mount()
-    q('.lock').dispatchEvent(click())
+    q('.axt-fb-lock').dispatchEvent(click())
     expect(onPlacement).toHaveBeenLastCalledWith({ side: 'right', position: 0.66, locked: true })
-    expect(q('.lock').getAttribute('aria-label')).toBe(STRINGS.unlock)
-    q('.lock').dispatchEvent(click())
+    expect(q('.axt-fb-lock').getAttribute('aria-label')).toBe(STRINGS.unlock)
+    q('.axt-fb-lock').dispatchEvent(click())
     expect(onPlacement).toHaveBeenLastCalledWith({ side: 'right', position: 0.66, locked: false })
-    expect(q('.lock').getAttribute('aria-label')).toBe(STRINGS.lock)
+    expect(q('.axt-fb-lock').getAttribute('aria-label')).toBe(STRINGS.lock)
   })
 
   it('takes a placement saved in another tab, and hides while the document is fullscreen', () => {
     const { entry, dock } = mount()
     entry.place({ side: 'left', position: 0.3, locked: true })
-    expect([dock.dataset.side, dock.style.top]).toEqual(['left', '230px'])
+    expect([dock.dataset.axtSide, dock.style.top]).toEqual(['left', '230px'])
     setFullscreen(document.body)
     document.dispatchEvent(new Event('fullscreenchange'))
     expect(dock.hidden).toBe(true)
@@ -264,7 +282,7 @@ describe('the floating button: click and drag', () => {
     const follow = click()
     m.main.dispatchEvent(follow)
     expect(follow.defaultPrevented).toBe(false)
-    expect(m.dock.dataset.dragging).toBe('no')
+    expect(m.dock.dataset.axtDragging).toBe('no')
     expect(m.onPlacement).not.toHaveBeenCalled()
   })
 
@@ -273,15 +291,15 @@ describe('the floating button: click and drag', () => {
     placeBoxes(m)
     m.main.dispatchEvent(pointer('pointerdown', 1000, 569))
     m.main.dispatchEvent(pointer('pointermove', 1004, 572))
-    expect(m.dock.dataset.dragging).toBe('no')
+    expect(m.dock.dataset.axtDragging).toBe('no')
     m.main.dispatchEvent(pointer('pointermove', 300, 400))
     // The pointer held the button 20 px from its left and top, so the circle's corner is there
-    expect([m.dock.dataset.dragging, m.dock.style.left, m.dock.style.right, m.dock.style.top]).toEqual(['yes', '280px', 'auto', '380px'])
+    expect([m.dock.dataset.axtDragging, m.dock.style.left, m.dock.style.right, m.dock.style.top]).toEqual(['yes', '280px', 'auto', '380px'])
     expect([document.body.style.cursor, document.body.style.userSelect]).toEqual(['grabbing', 'none'])
     m.main.dispatchEvent(pointer('pointerup', 300, 400))
     // Its centre (280 + 22) is in the left half; the dock's top is the button's less the 42 px above it
     expect(m.onPlacement).toHaveBeenCalledWith({ side: 'left', position: (380 - 42) / 768, locked: false })
-    expect([m.dock.dataset.dragging, m.dock.dataset.side, m.dock.style.left, m.dock.style.top]).toEqual(['no', 'left', '', '338px'])
+    expect([m.dock.dataset.axtDragging, m.dock.dataset.axtSide, m.dock.style.left, m.dock.style.top]).toEqual(['no', 'left', '', '338px'])
     // The page's own cursor and selection are back
     expect([document.body.style.cursor, document.body.style.userSelect]).toEqual(['', ''])
   })
@@ -306,7 +324,7 @@ describe('the floating button: click and drag', () => {
     vi.useFakeTimers()
     const m = mount()
     placeBoxes(m)
-    const shield = m.q('.shield')
+    const shield = m.q('.axt-fb-shield')
     expect(shield.hidden).toBe(true)
     m.main.dispatchEvent(pointer('pointerdown', 1000, 569))
     expect(shield.hidden).toBe(false)
@@ -343,7 +361,7 @@ describe('the floating button: click and drag', () => {
     placeBoxes(m)
     m.main.dispatchEvent(pointer('pointerdown', 1000, 569))
     vi.advanceTimersByTime(350)
-    expect(m.dock.dataset.dragging).toBe('yes')
+    expect(m.dock.dataset.axtDragging).toBe('yes')
     m.main.dispatchEvent(pointer('pointerup', 1000, 569))
     // Dropped where it was picked up: still on the right, at the same height
     expect(m.onPlacement).toHaveBeenCalledWith({ side: 'right', position: 507 / 768, locked: false })
@@ -371,7 +389,7 @@ describe('the floating button: click and drag', () => {
     expect(down.defaultPrevented).toBe(false)
     m.main.dispatchEvent(pointer('pointermove', 300, 300))
     vi.advanceTimersByTime(1000)
-    expect(m.dock.dataset.dragging).toBe('no')
+    expect(m.dock.dataset.axtDragging).toBe('no')
     expect(m.onPlacement).not.toHaveBeenCalled()
   })
 
@@ -381,7 +399,7 @@ describe('the floating button: click and drag', () => {
     const down = pointer('pointerdown', 1000, 569, { button: 1 })
     m.main.dispatchEvent(down)
     m.main.dispatchEvent(pointer('pointermove', 300, 300))
-    expect([down.defaultPrevented, m.dock.dataset.dragging]).toEqual([false, 'no'])
+    expect([down.defaultPrevented, m.dock.dataset.axtDragging]).toEqual([false, 'no'])
   })
 
   it('fullscreen in the middle of a drag cancels it, and gives the page back its cursor and selection', () => {
@@ -393,8 +411,8 @@ describe('the floating button: click and drag', () => {
     expect(document.body.style.cursor).toBe('grabbing')
     setFullscreen(document.body)
     document.dispatchEvent(new Event('fullscreenchange'))
-    expect([m.dock.dataset.dragging, document.body.style.cursor, document.body.style.userSelect]).toEqual(['no', 'text', ''])
-    expect(m.q('.shield').hidden).toBe(true)
+    expect([m.dock.dataset.axtDragging, document.body.style.cursor, document.body.style.userSelect]).toEqual(['no', 'text', ''])
+    expect(m.q('.axt-fb-shield').hidden).toBe(true)
     // The release that finally arrives changes nothing
     m.main.dispatchEvent(pointer('pointerup', 500, 300))
     expect(m.onPlacement).not.toHaveBeenCalled()
@@ -404,14 +422,14 @@ describe('the floating button: click and drag', () => {
 describe('the floating button: one size on every page, on the screen\'s own pixels', () => {
   it('undoes the page\'s zoom: the column and the panel carry its inverse, and a change of zoom is followed', () => {
     const { entry, dock } = mount({ zoom: 1.25 })
-    expect(dock.style.getPropertyValue('--unzoom')).toBe('0.8')
+    expect(dock.style.getPropertyValue('--axt-unzoom')).toBe('0.8')
     entry.rescale(2)
-    expect(dock.style.getPropertyValue('--unzoom')).toBe('0.5')
+    expect(dock.style.getPropertyValue('--axt-unzoom')).toBe('0.5')
     // Nonsense is not a zoom
     entry.rescale(0)
     entry.rescale(Number.NaN)
-    expect(dock.style.getPropertyValue('--unzoom')).toBe('0.5')
-    expect(mount().dock.style.getPropertyValue('--unzoom')).toBe('1')
+    expect(dock.style.getPropertyValue('--axt-unzoom')).toBe('0.5')
+    expect(mount().dock.style.getPropertyValue('--axt-unzoom')).toBe('1')
   })
 
   it('its place down the edge is a whole pixel of the screen, whatever the pixel ratio, and follows the window', () => {
@@ -432,11 +450,11 @@ describe('the floating button: one size on every page, on the screen\'s own pixe
   it('the panel is placed in the window\'s pixels and written in its own, which the un-zoom scales', () => {
     const m = mount({ zoom: 2 })
     placeBoxes(m)
-    m.q('.panel').dispatchEvent(click())
-    const frame = m.q<HTMLIFrameElement>('.panel-box iframe')
+    m.q('.axt-fb-panel').dispatchEvent(click())
+    const frame = m.q<HTMLIFrameElement>('.axt-fb-panel-box iframe')
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'axt:panel-size', height: 300 }, source: frame.contentWindow as Window }))
     // The popup's 300 px are 150 of the window's at half scale: centred on 569 → top 494, and both written doubled
-    expect([m.q('.panel-box').style.height, m.q('.panel-box').style.top]).toEqual(['300px', '988px'])
+    expect([m.q('.axt-fb-panel-box').style.height, m.q('.axt-fb-panel-box').style.top]).toEqual(['300px', '988px'])
   })
 })
 
@@ -448,69 +466,69 @@ describe('the floating button: the control panel', () => {
   it('opens the popup page in a frame beside the button, only while it is open, and holds the dock open', () => {
     vi.useFakeTimers()
     const { q, dock } = mount()
-    expect([q('.panel-box').hidden, q('.panel-box iframe')]).toEqual([true, null])
-    q('.panel').dispatchEvent(click())
-    const frame = q<HTMLIFrameElement>('.panel-box iframe')
-    expect([q('.panel-box').hidden, frame.getAttribute('src'), frame.title, q('.panel').getAttribute('aria-expanded'), dock.dataset.expanded])
+    expect([q('.axt-fb-panel-box').hidden, q('.axt-fb-panel-box iframe')]).toEqual([true, null])
+    q('.axt-fb-panel').dispatchEvent(click())
+    const frame = q<HTMLIFrameElement>('.axt-fb-panel-box iframe')
+    expect([q('.axt-fb-panel-box').hidden, frame.getAttribute('src'), frame.title, q('.axt-fb-panel').getAttribute('aria-expanded'), dock.dataset.axtExpanded])
       .toEqual([false, 'about:blank', STRINGS.panel, 'true', 'yes'])
     // The pointer going away does not fold it while the panel is up
     dock.dispatchEvent(new MouseEvent('mouseleave'))
     vi.advanceTimersByTime(1000)
-    expect(dock.dataset.expanded).toBe('yes')
+    expect(dock.dataset.axtExpanded).toBe('yes')
     // A second click closes it, and the frame goes with it
-    q('.panel').dispatchEvent(click())
-    expect([q('.panel-box').hidden, q('.panel-box iframe'), q('.panel').getAttribute('aria-expanded')]).toEqual([true, null, 'false'])
+    q('.axt-fb-panel').dispatchEvent(click())
+    expect([q('.axt-fb-panel-box').hidden, q('.axt-fb-panel-box iframe'), q('.axt-fb-panel').getAttribute('aria-expanded')]).toEqual([true, null, 'false'])
   })
 
   it('shows itself once the popup has said how tall it is, centred on the main button and kept inside the window', () => {
     const m = mount()
     placeBoxes(m)
-    m.q('.panel').dispatchEvent(click())
-    const box = m.q('.panel-box')
-    expect(box.dataset.ready).toBe('no')
-    fromFrame(m.q<HTMLIFrameElement>('.panel-box iframe'), { type: 'axt:panel-size', height: 300 })
+    m.q('.axt-fb-panel').dispatchEvent(click())
+    const box = m.q('.axt-fb-panel-box')
+    expect(box.dataset.axtReady).toBe('no')
+    fromFrame(m.q<HTMLIFrameElement>('.axt-fb-panel-box iframe'), { type: 'axt:panel-size', height: 300 })
     // The main button's centre is at 569 of 768: 569 − 150
-    expect([box.dataset.ready, box.style.height, box.style.top]).toEqual(['yes', '300px', '419px'])
+    expect([box.dataset.axtReady, box.style.height, box.style.top]).toEqual(['yes', '300px', '419px'])
     // Taller than the window allows: 16 px kept clear at both ends
-    fromFrame(m.q<HTMLIFrameElement>('.panel-box iframe'), { type: 'axt:panel-size', height: 2000 })
+    fromFrame(m.q<HTMLIFrameElement>('.axt-fb-panel-box iframe'), { type: 'axt:panel-size', height: 2000 })
     expect([box.style.height, box.style.top]).toEqual(['736px', '16px'])
   })
 
   it('believes only its own frame: the same message from the page\'s window changes nothing', () => {
     const m = mount()
     placeBoxes(m)
-    m.q('.panel').dispatchEvent(click())
+    m.q('.axt-fb-panel').dispatchEvent(click())
     fromFrame(window, { type: 'axt:panel-size', height: 300 })
-    expect(m.q('.panel-box').dataset.ready).toBe('no')
+    expect(m.q('.axt-fb-panel-box').dataset.axtReady).toBe('no')
     fromFrame(window, { type: 'axt:panel-close' })
-    expect(m.q('.panel-box').hidden).toBe(false)
+    expect(m.q('.axt-fb-panel-box').hidden).toBe(false)
   })
 
   it('closes when the popup asks, on Escape, on a press elsewhere, and when the close menu opens; a press inside keeps it', () => {
     const m = mount()
-    const open = () => { m.q('.panel').dispatchEvent(click()); return m.q<HTMLIFrameElement>('.panel-box iframe') }
+    const open = () => { m.q('.axt-fb-panel').dispatchEvent(click()); return m.q<HTMLIFrameElement>('.axt-fb-panel-box iframe') }
     fromFrame(open(), { type: 'axt:panel-close' })
-    expect(m.q('.panel-box').hidden).toBe(true)
+    expect(m.q('.axt-fb-panel-box').hidden).toBe(true)
 
     open()
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    expect(m.q('.panel-box').hidden).toBe(true)
+    expect(m.q('.axt-fb-panel-box').hidden).toBe(true)
 
     open()
-    m.q('.panel-box').dispatchEvent(pointer('pointerdown', 900, 500))
-    expect(m.q('.panel-box').hidden).toBe(false)
+    m.q('.axt-fb-panel-box').dispatchEvent(pointer('pointerdown', 900, 500))
+    expect(m.q('.axt-fb-panel-box').hidden).toBe(false)
     document.body.dispatchEvent(pointer('pointerdown', 10, 10))
-    expect(m.q('.panel-box').hidden).toBe(true)
+    expect(m.q('.axt-fb-panel-box').hidden).toBe(true)
 
     open()
-    m.q('.options').dispatchEvent(click())
-    expect([m.q('.panel-box').hidden, m.q('.menu').hidden]).toEqual([true, false])
+    m.q('.axt-fb-options').dispatchEvent(click())
+    expect([m.q('.axt-fb-panel-box').hidden, m.q('.axt-fb-menu').hidden]).toEqual([true, false])
   })
 
   it('opens on the host\'s word too, for a click on the main button that nothing could serve', () => {
     const { entry, q } = mount({ main: { kind: 'toggle', run: () => undefined } })
     entry.openPanel()
-    expect(q('.panel-box iframe')).not.toBeNull()
+    expect(q('.axt-fb-panel-box iframe')).not.toBeNull()
     entry.remove()
   })
 })
@@ -521,40 +539,40 @@ describe('the floating button: the close menu', () => {
     const { q, dock, main } = mount()
     main.dispatchEvent(new MouseEvent('mouseenter'))
     vi.advanceTimersByTime(400)
-    q('.options').dispatchEvent(click())
-    expect([q('.menu').hidden, q('.options').getAttribute('aria-expanded')]).toEqual([false, 'true'])
+    q('.axt-fb-options').dispatchEvent(click())
+    expect([q('.axt-fb-menu').hidden, q('.axt-fb-options').getAttribute('aria-expanded')]).toEqual([false, 'true'])
     // The pointer may wander off towards the menu; the dock stays open while it is up (Read Frog)
     dock.dispatchEvent(new MouseEvent('mouseleave'))
     vi.advanceTimersByTime(1000)
-    expect(dock.dataset.expanded).toBe('yes')
-    q('.menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    expect([q('.menu').hidden, q('.options').getAttribute('aria-expanded')]).toEqual([true, 'false'])
+    expect(dock.dataset.axtExpanded).toBe('yes')
+    q('.axt-fb-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect([q('.axt-fb-menu').hidden, q('.axt-fb-options').getAttribute('aria-expanded')]).toEqual([true, 'false'])
 
-    q('.options').dispatchEvent(click())
-    expect(q('.menu').hidden).toBe(false)
+    q('.axt-fb-options').dispatchEvent(click())
+    expect(q('.axt-fb-menu').hidden).toBe(false)
     document.body.dispatchEvent(pointer('pointerdown', 10, 10))
-    expect(q('.menu').hidden).toBe(true)
+    expect(q('.axt-fb-menu').hidden).toBe(true)
   })
 
   it('opened from the keyboard, the first item takes focus and the arrows move through them', () => {
     const { q, root } = mount()
-    q('.options').dispatchEvent(click(0))
-    expect(root.activeElement).toBe(q('.hide-now'))
-    q('.menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
-    expect(root.activeElement).toBe(q('.hide-always'))
-    q('.menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
-    expect(root.activeElement).toBe(q('.hide-now'))
+    q('.axt-fb-options').dispatchEvent(click(0))
+    expect(root.activeElement).toBe(q('.axt-fb-hide-now'))
+    q('.axt-fb-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    expect(root.activeElement).toBe(q('.axt-fb-hide-always'))
+    q('.axt-fb-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    expect(root.activeElement).toBe(q('.axt-fb-hide-now'))
   })
 
   it('"hide for now" and "don\'t show again" take the entry off the page and tell the host which', () => {
     const now = mount()
-    now.q('.options').dispatchEvent(click())
-    now.q('.hide-now').dispatchEvent(click())
+    now.q('.axt-fb-options').dispatchEvent(click())
+    now.q('.axt-fb-hide-now').dispatchEvent(click())
     expect([now.host.isConnected, now.onHide.mock.calls]).toEqual([false, [['now']]])
 
     const always = mount()
-    always.q('.options').dispatchEvent(click())
-    always.q('.hide-always').dispatchEvent(click())
+    always.q('.axt-fb-options').dispatchEvent(click())
+    always.q('.axt-fb-hide-always').dispatchEvent(click())
     expect([always.host.isConnected, always.onHide.mock.calls]).toEqual([false, [['always']]])
     expect(document.querySelectorAll('.axt-floating')).toHaveLength(0)
   })

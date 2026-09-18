@@ -1,5 +1,5 @@
 import { cachePortOf, translationCache } from '@/cache'
-import { getConfig, setConfig, watchConfig } from '@/config/storage'
+import { getConfig, watchConfig } from '@/config/storage'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport } from '@/providers/transport'
 import { toErrorInfo } from '@/providers/translate-service'
@@ -14,6 +14,7 @@ import { createConfigOffers, providerStatus, statusInForce } from './provider-st
 import { createOcrService } from './ocr'
 import { createSessionRouter } from './sessions'
 import { installContextMenu, refreshContextMenu, installToggleCommand, toggleTranslation } from './context-menu'
+import { getFloatingEntry, patchFloatingEntry } from './floating-entry'
 import { applyLocaleFrom, resolveLocale } from '@/ui/apply-locale'
 import { setLocale } from '@/ui/strings'
 import { savedFromStatus } from '@/shared/page-action'
@@ -336,30 +337,28 @@ export default defineBackground(() => {
         replyWith(toggleTranslation({ send: sendToTab, saved }, tab.id).then(acted => ({ acted })), sendResponse)
         return true
       }
-      case 'axt:zoom': {
-        // The floating button's size (§4.0c): the tab's zoom is the browser's to know, not the page's
+      case 'axt:entry-settings': {
+        // What a page needs of the settings (shared/entry-settings.ts): the configuration as this build reads it —
+        // the defaults, when it cannot — never the raw stored value; the tab's zoom is the browser's to know
         const tabId = sender.tab?.id
-        if (tabId === undefined) return
-        replyWith(browser.tabs.getZoom(tabId).then(zoom => ({ zoom })).catch(() => ({ zoom: 1 })), sendResponse)
+        replyWith(
+          Promise.all([
+            getConfig(),
+            getFloatingEntry(),
+            tabId === undefined ? 1 : browser.tabs.getZoom(tabId).catch(() => 1),
+          ]).then(([config, floating, zoom]) => ({ uiLanguage: config.uiLanguage, openIn: config.reading.openIn, zoom, floating })),
+          sendResponse,
+        )
         return true
       }
       case 'axt:open-settings':
         // A content script cannot open the settings page itself; `openOptionsPage` brings an open one to the front
         replyWith(browser.runtime.openOptionsPage().then(() => ({ opened: true })).catch(() => ({ opened: false })), sendResponse)
         return true
-      case 'axt:set-floating-entry': {
-        // The reader dragged, locked or turned off the PDF page's entry (§4.0b). Written here so it passes the one
-        // write gate: `setConfig` parses the result and refuses while the stored value is one this build cannot read
-        const patch = message.patch
-        replyWith(
-          getConfig()
-            .then(config => setConfig({ ...config, floatingEntry: { ...config.floatingEntry, ...patch } }))
-            .then(() => ({ saved: true }))
-            .catch(() => ({ saved: false })),
-          sendResponse,
-        )
+      case 'axt:set-floating-entry':
+        // The floating button's state has one writer, this one, under a key of its own (background/floating-entry.ts)
+        replyWith(patchFloatingEntry(message.patch), sendResponse)
         return true
-      }
       case 'axt:diag':
         // Only our own contexts can reach runtime.onMessage (no externally_connectable), still the shape is checked:
         // a line is a string, the source one of the pages'; the ring's cap and the coalesced save bound the rest (Devin on #214)

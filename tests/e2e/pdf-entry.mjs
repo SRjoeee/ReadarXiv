@@ -68,7 +68,7 @@ const extensionId = new URL(worker.url()).host
 /** The button as the page holds it: the host element, the main button inside its shadow root, and whether it is drawn */
 const readEntry = () => page.evaluate(() => {
   const host = document.querySelector('.axt-floating')
-  const link = host?.shadowRoot?.querySelector('.main') ?? null
+  const link = host?.shadowRoot?.querySelector('.axt-fb-main') ?? null
   const box = link?.getBoundingClientRect()
   return {
     contentType: document.contentType,
@@ -122,7 +122,7 @@ await page.screenshot({ path: `${SHOTS}/pdf-entry.png` })
 // translating by itself (the hash, DESIGN §4.1), and the PDF the reader was on is still there
 // A real click, pressed and released with the mouse: the press puts up the drag shield, and the click must still reach the link
 const target = await page.evaluate(() => {
-  const r = document.querySelector('.axt-floating')?.shadowRoot?.querySelector('.main')?.getBoundingClientRect()
+  const r = document.querySelector('.axt-floating')?.shadowRoot?.querySelector('.axt-fb-main')?.getBoundingClientRect()
   return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null
 })
 const opened = context.waitForEvent('page', { timeout: 60_000 })
@@ -155,6 +155,26 @@ await page.screenshot({ path: `${SHOTS}/pdf-entry-none.png` })
     !seen.notArxiv && seen.label !== null && seen.disabled === true && seen.noHtmlNote,
     `label “${seen.label}”, disabled ${seen.disabled}, reason shown ${seen.noHtmlNote}`)
   await popup.screenshot({ path: `${SHOTS}/pdf-popup-none.png` })
+  await popup.close()
+}
+
+// The popup on the abstract page (UI.md S-P-03b): the other entry page, whose answer comes from arXiv's own markup
+// rather than from a request (Devin on #247: the browser runs exercised only PDFs)
+await page.goto(`https://arxiv.org/abs/${WITH_HTML}`, { waitUntil: 'load' })
+await sleep(3000)
+{
+  const { popup, seen } = await popupOn(page)
+  check('the popup works on an abstract page too: the ordinary rows, and the button enabled',
+    !seen.notArxiv && seen.rows && seen.label !== null && seen.disabled === false,
+    `label “${seen.label}”, disabled ${seen.disabled}, rows ${seen.rows}, S-P-03 shown ${seen.notArxiv}`)
+  const viaPopup = context.waitForEvent('page', { timeout: 60_000 })
+  await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /双语版本|Bilingual version/.test(b.textContent ?? ''))?.click())
+  const opened = await viaPopup.catch(() => null)
+  await opened?.waitForLoadState('load').catch(() => undefined)
+  check('its button opens the href arXiv gives, in a new tab, and the abstract page stays',
+    /\/html\/.*#axt-translate$/.test(opened?.url() ?? '') && /\/abs\//.test(page.url()),
+    `opened ${opened?.url().slice(0, 60) ?? 'nothing'}, first tab ${page.url().slice(0, 40)}…`)
+  await opened?.close()
   await popup.close()
 }
 

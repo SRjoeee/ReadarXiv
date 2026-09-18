@@ -1,32 +1,16 @@
-// The floating button's life on a page (DESIGN §4.0c): mounted when the reader has it on, following the saved
-// settings while the page stays open, and sending what its buttons ask for to the background. Shared by the three
-// content scripts; the pages differ in what the main button does, and in nothing else.
+// The floating button's life on a page (DESIGN §4.0c): mounted when the reader has it on, following the settings
+// while the page stays open, and sending what its buttons ask for to the background. Shared by the three content
+// scripts; the pages differ in what the main button does, and in nothing else.
 //
-// The saved configuration is read **raw**, field by field, never through `getConfig`: that would pull zod, the whole
-// schema and the language table into the abstract and PDF scripts, which run on every such page opened and need five
-// fields. A field that is missing or malformed falls back on its own. Writes do go through the gate: the background
-// makes them (`axt:set-floating-entry`), so a page never writes `local:config` itself.
+// The settings come from the background, validated (shared/entry-settings.ts): this script reads no storage value
+// and writes none. The button's own state is saved by the background too, and its answer is what the page shows —
+// so a change that could not be saved does not look saved.
 import { FLOATING_CLASS, type DockPlacement, type FloatingButton, type FloatingButtonStrings, type MainAction, mountFloatingButton } from '@/core/floating/button'
 import { LOCALES, pickLocale, type Locale } from '@/locales'
+import { type EntrySettings, type FloatingEntryState, watchEntrySettings } from '@/shared/entry-settings'
 import { sendMessage } from '@/shared/messages'
 
-/** What this module reads of the stored configuration */
-interface SavedBits {
-  uiLanguage?: string
-  reading?: { openIn?: string }
-  floatingEntry?: { enabled?: boolean; side?: string; position?: number; locked?: boolean }
-}
-
-/** Shown unless the reader turned it off (config `floatingEntry.enabled`, v17) */
-const enabledOf = (config: SavedBits | undefined) => config?.floatingEntry?.enabled !== false
-/** Where the translation opens (config `reading.openIn`, v16): a new tab unless the reader chose this one */
-const newTabOf = (config: SavedBits | undefined) => config?.reading?.openIn !== 'same-tab'
-/** The saved placement, each field falling back to the default on its own (config v17) */
-const placementOf = (config: SavedBits | undefined): DockPlacement => ({
-  side: config?.floatingEntry?.side === 'left' ? 'left' : 'right',
-  position: typeof config?.floatingEntry?.position === 'number' ? config.floatingEntry.position : 0.66,
-  locked: config?.floatingEntry?.locked === true,
-})
+const placementOf = ({ side, position, locked }: FloatingEntryState): DockPlacement => ({ side, position, locked })
 
 export interface FloatingPage {
   main: MainAction
@@ -41,92 +25,82 @@ export interface InstalledFloatingButton {
   openPanel: () => void
 }
 
-const save = (patch: { enabled?: boolean } & Partial<DockPlacement>) =>
-  void sendMessage({ type: 'axt:set-floating-entry', patch }).catch(() => undefined)
-
 export async function installFloatingButton(doc: Document, page: FloatingPage): Promise<InstalledFloatingButton> {
-  const stored = await browser.storage.local.get('config').catch(() => ({}))
-  let saved = (stored as { config?: SavedBits }).config
   const ui = browser.i18n?.getUILanguage?.()
   const languages = ui ? [ui] : [navigator.language]
   /**
-   * The page's zoom, which the button undoes so that it is one size everywhere (button.ts). The document that hosts
-   * Chrome's PDF viewer is never zoomed — the viewer takes the tab's zoom for the paper — so there it stays 1
-   * (measured 2026-09-18: `devicePixelRatio` unchanged at a tab zoom of 1.5)
+   * The document that hosts Chrome's PDF viewer is never zoomed — the viewer takes the tab's zoom for the paper
+   * (measured 2026-09-18: `devicePixelRatio` unchanged at a tab zoom of 1.5) — so there is nothing to undo there
    */
   const zoomed = doc.contentType !== 'application/pdf'
-  let zoom = zoomed ? await sendMessage({ type: 'axt:zoom' }).then(r => r.zoom).catch(() => 1) : 1
   /** Hidden from the close menu for this page: the switch stays on, and a reload brings the button back */
   let hiddenForNow = false
   let active = false
   let button: FloatingButton | null = null
+  let settings: EntrySettings | null = null
 
-  const strings = (): FloatingButtonStrings => {
-    const { S } = LOCALES[pickLocale(saved?.uiLanguage, languages)]
+  const strings = (from: EntrySettings): FloatingButtonStrings => {
+    const { S } = LOCALES[pickLocale(from.uiLanguage, languages)]
     return { main: page.label(S, active), settings: S.settings, ...S.page.floating }
   }
 
-  const mount = () => {
+  /** What the settings say, put on the page: the button there or not, its words, its link, its place, its size */
+  const apply = (next: EntrySettings) => {
+    settings = next
+    if (!next.floating.enabled || hiddenForNow) {
+      button?.remove()
+      button = null
+      return
+    }
+    if (button === null) return mount(next)
+    button.relabel(strings(next))
+    button.retarget(next.openIn === 'new-tab')
+    // A drag saved in another tab, or the lock toggled there, moves this one too
+    button.place(placementOf(next.floating))
+    button.rescale(zoomed ? next.zoom : 1)
+  }
+
+  /** Save a change of the button's own state; what the background says is stored is what the page then shows */
+  const save = (patch: Partial<FloatingEntryState>) => {
+    void sendMessage({ type: 'axt:set-floating-entry', patch })
+      .then(({ floating }) => { if (settings) apply({ ...settings, floating }) })
+      // No answer at all: the page keeps what it shows, and the next change of the settings corrects it
+      .catch(() => undefined)
+  }
+
+  const mount = (from: EntrySettings) => {
     const host = doc.createElement('div')
     host.className = FLOATING_CLASS
     doc.body.append(host)
     button = mountFloatingButton(doc, host, {
       main: page.main,
-      newTab: newTabOf(saved),
-      zoom,
-      placement: placementOf(saved),
-      strings: strings(),
+      newTab: from.openIn === 'new-tab',
+      zoom: zoomed ? from.zoom : 1,
+      placement: placementOf(from.floating),
+      strings: strings(from),
       // The control panel is the extension's own popup page, framed beside the button (button.ts)
       panelUrl: browser.runtime.getURL('/popup.html'),
       onPlacement: ({ side, position, locked }) => save({ side, position, locked }),
       // A page cannot open the settings page itself: the background does (`openOptionsPage`)
       onSettings: () => void sendMessage({ type: 'axt:open-settings' }).catch(() => undefined),
       onHide: scope => {
+        // The button has taken itself off the page
         button = null
         if (scope === 'now') hiddenForNow = true
-        // For good: the settings page has the switch that brings it back (UI.md S-O-49c)
+        // For good: the settings page has the switch that brings it back (UI.md S-O-49c). Not saved, it comes back
         else save({ enabled: false })
       },
     })
     button.activate(active)
   }
-  if (enabledOf(saved)) mount()
 
-  browser.storage.local.onChanged.addListener(changes => {
-    const next = changes.config?.newValue as SavedBits | undefined
-    if (next === undefined) return
-    saved = next
-    // The settings switch, turned either way while the page is open
-    if (!enabledOf(next)) {
-      button?.remove()
-      button = null
-      return
-    }
-    if (button === null) {
-      if (!hiddenForNow) mount()
-      return
-    }
-    button.relabel(strings())
-    button.retarget(newTabOf(next))
-    // A drag saved in another tab, or the lock toggled there, moves this one too
-    button.place(placementOf(next))
-  })
-
-  if (zoomed) {
-    browser.runtime.onMessage.addListener((message: unknown) => {
-      const changed = message as { type?: string; zoom?: unknown } | null
-      if (changed?.type !== 'axt:zoom-changed' || typeof changed.zoom !== 'number') return undefined
-      zoom = changed.zoom
-      button?.rescale(zoom)
-      return undefined
-    })
-  }
+  await watchEntrySettings(apply)
 
   return {
     setActive: next => {
       active = next
       button?.activate(next)
-      button?.relabel(strings())
+      if (settings) button?.relabel(strings(settings))
     },
     openPanel: () => button?.openPanel(),
   }

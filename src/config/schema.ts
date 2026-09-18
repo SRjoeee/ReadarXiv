@@ -7,7 +7,7 @@ import { DEFAULT_APPEARANCE, appearanceSchema } from './appearance'
 import { BUILT_IN_SERVICES, SERVICE_ID_RE, serviceSchema } from './services'
 import { DEFAULT_LANG_CODE, langCodeSchema } from './languages'
 
-export const CONFIG_VERSION = 17
+export const CONFIG_VERSION = 18
 
 /** The three reading modes (DESIGN §7); `mode` is shared with the image translation's mode gate */
 export const MODE_VALUES = ['stack', 'side', 'only'] as const
@@ -95,17 +95,6 @@ export const configSchema = z.object({
    */
   reading: z.object({ sentenceHighlight: z.boolean(), openIn: z.enum(['new-tab', 'same-tab']) }),
   /**
-   * The floating entry on a PDF page (v17, issue #169): whether it is shown at all, which edge it is docked to, where
-   * down that edge as a fraction of the window's height, and whether the reader has locked it in place. The reader
-   * moves it by dragging it, so the placement is written by the page rather than by the settings
-   */
-  floatingEntry: z.object({
-    enabled: z.boolean(),
-    side: z.enum(['left', 'right']),
-    position: z.number().min(0).max(1),
-    locked: z.boolean(),
-  }),
-  /**
    * Image translation (§15). `enabled` is the reader's switch (popup, v11); `modes` says in which
    * display modes the overlays show, a detail kept on the options page. Both are display gates:
    * switching to a mode that is off only hides the overlays, nothing is re-requested. Without the
@@ -138,7 +127,6 @@ export const DEFAULT_CONFIG: Config = {
   prompts: DEFAULT_PROMPTS_CONFIG,
   preload: { ...DEFAULT_PRELOAD },
   reading: { sentenceHighlight: true, openIn: 'new-tab' },
-  floatingEntry: { enabled: true, side: 'right', position: 0.66, locked: false },
   image: { enabled: true, modes: [...MODE_VALUES] },
   uiLanguage: 'auto',
 }

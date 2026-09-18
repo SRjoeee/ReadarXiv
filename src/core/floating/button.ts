@@ -1,9 +1,11 @@
+// Ported from reference/read-frog/src/entrypoints/side.content/components/floating-button/index.tsx@9b44f82 (GPL-3.0), 2026-09-18, modified;
+// with reference/read-frog/src/entrypoints/side.content/components/floating-button/components/hidden-button.tsx@9b44f82 (GPL-3.0), 2026-09-18, modified,
+// and reference/read-frog/src/entrypoints/side.content/components/floating-button/components/floating-button-tooltip.tsx@9b44f82 (GPL-3.0), 2026-09-18, modified.
+//
 // The floating button on every arXiv page the extension knows — abstract, PDF, HTML full text (issue #169, DESIGN
 // §4.0c): our mark in a circle docked to the window's edge, with the control panel above it and the settings below.
 //
-// Ported from reference/read-frog/src/entrypoints/side.content/components/floating-button/index.tsx@9b44f82, with its
-// components/hidden-button.tsx and components/floating-button-tooltip.tsx (GPL-3.0), 2026-09-18, modified. **Read
-// Frog's is the frame** (the maintainer, 2026-09-18): the column around a main button, the corner controls, the
+// **Read Frog's is the frame** (the maintainer, 2026-09-18): the column around a main button, the corner controls, the
 // tooltips, the sizes and surfaces, and the whole drag — the long press, the threshold, docking to the nearer edge,
 // the height kept as a fraction with its clearances, the lock, cancelling on fullscreen.
 //
@@ -155,18 +157,18 @@ const svg = (shapes: string, stroke = 2) =>
 // else. Closed, each rests a few pixels towards the main button and a little smaller, so that open they grow out of it.
 const STYLE = `
 :host { all: initial }
-.dock {
-  --border: oklch(0.92 0.004 286.32); --surface: #fff; --hidden-fg: oklch(0.439 0 0); --hidden-hover: oklch(0.97 0 0);
-  --control: oklch(0.708 0 0); --control-hover: oklch(0.439 0 0);
-  --tip-bg: oklch(0.141 0.005 285.823); --tip-fg: #fff;
-  --popover: #fff; --popover-fg: oklch(0.141 0.005 285.823); --accent: oklch(0.967 0.001 286.375); --accent-fg: oklch(0.21 0.006 285.885);
-  --active: #2fa84f;
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+.axt-fb-dock {
+  --axt-border: oklch(0.92 0.004 286.32); --axt-surface: #fff; --axt-hidden-fg: oklch(0.439 0 0); --axt-hidden-hover: oklch(0.97 0 0);
+  --axt-control: oklch(0.708 0 0); --axt-control-hover: oklch(0.439 0 0);
+  --axt-tip-bg: oklch(0.141 0.005 285.823); --axt-tip-fg: #fff;
+  --axt-popover: #fff; --axt-popover-fg: oklch(0.141 0.005 285.823); --axt-accent: oklch(0.967 0.001 286.375); --axt-accent-fg: oklch(0.21 0.006 285.885);
+  --axt-active: #2fa84f;
+  --axt-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   /* Coming out: the fade is the gentler and shorter of the two, the growth decelerates for longer, so a part is
      fully there a moment before it has quite settled. Going: both at once and quickly */
-  --fade-in: 200ms cubic-bezier(0.33, 1, 0.68, 1);
-  --grow-in: 280ms cubic-bezier(0.22, 1, 0.36, 1);
-  --exit: 140ms cubic-bezier(0.4, 0, 1, 1);
+  --axt-fade-in: 200ms cubic-bezier(0.33, 1, 0.68, 1);
+  --axt-grow-in: 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  --axt-exit: 140ms cubic-bezier(0.4, 0, 1, 1);
   position: fixed; z-index: 2147483647;
   font-family: ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased;
   /* The column's box is mostly empty — the folded buttons, the gaps — and must not take the page's clicks: only
@@ -174,86 +176,86 @@ const STYLE = `
   pointer-events: none;
 }
 /* What the reader sees, at the size it has on every page: the page's zoom undone (button.ts \`rescale\`) */
-.column { display: flex; flex-direction: column; gap: 8px; zoom: var(--unzoom, 1) }
-.main, .menu, .shield, .panel-box { pointer-events: auto }
+.axt-fb-column { display: flex; flex-direction: column; gap: 8px; zoom: var(--axt-unzoom, 1) }
+.axt-fb-main, .axt-fb-menu, .axt-fb-shield, .axt-fb-panel-box { pointer-events: auto }
 @media (prefers-color-scheme: dark) {
-  .dock {
-    --border: oklch(1 0 0 / 10%); --surface: oklch(0.205 0 0); --hidden-fg: oklch(0.708 0 0); --hidden-hover: oklch(0.269 0 0);
-    --control: oklch(0.556 0 0); --control-hover: oklch(0.87 0 0); --tip-bg: oklch(0.985 0 0); --tip-fg: oklch(0.141 0.005 285.823);
-    --popover: oklch(0.21 0.006 285.885); --popover-fg: oklch(0.985 0 0); --accent: oklch(0.274 0.006 286.033); --accent-fg: oklch(0.985 0 0);
+  .axt-fb-dock {
+    --axt-border: oklch(1 0 0 / 10%); --axt-surface: oklch(0.205 0 0); --axt-hidden-fg: oklch(0.708 0 0); --axt-hidden-hover: oklch(0.269 0 0);
+    --axt-control: oklch(0.556 0 0); --axt-control-hover: oklch(0.87 0 0); --axt-tip-bg: oklch(0.985 0 0); --axt-tip-fg: oklch(0.141 0.005 285.823);
+    --axt-popover: oklch(0.21 0.006 285.885); --axt-popover-fg: oklch(0.985 0 0); --axt-accent: oklch(0.274 0.006 286.033); --axt-accent-fg: oklch(0.985 0 0);
   }
 }
-@media print { .dock { display: none } }
-.dock[hidden] { display: none }
+@media print { .axt-fb-dock { display: none } }
+.axt-fb-dock[hidden] { display: none }
 /* The room for the two corner controls is always there (pl-6 / pr-6 in Read Frog's open state): opening lays nothing out */
-.dock[data-side="right"] { right: 0 }
-.dock[data-side="left"] { left: 0 }
-.dock[data-side="right"] .column { align-items: flex-end; padding-left: 24px }
-.dock[data-side="left"] .column { align-items: flex-start; padding-right: 24px }
-.dock[data-dragging="yes"] .column { align-items: center; padding: 0 }
+.axt-fb-dock[data-axt-side="right"] { right: 0 }
+.axt-fb-dock[data-axt-side="left"] { left: 0 }
+.axt-fb-dock[data-axt-side="right"] .axt-fb-column { align-items: flex-end; padding-left: 24px }
+.axt-fb-dock[data-axt-side="left"] .axt-fb-column { align-items: flex-start; padding-right: 24px }
+.axt-fb-dock[data-axt-dragging="yes"] .axt-fb-column { align-items: center; padding: 0 }
 
 button { margin: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit }
 a { color: inherit; text-decoration: none }
 svg { display: block }
 
 /* Everything that comes out: one way in, one way out */
-.hidden-button, .control, .main .tip {
+.axt-fb-hidden-button, .axt-fb-control, .axt-fb-main .axt-fb-tip {
   opacity: 0; visibility: hidden; pointer-events: none; will-change: opacity, transform;
-  transition: opacity var(--exit), transform var(--exit), visibility 0s linear 140ms;
+  transition: opacity var(--axt-exit), transform var(--axt-exit), visibility 0s linear 140ms;
 }
-.panel { transform: translateY(8px) scale(0.86); transform-origin: center bottom }
-.settings { transform: translateY(-8px) scale(0.86); transform-origin: center top }
-.dock[data-side="right"] .control { transform: translateX(8px) scale(0.86); transform-origin: right center }
-.dock[data-side="left"] .control { transform: translateX(-8px) scale(0.86); transform-origin: left center }
-.dock[data-side="right"] .main .tip { transform: translate(8px, -50%) scale(0.96); transform-origin: right center }
-.dock[data-side="left"] .main .tip { transform: translate(-8px, -50%) scale(0.96); transform-origin: left center }
+.axt-fb-panel { transform: translateY(8px) scale(0.86); transform-origin: center bottom }
+.axt-fb-settings { transform: translateY(-8px) scale(0.86); transform-origin: center top }
+.axt-fb-dock[data-axt-side="right"] .axt-fb-control { transform: translateX(8px) scale(0.86); transform-origin: right center }
+.axt-fb-dock[data-axt-side="left"] .axt-fb-control { transform: translateX(-8px) scale(0.86); transform-origin: left center }
+.axt-fb-dock[data-axt-side="right"] .axt-fb-main .axt-fb-tip { transform: translate(8px, -50%) scale(0.96); transform-origin: right center }
+.axt-fb-dock[data-axt-side="left"] .axt-fb-main .axt-fb-tip { transform: translate(-8px, -50%) scale(0.96); transform-origin: left center }
 /* A tooltip that is up stays up for a beat after the pointer has left its button, while the dock is open — the
    close delay every tooltip library offers, and for its reason: the main button meets the two corner controls along
    its edge, and a pointer at rest there trembled the tooltip in and out with every pixel (measured: 48 reversals of
    its opacity in 1.5 s). Read Frog's main button has no tooltip, which is how theirs never met this; ours says what
    a click does, and on a paper with no HTML version it is the only place the reason is said. Folding takes
    everything together, with no beat: this rule needs the dock open */
-.dock[data-expanded="yes"] .tip { transition: opacity var(--exit) 120ms, transform var(--exit) 120ms, visibility 0s linear 260ms }
+.axt-fb-dock[data-axt-expanded="yes"] .axt-fb-tip { transition: opacity var(--axt-exit) 120ms, transform var(--axt-exit) 120ms, visibility 0s linear 260ms }
 /* After the closed transforms: two of those selectors tie with this one in specificity, and the later rule wins */
-.dock[data-expanded="yes"] :is(.hidden-button, .control),
-.dock[data-expanded="yes"] .main:is(:hover, :focus-visible) .tip {
+.axt-fb-dock[data-axt-expanded="yes"] :is(.axt-fb-hidden-button, .axt-fb-control),
+.axt-fb-dock[data-axt-expanded="yes"] .axt-fb-main:is(:hover, :focus-visible) .axt-fb-tip {
   opacity: 1; visibility: visible; transform: none;
-  transition: opacity var(--fade-in), transform var(--grow-in), visibility 0s;
+  transition: opacity var(--axt-fade-in), transform var(--axt-grow-in), visibility 0s;
 }
-.dock[data-expanded="yes"] :is(.hidden-button, .control) { pointer-events: auto }
-.dock[data-expanded="yes"] .main:is(:hover, :focus-visible) .tip { transform: translate(0, -50%) }
+.axt-fb-dock[data-axt-expanded="yes"] :is(.axt-fb-hidden-button, .axt-fb-control) { pointer-events: auto }
+.axt-fb-dock[data-axt-expanded="yes"] .axt-fb-main:is(:hover, :focus-visible) .axt-fb-tip { transform: translate(0, -50%) }
 
 /* HiddenButton */
-.hidden-button {
+.axt-fb-hidden-button {
   position: relative; display: flex; box-sizing: border-box; padding: 6px; cursor: pointer;
-  border: 1px solid var(--border); border-radius: 9999px; background: var(--surface); color: var(--hidden-fg);
-  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--axt-border); border-radius: 9999px; background: var(--axt-surface); color: var(--axt-hidden-fg);
+  box-shadow: var(--axt-shadow-lg);
 }
-.hidden-button::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--hidden-hover); opacity: 0; transition: opacity 150ms ease 80ms }
-.hidden-button:hover::before, .hidden-button[aria-expanded="true"]::before { opacity: 1; transition-delay: 0s }
-.hidden-button > svg { position: relative; width: 20px; height: 20px }
-.dock[data-side="right"] .hidden-button { margin-right: 8px }
-.dock[data-side="left"] .hidden-button { margin-left: 8px }
+.axt-fb-hidden-button::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--axt-hidden-hover); opacity: 0; transition: opacity 150ms ease 80ms }
+.axt-fb-hidden-button:hover::before, .axt-fb-hidden-button[aria-expanded="true"]::before { opacity: 1; transition-delay: 0s }
+.axt-fb-hidden-button > svg { position: relative; width: 20px; height: 20px }
+.axt-fb-dock[data-axt-side="right"] .axt-fb-hidden-button { margin-right: 8px }
+.axt-fb-dock[data-axt-side="left"] .axt-fb-hidden-button { margin-left: 8px }
 
 /* FloatingButtonTooltip: beside the button, on the side away from the edge */
-.tip {
+.axt-fb-tip {
   position: absolute; top: 50%; pointer-events: none; white-space: nowrap; max-width: 320px; box-sizing: border-box;
-  padding: 6px 12px; border-radius: 8px; background: var(--tip-bg); color: var(--tip-fg); font-size: 12px; line-height: 16px;
+  padding: 6px 12px; border-radius: 8px; background: var(--axt-tip-bg); color: var(--axt-tip-fg); font-size: 12px; line-height: 16px;
   font-weight: 400;
 }
-.hidden-button .tip { opacity: 0; visibility: hidden; transition: opacity var(--exit), transform var(--exit), visibility 0s linear 140ms }
-.dock[data-side="right"] .hidden-button .tip { right: calc(100% + 8px); transform: translate(6px, -50%) }
-.dock[data-side="left"] .hidden-button .tip { left: calc(100% + 8px); transform: translate(-6px, -50%) }
-.dock[data-expanded="yes"] .hidden-button:is(:hover, :focus-visible):not([aria-expanded="true"]) .tip {
+.axt-fb-hidden-button .axt-fb-tip { opacity: 0; visibility: hidden; transition: opacity var(--axt-exit), transform var(--axt-exit), visibility 0s linear 140ms }
+.axt-fb-dock[data-axt-side="right"] .axt-fb-hidden-button .axt-fb-tip { right: calc(100% + 8px); transform: translate(6px, -50%) }
+.axt-fb-dock[data-axt-side="left"] .axt-fb-hidden-button .axt-fb-tip { left: calc(100% + 8px); transform: translate(-6px, -50%) }
+.axt-fb-dock[data-axt-expanded="yes"] .axt-fb-hidden-button:is(:hover, :focus-visible):not([aria-expanded="true"]) .axt-fb-tip {
   opacity: 1; visibility: visible; transform: translate(0, -50%);
-  transition: opacity var(--fade-in), transform var(--grow-in), visibility 0s;
+  transition: opacity var(--axt-fade-in), transform var(--axt-grow-in), visibility 0s;
 }
 /* The main button's stands clear of the two corner controls, and comes out with them: one place, so it never jumps */
-.dock[data-side="right"] .main .tip { right: calc(100% + 28px) }
-.dock[data-side="left"] .main .tip { left: calc(100% + 28px) }
+.axt-fb-dock[data-axt-side="right"] .axt-fb-main .axt-fb-tip { right: calc(100% + 28px) }
+.axt-fb-dock[data-axt-side="left"] .axt-fb-main .axt-fb-tip { left: calc(100% + 28px) }
 
 /* The main button: a tab against the edge holding the circle, whole at rest and lit by the pointer */
-.anchor { position: relative; margin-block: -8px; padding-block: 8px }
+.axt-fb-anchor { position: relative; margin-block: -8px; padding-block: 8px }
 /* **The hit area grows when the button lights** — Read Frog's way of keeping a pointer on the button's edge from
    flickering it (their state is called \`isHitAreaExpanded\`; they debounce nothing): the boundary that lights the
    button is the main button's edge, the boundary that lets go is 24 px further out towards the page and 8 px above
@@ -262,100 +264,100 @@ svg { display: block }
    is spent crossing the edge. The anchor's own box is the 8 px above and below — which also bridge the gaps to the
    panel and the settings, so a slow pointer never leaves the dock on its way to them — and its pseudo-element is the
    24 px at the side, under the two corner controls once those are out */
-.dock[data-lit="yes"] .anchor { pointer-events: auto }
-.anchor::before { content: ""; position: absolute; top: 0; bottom: 0; width: 24px }
-.dock[data-side="right"] .anchor::before { right: 100% }
-.dock[data-side="left"] .anchor::before { left: 100% }
-.dock[data-dragging="yes"] .anchor::before { display: none }
-.main {
+.axt-fb-dock[data-axt-lit="yes"] .axt-fb-anchor { pointer-events: auto }
+.axt-fb-anchor::before { content: ""; position: absolute; top: 0; bottom: 0; width: 24px }
+.axt-fb-dock[data-axt-side="right"] .axt-fb-anchor::before { right: 100% }
+.axt-fb-dock[data-axt-side="left"] .axt-fb-anchor::before { left: 100% }
+.axt-fb-dock[data-axt-dragging="yes"] .axt-fb-anchor::before { display: none }
+.axt-fb-main {
   position: relative; display: flex; align-items: center; box-sizing: border-box; height: 40px; width: 44px;
-  border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-lg); cursor: pointer;
+  border: 1px solid var(--axt-border); background: var(--axt-surface); box-shadow: var(--axt-shadow-lg); cursor: pointer;
   touch-action: none; -webkit-user-drag: none; user-select: none; opacity: 0.7;
   transition: opacity 250ms ease-out;
 }
-.dock[data-lit="yes"] .main { opacity: 1 }
-.dock[data-side="right"] .main { justify-content: flex-start; border-right: 0; border-radius: 9999px 0 0 9999px }
-.dock[data-side="left"] .main { justify-content: flex-end; border-left: 0; border-radius: 0 9999px 9999px 0 }
+.axt-fb-dock[data-axt-lit="yes"] .axt-fb-main { opacity: 1 }
+.axt-fb-dock[data-axt-side="right"] .axt-fb-main { justify-content: flex-start; border-right: 0; border-radius: 9999px 0 0 9999px }
+.axt-fb-dock[data-axt-side="left"] .axt-fb-main { justify-content: flex-end; border-left: 0; border-radius: 0 9999px 9999px 0 }
 /* The maintainer's mark: our book in a white disc, with the soft shadow of the export (dy 4, blur 5.3, 6 % at 47 px,
    here at 32). Lit, the shadow deepens — the disc rises a little, rather than a coloured ring appearing */
-.disc {
+.axt-fb-disc {
   position: relative; display: block; width: 32px; height: 32px; border-radius: 50%; pointer-events: none;
   box-shadow: 0 3px 7px rgb(0 0 0 / 0.06); transition: box-shadow 250ms ease-out;
 }
-.dock[data-side="right"] .disc { margin-left: 3px }
-.dock[data-side="left"] .disc { margin-right: 3px }
-.dock[data-lit="yes"] .disc { box-shadow: 0 3px 8px rgb(0 0 0 / 0.16) }
-.mark { display: block; width: 32px; height: 32px }
+.axt-fb-dock[data-axt-side="right"] .axt-fb-disc { margin-left: 3px }
+.axt-fb-dock[data-axt-side="left"] .axt-fb-disc { margin-right: 3px }
+.axt-fb-dock[data-axt-lit="yes"] .axt-fb-disc { box-shadow: 0 3px 8px rgb(0 0 0 / 0.16) }
+.axt-fb-mark { display: block; width: 32px; height: 32px }
 /* The page shows its translation: Immersive Translate's tick, at the circle's lower right; it lands with a small overshoot */
-.tick {
+.axt-fb-tick {
   position: absolute; right: -3px; bottom: -3px; display: grid; place-items: center; box-sizing: border-box;
-  width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid #fff; background: var(--active); color: #fff;
-  transform: scale(0); transition: transform var(--exit);
+  width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid #fff; background: var(--axt-active); color: #fff;
+  transform: scale(0); transition: transform var(--axt-exit);
 }
-.tick svg { width: 8px; height: 8px }
-.dock[data-active="yes"] .tick { transform: none; transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1) }
+.axt-fb-tick svg { width: 8px; height: 8px }
+.axt-fb-dock[data-axt-active="yes"] .axt-fb-tick { transform: none; transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1) }
 /* Nothing to open: the circle greys, and the tooltip says why */
-.main[aria-disabled="true"] { cursor: default }
-.main[aria-disabled="true"] .mark { filter: grayscale(1); opacity: 0.5 }
-.dock[data-dragging="yes"] .main {
-  width: 40px; justify-content: center; border: 1px solid var(--border); border-radius: 9999px;
+.axt-fb-main[aria-disabled="true"] { cursor: default }
+.axt-fb-main[aria-disabled="true"] .axt-fb-mark { filter: grayscale(1); opacity: 0.5 }
+.axt-fb-dock[data-axt-dragging="yes"] .axt-fb-main {
+  width: 40px; justify-content: center; border: 1px solid var(--axt-border); border-radius: 9999px;
   opacity: 1; cursor: grabbing;
 }
-.dock[data-dragging="yes"] .disc { margin: 0 }
-.main:focus-visible, .hidden-button:focus-visible, .control:focus-visible { outline: 2px solid oklch(0.705 0.015 286.067); outline-offset: 2px }
+.axt-fb-dock[data-axt-dragging="yes"] .axt-fb-disc { margin: 0 }
+.axt-fb-main:focus-visible, .axt-fb-hidden-button:focus-visible, .axt-fb-control:focus-visible { outline: 2px solid oklch(0.705 0.015 286.067); outline-offset: 2px }
 
 /* The close trigger above the main button's outer corner and the lock below it, in the room the dock keeps for them */
-.control {
+.axt-fb-control {
   position: absolute; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;
-  cursor: pointer; color: var(--control);
+  cursor: pointer; color: var(--axt-control);
 }
 /* Hover feedback comes at once and goes after a beat, like the tooltips: an edge under a trembling pointer does not strobe */
-.control > svg { width: 13px; height: 13px; transition: color 150ms ease 80ms, transform 150ms ease 80ms }
-.control:hover > svg, .control[aria-expanded="true"] > svg { color: var(--control-hover); transform: scale(1.12); transition-delay: 0s }
-.control:active > svg { transform: scale(0.9) }
-.control.options { top: 4px }
-.control.lock { bottom: 4px }
-.dock[data-side="right"] .control { left: -24px }
-.dock[data-side="left"] .control { right: -24px }
+.axt-fb-control > svg { width: 13px; height: 13px; transition: color 150ms ease 80ms, transform 150ms ease 80ms }
+.axt-fb-control:hover > svg, .axt-fb-control[aria-expanded="true"] > svg { color: var(--axt-control-hover); transform: scale(1.12); transition-delay: 0s }
+.axt-fb-control:active > svg { transform: scale(0.9) }
+.axt-fb-control.axt-fb-options { top: 4px }
+.axt-fb-control.axt-fb-lock { bottom: 4px }
+.axt-fb-dock[data-axt-side="right"] .axt-fb-control { left: -24px }
+.axt-fb-dock[data-axt-side="left"] .axt-fb-control { right: -24px }
 
 /* DropdownMenuContent, opened from the close trigger: beside it, away from the edge, aligned to its top */
-.menu {
+.axt-fb-menu {
   position: absolute; top: 4px; z-index: 1; box-sizing: border-box; padding: 4px; min-width: 0; white-space: nowrap;
-  border-radius: 10px; background: var(--popover); color: var(--popover-fg);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1), 0 0 0 1px color-mix(in oklab, var(--popover-fg) 10%, transparent);
-  animation: axt-pop-in var(--grow-in);
+  border-radius: 10px; background: var(--axt-popover); color: var(--axt-popover-fg);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1), 0 0 0 1px color-mix(in oklab, var(--axt-popover-fg) 10%, transparent);
+  animation: axt-pop-in var(--axt-grow-in);
 }
-.menu[hidden] { display: none }
-.dock[data-side="right"] .menu { right: calc(100% + 28px); transform-origin: right top }
-.dock[data-side="left"] .menu { left: calc(100% + 28px); transform-origin: left top }
-.menu button {
+.axt-fb-menu[hidden] { display: none }
+.axt-fb-dock[data-axt-side="right"] .axt-fb-menu { right: calc(100% + 28px); transform-origin: right top }
+.axt-fb-dock[data-axt-side="left"] .axt-fb-menu { left: calc(100% + 28px); transform-origin: left top }
+.axt-fb-menu button {
   display: flex; align-items: center; gap: 6px; width: 100%; box-sizing: border-box; padding: 4px 6px;
   border-radius: 8px; font-size: 14px; line-height: 20px; cursor: default; user-select: none; outline: none; text-align: start;
 }
-.menu button:hover, .menu button:focus-visible { background: var(--accent); color: var(--accent-fg) }
+.axt-fb-menu button:hover, .axt-fb-menu button:focus-visible { background: var(--axt-accent); color: var(--axt-accent-fg) }
 @keyframes axt-pop-in { from { opacity: 0; transform: scale(0.96) } }
 
 /* The control panel: the extension's popup in a frame, beside the dock, grown out of it like the menu */
-.panel-box {
-  position: fixed; z-index: 1; width: 320px; overflow: hidden; zoom: var(--unzoom, 1); border-radius: 16px; background: var(--popover);
-  box-shadow: 0 20px 40px -8px rgb(0 0 0 / 0.22), 0 4px 12px -4px rgb(0 0 0 / 0.12), 0 0 0 1px color-mix(in oklab, var(--popover-fg) 10%, transparent);
-  opacity: 0; transform: scale(0.96); transition: opacity var(--exit), transform var(--exit);
+.axt-fb-panel-box {
+  position: fixed; z-index: 1; width: 320px; overflow: hidden; zoom: var(--axt-unzoom, 1); border-radius: 16px; background: var(--axt-popover);
+  box-shadow: 0 20px 40px -8px rgb(0 0 0 / 0.22), 0 4px 12px -4px rgb(0 0 0 / 0.12), 0 0 0 1px color-mix(in oklab, var(--axt-popover-fg) 10%, transparent);
+  opacity: 0; transform: scale(0.96); transition: opacity var(--axt-exit), transform var(--axt-exit);
 }
-.panel-box[data-ready="yes"] { opacity: 1; transform: none; transition: opacity var(--fade-in), transform var(--grow-in) }
-.panel-box[hidden] { display: none }
-.dock[data-side="right"] .panel-box { right: 76px }
-.dock[data-side="left"] .panel-box { left: 76px }
-.panel-box iframe { display: block; width: 100%; height: 100%; border: 0; color-scheme: normal }
+.axt-fb-panel-box[data-axt-ready="yes"] { opacity: 1; transform: none; transition: opacity var(--axt-fade-in), transform var(--axt-grow-in) }
+.axt-fb-panel-box[hidden] { display: none }
+.axt-fb-dock[data-axt-side="right"] .axt-fb-panel-box { right: 76px }
+.axt-fb-dock[data-axt-side="left"] .axt-fb-panel-box { left: 76px }
+.axt-fb-panel-box iframe { display: block; width: 100%; height: 100%; border: 0; color-scheme: normal }
 
-.dock[data-dragging="yes"] :is(.hidden-button, .control, .menu, .panel-box, .tip) { display: none }
+.axt-fb-dock[data-axt-dragging="yes"] :is(.axt-fb-hidden-button, .axt-fb-control, .axt-fb-menu, .axt-fb-panel-box, .axt-fb-tip) { display: none }
 /* Over the whole window for as long as a press lasts, inside the dock so the pointer never leaves it (see the header) */
-.shield { position: fixed; inset: 0; z-index: 2; cursor: pointer }
-.shield[hidden] { display: none }
-.dock[data-dragging="yes"] .shield { cursor: grabbing }
+.axt-fb-shield { position: fixed; inset: 0; z-index: 2; cursor: pointer }
+.axt-fb-shield[hidden] { display: none }
+.axt-fb-dock[data-axt-dragging="yes"] .axt-fb-shield { cursor: grabbing }
 /* Behind the buttons and over the whole window while the button is lit on a PDF: where the pointer goes when it leaves */
-.catcher { position: fixed; inset: 0; z-index: -1; pointer-events: auto }
-.catcher[hidden] { display: none }
-@media (prefers-reduced-motion: reduce) { .dock, .dock *, .dock *::before { transition-duration: 0s !important; animation: none !important } }
+.axt-fb-catcher { position: fixed; inset: 0; z-index: -1; pointer-events: auto }
+.axt-fb-catcher[hidden] { display: none }
+@media (prefers-reduced-motion: reduce) { .axt-fb-dock, .axt-fb-dock *, .axt-fb-dock *::before { transition-duration: 0s !important; animation: none !important } }
 `
 
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high)
@@ -400,41 +402,41 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   }
   const style = make('style', '')
   style.textContent = STYLE
-  const dock = make('div', 'dock')
+  const dock = make('div', 'axt-fb-dock')
   /** Every button carries its name as `aria-label`; the tooltip is the same words for the eye */
   const tip = () => {
-    const element = make('span', 'tip')
+    const element = make('span', 'axt-fb-tip')
     element.setAttribute('aria-hidden', 'true')
     return element
   }
 
-  const panel = make('button', 'hidden-button panel', svg(ICONS.panel))
+  const panel = make('button', 'axt-fb-hidden-button axt-fb-panel', svg(ICONS.panel))
   panel.type = 'button'
   panel.setAttribute('aria-haspopup', 'dialog')
   const panelTip = tip()
   panel.append(panelTip)
 
-  const anchor = make('div', 'anchor')
+  const anchor = make('div', 'axt-fb-anchor')
   // A link where there is somewhere to go, a button where there is something to do; one type for the listeners below
-  const main: HTMLElement = action.kind === 'link' ? make('a', 'main') : make('button', 'main')
+  const main: HTMLElement = action.kind === 'link' ? make('a', 'axt-fb-main') : make('button', 'axt-fb-main')
   if (main instanceof HTMLButtonElement) main.type = 'button'
   if (action.kind === 'none') main.setAttribute('aria-disabled', 'true')
   main.draggable = false
-  const disc = make('span', 'disc', MARK_DISC)
-  disc.append(make('span', 'tick', svg(ICONS.tick, 3.2)))
+  const disc = make('span', 'axt-fb-disc', MARK_DISC)
+  disc.append(make('span', 'axt-fb-tick', svg(ICONS.tick, 3.2)))
   const mainTip = tip()
   main.append(disc, mainTip)
-  const optionsButton = make('button', 'control options', svg(ICONS.close, 3))
+  const optionsButton = make('button', 'axt-fb-control axt-fb-options', svg(ICONS.close, 3))
   optionsButton.type = 'button'
   optionsButton.setAttribute('aria-haspopup', 'menu')
-  const lock = make('button', 'control lock')
+  const lock = make('button', 'axt-fb-control axt-fb-lock')
   lock.type = 'button'
-  const menu = make('div', 'menu')
+  const menu = make('div', 'axt-fb-menu')
   menu.setAttribute('role', 'menu')
   menu.tabIndex = -1
   menu.hidden = true
-  const hideNow = make('button', 'hide-now')
-  const hideAlways = make('button', 'hide-always')
+  const hideNow = make('button', 'axt-fb-hide-now')
+  const hideAlways = make('button', 'axt-fb-hide-always')
   for (const item of [hideNow, hideAlways]) {
     item.type = 'button'
     item.setAttribute('role', 'menuitem')
@@ -443,21 +445,21 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   menu.append(hideNow, hideAlways)
   anchor.append(main, optionsButton, lock, menu)
 
-  const settings = make('button', 'hidden-button settings', svg(ICONS.settings))
+  const settings = make('button', 'axt-fb-hidden-button axt-fb-settings', svg(ICONS.settings))
   settings.type = 'button'
   const settingsTip = tip()
   settings.append(settingsTip)
   /** Where the control panel's frame goes; the frame itself exists only while the panel is open */
-  const panelBox = make('div', 'panel-box')
+  const panelBox = make('div', 'axt-fb-panel-box')
   panelBox.hidden = true
-  const shield = make('div', 'shield')
+  const shield = make('div', 'axt-fb-shield')
   shield.hidden = true
   /** Only where the page under the button is another process's frame: Chrome's PDF viewer (see the header) */
-  const catcher = doc.contentType === 'application/pdf' ? make('div', 'catcher') : null
+  const catcher = doc.contentType === 'application/pdf' ? make('div', 'axt-fb-catcher') : null
   if (catcher) catcher.hidden = true
   // The column is what the reader sees and what undoes the page's zoom; the dock around it only places it, in the
   // page's own pixels, and the two full-window layers stay out of the zoom so that they stay full-window
-  const column = make('div', 'column')
+  const column = make('div', 'axt-fb-column')
   column.append(panel, anchor, settings)
   dock.append(column, panelBox, shield, ...(catcher ? [catcher] : []))
   root.append(style, dock)
@@ -502,12 +504,12 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
 
   const draw = () => {
     const open = expanded()
-    dock.dataset.side = placement.side
-    dock.dataset.lit = lit || open || dragging ? 'yes' : 'no'
-    dock.dataset.expanded = open ? 'yes' : 'no'
-    dock.dataset.dragging = dragging ? 'yes' : 'no'
-    dock.dataset.active = active ? 'yes' : 'no'
-    dock.style.setProperty('--unzoom', String(1 / pageZoom))
+    dock.dataset.axtSide = placement.side
+    dock.dataset.axtLit = lit || open || dragging ? 'yes' : 'no'
+    dock.dataset.axtExpanded = open ? 'yes' : 'no'
+    dock.dataset.axtDragging = dragging ? 'yes' : 'no'
+    dock.dataset.axtActive = active ? 'yes' : 'no'
+    dock.style.setProperty('--axt-unzoom', String(1 / pageZoom))
     dock.hidden = fullscreen
     if (catcher) catcher.hidden = dragging || !(lit || open)
     if (dragging && preview) {
@@ -685,7 +687,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
       panelHeight = data.height
       placePanel()
       // Shown once it knows its size, so it arrives whole rather than growing on screen
-      panelBox.dataset.ready = 'yes'
+      panelBox.dataset.axtReady = 'yes'
     }
   }
   const setPanel = (open: boolean) => {
@@ -696,7 +698,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
       frame = make('iframe', '')
       frame.src = options.panelUrl
       frame.title = strings.panel
-      panelBox.dataset.ready = 'no'
+      panelBox.dataset.axtReady = 'no'
       panelBox.hidden = false
       panelBox.replaceChildren(frame)
       view.addEventListener('message', onPanelMessage)

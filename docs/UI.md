@@ -166,7 +166,7 @@ changes, and the two drawers commit with one button.
 | S-O-48 | Drawer actions | 复制一份 · 删除 · 完成 | |
 | S-O-49 | Background highlight | 背景高亮 / 悬停时来标出对应句子的底色 | Same grid and editor, fields 底色 + 透明度; built-ins: 柔和绿 · 淡黄 · 淡蓝 |
 | S-O-49b | Where the translation opens | 译文在哪里打开 / 从论文的摘要页或 PDF 打开时，译文是这篇论文的 HTML 版本 | 新标签页 · 当前标签页, configuration `reading.openIn` (v16). **新标签页 is the default** (the owner, 2026-09-18): the first version navigated the tab from the abstract page or the PDF, and the page the reader was on was gone. It reaches the two in-page entries (S-I-06 and the abstract page's line, as `target`) and the popup's button on those pages (S-P-03b) alike; on the full text nothing navigates, so nothing here applies |
-| S-O-49c | Floating button | 显示悬浮按钮 / 在 arXiv 的摘要页、PDF 和论文全文页贴在窗口边缘：翻译、控制面板、设置 | Switch, configuration `floatingEntry.enabled` (v17), on by default. The way back from S-I-06c's 不再显示; every open arXiv page follows it at once. The popup, the key and the menu work either way |
+| S-O-49c | Floating button | 显示悬浮按钮 / 在 arXiv 的摘要页、PDF 和论文全文页贴在窗口边缘：翻译、控制面板、设置 | Switch, storage key `floatingEntry` (`enabled`; not in the configuration, DESIGN §4.0c), on by default, written through the background like the button's own drags. The way back from S-I-06c's 不再显示; every open arXiv page follows it at once. The popup, the key and the menu work either way |
 | S-O-50 | Preload range | 提前翻译的范围 / 屏幕下方多远的段落先翻；越近越省费用，整篇则一开始就全部请求 | 一屏 · 两屏 · 三屏 · 整篇. 整篇 reaches an open paper at once (everything still waiting is requested); the other stops apply from the next session |
 | S-O-51 | When translation starts | 开始翻译的时机 / 段落露出多少才开始翻 | 刚露出 · 露出一半 · 完全露出 |
 | S-O-60 | Prompts and glossary · not an LLM | 只对 LLM 服务生效 | A line at the top; the section stays usable |

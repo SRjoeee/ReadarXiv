@@ -14,6 +14,7 @@ import { Segmented } from '@/ui/Segmented'
 import { Switch } from '@/ui/Switch'
 import { O, copyName, S } from '@/ui/strings'
 import type { OptionsData } from '../data'
+import { useFloatingEntry } from '../floating-entry'
 
 /** The preload margin as screens rather than pixels — a number of pixels means nothing to a reader — and the whole paper (`all`, v15) */
 const MARGINS: readonly (number | 'all')[] = [900, 1800, 2700, 'all']
@@ -36,6 +37,7 @@ export function Reading({ data }: { data: OptionsData }) {
   /** The profiles being edited as this tab last saw them: a drawer outlives a deletion made elsewhere (below) */
   const lastStyle = useRef<StyleProfile | undefined>(undefined)
   const lastBand = useRef<HighlightProfile | undefined>(undefined)
+  const floating = useFloatingEntry()
   if (!config) return null
   const a = config.appearance
   const style = activeStyle(a)
@@ -127,11 +129,7 @@ export function Reading({ data }: { data: OptionsData }) {
 
       <div className="mb-6 rounded-card border border-line bg-card px-3.5">
         <Row label={O.reading.floatingEntry} hint={O.reading.floatingEntryHint}>
-          <Switch
-            checked={config.floatingEntry.enabled}
-            onChange={on => void patch(latest => ({ ...latest, floatingEntry: { ...latest.floatingEntry, enabled: on } }))}
-            label={O.reading.floatingEntry}
-          />
+          <Switch checked={floating.enabled ?? true} onChange={floating.setEnabled} label={O.reading.floatingEntry} />
         </Row>
       </div>
 

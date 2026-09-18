@@ -325,7 +325,13 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
       const r = await sendToActiveTab({ type: 'axt:restore-page', ...(epoch !== undefined ? { epoch } : {}) })
       if (r.refused) throw new Error(S.page.sessionOver)
     }),
-    chooseMode: mode => void guard(async () => { await sendToActiveTab({ type: 'axt:set-mode', mode }) }),
+    // The full text switches its layout and saves the preference itself (`axt:set-mode`). An abstract or PDF page
+    // has no layout to switch and no listener for that message: there the preference is saved here, and the paper
+    // opens in it (Devin on #247: the choice was lost, and the popup reported a failure)
+    chooseMode: mode => void guard(async () => {
+      if (entry) await patchConfig(latest => ({ ...latest, mode }))
+      else await sendToActiveTab({ type: 'axt:set-mode', mode })
+    }),
     retryFailed: () => void guard(async () => { await sendToActiveTab({ type: 'axt:retry-failed' }) }),
     openMenu: kind => setMenu(kind),
     closeMenu: () => setMenu(null),
