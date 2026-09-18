@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { AUTO_TRANSLATE_HASH } from '@/core/abstract/link'
-import { htmlUrlOf, injectPdfEntry, paperIdFromPdfPath, PDF_ENTRY_CLASS, relabelPdfEntry, translatedHtmlUrlOf } from '@/core/pdf/entry'
+import { htmlUrlOf, injectPdfEntry, paperIdFromPdfPath, PDF_ENTRY_CLASS, relabelPdfEntry, retargetPdfEntry, translatedHtmlUrlOf } from '@/core/pdf/entry'
 
 // The bilingual entry on arXiv's PDF page (issue #169)
 
@@ -50,6 +50,21 @@ describe('injectPdfEntry', () => {
     expect(link.textContent).toBe('Bilingual version (Read arXiv)')
     // A plain link: the reader's click navigates by itself, with nothing to dismiss first
     expect(host!.shadowRoot!.querySelector('button')).toBeNull()
+  })
+
+  it('opens in a new tab by default and in this one when the reader says so, following the setting either way', () => {
+    const link = () => document.querySelector(`.${PDF_ENTRY_CLASS}`)!.shadowRoot!.querySelector('a')!
+    injectPdfEntry(document, { label: 'a', href: 'https://arxiv.org/html/x' })
+    // The PDF the reader is on must still be there when the translation opens (the owner, 2026-09-18)
+    expect([link().getAttribute('target'), link().getAttribute('rel')]).toEqual(['_blank', 'noopener'])
+    expect(retargetPdfEntry(document, false)).toBe(true)
+    expect([link().getAttribute('target'), link().getAttribute('rel')]).toEqual([null, null])
+
+    document.body.innerHTML = ''
+    injectPdfEntry(document, { label: 'a', href: 'https://arxiv.org/html/x', newTab: false })
+    expect(link().getAttribute('target')).toBeNull()
+    expect(retargetPdfEntry(document, true)).toBe(true)
+    expect(link().getAttribute('target')).toBe('_blank')
   })
 
   it('is idempotent, and leaves the rest of the document alone', () => {
