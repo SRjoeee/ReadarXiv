@@ -87,6 +87,9 @@ const S: Locale['S'] = {
     done: 'Recognition tool ready',
   },
   primary: {
+    // The popup's button on an abstract or PDF page: it opens the paper's bilingual version, it does not
+    // translate the page in front of the reader (UI.md S-P-50b). The same words as the entry on the page itself
+    bilingual: 'Bilingual version',
     translate: 'Translate this page',
     restore: 'Show original',
     retranslate: 'Translate again',

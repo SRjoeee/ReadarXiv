@@ -27,7 +27,8 @@ async function popupOn(paperTab) {
   await paperTab.bringToFront()
   await sleep(2500)
   const seen = await popup.evaluate(() => {
-    const button = [...document.querySelectorAll('button')].find(b => /翻译本页|Translate this page/.test(b.textContent ?? ''))
+    // S-P-50b: on an abstract or PDF page the button says what it opens, not “translate this page”
+    const button = [...document.querySelectorAll('button')].find(b => /双语版本|Bilingual version/.test(b.textContent ?? ''))
     const text = (document.body.textContent ?? '').replace(/\s+/g, ' ')
     return {
       label: button?.textContent?.trim() ?? null,
@@ -89,6 +90,23 @@ check('the entry leads to the HTML full text of the version the reader opened, a
   entry.href === `https://arxiv.org/html/${WITH_HTML}#axt-translate`,
   `href ${entry.href}`)
 check('the entry carries the same sentence as the abstract page\'s (S-I-06)', /Read arXiv/.test(entry.label ?? ''), `label “${entry.label}”`)
+
+// Collapsed to the mark, opening on hover (UI.md S-I-06, the shape of Read Frog's floating button)
+const boxOf = () => page.evaluate(() => {
+  const link = document.querySelector('.axt-pdf-entry')?.shadowRoot?.querySelector('a')
+  const mark = link?.querySelector('.mark')
+  const rect = link?.getBoundingClientRect()
+  return rect ? { width: Math.round(rect.width), height: Math.round(rect.height), x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2), mark: !!mark } : null
+})
+const collapsed = await boxOf()
+await page.mouse.move(collapsed.x, collapsed.y)
+await sleep(700)
+const expanded = await boxOf()
+check('collapsed it is the mark alone, and hovering opens it to the words',
+  collapsed.mark && collapsed.width <= 50 && expanded.width > collapsed.width + 40,
+  `${collapsed.width}px collapsed → ${expanded.width}px on hover, mark drawn ${collapsed.mark}`)
+await page.mouse.move(10, 10)
+await sleep(400)
 check('Chrome\'s own viewer is left alone', entry.viewerUntouched, 'no embed or object of ours')
 await page.screenshot({ path: `${SHOTS}/pdf-entry.png` })
 
@@ -102,7 +120,7 @@ await page.screenshot({ path: `${SHOTS}/pdf-entry.png` })
 
   // The button follows the same setting: a new tab, with the PDF still open behind it
   const fromPopup = context.waitForEvent('page', { timeout: 60_000 })
-  await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /翻译本页|Translate this page/.test(b.textContent ?? ''))?.click())
+  await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /双语版本|Bilingual version/.test(b.textContent ?? ''))?.click())
   const viaPopup = await fromPopup.catch(() => null)
   await viaPopup?.waitForLoadState('load').catch(() => undefined)
   check('the popup\'s button opens the translation in a new tab as well, leaving the PDF open',
