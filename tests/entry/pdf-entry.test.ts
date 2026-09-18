@@ -41,13 +41,13 @@ describe('injectPdfEntry', () => {
 
   it('adds one link, in a shadow root, pointing where the click should go', () => {
     const href = translatedHtmlUrlOf('2501.07202v1')
-    expect(injectPdfEntry(document, { label: '双语版本（Read arXiv）', href })).toBe(true)
+    expect(injectPdfEntry(document, { label: 'Bilingual version (Read arXiv)', href })).toBe(true)
 
     const host = document.querySelector(`.${PDF_ENTRY_CLASS}`)
     expect(host).not.toBeNull()
     const link = host!.shadowRoot!.querySelector('a')!
     expect(link.getAttribute('href')).toBe(href)
-    expect(link.textContent).toBe('双语版本（Read arXiv）')
+    expect(link.textContent).toBe('Bilingual version (Read arXiv)')
     // A plain link: the reader's click navigates by itself, with nothing to dismiss first
     expect(host!.shadowRoot!.querySelector('button')).toBeNull()
   })
@@ -72,10 +72,11 @@ describe('relabelPdfEntry', () => {
   beforeEach(() => { document.body.innerHTML = '' })
 
   it('follows a change of interface language while the PDF stays open', () => {
-    injectPdfEntry(document, { label: '双语版本（Read arXiv）', href: 'https://arxiv.org/html/x' })
-    expect(relabelPdfEntry(document, 'Bilingual version (Read arXiv)')).toBe(true)
+    injectPdfEntry(document, { label: 'Bilingual version (Read arXiv)', href: 'https://arxiv.org/html/x' })
+    // The label is whatever the content script resolved from the locale pack; the module only has to replace it
+    expect(relabelPdfEntry(document, 'Zweisprachige Fassung (Read arXiv)')).toBe(true)
     expect(document.querySelector(`.${PDF_ENTRY_CLASS}`)!.shadowRoot!.querySelector('a')!.textContent)
-      .toBe('Bilingual version (Read arXiv)')
+      .toBe('Zweisprachige Fassung (Read arXiv)')
   })
 
   it('answers false when no entry is on the page', () => {
