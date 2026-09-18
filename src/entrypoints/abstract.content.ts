@@ -3,7 +3,9 @@
 // The locale pack is read directly, not through `@/ui/strings`: that module pulls in 179 language names and the
 // appearance module, and this script runs on every arXiv abstract page. All it needs is one sentence (Codex on #161: the sentence used to be hard-coded Chinese).
 import { LOCALES, pickLocale } from '@/locales'
-import { injectBilingualLink, relabelBilingualLink } from '@/core/abstract/link'
+import { htmlHrefOn, injectBilingualLink, relabelBilingualLink } from '@/core/abstract/link'
+import { paperIdFrom } from '@/core/paper-id'
+import { answerEntryMessages } from '@/shared/entry-page'
 
 export default defineContentScript({
   matches: ['https://arxiv.org/abs/*'],
@@ -20,6 +22,10 @@ export default defineContentScript({
       return S.page.abstractLink(S.brand)
     }
     injectBilingualLink(document, label(chosen))
+
+    // The popup asks this page what it is: on an abstract page the translate button works, and takes the reader to
+    // the HTML version to translate it there (UI.md S-P-03b, the maintainer 2026-09-18)
+    answerEntryMessages({ paper: () => paperIdFrom(location.pathname, 'abs'), html: () => htmlHrefOn(document) })
 
     // This page may stay open while the reader changes the interface language on the settings page: everywhere else follows, and so must this (Codex on #161)
     browser.storage.local.onChanged.addListener(changes => {

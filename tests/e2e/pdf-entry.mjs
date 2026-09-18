@@ -20,6 +20,27 @@ const SHOTS = `${HERE}.shots`
 const WITH_HTML = process.env.AXT_PAPER ?? '1706.03762'
 const WITHOUT_HTML = 'hep-th/9711200'
 
+/** The popup reads the active tab, so the paper goes back in front after the popup page is opened */
+async function popupOn(paperTab) {
+  const popup = await context.newPage()
+  await popup.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: 'load' })
+  await paperTab.bringToFront()
+  await sleep(2500)
+  const seen = await popup.evaluate(() => {
+    const button = [...document.querySelectorAll('button')].find(b => /翻译本页|Translate this page/.test(b.textContent ?? ''))
+    const text = (document.body.textContent ?? '').replace(/\s+/g, ' ')
+    return {
+      label: button?.textContent?.trim() ?? null,
+      disabled: button?.disabled ?? null,
+      // S-P-03: the one-sentence screen the popup used to show on any page but the full text
+      notArxiv: /打开 arXiv|Open an arXiv/.test(text),
+      noHtmlNote: /没有这篇论文的 HTML|no HTML version/.test(text),
+      rows: /Microsoft/.test(text),
+    }
+  })
+  return { popup, seen }
+}
+
 const results = []
 const check = (name, ok, detail) => {
   results.push({ name, ok, detail })
@@ -38,6 +59,9 @@ const context = await chromium.launchPersistentContext(PROFILE, {
 })
 context.setDefaultNavigationTimeout(90_000)
 const page = context.pages()[0] ?? await context.newPage()
+/** The extension's id, for the popup's own URL */
+const [worker] = context.serviceWorkers().length ? context.serviceWorkers() : [await context.waitForEvent('serviceworker')]
+const extensionId = new URL(worker.url()).host
 
 /** The entry as the page holds it: the host element, the link inside its shadow root, and whether it is drawn */
 const readEntry = () => page.evaluate(() => {
@@ -68,6 +92,17 @@ check('the entry carries the same sentence as the abstract page\'s (S-I-06)', /R
 check('Chrome\'s own viewer is left alone', entry.viewerUntouched, 'no embed or object of ours')
 await page.screenshot({ path: `${SHOTS}/pdf-entry.png` })
 
+// The popup on that same page (UI.md S-P-03b): a working popup, not the “not an arXiv page” sentence
+{
+  const { popup, seen } = await popupOn(page)
+  check('the popup works on a PDF page: the ordinary rows, and the translate button enabled',
+    !seen.notArxiv && seen.rows && seen.label !== null && seen.disabled === false,
+    `label “${seen.label}”, disabled ${seen.disabled}, rows ${seen.rows}, S-P-03 shown ${seen.notArxiv}`)
+  await popup.screenshot({ path: `${SHOTS}/pdf-popup.png` })
+  await popup.close()
+  await page.bringToFront()
+}
+
 // Following it lands on the HTML page, which starts translating by itself (the hash, DESIGN §4.1)
 await page.evaluate(() => document.querySelector('.axt-pdf-entry')?.shadowRoot?.querySelector('a')?.click())
 await page.waitForURL(/\/html\//, { timeout: 60_000 }).catch(() => undefined)
@@ -88,6 +123,15 @@ check('a paper with no HTML version is offered nothing, rather than a link that 
   none.hosts === 0,
   `${none.hosts} entries on ${WITHOUT_HTML}`)
 await page.screenshot({ path: `${SHOTS}/pdf-entry-none.png` })
+
+{
+  const { popup, seen } = await popupOn(page)
+  check('the popup on a paper with no HTML version: the button is there, disabled, with the reason (S-P-33)',
+    !seen.notArxiv && seen.label !== null && seen.disabled === true && seen.noHtmlNote,
+    `label “${seen.label}”, disabled ${seen.disabled}, reason shown ${seen.noHtmlNote}`)
+  await popup.screenshot({ path: `${SHOTS}/pdf-popup-none.png` })
+  await popup.close()
+}
 
 await context.close()
 const pass = results.filter(r => r.ok).length

@@ -43,7 +43,7 @@ function provider(over: Partial<ProviderStatus> = {}): ProviderStatus {
 const llmProvider = (over: Partial<ProviderStatus> = {}) => provider({ providerId: SVC.id, chosen: SVC.id, model: SVC.model, renderPath: 'tags', engine: { id: SVC.id }, chain: [SVC.id, 'microsoft', 'google-web'], ...over })
 
 const base: PopupInput = {
-  page: page(), saved: provider(), session: null, config, pack: 'available', helper: { state: 'ready', version: '1.0' }, platform: 'mac', menu: null, shortcut: '⌥T', extensionId: 'abcdefghijklmnopabcdefghijklmnop',
+  page: page(), entry: null, saved: provider(), session: null, config, pack: 'available', helper: { state: 'ready', version: '1.0' }, platform: 'mac', menu: null, shortcut: '⌥T', extensionId: 'abcdefghijklmnopabcdefghijklmnop',
   // The saved settings' digest equals the running page's revision: nothing is behind unless a fixture says so
   savedRevision: 'r1',
 }
@@ -68,4 +68,8 @@ export const POPUP_FIXTURES: { id: string; name: string; when: string; input: Po
   { id: 'P14b', name: 'Helper permission taking effect', when: 'images.enabled ∧ helper = restarting', input: { ...base, helper: { state: 'restarting' } } },
   { id: 'P15', name: 'Prompt menu', when: 'llm ∧ menu = prompt', input: { ...base, config: llm, saved: llmProvider(), menu: 'prompt' } },
   { id: 'P16', name: 'Style menu', when: 'menu = style', input: { ...base, menu: 'style' } },
+  // The two pages that are not the full text (§4.0b): the popup works there, and its button opens the HTML version
+  { id: 'P17', name: 'Abstract or PDF page', when: 'page === null ∧ entry.html', input: { ...base, page: null, entry: { paper: '2501.07202v1', html: 'https://arxiv.org/html/2501.07202v1#axt-translate' } } },
+  { id: 'P17a', name: 'Abstract or PDF page, no HTML version', when: 'page === null ∧ entry.html === null', input: { ...base, page: null, entry: { paper: 'hep-th/9711200', html: null } } },
+  { id: 'P17b', name: 'Abstract or PDF page, service cannot run', when: 'page === null ∧ entry.html ∧ !runnable', input: { ...base, page: null, config: llmNoKey, saved: llmProvider({ available: false }), entry: { paper: '2501.07202v1', html: 'https://arxiv.org/html/2501.07202v1#axt-translate' } } },
 ]

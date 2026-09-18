@@ -13,7 +13,7 @@ import type { Mode } from '@/core/renderer'
 import { COMMAND_ID } from '@/entrypoints/background/context-menu'
 import type { ProviderStatus } from '@/providers/transport'
 import { isBuiltInService, isLlmChosen } from '@/config/services'
-import { type PageStatus, sendMessage, sendToActiveTab } from '@/shared/messages'
+import { type EntryStatus, type PageStatus, sendMessage, sendToActiveTab } from '@/shared/messages'
 import type { HelperStatus } from '@/shared/ocr'
 import { type PackState, createPackLookup, downloadPack } from '@/shared/pack'
 import { MANAGE_SERVICES, MANAGE_STYLES, type MenuKind, type PopupInput, actionErrorText, pollsBackground, runnable, startRefusalText } from './view-model'
@@ -28,6 +28,8 @@ const staleLocale = (c: Config) => pickLocale(c.uiLanguage, browserLanguages()) 
 
 export interface PopupActions {
   translate(): void
+  /** On an abstract or PDF page: open this paper's HTML version and translate it there */
+  openHtml(): void
   /** A new session over the running one, or after a pause: the page follows the saved settings */
   retranslate(): void
   restore(): void
@@ -65,6 +67,8 @@ function openOptions(section?: OptionsSection): void {
 
 export function usePopupData(): { input: PopupInput; error: string | null; actions: PopupActions } {
   const [page, setPage] = useState<PageStatus | null>(null)
+  /** What an abstract or PDF page answered; asked only when no full text is there to answer (§4.0b) */
+  const [entry, setEntry] = useState<EntryStatus | null>(null)
   /**
    * Two provider statuses, published by two kinds of ask and never confused (local review): the saved
    * settings' chain — asked at mount, after a save, after a configuration change (fresh) — and the running
@@ -105,7 +109,22 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
   const writes = useRef<Promise<Config>>(Promise.resolve(DEFAULT_CONFIG))
 
   const refresh = useCallback(() => {
-    sendToActiveTab({ type: 'axt:page-status' }).then(setPage).catch(() => setPage(null))
+    /**
+     * The full text answers `axt:page-status`; an abstract or PDF page does not, and then the popup asks what it is
+     * instead (UI.md S-P-03b).
+     *
+     * **A missing answer arrives two ways**: a page with no content script at all rejects ("could not establish
+     * connection"), while a page whose content script has a listener that ignores this message **resolves with
+     * `undefined`** — which is what the entry pages do, and what put `undefined` where a `PageStatus` was expected.
+     * Both are the same thing here: no full text on this tab.
+     */
+    const askEntry = () => {
+      setPage(null)
+      sendToActiveTab({ type: 'axt:entry-status' }).then(entry => setEntry(entry ?? null)).catch(() => setEntry(null))
+    }
+    sendToActiveTab({ type: 'axt:page-status' })
+      .then(status => { if (!status) { askEntry(); return } setPage(status); setEntry(null) })
+      .catch(askEntry)
   }, [])
   /** The session the page reports right now */
   const sessionRef = useRef<string | null>(null)
@@ -268,6 +287,13 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
   }
 
   const actions: PopupActions = {
+    // The abstract and PDF pages: the page navigates itself to the HTML version, which starts translating on arrival
+    // (`#axt-translate`). The popup closes with it, as it does when a click sends the reader elsewhere
+    openHtml: () => void guard(async () => {
+      const { opened } = await sendToActiveTab({ type: 'axt:open-html' })
+      if (!opened) throw new Error(S.note.noHtml)
+      window.close()
+    }),
     translate: () => void guard(async () => {
       // The epoch at the click, as for the other two: a translate delivered late must not translate a page the reader
       // translated and restored meanwhile (local review)
@@ -354,5 +380,5 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
 
   // The view gets both: the session's chain only while the page is on — unknown until it answers, never the saved
   // chain in its place (Codex on #185) — and the saved settings' chain for what a start would run on
-  return { input: { page, saved: savedProvider, session: on ? sessionProvider : null, config, pack, helper, platform, menu, shortcut, extensionId: browser.runtime.id, savedRevision }, error, actions }
+  return { input: { page, entry, saved: savedProvider, session: on ? sessionProvider : null, config, pack, helper, platform, menu, shortcut, extensionId: browser.runtime.id, savedRevision }, error, actions }
 }
