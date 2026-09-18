@@ -9,6 +9,7 @@
 import { FLOATING_CLASS, type DockPlacement, type FloatingButton, type FloatingButtonStrings, type MainAction, mountFloatingButton } from '@/core/floating/button'
 import { LOCALES, pickLocale, type Locale } from '@/locales'
 import { sendMessage } from '@/shared/messages'
+import { installVariantExperiment } from './floating-experiment'
 
 /** What this module reads of the stored configuration */
 interface SavedBits {
@@ -45,6 +46,7 @@ const save = (patch: { enabled?: boolean } & Partial<DockPlacement>) =>
   void sendMessage({ type: 'axt:set-floating-entry', patch }).catch(() => undefined)
 
 export async function installFloatingButton(doc: Document, page: FloatingPage): Promise<InstalledFloatingButton> {
+  installVariantExperiment(doc) // THROWAWAY: exp/floating-variants only
   const stored = await browser.storage.local.get('config').catch(() => ({}))
   let saved = (stored as { config?: SavedBits }).config
   const ui = browser.i18n?.getUILanguage?.()
