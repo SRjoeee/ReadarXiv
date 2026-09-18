@@ -1,19 +1,14 @@
 // The pending translation node (DESIGN §7.6): inserted after the original block before the request goes out, a
-// skeleton inside; replaced by the real translation when it arrives — clearTranslation at the start of renderText /
-// renderTable removes the sibling with the same data-axt-for. In keeping with §7.1: it is only the original block's
-// next sibling, and the original node is untouched.
+// skeleton inside. A text block's translation takes the node over when it arrives (renderText empties it and fills
+// it); a table's clone and a failure widget replace it — clearTranslation removes the sibling with the same
+// data-axt-for. In keeping with §7.1: it is only the original block's next sibling, and the original node is untouched.
 import type { Block, TextBlock } from '@/core/extractor'
 import { FOR_ATTR, INLINE_ATTR, PENDING_CLASS } from './attrs'
-import { shouldInline, translationClass, translationShell } from './shell'
+import { pendingOf, shouldInline, translationClass, translationShell } from './shell'
 import { cancelSkeletonsIn, createSkeletonInside } from './skeleton'
 import { markTail } from './side-layout'
 import { clearTranslation, setState } from './translation'
 
-
-function pendingOf(block: Block): Element | null {
-  const next = block.el.nextElementSibling
-  return next?.classList.contains(PENDING_CLASS) && next.getAttribute(FOR_ATTR) === block.id ? next : null
-}
 
 /**
  * Insert the pending node: the original's tag (a div for table blocks — a table only once the whole clone is there),
