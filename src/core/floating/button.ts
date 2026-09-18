@@ -519,7 +519,11 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     } else {
       dock.style.left = ''
       dock.style.right = ''
-      dock.style.top = `${snap(clamp(placement.position, 0, 1) * view.innerHeight)}px`
+      // The clearances of the drop hold here too: the place is a fraction of the window it was dropped in, and a
+      // window since made shorter would put the column partly below its edge (Devin on #251)
+      const height = Math.max(1, view.innerHeight)
+      const highest = Math.max(TOP_CLEARANCE_PX, height - BOTTOM_CLEARANCE_PX)
+      dock.style.top = `${snap(clamp(clamp(placement.position, 0, 1) * height, TOP_CLEARANCE_PX, highest))}px`
     }
     lock.setAttribute('aria-label', placement.locked ? strings.unlock : strings.lock)
     if (lockDrawn !== placement.locked) {

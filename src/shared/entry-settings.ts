@@ -37,6 +37,13 @@ export interface EntrySettings {
 /** What a page runs on when the background does not answer: the defaults, as everywhere */
 export const DEFAULT_ENTRY_SETTINGS: EntrySettings = { uiLanguage: 'auto', openIn: 'new-tab', zoom: 1, floating: DEFAULT_FLOATING_ENTRY }
 
+const isEntrySettings = (value: unknown): value is EntrySettings => {
+  if (typeof value !== 'object' || value === null) return false
+  const v = value as Partial<EntrySettings>
+  return typeof v.uiLanguage === 'string' && (v.openIn === 'new-tab' || v.openIn === 'same-tab') && typeof v.zoom === 'number'
+    && typeof v.floating === 'object' && v.floating !== null && typeof v.floating.enabled === 'boolean'
+}
+
 /** One subscription per page, however many parts of it follow the settings (the abstract page has two) */
 const followers: ((settings: EntrySettings) => void)[] = []
 let current = DEFAULT_ENTRY_SETTINGS
@@ -50,8 +57,17 @@ export function watchEntrySettings(onSettings: (settings: EntrySettings) => void
   followers.push(onSettings)
   if (first !== null) return first.then(() => { onSettings(current); return current })
   const tell = () => { for (const follower of followers) follower(current) }
+  /** The asks made so far. Answers may come back out of order, and only the newest ask's is believed (Devin on #251) */
+  let asked = 0
   const ask = async () => {
-    current = await sendMessage({ type: 'axt:entry-settings' }).catch(() => current)
+    const mine = ++asked
+    // An answer that is not the settings is no answer, and the page keeps what it has: a background that does not
+    // know this message resolves `undefined` rather than rejecting — another build's worker, for the moment after an
+    // update (met 2026-09-19 in a browser profile that had cached an older worker: the button never appeared)
+    const answer: unknown = await sendMessage({ type: 'axt:entry-settings' }).catch(() => null)
+    // Overtaken by a later ask, or by a zoom the background pushed since: that one's word stands
+    if (mine !== asked) return current
+    if (isEntrySettings(answer)) current = answer
     tell()
     return current
   }
@@ -61,6 +77,8 @@ export function watchEntrySettings(onSettings: (settings: EntrySettings) => void
   browser.runtime.onMessage.addListener((message: unknown) => {
     const changed = message as { type?: string; zoom?: unknown } | null
     if (changed?.type !== 'axt:zoom-changed' || typeof changed.zoom !== 'number') return undefined
+    // Newer than any answer still on its way, which was read before this zoom
+    asked++
     current = { ...current, zoom: changed.zoom }
     tell()
     return undefined

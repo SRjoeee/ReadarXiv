@@ -46,6 +46,9 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
 
   /** What the settings say, put on the page: the button there or not, its words, its link, its place, its size */
   const apply = (next: EntrySettings) => {
+    // Turned on again on the settings page: that is the reader asking for it, and "hide for now" is over
+    // (Devin on #251: it used to take a reload)
+    if (settings !== null && !settings.floating.enabled && next.floating.enabled) hiddenForNow = false
     settings = next
     if (!next.floating.enabled || hiddenForNow) {
       button?.remove()

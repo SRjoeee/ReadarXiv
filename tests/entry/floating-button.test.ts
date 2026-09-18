@@ -447,6 +447,22 @@ describe('the floating button: one size on every page, on the screen\'s own pixe
     height.mockRestore()
   })
 
+  it('the drop\'s clearances hold wherever it is drawn: a window made shorter since does not leave the column below its edge (Devin on #251)', () => {
+    const height = vi.spyOn(window, 'innerHeight', 'get')
+    height.mockReturnValue(1000)
+    const { dock } = mount({ placement: { side: 'right', position: 0.8, locked: false } })
+    expect(dock.style.top).toBe('800px')
+    // 0.8 of 300 would be 240, with the column's 124 px below it: held 200 px from the bottom instead
+    height.mockReturnValue(300)
+    window.dispatchEvent(new Event('resize'))
+    expect(dock.style.top).toBe('100px')
+    // …and never above the top clearance, in a window shorter than the two together
+    height.mockReturnValue(150)
+    window.dispatchEvent(new Event('resize'))
+    expect(dock.style.top).toBe('30px')
+    height.mockRestore()
+  })
+
   it('the panel is placed in the window\'s pixels and written in its own, which the un-zoom scales', () => {
     const m = mount({ zoom: 2 })
     placeBoxes(m)
