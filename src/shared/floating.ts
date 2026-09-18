@@ -46,7 +46,7 @@ const save = (patch: { enabled?: boolean } & Partial<DockPlacement>) =>
   void sendMessage({ type: 'axt:set-floating-entry', patch }).catch(() => undefined)
 
 export async function installFloatingButton(doc: Document, page: FloatingPage): Promise<InstalledFloatingButton> {
-  installVariantExperiment(doc) // THROWAWAY: exp/floating-variants only
+  installVariantExperiment(doc) // UI archive: branch archive/floating-mark-variants only
   const stored = await browser.storage.local.get('config').catch(() => ({}))
   let saved = (stored as { config?: SavedBits }).config
   const ui = browser.i18n?.getUILanguage?.()

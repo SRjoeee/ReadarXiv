@@ -1,8 +1,13 @@
-// THROWAWAY — branch `exp/floating-variants` only, never merged. Lets the maintainer flip between four treatments of
-// the floating button's mark on a live page (2026-09-18): A is what the feature branch ships, B / C / D are style
-// overrides added to the button's shadow root from outside, so `core/floating/button.ts` is not touched. A small bar
-// at the bottom of the page switches; the choice lives under its own storage key and reaches every open tab at once.
-// Once a letter is chosen, its few rules go into button.ts on the feature branch and this branch is deleted.
+// UI ARCHIVE — branch `archive/floating-mark-variants`, kept at the maintainer's request (2026-09-18) and never merged.
+// Four treatments of the floating button's mark, switchable on a live page: A is what ships (the maintainer's disc as
+// exported, chosen as the default), B a neutral hairline round the disc, C a grey tab with the disc as a knob, D no
+// tab at all. B / C / D are style overrides added to the button's shadow root from outside, so
+// `core/floating/button.ts` is the feature branch's, untouched. A small bar at the bottom of the page switches; the
+// choice lives under its own storage key and reaches every open tab at once.
+//
+// To look at them again: check this branch out, `pnpm build`, load `.output/chrome-mv3` unpacked. The branch is not
+// gated: the bar is a second node of ours on the page, which `pnpm e2e:floating` rightly refuses. To take one of them
+// further, move its few rules into button.ts on a feature branch; this file stays here.
 import { FLOATING_CLASS } from '@/core/floating/button'
 
 const KEY = 'axt-experiment-floating-variant'
