@@ -207,6 +207,13 @@ svg { display: block }
 .dock[data-side="left"] .control { transform: translateX(-8px) scale(0.86); transform-origin: left center }
 .dock[data-side="right"] .main .tip { transform: translate(8px, -50%) scale(0.96); transform-origin: right center }
 .dock[data-side="left"] .main .tip { transform: translate(-8px, -50%) scale(0.96); transform-origin: left center }
+/* A tooltip that is up stays up for a beat after the pointer has left its button, while the dock is open — the
+   close delay every tooltip library offers, and for its reason: the main button meets the two corner controls along
+   its edge, and a pointer at rest there trembled the tooltip in and out with every pixel (measured: 48 reversals of
+   its opacity in 1.5 s). Read Frog's main button has no tooltip, which is how theirs never met this; ours says what
+   a click does, and on a paper with no HTML version it is the only place the reason is said. Folding takes
+   everything together, with no beat: this rule needs the dock open */
+.dock[data-expanded="yes"] .tip { transition: opacity var(--exit) 120ms, transform var(--exit) 120ms, visibility 0s linear 260ms }
 /* After the closed transforms: two of those selectors tie with this one in specificity, and the later rule wins */
 .dock[data-expanded="yes"] :is(.hidden-button, .control),
 .dock[data-expanded="yes"] .main:is(:hover, :focus-visible) .tip {
@@ -222,8 +229,8 @@ svg { display: block }
   border: 1px solid var(--border); border-radius: 9999px; background: var(--surface); color: var(--hidden-fg);
   box-shadow: var(--shadow-lg);
 }
-.hidden-button::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--hidden-hover); opacity: 0; transition: opacity 150ms ease }
-.hidden-button:hover::before, .hidden-button[aria-expanded="true"]::before { opacity: 1 }
+.hidden-button::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--hidden-hover); opacity: 0; transition: opacity 150ms ease 80ms }
+.hidden-button:hover::before, .hidden-button[aria-expanded="true"]::before { opacity: 1; transition-delay: 0s }
 .hidden-button > svg { position: relative; width: 20px; height: 20px }
 .dock[data-side="right"] .hidden-button { margin-right: 8px }
 .dock[data-side="left"] .hidden-button { margin-left: 8px }
@@ -247,9 +254,19 @@ svg { display: block }
 
 /* The main button: a tab against the edge holding the circle, whole at rest and lit by the pointer */
 .anchor { position: relative; margin-block: -8px; padding-block: 8px }
-/* Open, the anchor's own box bridges the two gaps to its neighbours, so a pointer travelling from the main button to
-   the panel or the settings never leaves the dock on the way, however slowly it goes */
-.dock[data-expanded="yes"] .anchor { pointer-events: auto }
+/* **The hit area grows when the button lights** — Read Frog's way of keeping a pointer on the button's edge from
+   flickering it (their state is called \`isHitAreaExpanded\`; they debounce nothing): the boundary that lights the
+   button is the main button's edge, the boundary that lets go is 24 px further out towards the page and 8 px above
+   and below, so a pointer at rest on the edge, trembling across it, is well inside. Theirs grows on the first hover
+   because they open at once; ours opens after a dwell, and the area has to be there from the light-up, or the dwell
+   is spent crossing the edge. The anchor's own box is the 8 px above and below — which also bridge the gaps to the
+   panel and the settings, so a slow pointer never leaves the dock on its way to them — and its pseudo-element is the
+   24 px at the side, under the two corner controls once those are out */
+.dock[data-lit="yes"] .anchor { pointer-events: auto }
+.anchor::before { content: ""; position: absolute; top: 0; bottom: 0; width: 24px }
+.dock[data-side="right"] .anchor::before { right: 100% }
+.dock[data-side="left"] .anchor::before { left: 100% }
+.dock[data-dragging="yes"] .anchor::before { display: none }
 .main {
   position: relative; display: flex; align-items: center; box-sizing: border-box; height: 40px; width: 44px;
   border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-lg); cursor: pointer;
@@ -292,8 +309,9 @@ svg { display: block }
   position: absolute; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;
   cursor: pointer; color: var(--control);
 }
-.control > svg { width: 13px; height: 13px; transition: color 150ms ease, transform 150ms ease }
-.control:hover > svg, .control[aria-expanded="true"] > svg { color: var(--control-hover); transform: scale(1.12) }
+/* Hover feedback comes at once and goes after a beat, like the tooltips: an edge under a trembling pointer does not strobe */
+.control > svg { width: 13px; height: 13px; transition: color 150ms ease 80ms, transform 150ms ease 80ms }
+.control:hover > svg, .control[aria-expanded="true"] > svg { color: var(--control-hover); transform: scale(1.12); transition-delay: 0s }
 .control:active > svg { transform: scale(0.9) }
 .control.options { top: 4px }
 .control.lock { bottom: 4px }
@@ -550,7 +568,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
       }, OPEN_DWELL_MS)
     }
   })
-  /** The pointer is off the buttons: fold after the grace, unless it comes back. The menu holds the dock open */
+  /** The pointer is off the dock's hit area: fold after the grace, unless it comes back. The menu holds it open */
   const left = () => {
     if (menuOpen || panelOpen || dragging || leaveTimer !== null) return
     if (openTimer !== null) clearTimeout(openTimer)

@@ -259,6 +259,72 @@ await sleep(3000)
   await sleep(700)
 }
 
+// A pointer at rest on an edge trembles across it (the maintainer, 2026-09-18: a strobing jump as the pointer reached
+// the button). Measured then: with the dock open, a pointer trembling across the main button's edge towards the two
+// corner controls made the main button's tooltip reverse its opacity 48 times in 1.5 s. A reversal is an opacity that
+// was rising and falls, or the other way: a look that only comes, stays and goes has none while the pointer trembles.
+// The cure is Read Frog's — the hit area grows when the button lights, so the edge that lit it is no longer an edge —
+// and a close delay on the tooltips
+{
+  await page.mouse.move(640, 10)
+  await sleep(700)
+  const at = (await dockState()).main
+  // The edge that faces the page — the one a pointer coming for the button reaches first, whichever side it is docked to
+  const docked = (await dockState()).side
+  const edge = docked === 'right' ? at.left : at.right
+  const inward = docked === 'right' ? 1 : -1
+  const watch = () => page.evaluate(() => {
+    const root = document.querySelector('.axt-floating').shadowRoot
+    const parts = ['.main', '.main .tip', '.panel', '.options'].map(selector => root.querySelector(selector))
+    window.__looks = []
+    window.__watching = true
+    const read = () => {
+      window.__looks.push(parts.map(part => Number(getComputedStyle(part).opacity)))
+      if (window.__watching) requestAnimationFrame(read)
+    }
+    requestAnimationFrame(read)
+  })
+  const reversals = looks => [0, 1, 2, 3].map(k => {
+    let turns = 0
+    let direction = 0
+    for (let i = 1; i < looks.length; i++) {
+      const step = Math.sign(Math.round((looks[i][k] - looks[i - 1][k]) * 1000))
+      if (step === 0) continue
+      if (direction !== 0 && step !== direction) turns++
+      direction = step
+    }
+    return turns
+  })
+  const tremble = async (ms) => {
+    for (let t = 0; t < ms; t += 30) {
+      await page.mouse.move(edge + inward * ((t / 30) % 2 ? -1 : 1), at.y)
+      await sleep(30)
+    }
+  }
+
+  // The hit area: folded, 10 px outside the edge is the page's; lit, it is the dock's, and lets the pointer tremble
+  const oursAt = (x, y) => page.evaluate(([px, py]) => document.elementFromPoint(px, py)?.classList.contains('axt-floating') ?? false, [x, y])
+  const outside = edge - inward * 10
+  const foldedReach = await oursAt(outside, at.y)
+  // From folded: the pointer comes to rest on the edge and trembles there. The dwell must survive it
+  await watch()
+  await page.mouse.move(edge + inward, at.y, { steps: 4 })
+  await sleep(120)
+  const litReach = await oursAt(outside, at.y)
+  await tremble(1500)
+  const opened = (await dockState()).expanded
+  // Still trembling, now with the dock open and the corner controls a pixel away
+  const before = await page.evaluate(() => window.__looks.length)
+  await tremble(1500)
+  const looks = await page.evaluate(() => { window.__watching = false; return window.__looks })
+  const turns = reversals(looks.slice(before))
+  check('the hit area grows when the button lights: a pointer trembling on its edge still opens the dock, and nothing strobes while it trembles there',
+    !foldedReach && litReach && opened === 'yes' && turns.every(n => n === 0),
+    `10 px outside the edge is ours — folded: ${foldedReach}, lit: ${litReach}; open after 1.5 s of trembling: ${opened}; opacity reversals over the next 1.5 s — main ${turns[0]}, its tooltip ${turns[1]}, panel button ${turns[2]}, close control ${turns[3]} (${looks.length - before} frames)`)
+  await page.mouse.move(640, 10)
+  await sleep(700)
+}
+
 // ————— The HTML full text: the toggle, the tick, the page's DOM —————
 await page.goto(`https://arxiv.org/html/${PAPER}`, { waitUntil: 'load' })
 await sleep(5000)
