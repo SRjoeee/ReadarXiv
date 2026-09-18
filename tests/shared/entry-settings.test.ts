@@ -96,6 +96,21 @@ describe('watchEntrySettings', () => {
     expect(seen.at(-1)?.zoom).toBe(3)
   })
 
+  it('a zoom pushed while the first ask is out costs the answer its zoom and nothing else: the saved place and the switch still arrive', async () => {
+    // A PDF's viewer sets the tab's zoom as it loads, so the push lands inside the page's first ask more often than
+    // not. The whole answer used to be dropped for it, and with nothing to ask again the button sat at its default
+    // place, and showed for a reader who had turned it off (the e2e's dragged place lost after a reload, 2026-09-19)
+    const first = deferredAnswer()
+    wire.pending = [first]
+    const { watchEntrySettings } = await fresh()
+    const seen: EntrySettings[] = []
+    const started = watchEntrySettings(s => seen.push(s))
+    await (fakeBrowser.runtime.onMessage.trigger as unknown as (message: unknown) => Promise<unknown>)({ type: 'axt:zoom-changed', zoom: 1.5 })
+    first.resolve(SETTINGS)
+    expect(await started).toEqual({ ...SETTINGS, zoom: 1.5 })
+    expect(seen.at(-1)).toEqual({ ...SETTINGS, zoom: 1.5 })
+  })
+
   it('one subscription per page: a second follower asks nothing again and hears the same settings; a change of zoom reaches both', async () => {
     const { watchEntrySettings } = await fresh()
     const first: number[] = []
