@@ -59,15 +59,24 @@ export function watchEntrySettings(onSettings: (settings: EntrySettings) => void
   const tell = () => { for (const follower of followers) follower(current) }
   /** The asks made so far. Answers may come back out of order, and only the newest ask's is believed (Devin on #251) */
   let asked = 0
+  /**
+   * The zooms the background has pushed so far. An answer read before a push is stale **in its zoom alone**: the rest
+   * of it — where the button was left, whether it is shown at all — no push says anything about. Dropping the whole
+   * answer for a push lost exactly that on a PDF, whose viewer sets the tab's zoom as it loads, inside the page's
+   * first ask more often than not: the button sat at its default place, and showed for a reader who had turned it
+   * off, with nothing left to ask again
+   */
+  let pushed = 0
   const ask = async () => {
     const mine = ++asked
+    const pushedBefore = pushed
     // An answer that is not the settings is no answer, and the page keeps what it has: a background that does not
     // know this message resolves `undefined` rather than rejecting — another build's worker, for the moment after an
     // update (met 2026-09-19 in a browser profile that had cached an older worker: the button never appeared)
     const answer: unknown = await sendMessage({ type: 'axt:entry-settings' }).catch(() => null)
-    // Overtaken by a later ask, or by a zoom the background pushed since: that one's word stands
+    // Overtaken by a later ask: that one's word stands
     if (mine !== asked) return current
-    if (isEntrySettings(answer)) current = answer
+    if (isEntrySettings(answer)) current = pushed === pushedBefore ? answer : { ...answer, zoom: current.zoom }
     tell()
     return current
   }
@@ -77,8 +86,8 @@ export function watchEntrySettings(onSettings: (settings: EntrySettings) => void
   browser.runtime.onMessage.addListener((message: unknown) => {
     const changed = message as { type?: string; zoom?: unknown } | null
     if (changed?.type !== 'axt:zoom-changed' || typeof changed.zoom !== 'number') return undefined
-    // Newer than any answer still on its way, which was read before this zoom
-    asked++
+    // Newer than the zoom of any answer still on its way, which was read before this one
+    pushed++
     current = { ...current, zoom: changed.zoom }
     tell()
     return undefined
