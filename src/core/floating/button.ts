@@ -802,7 +802,10 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     }
     preview = null
     dragging = false
-    swallowClick = true
+    // A release is followed by a click, which must not act; a cancelled press is followed by none, and a flag left
+    // armed would swallow the reader's next one — a key press on the focused button, which no pointerdown precedes
+    // (Devin on #251)
+    swallowClick = event.type === 'pointerup'
     lit = false
     restoreBody()
     draw()

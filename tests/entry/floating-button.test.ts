@@ -355,6 +355,19 @@ describe('the floating button: click and drag', () => {
     expect(run).toHaveBeenCalledOnce()
   })
 
+  it('a drag the browser cancels docks where it was, and swallows nothing: no click follows a cancel, and the next one is the reader\'s (Devin on #251)', () => {
+    const run = vi.fn<() => void>()
+    const m = mount({ main: { kind: 'toggle', run } })
+    placeBoxes(m)
+    m.main.dispatchEvent(pointer('pointerdown', 1000, 569))
+    m.main.dispatchEvent(pointer('pointermove', 300, 400))
+    m.main.dispatchEvent(pointer('pointercancel', 300, 400))
+    expect(m.onPlacement).toHaveBeenCalledOnce()
+    // Enter on the focused button: a click with no pointerdown before it to reset anything
+    m.main.dispatchEvent(click(0))
+    expect(run).toHaveBeenCalledOnce()
+  })
+
   it('a long press starts the drag without moving', () => {
     vi.useFakeTimers()
     const m = mount()
