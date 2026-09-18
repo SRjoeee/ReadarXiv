@@ -5,7 +5,7 @@
 // same-origin and needs no host permission (measured 2026-09-18: 200 for a paper with an HTML version, 404 for one
 // without). A paper with no HTML version gets no entry — there is nothing to offer, so nothing is shown.
 import { LOCALES, pickLocale } from '@/locales'
-import { htmlUrlOf, injectPdfEntry, paperIdFromPdfPath, relabelPdfEntry, translatedHtmlUrlOf } from '@/core/pdf/entry'
+import { htmlUrlOf, injectPdfEntry, paperIdFromPdfPath, relabelPdfEntry, retargetPdfEntry, translatedHtmlUrlOf } from '@/core/pdf/entry'
 import { answerEntryMessages } from '@/shared/entry-page'
 
 export default defineContentScript({
@@ -27,7 +27,10 @@ export default defineContentScript({
     // The locale pack directly, as on the abstract page: `@/ui/strings` would pull 179 language names into a script
     // that needs one sentence, and this one runs on every arXiv PDF opened
     const stored = await browser.storage.local.get('config').catch(() => ({}))
-    const chosen = (stored as { config?: { uiLanguage?: string } }).config?.uiLanguage
+    const saved = (stored as { config?: { uiLanguage?: string; reading?: { openIn?: string } } }).config
+    const chosen = saved?.uiLanguage
+    // Where the translation opens (config `reading.openIn`, v16): a new tab unless the reader chose this one
+    const newTabOf = (reading: { openIn?: string } | undefined) => reading?.openIn !== 'same-tab'
     const ui = browser.i18n?.getUILanguage?.()
     const languages = ui ? [ui] : [navigator.language]
     const label = (uiLanguage: string | undefined) => {
@@ -35,11 +38,13 @@ export default defineContentScript({
       // The same sentence as the abstract page's entry (UI.md S-I-06): one offer, made on two pages
       return S.page.abstractLink(S.brand)
     }
-    injectPdfEntry(document, { label: label(chosen), href: translatedHtmlUrlOf(id, location.origin) })
+    injectPdfEntry(document, { label: label(chosen), href: translatedHtmlUrlOf(id, location.origin), newTab: newTabOf(saved?.reading) })
 
     browser.storage.local.onChanged.addListener(changes => {
-      const next = (changes.config?.newValue as { uiLanguage?: string } | undefined)?.uiLanguage
-      if (next !== undefined) relabelPdfEntry(document, label(next))
+      const next = changes.config?.newValue as { uiLanguage?: string; reading?: { openIn?: string } } | undefined
+      if (next === undefined) return
+      if (next.uiLanguage !== undefined) relabelPdfEntry(document, label(next.uiLanguage))
+      retargetPdfEntry(document, newTabOf(next.reading))
     })
   },
 })

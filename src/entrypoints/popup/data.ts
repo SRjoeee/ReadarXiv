@@ -290,8 +290,16 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
     // The abstract and PDF pages: the page navigates itself to the HTML version, which starts translating on arrival
     // (`#axt-translate`). The popup closes with it, as it does when a click sends the reader elsewhere
     openHtml: () => void guard(async () => {
-      const { opened } = await sendToActiveTab({ type: 'axt:open-html' })
-      if (!opened) throw new Error(S.note.noHtml)
+      const href = entry?.html
+      if (!href) throw new Error(S.note.noHtml)
+      // A new tab by default (config `reading.openIn`, v16): the abstract or PDF page the reader is on stays where
+      // it is. The popup opens it itself — `tabs.create` needs no permission — while “this tab” is the page's own
+      // navigation, which needs none either
+      if ((local?.config ?? DEFAULT_CONFIG).reading.openIn === 'new-tab') await browser.tabs.create({ url: href })
+      else {
+        const { opened } = await sendToActiveTab({ type: 'axt:open-html' })
+        if (!opened) throw new Error(S.note.noHtml)
+      }
       window.close()
     }),
     translate: () => void guard(async () => {

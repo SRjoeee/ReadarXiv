@@ -420,7 +420,7 @@ describe('provider selection', () => {
     const c = await fresh.getConfig()
     expect(fresh.configFallbackReason()).toBeNull()
     expect(c.version).toBe(CONFIG_VERSION)
-    expect(c.reading).toEqual({ sentenceHighlight: true })
+    expect(c.reading).toEqual({ sentenceHighlight: true, openIn: 'new-tab' })
     expect(c.services[0]).toMatchObject({ id: SVC.id, apiKey: 'sk-keep', thinking: 'disabled' })
     expect(c.targetLanguage).toBe('jpn')
     // `null` is not "absent": a hand edit, and it falls back naming the field, as any wrong value does
@@ -449,12 +449,12 @@ describe('provider selection', () => {
     const stripped = await import('@/config/storage')
     expect(await stripped.getConfig()).toEqual(DEFAULT_CONFIG)
     expect(stripped.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'services.0.thinking' })
-    // A v13 value with both present migrates to the same value at 14
+    // A v13 value with both present migrates unchanged, apart from what later versions add: v16's `reading.openIn`
     const full = { ...DEFAULT_CONFIG, version: 13, reading: { sentenceHighlight: false }, provider: SVC.id, services: [{ ...SVC, thinking: 'enabled' as const }] }
     await fakeBrowser.storage.local.set({ config: full, config$: { v: 13 } })
     vi.resetModules()
     const again = await (await import('@/config/storage')).getConfig()
-    expect(again).toEqual({ ...full, version: CONFIG_VERSION })
+    expect(again).toEqual({ ...full, version: CONFIG_VERSION, reading: { sentenceHighlight: false, openIn: 'new-tab' } })
   })
 
   it('no field of the stored shape, at any depth, carries a zod default: the version alone says what is in storage (DESIGN §9)', () => {
@@ -539,6 +539,19 @@ describe('provider selection', () => {
     expect(c.services).toEqual([])
     // Every mode unticked was “off”: the switch says so, the list stays what the reader left
     expect(c.image).toEqual({ enabled: false, modes: [] })
+  })
+
+  it('a v15 configuration climbs to v16: the translation opens in a new tab, which is nobody\'s old choice to lose', async () => {
+    const v15 = { ...DEFAULT_CONFIG, version: 15, reading: { sentenceHighlight: false } } as Record<string, unknown>
+    await fakeBrowser.storage.local.set({ config: v15, config$: { v: 15 } })
+    // A fresh module, as the other migration cases do: the storage item reads its version once
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const config = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(config.version).toBe(CONFIG_VERSION)
+    // The reader's own choice about highlighting survives; the new field takes the default
+    expect(config.reading).toEqual({ sentenceHighlight: false, openIn: 'new-tab' })
   })
 
   it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a preload margin under one screen becoming one screen', async () => {

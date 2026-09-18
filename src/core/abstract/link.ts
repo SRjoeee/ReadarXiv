@@ -26,7 +26,7 @@ export function htmlHrefOn(doc: Document): string | null {
   return html ? `${html.href}${AUTO_TRANSLATE_HASH}` : null
 }
 
-export function injectBilingualLink(doc: Document, label: string): boolean {
+export function injectBilingualLink(doc: Document, label: string, options: { newTab?: boolean } = {}): boolean {
   const html = doc.querySelector<HTMLAnchorElement>(HTML_LINK)
   if (!html) return false
   const item = html.closest('li')
@@ -38,9 +38,32 @@ export function injectBilingualLink(doc: Document, label: string): boolean {
   link.className = `abs-button ${ABS_LINK_CLASS}`
   link.href = `${html.href}${AUTO_TRANSLATE_HASH}`
   link.textContent = label
+  setTarget(link, options.newTab !== false)
   const li = doc.createElement('li')
   li.append(link)
   item.after(li)
+  return true
+}
+
+/**
+ * Where the translation opens (config `reading.openIn`, v16): a new tab by default, so the page the reader is on
+ * stays where it is. `rel` goes with `target`, or the new tab could reach back through `window.opener`.
+ */
+export function setTarget(link: HTMLAnchorElement, newTab: boolean): void {
+  if (newTab) {
+    link.target = '_blank'
+    link.rel = 'noopener'
+  } else {
+    link.removeAttribute('target')
+    link.removeAttribute('rel')
+  }
+}
+
+/** Follow a change of that setting while the page stays open, as the label does */
+export function retargetBilingualLink(doc: Document, newTab: boolean): boolean {
+  const link = doc.querySelector<HTMLAnchorElement>(`.${ABS_LINK_CLASS}`)
+  if (!link) return false
+  setTarget(link, newTab)
   return true
 }
 

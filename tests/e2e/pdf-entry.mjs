@@ -99,21 +99,36 @@ await page.screenshot({ path: `${SHOTS}/pdf-entry.png` })
     !seen.notArxiv && seen.rows && seen.label !== null && seen.disabled === false,
     `label “${seen.label}”, disabled ${seen.disabled}, rows ${seen.rows}, S-P-03 shown ${seen.notArxiv}`)
   await popup.screenshot({ path: `${SHOTS}/pdf-popup.png` })
+
+  // The button follows the same setting: a new tab, with the PDF still open behind it
+  const fromPopup = context.waitForEvent('page', { timeout: 60_000 })
+  await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /翻译本页|Translate this page/.test(b.textContent ?? ''))?.click())
+  const viaPopup = await fromPopup.catch(() => null)
+  await viaPopup?.waitForLoadState('load').catch(() => undefined)
+  check('the popup\'s button opens the translation in a new tab as well, leaving the PDF open',
+    /\/html\//.test(viaPopup?.url() ?? '') && /\/pdf\//.test(page.url()),
+    `opened ${viaPopup?.url().slice(0, 55) ?? 'nothing'}…, first tab ${page.url().slice(0, 40)}…`)
+  await viaPopup?.close()
   await popup.close()
   await page.bringToFront()
 }
 
-// Following it lands on the HTML page, which starts translating by itself (the hash, DESIGN §4.1)
+// Following it opens the HTML page **in a new tab** (config `reading.openIn`, UI.md S-O-49b), which starts
+// translating by itself (the hash, DESIGN §4.1), and the PDF the reader was on is still there
+const opened = context.waitForEvent('page', { timeout: 60_000 })
 await page.evaluate(() => document.querySelector('.axt-pdf-entry')?.shadowRoot?.querySelector('a')?.click())
-await page.waitForURL(/\/html\//, { timeout: 60_000 }).catch(() => undefined)
+const translated = await opened.catch(() => null)
+await translated?.waitForLoadState('load').catch(() => undefined)
 await sleep(12_000)
-const landed = await page.evaluate(() => ({
-  url: location.href,
-  translations: document.querySelectorAll('.axt-t').length,
-}))
-check('the click lands on the HTML paper, with no dialog on the way, and the translation has started',
+const landed = translated ? await translated.evaluate(() => ({ url: location.href, translations: document.querySelectorAll('.axt-t').length })) : { url: '', translations: 0 }
+check('the click opens the HTML paper with no dialog on the way, and the translation has started',
   /\/html\//.test(landed.url) && landed.translations > 0,
   `${landed.url.slice(0, 60)}…, ${landed.translations} translation nodes`)
+check('it opens in a new tab: the PDF the reader was on is still open, on the same paper',
+  /\/pdf\//.test(page.url()),
+  `the first tab is still ${page.url().slice(0, 50)}…`)
+await translated?.close()
+await page.bringToFront()
 
 await sleep(3000)
 await page.goto(`https://arxiv.org/pdf/${WITHOUT_HTML}`, { waitUntil: 'load' })

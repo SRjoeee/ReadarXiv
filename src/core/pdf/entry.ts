@@ -7,7 +7,7 @@
 // that URL runs in it; the viewer itself is a separate `chrome-extension://` frame and is never touched. A
 // `position: fixed` element appended to the host document draws above the viewer (measured 2026-09-18, Chromium 153).
 
-import { AUTO_TRANSLATE_HASH } from '@/core/abstract/link'
+import { AUTO_TRANSLATE_HASH, setTarget } from '@/core/abstract/link'
 import { paperIdFrom } from '@/core/paper-id'
 
 /** The element we insert; the mark makes the insertion idempotent and recognisable */
@@ -52,7 +52,7 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px }
  *
  * Nothing happens twice: Chrome's PDF host document does not re-render, but idempotence is one query.
  */
-export function injectPdfEntry(doc: Document, options: { label: string; href: string }): boolean {
+export function injectPdfEntry(doc: Document, options: { label: string; href: string; newTab?: boolean }): boolean {
   if (doc.querySelector(`.${PDF_ENTRY_CLASS}`)) return false
   const body = doc.body
   if (!body) return false
@@ -65,6 +65,8 @@ export function injectPdfEntry(doc: Document, options: { label: string; href: st
   const link = doc.createElement('a')
   link.href = options.href
   link.textContent = options.label
+  // A new tab by default (config `reading.openIn`): the PDF the reader is on stays open behind the translation
+  setTarget(link, options.newTab !== false)
   root.append(style, link)
   body.append(host)
   return true
@@ -75,5 +77,13 @@ export function relabelPdfEntry(doc: Document, label: string): boolean {
   const link = doc.querySelector(`.${PDF_ENTRY_CLASS}`)?.shadowRoot?.querySelector('a')
   if (!link) return false
   link.textContent = label
+  return true
+}
+
+/** Follow a change of `reading.openIn` while the PDF stays open */
+export function retargetPdfEntry(doc: Document, newTab: boolean): boolean {
+  const link = doc.querySelector(`.${PDF_ENTRY_CLASS}`)?.shadowRoot?.querySelector('a')
+  if (!link) return false
+  setTarget(link, newTab)
   return true
 }

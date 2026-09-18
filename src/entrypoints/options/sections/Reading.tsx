@@ -115,6 +115,16 @@ export function Reading({ data }: { data: OptionsData }) {
         renderTile={profile => <span className="text-[13px]"><span style={bandTile(profile)}>{O.reading.previewTarget}</span></span>}
       />
 
+      <h3 className="mb-1 text-[14px] font-bold">{O.reading.openIn}</h3>
+      <p className="mb-2 text-[11px] text-fg-2">{O.reading.openInHint}</p>
+      <div className="mb-6">
+        <Segmented
+          value={config.reading.openIn}
+          options={(['new-tab', 'same-tab'] as const).map((v, i) => ({ value: v, label: O.reading.openInStops[i]!, title: O.reading.openInStops[i]! }))}
+          onChange={next => void patch(latest => ({ ...latest, reading: { ...latest.reading, openIn: next === 'same-tab' ? 'same-tab' : 'new-tab' } }))}
+        />
+      </div>
+
       <h3 className="mb-1 text-[14px] font-bold">{O.reading.preloadRange}</h3>
       <p className="mb-2 text-[11px] text-fg-2">{O.reading.preloadRangeHint}</p>
       <div className="mb-6">

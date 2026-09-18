@@ -2,10 +2,11 @@
 
 Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
-## 0.5.0 — unreleased
+## 0.4.1 — unreleased
 
 - Opening a paper's PDF on arXiv now offers its bilingual version: one link, bottom right, straight to the HTML full text already translating. It appears only for papers that have an HTML version.
 - The extension's popup now works on a paper's abstract and PDF pages as well: the same settings, and a translate button that opens the paper's HTML version and translates it there. Where arXiv has no HTML version of a paper, the button says so instead of being a dead end.
+- The translation opens in a new tab, so the abstract page or PDF you were reading stays where it is. The settings page has the choice, under Reading, if you would rather it opened in the tab you are on.
 
 ## 0.4.0 — 2026-09-17
 

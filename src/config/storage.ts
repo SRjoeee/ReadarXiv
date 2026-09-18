@@ -81,6 +81,17 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
       const margin = typeof preload?.margin === 'number' && preload.margin < 900 ? 900 : preload?.margin
       return { ...v14, version: 15 as const, preload: { ...preload, margin } }
     },
+    // v15 -> v16: where a translation asked for from an abstract or PDF page opens. Everyone gets the new default, a
+    // new tab: before this the entry navigated the tab, which took the reader's page away, and nobody chose that.
+    // **A `reading` that is not an object is passed through untouched**, as every migration here does: repairing a
+    // hand-edited value would hide it, and the documented fallback names the field instead (Copilot on #209)
+    16: (v15: (Omit<Config, 'version' | 'reading'> & { version: 15; reading?: unknown }) | null) => {
+      const reading = v15?.reading
+      const filled = reading !== null && typeof reading === 'object' && !Array.isArray(reading)
+        ? { ...(reading as Record<string, unknown>), openIn: 'new-tab' as const }
+        : reading
+      return { ...v15, version: 16 as const, reading: filled }
+    },
   },
 })
 
