@@ -6,6 +6,7 @@ import { LOCALES, pickLocale } from '@/locales'
 import { htmlHrefOn, injectBilingualLink, relabelBilingualLink, retargetBilingualLink } from '@/core/abstract/link'
 import { paperIdFrom } from '@/core/paper-id'
 import { answerEntryMessages } from '@/shared/entry-page'
+import { installFloatingButton } from '@/shared/floating'
 
 export default defineContentScript({
   matches: ['https://arxiv.org/abs/*'],
@@ -29,6 +30,14 @@ export default defineContentScript({
     // The popup asks this page what it is: on an abstract page the translate button works, and takes the reader to
     // the HTML version to translate it there (UI.md S-P-03b, the maintainer 2026-09-18)
     answerEntryMessages({ paper: () => paperIdFrom(location.pathname, 'abs'), html: () => htmlHrefOn(document) })
+
+    // The floating button (DESIGN §4.0c), as on the PDF and the full text: here its main button follows the href
+    // arXiv gives, read once — the abstract page does not change under the reader
+    const href = htmlHrefOn(document)
+    void installFloatingButton(document, {
+      main: href !== null ? { kind: 'link', href } : { kind: 'none' },
+      label: S => (href !== null ? S.page.abstractLink(S.brand) : S.note.noHtml),
+    })
 
     // This page may stay open while the reader changes the interface language on the settings page: everywhere else follows, and so must this (Codex on #161)
     browser.storage.local.onChanged.addListener(changes => {

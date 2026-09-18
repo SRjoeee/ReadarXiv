@@ -13,7 +13,7 @@ import { createHelperRestart } from './helper-restart'
 import { createConfigOffers, providerStatus, statusInForce } from './provider-status'
 import { createOcrService } from './ocr'
 import { createSessionRouter } from './sessions'
-import { installContextMenu, refreshContextMenu, installToggleCommand } from './context-menu'
+import { installContextMenu, refreshContextMenu, installToggleCommand, toggleTranslation } from './context-menu'
 import { applyLocaleFrom, resolveLocale } from '@/ui/apply-locale'
 import { setLocale } from '@/ui/strings'
 import { savedFromStatus } from '@/shared/page-action'
@@ -321,6 +321,29 @@ export default defineBackground(() => {
         ocr.ocr(message)
           .catch((e: unknown) => ({ ok: false as const, error: { kind: 'unknown' as const, message: e instanceof Error ? e.message : String(e) } }))
           .then(sendResponse)
+        return true
+      case 'axt:toggle': {
+        // The floating button on the full text (§4.0c): the same toggle as the key and the menu, for the tab that asked.
+        // Nothing could be done — no service can run — and the popup opens instead: it is where the reason is said
+        const tab = sender.tab
+        if (tab?.id === undefined) return
+        replyWith(
+          toggleTranslation({ send: sendToTab, saved }, tab.id).then(async acted => {
+            if (!acted) await browser.action.openPopup({ windowId: tab.windowId }).catch(() => undefined)
+            return { acted }
+          }),
+          sendResponse,
+        )
+        return true
+      }
+      case 'axt:open-popup':
+        // `action.openPopup` (Chrome 127+, our floor is 131) is the background's to call; over the window that asked
+        replyWith(
+          browser.action.openPopup(sender.tab?.windowId !== undefined ? { windowId: sender.tab.windowId } : undefined)
+            .then(() => ({ opened: true }))
+            .catch(() => ({ opened: false })),
+          sendResponse,
+        )
         return true
       case 'axt:open-settings':
         // A content script cannot open the settings page itself; `openOptionsPage` brings an open one to the front

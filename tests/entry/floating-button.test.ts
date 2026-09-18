@@ -1,36 +1,38 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { type DockPlacement, type FloatingEntryOptions, type FloatingEntryStrings, mountFloatingEntry } from '@/core/pdf/floating'
+import { type DockPlacement, type FloatingButtonOptions, type FloatingButtonStrings, mountFloatingButton } from '@/core/floating/button'
 
-// The floating button on arXiv's PDF page (issue #169, UI.md S-I-06): Read Frog's, ported. Layout and motion are the
-// real browser's business (tests/e2e/pdf-entry.mjs); here, the state each interaction leaves behind
+// The floating button on arXiv's pages (issue #169, DESIGN §4.0c, UI.md S-I-06): Read Frog's frame, resting and opening
+// as Immersive Translate's does. Layout and motion are the real browser's business (tests/e2e/floating-button.mjs);
+// here, the state each interaction leaves behind
 
-const STRINGS: FloatingEntryStrings = {
-  open: 'Bilingual version (Read arXiv)',
+const STRINGS: FloatingButtonStrings = {
+  main: 'Bilingual version (Read arXiv)',
+  panel: 'Control panel',
   options: 'Floating button options',
   lock: 'Lock position',
   unlock: 'Unlock position',
   settings: 'Settings',
-  feedback: 'Send feedback',
   hideForNow: 'Hide for now',
   hideAlways: "Don't show again",
 }
 const HREF = 'https://arxiv.org/html/2501.07202v1#axt-translate'
 
-function mount(overrides: Partial<FloatingEntryOptions> = {}) {
+function mount(overrides: Partial<FloatingButtonOptions> = {}) {
   const host = document.createElement('div')
-  host.className = 'axt-pdf-entry'
+  host.className = 'axt-floating'
   document.body.append(host)
   const onPlacement = vi.fn<(placement: DockPlacement) => void>()
+  const onPanel = vi.fn<() => void>()
   const onSettings = vi.fn<() => void>()
   const onHide = vi.fn<(scope: 'now' | 'always') => void>()
-  const entry = mountFloatingEntry(document, host, {
-    href: HREF,
+  const entry = mountFloatingButton(document, host, {
+    main: { kind: 'link', href: HREF },
     newTab: true,
     iconUrl: 'chrome-extension://id/icon/mark.svg',
-    feedbackUrl: 'https://github.com/SRjoeee/ReadarXiv/issues/new',
     placement: { side: 'right', position: 0.66, locked: false },
     strings: STRINGS,
     onPlacement,
+    onPanel,
     onSettings,
     onHide,
     ...overrides,
@@ -38,8 +40,8 @@ function mount(overrides: Partial<FloatingEntryOptions> = {}) {
   const root = host.shadowRoot!
   const q = <T extends Element = HTMLElement>(selector: string) => root.querySelector(selector) as T
   const dock = q('.dock')
-  const main = q<HTMLAnchorElement>('a.main')
-  return { host, entry, root, q, dock, main, onPlacement, onSettings, onHide }
+  const main = q('.main')
+  return { host, entry, root, q, dock, main, onPlacement, onPanel, onSettings, onHide }
 }
 
 /** The main button where Read Frog's sits by default in a 1024 × 768 window: 40 px tall, flush with the right edge */
@@ -66,52 +68,75 @@ beforeEach(() => {
 })
 afterEach(() => {
   Reflect.deleteProperty(document, 'fullscreenElement')
+  Reflect.deleteProperty(document, 'contentType')
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
 describe('the floating button: what it is made of', () => {
-  it('is Read Frog\'s column, top to bottom: translate, the main button with its two corner controls, settings, feedback', () => {
+  it('is a column of three: the control panel, the main button with its two corner controls, the settings', () => {
     const { root, q } = mount()
     const order = [...root.querySelectorAll('.dock > *')].map(e => e.className)
-    expect(order).toEqual(['hidden-button translate', 'anchor', 'hidden-button settings', 'hidden-button feedback', 'shield'])
+    expect(order).toEqual(['hidden-button panel', 'anchor', 'hidden-button settings', 'shield'])
     expect([...q('.anchor').children].map(e => e.className)).toEqual(['main', 'control options', 'control lock', 'menu'])
-    // Our mark in place of their mascot, decorative: the link carries the name
-    expect(q<HTMLImageElement>('.main img').getAttribute('src')).toBe('chrome-extension://id/icon/mark.svg')
-    expect(q<HTMLImageElement>('.main img').alt).toBe('')
+    // Our mark inside a circle, decorative: the button carries the name
+    expect(q<HTMLImageElement>('.main .disc img').getAttribute('src')).toBe('chrome-extension://id/icon/mark.svg')
+    expect(q<HTMLImageElement>('.main .disc img').alt).toBe('')
+    expect(q('.main .disc .tick')).not.toBeNull()
   })
 
-  it('opens the bilingual version from the main button and the one above it, in a new tab unless told otherwise', () => {
-    const { entry, root } = mount()
-    const links = [...root.querySelectorAll<HTMLAnchorElement>('a.main, a.translate')]
-    expect(links.map(a => [a.getAttribute('href'), a.target, a.rel, a.getAttribute('aria-label')])).toEqual([
-      [HREF, '_blank', 'noopener', STRINGS.open],
-      [HREF, '_blank', 'noopener', STRINGS.open],
-    ])
-    entry.retarget(false)
-    expect(links.map(a => [a.getAttribute('target'), a.getAttribute('rel')])).toEqual([[null, null], [null, null]])
-    entry.retarget(true)
-    expect(links.map(a => a.target)).toEqual(['_blank', '_blank'])
-  })
-
-  it('names every control, and sends feedback to the issue tracker with nothing about the page', () => {
-    const { q, onSettings } = mount()
-    expect(q('.options').getAttribute('aria-label')).toBe(STRINGS.options)
-    expect(q('.lock').getAttribute('aria-label')).toBe(STRINGS.lock)
-    expect([q('.settings .tip').textContent, q('.translate .tip').textContent, q('.feedback .tip').textContent])
-      .toEqual([STRINGS.settings, STRINGS.open, STRINGS.feedback])
-    const feedback = q<HTMLAnchorElement>('a.feedback')
-    expect([feedback.getAttribute('href'), feedback.target, feedback.rel])
-      .toEqual(['https://github.com/SRjoeee/ReadarXiv/issues/new', '_blank', 'noopener noreferrer'])
-    q('.settings').dispatchEvent(click())
-    expect(onSettings).toHaveBeenCalledOnce()
-  })
-
-  it('follows a change of interface language while the PDF stays open', () => {
+  it('on an abstract or PDF page the main button is a link to the bilingual version, in a new tab unless told otherwise', () => {
     const { entry, q } = mount()
-    entry.relabel({ ...STRINGS, open: 'Zweisprachige Fassung', lock: 'Position sperren', hideForNow: 'Vorerst ausblenden' })
-    expect([q('a.main').getAttribute('aria-label'), q('.translate .tip').textContent, q('.lock').getAttribute('aria-label'), q('.hide-now').textContent])
-      .toEqual(['Zweisprachige Fassung', 'Zweisprachige Fassung', 'Position sperren', 'Vorerst ausblenden'])
+    const link = q<HTMLAnchorElement>('a.main')
+    expect([link.getAttribute('href'), link.target, link.rel, link.getAttribute('aria-label')]).toEqual([HREF, '_blank', 'noopener', STRINGS.main])
+    entry.retarget(false)
+    expect([link.getAttribute('target'), link.getAttribute('rel')]).toEqual([null, null])
+    entry.retarget(true)
+    expect(link.target).toBe('_blank')
+  })
+
+  it('on the full text the main button is a button that runs the toggle, and the tick says the page is translated', () => {
+    const run = vi.fn<() => void>()
+    const { entry, q, dock } = mount({ main: { kind: 'toggle', run } })
+    const main = q<HTMLButtonElement>('button.main')
+    expect([main.type, main.getAttribute('aria-label'), dock.dataset.active]).toEqual(['button', STRINGS.main, 'no'])
+    main.dispatchEvent(click())
+    expect(run).toHaveBeenCalledOnce()
+    entry.activate(true)
+    entry.relabel({ ...STRINGS, main: 'Show the original' })
+    expect([dock.dataset.active, main.getAttribute('aria-label'), q('.main .tip').textContent]).toEqual(['yes', 'Show the original', 'Show the original'])
+    entry.activate(false)
+    expect(dock.dataset.active).toBe('no')
+    // A link has nothing to retarget here, and says nothing about it
+    entry.retarget(false)
+    expect(main.hasAttribute('target')).toBe(false)
+  })
+
+  it('a paper with no HTML version keeps the button, disabled, its tooltip saying why', () => {
+    const { q } = mount({ main: { kind: 'none' }, strings: { ...STRINGS, main: 'arXiv has no HTML version of this paper' } })
+    const main = q<HTMLButtonElement>('button.main')
+    expect([main.getAttribute('aria-disabled'), main.getAttribute('aria-label'), q('.main .tip').textContent])
+      .toEqual(['true', 'arXiv has no HTML version of this paper', 'arXiv has no HTML version of this paper'])
+    // A click does nothing, and the other two buttons still work
+    expect(() => main.dispatchEvent(click())).not.toThrow()
+  })
+
+  it('names every control; the tooltips are the same words for the eye only; the panel and the settings ask the host', () => {
+    const { q, root, onPanel, onSettings } = mount()
+    expect([q('.panel').getAttribute('aria-label'), q('.settings').getAttribute('aria-label'), q('.options').getAttribute('aria-label'), q('.lock').getAttribute('aria-label')])
+      .toEqual([STRINGS.panel, STRINGS.settings, STRINGS.options, STRINGS.lock])
+    expect([q('.panel .tip').textContent, q('.settings .tip').textContent, q('.main .tip').textContent]).toEqual([STRINGS.panel, STRINGS.settings, STRINGS.main])
+    expect([...root.querySelectorAll('.tip')].every(tip => tip.getAttribute('aria-hidden') === 'true')).toBe(true)
+    q('.panel').dispatchEvent(click())
+    q('.settings').dispatchEvent(click())
+    expect([onPanel.mock.calls.length, onSettings.mock.calls.length]).toEqual([1, 1])
+  })
+
+  it('follows a change of interface language while the page stays open', () => {
+    const { entry, q } = mount()
+    entry.relabel({ ...STRINGS, main: 'Zweisprachige Fassung', panel: 'Bedienfeld', lock: 'Position sperren', hideForNow: 'Vorerst ausblenden' })
+    expect([q('.main').getAttribute('aria-label'), q('.panel .tip').textContent, q('.lock').getAttribute('aria-label'), q('.hide-now').textContent])
+      .toEqual(['Zweisprachige Fassung', 'Bedienfeld', 'Position sperren', 'Vorerst ausblenden'])
   })
 
   it('leaves the rest of the document alone', () => {
@@ -123,33 +148,90 @@ describe('the floating button: what it is made of', () => {
   })
 })
 
-describe('the floating button: tucked and opened', () => {
-  it('rests tucked against the edge and faded; entering the main button opens it; leaving the dock tucks it again', () => {
+describe('the floating button: at rest, lit, open', () => {
+  it('rests whole and dim; the pointer lights it at once, the other buttons come out once it has stayed 400 ms', () => {
+    vi.useFakeTimers()
     const { dock, main } = mount()
-    expect([dock.dataset.side, dock.dataset.expanded, dock.dataset.attached]).toEqual(['right', 'no', 'no'])
-    expect(dock.style.top).toBe('66vh')
+    expect([dock.dataset.side, dock.dataset.lit, dock.dataset.expanded, dock.style.top]).toEqual(['right', 'no', 'no', '66vh'])
     main.dispatchEvent(new MouseEvent('mouseenter'))
-    expect([dock.dataset.expanded, dock.dataset.attached]).toEqual(['yes', 'yes'])
-    dock.dispatchEvent(new MouseEvent('mouseleave'))
-    expect([dock.dataset.expanded, dock.dataset.attached]).toEqual(['no', 'no'])
+    expect([dock.dataset.lit, dock.dataset.expanded]).toEqual(['yes', 'no'])
+    vi.advanceTimersByTime(399)
+    expect(dock.dataset.expanded).toBe('no')
+    vi.advanceTimersByTime(1)
+    expect([dock.dataset.lit, dock.dataset.expanded]).toEqual(['yes', 'yes'])
   })
 
-  it('locked, it stays out of the edge while closed; the lock says what it will do next, and the host saves it', () => {
-    const { dock, q, onPlacement } = mount()
+  it('a pointer that only crosses it opens nothing, and the light goes out 200 ms after it has left', () => {
+    vi.useFakeTimers()
+    const { dock, main } = mount()
+    main.dispatchEvent(new MouseEvent('mouseenter'))
+    vi.advanceTimersByTime(150)
+    dock.dispatchEvent(new MouseEvent('mouseleave'))
+    vi.advanceTimersByTime(199)
+    expect([dock.dataset.lit, dock.dataset.expanded]).toEqual(['yes', 'no'])
+    vi.advanceTimersByTime(1)
+    expect([dock.dataset.lit, dock.dataset.expanded]).toEqual(['no', 'no'])
+    // The dwell that was under way died with the leave
+    vi.advanceTimersByTime(1000)
+    expect(dock.dataset.expanded).toBe('no')
+  })
+
+  it('leaving is forgiven for 200 ms: back inside in time, it stays open', () => {
+    vi.useFakeTimers()
+    const { dock, main } = mount()
+    main.dispatchEvent(new MouseEvent('mouseenter'))
+    vi.advanceTimersByTime(400)
+    dock.dispatchEvent(new MouseEvent('mouseleave'))
+    vi.advanceTimersByTime(150)
+    main.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    vi.advanceTimersByTime(1000)
+    expect([dock.dataset.lit, dock.dataset.expanded]).toEqual(['yes', 'yes'])
+    dock.dispatchEvent(new MouseEvent('mouseleave'))
+    vi.advanceTimersByTime(200)
+    expect([dock.dataset.lit, dock.dataset.expanded]).toEqual(['no', 'no'])
+  })
+
+  it('on a PDF the document never hears the pointer leave for the viewer: a layer behind the lit button hears it instead', () => {
+    vi.useFakeTimers()
+    Object.defineProperty(document, 'contentType', { configurable: true, get: () => 'application/pdf' })
+    const { dock, main, q } = mount()
+    const catcher = q('.catcher')
+    expect(catcher.hidden).toBe(true)
+    main.dispatchEvent(new MouseEvent('mouseenter'))
+    main.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    expect(catcher.hidden).toBe(false)
+    vi.advanceTimersByTime(400)
+    expect(dock.dataset.expanded).toBe('yes')
+    // Off the buttons and onto the layer, then back within the grace: still open
+    catcher.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    vi.advanceTimersByTime(150)
+    q('.panel').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    vi.advanceTimersByTime(1000)
+    expect(dock.dataset.expanded).toBe('yes')
+    // Off for good: folded, dim, and the layer is gone with it, so the viewer has the pointer again
+    catcher.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    vi.advanceTimersByTime(200)
+    expect([dock.dataset.expanded, dock.dataset.lit, catcher.hidden]).toEqual(['no', 'no', true])
+  })
+
+  it('an ordinary page has no such layer', () => {
+    expect(mount().root.querySelector('.catcher')).toBeNull()
+  })
+
+  it('the lock says what it will do next, and the host saves it', () => {
+    const { q, onPlacement } = mount()
     q('.lock').dispatchEvent(click())
     expect(onPlacement).toHaveBeenLastCalledWith({ side: 'right', position: 0.66, locked: true })
     expect(q('.lock').getAttribute('aria-label')).toBe(STRINGS.unlock)
-    dock.dispatchEvent(new MouseEvent('mouseleave'))
-    expect([dock.dataset.expanded, dock.dataset.attached]).toEqual(['no', 'yes'])
     q('.lock').dispatchEvent(click())
     expect(onPlacement).toHaveBeenLastCalledWith({ side: 'right', position: 0.66, locked: false })
-    expect(dock.dataset.attached).toBe('no')
+    expect(q('.lock').getAttribute('aria-label')).toBe(STRINGS.lock)
   })
 
   it('takes a placement saved in another tab, and hides while the document is fullscreen', () => {
     const { entry, dock } = mount()
     entry.place({ side: 'left', position: 0.3, locked: true })
-    expect([dock.dataset.side, dock.style.top, dock.dataset.attached]).toEqual(['left', '30vh', 'yes'])
+    expect([dock.dataset.side, dock.style.top]).toEqual(['left', '30vh'])
     setFullscreen(document.body)
     document.dispatchEvent(new Event('fullscreenchange'))
     expect(dock.hidden).toBe(true)
@@ -229,6 +311,21 @@ describe('the floating button: click and drag', () => {
     expect(shield.hidden).toBe(true)
   })
 
+  it('the same holds for the toggle on the full text: a drag runs nothing, the next click does', () => {
+    const run = vi.fn<() => void>()
+    const m = mount({ main: { kind: 'toggle', run } })
+    placeBoxes(m)
+    m.main.dispatchEvent(pointer('pointerdown', 1000, 569))
+    m.main.dispatchEvent(pointer('pointermove', 900, 300))
+    m.main.dispatchEvent(pointer('pointerup', 900, 300))
+    m.main.dispatchEvent(click())
+    expect(run).not.toHaveBeenCalled()
+    m.main.dispatchEvent(pointer('pointerdown', 1000, 569))
+    m.main.dispatchEvent(pointer('pointerup', 1000, 569))
+    m.main.dispatchEvent(click())
+    expect(run).toHaveBeenCalledOnce()
+  })
+
   it('a long press starts the drag without moving', () => {
     vi.useFakeTimers()
     const m = mount()
@@ -295,12 +392,15 @@ describe('the floating button: click and drag', () => {
 
 describe('the floating button: the close menu', () => {
   it('opens from the close control, keeps the dock open, and closes on Escape or a press elsewhere', () => {
+    vi.useFakeTimers()
     const { q, dock, main } = mount()
     main.dispatchEvent(new MouseEvent('mouseenter'))
+    vi.advanceTimersByTime(400)
     q('.options').dispatchEvent(click())
     expect([q('.menu').hidden, q('.options').getAttribute('aria-expanded')]).toEqual([false, 'true'])
-    // The pointer may wander off towards the menu; the dock stays open while it is up (reference)
+    // The pointer may wander off towards the menu; the dock stays open while it is up (Read Frog)
     dock.dispatchEvent(new MouseEvent('mouseleave'))
+    vi.advanceTimersByTime(1000)
     expect(dock.dataset.expanded).toBe('yes')
     q('.menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect([q('.menu').hidden, q('.options').getAttribute('aria-expanded')]).toEqual([true, 'false'])
@@ -331,7 +431,7 @@ describe('the floating button: the close menu', () => {
     always.q('.options').dispatchEvent(click())
     always.q('.hide-always').dispatchEvent(click())
     expect([always.host.isConnected, always.onHide.mock.calls]).toEqual([false, [['always']]])
-    expect(document.querySelectorAll('.axt-pdf-entry')).toHaveLength(0)
+    expect(document.querySelectorAll('.axt-floating')).toHaveLength(0)
   })
 
   it('removed, it stops listening to the document', () => {

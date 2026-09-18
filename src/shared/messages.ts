@@ -78,6 +78,14 @@ export interface AxtMessages {
   'axt:entry-status': { request: Record<never, never>; response: EntryStatus }
   /** popup → content, on those pages: go to the HTML version and translate it. The page navigates itself, so no tabs permission is involved */
   'axt:open-html': { request: Record<never, never>; response: { opened: boolean } }
+  /**
+   * content → background: the floating button's main button on the full text (§4.0c). The background decides as it
+   * does for the keyboard command and the context menu — one toggle, four doors — and tells this tab what to do.
+   * `acted: false` when nothing could be done (no service can run): the background opens the popup, which says why
+   */
+  'axt:toggle': { request: Record<never, never>; response: { acted: boolean } }
+  /** content → background: open the extension's popup over this tab (`action.openPopup`, which a page cannot call) */
+  'axt:open-popup': { request: Record<never, never>; response: { opened: boolean } }
   /** content → background: open the settings page. A content script cannot call `openOptionsPage` itself */
   'axt:open-settings': { request: Record<never, never>; response: { opened: boolean } }
   /**

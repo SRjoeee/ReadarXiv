@@ -23,6 +23,7 @@
     "e2e:a11y": "node tests/e2e/a11y.mjs",
     "e2e:local-endpoint": "node tests/e2e/local-endpoint.mjs",
     "e2e:pdf": "node tests/e2e/pdf-entry.mjs",
+    "e2e:floating": "node tests/e2e/floating-button.mjs",
     "e2e:image": "node tests/e2e/image.mjs",
     "e2e:placeholders": "node tests/e2e/placeholders.mjs",
     "helper:build": "swift build -c release --package-path helper",

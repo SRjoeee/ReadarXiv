@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AUTO_TRANSLATE_HASH } from '@/core/abstract/link'
 import { htmlUrlOf, paperIdFromPdfPath, translatedHtmlUrlOf } from '@/core/pdf/entry'
 
-// The bilingual entry on arXiv's PDF page (issue #169): where it leads. The floating button itself: floating.test.ts
+// The bilingual entry on arXiv's PDF page (issue #169): where it leads. The floating button itself: floating-button.test.ts
 
 describe('paperIdFromPdfPath', () => {
   it('reads the id arXiv serves a PDF under, keeping the version the reader opened', () => {

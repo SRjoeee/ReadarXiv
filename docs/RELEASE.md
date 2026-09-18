@@ -62,7 +62,7 @@ Category: Productivity. Language: English, with the Chinese description below. T
 | `contextMenus` | The "translate this page / show the original" item on arXiv pages |
 | `alarms` | Waking a fresh service worker after the reader grants the helper permission at runtime |
 | `nativeMessaging` (optional) | Talking to the local macOS helper that recognises text in bitmap figures; asked only when the reader clicks "allow" |
-| `https://arxiv.org/*` (content scripts) | The pages it translates, and the bilingual link on abstract pages |
+| `https://arxiv.org/*` (content scripts) | The pages it translates, the bilingual link on abstract pages, and the floating button on abstract, PDF and full-text pages |
 | `https://edge.microsoft.com/*`, `https://translate-pa.googleapis.com/*`, `https://openrouter.ai/*` | The free translators and the most common LLM gateway |
 | `https://*/*`, `http://*/*` (optional) | An endpoint the reader adds in the settings; each origin is asked for on its own when saved |
 

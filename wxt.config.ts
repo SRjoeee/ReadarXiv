@@ -69,7 +69,7 @@ export default defineConfig({
     // hope for `Access-Control-Allow-Origin` from the other side. Microsoft does return `*` today (measured), but that is a dependency
     // beyond our control — the day it stops, the whole engine becomes a `network` failure (Codex on #115; the line was missed when the provider was added)
     host_permissions: ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*'],
-    // The PDF page's entry draws the brand mark, and a page may only load an extension file that is declared here.
+    // The floating button (DESIGN §4.0c) draws the brand mark, and a page may only load an extension file that is declared here.
     // One file, and only to arXiv: the mark is already in the build for the extension's own pages (issue #169)
     web_accessible_resources: [{ resources: ['icon/mark.svg'], matches: ['https://arxiv.org/*'] }],
     // A custom endpoint may be http on 127.0.0.1 / the LAN (Ollama, LM Studio); with only the localhost literal the request fails outright (Codex on #6).

@@ -87,9 +87,10 @@ HTML papers only — PDFs are not translated.
 2. **Load it.** Open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked**,
    and select `.output/chrome-mv3`.
 
-3. **Open a paper** at `arxiv.org/html/…` and press <kbd>Alt</kbd>+<kbd>T</kbd> — or use the toolbar
-   button, the right-click menu, or the popup. On an abstract page a **Bilingual version** link
-   appears beside arXiv's own HTML link, which opens the paper and starts translating in one step.
+3. **Open a paper** at `arxiv.org/html/…` and click the floating button at the edge of the window, or
+   press <kbd>Alt</kbd>+<kbd>T</kbd> — or use the toolbar button, the right-click menu, or the popup. On
+   a paper's abstract page or its PDF the same button opens the paper and starts translating in one
+   step, as does the **Bilingual version** link beside arXiv's own HTML link.
 
 **Updating.** Pull, run `pnpm build` again, then press the reload button on the extension's card in
 `chrome://extensions`. Restarting Chrome is not enough: it keeps running the previous build's
