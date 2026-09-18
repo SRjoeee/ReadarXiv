@@ -34,14 +34,14 @@ describe('derivePopupView (UI.md §4)', () => {
     expect(v.empty).toBe(false)
     expect(v.service).toEqual({ value: 'Microsoft 翻译' })
     expect(v.language.value).toBe('简体中文')
-    expect(v.primary).toEqual({ label: '翻译本页', action: 'openHtml', disabled: false })
+    expect(v.primary).toEqual({ label: '双语版本', action: 'openHtml', disabled: false })
     expect(v.note).toBeNull()
     expect(v.secondary).toBeNull()
     expect(v.failed).toBeNull()
   })
   it('P17a no HTML version: the button is there and disabled, with the reason said once', () => {
     const v = view('P17a')
-    expect(v.primary).toEqual({ label: '翻译本页', action: 'openHtml', disabled: true })
+    expect(v.primary).toEqual({ label: '双语版本', action: 'openHtml', disabled: true })
     expect(v.note?.text).toBe('arXiv 没有这篇论文的 HTML 版本，无法翻译')
     // Nothing to open in the settings about a paper arXiv never converted
     expect(v.note?.settings).toBe(false)

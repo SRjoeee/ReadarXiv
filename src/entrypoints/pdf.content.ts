@@ -38,7 +38,13 @@ export default defineContentScript({
       // The same sentence as the abstract page's entry (UI.md S-I-06): one offer, made on two pages
       return S.page.abstractLink(S.brand)
     }
-    injectPdfEntry(document, { label: label(chosen), href: translatedHtmlUrlOf(id, location.origin), newTab: newTabOf(saved?.reading) })
+    injectPdfEntry(document, {
+      label: label(chosen),
+      href: translatedHtmlUrlOf(id, location.origin),
+      newTab: newTabOf(saved?.reading),
+      // Collapsed, the entry is the mark alone (UI.md S-I-06); the page may load it because the manifest says so
+      iconUrl: browser.runtime.getURL('/icon/mark.svg'),
+    })
 
     browser.storage.local.onChanged.addListener(changes => {
       const next = changes.config?.newValue as { uiLanguage?: string; reading?: { openIn?: string } } | undefined

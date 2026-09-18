@@ -28,19 +28,32 @@ export function translatedHtmlUrlOf(id: string, origin = 'https://arxiv.org'): s
   return `${htmlUrlOf(id, origin)}${AUTO_TRANSLATE_HASH}`
 }
 
+/**
+ * Collapsed to the mark, opening on hover or keyboard focus — the shape of Read Frog's floating button, which the
+ * maintainer asked this to follow (2026-09-18); the rules, the colours and the motion are ours. A pill that is
+ * always its full width sits on the page's own corner the whole time a reader is on a PDF, which is what the first
+ * version did.
+ *
+ * The expansion is CSS only: no listener, nothing to keep in sync, and it answers the keyboard as well as the
+ * pointer. `prefers-reduced-motion` gets the same states without the travel.
+ */
 const STYLE = `
 :host { all: initial }
+@media print { :host { display: none } }
 a {
   position: fixed; inset: auto 20px 20px auto; z-index: 2147483000;
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 9px 14px; border-radius: 999px;
-  background: #b31b1b; color: #fff; text-decoration: none;
+  display: grid; grid-template-columns: 24px 0fr; align-items: center; gap: 0;
+  box-sizing: border-box; height: 44px; padding: 10px;
+  border-radius: 999px; background: #b31b1b; color: #fff; text-decoration: none;
   font: 500 13px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
   box-shadow: 0 2px 10px rgb(0 0 0 / 0.28);
+  transition: grid-template-columns 180ms ease, gap 180ms ease, background 120ms ease;
 }
-a:hover { background: #991717 }
+.mark { width: 24px; height: 24px; display: block }
+.label { overflow: hidden; white-space: nowrap; min-width: 0 }
+a:hover, a:focus-visible { grid-template-columns: 24px 1fr; gap: 8px; padding-right: 14px; background: #991717 }
 a:focus-visible { outline: 2px solid #fff; outline-offset: 2px }
-@media (prefers-reduced-motion: no-preference) { a { transition: background 120ms ease } }
+@media (prefers-reduced-motion: reduce) { a { transition: none } }
 `
 
 /**
@@ -52,7 +65,7 @@ a:focus-visible { outline: 2px solid #fff; outline-offset: 2px }
  *
  * Nothing happens twice: Chrome's PDF host document does not re-render, but idempotence is one query.
  */
-export function injectPdfEntry(doc: Document, options: { label: string; href: string; newTab?: boolean }): boolean {
+export function injectPdfEntry(doc: Document, options: { label: string; href: string; newTab?: boolean; iconUrl?: string }): boolean {
   if (doc.querySelector(`.${PDF_ENTRY_CLASS}`)) return false
   const body = doc.body
   if (!body) return false
@@ -64,7 +77,21 @@ export function injectPdfEntry(doc: Document, options: { label: string; href: st
   style.textContent = STYLE
   const link = doc.createElement('a')
   link.href = options.href
-  link.textContent = options.label
+  // The label is read out and read by a reader who opens it; collapsed, the mark alone stands for it
+  link.title = options.label
+  link.setAttribute('aria-label', options.label)
+  if (options.iconUrl) {
+    const mark = doc.createElement('img')
+    mark.className = 'mark'
+    mark.src = options.iconUrl
+    // Decorative: the link's own name is the label
+    mark.alt = ''
+    link.append(mark)
+  }
+  const label = doc.createElement('span')
+  label.className = 'label'
+  label.textContent = options.label
+  link.append(label)
   // A new tab by default (config `reading.openIn`): the PDF the reader is on stays open behind the translation
   setTarget(link, options.newTab !== false)
   root.append(style, link)
@@ -75,8 +102,11 @@ export function injectPdfEntry(doc: Document, options: { label: string; href: st
 /** The interface's language can change while a PDF sits open; the entry follows, as the abstract page's does */
 export function relabelPdfEntry(doc: Document, label: string): boolean {
   const link = doc.querySelector(`.${PDF_ENTRY_CLASS}`)?.shadowRoot?.querySelector('a')
-  if (!link) return false
-  link.textContent = label
+  const span = link?.querySelector('.label')
+  if (!link || !span) return false
+  span.textContent = label
+  link.title = label
+  link.setAttribute('aria-label', label)
   return true
 }
 

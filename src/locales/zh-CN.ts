@@ -93,6 +93,7 @@ const S = {
     done: '识别助手已就绪',
   },
   primary: {
+    bilingual: '双语版本',
     translate: '翻译本页', // S-P-50
     restore: '显示原文', // S-P-51 / S-P-53
     retranslate: '重新翻译', // S-P-52

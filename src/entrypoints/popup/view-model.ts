@@ -181,7 +181,8 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
     note: noHtml ? { text: S.note.noHtml, settings: false } : !canRun ? { text: S.note.cannotRun(cannotRunWhy(config, pack)), settings: true } : null,
     failed: null,
     // No shortcut badge: ⌥T toggles a translated page, and there is none here yet (UI.md S-P-50)
-    primary: { label: S.primary.translate, action: 'openHtml', disabled: noHtml || !canRun },
+    // Not the paper page's label: this page is not what gets translated (UI.md S-P-50b, the owner 2026-09-18)
+    primary: { label: S.primary.bilingual, action: 'openHtml', disabled: noHtml || !canRun },
     secondary: null,
     mode: { value: config.mode, note: null },
   }
