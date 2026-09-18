@@ -17,9 +17,17 @@
 // - **No React, jotai, Tailwind or Base UI.** This runs on every arXiv page a reader opens, where those would be four
 //   dependencies and a React root for one button (the reason DESIGN §7.6 gives for the failure widget). Their utility
 //   classes are written out below as the CSS Tailwind v4 generates for them, their state as a few variables.
-// - **Three buttons, ours**: the control panel (the extension's popup), the main button (translate this page, or open
-//   the paper's bilingual version), the settings. Their feedback button is gone. The icons are drawn here, in the
-//   style of the popup's own (a 24 px box, 1.8 px round strokes).
+// - **Three buttons, ours**: the control panel, the main button (translate this page, or open the paper's bilingual
+//   version), the settings. Their feedback button is gone. **The control panel opens beside the button, in the page**,
+//   as Immersive Translate's does (measured: a 316 px panel fixed beside its button, a click elsewhere closes it): the
+//   extension's own popup page in a frame, so there is one popup and not two. The toolbar's popup
+//   (`action.openPopup`) was tried first and did not open in the maintainer's Chrome.
+// - **One motion for everything that comes out** (the maintainer, 2026-09-18: the parts came out on different curves
+//   and flickered): the panel, the settings, the two corner controls and the main button's tooltip enter together,
+//   one fade and one decelerating growth for all of them, each growing out of the main button, and leave together
+//   in 140 ms. Only opacity and transform move — nothing that lays the page out again — and the layout of the open state
+//   is the layout of the closed one, so nothing jumps when it opens.
+// - **The icons are Lucide's** (ISC; `docs/THIRD_PARTY.md`), a set drawn on one grid, rather than drawn here.
 // - **A press covers the window with a transparent shield** until it is released. On a PDF the page under the button is
 //   Chrome's viewer, another process's frame, and the moves and the release of a press went there rather than to the
 //   captured button (measured 2026-09-18, Chromium 153: pointer capture granted, not one pointermove or pointerup
@@ -29,6 +37,8 @@
 //   (measured the same day) — so without it the button, once opened, would never fold, nor its menu close.
 // - **The lock stops the drag**: theirs keeps the button out of the edge, which ours always is.
 // - **Keyboard focus opens it as the pointer does**, and the main button can be reached with Tab: theirs is a `div`.
+
+import { Check, type IconNode, Lock, LockOpen, Settings, SlidersHorizontal, X } from 'lucide'
 
 /** A press this long turns into a drag without moving (Read Frog) */
 const LONG_PRESS_MS = 350
@@ -85,9 +95,15 @@ export interface FloatingButtonOptions {
   iconUrl: string
   placement: DockPlacement
   strings: FloatingButtonStrings
+  /**
+   * The extension's popup page, which the control panel frames beside the button. The page may frame it because the
+   * manifest says so (`web_accessible_resources`, arXiv only). It tells its frame two things by `postMessage`, and is
+   * believed only when the message's source is that very frame: `axt:panel-size` (its content's height) and
+   * `axt:panel-close` (Escape inside it, or an action that sends the reader elsewhere)
+   */
+  panelUrl: string
   /** A drag that ended, or the lock toggled: the host saves it */
   onPlacement: (placement: DockPlacement) => void
-  onPanel: () => void
   onSettings: () => void
   /** Hidden from the close menu, after the button has taken itself off the page */
   onHide: (scope: 'now' | 'always') => void
@@ -100,103 +116,127 @@ export interface FloatingButton {
   activate: (active: boolean) => void
   /** A placement saved elsewhere (another tab's drag): taken unless a drag is under way here */
   place: (placement: DockPlacement) => void
+  /** Open the control panel without a click on its button: a click on the main button that nothing could serve */
+  openPanel: () => void
   remove: () => void
 }
 
-/** Our own glyphs, in the popup's style: a 24 px box, round strokes */
+/** Lucide's glyphs (ISC): one 24 px grid, 2 px round strokes. Only these six are bundled, the rest is shaken off */
+const glyph = (node: IconNode) => node.map(([tag, attrs]) => `<${tag} ${Object.entries(attrs).map(([name, value]) => `${name}="${value}"`).join(' ')}/>`).join('')
 const ICONS = {
-  /** Two sliders in the rounded frame of the popup's mode marks */
-  panel: '<rect x="3.5" y="4.5" width="17" height="15" rx="3.5"/><path d="M7.5 9.5h2.2M14.3 9.5h2.2M7.5 14.5h5.2"/><circle cx="12" cy="9.5" r="1.9"/><circle cx="15" cy="14.5" r="1.9"/>',
-  /** An eight-toothed cog: root arcs of radius 7.1, tooth tops of 9.4, generated rather than traced */
-  settings: '<path d="M10.16 5.14 10.45 2.73A9.4 9.4 0 0 1 13.55 2.73L13.84 5.14A7.1 7.1 0 0 1 15.55 5.85L17.46 4.35A9.4 9.4 0 0 1 19.65 6.54L18.15 8.45A7.1 7.1 0 0 1 18.86 10.16L21.27 10.45A9.4 9.4 0 0 1 21.27 13.55L18.86 13.84A7.1 7.1 0 0 1 18.15 15.55L19.65 17.46A9.4 9.4 0 0 1 17.46 19.65L15.55 18.15A7.1 7.1 0 0 1 13.84 18.86L13.55 21.27A9.4 9.4 0 0 1 10.45 21.27L10.16 18.86A7.1 7.1 0 0 1 8.45 18.15L6.54 19.65A9.4 9.4 0 0 1 4.35 17.46L5.85 15.55A7.1 7.1 0 0 1 5.14 13.84L2.73 13.55A9.4 9.4 0 0 1 2.73 10.45L5.14 10.16A7.1 7.1 0 0 1 5.85 8.45L4.35 6.54A9.4 9.4 0 0 1 6.54 4.35L8.45 5.85A7.1 7.1 0 0 1 10.16 5.14Z"/><circle cx="12" cy="12" r="2.8"/>',
-  close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
-  lock: '<rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
-  lockOpen: '<rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 7.7-1.5"/>',
-  tick: '<path d="M2.5 6.3l2.3 2.3 4.7-5"/>',
+  panel: glyph(SlidersHorizontal),
+  settings: glyph(Settings),
+  close: glyph(X),
+  lock: glyph(Lock),
+  lockOpen: glyph(LockOpen),
+  tick: glyph(Check),
 } as const
 
-/** One icon, sized by the style sheet; the two small corner controls are drawn heavier, as Read Frog's are */
-const svg = (shapes: string, stroke = 1.8, box = 24) =>
-  `<svg viewBox="0 0 ${box} ${box}" fill="none" stroke="currentColor" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shapes}</svg>`
+/** One icon, sized by the style sheet; the two small corner controls and the tick are drawn heavier, as Read Frog's are */
+const svg = (shapes: string, stroke = 2) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shapes}</svg>`
 
-// Read Frog's Tailwind classes as the CSS Tailwind v4 generates for them (their theme's `--rf-*` colours and
-// Tailwind's neutral scale, light and dark); the circle, the tick and the timing of rest and hover are ours, the
-// latter after Immersive Translate. `--brand` is the crimson of our mark
+// Read Frog's surfaces and sizes as the CSS Tailwind v4 generates for their classes (their theme's `--rf-*` colours
+// and Tailwind's neutral scale, light and dark); the circle, the tick, the motion and the panel are ours.
+// `--brand` is the crimson of our mark.
+//
+// **The motion** (see the header): `--fade-in`, `--grow-in` and `--exit` are the only timings a part that comes out may use, and
+// such a part — `.hidden-button`, `.control`, the main button's `.tip` — animates opacity and transform and nothing
+// else. Closed, each rests a few pixels towards the main button and a little smaller, so that open they grow out of it.
 const STYLE = `
 :host { all: initial }
 .dock {
   --border: oklch(0.92 0.004 286.32); --surface: #fff; --hidden-fg: oklch(0.439 0 0); --hidden-hover: oklch(0.97 0 0);
-  --control: oklch(0.87 0 0); --control-hover: oklch(0.556 0 0);
+  --control: oklch(0.708 0 0); --control-hover: oklch(0.439 0 0);
   --tip-bg: oklch(0.141 0.005 285.823); --tip-fg: #fff;
   --popover: #fff; --popover-fg: oklch(0.141 0.005 285.823); --accent: oklch(0.967 0.001 286.375); --accent-fg: oklch(0.21 0.006 285.885);
   --brand: #aa142d; --active: #2fa84f;
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  /* Coming out: the fade is the gentler and shorter of the two, the growth decelerates for longer, so a part is
+     fully there a moment before it has quite settled. Going: both at once and quickly */
+  --fade-in: 200ms cubic-bezier(0.33, 1, 0.68, 1);
+  --grow-in: 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  --exit: 140ms cubic-bezier(0.4, 0, 1, 1);
   position: fixed; z-index: 2147483647; display: flex; flex-direction: column; gap: 8px;
   font-family: ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased;
   /* The column's box is mostly empty — the folded buttons, the gaps — and must not take the page's clicks: only
      what is drawn answers the pointer (Immersive Translate's container does the same) */
   pointer-events: none;
 }
-.main, .hidden-button, .menu, .shield { pointer-events: auto }
+.main, .menu, .shield, .panel-box { pointer-events: auto }
 @media (prefers-color-scheme: dark) {
   .dock {
     --border: oklch(1 0 0 / 10%); --surface: oklch(0.205 0 0); --hidden-fg: oklch(0.708 0 0); --hidden-hover: oklch(0.269 0 0);
-    --control: oklch(0.371 0 0); --tip-bg: oklch(0.985 0 0); --tip-fg: oklch(0.141 0.005 285.823);
+    --control: oklch(0.556 0 0); --control-hover: oklch(0.87 0 0); --tip-bg: oklch(0.985 0 0); --tip-fg: oklch(0.141 0.005 285.823);
     --popover: oklch(0.21 0.006 285.885); --popover-fg: oklch(0.985 0 0); --accent: oklch(0.274 0.006 286.033); --accent-fg: oklch(0.985 0 0);
     --brand: #d2364e;
   }
 }
 @media print { .dock { display: none } }
 .dock[hidden] { display: none }
-.dock[data-side="right"] { right: 0; align-items: flex-end }
-.dock[data-side="left"] { left: 0; align-items: flex-start }
-.dock[data-dragging="yes"] { align-items: center }
-/* pl-6 / pr-6 while open: the two small controls stand out from the main button, and the pointer may cross to them */
-.dock[data-expanded="yes"][data-side="right"] { padding-left: 24px }
-.dock[data-expanded="yes"][data-side="left"] { padding-right: 24px }
+/* The room for the two corner controls is always there (pl-6 / pr-6 in Read Frog's open state): opening lays nothing out */
+.dock[data-side="right"] { right: 0; align-items: flex-end; padding-left: 24px }
+.dock[data-side="left"] { left: 0; align-items: flex-start; padding-right: 24px }
+.dock[data-dragging="yes"] { align-items: center; padding: 0 }
 
 button { margin: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit }
 a { color: inherit; text-decoration: none }
 svg { display: block }
 
-/* HiddenButton: out of sight and out of reach until the dock opens, then a short fade and slide from the edge */
+/* Everything that comes out: one way in, one way out */
+.hidden-button, .control, .main .tip {
+  opacity: 0; visibility: hidden; pointer-events: none; will-change: opacity, transform;
+  transition: opacity var(--exit), transform var(--exit), visibility 0s linear 140ms;
+}
+.panel { transform: translateY(8px) scale(0.86); transform-origin: center bottom }
+.settings { transform: translateY(-8px) scale(0.86); transform-origin: center top }
+.dock[data-side="right"] .control { transform: translateX(8px) scale(0.86); transform-origin: right center }
+.dock[data-side="left"] .control { transform: translateX(-8px) scale(0.86); transform-origin: left center }
+.dock[data-side="right"] .main .tip { transform: translate(8px, -50%) scale(0.96); transform-origin: right center }
+.dock[data-side="left"] .main .tip { transform: translate(-8px, -50%) scale(0.96); transform-origin: left center }
+/* After the closed transforms: two of those selectors tie with this one in specificity, and the later rule wins */
+.dock[data-expanded="yes"] :is(.hidden-button, .control),
+.dock[data-expanded="yes"] .main:is(:hover, :focus-visible) .tip {
+  opacity: 1; visibility: visible; transform: none;
+  transition: opacity var(--fade-in), transform var(--grow-in), visibility 0s;
+}
+.dock[data-expanded="yes"] :is(.hidden-button, .control) { pointer-events: auto }
+.dock[data-expanded="yes"] .main:is(:hover, :focus-visible) .tip { transform: translate(0, -50%) }
+
+/* HiddenButton */
 .hidden-button {
   position: relative; display: flex; box-sizing: border-box; padding: 6px; cursor: pointer;
   border: 1px solid var(--border); border-radius: 9999px; background: var(--surface); color: var(--hidden-fg);
   box-shadow: var(--shadow-lg);
-  transition: opacity 110ms ease-out, translate 160ms var(--ease), visibility 110ms;
 }
-.hidden-button:hover { background: var(--hidden-hover) }
-.hidden-button > svg { width: 20px; height: 20px }
+.hidden-button::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--hidden-hover); opacity: 0; transition: opacity 150ms ease }
+.hidden-button:hover::before, .hidden-button[aria-expanded="true"]::before { opacity: 1 }
+.hidden-button > svg { position: relative; width: 20px; height: 20px }
 .dock[data-side="right"] .hidden-button { margin-right: 8px }
 .dock[data-side="left"] .hidden-button { margin-left: 8px }
-.dock[data-expanded="no"] .hidden-button { opacity: 0; visibility: hidden; pointer-events: none }
-.dock[data-expanded="no"][data-side="right"] .hidden-button { translate: 8px 0 }
-.dock[data-expanded="no"][data-side="left"] .hidden-button { translate: -8px 0 }
 
-/* FloatingButtonTooltip: beside the button, on the side away from the edge, 8px off; Base UI's enter and exit */
+/* FloatingButtonTooltip: beside the button, on the side away from the edge */
 .tip {
   position: absolute; top: 50%; pointer-events: none; white-space: nowrap; max-width: 320px; box-sizing: border-box;
   padding: 6px 12px; border-radius: 8px; background: var(--tip-bg); color: var(--tip-fg); font-size: 12px; line-height: 16px;
-  font-weight: 400; opacity: 0; visibility: hidden; scale: 0.95;
-  transition: opacity 150ms ease, scale 150ms ease, translate 150ms ease, visibility 150ms;
+  font-weight: 400;
 }
-.dock[data-side="right"] .tip { right: calc(100% + 8px); translate: 8px -50% }
-.dock[data-side="left"] .tip { left: calc(100% + 8px); translate: -8px -50% }
-.hidden-button:hover .tip, .hidden-button:focus-visible .tip, .main:hover .tip, .main:focus-visible .tip { opacity: 1; visibility: visible; scale: 1; translate: 0 -50% }
-/* Once the two corner controls are out, the main button's tooltip stands clear of them */
-.dock[data-expanded="yes"] .main .tip { right: calc(100% + 28px) }
-.dock[data-expanded="yes"][data-side="left"] .main .tip { right: auto; left: calc(100% + 28px) }
+.hidden-button .tip { opacity: 0; visibility: hidden; transition: opacity var(--exit), transform var(--exit), visibility 0s linear 140ms }
+.dock[data-side="right"] .hidden-button .tip { right: calc(100% + 8px); transform: translate(6px, -50%) }
+.dock[data-side="left"] .hidden-button .tip { left: calc(100% + 8px); transform: translate(-6px, -50%) }
+.dock[data-expanded="yes"] .hidden-button:is(:hover, :focus-visible):not([aria-expanded="true"]) .tip {
+  opacity: 1; visibility: visible; transform: translate(0, -50%);
+  transition: opacity var(--fade-in), transform var(--grow-in), visibility 0s;
+}
+/* The main button's stands clear of the two corner controls, and comes out with them: one place, so it never jumps */
+.dock[data-side="right"] .main .tip { right: calc(100% + 28px) }
+.dock[data-side="left"] .main .tip { left: calc(100% + 28px) }
 
 /* The main button: a tab against the edge holding the circle, whole at rest and lit by the pointer */
-.anchor { position: relative }
-/* Open, the anchor reaches across the two gaps to its neighbours, so a pointer travelling from the main button to
+.anchor { position: relative; margin-block: -8px; padding-block: 8px }
+/* Open, the anchor's own box bridges the two gaps to its neighbours, so a pointer travelling from the main button to
    the panel or the settings never leaves the dock on the way, however slowly it goes */
-.dock[data-expanded="yes"] .anchor { pointer-events: auto; margin-block: -8px; padding-block: 8px }
-.dock[data-expanded="yes"] .control.options { top: 4px }
-.dock[data-expanded="yes"] .control.lock { bottom: 4px }
-.dock[data-expanded="yes"] .menu { top: 4px }
+.dock[data-expanded="yes"] .anchor { pointer-events: auto }
 .main {
   position: relative; display: flex; align-items: center; box-sizing: border-box; height: 40px; width: 44px;
   border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-lg); cursor: pointer;
@@ -216,14 +256,14 @@ svg { display: block }
 .dock[data-side="left"] .disc { margin-right: 4px }
 .dock[data-lit="yes"] .disc { box-shadow: 0 0 0 3px color-mix(in oklab, var(--brand) 16%, transparent) }
 .disc img { display: block; width: 22px; height: auto }
-/* The page shows its translation: Immersive Translate's tick, at the circle's lower right */
+/* The page shows its translation: Immersive Translate's tick, at the circle's lower right; it lands with a small overshoot */
 .tick {
   position: absolute; right: -3px; bottom: -3px; display: grid; place-items: center; box-sizing: border-box;
   width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid #fff; background: var(--active); color: #fff;
-  scale: 0; transition: scale 180ms var(--ease);
+  transform: scale(0); transition: transform var(--exit);
 }
 .tick svg { width: 8px; height: 8px }
-.dock[data-active="yes"] .tick { scale: 1 }
+.dock[data-active="yes"] .tick { transform: none; transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1) }
 /* Nothing to open: the circle greys, and the tooltip says why */
 .main[aria-disabled="true"] { cursor: default }
 .main[aria-disabled="true"] .disc { border-color: var(--control); }
@@ -233,33 +273,27 @@ svg { display: block }
   opacity: 1; cursor: grabbing;
 }
 .dock[data-dragging="yes"] .disc { margin: 0 }
-.dock[data-dragging="yes"] .tip { display: none }
 .main:focus-visible, .hidden-button:focus-visible, .control:focus-visible { outline: 2px solid oklch(0.705 0.015 286.067); outline-offset: 2px }
 
-/* The close trigger above the main button's outer corner and the lock below it: unseen until the dock opens */
+/* The close trigger above the main button's outer corner and the lock below it, in the room the dock keeps for them */
 .control {
   position: absolute; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;
-  cursor: pointer; color: var(--control); visibility: hidden; pointer-events: none;
-  transition: color 300ms var(--ease), left 300ms var(--ease), right 300ms var(--ease), transform 300ms var(--ease);
+  cursor: pointer; color: var(--control);
 }
-.control > svg { width: 12px; height: 12px }
-.control:hover, .control:active { color: var(--control-hover) }
-.control:hover { scale: 1.1 }
-.control:active { scale: 0.9 }
-.control.options { top: -4px }
-.control.lock { bottom: -4px }
-.dock[data-side="right"] .control { left: 0 }
-.dock[data-side="left"] .control { right: 0 }
-.dock[data-expanded="yes"][data-side="right"] .control { left: -24px }
-.dock[data-expanded="yes"][data-side="left"] .control { right: -24px }
-.dock[data-expanded="yes"] .control { visibility: visible; pointer-events: auto }
+.control > svg { width: 13px; height: 13px; transition: color 150ms ease, transform 150ms ease }
+.control:hover > svg, .control[aria-expanded="true"] > svg { color: var(--control-hover); transform: scale(1.12) }
+.control:active > svg { transform: scale(0.9) }
+.control.options { top: 4px }
+.control.lock { bottom: 4px }
+.dock[data-side="right"] .control { left: -24px }
+.dock[data-side="left"] .control { right: -24px }
 
 /* DropdownMenuContent, opened from the close trigger: beside it, away from the edge, aligned to its top */
 .menu {
-  position: absolute; top: -4px; z-index: 1; box-sizing: border-box; padding: 4px; min-width: 0; white-space: nowrap;
+  position: absolute; top: 4px; z-index: 1; box-sizing: border-box; padding: 4px; min-width: 0; white-space: nowrap;
   border-radius: 10px; background: var(--popover); color: var(--popover-fg);
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1), 0 0 0 1px color-mix(in oklab, var(--popover-fg) 10%, transparent);
-  animation: axt-menu-in 100ms ease;
+  animation: axt-pop-in var(--grow-in);
 }
 .menu[hidden] { display: none }
 .dock[data-side="right"] .menu { right: calc(100% + 28px); transform-origin: right top }
@@ -269,16 +303,29 @@ svg { display: block }
   border-radius: 8px; font-size: 14px; line-height: 20px; cursor: default; user-select: none; outline: none; text-align: start;
 }
 .menu button:hover, .menu button:focus-visible { background: var(--accent); color: var(--accent-fg) }
-@keyframes axt-menu-in { from { opacity: 0; scale: 0.95 } }
-.dock[data-dragging="yes"] .hidden-button, .dock[data-dragging="yes"] .control, .dock[data-dragging="yes"] .menu { display: none }
+@keyframes axt-pop-in { from { opacity: 0; transform: scale(0.96) } }
+
+/* The control panel: the extension's popup in a frame, beside the dock, grown out of it like the menu */
+.panel-box {
+  position: fixed; z-index: 1; width: 320px; overflow: hidden; border-radius: 16px; background: var(--popover);
+  box-shadow: 0 20px 40px -8px rgb(0 0 0 / 0.22), 0 4px 12px -4px rgb(0 0 0 / 0.12), 0 0 0 1px color-mix(in oklab, var(--popover-fg) 10%, transparent);
+  opacity: 0; transform: scale(0.96); transition: opacity var(--exit), transform var(--exit);
+}
+.panel-box[data-ready="yes"] { opacity: 1; transform: none; transition: opacity var(--fade-in), transform var(--grow-in) }
+.panel-box[hidden] { display: none }
+.dock[data-side="right"] .panel-box { right: 76px }
+.dock[data-side="left"] .panel-box { left: 76px }
+.panel-box iframe { display: block; width: 100%; height: 100%; border: 0; color-scheme: normal }
+
+.dock[data-dragging="yes"] :is(.hidden-button, .control, .menu, .panel-box, .tip) { display: none }
 /* Over the whole window for as long as a press lasts, inside the dock so the pointer never leaves it (see the header) */
 .shield { position: fixed; inset: 0; z-index: 2; cursor: pointer }
 .shield[hidden] { display: none }
+.dock[data-dragging="yes"] .shield { cursor: grabbing }
 /* Behind the buttons and over the whole window while the button is lit on a PDF: where the pointer goes when it leaves */
 .catcher { position: fixed; inset: 0; z-index: -1; pointer-events: auto }
 .catcher[hidden] { display: none }
-.dock[data-dragging="yes"] .shield { cursor: grabbing }
-@media (prefers-reduced-motion: reduce) { .dock *, .dock { transition: none !important; animation: none !important } }
+@media (prefers-reduced-motion: reduce) { .dock, .dock *, .dock *::before { transition-duration: 0s !important; animation: none !important } }
 `
 
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high)
@@ -333,6 +380,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
 
   const panel = make('button', 'hidden-button panel', svg(ICONS.panel))
   panel.type = 'button'
+  panel.setAttribute('aria-haspopup', 'dialog')
   const panelTip = tip()
   panel.append(panelTip)
 
@@ -347,7 +395,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   mark.src = options.iconUrl
   mark.alt = ''
   mark.draggable = false
-  disc.append(mark, make('span', 'tick', svg(ICONS.tick, 2.2, 12)))
+  disc.append(mark, make('span', 'tick', svg(ICONS.tick, 3.2)))
   const mainTip = tip()
   main.append(disc, mainTip)
   const optionsButton = make('button', 'control options', svg(ICONS.close, 3))
@@ -373,12 +421,15 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   settings.type = 'button'
   const settingsTip = tip()
   settings.append(settingsTip)
+  /** Where the control panel's frame goes; the frame itself exists only while the panel is open */
+  const panelBox = make('div', 'panel-box')
+  panelBox.hidden = true
   const shield = make('div', 'shield')
   shield.hidden = true
   /** Only where the page under the button is another process's frame: Chrome's PDF viewer (see the header) */
   const catcher = doc.contentType === 'application/pdf' ? make('div', 'catcher') : null
   if (catcher) catcher.hidden = true
-  dock.append(panel, anchor, settings, shield, ...(catcher ? [catcher] : []))
+  dock.append(panel, anchor, settings, panelBox, shield, ...(catcher ? [catcher] : []))
   root.append(style, dock)
 
   /** The pointer is over the dock: the circle is lit at once, the rest waits for `OPEN_DWELL_MS` */
@@ -387,6 +438,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   /** Keyboard focus inside the dock opens it too, at once; a mouse click that leaves focus on a control does not */
   let focused = false
   let menuOpen = false
+  let panelOpen = false
   let active = false
   let press: Press | null = null
   let dragging = false
@@ -406,7 +458,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     openTimer = leaveTimer = null
   }
 
-  const expanded = () => !dragging && (hovered || focused || menuOpen)
+  const expanded = () => !dragging && (hovered || focused || menuOpen || panelOpen)
 
   const draw = () => {
     const open = expanded()
@@ -433,6 +485,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     }
     menu.hidden = !menuOpen
     optionsButton.setAttribute('aria-expanded', menuOpen ? 'true' : 'false')
+    panel.setAttribute('aria-expanded', panelOpen ? 'true' : 'false')
   }
 
   const label = () => {
@@ -440,6 +493,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     mainTip.textContent = strings.main
     panel.setAttribute('aria-label', strings.panel)
     panelTip.textContent = strings.panel
+    if (frame) frame.title = strings.panel
     settings.setAttribute('aria-label', strings.settings)
     settingsTip.textContent = strings.settings
     optionsButton.setAttribute('aria-label', strings.options)
@@ -475,7 +529,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   })
   /** The pointer is off the buttons: fold after the grace, unless it comes back. The menu holds the dock open */
   const left = () => {
-    if (menuOpen || dragging || leaveTimer !== null) return
+    if (menuOpen || panelOpen || dragging || leaveTimer !== null) return
     if (openTimer !== null) clearTimeout(openTimer)
     openTimer = null
     leaveTimer = setTimeout(() => {
@@ -505,6 +559,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
 
   const items = [hideNow, hideAlways]
   const setMenu = (open: boolean, focusFirst = false) => {
+    if (open) setPanel(false)
     menuOpen = open
     // Closed, the dock stays open only while the pointer is still over it (Read Frog's keeps it open until the next
     // leave, which never comes when the pointer left while the menu was up)
@@ -532,12 +587,20 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
       optionsButton.focus()
     } else if (event.key === 'Tab') setMenu(false)
   })
+  // A press elsewhere closes whichever of the two is up — the light dismiss of any popover. `setPanel` is declared
+  // below and only ever called from an event, long after it exists
   const onOutside = (event: Event) => {
-    if (!menuOpen) return
     const path = event.composedPath()
-    if (!path.includes(menu) && !path.includes(optionsButton)) setMenu(false)
+    if (menuOpen && !path.includes(menu) && !path.includes(optionsButton)) setMenu(false)
+    if (panelOpen && !path.includes(panelBox) && !path.includes(panel)) setPanel(false)
   }
   doc.addEventListener('pointerdown', onOutside, true)
+  const onEscape = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || !panelOpen) return
+    setPanel(false)
+    panel.focus()
+  }
+  doc.addEventListener('keydown', onEscape, true)
   const hide = (scope: 'now' | 'always') => {
     button.remove()
     options.onHide(scope)
@@ -550,8 +613,61 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     draw()
     options.onPlacement(placement)
   })
-  panel.addEventListener('click', () => options.onPanel())
   settings.addEventListener('click', () => options.onSettings())
+
+  // The control panel: the extension's popup in a frame beside the dock. The frame lives only while the panel is
+  // open — a popup polls its page while it is up, and no page should carry one it is not showing
+  let frame: HTMLIFrameElement | null = null
+  let panelHeight = 0
+  const PANEL_MARGIN_PX = 16
+  /** Centred on the main button, kept inside the window; it grows out of the point level with that button */
+  const placePanel = () => {
+    const mainBox = main.getBoundingClientRect()
+    const height = Math.min(panelHeight, Math.max(0, view.innerHeight - 2 * PANEL_MARGIN_PX))
+    const centre = mainBox.top + mainBox.height / 2
+    const top = clamp(centre - height / 2, PANEL_MARGIN_PX, Math.max(PANEL_MARGIN_PX, view.innerHeight - height - PANEL_MARGIN_PX))
+    panelBox.style.top = `${top}px`
+    panelBox.style.height = `${height}px`
+    panelBox.style.transformOrigin = `${placement.side === 'right' ? 'right' : 'left'} ${centre - top}px`
+  }
+  const onPanelMessage = (event: MessageEvent) => {
+    // Only the frame we made is believed: a page script can post anything, but it cannot be this window
+    if (frame === null || event.source !== frame.contentWindow) return
+    const data = event.data as { type?: unknown; height?: unknown } | null
+    if (data?.type === 'axt:panel-close') {
+      setPanel(false)
+      panel.focus()
+    } else if (data?.type === 'axt:panel-size' && typeof data.height === 'number' && data.height > 0) {
+      panelHeight = data.height
+      placePanel()
+      // Shown once it knows its size, so it arrives whole rather than growing on screen
+      panelBox.dataset.ready = 'yes'
+    }
+  }
+  const setPanel = (open: boolean) => {
+    if (panelOpen === open) return
+    panelOpen = open
+    if (open) {
+      menuOpen = false
+      frame = make('iframe', '')
+      frame.src = options.panelUrl
+      frame.title = strings.panel
+      panelBox.dataset.ready = 'no'
+      panelBox.hidden = false
+      panelBox.replaceChildren(frame)
+      view.addEventListener('message', onPanelMessage)
+      view.addEventListener('resize', placePanel)
+    } else {
+      view.removeEventListener('message', onPanelMessage)
+      view.removeEventListener('resize', placePanel)
+      frame = null
+      panelBox.replaceChildren()
+      panelBox.hidden = true
+      lit = hovered = dock.matches(':hover')
+    }
+    draw()
+  }
+  panel.addEventListener('click', () => setPanel(!panelOpen))
 
   // The drag (Read Frog's `handlePointerDown` / `handlePointerMove` / `finishPointerInteraction`)
   const previewOf = (p: Press) => ({
@@ -569,6 +685,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     press.active = true
     preview = previewOf(press)
     clearTimers()
+    setPanel(false)
     hovered = false
     menuOpen = false
     dragging = true
@@ -664,6 +781,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
       preview = null
       dragging = false
       clearTimers()
+      setPanel(false)
       lit = false
       hovered = false
       menuOpen = false
@@ -692,14 +810,18 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
       if (dragging) return
       placement = { ...next }
       draw()
+      if (panelOpen) placePanel()
     },
+    openPanel: () => setPanel(true),
     remove: () => {
       if (press !== null) clearTimeout(press.timer)
       press = null
       clearTimers()
+      setPanel(false)
       restoreBody()
       doc.removeEventListener('fullscreenchange', onFullscreen)
       doc.removeEventListener('pointerdown', onOutside, true)
+      doc.removeEventListener('keydown', onEscape, true)
       host.remove()
     },
   }

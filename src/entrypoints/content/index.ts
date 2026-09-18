@@ -76,10 +76,14 @@ export default defineContentScript({
     })
 
     // The floating button: here its main button is the toggle the key and the menu are, decided in the background
-    // on the saved settings (shared/page-action.ts), so the four doors cannot disagree. After the extraction above,
-    // which therefore never sees it
+    // on the saved settings (shared/page-action.ts), so the four doors cannot disagree. When nothing could be done —
+    // no service can run — the control panel opens beside the button: it is where the reason is said, and a click is
+    // never met with silence. After the extraction above, which therefore never sees the button
     void installFloatingButton(document, {
-      main: { kind: 'toggle', run: () => void sendMessage({ type: 'axt:toggle' }).catch(() => undefined) },
+      main: {
+        kind: 'toggle',
+        run: () => void sendMessage({ type: 'axt:toggle' }).then(({ acted }) => { if (!acted) floating?.openPanel() }).catch(() => undefined),
+      },
       label: (S, active) => (active ? S.primary.restore : S.primary.translate),
     }).then(async installed => {
       floating = installed

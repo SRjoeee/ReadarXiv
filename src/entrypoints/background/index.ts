@@ -323,28 +323,12 @@ export default defineBackground(() => {
           .then(sendResponse)
         return true
       case 'axt:toggle': {
-        // The floating button on the full text (§4.0c): the same toggle as the key and the menu, for the tab that asked.
-        // Nothing could be done — no service can run — and the popup opens instead: it is where the reason is said
+        // The floating button on the full text (§4.0c): the same toggle as the key and the menu, for the tab that asked
         const tab = sender.tab
         if (tab?.id === undefined) return
-        replyWith(
-          toggleTranslation({ send: sendToTab, saved }, tab.id).then(async acted => {
-            if (!acted) await browser.action.openPopup({ windowId: tab.windowId }).catch(() => undefined)
-            return { acted }
-          }),
-          sendResponse,
-        )
+        replyWith(toggleTranslation({ send: sendToTab, saved }, tab.id).then(acted => ({ acted })), sendResponse)
         return true
       }
-      case 'axt:open-popup':
-        // `action.openPopup` (Chrome 127+, our floor is 131) is the background's to call; over the window that asked
-        replyWith(
-          browser.action.openPopup(sender.tab?.windowId !== undefined ? { windowId: sender.tab.windowId } : undefined)
-            .then(() => ({ opened: true }))
-            .catch(() => ({ opened: false })),
-          sendResponse,
-        )
-        return true
       case 'axt:open-settings':
         // A content script cannot open the settings page itself; `openOptionsPage` brings an open one to the front
         replyWith(browser.runtime.openOptionsPage().then(() => ({ opened: true })).catch(() => ({ opened: false })), sendResponse)

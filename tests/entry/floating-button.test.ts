@@ -22,7 +22,6 @@ function mount(overrides: Partial<FloatingButtonOptions> = {}) {
   host.className = 'axt-floating'
   document.body.append(host)
   const onPlacement = vi.fn<(placement: DockPlacement) => void>()
-  const onPanel = vi.fn<() => void>()
   const onSettings = vi.fn<() => void>()
   const onHide = vi.fn<(scope: 'now' | 'always') => void>()
   const entry = mountFloatingButton(document, host, {
@@ -31,8 +30,9 @@ function mount(overrides: Partial<FloatingButtonOptions> = {}) {
     iconUrl: 'chrome-extension://id/icon/mark.svg',
     placement: { side: 'right', position: 0.66, locked: false },
     strings: STRINGS,
+    // happy-dom would go and fetch a real address; what the frame shows is the browser's business (e2e)
+    panelUrl: 'about:blank',
     onPlacement,
-    onPanel,
     onSettings,
     onHide,
     ...overrides,
@@ -41,7 +41,7 @@ function mount(overrides: Partial<FloatingButtonOptions> = {}) {
   const q = <T extends Element = HTMLElement>(selector: string) => root.querySelector(selector) as T
   const dock = q('.dock')
   const main = q('.main')
-  return { host, entry, root, q, dock, main, onPlacement, onPanel, onSettings, onHide }
+  return { host, entry, root, q, dock, main, onPlacement, onSettings, onHide }
 }
 
 /** The main button where Read Frog's sits by default in a 1024 × 768 window: 40 px tall, flush with the right edge */
@@ -77,7 +77,7 @@ describe('the floating button: what it is made of', () => {
   it('is a column of three: the control panel, the main button with its two corner controls, the settings', () => {
     const { root, q } = mount()
     const order = [...root.querySelectorAll('.dock > *')].map(e => e.className)
-    expect(order).toEqual(['hidden-button panel', 'anchor', 'hidden-button settings', 'shield'])
+    expect(order).toEqual(['hidden-button panel', 'anchor', 'hidden-button settings', 'panel-box', 'shield'])
     expect([...q('.anchor').children].map(e => e.className)).toEqual(['main', 'control options', 'control lock', 'menu'])
     // Our mark inside a circle, decorative: the button carries the name
     expect(q<HTMLImageElement>('.main .disc img').getAttribute('src')).toBe('chrome-extension://id/icon/mark.svg')
@@ -121,15 +121,25 @@ describe('the floating button: what it is made of', () => {
     expect(() => main.dispatchEvent(click())).not.toThrow()
   })
 
-  it('names every control; the tooltips are the same words for the eye only; the panel and the settings ask the host', () => {
-    const { q, root, onPanel, onSettings } = mount()
+  it('names every control; the tooltips are the same words for the eye only; the settings ask the host', () => {
+    const { q, root, onSettings } = mount()
     expect([q('.panel').getAttribute('aria-label'), q('.settings').getAttribute('aria-label'), q('.options').getAttribute('aria-label'), q('.lock').getAttribute('aria-label')])
       .toEqual([STRINGS.panel, STRINGS.settings, STRINGS.options, STRINGS.lock])
     expect([q('.panel .tip').textContent, q('.settings .tip').textContent, q('.main .tip').textContent]).toEqual([STRINGS.panel, STRINGS.settings, STRINGS.main])
     expect([...root.querySelectorAll('.tip')].every(tip => tip.getAttribute('aria-hidden') === 'true')).toBe(true)
-    q('.panel').dispatchEvent(click())
     q('.settings').dispatchEvent(click())
-    expect([onPanel.mock.calls.length, onSettings.mock.calls.length]).toEqual([1, 1])
+    expect(onSettings).toHaveBeenCalledOnce()
+  })
+
+  it('the icons are one set on one grid: Lucide\'s, each a 24 px box with round strokes', () => {
+    const { root } = mount()
+    const icons = [...root.querySelectorAll('svg')]
+    expect(icons.length).toBeGreaterThanOrEqual(5)
+    for (const icon of icons) {
+      expect([icon.getAttribute('viewBox'), icon.getAttribute('stroke-linecap'), icon.getAttribute('stroke-linejoin'), icon.getAttribute('fill')])
+        .toEqual(['0 0 24 24', 'round', 'round', 'none'])
+      expect(icon.children.length).toBeGreaterThan(0)
+    }
   })
 
   it('follows a change of interface language while the page stays open', () => {
@@ -390,6 +400,81 @@ describe('the floating button: click and drag', () => {
   })
 })
 
+describe('the floating button: the control panel', () => {
+  /** A message as the framed popup posts it: `source` is what the button checks, and a test can set it */
+  const fromFrame = (frame: HTMLIFrameElement | Window | null, data: unknown) =>
+    window.dispatchEvent(new MessageEvent('message', { data, source: (frame instanceof HTMLIFrameElement ? frame.contentWindow : frame) as Window }))
+
+  it('opens the popup page in a frame beside the button, only while it is open, and holds the dock open', () => {
+    vi.useFakeTimers()
+    const { q, dock } = mount()
+    expect([q('.panel-box').hidden, q('.panel-box iframe')]).toEqual([true, null])
+    q('.panel').dispatchEvent(click())
+    const frame = q<HTMLIFrameElement>('.panel-box iframe')
+    expect([q('.panel-box').hidden, frame.getAttribute('src'), frame.title, q('.panel').getAttribute('aria-expanded'), dock.dataset.expanded])
+      .toEqual([false, 'about:blank', STRINGS.panel, 'true', 'yes'])
+    // The pointer going away does not fold it while the panel is up
+    dock.dispatchEvent(new MouseEvent('mouseleave'))
+    vi.advanceTimersByTime(1000)
+    expect(dock.dataset.expanded).toBe('yes')
+    // A second click closes it, and the frame goes with it
+    q('.panel').dispatchEvent(click())
+    expect([q('.panel-box').hidden, q('.panel-box iframe'), q('.panel').getAttribute('aria-expanded')]).toEqual([true, null, 'false'])
+  })
+
+  it('shows itself once the popup has said how tall it is, centred on the main button and kept inside the window', () => {
+    const m = mount()
+    placeBoxes(m)
+    m.q('.panel').dispatchEvent(click())
+    const box = m.q('.panel-box')
+    expect(box.dataset.ready).toBe('no')
+    fromFrame(m.q<HTMLIFrameElement>('.panel-box iframe'), { type: 'axt:panel-size', height: 300 })
+    // The main button's centre is at 569 of 768: 569 − 150
+    expect([box.dataset.ready, box.style.height, box.style.top]).toEqual(['yes', '300px', '419px'])
+    // Taller than the window allows: 16 px kept clear at both ends
+    fromFrame(m.q<HTMLIFrameElement>('.panel-box iframe'), { type: 'axt:panel-size', height: 2000 })
+    expect([box.style.height, box.style.top]).toEqual(['736px', '16px'])
+  })
+
+  it('believes only its own frame: the same message from the page\'s window changes nothing', () => {
+    const m = mount()
+    placeBoxes(m)
+    m.q('.panel').dispatchEvent(click())
+    fromFrame(window, { type: 'axt:panel-size', height: 300 })
+    expect(m.q('.panel-box').dataset.ready).toBe('no')
+    fromFrame(window, { type: 'axt:panel-close' })
+    expect(m.q('.panel-box').hidden).toBe(false)
+  })
+
+  it('closes when the popup asks, on Escape, on a press elsewhere, and when the close menu opens; a press inside keeps it', () => {
+    const m = mount()
+    const open = () => { m.q('.panel').dispatchEvent(click()); return m.q<HTMLIFrameElement>('.panel-box iframe') }
+    fromFrame(open(), { type: 'axt:panel-close' })
+    expect(m.q('.panel-box').hidden).toBe(true)
+
+    open()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(m.q('.panel-box').hidden).toBe(true)
+
+    open()
+    m.q('.panel-box').dispatchEvent(pointer('pointerdown', 900, 500))
+    expect(m.q('.panel-box').hidden).toBe(false)
+    document.body.dispatchEvent(pointer('pointerdown', 10, 10))
+    expect(m.q('.panel-box').hidden).toBe(true)
+
+    open()
+    m.q('.options').dispatchEvent(click())
+    expect([m.q('.panel-box').hidden, m.q('.menu').hidden]).toEqual([true, false])
+  })
+
+  it('opens on the host\'s word too, for a click on the main button that nothing could serve', () => {
+    const { entry, q } = mount({ main: { kind: 'toggle', run: () => undefined } })
+    entry.openPanel()
+    expect(q('.panel-box iframe')).not.toBeNull()
+    entry.remove()
+  })
+})
+
 describe('the floating button: the close menu', () => {
   it('opens from the close control, keeps the dock open, and closes on Escape or a press elsewhere', () => {
     vi.useFakeTimers()
@@ -439,6 +524,6 @@ describe('the floating button: the close menu', () => {
     const off = vi.spyOn(document, 'removeEventListener')
     entry.remove()
     expect(host.isConnected).toBe(false)
-    expect(off.mock.calls.map(([type]) => type).sort()).toEqual(['fullscreenchange', 'pointerdown'])
+    expect(off.mock.calls.map(([type]) => type).sort()).toEqual(['fullscreenchange', 'keydown', 'pointerdown'])
   })
 })

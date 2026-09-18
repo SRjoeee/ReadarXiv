@@ -54,18 +54,49 @@ const dockState = (on = page) => on.evaluate(() => {
     side: dock.dataset.side, lit: dock.dataset.lit, expanded: dock.dataset.expanded, active: dock.dataset.active, width: window.innerWidth,
     main: rect('.main'), disc: rect('.disc'), panel: rect('.panel'), settings: rect('.settings'), options: rect('.options'),
     mainOpacity: Number(look('.main', 'opacity')), panelOpacity: Number(look('.panel', 'opacity')), panelVisibility: look('.panel', 'visibility'),
-    tickScale: look('.tick', 'scale'), discRadius: look('.disc', 'borderRadius'),
+    // The tick is scaled to nothing until the page is translated
+    tickShown: look('.tick', 'transform') !== 'matrix(0, 0, 0, 0, 0, 0)', discRadius: look('.disc', 'borderRadius'),
     label: main.getAttribute('aria-label'), tag: main.tagName, href: main.getAttribute('href'),
     order: [...root.querySelectorAll('.dock > *')].map(e => e.className),
   }
 })
+
+/**
+ * Open the control panel with the mouse and say what is there: the panel's box, whether the popup loaded in its frame
+ * and what it shows, and whether a press elsewhere closed it again
+ */
+async function openPanel() {
+  const resting = await dockState()
+  await page.mouse.move(resting.main.x, resting.main.y, { steps: 3 })
+  await sleep(900)
+  const panel = (await dockState()).panel
+  await page.mouse.click(panel.x, panel.y)
+  await sleep(2500)
+  const frame = page.frames().find(f => f.url().includes('/popup.html'))
+  const text = frame ? await frame.evaluate(() => document.body.innerText.replace(/\s+/g, ' ')).catch(() => null) : null
+  const state = await page.evaluate(() => {
+    const root = document.querySelector('.axt-floating').shadowRoot
+    const box = root.querySelector('.panel-box')
+    const r = box.getBoundingClientRect()
+    const m = root.querySelector('.main').getBoundingClientRect()
+    return { ready: box.dataset.ready, box: { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), height: Math.round(r.height) }, main: { left: Math.round(m.left), y: Math.round(m.y + m.height / 2) }, innerHeight: window.innerHeight, expanded: root.querySelector('.panel').getAttribute('aria-expanded') }
+  })
+  await page.screenshot({ path: `${SHOTS}/floating-panel.png` })
+  // Between the two places the panel can be — the dock may be docked to either side by now — and on the paper's text
+  await page.mouse.click(640, 430)
+  await sleep(500)
+  const closedByPress = await page.evaluate(() => document.querySelector('.axt-floating').shadowRoot.querySelector('.panel-box').hidden)
+  await page.mouse.move(640, 10)
+  await sleep(600)
+  return { ...state, loaded: frame !== undefined, text, closedByPress }
+}
 
 // ————— The PDF page: rest, light, open, drag, hide —————
 await page.goto(`https://arxiv.org/pdf/${PAPER}`, { waitUntil: 'load' })
 await sleep(6000)
 const rest = await dockState()
 check('three buttons in a column: the control panel, the main button, the settings (no feedback button)',
-  JSON.stringify(rest?.order) === JSON.stringify(['hidden-button panel', 'anchor', 'hidden-button settings', 'shield', 'catcher']),
+  JSON.stringify(rest?.order) === JSON.stringify(['hidden-button panel', 'anchor', 'hidden-button settings', 'panel-box', 'shield', 'catcher']),
   `${rest?.order?.join(' · ')}`)
 check('at rest the whole circle shows, dim, docked to the right edge, and the other buttons are out of sight',
   rest.side === 'right' && rest.main.right === rest.width && rest.disc.right <= rest.width && rest.disc.width === 32 && rest.discRadius === '50%'
@@ -111,6 +142,14 @@ const folded = await dockState()
 // Over Chrome's PDF viewer this document hears no `mouseleave`: the layer behind the lit button is what tells it (button.ts)
 check('it folds and dims again after the pointer has left for the PDF viewer', folded.expanded === 'no' && folded.lit === 'no' && Math.abs(folded.mainOpacity - 0.7) < 0.01,
   `open ${folded.expanded}, lit ${folded.lit}, opacity ${folded.mainOpacity.toFixed(2)}`)
+
+// The control panel on a PDF: the popup framed in a document whose body is Chrome's viewer, closed by a press on that viewer
+{
+  const seen = await openPanel()
+  check('on a PDF the control panel opens beside the button with the popup in it, and a press on the viewer closes it',
+    seen.ready === 'yes' && seen.loaded && /双语版本|Bilingual version/.test(seen.text ?? '') && seen.box.right <= seen.main.left && seen.closedByPress,
+    `ready ${seen.ready}, popup loaded ${seen.loaded} (“${seen.text?.slice(0, 40)}…”), panel ${seen.box.left}–${seen.box.right} beside the button at ${seen.main.left}, closed by a press elsewhere: ${seen.closedByPress}`)
+}
 
 // The drag (Read Frog's): past 6 px it follows the pointer, the release docks it to the nearer side, the place is saved
 {
@@ -172,6 +211,45 @@ await sleep(3000)
     `main <${abs?.tag?.toLowerCase()}> → ${abs?.href}, arXiv's own ${arxivHref}, docked ${abs?.side} as saved on the PDF`)
 }
 
+// The opening motion, frame by frame (the maintainer, 2026-09-18: the parts came out on different curves, and flickered).
+// What an eye judges as "together" and "smooth" is, in numbers: every part has the same opacity in every frame, no
+// opacity ever falls back on the way in, and nothing that was already on screen moves
+{
+  await page.mouse.move(640, 10)
+  await sleep(700)
+  await page.evaluate(() => {
+    const root = document.querySelector('.axt-floating').shadowRoot
+    const parts = ['.panel', '.settings', '.options', '.lock', '.main .tip'].map(selector => root.querySelector(selector))
+    const dock = root.querySelector('.dock')
+    const main = root.querySelector('.main')
+    window.__frames = []
+    let from = null
+    const read = () => {
+      if (from === null && dock.dataset.expanded === 'yes') from = performance.now()
+      if (from !== null) {
+        const m = main.getBoundingClientRect()
+        const d = dock.getBoundingClientRect()
+        window.__frames.push({ opacities: parts.map(part => Number(getComputedStyle(part).opacity)), still: [m.left, m.top, d.left, d.top, d.width, d.height].join() })
+      }
+      if (from === null || performance.now() - from < 500) requestAnimationFrame(read)
+    }
+    requestAnimationFrame(read)
+  })
+  const at = (await dockState()).main
+  await page.mouse.move(at.x, at.y, { steps: 3 })
+  await sleep(1300)
+  const frames = await page.evaluate(() => window.__frames)
+  const together = frames.every(f => Math.max(...f.opacities) - Math.min(...f.opacities) < 0.02)
+  const rising = frames.every((f, i) => i === 0 || f.opacities.every((o, k) => o >= frames[i - 1].opacities[k] - 0.001))
+  const still = frames.every(f => f.still === frames[0].still)
+  const arrived = frames.at(-1)?.opacities.every(o => o > 0.99) ?? false
+  check('the panel, the settings, the two corner controls and the tooltip come out as one: same opacity every frame, never falling back, and nothing already on screen moves',
+    frames.length > 10 && together && rising && still && arrived,
+    `${frames.length} frames; together ${together}, only rising ${rising}, main button and dock still ${still}, all fully in at the end ${arrived}`)
+  await page.mouse.move(640, 10)
+  await sleep(700)
+}
+
 // ————— The HTML full text: the toggle, the tick, the page's DOM —————
 await page.goto(`https://arxiv.org/html/${PAPER}`, { waitUntil: 'load' })
 await sleep(5000)
@@ -199,8 +277,8 @@ await page.mouse.move(600, 200)
 await sleep(600)
 await page.screenshot({ path: `${SHOTS}/floating-active.png`, clip: { x: 0, y: 440, width: 180, height: 260 } })
 check('a click translates the page: translations arrive, the tick shows, and the button now offers the original',
-  translated > 0 && on.active === 'yes' && on.tickScale === '1' && /显示原文|Show the original|original/i.test(on.label ?? ''),
-  `${translated} translation nodes, active ${on.active}, tick scale ${on.tickScale}, label “${on.label}”`)
+  translated > 0 && on.active === 'yes' && on.tickShown && idle.tickShown === false && /显示原文|Show the original|original/i.test(on.label ?? ''),
+  `${translated} translation nodes, active ${on.active}, tick shown ${idle.tickShown} → ${on.tickShown}, label “${on.label}”`)
 
 const again = await dockState()
 await page.mouse.click(again.main.x, again.main.y)
@@ -218,23 +296,13 @@ check('a second click restores it: the tick goes, nothing of ours is left but th
   off !== null && off.active === 'no' && JSON.stringify(after.ours) === JSON.stringify(['axt-floating']) && after.html === before.html,
   `active ${off?.active}, our nodes and marks: ${after.ours.join(', ')}, document ${before.html.length} → ${after.html.length} characters, first difference: ${firstDifference(before.html, after.html)}`)
 
-// The control panel opens the extension's popup (`action.openPopup`, from the background)
+// The control panel (Immersive Translate's manner: a panel in the page, beside the button — not the toolbar's popup)
 {
-  const resting = await dockState()
-  await page.mouse.move(resting.main.x, resting.main.y, { steps: 3 })
-  await sleep(800)
-  const panel = (await dockState()).panel
-  // An action popup is no tab, and Playwright reports no page for it: the extension's own contexts are asked instead
-  const popups = () => worker.evaluate(() => chrome.runtime.getContexts({ contextTypes: ['POPUP'] }).then(list => list.map(c => c.documentUrl)))
-  const beforeClick = await popups()
-  await page.mouse.click(panel.x, panel.y)
-  let opened = []
-  for (let i = 0; i < 20 && opened.length === 0; i++) {
-    await sleep(250)
-    opened = await popups()
-  }
-  check('the control panel opens the extension\'s popup', beforeClick.length === 0 && opened.length === 1 && /popup\.html/.test(opened[0] ?? ''),
-    `${beforeClick.length} popup before the click, then ${opened.map(u => u.replace(/^chrome-extension:\/\/[a-z]+/, '…')).join(', ') || 'none'}`)
+  const seen = await openPanel()
+  check('the control panel opens beside the button, inside the window, with the popup for this page in it; a press elsewhere closes it',
+    seen.ready === 'yes' && seen.loaded && /翻译本页|Translate this page/.test(seen.text ?? '') && seen.box.top >= 16 && seen.box.bottom <= seen.innerHeight - 16
+      && Math.abs((seen.box.left > seen.main.left ? seen.box.left - seen.main.left : seen.main.left - seen.box.right)) <= 80 && seen.closedByPress,
+    `ready ${seen.ready}, popup loaded ${seen.loaded} (“${seen.text?.slice(0, 40)}…”), panel ${seen.box.top}–${seen.box.bottom} of ${seen.innerHeight}px, closed by a press elsewhere: ${seen.closedByPress}`)
 }
 
 await context.close()

@@ -21,6 +21,7 @@ import { chainRevision } from '@/config/revision'
 import { localeInUse, S } from '@/ui/strings'
 import { pickLocale } from '@/locales'
 import { browserLanguages } from '@/ui/apply-locale'
+import { closePopup, EMBEDDED } from './embedded'
 import { createProviderAsks } from './provider-asks'
 
 /** The stored interface language resolves to another pack than the one in use (chosen once, before the first paint) */
@@ -61,8 +62,11 @@ export type OptionsSection = 'services' | 'reading' | 'prompts' | 'data'
  * A reader who clicks “Manage styles…” and lands on “Services” is worse off than one with an extra tab
  */
 function openOptions(section?: OptionsSection): void {
-  if (!section) return void browser.runtime.openOptionsPage()
-  void browser.tabs.create({ url: browser.runtime.getURL(`/options.html#${section}`) })
+  if (!section) void browser.runtime.openOptionsPage()
+  else void browser.tabs.create({ url: browser.runtime.getURL(`/options.html#${section}`) })
+  // The toolbar's popup closes by itself when another tab takes the focus; framed beside the floating button it
+  // would still be open when the reader comes back, so it asks to go (embedded.ts)
+  if (EMBEDDED) closePopup()
 }
 
 export function usePopupData(): { input: PopupInput; error: string | null; actions: PopupActions } {
@@ -300,7 +304,7 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
         const { opened } = await sendToActiveTab({ type: 'axt:open-html' })
         if (!opened) throw new Error(S.note.noHtml)
       }
-      window.close()
+      closePopup()
     }),
     translate: () => void guard(async () => {
       // The epoch at the click, as for the other two: a translate delivered late must not translate a page the reader

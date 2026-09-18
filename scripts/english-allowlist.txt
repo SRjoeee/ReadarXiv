@@ -36,7 +36,7 @@ tests/e2e/extension.mjs 93  # raised 2026-09-17: the whole-paper preload check c
 tests/e2e/image.mjs 16
 tests/e2e/layout.mjs 8
 tests/e2e/local-endpoint.mjs 2
-tests/e2e/floating-button.mjs 3  # 2026-09-18: the settings switch and the main button's two labels, located and checked by their Chinese copy, as the other suites locate controls (issue #169)
+tests/e2e/floating-button.mjs 5  # 2026-09-18: the settings switch, the main button's two labels, and the popup's button inside the control panel on a PDF and on the full text, located and checked by their Chinese copy, as the other suites locate controls (issue #169)
 tests/e2e/pdf-entry.mjs 4  # 2026-09-18: the popup's button and the no-HTML reason are located by their Chinese copy, as the other suites locate controls (issue #169)
 tests/e2e/options-page.mjs 13
 tests/e2e/placeholders.mjs 7

@@ -37,6 +37,8 @@ export interface FloatingPage {
 export interface InstalledFloatingButton {
   /** The page began or stopped showing its translation: the tick and the main button's words follow */
   setActive: (active: boolean) => void
+  /** Open the control panel: where a click that nothing could serve is explained */
+  openPanel: () => void
 }
 
 const save = (patch: { enabled?: boolean } & Partial<DockPlacement>) =>
@@ -68,9 +70,10 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
       iconUrl: browser.runtime.getURL('/icon/mark.svg'),
       placement: placementOf(saved),
       strings: strings(),
+      // The control panel is the extension's own popup page, framed beside the button (button.ts)
+      panelUrl: browser.runtime.getURL('/popup.html'),
       onPlacement: ({ side, position, locked }) => save({ side, position, locked }),
-      // Neither can be opened from a page: the background opens the popup and the settings (`action.openPopup`, `openOptionsPage`)
-      onPanel: () => void sendMessage({ type: 'axt:open-popup' }).catch(() => undefined),
+      // A page cannot open the settings page itself: the background does (`openOptionsPage`)
       onSettings: () => void sendMessage({ type: 'axt:open-settings' }).catch(() => undefined),
       onHide: scope => {
         button = null
@@ -109,5 +112,6 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
       button?.activate(next)
       button?.relabel(strings())
     },
+    openPanel: () => button?.openPanel(),
   }
 }
