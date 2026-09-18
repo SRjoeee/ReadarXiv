@@ -8,6 +8,14 @@ import type { TranslateCall, TranslateMessageResponse } from '@/providers/transl
 import type { HelperStatus, ImageProgress, OcrCall, OcrMessageResponse } from './ocr'
 import type { DiagnosticSource, DiagnosticsExport } from '@/shared/diagnostics'
 
+/** What an abstract or PDF page answers the popup (§4.0b) */
+export interface EntryStatus {
+  /** The paper this page is about, with the version the reader opened */
+  paper: string
+  /** Where its HTML full text is, already carrying `#axt-translate`; null when the paper has no HTML version */
+  html: string | null
+}
+
 export interface PageStatus {
   /** The current page's arXiv id; null when this is not an arXiv HTML page */
   paper: string | null
@@ -60,6 +68,15 @@ export interface AxtMessages {
   'axt:set-mode': { request: { mode: Mode }; response: { mode: Mode; preference: Mode } }
   /** popup → content: the progress */
   'axt:page-status': { request: Record<never, never>; response: PageStatus }
+  /**
+   * popup → content, on the two pages that are not the full text (§4.0b): which paper this is and where its HTML
+   * version is. The abstract page reads arXiv's own link; the PDF page has asked `HEAD` for it. `html` is null when
+   * the paper has none, and then the popup's translate button is there but disabled — the reader is told the answer
+   * rather than left with a button that would lead nowhere (the maintainer, 2026-09-18)
+   */
+  'axt:entry-status': { request: Record<never, never>; response: EntryStatus }
+  /** popup → content, on those pages: go to the HTML version and translate it. The page navigates itself, so no tabs permission is involved */
+  'axt:open-html': { request: Record<never, never>; response: { opened: boolean } }
   /** content / options → background: translate a batch of segments (§8.0: the chain, the queues and the requests all live in the background) */
   'axt:translate': { request: TranslateCall; response: TranslateMessageResponse }
   /** content → background: withdraw a session's queued and in-flight requests (restore, restart) */

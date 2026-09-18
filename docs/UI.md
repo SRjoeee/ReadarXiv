@@ -68,6 +68,7 @@ states, verbs for buttons, no spoken phrases (去填 / 去修 are out), every no
 | S-P-01 | Brand row | Read arXiv | [decided; 2026-09-11 set as two words, upheld on the 09-12 re-check] **The reader sees the name with a space**, arXiv in its official casing. The repository (`SRjoeee/ReadarXiv`) and the domain (readarxiv.org) can only use the unspaced form, **which is no basis for the display name** — two spellings of one product; never change this row after the repository name (on 2026-09-12 that nearly happened). The roadmap #155's “the product becomes Readarxiv” speaks of that identity, not of this string. The extension manifest `name`, the three pages' `<title>` and the toolbar tooltip all follow this row; the store name is pending. The brand mark is in §5.1 |
 | S-P-02 | Gear in the brand row, `aria-label`; the button beside every note | 设置 | The one button of every note; opens the options page |
 | S-P-03 | Not an arXiv page / page loading (P0) | 打开 arXiv 论文的 HTML 页面后即可翻译 | Same sentence for both cases; never "后台未响应" |
+| S-P-03b | Abstract or PDF page (P17) | (the ordinary popup) | **The popup works on every arXiv page the reader may be on** (the maintainer, 2026-09-18): on `abs` and `pdf` the rows are the ordinary ones and the button is S-P-50's 翻译本页, which opens that paper's HTML version and translates it there — no dialog, no question. The paper has no HTML version: the button stays, **disabled**, with S-P-33 below it, so a reader is told the answer rather than left with a control that does nothing. A service that cannot run disables it here as it does on the paper page (S-P-32). No shortcut badge: ⌥T acts on a translated page, and this is not one |
 | S-P-10 | Service row label | 翻译服务 | The row opens the service menu (S-P-40…46) under itself |
 | S-P-11 | Service row value | {模型名 / 服务名} | LLM shows the model (`deepseek-v4-flash`), others their name; while replaced (S-P-30) the service in use with the one put aside struck through |
 | S-P-20 | Language row label | 目标语言 | The row opens the language menu |
@@ -78,6 +79,7 @@ states, verbs for buttons, no spoken phrases (去填 / 去修 are out), every no
 | S-P-31 | Note · will switch | {为何不能用}，本次将使用 {服务} | Idle, the chosen service cannot run, another takes over |
 | S-P-32 | Note · cannot translate | {为何不能用} | Idle with nothing to take over, or the page left behind by a choice that cannot run (P13) |
 | S-P-32a | {为何不能用} · LLM | LLM 尚未配置 API Key | |
+| S-P-33 | Note · no HTML version | arXiv 没有这篇论文的 HTML 版本，无法翻译 | Only on S-P-03b; no settings button, since nothing in the settings changes what arXiv converted |
 | S-P-32b | {为何不能用} · Chrome | Chrome 翻译的语言包尚未下载 / Chrome 翻译的语言包下载中，约需 1 分钟 | Reachable from the options page only: the popup's item is greyed |
 | S-P-32c | {为何不能用} · Microsoft | Microsoft 翻译不支持当前目标语言 | |
 | S-P-33 | Note · paused | {原因}。请检查设置后重新翻译 | Reason per S-E |

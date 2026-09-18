@@ -16,7 +16,7 @@ import type { Mode } from '@/core/renderer'
 import { supportsTarget } from '@/providers/microsoft'
 import { BUILT_IN_PROMPTS } from '@/providers/prompt-library'
 import type { ProviderStatus } from '@/providers/transport'
-import type { PageStatus } from '@/shared/messages'
+import type { EntryStatus, PageStatus } from '@/shared/messages'
 import type { StartResult } from '@/core/session'
 import { pageDecision } from '@/shared/page-action'
 import type { HelperStatus } from '@/shared/ocr'
@@ -62,6 +62,11 @@ export interface PopupInput {
   savedRevision: string | null
   /** Which menu is open (the popup's own state) */
   menu: MenuKind | null
+  /**
+   * What an abstract or PDF page answered (§4.0b): null on the HTML full text, where `page` speaks instead, and on
+   * any other page, where nothing answers at all
+   */
+  entry: EntryStatus | null
   /** The translate shortcut as Chrome reports it; null when unbound or unknown */
   shortcut: string | null
   extensionId: string
@@ -90,7 +95,7 @@ export interface PopupView {
   helper: { text: string; step: 'allow' | 'install' | null; extensionId?: string } | null
   note: Note | null
   failed: string | null
-  primary: { label: string; action: 'translate' | 'restore' | 'retranslate'; disabled: boolean; shortcut?: string }
+  primary: { label: string; action: 'translate' | 'restore' | 'retranslate' | 'openHtml'; disabled: boolean; shortcut?: string }
   secondary: { label: string; action: 'restore' } | null
   mode: { value: Mode; note: string | null }
 }
@@ -148,9 +153,47 @@ function cannotRunWhy(config: Config, pack: PackState | null): string {
   }
 }
 
+/**
+ * The popup on the two pages that are not the full text (UI.md S-P-03b, the maintainer 2026-09-18: “whatever the
+ * reader opened — abs, PDF or HTML — the popup is something they can click”).
+ *
+ * The same rows as anywhere else, because the settings they show are the same settings; the one difference is the
+ * button, which opens the HTML version and translates it there. **Disabled, not hidden, when that paper has no HTML
+ * version**: a reader who came for the translation is told the answer instead of finding a control that does nothing.
+ */
+function entryView(entry: EntryStatus, config: Config, input: PopupInput): PopupView {
+  const { pack, menu } = input
+  const canRun = runnable(config, pack)
+  const named = (id: string) => serviceName(id, config.services)
+  const noHtml = entry.html === null
+
+  return {
+    empty: false,
+    service: { value: named(config.provider) },
+    language: { value: languageName(config.targetLanguage) },
+    prompt: isLlmChosen(config) ? { value: promptName(config) } : null,
+    style: { value: profileName(activeStyle(config.appearance)) },
+    highlight: config.reading.sentenceHighlight,
+    images: config.image.enabled,
+    menu: menu === null ? null : menuOf(menu, config, pack),
+    // The helper's prompt belongs where images are translated, which is the full text
+    helper: null,
+    note: noHtml ? { text: S.note.noHtml, settings: false } : !canRun ? { text: S.note.cannotRun(cannotRunWhy(config, pack)), settings: true } : null,
+    failed: null,
+    // No shortcut badge: ⌥T toggles a translated page, and there is none here yet (UI.md S-P-50)
+    primary: { label: S.primary.translate, action: 'openHtml', disabled: noHtml || !canRun },
+    secondary: null,
+    mode: { value: config.mode, note: null },
+  }
+}
+
 export function derivePopupView(input: PopupInput): PopupView {
-  const { page, saved, session, config, pack, helper, platform, menu, shortcut, extensionId, savedRevision } = input
-  if (page === null) return empty()
+  const { page, saved, session, config, pack, helper, platform, menu, shortcut, extensionId, savedRevision, entry } = input
+  // An abstract or PDF page: the popup works there too, and its button takes the reader to the HTML version.
+  // `== null` on purpose: a tab whose content script ignores `axt:page-status` resolves `undefined` rather than
+  // rejecting, and an undefined page is no page (it once rendered an empty popup on every PDF page)
+  if (page == null && entry != null && config !== null) return entryView(entry, config, input)
+  if (page == null) return empty()
   if (config === null) return { ...empty(), empty: false, mode: { value: page.preference, note: null } }
 
   const progress = page.progress

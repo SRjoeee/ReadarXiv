@@ -8,27 +8,14 @@
 // `position: fixed` element appended to the host document draws above the viewer (measured 2026-09-18, Chromium 153).
 
 import { AUTO_TRANSLATE_HASH } from '@/core/abstract/link'
+import { paperIdFrom } from '@/core/paper-id'
 
 /** The element we insert; the mark makes the insertion idempotent and recognisable */
 export const PDF_ENTRY_CLASS = 'axt-pdf-entry'
 
-/**
- * New-style `2501.07202`, optionally versioned, and old-style `hep-th/9711200` with its optional subject class
- * (`math.GT/0309136`). Anything else is not a paper id, and nothing is offered for it.
- */
-const NEW_STYLE = /^\d{4}\.\d{4,5}(v\d+)?$/
-const OLD_STYLE = /^[a-z-]+(\.[A-Z]{2})?\/\d{7}(v\d+)?$/
-
-/**
- * The paper id in a `/pdf/…` path, or null.
- *
- * arXiv serves the same paper at `/pdf/<id>`, `/pdf/<id>v<n>` and either with `.pdf`; the version, when the reader
- * opened one, is kept, so the HTML offered is the version in front of them rather than the latest.
- */
+/** The paper id in a `/pdf/…` path, or null; the shapes live in `core/paper-id.ts`, which the abstract page reads too */
 export function paperIdFromPdfPath(pathname: string): string | null {
-  const path = pathname.replace(/^\/pdf\//, '').replace(/\.pdf$/, '').replace(/\/$/, '')
-  if (path === pathname) return null
-  return NEW_STYLE.test(path) || OLD_STYLE.test(path) ? path : null
+  return paperIdFrom(pathname, 'pdf')
 }
 
 /** The HTML full text of that paper, on the page's own origin */

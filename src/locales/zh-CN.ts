@@ -64,6 +64,7 @@ const S = {
     serviceGone: '选中的翻译服务已被删除，请重新选择', // S-P-32d
     paused: (reason: string) => `${reason}。请检查设置后重新翻译`, // S-P-33
     imagesPaused: (reason: string) => `图片翻译已暂停：${reason}`, // S-P-35
+    noHtml: 'arXiv 没有这篇论文的 HTML 版本，无法翻译',
   },
   helper: {
     permission: '图片翻译需要允许扩展与识别助手通信', // S-P-86b, macOS: nativeMessaging is optional (DESIGN §15.3)

@@ -6,6 +6,7 @@
 // without). A paper with no HTML version gets no entry — there is nothing to offer, so nothing is shown.
 import { LOCALES, pickLocale } from '@/locales'
 import { htmlUrlOf, injectPdfEntry, paperIdFromPdfPath, relabelPdfEntry, translatedHtmlUrlOf } from '@/core/pdf/entry'
+import { answerEntryMessages } from '@/shared/entry-page'
 
 export default defineContentScript({
   matches: ['https://arxiv.org/pdf/*'],
@@ -18,6 +19,9 @@ export default defineContentScript({
     const exists = await fetch(htmlUrlOf(id, location.origin), { method: 'HEAD', credentials: 'omit' })
       .then(res => res.ok)
       .catch(() => false)
+    // The popup asks before the answer is needed on screen, so it is answered whether or not an entry is drawn:
+    // with no HTML version the popup's translate button is there and disabled (UI.md S-P-03b)
+    answerEntryMessages({ paper: () => id, html: () => (exists ? translatedHtmlUrlOf(id, location.origin) : null) })
     if (!exists) return
 
     // The locale pack directly, as on the abstract page: `@/ui/strings` would pull 179 language names into a script

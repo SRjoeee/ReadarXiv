@@ -17,6 +17,15 @@ export const AUTO_TRANSLATE_HASH = '#axt-translate'
  * Nothing happens in three cases: this is not an abstract page, the paper has no HTML version (`HTML_LINK` absent), or it was inserted already.
  * Idempotent because it is cheap: arXiv's abstract page does not re-render, but an assumption that only holds under one DOM shape is not worth relying on.
  */
+/**
+ * Where arXiv says this paper's HTML full text is, plus the hash that starts the translation; null when the paper
+ * has no HTML version. The popup asks the page for this rather than building a URL: the href carries the version.
+ */
+export function htmlHrefOn(doc: Document): string | null {
+  const html = doc.querySelector<HTMLAnchorElement>(HTML_LINK)
+  return html ? `${html.href}${AUTO_TRANSLATE_HASH}` : null
+}
+
 export function injectBilingualLink(doc: Document, label: string): boolean {
   const html = doc.querySelector<HTMLAnchorElement>(HTML_LINK)
   if (!html) return false

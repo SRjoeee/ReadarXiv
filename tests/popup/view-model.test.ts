@@ -21,6 +21,37 @@ describe('derivePopupView (UI.md §4)', () => {
   it('P0 is one sentence', () => {
     expect(view('P0').empty).toBe(true)
   })
+  it('a page that answered with nothing is no page: a listener that ignores axt:page-status resolves undefined', () => {
+    // Measured in a real browser: with the entry pages answering other messages, `sendToActiveTab` resolved
+    // `undefined` instead of rejecting, and the popup rendered nothing at all on every arXiv PDF
+    const undefinedPage = { ...input('P0'), page: undefined as unknown as null }
+    expect(derivePopupView(undefinedPage).empty).toBe(true)
+    expect(derivePopupView({ ...undefinedPage, entry: { paper: '2501.07202', html: 'https://arxiv.org/html/2501.07202#axt-translate' } }).primary.action).toBe('openHtml')
+  })
+  it('P17 an abstract or PDF page: the popup is a working popup, and the button opens the HTML version', () => {
+    const v = view('P17')
+    // Not the one-sentence screen: the rows the reader came for are all there
+    expect(v.empty).toBe(false)
+    expect(v.service).toEqual({ value: 'Microsoft 翻译' })
+    expect(v.language.value).toBe('简体中文')
+    expect(v.primary).toEqual({ label: '翻译本页', action: 'openHtml', disabled: false })
+    expect(v.note).toBeNull()
+    expect(v.secondary).toBeNull()
+    expect(v.failed).toBeNull()
+  })
+  it('P17a no HTML version: the button is there and disabled, with the reason said once', () => {
+    const v = view('P17a')
+    expect(v.primary).toEqual({ label: '翻译本页', action: 'openHtml', disabled: true })
+    expect(v.note?.text).toBe('arXiv 没有这篇论文的 HTML 版本，无法翻译')
+    // Nothing to open in the settings about a paper arXiv never converted
+    expect(v.note?.settings).toBe(false)
+  })
+  it('P17b a service that cannot run disables the button there too, as it does on the paper page', () => {
+    const v = view('P17b')
+    expect(v.primary.disabled).toBe(true)
+    expect(v.note?.text).toContain('API Key')
+    expect(v.note?.settings).toBe(true)
+  })
   it('P1 ready: the default service, no note, translate with the shortcut, both switches on', () => {
     const v = view('P1')
     expect(v.service).toEqual({ value: 'Microsoft 翻译' })

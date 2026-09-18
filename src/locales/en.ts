@@ -60,6 +60,7 @@ const S: Locale['S'] = {
     serviceGone: 'The chosen service has been deleted. Pick another one',
     paused: reason => `${reason}. Check the settings, then translate again`,
     imagesPaused: reason => `Image translation paused: ${reason}`,
+    noHtml: 'arXiv has no HTML version of this paper, so there is nothing to translate',
   },
   helper: {
     permission: 'Image translation needs permission to use the recognition tool',
