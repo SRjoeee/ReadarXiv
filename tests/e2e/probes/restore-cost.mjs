@@ -5,11 +5,12 @@
 // `restore()` are timed apart on the translated page (read-only: nothing is removed) to say which of them it is.
 // Reuses the profile highlight-lag.mjs leaves behind (its cache holds the papers), so a paper settles in seconds.
 // Usage: pnpm build && node tests/e2e/probes/restore-cost.mjs [paper ...]   (default 2410.00260 2312.17141)
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
-const EXT = fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
+const EXT = process.env.AXT_EXT_DIR ? resolve(process.env.AXT_EXT_DIR) : fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
 const PROFILE = `${E2E}.profile-hl`
 const PAPERS = process.argv.slice(2).length ? process.argv.slice(2) : ['2410.00260', '2312.17141']
 const IDLE = /session idle: (\d+)\/(\d+) requested of (\d+), (\d+) failed, (\d+) cached/
