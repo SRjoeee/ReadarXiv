@@ -57,7 +57,10 @@ const dockState = (on = page) => on.evaluate(() => {
     // The tick is scaled to nothing until the page is translated
     tickShown: look('.tick', 'transform') !== 'matrix(0, 0, 0, 0, 0, 0)', discRadius: look('.disc', 'borderRadius'),
     label: main.getAttribute('aria-label'), tag: main.tagName, href: main.getAttribute('href'),
-    order: [...root.querySelectorAll('.dock > *')].map(e => e.className),
+    order: [...root.querySelectorAll('.column > *')].map(e => e.className),
+    // In the screen's own pixels: what the reader's eye gets, whatever the page's zoom
+    device: (() => { const r = main.getBoundingClientRect(); const k = window.devicePixelRatio; return { ratio: k, width: r.width * k, height: r.height * k, top: r.top * k, left: r.left * k } })(),
+    vector: root.querySelector('.disc svg.mark') !== null && root.querySelector('img') === null,
   }
 })
 
@@ -96,8 +99,14 @@ await page.goto(`https://arxiv.org/pdf/${PAPER}`, { waitUntil: 'load' })
 await sleep(6000)
 const rest = await dockState()
 check('three buttons in a column: the control panel, the main button, the settings (no feedback button)',
-  JSON.stringify(rest?.order) === JSON.stringify(['hidden-button panel', 'anchor', 'hidden-button settings', 'panel-box', 'shield', 'catcher']),
+  JSON.stringify(rest?.order) === JSON.stringify(['hidden-button panel', 'anchor', 'hidden-button settings']),
   `${rest?.order?.join(' · ')}`)
+/** Every edge of the main button on a whole pixel of the screen: half a pixel is a soft edge */
+const onTheGrid = device => [device.width, device.height, device.top, device.left].every(v => Math.abs(v - Math.round(v)) < 0.01)
+check('the mark is inline vector, and the main button sits on whole pixels of the screen',
+  rest.vector && onTheGrid(rest.device),
+  `inline svg and no image: ${rest.vector}; device px: ${rest.device.width} × ${rest.device.height} at top ${rest.device.top}, left ${rest.device.left} (ratio ${rest.device.ratio})`)
+const pdfSize = rest.device
 check('at rest the whole circle shows, dim, docked to the right edge, and the other buttons are out of sight',
   rest.side === 'right' && rest.main.right === rest.width && rest.disc.right <= rest.width && rest.disc.width === 32 && rest.discRadius === '50%'
     && Math.abs(rest.mainOpacity - 0.7) < 0.01 && rest.panelVisibility === 'hidden',
@@ -303,6 +312,27 @@ check('a second click restores it: the tick goes, nothing of ours is left but th
     seen.ready === 'yes' && seen.loaded && /翻译本页|Translate this page/.test(seen.text ?? '') && seen.box.top >= 16 && seen.box.bottom <= seen.innerHeight - 16
       && Math.abs((seen.box.left > seen.main.left ? seen.box.left - seen.main.left : seen.main.left - seen.box.right)) <= 80 && seen.closedByPress,
     `ready ${seen.ready}, popup loaded ${seen.loaded} (“${seen.text?.slice(0, 40)}…”), panel ${seen.box.top}–${seen.box.bottom} of ${seen.innerHeight}px, closed by a press elsewhere: ${seen.closedByPress}`)
+}
+
+// One size on every page (the maintainer, 2026-09-18: larger on the full text than on a PDF). A reader's zoom scales
+// the full text and everything in it, and never the document hosting Chrome's PDF viewer; the button undoes it
+{
+  const zoomTo = factor => worker.evaluate(async zoom => {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
+    await chrome.tabs.setZoom(tab.id, zoom)
+  }, factor)
+  await page.bringToFront()
+  const seen = []
+  for (const zoom of [1.25, 1.5, 1]) {
+    await zoomTo(zoom)
+    await sleep(1500)
+    const { device } = await dockState()
+    seen.push({ zoom, ...device })
+  }
+  const same = seen.every(d => Math.abs(d.width - pdfSize.width) < 0.5 && Math.abs(d.height - pdfSize.height) < 0.5)
+  check('zoomed to 125 % and 150 %, the button on the full text stays the size it has on a PDF, and on whole pixels',
+    same && seen.every(onTheGrid) && seen[0].ratio > seen[2].ratio,
+    `PDF ${pdfSize.width} × ${pdfSize.height} device px; full text ${seen.map(d => `${d.zoom * 100} %: ${Math.round(d.width * 10) / 10} × ${Math.round(d.height * 10) / 10} (ratio ${d.ratio})`).join(', ')}`)
 }
 
 await context.close()

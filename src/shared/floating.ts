@@ -49,6 +49,13 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
   let saved = (stored as { config?: SavedBits }).config
   const ui = browser.i18n?.getUILanguage?.()
   const languages = ui ? [ui] : [navigator.language]
+  /**
+   * The page's zoom, which the button undoes so that it is one size everywhere (button.ts). The document that hosts
+   * Chrome's PDF viewer is never zoomed — the viewer takes the tab's zoom for the paper — so there it stays 1
+   * (measured 2026-09-18: `devicePixelRatio` unchanged at a tab zoom of 1.5)
+   */
+  const zoomed = doc.contentType !== 'application/pdf'
+  let zoom = zoomed ? await sendMessage({ type: 'axt:zoom' }).then(r => r.zoom).catch(() => 1) : 1
   /** Hidden from the close menu for this page: the switch stays on, and a reload brings the button back */
   let hiddenForNow = false
   let active = false
@@ -66,8 +73,7 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
     button = mountFloatingButton(doc, host, {
       main: page.main,
       newTab: newTabOf(saved),
-      // The page may load the mark because the manifest says so (`web_accessible_resources`, arXiv only)
-      iconUrl: browser.runtime.getURL('/icon/mark.svg'),
+      zoom,
       placement: placementOf(saved),
       strings: strings(),
       // The control panel is the extension's own popup page, framed beside the button (button.ts)
@@ -105,6 +111,16 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
     // A drag saved in another tab, or the lock toggled there, moves this one too
     button.place(placementOf(next))
   })
+
+  if (zoomed) {
+    browser.runtime.onMessage.addListener((message: unknown) => {
+      const changed = message as { type?: string; zoom?: unknown } | null
+      if (changed?.type !== 'axt:zoom-changed' || typeof changed.zoom !== 'number') return undefined
+      zoom = changed.zoom
+      button?.rescale(zoom)
+      return undefined
+    })
+  }
 
   return {
     setActive: next => {

@@ -69,12 +69,12 @@ export default defineConfig({
     // hope for `Access-Control-Allow-Origin` from the other side. Microsoft does return `*` today (measured), but that is a dependency
     // beyond our control — the day it stops, the whole engine becomes a `network` failure (Codex on #115; the line was missed when the provider was added)
     host_permissions: ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*'],
-    // The floating button (DESIGN §4.0c) draws the brand mark and frames the popup as its control panel, and a page
-    // may only load an extension file that is declared here. Two files, and only to arXiv. What the popup loads for
-    // itself (its script, its style sheet) is asked for by the extension's own origin and needs no entry. A page that
+    // The floating button (DESIGN §4.0c) frames the popup as its control panel, and a page may only load an extension
+    // file that is declared here. One file, and only to arXiv. What the popup loads for itself (its script, its
+    // style sheet) is asked for by the extension's own origin and needs no entry; the button's mark is inline vector. A page that
     // may frame the popup could try to trick a click on it: the popup shows no key and no paper text, and what a
     // click can do there is what the reader does there anyway — start or undo a translation, pick a mode or a service
-    web_accessible_resources: [{ resources: ['icon/mark.svg', 'popup.html'], matches: ['https://arxiv.org/*'] }],
+    web_accessible_resources: [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }],
     // A custom endpoint may be http on 127.0.0.1 / the LAN (Ollama, LM Studio); with only the localhost literal the request fails outright (Codex on #6).
     // This is only the range that may be requested; the real grant is still asked for per origin on the settings page
     optional_host_permissions: ['https://*/*', 'http://*/*'],

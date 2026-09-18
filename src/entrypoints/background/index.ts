@@ -3,7 +3,7 @@ import { getConfig, setConfig, watchConfig } from '@/config/storage'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport } from '@/providers/transport'
 import { toErrorInfo } from '@/providers/translate-service'
-import { isAxtMessage, replyWith, sendToTab } from '@/shared/messages'
+import { type AxtMessage, isAxtMessage, replyWith, sendToTab } from '@/shared/messages'
 import { HELPER_HOST, type HelperStatus } from '@/shared/ocr'
 import { createChainHolder } from './chain'
 import { engineReady } from './engine-ready'
@@ -231,6 +231,13 @@ export default defineBackground(() => {
     saved,
   })
 
+  // The floating button undoes the page's zoom (§4.0c): every tab is told when its zoom changes. A tab with none of
+  // our scripts has nobody listening, and that rejection is nothing to report
+  browser.tabs.onZoomChange.addListener(({ tabId, newZoomFactor }) => {
+    const message: AxtMessage<'axt:zoom-changed'> = { type: 'axt:zoom-changed', zoom: newZoomFactor }
+    void sendToTab(tabId, message).catch(() => undefined)
+  })
+
   browser.tabs.onRemoved.addListener(tabId => dropTab(tabId, 'closed'))
   /**
    * Navigating away withdraws too (Codex on #59): `onRemoved` covers closing only, and a tab moving to another URL
@@ -327,6 +334,13 @@ export default defineBackground(() => {
         const tab = sender.tab
         if (tab?.id === undefined) return
         replyWith(toggleTranslation({ send: sendToTab, saved }, tab.id).then(acted => ({ acted })), sendResponse)
+        return true
+      }
+      case 'axt:zoom': {
+        // The floating button's size (§4.0c): the tab's zoom is the browser's to know, not the page's
+        const tabId = sender.tab?.id
+        if (tabId === undefined) return
+        replyWith(browser.tabs.getZoom(tabId).then(zoom => ({ zoom })).catch(() => ({ zoom: 1 })), sendResponse)
         return true
       }
       case 'axt:open-settings':

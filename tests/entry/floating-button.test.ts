@@ -27,7 +27,6 @@ function mount(overrides: Partial<FloatingButtonOptions> = {}) {
   const entry = mountFloatingButton(document, host, {
     main: { kind: 'link', href: HREF },
     newTab: true,
-    iconUrl: 'chrome-extension://id/icon/mark.svg',
     placement: { side: 'right', position: 0.66, locked: false },
     strings: STRINGS,
     // happy-dom would go and fetch a real address; what the frame shows is the browser's business (e2e)
@@ -76,12 +75,14 @@ afterEach(() => {
 describe('the floating button: what it is made of', () => {
   it('is a column of three: the control panel, the main button with its two corner controls, the settings', () => {
     const { root, q } = mount()
-    const order = [...root.querySelectorAll('.dock > *')].map(e => e.className)
-    expect(order).toEqual(['hidden-button panel', 'anchor', 'hidden-button settings', 'panel-box', 'shield'])
+    // The dock places; the column inside it is what is seen, and what undoes the page's zoom
+    expect([...root.querySelectorAll('.dock > *')].map(e => e.className)).toEqual(['column', 'panel-box', 'shield'])
+    expect([...q('.column').children].map(e => e.className)).toEqual(['hidden-button panel', 'anchor', 'hidden-button settings'])
     expect([...q('.anchor').children].map(e => e.className)).toEqual(['main', 'control options', 'control lock', 'menu'])
-    // Our mark inside a circle, decorative: the button carries the name
-    expect(q<HTMLImageElement>('.main .disc img').getAttribute('src')).toBe('chrome-extension://id/icon/mark.svg')
-    expect(q<HTMLImageElement>('.main .disc img').alt).toBe('')
+    // Our mark in its disc, inline vector and decorative: the button carries the name, and no image file is fetched
+    const mark = q<SVGElement>('.main .disc svg.mark')
+    expect([mark.getAttribute('aria-hidden'), mark.getAttribute('viewBox'), mark.querySelector('circle')?.getAttribute('fill')]).toEqual(['true', '10.6 6.6 47 47', '#fff'])
+    expect(root.querySelector('img')).toBeNull()
     expect(q('.main .disc .tick')).not.toBeNull()
   })
 
@@ -133,7 +134,7 @@ describe('the floating button: what it is made of', () => {
 
   it('the icons are one set on one grid: Lucide\'s, each a 24 px box with round strokes', () => {
     const { root } = mount()
-    const icons = [...root.querySelectorAll('svg')]
+    const icons = [...root.querySelectorAll('svg:not(.mark)')]
     expect(icons.length).toBeGreaterThanOrEqual(5)
     for (const icon of icons) {
       expect([icon.getAttribute('viewBox'), icon.getAttribute('stroke-linecap'), icon.getAttribute('stroke-linejoin'), icon.getAttribute('fill')])
@@ -162,7 +163,8 @@ describe('the floating button: at rest, lit, open', () => {
   it('rests whole and dim; the pointer lights it at once, the other buttons come out once it has stayed 400 ms', () => {
     vi.useFakeTimers()
     const { dock, main } = mount()
-    expect([dock.dataset.side, dock.dataset.lit, dock.dataset.expanded, dock.style.top]).toEqual(['right', 'no', 'no', '66vh'])
+    // 0.66 of happy-dom's 768 px window, on a whole pixel rather than at 66vh
+    expect([dock.dataset.side, dock.dataset.lit, dock.dataset.expanded, dock.style.top]).toEqual(['right', 'no', 'no', '507px'])
     main.dispatchEvent(new MouseEvent('mouseenter'))
     expect([dock.dataset.lit, dock.dataset.expanded]).toEqual(['yes', 'no'])
     vi.advanceTimersByTime(399)
@@ -241,7 +243,7 @@ describe('the floating button: at rest, lit, open', () => {
   it('takes a placement saved in another tab, and hides while the document is fullscreen', () => {
     const { entry, dock } = mount()
     entry.place({ side: 'left', position: 0.3, locked: true })
-    expect([dock.dataset.side, dock.style.top]).toEqual(['left', '30vh'])
+    expect([dock.dataset.side, dock.style.top]).toEqual(['left', '230px'])
     setFullscreen(document.body)
     document.dispatchEvent(new Event('fullscreenchange'))
     expect(dock.hidden).toBe(true)
@@ -279,8 +281,7 @@ describe('the floating button: click and drag', () => {
     m.main.dispatchEvent(pointer('pointerup', 300, 400))
     // Its centre (280 + 22) is in the left half; the dock's top is the button's less the 42 px above it
     expect(m.onPlacement).toHaveBeenCalledWith({ side: 'left', position: (380 - 42) / 768, locked: false })
-    expect([m.dock.dataset.dragging, m.dock.dataset.side, m.dock.style.left]).toEqual(['no', 'left', ''])
-    expect(Number.parseFloat(m.dock.style.top)).toBeCloseTo(((380 - 42) / 768) * 100, 4)
+    expect([m.dock.dataset.dragging, m.dock.dataset.side, m.dock.style.left, m.dock.style.top]).toEqual(['no', 'left', '', '338px'])
     // The page's own cursor and selection are back
     expect([document.body.style.cursor, document.body.style.userSelect]).toEqual(['', ''])
   })
@@ -397,6 +398,45 @@ describe('the floating button: click and drag', () => {
     // The release that finally arrives changes nothing
     m.main.dispatchEvent(pointer('pointerup', 500, 300))
     expect(m.onPlacement).not.toHaveBeenCalled()
+  })
+})
+
+describe('the floating button: one size on every page, on the screen\'s own pixels', () => {
+  it('undoes the page\'s zoom: the column and the panel carry its inverse, and a change of zoom is followed', () => {
+    const { entry, dock } = mount({ zoom: 1.25 })
+    expect(dock.style.getPropertyValue('--unzoom')).toBe('0.8')
+    entry.rescale(2)
+    expect(dock.style.getPropertyValue('--unzoom')).toBe('0.5')
+    // Nonsense is not a zoom
+    entry.rescale(0)
+    entry.rescale(Number.NaN)
+    expect(dock.style.getPropertyValue('--unzoom')).toBe('0.5')
+    expect(mount().dock.style.getPropertyValue('--unzoom')).toBe('1')
+  })
+
+  it('its place down the edge is a whole pixel of the screen, whatever the pixel ratio, and follows the window', () => {
+    const ratio = vi.spyOn(window, 'devicePixelRatio', 'get')
+    ratio.mockReturnValue(2.5)
+    const { entry, dock } = mount({ placement: { side: 'right', position: 0.333, locked: false } })
+    // 0.333 × 768 = 255.744 → 639.36 device pixels → 639 → 255.6 px
+    expect(dock.style.top).toBe('255.6px')
+    ratio.mockReturnValue(1)
+    entry.place({ side: 'right', position: 0.333, locked: false })
+    expect(dock.style.top).toBe('256px')
+    const height = vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(1000)
+    window.dispatchEvent(new Event('resize'))
+    expect(dock.style.top).toBe('333px')
+    height.mockRestore()
+  })
+
+  it('the panel is placed in the window\'s pixels and written in its own, which the un-zoom scales', () => {
+    const m = mount({ zoom: 2 })
+    placeBoxes(m)
+    m.q('.panel').dispatchEvent(click())
+    const frame = m.q<HTMLIFrameElement>('.panel-box iframe')
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'axt:panel-size', height: 300 }, source: frame.contentWindow as Window }))
+    // The popup's 300 px are 150 of the window's at half scale: centred on 569 → top 494, and both written doubled
+    expect([m.q('.panel-box').style.height, m.q('.panel-box').style.top]).toEqual(['300px', '988px'])
   })
 })
 

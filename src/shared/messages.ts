@@ -84,6 +84,13 @@ export interface AxtMessages {
    * `acted: false` when nothing could be done (no service can run): the page opens its control panel, which says why
    */
   'axt:toggle': { request: Record<never, never>; response: { acted: boolean } }
+  /**
+   * content → background: this tab's zoom factor (`tabs.getZoom`, which a page cannot call and needs no permission).
+   * The floating button undoes it, so that it is the same size on every page (§4.0c)
+   */
+  'axt:zoom': { request: Record<never, never>; response: { zoom: number } }
+  /** background → content: the reader changed this tab's zoom (`tabs.onZoomChange`) */
+  'axt:zoom-changed': { request: { zoom: number }; response: undefined }
   /** content → background: open the settings page. A content script cannot call `openOptionsPage` itself */
   'axt:open-settings': { request: Record<never, never>; response: { opened: boolean } }
   /**
