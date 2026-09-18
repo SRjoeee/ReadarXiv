@@ -511,6 +511,19 @@ describe('page session', () => {
     expect(document.documentElement.getAttribute(UNDERLINE_ATTR)).toBe('solid')
   })
 
+  it('a start that throws reaches its caller as a failure, and the diagnostics line names the error without its message', async () => {
+    const h = harness()
+    live = h.session
+    await h.session.ready
+    h.deps.config.get = async () => { throw new TypeError('the endpoint said: sk-not-for-the-log') }
+    await expect(h.session.start()).rejects.toThrow(TypeError)
+    expect(h.trace()).toContain('start failed (TypeError; message withheld)')
+    expect(h.trace().join('\n')).not.toContain('sk-not-for-the-log')
+    // The failed start is over: the next one is judged on its own
+    h.deps.config.get = async () => h.config()
+    expect(await h.session.start()).toEqual({ started: true })
+  })
+
   it('setMode before any session is a saved preference and writes nothing on the page; on a translated page it switches the attribute at once', async () => {
     const h = harness({ config: { mode: 'side' } })
     live = h.session

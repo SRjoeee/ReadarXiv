@@ -108,4 +108,33 @@ describe('createRunLedger', () => {
     expect(spy).toHaveBeenCalledWith([a], { margin: 5, threshold: 0, onEnter })
     spy.mockRestore()
   })
+
+  it('measure reads where the targets are ahead of observe, which starts the scheduler from that reading and reads nothing itself', () => {
+    const [a, b] = three()
+    const read = vi.spyOn(lazy, 'readViewport')
+    const made = vi.spyOn(lazy, 'createLazyScheduler')
+    const ledger = createRunLedger([a, b], { preload: lazy.DEFAULT_PRELOAD, onEnter: () => undefined })
+    ledger.measure()
+    expect(read).toHaveBeenCalledTimes(1)
+    const reading = read.mock.results[0]!.value
+    ledger.observe()
+    // The one read is measure's: handed a reading, the scheduler takes none of its own
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(made.mock.calls[0]![1].reading).toBe(reading)
+    // Once the scheduler runs there is nothing left to read for
+    ledger.measure()
+    expect(read).toHaveBeenCalledTimes(1)
+    read.mockRestore()
+    made.mockRestore()
+  })
+
+  it('a halted run measures nothing', () => {
+    const [a] = three()
+    const read = vi.spyOn(lazy, 'readViewport')
+    const ledger = createRunLedger([a], { preload: lazy.DEFAULT_PRELOAD, onEnter: () => undefined })
+    ledger.stop()
+    ledger.measure()
+    expect(read).not.toHaveBeenCalled()
+    read.mockRestore()
+  })
 })

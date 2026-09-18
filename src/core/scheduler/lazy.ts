@@ -7,6 +7,9 @@
 // asynchronous, so the first screen is seeded synchronously at creation with getBoundingClientRect (our original
 // viewport.ts's way).
 //
+// The geometry is read apart from the start (`readViewport`): a read after a write makes the browser recalculate
+// styles and lay the whole paper out there and then, so a caller about to write to the page reads first (DESIGN §10).
+//
 // Anchors (the idea of FluentRead's resolveFullPageVisibilityAnchor): a block with no layout box never enters the
 // viewport — a footnote body is height: 0 in ar5iv, or collapsed to display: none — so its nearest ancestor block is
 // observed instead, and it enters when the ancestor does.
@@ -71,22 +74,82 @@ export interface LazyScheduler<T extends { el: Element } = Block> {
   disconnect(): void
 }
 
+/**
+ * Where the blocks are, read from the layout in one go: each block's anchor, and the anchors the reader has on screen
+ * or within the preload distance. This is the scheduler's only question to the layout, so a run about to change the
+ * page asks it **before the first write** and starts the scheduler from the answer; asked after, it costs the whole
+ * paper's style recalculation and layout in the middle of the script (measured in DESIGN §10).
+ */
+export interface ViewportReading<T extends { el: Element } = Block> {
+  /** Anchor → the blocks it carries. A block with a layout box observes itself; one without hangs on its nearest ancestor block */
+  byAnchor: Map<Element, T[]>
+  /** The anchors that enter as the scheduler starts; every other one goes to the observer */
+  seeded: Element[]
+}
+
 function hasLayoutBox(el: Element): boolean {
   const rect = el.getBoundingClientRect()
   return rect.width > 0 || rect.height > 0
 }
 
-/** Anything scheduled only needs an `el`: text blocks (Block) and image targets (§15) share one observer */
-export function createLazyScheduler<T extends { el: Element } = Block>(blocks: T[], options: PreloadOptions & { onEnter: (blocks: T[]) => void }): LazyScheduler<T> {
-  const waiting = new Set<T>(blocks)
-  // Anchor → the blocks it carries. A block with a layout box observes itself; one without hangs on its nearest ancestor block
+/**
+ * The **effective threshold** an anchor can really reach. Two corrections stacked (Codex on #32 / #36):
+ *
+ * 1. `isIntersecting` is defined as “intersection ratio > 0”, **not** “≥ threshold”. Right after observe the
+ *    browser sends an initial notification, and a block a tenth exposed reports isIntersecting at threshold=0.5 all
+ *    the same, so the setting has no effect at all. The callback has to compare `intersectionRatio` itself.
+ * 2. A block taller than the root **never reaches** a high threshold: the root (viewport + vertical margins)
+ *    cannot hold it, and the ratio caps at `root height ÷ element height`. The design expressly does not split
+ *    huge tables, so at threshold=1 such a table is never translated. The threshold is clamped to that cap: as
+ *    much as is reachable is demanded.
+ */
+function effectiveThreshold(threshold: number, elHeight: number, rootHeight: number): number {
+  if (elHeight <= 0) return threshold
+  const reachable = Math.min(1, rootHeight / elHeight)
+  // Reachable, the configured value decides — it is itself registered (see observerThresholds), so the callback
+  // arrives; unreachable, it drops to the cap, and that number has to be **aligned to the grid**, or the passing callback never comes either
+  return threshold <= reachable ? threshold : quantizeThreshold(reachable)
+}
+
+export function readViewport<T extends { el: Element } = Block>(blocks: readonly T[], preload: PreloadOptions): ViewportReading<T> {
   const byAnchor = new Map<Element, T[]>()
   for (const block of blocks) {
-    const anchor = hasLayoutBox(block.el) ? block.el : block.el.parentElement?.closest(`[${ID_ATTR}]`) ?? block.el
+    // The whole paper: every block enters as the run starts, boxless ones included, so where they are is not asked at all
+    const anchor = preload.margin === 'all' || hasLayoutBox(block.el) ? block.el : block.el.parentElement?.closest(`[${ID_ATTR}]`) ?? block.el
     const carried = byAnchor.get(anchor)
     if (carried) carried.push(block)
     else byAnchor.set(anchor, [block])
   }
+  if (preload.margin === 'all') return { byAnchor, seeded: [...byAnchor.keys()] }
+
+  // Seeding: the anchors on the first screen and within the margin. **The same threshold as the observer's** (Codex
+  // on #35): judging by rectangle intersection alone, a reader with a threshold configured would see “a block one
+  // pixel exposed translated at once”, while the same block entering a little later would have to wait for its
+  // ratio — two inconsistent paths
+  const margin = preload.margin
+  const height = globalThis.innerHeight ?? 0
+  const seeded: Element[] = []
+  for (const anchor of byAnchor.keys()) {
+    const rect = anchor.getBoundingClientRect()
+    // No box yet (an image whose subtree is not laid out, a collapsed container): nothing to seed from, and the
+    // observer holds it — it reports the element once it has a box and intersects
+    if (!(rect.width || rect.height)) continue
+    const top = Math.max(rect.top, -margin)
+    const bottom = Math.min(rect.bottom, height + margin)
+    const visible = Math.max(0, bottom - top)
+    // The same meaning as IntersectionObserver's intersectionRatio: intersecting height ÷ the element's own height
+    if (visible > 0 && visible / rect.height >= effectiveThreshold(preload.threshold, rect.height, height + 2 * margin) - 1e-6) seeded.push(anchor)
+  }
+  return { byAnchor, seeded }
+}
+
+/**
+ * Anything scheduled only needs an `el`: text blocks (Block) and image targets (§15) share one observer. Started
+ * from `reading` when the caller took one before writing to the page; without one it is taken here
+ */
+export function createLazyScheduler<T extends { el: Element } = Block>(blocks: T[], options: PreloadOptions & { onEnter: (blocks: T[]) => void; reading?: ViewportReading<T> }): LazyScheduler<T> {
+  const waiting = new Set<T>(blocks)
+  const { byAnchor, seeded } = options.reading ?? readViewport(blocks, options)
 
   const fire = (entered: T[]) => {
     const fresh = entered.filter(block => waiting.delete(block))
@@ -94,31 +157,11 @@ export function createLazyScheduler<T extends { el: Element } = Block>(blocks: T
   }
   const enterAnchors = (anchors: Element[]) => fire(anchors.flatMap(anchor => byAnchor.get(anchor) ?? []))
 
-  /**
-   * The **effective threshold** this anchor can really reach. Two corrections stacked (Codex on #32 / #36):
-   *
-   * 1. `isIntersecting` is defined as “intersection ratio > 0”, **not** “≥ threshold”. Right after observe the
-   *    browser sends an initial notification, and a block a tenth exposed reports isIntersecting at threshold=0.5 all
-   *    the same, so the setting has no effect at all. The callback has to compare `intersectionRatio` itself.
-   * 2. A block taller than the root **never reaches** a high threshold: the root (viewport + vertical margins)
-   *    cannot hold it, and the ratio caps at `root height ÷ element height`. The design expressly does not split
-   *    huge tables, so at threshold=1 such a table is never translated. The threshold is clamped to that cap: as
-   *    much as is reachable is demanded.
-   */
-  const effectiveThreshold = (elHeight: number, rootHeight: number) => {
-    if (elHeight <= 0) return options.threshold
-    const reachable = Math.min(1, rootHeight / elHeight)
-    // Reachable, the configured value decides — it is itself registered (see observerThresholds), so the callback
-    // arrives; unreachable, it drops to the cap, and that number has to be **aligned to the grid**, or the passing callback never comes either
-    return options.threshold <= reachable ? options.threshold : quantizeThreshold(reachable)
-  }
-
-  // The whole paper: no observer, no distance — every anchor enters at creation as one batch, boxless ones included,
-  // and the run's own caps and pacing (§8.2) take it from there. The reader chose to pay for everything up front
-  const whole = options.margin === 'all'
+  // The whole paper: no observer, no distance — every anchor enters at creation as one batch, and the run's own caps
+  // and pacing (§8.2) take it from there. The reader chose to pay for everything up front
   const margin = options.margin === 'all' ? 0 : options.margin
   const Observer = globalThis.IntersectionObserver
-  const observer = typeof Observer === 'function' && !whole
+  const observer = typeof Observer === 'function' && options.margin !== 'all'
     ? new Observer((entries, io) => {
         const anchors: Element[] = []
         for (const entry of entries) {
@@ -127,7 +170,7 @@ export function createLazyScheduler<T extends { el: Element } = Block>(blocks: T
           const rootHeight = entry.rootBounds?.height
           const elHeight = entry.boundingClientRect.height
           // Tolerance: the browser's ratio is floating point and may report 0.2999999 when crossing 0.30
-          if (rootHeight !== undefined && entry.intersectionRatio < effectiveThreshold(elHeight, rootHeight) - 1e-6) continue
+          if (rootHeight !== undefined && entry.intersectionRatio < effectiveThreshold(options.threshold, elHeight, rootHeight) - 1e-6) continue
           io.unobserve(entry.target)
           anchors.push(entry.target)
         }
@@ -135,32 +178,10 @@ export function createLazyScheduler<T extends { el: Element } = Block>(blocks: T
       }, { rootMargin: `${margin}px 0px`, threshold: observerThresholds(options.threshold) })
     : null
 
-  // Seeding: the anchors on the first screen and within the margin fire once synchronously, the rest go to the
-  // observer. **The same threshold as the observer's** (Codex on #35): judging by rectangle intersection alone, a
-  // reader with a threshold configured would see “a block one pixel exposed translated at once”, while the same block
-  // entering a little later would have to wait for its ratio — two inconsistent paths
-  const height = globalThis.innerHeight ?? 0
-  const seeded: Element[] = []
-  for (const anchor of byAnchor.keys()) {
-    if (whole) {
-      seeded.push(anchor)
-      continue
-    }
-    const rect = anchor.getBoundingClientRect()
-    // No box yet (an image whose subtree is not laid out, a collapsed container): nothing to seed from, but the
-    // observer still has to hold it — it reports the element once it has a box and intersects. Skipped here, such
-    // an anchor could never enter at all
-    if (!(rect.width || rect.height)) {
-      observer?.observe(anchor)
-      continue
-    }
-    const top = Math.max(rect.top, -margin)
-    const bottom = Math.min(rect.bottom, height + margin)
-    const visible = Math.max(0, bottom - top)
-    // The same meaning as IntersectionObserver's intersectionRatio: intersecting height ÷ the element's own height
-    if (visible > 0 && visible / rect.height >= effectiveThreshold(rect.height, height + 2 * margin) - 1e-6) seeded.push(anchor)
-    else observer?.observe(anchor)
-  }
+  // The anchors of the first screen fire once, synchronously; the rest go to the observer — the boxless among them
+  // too: skipped, such an anchor could never enter at all
+  const first = new Set(seeded)
+  if (observer) for (const anchor of byAnchor.keys()) if (!first.has(anchor)) observer.observe(anchor)
   enterAnchors(seeded)
 
   const release = (picked: T[]) => {

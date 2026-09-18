@@ -212,7 +212,14 @@ export function createPageSession(deps: SessionDeps): PageSession {
     // obsolete by a restore must not swallow the translate the reader asked for after it
     const key = `${requested ?? ''}|${restart}|${from ?? ''}|${epoch ?? ''}`
     if (starting?.key === key) return starting.promise
-    const run = () => begin(requested, restart, from, epoch)
+    // A start that throws — the settings unreadable, a crash in the run's own synchronous start (DESIGN §10) — reaches
+    // its caller as a failure. The line is for the diagnostics log, which shows what the page did: the error's name
+    // only, since a message may be an endpoint's (Codex on #214)
+    const run = () => begin(requested, restart, from, epoch).catch(e => {
+      console.error('[axt] start failed', e)
+      trace(`start failed (${e instanceof Error ? e.name : typeof e}; message withheld)`)
+      throw e
+    })
     const promise: Promise<StartResult> = (starting ? starting.promise.then(run, run) : run()).finally(() => { if (starting?.promise === promise) starting = null })
     starting = { key, promise }
     return promise
@@ -329,10 +336,6 @@ export function createPageSession(deps: SessionDeps): PageSession {
         setProgress(p)
         traceIdle(p)
       },
-    })
-    run.ready.catch(e => {
-      console.error('[axt] translation crashed', e)
-      trace(`translation crashed (${e instanceof Error ? e.name : typeof e}; message withheld)`)
     })
     // The tab title is translated too (§10): the same service, the same cache; the title is plain text, escaped and decoded by the placeholder protocol
     title = translateTitle(doc, {

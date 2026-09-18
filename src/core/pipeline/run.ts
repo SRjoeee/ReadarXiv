@@ -13,7 +13,6 @@ import {
 } from '@/core/renderer'
 import { createRunLedger } from '@/core/run/ledger'
 import type { PreloadOptions } from '@/core/scheduler/lazy'
-import { createWorkPacer, pauseIfBudgetSpent } from '@/core/scheduler/pacer'
 import type { RenderPath } from '@/cache/key'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
 import { planBatches, sectionTitles, type Batch, type Segment } from './batches'
@@ -67,8 +66,6 @@ export interface RunOptions {
 }
 
 export interface TranslationRun {
-  /** The marks and the observers are ready (marking is sliced, yielding the main thread) */
-  ready: Promise<void>
   /** Queue these blocks for translation: observer entry, retries and tests all come through here; blocks in flight are skipped */
   translate(blocks: Block[]): Promise<void>
   /** End the session: disconnect the observers, remove the pending nodes; nothing is rendered or reported after */
@@ -133,37 +130,29 @@ export function startTranslation(options: RunOptions): TranslationRun {
     options.onProvider?.(id)
   }
 
+  // The block marks first, at once and unsliced (issue #67): both gates of side prep read data-axt-id — a container
+  // “with unmarked blocks still inside” would be taken for static content and **cloned whole** into the right column,
+  // and once the blocks inside were translated the right column would hold a whole extra passage of English.
+  // Measured (three prep passes while marking was sliced): 36 places on 2312.17141, 87 on 2609.00245, all large blocks
+  // like .ltx_para / .ltx_proof / .ltx_theorem. They are attribute writes no style of the page reads: 979 blocks
+  // written in 1.2 ms, and the scheduler's anchors below resolve through them
+  markBlocks(blocks)
+  // Where the blocks are is asked **before anything that changes the layout is written** (DESIGN §10): `enable`
+  // below restyles the whole paper, and the same question after it made the browser recalculate and lay out every
+  // element in the middle of this script — with the first screen's requests waiting behind it, 230 ms on a paper of
+  // 32 000 elements. The first screen is the one the reader was looking at when they asked
+  ledger.measure()
+
   // The translation's language goes on <html>, and renderText writes it onto each translation node: the page's lang
   // names the original (en on arXiv), and unmarked, a screen reader would read Chinese in an English voice
   enable(doc, options.mode, options.appearance, toBcp47(options.target))
   const sectionOf = sectionTitles(blocks)
-
-  // The block marks are written at once, unsliced (issue #67): both gates of side prep read data-axt-id — a
-  // container “with unmarked blocks still inside” would be taken for static content and **cloned whole** into the
-  // right column, and once the blocks inside were translated the right column would hold a whole extra passage of
-  // English. Measured (three prep passes while marking was sliced): 36 places on 2312.17141, 87 on 2609.00245, all
-  // large blocks like .ltx_para / .ltx_proof / .ltx_theorem. The slicing was meant to prevent “hundreds of attribute
-  // writes freezing the page” (Read Frog's #1881), but the sum does not add up: the loop is attribute writes only with
-  // no layout read, and Chromium measured 979 blocks written in 1.2 ms with a forced layout of 0 ms afterwards.
-  // Writing synchronously also settles the halted() race along the way — no await in between, restore cannot get in
-  markBlocks(blocks)
   // The structural marks the side-mode style sheet reads (multi-panel figures, tagged list items) go with them (DESIGN §7.2)
   markStructure(doc)
-
-  // The state attribute is still sliced: it carries styling (the pending skeleton) and does not affect side prep's decisions
-  const ready = (async () => {
-    const pacer = createWorkPacer()
-    for (const block of blocks) {
-      // Before each block is written the session has to be checked: while the main thread was yielded the reader may
-      // have “restored the original”; checked outside the loop only, this would keep writing states onto the DOM after
-      // restore cleaned it, leaving orphan data-axt-* on the page (the invariant of §7.1 broken, experiment 1 of issue #45)
-      if (halted()) return
-      setState(block, 'pending')
-      await pauseIfBudgetSpent(pacer)
-    }
-    if (halted()) return
-    ledger.observe()
-  })()
+  // The states too, in the same go: a thousand attribute writes cost a millisecond or two. They used to be written in
+  // slices with the scheduler started after the last, which is what put its geometry read behind `enable`. Nothing
+  // yields between here and the scheduler's start at the end of this function, so a restore cannot come in between
+  for (const block of blocks) setState(block, 'pending')
 
   const send = (items: { id: string; text: string; cuts?: number[] }[], renderPath: RenderPath, sectionTitle?: string, opts: { bypassCache?: boolean } = {}) => {
     const context: TranslateContext = { ...options.context, ...(sectionTitle ? { sectionTitle } : {}) }
@@ -381,5 +370,10 @@ export function startTranslation(options: RunOptions): TranslationRun {
     await Promise.all(batches.map(processBatch))
   }
 
-  return { ready, translate, stop: () => ledger.stop(), progress, failed: () => ledger.failed(), release: () => ledger.release() }
+  // Last, with everything it calls defined: the first screen enters here, so its skeletons and its requests go out in
+  // the task that enabled the page — one style recalculation and one layout show both, and the service is already
+  // working while the browser does them
+  ledger.observe()
+
+  return { translate, stop: () => ledger.stop(), progress, failed: () => ledger.failed(), release: () => ledger.release() }
 }
