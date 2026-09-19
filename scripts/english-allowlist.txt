@@ -1,5 +1,5 @@
 # Files that may hold lines with CJK characters, and how many (scripts/check-english.mjs). The numbers are exact: the gate asks for an entry to be lowered when lines go, and raised only with a reason beside it.
-docs/DESIGN.md 10  # 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
+docs/DESIGN.md 11  # 2026-09-19: +1, §6.2 quotes what the Edge endpoint returned for a marker touching a word; 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
 docs/RELEASE.md 6  # 2026-09-17: the Chinese store listing (product copy the owner submits)
 docs/UI.md 183  # 2026-09-18: S-I-06 / S-I-06a / S-I-06b / S-I-06c (the floating button, its two side buttons and its menu), S-P-03b / S-P-33 / S-P-50b (the popup on entry pages), S-O-49b / S-O-49c (where the translation opens, the floating button switch), issue #169
 README.md 1  # 2026-09-17: the link to the Chinese README
@@ -53,7 +53,7 @@ tests/pipeline/session-guard.test.ts 5
 tests/popup/view-model.test.ts 41  # 2026-09-19: +1 for P17c's expectation, the Chinese label of the entry pages' button (issue #169); 2026-09-18: +5 for the P17 cases' expectations, the Chinese copy of S-P-03b / S-P-33
 tests/protector/clone.test.ts 5
 tests/protector/label.test.ts 50
-tests/protector/markers.test.ts 11
+tests/protector/markers.test.ts 12  # 2026-09-19: +1, the translations the wire-space cases fill back, all on one line
 tests/protector/offsets.test.ts 1
 tests/protector/rehydrate.test.ts 2
 tests/protector/runs.test.ts 11

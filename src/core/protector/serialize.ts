@@ -7,7 +7,7 @@
 // placeholder and its text lost (measured on Table 1 of 2410.00260; Codex on #5).
 import { isInjected } from '@/core/marks'
 import { ELEMENT_NODE, TEXT_NODE } from '@/core/text'
-import { FUNCTIONAL_INLINE, classify, isTableCell } from '@/core/rules/latexml'
+import { CODE_SPACE, FUNCTIONAL_INLINE, classify, isTableCell } from '@/core/rules/latexml'
 import type { WireSpan } from './offsets'
 import { type WireFormat, writeVoid } from './tokens'
 
@@ -29,6 +29,12 @@ export interface ProtectedBlock {
    * defensive branch that can never be exercised.
    */
   offsets: WireSpan[]
+  /**
+   * The placeholders that touched a word in the source, and on which side: there the markers wire carries a space
+   * of ours (`makeTracker`), and the translation has the space on that side taken off as it is filled back, so the
+   * page reads `2.3 Title` and `word¹` as the paper set them. Empty under `tags`
+   */
+  spaced: Map<number, { before: boolean; after: boolean }>
   /**
    * The element this block was serialised from. Untouched by translation (§7.1), so the rehydrate
    * side can read what the wire text no longer says — which formatting element the block opened
@@ -67,6 +73,15 @@ export const VOID_DENSE_THRESHOLD = 40
 
 
 const hasText = (el: Element) => /\S/.test(el.textContent ?? '')
+/**
+ * What a machine translator reads as part of a word: a marker touching one of these is one token with it. Asked of a
+ * whole code point, never of a UTF-16 unit — half of an astral letter (𝐾, U+1D43E) is no letter — and a combining mark
+ * counts, being the end of a word written decomposed: `resume\u0301@a#` came back untranslated like any other
+ * (Devin on #254, confirmed on the Edge endpoint)
+ */
+const WORD = /[\p{L}\p{N}\p{M}]/u
+/** The last code point of a string */
+const lastPoint = (s: string): string => (/[\uD800-\uDBFF][\uDC00-\uDFFF]$/.test(s) ? s.slice(-2) : s.slice(-1))
 
 /**
  * Writes the wire text character by character, escaping and collapsing whitespace as it goes, and
@@ -77,9 +92,31 @@ const hasText = (el: Element) => /\S/.test(el.textContent ?? '')
  * from noise (676 blocks, 15.69 ms plain vs 15.71 ms tracked at min of four runs, tracked faster in
  * two of them), and two paths that must emit byte-identical wire text are two paths that can drift.
  */
-function makeTracker(format: WireFormat, parts: string[], spans: WireSpan[]) {
+function makeTracker(format: WireFormat, parts: string[], spans: WireSpan[], spaced: ProtectedBlock['spaced']) {
   let len = 0
   let afterSpace = false
+  /**
+   * **A marker that touches a word is set apart from it by a space** (markers only). `@a#Word` reads to a machine
+   * translator as one token — a hashtag after a mention — and `word@a#` as an address, and neither is translated:
+   * every numbered heading went out as `@a#Backpropagation recursion`, the section number's own space being inside
+   * the protected tag, and came back with `Backpropagation` and `Complexity` in English and `@a#Products` moved to
+   * the end (the maintainer's report, 2026-09-19; the outputs are quoted in DESIGN §6.2). Replayed through the Edge endpoint over the 404 blocks of the 12 fixtures
+   * with such a join — 9 % of all text blocks: headings, the word before a footnote mark or a citation, an
+   * affiliation after its label, a caption after its tag — the word came back in English in **330 of 330** as sent
+   * and in 26 of 330 with the space (names, mostly), with the markers intact in 400 and 401 of 404. Google loses the
+   * marker itself on `@b#th` and keeps it with the space.
+   *
+   * The space is the wire's, not the page's: it maps to no character of the DOM (an anchor of its text run says so),
+   * and `rehydrate` takes the space on that side of that marker off the translation. `last` is the last character
+   * written; `pending` the marker just written, while nothing has followed it
+   */
+  let last = ''
+  let pending: number | undefined
+  const mark = (id: number, side: 'before' | 'after') => {
+    const sides = spaced.get(id) ?? { before: false, after: false }
+    sides[side] = true
+    spaced.set(id, sides)
+  }
   return {
     /**
      * A placeholder run. It holds no collapsible whitespace and neither starts nor ends with any,
@@ -87,11 +124,22 @@ function makeTracker(format: WireFormat, parts: string[], spans: WireSpan[]) {
      * a placeholder has to resolve to that node's own boundary, otherwise a sentence opening or
      * closing on a formula would drop it (Codex pointed this out on #123).
      */
-    raw(s: string, node: Node, role: 'void' | 'open' | 'close') {
+    raw(s: string, node: Node, role: 'void' | 'open' | 'close', apart?: number) {
+      // `apart` is the marker's id when it may be set apart from a word. The space before it belongs to the text
+      // run that ended in the word — the last span, since a placeholder never ends in a letter
+      if (apart !== undefined && WORD.test(last)) {
+        const run = spans[spans.length - 1]!
+        parts.push(' ')
+        run.to += 1
+        len += 1
+        mark(apart, 'before')
+      }
       parts.push(s)
       spans.push({ kind: 'slot', node, from: len, to: len + s.length, role })
       len += s.length
       afterSpace = false
+      last = lastPoint(s)
+      pending = apart
     },
     text(node: Text) {
       const data = node.data
@@ -137,6 +185,16 @@ function makeTracker(format: WireFormat, parts: string[], spans: WireSpan[]) {
           emitted = c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : format === 'markers' && c === '@' ? '@@' : c
           afterSpace = false
         }
+        if (emitted && pending !== undefined) {
+          // The first character after a marker: a word gets the wire's space first, which stands for no character
+          // of this node, so the 1:1 run restarts behind it
+          if (WORD.test(String.fromCodePoint(data.codePointAt(i)!))) {
+            out += ' '
+            anchors.push([len + out.length, i])
+            mark(pending, 'after')
+          }
+          pending = undefined
+        }
         out += emitted
         // One input character did not produce exactly one output character, so the 1:1 run
         // restarts here and needs an anchor.
@@ -145,6 +203,7 @@ function makeTracker(format: WireFormat, parts: string[], spans: WireSpan[]) {
       if (out.length === 0) return
       parts.push(out)
       len += out.length
+      last = lastPoint(out)
       spans.push({ kind: 'text', node, from, to: len, anchors })
     },
   }
@@ -155,7 +214,8 @@ export function serialize(root: Element, format: WireFormat = 'tags'): Protected
   const paired = new Set<number>()
   const parts: string[] = []
   const spans: WireSpan[] = []
-  const tracker = makeTracker(format, parts, spans)
+  const spaced: ProtectedBlock['spaced'] = new Map()
+  const tracker = makeTracker(format, parts, spans, spaced)
   let voidCount = 0
   let next = 1
   const inCell = isTableCell(root)
@@ -182,7 +242,7 @@ export function serialize(root: Element, format: WireFormat = 'tags'): Protected
         slots.set(id, el)
         if (isVoid || format === 'markers') {
           voidCount++
-          tracker.raw(writeVoid(id, format), el, 'void')
+          tracker.raw(writeVoid(id, format), el, 'void', format === 'markers' && !el.matches(CODE_SPACE) ? id : undefined)
         } else {
           paired.add(id)
           tracker.raw(`<t id="${id}">`, el, 'open')
@@ -195,5 +255,5 @@ export function serialize(root: Element, format: WireFormat = 'tags'): Protected
   }
   walk(root)
   // The tracker collapses whitespace as it writes, so the joined parts are already collapsed.
-  return { format, text: parts.join(''), slots, paired, voidCount, offsets: spans, root }
+  return { format, text: parts.join(''), slots, paired, voidCount, offsets: spans, spaced, root }
 }

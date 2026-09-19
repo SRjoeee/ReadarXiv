@@ -1,7 +1,8 @@
 // The plain-text marker format (#104, DESIGN §6.1): `@a#`, voids only, paired placeholders flattened.
 // The measured basis is in the file header of tokens.ts: Microsoft's Edge endpoint 0% on the tag format, 98% on markers; Google ~99% on both.
 import { describe, expect, it } from 'vitest'
-import { escapeText, expectationsFromText, fromAlpha, rehydrate, serialize, toAlpha, tokenize, unescapeText, validate } from '@/core/protector'
+import { escapeText, expectationsFromText, fromAlpha, rehydrate, serialize, splitRuns, toAlpha, tokenize, unescapeText, validate } from '@/core/protector'
+import { rangesOf } from '@/core/protector/offsets'
 import { el, htmlOf } from './helpers'
 
 // 'Let @a# be bold per @b#.' (<em> flattened, <a class=ltx_ref> is a protected node)
@@ -43,6 +44,115 @@ describe('serialize (markers)', () => {
 
   it('the same block\'s wire text differs between the two formats', () => {
     expect(serialize(el(source), 'tags').text).toBe('Let <x id="1"/> be <t id="2">bold</t> per <x id="3"/>.')
+  })
+})
+
+// `@a#Word` is one token to a machine translator — a hashtag after a mention — and `word@a#` an address: neither is
+// translated. Every numbered heading went out that way, the number's own space being inside the protected tag (the
+// maintainer's report, 2026-09-19; the outputs are quoted in DESIGN §6.2). Measured through
+// the Edge endpoint over the 404 such blocks of the fixtures: the word left in English in 330 of 330 as it was sent,
+// in 26 of 330 with a space at the join. The space is the wire's alone and comes off as the translation is filled back
+describe('a marker that touches a word is set apart from it on the wire', () => {
+  const HEADING = '<h3 class="ltx_title ltx_title_subsection"><span class="ltx_tag ltx_tag_subsection">2.3 </span>Backpropagation recursion</h3>'
+  const NOTE = '<p class="ltx_p">an instance of this<span class="ltx_note ltx_role_footnote"><sup class="ltx_note_mark">1</sup></span>, with base type</p>'
+  /** What an engine hands back, in pieces: a title, its two halves swapped, and the sentence around a footnote mark */
+  const ZH = { title: '反向传播递归', swapped: ['递归', '反向传播'], note: ['这是该', '，基类型为'], plain: ['设', '为粗体，见', '。'] }
+  const TAG = '<span class="ltx_tag ltx_tag_subsection">2.3 </span>'
+  const MARK = '<span class="ltx_note ltx_role_footnote"><sup class="ltx_note_mark">1</sup></span>'
+  // In the live document: a range over nodes of another document reads empty in happy-dom
+  const wire = (html: string, format: 'markers' | 'tags' = 'markers') => {
+    document.body.innerHTML = html
+    return serialize(document.body.firstElementChild!, format)
+  }
+
+  it('a heading\'s number, whose space is inside the protected tag: a space after the marker, recorded as ours', () => {
+    const b = wire(HEADING)
+    expect(b.text).toBe('@a# Backpropagation recursion')
+    expect(b.spaced.get(1)).toEqual({ before: false, after: true })
+  })
+
+  it('a footnote mark on its word: a space before the marker', () => {
+    const b = wire(NOTE)
+    expect(b.text).toBe('an instance of this @a#, with base type')
+    expect(b.spaced.get(1)).toEqual({ before: true, after: false })
+  })
+
+  it('both sides, digits included; and a marker between two markers or against punctuation is left alone', () => {
+    expect(wire('<p class="ltx_p">resized to 256<math class="ltx_Math"><mo>×</mo></math>256 pixels</p>').text).toBe('resized to 256 @a# 256 pixels')
+    const b = wire('<p class="ltx_p">follows (<a class="ltx_ref" href="#E3">3</a>)–(<a class="ltx_ref" href="#E4">4</a>), so <math class="ltx_Math"><mi>u</mi></math><math class="ltx_Math"><mi>v</mi></math> holds</p>')
+    expect(b.text).toBe('follows (@a#)–(@b#), so @c#@d# holds')
+    expect(b.spaced.size).toBe(0)
+  })
+
+  it('a word is a word by its code points: one written with a combining mark, or in astral letters, is set apart too (Devin on #254)', () => {
+    const math = '<math class="ltx_Math"><mi>x</mi></math>'
+    // `resume` + U+0301: the word ends in a mark, not a letter — the Edge endpoint left it in English like any other
+    expect(wire(`<p class="ltx_p">the resume\u0301${math} was reviewed</p>`).text).toBe('the resume\u0301 @a# was reviewed')
+    // U+1D43E, two UTF-16 units: neither half is a letter
+    expect(wire(`<p class="ltx_p">the order \u{1D43E}${math}\u{1D43E} is fixed</p>`).text).toBe('the order \u{1D43E} @a# \u{1D43E} is fixed')
+  })
+
+  it('where the paper has a space, or a no-break space, nothing is added', () => {
+    expect(wire(source).spaced.size).toBe(0)
+    const b = wire('<p class="ltx_p">see Section\u00a0<a class="ltx_ref" href="#S5">5.4</a>\u00a0there</p>')
+    expect(b.text).toBe('see Section\u00a0@a#\u00a0there')
+    expect(b.spaced.size).toBe(0)
+  })
+
+  it('the tags format is as it was: a tag is no part of a word to an engine that parses markup', () => {
+    const b = wire(HEADING, 'tags')
+    expect(b.text).toBe('<x id="1"/>Backpropagation recursion')
+    expect(b.spaced.size).toBe(0)
+  })
+
+  it('the spaces of an inline listing stay tight: the words around them are code, and apart from the marker they were translated', () => {
+    const b = wire('<p class="ltx_p">the observation <span class="ltx_text ltx_lstlisting"><span class="ltx_text ltx_lst_identifier">y</span><span class="ltx_text ltx_lst_space"> </span>==<span class="ltx_text ltx_lst_space"> </span>40</span> has</p>')
+    expect(b.text).toBe('the observation y@a#==@b#40 has')
+    expect(b.spaced.size).toBe(0)
+  })
+
+  it('the wire\'s space stands for no character of the page: offsets on either side of it land on the text\'s own edge', () => {
+    const b = wire(HEADING)
+    // The whole title, from behind the space and from before it
+    expect(rangesOf(b.offsets, 4, b.text.length).map(String).join('')).toBe('Backpropagation recursion')
+    expect(rangesOf(b.offsets, 3, b.text.length).map(String).join('')).toBe('Backpropagation recursion')
+    const n = wire(NOTE)
+    expect(rangesOf(n.offsets, 0, n.text.indexOf(' @a#')).map(String).join('')).toBe('an instance of this')
+    expect(rangesOf(n.offsets, 0, n.text.indexOf('@a#')).map(String).join('')).toBe('an instance of this')
+  })
+
+  it('serialising twice gives the same wire: the stale check compares against it', () => {
+    const node = el(HEADING)
+    expect(serialize(node, 'markers').text).toBe(serialize(node, 'markers').text)
+    expect(serialize(node, 'markers').text).toBe('@a# Backpropagation recursion')
+  })
+
+  it('filled back, the space on that side of that marker comes off: the number keeps its own, the mark sits on its word', () => {
+    expect(htmlOf(rehydrate(`@a# ${ZH.title}`, wire(HEADING), document))).toBe(`${TAG}${ZH.title}`)
+    expect(htmlOf(rehydrate(`${ZH.note[0]} @a#${ZH.note[1]}`, wire(NOTE), document))).toBe(`${ZH.note[0]}${MARK}${ZH.note[1]}`)
+  })
+
+  it('an engine that hands back no space changes nothing, and a space that was the paper\'s stays', () => {
+    expect(htmlOf(rehydrate(`@a#${ZH.title}`, wire(HEADING), document))).toBe(`${TAG}${ZH.title}`)
+    // 'Let @a# be bold per @b#.': the spaces around @a# are the paper's
+    expect(htmlOf(rehydrate(`${ZH.plain[0]} @a# ${ZH.plain[1]} @b#${ZH.plain[2]}`, block(), document))).toContain(`${ZH.plain[0]} <math`)
+    // The other side of a marker set apart on one side keeps what the engine wrote
+    expect(htmlOf(rehydrate(`${ZH.swapped[0]} @a# ${ZH.swapped[1]}`, wire(HEADING), document))).toBe(`${ZH.swapped[0]} ${TAG}${ZH.swapped[1]}`)
+  })
+
+  it('the translation\'s offsets follow the cut: the text behind a leading space, an entity included, maps to where it landed', () => {
+    const t = '@a#  A &amp; B'
+    const f = rehydrate(t, wire(HEADING), document)
+    expect(f.textContent).toBe('2.3 A & B')
+    expect(rangesOf(f.offsets, t.indexOf('A'), t.length).map(String).join('')).toBe('A & B')
+    expect(rangesOf(f.offsets, t.indexOf('B'), t.length).map(String).join('')).toBe('B')
+    // From inside the space that came off: the text's own start
+    expect(rangesOf(f.offsets, 4, t.length).map(String).join('')).toBe('A & B')
+  })
+
+  it('a run goes out without the space: it is for an engine that sees the marker', () => {
+    expect(splitRuns(wire(HEADING)).runs).toEqual(['Backpropagation recursion'])
+    expect(splitRuns(wire(NOTE)).runs).toEqual(['an instance of this', ', with base type'])
   })
 })
 

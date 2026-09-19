@@ -5,6 +5,24 @@ import { scanTokens, type WireSpan } from './offsets'
 import { type ProtectedBlock, staleSlot } from './serialize'
 import { PlaceholderIntegrityError, validate } from './validate'
 
+type TextToken = Extract<ReturnType<typeof scanTokens>[number], { kind: 'text' }>
+
+/**
+ * A text run with the wire's own space taken off. Where a marker touched a word in the source the wire set them
+ * apart (`serialize`), and the engine hands a space back on that side of the marker — after a heading's number, before a footnote's mark —
+ * which is not the paper's: the section number carries its own space inside the tag, and a footnote mark sits on
+ * its word. Only the five characters HTML collapses, the ones `serialize` writes; they are 1:1 with the wire, so
+ * the run's wire interval stays and the node offsets behind a leading cut move down by it (`nodeOffsetAt` clamps a
+ * trailing one by the node's length)
+ */
+function tighten(t: TextToken, lead: boolean, trail: boolean): Pick<TextToken, 'text' | 'anchors'> {
+  const end = trail ? t.text.replace(/[ \t\n\f\r]+$/, '').length : t.text.length
+  const cut = lead ? Math.min(end, t.text.length - t.text.replace(/^[ \t\n\f\r]+/, '').length) : 0
+  if (cut === 0) return { text: t.text.slice(0, end), anchors: t.anchors }
+  const moved = t.anchors.filter(([wire]) => wire > t.from + cut).map(([wire, node]) => [wire, node - cut] as const)
+  return { text: t.text.slice(cut, end), anchors: [[t.from, 0], [t.from + cut, 0], ...moved] }
+}
+
 /**
  * Rebuilds the block from the translated wire text, and reports where each run of that text ended
  * up in the DOM it just built.
@@ -47,12 +65,19 @@ export function rehydrate(translated: string, block: ProtectedBlock, doc: Docume
   /** Which slot each clone stands for; the label restore checks identities, not just counts */
   const ids = new Map<Node, number>()
 
-  for (const t of scanTokens(translated, block.format)) {
+  const tokens = scanTokens(translated, block.format)
+  /** Whether the marker beside a text run was set apart from a word on the side that faces the run (`spaced`) */
+  const apart = (i: number, side: 'before' | 'after') => {
+    const t = tokens[i]
+    return t?.kind === 'void' && block.spaced.get(t.id)?.[side] === true
+  }
+  for (const [i, t] of tokens.entries()) {
     if (t.kind === 'text') {
       // `scanTokens` has already resolved entities and `@@`; decoding again would eat a literal one
-      const node = doc.createTextNode(t.text)
+      const { text, anchors } = tighten(t, apart(i - 1, 'after'), apart(i + 1, 'before'))
+      const node = doc.createTextNode(text)
       top().append(node)
-      spans.push({ kind: 'text', node, from: t.from, to: t.to, anchors: t.anchors })
+      spans.push({ kind: 'text', node, from: t.from, to: t.to, anchors })
     } else if (t.kind === 'void') {
       const node = cloneWithoutIds(doc, block.slots.get(t.id)!, true)
       top().append(node)

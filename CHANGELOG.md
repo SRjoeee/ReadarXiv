@@ -10,6 +10,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 - The translation opens in a new tab, so the abstract page or PDF you were reading stays where it is. The settings page has the choice, under Reading, if you would rather it opened in the tab you are on.
 - Long papers answer sooner. Translating asks for the first screen's text at once instead of after the page has been laid out again: the first translations appear about a third sooner on a paper of several hundred formulas, and a little sooner on any paper. Showing the original again is a little quicker too.
 - A page opened already translating now ends in `#readarxiv` rather than `#axt-translate`: the ending stays in the address bar and travels with a link you pass on, so it carries the product's name. Bookmarks and links with the old ending keep working.
+- Fixed, with Microsoft Translator: a numbered heading came back with its first word left in English — a one-word heading not translated at all, the number sometimes moved into the middle — and so did the word a footnote mark or a citation sits on. The blocks this touched are translated afresh rather than taken from the cache.
 
 ## 0.4.0 — 2026-09-17
 
