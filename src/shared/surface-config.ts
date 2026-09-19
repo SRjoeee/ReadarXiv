@@ -40,8 +40,8 @@ export interface SurfaceConfigState {
   pack: PackState | null
 }
 
-/** Where a configuration that just landed came from */
-export type Landing = 'first' | 'own' | 'elsewhere'
+/** Where a configuration that just landed came from; `refused` is what stays in effect after a write the store refused */
+export type Landing = 'first' | 'own' | 'elsewhere' | 'refused'
 
 export interface SurfaceConfigDeps {
   /** Does this configuration's interface language resolve to another pack than the one the surface was painted in */
@@ -167,7 +167,7 @@ export function createSurfaceConfig(deps: SurfaceConfigDeps): SurfaceConfig {
         await setConfig(next)
       } catch (e) {
         // Refused, storage as it was: the surface goes on showing what is in effect, with the reason
-        if (e instanceof ConfigUnreadableError) await land(latest, e.reason, 'own')
+        if (e instanceof ConfigUnreadableError) await land(latest, e.reason, 'refused')
         throw e
       }
       // An accepted write proves the stored value readable: a notice still up is from before a repair made elsewhere

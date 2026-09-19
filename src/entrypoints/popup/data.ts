@@ -8,24 +8,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { browser } from 'wxt/browser'
 import { type Config, DEFAULT_CONFIG, MODE_VALUES } from '@/config/schema'
-import { getConfig, setConfig, watchConfig } from '@/config/storage'
 import type { Mode } from '@/core/renderer'
 import { COMMAND_ID } from '@/entrypoints/background/context-menu'
 import type { ProviderStatus } from '@/providers/transport'
 import { isBuiltInService, isLlmChosen } from '@/config/services'
 import { type EntryStatus, type PageStatus, sendMessage, sendToActiveTab } from '@/shared/messages'
 import type { HelperStatus } from '@/shared/ocr'
-import { type PackState, createPackLookup, downloadPack } from '@/shared/pack'
+import { type PackState, downloadPack } from '@/shared/pack'
 import { MANAGE_SERVICES, MANAGE_STYLES, type MenuKind, type PopupInput, actionErrorText, pollsBackground, runnable, startRefusalText } from './view-model'
-import { chainRevision } from '@/config/revision'
-import { localeInUse, S } from '@/ui/strings'
-import { pickLocale } from '@/locales'
-import { browserLanguages } from '@/ui/apply-locale'
+import { S } from '@/ui/strings'
+import { useSurfaceConfig } from '@/ui/use-surface-config'
 import { closePopup, EMBEDDED } from './embedded'
 import { createProviderAsks } from './provider-asks'
-
-/** The stored interface language resolves to another pack than the one in use (chosen once, before the first paint) */
-const staleLocale = (c: Config) => pickLocale(c.uiLanguage, browserLanguages()) !== localeInUse()
 
 export interface PopupActions {
   translate(): void
@@ -82,35 +76,20 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
   const [savedProvider, setSavedProvider] = useState<ProviderStatus | null>(null)
   const [sessionProvider, setSessionProvider] = useState<ProviderStatus | null>(null)
   /**
-   * The configuration this popup shows, with the digest of its chain settings — **one** state, set once the digest
-   * is known: a configuration shown beside the previous one's digest would call a page current that is behind it,
-   * and the button would restore where the toggle refuses (local review)
+   * The configuration this popup shows, the digest of its chain settings and the offline service's language pack
+   * (§8.4; `downloadable` needs a click to create(), a user gesture) — read, patched and followed by the surface
+   * configuration (shared/surface-config.ts), which publishes them as one state. A configuration that lands after the
+   * first — a save here, a change saved elsewhere — is followed by an ask for the chain the background now gives it
    */
-  const [local, setLocal] = useState<{ config: Config; revision: string } | null>(null)
-  const config = local?.config ?? null
-  const savedRevision = local?.revision ?? null
-  /** The offline service's language pack (§8.4); `downloadable` needs a click to create() (user gesture) */
-  const [pack, setPack] = useState<PackState | null>(null)
-  /** The lookups' bookkeeping (shared/pack.ts): the committed target, the newest lookup, the downloads in flight */
-  const [packs] = useState(() => createPackLookup({
-    publish: setPack,
-    // The settings page may be open beside this popup: tell it the download ended, as the helper's state is told
-    announce: target => void sendMessage({ type: 'axt:pack-changed', target }).catch(() => undefined),
-  }))
-  const settle = useCallback(async (next: Config) => {
-    // The committed configuration owns the wanted target: another target forgets the previous one's pack state at
-    // once (Codex on #185); the lookup that follows fills the new one
-    packs.want(next.targetLanguage)
-    setLocal({ config: next, revision: await chainRevision(next) })
-  }, [packs])
+  const afterLanding = useRef<() => void>(() => undefined)
+  const { surface, state } = useSurfaceConfig({ onLanded: (_, from) => { if (from === 'own' || from === 'elsewhere') afterLanding.current() } })
+  const { config, revision: savedRevision, pack } = state
   const [helper, setHelper] = useState<HelperStatus | null>(null)
   const [platform, setPlatform] = useState<'mac' | 'other' | null>(null)
   const [menu, setMenu] = useState<MenuKind | null>(null)
   /** The translate shortcut as bound right now; Chrome formats it for the platform (⌥T / Alt+T) */
   const [shortcut, setShortcut] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  /** Every config write queues behind the previous one; see `patchConfig` */
-  const writes = useRef<Promise<Config>>(Promise.resolve(DEFAULT_CONFIG))
 
   const refresh = useCallback(() => {
     /**
@@ -151,45 +130,16 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
     return scope ? asks.session(scope) : asks.saved()
   }, [asks])
 
+  afterLanding.current = () => void loadProvider()
+
   useEffect(() => {
-    // The first read is queued on the write chain with everything that follows it: a slow first digest must not
-    // land after a watcher reload settled newer settings (local review)
-    const init = async () => {
-      const c = await getConfig()
-      // A change landing between the locale's read (main.tsx) and this one would otherwise show its settings in the
-      // labels of the previous language (Codex on #185)
-      if (staleLocale(c)) { location.reload(); return c }
-      await settle(c)
-      void packs.check(c.targetLanguage)
-      return c
-    }
-    writes.current = writes.current.then(init, init)
-    writes.current.catch(() => setLocal(null))
     refresh()
     browser.commands.getAll()
       .then(all => setShortcut(all.find(c => c.name === COMMAND_ID)?.shortcut || null))
       .catch(() => setShortcut(null))
     sendMessage({ type: 'axt:helper-status', recheck: true }).then(setHelper).catch(() => setHelper({ state: 'not-installed' }))
     browser.runtime.getPlatformInfo().then(info => setPlatform(info.os === 'mac' ? 'mac' : 'other')).catch(() => setPlatform('other'))
-    // A change saved elsewhere — the settings page, another tab's popup — shows here without reopening.
-    // Re-read on the serialized write chain rather than taken from the event, which carries no order (#182)
-    const unwatch = watchConfig(() => {
-      const follow = async () => {
-        const stored = await getConfig()
-        // The interface language was applied once at mount (applyLocale); a stored choice that resolves to another
-        // pack takes a reload, as the settings page's own change does. Compared with the locale actually in use, not
-        // with a value this hook recorded: a change landing between the locale's read and this hook's first read
-        // would otherwise pass unnoticed (Codex on #185)
-        if (staleLocale(stored)) { location.reload(); return stored }
-        await settle(stored)
-        void packs.check(stored.targetLanguage)
-        void loadProvider()
-        return stored
-      }
-      writes.current = writes.current.then(follow, follow)
-    })
-    return unwatch
-  }, [refresh, packs, loadProvider, settle])
+  }, [refresh])
 
   // The background broadcasts the helper's state when it changes on its own — the guided install's wait found it,
   // or the fresh worker after a runtime grant reported (DESIGN §15.3). Without this the card would stay up until the
@@ -199,11 +149,11 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
       const m = message as { type?: string; status?: HelperStatus; target?: string } | null
       if (m?.type === 'axt:helper-state' && m.status) setHelper(m.status)
       // A pack downloaded on the settings page: this popup's Download button must not stay over an installed pack
-      if (m?.type === 'axt:pack-changed' && m.target) packs.receive(m.target)
+      if (m?.type === 'axt:pack-changed' && m.target) surface.receivePack(m.target)
     }
     browser.runtime.onMessage.addListener(onState)
     return () => browser.runtime.onMessage.removeListener(onState)
-  }, [packs])
+  }, [surface])
 
   // While the page is still loading the content script is not injected yet (document_idle), so
   // the first ask has no receiver; ask again every 500 ms a few times instead of declaring "not an
@@ -258,27 +208,8 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
     refresh()
   }
 
-  /**
-   * Change one field of the config on top of what storage holds **now**. The mounted snapshot is
-   * stale as soon as the content script writes the mode or the options page saves: writing the
-   * whole snapshot back would revert those (Codex on #39).
-   *
-   * **Serialized**: two controls changed before the first write lands would otherwise both read the
-   * same snapshot and the later write would drop the earlier change (Codex on #157)
-   */
-  const patchConfig = (patch: (latest: Config) => Config): Promise<Config> => {
-    // `then(run, run)`: a write that throws must not poison the chain — every later change would
-    // be skipped and the page would silently stop saving
-    const run = async () => {
-      const next = patch(await getConfig())
-      await setConfig(next)
-      await settle(next)
-      loadProvider()
-      return next
-    }
-    writes.current = writes.current.then(run, run)
-    return writes.current
-  }
+  /** Change one field of the configuration: a patch on what storage holds now, in turn (shared/surface-config.ts). A refused write reaches `guard` as the error it is */
+  const patchConfig = surface.patch
 
   /** After a settings change: restart the page on the new settings if it is on and they can run */
   const restartIfOn = async (next: Config, packState: PackState | null) => {
@@ -299,7 +230,7 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
       // A new tab by default (config `reading.openIn`, v16): the abstract or PDF page the reader is on stays where
       // it is. The popup opens it itself — `tabs.create` needs no permission — while “this tab” is the page's own
       // navigation, which needs none either
-      if ((local?.config ?? DEFAULT_CONFIG).reading.openIn === 'new-tab') await browser.tabs.create({ url: href })
+      if ((config ?? DEFAULT_CONFIG).reading.openIn === 'new-tab') await browser.tabs.create({ url: href })
       else {
         const { opened } = await sendToActiveTab({ type: 'axt:open-html' })
         if (!opened) throw new Error(S.note.noHtml)
@@ -345,13 +276,13 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
         isBuiltInService(id) || latest.services.some(s => s.id === id) ? { ...latest, provider: id } : latest
       ))
       if (next.provider !== id) return
-      const packState = id === 'chrome-builtin' ? await packs.check(next.targetLanguage) : pack
+      const packState = id === 'chrome-builtin' ? await surface.checkPack(next.targetLanguage) : pack
       await restartIfOn(next, packState)
     }),
     chooseLanguage: code => void guard(async () => {
       setMenu(null)
       const next = await patchConfig(latest => ({ ...latest, targetLanguage: code }))
-      const packState = await packs.check(code)
+      const packState = await surface.checkPack(code)
       await restartIfOn(next, packState)
     }),
     choosePrompt: id => void guard(async () => {
@@ -385,7 +316,7 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
     // From the click itself (shared/pack.ts says why); the menu shows a spinner meanwhile
     downloadPack: () => void guard(async () => {
       if (!config) return
-      await packs.download(config.targetLanguage, downloadPack)
+      await surface.downloadPack(config.targetLanguage, downloadPack)
       // The service chain lives in background (§8.0): have it rebuild one so the now-usable offline
       // service is back on it. The promise shown next to this button is about **this** tab, so only
       // its session moves onto the new chain (Codex on #157)
