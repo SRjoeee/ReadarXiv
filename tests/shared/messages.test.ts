@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { decodeReply, failure, isAxtMessage, isFailure, replyWith } from '@/shared/messages'
+import { describe, expect, it, vi } from 'vitest'
+import { answerMessages, decodeReply, failure, isAxtMessage, isFailure, replyWith } from '@/shared/messages'
 
 // A handler's failure travels back as a typed reply and becomes the sender's rejection (local review):
 // a request whose work failed must settle, not wait for the worker to die
@@ -42,3 +42,54 @@ describe('isAxtMessage', () => {
     expect(isAxtMessage(null)).toBe(false)
   })
 })
+
+// One listener for a table of handlers: what each `runtime.onMessage` listener had to get right by hand — which
+// messages to leave alone, when to keep the channel open, how a failure reaches the sender
+describe('answerMessages', () => {
+  const settle = () => new Promise(resolve => setTimeout(resolve, 0))
+
+  it('a message that is not ours, or that has no handler here, passes by unanswered: another listener may take it', () => {
+    const reply = vi.fn()
+    const listen = answerMessages({ 'axt:cancel-scope': async () => ({ cancelled: 0 }) })
+    expect(listen({ type: 'someone-else' }, {}, reply)).toBeUndefined()
+    expect(listen(null, {}, reply)).toBeUndefined()
+    expect(listen({ type: 'axt:page-status' }, {}, reply)).toBeUndefined()
+    expect(reply).not.toHaveBeenCalled()
+  })
+
+  it('a handler gets the message and the sender\'s tab, its promise is the answer, and the channel stays open for it', async () => {
+    const reply = vi.fn()
+    const handler = vi.fn(async () => ({ cancelled: 2 }))
+    const listen = answerMessages({ 'axt:cancel-scope': handler })
+    expect(listen({ type: 'axt:cancel-scope', scope: 's1' }, { tab: { id: 7 } }, reply)).toBe(true)
+    await settle()
+    expect(handler).toHaveBeenCalledWith({ type: 'axt:cancel-scope', scope: 's1' }, { tabId: 7 })
+    expect(reply).toHaveBeenCalledWith({ cancelled: 2 })
+    // An extension page has no tab
+    listen({ type: 'axt:cancel-scope', scope: 's2' }, {}, reply)
+    expect(handler).toHaveBeenLastCalledWith({ type: 'axt:cancel-scope', scope: 's2' }, { tabId: undefined })
+  })
+
+  it('a rejection settles the sender\'s request as a failure, and so does a handler that throws before it has a promise', async () => {
+    const reply = vi.fn()
+    const listen = answerMessages({
+      'axt:cancel-scope': () => Promise.reject(new Error('the router is gone')),
+      'axt:open-settings': () => { throw new TypeError('no such page') },
+    })
+    expect(listen({ type: 'axt:cancel-scope', scope: 's1' }, {}, reply)).toBe(true)
+    expect(listen({ type: 'axt:open-settings' }, {}, reply)).toBe(true)
+    await settle()
+    expect(reply.mock.calls.map(c => c[0])).toEqual([{ axtError: 'the router is gone', name: 'Error' }, { axtError: 'no such page', name: 'TypeError' }])
+  })
+
+  it('a handler that answers nothing closes the channel: nobody waits on that message', async () => {
+    const reply = vi.fn()
+    const seen: string[] = []
+    const listen = answerMessages({ 'axt:diag': message => { seen.push(message.line); return undefined } })
+    expect(listen({ type: 'axt:diag', src: 'content', line: 'a line' }, {}, reply)).toBeUndefined()
+    await settle()
+    expect(seen).toEqual(['a line'])
+    expect(reply).not.toHaveBeenCalled()
+  })
+})
+
