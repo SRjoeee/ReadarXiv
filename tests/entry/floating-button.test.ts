@@ -168,6 +168,19 @@ describe('the floating button: what it is made of', () => {
     expect(q('.axt-fb-dock').style.getPropertyValue('--axt-unzoom')).toBe('0.8')
   })
 
+  it('its sheet carries no :has() (hard rule 9): what a selector would ask of the structure, a data-axt-* mark says', () => {
+    // The rule was measured on author sheets in the document (DESIGN §7.2); this one lives in a shadow root, where the
+    // cost was not measured. It is held to the same rule all the same: the gate in tests/styles reads `src/styles/*.css`
+    // and never sees CSS written in TypeScript, and a mark costs this sheet nothing a selector would save
+    const { root, q, entry } = mount({ zoom: 1.25 })
+    q('.axt-fb-panel').dispatchEvent(click())
+    entry.activate(true)
+    const sheets = [...root.querySelectorAll('style')].map(style => (style.textContent ?? '').replace(/\/\*[\s\S]*?\*\//g, ''))
+    expect(sheets.length).toBeGreaterThan(0)
+    expect(sheets.join('\n').length).toBeGreaterThan(1000)
+    for (const sheet of sheets) expect(sheet).not.toContain(':has(')
+  })
+
   it('leaves the rest of the document alone', () => {
     document.body.innerHTML = '<embed id="viewer" type="application/pdf">'
     const before = document.getElementById('viewer')!.outerHTML

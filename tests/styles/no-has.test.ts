@@ -9,7 +9,12 @@
 // a query sets no invalidation state.
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, type Look } from '@/config/appearance'
+import { STYLE_ATTR } from '@/core/renderer'
+import { failureWidget } from '@/core/renderer/failed'
+import { appearanceSheet } from '@/core/renderer/page'
+import { enableDebug } from '@/entrypoints/content/debug'
 
 const STYLES = join(import.meta.dirname, '../../src/styles')
 
@@ -24,3 +29,51 @@ describe('the injected style sheets', () => {
     }
   })
 })
+
+// The files above are not all that reaches a page: some CSS is text built in TypeScript, which a gate that reads
+// `src/styles/*.css` never sees. These read what is **actually injected** — the text a `<style>` ends up holding —
+// so a sheet assembled from pieces, or generated from the reader's settings, is held to the rule as a whole.
+// (The floating button's sheet is checked where its harness is, tests/entry/floating-button.test.ts.)
+describe('the style sheets built in TypeScript', () => {
+  const withoutComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '')
+
+  afterEach(() => {
+    document.head.innerHTML = ''
+    document.documentElement.removeAttribute('data-axt-debug')
+  })
+
+  it('the page sheet as it is assembled, for every built-in look and for a profile with an advanced block', () => {
+    const looks: Look[] = BUILT_IN_STYLES.flatMap(style => BUILT_IN_HIGHLIGHTS.map(highlight => ({ style, highlight })))
+    // The reader's own declarations go between a pair of our braces (style-values.ts `sanitizeCustomCss` admits no
+    // selector, no brace, no at-rule), so they cannot bring a `:has()` in; the rule they land in is ours, and checked
+    looks.push({
+      style: { ...BUILT_IN_STYLES[0]!, id: 'custom', name: 'Custom', color: '#336699', underline: 'dashed', blur: true, css: 'font-style: italic; letter-spacing: 0.01em' },
+      highlight: { ...BUILT_IN_HIGHLIGHTS[0]!, id: 'custom-band', color: '#ffcc00' },
+    })
+    expect(looks.length).toBe(BUILT_IN_STYLES.length * BUILT_IN_HIGHLIGHTS.length + 1)
+    for (const look of looks) {
+      const sheet = withoutComments(appearanceSheet(look))
+      // Not an empty string passing for a clean sheet. Under vitest the `?inline` imports of the four files are empty
+      // strings, so the static part is the case above's, from the files themselves; what is held here is the part
+      // `lookSheet` generates, and it has to be there: the band's variables always, the reader's block when given
+      expect(sheet, `${look.style.id} / ${look.highlight.id}`).toContain('--axt-hl-color')
+      if (look.style.css) expect(sheet).toContain(look.style.css)
+      expect(sheet, `the page sheet for ${look.style.id} / ${look.highlight.id} uses :has()`).not.toContain(':has(')
+    }
+  })
+
+  it('the failure widget\'s sheet, inside its shadow root', () => {
+    const widget = failureWidget(document, 'network: offline', () => undefined)
+    const sheet = widget.shadowRoot?.querySelector('style')?.textContent ?? ''
+    expect(sheet.length).toBeGreaterThan(0)
+    expect(withoutComments(sheet)).not.toContain(':has(')
+  })
+
+  it('the debug outlines\' sheet (#axt-debug)', () => {
+    enableDebug([])
+    const sheet = document.querySelector(`style[${STYLE_ATTR}="debug"]`)?.textContent ?? ''
+    expect(sheet.length).toBeGreaterThan(0)
+    expect(withoutComments(sheet)).not.toContain(':has(')
+  })
+})
+
