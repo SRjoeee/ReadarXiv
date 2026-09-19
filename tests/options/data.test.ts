@@ -100,12 +100,20 @@ describe('useOptionsData', () => {
     const hook = await mountHook(useOptionsData)
     await hook.until(() => hook.current().config !== null || reload.mock.calls.length > 0)
     const release = drafts.hold()
+    // Waited for by what it shows, not by a tick: a change saved elsewhere is re-read on the surface's chain, and the
+    // digest that lands with it is real asynchronous work — one tick is enough on a quiet machine and not on a loaded
+    // one (CI on #265: the reload came after the assertion)
     await hook.run(() => saveElsewhere({ ...DEFAULT_CONFIG, uiLanguage: 'zh-CN', targetLanguage: 'jpn' }))
+    await hook.until(() => hook.current().config?.targetLanguage === 'jpn')
     expect(reload).not.toHaveBeenCalled()
     expect(hook.current().config?.targetLanguage).toBe('jpn')
     // A second change while it waits asks for no second reload
     await hook.run(() => saveElsewhere({ ...DEFAULT_CONFIG, uiLanguage: 'zh-CN', targetLanguage: 'kor' }))
+    await hook.until(() => hook.current().config?.targetLanguage === 'kor')
+    expect(reload).not.toHaveBeenCalled()
     release()
+    await hook.until(() => reload.mock.calls.length > 0)
+    // Settled: the reload the first change asked for, and no second one for the second
     await hook.flush()
     expect(reload).toHaveBeenCalledTimes(1)
     await hook.unmount()
