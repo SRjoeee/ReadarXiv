@@ -98,6 +98,15 @@ export function resolvePromptReplacementValue(value: string | null | undefined, 
   return typeof value === 'string' && value.trim() !== '' ? value : fallback
 }
 
+/**
+ * Does `id` name a prompt — a built-in one or one of the reader's. A choice made from a list another tab has since
+ * deleted from must not be stored: `selectPrompt` resolves an id that names nothing to the default silently, so
+ * neither it nor the previous choice would translate. The settings page and the popup both ask before they store
+ */
+export function promptExists(config: PromptsConfig, id: string): boolean {
+  return Object.hasOwn(BUILT_IN_PROMPTS, id) || config.patterns.some(p => p.id === id)
+}
+
 /** Built-ins first, then custom, else the default (as in Read Frog). Own properties only: an id like "constructor" must not reach the prototype */
 export function selectPrompt(config: PromptsConfig = DEFAULT_PROMPTS_CONFIG): PromptTemplate {
   const id = config.promptId || DEFAULT_PROMPT_ID
