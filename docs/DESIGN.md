@@ -291,8 +291,8 @@ The whole **outermost** `.ltx_tabular` is one unit (15 of the fixtures' 58 tabul
 
 ### 5.5 Rule versioning
 
-- `RULES_VERSION` (`0.10.1` today) is exported by the rule file and is part of the cache key: a change that makes the same text translate differently must bump it.
-- **When not to bump**: a purely additive change (a shape newly extracted, a group newly protected) may keep the version **only when the wire text of every block of every fixture is byte for byte unchanged** — then a changed block's key changes by itself through `normalizedText`, and no stale entry can be hit. A bump voids every reader's whole cache and costs LLM users real money; the criterion is measured, not argued (issue #152 kept `0.10.1` this way).
+- `RULES_VERSION` (`0.10.2` today) is exported by the rule file and is part of the cache key: a change that makes the same text translate differently must bump it.
+- **When not to bump**: a purely additive change (a shape newly extracted, a group newly protected) may keep the version **only when the wire text of every block of every fixture is byte for byte unchanged** — then a changed block's key changes by itself through `normalizedText`, and no stale entry can be hit. A bump voids every reader's whole cache and costs LLM users real money; the criterion is measured, not argued (issue #152 kept `0.10.1` this way; protecting inline listings did not meet it — the wire text of 12 blocks of 2312.17141 changed — and moved it to `0.10.2`).
 - The fixtures record their generator version. arXiv has reconverted its whole history with oxide 0.7.6, so no older output exists online and the year of a paper is no proxy for a version; should a future LaTeXML differ enough, the answer is a second rule file plus a detection function, not conditionals inside one.
 
 ### 5.6 Rule interface and precedence
