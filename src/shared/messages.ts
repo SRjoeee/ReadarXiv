@@ -212,6 +212,45 @@ export function replyWith<T>(promise: Promise<T>, sendResponse: (reply: T | Fail
   promise.then(sendResponse, error => sendResponse(failure(error)))
 }
 
+/** Who sent a message, as far as a handler may know: the tab, when a content script did — an extension page has none */
+export interface MessageSender {
+  tabId: number | undefined
+}
+
+/**
+ * The handlers of one listener, by message type, each typed by the table above: a request that does not match its
+ * type, or an answer that does not match its response, does not compile. A handler answers with a promise, or with
+ * `undefined` for a message nobody waits on
+ */
+export type MessageHandlers = {
+  [T in AxtMessageType]?: (message: AxtMessage<T>, sender: MessageSender) => Promise<AxtResponse<T>> | undefined
+}
+
+/**
+ * The listener for a table of handlers — what every `runtime.onMessage` listener of ours has to get right, once:
+ * a message that is not ours, or that this context has no handler for, passes by unanswered (another listener may
+ * take it); a handler's promise is answered through `replyWith`, so its rejection settles the sender's request as a
+ * failure instead of leaving it to wait for the worker to die; and the channel is kept open for exactly those — WXT
+ * ≥ 0.20 ships no polyfill, so an asynchronous response needs `sendResponse` and `return true`. A handler that
+ * throws before it has a promise is answered the same way
+ */
+export function answerMessages(handlers: MessageHandlers) {
+  return (message: unknown, sender: { tab?: { id?: number } }, sendResponse: (reply: unknown) => void): true | undefined => {
+    if (!isAxtMessage(message)) return undefined
+    const handler = handlers[message.type] as ((message: AxtMessage, sender: MessageSender) => Promise<unknown> | undefined) | undefined
+    if (!handler) return undefined
+    let answer: Promise<unknown> | undefined
+    try {
+      answer = handler(message, { tabId: sender.tab?.id })
+    } catch (error) {
+      answer = Promise.reject(error)
+    }
+    if (answer === undefined) return undefined
+    replyWith(answer, sendResponse)
+    return true
+  }
+}
+
 /** The sender's side of `replyWith`: a failure reply becomes a rejection */
 export function decodeReply<T>(reply: T | FailureReply): T {
   if (!isFailure(reply)) return reply
