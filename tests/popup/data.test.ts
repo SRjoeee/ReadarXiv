@@ -5,7 +5,9 @@ import type { ProviderStatus } from '@/providers/transport'
 import type { AxtMessage, PageStatus } from '@/shared/messages'
 import { deferred, mountHook } from '../ui/render-hook'
 
-// The popup's data layer, mounted in a real React root: which ask publishes, and when the page reloads
+// The popup's data layer, mounted in a real React root: which ask publishes, and what follows a configuration that
+// lands. Reading, patching and following the configuration, the reload included, is the surface configuration's and is
+// tested at its interface (tests/shared/surface-config.test.ts)
 
 const store = vi.hoisted(() => ({
   config: null as Config | null,
@@ -110,23 +112,6 @@ describe('usePopupData', () => {
       await hook.run(() => poll.answer.resolve(status('session-chain')))
       expect(hook.current().input.session?.providerId).toBe('session-chain')
     }
-    await hook.unmount()
-  })
-
-  it('a stored interface language that differs from the one in use at the first read reloads the popup', async () => {
-    // Codex on #185: a change landing between the locale's read and the hook's first read has no watcher yet
-    store.config = { ...DEFAULT_CONFIG, uiLanguage: 'zh-CN' }
-    const hook = await mountHook(usePopupData)
-    await hook.until(() => reload.mock.calls.length > 0)
-    expect(reload).toHaveBeenCalledTimes(1)
-    await hook.unmount()
-  })
-
-  it('the same interface language at the first read does not reload', async () => {
-    const hook = await mountHook(usePopupData)
-    await hook.until(() => hook.current().input.config !== null)
-    expect(reload).not.toHaveBeenCalled()
-    expect(hook.current().input.config?.uiLanguage).toBe('en')
     await hook.unmount()
   })
 
