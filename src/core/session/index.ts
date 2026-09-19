@@ -19,6 +19,7 @@ import {
   startSentenceHighlight,
 } from '@/core/renderer'
 import { DOCUMENT_ROOT } from '@/core/rules/latexml'
+import { createSerialQueue } from '@/core/scheduler/serial'
 import { newSessionId } from '@/core/scheduler/session'
 import { translateTitle, type TitleTranslator } from '@/core/scheduler/title'
 import type { TranslationTransport } from '@/providers/transport'
@@ -109,8 +110,8 @@ export function createPageSession(deps: SessionDeps): PageSession {
    * guessing itself). The default is only the fallback for a failed read
    */
   let savedMode: Mode = DEFAULT_CONFIG.mode
-  /** The chain `setMode`'s saves run on, one after another */
-  let modeSaves: Promise<void> = Promise.resolve()
+  /** `setMode`'s saves and the re-reads of the stored mode, one after another (core/scheduler/serial.ts) */
+  const modeSaves = createSerialQueue()
   let configRead: () => void = () => undefined
   const ready = new Promise<void>(resolve => { configRead = resolve })
   /** Set by startImages: once the recognition helper is installed later, the parked bitmaps of this page are released */
@@ -503,7 +504,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
     if (modes) enterSide(effective)
     // **Saved in order**: each save reads the store and compares, so two choices in quick succession, both reading
     // before either wrote, would leave the store on the first while the page shows the second
-    const save = async () => {
+    await modeSaves(async () => {
       // After the first configuration read, which writes the same variable: a choice made before it came back would
       // be overwritten by the stored mode it carries
       await ready
@@ -513,10 +514,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       // and leaves the preference as it was: on a translated page the switch holds for the page, on an untranslated
       // one nothing changed, and the caller tells the reader it was not saved
       savedMode = mode
-    }
-    const saved = modeSaves.then(save, save)
-    modeSaves = saved.catch(() => undefined)
-    await saved
+    })
     return { mode, effective }
   }
 
@@ -525,11 +523,11 @@ export function createPageSession(deps: SessionDeps): PageSession {
    * first read's snapshot arrive in, the last word is a read made after every write this page knows of
    */
   function refreshSavedMode(): void {
-    const refresh = async () => {
+    // A failed read leaves the preference as it was; the next event, or the next save, reads again
+    void modeSaves(async () => {
       await ready
       savedMode = (await deps.config.get()).mode
-    }
-    modeSaves = modeSaves.then(refresh, refresh).catch(() => undefined)
+    }).catch(() => undefined)
   }
 
   function restorePage(epoch?: string): { removedNodes: number; refused?: true } {
