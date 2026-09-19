@@ -70,3 +70,17 @@ pnpm zip                 # the store archive; pnpm icons regenerates the icons
 AXT_MEASURE=1 pnpm vitest run tests/perf       # the cost measurements (readings, not assertions)
 AXT_CHROME=<binary> pnpm e2e                   # the e2e suite on a chosen Chrome; probes live in tests/e2e/probes/
 ```
+
+## Agent skills
+
+### Issue tracker
+
+Issues, specs and the roadmap (#155) live in this repository's GitHub Issues, read and written with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default triage labels, each label string equal to its role's name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context, and the context is `docs/DESIGN.md`: §3 is the glossary, the sections hold the decisions; no `CONTEXT.md`, no `docs/adr/`. See `docs/agents/domain.md`.
