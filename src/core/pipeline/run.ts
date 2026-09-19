@@ -11,6 +11,7 @@ import { PlaceholderIntegrityError, joinRuns, rehydrate, splitRuns, staleSlot, t
 import {
   clearAllPending, enable, markPartial, markStructure, registerSentences, renderFailed, renderPending, renderTable, renderText, setState, type Look, type Mode,
 } from '@/core/renderer'
+import { type CallBase, translateCall } from '@/core/run/call'
 import { createRunLedger } from '@/core/run/ledger'
 import type { PreloadOptions } from '@/core/scheduler/lazy'
 import type { RenderPath } from '@/cache/key'
@@ -154,14 +155,10 @@ export function startTranslation(options: RunOptions): TranslationRun {
   // yields between here and the scheduler's start at the end of this function, so a restore cannot come in between
   for (const block of blocks) setState(block, 'pending')
 
-  const send = (items: { id: string; text: string; cuts?: number[] }[], renderPath: RenderPath, sectionTitle?: string, opts: { bypassCache?: boolean } = {}) => {
-    const context: TranslateContext = { ...options.context, ...(sectionTitle ? { sectionTitle } : {}) }
-    return transport({
-      request: { segments: items, source: 'en', target: options.target, context: Object.keys(context).length ? context : undefined },
-      cache: { paper: options.paper, renderPath, ...(opts.bypassCache ? { bypass: true } : {}) },
-      ...(options.scope ? { scope: options.scope } : {}),
-    })
-  }
+  // The envelope is the session's, the same for the image labels and the title (run/call.ts)
+  const base: CallBase = { target: options.target, paper: options.paper, ...(options.scope ? { scope: options.scope } : {}), ...(options.context ? { context: options.context } : {}) }
+  const send = (items: { id: string; text: string; cuts?: number[] }[], renderPath: RenderPath, sectionTitle?: string, opts: { bypassCache?: boolean } = {}) =>
+    transport(translateCall(base, items, renderPath, { ...(sectionTitle ? { sectionTitle } : {}), ...(opts.bypassCache ? { bypassCache: true } : {}) }))
 
   /**
    * The sentence boundaries travel with the request (§8.6). Choosing the cut points needs the block itself — is a
