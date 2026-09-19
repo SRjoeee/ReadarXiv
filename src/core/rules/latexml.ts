@@ -343,6 +343,14 @@ export function classify(el: Element): Classification | null {
 export const FUNCTIONAL_INLINE = 'a[href]'
 
 /**
+ * The spaces inside an inline listing (`lstlisting`): each a protected element between two identifiers of code. On
+ * the markers wire a placeholder that touches a word is set apart from it by a space (protector/serialize.ts), so
+ * that the engine reads the word as prose; here the words are code, and apart from the placeholder `let` and
+ * `if … then … else` came back translated (the Edge endpoint, 2026-09-19). These stay as tight as they were
+ */
+export const CODE_SPACE = '.ltx_lst_space'
+
+/**
  * Formatting-only inline elements, which the markers format flattens to text (§6.3). One that
  * opens a block — `Keywords:`, `Note.`, an italic theorem statement — can be put back at rehydrate
  * time along its separator (protector/label.ts, issue #150). Not `.ltx_font_typewriter`: that is

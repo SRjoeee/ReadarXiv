@@ -53,16 +53,25 @@ export function splitRuns(block: ProtectedBlock): RunLayout {
   }
   // Skipping a paired element's whole subtree has to count the nesting depth, or an inner </t> ends it early
   let skipDepth = 0
+  /** The marker just passed was set apart from the word that follows it */
+  let tight = false
   for (const t of tokenize(block.text, block.format)) {
     if (skipDepth > 0) {
       if (t.kind === 'open') skipDepth++
       else if (t.kind === 'close') skipDepth--
       continue
     }
-    if (t.kind === 'text') buffer += t.text
-    else if (t.kind === 'void') {
+    if (t.kind === 'text') {
+      // The space the markers wire put between a marker and the word it touched (`serialize`) is for an engine that
+      // sees the marker; a run goes out without one, as it always has
+      buffer += tight ? t.text.replace(/^ /, '') : t.text
+      tight = false
+    } else if (t.kind === 'void') {
+      const sides = block.spaced.get(t.id)
+      if (sides?.before) buffer = buffer.replace(/ $/, '')
       flush()
       items.push({ kind: 'void', id: t.id })
+      tight = sides?.after === true
     } else if (t.kind === 'open' && isFunctional(t.id)) {
       // An element with behaviour is kept whole: treated like a void, its content skipped along
       flush()

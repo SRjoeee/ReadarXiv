@@ -9,6 +9,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 - A floating button on every arXiv page — abstract, PDF and full text — docked to the edge of the window. Click it to translate the page you are on (a green tick shows a translated page; click again for the original), or, from an abstract or a PDF, to open the paper's bilingual version. Point at it for two more buttons: the control panel, which is the extension's popup, and the settings. Drag it to either edge and it stays there, lock it in place, or hide it for now or for good; the settings page, under Reading, brings it back.
 - The translation opens in a new tab, so the abstract page or PDF you were reading stays where it is. The settings page has the choice, under Reading, if you would rather it opened in the tab you are on.
 - Long papers answer sooner. Translating asks for the first screen's text at once instead of after the page has been laid out again: the first translations appear about a third sooner on a paper of several hundred formulas, and a little sooner on any paper. Showing the original again is a little quicker too.
+- Fixed, with Microsoft Translator: a numbered heading came back with its first word left in English — a one-word heading not translated at all, the number sometimes moved into the middle — and so did the word a footnote mark or a citation sits on. The blocks this touched are translated afresh rather than taken from the cache.
 
 ## 0.4.0 — 2026-09-17
 

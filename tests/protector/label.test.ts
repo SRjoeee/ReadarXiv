@@ -76,8 +76,9 @@ describe('leading label under markers (#150)', () => {
 
   it('keeps a placeholder that sits inside the label', () => {
     const { block } = markers('<p class="ltx_p"><span class="ltx_text ltx_font_bold">MMLU<a class="ltx_ref" href="#bib1">[23]</a>:</span> a benchmark.</p>')
-    expect(block.text).toBe('MMLU@a#: a benchmark.')
-    const t = 'MMLU@a#：一个基准。'
+    // The citation sits on the word, so the wire sets it apart (serialize); the engine hands the space back, and it comes off
+    expect(block.text).toBe('MMLU @a#: a benchmark.')
+    const t = 'MMLU @a#：一个基准。'
     const f = rehydrate(t, block, document)
     const shell = label(f)!
     expect(shell.className).toBe('ltx_text ltx_font_bold')
