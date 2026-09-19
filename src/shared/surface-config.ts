@@ -22,6 +22,7 @@
 // of the latest value today — into a named operation that can cross a message. Left until a lost write is seen.
 import { chainRevision } from '@/config/revision'
 import type { Config } from '@/config/schema'
+import { createSerialQueue } from '@/core/scheduler/serial'
 import { ConfigUnreadableError, type FallbackReason, configFallbackReason, getConfig, resetConfig, setConfig, watchConfig } from '@/config/storage'
 import { sendMessage } from './messages'
 import { type PackState, createPackLookup } from './pack'
@@ -97,13 +98,8 @@ export function createSurfaceConfig(deps: SurfaceConfigDeps): SurfaceConfig {
     announce: deps.announce ?? (target => void sendMessage({ type: 'axt:pack-changed', target }).catch(() => undefined)),
   })
 
-  /** The chain every read and write of this surface queues on. It never rejects: a link's failure is its caller's */
-  let chain: Promise<unknown> = Promise.resolve()
-  const queue = <T>(run: () => Promise<T>): Promise<T> => {
-    const result = chain.then(run)
-    chain = result.catch(() => undefined)
-    return result
-  }
+  /** The chain every read and write of this surface queues on (core/scheduler/serial.ts): a link's failure is its caller's */
+  const queue = createSerialQueue()
 
   /** A configuration takes effect here: the wanted pack first, then the configuration with its digest, as one */
   const land = async (config: Config, fallbackReason: FallbackReason | null, from: Landing, more: Partial<SurfaceConfigState> = {}) => {
@@ -124,8 +120,8 @@ export function createSurfaceConfig(deps: SurfaceConfigDeps): SurfaceConfig {
     reloadDue = true
     const held = () => deps.holds?.any() ?? false
     const settle = () => (deps.holds?.whenNone ?? (fn => fn()))(() => {
-      const waitedFor = chain
-      void waitedFor.then(() => { if (held() || chain !== waitedFor) settle(); else deps.reload() })
+      const waitedFor = queue.idle()
+      void waitedFor.then(() => { if (held() || queue.idle() !== waitedFor) settle(); else deps.reload() })
     })
     settle()
   }

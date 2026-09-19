@@ -3,6 +3,7 @@
 // the writes run one after another, so two tabs' drags, or a drag and the settings page's switch, cannot undo each
 // other — and none of them can touch the configuration.
 import { storage } from 'wxt/utils/storage'
+import { createSerialQueue } from '@/core/scheduler/serial'
 import { DEFAULT_FLOATING_ENTRY, type FloatingEntryState } from '@/shared/entry-settings'
 
 const KEY = 'local:floatingEntry'
@@ -20,7 +21,8 @@ export async function getFloatingEntry(): Promise<FloatingEntryState> {
   return valid(stored) ? stored : DEFAULT_FLOATING_ENTRY
 }
 
-let writes: Promise<unknown> = Promise.resolve()
+/** One after another (core/scheduler/serial.ts): each patch merges into what the one before it stored */
+const writes = createSerialQueue()
 
 /**
  * Merge a patch into the stored state. Resolves to whether it was saved and to the state that is stored now — the
@@ -28,7 +30,7 @@ let writes: Promise<unknown> = Promise.resolve()
  * not look saved (Devin on #250)
  */
 export function patchFloatingEntry(patch: Partial<FloatingEntryState>): Promise<{ saved: boolean; floating: FloatingEntryState }> {
-  const run = async () => {
+  return writes(async () => {
     const before = await getFloatingEntry()
     const next = { ...before, ...patch }
     if (!valid(next)) return { saved: false, floating: before }
@@ -38,9 +40,5 @@ export function patchFloatingEntry(patch: Partial<FloatingEntryState>): Promise<
     } catch {
       return { saved: false, floating: before }
     }
-  }
-  // `then(run, run)`: a write that failed must not stop the ones behind it
-  const result = writes.then(run, run)
-  writes = result
-  return result
+  })
 }
