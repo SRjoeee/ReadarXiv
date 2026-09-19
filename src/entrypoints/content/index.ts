@@ -4,7 +4,7 @@ import { extract, paperContext } from '@/core/extractor'
 import { paperIdFromUrl } from '@/core/pipeline'
 import { createPageSession } from '@/core/session'
 import { installFloatingButton, type InstalledFloatingButton } from '@/shared/floating'
-import { isAxtMessage, replyWith, sendMessage } from '@/shared/messages'
+import { onMessages, sendMessage } from '@/shared/messages'
 import { createMessageTransport } from '@/shared/transport'
 import { applyLocaleFrom } from '@/ui/apply-locale'
 import { enableDebug } from './debug'
@@ -50,29 +50,14 @@ export default defineContentScript({
     // watchConfig rather than a message: the settings page is itself the active tab and cannot reach the content page; the subscription also updates every open paper at once
     watchConfig(config => session.onConfig(config))
 
-    browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-      if (!isAxtMessage(message)) return
-      switch (message.type) {
-        case 'axt:translate-page':
-          replyWith(session.start(message.mode, message.restart === true, undefined, message.epoch), sendResponse)
-          return true
-        case 'axt:restore-page':
-          sendResponse(session.restore(message.epoch))
-          return true
-        case 'axt:set-mode':
-          // A refused save (the stored settings unreadable, config/storage.ts) rejects after the page has switched: the popup says why
-          replyWith(session.setMode(message.mode).then(r => ({ mode: r.effective, preference: r.mode })), sendResponse)
-          return true
-        case 'axt:retry-failed':
-          sendResponse({ retried: session.retryFailed() })
-          return true
-        case 'axt:helper-ready':
-          sendResponse({ resumed: session.resumeRaster() })
-          return true
-        case 'axt:page-status':
-          replyWith(session.status(), sendResponse)
-          return true
-      }
+    onMessages({
+      'axt:translate-page': message => session.start(message.mode, message.restart === true, undefined, message.epoch),
+      'axt:restore-page': async message => session.restore(message.epoch),
+      // A refused save (the stored settings unreadable, config/storage.ts) rejects after the page has switched: the popup says why
+      'axt:set-mode': message => session.setMode(message.mode).then(r => ({ mode: r.effective, preference: r.mode })),
+      'axt:retry-failed': async () => ({ retried: session.retryFailed() }),
+      'axt:helper-ready': async () => ({ resumed: session.resumeRaster() }),
+      'axt:page-status': () => session.status(),
     })
 
     // The floating button: here its main button is the toggle the key and the menu are, decided in the background

@@ -4,7 +4,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { browser } from 'wxt/browser'
 import { COMMAND_ID } from '@/entrypoints/background/context-menu'
-import { sendMessage, sendToActiveTab } from '@/shared/messages'
+import { onMessages, sendMessage, sendToActiveTab } from '@/shared/messages'
 import { downloadPack } from '@/shared/pack'
 import { localeStale } from '@/ui/use-surface-config'
 import { closePopup, EMBEDDED } from './embedded'
@@ -17,10 +17,7 @@ export type { OptionsSection, PopupActions } from './state'
 const browserHost = (): PopupHost => ({
   toTab: sendToActiveTab,
   toBackground: sendMessage,
-  onBroadcast(listener) {
-    browser.runtime.onMessage.addListener(listener)
-    return () => browser.runtime.onMessage.removeListener(listener)
-  },
+  onBroadcast: onMessages,
   openTab: url => browser.tabs.create({ url }),
   openOptionsPage: () => void browser.runtime.openOptionsPage(),
   url: path => browser.runtime.getURL(path as Parameters<typeof browser.runtime.getURL>[0]),

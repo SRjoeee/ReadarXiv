@@ -116,7 +116,9 @@ describe('useOptionsData', () => {
     const hook = await mountHook(useOptionsData)
     await hook.until(() => hook.current().pack !== null)
     expect(hook.current().pack).toBe('unsupported') // no Translator API in the test runtime
-    const onMessage = vi.mocked(browser.runtime.onMessage.addListener).mock.calls[listeners]?.[0] as (message: unknown) => void
+    // Called as the browser calls a listener: message, sender, sendResponse
+    const listener = vi.mocked(browser.runtime.onMessage.addListener).mock.calls[listeners]?.[0] as unknown as (message: unknown, sender: object, sendResponse: () => void) => unknown
+    const onMessage = (message: unknown) => void listener(message, {}, () => undefined)
     // The other surface's download installed the pack: from here on the API answers, and only a lookup shows it
     const availability = vi.fn(async () => 'available')
     ;(globalThis as { Translator?: unknown }).Translator = { availability }

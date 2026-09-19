@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { answerMessages, decodeReply, failure, isAxtMessage, isFailure, replyWith } from '@/shared/messages'
+import { fakeBrowser } from 'wxt/testing/fake-browser'
+import { answerMessages, decodeReply, failure, isAxtMessage, isFailure, onMessages, replyWith } from '@/shared/messages'
 
 // A handler's failure travels back as a typed reply and becomes the sender's rejection (local review):
 // a request whose work failed must settle, not wait for the worker to die
@@ -90,6 +91,18 @@ describe('answerMessages', () => {
     await settle()
     expect(seen).toEqual(['a line'])
     expect(reply).not.toHaveBeenCalled()
+  })
+})
+
+describe('onMessages', () => {
+  it('answers in this context until it is stopped', async () => {
+    const deliver = (message: unknown) => (fakeBrowser.runtime.onMessage.trigger as unknown as (...args: unknown[]) => Promise<unknown>)(message, {}, () => undefined)
+    const seen: number[] = []
+    const stop = onMessages({ 'axt:zoom-changed': message => { seen.push(message.zoom); return undefined } })
+    await deliver({ type: 'axt:zoom-changed', zoom: 2 })
+    stop()
+    await deliver({ type: 'axt:zoom-changed', zoom: 3 })
+    expect(seen).toEqual([2])
   })
 })
 

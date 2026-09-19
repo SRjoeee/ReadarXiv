@@ -10,7 +10,7 @@
 //   object from one more context, and a whole-object write can put back a snapshot taken before another context's
 //   save — a service or a key just added, gone. Under its own key, written only by the background and one write after
 //   another, a drag cannot touch anything but itself.
-import { sendMessage } from '@/shared/messages'
+import { onMessages, sendMessage } from '@/shared/messages'
 
 /** Where the floating button is, and whether it is shown at all (storage key `floatingEntry`, DESIGN §4.0c) */
 export interface FloatingEntryState {
@@ -83,14 +83,15 @@ export function watchEntrySettings(onSettings: (settings: EntrySettings) => void
   browser.storage.local.onChanged.addListener(changes => {
     if (WATCHED_KEYS.some(key => key in changes)) void ask()
   })
-  browser.runtime.onMessage.addListener((message: unknown) => {
-    const changed = message as { type?: string; zoom?: unknown } | null
-    if (changed?.type !== 'axt:zoom-changed' || typeof changed.zoom !== 'number') return undefined
-    // Newer than the zoom of any answer still on its way, which was read before this one
-    pushed++
-    current = { ...current, zoom: changed.zoom }
-    tell()
-    return undefined
+  onMessages({
+    'axt:zoom-changed': changed => {
+      if (typeof changed.zoom !== 'number') return undefined
+      // Newer than the zoom of any answer still on its way, which was read before this one
+      pushed++
+      current = { ...current, zoom: changed.zoom }
+      tell()
+      return undefined
+    },
   })
   first = ask()
   return first

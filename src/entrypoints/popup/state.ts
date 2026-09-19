@@ -20,7 +20,7 @@ import { isBuiltInService, isLlmChosen } from '@/config/services'
 import type { Mode } from '@/core/renderer'
 import { promptExists } from '@/providers/prompt-library'
 import type { ProviderStatus } from '@/providers/transport'
-import type { AxtMessage, EntryStatus, PageStatus, sendMessage, sendToActiveTab } from '@/shared/messages'
+import type { AxtMessage, EntryStatus, MessageHandlers, PageStatus, sendMessage, sendToActiveTab } from '@/shared/messages'
 import type { HelperStatus } from '@/shared/ocr'
 import type { PackState } from '@/shared/pack'
 import { messageFor } from '@/shared/page-action'
@@ -67,7 +67,7 @@ export interface PopupHost {
   toTab: typeof sendToActiveTab
   toBackground: typeof sendMessage
   /** The background's broadcasts to the open surfaces (`axt:helper-state`, `axt:pack-changed`); returns the way to stop */
-  onBroadcast(listener: (message: unknown) => void): () => void
+  onBroadcast(handlers: MessageHandlers): () => void
   openTab(url: string): Promise<unknown>
   /** Brings a settings tab already open to the front rather than opening another */
   openOptionsPage(): void
@@ -387,11 +387,16 @@ export function createPopupState(host: PopupHost): PopupState {
       // The background broadcasts the helper's state when it changes on its own — the guided install's wait found it,
       // or the fresh worker after a runtime grant reported (DESIGN §15.3). Without this the card would stay up until
       // the reader closed and reopened the popup (§15.4)
-      const stopBroadcasts = host.onBroadcast(message => {
-        const m = message as { type?: string; status?: HelperStatus; target?: string } | null
-        if (m?.type === 'axt:helper-state' && m.status) { helper = m.status; changed() }
+      const stopBroadcasts = host.onBroadcast({
+        'axt:helper-state': message => {
+          if (message.status) { helper = message.status; changed() }
+          return undefined
+        },
         // A pack downloaded on the settings page: this popup's Download button must not stay over an installed pack
-        if (m?.type === 'axt:pack-changed' && m.target) surface.receivePack(m.target)
+        'axt:pack-changed': message => {
+          if (message.target) surface.receivePack(message.target)
+          return undefined
+        },
       })
       return () => {
         running = false

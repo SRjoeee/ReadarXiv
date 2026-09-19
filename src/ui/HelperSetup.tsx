@@ -8,9 +8,7 @@
 // The waiting state lives in the background, not here: the popup is destroyed the moment it loses focus, so this
 // component is gone the instant the reader switches to the terminal; on reopening, one `axt:helper-await` question picks the same wait up again.
 import { useEffect, useState } from 'react'
-import { browser } from 'wxt/browser'
-import { sendMessage } from '@/shared/messages'
-import type { HelperStatus } from '@/shared/ocr'
+import { onMessages, sendMessage } from '@/shared/messages'
 import { HELPER_GUIDE_URL, S, helperInstallCommand } from '@/ui/strings'
 
 /** How long “Copied” stays: long enough to read, not so long it looks stuck */
@@ -48,14 +46,12 @@ export function HelperSetup({ extensionId }: { extensionId: string }) {
   // The background broadcasts the state it finds (`axt:helper-state`); the page's data layer takes it and this
   // component is replaced by the ready state. What is left to do here is to stop the wait line at once — the reader may see
   // the frame before the parent re-renders
-  useEffect(() => {
-    const onState = (message: unknown) => {
-      const m = message as { type?: string; status?: HelperStatus } | null
-      if (m?.type === 'axt:helper-state' && m.status?.state === 'ready') setUntil(null)
-    }
-    browser.runtime.onMessage.addListener(onState)
-    return () => browser.runtime.onMessage.removeListener(onState)
-  }, [])
+  useEffect(() => onMessages({
+    'axt:helper-state': message => {
+      if (message.status?.state === 'ready') setUntil(null)
+      return undefined
+    },
+  }), [])
 
   /**
    * Say “Copied” only after the write succeeded. Said regardless with the clipboard blocked, the reader would in

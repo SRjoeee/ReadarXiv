@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { browser } from 'wxt/browser'
 import { ConfigUnreadableError, type FallbackReason, getConfig } from '@/config/storage'
 import type { Config } from '@/config/schema'
-import { sendMessage } from '@/shared/messages'
+import { onMessages, sendMessage } from '@/shared/messages'
 import type { HelperStatus } from '@/shared/ocr'
 import { type PackState, downloadPack } from '@/shared/pack'
 import { S } from '@/ui/strings'
@@ -69,20 +69,24 @@ export function useOptionsData(): OptionsData {
     browser.runtime.getPlatformInfo().then(info => setPlatform(info.os === 'mac' ? 'mac' : 'other')).catch(() => setPlatform('other'))
     // The background broadcasts the helper's state when it changes on its own — the install wait found it, or the
     // fresh worker after a runtime grant reported (DESIGN §15.3); the section follows without a reload
-    const onHelperState = (message: unknown) => {
-      const m = message as { type?: string; status?: HelperStatus; target?: string } | null
-      if (m?.type === 'axt:helper-state' && m.status) setHelper(m.status)
+    const stopBroadcasts = onMessages({
+      'axt:helper-state': message => {
+        if (message.status) setHelper(message.status)
+        return undefined
+      },
       // A pack downloaded from the popup: the Chrome card here must not keep offering the download
-      if (m?.type === 'axt:pack-changed' && m.target) surface.receivePack(m.target)
-    }
-    browser.runtime.onMessage.addListener(onHelperState)
+      'axt:pack-changed': message => {
+        if (message.target) surface.receivePack(message.target)
+        return undefined
+      },
+    })
     void loadCache()
     // Translation happens in other tabs: re-read on returning to the settings page, or the numbers shown are forever those of the moment it opened
     const onVisible = () => { if (!document.hidden) void loadCache() }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
     return () => {
-      browser.runtime.onMessage.removeListener(onHelperState)
+      stopBroadcasts()
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
     }
