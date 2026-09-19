@@ -4,7 +4,10 @@ import { T_CLASS } from '@/core/marks'
 import { FOR_ATTR, STATE_ATTR } from '@/core/renderer/attrs'
 import { renderTable, setState } from '@/core/renderer/translation'
 import { TABLE_RULES } from '@/core/rules/latexml'
-import { docOf, frag } from './helpers'
+import { docOfChecked, frag } from './helpers'
+
+// Every document a case renders into is held to the tail mark's invariant afterwards (helpers.ts)
+const docOf = docOfChecked()
 
 const table =
   '<figure class="ltx_table" id="F1"><table class="ltx_tabular" id="T1"><tbody>'

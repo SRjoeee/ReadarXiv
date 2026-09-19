@@ -6,7 +6,10 @@ import { createPrep, rootsOf } from '@/core/renderer/prep'
 import { splitFigures } from '@/core/renderer/split-figures'
 import { resetFitCache } from '@/core/renderer/table-fit'
 import { renderText } from '@/core/renderer/translation'
-import { docOf, frag } from './helpers'
+import { docOfChecked, frag } from './helpers'
+
+// Every document a case renders into is held to the tail mark's invariant afterwards (helpers.ts)
+const docOf = docOfChecked()
 
 // Incremental tidying (issue #46): each pass touches only the containers of the blocks whose DOM just changed, the mirror runs once per session,
 // and the column width is read before anything is written, and only when stale. The cases here use effects observable in happy-dom:
@@ -31,8 +34,8 @@ const EQUATION = '<div class="ltx_para"><p class="ltx_p" id="p1">Text.</p>'
 /** A watch that never reports: for the cases that build a prep by hand and are not about the width */
 const noWatch = () => () => undefined
 
-function setup(html: string, opts: { side?: boolean; columnWidth?: (root: Element) => number } = {}) {
-  const doc = docOf(html)
+function setup(html: string, opts: { side?: boolean; columnWidth?: (root: Element) => number; handBuilt?: boolean } = {}) {
+  const doc = opts.handBuilt ? docOf.handBuilt(html) : docOf(html)
   const blocks = extract(doc)
   markBlocks(blocks)
   const columnWidth = opts.columnWidth ?? (() => 484)
@@ -99,7 +102,8 @@ describe('createPrep', () => {
   })
 
   it('the mirror runs once per session: the second full pass builds no mirror for a formula inserted later', () => {
-    const { doc, prep } = setup(EQUATION)
+    // Hand-built from here on: the case appends a node behind the mirror itself, which no renderer does
+    const { doc, prep } = setup(EQUATION, { handBuilt: true })
     prep.side(true)
     flush()
     expect(doc.querySelectorAll(`.${MIRROR_CLASS}`)).toHaveLength(1)
@@ -113,7 +117,8 @@ describe('createPrep', () => {
   })
 
   it('after reset() the mirror may run once more', () => {
-    const { doc, prep } = setup(EQUATION)
+    // Hand-built, as above: a formula appended by hand behind the mirror
+    const { doc, prep } = setup(EQUATION, { handBuilt: true })
     prep.side(true)
     flush()
     const late = doc.getElementById('E1')!.cloneNode(true) as Element
