@@ -251,7 +251,7 @@ await options.close()
 const logs = []
 const page = await context.newPage()
 page.on('console', m => { if (m.text().includes('[axt]')) logs.push(m.text()) })
-await page.goto(`${PAPER_URL}#axt-translate`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+await page.goto(`${PAPER_URL}#readarxiv`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
 // Scroll the whole paper: translating the first screen only, the audit would miss most of the body (the loading model of §10)
 await scrollThrough(page)
 const settled = await waitSettled(page, logs)

@@ -292,7 +292,7 @@ export function usePopupData(): { input: PopupInput; error: string | null; actio
 
   const actions: PopupActions = {
     // The abstract and PDF pages: the page navigates itself to the HTML version, which starts translating on arrival
-    // (`#axt-translate`). The popup closes with it, as it does when a click sends the reader elsewhere
+    // (`#readarxiv`). The popup closes with it, as it does when a click sends the reader elsewhere
     openHtml: () => void guard(async () => {
       const href = entry?.html
       if (!href) throw new Error(S.note.noHtml)

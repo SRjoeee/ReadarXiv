@@ -1,15 +1,27 @@
 // The bilingual entry on the abstract page (issue #146): one more line under arXiv's own HTML link in “Access Paper”,
 // leading straight to the HTML full text already translating.
 //
-// **The URL is the one arXiv gives**, plus a `#axt-translate` — the content script starts translating of itself on seeing that hash.
+// **The URL is the one arXiv gives**, plus `#readarxiv` — the content script starts translating of itself on seeing that hash.
 // Building `arxiv.org/html/<id>` ourselves would point at the wrong version of a paper with several (its href carries the `v7`).
 
 import { HTML_LINK } from '@/core/rules/abstract'
 
 /** The line we insert; `restore` leaves the abstract page alone, but the mark is still needed, for recognition and idempotence */
 export const ABS_LINK_CLASS = 'axt-abs-link'
-/** The hash that makes the content script start translating as soon as it enters the page (DESIGN §4.1) */
-export const AUTO_TRANSLATE_HASH = '#axt-translate'
+/**
+ * The hash our links carry: the content script starts translating as soon as it enters a page that has it (DESIGN
+ * §4.1). It stays in the address bar and travels with a link a reader passes on, so it is the product's name, not
+ * the code's prefix (the maintainer, 2026-09-19)
+ */
+export const AUTO_TRANSLATE_HASH = '#readarxiv'
+/** What 0.4.0's links carried. A bookmark or a shared link made then still starts the translation */
+const LEGACY_AUTO_TRANSLATE_HASH = '#axt-translate'
+
+/** Does this `location.hash` ask for the translation to start. Any capitalisation: the name is written `ReadarXiv` too */
+export function startsTranslation(hash: string): boolean {
+  const asked = hash.toLowerCase()
+  return asked === AUTO_TRANSLATE_HASH || asked === LEGACY_AUTO_TRANSLATE_HASH
+}
 
 /**
  * Insert the bilingual entry; returns whether it was inserted.

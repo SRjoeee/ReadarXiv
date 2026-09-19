@@ -23,7 +23,7 @@ for (const engine of ['Google 翻译', 'Microsoft 翻译']) {
   const page = await context.newPage()
   const logs = []
   page.on('console', m => { const t = m.text(); if (t.includes('[axt]')) logs.push(t) })
-  await page.goto('https://arxiv.org/html/2410.00260#axt-translate', { waitUntil: 'domcontentloaded' })
+  await page.goto('https://arxiv.org/html/2410.00260#readarxiv', { waitUntil: 'domcontentloaded' })
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
   for (let y = 0; y < height; y += 800) { await page.evaluate(top => window.scrollTo(0, top), y); await sleep(120) }
   let last = null, stable = 0
