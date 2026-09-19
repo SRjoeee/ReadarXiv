@@ -14,6 +14,7 @@ import { escapeText, unescapeText } from '@/core/protector/escape'
 import { type ImageLabel, type ImageTarget, clearImage, renderImage } from '@/core/renderer/image'
 import { DOCUMENT_ROOT, FIGURE_SELECTORS } from '@/core/rules/latexml'
 import { INJECTED_SELECTOR } from '@/core/marks'
+import { type CallBase, translateCall } from '@/core/run/call'
 import { createRunLedger } from '@/core/run/ledger'
 import type { PreloadOptions } from '@/core/scheduler/lazy'
 import { foreignLinesOf, linesOf, looksLikeCode, pictureTexts } from '@/core/svg'
@@ -225,6 +226,8 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     },
   })
   const alive = () => !ledger.halted()
+  // The envelope is the session's, the same for the text run and the title (run/call.ts)
+  const base: CallBase = { target: options.target, paper: options.paper, scope: options.scope, ...(options.context ? { context: options.context } : {}) }
   /**
    * The run-level queue and worker pool: the concurrency cap applies to the whole run, not to each translate() call
    * on its own — every observer callback and every retry calls translate(), and a pool per call would make the cap a
@@ -336,18 +339,10 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
       // Every line of an inline picture is a complete TikZ node already and must not merge with its vertical neighbours (§15.6)
       const boxes = linesToBoxes(lines, target.kind === 'picture' ? { merge: false } : {})
       if (boxes.length === 0) return finishEmpty() // nothing translatable in the image
+      // The caption stands where a block's section heading does: the labels of a figure are read under it
       const caption = captionOf(target.el)
-      const context: TranslateContext = { ...options.context, ...(caption ? { sectionTitle: caption } : {}) }
-      const res = await options.translate({
-        request: {
-          segments: boxes.map((box, i) => ({ id: `${target.id}#L${i}`, text: escapeText(box.text, wireFormatOf(options.renderPath)) })),
-          source: 'en',
-          target: options.target,
-          context: Object.keys(context).length ? context : undefined,
-        },
-        cache: { paper: options.paper, renderPath: options.renderPath },
-        scope: options.scope,
-      })
+      const segments = boxes.map((box, i) => ({ id: `${target.id}#L${i}`, text: escapeText(box.text, wireFormatOf(options.renderPath)) }))
+      const res = await options.translate(translateCall(base, segments, options.renderPath, caption ? { sectionTitle: caption } : {}))
       if (!alive()) return
       if (!res.ok) {
         // One image's labels may span several batches (an inline TikZ picture easily has a hundred nodes): when one

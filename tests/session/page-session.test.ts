@@ -460,6 +460,25 @@ describe('page session', () => {
     expect(h.calls.slice(since).map(c => c.scope)).toEqual(h.calls.slice(since).map(() => next))
   })
 
+  it('the title goes out in the same envelope as the blocks: on a page with no title or abstract to send, it carries no context, and a block only its heading', async () => {
+    // To the cache key an absent context and an empty one are two contexts (run/call.ts); the title used to send `{}`
+    const h = harness()
+    h.deps.context = {}
+    live = h.session
+    await h.session.start()
+    await settle()
+    await h.session.translate(h.blocks.slice(1))
+    await settle()
+    const title = h.calls.find(c => c.request.segments[0]?.id === 'document.title')
+    const block = h.calls.find(c => c.request.segments[0]?.id !== 'document.title')
+    expect(title).toBeDefined()
+    expect(block).toBeDefined()
+    expect(title?.request.context).toBeUndefined()
+    // The block sits under a heading, which is a context of its own; nothing of the paper's goes with it
+    expect(block?.request.context).toEqual({ sectionTitle: 'Introduction' })
+    expect(title?.cache).toEqual(block?.cache)
+  })
+
   it('a permanent hand-over restarts the page once on the serving engine; a temporary one does not', async () => {
     let handedOver = false
     const h = harness({

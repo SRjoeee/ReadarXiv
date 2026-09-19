@@ -17,6 +17,7 @@ import {
   applyStyle, clearImageEverywhere, createModeController, createPrep, installAnchorFallback, type Mode, type ModeController, relabelFailed, restore, type SentenceHighlight, setImageModes,
   startSentenceHighlight,
 } from '@/core/renderer'
+import { translateCall } from '@/core/run/call'
 import { createSerialQueue } from '@/core/scheduler/serial'
 import { newSessionId } from '@/core/scheduler/session'
 import { translateTitle, type TitleTranslator } from '@/core/scheduler/title'
@@ -370,11 +371,12 @@ export function createPageSession(deps: SessionDeps): PageSession {
       isCurrent: alive,
       warn: trace,
       translate: async text => {
-        const res = await backend.translate({
-          request: { segments: [{ id: 'document.title', text: escapeText(text, wireFormatOf(status.renderPath)) }], source: 'en', target, context },
-          cache: { paper, renderPath: status.renderPath },
-          scope: session,
-        })
+        // The same envelope as the runs' (run/call.ts): an empty context is left out here too
+        const res = await backend.translate(translateCall(
+          { target, paper, scope: session, context },
+          [{ id: 'document.title', text: escapeText(text, wireFormatOf(status.renderPath)) }],
+          status.renderPath,
+        ))
         return res.ok ? unescapeText(res.result.segments[0]?.text ?? '', wireFormatOf(status.renderPath)) || null : null
       },
     })
