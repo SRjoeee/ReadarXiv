@@ -251,6 +251,13 @@ export function answerMessages(handlers: MessageHandlers) {
   }
 }
 
+/** Answer these messages in this context for as long as it lives, or until the returned function is called */
+export function onMessages(handlers: MessageHandlers): () => void {
+  const listener = answerMessages(handlers)
+  browser.runtime.onMessage.addListener(listener)
+  return () => browser.runtime.onMessage.removeListener(listener)
+}
+
 /** The sender's side of `replyWith`: a failure reply becomes a rejection */
 export function decodeReply<T>(reply: T | FailureReply): T {
   if (!isFailure(reply)) return reply

@@ -6,7 +6,9 @@ import type { EntrySettings } from '@/shared/entry-settings'
 // and never taken from an answer that is not the settings
 
 const wire = vi.hoisted(() => ({ answers: [] as unknown[], asked: 0, pending: [] as { promise: Promise<unknown> }[] }))
-vi.mock('@/shared/messages', () => ({
+// Only the asking is faked: the listening is the real one (`onMessages`), fed through the fake browser
+vi.mock('@/shared/messages', async importOriginal => ({
+  ...await importOriginal<typeof import('@/shared/messages')>(),
   sendMessage: async () => {
     wire.asked++
     // An answer the test holds back, handed out in the order the asks were made
@@ -37,6 +39,9 @@ beforeEach(() => {
   wire.asked = 0
   wire.pending = []
 })
+
+/** The background's push, delivered as the browser delivers a message: with a sender and a way to answer */
+const push = (message: unknown) => (fakeBrowser.runtime.onMessage.trigger as unknown as (...args: unknown[]) => Promise<unknown>)(message, {}, () => undefined)
 
 describe('watchEntrySettings', () => {
   it('tells the settings once at the start, and again when either storage key changes', async () => {
@@ -90,7 +95,7 @@ describe('watchEntrySettings', () => {
     const stale = deferredAnswer()
     wire.pending = [stale]
     await fakeBrowser.storage.local.set({ config: { version: 1 } })
-    await (fakeBrowser.runtime.onMessage.trigger as unknown as (message: unknown) => Promise<unknown>)({ type: 'axt:zoom-changed', zoom: 3 })
+    await push({ type: 'axt:zoom-changed', zoom: 3 })
     stale.resolve({ ...SETTINGS, zoom: 1 })
     await settle()
     expect(seen.at(-1)?.zoom).toBe(3)
@@ -105,7 +110,7 @@ describe('watchEntrySettings', () => {
     const { watchEntrySettings } = await fresh()
     const seen: EntrySettings[] = []
     const started = watchEntrySettings(s => seen.push(s))
-    await (fakeBrowser.runtime.onMessage.trigger as unknown as (message: unknown) => Promise<unknown>)({ type: 'axt:zoom-changed', zoom: 1.5 })
+    await push({ type: 'axt:zoom-changed', zoom: 1.5 })
     first.resolve(SETTINGS)
     expect(await started).toEqual({ ...SETTINGS, zoom: 1.5 })
     expect(seen.at(-1)).toEqual({ ...SETTINGS, zoom: 1.5 })
@@ -119,7 +124,7 @@ describe('watchEntrySettings', () => {
     await watchEntrySettings(s => second.push(s.zoom))
     expect(wire.asked).toBe(1)
     // fake-browser types `trigger` with the listener's full signature; a background's push carries the message alone
-    await (fakeBrowser.runtime.onMessage.trigger as unknown as (message: unknown) => Promise<unknown>)({ type: 'axt:zoom-changed', zoom: 2 })
+    await push({ type: 'axt:zoom-changed', zoom: 2 })
     expect([first, second]).toEqual([[1.25, 2], [1.25, 2]])
   })
 })

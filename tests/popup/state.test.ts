@@ -5,7 +5,7 @@ import { getConfig, setConfig } from '@/config/storage'
 import { type PopupHost, createPopupState } from '@/entrypoints/popup/state'
 import { MANAGE_SERVICES, MANAGE_STYLES } from '@/entrypoints/popup/view-model'
 import type { ProviderStatus } from '@/providers/transport'
-import type { AxtMessage, PageStatus } from '@/shared/messages'
+import { type AxtMessage, type PageStatus, answerMessages } from '@/shared/messages'
 import type { PackState } from '@/shared/pack'
 import { applyLocaleFrom } from '@/ui/apply-locale'
 
@@ -64,7 +64,12 @@ function world() {
       if (message.type === 'axt:helper-status') return w.helper
       return undefined
     }) as PopupHost['toBackground'],
-    onBroadcast: listener => { w.broadcast = listener; return () => { w.broadcast = () => undefined } },
+    // The real listener over the popup's handlers, so a broadcast is decoded as the browser's would be
+    onBroadcast: handlers => {
+      const listen = answerMessages(handlers)
+      w.broadcast = message => void listen(message, {}, () => undefined)
+      return () => { w.broadcast = () => undefined }
+    },
     openTab: async url => { w.opened.push(url) },
     openOptionsPage: () => { w.optionsPages++ },
     url: path => `ext://${path}`,

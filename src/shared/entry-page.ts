@@ -3,7 +3,7 @@
 //
 // The navigation happens **here, in the page**: `location.assign` needs no permission, while a popup that navigated
 // the tab itself would need one. The reader's click therefore does exactly what following the in-page entry does.
-import { replyWith, type EntryStatus } from '@/shared/messages'
+import { onMessages } from '@/shared/messages'
 
 export interface EntryPage {
   /** This page's paper id, or null when the path is not a paper's */
@@ -19,21 +19,16 @@ export interface EntryPage {
  * reading twice costs one selector and removes a class of staleness.
  */
 export function answerEntryMessages(page: EntryPage): void {
-  browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-    const type = (message as { type?: string } | null)?.type
-    if (type === 'axt:entry-status') {
+  onMessages({
+    // A path that is not a paper's has nothing to say, and says nothing
+    'axt:entry-status': () => {
       const paper = page.paper()
-      if (paper === null) return undefined
-      const status: EntryStatus = { paper, html: page.html() }
-      replyWith(Promise.resolve(status), sendResponse)
-      return true
-    }
-    if (type === 'axt:open-html') {
+      return paper === null ? undefined : Promise.resolve({ paper, html: page.html() })
+    },
+    'axt:open-html': async () => {
       const href = page.html()
       if (href !== null) location.assign(href)
-      replyWith(Promise.resolve({ opened: href !== null }), sendResponse)
-      return true
-    }
-    return undefined
+      return { opened: href !== null }
+    },
   })
 }
