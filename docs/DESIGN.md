@@ -501,6 +501,8 @@ When the pointer rests on a sentence of the original or the translation, **both 
 
 The providers' `fetch`, the engine chain, the queues and the cache all live in the service worker. The content script's translation traffic is messages (§4.5), and the settings page's "connect" (save, then one test translation naming the chosen service) and page translation go through the same `TranslationTransport`, so "the test passes and the translation fails" cannot happen (issue #42).
 
+What the worker answers is a table of handlers by message type (`background/handlers.ts`), each holding the rule of its message, with what it needs of the worker passed in by `background/index.ts`. The table sits behind the one listener that knows how to answer (`answerMessages`, `shared/messages.ts`): a message without a handler passes by, a promise keeps the channel open, and its rejection settles the sender's request as a failure.
+
 **Why, measured** (2026-09-05/06, a probe extension against two local endpoints identical except for CORS headers, and against a live arXiv page):
 
 | Where the request runs | Endpoint with CORS headers | Endpoint without | What the server sees |

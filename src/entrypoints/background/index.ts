@@ -2,15 +2,14 @@ import { cachePortOf, translationCache } from '@/cache'
 import { getConfig, watchConfig } from '@/config/storage'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport } from '@/providers/transport'
-import { toErrorInfo } from '@/providers/translate-service'
-import { type AxtMessage, isAxtMessage, replyWith, sendToTab } from '@/shared/messages'
+import { type AxtMessage, answerMessages, sendToTab } from '@/shared/messages'
 import { HELPER_HOST, type HelperStatus } from '@/shared/ocr'
 import { createChainHolder } from './chain'
-import { engineReady } from './engine-ready'
+import { createHandlers } from './handlers'
 import { createHelperClient } from './helper'
 import { createHelperWaiter } from './helper-await'
 import { createHelperRestart } from './helper-restart'
-import { createConfigOffers, providerStatus, statusInForce } from './provider-status'
+import { createConfigOffers, statusInForce } from './provider-status'
 import { createOcrService } from './ocr'
 import { createSessionRouter } from './sessions'
 import { installContextMenu, refreshContextMenu, installToggleCommand, toggleTranslation } from './context-menu'
@@ -19,11 +18,10 @@ import { applyLocaleFrom, resolveLocale } from '@/ui/apply-locale'
 import { setLocale } from '@/ui/strings'
 import { savedFromStatus } from '@/shared/page-action'
 import { BUILD_REF } from '@/shared/build'
-import { failureLine } from '@/shared/diagnostics'
 import { createDiagnostics } from './diagnostics'
 
-// The background: message routing + the engine chain + the queues + the cache (DESIGN §8.0). WXT ≥0.20 ships no
-// polyfill, so an asynchronous response needs sendResponse + return true.
+// The background: the engine chain, the queues, the cache and the helper, wired together (DESIGN §8.0); what it
+// answers is the table in ./handlers.ts.
 export default defineBackground(() => {
   const cache = cachePortOf(translationCache)
   /** Scopes ended for certain — one registry (DESIGN §8.5): the session router writes it, the chain's services and OCR read it */
@@ -266,123 +264,28 @@ export default defineBackground(() => {
   }
   browser.tabs.onUpdated.addListener(onTabUpdated)
 
-  browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (!isAxtMessage(message)) return
-    switch (message.type) {
-      case 'axt:translate':
-        // A failed chain build (a provider constructor throwing) is answered honestly too: unanswered, the caller waits for “message channel closed”
-        router.forCall(message.scope, sender.tab?.id)
-          .then(t => t.translate(message))
-          .catch((e: unknown) => {
-            const error = toErrorInfo(e)
-            diag(`[axt] translate call failed before any request: ${failureLine(error.kind, error.message)}`)
-            return { ok: false as const, error }
-          })
-          .then(sendResponse)
-        return true
-      case 'axt:cancel-scope':
-        router.drop([message.scope])
-          .catch(() => 0)
-          .then(cancelled => sendResponse({ cancelled }))
-        return true
-      case 'axt:provider-status':
-        // A session's own chain, the chain in force, or — after a save — one built from what is stored now
-        // A failure (a build that failed, the status deadline) is replied, not only logged: the page that asked
-        // must see its request settle
-        replyWith(providerStatus({ chain, router, offers }, message, sender.tab?.id), sendResponse)
-        return true
-      case 'axt:engine-ready':
-        // Rebuild and move whom the sender says (./engine-ready.ts): a downloaded language pack moves one tab, a
-        // deleted service moves everyone and retires its chain — the movers act on the chain in force
-        replyWith(engineReady(chain, router, message), sendResponse)
-        return true
-      // With IndexedDB unavailable an answer still goes back, or the caller waits for “message channel closed” (Codex on #7)
-      case 'axt:cache-clear':
-        // A failure is reported as it is: swallowing the exception into { removed: 0 } would let the reader believe the cache cleared when IndexedDB is unusable (Codex on #52)
-        translationCache.clear()
-          .then(removed => sendResponse({ ok: true, removed }))
-          .catch((e: unknown) => sendResponse({ ok: false, message: e instanceof Error ? e.message : String(e) }))
-        return true
-      case 'axt:helper-status':
-        replyWith(ocr.status(message.recheck ? { recheck: true } : undefined).then(status => {
-          // A re-probe that finds it has to reach the papers already open, which parked their
-          // bitmaps when the probe at their session start found nothing (Codex on #161)
-          if (message.recheck && status.state === 'ready') void tellTabs({ type: 'axt:helper-ready' })
-          // Granted a moment ago into this running worker: arrange the fresh one (DESIGN §15.3)
-          helperRestart.noticed(status)
-          return status
-        }), sendResponse)
-        return true
-      case 'axt:helper-await':
-        // One message, two uses: with start it is “copied, start waiting”, without it “still waiting?” — the popup is
-        // destroyed on losing focus and picks the same wait up again with the latter on reopening (DESIGN §15.4)
-        if (message.start) {
-          replyWith(helperWaiter.start().then(() => ({ until: helperWaiter.until() })), sendResponse)
-          return true
-        }
-        replyWith(helperRestored.then(() => ({ until: helperWaiter.until() })), sendResponse)
-        return true
-      case 'axt:ocr':
-        // The scope is bound to the sender's tab first: this may be the tab's first message carrying a scope, and unbound,
-        // dropTab could not withdraw the queued recognition when the tab closes. The association only, no chain: OCR must not wait for the translation chain to build (Codex on #87, two rounds)
-        if (message.scope) router.bind(message.scope, sender.tab?.id)
-        ocr.ocr(message)
-          .catch((e: unknown) => ({ ok: false as const, error: { kind: 'unknown' as const, message: e instanceof Error ? e.message : String(e) } }))
-          .then(sendResponse)
-        return true
-      case 'axt:toggle': {
-        // The floating button on the full text (§4.0c): the same toggle as the key and the menu, for the tab that asked
-        const tab = sender.tab
-        if (tab?.id === undefined) return
-        replyWith(toggleTranslation({ send: sendToTab, saved }, tab.id).then(acted => ({ acted })), sendResponse)
-        return true
-      }
-      case 'axt:entry-settings': {
-        // What a page needs of the settings (shared/entry-settings.ts): the configuration as this build reads it —
-        // the defaults, when it cannot — never the raw stored value; the tab's zoom is the browser's to know
-        const tabId = sender.tab?.id
-        replyWith(
-          Promise.all([
-            getConfig(),
-            getFloatingEntry(),
-            tabId === undefined ? 1 : browser.tabs.getZoom(tabId).catch(() => 1),
-          ]).then(([config, floating, zoom]) => ({ uiLanguage: config.uiLanguage, openIn: config.reading.openIn, zoom, floating })),
-          sendResponse,
-        )
-        return true
-      }
-      case 'axt:open-settings':
-        // A content script cannot open the settings page itself; `openOptionsPage` brings an open one to the front
-        replyWith(browser.runtime.openOptionsPage().then(() => ({ opened: true })).catch(() => ({ opened: false })), sendResponse)
-        return true
-      case 'axt:set-floating-entry':
-        // The floating button's state has one writer, this one, under a key of its own (background/floating-entry.ts)
-        replyWith(patchFloatingEntry(message.patch), sendResponse)
-        return true
-      case 'axt:diag':
-        // Only our own contexts can reach runtime.onMessage (no externally_connectable), still the shape is checked:
-        // a line is a string, the source one of the pages'; the ring's cap and the coalesced save bound the rest (Devin on #214)
-        if (typeof message.line === 'string' && (message.src === 'content' || message.src === 'popup' || message.src === 'options')) diagnostics.record(message.src, message.line)
-        return false
-      case 'axt:diag-export':
-        // The environment a reader cannot be expected to report: the build, the browser, the platform
-        replyWith(Promise.all([diagnostics.restored, browser.runtime.getPlatformInfo().catch(() => ({ os: 'unknown' }))]).then(([, info]) =>
-          diagnostics.export({
-            extension: { version: browser.runtime.getManifest().version, buildRef: BUILD_REF },
-            browser: navigator.userAgent,
-            platform: info.os,
-          }),
-        ), sendResponse)
-        return true
-      case 'axt:cache-stats':
-        // The same protocol as cache-clear: a failure is reported as it is, and “IndexedDB unusable” must not show as “the
-        // cache is empty”. Expired entries are cleaned before counting — `get()` only treats them as misses and never
-        // deletes, and uncleaned the page would keep showing a heap of unusable counts and bytes; this is also cleanup()'s only call site at run time (Codex on #52)
-        translationCache.cleanup()
-          .then(() => translationCache.stats())
-          .then(stats => sendResponse({ ok: true, ...stats }))
-          .catch((e: unknown) => sendResponse({ ok: false, message: e instanceof Error ? e.message : String(e) }))
-        return true
-    }
-  })
+  // What this worker answers (./handlers.ts), behind the one listener that knows how to answer (shared/messages.ts)
+  browser.runtime.onMessage.addListener(answerMessages(createHandlers({
+    chain,
+    router,
+    offers,
+    ocr,
+    helperWaiter,
+    helperRestored,
+    helperRestart,
+    tellTabs: message => void tellTabs(message),
+    diagnostics,
+    cache: translationCache,
+    toggle: tabId => toggleTranslation({ send: sendToTab, saved }, tabId),
+    getConfig,
+    getFloatingEntry,
+    patchFloatingEntry,
+    zoomOf: tabId => browser.tabs.getZoom(tabId),
+    openSettings: () => browser.runtime.openOptionsPage(),
+    environment: async () => ({
+      extension: { version: browser.runtime.getManifest().version, buildRef: BUILD_REF },
+      browser: navigator.userAgent,
+      platform: (await browser.runtime.getPlatformInfo().catch(() => ({ os: 'unknown' }))).os,
+    }),
+  })))
 })
