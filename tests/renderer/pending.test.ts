@@ -7,7 +7,10 @@ import { clearAllPending, renderPending } from '@/core/renderer/pending'
 import { renderFailed } from '@/core/renderer/failed'
 import { SKELETON_CLASS, activeSkeletonAnimations } from '@/core/renderer/skeleton'
 import { clearTranslation, renderText } from '@/core/renderer/translation'
-import { docOf, frag } from './helpers'
+import { docOfChecked, frag } from './helpers'
+
+// Every document a case renders into is held to the tail mark's invariant afterwards (helpers.ts)
+const docOf = docOfChecked()
 
 /** The translations the tests fill in */
 const ZH = { text: '文本。', heading: '引言', row: '其中平均曲率为', old: '旧。', fresh: '新。' }

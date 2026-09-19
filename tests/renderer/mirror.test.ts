@@ -7,7 +7,10 @@ import { createMirrors } from '@/core/renderer/mirror'
 import { restore } from '@/core/renderer/page'
 import { renderText } from '@/core/renderer/translation'
 import { IMG_CLASS } from '@/core/marks'
-import { docOf, frag } from './helpers'
+import { docOfChecked, frag } from './helpers'
+
+// Every document a case renders into is held to the tail mark's invariant afterwards (helpers.ts)
+const docOf = docOfChecked()
 
 /** Build the shape “some container already holds a translation”, so the container check applies */
 const withTranslation = (body: string) => {
@@ -125,7 +128,8 @@ describe('createMirrors', () => {
 
   it('no mirrors inside a stacked area: there is no right column there, and a mirror would only duplicate within the same column', () => {
     // The panels of a multi-panel figure (measured on 2312.17141: every panel's formula was copied, the content twice on the page)
-    const doc = docOf(`
+    // Hand-built: the translations are written into the HTML, so no renderer kept their originals' tail marks
+    const doc = docOf.handBuilt(`
       <div class="ltx_para"><p class="ltx_p">x</p><p class="ltx_p ${T_CLASS}" data-axt-for="1">译</p></div>
       <figure class="ltx_figure"><div class="ltx_flex_figure"><div class="ltx_flex_cell">
         <figure class="ltx_figure ltx_figure_panel">
@@ -140,7 +144,8 @@ describe('createMirrors', () => {
 
   it('margin notes floated to the page edge and publication metadata are not mirrored: only a duplicate would come of it', () => {
     // Measured on 2312.17141: the DOI / journal / CCS block was mirrored in two, and the floated content of the left copy pressed on the right column
-    const doc = docOf(`
+    // Hand-built, like the case above: the translation is written into the HTML
+    const doc = docOf.handBuilt(`
       <span class="ltx_pubnotes ltx_pubnotes_meta"><span class="ltx_pubnotes_content">DOI: x</span></span>
       <div class="ltx_para"><p class="ltx_p">x</p><p class="ltx_p ${T_CLASS}" data-axt-for="1">译</p></div>`)
     createMirrors(doc)

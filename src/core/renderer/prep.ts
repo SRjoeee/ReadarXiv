@@ -19,24 +19,34 @@
 import { ID_ATTR } from '@/core/extractor'
 import { DOCUMENT_ROOT } from '@/core/rules/latexml'
 import { createCoalescer, type Coalescer } from '@/core/scheduler/coalesce'
-import { applyMarginNotes, planMarginNotes } from './margin-notes'
+import { applyMarginNotes, clearMarginNotes, planMarginNotes } from './margin-notes'
 import { createMirrors } from './mirror'
 import { localizeNotes } from './notes'
-import { readPairMargins, writePairMargins, type PairMarginPlan } from './pair-margins'
-import { dropStaleSplits, outermostFigure, splitFigures } from './split-figures'
+import { clearPairMargins, readPairMargins, writePairMargins, type PairMarginPlan } from './pair-margins'
+import { dropStaleSplits, outermostFigure, setSplitDuplicatesHidden, splitFigures } from './split-figures'
 import { fitTables, measureColumn, resetFitCache, watchFontLoads } from './table-fit'
 
 export interface Prep {
   /** These blocks (or image targets, §15) just touched the DOM: schedule a pass tidying only their containers */
   touch(items: ReadonlyArray<{ el: Element }>): void
-  /** Schedule a full pass (entering side, the column width changed, a session started) */
-  touchAll(): void
-  /** Cancel the scheduled pass (leaving side) */
-  cancel(): void
-  /** A session starts or ends: the mirrors may run once more, the width cache is cleared, the column width is re-read, and the font subscription is dropped until the next touch */
+  /**
+   * The mode in effect is side, or no longer is — told at every change of it, and when a session starts in it.
+   * What side needs beyond the passes is the tidy layer's to know, not its caller's:
+   *
+   * - **Entering**: the column width is re-read and one full pass runs (coming back from stack / only, the alignment
+   *   margins were cleared and have to be computed afresh), and the root's width is watched from here on — the
+   *   column follows the window, and the zoom ratios with it. Only a width that really changed counts: scaling a
+   *   table makes the watched root report a size change itself, and without that gate the two would oscillate.
+   * - **Leaving**: the queued pass is withdrawn, the watch ends, and what the passes wrote **inline** is taken back —
+   *   the alignment margins and the margin-note offsets serve the two columns only, and in the other modes the
+   *   site's own margins and the floats' own heights are right. What a pass wrote as a `data-axt-*` mark needs no
+   *   undoing: the style sheet reads those under side alone.
+   * - **Either way** the split copies' duplicated media speak only where the original does not (§7.4b, issue #170):
+   *   `aria-hidden` is an attribute, and no style sheet can switch it.
+   */
+  side(on: boolean): void
+  /** A session starts or ends: the mirrors may run once more, the width cache is cleared, the column width is re-read, and the font subscription and the width watch are dropped — until the next touch, the next `side(true)` */
   reset(): void
-  /** The column width may have changed (window resized): re-read at the start of the next pass */
-  refreshColumn(): void
 }
 
 export interface PrepOptions {
@@ -47,6 +57,8 @@ export interface PrepOptions {
   retry?: (blockId: string) => void
   /** Test injection: the column width */
   columnWidth?: (root: Element) => number
+  /** Test injection: watch an element's width, returning the way to stop; a `ResizeObserver` when absent */
+  watchWidth?: (root: Element, onWidth: (width: number) => void) => () => void
   delay?: number
   maxWait?: number
 }
@@ -74,6 +86,14 @@ export function rootsOf(blocks: Iterable<Element>): Element[] {
 
 export function createPrep(doc: Document, options: PrepOptions): Prep {
   const columnWidth = options.columnWidth ?? measureColumn
+  const watchWidth = options.watchWidth ?? ((root: Element, onWidth: (width: number) => void) => {
+    if (typeof ResizeObserver !== 'function') return () => undefined
+    const observer = new ResizeObserver(entries => onWidth(Math.round(entries[0]?.contentRect.width ?? 0)))
+    observer.observe(root)
+    return () => observer.disconnect()
+  })
+  /** The way to stop watching the root's width; null while it is not watched */
+  let unwatchWidth: (() => void) | null = null
   let mirrorsDone = false
   let columnStale = true
   let column = 0
@@ -174,25 +194,43 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
       watchFonts()
       for (const item of items) coalescer.schedule(item.el)
     },
-    touchAll() {
-      watchFonts()
-      coalescer.schedule()
-    },
-    cancel() {
-      coalescer.cancel()
-      restack.cancel()
+    side(on) {
+      setSplitDuplicatesHidden(doc, on)
+      if (!on) {
+        unwatchWidth?.()
+        unwatchWidth = null
+        coalescer.cancel()
+        restack.cancel()
+        clearPairMargins(doc)
+        clearMarginNotes(doc)
+        return
+      }
+      const fullPass = () => {
+        columnStale = true
+        watchFonts()
+        coalescer.schedule()
+      }
+      fullPass()
+      if (unwatchWidth) return
+      const root = doc.querySelector(DOCUMENT_ROOT)
+      if (!root) return
+      let lastWidth = 0
+      unwatchWidth = watchWidth(root, width => {
+        if (width === lastWidth) return
+        lastWidth = width
+        fullPass()
+      })
     },
     reset() {
       coalescer.cancel()
       restack.cancel()
       unwatchFonts?.()
       unwatchFonts = null
+      unwatchWidth?.()
+      unwatchWidth = null
       mirrorsDone = false
       columnStale = true
       resetFitCache()
-    },
-    refreshColumn() {
-      columnStale = true
     },
   }
 }
