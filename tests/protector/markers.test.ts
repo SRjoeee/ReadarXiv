@@ -105,10 +105,13 @@ describe('a marker that touches a word is set apart from it on the wire', () => 
     expect(b.spaced.size).toBe(0)
   })
 
-  it('the spaces of an inline listing stay tight: the words around them are code, and apart from the marker they were translated', () => {
-    const b = wire('<p class="ltx_p">the observation <span class="ltx_text ltx_lstlisting"><span class="ltx_text ltx_lst_identifier">y</span><span class="ltx_text ltx_lst_space"> </span>==<span class="ltx_text ltx_lst_space"> </span>40</span> has</p>')
-    expect(b.text).toBe('the observation y@a#==@b#40 has')
-    expect(b.spaced.size).toBe(0)
+  it('an inline listing is one placeholder, code and all (the `lstinline` rule), and is set apart from a word like any other', () => {
+    const code = '<span class="ltx_text ltx_lstlisting"><span class="ltx_text ltx_lst_identifier">y</span><span class="ltx_text ltx_lst_space"> </span>==<span class="ltx_text ltx_lst_space"> </span>40</span>'
+    const b = wire(`<p class="ltx_p">the observation ${code} has probability zero, as does non${code}</p>`)
+    expect(b.text).toBe('the observation @a# has probability zero, as does non @b#')
+    expect(b.slots.size).toBe(2)
+    // Filled back, the code is the paper's, space for space
+    expect(htmlOf(rehydrate(`${ZH.plain[0]} @a# ${ZH.plain[1]} @b#`, b, document))).toContain(`<span class="ltx_text ltx_lst_identifier">y</span><span class="ltx_text ltx_lst_space"> </span>==`)
   })
 
   it('the wire\'s space stands for no character of the page: offsets on either side of it land on the text\'s own edge', () => {
