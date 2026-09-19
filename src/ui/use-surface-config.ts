@@ -9,7 +9,7 @@ import { browserLanguages } from './apply-locale'
 import { localeInUse } from './strings'
 
 /** The stored interface language resolves to another pack than the one in use (chosen once, before the first paint) */
-const localeStale = (config: Config) => pickLocale(config.uiLanguage, browserLanguages()) !== localeInUse()
+export const localeStale = (config: Config) => pickLocale(config.uiLanguage, browserLanguages()) !== localeInUse()
 
 /** `deps` are read once, at the first render: what they call may change, the functions themselves must not need to */
 export function useSurfaceConfig(deps: Pick<SurfaceConfigDeps, 'holds' | 'onLanded'> = {}): { surface: SurfaceConfig; state: SurfaceConfigState } {
