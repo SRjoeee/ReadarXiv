@@ -30,6 +30,9 @@ importers:
       '@axe-core/playwright':
         specifier: ^4.13.0
         version: 4.13.0(playwright-core@1.63.0)
+      '@babel/parser':
+        specifier: ^7.29.8
+        version: 7.29.8
       '@biomejs/biome':
         specifier: ^2.5.12
         version: 2.5.12
