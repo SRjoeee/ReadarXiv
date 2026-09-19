@@ -165,6 +165,20 @@ describe('a stored configuration this build cannot read', () => {
     s.stop()
   })
 
+  it('an accepted save proves the store readable: the line about a refused reset goes, whoever repaired it', async () => {
+    await unreadable()
+    const s = surface()
+    await until(() => s.made.state().config !== null)
+    s.stop() // repaired below without an event reaching this surface
+    vi.spyOn(fakeBrowser.storage.local, 'set').mockRejectedValueOnce(new Error('refused'))
+    await s.made.reset()
+    expect(s.made.state().resetFailed).toBe(true)
+    vi.restoreAllMocks()
+    await fakeBrowser.storage.local.set({ config: BASE, config$: { v: CONFIG_VERSION } })
+    await s.made.patch(latest => ({ ...latest, targetLanguage: 'jpn' }))
+    expect(s.made.state()).toMatchObject({ resetFailed: false, fallbackReason: null })
+  })
+
   it('a valid write elsewhere is the repair: the reason goes, and the line about a refused reset with it (Codex on #185)', async () => {
     await unreadable()
     const s = surface()

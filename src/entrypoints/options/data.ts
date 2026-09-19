@@ -1,22 +1,19 @@
-// The settings page's data layer: the stored config and the few statuses the page shows. Every
-// change is written straight away (there is no save button), always on top of what storage holds
-// now — the popup and the page it is translating write the same object (Codex on #39).
-import { useCallback, useEffect, useRef, useState } from 'react'
+// The settings page's data layer: the stored config and the few statuses the page shows. Every change is written
+// straight away (there is no save button). Reading, patching and following the configuration — and the reload an
+// interface language takes, which here waits for the page's drafts — is the surface configuration's
+// (shared/surface-config.ts); this adds the helper, the platform and the cache.
+import { useCallback, useEffect, useState } from 'react'
 import { browser } from 'wxt/browser'
-import { ConfigUnreadableError, type FallbackReason, configFallbackReason, getConfig, resetConfig, setConfig, watchConfig } from '@/config/storage'
-import { type Config, DEFAULT_CONFIG } from '@/config/schema'
+import { ConfigUnreadableError, type FallbackReason, getConfig } from '@/config/storage'
+import type { Config } from '@/config/schema'
 import { sendMessage } from '@/shared/messages'
 import type { HelperStatus } from '@/shared/ocr'
-import { type PackState, createPackLookup, downloadPack } from '@/shared/pack'
-import { localeInUse, S } from '@/ui/strings'
-import { pickLocale } from '@/locales'
-import { browserLanguages } from '@/ui/apply-locale'
+import { type PackState, downloadPack } from '@/shared/pack'
+import { S } from '@/ui/strings'
 import { drafts } from '@/ui/drafts'
+import { useSurfaceConfig } from '@/ui/use-surface-config'
 
 export interface CacheStats { entries: number; bytes: number }
-
-/** The stored interface language resolves to another pack than the one in use (chosen once, before the first paint) */
-const staleLocale = (c: Config) => pickLocale(c.uiLanguage, browserLanguages()) !== localeInUse()
 
 export interface OptionsData {
   config: Config | null
@@ -44,47 +41,13 @@ export interface OptionsData {
 }
 
 export function useOptionsData(): OptionsData {
-  const [config, setLocal] = useState<Config | null>(null)
-  const [fallbackReason, setFallbackReason] = useState<FallbackReason | null>(null)
-  const [resetFailed, setResetFailed] = useState(false)
-  const [pack, setPack] = useState<PackState | null>(null)
+  // A draft — a service being edited, a profile, a prompt — is local until its own save, and a reload would discard it
+  const { surface, state } = useSurfaceConfig({ holds: drafts })
   const [helper, setHelper] = useState<HelperStatus | null>(null)
   const [platform, setPlatform] = useState<'mac' | 'other' | null>(null)
   const [cache, setCache] = useState<CacheStats | null>(null)
   const [cacheError, setCacheError] = useState('')
   const [cacheCleared, setCacheCleared] = useState(false)
-  /** Every config write queues behind the previous one; see `patch` */
-  const writes = useRef<Promise<Config>>(Promise.resolve(DEFAULT_CONFIG))
-  /**
-   * The lookups' bookkeeping (shared/pack.ts): the committed configuration owns the wanted target — set where the
-   * configuration lands, and another target forgets the previous one's state at once, so the card never shows, and
-   * the popup never acts on, the old language's availability (Codex on #185) — only the newest lookup for it
-   * publishes, and none while its download is in flight
-   */
-  const [packs] = useState(() => createPackLookup({
-    publish: setPack,
-    // The popup may be open beside this page: tell it the download ended, as the helper's state is told
-    announce: target => void sendMessage({ type: 'axt:pack-changed', target }).catch(() => undefined),
-  }))
-  /**
-   * Apply the stored interface language the way this page's own change does — a reload — but not under a draft: a
-   * service being edited, a profile, a prompt is local until its own save, and the reload would discard it (local
-   * review). It waits for the last draft to close, then for the page's own writes: a draft's
-   * save is queued on the chain in the same breath as its editor closes, and a reload issued at once would cut it off
-   * before its read of the store came back — and it looks again after the wait, since a draft opened or a save queued
-   * meanwhile is owed the same. A second change while it waits adds nothing
-   */
-  const reloadDue = useRef(false)
-  const reload = useCallback(() => {
-    if (reloadDue.current) return
-    reloadDue.current = true
-    const settle = () => drafts.whenNone(() => {
-      const chain = writes.current
-      const after = () => { if (drafts.any() || writes.current !== chain) settle(); else location.reload() }
-      void chain.then(after, after)
-    })
-    settle()
-  }, [])
 
   const loadCache = useCallback(async () => {
     try {
@@ -99,41 +62,6 @@ export function useOptionsData(): OptionsData {
   }, [])
 
   useEffect(() => {
-    // Queued on the write chain with the watcher reloads that follow: a slow first read must not land after one of
-    // them showed newer settings (local review)
-    const init = async () => {
-      const c = await getConfig()
-      // A change landing between the locale's read (main.tsx) and this one would otherwise show its settings in the
-      // labels of the previous language (Codex on #185)
-      if (staleLocale(c)) reload()
-      packs.want(c.targetLanguage)
-      setLocal(c)
-      setFallbackReason(configFallbackReason())
-      void packs.check(c.targetLanguage)
-      return c
-    }
-    writes.current = writes.current.then(init, init)
-    // A change saved elsewhere — the popup, another settings tab — shows here without a reload. The
-    // store is re-read on the same serialized chain the page's own writes use, not taken from the event: events
-    // carry no order, and one for an earlier write can arrive after a later write was already shown (#182)
-    const unwatch = watchConfig(() => {
-      const follow = async () => {
-        const stored = await getConfig()
-        // The interface language is chosen once before the page renders (main.tsx): a stored choice that resolves to
-        // another pack takes the same way this page's own change does — a reload, deferred under a draft. Compared
-        // with the locale in use, not with a recorded value (Codex on #185). The settings below follow meanwhile
-        if (staleLocale(stored)) reload()
-        packs.want(stored.targetLanguage)
-        setLocal(stored)
-        // A valid write elsewhere is the repair of a configuration this page had to fall back from (Codex on #185); the
-        // line about a refused reset goes with it, or it would come back with the next fallback nobody reset
-        setFallbackReason(configFallbackReason())
-        if (configFallbackReason() === null) setResetFailed(false)
-        void packs.check(stored.targetLanguage)
-        return stored
-      }
-      writes.current = writes.current.then(follow, follow)
-    })
     // `recheck` on every open of a page: the reader may have installed the helper since the worker
     // last looked, and it remembers a missing host for its whole life. Chrome fails a connect to an
     // absent host without spawning anything, so asking again costs nothing
@@ -145,7 +73,7 @@ export function useOptionsData(): OptionsData {
       const m = message as { type?: string; status?: HelperStatus; target?: string } | null
       if (m?.type === 'axt:helper-state' && m.status) setHelper(m.status)
       // A pack downloaded from the popup: the Chrome card here must not keep offering the download
-      if (m?.type === 'axt:pack-changed' && m.target) packs.receive(m.target)
+      if (m?.type === 'axt:pack-changed' && m.target) surface.receivePack(m.target)
     }
     browser.runtime.onMessage.addListener(onHelperState)
     void loadCache()
@@ -154,80 +82,34 @@ export function useOptionsData(): OptionsData {
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
     return () => {
-      unwatch()
       browser.runtime.onMessage.removeListener(onHelperState)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
     }
-  }, [loadCache, packs, reload])
+  }, [loadCache, surface])
 
   /**
-   * **Serialized**: each call reads storage, applies one change and writes it back, so two controls
-   * changed before the first write lands would otherwise both read the same snapshot and the later
-   * write would drop the earlier change — dragging a slider produces exactly that overlap
-   * (Codex on #157)
+   * A refused write (the stored value cannot be read) is no error on this page: the notice above the sections says
+   * why and offers the reset, and the caller gets what is in effect. The sections are not rendered in this state
+   * (App.tsx), so this is the race only — the stored value turned unreadable while a section was open
    */
-  const patch = useCallback((fn: (latest: Config) => Config): Promise<Config> => {
-    // `then(run, run)`: a write that throws must not poison the chain — every later change would
-    // be skipped and the page would silently stop saving
-    const run = async () => {
-      const latest = await getConfig()
-      const next = fn(latest)
-      try {
-        await setConfig(next)
-      } catch (e) {
-        if (!(e instanceof ConfigUnreadableError)) throw e
-        // Refused, storage as it was (config/storage.ts): the page goes on showing what is in effect, under the
-        // notice that says why and offers the reset. The sections are not rendered in this state (App.tsx), so
-        // this is the race only — the stored value turned unreadable while a section was open
-        setLocal(latest)
-        setFallbackReason(e.reason)
-        return latest
-      }
-      packs.want(next.targetLanguage)
-      setLocal(next)
-      // An accepted write proves the stored value readable: a notice still up is from before a repair made elsewhere
-      setFallbackReason(null)
-      setResetFailed(false)
-      return next
-    }
-    writes.current = writes.current.then(run, run)
-    return writes.current
-  }, [packs])
-
-  /** S-O-02's way out, on the same chain as every other write: the defaults replace what could not be read */
-  const reset = useCallback((): Promise<Config> => {
-    const run = async () => {
-      try {
-        await resetConfig()
-      } catch {
-        // Storage refused the write (IO, quota): the notice stays, and says the reset did not go through — a click
-        // that changes nothing and says nothing reads as a button that does not work
-        setResetFailed(true)
-        return getConfig()
-      }
-      setResetFailed(false)
-      const next = await getConfig()
-      packs.want(next.targetLanguage)
-      setLocal(next)
-      setFallbackReason(configFallbackReason())
-      return next
-    }
-    writes.current = writes.current.then(run, run)
-    return writes.current
-  }, [packs])
+  const patch = useCallback((fn: (latest: Config) => Config): Promise<Config> => surface.patch(fn).catch(e => {
+    const inEffect = surface.state().config
+    if (e instanceof ConfigUnreadableError && inEffect) return inEffect
+    throw e
+  }), [surface])
 
   /** From the click itself (shared/pack.ts says why); the row shows an indeterminate state meanwhile */
   const fetchPack = useCallback(async () => {
     const target = (await getConfig()).targetLanguage
-    await packs.download(target, async downloaded => {
+    await surface.downloadPack(target, async downloaded => {
       await downloadPack(downloaded)
       // The chain lives in background (§8.0): have it rebuild one with the now-usable offline
       // service. No session is moved — this page promised nothing about any tab, and a page
       // translating into another language must keep the chain it started on (Codex on #157)
       await sendMessage({ type: 'axt:engine-ready', id: 'chrome-builtin' }).catch(() => undefined)
     })
-  }, [packs])
+  }, [surface])
 
   const clearCache = useCallback(async () => {
     const res = await sendMessage({ type: 'axt:cache-clear' })
@@ -237,5 +119,5 @@ export function useOptionsData(): OptionsData {
     await loadCache()
   }, [loadCache])
 
-  return { config, fallbackReason, patch, reset, resetFailed, pack, checkPack: packs.check, fetchPack, helper, setHelper, platform, cache, cacheError, clearCache, cacheCleared }
+  return { config: state.config, fallbackReason: state.fallbackReason, patch, reset: surface.reset, resetFailed: state.resetFailed, pack: state.pack, checkPack: surface.checkPack, fetchPack, helper, setHelper, platform, cache, cacheError, clearCache, cacheCleared }
 }
