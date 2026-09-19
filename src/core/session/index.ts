@@ -90,19 +90,61 @@ export interface PageSession {
   status(): Promise<PageStatus>
 }
 
+/**
+ * One round of image translation (§15): what `startImages` creates. The settings can switch image translation within a
+ * session, and the round is then replaced whole — nothing of the previous one stays reachable
+ */
+interface ImageRound {
+  run: ImageRun
+  targets: ImageTarget[]
+  progress(): ImageProgress | null
+  /** The helper became available: release this round's parked bitmaps. False when there was nothing to release */
+  resume(): boolean
+}
+
+/**
+ * What one start creates, ended as one (`endLive`). It used to be fifteen variables reset by four lists, which had
+ * begun to differ; a callback of a session is alive while the record it closed over is the one in force
+ */
+interface LiveSession {
+  /** The session id: the cancellation scope of every request it makes (DESIGN §10) */
+  id: string
+  /** The start-time inputs, for the parts a settings change can restart on their own (images) */
+  config: Config
+  context: TranslateContext
+  renderPath: RenderPath
+  /** What the session runs on (PageStatus.running) */
+  running: NonNullable<PageStatus['running']>
+  /**
+   * Whether this session has already been restarted by a permanent hand-over. **One per session**: kept across
+   * sessions it would suppress the restart a later service needs when that one hands over to the same engine
+   * (Codex on #157), and unbounded within a session it could chase a chain down step by step
+   */
+  restarted: boolean
+  /** The mode in effect is the controller's call by viewport (§7.2); the preference the reader switches to on this page */
+  modes: ModeController
+  /** The teardown of the in-page anchor fallback (issue #44) */
+  uninstallAnchors: () => void
+  /** The hover highlight (§7.7); with the setting off no listener is attached at all */
+  highlight: SentenceHighlight | null
+  // Null while the record is being built: a run may call back as it starts, and the record has to be in force by then
+  run: TranslationRun | null
+  title: TitleTranslator | null
+  images: ImageRound | null
+}
+
 export function createPageSession(deps: SessionDeps): PageSession {
   const { doc, blocks, paper, backend } = deps
   const trace = deps.trace ?? (() => undefined)
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
 
-  // The mode: the preference lives in the configuration, and the one in effect is the ModeController's call by
-  // viewport (§7.2). No controller before a translation starts, so no data-axt-mode is written onto an untranslated
-  // page; until then the popup sees the configured preference.
-  let modes: ModeController | null = null
-  /** The teardown of the in-page anchor fallback (issue #44): attached when a session starts, removed on restore */
-  let uninstallAnchors: (() => void) | null = null
-  /** The hover highlight (§7.7): starts and stops with a translation session; with the setting off no listener is attached at all */
-  let highlight: SentenceHighlight | null = null
+  /**
+   * The session in force; null on a page that shows no translation. It stays after a fatal error stopped its run —
+   * the translations are still on the page, and the mode still switches — until the next start or a restore.
+   * No record, no mode controller: no data-axt-mode is written onto an untranslated page, and the popup sees the
+   * configured preference
+   */
+  let live: LiveSession | null = null
   /**
    * The mode the reader saved. **A status request waits for it to come back**: the popup stops retrying the moment
    * it gets a non-empty status, so any guess before then may pin the mode bar on the wrong stop — a reader who
@@ -114,8 +156,6 @@ export function createPageSession(deps: SessionDeps): PageSession {
   const modeSaves = createSerialQueue()
   let configRead: () => void = () => undefined
   const ready = new Promise<void>(resolve => { configRead = resolve })
-  /** Set by startImages: once the recognition helper is installed later, the parked bitmaps of this page are released */
-  let resumeRaster: () => boolean = () => false
   /** The translation's appearance (§7.5): the style and highlight profiles the reader chose, written as attributes and variables on <html> */
   let look: Look = lookOf(DEFAULT_CONFIG)
   /**
@@ -145,26 +185,6 @@ export function createPageSession(deps: SessionDeps): PageSession {
     .catch(e => trace(`configuration read failed (${e instanceof Error ? e.name : typeof e}), answering with the defaults for now`))
     .finally(() => configRead())
 
-  let run: TranslationRun | null = null
-  let title: TitleTranslator | null = null
-  /** Image translation (§15): only with the helper available and at least one mode ticked in the settings */
-  let images: ImageRun | null = null
-  /** The image targets of the running session; `translateImages()` hands them all over by default */
-  let imageTargets: ImageTarget[] = []
-  let imageProgress: ImageProgress | null = null
-  /** What the session runs on (PageStatus.running); null outside a session */
-  let running: NonNullable<PageStatus['running']> | null = null
-  /** The session's start-time inputs, for the parts a settings change can restart on their own (images) */
-  let current: { session: string; config: Config; context: TranslateContext; renderPath: RenderPath } | null = null
-  /**
-   * Whether this session has already been restarted by a permanent hand-over. **One per session,
-   * and reset by every `start()`**: kept across sessions it would suppress the restart a later
-   * service needs when that one hands over to the same engine (Codex on #157), and unbounded
-   * within a session it could chase a chain down step by step
-   */
-  let restarted = false
-  /** The current session's id; null outside a session. Every callback of a run closes over its own copy */
-  let active: string | null = null
   /**
    * The page's action epoch (PageStatus.epoch): every start that commits and every restore moves the counter, and
    * the document's own id keeps a command decided on another document — the same tab before a reload — from
@@ -182,22 +202,24 @@ export function createPageSession(deps: SessionDeps): PageSession {
     if (moved) deps.onState?.(next.state)
   }
 
-  /** End the current session: disconnect the observers, remove the pending nodes, withdraw the queued and in-flight requests; the translations on the page stay */
-  function endRun(): void {
-    highlight?.stop()
-    highlight = null
-    title?.stop()
-    title = null
-    run?.stop()
-    run = null
-    images?.stop()
-    images = null
-    imageTargets = []
-    imageProgress = null
-    const session = active
-    active = null
+  /**
+   * End the session in force, everything a start created: disconnect the observers, remove the pending nodes, take
+   * the mode controller and the anchor fallback off, withdraw the queued and in-flight requests. The translations on
+   * the page stay — taking them off is `restore`'s
+   */
+  function endLive(): void {
+    const ended = live
+    if (!ended) return
+    // First: every callback of the ended session is dead from here on
+    live = null
+    ended.highlight?.stop()
+    ended.title?.stop()
+    ended.run?.stop()
+    ended.images?.run.stop()
+    ended.modes.stop()
+    ended.uninstallAnchors()
     // Withdrawing requests is best effort: queued batches are not sent, an in-flight fetch is aborted, and what cannot be withdrawn is stopped by each callback's alive()
-    if (session) void backend.cancel(session)
+    void backend.cancel(ended.id)
   }
 
   /**
@@ -233,7 +255,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
    */
   async function begin(requested?: Mode, restart = false, from?: string, epoch?: string): Promise<StartResult> {
     if (progress.state === 'on' && !restart) return { started: false, reason: 'already-on' }
-    if (from !== undefined && active !== from) return { started: false, reason: 'session-over' }
+    if (from !== undefined && live?.id !== from) return { started: false, reason: 'session-over' }
     if (epoch !== undefined && epoch !== epochNow()) return { started: false, reason: 'session-over' }
     if (!paper) return { started: false, reason: 'not-paper' }
     if (blocks.length === 0) return { started: false, reason: 'nothing-to-translate' }
@@ -264,39 +286,46 @@ export function createPageSession(deps: SessionDeps): PageSession {
     // The first choice unavailable while the chain still has a fallback: start as usual, the requests land straight on the free engine (§8.5)
     if (!status.available && !status.fallback) return release('no-service')
     // The reader may have restored the page while the two reads above were in flight
-    if (from !== undefined && active !== from) return release('session-over')
+    if (from !== undefined && live?.id !== from) return release('session-over')
     if (epoch !== undefined && epoch !== epochNow()) return release('session-over')
     trace(`start: ready in ${Math.round(now() - tStart)} ms, since page start ${Math.round(tStart)} ms`)
 
-    modes?.stop()
-    modes = createModeController(doc, requested ?? config.mode, { onChange: enterSide })
+    endLive() // the previous session, stopped but not restored (a restart, or a retry after a fatal error)
     adoptStyle(lookOf(config))
-    endRun() // the previous session, stopped but not restored (a retry after a fatal error)
-    // The in-page anchor fallback (issue #44): in only mode the target block is hidden, and a clicked cross-reference goes nowhere
-    uninstallAnchors?.()
-    uninstallAnchors = installAnchorFallback(doc)
-    // Attached on this path only: with no translation on there is no translation, and nothing to compare
-    if (config.reading.sentenceHighlight) highlight = startSentenceHighlight(doc) ?? null
-    active = session
-    actions++
-    const alive = () => active === session
-    setProgress({ ...idle(), state: 'on' })
-    restarted = false
     const startEngine = status.engine.id
     const target = status.targetLanguage
-    running = { provider: status.chosen, target, engine: startEngine, revision: status.revision }
-    current = { session, config, context, renderPath: status.renderPath }
+    const started: LiveSession = {
+      id: session,
+      config,
+      context,
+      renderPath: status.renderPath,
+      running: { provider: status.chosen, target, engine: startEngine, revision: status.revision },
+      restarted: false,
+      modes: createModeController(doc, requested ?? config.mode, { onChange: enterSide }),
+      // The in-page anchor fallback (issue #44): in only mode the target block is hidden, and a clicked cross-reference goes nowhere
+      uninstallAnchors: installAnchorFallback(doc),
+      // Attached on this path only: with no translation on there is no translation, and nothing to compare
+      highlight: config.reading.sentenceHighlight ? startSentenceHighlight(doc) ?? null : null,
+      run: null,
+      title: null,
+      images: null,
+    }
+    // In force before anything below starts: a run may call back as it starts
+    live = started
+    actions++
+    const alive = () => live === started
+    setProgress({ ...idle(), state: 'on' })
     prep.reset() // a new session: the mirrors may run once more, the width cache is cleared, the column width is re-read
-    enterSide(modes.effective())
+    enterSide(started.modes.effective())
     // Each busy → idle transition is one line the e2e suites read (idle-trace.ts)
     const traceIdle = createIdleTrace<Progress>({ now, trace }, p => p.inFlight > 0, (p, ms) =>
       // The fatal's kind only: the message is the endpoint's, and the trace reaches the diagnostics log (Codex on #214)
       `session idle: ${p.done}/${p.requested} requested of ${p.total}, ${p.failed} failed, ${p.cached} cached, ${ms} ms${p.fatal ? `, fatal: ${parseFatal(p.fatal).kind}` : ''}`)
-    run = startTranslation({
+    started.run = startTranslation({
       doc,
       blocks,
       target,
-      mode: modes.effective(),
+      mode: started.modes.effective(),
       appearance: look,
       paper,
       // The title + the abstract go with every batch (DESIGN §8.2)
@@ -312,8 +341,8 @@ export function createPageSession(deps: SessionDeps): PageSession {
       },
       onProvider: id => {
         if (!alive()) return
-        if (running) running.engine = id
-        if (id === startEngine || restarted) return
+        started.running.engine = id
+        if (id === startEngine || started.restarted) return
         // A permanent hand-over (missing or rejected key) would leave the paragraphs already on
         // screen from one service and the rest from another. Start over on the service that is
         // actually available, so the whole page reads from one hand (UI.md, decided 2026-09-10).
@@ -326,7 +355,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
           // (Codex on #157)
           const kind = s.demotions.find(d => d.id === startEngine)?.kind
           if (kind === undefined || !isPermanentErrorKind(kind)) return
-          restarted = true
+          started.restarted = true
           trace(`hand-over to ${id} is permanent (${kind}); restarting the page on it`)
           void start(undefined, true, session)
         }).catch(() => undefined)
@@ -339,7 +368,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       },
     })
     // The tab title is translated too (§10): the same service, the same cache; the title is plain text, escaped and decoded by the placeholder protocol
-    title = translateTitle(doc, {
+    started.title = translateTitle(doc, {
       isCurrent: alive,
       warn: trace,
       translate: async text => {
@@ -351,7 +380,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
         return res.ok ? unescapeText(res.result.segments[0]?.text ?? '', wireFormatOf(status.renderPath)) || null : null
       },
     })
-    startImages(session, alive, config, context, status.renderPath)
+    started.images = startImages(started, config)
     return { started: true }
   }
 
@@ -361,17 +390,17 @@ export function createPageSession(deps: SessionDeps): PageSession {
    * blocks; with the current mode outside the reader's ticked set, an image entering the viewport parks and is
    * translated on switching back
    */
-  function startImages(session: string, alive: () => boolean, config: Config, context: TranslateContext, renderPath: RenderPath): void {
+  function startImages(session: LiveSession, config: Config): ImageRound | null {
     // The overlays and the mode gate of the previous round (restarted after a fatal error without a restore) are taken
     // off first: with the helper gone, image translation off or the target language changed, the old ones must not
     // show; the new round replaces them when it reaches the image (Codex on #89)
     setImageModes(doc, [])
-    if (!config.image.enabled || config.image.modes.length === 0) return
-    if (!paper) return
+    if (!config.image.enabled || config.image.modes.length === 0) return null
+    if (!paper) return null
     const targets = collectImageTargets(doc)
-    if (targets.length === 0) return
-    imageTargets = targets
+    if (targets.length === 0) return null
     setImageModes(doc, config.image.modes)
+    const alive = () => live === session
 
     /**
      * The helper decides **bitmaps** only (§15.5). So this round **starts at once**, without waiting for its probe:
@@ -381,34 +410,37 @@ export function createPageSession(deps: SessionDeps): PageSession {
      * probe comes back.
      */
     let helperReady = false
+    let progress: ImageProgress | null = null
+    // Read by callbacks that may fire while the run starts
+    let run: ImageRun | null = null
     const traceIdle = createIdleTrace<ImageProgress>({ now, trace }, p => p.requested - p.done - p.failed > 0, (p, ms) => `images idle: ${p.done}/${p.requested} of ${p.total}, ${p.failed} failed, ${ms} ms${waitingNote()}`)
     /** Names the targets never requested when idle arrives with some left over — the e2e's one nondeterministic check, `5/5 of 6`, needs to say which image and whether it was parked */
     const waitingNote = () => {
-      const left = images?.waiting() ?? []
+      const left = run?.waiting() ?? []
       if (left.length === 0) return ''
       const shown = left.slice(0, 8).map(w => `${w.target.id || w.target.kind}${w.parked ? ' (parked)' : ''}`)
-      return `; waiting: ${shown.join(', ')}${left.length > 8 ? `, +${left.length - 8}` : ''}; observer holds ${images?.observing() ?? 0}`
+      return `; waiting: ${shown.join(', ')}${left.length > 8 ? `, +${left.length - 8}` : ''}; observer holds ${run?.observing() ?? 0}`
     }
-    images = startImageTranslation({
-      renderPath,
+    run = startImageTranslation({
+      renderPath: session.renderPath,
       doc,
       targets,
       paper,
-      // The target the session runs on — the chain's, recorded at start (see `running`); the configuration's only before a session exists
-      target: running?.target ?? config.targetLanguage,
-      scope: session,
+      // The target the session runs on — the chain's, recorded at start (see `running`), not the configuration's
+      target: session.running.target,
+      scope: session.id,
       preload: config.preload,
-      context,
+      context: session.context,
       ocr: call => deps.ocr(call),
       translate: request => backend.translate(request),
       onTrace: line => trace(line),
       ...(deps.fetchImage ? { fetchBytes: deps.fetchImage } : {}),
       // The mode gate is the same for both kinds of image; a bitmap additionally waits for the helper (§15.5)
-      isEnabled: t => config.image.enabled && config.image.modes.includes(modes?.effective() ?? config.mode) && (t.kind !== 'raster' || helperReady),
+      isEnabled: t => config.image.enabled && config.image.modes.includes(session.modes.effective()) && (t.kind !== 'raster' || helperReady),
       isCurrent: alive,
       onProgress: p => {
         if (!alive()) return
-        imageProgress = p
+        progress = p
         traceIdle(p)
       },
       // The overlay is in: in side mode the figure it sits in is split in two (§7.2), the tidy layer's job
@@ -424,22 +456,34 @@ export function createPageSession(deps: SessionDeps): PageSession {
      * round drew are still on the page, and this round their targets park and would never reach `clearImage` — the
      * old translations (even in the old target language) would just stay (Codex on #134)
      */
-    const settleRaster = (available: boolean) => {
-      if (!alive()) return
-      helperReady = available
-      if (available) images?.resume()
-      else for (const t of targets) if (t.kind === 'raster') clearImageEverywhere(t)
+    const started = run
+    const round: ImageRound = {
+      run: started,
+      targets,
+      progress: () => progress,
+      // Once the recognition helper is installed, this page has to be released (Codex on #161): with the probe missing
+      // at session start the bitmaps park for good, and the page itself has no occasion to ask again
+      resume: () => {
+        if (helperReady || !inForce()) return false
+        settleRaster(true)
+        return true
+      },
     }
-    // Once the recognition helper is installed, this page has to be released (Codex on #161): with the probe missing
-    // at session start the bitmaps park for good, and the page itself has no occasion to ask again
-    resumeRaster = () => {
-      if (helperReady || !alive()) return false
-      settleRaster(true)
-      return true
+    /**
+     * Is this round still the session's. The probe below answers when it answers, and the settings may have replaced
+     * the round by then: a late “not there” must not clear the overlays the round after it drew
+     */
+    const inForce = () => alive() && session.images === round
+    const settleRaster = (available: boolean) => {
+      if (!inForce()) return
+      helperReady = available
+      if (available) started.resume()
+      else for (const t of targets) if (t.kind === 'raster') clearImageEverywhere(t)
     }
     deps.helperStatus()
       .then(helper => settleRaster(helper.state === 'ready'))
       .catch(e => { trace(`helper-status failed (${e instanceof Error ? e.name : typeof e})`); settleRaster(false) })
+    return round
   }
 
   let fitObserver: ResizeObserver | null = null
@@ -451,19 +495,19 @@ export function createPageSession(deps: SessionDeps): PageSession {
    * before anything is written. All of it is renderer/prep.ts; this only wires it up
    */
   const prep = createPrep(doc, {
-    isSide: () => modes?.effective() === 'side',
+    isSide: () => live?.modes.effective() === 'side',
     trace,
     // The split copies' failure widgets retry through the run, as the original's side does (issue #170)
     retry: blockId => {
-      const block = run?.failed().find(b => b.id === blockId)
-      if (block) void run?.translate([block])
+      const block = live?.run?.failed().find(b => b.id === blockId)
+      if (block) void live?.run?.translate([block])
     },
   })
 
   /** The preparation on entering side: the right column gets its copies of formulas and figures (§7.2), and tables shrink to fit a column */
   function enterSide(effective: Mode): void {
     // The mode gate may have just opened: parked images are released (§15)
-    images?.resume()
+    live?.images?.run.resume()
     // The split copies' duplicated media speak only where the original does not (§7.4b, issue #170)
     setSplitDuplicatesHidden(doc, effective === 'side')
     if (effective !== 'side') {
@@ -500,8 +544,8 @@ export function createPageSession(deps: SessionDeps): PageSession {
     // that reads it. No controller, no attribute on <html> — nothing is written before a translation starts
     // (DESIGN §4.1), and nothing would take a controller made here down again. On a translated page the switch is
     // immediate; only the save below waits
-    const effective = modes ? modes.choose(mode) : mode
-    if (modes) enterSide(effective)
+    const effective = live ? live.modes.choose(mode) : mode
+    if (live) enterSide(effective)
     // **Saved in order**: each save reads the store and compares, so two choices in quick succession, both reading
     // before either wrote, would leave the store on the first while the page shows the second
     await modeSaves(async () => {
@@ -533,19 +577,12 @@ export function createPageSession(deps: SessionDeps): PageSession {
   function restorePage(epoch?: string): { removedNodes: number; refused?: true } {
     if (epoch !== undefined && epoch !== epochNow()) return { removedNodes: 0, refused: true }
     actions++
-    endRun()
-    modes?.stop()
-    modes = null
+    endLive()
     fitObserver?.disconnect()
     fitObserver = null
     prep.reset()
-    uninstallAnchors?.()
-    uninstallAnchors = null
     const result = restore(doc)
     setProgress(idle())
-    running = null
-    current = null
-    restarted = false
     trace(`translation stopped: ${result.removedNodes} nodes removed`)
     return { removedNodes: result.removedNodes }
   }
@@ -568,38 +605,34 @@ export function createPageSession(deps: SessionDeps): PageSession {
     // The hover highlight is a front-page toggle (UI.md S-P-80), so it takes effect on this page
     // at once: installed or torn down mid-session, no translation node touched. Outside a session
     // there is nothing to pair, and start() reads the setting itself
-    if (run) {
-      if (config.reading.sentenceHighlight && !highlight) highlight = startSentenceHighlight(doc) ?? null
-      else if (!config.reading.sentenceHighlight && highlight) {
-        highlight.stop()
-        highlight = null
+    if (live?.run) {
+      if (config.reading.sentenceHighlight && !live.highlight) live.highlight = startSentenceHighlight(doc) ?? null
+      else if (!config.reading.sentenceHighlight && live.highlight) {
+        live.highlight.stop()
+        live.highlight = null
       }
     }
     // The preload range (UI.md S-O-50): the whole-paper stop reaches an open paper at once — everything still waiting
     // for the viewport is handed to both runs now. Any other change applies from the next session: a running
     // observer's distance cannot be moved, and what was requested cannot be taken back (Devin on #222)
-    if (run && current && config.preload.margin === 'all' && current.config.preload.margin !== 'all') {
-      run.release()
-      images?.release()
+    if (live?.run && config.preload.margin === 'all' && live.config.preload.margin !== 'all') {
+      live.run.release()
+      live.images?.run.release()
     }
-    if (current) current = { ...current, config: { ...current.config, preload: config.preload } }
+    if (live) live.config = { ...live.config, preload: config.preload }
     // Image translation, both the switch (popup) and the per-mode list (settings): on starts the
     // image run for this session, off stops it and hides every overlay through the display gate,
     // and a change to the modes has to reach both the gate and the run that reads it — otherwise
     // unticking the current mode leaves the overlays up and keeps requesting (Codex on #157).
     // The text run is not touched either way
-    const imageChanged = run && current
-      && (config.image.enabled !== current.config.image.enabled
-        || config.image.modes.join(' ') !== current.config.image.modes.join(' '))
-    if (imageChanged && current) {
-      current = { ...current, config }
-      images?.stop()
-      images = null
-      imageTargets = []
-      imageProgress = null
+    if (live?.run && (config.image.enabled !== live.config.image.enabled || config.image.modes.join(' ') !== live.config.image.modes.join(' '))) {
+      live.config = config
+      // The round is replaced whole: stopped, out of the record, its display gate closed — and a new one only when
+      // image translation is still on
+      live.images?.run.stop()
+      live.images = null
       setImageModes(doc, [])
-      const session = current.session
-      if (config.image.enabled) startImages(session, () => active === session, config, current.context, current.renderPath)
+      if (config.image.enabled) live.images = startImages(live, config)
     }
     // The language changed: the failure widgets already drawn copied the words into their own shadow roots and have to be rewritten (Codex on #161)
     deps.applyLocale(config.uiLanguage)
@@ -615,27 +648,31 @@ export function createPageSession(deps: SessionDeps): PageSession {
     start,
     restore: restorePage,
     setMode,
-    translate: picked => run?.translate(picked) ?? Promise.resolve(),
-    translateImages: picked => images?.translate(picked ?? imageTargets) ?? Promise.resolve(),
+    translate: picked => live?.run?.translate(picked) ?? Promise.resolve(),
+    translateImages: picked => live?.images?.run.translate(picked ?? live.images.targets) ?? Promise.resolve(),
     retryFailed() {
-      const failed = run?.failed() ?? []
-      void run?.translate(failed)
-      const failedImages = images?.failed() ?? []
-      void images?.translate(failedImages)
+      const failed = live?.run?.failed() ?? []
+      void live?.run?.translate(failed)
+      const failedImages = live?.images?.run.failed() ?? []
+      void live?.images?.run.translate(failedImages)
       return failed.length + failedImages.length
     },
-    resumeRaster: () => resumeRaster(),
+    // No round — image translation off, or switched off since — has nothing to release, and says so
+    resumeRaster: () => live?.images?.resume() ?? false,
     onConfig,
     // Wait for the first configuration read: one answer settles this round's popup mode bar (see the note on savedMode)
-    status: () => ready.then(() => ({
-      paper,
-      mode: modes?.effective() ?? savedMode,
-      preference: modes?.preference() ?? savedMode,
-      progress,
-      session: active,
-      epoch: epochNow(),
-      ...(imageProgress ? { images: imageProgress } : {}),
-      ...(running ? { running } : {}),
-    })),
+    status: () => ready.then(() => {
+      const images = live?.images?.progress() ?? null
+      return {
+        paper,
+        mode: live?.modes.effective() ?? savedMode,
+        preference: live?.modes.preference() ?? savedMode,
+        progress,
+        session: live?.id ?? null,
+        epoch: epochNow(),
+        ...(images ? { images } : {}),
+        ...(live ? { running: live.running } : {}),
+      }
+    }),
   }
 }
