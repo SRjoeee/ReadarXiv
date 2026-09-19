@@ -57,7 +57,10 @@ describe('the total time limit of one task', () => {
     const queue = new RequestQueue(opts({ rate: 1000, capacity: 100, maxRetries: 50, baseRetryDelayMs: 5, maxTotalMs: 60 }))
     let calls = 0
     const failing = async () => { calls++; throw Object.assign(new Error('boom'), { name: 'TypeError' }) }
-    await expect(queue.enqueue(failing, Date.now(), 'x')).rejects.toThrow('boom')
+    // Whichever end comes first: the last attempt's own error when the retry finds no budget left, or the budget's
+    // error when the task was waiting for its retry as the 60 ms ran out. A loaded run takes the second often enough
+    // to have failed the gate on a change that touched none of this (2026-09-19); both hand an error back
+    await expect(queue.enqueue(failing, Date.now(), 'x')).rejects.toThrow(/boom|total budget/)
     // Without a total limit maxRetries=50 would run the full 51 attempts; with it the cut is by time
     expect(calls).toBeLessThan(51)
     expect(calls).toBeGreaterThan(1)
