@@ -37,7 +37,7 @@ function world() {
     hold: false,
     held: [] as { message: AxtMessage<'axt:provider-status'>; resolve(s: ProviderStatus): void; reject(e: unknown): void }[],
     helper: { state: 'ready', version: '1' } as unknown,
-    broadcast: (_: unknown) => undefined as void,
+    broadcast: (_: unknown): void => undefined,
     opened: [] as string[],
     optionsPages: 0,
     closed: 0,
