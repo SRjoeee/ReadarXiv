@@ -14,11 +14,9 @@ import { collectImageTargets, startImageTranslation, type ImageBytes, type Image
 import { startTranslation, type Progress, type TranslationRun } from '@/core/pipeline'
 import { escapeText, unescapeText } from '@/core/protector/escape'
 import {
-  applyStyle, clearImageEverywhere, clearMarginNotes, clearPairMargins, createModeController, createPrep, setSplitDuplicatesHidden,
-  installAnchorFallback, type Mode, type ModeController, relabelFailed, restore, type SentenceHighlight, setImageModes,
+  applyStyle, clearImageEverywhere, createModeController, createPrep, installAnchorFallback, type Mode, type ModeController, relabelFailed, restore, type SentenceHighlight, setImageModes,
   startSentenceHighlight,
 } from '@/core/renderer'
-import { DOCUMENT_ROOT } from '@/core/rules/latexml'
 import { createSerialQueue } from '@/core/scheduler/serial'
 import { newSessionId } from '@/core/scheduler/session'
 import { translateTitle, type TitleTranslator } from '@/core/scheduler/title'
@@ -486,8 +484,6 @@ export function createPageSession(deps: SessionDeps): PageSession {
     return round
   }
 
-  let fitObserver: ResizeObserver | null = null
-
   /**
    * The tidy after a translation arrives (DESIGN §7.2 / §10, issue #46): footnote placement, split figures, mirrors,
    * table fitting, margin alignment. Driven by the dirty blocks the pipeline hands over per batch, each pass touching
@@ -504,39 +500,14 @@ export function createPageSession(deps: SessionDeps): PageSession {
     },
   })
 
-  /** The preparation on entering side: the right column gets its copies of formulas and figures (§7.2), and tables shrink to fit a column */
+  /**
+   * The mode in effect moved, or a session started in it: what waited for the mode may go, and the tidy layer enters
+   * or leaves side — what that takes is its own to know (renderer/prep.ts `side`)
+   */
   function enterSide(effective: Mode): void {
     // The mode gate may have just opened: parked images are released (§15)
     live?.images?.run.resume()
-    // The split copies' duplicated media speak only where the original does not (§7.4b, issue #170)
-    setSplitDuplicatesHidden(doc, effective === 'side')
-    if (effective !== 'side') {
-      fitObserver?.disconnect()
-      fitObserver = null
-      prep.cancel()
-      // The inline margins for alignment serve the two-column layout only and go back to the site's styles in the
-      // other modes; the margin-note stacking likewise — in the other modes the floats avoid one another by their own height, with no push from us
-      clearPairMargins(doc)
-      clearMarginNotes(doc)
-      return
-    }
-    // Entering side: the column width re-read, one full tidy pass (coming back from stack / only the alignment margins were cleared and have to be computed afresh)
-    prep.refreshColumn()
-    prep.touchAll()
-    // The column width follows the window, and the zoom ratios have to be recomputed with it. Only when the width
-    // really changed: scaling a table itself makes the observed target report a size change, and without this gate it would oscillate
-    if (!fitObserver && typeof ResizeObserver === 'function') {
-      let lastWidth = 0
-      fitObserver = new ResizeObserver(entries => {
-        const width = Math.round(entries[0]?.contentRect.width ?? 0)
-        if (width === lastWidth) return
-        lastWidth = width
-        prep.refreshColumn()
-        prep.touchAll()
-      })
-      const target = doc.querySelector(DOCUMENT_ROOT)
-      if (target) fitObserver.observe(target)
-    }
+    prep.side(effective === 'side')
   }
 
   async function setMode(mode: Mode): Promise<{ mode: Mode; effective: Mode }> {
@@ -578,8 +549,6 @@ export function createPageSession(deps: SessionDeps): PageSession {
     if (epoch !== undefined && epoch !== epochNow()) return { removedNodes: 0, refused: true }
     actions++
     endLive()
-    fitObserver?.disconnect()
-    fitObserver = null
     prep.reset()
     const result = restore(doc)
     setProgress(idle())
