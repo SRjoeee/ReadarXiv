@@ -139,7 +139,7 @@ check('the settings page detects the recognition helper', /已就绪/.test(helpe
 const page = await context.newPage()
 const logs = []
 page.on('console', m => { const text = m.text(); if (text.includes('[axt]')) logs.push({ t: Date.now(), text }) })
-await page.goto(`https://arxiv.org/html/${PAPER}#axt-translate`, { waitUntil: 'domcontentloaded' })
+await page.goto(`https://arxiv.org/html/${PAPER}#readarxiv`, { waitUntil: 'domcontentloaded' })
 // This part measures **stack**: since 2026-09-11 the default mode is side (§7.2), and without switching explicitly the figures are split in two from the start,
 // the overlays counted below are “original + copy”, and every expectation after this is off
 {
@@ -218,7 +218,7 @@ await setImageMode(options, '仅译文', false)
 const page2 = await context.newPage()
 const logs2 = []
 page2.on('console', m => { const text = m.text(); if (text.includes('[axt]')) logs2.push({ t: Date.now(), text }) })
-await page2.goto(`https://arxiv.org/html/${PAPER}#axt-translate`, { waitUntil: 'domcontentloaded' })
+await page2.goto(`https://arxiv.org/html/${PAPER}#readarxiv`, { waitUntil: 'domcontentloaded' })
 await waitForLog(logs2, IMAGE_COUNTS, 20_000)
 await scrollThrough(page2)
 await waitForLog(logs2, IDLE, 90_000)

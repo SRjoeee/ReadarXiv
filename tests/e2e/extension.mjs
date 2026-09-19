@@ -66,7 +66,7 @@ const extensionWorker = () => context.serviceWorkers().find(w => w.url().startsW
 console.log(`extension ${extId} loaded from ${EXT}`)
 
 /**
- * Open a paper and start translating of itself (#axt-translate), collecting the [axt] log and the requests sent to the host.
+ * Open a paper and start translating of itself (#readarxiv), collecting the [axt] log and the requests sent to the host.
  *
  * Requests are listened for on the **context**, not the page: since 2026-09-06 the translation fetches leave from the background service worker
  * (DESIGN §8.0), and page-level events see none of them. The rings cannot be polled either — with the first screen all cached it is over in 38 ms,
@@ -124,7 +124,7 @@ async function openPaper(id, host) {
     if (document.documentElement) start()
     else document.addEventListener('readystatechange', start, { once: true })
   })
-  await page.goto(`https://arxiv.org/html/${id}#axt-translate`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`https://arxiv.org/html/${id}#readarxiv`, { waitUntil: 'domcontentloaded' })
   const originalTitle = await page.title()
   return { page, logs, requests, originalTitle, skeletonsSeen: () => page.evaluate(() => window.__axtSkeletonsSeen ?? 0).catch(() => 0) }
 }
@@ -351,7 +351,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await chooseStyle(options, '淡一档')
 
   const page = await context.newPage()
-  await page.goto(`https://arxiv.org/html/${PAPER}#axt-translate`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`https://arxiv.org/html/${PAPER}#readarxiv`, { waitUntil: 'domcontentloaded' })
   // Only real translations count: the loading ring / failure widget / mirrors and split clones carry .axt-t too, but the appearance deliberately does not decorate them,
   // and a poll landing on a pending node would misreport “the opacity did not apply” as a broken configuration (Codex on #52)
   await page.waitForFunction(sel => document.querySelector(sel) !== null, `.axt-t:not([data-axt-inline])${REAL}`, { timeout: 60_000 }).catch(() => undefined)
@@ -402,9 +402,9 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await editor.getByRole('button', { name: '完成', exact: true }).click()
   // Switch to a math-heavy paper: PAPER's first screen has no inline formula, and the check would run empty
   const dashedPage = await context.newPage()
-  await dashedPage.goto('https://arxiv.org/html/2609.04056v1#axt-translate', { waitUntil: 'domcontentloaded' })
+  await dashedPage.goto('https://arxiv.org/html/2609.04056v1#readarxiv', { waitUntil: 'domcontentloaded' })
   // Both conditions have to be met (issue #82): waiting only for “the first translation with a formula appears”, the data-axt-style on `<html>`
-  // may not be written yet — enable() writes it inside startTranslation, and between the session #axt-translate starts and the preset the settings page just saved
+  // may not be written yet — enable() writes it inside startTranslation, and between the session #readarxiv starts and the preset the settings page just saved
   // lies one configuration read. One run hit exactly that: 22 formulas measured, block-level none/solid; the same build rerun gave 51 underline/dashed
   await dashedPage.waitForFunction(
     real => document.documentElement.dataset.axtUnderline === 'dashed' && document.querySelectorAll(`.axt-t${real} math`).length > 0,
@@ -520,6 +520,16 @@ check('the settings page: after deleting the custom prompt the default is chosen
   const again = idleOf(await waitForLog(logs, IDLE, 60_000))
   // cached counts passages (each table cell one), done counts blocks, so the two differing is normal; the point is no endpoint request
   check('reload and translate again: everything near the first screen hits the cache, no more endpoint requests', !!again && again.done === again.requested && again.cached >= again.done && requests.length === 0, `${again?.text ?? '(no idle line)'}; endpoint requests ${requests.length}`)
+
+  // ── A link made by 0.4.0 carries `#axt-translate`: a bookmark or a link passed on then still starts the translation (DESIGN §4.0b) ──
+  logs.length = 0
+  await page.goto(`https://arxiv.org/html/${PAPER}#axt-translate`, { waitUntil: 'domcontentloaded' })
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  const legacy = idleOf(await waitForLog(logs, IDLE, 60_000))
+  check('the hash of 0.4.0\'s links still starts the translation', !!legacy && legacy.done > 0 && legacy.done === legacy.requested, legacy?.text ?? '(no idle line)')
+  await page.goto(`https://arxiv.org/html/${PAPER}#readarxiv`, { waitUntil: 'domcontentloaded' })
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await waitForLog(logs, IDLE, 60_000)
 
   // ── The whole-paper stop (§10, v15): every block is requested as the session starts, without a scroll. The paper was scrolled through
   // above, so nearly everything is cached; a block the scroll never brought near the viewport (measured: one passage of 292) still goes to the endpoint ──
@@ -908,7 +918,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
 {
   const stall = await stallEndpoint(GOOGLE)
   const page = await context.newPage()
-  await page.goto(`https://arxiv.org/html/${PAPER2}#axt-translate`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`https://arxiv.org/html/${PAPER2}#readarxiv`, { waitUntil: 'domcontentloaded' })
   // The queue must really hold work not yet sent; only then is “will it still send requests” after closing a question at all; otherwise the assertion idles
   // (when this was first written the first screen happened to be all cached, only 2 requests went out, and nothing was measured)
   const q = await fillQueue(page, stall)
@@ -928,7 +938,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
 {
   const stall = await stallEndpoint(GOOGLE)
   const page = await context.newPage()
-  await page.goto(`https://arxiv.org/html/${PAPER3}#axt-translate`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`https://arxiv.org/html/${PAPER3}#readarxiv`, { waitUntil: 'domcontentloaded' })
   const q = await fillQueue(page, stall)
   const before = stall.held.length
   // Jump to a non-arXiv page: the content script is gone and will never send a new scope again
@@ -1022,7 +1032,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
     }
   })
   check('the abstract page: the bilingual entry is inserted after arXiv\'s HTML link, exactly one (#146)',
-    link.exists && link.afterHtmlLink && link.inSameList && link.count === 1 && /\/html\/.*#axt-translate$/.test(link.href ?? ''),
+    link.exists && link.afterHtmlLink && link.inSameList && link.count === 1 && /\/html\/.*#readarxiv$/.test(link.href ?? ''),
     `“${link.text}” → ${link.href}; right after the HTML link ${link.afterHtmlLink}, same list ${link.inSameList}, ${link.count} in all`)
 
   // The translation opens in a new tab by default (config `reading.openIn`, v16), and the abstract page stays where
@@ -1031,7 +1041,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   const arriving = context.waitForEvent('page', { timeout: 30_000 })
   await page.click('.axt-abs-link')
   const paper = await arriving
-  await paper.waitForURL(/\/html\/.*#axt-translate/, { timeout: 30_000 })
+  await paper.waitForURL(/\/html\/.*#readarxiv/, { timeout: 30_000 })
   const idle = idleOf(await waitForLog(logs, IDLE, 120_000))
   const rendered = await paper.evaluate(() => document.querySelectorAll('.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)').length)
   const stayed = /\/abs\//.test(page.url())
@@ -1218,7 +1228,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   const popup = await context.newPage()
   await popup.goto(`chrome-extension://${extId}/popup.html`)
   await page.bringToFront()
-  // openPaper starts translating of itself with #axt-translate; only the mode is switched here — the switch changes the attribute on <html> only, no retranslation
+  // openPaper starts translating of itself with #readarxiv; only the mode is switched here — the switch changes the attribute on <html> only, no retranslation
   await popup.getByRole('button', { name: '仅译文', exact: true }).waitFor({ timeout: 10_000 })
   await popup.getByRole('button', { name: '仅译文', exact: true }).click()
   await sleep(500)

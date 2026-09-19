@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ABS_LINK_CLASS, AUTO_TRANSLATE_HASH, injectBilingualLink, relabelBilingualLink, retargetBilingualLink } from '@/core/abstract/link'
+import { ABS_LINK_CLASS, AUTO_TRANSLATE_HASH, injectBilingualLink, relabelBilingualLink, retargetBilingualLink, startsTranslation } from '@/core/abstract/link'
 import { LOCALES } from '@/locales'
 
 // The bilingual entry on the abstract page (issue #146). The fixture is a real arxiv.org/abs page: the insertion point relies on arXiv's own
@@ -81,5 +81,21 @@ describe('the bilingual entry on the abstract page (#146)', () => {
     const inserted = doc.querySelector(`.${ABS_LINK_CLASS}`)!.closest('li')!
     inserted.remove()
     expect(doc.body.outerHTML).toBe(before)
+  })
+})
+
+// The hash stays in the address bar and travels with a link a reader passes on: the product's name since 0.4.1
+// (the maintainer, 2026-09-19), the code's prefix before it — and a link made then is somebody's saved way in
+describe('the hash that starts the translation', () => {
+  it('our links carry the product\'s name', () => {
+    expect(AUTO_TRANSLATE_HASH).toBe('#readarxiv')
+  })
+
+  it('it starts the translation in any capitalisation, and so does the hash 0.4.0\'s links carried', () => {
+    for (const hash of ['#readarxiv', '#ReadarXiv', '#READARXIV', '#axt-translate']) expect(startsTranslation(hash)).toBe(true)
+  })
+
+  it('nothing else does: no hash, a section\'s anchor, the debugging hook, a longer word', () => {
+    for (const hash of ['', '#', '#S2.SS3', '#axt-debug', '#readarxiv2', '#read-arxiv', 'readarxiv']) expect(startsTranslation(hash)).toBe(false)
   })
 })

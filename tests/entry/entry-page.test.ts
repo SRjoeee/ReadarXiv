@@ -36,9 +36,9 @@ async function ask(type: string): Promise<{ reply: unknown; answered: boolean; k
 
 describe('answerEntryMessages', () => {
   it('answers what paper this is and where its HTML version is', async () => {
-    answerEntryMessages({ paper: () => '2501.07202v1', html: () => 'https://arxiv.org/html/2501.07202v1#axt-translate' })
+    answerEntryMessages({ paper: () => '2501.07202v1', html: () => 'https://arxiv.org/html/2501.07202v1#readarxiv' })
     const { reply, keptChannelOpen } = await ask('axt:entry-status')
-    expect(reply).toEqual({ paper: '2501.07202v1', html: 'https://arxiv.org/html/2501.07202v1#axt-translate' })
+    expect(reply).toEqual({ paper: '2501.07202v1', html: 'https://arxiv.org/html/2501.07202v1#readarxiv' })
     // The channel is held open for the asynchronous reply, or the popup receives undefined
     expect(keptChannelOpen).toBe(true)
   })
@@ -57,9 +57,9 @@ describe('answerEntryMessages', () => {
   })
 
   it('opens the HTML version itself, so no permission is needed to navigate the tab', async () => {
-    answerEntryMessages({ paper: () => '2501.07202', html: () => 'https://arxiv.org/html/2501.07202#axt-translate' })
+    answerEntryMessages({ paper: () => '2501.07202', html: () => 'https://arxiv.org/html/2501.07202#readarxiv' })
     const { reply } = await ask('axt:open-html')
-    expect(assign).toHaveBeenCalledWith('https://arxiv.org/html/2501.07202#axt-translate')
+    expect(assign).toHaveBeenCalledWith('https://arxiv.org/html/2501.07202#readarxiv')
     expect(reply).toEqual({ opened: true })
   })
 

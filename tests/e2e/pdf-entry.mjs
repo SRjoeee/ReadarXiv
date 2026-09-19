@@ -90,7 +90,7 @@ check('a content script runs on Chrome\'s PDF page and the floating button is dr
   entry.contentType === 'application/pdf' && entry.hosts === 1 && entry.drawn,
   `contentType ${entry.contentType}, ${entry.hosts} entry, drawn ${entry.drawn}`)
 check('its main button leads to the HTML full text of the version the reader opened, already translating',
-  entry.href === `https://arxiv.org/html/${WITH_HTML}#axt-translate`,
+  entry.href === `https://arxiv.org/html/${WITH_HTML}#readarxiv`,
   `href ${entry.href}`)
 check('it carries the same sentence as the abstract page\'s entry (S-I-06)', /Read arXiv/.test(entry.label ?? ''), `label “${entry.label}”`)
 
@@ -172,7 +172,7 @@ await sleep(3000)
   const opened = await viaPopup.catch(() => null)
   await opened?.waitForLoadState('load').catch(() => undefined)
   check('its button opens the href arXiv gives, in a new tab, and the abstract page stays',
-    /\/html\/.*#axt-translate$/.test(opened?.url() ?? '') && /\/abs\//.test(page.url()),
+    /\/html\/.*#readarxiv$/.test(opened?.url() ?? '') && /\/abs\//.test(page.url()),
     `opened ${opened?.url().slice(0, 60) ?? 'nothing'}, first tab ${page.url().slice(0, 40)}…`)
   await opened?.close()
   await popup.close()
