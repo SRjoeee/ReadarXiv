@@ -146,7 +146,7 @@ describe('usePopupData', () => {
 
   it('on an abstract or PDF page a mode is saved here, not sent to a page that has no listener for it (Devin on #247)', async () => {
     wire.page = async () => undefined
-    wire.entry = { paper: '2501.07202', html: 'https://arxiv.org/html/2501.07202#axt-translate' }
+    wire.entry = { paper: '2501.07202', html: 'https://arxiv.org/html/2501.07202#readarxiv' }
     const hook = await mountHook(usePopupData)
     await hook.until(() => hook.current().input.entry !== null && hook.current().input.config !== null)
     await hook.run(() => hook.current().actions.chooseMode('only'))

@@ -1,5 +1,5 @@
 import { getConfig, setConfig, watchConfig } from '@/config/storage'
-import { AUTO_TRANSLATE_HASH } from '@/core/abstract/link'
+import { startsTranslation } from '@/core/abstract/link'
 import { extract, paperContext } from '@/core/extractor'
 import { paperIdFromUrl } from '@/core/pipeline'
 import { createPageSession } from '@/core/session'
@@ -10,7 +10,7 @@ import { applyLocaleFrom } from '@/ui/apply-locale'
 import { enableDebug } from './debug'
 
 // Injected into arxiv.org/html/*. On page load it only extracts and keeps the Block[] in memory — the one DOM write
-// is the floating button's host on <body> (DESIGN §4.0c, §7.1); translation starts when the reader asks (DESIGN §4.1). A URL with #axt-debug draws outlines, one with #axt-translate starts of itself — for debugging and automated checks.
+// is the floating button's host on <body> (DESIGN §4.0c, §7.1); translation starts when the reader asks (DESIGN §4.1). A URL with #axt-debug draws outlines, one with #readarxiv starts of itself — for debugging and automated checks.
 //
 // This file is an adapter (DESIGN §4.3): the session's state and decisions live in core/session; here
 // the browser's messages, the configuration subscription and the URL hash are mapped onto it.
@@ -91,6 +91,6 @@ export default defineContentScript({
     })
 
     if (location.hash === '#axt-debug') enableDebug(blocks)
-    if (location.hash === AUTO_TRANSLATE_HASH) void session.start()
+    if (startsTranslation(location.hash)) void session.start()
   },
 })

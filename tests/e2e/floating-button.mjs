@@ -217,7 +217,7 @@ await sleep(3000)
   const abs = await dockState()
   const arxivHref = await page.evaluate(() => document.querySelector('a#latexml-download-link, a[href*="/html/"]')?.href ?? null)
   check('the abstract page has the button too, its main button a link to the href arXiv gives, already translating',
-    abs !== null && abs.tag === 'A' && arxivHref !== null && abs.href === `${arxivHref}#axt-translate` && abs.side === 'left',
+    abs !== null && abs.tag === 'A' && arxivHref !== null && abs.href === `${arxivHref}#readarxiv` && abs.side === 'left',
     `main <${abs?.tag?.toLowerCase()}> → ${abs?.href}, arXiv's own ${arxivHref}, docked ${abs?.side} as saved on the PDF`)
 }
 

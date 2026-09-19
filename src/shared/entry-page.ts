@@ -8,7 +8,7 @@ import { replyWith, type EntryStatus } from '@/shared/messages'
 export interface EntryPage {
   /** This page's paper id, or null when the path is not a paper's */
   paper: () => string | null
-  /** The HTML full text with `#axt-translate`, or null when this paper has no HTML version */
+  /** The HTML full text with `#readarxiv`, or null when this paper has no HTML version */
   html: () => string | null
 }
 

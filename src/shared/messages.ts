@@ -13,7 +13,7 @@ import type { DiagnosticSource, DiagnosticsExport } from '@/shared/diagnostics'
 export interface EntryStatus {
   /** The paper this page is about, with the version the reader opened */
   paper: string
-  /** Where its HTML full text is, already carrying `#axt-translate`; null when the paper has no HTML version */
+  /** Where its HTML full text is, already carrying `#readarxiv`; null when the paper has no HTML version */
   html: string | null
 }
 

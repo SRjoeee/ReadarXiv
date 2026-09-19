@@ -15,7 +15,7 @@ const STRINGS: FloatingButtonStrings = {
   hideForNow: 'Hide for now',
   hideAlways: "Don't show again",
 }
-const HREF = 'https://arxiv.org/html/2501.07202v1#axt-translate'
+const HREF = 'https://arxiv.org/html/2501.07202v1#readarxiv'
 
 function mount(overrides: Partial<FloatingButtonOptions> = {}) {
   const host = document.createElement('div')
