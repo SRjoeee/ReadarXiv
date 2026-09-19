@@ -8,9 +8,10 @@ import { collectText, squash } from '@/core/text'
  * inside a cell serialised by walking in (§5.3). 0.6.2: tags carrying an environment name became translatable, bare
  * identifiers (`(a)`, `(ii)`) stay protected — the classification changed meaning, and the old cache must not carry
  * over (Codex on #53). 0.10.1: `.ltx_nodisplay` is a void — the cached blocks had translated the hidden accessibility
- * descriptions along, and would keep serving them with the key unchanged
+ * descriptions along, and would keep serving them with the key unchanged. 0.10.2: an inline listing is a void
+ * (`lstinline`) — its identifiers had gone to the engine as prose
  */
-export const RULES_VERSION = '0.10.1'
+export const RULES_VERSION = '0.10.2'
 
 /** The LaTeXML class prefix, to tell whether an element belongs to the paper body */
 export const LTX_CLASS_PREFIX = 'ltx_'
@@ -198,6 +199,16 @@ export const PROTECT_RULES: readonly ProtectRule[] = [
   { id: 'cite', selector: '.ltx_cite', note: 'citation mark' },
   { id: 'tag', selector: '.ltx_tag', note: 'numbers and symbols: section numbers, equation numbers, list bullets, footnote marks, code line numbers; the ones carrying an environment name excepted, see isNamedTag' },
   { id: 'tt', selector: '.ltx_text.ltx_font_typewriter', note: 'monospaced text, taken for code' },
+  // `\lstinline`: LaTeXML's listings binding sets it as a `ltx:text` of class `ltx_lstlisting`, **without** the
+  // typewriter class the rule above reads (the face comes from the site's style sheet), its tokens in spans of their
+  // own — `ltx_lst_identifier`, `ltx_lst_keyword`, a `ltx_lst_space` per space. Walked as text it went to the engine
+  // as prose: through the Edge endpoint `let y = sample(D) in y =:= x` came back with `=` doubled, the punctuation
+  // full-width and, once the wire set markers apart from words (protector/serialize.ts), `let` and `in` translated.
+  // Measured over the 12 fixtures and 39 recent cs.PL / cs.SE papers (2026-09-19): 551 inline listings, all code
+  // (8 characters at the median, 56 at most; 30 hold a formula, which the clone keeps), none of them typewriter or
+  // inside a block listing, so none was protected; every other carrier of the class is a block listing (skipped
+  // already), a float with its caption (must stay open) or an `mrow` / `mtext` inside a formula — hence `.ltx_text`
+  { id: 'lstinline', selector: '.ltx_text.ltx_lstlisting', note: 'an inline listing (\\lstinline): code, kept as it is' },
   { id: 'note', selector: '.ltx_note', descend: true, note: 'footnote container: a void to the outer paragraph, while the .ltx_note_content inside is still found as a block' },
   // The same shape as a footnote (issue #152): **one atom to the outer unit** — the whole group is a void, the wire
   // text is byte for byte what it was, and `<table><tbody><tr>` must never go to the engine as paired tags; **but the
@@ -341,14 +352,6 @@ export function classify(el: Element): Classification | null {
  * blocked by PROTECT_RULES already; this is the fallback for plain <a> and for other sites in v2
  */
 export const FUNCTIONAL_INLINE = 'a[href]'
-
-/**
- * The spaces inside an inline listing (`lstlisting`): each a protected element between two identifiers of code. On
- * the markers wire a placeholder that touches a word is set apart from it by a space (protector/serialize.ts), so
- * that the engine reads the word as prose; here the words are code, and apart from the placeholder `let` and
- * `if … then … else` came back translated (the Edge endpoint, 2026-09-19). These stay as tight as they were
- */
-export const CODE_SPACE = '.ltx_lst_space'
 
 /**
  * Formatting-only inline elements, which the markers format flattens to text (§6.3). One that

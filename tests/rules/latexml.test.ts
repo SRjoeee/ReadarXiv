@@ -33,7 +33,7 @@ describe('the rule table\'s integrity', () => {
   })
 
   it('the version number was bumped for this change of rules', () => {
-    expect(RULES_VERSION).toBe('0.10.1')
+    expect(RULES_VERSION).toBe('0.10.2')
   })
 })
 
@@ -79,6 +79,10 @@ describe('classify: rule by rule', () => {
     ['citation', '<p class="ltx_p"><cite class="ltx_cite ltx_citemacro_cite">[3]</cite></p>', 'cite', { kind: 'protect', rule: 'cite', descend: false }],
     ['number tag', '<span class="ltx_tag ltx_tag_item">•</span>', undefined, { kind: 'protect', rule: 'tag', descend: false }],
     ['monospace text', '<span class="ltx_text ltx_font_typewriter">foo</span>', undefined, { kind: 'protect', rule: 'tt', descend: false }],
+    // `\lstinline` carries no typewriter class: the listing class on a `ltx:text` is what says code (0.10.2)
+    ['an inline listing', '<p class="ltx_p"><span class="ltx_text ltx_lst_language_Python ltx_lstlisting"><span class="ltx_text ltx_lst_identifier">y</span><span class="ltx_text ltx_lst_space"> </span>==<span class="ltx_text ltx_lst_space"> </span>40</span></p>', '.ltx_lstlisting', { kind: 'protect', rule: 'lstinline', descend: false }],
+    ['an inline listing of one identifier', '<p class="ltx_p"><span class="ltx_text ltx_lst_identifier ltx_lst_language_Python ltx_lstlisting">x</span></p>', '.ltx_lstlisting', { kind: 'protect', rule: 'lstinline', descend: false }],
+    ['a block listing is skipped as before, by its own rule', '<div class="ltx_listing ltx_lst_language_C ltx_lstlisting ltx_listing"><div class="ltx_listingline">int x;</div></div>', undefined, { kind: 'skip', rule: 'listing', descend: false }],
     ['footnote container: protect-but-descend', '<span class="ltx_note ltx_role_footnote"><sup class="ltx_note_mark">1</sup></span>', undefined, { kind: 'protect', rule: 'note', descend: true }],
     ['footnote mark', '<sup class="ltx_note_mark">1</sup>', undefined, { kind: 'protect', rule: 'note-mark', descend: false }],
     ['footnote type', '<span class="ltx_note_type">footnotemark: </span>', undefined, { kind: 'protect', rule: 'note-mark', descend: false }],
@@ -90,6 +94,12 @@ describe('classify: rule by rule', () => {
       expect(classify(el(html, selector))).toEqual(expected)
     })
   }
+
+  it('the listing class on anything but a `ltx:text` is not the inline rule\'s: a float keeps its caption open', () => {
+    // `figure.ltx_float.ltx_lstlisting` wraps a block listing **and its caption**; protected whole, the caption would never be translated
+    expect(classify(el('<figure class="ltx_float ltx_lstlisting"><figcaption class="ltx_caption">Listing 1: a loop</figcaption></figure>'))).toBeNull()
+    expect(classify(el('<figure class="ltx_figure ltx_figure_panel ltx_lstlisting ltx_align_center"></figure>'))).toBeNull()
+  })
 
   it('ordinary containers and style spans match nothing', () => {
     expect(classify(el('<div class="ltx_para"><p class="ltx_p">x</p></div>'))).toBeNull()

@@ -11,6 +11,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 - Long papers answer sooner. Translating asks for the first screen's text at once instead of after the page has been laid out again: the first translations appear about a third sooner on a paper of several hundred formulas, and a little sooner on any paper. Showing the original again is a little quicker too.
 - A page opened already translating now ends in `#readarxiv` rather than `#axt-translate`: the ending stays in the address bar and travels with a link you pass on, so it carries the product's name. Bookmarks and links with the old ending keep working.
 - Fixed, with Microsoft Translator: a numbered heading came back with its first word left in English — a one-word heading not translated at all, the number sometimes moved into the middle — and so did the word a footnote mark or a citation sits on. The blocks this touched are translated afresh rather than taken from the cache.
+- Inline code (`\lstinline`) is left as the paper has it. It used to go to the translator as prose and could come back altered — an operator doubled, punctuation made full-width, a keyword translated. This is a change of the rules every translation is made under, so papers read before are translated afresh once.
 
 ## 0.4.0 — 2026-09-17
 

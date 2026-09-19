@@ -7,7 +7,7 @@
 // placeholder and its text lost (measured on Table 1 of 2410.00260; Codex on #5).
 import { isInjected } from '@/core/marks'
 import { ELEMENT_NODE, TEXT_NODE } from '@/core/text'
-import { CODE_SPACE, FUNCTIONAL_INLINE, classify, isTableCell } from '@/core/rules/latexml'
+import { FUNCTIONAL_INLINE, classify, isTableCell } from '@/core/rules/latexml'
 import type { WireSpan } from './offsets'
 import { type WireFormat, writeVoid } from './tokens'
 
@@ -242,7 +242,7 @@ export function serialize(root: Element, format: WireFormat = 'tags'): Protected
         slots.set(id, el)
         if (isVoid || format === 'markers') {
           voidCount++
-          tracker.raw(writeVoid(id, format), el, 'void', format === 'markers' && !el.matches(CODE_SPACE) ? id : undefined)
+          tracker.raw(writeVoid(id, format), el, 'void', format === 'markers' ? id : undefined)
         } else {
           paired.add(id)
           tracker.raw(`<t id="${id}">`, el, 'open')
