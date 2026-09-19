@@ -73,8 +73,15 @@ export const VOID_DENSE_THRESHOLD = 40
 
 
 const hasText = (el: Element) => /\S/.test(el.textContent ?? '')
-/** What a machine translator reads as part of a word: a marker touching one of these is one token with it */
-const WORD = /[\p{L}\p{N}]/u
+/**
+ * What a machine translator reads as part of a word: a marker touching one of these is one token with it. Asked of a
+ * whole code point, never of a UTF-16 unit — half of an astral letter (𝐾, U+1D43E) is no letter — and a combining mark
+ * counts, being the end of a word written decomposed: `resume\u0301@a#` came back untranslated like any other
+ * (Devin on #254, confirmed on the Edge endpoint)
+ */
+const WORD = /[\p{L}\p{N}\p{M}]/u
+/** The last code point of a string */
+const lastPoint = (s: string): string => (/[\uD800-\uDBFF][\uDC00-\uDFFF]$/.test(s) ? s.slice(-2) : s.slice(-1))
 
 /**
  * Writes the wire text character by character, escaping and collapsing whitespace as it goes, and
@@ -131,7 +138,7 @@ function makeTracker(format: WireFormat, parts: string[], spans: WireSpan[], spa
       spans.push({ kind: 'slot', node, from: len, to: len + s.length, role })
       len += s.length
       afterSpace = false
-      last = s[s.length - 1] ?? last
+      last = lastPoint(s)
       pending = apart
     },
     text(node: Text) {
@@ -181,7 +188,7 @@ function makeTracker(format: WireFormat, parts: string[], spans: WireSpan[], spa
         if (emitted && pending !== undefined) {
           // The first character after a marker: a word gets the wire's space first, which stands for no character
           // of this node, so the 1:1 run restarts behind it
-          if (WORD.test(emitted)) {
+          if (WORD.test(String.fromCodePoint(data.codePointAt(i)!))) {
             out += ' '
             anchors.push([len + out.length, i])
             mark(pending, 'after')
@@ -196,7 +203,7 @@ function makeTracker(format: WireFormat, parts: string[], spans: WireSpan[], spa
       if (out.length === 0) return
       parts.push(out)
       len += out.length
-      last = out[out.length - 1]!
+      last = lastPoint(out)
       spans.push({ kind: 'text', node, from, to: len, anchors })
     },
   }

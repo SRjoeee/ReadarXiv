@@ -84,6 +84,14 @@ describe('a marker that touches a word is set apart from it on the wire', () => 
     expect(b.spaced.size).toBe(0)
   })
 
+  it('a word is a word by its code points: one written with a combining mark, or in astral letters, is set apart too (Devin on #254)', () => {
+    const math = '<math class="ltx_Math"><mi>x</mi></math>'
+    // `resume` + U+0301: the word ends in a mark, not a letter — the Edge endpoint left it in English like any other
+    expect(wire(`<p class="ltx_p">the resume\u0301${math} was reviewed</p>`).text).toBe('the resume\u0301 @a# was reviewed')
+    // U+1D43E, two UTF-16 units: neither half is a letter
+    expect(wire(`<p class="ltx_p">the order \u{1D43E}${math}\u{1D43E} is fixed</p>`).text).toBe('the order \u{1D43E} @a# \u{1D43E} is fixed')
+  })
+
   it('where the paper has a space, or a no-break space, nothing is added', () => {
     expect(wire(source).spaced.size).toBe(0)
     const b = wire('<p class="ltx_p">see Section\u00a0<a class="ltx_ref" href="#S5">5.4</a>\u00a0there</p>')
