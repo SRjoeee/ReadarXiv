@@ -350,6 +350,22 @@ describe('a settings change restarts a page that is on, in place, once the backg
     p.stop()
   })
 
+  it('a prompt deleted in another tab while the menu was open is not stored, and nothing restarts: it would resolve to the default silently (local review)', async () => {
+    await setConfig({ ...BASE, provider: SVC.id, prompts: { promptId: 'default', patterns: [{ id: 'mine', name: 'Mine', systemPrompt: 's {{targetLanguage}} {{glossary}}', prompt: '{{input}}' }] } })
+    const p = await opened(w => { w.page = page('on', 's1') })
+    p.popup.actions.choosePrompt('gone')
+    await flush()
+    expect((await getConfig()).prompts.promptId).toBe('default')
+    expect(p.sent('axt:translate-page')).toEqual([])
+    // The reader's own prompt and a built-in one both still name something
+    p.popup.actions.choosePrompt('mine')
+    await until(() => p.sent('axt:translate-page').length === 1)
+    expect((await getConfig()).prompts.promptId).toBe('mine')
+    p.popup.actions.choosePrompt('precision-rewrite')
+    await until(() => p.sent('axt:translate-page').length === 2)
+    p.stop()
+  })
+
   it('a prompt restarts the page only when the chosen service reads prompts', async () => {
     const p = await opened(w => { w.page = page('on', 's1') })
     p.popup.actions.choosePrompt('precision-rewrite')

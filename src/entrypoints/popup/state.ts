@@ -18,6 +18,7 @@
 import { type Config, DEFAULT_CONFIG, MODE_VALUES } from '@/config/schema'
 import { isBuiltInService, isLlmChosen } from '@/config/services'
 import type { Mode } from '@/core/renderer'
+import { promptExists } from '@/providers/prompt-library'
 import type { ProviderStatus } from '@/providers/transport'
 import type { AxtMessage, EntryStatus, PageStatus, sendMessage, sendToActiveTab } from '@/shared/messages'
 import type { HelperStatus } from '@/shared/ocr'
@@ -326,7 +327,10 @@ export function createPopupState(host: PopupHost): PopupState {
     choosePrompt: id => void guard(async () => {
       menu = null
       changed()
-      const next = await patchConfig(latest => ({ ...latest, prompts: { ...latest.prompts, promptId: id } }))
+      // Same as the service and style menus: this list may have been built before another tab deleted the prompt, and
+      // an id that names nothing resolves to the default silently (providers/prompt-library.ts)
+      const next = await patchConfig(latest => (promptExists(latest.prompts, id) ? { ...latest, prompts: { ...latest.prompts, promptId: id } } : latest))
+      if (next.prompts.promptId !== id) return
       // Any of the reader's services is an LLM, and each is chosen through its own id — comparing
       // against 'openai-compat' was never true after v12, so the page kept the old prompt (Codex on #157)
       if (isLlmChosen(next)) await restartIfOn(next, surface.state().pack)

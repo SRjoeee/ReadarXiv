@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { PromptFileFormatError, downloadPromptFile, readPromptFile } from '@/providers/prompt-file'
 import {
   BUILT_IN_PROMPTS, DEFAULT_PROMPT_ID, PROMPT_TOKENS, getTokenCellText,
-  type PromptTemplate, type PromptsConfig,
+  type PromptTemplate, type PromptsConfig, promptExists,
 } from '@/providers/prompt-library'
 import { getRandomUUID as uuid } from '@/shared/uuid'
 import { O } from '@/ui/strings'
@@ -69,7 +69,7 @@ export function PromptManager({ value, onChange }: { value: PromptsConfig; onCha
   // one's refresh ran, the prompt would resolve to the default silently, and neither it nor the previous choice would
   // translate (local review). Such a choice keeps what is stored
   const select = (promptId: string) => onChange(current => (
-    builtIns.some(t => t.id === promptId) || current.patterns.some(p => p.id === promptId) ? { ...current, promptId } : current
+    promptExists(current, promptId) ? { ...current, promptId } : current
   ))
 
   function open(mode: EditorMode, template?: PromptTemplate) {
