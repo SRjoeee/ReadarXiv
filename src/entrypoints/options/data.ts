@@ -9,7 +9,6 @@ import type { Config } from '@/config/schema'
 import { onMessages, sendMessage } from '@/shared/messages'
 import type { HelperStatus } from '@/shared/ocr'
 import { type PackState, downloadPack } from '@/shared/pack'
-import { S } from '@/ui/strings'
 import { drafts } from '@/ui/drafts'
 import { useSurfaceConfig } from '@/ui/use-surface-config'
 
@@ -65,7 +64,9 @@ export function useOptionsData(): OptionsData {
     // `recheck` on every open of a page: the reader may have installed the helper since the worker
     // last looked, and it remembers a missing host for its whole life. Chrome fails a connect to an
     // absent host without spawning anything, so asking again costs nothing
-    sendMessage({ type: 'axt:helper-status', recheck: true }).then(setHelper).catch(() => setHelper({ state: 'not-installed', reason: S.page.backendSilent }))
+    // A background that does not answer reads as a helper that is not there, as in the popup. No reason goes with it:
+    // the field is the background's, for an image's failure line, and no surface shows it
+    sendMessage({ type: 'axt:helper-status', recheck: true }).then(setHelper).catch(() => setHelper({ state: 'not-installed' }))
     browser.runtime.getPlatformInfo().then(info => setPlatform(info.os === 'mac' ? 'mac' : 'other')).catch(() => setPlatform('other'))
     // The background broadcasts the helper's state when it changes on its own — the install wait found it, or the
     // fresh worker after a runtime grant reported (DESIGN §15.3); the section follows without a reload

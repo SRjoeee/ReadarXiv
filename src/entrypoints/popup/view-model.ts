@@ -22,6 +22,7 @@ import { pageDecision } from '@/shared/page-action'
 import type { HelperStatus } from '@/shared/ocr'
 import type { PackState } from '@/shared/pack'
 import type { MenuItem } from '@/ui/Menu'
+import { helperStep } from '@/ui/helper-step'
 import { styleTile } from '@/ui/appearance/tiles'
 import { NoActiveTabError } from '@/shared/messages'
 import { PREVIEW_TARGET, S, languageLabel, languageName, parseFatal, profileName, reasonText, serviceName } from '@/ui/strings'
@@ -244,10 +245,13 @@ export function derivePopupView(input: PopupInput): PopupView {
   if (!primary.disabled && shortcut) primary.shortcut = shortcut
   const secondary = behind || paused ? { label: S.primary.restore, action: 'restore' as const } : null
 
-  const helperHint: PopupView['helper'] = !config.image.enabled || helper === null || helper.state === 'ready' || platform === null ? null
-    : platform !== 'mac' ? { text: S.helper.macOnly, step: null }
-    : helper.state === 'permission-missing' ? { text: S.helper.permission, step: 'allow' }
-    : helper.state === 'restarting' ? { text: S.helper.enabling, step: null }
+  // Where the reader stands with the helper is one decision (ui/helper-step.ts); the popup shows it only while image
+  // translation is on and there is something to say — nothing while it is unknown, nothing once it is ready
+  const step = config.image.enabled ? helperStep(helper, platform) : 'ready'
+  const helperHint: PopupView['helper'] = step === 'detecting' || step === 'ready' ? null
+    : step === 'mac-only' ? { text: S.helper.macOnly, step: null }
+    : step === 'allow' ? { text: S.helper.permission, step: 'allow' }
+    : step === 'enabling' ? { text: S.helper.enabling, step: null }
     : { text: S.helper.install, step: 'install', extensionId }
 
   return {

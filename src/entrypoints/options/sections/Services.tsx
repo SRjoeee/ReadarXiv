@@ -13,6 +13,7 @@ import { MODE_ORDER, O, S, languageLabel, languageName } from '@/ui/strings'
 import type { OptionsData } from '../data'
 import { HelperPermission } from '@/ui/HelperPermission'
 import { HelperSetup } from '@/ui/HelperSetup'
+import { helperStep } from '@/ui/helper-step'
 import { ServiceDrawer } from './ServiceDrawer'
 
 /** Read at render, not at import: the pack is chosen after this module loads (ui/strings.ts) */
@@ -22,6 +23,9 @@ const RADIO = 'size-3.5 shrink-0 appearance-none rounded-full border-[1.5px] bor
 
 export function Services({ data, extensionId }: { data: OptionsData; extensionId: string }) {
   const { config, patch, pack, checkPack, fetchPack, helper, setHelper, platform } = data
+  const step = helperStep(helper, platform)
+  // `ready` is the one step that shows something of the status itself
+  const helperVersion = helper?.state === 'ready' ? helper.version : ''
   /** null = closed, 'new' = the add form, otherwise the service being edited */
   const [editing, setEditing] = useState<'new' | string | null>(null)
   if (!config) return null
@@ -114,14 +118,12 @@ export function Services({ data, extensionId }: { data: OptionsData; extensionId
           <Switch checked={config.image.enabled} onChange={on => void patch(latest => ({ ...latest, image: { enabled: on, modes: on && latest.image.modes.length === 0 ? [...MODE_VALUES] : latest.image.modes } }))} label={S.rows.images} />
         </Row>
         <div className="border-t border-line py-3 text-[12px] leading-relaxed text-fg-2">
-          {helper === null || platform === null ? O.services.detecting
-            : helper.state === 'ready' ? `${S.setup.done} ${helper.version}`
-            // The installer exits at once on anything but macOS, so offering it elsewhere would be
-            // an actionable-looking path that cannot work (Codex on #157)
-            : platform !== 'mac' ? S.helper.macOnly
-            // The permission comes before the install command (DESIGN §15.3); a grant into a running worker takes a moment
-            : helper.state === 'permission-missing' ? <div className="flex flex-col gap-2"><span>{S.helper.permission}</span><HelperPermission onStatus={setHelper} /></div>
-            : helper.state === 'restarting' ? S.helper.enabling
+          {/* Where the reader stands with the helper is one decision, the popup's too (ui/helper-step.ts) */}
+          {step === 'detecting' ? O.services.detecting
+            : step === 'ready' ? `${S.setup.done} ${helperVersion}`
+            : step === 'mac-only' ? S.helper.macOnly
+            : step === 'allow' ? <div className="flex flex-col gap-2"><span>{S.helper.permission}</span><HelperPermission onStatus={setHelper} /></div>
+            : step === 'enabling' ? S.helper.enabling
             : <HelperSetup extensionId={extensionId} />}
         </div>
         <fieldset className="border-0 border-t border-line p-0 py-3">
