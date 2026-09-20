@@ -130,6 +130,43 @@ describe('createPlaceKeeper', () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 3000 + 300, behavior: 'instant' })
   })
 
+  it('under stacked the reader reads the translation, below its original: the place is measured on what was hit, the original only names it (Codex on #270)', () => {
+    const { el } = page()
+    const b = el('b')
+    const translation = boxed(document.createElement('p'))
+    translation.className = T_CLASS
+    translation.innerHTML = '<span id="read">translated</span>'
+    b.after(translation)
+    // The original ends above the line (200); the line is a quarter of the way down the translation
+    place(b, 0, 150)
+    place(translation, 150, 200)
+    const k = keeper([b], () => document.getElementById('read'))
+    k.keep.keep()
+    // Side by side: the translation is beside its original now, and taller
+    place(b, 900, 300)
+    place(translation, 900, 400)
+    k.layout()
+    // A quarter of the way down the translation is at 1000; measured on the original's bottom edge it would have been 1200
+    expect(scrollTo).toHaveBeenCalledWith({ top: 3000 + 800, behavior: 'instant' })
+  })
+
+  it('and when what was hit is gone by then — a restore — the same part of the original is where the place is looked for', () => {
+    const { el } = page()
+    const b = el('b')
+    const translation = boxed(document.createElement('p'))
+    translation.className = T_CLASS
+    b.after(translation)
+    place(b, 0, 150)
+    place(translation, 150, 200)
+    const k = keeper([b], () => translation)
+    k.keep.keep()
+    translation.remove()
+    place(b, 500, 200)
+    k.layout()
+    // A quarter of the way down the original: 550, from the 200 the reader was on
+    expect(scrollTo).toHaveBeenCalledWith({ top: 3000 + 350, behavior: 'instant' })
+  })
+
   it('a hit on an image\'s translated label is read as the image: the overlay is ours, takes the pointer, and is gone after a restore (Devin on #270)', () => {
     const { el } = page()
     const section = el('s')
@@ -200,6 +237,30 @@ describe('createPlaceKeeper', () => {
     expect(again.afterLayout).toHaveBeenCalledTimes(1)
   })
 
+  it('a paragraph\'s little wrapper is a container too, however short: under translation only it loses the original inside it (measured: 103 px off)', () => {
+    const { el } = page()
+    const wrapper = boxed(document.createElement('div'))
+    const original = boxed(document.createElement('p'))
+    const translation = boxed(document.createElement('p'))
+    translation.className = T_CLASS
+    wrapper.append(original, translation)
+    el('s').append(wrapper)
+    place(wrapper, -30, 420)
+    place(original, -30, 240)
+    place(translation, 210, 180)
+    // The point between the two hits the wrapper; sixteen pixels lower it hits the translation
+    const k = keeper([original], y => (y < 210 ? wrapper : translation))
+    k.keep.keep()
+    expect(k.elementAt.mock.calls.map(call => call[1])).toEqual([200, 216])
+    // Translation only: the original is hidden, the wrapper shrinks by its height; the translation is what was kept
+    boxes.delete(original)
+    place(wrapper, 500, 180)
+    place(translation, 500, 180)
+    k.layout()
+    // 6 px down the translation then, at 216; the same part of it now is at 506
+    expect(scrollTo).toHaveBeenCalledWith({ top: 3000 + 290, behavior: 'instant' })
+  })
+
   it('taller than the viewport is still the reader\'s place when it is one thing: a long translated paragraph, a tall image', () => {
     const { el } = page()
     // A paragraph of 1 200 px with children of its own, but a translation block: its parts keep their order
@@ -227,6 +288,13 @@ describe('createPlaceKeeper', () => {
     const k = keeper([el('b')], () => el('b'))
     k.keep.keep()
     window.dispatchEvent(new Event('wheel'))
+    place(el('b'), 3650, 400)
+    k.layout()
+    expect(scrollTo).not.toHaveBeenCalled()
+    // A press on the viewport's scrollbar reaches the page as a pointerdown on the root, and nothing else does (Codex on #270)
+    place(el('b'), 150, 200)
+    k.keep.keep()
+    window.dispatchEvent(new Event('pointerdown'))
     place(el('b'), 3650, 400)
     k.layout()
     expect(scrollTo).not.toHaveBeenCalled()

@@ -10,6 +10,8 @@
 // trying it from inside the page first (2026-09-20): one correction at the action left 96 px where the tidy layer's
 // full pass followed; a correction at each relayout the extension itself performs left 0–1 px, never painted further.
 // AXT_TIMELINE=1 prints when what was shown changed, beside the extension's own lines.
+// AXT_NUDGE=px scrolls that much further before every action but the first: under stacked the translation is below
+// its original, and a nudge of a paragraph's height puts the reader's line on the translation — what a reader reads.
 // Usage: pnpm build && node tests/e2e/probes/reading-position.mjs [paper] [fraction of the way down, 0–1]
 import { rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -23,6 +25,7 @@ const PAPER = process.argv[2] ?? '2410.00260'
 const DOWN = Number(process.argv[3] ?? 0.45)
 /** The reader's line, as the extension takes it: a quarter of the way down a 900 px viewport */
 const LINE = Number(process.env.AXT_LINE ?? 225)
+const NUDGE = Number(process.env.AXT_NUDGE ?? 0)
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 rmSync(PROFILE, { recursive: true, force: true })
@@ -61,6 +64,14 @@ await page.evaluate(({ down, line }) => {
   const own = () => [...document.querySelectorAll('article p.ltx_p')].filter(p => !p.closest('.axt-t'))
   // What stands for a paragraph on screen: itself, or under "translation only" the translation beside it
   const shown = p => (p.getClientRects().length ? p : p.nextElementSibling?.classList.contains('axt-t') ? p.nextElementSibling : null)
+  const wordTop = (node, offset) => {
+    if (!node.isConnected) return Number.NaN
+    const range = document.createRange()
+    range.setStart(node, Math.min(offset, node.length))
+    range.setEnd(node, Math.min(offset + 1, node.length))
+    const box = range.getClientRects()[0]
+    return box ? box.top : Number.NaN
+  }
   window.__place = {
     note() {
       const list = own()
@@ -72,6 +83,12 @@ await page.evaluate(({ down, line }) => {
         if (best === null || Math.abs(top - line) < Math.abs(best.top - line)) best = { index, top, p }
       }
       window.__place.anchor = best.p
+      // The word on the reader's line — the text node and the offset the browser's caret lands on there — is the
+      // measure that owes nothing to how the extension keeps the place: a paragraph's top moves when the paragraph
+      // changes height, though the sentence being read stays put. Taken in the text column, as the extension does
+      const article = document.querySelector('article').getBoundingClientRect()
+      const caret = document.caretRangeFromPoint(article.left + article.width * 0.25, line)
+      window.__place.word = caret && caret.startContainer.nodeType === 3 ? { node: caret.startContainer, offset: caret.startOffset, top: wordTop(caret.startContainer, caret.startOffset) } : null
       // Every painted frame from here on is compared with this place
       window.__place.was = best.top
       window.__place.worst = 0
@@ -83,7 +100,9 @@ await page.evaluate(({ down, line }) => {
     find() {
       const el = shown(window.__place.anchor)
       const top = el ? el.getBoundingClientRect().top : Number.NaN
-      return { top: Math.round(top), onScreen: top > -40 && top < innerHeight - 40, scrollY: Math.round(scrollY), height: document.documentElement.scrollHeight, worst: Math.round(window.__place.worst), timeline: window.__place.timeline, t0: window.__place.t0 }
+      const word = window.__place.word
+      const wordNow = word ? wordTop(word.node, word.offset) : Number.NaN
+      return { word: word && !Number.isNaN(wordNow) ? Math.round(wordNow - word.top) : null, in: word ? (word.node.parentElement?.closest('.axt-t') ? 'a translation' : 'the original') : null, top: Math.round(top), onScreen: top > -40 && top < innerHeight - 40, scrollY: Math.round(scrollY), height: document.documentElement.scrollHeight, worst: Math.round(window.__place.worst), timeline: window.__place.timeline, t0: window.__place.t0 }
     },
   }
   // What the reader was shown: after each paint, how far the noted paragraph stands from where it was
@@ -117,7 +136,8 @@ const steps = [
 ]
 
 console.log(`\n=== ${PAPER}, ${Math.round(DOWN * 100)}% of the way down, viewport 1440×900, the reader's line ${LINE} px from the top`)
-for (const [name, act, wait] of steps) {
+for (const [index, [name, act, wait]] of steps.entries()) {
+  if (NUDGE && index > 0) { await page.evaluate(px => window.scrollBy(0, px), NUDGE); await sleep(400) }
   const before = await page.evaluate(() => window.__place.note())
   await act()
   await sleep(wait)
@@ -129,6 +149,6 @@ for (const [name, act, wait] of steps) {
     for (const line of lines.splice(0)) console.log(`     ${Math.round(line.at - after.t0)} ms (when the line was read, a little after it was written): ${line.text}`)
   }
   console.log(`${name.padEnd(26)} paragraph #${before.index} “${before.words}…”: ${before.top} px → ${Number.isNaN(after.top) ? 'gone' : `${after.top} px`} `
-    + `(${moved > 0 ? '+' : ''}${moved} px, ${after.onScreen ? 'still on screen' : 'OFF SCREEN'}); worst shown ${after.worst} px; on the reader's line now: #${now.index} (${now.index - before.index >= 0 ? '+' : ''}${now.index - before.index})`)
+    + `(${moved > 0 ? '+' : ''}${moved} px, ${after.onScreen ? 'still on screen' : 'OFF SCREEN'}); the word on the line, in ${after.in ?? 'no text'}: ${after.word === null ? 'gone or hidden' : `${after.word > 0 ? '+' : ''}${after.word} px`}; worst shown ${after.worst} px; on the reader's line now: #${now.index} (${now.index - before.index >= 0 ? '+' : ''}${now.index - before.index})`)
 }
 await context.close()

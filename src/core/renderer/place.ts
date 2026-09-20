@@ -35,13 +35,21 @@ const NEAR_PX = 4
 /** Across the text: a quarter of the way into the article from its left edge — the originals' column under side, the text itself otherwise, clear of whatever floats at the window's edges */
 const ACROSS = 0.25
 /**
- * Between two paragraphs the hit test finds their container — a section thousands of pixels tall, no measure of
- * anything: content changing height far below the viewport would move "the same part of it" (Codex on #270). The line
- * is tried lower, by these offsets; where even half a screen down holds nothing the reader could be on, nothing is kept
+ * Between two paragraphs the hit test finds their container, and a container is no measure of anything: what is
+ * inside it comes and goes with the mode. A section's far end moves "the same part of it" by thousands of pixels
+ * (Codex on #270); a paragraph's little wrapper, holding an original and its translation, loses the original under
+ * translation only and with it a hundred pixels (measured: 103). The line is tried lower, by these offsets; where even
+ * half a screen down holds nothing the reader could be on, nothing is kept
  */
 const GAP_OFFSETS_PX = [0, 16, 32, 64, 128, 256]
-/** The reader scrolling by their own hand, which a correction must never undo */
-const READER_SCROLLS = ['wheel', 'touchmove', 'keydown'] as const
+/**
+ * The reader scrolling by their own hand, which a correction must never undo. `pointerdown` is the press on the
+ * viewport's scrollbar, which Chrome gives to the root, and the start of a middle-button scroll (Codex on #270). The
+ * scroll offset itself tells nothing: measured, Chrome's own anchoring moves it by thousands of pixels in the very
+ * frames that still need correcting (−9 239 px of its own, 7 767 px still off) — "it moved, so leave it" would switch
+ * the keeper off where it matters. A drag already under way needs no signal: its next move sets the offset again
+ */
+const READER_SCROLLS = ['wheel', 'touchmove', 'keydown', 'pointerdown'] as const
 
 export function createPlaceKeeper(doc: Document, blocks: ReadonlyArray<{ el: Element }>, options: PlaceKeeperOptions = {}): PlaceKeeper {
   const afterLayout = options.afterLayout ?? ((root: Element, run: () => void) => {
@@ -61,14 +69,22 @@ export function createPlaceKeeper(doc: Document, blocks: ReadonlyArray<{ el: Ele
    * block the unit is the block: under translation only it is the block that hides, whole, with its translation beside it
    */
   const OURS = `.${T_CLASS}, .${IMG_CLASS}`
-  const unitOf = (hit: Element): Element => {
+  /**
+   * `unit` is the identity, the page's own. `ours` is what was actually under the line when that was one of ours —
+   * under stacked the reader reads the translation, below its original — and the place is measured on it for as long
+   * as it shows: measured on the original instead, the point kept was the original's bottom edge, a paragraph away
+   * from the reader once side puts the two beside each other (Codex on #270; 65–103 px in the browser)
+   */
+  const resolve = (hit: Element): { unit: Element; ours: Element | null } => {
     let at = hit
-    for (let ours = at.closest(OURS); ours; ours = at.closest(OURS)) {
-      if (!ours.previousElementSibling) break
-      at = ours.previousElementSibling
+    let ours: Element | null = null
+    for (let found = at.closest(OURS); found; found = at.closest(OURS)) {
+      if (!found.previousElementSibling) break
+      ours = found
+      at = found.previousElementSibling
     }
-    for (let up: Element | null = at; up; up = up.parentElement) if (blockEls.has(up)) return up
-    return at
+    for (let up: Element | null = at; up; up = up.parentElement) if (blockEls.has(up)) return { unit: up, ours }
+    return { unit: at, ours }
   }
 
   /**
@@ -87,6 +103,22 @@ export function createPlaceKeeper(doc: Document, blocks: ReadonlyArray<{ el: Ele
     }
     return null
   }
+  /**
+   * One thing, whose parts keep their order whatever the mode: a translation block, or an element with none inside
+   * it — an image however tall, a row of a formula, a paragraph the extractor passed over. Anything else holds
+   * blocks, and is a container
+   */
+  const oneThing = (unit: Element): boolean => {
+    if (blockEls.has(unit)) return true
+    for (const inside of Array.from(unit.querySelectorAll('*'))) if (blockEls.has(inside) || inside.classList.contains(T_CLASS)) return false
+    return true
+  }
+
+  /** Where the place is measured: on ours that was hit while it is still on the page and shows, on the unit otherwise — after a restore, a retranslation */
+  const measure = (unit: Element, ours: Element | null): DOMRect | null => {
+    const its = ours?.isConnected ? ours.getBoundingClientRect() : null
+    return its && (its.width > 0 || its.height > 0) ? its : boxOf(unit)
+  }
 
   return {
     keep() {
@@ -101,25 +133,25 @@ export function createPlaceKeeper(doc: Document, blocks: ReadonlyArray<{ el: Ele
       // What is on the reader's line — a paragraph, a row of a formula, a figure; translated or not. Not the nearest
       // translation block: through an appendix of bare formulas that was a thousand pixels away, and the stretch
       // between it and the reader changes height from mode to mode (measured: 750 px off)
-      let kept: Element | null = null
+      let kept: { unit: Element; ours: Element | null } | null = null
       let box: DOMRect | null = null
       let line = 0
       for (const lower of GAP_OFFSETS_PX) {
         line = view.innerHeight * LINE + lower
         const hit = elementAt(x, line)
         if (!hit || !root.contains(hit)) continue
-        const unit = unitOf(hit)
-        const its = boxOf(unit)
+        const found = resolve(hit)
+        const { unit } = found
+        // A container the line fell through — a section, a paragraph's wrapper — is tried past
+        if (!oneThing(unit)) continue
+        const its = measure(unit, found.ours)
         if (!its) continue
-        // Taller than the viewport is still the reader's place when it is one thing — a long paragraph, a tall image:
-        // its parts keep their order. A container the line fell through is not: a section, a list, a figure's wrapper
-        if (its.height > view.innerHeight && unit.childElementCount > 0 && !blockEls.has(unit)) continue
-        kept = unit
+        kept = found
         box = its
         break
       }
       if (!kept || !box) return
-      const block = kept
+      const place = kept
       // The point kept is one of the unit's own: how far down it, and where on screen it stands now
       const part = box.height > 0 ? Math.min(1, Math.max(0, (line - box.top) / box.height)) : 0
       const was = box.top + part * box.height
@@ -133,7 +165,7 @@ export function createPlaceKeeper(doc: Document, blocks: ReadonlyArray<{ el: Ele
         stop()
         inputs.abort()
         armed = false
-        const now = readerScrolled ? null : boxOf(block)
+        const now = readerScrolled ? null : measure(place.unit, place.ours)
         if (!now) return
         const off = now.top + part * now.height - was
         // `instant`: a page that asks for smooth scrolling would play the correction as a glide
