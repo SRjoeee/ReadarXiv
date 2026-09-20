@@ -44,7 +44,9 @@ function wanted(tag: string): LangCode | null {
   // A script subtag is the four-letter one (BCP-47)
   const asked = subtags.slice(1).find(part => /^[a-z]{4}$/.test(part))
   const named = NAMED_SCRIPT[language]
-  if (named) return (asked ? asked === named.script : named.unmarked) ? language : null
+  // Naming the entry by its own code is asking for it: `ckb-IQ` is Sorani, whatever `ku` means (Devin on #272)
+  const byItsOwnCode = subtags[0] === language.toLowerCase()
+  if (named) return (asked ? asked === named.script : named.unmarked || byItsOwnCode) ? language : null
   if (!asked) return language
   // **A script asked for by name is given only where the table vouches for it** — the entries above, and Chinese,
   // whose two entries are its two scripts. For the rest the table says nothing of the script, and `ru-Latn` is not

@@ -50,6 +50,11 @@ describe('pickTargetLanguage', () => {
     expect(pickTargetLanguage(['ku', 'tr'])).toBe('tur')
     expect(pickTargetLanguage(['ku-Latn-TR', 'tr'])).toBe('tur')
     expect(pickTargetLanguage(['ku-Arab-IQ'])).toBe('ckb')
+    // Named by its own code it is asked for outright; a script it is not written in still is not given
+    expect(pickTargetLanguage(['ckb-IQ', 'en'])).toBe('ckb')
+    expect(pickTargetLanguage(['ckb'])).toBe('ckb')
+    expect(pickTargetLanguage(['ckb-Latn', 'tr'])).toBe('tur')
+    expect(pickTargetLanguage(['uzn'])).toBe('uzn')
   })
 
   it('knows a language by the code the browser uses for it, and a three-letter one with its region', () => {
