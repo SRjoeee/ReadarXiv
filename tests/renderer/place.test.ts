@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { T_CLASS } from '@/core/marks'
+import { IMG_CLASS, T_CLASS } from '@/core/marks'
 import { createPlaceKeeper } from '@/core/renderer/place'
 
 // The reader's place across a relayout (DESIGN §10). happy-dom lays nothing out, so the boxes are given by hand and
@@ -113,7 +113,7 @@ describe('createPlaceKeeper', () => {
     const b = el('b')
     const translation = document.createElement('p')
     translation.className = T_CLASS
-    translation.innerHTML = '<span id="ours">译</span>'
+    translation.innerHTML = '<span id="ours">translated</span>'
     b.after(translation)
     place(b, 150, 200)
     const k = keeper([b], () => document.getElementById('ours'))
@@ -123,6 +123,30 @@ describe('createPlaceKeeper', () => {
     place(b, 450, 200)
     k.layout()
     expect(scrollTo).toHaveBeenCalledWith({ top: 3000 + 300, behavior: 'instant' })
+  })
+
+  it('a hit on an image\'s translated label is read as the image: the overlay is ours, takes the pointer, and is gone after a restore (Devin on #270)', () => {
+    const { el } = page()
+    const section = el('s')
+    const figure = document.createElement('img')
+    figure.id = 'fig'
+    section.append(figure)
+    vi.spyOn(figure, 'getBoundingClientRect').mockImplementation(() => {
+      const box = boxes.get(figure)
+      return (box ? { top: box.top, bottom: box.top + box.height, height: box.height, left: 100, width: 600 } : { top: 0, bottom: 0, height: 0, left: 0, width: 0 }) as DOMRect
+    })
+    const overlay = document.createElement('div')
+    overlay.className = IMG_CLASS
+    overlay.innerHTML = '<span id="label">Energy</span>'
+    figure.after(overlay)
+    place(figure, 100, 400)
+    const k = keeper([], () => document.getElementById('label'))
+    k.keep.keep()
+    // Restored: the overlay is swept away; the image is what the place is measured by
+    overlay.remove()
+    place(figure, 700, 400)
+    k.layout()
+    expect(scrollTo).toHaveBeenCalledWith({ top: 3000 + 600, behavior: 'instant' })
   })
 
   it('between two paragraphs the hit test finds their section, which measures nothing: the line is tried a little lower', () => {

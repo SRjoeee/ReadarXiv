@@ -13,7 +13,7 @@
 // stood after the browser's next layout, before it paints. No timer, no window of time, no layout forced: measured, the paragraph is never painted more than
 // a pixel from its place. What comes after — translations arriving above the viewport — is Chrome's anchoring's, as
 // before (§10). The aim is the paragraph, not the pixel: nobody knows which word the reader was on.
-import { T_CLASS } from '@/core/marks'
+import { IMG_CLASS, T_CLASS } from '@/core/marks'
 import { DOCUMENT_ROOT } from '@/core/rules/latexml'
 
 export interface PlaceKeeper {
@@ -52,13 +52,15 @@ export function createPlaceKeeper(doc: Document, blocks: ReadonlyArray<{ el: Ele
   const blockEls = new Set(blocks.map(block => block.el))
 
   /**
-   * What on the page stands for the element the hit test found. One of ours — a translation, a mirror, a copy — is
-   * beside its original, which is the page's own and outlives a restore. Inside a translated block the unit is the
-   * block: under translation only it is the block that hides, whole, with its translation beside it
+   * What on the page stands for the element the hit test found. One of ours — a translation, a mirror, a copy, or an
+   * image's overlay, whose labels take the pointer (Devin on #270) — is the next sibling of its original, which is the
+   * page's own and outlives a restore; ours would be gone by the time the place is put back. Inside a translated
+   * block the unit is the block: under translation only it is the block that hides, whole, with its translation beside it
    */
+  const OURS = `.${T_CLASS}, .${IMG_CLASS}`
   const unitOf = (hit: Element): Element => {
     let at = hit
-    for (let ours = at.closest(`.${T_CLASS}`); ours; ours = at.closest(`.${T_CLASS}`)) {
+    for (let ours = at.closest(OURS); ours; ours = at.closest(OURS)) {
       if (!ours.previousElementSibling) break
       at = ours.previousElementSibling
     }
