@@ -142,8 +142,11 @@ export function createPlaceKeeper(doc: Document, blocks: ReadonlyArray<{ el: Ele
         if (!hit || !root.contains(hit)) continue
         const found = resolve(hit)
         const { unit } = found
-        // A container the line fell through — a section, a paragraph's wrapper — is tried past
-        if (!oneThing(unit)) continue
+        // A container the line fell through — a section, a paragraph's wrapper — is tried past. Not when one of
+        // ours was hit: the place is measured on that, and it is one thing whatever it stands beside — under
+        // translation only a split figure's copy is all there is of the figure, and the figure it maps to holds its
+        // caption's block (Devin on #270: every try inside a tall copy was refused, and nothing was kept)
+        if (!found.ours && !oneThing(unit)) continue
         const its = measure(unit, found.ours)
         if (!its) continue
         kept = found

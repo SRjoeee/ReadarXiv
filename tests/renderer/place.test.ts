@@ -224,6 +224,43 @@ describe('createPlaceKeeper', () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 3000 + (500 + 0.5 * 300 - 200), behavior: 'instant' })
   })
 
+  it('from translation only, on a split figure\'s copy — all there is of the figure then: measured on the copy through a change of mode, on the figure after a restore (Devin on #270)', () => {
+    const build = () => {
+      const { el } = page()
+      const figure = boxed(document.createElement('figure'))
+      figure.innerHTML = '<img><figcaption id="cap">Figure 1.</figcaption>'
+      el('s').append(figure)
+      const caption = document.getElementById('cap') as HTMLElement
+      const copy = boxed(document.createElement('figure'))
+      copy.className = `${T_CLASS} axt-split`
+      copy.innerHTML = '<img id="shown">'
+      figure.after(copy)
+      // Translation only: the figure is hidden, its copy shows and is tall — every try of the line lands in it
+      place(copy, -100, 1200)
+      return { figure, caption, copy }
+    }
+    // The figure the copy maps to holds its caption's block: a container, and still the copy is kept
+    const first = build()
+    const toSide = keeper([first.caption], () => document.getElementById('shown'))
+    toSide.keep.keep()
+    expect(toSide.afterLayout).toHaveBeenCalledTimes(1)
+    expect(toSide.elementAt).toHaveBeenCalledTimes(1)
+    place(first.figure, 400, 1200)
+    place(first.copy, 400, 1200)
+    toSide.layout()
+    // A quarter of the way down the copy then (200), a quarter of the way down it now: 700
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 3000 + 500, behavior: 'instant' })
+
+    const second = build()
+    const restored = keeper([second.caption], () => document.getElementById('shown'))
+    restored.keep.keep()
+    second.copy.remove()
+    place(second.figure, 900, 1000)
+    restored.layout()
+    // The copy is gone; the same part of the figure it stood for: 900 + 0.25 × 1000 = 1150
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 3000 + 950, behavior: 'instant' })
+  })
+
   it('a container the line fell through is never the measure: when every try finds the section, nothing is kept (Codex on #270)', () => {
     const { el } = page()
     const k = keeper([el('b')], () => el('s'))
