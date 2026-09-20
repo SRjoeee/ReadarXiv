@@ -55,6 +55,12 @@ export interface PrepOptions {
   trace?: (line: string) => void
   /** Retry a failed block by id — the pipeline's `translate([block])`; the split copies' widgets call it (issue #170) */
   retry?: (blockId: string) => void
+  /**
+   * A full pass under side is about to relayout the page — mirrors by the hundred, tables scaled — and Chrome's own
+   * scroll anchoring stands down for that frame (measured: 96 px in one pass, more with more tables above the reader).
+   * Called at the start of such a pass, where the layout is still clean (renderer/place.ts)
+   */
+  keepPlace?: () => void
   /** Test injection: the column width */
   columnWidth?: (root: Element) => number
   /** Test injection: watch an element's width, returning the way to stop; a `ResizeObserver` when absent */
@@ -100,6 +106,8 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
 
   const run = (scope: Element[] | null) => {
     const t0 = performance.now()
+    // Before anything is read or written: the reader's place, across the one kind of pass that moves the whole page
+    if (scope === null && options.isSide()) options.keepPlace?.()
     // The column width: read before anything is written. The layout is clean at this moment (the last frame has just
     // rendered), so no whole-page forced layout is paid for. Measured from the **translation root**, not <html>:
     // measureColumn finds the grid track through closest(DOCUMENT_ROOT), which from <html> finds nothing, and the

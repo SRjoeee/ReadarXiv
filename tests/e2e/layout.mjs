@@ -541,6 +541,65 @@ async function measureFrame(page) {
   await page.close()
 }
 
+// The reader's place (DESIGN §10, core/renderer/place.ts): starting a translation, each change of mode and a restore
+// lay the whole paper out anew, and the paragraph the reader was on used to leave the screen by thousands of pixels
+// every time (tests/e2e/probes/reading-position.mjs has the numbers). The aim is the paragraph, not the pixel: it has
+// to stay on screen, within a few lines of where it stood
+{
+  const page = await context.newPage()
+  await page.goto('https://arxiv.org/html/2410.00260', { waitUntil: 'load' })
+  const popup = await context.newPage()
+  await popup.goto(`chrome-extension://${extId}/popup.html`)
+  await page.bringToFront()
+  const sideButton = popup.getByRole('button', { name: '左右', exact: true })
+  await sideButton.waitFor({ timeout: 10_000 })
+  await sideButton.click()
+  await sleep(1500)
+  await page.evaluate(() => {
+    // The reader's line as the extension takes it: a quarter of the way down the viewport
+    const line = innerHeight / 4
+    const own = () => [...document.querySelectorAll('article p.ltx_p')].filter(p => !p.closest('.axt-t'))
+    // Under translation only a translated original is hidden, and its translation stands beside it
+    const shown = p => (p.getClientRects().length ? p : p.nextElementSibling?.classList.contains('axt-t') ? p.nextElementSibling : null)
+    window.__place = {
+      note() {
+        let best = null
+        for (const p of own()) {
+          const el = shown(p)
+          if (!el) continue
+          const top = el.getBoundingClientRect().top
+          if (best === null || Math.abs(top - line) < Math.abs(best.top - line)) best = { p, top }
+        }
+        window.__place.p = best.p
+        return best.top
+      },
+      find() {
+        const el = shown(window.__place.p)
+        return el ? el.getBoundingClientRect().top : Number.NaN
+      },
+    }
+    const list = own()
+    const target = list[Math.floor(list.length * 0.45)]
+    scrollTo(0, target.getBoundingClientRect().top + scrollY - line)
+  })
+  await sleep(800)
+  const press = name => () => popup.getByRole('button', { name, exact: true }).click()
+  const steps = [['translate', press('翻译本页'), 6000], ['stacked', press('上下'), 2500], ['translation only', press('仅译文'), 2500], ['side by side', press('左右'), 3500], ['restore', press('显示原文'), 3000]]
+  const moves = []
+  for (const [name, act, wait] of steps) {
+    const before = await page.evaluate(() => window.__place.note())
+    await act()
+    await sleep(wait)
+    const after = await page.evaluate(() => ({ top: window.__place.find(), height: innerHeight }))
+    moves.push({ name, moved: Math.round(after.top - before), onScreen: after.top > 0 && after.top < after.height })
+  }
+  check('the reader keeps their place: the paragraph on the reader\'s line stays on screen, within a few lines of where it stood, across translate, every mode and restore (§10)',
+    moves.every(m => m.onScreen && Math.abs(m.moved) <= 80),
+    moves.map(m => `${m.name} ${m.moved > 0 ? '+' : ''}${m.moved} px${m.onScreen ? '' : ' OFF SCREEN'}`).join(', '))
+  await popup.close()
+  await page.close()
+}
+
 await context.close()
 const failed = results.filter(r => !r.ok)
 console.log(`\n${results.length - failed.length}/${results.length} passed; screenshots in ${SHOTS}`)

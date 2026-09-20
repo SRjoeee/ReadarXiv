@@ -34,7 +34,7 @@ tests/core/marks.test.ts 8
 tests/e2e/a11y.mjs 2
 tests/e2e/extension.mjs 93  # raised 2026-09-17: the whole-paper preload check clicks two more stop labels and the cache check waits for the zero-count line; the unreadable-settings check locates the notice, its reset and the section that must be absent by their labels
 tests/e2e/image.mjs 16
-tests/e2e/layout.mjs 8
+tests/e2e/layout.mjs 10  # 2026-09-20: +2, the reader's-place check finds the popup's mode, translate and restore buttons by their Chinese labels, as the rest of the suite does
 tests/e2e/local-endpoint.mjs 2
 tests/e2e/floating-button.mjs 5  # 2026-09-18: the settings switch, the main button's two labels, and the popup's button inside the control panel on a PDF and on the full text, located and checked by their Chinese copy, as the other suites locate controls (issue #169)
 tests/e2e/pdf-entry.mjs 5  # 2026-09-19: the popup's button (on the PDF and on the abstract page) and the no-HTML reason are located by their Chinese copy, as the other suites locate controls (issue #169)

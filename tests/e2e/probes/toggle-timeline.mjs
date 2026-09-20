@@ -12,6 +12,8 @@
 //   AXT_READ=1   trace twelve screens of reading after each start
 //   AXT_IMAGES   on | off: image translation for this run (the profile keeps the last choice)
 //   AXT_VERBOSE=1  the task table of every round, not of the last only
+//   AXT_AT=0.5   scroll this far down the paper before each start and each restore: at the top of the page the reader's
+//                place is not kept at all (core/renderer/place.ts), so its cost shows only from inside the paper
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
@@ -22,6 +24,7 @@ const PAPERS = process.argv.slice(2).length ? process.argv.slice(2) : ['2401.004
 const ROUNDS = Number(process.env.AXT_ROUNDS ?? 3)
 const MODE = process.env.AXT_MODE
 const TASK_FLOOR_US = 8000
+const AT = process.env.AXT_AT ? Number(process.env.AXT_AT) : null
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 const context = await chromium.launchPersistentContext(`${E2E}.profile-hl`, {
@@ -172,6 +175,7 @@ for (const id of PAPERS) {
       })
       mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'], childList: true, subtree: true })
     })
+    if (AT !== null) { await page.evaluate(at => window.scrollTo(0, document.documentElement.scrollHeight * at), AT); await sleep(600) }
     say('start  ', round, timeline(await traced(cdp, async () => { await startTab({ type: 'axt:translate-page', ...(MODE ? { mode: MODE } : {}) }); await sleep(2500) })))
     console.log(`            the first request for the paper's blocks reached the background ${Math.round(await worker.evaluate(() => globalThis.__axtFirstRequest ?? NaN))} ms after the start was sent`)
     if (process.env.AXT_READ) {
@@ -192,6 +196,7 @@ for (const id of PAPERS) {
       for (let i = 0; i < 120 && await page.evaluate(() => document.querySelectorAll('.axt-pending').length) > 0; i++) await sleep(1000)
     }
     await sleep(3000)
+    if (AT !== null) { await page.evaluate(at => window.scrollTo(0, document.documentElement.scrollHeight * at), AT); await sleep(600) }
     say('restore', round, timeline(await traced(cdp, async () => { await toTab({ type: 'axt:restore-page' }); await sleep(1500) })))
     await sleep(1000)
   }

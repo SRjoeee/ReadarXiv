@@ -197,6 +197,32 @@ describe('createPrep', () => {
     expect(passes()).toBe(before + 2)
   })
 
+  it('a full pass under side asks for the reader\'s place first, before it has written anything; a pass over a few blocks does not, nor any pass outside side', () => {
+    // The full pass is the one that moves the whole page — mirrors by the hundred, tables scaled — in a frame where
+    // Chrome's own anchoring stands down (renderer/place.ts; measured 96 px in one pass)
+    const doc = docOf(TWO_FIGURES)
+    const blocks = extract(doc)
+    markBlocks(blocks)
+    const c1 = blocks.find(b => b.el.id === 'c1') as TextBlock
+    renderText(c1, frag(doc, 'Figure 1, translated.'))
+    const copies: number[] = []
+    let side = true
+    const prep = createPrep(doc, { isSide: () => side, columnWidth: () => 484, watchWidth: noWatch, keepPlace: () => copies.push(doc.querySelectorAll(`.${SPLIT_CLASS}`).length) })
+    prep.touch([c1])
+    flush()
+    expect(copies).toEqual([])
+    const made = doc.querySelectorAll(`.${SPLIT_CLASS}`).length
+    prep.side(true)
+    flush()
+    // Asked once, and what it saw was the page before this pass wrote to it
+    expect(copies).toEqual([made])
+    side = false
+    prep.reset()
+    prep.touch([c1])
+    flush()
+    expect(copies).toEqual([made])
+  })
+
   it('entering side twice watches once; leaving ends the watch, and entering again starts one', () => {
     const { prep, watchWidth, stopWatching } = setup(EQUATION)
     prep.side(true)
