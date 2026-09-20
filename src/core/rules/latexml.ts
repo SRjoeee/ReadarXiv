@@ -531,15 +531,16 @@ export function isFigureText(el: Element): boolean {
 /**
  * What a unit's own text must hold for the unit to be a block, and what is left out of that text first.
  *
- * One letter, anywhere but in a picture's label (§15.6). A label is sent **on its own**, not inside a sentence, and
+ * One letter, anywhere but inside a picture (§15.6) — by the place, not by the rule: a wrapped label's block is the
+ * `.ltx_p` it holds, and that is sent on its own just the same (Devin on #277). A label is sent **on its own**, not inside a sentence, and
  * on its own `N`, `q` and `L2` are symbols: it takes two letters running. An identifier set as text in math mode
  * (`initMT`, `softmax`) is a symbol too — a word to an engine, and a formula's name translated in a diagram is worse than none
  * — so what LaTeXML marked as math is left out before the test: of the 507 labels in the measured corpus exactly one
  * is such, `initMT` on 2609.00246 (Codex on #163). Inside a sentence it is translated with the sentence as before
  * (`Block n−1` goes with its symbol): the test decides only whether there is a block
  */
-export function blockTest(rule: string): { holds: RegExp; without?: string } {
-  return rule === 'picturelabel' ? { holds: /\p{L}{2,}/u, without: MARKED_AS_MATH } : { holds: LETTER }
+export function blockTest(unit: Element): { holds: RegExp; without?: string } {
+  return isFigureText(unit) ? { holds: /\p{L}{2,}/u, without: MARKED_AS_MATH } : { holds: LETTER }
 }
 
 function textOf(el: Element, drop?: (el: Element) => boolean): string {

@@ -101,6 +101,12 @@ describe('extract: a picture\'s labels (§15.6)', () => {
     expect(texts(extract(docOf(picture(wrapped))))).toEqual([['p', 'PolyFlow is effective end to end.']])
   })
 
+  it('the bar is the picture\'s, not the rule\'s: a wrapped label\'s paragraph is sent on its own just the same, and a single letter or a maths-marked identifier in one is a symbol (Devin on #277)', () => {
+    const wrap = (inner: string) => `<span class="ltx_inline-block"><span class="ltx_p">${inner}</span></span>`
+    expect(extract(docOf(picture(wrap('N'), wrap('<span class="ltx_text ltx_markedasmath">initMT</span>'))))).toHaveLength(0)
+    expect(texts(extract(docOf(picture(wrap('Routed Expert')))))).toEqual([['p', 'Routed Expert']])
+  })
+
   it('a picture inside a paragraph that is a block is that block\'s, labels and all: the paragraph cloned it whole, and a label found inside would be translated twice', () => {
     const inline = `<svg class="ltx_picture">${node('Shared Expert')}${node('<span class="ltx_inline-block"><span class="ltx_p">A wrapped label.</span></span>')}</svg>`
     expect(texts(extract(docOf(`<p class="ltx_p" id="p">See ${inline} here.</p>`))).map(([unit]) => unit)).toEqual(['p'])

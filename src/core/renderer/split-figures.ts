@@ -244,13 +244,16 @@ export function splitFigures(root: Document | Element, options: SplitOptions = {
       else dead.remove()
     }
     // The clone keeps the pairs' our-side members only: each pair's original member is taken out (a translation, a ring, a widget never is).
-    // A figure's text is the exception the reader's setting makes (§15.6): a label shows one of its two texts, its node
-    // having room for one, and with figures not translated in side it is the original the copy keeps
+    // A figure's text is the exception (§15.6): a label shows one of its two texts, its node having room for one, and
+    // the copy keeps the original wherever the translation is not what shows — with figures not translated in side,
+    // and while the label waits or after it failed: a ring and a widget are not drawn inside a picture, and with the
+    // original gone the node stood empty, for good after a failure (Codex on #277). The pair's state is in the key,
+    // so the translation arriving makes the copy again
     for (const original of Array.from(clone.querySelectorAll('*'))) {
       if (original.classList.contains(T_CLASS)) continue
       const ours = original.nextElementSibling
       if (!ours?.classList.contains(T_CLASS)) continue
-      if (!figures && isFigureText(original)) ours.remove()
+      if (isFigureText(original) && !(figures && ours.matches(REAL_TRANSLATION))) ours.remove()
       else original.remove()
     }
     stripIds(clone)

@@ -123,7 +123,7 @@ export function extract(root: Document | Element): Block[] {
         case 'unit':
           if (YIELDS_TO_OUTER_BLOCK.has(c.rule) && underEmittedBlock(el)) break
           {
-            const { holds, without } = blockTest(c.rule)
+            const { holds, without } = blockTest(el)
             if (holds.test(ownText(el, without))) {
               blocks.push({ id: assignId(el), kind: 'text', el, unit: c.rule })
               emitted.add(el)

@@ -144,6 +144,25 @@ describe('splitFigures', () => {
       expect(copy.querySelector('.ltx_caption')!.textContent).toBe('caption, translated')
     })
 
+    it('a label still waiting, or one that failed, keeps its original in the copy: the ring and the widget are not shown inside a picture, and with the original gone the node stood empty — for good, after a failure (Codex on #277)', () => {
+      const waiting = (cls: string) => picture.replace(`<span class="ltx_foreignobject_content ${T_CLASS}" data-axt-for="l1">expert partage</span>`, `<span class="ltx_foreignobject_content ${T_CLASS} ${cls}" data-axt-for="l1"></span>`).replace(' data-axt-state="translated">Shared', ' data-axt-state="pending">Shared')
+      for (const cls of ['axt-pending', 'axt-error']) {
+        const doc = docOf(waiting(cls))
+        setImageModes(doc, ['side'])
+        splitFigures(doc)
+        expect([cls, labelsOf(doc.querySelector(`.${SPLIT_CLASS}`)!)]).toEqual([cls, ['Shared Expert', 'N']])
+      }
+      // The translation arriving changes the pair's state, which is part of the key: the copy is made again and holds it
+      const doc = docOf(waiting('axt-pending'))
+      setImageModes(doc, ['side'])
+      splitFigures(doc)
+      const ours = doc.querySelector(`figure[${SPLIT_ATTR}] svg .${T_CLASS}`)!
+      ours.classList.remove('axt-pending')
+      ours.textContent = 'expert partage'
+      expect(splitFigures(doc)).toBe(1)
+      expect(labelsOf(doc.querySelector(`.${SPLIT_CLASS}`)!)).toEqual(['expert partage', 'N'])
+    })
+
     it('the setting changing makes the copy again: it is part of the key, or the copy would hold the wrong member of every pair for good', () => {
       const doc = docOf(picture)
       setImageModes(doc, ['stack'])
