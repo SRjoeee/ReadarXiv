@@ -23,6 +23,7 @@ tests/e2e/.ext-*/
 /tests/fixtures/arxiv/2608.29808.html
 /tests/fixtures/arxiv/2609.00245.html
 /tests/fixtures/svg/2608.29808-bounter-case.svg
+/tests/fixtures/svg/2607.24653-AET_blackbox_curve.svg
 /helper/Tests/Fixtures/qed3d-string-breaking.png
 *.partial
 

@@ -12,6 +12,8 @@ function svgOf(name: string): Element {
 
 const PLOT = '2609.03768-fig_closure.svg'
 const LISTING = '2608.29808-bounter-case.svg'
+/** Made by TeX: not one space glyph in it (tests/fixtures/README.md) */
+const TEX_PLOT = '2607.24653-AET_blackbox_curve.svg'
 
 const deg = (radians: number) => Math.round((radians * 180) / Math.PI)
 
@@ -38,6 +40,85 @@ describe('SVG glyph extraction (#121)', () => {
     const label = runs.find(r => r.text.startsWith('wall time'))
     expect(label?.text).toBe('wall time per epoch [ms]')
     expect(label?.glyphs).toBe('wall time per epoch [ms]'.length)
+  })
+
+  it('puts back the spaces a figure made by TeX leaves as gaps: it draws no space glyph at all, and every label arrived as one glued word (reader\'s report on 2607.24653v2)', () => {
+    const svg = svgOf(TEX_PLOT)
+    expect(svg.querySelectorAll('use[data-text=" "]')).toHaveLength(0)
+    const texts = runsOf(svg).map(r => r.text)
+    // The title and the axis the reader saw left in English: sent as `CameraRepairManagementSystemReplication`, the
+    // engine gave it back unchanged, and a translation equal to its source draws nothing
+    expect(texts).toContain('Camera Repair Management System Replication')
+    expect(texts).toContain('Normalized executor tool-call progress (%)')
+    expect(texts).toContain('Completion curve (%)')
+    expect(texts).toContain('Kimi K3 (1.000)')
+    expect(texts).toContain('Opus 4.8 (0.918)')
+    expect(texts).toContain('GPT-5.5 (0.893)')
+    expect(texts).toContain('Kimi K2.6 (0.560)')
+    // A tick is a number still: no gap inside one reads as a space
+    expect(texts.filter(t => /^\d+$/.test(t)).length).toBeGreaterThan(8)
+    expect(texts.some(t => /\d \d/.test(t))).toBe(false)
+  })
+
+  it('a gap is a space by the air between the ink of two glyphs, in the font\'s own size — held at both ends the figures measured: 0.20 inside a word, 0.26 between two', () => {
+    // Outlines in the unit square, as the converter writes them: `m` reaches 0 to 0.8, `i` 0.05 to 0.25; size 10
+    const use = (text: string, x: number) => `<use data-text="${text}" xlink:href="#${text}" transform="matrix(10,0,0,-10,${x},50)"/>`
+    const svg = new DOMParser().parseFromString(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 200 100">
+      <defs><path id="m" d="M0 0H.8V.5H0Z"/><path id="i" d="M.05 0H.25V.7H.05Z"/></defs>
+      ${use('m', 0)}${use('i', 9)}${use('m', 12.5)}${use('m', 22.5)}${use('i', 32.6)}
+    </svg>`, 'image/svg+xml').documentElement
+    // Ink to ink: m→i 8 to 9.5, 0.15; i→m 11.5 to 12.5, 0.10; m→m 20.5 to 22.5, 0.20 — the widest seen inside a word;
+    // m→i 30.5 to 33.1, 0.26 — the narrowest word gap seen. Origin to origin the last two are 10 and 10.1: only the outlines tell
+    expect(runsOf(svg).map(r => r.text)).toEqual(['mimm i'])
+  })
+
+  it('reads an outline the converter wrapped in a group, in font units under a scale — how it writes a TrueType face, as in the plot fixture (Codex and Devin on #274)', () => {
+    // The same glyphs and places as the case above, `m` 0 to 800 and `i` 50 to 250 in thousandths of the font size
+    const use = (text: string, x: number) => `<use data-text="${text}" xlink:href="#${text}" transform="matrix(10,0,0,-10,${x},50)"/>`
+    const svg = new DOMParser().parseFromString(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 200 100">
+      <defs><g id="m"><path transform="matrix(.001,0,0,.001,0,0)" d="M0 0H800V500H0Z"/></g><g id="i"><path transform="matrix(.001,0,0,.001,0,0)" d="M50 0H250V700H50Z"/></g></defs>
+      ${use('m', 0)}${use('i', 9)}${use('m', 12.5)}${use('m', 22.5)}${use('i', 32.6)}
+    </svg>`, 'image/svg+xml').documentElement
+    expect(runsOf(svg).map(r => r.text)).toEqual(['mimm i'])
+    // That is the fixture's own form: every one of its glyphs is a group holding a scaled path
+    const plot = svgOf(PLOT)
+    expect(plot.querySelectorAll('defs > g[id] > path[transform]').length).toBeGreaterThan(20)
+    expect(plot.querySelectorAll('defs > path[id]')).toHaveLength(0)
+  })
+
+  it('the grouped form on real metrics: the plot fixture with its space glyphs taken out reads every word as it did with them', () => {
+    const worded = (svg: Element) => runsOf(svg).map(r => r.text).filter(text => /\p{L}{2,}/u.test(text))
+    const drawn = worded(svgOf(PLOT))
+    const svg = svgOf(PLOT)
+    const spaces = Array.from(svg.querySelectorAll('use[data-text=" "]'))
+    expect(spaces.length).toBeGreaterThan(0)
+    for (const space of spaces) space.remove()
+    // All four spaces of the axis title back, and none added to a word. What does differ is a formula, `||=89`
+    // read as `| | = 89` — mathematics is set with air around its signs — which holds no word and is sent nowhere
+    expect(worded(svg)).toEqual(drawn)
+    expect(drawn).toEqual(['closure', 'dense', 'wall time per epoch [ms]'])
+  })
+
+  it('in a fixed-pitch face a space is a skipped cell, not air: a full stop sits in a cell as wide as an `m`\'s, and read by air the listing came out `self . cms` (81 such in it, not one inside a word; Codex on #274)', () => {
+    const drawn = runsOf(svgOf(LISTING)).flatMap(r => r.text.split(/\s+/)).filter(Boolean)
+    const svg = svgOf(LISTING)
+    for (const space of Array.from(svg.querySelectorAll('use[data-text=" "]'))) space.remove()
+    const read = runsOf(svg).flatMap(r => r.text.split(/\s+/)).filter(Boolean).join(' ')
+    // Nothing the figure wrote as one piece is taken apart
+    expect(read).toContain('self.cms')
+    expect(read).toContain('kwlist[]')
+    expect(read).not.toMatch(/self \.|\[ \]|" ,/)
+    // Every space it drew is back, and the ones its syntax colouring dropped with them: the cell is there, empty
+    for (const word of ['static', 'int', 'hash_length', 'return']) expect(read.split(' ')).toContain(word)
+    expect(drawn).toContain('staticint')
+    expect(read).not.toContain('staticint')
+  })
+
+  it('a figure that draws its spaces is read as it is drawn: a monospaced face leaves more air beside a narrow letter than a word gap is wide', () => {
+    // Measured on the listing: 79 pairs of letters inside a word stand 0.20–0.30 em apart, where TeX's word gaps begin
+    const texts = runsOf(svgOf(LISTING)).map(r => r.text)
+    expect(texts).toContain('hash_length = 0;')
+    expect(texts.some(t => /h ash|l ength|w idth/.test(t))).toBe(false)
   })
 
   it('reads rotated labels at their true angle and size', () => {

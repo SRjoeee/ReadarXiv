@@ -97,6 +97,49 @@ describe('what to translate in a figure (#121)', () => {
     }
   })
 
+  it('a sentence that names one identifier is a sentence: the four titles of 2607.24653v2\'s roofline figure were left in English for an `sm_89` and a `train_gpt` (reader\'s report)', () => {
+    for (const text of [
+      'MiniTriton CUDA-core roofline — NVIDIA L20 (sm_89), fp32',
+      'MiniTriton tensor-core roofline — NVIDIA L20 (sm_89)',
+      'train_gpt convergence — minitriton vs torch eager',
+      'train_gpt fp32 — single GPU vs DDP ×2',
+    ]) {
+      expect([text, looksLikeCode(text)]).toEqual([text, false])
+    }
+  })
+
+  it('an identifier on its own, or outnumbering the words beside it, is still code: the same figure\'s legend', () => {
+    for (const text of ['flash_attn', 'solve_tril', 'gpt50m_step', 'return hash_length', 'if(hash_length < 0)']) {
+      expect([text, looksLikeCode(text)]).toEqual([text, true])
+    }
+    // A snake-case name being called is code however many words follow: the arguments are words too
+    expect(looksLikeCode('if(!PyArg_ParseTupleAndKeywords(args, kwds, "II", kwlist,')).toBe(true)
+  })
+
+  it('what a string literal holds is what the program says, not what the run is: the words in it do not make a line of code a sentence (Codex and Devin on #274)', () => {
+    for (const text of [
+      'status_message = "unable to load model"',
+      "status_message = 'unable to load model'",
+      'print(f"unable to load {model_name} right now")',
+    ]) {
+      expect([text, looksLikeCode(text)]).toEqual([text, true])
+    }
+    // Nor do the words of what a name is assigned: a line that opens with an identifier and an equals sign is a statement
+    expect(looksLikeCode('status_message = await response.text()')).toBe(true)
+    expect(looksLikeCode('total_loss += criterion(outputs, labels) * weight')).toBe(true)
+    // — opens with: a sentence may state a setting (`==` is an operator already)
+    expect(looksLikeCode('trained with batch_size = 32 and the default schedule')).toBe(false)
+    // Nor the words of a comment at the line's end: the run is the code before it
+    expect(looksLikeCode('return result_value  # use the cached result when available')).toBe(true)
+    expect(looksLikeCode('flush(out_buf) // nothing else holds the lock at this point')).toBe(true)
+    // — a marker set off by space on both sides: inside a word it is the label's own (`# of`, a URL)
+    expect(looksLikeCode('share of train_gpt runs solved (# of 50), see https://example.org/a_b for the rest')).toBe(false)
+    // A label may quote a name, and an apostrophe is no quotation mark
+    for (const text of ['the "train_gpt" run converges faster than before', 'Kimi\'s train_gpt loss, per step']) {
+      expect([text, looksLikeCode(text)]).toEqual([text, false])
+    }
+  })
+
   it('catches code that has no punctuation of its own', () => {
     // `int i;` with the space dropped, and a listing gutter that merged into its line
     expect(looksLikeCode('inti;')).toBe(true)
