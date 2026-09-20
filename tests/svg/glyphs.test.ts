@@ -99,6 +99,21 @@ describe('SVG glyph extraction (#121)', () => {
     expect(drawn).toEqual(['closure', 'dense', 'wall time per epoch [ms]'])
   })
 
+  it('in a fixed-pitch face a space is a skipped cell, not air: a full stop sits in a cell as wide as an `m`\'s, and read by air the listing came out `self . cms` (81 such in it, not one inside a word; Codex on #274)', () => {
+    const drawn = runsOf(svgOf(LISTING)).flatMap(r => r.text.split(/\s+/)).filter(Boolean)
+    const svg = svgOf(LISTING)
+    for (const space of Array.from(svg.querySelectorAll('use[data-text=" "]'))) space.remove()
+    const read = runsOf(svg).flatMap(r => r.text.split(/\s+/)).filter(Boolean).join(' ')
+    // Nothing the figure wrote as one piece is taken apart
+    expect(read).toContain('self.cms')
+    expect(read).toContain('kwlist[]')
+    expect(read).not.toMatch(/self \.|\[ \]|" ,/)
+    // Every space it drew is back, and the ones its syntax colouring dropped with them: the cell is there, empty
+    for (const word of ['static', 'int', 'hash_length', 'return']) expect(read.split(' ')).toContain(word)
+    expect(drawn).toContain('staticint')
+    expect(read).not.toContain('staticint')
+  })
+
   it('a figure that draws its spaces is read as it is drawn: a monospaced face leaves more air beside a narrow letter than a word gap is wide', () => {
     // Measured on the listing: 79 pairs of letters inside a word stand 0.20–0.30 em apart, where TeX's word gaps begin
     const texts = runsOf(svgOf(LISTING)).map(r => r.text)

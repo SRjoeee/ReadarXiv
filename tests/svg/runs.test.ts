@@ -124,6 +124,11 @@ describe('what to translate in a figure (#121)', () => {
     ]) {
       expect([text, looksLikeCode(text)]).toEqual([text, true])
     }
+    // Nor do the words of what a name is assigned: a line that opens with an identifier and an equals sign is a statement
+    expect(looksLikeCode('status_message = await response.text()')).toBe(true)
+    expect(looksLikeCode('total_loss += criterion(outputs, labels) * weight')).toBe(true)
+    // — opens with: a sentence may state a setting (`==` is an operator already)
+    expect(looksLikeCode('trained with batch_size = 32 and the default schedule')).toBe(false)
     // A label may quote a name, and an apostrophe is no quotation mark
     for (const text of ['the "train_gpt" run converges faster than before', 'Kimi\'s train_gpt loss, per step']) {
       expect([text, looksLikeCode(text)]).toEqual([text, false])

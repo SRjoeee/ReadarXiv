@@ -37,6 +37,13 @@ const SNAKE_CASE = /\w_\w/
 /** A snake-case name being called, `PyArg_ParseTupleAndKeywords(`: code however many words follow, the arguments being words too */
 const SNAKE_CALL = /\w_\w*\(/
 
+/**
+ * A snake-case name being assigned, **at the head of the run**: a statement opens with its target, and what it is
+ * assigned may be all words (`status_message = await response.text()`; Codex on #274). A sentence may state a
+ * setting further in (`trained with batch_size = 32`), and `==` is an operator already
+ */
+const SNAKE_ASSIGNED = /^\S*\w_\w\S*\s*[-+*/%&|^]?=(?!=)/
+
 /** A word as prose has them: two letters running */
 const WORD = /\p{L}{2,}/u
 
@@ -53,12 +60,14 @@ const STRING_LITERAL = /"[^"]*"|`[^`]*`|(?<!\p{L})'[^']*'(?!\p{L})/gu
  * same figure's legend) or not outnumbered (`return hash_length`, `if(hash_length < 0)`) it is code, among more
  * words than identifiers it is a name a sentence mentions. Every source line of the listing fixture is still rejected.
  *
+ * Two things a program does with a name and a sentence does not settle it outright: it is called, or it is assigned.
+ *
  * **The words are counted outside string literals**: what a literal holds is what the program says, not what the run
  * is, and `status_message = "unable to load model"` is no sentence for the four words in it (Codex and Devin on
  * #274). A comment's words do count — a comment is prose, and `#` and `//` are at home in labels
  */
 function identifiersRule(text: string): boolean {
-  if (SNAKE_CALL.test(text)) return true
+  if (SNAKE_CALL.test(text) || SNAKE_ASSIGNED.test(text)) return true
   const identifiers = text.split(/\s+/).filter(token => SNAKE_CASE.test(token)).length
   if (identifiers === 0) return false
   return identifiers >= text.replace(STRING_LITERAL, ' ').split(/\s+/).filter(token => !SNAKE_CASE.test(token) && WORD.test(token)).length

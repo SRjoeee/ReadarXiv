@@ -88,11 +88,23 @@ const RUN_BREAK = 1.5
  * | letters of one word | ≤ 0.20 (side bearings; the widest a `1.`) |
  * | a word gap | ≥ 0.26 in a sans face, ≥ 0.30 in Computer Modern |
  *
- * **Only where no space is drawn.** A figure that draws its spaces is exact as it stands, and the measure does not
- * carry over: in the listing fixture's monospaced face 79 pairs inside a word stand 0.20–0.30 apart, the air a narrow
- * letter leaves in its fixed cell.
+ * **Only where no space is drawn.** A figure that draws its spaces is exact as it stands.
+ *
+ * **And not in a fixed-pitch face**, where air says nothing: every glyph stands in a cell of one width, a full stop
+ * in as much as an `m`. Read by air, the listing fixture with its space glyphs deleted came out `self . cms` and
+ * `kwlist [ ]` — 81 spaces where none was drawn, though not one inside a word (Codex on #274). There a space is a
+ * **skipped cell**, which is exact: all 122 of the fixture's own come back that way and none is added, and the ones
+ * its syntax colouring dropped come back with them, their cells being there, empty (`staticint` → `static int`).
  */
 const WORD_GAP = 0.22
+
+/**
+ * How far from a whole number of cells an advance may be and the face still be fixed-pitch, in font sizes, and how
+ * many advances it takes to say so. Measured on five figures: the listing's face strays 0.033 at its worst over 737
+ * advances (the coordinates are rounded), and the worst of each of the 14 proportional faces is 0.25 to 0.37
+ */
+const CELL_TOLERANCE = 0.05
+const CELL_EVIDENCE = 8
 
 /**
  * Decomposes `transform="matrix(a,b,c,d,e,f)"`.
@@ -217,6 +229,36 @@ function outlinesOf(svg: Element): Map<string, { from: number; to: number }> {
   return out
 }
 
+/** The face a glyph is set in: the converter names an outline `font_<face>_<glyph>` (all five files read) */
+const faceOf = (outline: string): string => outline.slice(0, outline.lastIndexOf('_'))
+
+/**
+ * The cell width of every fixed-pitch face in the figure, in font sizes: a face whose every advance — origin to
+ * origin, between two glyphs that follow each other on one line — is a whole number of cells, the cell being the
+ * median advance (the smallest carries the rounding of one pair into every other). A proportional face fails on its
+ * second letter (`i` 0.28, `m` 0.83); too few advances to tell, and the face is taken for proportional, which a face
+ * in a figure nearly always is. A face that draws only digits passes, digits being of one width in any face: a
+ * number holds no space, and read by cells none is put into one
+ */
+function cellsOf(glyphs: readonly Glyph[]): Map<string, number> {
+  const advances = new Map<string, number[]>()
+  for (let i = 1; i < glyphs.length; i++) {
+    const before = glyphs[i - 1]!
+    const g = glyphs[i]!
+    const advance = (g.along - before.along) / before.size
+    if (!sameLine({ angle: before.angle, size: before.size, across: before.across }, g) || advance <= 0 || advance > RUN_BREAK) continue
+    const face = faceOf(before.outline)
+    advances.set(face, [...(advances.get(face) ?? []), advance])
+  }
+  const cells = new Map<string, number>()
+  for (const [face, seen] of advances) {
+    if (seen.length < CELL_EVIDENCE) continue
+    const cell = [...seen].sort((a, b) => a - b)[Math.floor(seen.length / 2)]!
+    if (seen.every(advance => Math.abs(advance - Math.max(1, Math.round(advance / cell)) * cell) <= CELL_TOLERANCE)) cells.set(face, cell)
+  }
+  return cells
+}
+
 /**
  * Glyphs to runs.
  *
@@ -231,12 +273,17 @@ export function runsOf(svg: Element): GlyphRun[] {
   let current: GlyphRun | undefined
   let last: Glyph | undefined
   const glyphs = glyphsOf(svg)
-  const outlines = glyphs.some(g => g.text === ' ') ? undefined : outlinesOf(svg)
-  /** Whether the figure left a space as the air between the glyph before and this one */
+  const gaps = !glyphs.some(g => g.text === ' ')
+  const outlines = gaps ? outlinesOf(svg) : undefined
+  const cells = gaps ? cellsOf(glyphs) : undefined
+  /** Whether the figure left a space between the glyph before and this one: a skipped cell in a fixed-pitch face, air between the outlines in any other */
   const spaceBefore = (g: Glyph): boolean => {
-    const before = last && outlines?.get(last.outline)
-    const after = outlines?.get(g.outline)
-    if (!last || !before || !after) return false
+    if (!last || !outlines || !cells) return false
+    const cell = cells.get(faceOf(last.outline))
+    if (cell !== undefined) return (g.along - last.along) / last.size >= 1.5 * cell
+    const before = outlines.get(last.outline)
+    const after = outlines.get(g.outline)
+    if (!before || !after) return false
     return g.along + after.from * g.size - (last.along + before.to * last.size) >= WORD_GAP * g.size
   }
 
