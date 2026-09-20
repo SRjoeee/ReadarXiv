@@ -34,6 +34,30 @@ const OPERATORS = /->|=>|==|!=|::|>>|<<|&&|\|\|/
 /** `hash_length`, `uint32_t`: an underscore joining word characters */
 const SNAKE_CASE = /\w_\w/
 
+/** A snake-case name being called, `PyArg_ParseTupleAndKeywords(`: code however many words follow, the arguments being words too */
+const SNAKE_CALL = /\w_\w*\(/
+
+/** A word as prose has them: two letters running */
+const WORD = /\p{L}{2,}/u
+
+/**
+ * Whether the identifiers make the run code.
+ *
+ * An identifier **named in a sentence** does not: `train_gpt convergence — minitriton vs torch eager` and
+ * `MiniTriton CUDA-core roofline — NVIDIA L20 (sm_89), fp32` are a figure's titles, and the first version of this
+ * rule — any underscore between word characters — left all four titles of one figure in English (reported on
+ * 2607.24653v2). So the identifiers are weighed against the plain words beside them: on its own (`flash_attn`, the
+ * same figure's legend) or not outnumbered (`return hash_length`, `if(hash_length < 0)`) it is code, among more
+ * words than identifiers it is a name a sentence mentions. Every source line of the listing fixture is still rejected.
+ */
+function identifiersRule(text: string): boolean {
+  if (SNAKE_CALL.test(text)) return true
+  const tokens = text.split(/\s+/)
+  const identifiers = tokens.filter(token => SNAKE_CASE.test(token)).length
+  if (identifiers === 0) return false
+  return identifiers >= tokens.filter(token => !SNAKE_CASE.test(token) && WORD.test(token)).length
+}
+
 /** A statement end, even when everything else about the line looks like words (`inti;`) */
 const STATEMENT_END = /[;{}]\s*$/
 
@@ -51,7 +75,7 @@ export function looksLikeCode(text: string): boolean {
   if (trimmed === '') return false
   if (GUTTER.test(trimmed)) return true
   if (OPERATORS.test(trimmed)) return true
-  if (SNAKE_CASE.test(trimmed)) return true
+  if (identifiersRule(trimmed)) return true
   if (STATEMENT_END.test(trimmed)) return true
   return (trimmed.match(BRACES) ?? []).length >= 2
 }

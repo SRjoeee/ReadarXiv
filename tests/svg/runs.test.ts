@@ -97,6 +97,25 @@ describe('what to translate in a figure (#121)', () => {
     }
   })
 
+  it('a sentence that names one identifier is a sentence: the four titles of 2607.24653v2\'s roofline figure were left in English for an `sm_89` and a `train_gpt` (reader\'s report)', () => {
+    for (const text of [
+      'MiniTriton CUDA-core roofline — NVIDIA L20 (sm_89), fp32',
+      'MiniTriton tensor-core roofline — NVIDIA L20 (sm_89)',
+      'train_gpt convergence — minitriton vs torch eager',
+      'train_gpt fp32 — single GPU vs DDP ×2',
+    ]) {
+      expect([text, looksLikeCode(text)]).toEqual([text, false])
+    }
+  })
+
+  it('an identifier on its own, or outnumbering the words beside it, is still code: the same figure\'s legend', () => {
+    for (const text of ['flash_attn', 'solve_tril', 'gpt50m_step', 'return hash_length', 'if(hash_length < 0)']) {
+      expect([text, looksLikeCode(text)]).toEqual([text, true])
+    }
+    // A snake-case name being called is code however many words follow: the arguments are words too
+    expect(looksLikeCode('if(!PyArg_ParseTupleAndKeywords(args, kwds, "II", kwlist,')).toBe(true)
+  })
+
   it('catches code that has no punctuation of its own', () => {
     // `int i;` with the space dropped, and a listing gutter that merged into its line
     expect(looksLikeCode('inti;')).toBe(true)

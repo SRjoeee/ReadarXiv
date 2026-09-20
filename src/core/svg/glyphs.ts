@@ -27,6 +27,8 @@ interface Glyph {
   size: number
   /** Radians, from the transform matrix. Only 0 and -π/2 occur in the corpus. */
   angle: number
+  /** The id of the outline in `<defs>` that draws it */
+  outline: string
 }
 
 /** A run of glyphs sharing a baseline: one label, one tick, one line of a listing. */
@@ -66,6 +68,31 @@ export interface GlyphRun {
  * never reaches a translator.
  */
 const RUN_BREAK = 1.5
+
+/**
+ * In a figure that draws **no space glyph**, this much air between the ink of two glyphs, in font sizes, is a space.
+ *
+ * A figure made by TeX — pgfplots, TikZ compiled on its own, matplotlib under `usetex` — has none: to TeX a space is
+ * glue, not a character, and the converter can only write down the glyphs there are. Every label of such a figure
+ * arrived as one glued word (`CameraRepairManagementSystemReplication`), which an engine gives back unchanged, and a
+ * translation equal to its source draws nothing: the reader saw the title and an axis left in English (reported on
+ * 2607.24653v2, where 2 of the 11 figures are such; the 7.28 % of glyphs that are spaces (§15.5) is the corpus's
+ * average, not every file's).
+ *
+ * The air is measured between **outlines**, which the file holds in the font's own unit square, not between origins:
+ * an advance says nothing without the letter's width (`m` is four `i`s wide). Measured on the two figures, 269 pairs
+ * on a shared baseline:
+ *
+ * | | |
+ * |---|---|
+ * | letters of one word | ≤ 0.20 (side bearings; the widest a `1.`) |
+ * | a word gap | ≥ 0.26 in a sans face, ≥ 0.30 in Computer Modern |
+ *
+ * **Only where no space is drawn.** A figure that draws its spaces is exact as it stands, and the measure does not
+ * carry over: in the listing fixture's monospaced face 79 pairs inside a word stand 0.20–0.30 apart, the air a narrow
+ * letter leaves in its fixed cell.
+ */
+const WORD_GAP = 0.22
 
 /**
  * Decomposes `transform="matrix(a,b,c,d,e,f)"`.
@@ -124,6 +151,7 @@ function glyphsOf(svg: Element): Glyph[] {
       across: -t.x * sin + t.y * cos,
       size: t.size,
       angle: t.angle,
+      outline: (use.getAttribute('xlink:href') ?? use.getAttribute('href') ?? '').replace(/^#/, ''),
     })
   }
   return out
@@ -138,28 +166,76 @@ function sameLine(run: { angle: number; size: number; across: number }, g: Glyph
   return Math.abs(run.across - g.across) <= 0.05 * g.size
 }
 
+const PATH_COMMAND = /([MLHVCSQTAZmlhvcsqtaz])([^MLHVCSQTAZmlhvcsqtaz]*)/g
+const PATH_NUMBER = /-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi
+
+/**
+ * How far an outline reaches along the baseline, in font sizes, read from its path data alone — no layout, and the
+ * same under happy-dom. The converter writes absolute commands only (M L H V C Z over 260 outlines in five files):
+ * every pair's first number is an x, `H` holds nothing but, `V` none. A curve's control points stand in for the
+ * curve, which they bound. Anything else — a relative command, an arc — and the outline is not read, its glyph
+ * taking no part in the measure
+ */
+function reachOf(d: string): { from: number; to: number } | undefined {
+  let from = Number.POSITIVE_INFINITY
+  let to = Number.NEGATIVE_INFINITY
+  for (const [, command, args] of d.matchAll(PATH_COMMAND)) {
+    if (command === 'Z' || command === 'z' || command === 'V') continue
+    if (!'MLHCSQT'.includes(command!)) return undefined
+    const numbers = (args!.match(PATH_NUMBER) ?? []).map(Number)
+    for (let i = 0; i < numbers.length; i += command === 'H' ? 1 : 2) {
+      from = Math.min(from, numbers[i]!)
+      to = Math.max(to, numbers[i]!)
+    }
+  }
+  return from <= to ? { from, to } : undefined
+}
+
+/** Every outline's reach by its id, read once per figure and only for a figure whose spaces are gaps */
+function outlinesOf(svg: Element): Map<string, { from: number; to: number }> {
+  const out = new Map<string, { from: number; to: number }>()
+  for (const path of Array.from(svg.querySelectorAll('path[id]'))) {
+    const reach = reachOf(path.getAttribute('d') ?? '')
+    if (reach) out.set(path.id, reach)
+  }
+  return out
+}
+
 /**
  * Glyphs to runs.
  *
  * The converter emits every glyph as a direct child of `<svg>` with no grouping whatsoever — one
  * figure is a flat list where ticks, axis titles and legend entries run together as
  * `"110100Number of terms N1015…"`. Document order within a run is exact, including the
- * spaces, which are glyphs of their own; all that has to be recovered is where one run ends.
+ * spaces where they are glyphs of their own; where the figure draws none they are put back from
+ * the air between two outlines (`WORD_GAP`). What is left to recover is where one run ends.
  */
 export function runsOf(svg: Element): GlyphRun[] {
   const runs: GlyphRun[] = []
   let current: GlyphRun | undefined
+  let last: Glyph | undefined
+  const glyphs = glyphsOf(svg)
+  const outlines = glyphs.some(g => g.text === ' ') ? undefined : outlinesOf(svg)
+  /** Whether the figure left a space as the air between the glyph before and this one */
+  const spaceBefore = (g: Glyph): boolean => {
+    const before = last && outlines?.get(last.outline)
+    const after = outlines?.get(g.outline)
+    if (!last || !before || !after) return false
+    return g.along + after.from * g.size - (last.along + before.to * last.size) >= WORD_GAP * g.size
+  }
 
-  for (const g of glyphsOf(svg)) {
+  for (const g of glyphs) {
     const gap = current ? g.along - current.to : 0
     if (current && sameLine(current, g) && gap >= 0 && gap <= RUN_BREAK * current.size) {
-      current.text += g.text
+      current.text += spaceBefore(g) ? ` ${g.text}` : g.text
       current.to = g.along
       current.glyphs++
+      last = g
       continue
     }
     if (current) runs.push(current)
     current = { text: g.text, angle: g.angle, size: g.size, from: g.along, to: g.along, across: g.across, glyphs: 1 }
+    last = g
   }
   if (current) runs.push(current)
   return runs

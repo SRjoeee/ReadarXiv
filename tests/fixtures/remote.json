@@ -44,6 +44,13 @@
       "for": "tests"
     },
     {
+      "path": "tests/fixtures/svg/2607.24653-AET_blackbox_curve.svg",
+      "url": "https://arxiv.org/html/2607.24653v2/AET_blackbox_curve.svg",
+      "sha256": "611cf41081f27769f03735aa5362a2fd543ddcd06071040c3b2c69c66eccc9ba",
+      "bytes": 89704,
+      "for": "tests"
+    },
+    {
       "path": "helper/Tests/Fixtures/qed3d-string-breaking.png",
       "url": "https://arxiv.org/html/2609.04114v1/QED3Dstringbreaking.png",
       "sha256": "9df0af7414517862bf8bceb3b4a67807241592059f995175a636df8509cf159e",
