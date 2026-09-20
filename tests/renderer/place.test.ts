@@ -11,16 +11,21 @@ type Box = { top: number; height: number }
 const boxes = new Map<Element, Box>()
 const place = (el: Element, top: number, height: number) => boxes.set(el, { top, height })
 
+/** The element answers with the box `place` gave it, and with none — hidden — when it has none */
+function boxed<T extends Element>(node: T): T {
+  // Spied on as an Element: through the generic the method's name is not a key the spy's types can see
+  vi.spyOn(node as Element, 'getBoundingClientRect').mockImplementation(() => {
+    const box = boxes.get(node)
+    return (box ? { top: box.top, bottom: box.top + box.height, height: box.height, left: 100, width: 600 } : { top: 0, bottom: 0, height: 0, left: 0, width: 0 }) as DOMRect
+  })
+  return node
+}
+
 function page() {
   document.body.innerHTML = '<article class="ltx_document"><section id="s"><p id="a">One.</p><p id="b">Two.</p><table id="f"><tbody><tr><td id="cell">x=1</td></tr></tbody></table></section></article>'
   const el = (id: string) => document.getElementById(id) as HTMLElement
   const root = document.querySelector('article') as HTMLElement
-  for (const node of [root, ...root.querySelectorAll<HTMLElement>('*')]) {
-    vi.spyOn(node, 'getBoundingClientRect').mockImplementation(() => {
-      const box = boxes.get(node)
-      return (box ? { top: box.top, bottom: box.top + box.height, height: box.height, left: 100, width: 600 } : { top: 0, bottom: 0, height: 0, left: 0, width: 0 }) as DOMRect
-    })
-  }
+  for (const node of [root, ...root.querySelectorAll<HTMLElement>('*')]) boxed(node)
   place(root, -5000, 20000)
   place(el('s'), -5000, 20000)
   return { root, el }
@@ -128,13 +133,9 @@ describe('createPlaceKeeper', () => {
   it('a hit on an image\'s translated label is read as the image: the overlay is ours, takes the pointer, and is gone after a restore (Devin on #270)', () => {
     const { el } = page()
     const section = el('s')
-    const figure = document.createElement('img')
+    const figure = boxed(document.createElement('img'))
     figure.id = 'fig'
     section.append(figure)
-    vi.spyOn(figure, 'getBoundingClientRect').mockImplementation(() => {
-      const box = boxes.get(figure)
-      return (box ? { top: box.top, bottom: box.top + box.height, height: box.height, left: 100, width: 600 } : { top: 0, bottom: 0, height: 0, left: 0, width: 0 }) as DOMRect
-    })
     const overlay = document.createElement('div')
     overlay.className = IMG_CLASS
     overlay.innerHTML = '<span id="label">Energy</span>'
@@ -159,6 +160,65 @@ describe('createPlaceKeeper', () => {
     k.layout()
     // The point kept is the paragraph's, 6 px down it, where it stood: 216
     expect(scrollTo).toHaveBeenCalledWith({ top: 3000 + 500, behavior: 'instant' })
+  })
+
+  it('inside a split figure that translation only hides whole, the copy beside the figure stands for it — nothing beside the caption shows (Codex on #270)', () => {
+    const { el } = page()
+    const figure = boxed(document.createElement('figure'))
+    figure.innerHTML = '<img id="pic"><figcaption id="cap">Figure 1.</figcaption>'
+    el('s').append(figure)
+    const caption = boxed(document.getElementById('cap') as HTMLElement)
+    const captionTranslation = boxed(document.createElement('figcaption'))
+    captionTranslation.className = T_CLASS
+    caption.after(captionTranslation)
+    const copy = boxed(document.createElement('figure'))
+    copy.className = `${T_CLASS} axt-split`
+    figure.after(copy)
+    place(figure, -100, 400)
+    place(caption, 180, 40)
+    const k = keeper([caption], () => caption)
+    k.keep.keep()
+    // Translation only: the figure is `display: none`, and with it the caption and the caption's translation
+    boxes.delete(figure)
+    boxes.delete(caption)
+    place(copy, 500, 300)
+    k.layout()
+    // Half-way down the caption was the point; half-way down the copy is where it is looked for — the same figure, which is the aim
+    expect(scrollTo).toHaveBeenCalledWith({ top: 3000 + (500 + 0.5 * 300 - 200), behavior: 'instant' })
+  })
+
+  it('a container the line fell through is never the measure: when every try finds the section, nothing is kept (Codex on #270)', () => {
+    const { el } = page()
+    const k = keeper([el('b')], () => el('s'))
+    k.keep.keep()
+    expect(k.elementAt.mock.calls.map(call => call[1])).toEqual([200, 216, 232, 264, 328, 456])
+    expect(k.afterLayout).not.toHaveBeenCalled()
+    // And the next action starts clean
+    place(el('b'), 150, 200)
+    const again = keeper([el('b')], () => el('b'))
+    again.keep.keep()
+    expect(again.afterLayout).toHaveBeenCalledTimes(1)
+  })
+
+  it('taller than the viewport is still the reader\'s place when it is one thing: a long translated paragraph, a tall image', () => {
+    const { el } = page()
+    // A paragraph of 1 200 px with children of its own, but a translation block: its parts keep their order
+    el('b').innerHTML = 'Long <span>text</span>.'
+    place(el('b'), -400, 1200)
+    const long = keeper([el('b')], () => el('b'))
+    long.keep.keep()
+    expect(long.afterLayout).toHaveBeenCalledTimes(1)
+    place(el('b'), -1000, 2400)
+    long.layout()
+    // Half-way down it then, half-way down it now: -1000 + 1200 = 200. It held
+    expect(scrollTo).not.toHaveBeenCalled()
+
+    const image = boxed(document.createElement('img'))
+    el('s').append(image)
+    place(image, -300, 1500)
+    const tall = keeper([], () => image)
+    tall.keep.keep()
+    expect(tall.afterLayout).toHaveBeenCalledTimes(1)
   })
 
   it('the reader scrolling by their own hand before the layout wins: nothing is corrected', () => {

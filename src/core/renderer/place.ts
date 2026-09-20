@@ -34,9 +34,12 @@ const LINE = 0.25
 const NEAR_PX = 4
 /** Across the text: a quarter of the way into the article from its left edge — the originals' column under side, the text itself otherwise, clear of whatever floats at the window's edges */
 const ACROSS = 0.25
-/** Between two paragraphs the hit test finds their container, a section thousands of pixels tall and no measure of anything: the line is tried a little lower, this far and this often */
-const GAP_STEP_PX = 16
-const GAP_TRIES = 6
+/**
+ * Between two paragraphs the hit test finds their container — a section thousands of pixels tall, no measure of
+ * anything: content changing height far below the viewport would move "the same part of it" (Codex on #270). The line
+ * is tried lower, by these offsets; where even half a screen down holds nothing the reader could be on, nothing is kept
+ */
+const GAP_OFFSETS_PX = [0, 16, 32, 64, 128, 256]
 /** The reader scrolling by their own hand, which a correction must never undo */
 const READER_SCROLLS = ['wheel', 'touchmove', 'keydown'] as const
 
@@ -68,13 +71,21 @@ export function createPlaceKeeper(doc: Document, blocks: ReadonlyArray<{ el: Ele
     return at
   }
 
-  /** A block's box on screen: its own, or under translation only — where the original is hidden — that of the translation beside it; null when neither shows */
-  const boxOf = (el: Element): DOMRect | null => {
-    const own = el.getBoundingClientRect()
-    if (own.width > 0 || own.height > 0) return own
-    const next = el.nextElementSibling
-    const beside = next?.classList.contains(T_CLASS) ? next.getBoundingClientRect() : null
-    return beside && (beside.width > 0 || beside.height > 0) ? beside : null
+  /**
+   * A unit's box on screen: its own, or that of ours beside it — under translation only a translated original is
+   * hidden and its translation stands for it. When neither shows, the same is asked of its ancestors: translation
+   * only hides a split figure **whole**, and what shows is the copy beside the figure, not anything beside the
+   * caption inside it (Codex on #270). Null when nothing up to the article shows
+   */
+  const boxOf = (unit: Element): DOMRect | null => {
+    for (let el: Element | null = unit; el && el !== doc.documentElement; el = el.parentElement) {
+      const own = el.getBoundingClientRect()
+      if (own.width > 0 || own.height > 0) return own
+      const next = el.nextElementSibling
+      const beside = next?.classList.contains(T_CLASS) ? next.getBoundingClientRect() : null
+      if (beside && (beside.width > 0 || beside.height > 0)) return beside
+    }
+    return null
   }
 
   return {
@@ -92,17 +103,20 @@ export function createPlaceKeeper(doc: Document, blocks: ReadonlyArray<{ el: Ele
       // between it and the reader changes height from mode to mode (measured: 750 px off)
       let kept: Element | null = null
       let box: DOMRect | null = null
-      let line = view.innerHeight * LINE
-      for (let tries = 0; tries < GAP_TRIES; tries++, line += GAP_STEP_PX) {
+      let line = 0
+      for (const lower of GAP_OFFSETS_PX) {
+        line = view.innerHeight * LINE + lower
         const hit = elementAt(x, line)
         if (!hit || !root.contains(hit)) continue
         const unit = unitOf(hit)
         const its = boxOf(unit)
         if (!its) continue
+        // Taller than the viewport is still the reader's place when it is one thing — a long paragraph, a tall image:
+        // its parts keep their order. A container the line fell through is not: a section, a list, a figure's wrapper
+        if (its.height > view.innerHeight && unit.childElementCount > 0 && !blockEls.has(unit)) continue
         kept = unit
         box = its
-        // Shorter than the viewport: a thing the reader can be said to be on, not a container the line fell through
-        if (its.height <= view.innerHeight) break
+        break
       }
       if (!kept || !box) return
       const block = kept
