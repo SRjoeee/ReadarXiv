@@ -44,6 +44,9 @@ describe('pickTargetLanguage', () => {
     expect(pickTargetLanguage(['zh-Hans-CN'])).toBe('cmn')
     expect(pickTargetLanguage(['zh-Hant'])).toBe('cmn-Hant')
     expect(pickTargetLanguage(['cmn-Hant-TW', 'en'])).toBe('cmn-Hant')
+    // A script written out wins over what the region would suggest (Codex on #272)
+    expect(pickTargetLanguage(['zh-Hans-TW', 'en'])).toBe('cmn')
+    expect(pickTargetLanguage(['zh-Hans-HK'])).toBe('cmn')
     // Cantonese is given in Traditional characters, so naming them names what the table has (Codex on #272)
     expect(pickTargetLanguage(['yue-Hant-HK', 'en'])).toBe('yue')
     expect(pickTargetLanguage(['yue-HK'])).toBe('yue')
@@ -86,6 +89,9 @@ describe('pickTargetLanguage', () => {
     expect(pickTargetLanguage(['fil-PH', 'en'])).toBe('tgl')
     expect(pickTargetLanguage(['no'])).toBe('nob')
     expect(pickTargetLanguage(['ceb-PH', 'en'])).toBe('ceb')
+    // Persian in Afghanistan is Dari, listed apart
+    expect(pickTargetLanguage(['fa-AF', 'en'])).toBe('prs')
+    expect(pickTargetLanguage(['fa-IR'])).toBe('pes')
   })
 
   it('with only English preferred, the interface\'s language speaks — when it is not English either', () => {

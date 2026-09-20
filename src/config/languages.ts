@@ -1041,6 +1041,8 @@ export function languageOfTag(tag: string): LangCode | null {
   if (exact) return exact[0]
   // Traditional Chinese by script or region, under either name of the language: before the step below, which would
   // read `cmn-Hant-TW` as `cmn` and lose the script (Devin on #272)
+  // A script written out is the reader's word, over what the region would suggest: `zh-Hans-TW` is Simplified (Codex on #272)
+  if ((primary === 'zh' || primary === 'cmn') && subtags.includes('hans')) return 'cmn'
   if ((primary === 'zh' || primary === 'cmn') && subtags.some(part => TRADITIONAL_CHINESE_SUBTAGS.has(part))) return 'cmn-Hant'
   // A language with no two-letter code is its own primary subtag, and the table above does not list it: `ceb-PH` (Codex on #272)
   if (isLangCode(primary)) return primary

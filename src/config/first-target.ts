@@ -47,7 +47,9 @@ const NAMED_SCRIPT: Partial<Record<LangCode, { script: string; unmarked: boolean
 /** The language a browser's tag asks for, or null: one the table cannot place, or can place only in another script */
 function wanted(tag: string): LangCode | null {
   const subtags = withoutExtensions(tag).split('-')
-  const language = ALSO_KNOWN_AS[subtags[0] ?? ''] ?? languageOfTag(tag)
+  // Persian in Afghanistan is Dari, which the table lists apart (`prs`); the generic `fa` is Iranian Persian (Codex on #272)
+  const dari = subtags[0] === 'fa' && subtags.includes('af')
+  const language = dari ? 'prs' : ALSO_KNOWN_AS[subtags[0] ?? ''] ?? languageOfTag(tag)
   if (!language) return null
   // A script subtag is the four-letter one (BCP-47)
   const asked = subtags.slice(1).find(part => /^[a-z]{4}$/.test(part))
