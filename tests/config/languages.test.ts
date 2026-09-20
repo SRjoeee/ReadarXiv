@@ -70,10 +70,11 @@ describe('languageOfTag', () => {
     expect(languageOfTag('ja-JP')).toBe('jpn')
     expect(languageOfTag('zh-Hant-HK')).toBe('cmn-Hant')
     expect(languageOfTag('EN-us')).toBe('eng')
+    // A language with no two-letter code is its own primary subtag (Codex on #272)
+    expect(languageOfTag('ceb-PH')).toBe('ceb')
     expect(languageOfTag('xx-YY')).toBeNull()
     expect(languageOfTag('  ')).toBeNull()
     // fromBcp47 keeps its fallback: the v3 → v4 migration relies on it
     expect(fromBcp47('xx-YY')).toBe('cmn')
   })
 })
-

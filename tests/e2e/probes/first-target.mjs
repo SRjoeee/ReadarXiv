@@ -21,7 +21,8 @@ for (const list of LISTS) {
   })
   let [worker] = context.serviceWorkers()
   if (!worker) worker = await context.waitForEvent('serviceworker')
-  await sleep(1500)
+  // Waited for, not slept through: the write follows the install event by however long the worker takes to start
+  for (let i = 0; i < 50 && !(await worker.evaluate(async () => 'config' in await chrome.storage.local.get('config'))); i++) await sleep(200)
   const seen = await worker.evaluate(async () => ({
     preferred: navigator.languages,
     ui: chrome.i18n.getUILanguage(),

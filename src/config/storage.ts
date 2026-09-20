@@ -255,7 +255,12 @@ export async function resetConfig(): Promise<void> {
 /**
  * A new reader's first target language (first-target.ts), written **only while nothing is stored**: an installation
  * that already has a configuration — the reader's own, or one this build cannot read — is never touched. The value and
- * the version marker go in one write, as in `resetConfig`. Says whether it wrote
+ * the version marker go in one write, as in `resetConfig`. Says whether it wrote.
+ *
+ * The check and the write are two steps, and extension storage has no "create unless there" to make them one: a
+ * surface saving between them would be written over (Devin on #272). Left so, knowingly — the gap is one read and one
+ * write at the moment of installation, before any surface of ours can be open, and closing it for good is the
+ * background's single writer that §9 defers
  */
 export async function chooseFirstTarget(pick: () => Config['targetLanguage']): Promise<boolean> {
   if (await storage.getItem(CONFIG_KEY) !== null) return false

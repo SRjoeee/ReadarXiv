@@ -1039,6 +1039,8 @@ export function languageOfTag(tag: string): LangCode | null {
   const entries = (Object.entries(ISO6393_TO_6391) as [LangCode, string][]).map(([code, bcp]) => [code, bcp.toLowerCase().split('-')] as const)
   const exact = entries.find(([, parts]) => parts.join('-') === wanted)
   if (exact) return exact[0]
+  // A language with no two-letter code is its own primary subtag, and the table above does not list it: `ceb-PH` (Codex on #272)
+  if (isLangCode(primary)) return primary
   const sameLanguage = entries.filter(([, parts]) => parts[0] === primary)
   const overlapping = sameLanguage.find(([, parts]) => parts.slice(1).some(part => subtags.includes(part)))
   if (overlapping) return overlapping[0]

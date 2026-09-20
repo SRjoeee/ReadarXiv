@@ -697,4 +697,3 @@ describe('chooseFirstTarget', () => {
     expect((await fakeBrowser.storage.local.get('config')).config).toEqual(newer)
   })
 })
-
