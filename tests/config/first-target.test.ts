@@ -78,11 +78,13 @@ describe('pickTargetLanguage', () => {
     expect(pickTargetLanguage(['sr-u-nu-latn'])).toBe('srp')
   })
 
-  it('knows the two regions where an unmarked tag means another script, and passes them over', () => {
+  it('knows the few regions where an unmarked tag means another script, and passes them over', () => {
     expect(pickTargetLanguage(['sr-ME', 'de'])).toBe('deu')
     expect(pickTargetLanguage(['sr-Cyrl-ME'])).toBe('srp')
     expect(pickTargetLanguage(['pa-PK', 'ur'])).toBe('urd')
     expect(pickTargetLanguage(['pa-IN'])).toBe('pan')
+    expect(pickTargetLanguage(['mn-CN', 'zh-CN'])).toBe('cmn')
+    expect(pickTargetLanguage(['mn-MN'])).toBe('mon')
   })
 
   it('knows a language by the code the browser uses for it, and a three-letter one with its region', () => {

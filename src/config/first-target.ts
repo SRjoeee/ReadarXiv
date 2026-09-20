@@ -30,6 +30,8 @@ const NAMED_SCRIPT: Partial<Record<LangCode, { script: string; unmarked: boolean
   // Pakistan Arabic — Codex on #272). Two entries, not CLDR's likely subtags: past these a reader changes it in one click
   srp: { script: 'cyrl', unmarked: true, elsewhere: ['me'] },
   pan: { script: 'guru', unmarked: true, elsewhere: ['pk'] },
+  // Mongolian is Cyrillic from the engines; in Inner Mongolia it is written in the traditional script (Codex on #272)
+  mon: { script: 'cyrl', unmarked: true, elsewhere: ['cn'] },
   bos: { script: 'cyrl', unmarked: false },
   uzn: { script: 'cyrl', unmarked: false },
   azj: { script: 'cyrl', unmarked: false },
