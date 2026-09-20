@@ -48,6 +48,9 @@ describe('pickTargetLanguage', () => {
     expect(pickTargetLanguage(['yue-Hant-HK', 'en'])).toBe('yue')
     expect(pickTargetLanguage(['yue-HK'])).toBe('yue')
     expect(pickTargetLanguage(['yue-Hans', 'ja'])).toBe('jpn')
+    // On the mainland Cantonese is written in Simplified, which the table does not give
+    expect(pickTargetLanguage(['yue-CN', 'ja'])).toBe('jpn')
+    expect(pickTargetLanguage(['yue-Hant-CN'])).toBe('yue')
   })
 
   it('`ku` is Kurmanji, in Latin, which the table does not list: its Sorani is given only to a reader who asks for Arabic script or for `ckb` (Codex on #272)', () => {
@@ -58,7 +61,10 @@ describe('pickTargetLanguage', () => {
     expect(pickTargetLanguage(['ckb-IQ', 'en'])).toBe('ckb')
     expect(pickTargetLanguage(['ckb'])).toBe('ckb')
     expect(pickTargetLanguage(['ckb-Latn', 'tr'])).toBe('tur')
-    expect(pickTargetLanguage(['uzn'])).toBe('uzn')
+    // Only where the code itself means the script: Northern Uzbek or Malay by their own codes are still Latin by default (Codex on #272)
+    expect(pickTargetLanguage(['uzn', 'ru'])).toBe('rus')
+    expect(pickTargetLanguage(['zlm-MY', 'id'])).toBe('ind')
+    expect(pickTargetLanguage(['uzn-Cyrl'])).toBe('uzn')
   })
 
   it('reads the script where BCP-47 puts it: what follows a singleton is an extension, not the language (Codex on #272)', () => {

@@ -25,7 +25,7 @@ const ALSO_KNOWN_AS: Record<string, LangCode> = { fil: 'tgl', no: 'nob', iw: 'he
  * is not Cyrillic Serbian (Devin and Codex on #272): such a tag is passed over like one the table cannot place. That
  * the table has no Latin entry for these languages is the table's gap, not decided here
  */
-const NAMED_SCRIPT: Partial<Record<LangCode, { script: string; unmarked: boolean; elsewhere?: readonly string[] }>> = {
+const NAMED_SCRIPT: Partial<Record<LangCode, { script: string; unmarked: boolean; elsewhere?: readonly string[]; ownCode?: true }>> = {
   // `elsewhere`: regions where an unmarked tag means another script (Serbian in Montenegro is Latin, Panjabi in
   // Pakistan Arabic — Codex on #272). Two entries, not CLDR's likely subtags: past these a reader changes it in one click
   srp: { script: 'cyrl', unmarked: true, elsewhere: ['me'] },
@@ -36,9 +36,12 @@ const NAMED_SCRIPT: Partial<Record<LangCode, { script: string; unmarked: boolean
   zlm: { script: 'arab', unmarked: false },
   jav: { script: 'java', unmarked: false },
   // Cantonese comes in Traditional characters (languages.ts, measured): `yue-Hant-HK` names what the table gives — Codex on #272
-  yue: { script: 'hant', unmarked: true },
+  // … except on the mainland, where it is written in Simplified (Codex on #272)
+  yue: { script: 'hant', unmarked: true, elsewhere: ['cn'] },
   // `ku` is Kurmanji, in Latin, which the table does not list; its `ku` is Sorani (languages.ts says so, measured) — Codex on #272
-  ckb: { script: 'arab', unmarked: false },
+  // `ownCode`: the entry's own code does mean its script — Sorani is written in Arabic script, so `ckb-IQ` asks for it
+  // outright. Not so for the others: `zlm-MY` or `uzn` name a language whose usual script is Latin (Codex on #272)
+  ckb: { script: 'arab', unmarked: false, ownCode: true },
 }
 
 /** The language a browser's tag asks for, or null: one the table cannot place, or can place only in another script */
@@ -49,12 +52,11 @@ function wanted(tag: string): LangCode | null {
   // A script subtag is the four-letter one (BCP-47)
   const asked = subtags.slice(1).find(part => /^[a-z]{4}$/.test(part))
   const named = NAMED_SCRIPT[language]
-  // Naming the entry by its own code is asking for it: `ckb-IQ` is Sorani, whatever `ku` means (Devin on #272)
-  const byItsOwnCode = subtags[0] === language.toLowerCase()
   if (named) {
     if (asked) return asked === named.script ? language : null
     if (named.elsewhere?.some(region => subtags.includes(region))) return null
-    return named.unmarked || byItsOwnCode ? language : null
+    // `ckb-IQ` is Sorani, whatever `ku` means (Devin on #272)
+    return named.unmarked || (named.ownCode === true && subtags[0] === language.toLowerCase()) ? language : null
   }
   if (!asked) return language
   // **A script asked for by name is given only where the table vouches for it** — the entries above, and Chinese,
