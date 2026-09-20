@@ -1033,7 +1033,7 @@ export function fromBcp47(tag: string): LangCode {
  */
 export function languageOfTag(tag: string): LangCode | null {
   if (isLangCode(tag)) return tag
-  const wanted = tag.trim().toLowerCase()
+  const wanted = withoutExtensions(tag)
   if (wanted === '') return null
   const [primary = '', ...subtags] = wanted.split('-')
   const entries = (Object.entries(ISO6393_TO_6391) as [LangCode, string][]).map(([code, bcp]) => [code, bcp.toLowerCase().split('-')] as const)
@@ -1048,6 +1048,15 @@ export function languageOfTag(tag: string): LangCode | null {
   const overlapping = sameLanguage.find(([, parts]) => parts.slice(1).some(part => subtags.includes(part)))
   if (overlapping) return overlapping[0]
   return sameLanguage[0]?.[0] ?? null
+}
+
+/**
+ * A tag's language, script and region, lower case: what follows the first singleton subtag is an extension or
+ * private use (`ar-EG-u-nu-latn` is Arabic with Latin digits, not Arabic in Latin script — Codex on #272), and says
+ * nothing of the language
+ */
+export function withoutExtensions(tag: string): string {
+  return tag.trim().toLowerCase().replace(/-[a-z0-9](-.*)?$/, '')
 }
 
 /** The script / region subtags of Traditional Chinese (lower case) */

@@ -57,6 +57,21 @@ describe('pickTargetLanguage', () => {
     expect(pickTargetLanguage(['uzn'])).toBe('uzn')
   })
 
+  it('reads the script where BCP-47 puts it: what follows a singleton is an extension, not the language (Codex on #272)', () => {
+    // Arabic with Latin digits, a common system setting — not Arabic in Latin script
+    expect(pickTargetLanguage(['ar-EG-u-nu-latn', 'en'])).toBe('arb')
+    expect(pickTargetLanguage(['de-DE-u-co-phonebk'])).toBe('deu')
+    expect(pickTargetLanguage(['zh-TW-u-ca-roc'])).toBe('cmn-Hant')
+    expect(pickTargetLanguage(['sr-u-nu-latn'])).toBe('srp')
+  })
+
+  it('knows the two regions where an unmarked tag means another script, and passes them over', () => {
+    expect(pickTargetLanguage(['sr-ME', 'de'])).toBe('deu')
+    expect(pickTargetLanguage(['sr-Cyrl-ME'])).toBe('srp')
+    expect(pickTargetLanguage(['pa-PK', 'ur'])).toBe('urd')
+    expect(pickTargetLanguage(['pa-IN'])).toBe('pan')
+  })
+
   it('knows a language by the code the browser uses for it, and a three-letter one with its region', () => {
     expect(pickTargetLanguage(['fil-PH', 'en'])).toBe('tgl')
     expect(pickTargetLanguage(['no'])).toBe('nob')
