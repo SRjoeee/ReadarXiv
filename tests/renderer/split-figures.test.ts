@@ -2,9 +2,10 @@
 // a figure spanning both columns gives up the comparison, so the whole thing is copied once and the copy keeps only the translations.
 import { describe, expect, it } from 'vitest'
 import { T_CLASS } from '@/core/marks'
-import { FOR_ATTR, MIRROR_CLASS, SPLIT_ATTR, SPLIT_CLASS, SPLIT_FOR_ATTR } from '@/core/renderer/attrs'
+import { FOR_ATTR, MIRROR_CLASS, PANELS_ATTR, SPLIT_ATTR, SPLIT_CLASS, SPLIT_FOR_ATTR } from '@/core/renderer/attrs'
 import { renderImage } from '@/core/renderer/image'
 import { restore } from '@/core/renderer/page'
+import { markStructure } from '@/core/renderer/side-layout'
 import { DUPLICATE_ATTR, dropStaleSplits, setSplitDuplicatesHidden, splitFigures } from '@/core/renderer/split-figures'
 import { IMG_CLASS } from '@/core/marks'
 import { ID_ATTR } from '@/core/extractor'
@@ -86,6 +87,24 @@ describe('splitFigures', () => {
       </figure></div></div></figure>`)
     expect(splitFigures(doc)).toBe(1)
     expect(doc.querySelectorAll(`.${SPLIT_CLASS}`)).toHaveLength(1)
+  })
+
+  it('the copy of a multi-panel figure says so again: the mark went with every other data-axt-*, and without it side hid the row break and ran a 2 × 2 figure in one row (measured on 2607.24653v2, Figure 13)', () => {
+    const doc = docOf(`<figure class="ltx_figure"><div class="ltx_flex_figure">
+      <div class="ltx_flex_cell ltx_flex_size_2"><img class="ltx_graphics" src="a.png"></div>
+      <div class="ltx_flex_cell ltx_flex_size_2"><img class="ltx_graphics" src="b.png"></div>
+      <div class="ltx_flex_break"></div>
+      <div class="ltx_flex_cell ltx_flex_size_2"><img class="ltx_graphics" src="c.png"></div>
+      <div class="ltx_flex_cell ltx_flex_size_2"><img class="ltx_graphics" src="d.png"></div></div>
+      <figcaption class="ltx_caption">Figure 13. Original</figcaption>
+      <figcaption class="ltx_caption ${T_CLASS}" data-axt-for="c1">caption, translated</figcaption></figure>`)
+    // As the session does it: the structure is marked once, before any copy exists
+    markStructure(doc)
+    splitFigures(doc)
+    const original = doc.querySelector(`figure[${SPLIT_ATTR}] .ltx_flex_figure`)!
+    const copy = doc.querySelector(`.${SPLIT_CLASS} .ltx_flex_figure`)!
+    expect(original.hasAttribute(PANELS_ATTR)).toBe(true)
+    expect(copy.hasAttribute(PANELS_ATTR)).toBe(true)
   })
 
   it('idempotent: with the translation unchanged no rebuild', () => {
