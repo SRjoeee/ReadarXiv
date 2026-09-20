@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'wxt'
 import { readBuildRef } from './scripts/build-ref.mjs'
+import { licenceFiles, noteBundledPackages } from './scripts/third-party-notices.mjs'
 
 /**
  * The ref the popup's helper install command fetches from (issue #158): the commit this build is made from when a
@@ -21,7 +22,7 @@ export default defineConfig({
   srcDir: 'src',
   modules: ['@wxt-dev/module-react'],
   // In extension pages <link rel="modulepreload" crossorigin> triggers Chrome's "cross-world extension resource mismatch" warning (harmless but noisy); preloading is off
-  vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss()], define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()) } }),
+  vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()) } }),
   // The gallery is for `wxt` (serve) only: a release must not ship a debug page anyone can open
   hooks: {
     'entrypoints:found': (wxt, infos) => {
@@ -29,6 +30,11 @@ export default defineConfig({
         const at = infos.findIndex(info => info.name === 'gallery')
         if (at >= 0) infos.splice(at, 1)
       }
+    },
+    // The licences that go with every copy (scripts/third-party-notices.mjs): WXT calls this once every entry point
+    // is built, so the list of what was bundled is complete; the project's own licence goes in beside it
+    'build:publicAssets': (_wxt, files) => {
+      files.push(...licenceFiles())
     },
   },
   manifest: {
