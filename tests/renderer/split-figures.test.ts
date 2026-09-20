@@ -107,6 +107,18 @@ describe('splitFigures', () => {
     expect(copy.hasAttribute(PANELS_ATTR)).toBe(true)
   })
 
+  it('a figure that is the multi-panel flex figure itself is marked too: the query that finds the marks never answers for the element it is asked on (Devin on #273)', () => {
+    const doc = docOf(`<figure class="ltx_figure ltx_flex_figure">
+      <div class="ltx_flex_cell ltx_flex_size_2"><img class="ltx_graphics" src="a.png"></div>
+      <div class="ltx_flex_break"></div>
+      <div class="ltx_flex_cell ltx_flex_size_2"><img class="ltx_graphics" src="b.png"></div>
+      <figcaption class="ltx_caption">Figure 2. Original</figcaption>
+      <figcaption class="ltx_caption ${T_CLASS}" data-axt-for="c1">caption, translated</figcaption></figure>`)
+    markStructure(doc)
+    splitFigures(doc)
+    expect(doc.querySelector(`.${SPLIT_CLASS}`)!.hasAttribute(PANELS_ATTR)).toBe(true)
+  })
+
   it('idempotent: with the translation unchanged no rebuild', () => {
     const doc = docOf(figure())
     expect(splitFigures(doc)).toBe(1)

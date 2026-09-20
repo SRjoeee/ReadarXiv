@@ -106,12 +106,16 @@ export const SIDE_STACK = [
  * right after the block marks: a multi-panel flex figure (`data-axt-panels`, its subtree is no container) and a
  * list item whose marker is its child (`data-axt-tagged`, the marker leaves the grid flow). Both are facts of the
  * page's own structure and never change; `restore()` sweeps them with every other `data-axt-*`. Idempotent.
+ * An element given as the root is asked too — a split copy is marked through here (split-figures.ts), and
+ * `querySelectorAll` never answers for the element it is called on (Devin on #273; LaTeXML writes the flex figure
+ * as a `div` inside the `figure` in all 20 of the corpus's, so this is the signature kept honest, not a case met).
  * Returns how many elements were marked
  */
 export function markStructure(root: Document | Element): number {
   let marked = 0
   for (const [selector, attr] of [[MULTI_PANEL_FLEX, PANELS_ATTR], [SIDE_LAYOUT.taggedItem, TAGGED_ATTR]] as const) {
-    for (const el of Array.from(root.querySelectorAll(selector))) {
+    const own = 'matches' in root && root.matches(selector) ? [root] : []
+    for (const el of [...own, ...Array.from(root.querySelectorAll(selector))]) {
       if (el.hasAttribute(attr)) continue
       el.setAttribute(attr, '')
       marked++
