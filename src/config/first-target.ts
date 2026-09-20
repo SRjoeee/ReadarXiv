@@ -35,6 +35,8 @@ const NAMED_SCRIPT: Partial<Record<LangCode, { script: string; unmarked: boolean
   azj: { script: 'cyrl', unmarked: false },
   zlm: { script: 'arab', unmarked: false },
   jav: { script: 'java', unmarked: false },
+  // Cantonese comes in Traditional characters (languages.ts, measured): `yue-Hant-HK` names what the table gives — Codex on #272
+  yue: { script: 'hant', unmarked: true },
   // `ku` is Kurmanji, in Latin, which the table does not list; its `ku` is Sorani (languages.ts says so, measured) — Codex on #272
   ckb: { script: 'arab', unmarked: false },
 }

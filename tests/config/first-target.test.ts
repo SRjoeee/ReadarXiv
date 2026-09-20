@@ -44,6 +44,10 @@ describe('pickTargetLanguage', () => {
     expect(pickTargetLanguage(['zh-Hans-CN'])).toBe('cmn')
     expect(pickTargetLanguage(['zh-Hant'])).toBe('cmn-Hant')
     expect(pickTargetLanguage(['cmn-Hant-TW', 'en'])).toBe('cmn-Hant')
+    // Cantonese is given in Traditional characters, so naming them names what the table has (Codex on #272)
+    expect(pickTargetLanguage(['yue-Hant-HK', 'en'])).toBe('yue')
+    expect(pickTargetLanguage(['yue-HK'])).toBe('yue')
+    expect(pickTargetLanguage(['yue-Hans', 'ja'])).toBe('jpn')
   })
 
   it('`ku` is Kurmanji, in Latin, which the table does not list: its Sorani is given only to a reader who asks for Arabic script or for `ckb` (Codex on #272)', () => {
