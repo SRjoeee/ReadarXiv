@@ -129,6 +129,11 @@ describe('what to translate in a figure (#121)', () => {
     expect(looksLikeCode('total_loss += criterion(outputs, labels) * weight')).toBe(true)
     // — opens with: a sentence may state a setting (`==` is an operator already)
     expect(looksLikeCode('trained with batch_size = 32 and the default schedule')).toBe(false)
+    // Nor the words of a comment at the line's end: the run is the code before it
+    expect(looksLikeCode('return result_value  # use the cached result when available')).toBe(true)
+    expect(looksLikeCode('flush(out_buf) // nothing else holds the lock at this point')).toBe(true)
+    // — a marker set off by space on both sides: inside a word it is the label's own (`# of`, a URL)
+    expect(looksLikeCode('share of train_gpt runs solved (# of 50), see https://example.org/a_b for the rest')).toBe(false)
     // A label may quote a name, and an apostrophe is no quotation mark
     for (const text of ['the "train_gpt" run converges faster than before', 'Kimi\'s train_gpt loss, per step']) {
       expect([text, looksLikeCode(text)]).toEqual([text, false])

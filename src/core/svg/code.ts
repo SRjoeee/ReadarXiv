@@ -47,8 +47,12 @@ const SNAKE_ASSIGNED = /^\S*\w_\w\S*\s*[-+*/%&|^]?=(?!=)/
 /** A word as prose has them: two letters running */
 const WORD = /\p{L}{2,}/u
 
-/** A string literal. An apostrophe is none: a quotation mark stands clear of letters on its outer side (`Kimi's`) */
-const STRING_LITERAL = /"[^"]*"|`[^`]*`|(?<!\p{L})'[^']*'(?!\p{L})/gu
+/**
+ * What a line of code holds that is not code: a string literal — an apostrophe is none, a quotation mark stands clear
+ * of letters on its outer side (`Kimi's`) — and a comment to the line's end, its marker set off by space on both
+ * sides: inside a word `#` and `//` are a label's own (`(# of 50)`, a URL)
+ */
+const NOT_CODE = /"[^"]*"|`[^`]*`|(?<!\p{L})'[^']*'(?!\p{L})|\s(?:#|\/\/)\s.*$/gu
 
 /**
  * Whether the identifiers make the run code.
@@ -62,15 +66,16 @@ const STRING_LITERAL = /"[^"]*"|`[^`]*`|(?<!\p{L})'[^']*'(?!\p{L})/gu
  *
  * Two things a program does with a name and a sentence does not settle it outright: it is called, or it is assigned.
  *
- * **The words are counted outside string literals**: what a literal holds is what the program says, not what the run
- * is, and `status_message = "unable to load model"` is no sentence for the four words in it (Codex and Devin on
- * #274). A comment's words do count — a comment is prose, and `#` and `//` are at home in labels
+ * **The words are counted outside string literals and the comment at the line's end**: what those hold is what the
+ * program says and what its author says of it, not what the run is — `status_message = "unable to load model"` is no
+ * sentence for the four words in it, nor `return result_value  # use the cached result` for its five (Codex and
+ * Devin on #274)
  */
 function identifiersRule(text: string): boolean {
   if (SNAKE_CALL.test(text) || SNAKE_ASSIGNED.test(text)) return true
   const identifiers = text.split(/\s+/).filter(token => SNAKE_CASE.test(token)).length
   if (identifiers === 0) return false
-  return identifiers >= text.replace(STRING_LITERAL, ' ').split(/\s+/).filter(token => !SNAKE_CASE.test(token) && WORD.test(token)).length
+  return identifiers >= text.replace(NOT_CODE, ' ').split(/\s+/).filter(token => !SNAKE_CASE.test(token) && WORD.test(token)).length
 }
 
 /** A statement end, even when everything else about the line looks like words (`inti;`) */
