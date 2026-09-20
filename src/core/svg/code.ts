@@ -34,6 +34,50 @@ const OPERATORS = /->|=>|==|!=|::|>>|<<|&&|\|\|/
 /** `hash_length`, `uint32_t`: an underscore joining word characters */
 const SNAKE_CASE = /\w_\w/
 
+/** A snake-case name being called, `PyArg_ParseTupleAndKeywords(`: code however many words follow, the arguments being words too */
+const SNAKE_CALL = /\w_\w*\(/
+
+/**
+ * A snake-case name being assigned, **at the head of the run**: a statement opens with its target, and what it is
+ * assigned may be all words (`status_message = await response.text()`; Codex on #274). A sentence may state a
+ * setting further in (`trained with batch_size = 32`), and `==` is an operator already
+ */
+const SNAKE_ASSIGNED = /^\S*\w_\w\S*\s*[-+*/%&|^]?=(?!=)/
+
+/** A word as prose has them: two letters running */
+const WORD = /\p{L}{2,}/u
+
+/**
+ * What a line of code holds that is not code: a string literal — an apostrophe is none, a quotation mark stands clear
+ * of letters on its outer side (`Kimi's`) — and a comment to the line's end, its marker set off by space on both
+ * sides: inside a word `#` and `//` are a label's own (`(# of 50)`, a URL)
+ */
+const NOT_CODE = /"[^"]*"|`[^`]*`|(?<!\p{L})'[^']*'(?!\p{L})|\s(?:#|\/\/)\s.*$/gu
+
+/**
+ * Whether the identifiers make the run code.
+ *
+ * An identifier **named in a sentence** does not: `train_gpt convergence — minitriton vs torch eager` and
+ * `MiniTriton CUDA-core roofline — NVIDIA L20 (sm_89), fp32` are a figure's titles, and the first version of this
+ * rule — any underscore between word characters — left all four titles of one figure in English (reported on
+ * 2607.24653v2). So the identifiers are weighed against the plain words beside them: on its own (`flash_attn`, the
+ * same figure's legend) or not outnumbered (`return hash_length`, `if(hash_length < 0)`) it is code, among more
+ * words than identifiers it is a name a sentence mentions. Every source line of the listing fixture is still rejected.
+ *
+ * Two things a program does with a name and a sentence does not settle it outright: it is called, or it is assigned.
+ *
+ * **The words are counted outside string literals and the comment at the line's end**: what those hold is what the
+ * program says and what its author says of it, not what the run is — `status_message = "unable to load model"` is no
+ * sentence for the four words in it, nor `return result_value  # use the cached result` for its five (Codex and
+ * Devin on #274)
+ */
+function identifiersRule(text: string): boolean {
+  if (SNAKE_CALL.test(text) || SNAKE_ASSIGNED.test(text)) return true
+  const identifiers = text.split(/\s+/).filter(token => SNAKE_CASE.test(token)).length
+  if (identifiers === 0) return false
+  return identifiers >= text.replace(NOT_CODE, ' ').split(/\s+/).filter(token => !SNAKE_CASE.test(token) && WORD.test(token)).length
+}
+
 /** A statement end, even when everything else about the line looks like words (`inti;`) */
 const STATEMENT_END = /[;{}]\s*$/
 
@@ -51,7 +95,7 @@ export function looksLikeCode(text: string): boolean {
   if (trimmed === '') return false
   if (GUTTER.test(trimmed)) return true
   if (OPERATORS.test(trimmed)) return true
-  if (SNAKE_CASE.test(trimmed)) return true
+  if (identifiersRule(trimmed)) return true
   if (STATEMENT_END.test(trimmed)) return true
   return (trimmed.match(BRACES) ?? []).length >= 2
 }

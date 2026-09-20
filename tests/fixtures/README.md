@@ -25,7 +25,7 @@ Also in the repository:
 
 ## Not in the repository
 
-Five papers, one figure of one of them and the recognition helper's reference image were submitted under [arXiv's non-exclusive licence](https://arxiv.org/licenses/nonexclusive-distrib/1.0/license.html), which lets arXiv distribute them and nobody else. They are not redistributed: `remote.json` pins each to a **version** of the paper and the SHA-256 of what arXiv served, and `scripts/fetch-fixtures.mjs` downloads a missing one into the path the tests read and accepts only those bytes.
+Five papers, one figure of one of them and the recognition helper's reference image were submitted under [arXiv's non-exclusive licence](https://arxiv.org/licenses/nonexclusive-distrib/1.0/license.html), which lets arXiv distribute them and nobody else; one more figure is under CC BY-NC-ND 4.0, whose terms a GPL-3.0 tree cannot carry. They are not redistributed: `remote.json` pins each to a **version** of the paper and the SHA-256 of what arXiv served, and `scripts/fetch-fixtures.mjs` downloads a missing one into the path the tests read and accepts only those bytes.
 
 | Path | Source | Why this one |
 |---|---|---|
@@ -33,6 +33,7 @@ Five papers, one figure of one of them and the recognition helper's reference im
 | `arxiv/2401.00418.html` | [arXiv:2401.00418v1](https://arxiv.org/abs/2401.00418v1), *Bounds on the minimum distance of locally recoverable codes* | mathematics with large tables |
 | `arxiv/2401.00596.html` | [arXiv:2401.00596v3](https://arxiv.org/abs/2401.00596v3), *Bulk medium properties of heavy-ion collisions from the beam energy scan with a multistage hydrodynamic model* | dense footnotes, 248 citations, 89 references |
 | `arxiv/2608.29808.html`, `svg/2608.29808-bounter-case.svg` | [arXiv:2608.29808v1](https://arxiv.org/abs/2608.29808v1), *PolyFlow: A Neuro-Symbolic Framework for Static Cross-Language Information Flow Analysis* | code, algorithms, large tables, `.ltx_ERROR` and SVG figures in one page; the figure is a syntax-highlighted listing of 913 glyphs — the one that showed the dropped-space problem (`if log_counting` arriving as `iflog_counting`), and the one the code filter has to reject |
+| `svg/2607.24653-AET_blackbox_curve.svg` | a figure of [arXiv:2607.24653v2](https://arxiv.org/abs/2607.24653v2), *Kimi K3: Open Frontier Intelligence* — CC BY-NC-ND 4.0, which a GPL tree cannot hold either | a plot made by TeX: 171 glyphs and not one of them a space — the figure whose title arrived as `CameraRepairManagementSystemReplication` |
 | `arxiv/2609.00245.html` | [arXiv:2609.00245v1](https://arxiv.org/abs/2609.00245v1), *Higher-order Gaussian bounds for maximally subelliptic boundary value problems* | the densest mathematics (2 131 formulas), theorems, footnotes, 1 827 cross-references |
 | `helper/Tests/Fixtures/qed3d-string-breaking.png` | Figure 1 of [arXiv:2609.04114v1](https://arxiv.org/abs/2609.04114v1), *Real-Time String Dynamics in 3+1D Lattice Quantum Electrodynamics* | the helper's reference image: labels wrapped over two lines, labels beside symbols, four panels. `pnpm helper:smoke` also needs it as a JPEG stored on its side with EXIF orientation 6, which the script makes from it on the spot |
 

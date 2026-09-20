@@ -1,6 +1,6 @@
 // The fixtures that are not in the repository (tests/fixtures/remote.json): five papers, one figure of one of them and
 // the recognition helper's reference image are under arXiv's non-exclusive licence — arXiv may distribute them, this
-// repository may not. Each is downloaded from the pinned version into the path the tests read, once, and only a copy
+// repository may not — and one more figure is under CC BY-NC-ND, whose terms a GPL tree cannot carry. Each is downloaded from the pinned version into the path the tests read, once, and only a copy
 // whose SHA-256 is the recorded one is accepted: the rule-coverage snapshots and the measured numbers in DESIGN were
 // taken from exactly these bytes.
 //
