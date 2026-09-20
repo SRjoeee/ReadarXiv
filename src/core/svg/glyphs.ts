@@ -191,12 +191,28 @@ function reachOf(d: string): { from: number; to: number } | undefined {
   return from <= to ? { from, to } : undefined
 }
 
-/** Every outline's reach by its id, read once per figure and only for a figure whose spaces are gaps */
+/**
+ * Every outline's reach by the id a glyph names, read once per figure and only for a figure whose spaces are gaps.
+ *
+ * The converter writes an outline in one of two forms, by the kind of font and not by who made the figure: a Type 1
+ * face as `<path id>` in the unit square, a TrueType one as `<g id><path transform="matrix(.001,0,0,.001,0,0)">` in
+ * font units under a scale (the plot fixture is all of the second form; Codex and Devin on #274). So the id may be the
+ * path's or its group's, and a path's own matrix scales and shifts its reach. A matrix that turns or shears the
+ * outline has no reach along the baseline to speak of, and is left out
+ */
 function outlinesOf(svg: Element): Map<string, { from: number; to: number }> {
   const out = new Map<string, { from: number; to: number }>()
-  for (const path of Array.from(svg.querySelectorAll('path[id]'))) {
+  for (const path of Array.from(svg.querySelectorAll('defs path'))) {
+    const id = path.id || path.parentElement?.id
     const reach = reachOf(path.getAttribute('d') ?? '')
-    if (reach) out.set(path.id, reach)
+    if (!id || !reach) continue
+    const [a = 1, b = 0, c = 0, , e = 0] = /matrix\(([^)]*)\)/.exec(path.getAttribute('transform') ?? '')?.[1]?.split(/[\s,]+/).map(Number) ?? []
+    if (b !== 0 || c !== 0 || !(a > 0)) continue
+    const from = reach.from * a + e
+    const to = reach.to * a + e
+    // A glyph drawn by several paths reaches as far as they do together
+    const so = out.get(id)
+    out.set(id, so ? { from: Math.min(so.from, from), to: Math.max(so.to, to) } : { from, to })
   }
   return out
 }

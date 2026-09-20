@@ -116,6 +116,20 @@ describe('what to translate in a figure (#121)', () => {
     expect(looksLikeCode('if(!PyArg_ParseTupleAndKeywords(args, kwds, "II", kwlist,')).toBe(true)
   })
 
+  it('what a string literal holds is what the program says, not what the run is: the words in it do not make a line of code a sentence (Codex and Devin on #274)', () => {
+    for (const text of [
+      'status_message = "unable to load model"',
+      "status_message = 'unable to load model'",
+      'print(f"unable to load {model_name} right now")',
+    ]) {
+      expect([text, looksLikeCode(text)]).toEqual([text, true])
+    }
+    // A label may quote a name, and an apostrophe is no quotation mark
+    for (const text of ['the "train_gpt" run converges faster than before', 'Kimi\'s train_gpt loss, per step']) {
+      expect([text, looksLikeCode(text)]).toEqual([text, false])
+    }
+  })
+
   it('catches code that has no punctuation of its own', () => {
     // `int i;` with the space dropped, and a listing gutter that merged into its line
     expect(looksLikeCode('inti;')).toBe(true)

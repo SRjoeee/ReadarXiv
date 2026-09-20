@@ -72,6 +72,33 @@ describe('SVG glyph extraction (#121)', () => {
     expect(runsOf(svg).map(r => r.text)).toEqual(['mimm i'])
   })
 
+  it('reads an outline the converter wrapped in a group, in font units under a scale — how it writes a TrueType face, as in the plot fixture (Codex and Devin on #274)', () => {
+    // The same glyphs and places as the case above, `m` 0 to 800 and `i` 50 to 250 in thousandths of the font size
+    const use = (text: string, x: number) => `<use data-text="${text}" xlink:href="#${text}" transform="matrix(10,0,0,-10,${x},50)"/>`
+    const svg = new DOMParser().parseFromString(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 200 100">
+      <defs><g id="m"><path transform="matrix(.001,0,0,.001,0,0)" d="M0 0H800V500H0Z"/></g><g id="i"><path transform="matrix(.001,0,0,.001,0,0)" d="M50 0H250V700H50Z"/></g></defs>
+      ${use('m', 0)}${use('i', 9)}${use('m', 12.5)}${use('m', 22.5)}${use('i', 32.6)}
+    </svg>`, 'image/svg+xml').documentElement
+    expect(runsOf(svg).map(r => r.text)).toEqual(['mimm i'])
+    // That is the fixture's own form: every one of its glyphs is a group holding a scaled path
+    const plot = svgOf(PLOT)
+    expect(plot.querySelectorAll('defs > g[id] > path[transform]').length).toBeGreaterThan(20)
+    expect(plot.querySelectorAll('defs > path[id]')).toHaveLength(0)
+  })
+
+  it('the grouped form on real metrics: the plot fixture with its space glyphs taken out reads every word as it did with them', () => {
+    const worded = (svg: Element) => runsOf(svg).map(r => r.text).filter(text => /\p{L}{2,}/u.test(text))
+    const drawn = worded(svgOf(PLOT))
+    const svg = svgOf(PLOT)
+    const spaces = Array.from(svg.querySelectorAll('use[data-text=" "]'))
+    expect(spaces.length).toBeGreaterThan(0)
+    for (const space of spaces) space.remove()
+    // All four spaces of the axis title back, and none added to a word. What does differ is a formula, `||=89`
+    // read as `| | = 89` — mathematics is set with air around its signs — which holds no word and is sent nowhere
+    expect(worded(svg)).toEqual(drawn)
+    expect(drawn).toEqual(['closure', 'dense', 'wall time per epoch [ms]'])
+  })
+
   it('a figure that draws its spaces is read as it is drawn: a monospaced face leaves more air beside a narrow letter than a word gap is wide', () => {
     // Measured on the listing: 79 pairs of letters inside a word stand 0.20–0.30 em apart, where TeX's word gaps begin
     const texts = runsOf(svgOf(LISTING)).map(r => r.text)

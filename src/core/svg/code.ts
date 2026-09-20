@@ -40,6 +40,9 @@ const SNAKE_CALL = /\w_\w*\(/
 /** A word as prose has them: two letters running */
 const WORD = /\p{L}{2,}/u
 
+/** A string literal. An apostrophe is none: a quotation mark stands clear of letters on its outer side (`Kimi's`) */
+const STRING_LITERAL = /"[^"]*"|`[^`]*`|(?<!\p{L})'[^']*'(?!\p{L})/gu
+
 /**
  * Whether the identifiers make the run code.
  *
@@ -49,13 +52,16 @@ const WORD = /\p{L}{2,}/u
  * 2607.24653v2). So the identifiers are weighed against the plain words beside them: on its own (`flash_attn`, the
  * same figure's legend) or not outnumbered (`return hash_length`, `if(hash_length < 0)`) it is code, among more
  * words than identifiers it is a name a sentence mentions. Every source line of the listing fixture is still rejected.
+ *
+ * **The words are counted outside string literals**: what a literal holds is what the program says, not what the run
+ * is, and `status_message = "unable to load model"` is no sentence for the four words in it (Codex and Devin on
+ * #274). A comment's words do count — a comment is prose, and `#` and `//` are at home in labels
  */
 function identifiersRule(text: string): boolean {
   if (SNAKE_CALL.test(text)) return true
-  const tokens = text.split(/\s+/)
-  const identifiers = tokens.filter(token => SNAKE_CASE.test(token)).length
+  const identifiers = text.split(/\s+/).filter(token => SNAKE_CASE.test(token)).length
   if (identifiers === 0) return false
-  return identifiers >= tokens.filter(token => !SNAKE_CASE.test(token) && WORD.test(token)).length
+  return identifiers >= text.replace(STRING_LITERAL, ' ').split(/\s+/).filter(token => !SNAKE_CASE.test(token) && WORD.test(token)).length
 }
 
 /** A statement end, even when everything else about the line looks like words (`inti;`) */
