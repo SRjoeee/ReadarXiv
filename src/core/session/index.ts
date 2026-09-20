@@ -14,7 +14,7 @@ import { collectImageTargets, startImageTranslation, type ImageBytes, type Image
 import { startTranslation, type Progress, type TranslationRun } from '@/core/pipeline'
 import { escapeText, unescapeText } from '@/core/protector/escape'
 import {
-  applyStyle, clearImageEverywhere, createModeController, createPrep, installAnchorFallback, type Mode, type ModeController, relabelFailed, restore, type SentenceHighlight, setImageModes,
+  applyStyle, clearImageEverywhere, createModeController, createPlaceKeeper, createPrep, installAnchorFallback, type Mode, type ModeController, relabelFailed, restore, type SentenceHighlight, setImageModes,
   startSentenceHighlight,
 } from '@/core/renderer'
 import { translateCall } from '@/core/run/call'
@@ -144,6 +144,11 @@ export function createPageSession(deps: SessionDeps): PageSession {
    * configured preference
    */
   let live: LiveSession | null = null
+  /**
+   * The reader's place across the relayouts done on their behalf (renderer/place.ts): a start, a restore, a change of
+   * the mode in effect, the tidy layer's full pass. Told **before** the writes, each time; it lives as long as the page
+   */
+  const place = createPlaceKeeper(doc, blocks)
   /**
    * The mode the reader saved. **A status request waits for it to come back**: the popup stops retrying the moment
    * it gets a non-empty status, so any guess before then may pin the mode bar on the wrong stop — a reader who
@@ -289,6 +294,8 @@ export function createPageSession(deps: SessionDeps): PageSession {
     if (epoch !== undefined && epoch !== epochNow()) return release('session-over')
     trace(`start: ready in ${Math.round(now() - tStart)} ms, since page start ${Math.round(tStart)} ms`)
 
+    // From here to the end of this function the page is written to, and laid out anew once: the reader's place first
+    place.keep()
     endLive() // the previous session, stopped but not restored (a restart, or a retry after a fatal error)
     adoptStyle(lookOf(config))
     const startEngine = status.engine.id
@@ -300,7 +307,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       renderPath: status.renderPath,
       running: { provider: status.chosen, target, engine: startEngine, revision: status.revision },
       restarted: false,
-      modes: createModeController(doc, requested ?? config.mode, { onChange: enterSide }),
+      modes: createModeController(doc, requested ?? config.mode, { beforeChange: () => place.keep(), onChange: enterSide }),
       // The in-page anchor fallback (issue #44): in only mode the target block is hidden, and a clicked cross-reference goes nowhere
       uninstallAnchors: installAnchorFallback(doc),
       // Attached on this path only: with no translation on there is no translation, and nothing to compare
@@ -495,6 +502,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
   const prep = createPrep(doc, {
     isSide: () => live?.modes.effective() === 'side',
     trace,
+    keepPlace: () => place.keep(),
     // The split copies' failure widgets retry through the run, as the original's side does (issue #170)
     retry: blockId => {
       const block = live?.run?.failed().find(b => b.id === blockId)
@@ -550,6 +558,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
   function restorePage(epoch?: string): { removedNodes: number; refused?: true } {
     if (epoch !== undefined && epoch !== epochNow()) return { removedNodes: 0, refused: true }
     actions++
+    place.keep()
     endLive()
     prep.reset()
     const result = restore(doc)
