@@ -107,6 +107,58 @@ describe('leading label under markers (#150)', () => {
     roundTrip(f.offsets, t)
   })
 
+  it('a block wholly inside one element needs no separator found, so neither a short label nor a listed face: a theorem set in italics keeps them at any length (218 such over eight words in 13 papers lost theirs)', () => {
+    const { block } = markers('<p class="ltx_p"><span class="ltx_text ltx_font_italic">For each integer k we have the following bound on the quantity in question, uniformly in the parameters.</span></p>')
+    const t = 'Pour tout entier k on a la borne suivante sur la grandeur en question, uniforme en les parametres.'
+    const f = rehydrate(t, block, document)
+    expect(label(f)!.className).toBe('ltx_text ltx_font_italic')
+    expect(label(f)!.textContent).toBe(t)
+    expect(f.childNodes).toHaveLength(1)
+    roundTrip(f.offsets, t)
+  })
+
+  it('a picture\'s label is such a block, its colour and face on the element inside: `lower-bounded` is red by a variable on its span, and came back white (reader\'s report on 2607.24653v2)', () => {
+    const { block } = markers('<span class="ltx_foreignobject_content"><span class="ltx_text ltx_font_sansserif" style="--ltx-fg-color:#E5484D;">lower-bounded</span></span>')
+    const f = rehydrate('borne inferieure', block, document)
+    expect(label(f)!.className).toBe('ltx_text ltx_font_sansserif')
+    expect(label(f)!.getAttribute('style')).toBe('--ltx-fg-color:#E5484D;')
+    expect(label(f)!.hasAttribute('id')).toBe(false)
+    expect(text(f)).toBe('borne inferieure')
+  })
+
+  it('with a formula inside: the words and the formula go back in together, and the block\'s only child is the span again, not the formula — arXiv\'s sheet centres a label whose only child is one (measured: 12 px off its place)', () => {
+    const { block } = markers('<span class="ltx_foreignobject_content"><span class="ltx_text">Block <math class="ltx_Math"><mi>n</mi></math></span></span>')
+    const f = rehydrate(block.text.replace('Block', 'Bloc'), block, document)
+    expect(f.childNodes).toHaveLength(1)
+    expect(label(f)!.matches('span.ltx_text')).toBe(true)
+    expect(label(f)!.querySelector('math')).not.toBeNull()
+    expect(f.querySelector(':scope > math')).toBeNull()
+  })
+
+  it('what went out as one placeholder comes back as itself, with no second shell around it: a link keeps its address, code its letters', () => {
+    for (const [html, selector] of [
+      ['<p class="ltx_p"><a href="https://example.org">All of it a link</a></p>', 'a[href="https://example.org"]'],
+      ['<p class="ltx_p"><span class="ltx_text ltx_font_typewriter">all_of_it code</span></p>', 'span.ltx_font_typewriter'],
+    ] as const) {
+      const { block } = markers(html)
+      expect(block.text).toBe('@a#')
+      const f = rehydrate(block.text, block, document)
+      expect(f.childNodes).toHaveLength(1)
+      expect(label(f)!.matches(selector)).toBe(true)
+      expect(label(f)!.querySelector(selector)).toBeNull()
+    }
+  })
+
+  it('with a body after it the list stays the narrow one the replay covered: there a separator has to be found, and a coloured span before a colon is not a label on that evidence', () => {
+    const { block } = markers('<p class="ltx_p"><span class="ltx_text" style="--ltx-fg-color:#E5484D;">Warning:</span> the bound is not tight.</p>')
+    expect(rehydrate('Avertissement : la borne n\'est pas atteinte.', block, document).querySelector('span')).toBeNull()
+  })
+
+  it('an element that does not open the block is no shell for it, whatever it is', () => {
+    const { block } = markers('<p class="ltx_p">See <span class="ltx_text" style="--ltx-fg-color:#E5484D;">the red part</span></p>')
+    expect(rehydrate('Voir la partie rouge', block, document).querySelector('span')).toBeNull()
+  })
+
   it('leaves the translation alone when the separator is missing, far, or after a sentence end', () => {
     const { block } = markers('<p class="ltx_p"><span class="ltx_text ltx_font_bold">Note.</span> The start is our paper.</p>')
     for (const t of [
@@ -254,7 +306,7 @@ describe('leading label under markers (#150)', () => {
     expect(rehydrate('注意：好。', colon.block, document).querySelector('.ltx_font_bold')?.textContent).toBe('注意：')
   })
 
-  it('a label longer than eight words is not a label', () => {
+  it('a label longer than eight words, with a body after it, is not a label: past there the separator is a guess', () => {
     const { block } = markers('<p class="ltx_p"><span class="ltx_text ltx_font_italic">For each integer k we have the following bound on the quantity:</span> proof.</p>')
     const f = rehydrate('对于每个整数 k，我们有以下关于该量的界：证明。', block, document)
     expect(f.querySelector('.ltx_font_italic')).toBeNull()

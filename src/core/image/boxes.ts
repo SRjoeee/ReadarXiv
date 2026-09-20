@@ -38,16 +38,6 @@ export interface Box {
 export interface BoxOptions {
   /** Lines below this confidence are dropped */
   minConf?: number
-  /**
-   * Whether vertically adjacent, aligned lines are one label. True for anything that arrives as
-   * *lines* — OCR and glyph runs both cut a wrapped label into one per line, and translating the
-   * halves separately would be translating half sentences.
-   *
-   * The inline-picture path (§15.6) passes false: there a line is a whole TikZ node, already
-   * complete however it wraps, and two nodes stacked close together in a diagram ("Stable
-   * LatentMoE" over "Gated MLA") would otherwise be merged into one label across both boxes.
-   */
-  merge?: boolean
 }
 
 /** The axis-aligned bounding box of the four corners: a rotated axis label's corners are not axis-aligned, so its box is drawn first */
@@ -83,14 +73,13 @@ function adjacent(a: Box, b: { y: number; h: number }): boolean {
 
 export function linesToBoxes(lines: readonly OcrLine[], options: BoxOptions = {}): Box[] {
   const minConf = options.minConf ?? 0.3
-  const merge = options.merge ?? true
   const kept = lines
     .filter(line => line.conf >= minConf && isTranslatable(line.text))
-    .map(line => ({ ...quadBounds(line.quad), text: line.text.trim(), angle: line.angle, len: line.len, thick: line.thick, rows: line.rows }))
+    .map(line => ({ ...quadBounds(line.quad), text: line.text.trim(), angle: line.angle, len: line.len, thick: line.thick }))
     .sort((a, b) => a.y - b.y || a.x - b.x)
   const boxes: Box[] = []
   for (const line of kept) {
-    const host = !merge || line.angle ? undefined : boxes.find(box => !box.angle && adjacent(box, line) && aligned(box, line))
+    const host = line.angle ? undefined : boxes.find(box => !box.angle && adjacent(box, line) && aligned(box, line))
     if (host) {
       const right = Math.max(host.x + host.w, line.x + line.w)
       const bottom = Math.max(host.y + host.h, line.y + line.h)
@@ -101,9 +90,7 @@ export function linesToBoxes(lines: readonly OcrLine[], options: BoxOptions = {}
       host.text = `${host.text} ${line.text}`
       host.lines++
     } else {
-      // A picture label knows how many lines it wraps to (§15.6); everything else is one line
-      const { rows, ...rest } = line
-      boxes.push({ ...rest, lines: Math.max(1, rows ?? 1) })
+      boxes.push({ ...line, lines: 1 })
     }
   }
   return boxes

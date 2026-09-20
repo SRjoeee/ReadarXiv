@@ -1,6 +1,6 @@
 import { ID_ATTR } from '@/core/extractor'
 import { T_CLASS } from '@/core/marks'
-import { NOTE, SIDE_LAYOUT } from '@/core/rules/latexml'
+import { NOTE, pictureOf, SIDE_LAYOUT } from '@/core/rules/latexml'
 import { MIRRORED_ATTR, PANELS_ATTR, REAL_TRANSLATION, SPLIT_ATTR, SPLIT_CLASS, TAGGED_ATTR, TAIL_ATTR, TRANSLATED_ATTR } from './attrs'
 // The structural decisions of side mode (DESIGN §7.2). This is the single source of truth; the lists of the same
 // names in modes.css are guarded by tests. Every `ltx_*` literal comes from the rules module's SIDE_LAYOUT
@@ -89,7 +89,9 @@ export const SIDE_CONTAINER = `:has(.${T_CLASS}, [${ID_ATTR}]):not(:is(${SIDE_DE
  * cannot recur.
  */
 export function isSideContainer(el: Element): boolean {
-  return el.matches(SIDE_CONTAINER) && el.closest(SIDE_DENY_SUBTREE) === null
+  // Nothing inside a picture is a container, whatever it holds: a label's node is the picture's to lay out, and the
+  // marks the sheet reads are not written in there either (markBlocks, DESIGN §15.6)
+  return el.matches(SIDE_CONTAINER) && el.closest(SIDE_DENY_SUBTREE) === null && pictureOf(el) === null
 }
 
 // Stack regions: no left / right split inside these cells; the pairs fall back to stacking (modes.css holds the

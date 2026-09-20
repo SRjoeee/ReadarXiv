@@ -43,7 +43,8 @@ const options = await openOptions(context, extId)
 await chooseBuiltIn(options, 'Google 翻译')
 // Image translation (DESIGN §15) is on by default; with the helper installed on this machine the overlays and the split would disturb the layout / count assertions below,
 // so it is switched off here, and the dedicated e2e:image switches it back on (kept when AXT_E2E_IMAGES=1)
-if (!process.env.AXT_E2E_IMAGES) await setSwitch(options, '图片翻译', false)
+const FIGURES_SWITCH = '图片翻译'
+if (!process.env.AXT_E2E_IMAGES) await setSwitch(options, FIGURES_SWITCH, false)
 await options.close()
 
 /** Open the paper, choose side mode through the popup and start translating */
@@ -400,6 +401,54 @@ async function measureFrame(page) {
     rows.split && rows.original.join() === '0,0,1,1' && rows.copy.join() === rows.original.join(),
     JSON.stringify(rows))
   await page.screenshot({ path: `${SHOTS}/layout-split-panels.png` })
+
+  // The same paper's Figure 3, a TikZ picture: its labels are blocks of the text run, each translation beside its
+  // label inside the node, one of the two showing (DESIGN §15.6). This script runs with figures not translated, so
+  // the gate comes first: a label reached is neither asked for nor replaced
+  const labels = () => page.evaluate(() => {
+    const anchor = [...document.querySelectorAll('svg .ltx_foreignobject_content:not(.axt-t)')].find(e => e.textContent.trim() === 'lower-bounded')
+    let figure = anchor?.closest('figure')
+    while (figure?.parentElement?.closest('figure')) figure = figure.parentElement.closest('figure')
+    const copy = figure?.nextElementSibling?.classList.contains('axt-split') ? figure.nextElementSibling : null
+    const shown = el => el.getClientRects().length > 0
+    // A label as the reader sees it: where it stands in its picture, in what colour, and whether its node is still ar5iv's flex box
+    // The same picture on both sides, by its place among the figure's pictures: the copy no longer holds the words it is known by
+    const nth = [...(figure?.querySelectorAll('svg.ltx_picture') ?? [])].indexOf(anchor?.closest('svg.ltx_picture'))
+    const rows = root => {
+      const picture = root?.querySelectorAll('svg.ltx_picture')[nth]
+      if (!picture) return []
+      const box = picture.getBoundingClientRect()
+      return [...picture.querySelectorAll('.ltx_foreignobject_content')].filter(l => shown(l) && /\p{L}{2,}/u.test(l.textContent)).map(l => {
+        const r = l.getBoundingClientRect()
+        return { ours: l.classList.contains('axt-t'), text: l.textContent.trim(), top: Math.round(r.top - box.top), left: Math.round(r.left - box.left), colour: getComputedStyle(l.firstElementChild ?? l).color, node: getComputedStyle(l.parentElement).display }
+      })
+    }
+    return { translationsInPictures: document.querySelectorAll('svg .axt-t').length, original: rows(figure), copy: rows(copy) }
+  })
+  await page.evaluate(() => [...document.querySelectorAll('svg .ltx_foreignobject_content')].find(e => e.textContent.trim() === 'lower-bounded')?.closest('figure')?.scrollIntoView({ block: 'center' }))
+  await quiesce(page, 'a picture, figures not translated')
+  const gated = await labels()
+  check('figures not translated: a picture\'s labels are neither asked for nor replaced, and stand as the paper has them',
+    gated.translationsInPictures === 0 && gated.original.length >= 4 && gated.original.every(l => !l.ours && l.node === 'flex'),
+    `${gated.translationsInPictures} translations inside pictures; ${gated.original.map(l => l.text).join(' / ')}`)
+
+  // The reader turns figures on while the session runs: the labels held back are asked for, and the figure's copy is made again
+  const settings = await openOptions(context, extId)
+  await setSwitch(settings, FIGURES_SWITCH, true)
+  await settings.close()
+  await page.bringToFront()
+  let on = await labels()
+  for (let i = 0; i < 60 && !(on.copy.length > 0 && on.copy.every(l => l.ours)); i++) { await sleep(500); on = await labels() }
+  const same = on.original.length === on.copy.length && on.original.every((l, i) => Math.abs(l.top - on.copy[i].top) <= 1 && Math.abs(l.left - on.copy[i].left) <= 1 && l.colour === on.copy[i].colour && on.copy[i].node === 'flex' && l.node === 'flex')
+  check('figures turned on mid-session: the original keeps its labels, the copy shows their translations — each where its label stands, in its colour, the node still ar5iv\'s own',
+    on.original.length >= 4 && on.original.every(l => !l.ours) && on.copy.every(l => l.ours) && same && new Set(on.copy.map(l => l.colour)).size >= 2,
+    JSON.stringify(on.original.map((l, i) => `${l.text} → ${on.copy[i]?.text} Δ(${(on.copy[i]?.top ?? NaN) - l.top}, ${(on.copy[i]?.left ?? NaN) - l.left})`)))
+  await page.screenshot({ path: `${SHOTS}/layout-picture-labels.png` })
+  if (!process.env.AXT_E2E_IMAGES) {
+    const back = await openOptions(context, extId)
+    await setSwitch(back, FIGURES_SWITCH, false)
+    await back.close()
+  }
   await page.close()
 }
 

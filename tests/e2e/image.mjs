@@ -69,7 +69,7 @@ extId = worker.url().split('/')[2]
 const IDLE = /session idle: (\d+)\/(\d+) requested of (\d+)/
 const IMAGES_IDLE = /images idle: (\d+)\/(\d+) of (\d+), (\d+) failed/
 /** The image count content reports, SVG and bitmaps counted apart; both enter the same pipeline, and idle's denominator is their sum */
-const IMAGE_COUNTS = /\[axt\] images: (\d+) SVG \+ (\d+) inline pictures \+ (\d+) bitmaps/
+const IMAGE_COUNTS = /\[axt\] images: (\d+) SVG \+ (\d+) bitmaps/
 async function waitForLog(logs, pattern, timeoutMs, predicate = () => true) {
   const t0 = Date.now()
   while (Date.now() - t0 < timeoutMs) {
@@ -89,10 +89,10 @@ async function scrollThrough(page) {
   }
   // One sweep at a fixed step is not enough: translations are inserted while scrolling, the document grows, and a whole image can be skipped between two positions
   // (measured: a run gave `5/5 of 6`, the sixth never entered the viewport). Finally scroll image by image, so “all have entered the viewport” is certain.
-  // The selector must match the production target set (graphics + picture of rules/latexml.ts): scrolling bitmaps only,
-  // with AXT_PAPER changed to a paper with external SVG or inline TikZ, the skipped one is never claimed and images idle waits until the timeout
-  // (Codex on #163)
-  const TARGETS = 'img.ltx_graphics, object.ltx_graphics[type="image/svg+xml"], svg.ltx_picture'
+  // The selector must match the production target set (the graphics of rules/latexml.ts): scrolling bitmaps only, with
+  // AXT_PAPER changed to a paper with external SVG, the skipped one is never claimed and images idle waits until the timeout
+  // (Codex on #163). An inline TikZ picture is no target: its labels are blocks of the text run (§15.6), checked by e2e:layout
+  const TARGETS = 'img.ltx_graphics, object.ltx_graphics[type="image/svg+xml"]'
   const count = await page.evaluate(sel => document.querySelectorAll(sel).length, TARGETS)
   for (let i = 0; i < count; i++) {
     await page.evaluate(([sel, n]) => document.querySelectorAll(sel)[n]?.scrollIntoView({ block: 'center' }), [TARGETS, i])
@@ -154,7 +154,7 @@ await page.goto(`https://arxiv.org/html/${PAPER}#readarxiv`, { waitUntil: 'domco
 // The image count comes from content's log, so the expectation follows when the paper changes (AXT_PAPER) (Codex on #89)
 const counted = await waitForLog(logs, IMAGE_COUNTS, 20_000)
 const found = counted ? IMAGE_COUNTS.exec(counted.text) : null
-const N = found ? +found[1] + +found[2] + +found[3] : 0
+const N = found ? +found[1] + +found[2] : 0
 check('content recognised the images on the page', N >= 1, counted?.text ?? 'no images log')
 await scrollThrough(page)
 const idle = await waitForLog(logs, IMAGES_IDLE, 90_000, m => +m[2] === N && +m[1] + +m[4] === N)

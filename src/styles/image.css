@@ -21,9 +21,7 @@
 }
 
 @supports (top: anchor(top)) and (anchor-scope: --x) {
-  /* An inline TikZ figure (§15.6) is an anchor too: the overlay sticks to its box the same way. The svg itself is
-     media to side's pairing rules, never a translation block */
-  html[data-axt-on] :is(img, object, svg)[data-axt-anchor] {
+  html[data-axt-on] :is(img, object)[data-axt-anchor] {
     anchor-name: --axt-img;
   }
 

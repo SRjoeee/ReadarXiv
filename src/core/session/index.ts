@@ -22,6 +22,7 @@ import { createSerialQueue } from '@/core/scheduler/serial'
 import { newSessionId } from '@/core/scheduler/session'
 import { translateTitle, type TitleTranslator } from '@/core/scheduler/title'
 import type { TranslationTransport } from '@/providers/transport'
+import { isFigureText } from '@/core/rules/latexml'
 import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
 import type { PageStatus } from '@/shared/messages'
 import type { HelperStatus, ImageProgress, OcrCall, OcrMessageResponse } from '@/shared/ocr'
@@ -340,6 +341,9 @@ export function createPageSession(deps: SessionDeps): PageSession {
       transport: request => backend.translate(request),
       scope: session,
       preload: config.preload,
+      // A figure's text — the labels inside a picture, blocks like any other (§15.6) — is asked for where the reader
+      // has figures translated, the images' gate: refused, a label waits unasked and the gate opening offers it again
+      admit: block => !isFigureText(block.el) || (started.config.image.enabled && started.config.image.modes.includes(started.modes.effective())),
       // The blocks this batch just touched go to the tidy layer: only their containers are touched, no whole-paper re-scan per pass (issue #46)
       onRendered: rendered => {
         if (!alive()) return
@@ -403,10 +407,11 @@ export function createPageSession(deps: SessionDeps): PageSession {
     // show; the new round replaces them when it reaches the image (Codex on #89)
     setImageModes(doc, [])
     if (!config.image.enabled || config.image.modes.length === 0) return null
+    // The display gate is a figure's text's too (§15.6), and that needs no round: a paper may hold pictures and not one image
+    setImageModes(doc, config.image.modes)
     if (!paper) return null
     const targets = collectImageTargets(doc)
     if (targets.length === 0) return null
-    setImageModes(doc, config.image.modes)
     const alive = () => live === session
 
     /**
@@ -456,7 +461,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
         prep.touch(rendered)
       },
     })
-    trace(`images: ${targets.filter(t => t.kind === 'svg').length} SVG + ${targets.filter(t => t.kind === 'picture').length} inline pictures + ${targets.filter(t => t.kind === 'raster').length} bitmaps, modes ${config.image.modes.join('/')}`)
+    trace(`images: ${targets.filter(t => t.kind === 'svg').length} SVG + ${targets.filter(t => t.kind === 'raster').length} bitmaps, modes ${config.image.modes.join('/')}`)
 
     /**
      * Bitmaps wait for the helper. **A failed or absent probe has to settle too**: the bitmap overlays the previous
@@ -515,8 +520,9 @@ export function createPageSession(deps: SessionDeps): PageSession {
    * or leaves side — what that takes is its own to know (renderer/prep.ts `side`)
    */
   function enterSide(effective: Mode): void {
-    // The mode gate may have just opened: parked images are released (§15)
+    // The mode gate may have just opened: parked images are released (§15), and the figures' text held with them (§15.6)
     live?.images?.run.resume()
+    live?.run?.resume()
     prep.side(effective === 'side')
   }
 
@@ -613,6 +619,10 @@ export function createPageSession(deps: SessionDeps): PageSession {
       live.images = null
       setImageModes(doc, [])
       if (config.image.enabled) live.images = startImages(live, config)
+      // The same gate holds the figures' text back in the text run (§15.6), and under side decides which member of
+      // a label's pair a figure's copy holds: the figures with labels are tidied again, their copies' keys having moved
+      live.run.resume()
+      prep.touch(blocks.filter(block => isFigureText(block.el)))
     }
     // The language changed: the failure widgets already drawn copied the words into their own shadow roots and have to be rewritten (Codex on #161)
     deps.applyLocale(config.uiLanguage)

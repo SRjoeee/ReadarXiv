@@ -59,8 +59,11 @@ html[data-axt-on] {
 /* A translation identical to the original word for word (the default prompt keeps names, journal titles and the like
    in the original, and a citation's author paragraph comes back whole): in stack the two lines duplicate to no
    purpose and the copy is hidden. side needs it to hold the right column and only hides the original, so both keep
-   it. `data-axt-identity` is set by renderText after its check (Codex on #74) */
-html[data-axt-mode="stack"] .axt-t[data-axt-identity] {
+   it. `data-axt-identity` is set by renderText after its check (Codex on #74).
+   **Not inside a picture** (§15.6): a label shows one of its two texts and in stack that is the translation, the
+   original hidden — with the copy hidden as well the node stood empty (`KDA`, `MLP`, `MoonViT-V2` come back as they
+   went; measured on 2607.24653v2, 4 of 33 labels blank) */
+html[data-axt-mode="stack"] .axt-t[data-axt-identity]:not(:where(svg) *) {
   display: none;
 }
 
@@ -558,7 +561,32 @@ html[data-axt-mode="side"] .ltx_inline-block :is(img, svg) {
 
 /* ── only: translation only (§7.4) ──────────────────────────────────────────────────
    The original block is hidden, not removed; switching back changes data-axt-mode alone. */
-html[data-axt-mode="only"] [data-axt-state="translated"] {
+html[data-axt-mode="only"] [data-axt-state="translated"]:not(:where(svg) *) {
+  display: none;
+}
+
+/* ── A picture's labels (§15.6) ─────────────────────────────────────────────────────
+   A TikZ node's label is HTML in the picture's foreignObject and a block like any other: its translation is its next
+   sibling (§7.1), in the label's own face and colour. The node was drawn for one text, so **one of the two shows, in
+   every mode** — stacked they burst the node. Which one is the reader's setting for figures, read off the same two
+   attributes as the image overlay (image.css): the translation where figures are translated in the mode in force,
+   the original otherwise. In side the split figure's original keeps its originals (the rule above hides every
+   translation in it) and the copy holds the one member split-figures.ts left it.
+   A label waiting shows no skeleton and one that failed no widget: a node has no room for either, and the label
+   stands as the paper has it. */
+html[data-axt-on] svg :is(.axt-pending, .axt-error) {
+  display: none;
+}
+
+html[data-axt-mode="side"]:not([data-axt-img-modes~="side"]) svg .axt-t,
+html[data-axt-mode="stack"]:not([data-axt-img-modes~="stack"]) svg .axt-t,
+html[data-axt-mode="only"]:not([data-axt-img-modes~="only"]) svg .axt-t {
+  display: none;
+}
+
+html[data-axt-mode="side"][data-axt-img-modes~="side"] svg [data-axt-state="translated"]:not(:where([data-axt-split]) *),
+html[data-axt-mode="stack"][data-axt-img-modes~="stack"] svg [data-axt-state="translated"],
+html[data-axt-mode="only"][data-axt-img-modes~="only"] svg [data-axt-state="translated"] {
   display: none;
 }
 

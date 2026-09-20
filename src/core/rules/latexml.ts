@@ -1,4 +1,4 @@
-import { collectText, squash } from '@/core/text'
+import { LETTER, collectText, squash } from '@/core/text'
 // The LaTeXML rules module. Every ltx_* selector lives in this file only (CLAUDE.md, the first of the two defaults).
 // Based on DESIGN.md §5.1 / §5.2 / §5.3 / §5.6 / §6.1; the measurements are in DESIGN §5.7.
 // Data tables and pure functions only, no traversal; the traversal is in src/core/extractor.
@@ -11,7 +11,7 @@ import { collectText, squash } from '@/core/text'
  * descriptions along, and would keep serving them with the key unchanged. 0.10.2: an inline listing is a void
  * (`lstinline`) — its identifiers had gone to the engine as prose
  */
-export const RULES_VERSION = '0.10.2'
+export const RULES_VERSION = '0.11.0'
 
 /** The LaTeXML class prefix, to tell whether an element belongs to the paper body */
 export const LTX_CLASS_PREFIX = 'ltx_'
@@ -84,6 +84,10 @@ export const UNIT_RULES: readonly Rule[] = [
   // and squash every equation; the row's sibling is a new row, exactly what is wanted. A spacing row matches too,
   // but its cell is empty and letterless, no block anyway, no special case needed
   { id: 'intertext', selector: EQN_PROSE_ROW, note: 'the \\intertext description row of an equation group (issue #152)' },
+  // A TikZ node's label (§15.6): ordinary HTML in the picture's `foreignObject`, in the figure's own face and colour.
+  // Its translation is its next sibling like any block's (§7.1) and a style rule shows one of the two, the node's box
+  // holding either (modes.css). A wrapped label holds a `.ltx_p` of its own, and then that is the block (rule p)
+  { id: 'picturelabel', selector: '.ltx_foreignobject_content', note: 'the label of a TikZ node, HTML inside the picture\'s foreignObject (§15.6)' },
   { id: 'marginal', selector: '.ltx_marginpar', note: 'marginal note' },
   { id: 'indexentry', selector: '.ltx_indexentry', note: 'index entry; the page numbers in .ltx_indexrefs are a placeholder' },
   { id: 'cv', selector: '.ltx_cv_item_label, .ltx_cv_item_content, .ltx_cv_entry_date', note: 'the entry fields of the CV template' },
@@ -150,10 +154,6 @@ export const SKIP_RULES: readonly Rule[] = [
   { id: 'author-glue', selector: '.ltx_author_before, .ltx_author_after', note: 'the glue between authors (“ and ”, “, ”)' },
   { id: 'classification', selector: '.ltx_classification', note: 'MSC / ACM classification codes, such as “Primary: 11L07”' },
   { id: 'pubnotes', selector: '.ltx_pubnotes', note: 'publication metadata (the ACM template\'s CCS / DOI / journal)' },
-  // The text pipeline skips an inline TikZ picture whole, unchanged: the labels inside are HTML in a foreignObject,
-  // and translated as blocks the translations would be inserted inside the svg and burst the canvas. The image
-  // pipeline overlays them (§15.6), on the same path as bitmaps and external SVGs
-  { id: 'picture', selector: 'svg, .ltx_picture', note: 'TikZ pictures; the labels inside are overlaid by the image pipeline (§15.6)' },
   { id: 'error', selector: '.ltx_ERROR, .ltx_FATAL, .ltx_WARNING, .ltx_INFO', note: 'LaTeXML conversion errors and notices, not paper content' },
   { id: 'nav', selector: '.ltx_page_navbar, .ltx_TOC', note: 'the navigation bar and the table of contents; outside the translation root, for the renderer to hide' },
 ]
@@ -216,6 +216,10 @@ export const PROTECT_RULES: readonly ProtectRule[] = [
   // Measured: 5 of the 39 equation groups in the 12 fixtures sit inside a unit such as `.ltx_item`, and either skip
   // or a missing descend would change what those 5 blocks send
   { id: 'equationgroup', selector: EQUATION_GROUP, descend: true, note: 'equation group container: a void to the outer unit, while the description rows inside are still found as blocks' },
+  // An inline TikZ picture, the same shape again (§15.6): one atom to an outer unit, entered by the extractor for the
+  // labels inside, which are HTML in a `foreignObject` and blocks of their own (UNIT_RULES' picturelabel). Until
+  // 2026-09-21 the picture was skipped whole and its labels went the images' way, a white box drawn over each
+  { id: 'picture', selector: 'svg, .ltx_picture', descend: true, note: 'TikZ picture: a void to the outer unit, while the labels inside are still found as blocks (§15.6)' },
   { id: 'note-mark', selector: '.ltx_note_mark, .ltx_note_type', note: 'footnote mark and type label (once at the container\'s outer level and once inside the body)' },
   { id: 'mailto', selector: 'a[href^="mailto:"]', note: 'e-mail addresses kept as they are' },
   // The contact labels LaTeXML generates ("Affiliation: " / "Email: "), which arXiv's style sheet sets display:none.
@@ -333,6 +337,15 @@ export function isNamedTag(el: Element): boolean {
  */
 export const YIELDS_TO_OUTER_BLOCK: ReadonlySet<string> = new Set(['intertext'])
 
+/**
+ * The containers the extractor does **not** enter once an outer unit became a block. A picture inside a paragraph
+ * that is a block was cloned whole into that paragraph's translation, labels and all, and any unit found inside —
+ * a label, or the `.ltx_p` of a wrapped one, which no list of giving-way units could name without taking every
+ * paragraph in a footnote with it — would be translated a second time beside the clone. A footnote and an equation
+ * group are entered all the same: their inner blocks are placed by steps of their own
+ */
+export const CLOSED_UNDER_OUTER_BLOCK: ReadonlySet<string> = new Set(['picture'])
+
 export function classify(el: Element): Classification | null {
   const skip = SKIP_RULES.find(r => el.matches(r.selector))
   if (skip) return { kind: 'skip', rule: skip.id, descend: false }
@@ -361,6 +374,16 @@ export const FUNCTIONAL_INLINE = 'a[href]'
  */
 export const LABEL_FORMATTING = '.ltx_font_bold, .ltx_font_italic, .ltx_font_smallcaps, .ltx_emph'
 
+/**
+ * What may be put back around a block that is **wholly inside it**: any formatting-only element — LaTeXML's
+ * `ltx_text`, which carries a face, a size or a colour (`--ltx-fg-color` on its style), and the emphasis element.
+ * Wider than the labels' list because nothing is guessed: with no body after it there is no separator to find, and
+ * every word of the translation goes back inside. Measured over 13 papers, 938 of 6 855 units are such (13.7 %):
+ * 720 paragraphs, 167 picture labels, 51 reference fragments — and a picture's label is nearly always one, its
+ * colour and face on the span inside (§15.6). Code is not among them: it went out as a placeholder
+ */
+export const WHOLE_FORMATTING = `.ltx_text, .ltx_emph, ${LABEL_FORMATTING}`
+
 /** Figures and graphics (for the Phase 0 statistics script) */
 /**
  * Image targets (§15). Both kinds of `graphics` are taken: a bitmap goes to OCR, an SVG has its glyphs read
@@ -369,13 +392,6 @@ export const LABEL_FORMATTING = '.ltx_font_bold, .ltx_font_italic, .ltx_font_sma
 export const FIGURE_SELECTORS = {
   figure: '.ltx_figure',
   graphics: 'img.ltx_graphics, object.ltx_graphics[type="image/svg+xml"]',
-  /**
-   * Inline TikZ (§15.6). Its labels are ordinary HTML inside `<foreignObject>`, so they are read
-   * from the main document rather than recognised or reconstructed from glyphs — the text pipeline
-   * still skips the whole picture (`PROTECT/skip` rule `picture`), the image pipeline draws over it
-   */
-  picture: 'svg.ltx_picture',
-  pictureText: '.ltx_foreignobject_content',
 } as const
 
 /** Footnotes (for the two-column placement of §7.2): the container, the body, the body's class name and the number it carries */
@@ -500,15 +516,30 @@ export function visibleText(el: Element): string {
 const MARKED_AS_MATH = '.ltx_markedasmath'
 
 /**
- * `visibleText` less the identifiers marked as math. **Only to decide “is this node one formula whole”** — an
- * identifier inside a sentence is translated with the sentence as before (`Block n−1` goes with its symbol), so what
- * is translated still follows `visibleText`. An image label (§15.6) is the only place that sends an identifier
- * **on its own** and paints a white box over it on the image: of the 507 image labels in the measured corpus exactly
- * 1 is such (`initMT` on 2609.00246), and past the word test it would be translated and covered (Codex on #163)
+ * The picture an element lies in (§15.6), or null. What is inside one is the picture's to lay out: a label's node is
+ * a box ar5iv sizes and aligns, and a block in there is the figure's text, translated by the reader's setting for
+ * figures and not for the body around them
  */
-export function proseText(el: Element): string {
-  if (el.matches(MARKED_AS_MATH)) return ''
-  return textOf(el, node => node.matches(MARKED_AS_MATH))
+export function pictureOf(el: Element): Element | null {
+  return el.closest('svg')
+}
+
+export function isFigureText(el: Element): boolean {
+  return pictureOf(el) !== null
+}
+
+/**
+ * What a unit's own text must hold for the unit to be a block, and what is left out of that text first.
+ *
+ * One letter, anywhere but in a picture's label (§15.6). A label is sent **on its own**, not inside a sentence, and
+ * on its own `N`, `q` and `L2` are symbols: it takes two letters running. An identifier set as text in math mode
+ * (`initMT`, `softmax`) is a symbol too — a word to an engine, and a formula's name translated in a diagram is worse than none
+ * — so what LaTeXML marked as math is left out before the test: of the 507 labels in the measured corpus exactly one
+ * is such, `initMT` on 2609.00246 (Codex on #163). Inside a sentence it is translated with the sentence as before
+ * (`Block n−1` goes with its symbol): the test decides only whether there is a block
+ */
+export function blockTest(rule: string): { holds: RegExp; without?: string } {
+  return rule === 'picturelabel' ? { holds: /\p{L}{2,}/u, without: MARKED_AS_MATH } : { holds: LETTER }
 }
 
 function textOf(el: Element, drop?: (el: Element) => boolean): string {

@@ -651,7 +651,7 @@ describe('page session', () => {
     await h.session.start()
     await settle()
     expect(document.documentElement.getAttribute(IMG_MODES_ATTR)).toBe('side stack only')
-    expect(h.trace().some(line => line.startsWith('images: 0 SVG + 0 inline pictures + 1 bitmaps'))).toBe(true)
+    expect(h.trace().some(line => line.startsWith('images: 0 SVG + 1 bitmaps'))).toBe(true)
     // the probe said "not available": the bitmap is parked, and the first resume releases it
     expect(h.session.resumeRaster()).toBe(true)
     expect(h.session.resumeRaster()).toBe(false)
@@ -662,6 +662,50 @@ describe('page session', () => {
     h.session.restore()
     live = null
     expect(h.session.resumeRaster()).toBe(false)
+  })
+
+  describe('a figure\'s text — the labels of a TikZ picture, blocks of the text run (§15.6) — is asked for where the reader has figures translated', () => {
+    const PICTURE = '<figure class="ltx_figure" id="F2"><svg class="ltx_picture"><foreignObject><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content" id="label">Shared Expert</span></span></foreignObject></svg></figure>'
+    const asked = (h: ReturnType<typeof harness>) => h.calls.flatMap(call => call.request.segments.map(seg => seg.id))
+
+    it('figures on: a label is asked for with the text around it, and the display gate is set though the paper holds not one image', async () => {
+      const h = harness({ page: PAGE + PICTURE, config: { image: { enabled: true, modes: ['side', 'stack', 'only'] } } })
+      live = h.session
+      await h.session.start()
+      await settle()
+      expect(document.documentElement.getAttribute(IMG_MODES_ATTR)).toBe('side stack only')
+      await h.session.translate(h.blocks)
+      expect(asked(h)).toContain('label')
+      expect(document.getElementById('label')!.nextElementSibling?.classList.contains('axt-t')).toBe(true)
+    })
+
+    it('figures off: the label is held, unasked, while every other block is translated; turned on mid-session it is asked for, and only it', async () => {
+      const h = harness({ page: PAGE + PICTURE, config: { image: { enabled: false, modes: [] } } })
+      live = h.session
+      await h.session.start()
+      await settle()
+      await h.session.translate(h.blocks)
+      expect(asked(h)).not.toContain('label')
+      expect(asked(h).length).toBeGreaterThan(0)
+      expect(document.getElementById('label')!.nextElementSibling).toBeNull()
+      const before = asked(h).length
+
+      h.session.onConfig({ ...h.config(), image: { enabled: true, modes: ['side', 'stack', 'only'] } })
+      await vi.waitFor(() => expect(asked(h)).toContain('label'))
+      expect(asked(h).slice(before).filter(id => id !== 'label')).toEqual([])
+      expect(document.getElementById('label')!.nextElementSibling?.classList.contains('axt-t')).toBe(true)
+    })
+
+    it('the modes the reader ticked, not the switch alone: figures on in translation only, a label reached in stacked waits, and the switch to that mode releases it', async () => {
+      const h = harness({ page: PAGE + PICTURE, config: { mode: 'stack', image: { enabled: true, modes: ['only'] } } })
+      live = h.session
+      await h.session.start()
+      await settle()
+      await h.session.translate(h.blocks)
+      expect(asked(h)).not.toContain('label')
+      await h.session.setMode('only')
+      await vi.waitFor(() => expect(asked(h)).toContain('label'))
+    })
   })
 
   it('images switched off mid-session leave no round behind: nothing to release, nothing to hand over', async () => {

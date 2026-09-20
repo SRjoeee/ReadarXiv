@@ -1,5 +1,5 @@
 # Files that may hold lines with CJK characters, and how many (scripts/check-english.mjs). The numbers are exact: the gate asks for an entry to be lowered when lines go, and raised only with a reason beside it.
-docs/DESIGN.md 11  # 2026-09-19: +1, §6.2 quotes what the Edge endpoint returned for a marker touching a word; 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
+docs/DESIGN.md 10  # 2026-09-19: +1, §6.2 quotes what the Edge endpoint returned for a marker touching a word; 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
 docs/RELEASE.md 6  # 2026-09-17: the Chinese store listing (product copy the owner submits)
 docs/UI.md 183  # 2026-09-18: S-I-06 / S-I-06a / S-I-06b / S-I-06c (the floating button, its two side buttons and its menu), S-P-03b / S-P-33 / S-P-50b (the popup on entry pages), S-O-49b / S-O-49c (where the translation opens, the floating button switch), issue #169
 README.md 1  # 2026-09-17: the link to the Chinese README
@@ -14,7 +14,6 @@ src/core/renderer/failed.ts 1
 src/core/renderer/highlight.ts 1
 src/core/renderer/image.ts 1
 src/core/rules/latexml.ts 8
-src/core/svg/foreign.ts 2
 src/entrypoints/background/helper.ts 1
 src/entrypoints/options/index.html 1
 src/entrypoints/popup/PopupView.tsx 1
@@ -103,7 +102,6 @@ tests/rules/selector-boundary.test.ts 6
 tests/scheduler/title.test.ts 6
 tests/shared/digest.test.ts 1
 tests/shared/transport.test.ts 1
-tests/svg/foreign.test.ts 1
 tests/ui/language-names.test.ts 9
 tests/ui/locales.test.ts 3
 tests/ui/strings.test.ts 13  # raised 2026-09-13: expectations for the locale-pack sentences (fallback text, drawer issue, popup action error)

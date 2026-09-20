@@ -17,12 +17,12 @@ import { INJECTED_SELECTOR } from '@/core/marks'
 import { type CallBase, translateCall } from '@/core/run/call'
 import { createRunLedger } from '@/core/run/ledger'
 import type { PreloadOptions } from '@/core/scheduler/lazy'
-import { foreignLinesOf, linesOf, looksLikeCode, pictureTexts } from '@/core/svg'
+import { linesOf, looksLikeCode } from '@/core/svg'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
 import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
 import { sha256Hex } from '@/shared/digest'
 import type { ImageProgress, OcrCall, OcrLine, OcrMessageResponse } from '@/shared/ocr'
-import { isTranslatable, linesToBoxes, type Box } from './boxes'
+import { linesToBoxes, type Box } from './boxes'
 import { squash } from '@/core/text'
 
 export type { ImageTarget } from '@/core/renderer/image'
@@ -96,11 +96,6 @@ export interface ImageRun {
   release(): number
 }
 
-/** Does this inline figure hold a label worth translating: a formula-only TikZ picture (most of the corpus) need not enter the scheduler */
-function hasPictureText(picture: Element): boolean {
-  return pictureTexts(picture).some(isTranslatable)
-}
-
 /**
  * The bitmaps inside the translation root, excluding those inside blocks (an image in a block is cloned into the
  * translation with the placeholders, and in only mode the original block is hidden whole, leaving the overlay
@@ -113,16 +108,13 @@ export function collectImageTargets(doc: Document): ImageTarget[] {
   const used = new Set<string>()
   let n = 0
   const targets: ImageTarget[] = []
-  for (const el of Array.from(root.querySelectorAll(`${FIGURE_SELECTORS.graphics}, ${FIGURE_SELECTORS.picture}`))) {
+  // An inline TikZ picture is no target: its labels are HTML in the page and blocks of the text run (§15.6)
+  for (const el of Array.from(root.querySelectorAll(FIGURE_SELECTORS.graphics))) {
     if (el.closest(`[${ID_ATTR}]`) || el.closest(INJECTED_SELECTOR)) continue
-    const tag = el.tagName.toLowerCase()
-    // Inline TikZ pictures (§15.6): only those **with words**. Most of the 170 in the corpus draw formulas, and taking
-    // them would only give the scheduler a heap of targets that end with nothing; the test reads text, not geometry
-    if (tag === 'svg' && (el.parentElement?.closest(FIGURE_SELECTORS.picture) || !hasPictureText(el))) continue
     let id = el.id || `axt-img-${++n}`
     while (used.has(id)) id = `${id}-${++n}`
     used.add(id)
-    targets.push({ id, el, kind: tag === 'object' ? 'svg' : tag === 'svg' ? 'picture' : 'raster' })
+    targets.push({ id, el, kind: el.tagName.toLowerCase() === 'object' ? 'svg' : 'raster' })
   }
   return targets
 }
@@ -305,10 +297,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     try {
       let lines: readonly OcrLine[]
       let frames = 1
-      if (target.kind === 'picture') {
-        // An inline TikZ picture (§15.6): text and geometry are in the main document; nothing to fetch, wait for or recognise
-        lines = foreignLinesOf(target.el).filter(line => !looksLikeCode(line.text))
-      } else if (target.kind === 'svg') {
+      if (target.kind === 'svg') {
         const read = await svgLines(target)
         if (!alive()) return
         if (typeof read === 'string') return fail(target, read)
@@ -336,8 +325,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
       }
       // An animated image: the helper recognised frame 0 only, the browser is showing later frames, the boxes would not line up — no overlay
       if (frames > 1) return finishEmpty()
-      // Every line of an inline picture is a complete TikZ node already and must not merge with its vertical neighbours (§15.6)
-      const boxes = linesToBoxes(lines, target.kind === 'picture' ? { merge: false } : {})
+      const boxes = linesToBoxes(lines)
       if (boxes.length === 0) return finishEmpty() // nothing translatable in the image
       // The caption stands where a block's section heading does: the labels of a figure are read under it
       const caption = captionOf(target.el)
@@ -345,7 +333,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
       const res = await options.translate(translateCall(base, segments, options.renderPath, caption ? { sectionTitle: caption } : {}))
       if (!alive()) return
       if (!res.ok) {
-        // One image's labels may span several batches (an inline TikZ picture easily has a hundred nodes): when one
+        // One image's labels may span several batches (a dense plot has a hundred of them): when one
         // batch fails, the labels another batch had translated come back with the failure (`partial` of §8.2), and
         // they are drawn before the failure is handled — a few labels short beats an empty image, and on retry the
         // drawn ones hit the cache (Codex on #163; the text pipeline does the same already). **Drawn before the

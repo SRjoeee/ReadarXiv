@@ -68,6 +68,47 @@ describe('extract: text blocks', () => {
   })
 })
 
+describe('extract: a picture\'s labels (§15.6)', () => {
+  const node = (inner: string) => `<foreignObject><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content">${inner}</span></span></foreignObject>`
+  const math = (tex: string) => `<math class="ltx_Math"><semantics><mi>${tex}</mi><annotation encoding="application/x-tex">\\${tex}</annotation></semantics></math>`
+  const picture = (...nodes: string[]) => `<figure class="ltx_figure"><svg class="ltx_picture"><g>${nodes.map(node).join('')}</g></svg></figure>`
+  const texts = (blocks: Block[]) => blocks.map(block => [block.unit, block.el.textContent])
+
+  it('each label with words is a block of its own; the picture is entered, not skipped', () => {
+    expect(texts(extract(docOf(picture('Shared Expert', 'Router'))))).toEqual([['picturelabel', 'Shared Expert'], ['picturelabel', 'Router']])
+  })
+
+  it('a label is sent on its own, and on its own a single letter, a number and a formula are symbols: two letters running make a label', () => {
+    expect(extract(docOf(picture('N', '2', 'L2', math('alpha'), '3 ×')))).toHaveLength(0)
+    // In a sentence one letter is enough, as ever
+    expect(extract(docOf('<p class="ltx_p">a</p>'))).toHaveLength(1)
+  })
+
+  it('an identifier set as text in math mode is a symbol too: `initMT`, the corpus\'s one (2609.00246; Codex on #163) — alone it is no block, beside words it goes with them', () => {
+    const marked = '<span class="ltx_text ltx_markedasmath">initMT</span>'
+    expect(extract(docOf(picture(marked)))).toHaveLength(0)
+    expect(texts(extract(docOf(picture(`call ${marked}`))))).toEqual([['picturelabel', 'call initMT']])
+  })
+
+  it('words beside a formula are one block, the formula going with them (`Block n−1`)', () => {
+    const blocks = extract(docOf(picture(`Block ${math('n')}`)))
+    expect(blocks.map(block => block.unit)).toEqual(['picturelabel'])
+    expect(blocks[0]!.el.querySelector('math')).not.toBeNull()
+  })
+
+  it('a wrapped label holds a paragraph of its own, and that is the block: the finding boxes of 2608.29808 are five such', () => {
+    const wrapped = '<span class="ltx_inline-block" style="width:300pt"><span class="ltx_p">PolyFlow is effective end to end.</span></span>'
+    expect(texts(extract(docOf(picture(wrapped))))).toEqual([['p', 'PolyFlow is effective end to end.']])
+  })
+
+  it('a picture inside a paragraph that is a block is that block\'s, labels and all: the paragraph cloned it whole, and a label found inside would be translated twice', () => {
+    const inline = `<svg class="ltx_picture">${node('Shared Expert')}${node('<span class="ltx_inline-block"><span class="ltx_p">A wrapped label.</span></span>')}</svg>`
+    expect(texts(extract(docOf(`<p class="ltx_p" id="p">See ${inline} here.</p>`))).map(([unit]) => unit)).toEqual(['p'])
+    // A paragraph with no text of its own is no block and has cloned nothing: the picture is entered
+    expect(texts(extract(docOf(`<p class="ltx_p">${inline}</p>`))).map(([unit]) => unit)).toEqual(['picturelabel', 'p'])
+  })
+})
+
 describe('extract: table blocks', () => {
   const table =
     '<table class="ltx_tabular" id="T1"><thead><tr><th class="ltx_td ltx_th">Model</th><th class="ltx_td ltx_th">Acc (%)</th></tr></thead>'
@@ -141,6 +182,16 @@ describe('the DOM invariant', () => {
     const before = doc.documentElement.outerHTML
     extract(doc)
     expect(doc.documentElement.outerHTML).toBe(before)
+  })
+
+  it('inside a picture nothing is a pairing container: the marks go from the picture outwards. A label\'s node is laid out by ar5iv — a flex box, the label at its foot — and marked, side\'s stack rule made it a block and the label dropped 23 px (measured on 2607.24653v2)', () => {
+    const doc = docOf(`<section class="ltx_section"><figure class="ltx_figure"><span class="ltx_inline-block"><svg class="ltx_picture"><g><foreignObject>
+      <span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content">Shared Expert</span></span></foreignObject></g></svg></span></figure></section>`)
+    markBlocks(extract(doc))
+    expect(doc.querySelector('.ltx_foreignobject_content')!.hasAttribute('data-axt-id')).toBe(true)
+    expect(doc.querySelectorAll('svg[data-axt-pairs], svg [data-axt-pairs]')).toHaveLength(0)
+    // From the picture outwards the figure and the section hold a pair, as they would for a caption
+    expect(Array.from(doc.querySelectorAll('[data-axt-pairs]'), el => el.className)).toEqual(['ltx_section', 'ltx_figure', 'ltx_inline-block'])
   })
 
   it('markBlocks appends data-axt-id only', () => {

@@ -64,6 +64,11 @@ export interface RunOptions {
   scope?: string
   /** The viewport trigger distance and threshold (§10) */
   preload: PreloadOptions
+  /**
+   * May this block be asked for now. A block refused waits, unasked, and is offered again on `resume()` — the image
+   * run's gate (§15), for the blocks that are a figure's text (§15.6). Absent, every block may
+   */
+  admit?: (block: Block) => boolean
 }
 
 export interface TranslationRun {
@@ -72,6 +77,8 @@ export interface TranslationRun {
   /** End the session: disconnect the observers, remove the pending nodes; nothing is rendered or reported after */
   stop(): void
   progress(): Progress
+  /** The gate may have opened: the blocks it refused are offered again */
+  resume(): void
   /** The blocks whose translation failed (document order); the popup's “retry failed” hands them to translate again */
   failed(): Block[]
   /** Every block still waiting for the viewport is queued now (the whole-paper range chosen mid-session, §10); returns how many */
@@ -359,8 +366,13 @@ export function startTranslation(options: RunOptions): TranslationRun {
     report()
   }
 
+  /** What the gate refused: not asked for, and offered again when the gate may have opened */
+  const held = new Set<Block>()
   async function translate(picked: Block[]): Promise<void> {
-    const { taken } = ledger.intake(picked)
+    const intake = ledger.intake(picked, options.admit)
+    for (const block of intake.held) held.add(block)
+    const { taken } = intake
+    for (const block of taken) held.delete(block)
     if (taken.length === 0) return
     const batches = planBatches(taken, { maxBatchChars: options.capabilities.maxBatchChars, maxBatchItems: options.capabilities.maxBatchItems, renderPath: options.capabilities.renderPath }, block => sectionOf.get(block))
     // The batch goes straight to the service: the number in flight is held by the ported request-queue's rate limit (§8.2); no worker pool here any more
@@ -372,5 +384,9 @@ export function startTranslation(options: RunOptions): TranslationRun {
   // working while the browser does them
   ledger.observe()
 
-  return { translate, stop: () => ledger.stop(), progress, failed: () => ledger.failed(), release: () => ledger.release() }
+  const resume = (): void => {
+    if (held.size > 0) void translate([...held])
+  }
+
+  return { translate, stop: () => ledger.stop(), progress, failed: () => ledger.failed(), release: () => ledger.release(), resume }
 }
