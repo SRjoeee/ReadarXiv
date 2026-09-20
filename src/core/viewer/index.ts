@@ -29,6 +29,8 @@ export interface FigureViewerOptions {
   figures: string
   /** One of ours that lies over a figure and takes the pointer there (the image overlay): the figure is what precedes it */
   overlay: string
+  /** The block a figure stands in, met by the pointer when the figure itself takes none */
+  around: string
   strings: FigureViewerStrings
 }
 
@@ -184,10 +186,18 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   let current: Element | null = null
   let leaving: ReturnType<typeof setTimeout> | undefined
   let frame = 0
-  const figureAt = (target: EventTarget | null): Element | null => {
+  const figureAt = (event: PointerEvent): Element | null => {
+    const { target } = event
     if (!(target instanceof Element) || host.contains(target)) return null
     const lying = target.closest(options.overlay)
-    const figure = lying ? lying.previousElementSibling : target.closest(options.figures)
+    const holds = (el: Element): boolean => {
+      const box = el.getBoundingClientRect()
+      return event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom
+    }
+    // A figure that is `inert` takes no pointer — side mode silences the media a split copy repeats (DESIGN §7.4b) —
+    // and what is met instead is the block around it: the figure there whose box holds the pointer
+    const figure = (lying ? lying.previousElementSibling : target.closest(options.figures))
+      ?? Array.from(target.closest(options.around)?.querySelectorAll(options.figures) ?? []).find(holds)
     if (!figure?.matches(options.figures) || figure.parentElement?.closest(options.figures)) return null
     const box = figure.getBoundingClientRect()
     return box.width >= MIN_WIDTH_PX && box.height >= MIN_HEIGHT_PX ? figure : null
@@ -214,13 +224,31 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     }
     open.setAttribute('data-shown', '')
   }
+  /**
+   * The block whose moves are followed. Entering an element is one event, and a figure that takes no pointer is
+   * never entered: the pointer comes into its block at the margin and crosses onto the figure with nothing to say so.
+   * Only such a block is listened to, and only while the pointer is in it — not every move on every page
+   */
+  let followed: Element | null = null
+  const onMove = (event: PointerEvent): void => {
+    const figure = figureAt(event)
+    if (figure) show(figure)
+  }
+  const follow = (block: Element | null): void => {
+    if (followed === block) return
+    followed?.removeEventListener('pointermove', onMove as EventListener)
+    followed = block
+    block?.addEventListener('pointermove', onMove as EventListener, { passive: true })
+  }
   const onOver = (event: PointerEvent): void => {
     if (dialog.open) return
     if (event.composedPath().includes(open)) {
       clearTimeout(leaving)
       return
     }
-    const figure = figureAt(event.target)
+    const figure = figureAt(event)
+    const block = event.target instanceof Element ? event.target.closest(options.around) : null
+    follow(block?.querySelector(`:is(${options.figures})[inert]`) ? block : null)
     if (figure) {
       show(figure)
       return
@@ -321,6 +349,7 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   return {
     remove() {
       doc.removeEventListener('pointerover', onOver)
+      follow(null)
       view.removeEventListener('scroll', onScroll, { capture: true })
       clearTimeout(leaving)
       if (frame) view.cancelAnimationFrame(frame)

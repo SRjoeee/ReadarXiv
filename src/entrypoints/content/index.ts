@@ -79,7 +79,7 @@ export default defineContentScript({
     })
 
     // The figure viewer (issue #276), a prototype: nothing of the paper is touched, so it is there whether or not the page is translated
-    installFigureViewer(document, { figures: FIGURE_SELECTORS.viewable, overlay: `.${IMG_CLASS}`, strings: { open: 'Open figure', zoomIn: 'Zoom in', zoomOut: 'Zoom out', close: 'Close' } })
+    installFigureViewer(document, { figures: FIGURE_SELECTORS.viewable, overlay: `.${IMG_CLASS}`, around: FIGURE_SELECTORS.figure, strings: { open: 'Open figure', zoomIn: 'Zoom in', zoomOut: 'Zoom out', close: 'Close' } })
 
     if (location.hash === '#axt-debug') enableDebug(blocks)
     if (startsTranslation(location.hash)) void session.start()
