@@ -30,19 +30,14 @@ describe('collectImageTargets', () => {
     expect(targets[0]!.id).toBe('axt-img-1') // an image without an id is numbered
   })
 
-  it('inline TikZ pictures (§15.6): those with words are collected, formula-only ones are not, those inside blocks still not', () => {
+  it('an inline TikZ picture is no image target: its labels are HTML in the page and blocks of the text run (§15.6)', () => {
     const node = (inner: string) =>
       `<foreignObject><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content">${inner}</span></span></foreignObject>`
-    const math = '<math class="ltx_Math"><semantics><mrow>E1</mrow><annotation encoding="application/x-tex">E_1</annotation></semantics></math>'
-    const doc = docOf(
-      `<figure class="ltx_figure"><span class="ltx_inline-block"><svg id="words" class="ltx_picture">${node('Shared Expert')}</svg></span></figure>`
-      + `<figure class="ltx_figure"><span class="ltx_inline-block"><svg id="formula" class="ltx_picture">${node(math)}</svg></span></figure>`
-      + `<div class="ltx_para"><p class="ltx_p" id="p">Text <svg id="inline" class="ltx_picture">${node('Shared Expert')}</svg> more text.</p></div>`,
-    )
-    markBlocks(extract(doc))
-    const targets = collectImageTargets(doc)
-    expect(targets.map(t => t.id)).toEqual(['words'])
-    expect(targets[0]!.kind).toBe('picture')
+    const doc = docOf(`<figure class="ltx_figure"><span class="ltx_inline-block"><svg id="words" class="ltx_picture">${node('Shared Expert')}</svg></span><img class="ltx_graphics" id="bitmap" src="a.png"></figure>`)
+    const blocks = extract(doc)
+    markBlocks(blocks)
+    expect(collectImageTargets(doc).map(t => [t.id, t.kind])).toEqual([['bitmap', 'raster']])
+    expect(blocks.map(block => block.unit)).toEqual(['picturelabel'])
   })
 
   it('without block marks images inside blocks are collected too: the caller must collect only after the marks are written', () => {

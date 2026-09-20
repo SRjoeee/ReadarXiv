@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { T_CLASS } from '@/core/marks'
 import { FOR_ATTR, MIRROR_CLASS, PANELS_ATTR, SPLIT_ATTR, SPLIT_CLASS, SPLIT_FOR_ATTR } from '@/core/renderer/attrs'
-import { renderImage } from '@/core/renderer/image'
+import { renderImage, setImageModes } from '@/core/renderer/image'
 import { restore } from '@/core/renderer/page'
 import { markStructure } from '@/core/renderer/side-layout'
 import { DUPLICATE_ATTR, dropStaleSplits, setSplitDuplicatesHidden, splitFigures } from '@/core/renderer/split-figures'
@@ -117,6 +117,71 @@ describe('splitFigures', () => {
     markStructure(doc)
     splitFigures(doc)
     expect(doc.querySelector(`.${SPLIT_CLASS}`)!.hasAttribute(PANELS_ATTR)).toBe(true)
+  })
+
+  describe('a picture\'s labels (§15.6): a label shows one of its two texts, and which one the copy holds is the reader\'s setting for figures', () => {
+    const label = (id: string, source: string, translation: string) => `<foreignObject><span class="ltx_foreignobject_container">
+      <span class="ltx_foreignobject_content" data-axt-id="${id}" data-axt-state="translated">${source}</span><span class="ltx_foreignobject_content ${T_CLASS}" data-axt-for="${id}">${translation}</span></span></foreignObject>`
+    const picture = `<figure class="ltx_figure"><svg class="ltx_picture">${label('l1', 'Shared Expert', 'expert partage')}<foreignObject><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content">N</span></span></foreignObject></svg>
+      <figcaption class="ltx_caption" data-axt-id="c1">Figure 2. Original</figcaption><figcaption class="ltx_caption ${T_CLASS}" data-axt-for="c1">caption, translated</figcaption></figure>`
+    const labelsOf = (root: Element) => Array.from(root.querySelectorAll('svg .ltx_foreignobject_content'), el => el.textContent)
+
+    it('figures translated in side: the copy keeps each label\'s translation and drops its original, as with any pair; a label with no pair stays', () => {
+      const doc = docOf(picture)
+      setImageModes(doc, ['side', 'stack', 'only'])
+      splitFigures(doc)
+      expect(labelsOf(doc.querySelector(`.${SPLIT_CLASS}`)!)).toEqual(['expert partage', 'N'])
+      // The original is what it was: both members still in the node, the sheet hiding the translation there
+      expect(labelsOf(doc.querySelector(`figure[${SPLIT_ATTR}]`)!)).toEqual(['Shared Expert', 'expert partage', 'N'])
+    })
+
+    it('figures not translated in side: the copy keeps the original of each label — a node has room for one text, and with the translation hidden by the gate it stood empty — while the caption is translated as ever', () => {
+      const doc = docOf(picture)
+      setImageModes(doc, ['stack', 'only'])
+      splitFigures(doc)
+      const copy = doc.querySelector(`.${SPLIT_CLASS}`)!
+      expect(labelsOf(copy)).toEqual(['Shared Expert', 'N'])
+      expect(copy.querySelector('.ltx_caption')!.textContent).toBe('caption, translated')
+    })
+
+    it('a label still waiting, or one that failed, keeps its original in the copy: the ring and the widget are not shown inside a picture, and with the original gone the node stood empty — for good, after a failure (Codex on #277)', () => {
+      const waiting = (cls: string) => picture.replace(`<span class="ltx_foreignobject_content ${T_CLASS}" data-axt-for="l1">expert partage</span>`, `<span class="ltx_foreignobject_content ${T_CLASS} ${cls}" data-axt-for="l1"></span>`).replace(' data-axt-state="translated">Shared', ' data-axt-state="pending">Shared')
+      for (const cls of ['axt-pending', 'axt-error']) {
+        const doc = docOf(waiting(cls))
+        setImageModes(doc, ['side'])
+        splitFigures(doc)
+        expect([cls, labelsOf(doc.querySelector(`.${SPLIT_CLASS}`)!)]).toEqual([cls, ['Shared Expert', 'N']])
+      }
+      // The translation arriving changes the pair's state, which is part of the key: the copy is made again and holds it
+      const doc = docOf(waiting('axt-pending'))
+      setImageModes(doc, ['side'])
+      splitFigures(doc)
+      const ours = doc.querySelector(`figure[${SPLIT_ATTR}] svg .${T_CLASS}`)!
+      ours.classList.remove('axt-pending')
+      ours.textContent = 'expert partage'
+      expect(splitFigures(doc)).toBe(1)
+      expect(labelsOf(doc.querySelector(`.${SPLIT_CLASS}`)!)).toEqual(['expert partage', 'N'])
+    })
+
+    it('the setting changing makes the copy again: it is part of the key, or the copy would hold the wrong member of every pair for good', () => {
+      const doc = docOf(picture)
+      setImageModes(doc, ['stack'])
+      splitFigures(doc)
+      expect(splitFigures(doc)).toBe(0)
+      setImageModes(doc, ['stack', 'side'])
+      expect(splitFigures(doc)).toBe(1)
+      expect(labelsOf(doc.querySelector(`.${SPLIT_CLASS}`)!)).toEqual(['expert partage', 'N'])
+    })
+
+    it('a picture whose labels are translated is no duplicate of the original\'s: it is what reads in the copy, and is not silenced; with its originals kept it is one', () => {
+      const on = docOf(picture)
+      setImageModes(on, ['side'])
+      splitFigures(on)
+      expect(on.querySelector(`.${SPLIT_CLASS} svg`)!.hasAttribute(DUPLICATE_ATTR)).toBe(false)
+      const off = docOf(picture)
+      splitFigures(off)
+      expect(off.querySelector(`.${SPLIT_CLASS} svg`)!.hasAttribute(DUPLICATE_ATTR)).toBe(true)
+    })
   })
 
   it('idempotent: with the translation unchanged no rebuild', () => {

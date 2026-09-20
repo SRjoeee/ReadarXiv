@@ -450,6 +450,56 @@ describe('startTranslation', () => {
   })
 })
 
+describe('the gate: a block refused is not asked for, and is offered again when the gate may have opened (§15.6)', () => {
+  const FIGURE = '<p class="ltx_p" id="p1">Body text.</p>'
+    + '<figure class="ltx_figure"><svg class="ltx_picture"><foreignObject><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content" id="label">Shared Expert</span></span></foreignObject></svg></figure>'
+
+  it('a figure\'s label is a block like any other: its translation is its next sibling inside the node, the formula beside the words kept', async () => {
+    const doc = docOf(FIGURE.replace('Shared Expert', 'Block <math class="ltx_Math"><mi>n</mi></math>'))
+    const blocks = extract(doc)
+    const { transport } = makeTransport((_req, seg) => seg.text.replace('Block', 'Bloc'))
+    const run = await start(doc, blocks, transport)
+    await run.translate(blocks)
+    const label = doc.getElementById('label')!
+    const translation = label.nextElementSibling!
+    expect(translation.classList.contains(T_CLASS)).toBe(true)
+    expect(translation.classList.contains('ltx_foreignobject_content')).toBe(true)
+    expect(translation.parentElement).toBe(label.parentElement)
+    expect(translation.textContent).toContain('Bloc')
+    expect(translation.querySelector('math')).not.toBeNull()
+    // The original is what it was (§7.1): a mark, and nothing else
+    expect(label.textContent).toBe('Block n')
+  })
+
+  it('refused, the label is neither requested nor rendered while the text beside it is; resume() asks for it once the gate is open, and only for it', async () => {
+    const doc = docOf(FIGURE)
+    const blocks = extract(doc)
+    const { transport, requests } = makeTransport()
+    let figures = false
+    const run = await start(doc, blocks, transport, { admit: block => block.id !== 'label' || figures })
+    await run.translate(blocks)
+    expect(requests.flatMap(r => r.request.segments.map(seg => seg.id))).toEqual(['p1'])
+    expect(doc.getElementById('label')!.nextElementSibling).toBeNull()
+    expect(run.progress()).toMatchObject({ total: 2, requested: 1, done: 1 })
+
+    // The gate still shut: resume asks for nothing
+    run.resume()
+    await Promise.resolve()
+    expect(requests).toHaveLength(1)
+
+    figures = true
+    run.resume()
+    await vi.waitFor(() => expect(run.progress()).toMatchObject({ requested: 2, done: 2 }))
+    expect(requests.flatMap(r => r.request.segments.map(seg => seg.id))).toEqual(['p1', 'label'])
+    expect(doc.getElementById('label')!.nextElementSibling?.classList.contains(T_CLASS)).toBe(true)
+
+    // Nothing is held any more: a second resume asks for nothing
+    run.resume()
+    await Promise.resolve()
+    expect(requests).toHaveLength(2)
+  })
+})
+
 describe('onRendered: hands over the blocks whose DOM just changed, for each batch (issue #46)', () => {
   it('twice per batch: once after the skeletons are inserted, once after the results are rendered, both with this batch\'s blocks', async () => {
     const doc = docOf()

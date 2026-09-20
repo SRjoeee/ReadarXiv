@@ -13,13 +13,13 @@
 // 78 / 102 / 209px) falls back to horizontal scrolling within the column, with the font size never touched. Feeding
 // the column width to ar5iv's `--main-width` (it sizes panels at .33 / .5 of it) measured worse: panels shrank to
 // 160px and still overflowed by 555px, so that variable is left alone.
-import { DOCUMENT_ROOT, FIGURE_MEDIA, SPLIT_ROOTS, isTableRoot, tableCells } from '@/core/rules/latexml'
+import { DOCUMENT_ROOT, FIGURE_MEDIA, SPLIT_ROOTS, isFigureText, isTableRoot, tableCells } from '@/core/rules/latexml'
 import { ID_ATTR } from '@/core/extractor'
 import { AXT_ATTR_PREFIX, IMG_CLASS, T_CLASS } from '@/core/marks'
 import { hashText } from '@/shared/hash'
 import { ERROR_CLASS, FOR_ATTR, MIRROR_CLASS, PENDING_CLASS, REAL_TRANSLATION, SPLIT_ATTR, SPLIT_CLASS, SPLIT_FOR_ATTR, SPLIT_OF_ATTR } from './attrs'
 import { REASON_ATTR, failureWidget } from './failed'
-import { markAnchor } from './image'
+import { imageModesOf, markAnchor } from './image'
 import { dropMirror } from './mirror'
 import { markTranslatedCopies } from './notes'
 import { markStructure, markTail } from './side-layout'
@@ -73,12 +73,16 @@ const reasonOf = (t: Element): string => (t.matches(`[${REASON_ATTR}]`) ? t : t.
 const stateOf = (t: Element): string =>
   t.classList.contains(PENDING_CLASS) ? 'pending' : t.classList.contains(ERROR_CLASS) ? `error:${reasonOf(t)}` : t.classList.contains(IMG_CLASS) ? 'image' : 'done'
 
+/** Whether figures are translated in side mode, the reader's setting as the page records it (the images' display gate, §15): it decides which member of a label's pair a copy holds (§15.6) */
+const figuresInSide = (doc: Document): boolean => imageModesOf(doc).includes('side')
+
 /** The pairs' signature: the same count with changed content (a retranslation into another target language) rebuilds too; counting alone would keep a stale copy for good (Codex on #26) */
 function translationKey(fig: Element): string {
   // Beyond the text, the **sentence registration**: with the text unchanged but the registration going from “none”
   // to “some”, a copy left as it is would never be mirrored, and hovering it would find nothing (Codex on #148)
   const texts = Array.from(fig.querySelectorAll(PAIRED), t => `${stateOf(t)}\u0001${t.textContent ?? ''}\u0000${signatureOf(t)}`)
-  return `${texts.length}:${hashText(JSON.stringify(texts))}`
+  // And the figures' setting: a copy made under the other one holds the wrong member of every label's pair
+  return `${texts.length}:${hashText(JSON.stringify(texts))}${figuresInSide(fig.ownerDocument) ? '' : ':figures-off'}`
 }
 
 /**
@@ -143,6 +147,8 @@ function markDuplicates(clone: Element): void {
   for (const media of Array.from(clone.querySelectorAll(FIGURE_MEDIA))) {
     // Inside a translation or an image overlay (§15.2) it is ours, and the copy's is the one shown in side
     if (media.closest(`.${T_CLASS}, .${IMG_CLASS}`) !== clone) continue
+    // A picture whose labels are translated is no duplicate of the original's: it is what reads in the copy (§15.6)
+    if (media.querySelector(`.${T_CLASS}`)) continue
     // Already silent by the paper's own hand (a decorative `aria-hidden="true"` SVG, an inert one): not ours to mark,
     // or leaving side would strip the paper's attributes along with what side added. `aria-hidden` is a token, not a
     // boolean: `"false"` exposes, and such media are duplicates like any other — the value is kept in the mark and put
@@ -204,6 +210,7 @@ export function splitFigures(root: Document | Element, options: SplitOptions = {
   const scope = root.querySelector(DOCUMENT_ROOT) ?? ('body' in root ? null : (root as Element))
   if (!scope) return 0
   let made = 0
+  const figures = figuresInSide(scope.ownerDocument)
   for (const fig of Array.from(scope.querySelectorAll(SPLIT_ROOTS))) {
     if (!needsSplit(fig)) continue
     const key = translationKey(fig)
@@ -236,10 +243,18 @@ export function splitFigures(root: Document | Element, options: SplitOptions = {
       if (options.retry && blockId && reason !== '') failed.push({ dead, blockId, reason })
       else dead.remove()
     }
-    // The clone keeps the pairs' our-side members only: each pair's original member is taken out (a translation, a ring, a widget never is)
+    // The clone keeps the pairs' our-side members only: each pair's original member is taken out (a translation, a ring, a widget never is).
+    // A figure's text is the exception (§15.6): a label shows one of its two texts, its node having room for one, and
+    // the copy keeps the original wherever the translation is not what shows — with figures not translated in side,
+    // and while the label waits or after it failed: a ring and a widget are not drawn inside a picture, and with the
+    // original gone the node stood empty, for good after a failure (Codex on #277). The pair's state is in the key,
+    // so the translation arriving makes the copy again
     for (const original of Array.from(clone.querySelectorAll('*'))) {
       if (original.classList.contains(T_CLASS)) continue
-      if (original.nextElementSibling?.classList.contains(T_CLASS)) original.remove()
+      const ours = original.nextElementSibling
+      if (!ours?.classList.contains(T_CLASS)) continue
+      if (isFigureText(original) && !(figures && ours.matches(REAL_TRANSLATION))) ours.remove()
+      else original.remove()
     }
     stripIds(clone)
     // The marks went with the other data-axt-*: the copy's overlays anchor to the copy's images again (§15.2), and a

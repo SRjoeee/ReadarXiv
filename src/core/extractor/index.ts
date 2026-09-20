@@ -2,7 +2,7 @@
 // The traversal is decoupled from the classification: classification comes from classify() of rules/latexml, and
 // this file decides only “yield or not” and “descend or not”.
 import { isInjected } from '@/core/marks'
-import { DOCUMENT_ROOT, YIELDS_TO_OUTER_BLOCK, classify, documentRoot, isNumericCell, tableCells } from '@/core/rules/latexml'
+import { CLOSED_UNDER_OUTER_BLOCK, DOCUMENT_ROOT, YIELDS_TO_OUTER_BLOCK, blockTest, classify, documentRoot, isNumericCell, pictureOf, tableCells } from '@/core/rules/latexml'
 import { LETTER, collectText } from '@/core/text'
 
 export interface Cell {
@@ -45,8 +45,8 @@ export const PAIRS_ATTR = 'data-axt-pairs'
  * unit / table are nested units (blocks of their own, not the outer's) — two categories more than the rules module's
  * visibleText prunes. The translations / mirrors we inserted do not count either (on a re-extraction they are already inside the block).
  */
-function ownText(el: Element): string {
-  return collectText(el, child => isInjected(child) || classify(child) !== null)
+function ownText(el: Element, without?: string): string {
+  return collectText(el, child => isInjected(child) || classify(child) !== null || (without !== undefined && child.matches(without)))
 }
 
 /**
@@ -122,13 +122,17 @@ export function extract(root: Document | Element): Block[] {
         }
         case 'unit':
           if (YIELDS_TO_OUTER_BLOCK.has(c.rule) && underEmittedBlock(el)) break
-          if (LETTER.test(ownText(el))) {
-            blocks.push({ id: assignId(el), kind: 'text', el, unit: c.rule })
-            emitted.add(el)
+          {
+            const { holds, without } = blockTest(el)
+            if (holds.test(ownText(el, without))) {
+              blocks.push({ id: assignId(el), kind: 'text', el, unit: c.rule })
+              emitted.add(el)
+            }
           }
           break
         case 'protect':
-          descend = c.descend
+          // A container an outer block cloned whole is that block's, everything in it included
+          descend = c.descend && !(CLOSED_UNDER_OUTER_BLOCK.has(c.rule) && underEmittedBlock(el))
           break
       }
     }
@@ -150,11 +154,15 @@ export function extract(root: Document | Element): Block[] {
  * node the renderer inserts lands next to a block, next to a child of a container, or inside a translation — so
  * the ancestors of the blocks are the whole set. The walk stops at the first ancestor already marked: everything
  * above it was marked from that block's chain.
+ *
+ * **From the picture outwards** for a block inside one (§15.6): in there nothing is a pairing container. A label's
+ * node is ar5iv's to lay out — a flex box with the label at its foot — and marked, side's stack rule made it a block
+ * and the label dropped by 23 px (measured on 2607.24653v2)
  */
 export function markBlocks(blocks: Block[]): void {
   for (const b of blocks) {
     b.el.setAttribute(ID_ATTR, b.id)
-    for (let el = b.el.parentElement; el && !el.matches(DOCUMENT_ROOT); el = el.parentElement) {
+    for (let el = (pictureOf(b.el) ?? b.el).parentElement; el && !el.matches(DOCUMENT_ROOT); el = el.parentElement) {
       if (el.hasAttribute(PAIRS_ATTR)) break
       el.setAttribute(PAIRS_ATTR, '')
     }

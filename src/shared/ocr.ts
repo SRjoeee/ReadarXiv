@@ -29,12 +29,6 @@ export interface OcrLine {
    */
   len?: number
   thick?: number
-  /**
-   * How many rendered lines the quad spans, when the source knows. Only the inline-picture path
-   * (§15.6) sets it — a TikZ label is one node whatever it wraps to, and the overlay sizes its font
-   * by the box height divided by this. OCR and glyph runs are one line each and leave it off.
-   */
-  rows?: number
 }
 
 export interface OcrResult {

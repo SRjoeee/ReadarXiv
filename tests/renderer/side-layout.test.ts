@@ -214,8 +214,10 @@ describe('side mode\'s container coverage', () => {
       expect(total).toBeGreaterThan(0)
 
       // The mark the sheet reads and the structural query the code asks name the same containers, element for element (DESIGN §7.2):
-      // every ancestor of a block is marked, and nothing the renderer inserts creates a container the blocks did not
-      const disagree = Array.from(root.querySelectorAll('*')).filter(el => el.hasAttribute(PAIRS_ATTR) !== el.matches(SIDE_CONTAINER.replace(/:not\(.*$/, '')))
+      // every ancestor of a block is marked, and nothing the renderer inserts creates a container the blocks did not.
+      // From a picture outwards: inside one nothing is a container, by the mark and by the query alike (§15.6)
+      const structural = (el: Element) => el.matches(SIDE_CONTAINER.replace(/:not\(.*$/, '')) && el.closest('svg') === null
+      const disagree = Array.from(root.querySelectorAll('*')).filter(el => el.hasAttribute(PAIRS_ATTR) !== structural(el))
       expect(disagree.map(el => `${el.tagName.toLowerCase()}.${el.className}`)).toEqual([])
 
       // A pair really splits into two columns only when every level of the ancestor chain is a container;

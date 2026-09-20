@@ -14,11 +14,11 @@ export interface ImageTarget {
   id: string
   el: Element
   /**
-   * A bitmap goes “bytes → OCR”, an external SVG figure reads the glyphs of its `contentDocument` directly (§15.5),
-   * an inline TikZ figure reads the HTML inside `foreignObject` and its rectangle (§15.6). The three meet in
-   * `linesToBoxes`; the overlay, the cache and the scheduling after that are one and the same
+   * A bitmap goes “bytes → OCR”, an external SVG figure reads the glyphs of its `contentDocument` directly (§15.5).
+   * The two meet in `linesToBoxes`; the overlay, the cache and the scheduling after that are one and the same. An
+   * inline TikZ picture is neither: its labels are HTML in the page, blocks of the text run (§15.6)
    */
-  kind: 'raster' | 'svg' | 'picture'
+  kind: 'raster' | 'svg'
 }
 
 /** One translated label: position and size in the image's normalised coordinates (0–1, top-left origin); lines is how many OCR lines were merged into it */
@@ -37,6 +37,11 @@ export interface ImageLabel {
   /** A tilted label's own length and thickness, both as fractions of the image's **width**; present with angle */
   len?: number
   thick?: number
+}
+
+/** The modes figures are translated in, as the page has them now — the display gate's own record, for what a style rule cannot do (split-figures.ts) */
+export function imageModesOf(doc: Document): string[] {
+  return doc.documentElement.getAttribute(IMG_MODES_ATTR)?.split(' ').filter(Boolean) ?? []
 }
 
 export function setImageModes(doc: Document, modes: readonly string[]): void {

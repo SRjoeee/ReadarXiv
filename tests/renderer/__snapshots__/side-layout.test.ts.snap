@@ -59,8 +59,10 @@ exports[`side mode's container coverage > 2507.00150.html: whether a pair reache
 
 exports[`side mode's container coverage > 2608.29808.html: whether a pair reaches the translation root; the snapshot records how many each exclusion blocked 1`] = `
 {
-  "blockedBy": {},
-  "connected": "437/437",
+  "blockedBy": {
+    "ltx_inline-block": 5,
+  },
+  "connected": "437/442",
 }
 `;
 
