@@ -71,7 +71,7 @@ states, verbs for buttons, no spoken phrases (去填 / 去修 are out), every no
 | S-P-03b | Abstract or PDF page (P17) | (the ordinary popup) | **The popup works on every arXiv page the reader may be on** (the maintainer, 2026-09-18): on `abs` and `pdf` the rows are the ordinary ones and the button is S-P-50's 翻译本页, which opens that paper's HTML version and translates it there — no dialog, no question. The paper has no HTML version: the button stays, **disabled**, with S-P-33 below it, so a reader is told the answer rather than left with a control that does nothing. A service that cannot run disables it here as it does on the paper page (S-P-32). No shortcut badge: ⌥T acts on a translated page, and this is not one. The translation opens where S-O-49b says, a new tab by default, and the popup closes with it |
 | S-P-10 | Service row label | 翻译服务 | The row opens the service menu (S-P-40…46) under itself |
 | S-P-11 | Service row value | {模型名 / 服务名} | LLM shows the model (`deepseek-v4-flash`), others their name; while replaced (S-P-30) the service in use with the one put aside struck through |
-| S-P-20 | Language row label | 目标语言 | The row opens the language menu |
+| S-P-20 | Language row label | 目标语言 | The row opens the language menu. What a new reader finds here follows the browser's languages, chosen once at install (DESIGN §9): the first preferred language that is not English; Simplified Chinese when none is |
 | S-P-21 | Language row value | {语言名} | `languages.ts` label |
 | S-P-22 | Language menu search box | 搜索语言 | Matches the Chinese name, the local name, the English name and the code |
 | S-P-23 | Language menu, no results | 没有匹配的语言 | |

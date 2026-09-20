@@ -1023,8 +1023,18 @@ export function isRtlTag(tag: string): boolean {
  * (zh-CN → zh → cmn, cmn being listed before yue); with nothing found, Simplified Chinese
  */
 export function fromBcp47(tag: string): LangCode {
+  return languageOfTag(tag) ?? DEFAULT_LANG_CODE
+}
+
+/**
+ * The same lookup without the last step: null for a tag that names no language of the table. Choosing a reader's
+ * first target language walks a list of preferences (first-target.ts), and a tag it cannot place has to be passed
+ * over for the next one, not read as Simplified Chinese
+ */
+export function languageOfTag(tag: string): LangCode | null {
   if (isLangCode(tag)) return tag
-  const wanted = tag.toLowerCase()
+  const wanted = tag.trim().toLowerCase()
+  if (wanted === '') return null
   const [primary = '', ...subtags] = wanted.split('-')
   const entries = (Object.entries(ISO6393_TO_6391) as [LangCode, string][]).map(([code, bcp]) => [code, bcp.toLowerCase().split('-')] as const)
   const exact = entries.find(([, parts]) => parts.join('-') === wanted)
@@ -1033,7 +1043,7 @@ export function fromBcp47(tag: string): LangCode {
   const overlapping = sameLanguage.find(([, parts]) => parts.slice(1).some(part => subtags.includes(part)))
   if (overlapping) return overlapping[0]
   if (primary === 'zh' && subtags.some(part => TRADITIONAL_CHINESE_SUBTAGS.has(part))) return 'cmn-Hant'
-  return sameLanguage[0]?.[0] ?? DEFAULT_LANG_CODE
+  return sameLanguage[0]?.[0] ?? null
 }
 
 /** The script / region subtags of Traditional Chinese (lower case) */

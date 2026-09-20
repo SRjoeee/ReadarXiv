@@ -252,6 +252,20 @@ export async function resetConfig(): Promise<void> {
   fallbackReason = null
 }
 
+/**
+ * A new reader's first target language (first-target.ts), written **only while nothing is stored**: an installation
+ * that already has a configuration — the reader's own, or one this build cannot read — is never touched. The value and
+ * the version marker go in one write, as in `resetConfig`. Says whether it wrote
+ */
+export async function chooseFirstTarget(pick: () => Config['targetLanguage']): Promise<boolean> {
+  if (await storage.getItem(CONFIG_KEY) !== null) return false
+  await storage.setItems([
+    { key: CONFIG_KEY, value: configSchema.parse({ ...DEFAULT_CONFIG, targetLanguage: pick() }) },
+    { key: `${CONFIG_KEY}$`, value: { v: CONFIG_VERSION } },
+  ])
+  return true
+}
+
 export function watchConfig(callback: (config: Config) => void) {
   return configItem.watch(value => {
     const parsed = configSchema.safeParse(value)
