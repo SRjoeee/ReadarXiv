@@ -1,7 +1,7 @@
 import { getConfig, setConfig, watchConfig } from '@/config/storage'
 import { startsTranslation } from '@/core/abstract/link'
 import { extract, paperContext } from '@/core/extractor'
-import { IMG_CLASS } from '@/core/marks'
+import { IMG_CLASS, T_CLASS } from '@/core/marks'
 import { paperIdFromUrl } from '@/core/pipeline'
 import { FIGURE_SELECTORS } from '@/core/rules/latexml'
 import { createPageSession } from '@/core/session'
@@ -79,7 +79,7 @@ export default defineContentScript({
     })
 
     // The figure viewer (issue #276), a prototype: nothing of the paper is touched, so it is there whether or not the page is translated
-    installFigureViewer(document, { figures: FIGURE_SELECTORS.viewable, overlay: `.${IMG_CLASS}`, around: FIGURE_SELECTORS.figure, strings: { open: 'Open figure', zoomIn: 'Zoom in', zoomOut: 'Zoom out', close: 'Close' } })
+    installFigureViewer(document, { figures: FIGURE_SELECTORS.viewable, overlay: `.${IMG_CLASS}`, around: FIGURE_SELECTORS.figure, ours: `.${T_CLASS}`, strings: { open: 'Open figure', zoomIn: 'Zoom in', zoomOut: 'Zoom out', close: 'Close' } })
 
     if (location.hash === '#axt-debug') enableDebug(blocks)
     if (startsTranslation(location.hash)) void session.start()

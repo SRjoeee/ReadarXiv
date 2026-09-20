@@ -31,6 +31,8 @@ export interface FigureViewerOptions {
   overlay: string
   /** The block a figure stands in, met by the pointer when the figure itself takes none */
   around: string
+  /** A node of ours inside a figure: a label's translation beside the label */
+  ours: string
   strings: FigureViewerStrings
 }
 
@@ -50,6 +52,8 @@ const MIN_ZOOM = 0.5
 const LEAVE_GRACE_MS = 120
 
 export const VIEWER_CLASS = 'axt-viewer'
+/** The marks the page's rules read on the paper's nodes (DESIGN §7.1) */
+const MARK_PREFIX = 'data-axt-'
 
 const ICONS = {
   open: '<path d="M15 3h6v6"/><path d="M21 3l-7 7"/><path d="M9 21H3v-6"/><path d="M3 21l7-7"/>',
@@ -92,7 +96,7 @@ const INHERITED_TEXT = [
 ]
 
 /** A copy of the figure for the dialog, as large as the figure is laid out on the page; with the overlay of ours that lies on it */
-function copyOf(doc: Document, figure: Element, overlay: Element | null): { node: HTMLElement; width: number; height: number } {
+function copyOf(doc: Document, figure: Element, overlay: Element | null, ours: string): { node: HTMLElement; width: number; height: number } {
   const box = figure.getBoundingClientRect()
   const frame = doc.createElement('div')
   const stood = figure.parentElement && doc.defaultView?.getComputedStyle(figure.parentElement)
@@ -115,8 +119,18 @@ function copyOf(doc: Document, figure: Element, overlay: Element | null): { node
     copy = image
   } else {
     copy = figure.cloneNode(true) as Element
-    // The ids stay the original's alone; what the copy refers to by one is found there
-    for (const el of [copy, ...Array.from(copy.querySelectorAll('[id]'))]) el.removeAttribute('id')
+    // **What showed on the page is what is copied.** A label and its translation both lie in the picture and a style
+    // rule shows one of them, by where the picture stands — a split figure's original keeps its labels, its copy shows
+    // the translations (DESIGN §15.6) — and the copy stands nowhere: the member that did not show is taken out, and
+    // the marks the rules read go, so that none of them decides again. The ids stay the original's alone; what the
+    // copy refers to by one is found there
+    const was = Array.from(figure.querySelectorAll('*'))
+    const twins = Array.from(copy.querySelectorAll('*'))
+    const hidden = twins.filter((_, i) => was[i]!.matches(`${ours}, [${MARK_PREFIX}id]`) && was[i]!.getClientRects().length === 0)
+    for (const twin of hidden) twin.remove()
+    for (const el of [copy, ...twins]) {
+      for (const name of el.getAttributeNames()) if (name === 'id' || name.startsWith(MARK_PREFIX)) el.removeAttribute(name)
+    }
   }
   ;(copy as HTMLElement | SVGElement).style.cssText += ';display:block;width:100%;height:100%;max-width:none;max-height:none;margin:0;'
   frame.append(copy)
@@ -294,7 +308,7 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   const centre = (): [number, number] => [stage.clientWidth / 2, stage.clientHeight / 2]
   const show_ = (figure: Element): void => {
     const lying = figure.nextElementSibling?.matches(options.overlay) ? figure.nextElementSibling : null
-    const copy = copyOf(doc, figure, lying)
+    const copy = copyOf(doc, figure, lying, options.ours)
     content = copy.node
     natural = { width: copy.width, height: copy.height }
     content.style.cssText += 'position:absolute;left:0;top:0;transform-origin:0 0;'
