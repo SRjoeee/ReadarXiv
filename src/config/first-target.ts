@@ -32,17 +32,26 @@ const NAMED_SCRIPT: Partial<Record<LangCode, { script: string; unmarked: boolean
   azj: { script: 'cyrl', unmarked: false },
   zlm: { script: 'arab', unmarked: false },
   jav: { script: 'java', unmarked: false },
+  // `ku` is Kurmanji, in Latin, which the table does not list; its `ku` is Sorani (languages.ts says so, measured) — Codex on #272
+  ckb: { script: 'arab', unmarked: false },
 }
 
 /** The language a browser's tag asks for, or null: one the table cannot place, or can place only in another script */
 function wanted(tag: string): LangCode | null {
   const subtags = tag.trim().toLowerCase().split('-')
   const language = ALSO_KNOWN_AS[subtags[0] ?? ''] ?? languageOfTag(tag)
-  const named = language ? NAMED_SCRIPT[language] : undefined
-  if (!language || !named) return language
+  if (!language) return null
   // A script subtag is the four-letter one (BCP-47)
   const asked = subtags.slice(1).find(part => /^[a-z]{4}$/.test(part))
-  return (asked ? asked === named.script : named.unmarked) ? language : null
+  const named = NAMED_SCRIPT[language]
+  if (named) return (asked ? asked === named.script : named.unmarked) ? language : null
+  if (!asked) return language
+  // **A script asked for by name is given only where the table vouches for it** — the entries above, and Chinese,
+  // whose two entries are its two scripts. For the rest the table says nothing of the script, and `ru-Latn` is not
+  // an order for Russian in Cyrillic (Devin on #272)
+  if (language === 'cmn') return asked === 'hans' ? language : null
+  if (language === 'cmn-Hant') return asked === 'hant' ? language : null
+  return null
 }
 
 /**

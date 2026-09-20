@@ -37,6 +37,21 @@ describe('pickTargetLanguage', () => {
     expect(pickTargetLanguage(['uz-Cyrl-UZ'])).toBe('uzn')
   })
 
+  it('gives a script asked for by name only where the table vouches for it; anywhere else the tag is passed over (Devin on #272)', () => {
+    expect(pickTargetLanguage(['ru-Latn', 'de'])).toBe('deu')
+    expect(pickTargetLanguage(['ja-Latn', 'ja-JP'])).toBe('jpn')
+    // Chinese: its two entries are its two scripts, under either name of the language
+    expect(pickTargetLanguage(['zh-Hans-CN'])).toBe('cmn')
+    expect(pickTargetLanguage(['zh-Hant'])).toBe('cmn-Hant')
+    expect(pickTargetLanguage(['cmn-Hant-TW', 'en'])).toBe('cmn-Hant')
+  })
+
+  it('`ku` is Kurmanji, in Latin, which the table does not list: its Sorani is given only to a reader who asks for Arabic script or for `ckb` (Codex on #272)', () => {
+    expect(pickTargetLanguage(['ku', 'tr'])).toBe('tur')
+    expect(pickTargetLanguage(['ku-Latn-TR', 'tr'])).toBe('tur')
+    expect(pickTargetLanguage(['ku-Arab-IQ'])).toBe('ckb')
+  })
+
   it('knows a language by the code the browser uses for it, and a three-letter one with its region', () => {
     expect(pickTargetLanguage(['fil-PH', 'en'])).toBe('tgl')
     expect(pickTargetLanguage(['no'])).toBe('nob')
