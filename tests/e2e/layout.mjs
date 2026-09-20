@@ -370,6 +370,39 @@ async function measureFrame(page) {
   await page.close()
 }
 
+// ── Paper 4b: 2607.24653v2 (Figure 13, four panels in two rows of two: the split copy keeps the rows) ──
+// The row break is ar5iv's `.ltx_flex_break`, which side hides in a single-column flex figure and leaves alone in a
+// multi-panel one — told apart by a mark, and the copy's marks go with every other data-axt-*. Without the mark
+// written again the copy ran its four panels in one row, each a quarter of the column (reader's report, 2026-09-21)
+{
+  const page = await openSide('2607.24653v2')
+  await page.setViewportSize({ width: 2000, height: 900 })
+  await page.evaluate(() => document.getElementById('S6.F13')?.scrollIntoView({ block: 'center' }))
+  await quiesce(page, 'a 2 × 2 figure')
+  const rows = await page.evaluate(() => {
+    const original = document.getElementById('S6.F13')
+    const copy = original?.nextElementSibling
+    // The row each panel falls in, in document order: a panel starting below the row before it opens the next
+    const pattern = fig => {
+      const out = []
+      let row = -1, bottom = -Infinity
+      for (const cell of fig?.querySelectorAll('.ltx_flex_figure > .ltx_flex_cell') ?? []) {
+        const box = cell.getBoundingClientRect()
+        if (box.top >= bottom - 1) { row++; bottom = box.bottom }
+        else bottom = Math.max(bottom, box.bottom)
+        out.push(row)
+      }
+      return out
+    }
+    return { split: copy?.classList.contains('axt-split') ?? false, original: pattern(original), copy: pattern(copy) }
+  })
+  check('a multi-panel figure\'s split copy lays its panels out in the rows the original has (2 × 2 stays 2 × 2)',
+    rows.split && rows.original.join() === '0,0,1,1' && rows.copy.join() === rows.original.join(),
+    JSON.stringify(rows))
+  await page.screenshot({ path: `${SHOTS}/layout-split-panels.png` })
+  await page.close()
+}
+
 // ── The band below the gutter (1280–1535px): frontmatter acknowledgement / corresponding-author notes pair left and right too ──────────
 // side applies from ≥1280px, the gutter rule from ≥96rem (1536px), and the band between falls under neither: ar5iv leaves that note in the body flow
 // with a hard-coded 800px width, so it overflows the article sideways and the translation stacks right under the source, looking as if it fell into the left column (reader's report, 2026-09-06)

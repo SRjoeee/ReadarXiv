@@ -22,7 +22,7 @@ import { REASON_ATTR, failureWidget } from './failed'
 import { markAnchor } from './image'
 import { dropMirror } from './mirror'
 import { markTranslatedCopies } from './notes'
-import { markTail } from './side-layout'
+import { markStructure, markTail } from './side-layout'
 import { mirrorBlock, mirrorSentences, sentenceSignatureOf } from './sentence-map'
 
 
@@ -243,9 +243,13 @@ export function splitFigures(root: Document | Element, options: SplitOptions = {
     }
     stripIds(clone)
     // The marks went with the other data-axt-*: the copy's overlays anchor to the copy's images again (§15.2), and a
-    // footnote copy that kept its translation says so again, or only mode would show its original too (Devin on #221)
+    // footnote copy that kept its translation says so again, or only mode would show its original too (Devin on #221).
+    // So do the structural marks the style sheet reads in place of `:has()` (§7.2): without `data-axt-panels` the
+    // copy of a multi-panel figure had its row break hidden as a single-column figure's is, and a 2 × 2 figure ran
+    // its four panels in one row (measured on 2607.24653v2, Figure 13)
     for (const overlay of Array.from(clone.querySelectorAll(`.${IMG_CLASS}`))) markAnchor(overlay)
     markTranslatedCopies(clone)
+    markStructure(clone)
     const doc = fig.ownerDocument
     for (const { dead, blockId, reason } of failed) {
       const retry = options.retry
