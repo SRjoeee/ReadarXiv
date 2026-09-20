@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { appearanceSchema } from '@/config/appearance'
 import { CONFIG_VERSION, DEFAULT_CONFIG, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
 import { serviceSchema } from '@/config/services'
-import { configItem, getConfig, setConfig } from '@/config/storage'
+import { chooseFirstTarget, configItem, getConfig, setConfig } from '@/config/storage'
 
 /** A reader-added service, the shape v12 stores */
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
@@ -667,5 +667,33 @@ describe('provider selection', () => {
   it('an out-of-range preload range is refused by the schema', async () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, preload: { margin: -1, threshold: 0 } })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, preload: { margin: 1000, threshold: 1.5 } })).rejects.toThrow()
+  })
+})
+
+// A new reader's first target language (config/first-target.ts): written once, and only into an empty store
+describe('chooseFirstTarget', () => {
+  beforeEach(() => {
+    fakeBrowser.reset()
+  })
+
+  it('writes the chosen language over the defaults, with the version marker beside it, when nothing is stored', async () => {
+    expect(await chooseFirstTarget(() => 'jpn')).toBe(true)
+    expect(await fakeBrowser.storage.local.get(['config', 'config$'])).toEqual({ config: { ...DEFAULT_CONFIG, targetLanguage: 'jpn' }, config$: { v: CONFIG_VERSION } })
+    expect((await getConfig()).targetLanguage).toBe('jpn')
+  })
+
+  it('leaves a stored configuration alone: the reader\'s choice is theirs, and the browser is not asked again', async () => {
+    await setConfig({ ...DEFAULT_CONFIG, targetLanguage: 'kor' })
+    let asked = false
+    expect(await chooseFirstTarget(() => { asked = true; return 'jpn' })).toBe(false)
+    expect(asked).toBe(false)
+    expect((await getConfig()).targetLanguage).toBe('kor')
+  })
+
+  it('leaves alone a stored value this build cannot read, a newer build\'s included: never written over', async () => {
+    const newer = { ...DEFAULT_CONFIG, version: CONFIG_VERSION + 1 }
+    await fakeBrowser.storage.local.set({ config: newer, config$: { v: CONFIG_VERSION + 1 } })
+    expect(await chooseFirstTarget(() => 'jpn')).toBe(false)
+    expect((await fakeBrowser.storage.local.get('config')).config).toEqual(newer)
   })
 })

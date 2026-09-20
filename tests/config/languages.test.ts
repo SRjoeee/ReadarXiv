@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ISO6393_TO_6391, LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME,
   englishName, fromBcp47, isLangCode, label, langCodeSchema, toBcp47,
+  languageOfTag,
 } from '@/config/languages'
 
 // The language table is ported from @read-frog/definitions@0.4.4; guarded here are the consistency between the tables and our own conversion functions
@@ -60,6 +61,27 @@ describe('languages', () => {
     expect(fromBcp47('en')).toBe('eng')
     expect(fromBcp47('en-US')).toBe('eng')
     expect(fromBcp47('cmn')).toBe('cmn')
+    expect(fromBcp47('xx-YY')).toBe('cmn')
+  })
+})
+
+describe('languageOfTag', () => {
+  it('is the lookup of fromBcp47 without its last step: a tag that names no language of the table is null, not Simplified Chinese', () => {
+    expect(languageOfTag('ja-JP')).toBe('jpn')
+    expect(languageOfTag('zh-Hant-HK')).toBe('cmn-Hant')
+    expect(languageOfTag('EN-us')).toBe('eng')
+    // An extension says nothing of the language (Codex on #272)
+    expect(languageOfTag('ar-EG-u-nu-latn')).toBe('arb')
+    expect(languageOfTag('fr-x-private')).toBe('fra')
+    // Traditional Chinese keeps its script under the three-letter name too (Devin on #272)
+    expect(languageOfTag('cmn-Hant-TW')).toBe('cmn-Hant')
+    expect(languageOfTag('cmn-TW')).toBe('cmn-Hant')
+    expect(languageOfTag('cmn-CN')).toBe('cmn')
+    // A language with no two-letter code is its own primary subtag (Codex on #272)
+    expect(languageOfTag('ceb-PH')).toBe('ceb')
+    expect(languageOfTag('xx-YY')).toBeNull()
+    expect(languageOfTag('  ')).toBeNull()
+    // fromBcp47 keeps its fallback: the v3 → v4 migration relies on it
     expect(fromBcp47('xx-YY')).toBe('cmn')
   })
 })

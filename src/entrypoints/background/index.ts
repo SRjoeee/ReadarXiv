@@ -1,5 +1,6 @@
 import { cachePortOf, translationCache } from '@/cache'
-import { getConfig, watchConfig } from '@/config/storage'
+import { pickTargetLanguage } from '@/config/first-target'
+import { chooseFirstTarget, getConfig, watchConfig } from '@/config/storage'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport } from '@/providers/transport'
 import { type AxtMessage, answerMessages, sendToTab } from '@/shared/messages'
@@ -23,6 +24,15 @@ import { createDiagnostics } from './diagnostics'
 // The background: the engine chain, the queues, the cache and the helper, wired together (DESIGN §8.0); what it
 // answers is the table in ./handlers.ts.
 export default defineBackground(() => {
+  // A new reader's target language follows the browser's languages, chosen once (config/first-target.ts). Registered
+  // at the top, synchronously, as MV3 asks of an event that may be what wakes the worker; an update is not an
+  // install, and an installation that already holds a configuration is left as it is (config/storage.ts)
+  browser.runtime.onInstalled.addListener(details => {
+    if (details.reason !== 'install') return
+    void chooseFirstTarget(() => pickTargetLanguage(navigator.languages ?? [], browser.i18n.getUILanguage?.()))
+      .catch(e => console.warn(`[axt] the first target language could not be saved (${e instanceof Error ? e.name : typeof e})`))
+  })
+
   const cache = cachePortOf(translationCache)
   /** Scopes ended for certain — one registry (DESIGN §8.5): the session router writes it, the chain's services and OCR read it */
   const cancelled = new CancelledScopeRegistry()
