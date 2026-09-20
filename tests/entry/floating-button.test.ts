@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type DockPlacement, type FloatingButtonOptions, type FloatingButtonStrings, mountFloatingButton } from '@/core/floating/button'
+import { Settings as LucideSettings } from 'lucide'
 
 // The floating button on arXiv's pages (issue #169, DESIGN §4.0c, UI.md S-I-06): Read Frog's frame, resting and opening
 // as Immersive Translate's does. Layout and motion are the real browser's business (tests/e2e/floating-button.mjs);
@@ -179,6 +180,13 @@ describe('the floating button: what it is made of', () => {
     expect(sheets.length).toBeGreaterThan(0)
     expect(sheets.join('\n').length).toBeGreaterThan(1000)
     for (const sheet of sheets) expect(sheet).not.toContain(':has(')
+  })
+
+  it('its settings button draws the glyph the popup\'s settings gear draws: one control, one icon', () => {
+    // Both take Lucide's `settings` node (the popup through ui/LucideIcon.tsx); the popup once had a gear of its own
+    const { q } = mount()
+    const path = q('.axt-fb-settings svg path')
+    expect(path.getAttribute('d')).toBe((LucideSettings[0]![1] as { d: string }).d)
   })
 
   it('leaves the rest of the document alone', () => {

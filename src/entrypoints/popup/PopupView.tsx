@@ -15,6 +15,8 @@ import { MODE_ORDER, S } from '@/ui/strings'
 import { Switch } from '@/ui/Switch'
 import type { PopupActions } from './data'
 import type { MenuKind, PopupView as View } from './view-model'
+import { Settings } from 'lucide'
+import { LucideIcon } from '@/ui/LucideIcon'
 
 /** Only the marks are constant; the words come from the pack in use, which is chosen after this
  *  module is imported (see the note at the top of ui/strings.ts) */
@@ -43,7 +45,8 @@ export function PopupView({ view, error, actions }: { view: View; error: string 
           <span className="text-[14px] font-bold">{S.brand}</span>
         </div>
         <button type="button" aria-label={S.settings} title={S.settings} onClick={() => actions.openOptions()} className="cursor-pointer text-fg-2 hover:text-fg">
-          <GearIcon />
+          {/* The same glyph as the floating button's settings button: one control, one icon */}
+          <LucideIcon node={Settings} />
         </button>
       </header>
 
@@ -241,7 +244,4 @@ function SideIcon() {
 }
 function OnlyIcon() {
   return <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5" fill="currentColor" /><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5" stroke="var(--axt-card)" strokeWidth="1.6" strokeLinecap="round" /></svg>
-}
-function GearIcon() {
-  return <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
 }
