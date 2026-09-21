@@ -341,8 +341,11 @@ const pageDom = () => page.evaluate(() => {
 })
 const before = await pageDom()
 const idle = await dockState()
-check('on the full text the button is there before any translation, and it is the only thing of ours on the page',
-  idle !== null && idle.tag === 'BUTTON' && idle.active === 'no' && /翻译本页|Translate this page/.test(idle.label ?? '') && JSON.stringify(before.ours) === JSON.stringify(['axt-floating']),
+/** The page's two tools of ours, there from the load whether or not it is translated: this button and the figure viewer (DESIGN §15.7) */
+const TOOLS = JSON.stringify(['axt-floating', 'axt-viewer'])
+const onlyTools = ours => JSON.stringify([...ours].sort()) === TOOLS
+check('on the full text the button is there before any translation, and nothing of ours is on the page but it and the figure viewer',
+  idle !== null && idle.tag === 'BUTTON' && idle.active === 'no' && /翻译本页|Translate this page/.test(idle.label ?? '') && onlyTools(before.ours),
   `main <${idle?.tag?.toLowerCase()}> “${idle?.label}”, active ${idle?.active}, our nodes and marks: ${before.ours.join(', ')}`)
 
 await page.mouse.click(idle.main.x, idle.main.y)
@@ -368,8 +371,8 @@ const firstDifference = (a, b) => {
   const at = ta.findIndex((tag, i) => tag !== tb[i])
   return at < 0 ? 'none' : `${ta[at]?.slice(0, 160)} → ${tb[at]?.slice(0, 160)}`
 }
-check('a second click restores it: the tick goes, nothing of ours is left but the button, and the document is what it was',
-  off !== null && off.active === 'no' && JSON.stringify(after.ours) === JSON.stringify(['axt-floating']) && after.html === before.html,
+check('a second click restores it: the tick goes, nothing of ours is left but the button and the figure viewer, and the document is what it was',
+  off !== null && off.active === 'no' && onlyTools(after.ours) && after.html === before.html,
   `active ${off?.active}, our nodes and marks: ${after.ours.join(', ')}, document ${before.html.length} → ${after.html.length} characters, first difference: ${firstDifference(before.html, after.html)}`)
 
 // The control panel (Immersive Translate's manner: a panel in the page, beside the button — not the toolbar's popup)

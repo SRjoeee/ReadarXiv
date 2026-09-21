@@ -141,6 +141,27 @@ describe('createRecogniserClient', () => {
     await expect(third).resolves.toEqual(RESULT)
   })
 
+  it('a figure given up on is not sent again: the closing of the document fails its send, and that failure is nobody\'s to retry', async () => {
+    vi.useFakeTimers()
+    const { client, offscreen, run, pending, shut } = harness({ timeoutMs: 1_000, firstTimeoutMs: 5_000 })
+    // As the browser does it: a message to a document that is closed under it is rejected
+    offscreen.close.mockImplementation(async () => {
+      shut()
+      for (const each of pending.splice(0)) each.fail(new Error('the message port closed before a response was received'))
+    })
+    const first = client.ocr(FIGURE).catch((e: OcrBackendError) => e.kind)
+    const second = client.ocr({ image: 'BBBB', mime: 'image/jpeg' })
+    await vi.advanceTimersByTimeAsync(5_001)
+    expect(await first).toBe('timeout')
+    await vi.advanceTimersByTimeAsync(0)
+    // The fresh document has one figure in it, the next one: sent a second time, the figure that took too long would
+    // take the worker from it, and its budget with it
+    expect(run).toHaveBeenCalledTimes(2)
+    expect(pending.map(each => each.request.image)).toEqual(['BBBB'])
+    pending[0]!.answer({ ok: true, result: RESULT })
+    await expect(second).resolves.toEqual(RESULT)
+  })
+
   it('once a figure has come back the budget is the ordinary one', async () => {
     vi.useFakeTimers()
     const { client, pending } = harness({ timeoutMs: 1_000, firstTimeoutMs: 5_000 })

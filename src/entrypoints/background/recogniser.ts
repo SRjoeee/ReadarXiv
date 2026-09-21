@@ -60,11 +60,18 @@ export function createRecogniserClient(deps: RecogniserClientDeps): OcrBackend {
     return opening
   }
 
-  /** The figure sent; once more when nobody answered — the document may close itself between the asking and the sending */
-  const send = async (request: Job['request']): Promise<OcrRunResponse> => {
+  /**
+   * The figure sent; once more when nobody answered — the document may close itself between the asking and the
+   * sending. **Not once it is settled**: a figure given up on has the document closed under it, which is what fails its
+   * send, and sent again it would be in the fresh document beside the next figure, taking the worker and the budget
+   * from it (Codex on #281)
+   */
+  const send = async (job: Job): Promise<OcrRunResponse> => {
+    const { request } = job
     await ensure()
     const answer = await deps.run(request).catch(() => undefined)
     if (answer) return answer
+    if (job.settled) throw new Error('given up on')
     await ensure()
     const again = await deps.run(request)
     if (!again) throw new Error('no page answered')
@@ -89,7 +96,7 @@ export function createRecogniserClient(deps: RecogniserClientDeps): OcrBackend {
       // the next figure to — a fresh one
       void deps.offscreen.close().catch(() => undefined).finally(next)
     }, budget)
-    send(job.request).then(
+    send(job).then(
       reply => {
         if (reply.ok) warmed = true
         settle(job, () => (reply.ok ? job.resolve(reply.result) : job.reject(new OcrBackendError(reply.kind, `recogniser: ${reply.message}`))))

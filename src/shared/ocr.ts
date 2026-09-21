@@ -11,16 +11,16 @@ export interface OcrLine {
   /** The recogniser's confidence, 0–1; the SVG path reads exactly and says 1 */
   conf: number
   /**
-   * Text direction in radians, absent when upright. Only the SVG path (§15.5) sets it, from the
-   * glyph transform; a recognised line carries its direction in the order of its corners.
+   * Text direction in radians, absent when upright. The SVG path (§15.5) reads it from the glyph
+   * transform; the recogniser sets it on a line it read on its side, a quarter turn either way (§15.3).
    */
   angle?: number
   /**
    * The label's own box when it is not axis-aligned, as fractions of the figure's **width** —
    * `len` along the baseline, `thick` across it. The quad's axis-aligned bounds are bigger than a
    * tilted label and in two different scales (x of the width, y of the height), so they cannot
-   * place it; these can, and a single axis keeps the two comparable (§15.5). Set by the glyph path
-   * whenever `angle` is; absent means the overlay falls back to the axis-aligned box.
+   * place it; these can, and a single axis keeps the two comparable (§15.5). Set whenever `angle`
+   * is; absent means the overlay falls back to the axis-aligned box.
    */
   len?: number
   thick?: number

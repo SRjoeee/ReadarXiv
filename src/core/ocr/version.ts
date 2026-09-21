@@ -4,4 +4,4 @@
  * is read as. **A module of its own**: the background computes cache keys from it and must not load the recogniser to
  * learn a string — imported from recognise.ts it brought the library into the service worker's bundle (measured)
  */
-export const OCR_VERSION = 'ppocr-v6-tiny.1'
+export const OCR_VERSION = 'ppocr-v6-tiny.2'

@@ -392,6 +392,8 @@ export const WHOLE_FORMATTING = `.ltx_text, .ltx_emph, ${LABEL_FORMATTING}`
 export const FIGURE_SELECTORS = {
   figure: '.ltx_figure',
   graphics: 'img.ltx_graphics, object.ltx_graphics[type="image/svg+xml"]',
+  /** What a reader may open large (issue #276): the two above and an inline TikZ picture, which is a figure though no image target */
+  viewable: 'img.ltx_graphics, object.ltx_graphics[type="image/svg+xml"], svg.ltx_picture',
 } as const
 
 /** Footnotes (for the two-column placement of §7.2): the container, the body, the body's class name and the number it carries */

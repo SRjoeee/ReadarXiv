@@ -36,6 +36,20 @@ export function turned(quad: PixelQuad, reading: 'up' | 'down'): PixelQuad {
   return reading === 'up' ? [d, a, b, c] : [b, c, d, a]
 }
 
+/**
+ * A line read on its side, as the overlay lays a turned label (§15.5): its direction, and its own length along the
+ * baseline and thickness across it, as fractions of the image's **width**. Without them the label is laid upright in
+ * the line's tall bounds, a character to a row (Devin and Codex on #281).
+ *
+ * **The direction is the quarter turn the line was read at, not the lean of its corners.** A detected box is the
+ * smallest rectangle round the ink, and round a short word that rectangle leans any way: over the 1 174 lines of the
+ * 39-figure sample, 901 lay within half a degree of their axis, and the 76 further than 10° off it were all boxes
+ * under 2.5 times as long as thick — `0`, `the`, `Cat` — with not one tilted label among them.
+ */
+export function sideways(quad: PixelQuad, turn: 'up' | 'down', width: number): { angle: number; len: number; thick: number } {
+  return { angle: turn === 'up' ? -Math.PI / 2 : Math.PI / 2, len: distance(quad[0], quad[1]) / width, thick: distance(quad[0], quad[3]) / width }
+}
+
 export interface Cut {
   width: number
   height: number

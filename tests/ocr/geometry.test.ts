@@ -1,6 +1,6 @@
 // The arithmetic of cutting a line out of a figure (DESIGN §15.3): no canvas here, the matrix is applied by hand
 import { describe, expect, it } from 'vitest'
-import { type Cut, cutOf, DETECT_SIDE_PX, detectScale, isTall, LINE_HEIGHT_PX, normalise, type PixelQuad, type Point, turned } from '@/core/ocr/geometry'
+import { type Cut, cutOf, DETECT_SIDE_PX, detectScale, isTall, LINE_HEIGHT_PX, normalise, type PixelQuad, type Point, sideways, turned } from '@/core/ocr/geometry'
 
 /** Where a point of the image lands in the cut */
 const through = ({ matrix: [a, b, c, d, e, f] }: Cut, [x, y]: Point): Point => [a * x + c * y + e, b * x + d * y + f]
@@ -76,5 +76,31 @@ describe('normalise', () => {
   it('gives the corners as fractions of the image, in the order they came', () => {
     expect(normalise(turned([[20, 100], [50, 100], [50, 400], [20, 400]], 'up'), 1000, 800))
       .toEqual([[0.02, 0.5], [0.02, 0.125], [0.05, 0.125], [0.05, 0.5]])
+  })
+})
+
+describe('sideways', () => {
+  // A y-axis label as detection found it on a 900 px wide figure: 36 px across, 261 px long, leaning 2° as a
+  // detected box does
+  const found: PixelQuad = [[55, 118], [91, 120], [83, 381], [47, 379]]
+
+  it('a line read from the bottom up is drawn a quarter turn counter-clockwise, its own length and thickness in fractions of the width', () => {
+    const own = sideways(turned(found, 'up'), 'up', 900)
+    expect(own.angle).toBe(-Math.PI / 2)
+    expect(own.len).toBeCloseTo(Math.hypot(8, 261) / 900, 10)
+    expect(own.thick).toBeCloseTo(Math.hypot(36, 2) / 900, 10)
+  })
+
+  it('and one read from the top down a quarter turn clockwise, the same size', () => {
+    const own = sideways(turned(found, 'down'), 'down', 900)
+    expect(own.angle).toBe(Math.PI / 2)
+    expect(own.len).toBeCloseTo(Math.hypot(8, 261) / 900, 10)
+    expect(own.thick).toBeCloseTo(Math.hypot(36, 2) / 900, 10)
+  })
+
+  it('the direction is the quarter turn it was read at, not the corners\' lean: a short label\'s box leans any way', () => {
+    // `Loss` on its side, its detected box leaning 9°
+    const leaning: PixelQuad = [[40, 100], [70, 105], [60, 165], [30, 160]]
+    expect(sideways(turned(leaning, 'up'), 'up', 600).angle).toBe(-Math.PI / 2)
   })
 })
