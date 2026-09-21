@@ -70,7 +70,8 @@ describe('image.css', () => {
     const block = label.slice(0, label.indexOf('}'))
     expect(block).toMatch(/backdrop-filter:\s*blur\(15px\)/)
     expect(block).toMatch(/background:\s*rgb\(252 250 248 \/ 0\.81\)/)
-    expect(block).toMatch(/color:\s*#5a5a5a/)
+    // The lightest grey that keeps 4.5 : 1 over the veil on black, where it composites to (204, 202, 201) (Codex on #278)
+    expect(block).toMatch(/color:\s*#555555/)
   })
 
   it('the style sheet has no ltx_ selector: the image overlay knows nothing of the site\'s structure', () => {

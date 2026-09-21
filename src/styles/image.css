@@ -63,7 +63,8 @@
      the label is **blurred**, then veiled by a near-white at 81 % — so the node's colour tints the label and the
      original's letters dissolve into it, where a plain veil let them show through its 8 % (the reader saw
      `Feed Forward` behind its translation). A shadow falling downward lifts it off the figure; the letters are a mid grey, not
-     black, at the regular weight. The font size follows the box height; the original shows on hover (title) */
+     black, at the regular weight — Safari's #5a5a5a darkened to #555555, the lightest grey that keeps 4.5 : 1 over the veil
+     on the darkest figure there is: over black the veil composites to (204, 202, 201), where #5a5a5a had 4.2 : 1 (Codex on #278). The font size follows the box height; the original shows on hover (title) */
   .axt-img > span {
     position: absolute;
     box-sizing: border-box;
@@ -74,7 +75,7 @@
     overflow: hidden;
     text-align: center;
     line-height: 1.15;
-    color: #5a5a5a;
+    color: #555555;
     background: rgb(252 250 248 / 0.81);
     backdrop-filter: blur(15px);
     border-radius: 0.2em;
