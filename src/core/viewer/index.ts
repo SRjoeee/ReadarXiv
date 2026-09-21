@@ -72,7 +72,7 @@ button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
 .open { position: fixed; z-index: 2147483000; color: #1c1c1e; background: rgb(255 255 255 / 0.86); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.16); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.15s; }
 .open[data-shown] { opacity: 0.85; visibility: visible; pointer-events: auto; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s; }
 .open[data-shown]:hover, .open[data-shown]:focus-visible { opacity: 1; }
-dialog { box-sizing: border-box; width: 90vw; height: 90vh; max-width: none; max-height: none; margin: auto; padding: 0; border: 0; border-radius: 12px; overflow: hidden; color: var(--ink, #1c1c1e); background: var(--paper, #f4f3f2); box-shadow: 0 24px 64px rgb(0 0 0 / 0.35); }
+dialog { box-sizing: border-box; width: 90vw; height: 90vh; max-width: none; max-height: none; margin: auto; padding: 0; border: 0; border-radius: 12px; overflow: hidden; touch-action: none; color: var(--ink, #1c1c1e); background: var(--paper, #f4f3f2); box-shadow: 0 24px 64px rgb(0 0 0 / 0.35); }
 dialog[open] { animation: enter 0.15s cubic-bezier(0.4, 0, 0.2, 1); }
 dialog::backdrop { background: rgb(0 0 0 / 0.5); backdrop-filter: blur(4px); animation: fade 0.15s; }
 .stage { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
@@ -257,7 +257,13 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   let followed: Element | null = null
   const onMove = (event: PointerEvent): void => {
     const figure = figureAt(event)
-    if (figure) show(figure)
+    if (figure) {
+      show(figure)
+      return
+    }
+    // Off the figure and still in its block: no new element is entered, so this is the only word of the leaving (Devin on #279)
+    clearTimeout(leaving)
+    leaving = setTimeout(hide, LEAVE_GRACE_MS)
   }
   const follow = (block: Element | null): void => {
     if (followed === block) return
@@ -301,11 +307,13 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   let y = 0
   const draw = (): void => {
     if (!content) return
-    // The size is what changes, not a transform's scale: a vector figure is drawn again at the size it has, where a
-    // scaled one is the small drawing stretched
-    content.style.width = `${natural.width * zoom}px`
-    content.style.height = `${natural.height * zoom}px`
-    content.style.transform = `translate(${x}px, ${y}px)`
+    // The copy keeps the page's size and is zoomed as a whole: laid out and drawn afresh at the size it is shown — a
+    // vector figure crisp, where a transform's scale stretches the small drawing — and every length inside with it, so
+    // an overlay's blur and shadow grow as on a larger page. Grown by width and height instead, its 15 px blur stayed
+    // 15 px over letters six times as thick, and the original showed through the label again (DESIGN §15.7, measured).
+    // The translation is one of the zoomed lengths too, hence divided
+    content.style.zoom = String(zoom)
+    content.style.transform = `translate(${x / zoom}px, ${y / zoom}px)`
   }
   /** Zoom by a factor, the point of the stage at (px, py) staying where it is */
   const zoomAbout = (factor: number, px: number, py: number): void => {
@@ -317,6 +325,11 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     draw()
   }
   const centre = (): [number, number] => [stage.clientWidth / 2, stage.clientHeight / 2]
+  const panBy = (dx: number, dy: number): void => {
+    x += dx
+    y += dy
+    draw()
+  }
   const show_ = (figure: Element): void => {
     // The overlay goes with the figure only where it showed: a mode the reader did not tick hides it, and under side
     // the original's is hidden while its copy's shows (DESIGN §15.2)
@@ -336,13 +349,42 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     y = (stage.clientHeight - natural.height * zoom) / 2
     draw()
   }
-  open.addEventListener('click', () => { if (current) show_(current) })
+  // The figure may have gone since the control appeared — side makes a figure's copy afresh as its translations arrive
+  // (Devin on #279) — and a figure out of the page has no box to fit: the control goes instead
+  open.addEventListener('click', () => {
+    if (current?.isConnected) show_(current)
+    else hide()
+  })
   zoomIn.addEventListener('click', () => zoomAbout(BUTTON_STEP, ...centre()))
   zoomOut.addEventListener('click', () => zoomAbout(1 / BUTTON_STEP, ...centre()))
   close.addEventListener('click', () => dialog.close())
-  // The page under a modal dialog does not scroll: a wheel over the backdrop lands on the dialog itself, and over the
-  // stage it zooms. DeepWiki sets the body's overflow for this, which would be writing to the page
+  // The page under a modal dialog does not scroll, or closing it would not return the reader where they were: a
+  // modal dialog does not hold the document still of itself (measured: PageDown moved it 860 px, End to the paper's
+  // end, a swipe on the backdrop 385 px; Codex on #279). A wheel over the backdrop lands on the dialog itself and over
+  // the stage zooms; a touch is held by `touch-action` in the sheet; the keys that would scroll move the figure
+  // instead — the arrows pan it, + and − zoom it — and the page keys do nothing. DeepWiki sets the body's overflow
+  // for this, which would be writing to the page, and hiding the scroll bar would lay the whole paper out again
   dialog.addEventListener('wheel', event => event.preventDefault(), { passive: false })
+  const PAN_PX = 60
+  const KEYS: Record<string, () => void> = {
+    ArrowLeft: () => panBy(PAN_PX, 0),
+    ArrowRight: () => panBy(-PAN_PX, 0),
+    ArrowUp: () => panBy(0, PAN_PX),
+    ArrowDown: () => panBy(0, -PAN_PX),
+    '+': () => zoomAbout(BUTTON_STEP, ...centre()),
+    '=': () => zoomAbout(BUTTON_STEP, ...centre()),
+    '-': () => zoomAbout(1 / BUTTON_STEP, ...centre()),
+    PageUp: () => undefined,
+    PageDown: () => undefined,
+    Home: () => undefined,
+    End: () => undefined,
+  }
+  dialog.addEventListener('keydown', event => {
+    const act = KEYS[event.key]
+    if (!act || event.altKey || event.ctrlKey || event.metaKey) return
+    event.preventDefault()
+    act()
+  })
   // The backdrop is the dialog's own box outside its content: a press that lands on the dialog itself
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close() })
   dialog.addEventListener('close', () => {

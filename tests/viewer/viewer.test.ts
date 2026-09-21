@@ -87,6 +87,10 @@ describe('the control over a figure', () => {
     expect(control.hasAttribute('data-shown')).toBe(false)
     over(document.getElementById('fig')!, 300, 250)
     expect(control.hasAttribute('data-shown')).toBe(true)
+    // Off the image and still in its block, the caption say: no element is entered, and the move alone says so (Devin on #279)
+    document.getElementById('fig')!.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 300, clientY: 450 }))
+    await new Promise(resolve => setTimeout(resolve, 200))
+    expect(control.hasAttribute('data-shown')).toBe(false)
   })
 })
 
@@ -156,16 +160,18 @@ describe('the dialog', () => {
     over(svg)
     control.click()
     const frame = host.firstElementChild as HTMLElement
-    const size = (): [number, number] => [Number.parseFloat(frame.style.width), Number.parseFloat(frame.style.height)]
+    // The copy keeps the figure's size on the page and is zoomed as a whole (CSS zoom): what it is shown at is the two together
+    expect([frame.style.width, frame.style.height]).toEqual(['400px', '300px'])
+    const zoomOf = () => Number.parseFloat(frame.style.zoom)
+    const size = (): [number, number] => [400 * zoomOf(), 300 * zoomOf()]
     const [w0, h0] = size()
     // Fitted: (1000 − 48) / 400 against (800 − 48) / 300 → the smaller, 2.38
     expect(w0).toBeCloseTo(400 * 2.38, 0)
     expect(h0).toBeCloseTo(300 * 2.38, 0)
-    // The point of the figure under the dialog's centre, in the figure's own pixels
+    // The point of the figure under the dialog's centre, in the figure's own pixels. The translation is a zoomed length too
     const underCentre = (): [number, number] => {
       const [, tx, ty] = /translate\(([-\d.e]+)px, ([-\d.e]+)px\)/.exec(frame.style.transform)!.map(Number) as [number, number, number]
-      const scale = size()[0] / 400
-      return [(500 - tx) / scale, (400 - ty) / scale]
+      return [(500 - tx * zoomOf()) / zoomOf(), (400 - ty * zoomOf()) / zoomOf()]
     }
     const [cx, cy] = underCentre()
     const zoomIn = root.querySelector('.bar button') as HTMLButtonElement
@@ -179,6 +185,44 @@ describe('the dialog', () => {
     expect(size()[0] / w0).toBeCloseTo(12, 5)
     dialog.close()
     expect(host.children).toHaveLength(0)
+  })
+
+  it('a figure gone since its control appeared — side makes a copy afresh as translations arrive — opens nothing: the control goes (Devin on #279)', () => {
+    const { control, dialog } = page(PICTURE)
+    const svg = document.querySelector('svg')!
+    place(svg, rect(100, 100, 400, 300))
+    over(svg)
+    expect(control.hasAttribute('data-shown')).toBe(true)
+    document.getElementById('F1')!.remove()
+    control.click()
+    expect(dialog.open).toBe(false)
+    expect(control.hasAttribute('data-shown')).toBe(false)
+  })
+
+  it('the page under the dialog stays where it is: the page keys do nothing, the arrows pan the figure, + and − zoom it (Codex on #279)', () => {
+    const { control, dialog, host } = page(PICTURE)
+    const svg = document.querySelector('svg')!
+    place(svg, rect(100, 100, 400, 300))
+    over(svg)
+    control.click()
+    const frame = host.firstElementChild as HTMLElement
+    const press = (key: string) => {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+      dialog.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    for (const key of ['PageDown', 'PageUp', 'End', 'Home']) expect([key, press(key)]).toEqual([key, true])
+    const before = frame.style.transform
+    expect(press('ArrowRight')).toBe(true)
+    expect(frame.style.transform).not.toBe(before)
+    const zoom = Number.parseFloat(frame.style.zoom)
+    press('+')
+    expect(Number.parseFloat(frame.style.zoom) / zoom).toBeCloseTo(1.2, 5)
+    // A key the viewer has no use for, and a shortcut, are left to the browser
+    expect(press('a')).toBe(false)
+    const shortcut = new KeyboardEvent('keydown', { key: 'ArrowDown', metaKey: true, bubbles: true, cancelable: true })
+    dialog.dispatchEvent(shortcut)
+    expect(shortcut.defaultPrevented).toBe(false)
   })
 
   it('removed, it takes its host away and no longer answers the pointer', () => {
