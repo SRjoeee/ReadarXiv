@@ -5,6 +5,7 @@ import { T_CLASS } from '@/core/marks'
 import { FOR_ATTR, MIRROR_CLASS, PANELS_ATTR, SPLIT_ATTR, SPLIT_CLASS, SPLIT_ROOT_ATTR } from '@/core/renderer/attrs'
 import { clearImage, renderImage, setImageModes } from '@/core/renderer/image'
 import { restore } from '@/core/renderer/page'
+import { rootsOf } from '@/core/renderer/prep'
 import { looseRootOf, markStructure } from '@/core/renderer/side-layout'
 import { DUPLICATE_ATTR, dropStaleSplits, setSplitDuplicatesHidden, splitFigures } from '@/core/renderer/split-figures'
 import { IMG_CLASS } from '@/core/marks'
@@ -444,6 +445,22 @@ describe('a mirror is no translation (issue #46, measured on 2312.17141)', () =>
         expect(copy.hasAttribute(SPLIT_ROOT_ATTR)).toBe(false)
         expect(copy.querySelector('[id]')).toBeNull()
         expect(splitFigures(doc)).toBe(0)
+      })
+
+      it('its overlay gone — a second round found nothing to draw — the copy goes with it, by the tidy of that one image', () => {
+        // The mark went with the overlay, and the mark was all the tidy found the block by: the copy kept showing
+        // the first round's translation, in side and in only (Devin and Codex on #282)
+        const doc = docOf(TEASER)
+        const para = doc.getElementById('p2')!
+        draw(doc)
+        splitFigures(doc)
+        expect(para.nextElementSibling?.classList.contains(SPLIT_CLASS)).toBe(true)
+        clearImage(target(doc))
+        // As prep tidies after one image: the roots that image needs, not the document
+        for (const root of rootsOf([target(doc).el])) dropStaleSplits(root)
+        expect(doc.querySelector(`.${SPLIT_CLASS}`)).toBeNull()
+        expect(para.hasAttribute(SPLIT_ATTR)).toBe(false)
+        expect(para.hasAttribute(SPLIT_ROOT_ATTR)).toBe(false)
       })
 
       it('restored, nothing of it is left', () => {
