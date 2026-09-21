@@ -36,8 +36,7 @@ self.onmessage = async ({ data }: MessageEvent<OcrWorkerRequest>) => {
     return
   }
   try {
-    const engine = await ready()
-    reply({ id: data.id, ok: true, result: await readFigure(image, engine) })
+    reply({ id: data.id, ok: true, result: await readFigure(image, ready) })
   } catch (e) {
     // A file the browser cannot decode is the request's fault; anything else is the recogniser's
     const undecodable = e instanceof DOMException && (e.name === 'InvalidStateError' || e.name === 'EncodingError')
