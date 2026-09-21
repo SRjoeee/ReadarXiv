@@ -311,17 +311,30 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     }
     return frame
   }
+  /**
+   * The two marks are kept while they stand. Restoring the page strips every mark of ours by its prefix — the rule is
+   * the prefix, not a list of names (§7.1) — and the pointer, still on the figure, enters nothing by moving within it:
+   * the control stayed shown and anchored to nothing, out of the window until the pointer left and came back (Devin on
+   * #285). Written back here, they are what they are on a page never translated: the viewer's, for as long as it shows
+   */
+  const kept = new view.MutationObserver(() => {
+    if (named && !named.hasAttribute(VIEWED_ATTR)) named.setAttribute(VIEWED_ATTR, '')
+    if (framed && !framed.hasAttribute(VIEWED_FRAME_ATTR)) framed.setAttribute(VIEWED_FRAME_ATTR, '')
+  })
   const name_ = (figure: Element | null): void => {
     clearTimeout(unnaming)
     if (named !== figure) {
+      // Before our own taking off, which is not to be undone
+      kept.disconnect()
       named?.removeAttribute(VIEWED_ATTR)
       framed?.removeAttribute(VIEWED_FRAME_ATTR)
       framed = figure ? frameOf(figure) : null
+      if (figure) kept.observe(figure, { attributes: true, attributeFilter: [VIEWED_ATTR] })
+      if (framed) kept.observe(framed, { attributes: true, attributeFilter: [VIEWED_FRAME_ATTR] })
     }
     named = figure
     if (framed && !framed.hasAttribute(VIEWED_FRAME_ATTR)) framed.setAttribute(VIEWED_FRAME_ATTR, '')
-    // Written only where it is missing — a restore sweeps every mark of ours off the page, this one with them — so a
-    // move over a figure already named is no mutation
+    // Written only where it is missing, so a move over a figure already named is no mutation
     if (figure && !figure.hasAttribute(VIEWED_ATTR)) figure.setAttribute(VIEWED_ATTR, '')
     const adopted = doc.adoptedStyleSheets.includes(anchoring)
     if (figure && !adopted) doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, anchoring]

@@ -117,19 +117,32 @@ describe('the control over a figure', () => {
     expect(frame.hasAttribute(VIEWED_FRAME_ATTR)).toBe(false)
   })
 
-  it('one figure is named at a time, and a name a restore swept away is written again at the next move over the figure', () => {
-    page(`${PICTURE}<figure class="ltx_figure"><img class="ltx_graphics" id="second" src="b.png"></figure>`)
+  it('one figure is named at a time; and a name swept off while the control shows — restoring the page strips every mark of ours by its prefix — is written back without the pointer moving onto anything', async () => {
+    // The pointer is on the figure still, and moving within one element enters nothing: waiting for the next arrival
+    // left a control that was shown and anchored to nothing, out of the window until the pointer left and came back
+    // (Devin on #285). The sweep's rule is the prefix, not a list of names (§7.1), so the viewer keeps its own
+    const { control } = page(`${PICTURE}<figure class="ltx_figure" id="frame" style="overflow-x:auto"><img class="ltx_graphics" id="second" src="b.png"></figure>`)
     const svg = document.querySelector('svg')!
     const img = document.getElementById('second')!
+    const frame = document.getElementById('frame')!
     place(svg, rect(100, 100, 400, 300))
     place(img, rect(100, 500, 400, 300))
+    place(frame, rect(100, 500, 300, 300))
     over(svg)
     over(img)
     expect(svg.hasAttribute(VIEWED_ATTR)).toBe(false)
     expect(img.hasAttribute(VIEWED_ATTR)).toBe(true)
     img.removeAttribute(VIEWED_ATTR)
-    over(img)
+    frame.removeAttribute(VIEWED_FRAME_ATTR)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(control.hasAttribute('data-axt-shown')).toBe(true)
     expect(img.hasAttribute(VIEWED_ATTR)).toBe(true)
+    expect(frame.hasAttribute(VIEWED_FRAME_ATTR)).toBe(true)
+    // Its own taking off is not undone: the pointer gone, the marks go and stay gone
+    over(document.querySelector('article')!)
+    await new Promise(resolve => setTimeout(resolve, 400))
+    expect(img.hasAttribute(VIEWED_ATTR)).toBe(false)
+    expect(frame.hasAttribute(VIEWED_FRAME_ATTR)).toBe(false)
   })
 
   it('not over a small one — an icon in a table, a symbol in a line — nor over a picture drawn inside another', () => {
