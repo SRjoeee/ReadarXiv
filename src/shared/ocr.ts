@@ -53,7 +53,8 @@ export type OcrMessageResponse =
 
 /** The offscreen document's answer to the background (§15.3): the result, or why there is none */
 export type OcrRunResponse =
-  | { ok: true; result: OcrResult }
+  /** `warm`: the recogniser has started there; until it has, the next figure still pays for the start (§15.3) */
+  | { ok: true; result: OcrResult; warm: boolean }
   | { ok: false; kind: ProviderErrorKind; message: string }
 
 /** The image translation's progress (serialisable like Progress, for the popup): total, entered the viewport, done, failed */
