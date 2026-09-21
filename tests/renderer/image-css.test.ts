@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { VIEWER_CLASS } from '@/core/viewer'
 
 // The image overlay's styles (DESIGN §15.2): happy-dom has no layout, so the rule itself is guarded here
 
@@ -32,9 +33,21 @@ describe('image.css', () => {
   it('one blur for the figure, masked to its labels — never one a label: a filtered backdrop is paid for by the element', () => {
     // Measured on the Transformer paper (242 labels showing, M4 Pro at 120 Hz): a blur a label gave 69–75 frames a
     // second with 13–18 frames over 25 ms a pass; one a figure, masked, 118 and none — as with no overlay at all
-    expect(RULES.match(/backdrop-filter/g)).toHaveLength(1)
     expect(RULES).toMatch(/\.axt-img::before \{[^}]*backdrop-filter: blur\(15px\);[^}]*mask-image: var\(--axt-img-mask, linear-gradient\(transparent, transparent\)\);/)
-    expect(RULES).not.toMatch(/\.axt-img > span \{[^}]*backdrop-filter/)
+    expect(RULES).not.toMatch(/\n  \.axt-img > span \{[^}]*backdrop-filter/)
+  })
+
+  it('in the figure viewer a label blurs for itself and the one layer is gone: a masked backdrop filter holds a texture as large as the overlay, and there the overlay grows eighteen times', () => {
+    // Measured on the maintainer's report (Figure 15 of 2607.24653v2, 41 labels, M4 Pro at 2×): the mask is one texture
+    // of the overlay's size in device pixels — 430 MB at a zoom of 13 — and past some 155 million pixels it is not
+    // made at all: the layer then blurs the whole figure, by 15 px × the zoom, and nothing of it can be read. On the
+    // page the overlay is no wider than the window. The viewer shows one figure, and a blur a label zooms at 119
+    // frames a second there, as the one layer did
+    expect(RULES.match(/backdrop-filter/g)).toHaveLength(2)
+    expect(RULES).toMatch(new RegExp(`\\.${VIEWER_CLASS} \\.axt-img::before \\{\\s*content: none;`))
+    expect(RULES).toMatch(new RegExp(`\\.${VIEWER_CLASS} \\.axt-img > span \\{\\s*backdrop-filter: blur\\(15px\\);`))
+    // After the rules they override, which they outrank by the host's class alone
+    expect(RULES.indexOf(`.${VIEWER_CLASS} .axt-img::before`)).toBeGreaterThan(RULES.indexOf('.axt-img > span {'))
   })
 
   it('out of the pairing grid, font size in container units, no interception of clicks on the image', () => {
