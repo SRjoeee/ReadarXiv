@@ -76,7 +76,7 @@ tests/renderer/anchors.test.ts 7
 tests/renderer/authors.test.ts 6
 tests/renderer/direction.test.ts 2
 tests/renderer/failed.test.ts 3
-tests/renderer/image.test.ts 12
+tests/renderer/image.test.ts 14  # 2026-09-21: +2, the two translated labels the mask cases are drawn from (an upright one and a turned one), test inputs as the file's others are
 tests/renderer/intertext.test.ts 11
 tests/renderer/margin-notes.test.ts 2
 tests/renderer/mirror.test.ts 9

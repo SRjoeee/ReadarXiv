@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { linesOf, runsOf, viewBoxOf } from '@/core/svg'
+import { frameOf, linesOf, runsOf, viewBoxOf } from '@/core/svg'
 
 const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/svg')
 
@@ -265,5 +265,22 @@ describe('SVG glyph extraction (#121)', () => {
     expect(viewBoxOf(parse('<svg xmlns="http://www.w3.org/2000/svg"/>'))).toBeUndefined()
     // A malformed viewBox is not silently treated as 0×0
     expect(viewBoxOf(parse('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 0 0" width="8" height="4"/>'))).toEqual({ x: 0, y: 0, w: 8, h: 4 })
+  })
+
+  it('the frame the labels are laid by: the viewBox\'s proportions, fitted whole and centred unless the figure says otherwise', () => {
+    const parse = (attrs: string) => new DOMParser().parseFromString(`<svg xmlns="http://www.w3.org/2000/svg" ${attrs}/>`, 'image/svg+xml').documentElement
+    // The Transformer paper's Figure 4: a viewBox of 319 × 217 in an <object> arXiv sizes 476 × 254. The browser fits
+    // the drawing whole and centres it, 50 px of air either side at the width the reader saw it
+    expect(frameOf(parse('viewBox="0 0 319.181 216.666" width="319.181pt" height="216.666pt"'))).toEqual({ ratio: 319.181 / 216.666, fitted: true })
+    expect(frameOf(parse('viewBox="0 0 200 100" preserveAspectRatio="xMidYMid meet"'))).toEqual({ ratio: 2, fitted: true })
+    expect(frameOf(parse('viewBox="0 0 200 100" preserveAspectRatio="xMidYMid"'))).toEqual({ ratio: 2, fitted: true })
+    // Stretched over the box: the linear map onto the whole element is the right one
+    expect(frameOf(parse('viewBox="0 0 200 100" preserveAspectRatio="none"'))).toEqual({ ratio: 2, fitted: false })
+    // Cropped, or pushed to a corner: not what centring describes; the whole box as before (none in 80 figures sampled)
+    expect(frameOf(parse('viewBox="0 0 200 100" preserveAspectRatio="xMidYMid slice"'))).toEqual({ ratio: 2, fitted: false })
+    expect(frameOf(parse('viewBox="0 0 200 100" preserveAspectRatio="xMinYMin meet"'))).toEqual({ ratio: 2, fitted: false })
+    // No viewBox: nothing is scaled to the box at all
+    expect(frameOf(parse('width="200pt" height="100pt"'))).toEqual({ ratio: 2, fitted: false })
+    expect(frameOf(parse(''))).toBeUndefined()
   })
 })

@@ -30,19 +30,26 @@
     anchor-scope: --axt-img;
   }
 
+  /* The overlay takes **the drawing's rectangle**, which is the image's box unless it is told otherwise. An SVG figure
+     is fitted whole and centred into its <object> (`preserveAspectRatio`'s default), and arXiv sizes the <object>
+     from the source's \includegraphics: the Transformer paper's Figure 4 is a drawing of 319 × 217 in a box of
+     476 × 254, with 50 px of air at either side, and laid over the whole box every label stood off its word, further
+     the nearer the edge (reported 2026-09-21; 5 of 80 SVG figures sampled, all that paper's). So the overlay is the
+     largest box of the drawing's proportions (--axt-img-ratio, width over height, in its inline style) that fits the
+     image's, centred in it by the auto margins — still no geometry read, and still following the column. With no
+     ratio told — a bitmap fills its box — the fallbacks make each min() pick the box's own side */
   .axt-img {
     position: absolute;
     position-anchor: --axt-img;
-    top: anchor(top);
-    left: anchor(left);
-    width: anchor-size(width);
-    height: anchor-size(height);
+    inset: anchor(top) anchor(right) anchor(bottom) anchor(left);
+    margin: auto;
+    width: min(anchor-size(width), anchor-size(height) * var(--axt-img-ratio, 1e5));
+    height: min(anchor-size(height), anchor-size(width) / var(--axt-img-ratio, 1e-5));
     /* The label's font size is computed from the box height and the character count in container query units (cqh / cqw), reading no layout */
     container-type: size;
     /* The figure the image sits in may be a pairing grid container: out of the grid flow (precedent: .ltx_item > .ltx_tag in modes.css) */
     grid-column: auto;
     grid-row: auto;
-    margin: 0;
     padding: 0;
     border: 0;
     pointer-events: none;
@@ -59,8 +66,25 @@
     display: block;
   }
 
+  /* The blur of the labels' material, below: **one for the figure, cut to the labels by a mask** (--axt-img-mask, an
+     SVG of their rectangles in the overlay's inline style, renderer/image.ts `maskOf`) — not `backdrop-filter` on
+     every label. A filtered backdrop is paid for by the element, whatever its size or radius: on the Transformer
+     paper, 242 labels showing over five figures, scrolling past them ran at 69–75 frames a second with 13–18 frames
+     over 25 ms a pass (M4 Pro, 120 Hz; the reader felt it); a 4 px blur a label was no better (86), one blur a
+     figure is 118 with none — what the page does with no overlay at all — and the labels look the same. Without a
+     mask (an overlay of an older build, still on the page) nothing is blurred, rather than the whole figure */
+  .axt-img::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    backdrop-filter: blur(15px);
+    mask-image: var(--axt-img-mask, linear-gradient(transparent, transparent));
+    mask-size: 100% 100%;
+    mask-repeat: no-repeat;
+  }
+
   /* Safari's material, measured off its own rendering of the Transformer's Figure 1 (DESIGN §15.2): what lies under
-     the label is **blurred**, then veiled by a near-white at 81 % — so the node's colour tints the label and the
+     the label is **blurred** (by the layer above), then veiled by a near-white at 81 % — so the node's colour tints the label and the
      original's letters dissolve into it, where a plain veil let them show through its 8 % (the reader saw
      `Feed Forward` behind its translation). A shadow falling downward lifts it off the figure; the letters are a mid grey, not
      black, at the regular weight — Safari's #5a5a5a darkened to #555555, the lightest grey that keeps 4.5 : 1 over the veil
@@ -77,7 +101,6 @@
     line-height: 1.15;
     color: #555555;
     background: rgb(252 250 248 / 0.81);
-    backdrop-filter: blur(15px);
     border-radius: 0.2em;
     box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 2px 10px rgb(0 0 0 / 0.1);
     font-family: system-ui, -apple-system, sans-serif;
