@@ -124,12 +124,18 @@ function pairNodes(from: Element, to: Element): Map<Node, Node> {
 /**
  * The outermost split root an element sits in (nested sub-figures and equation groups inside a figure are copied
  * with the outermost); null when not inside one. A root is not only `figure`: an equation group with a description
- * row is split in two whole as well (`SPLIT_ROOTS`, issue #152)
+ * row is split in two whole as well (`SPLIT_ROOTS`, issue #152).
+ *
+ * **A block that has been split counts while it is**, whatever it is a root by. A loose graphic's block is one by a
+ * mark that goes with its overlay, and the tidy that follows finds the stale copy from the block: asked after the
+ * mark had gone, there was no root, the tidy looked inside the image's parent and the copy beside the block kept the
+ * last round's translation, in side and in only (Devin and Codex on #282)
  */
 export function outermostFigure(el: Element): Element | null {
-  let fig = el.closest(ROOTS)
+  const roots = `${ROOTS}, [${SPLIT_ATTR}]`
+  let fig = el.closest(roots)
   while (fig?.parentElement) {
-    const outer = fig.parentElement.closest(ROOTS)
+    const outer = fig.parentElement.closest(roots)
     if (!outer) break
     fig = outer
   }
