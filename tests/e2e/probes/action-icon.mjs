@@ -2,8 +2,8 @@
 // works on. What it asks of the real browser:
 //   1. each of the three pages — abstract, PDF, full text — lights its own tab, and no other page does;
 //   2. Chrome drops a value set for one tab when that tab goes to another document, which is what turns the button grey
-//      again with no code of ours. Chrome has no getter for an icon, so this is read from the title, a value of the
-//      same kind the same per-tab store keeps;
+//      again with no code of ours. Chrome has no getter for an icon, so this is read from the title: Chromium's
+//      `ExtensionAction::ClearAllValuesForTab`, called on a cross-document navigation, erases the two together (UI.md §5.1);
 //   3. a page brought back from the back/forward cache, whose script does not run again, lights its tab once more.
 // Usage: pnpm build && node tests/e2e/probes/action-icon.mjs      (AXT_CHROME=<binary> for another Chrome)
 import { rmSync } from 'node:fs'

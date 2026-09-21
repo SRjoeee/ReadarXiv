@@ -282,7 +282,11 @@ value set for one tab when the tab goes to another document, and keeps it across
 from the back/forward cache runs no script, so it says so again on `pageshow`. A tab opened before the extension was
 installed or updated stays grey until it is reloaded, which is the truth: its page has no script of ours either. All
 of it measured in a real browser by `tests/e2e/probes/action-icon.mjs` (2026-09-21, Chromium 153) — the clearing read
-from the button's title, since Chrome gives no getter for an icon. The popup still opens on a grey button and says what
+from the button's title, since Chrome gives no getter for an icon. The title stands in for the icon on the source's
+word: `ExtensionActionRunner::DidFinishNavigation` calls `ExtensionAction::ClearAllValuesForTab` for a committed,
+cross-document navigation of the main frame, and that one function erases the tab's title and icon together
+(`chrome/browser/extensions/extension_action_runner.cc`, `extensions/browser/extension_action.cc`, read 2026-09-21).
+A restore from the back/forward cache is such a navigation too, which is why the page has to say so again. The popup still opens on a grey button and says what
 it can do there.
 
 `pnpm icons` renders every PNG from the vectors, and the README's `docs/images/mark-256.png` beside them; the PNGs are committed, so an ordinary build
