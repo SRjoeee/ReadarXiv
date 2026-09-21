@@ -1,6 +1,6 @@
-// Renders the two brand marks into the PNG sizes Chrome asks for.
+// Renders the brand marks into the PNG sizes Chrome asks for.
 //
-// There are two because the two places are different surfaces:
+// There are two shapes because the two places are different surfaces:
 //   - public/icon/tile.svg — the book on a white rounded tile, the app-icon shape. It goes to
 //     public/icon/<size>.png, the naming WXT looks for, and fills the manifest's `icons`: the
 //     extensions page, the install dialog and the store, where an icon sits on a card of its own.
@@ -9,6 +9,9 @@
 //     is what the toolbar, the page tabs and our own pages' brand rows draw. A white tile in those
 //     places would read as a sticker; the outline is what keeps the mark legible on a light and a
 //     dark surface alike.
+//   - public/icon/mark-off.svg — the same book in grey: the toolbar button everywhere the extension
+//     has nothing to do. It is the manifest's `default_icon`, as mark-off-<size>.png, and a page the
+//     extension works on lights its own tab with mark-<size>.png (UI.md §5.1).
 // Both are committed, so a normal build needs neither this script nor a browser; run it again
 // whenever a mark changes.
 //
@@ -29,6 +32,8 @@ const MARK_SIZES = [16, 32, 48]
  * extension, which is why it lands in docs/ and not public/
  */
 const STORE = { size: 128, art: 96, out: 'docs/brand/store-icon-128.png' }
+/** The README's header draws the bare mark; it lives beside the README's other images, not in the package */
+const README = { size: 256, out: 'docs/images/mark-256.png' }
 
 const shot = async (page, svg, size, art = size) => {
   const pad = (size - art) / 2
@@ -49,6 +54,7 @@ const page = await browser.newPage({ deviceScaleFactor: 1 })
 // and it stays the one file its PNGs are derived from
 const tile = await readFile(resolve(root, 'public/icon/tile.svg'), 'utf8')
 const mark = await readFile(resolve(root, 'public/icon/mark.svg'), 'utf8')
+const markOff = await readFile(resolve(root, 'public/icon/mark-off.svg'), 'utf8')
 
 await mkdir(resolve(root, 'public/icon'), { recursive: true })
 for (const size of SIZES) {
@@ -58,10 +64,14 @@ for (const size of SIZES) {
 for (const size of MARK_SIZES) {
   await writeFile(resolve(root, `public/icon/mark-${size}.png`), await shot(page, mark, size))
   console.log(`public/icon/mark-${size}.png`)
+  await writeFile(resolve(root, `public/icon/mark-off-${size}.png`), await shot(page, markOff, size))
+  console.log(`public/icon/mark-off-${size}.png`)
 }
 
 await mkdir(resolve(root, dirname(STORE.out)), { recursive: true })
 await writeFile(resolve(root, STORE.out), await shot(page, tile, STORE.size, STORE.art))
 console.log(STORE.out)
+await writeFile(resolve(root, README.out), await shot(page, mark, README.size))
+console.log(README.out)
 
 await browser.close()

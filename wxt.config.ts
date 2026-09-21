@@ -44,9 +44,11 @@ export default defineConfig({
     // Two marks, two surfaces (scripts/icons.mjs): `icons` is filled by WXT from public/icon/<size>.png,
     // the tile, for the card the extensions page and the store put an icon on. Everywhere the mark
     // stands on its own — this toolbar button, the page tabs, our own brand rows — it is the bare
-    // book, whose outline keeps it legible on a light and a dark surface alike
+    // book, whose outline keeps it legible on a light and a dark surface alike. The toolbar button
+    // starts grey: it has nothing to do on most pages, and a page it works on lights its own tab
+    // (shared/action-icon.ts, UI.md §5.1)
     action: {
-      default_icon: { 16: 'icon/mark-16.png', 32: 'icon/mark-32.png', 48: 'icon/mark-48.png' },
+      default_icon: { 16: 'icon/mark-off-16.png', 32: 'icon/mark-off-32.png', 48: 'icon/mark-off-48.png' },
     },
     // The image overlay uses CSS anchor positioning, and `anchor-scope` needs Chrome 131 (§15.2). The document always said so, but it never reached
     // the manifest: a Chrome below that version installs the extension all the same and gets a misplaced overlay, and its scroll containers do not enter

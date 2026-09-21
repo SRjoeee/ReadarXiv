@@ -270,10 +270,22 @@ An open book: the left page dark grey with an `A`, the right page arXiv red with
 | Vector | Shape | Where it goes |
 |---|---|---|
 | `public/icon/mark.svg` | the bare book with a white outline, no tile: the identity itself | `public/icon/mark-{16,32,48}.png`, declared as `action.default_icon` in `wxt.config.ts` — the toolbar button, the three pages' `<link rel="icon">`, and the brand row of the popup and the settings sidebar through `src/ui/BrandMark.tsx`. Everywhere the mark stands on its own, in other words. A white tile in those places reads as a sticker; the outline is what keeps it legible on a light and a dark surface alike |
+| `public/icon/mark-off.svg` | the same book in grey, glyphs and outline dark | `public/icon/mark-off-{16,32,48}.png`, the manifest's `action.default_icon`: the toolbar button wherever the extension has nothing to do (below) |
 | `public/icon/tile.svg` | the same book on a white rounded tile, the app-icon shape | `public/icon/{16,32,48,96,128}.png` (WXT fills the manifest's `icons` from those names) for the extensions page, the install dialog and the store — the places that frame an icon in a card of their own |
 | `docs/brand/store-icon-128.png` | 96 of tile artwork inset in a 128 canvas | uploaded by hand to the store listing, which wants the inset rather than a full-bleed icon. Never shipped inside the extension |
 
-`pnpm icons` renders every PNG from the two vectors; the PNGs are committed, so an ordinary build
+**The toolbar button is grey until a page lights it** [decided, the maintainer 2026-09-21]. The extension works on
+three kinds of page — the abstract, the PDF and the full text, the three its content scripts run on — and nowhere
+else, so its button starts grey and each of those pages lights its own tab (`src/shared/action-icon.ts`, the message
+`axt:page-usable`; the background sets the colour mark for that tab alone). Nothing turns it grey again: Chrome drops a
+value set for one tab when the tab goes to another document, and keeps it across a hash change. A page brought back
+from the back/forward cache runs no script, so it says so again on `pageshow`. A tab opened before the extension was
+installed or updated stays grey until it is reloaded, which is the truth: its page has no script of ours either. All
+of it measured in a real browser by `tests/e2e/probes/action-icon.mjs` (2026-09-21, Chromium 153) — the clearing read
+from the button's title, since Chrome gives no getter for an icon. The popup still opens on a grey button and says what
+it can do there.
+
+`pnpm icons` renders every PNG from the vectors, and the README's `docs/images/mark-256.png` beside them; the PNGs are committed, so an ordinary build
 needs neither the script nor a browser.
 
 The mark is decorative wherever it appears: the name sits beside it as text, so it carries `alt=""`.

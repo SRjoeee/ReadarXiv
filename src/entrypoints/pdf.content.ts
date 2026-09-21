@@ -6,6 +6,7 @@
 // without). A paper arXiv says has no HTML version keeps the button, its main button disabled and saying why — the
 // same answer the popup gives there (UI.md S-P-33).
 import { htmlUrlOf, paperIdFromPdfPath, translatedHtmlUrlOf } from '@/core/pdf/entry'
+import { announceUsablePage } from '@/shared/action-icon'
 import { answerEntryMessages } from '@/shared/entry-page'
 import { installFloatingButton } from '@/shared/floating'
 
@@ -15,6 +16,8 @@ export default defineContentScript({
   async main() {
     const id = paperIdFromPdfPath(location.pathname)
     if (id === null) return
+    // Lit before the check below: the popup works here whether or not the paper has an HTML version, and says which
+    announceUsablePage()
 
     // Only the head: the HTML full text is hundreds of kilobytes, and all that is asked here is whether it exists.
     // **Only arXiv saying so means there is none** (404, or 410): a request that failed, a 429 or a 5xx say nothing

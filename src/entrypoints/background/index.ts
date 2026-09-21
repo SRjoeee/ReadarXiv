@@ -214,6 +214,9 @@ export default defineBackground(() => {
     patchFloatingEntry,
     zoomOf: tabId => browser.tabs.getZoom(tabId),
     openSettings: () => browser.runtime.openOptionsPage(),
+    // A value set for one tab is the browser's to clear: it drops it when the tab navigates to another document, and
+    // the button falls back to the grey `default_icon` of the manifest
+    lightAction: tabId => browser.action.setIcon({ tabId, path: { 16: '/icon/mark-16.png', 32: '/icon/mark-32.png', 48: '/icon/mark-48.png' } }),
     environment: async () => ({
       extension: { version: browser.runtime.getManifest().version, buildRef: BUILD_REF },
       browser: navigator.userAgent,

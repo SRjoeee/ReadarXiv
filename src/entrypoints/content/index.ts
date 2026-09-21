@@ -7,6 +7,7 @@ import { paperIdFromUrl } from '@/core/pipeline'
 import { FIGURE_SELECTORS } from '@/core/rules/latexml'
 import { createPageSession } from '@/core/session'
 import { installFigureViewer } from '@/core/viewer'
+import { announceUsablePage } from '@/shared/action-icon'
 import { installFloatingButton, type InstalledFloatingButton } from '@/shared/floating'
 import { onMessages, sendMessage } from '@/shared/messages'
 import { createMessageTransport } from '@/shared/transport'
@@ -23,6 +24,7 @@ export default defineContentScript({
   matches: ['https://arxiv.org/html/*'],
   runAt: 'document_idle',
   main() {
+    announceUsablePage()
     const t0 = performance.now()
     const blocks = extract(document)
     // The title + abstract are extracted once here: the DOM holds no translation yet, and extracting after a translation would count the previous round's translation into the abstract
