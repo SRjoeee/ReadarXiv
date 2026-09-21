@@ -1,7 +1,8 @@
 // The figure viewer (DESIGN §15.7): a figure opened large in a dialog, from a control over it. happy-dom lays nothing
 // out, so the rectangles a figure has on the page, and whether a node shows, are given to the elements here
+import { VIEWED_ATTR, VIEWED_FRAME_ATTR } from '@/core/marks'
 import { afterEach, describe, expect, it } from 'vitest'
-import { installFigureViewer, VIEWER_CLASS, type FigureViewer } from '@/core/viewer'
+import { installFigureViewer, SPOT_CLASS, type FigureViewer, VIEWER_CLASS } from '@/core/viewer'
 
 const OPTIONS = {
   figures: 'img.ltx_graphics, object.ltx_graphics, svg.ltx_picture',
@@ -32,7 +33,7 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-function page(html: string): { root: ShadowRoot; control: HTMLButtonElement; dialog: HTMLDialogElement; host: HTMLElement } {
+function page(html: string): { root: ShadowRoot; control: HTMLButtonElement; dialog: HTMLDialogElement; host: HTMLElement; spot: HTMLElement } {
   document.body.innerHTML = `<article class="ltx_document">${html}</article>`
   viewer = installFigureViewer(document, { ...OPTIONS, strings: () => WORDS })
   const host = document.querySelector(`.${VIEWER_CLASS}`) as HTMLElement
@@ -41,7 +42,8 @@ function page(html: string): { root: ShadowRoot; control: HTMLButtonElement; dia
   Object.defineProperty(stage, 'clientWidth', { value: 1000, configurable: true })
   Object.defineProperty(stage, 'clientHeight', { value: 800, configurable: true })
   Object.defineProperty(stage, 'getBoundingClientRect', { value: () => rect(0, 0, 1000, 800), configurable: true })
-  return { root, host, control: root.querySelector('.axt-viewer-open') as HTMLButtonElement, dialog: root.querySelector('dialog') as HTMLDialogElement }
+  const spot = document.querySelector(`.${SPOT_CLASS}`) as HTMLElement
+  return { root, host, spot, control: spot.shadowRoot!.querySelector('.axt-viewer-open') as HTMLButtonElement, dialog: root.querySelector('dialog') as HTMLDialogElement }
 }
 
 const PICTURE = `<figure class="ltx_figure" id="F1"><svg class="ltx_picture" id="F1.pic"><foreignObject><span class="ltx_foreignobject_container">
@@ -59,6 +61,88 @@ describe('the control over a figure', () => {
     over(document.querySelector('article')!)
     await new Promise(resolve => setTimeout(resolve, 200))
     expect(control.hasAttribute('data-axt-shown')).toBe(false)
+  })
+
+  it('is bound to the figure by the browser, not placed by arithmetic: the figure is named as its anchor while it shows, and the control stands at its top right in the page\'s own layer', async () => {
+    // It was a fixed box of ours above everything, placed from the figure's rectangle and kept inside the window: with
+    // the figure's top under arXiv's sticky header it stood ON the header (reported 2026-09-21). An anchored box is
+    // laid out with the figure — it scrolls with it, and whatever the site raises above its content covers both
+    const { control, spot } = page(PICTURE)
+    const svg = document.querySelector('svg')!
+    place(svg, rect(100, -40, 400, 300))
+    expect(svg.hasAttribute(VIEWED_ATTR)).toBe(false)
+    over(svg)
+    expect(svg.hasAttribute(VIEWED_ATTR)).toBe(true)
+    const anchoring = document.adoptedStyleSheets.map(sheet => Array.from(sheet.cssRules, rule => rule.cssText).join(' ')).find(text => text.includes(VIEWED_ATTR))
+    expect(anchoring).toMatch(/\[data-axt-viewed\] \{ anchor-name: --axt-viewed; \}/)
+    const laid = spot.getAttribute('style') ?? ''
+    expect(laid).toContain('position:absolute')
+    expect(laid).toContain('position-anchor:--axt-viewed')
+    expect(laid).toMatch(/top:calc\(anchor\(top,[^)]*\) \+ 8px\)/)
+    expect(laid).toMatch(/right:calc\(max\(anchor\(right, 0px\), [^;]*\) \+ 8px\)/)
+    // The page's content layer, where our overlays are: arXiv's header is at 2
+    expect(laid).toContain('z-index:1')
+    expect(laid).not.toContain('fixed')
+    // Nothing of where it stands is written by us: a figure's top above the window is no case to handle
+    expect(control.style.top).toBe('')
+    expect(control.style.left).toBe('')
+    // Gone from the figure, the name goes once the control has faded, and the sheet with it
+    over(document.querySelector('article')!)
+    await new Promise(resolve => setTimeout(resolve, 400))
+    expect(svg.hasAttribute(VIEWED_ATTR)).toBe(false)
+    expect(document.adoptedStyleSheets).toHaveLength(0)
+  })
+
+  it('a figure wider than the frame that clips it — side\'s half column scrolls such a one — keeps its control inside the frame: the frame is named too, and the nearer edge is the one', async () => {
+    // Measured on 2312.17141 in side: the column ends at 708 px, a picture's right edge is at 881, and the control
+    // stood at 843–873 — over the other column, on the translation's side of a figure of the original's
+    // Of the frames that clip it, the one whose edge is furthest in is the one that shows on the screen: an equation's
+    // table there scrolls too, and is itself wider than the column its figure clips it to (708 against 922, measured)
+    page(`<figure class="ltx_figure" id="frame" style="overflow-x:auto"><table id="table" style="overflow-x:auto"><tr><td id="plain"><img class="ltx_graphics" id="wide" src="a.png"></td></tr></table></figure>`)
+    const img = document.getElementById('wide')!
+    const frame = document.getElementById('frame')!
+    place(img, rect(282, 100, 599, 300))
+    place(document.getElementById('table')!, rect(240, 100, 682, 300))
+    place(frame, rect(240, 100, 468, 300))
+    over(img)
+    expect(frame.hasAttribute(VIEWED_FRAME_ATTR)).toBe(true)
+    expect(document.getElementById('table')!.hasAttribute(VIEWED_FRAME_ATTR)).toBe(false)
+    expect(document.getElementById('plain')!.hasAttribute(VIEWED_FRAME_ATTR)).toBe(false)
+    const rules = document.adoptedStyleSheets.map(sheet => Array.from(sheet.cssRules, rule => rule.cssText).join(' ')).join(' ')
+    expect(rules).toMatch(/\[data-axt-viewed-frame\] \{ anchor-name: --axt-viewed-frame; \}/)
+    // The larger inset is the edge further in: the figure's, or the frame's where the figure runs past it
+    expect(document.querySelector(`.${SPOT_CLASS}`)!.getAttribute('style')).toMatch(/right:calc\(max\(anchor\(right, 0px\), anchor\(--axt-viewed-frame right, 0px\)\) \+ 8px\)/)
+    over(document.querySelector('article')!)
+    await new Promise(resolve => setTimeout(resolve, 400))
+    expect(frame.hasAttribute(VIEWED_FRAME_ATTR)).toBe(false)
+  })
+
+  it('one figure is named at a time; and a name swept off while the control shows — restoring the page strips every mark of ours by its prefix — is written back without the pointer moving onto anything', async () => {
+    // The pointer is on the figure still, and moving within one element enters nothing: waiting for the next arrival
+    // left a control that was shown and anchored to nothing, out of the window until the pointer left and came back
+    // (Devin on #285). The sweep's rule is the prefix, not a list of names (§7.1), so the viewer keeps its own
+    const { control } = page(`${PICTURE}<figure class="ltx_figure" id="frame" style="overflow-x:auto"><img class="ltx_graphics" id="second" src="b.png"></figure>`)
+    const svg = document.querySelector('svg')!
+    const img = document.getElementById('second')!
+    const frame = document.getElementById('frame')!
+    place(svg, rect(100, 100, 400, 300))
+    place(img, rect(100, 500, 400, 300))
+    place(frame, rect(100, 500, 300, 300))
+    over(svg)
+    over(img)
+    expect(svg.hasAttribute(VIEWED_ATTR)).toBe(false)
+    expect(img.hasAttribute(VIEWED_ATTR)).toBe(true)
+    img.removeAttribute(VIEWED_ATTR)
+    frame.removeAttribute(VIEWED_FRAME_ATTR)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(control.hasAttribute('data-axt-shown')).toBe(true)
+    expect(img.hasAttribute(VIEWED_ATTR)).toBe(true)
+    expect(frame.hasAttribute(VIEWED_FRAME_ATTR)).toBe(true)
+    // Its own taking off is not undone: the pointer gone, the marks go and stay gone
+    over(document.querySelector('article')!)
+    await new Promise(resolve => setTimeout(resolve, 400))
+    expect(img.hasAttribute(VIEWED_ATTR)).toBe(false)
+    expect(frame.hasAttribute(VIEWED_FRAME_ATTR)).toBe(false)
   })
 
   it('not over a small one — an icon in a table, a symbol in a line — nor over a picture drawn inside another', () => {
@@ -95,7 +179,7 @@ describe('the control over a figure', () => {
 })
 
 describe('the dialog', () => {
-  it('opens on a copy of what showed on the page: the paper is not touched, and the copy carries no id and no mark of ours', () => {
+  it('opens on a copy of what showed on the page: nothing is put into the paper — the figure carries the one mark it is the control\'s anchor by, and nothing once the control has gone — and the copy carries no id and no mark of ours', async () => {
     const { control, dialog, host } = page(PICTURE)
     const svg = document.querySelector('svg')!
     place(svg, rect(100, 100, 400, 300))
@@ -106,7 +190,16 @@ describe('the dialog', () => {
     const copy = host.querySelector('svg')!
     expect(copy).not.toBeNull()
     expect(copy.querySelector('[id]')).toBeNull()
-    expect(Array.from(copy.querySelectorAll('*')).some(el => el.getAttributeNames().some(name => name.startsWith('data-axt-')))).toBe(false)
+    // The anchor's mark least of all: a copy named as well would be an anchor nearer the control than the figure
+    expect([copy, ...Array.from(copy.querySelectorAll('*'))].some(el => el.getAttributeNames().some(name => name.startsWith('data-axt-')))).toBe(false)
+    const marked = svg.cloneNode(false) as Element
+    expect(marked.getAttributeNames().filter(name => name.startsWith('data-axt-'))).toEqual([VIEWED_ATTR])
+    svg.removeAttribute(VIEWED_ATTR)
+    expect(document.querySelector('article')!.outerHTML).toBe(before)
+    svg.setAttribute(VIEWED_ATTR, '')
+    dialog.close()
+    over(document.querySelector('article')!)
+    await new Promise(resolve => setTimeout(resolve, 400))
     expect(document.querySelector('article')!.outerHTML).toBe(before)
   })
 
@@ -251,14 +344,17 @@ describe('the dialog', () => {
     place(svg, rect(100, 100, 400, 300))
     over(svg)
     control.click()
-    const lock = document.adoptedStyleSheets.find(sheet => sheet !== theirs)
+    // The control's own sheet may be adopted beside it (the figure's anchor name, while the control shows)
+    const locks = () => document.adoptedStyleSheets.filter(sheet => /overflow: hidden/.test(sheet.cssRules[0]?.cssText ?? ''))
+    const lock = locks()[0]
     expect(lock?.cssRules[0]?.cssText).toMatch(/^:root \{ overflow: hidden !important; scrollbar-gutter: stable !important; \}$/)
     dialog.close()
-    expect(document.adoptedStyleSheets).toEqual([theirs])
+    expect(locks()).toEqual([])
+    expect(document.adoptedStyleSheets).toContain(theirs)
     // Opened again, locked again: the lock is one sheet, adopted once an opening
     over(svg)
     control.click()
-    expect(document.adoptedStyleSheets).toEqual([theirs, lock])
+    expect(locks()).toEqual([lock])
     dialog.close()
     document.adoptedStyleSheets = []
   })
@@ -415,7 +511,7 @@ describe('the dialog', () => {
   it('a figure that takes no pointer is found in any copy side mode makes, a graphic\'s that stands in no figure included: its copy is a paragraph, not a figure (2609.20818v1)', async () => {
     document.body.innerHTML = '<article class="ltx_document"><div class="ltx_para" id="p2"><img class="ltx_graphics" id="g"></div><div class="ltx_para axt-t axt-split"><img class="ltx_graphics" inert></div></article>'
     viewer = installFigureViewer(document, { ...OPTIONS, around: '.ltx_figure, .axt-split', strings: () => WORDS })
-    const control = document.querySelector(`.${VIEWER_CLASS}`)!.shadowRoot!.querySelector('.axt-viewer-open') as HTMLButtonElement
+    const control = document.querySelector(`.${SPOT_CLASS}`)!.shadowRoot!.querySelector('.axt-viewer-open') as HTMLButtonElement
     const copy = document.querySelector('.axt-split')!
     place(copy.querySelector('img')!, rect(800, 100, 400, 300))
     // The pointer is over the copy's block — its image is inert and is never the target

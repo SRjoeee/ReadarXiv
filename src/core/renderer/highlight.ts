@@ -26,7 +26,7 @@
 // so its bands would be empty; after a dwell its sentence is cloned into a panel beside or next to
 // the visible one (`peek.ts`). Same hit test, same registry, same read-then-write frame.
 
-import { HL_CLASS } from '@/core/marks'
+import { HL_CLASS, VIEWED_ATTR, VIEWED_FRAME_ATTR } from '@/core/marks'
 import { rangesOf, wholeRanges, wireOffsetAt } from '@/core/protector'
 import { DOCUMENT_ROOT } from '@/core/rules/latexml'
 import { createPeek, movesText, type PeekAnchor } from './peek'
@@ -589,6 +589,9 @@ export function startSentenceHighlight(doc: Document): SentenceHighlight | undef
         let reflowed = false
         for (const record of records) {
           if (record.target === layer || peek.contains(record.target)) continue
+          // The figure viewer names the figure under the pointer by a mark while its control shows (§15.7): it lays
+          // out nothing of the paper's, and comes and goes with every figure the pointer crosses
+          if (record.type === 'attributes' && (record.attributeName === VIEWED_ATTR || record.attributeName === VIEWED_FRAME_ATTR)) continue
           reflowed = true
           if (record.type === 'attributes') {
             peek.restyled(record.target)

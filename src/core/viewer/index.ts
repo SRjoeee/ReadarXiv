@@ -7,8 +7,11 @@
 // over pointer and wheel events — and a React dialog; here the dialog is the platform's `<dialog>`, which also hands
 // the focus back to where it came from, as theirs does not.
 //
-// **The paper is not touched.** The control is one button of ours in a shadow root, placed over the figure from its
-// rectangle; the figure in the dialog is a **copy**, and an `<object>` moved would load again. The copy is a light
+// **Nothing is put into the paper.** The control is a box of ours at the end of `<body>`, and it is **the browser that
+// binds it to the figure**: while it shows, the figure carries one mark, a rule names the figure an anchor by it, and
+// the box is laid out at the figure's top right by CSS anchor positioning — it scrolls with the figure, and what the
+// site raises above its content covers both (see `SPOT` below for what placing it ourselves came to). The figure in
+// the dialog is a **copy**, and an `<object>` moved would load again. The copy is a light
 // child of our host, slotted into the dialog: it stays in the document's tree, so the page's own styles reach it — a
 // TikZ picture's labels are HTML set by arXiv's sheet — and `url(#…)` inside it still finds the paper's definitions
 // (DESIGN §15.6), while the dialog and its controls keep a sheet of their own.
@@ -17,7 +20,7 @@
 // paper's own node (DESIGN §7.1), and opening by a click anywhere on the figure, which an `<object>` swallows — a
 // click inside one goes to its own document — and half of arXiv's figures are one.
 
-import { AXT_ATTR_PREFIX, stripAttributes } from '@/core/marks'
+import { AXT_ATTR_PREFIX, stripAttributes, VIEWED_ATTR, VIEWED_FRAME_ATTR } from '@/core/marks'
 
 export interface FigureViewerStrings {
   open: string
@@ -62,6 +65,45 @@ const MIN_ZOOM = 0.5
 const LEAVE_GRACE_MS = 120
 
 export const VIEWER_CLASS = 'axt-viewer'
+/** The box the control stands in, a node of its own beside the dialog's host: the one is laid out with a figure, the other in the top layer */
+export const SPOT_CLASS = 'axt-viewer-spot'
+/** The control fades for this long before the figure stops being its anchor, or it would leave at once and never fade */
+const FADE_MS = 150
+/**
+ * How the control is bound to the figure under the pointer.
+ *
+ * It was `position: fixed` above everything, placed from the figure's rectangle at every pointer event and once a
+ * frame while the page scrolled, and kept inside the window — `top: max(8, …)`. Each of the three showed: with a
+ * figure's top under arXiv's sticky header the control stood **on the header** (reported 2026-09-21); it trailed the
+ * figure by a frame of scrolling; and nothing could ever cover it. DeepWiki's button, the manner followed, is a child
+ * of the figure's own frame and gets all of that from layout. Ours cannot be one — nothing is inserted into the
+ * paper on a page that may not even be translated (DESIGN §7.1) — but **CSS anchor positioning** gives the same
+ * binding from outside: the figure is named an anchor, and the box, absolutely positioned in the document, is laid
+ * out at its corner. It scrolls with the figure because it is in the same scrolled document; it takes the page's
+ * content layer (`z-index: 1`, where our overlays are; arXiv's header is a sticky box at 2), so the header covers
+ * it as it covers the figure; and a figure's top out of the window is no case to handle. Measured on Chrome 131 and
+ * 153 over a bitmap, an external SVG figure and an inline picture: within a pixel of the corner, under the header
+ * with the figure, and an overlay of ours anchored to the same figure by a name of its own holds (image.css).
+ *
+ * **The name is given by a sheet the document adopts while the control shows**: an anchor name is scoped to the tree
+ * it is declared in, so neither a rule nor a box inside our shadow root reaches a figure of the page (measured: the
+ * same box, anchored from a shadow root, stood a thousand pixels off). The box is therefore a node of the document
+ * with its place in its inline style, and only the button inside it is in a shadow root. With no figure named the
+ * fallbacks put the box far above the page
+ *
+ * **Inside the frame that clips the figure, too.** Side's half column scrolls a figure wider than itself, and the
+ * figure's own right edge is then past what the column shows: on 2312.17141 a column ends at 708 px, a picture at
+ * 881, and the control stood at 843–873 — over the other column, on the translation's side of a figure of the
+ * original's. A child of the frame would be clipped with the figure; a box outside it is not. So the ancestor
+ * that clips it sideways on the screen (`frameOf`) is named as well, and the control's right edge is the nearer of the
+ * two — the larger inset. With no such frame the second anchor is not there and its fallback leaves the figure's edge.
+ * Chrome 131 gives a box one scroll compensation, its default anchor's: there, in a frame that is scrolled, the control
+ * stands left of the frame's edge by the distance scrolled (measured: 41 px) — inside the frame still; 153 is exact
+ */
+const ANCHOR = '--axt-viewed'
+const FRAME_ANCHOR = '--axt-viewed-frame'
+const ANCHORING = `[${VIEWED_ATTR}] { anchor-name: ${ANCHOR}; } [${VIEWED_FRAME_ATTR}] { anchor-name: ${FRAME_ANCHOR}; }`
+const SPOT = `position:absolute;position-anchor:${ANCHOR};top:calc(anchor(top, -100000px) + 8px);right:calc(max(anchor(right, 0px), anchor(${FRAME_ANCHOR} right, 0px)) + 8px);z-index:1;margin:0;`
 /**
  * The page held still under the dialog, or closing it would not return the reader where they were. A modal dialog
  * does not hold the document of itself, and a list of keys held in the dialog did not either: ⌘↓ and ⌥↓ passed it,
@@ -85,7 +127,7 @@ const SHEET = `
 button { all: unset; box-sizing: border-box; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; cursor: pointer; color: inherit; opacity: 0.7; transition: opacity 0.15s; }
 button:hover, button:focus-visible { opacity: 1; }
 button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
-.axt-viewer-open { position: fixed; z-index: 2147483000; color: #1c1c1e; background: rgb(255 255 255 / 0.86); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.16); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.15s; }
+.axt-viewer-open { color: #1c1c1e; background: rgb(255 255 255 / 0.86); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.16); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.15s; }
 .axt-viewer-open[data-axt-shown] { opacity: 0.85; visibility: visible; pointer-events: auto; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s; }
 .axt-viewer-open[data-axt-shown]:hover, .axt-viewer-open[data-axt-shown]:focus-visible { opacity: 1; }
 dialog { box-sizing: border-box; width: 90vw; height: 90vh; max-width: none; max-height: none; margin: auto; padding: 0; border: 0; border-radius: 12px; overflow: hidden; color: var(--axt-viewer-ink, #1c1c1e); background: var(--axt-viewer-paper, #f4f3f2); box-shadow: 0 24px 64px rgb(0 0 0 / 0.35); }
@@ -190,7 +232,15 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   style.textContent = SHEET
   const lock = new view.CSSStyleSheet()
   lock.replaceSync(LOCK)
+  const anchoring = new view.CSSStyleSheet()
+  anchoring.replaceSync(ANCHORING)
   const open = button('axt-viewer-open', ICONS.open)
+  const spot = doc.createElement('div')
+  spot.className = SPOT_CLASS
+  spot.setAttribute('style', SPOT)
+  const spotStyle = doc.createElement('style')
+  spotStyle.textContent = SHEET
+  spot.attachShadow({ mode: 'open' }).append(spotStyle, open)
   const dialog = doc.createElement('dialog')
   const stage = doc.createElement('div')
   stage.className = 'axt-viewer-stage'
@@ -213,8 +263,8 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   }
   bar.append(zoomIn, zoomOut, close)
   dialog.append(stage, bar)
-  root.append(style, open, dialog)
-  doc.body.append(host)
+  root.append(style, dialog)
+  doc.body.append(host, spot)
 
   /**
    * The ground the paper is read on, and whether it is a dark one. **The page's, not the system's**: arXiv has a
@@ -239,7 +289,57 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   // ── The control over the figure under the pointer ──
   let current: Element | null = null
   let leaving: ReturnType<typeof setTimeout> | undefined
-  let frame = 0
+  /** The figure named the control's anchor, which outlives `current` by the control's fade */
+  let named: Element | null = null
+  let framed: Element | null = null
+  let unnaming: ReturnType<typeof setTimeout> | undefined
+  /**
+   * The frame that clips the figure sideways **on the screen**: of the ancestors that clip, the one whose right edge
+   * is furthest in — not the nearest. An equation's table scrolls too and is itself wider than the column, which the
+   * figure around it clips it to: on 2312.17141 the table's edge was at 922 px and the figure's at 708 (measured)
+   */
+  const frameOf = (figure: Element): Element | null => {
+    let frame: Element | null = null
+    let edge = Number.POSITIVE_INFINITY
+    for (let up = figure.parentElement; up && up !== doc.body; up = up.parentElement) {
+      if (!/^(?:auto|scroll|hidden|clip)$/.test(view.getComputedStyle(up).overflowX)) continue
+      const { right } = up.getBoundingClientRect()
+      if (right < edge) {
+        frame = up
+        edge = right
+      }
+    }
+    return frame
+  }
+  /**
+   * The two marks are kept while they stand. Restoring the page strips every mark of ours by its prefix — the rule is
+   * the prefix, not a list of names (§7.1) — and the pointer, still on the figure, enters nothing by moving within it:
+   * the control stayed shown and anchored to nothing, out of the window until the pointer left and came back (Devin on
+   * #285). Written back here, they are what they are on a page never translated: the viewer's, for as long as it shows
+   */
+  const kept = new view.MutationObserver(() => {
+    if (named && !named.hasAttribute(VIEWED_ATTR)) named.setAttribute(VIEWED_ATTR, '')
+    if (framed && !framed.hasAttribute(VIEWED_FRAME_ATTR)) framed.setAttribute(VIEWED_FRAME_ATTR, '')
+  })
+  const name_ = (figure: Element | null): void => {
+    clearTimeout(unnaming)
+    if (named !== figure) {
+      // Before our own taking off, which is not to be undone
+      kept.disconnect()
+      named?.removeAttribute(VIEWED_ATTR)
+      framed?.removeAttribute(VIEWED_FRAME_ATTR)
+      framed = figure ? frameOf(figure) : null
+      if (figure) kept.observe(figure, { attributes: true, attributeFilter: [VIEWED_ATTR] })
+      if (framed) kept.observe(framed, { attributes: true, attributeFilter: [VIEWED_FRAME_ATTR] })
+    }
+    named = figure
+    if (framed && !framed.hasAttribute(VIEWED_FRAME_ATTR)) framed.setAttribute(VIEWED_FRAME_ATTR, '')
+    // Written only where it is missing, so a move over a figure already named is no mutation
+    if (figure && !figure.hasAttribute(VIEWED_ATTR)) figure.setAttribute(VIEWED_ATTR, '')
+    const adopted = doc.adoptedStyleSheets.includes(anchoring)
+    if (figure && !adopted) doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, anchoring]
+    if (!figure && adopted) doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter(sheet => sheet !== anchoring)
+  }
   const figureAt = (event: PointerEvent): Element | null => {
     const { target } = event
     if (!(target instanceof Element) || host.contains(target)) return null
@@ -256,18 +356,12 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     const box = figure.getBoundingClientRect()
     return box.width >= MIN_WIDTH_PX && box.height >= MIN_HEIGHT_PX ? figure : null
   }
-  const place = (): void => {
-    if (!current?.isConnected) {
-      hide()
-      return
-    }
-    const box = current.getBoundingClientRect()
-    open.style.left = `${Math.min(view.innerWidth - 38, box.right - 38)}px`
-    open.style.top = `${Math.max(8, box.top + 8)}px`
-  }
   const hide = (): void => {
     current = null
     open.removeAttribute('data-axt-shown')
+    // The figure stays the anchor while the control fades, or it would be gone at once
+    clearTimeout(unnaming)
+    unnaming = setTimeout(() => name_(null), FADE_MS)
   }
   const show = (figure: Element): void => {
     clearTimeout(leaving)
@@ -275,8 +369,8 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
       current = figure
       dress()
       label()
-      place()
     }
+    name_(figure)
     open.setAttribute('data-axt-shown', '')
   }
   /**
@@ -317,14 +411,6 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     clearTimeout(leaving)
     leaving = setTimeout(hide, LEAVE_GRACE_MS)
   }
-  // The figure moves under a control that is fixed to the window: it follows, once a frame and only while shown
-  const onScroll = (): void => {
-    if (!current || frame) return
-    frame = view.requestAnimationFrame(() => {
-      frame = 0
-      place()
-    })
-  }
   // Out of the window straight from a figure, the pointer enters nothing, so nothing says it has gone (measured:
   // the control stayed over the paper; Devin on #279). The document's own leaving is the word of it
   const onLeave = (): void => {
@@ -334,7 +420,6 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   }
   doc.addEventListener('pointerover', onOver, { passive: true })
   doc.documentElement.addEventListener('pointerleave', onLeave, { passive: true })
-  view.addEventListener('scroll', onScroll, { passive: true, capture: true })
 
   // ── The dialog: a copy of the figure, fitted, zoomed about a point, dragged ──
   let content: HTMLElement | null = null
@@ -471,11 +556,11 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
       doc.removeEventListener('pointerover', onOver)
       doc.documentElement.removeEventListener('pointerleave', onLeave)
       follow(null)
-      view.removeEventListener('scroll', onScroll, { capture: true })
       clearTimeout(leaving)
-      if (frame) view.cancelAnimationFrame(frame)
+      name_(null)
       if (dialog.open) dialog.close()
       host.remove()
+      spot.remove()
     },
   }
 }

@@ -455,12 +455,12 @@ async function measureFrame(page) {
     const svg = figure.nextElementSibling.querySelectorAll('svg.ltx_picture')[nth]
     svg.setAttribute('data-e2e-viewed', '')
     const r = svg.getBoundingClientRect()
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2, pageLength: document.querySelector('.ltx_page_content').outerHTML.length }
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, pageLength: document.querySelector('.ltx_page_content').outerHTML.replaceAll(' data-axt-viewed=""', '').length }
   })
   await page.mouse.move(3, 3)
   await page.mouse.move(picture.x, picture.y, { steps: 4 })
   await sleep(400)
-  const control = await page.evaluate(() => { const b = document.querySelector('.axt-viewer').shadowRoot.querySelector('.axt-viewer-open'); const r = b.getBoundingClientRect(); return { shown: b.hasAttribute('data-axt-shown'), name: b.getAttribute('aria-label'), x: r.left + 15, y: r.top + 15 } })
+  const control = await page.evaluate(() => { const b = document.querySelector('.axt-viewer-spot').shadowRoot.querySelector('.axt-viewer-open'); const r = b.getBoundingClientRect(); return { shown: b.hasAttribute('data-axt-shown'), name: b.getAttribute('aria-label'), x: r.left + 15, y: r.top + 15 } })
   if (control.shown) await page.mouse.click(control.x, control.y)
   await sleep(500)
   const viewed = await page.evaluate(() => {
@@ -475,7 +475,7 @@ async function measureFrame(page) {
   const zoomed = await page.evaluate(() => Number.parseFloat(document.querySelector('.axt-viewer').firstElementChild.style.zoom))
   await page.keyboard.press('Escape')
   await sleep(300)
-  const closed = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); return { open: host.shadowRoot.querySelector('dialog').open, emptied: host.children.length === 0, focus: host.shadowRoot.activeElement?.className ?? null } })
+  const closed = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); return { open: host.shadowRoot.querySelector('dialog').open, emptied: host.children.length === 0, focus: document.querySelector('.axt-viewer-spot').shadowRoot.activeElement?.className ?? null } })
   // Opened again, the page under the dialog stays put whatever has the focus: a modal dialog does not hold the
   // document still of itself, and a press on the figure takes the focus off the buttons — on Chrome 131 onto the
   // body (Codex on #279). Closed, the page is unlocked
@@ -490,7 +490,7 @@ async function measureFrame(page) {
   const scrolledBy = await page.evaluate(y => scrollY - y, scrolledFrom)
   await page.keyboard.press('Escape')
   await sleep(300)
-  const after = await page.evaluate(() => { const out = { open: document.querySelector('.axt-viewer').shadowRoot.querySelector('dialog').open, unlocked: getComputedStyle(document.documentElement).overflowY === 'visible' && document.adoptedStyleSheets.length === 0, pageLength: document.querySelector('.ltx_page_content').outerHTML.length }; document.querySelector('[data-e2e-viewed]').removeAttribute('data-e2e-viewed'); return out })
+  const after = await page.evaluate(() => { const out = { open: document.querySelector('.axt-viewer').shadowRoot.querySelector('dialog').open, unlocked: getComputedStyle(document.documentElement).overflowY === 'visible' && document.adoptedStyleSheets.every(sheet => !/overflow: hidden/.test(sheet.cssRules[0]?.cssText ?? '')), pageLength: document.querySelector('.ltx_page_content').outerHTML.replaceAll(' data-axt-viewed=""', '').length }; document.querySelector('[data-e2e-viewed]').removeAttribute('data-e2e-viewed'); return out })
   check('the figure viewer, from the translation\'s side: the control over the picture, a named dialog holding the labels the copy showed, each on as many lines as on the page; a press zooms by 1.2; Escape closes it, the focus back on the control; opened again, no key moves the page after a press on the figure; closed, the page unlocked and as it was',
     control.shown && viewed.open && viewed.name && viewed.name === control.name && viewed.same && viewed.inDialog.length >= 4 && viewed.inDialog.every(l => !/lower-bounded|Tensor Core/.test(l.t)) && Math.abs(zoomed / viewed.zoom - 1.2) < 0.001 && !closed.open && closed.emptied && closed.focus === 'axt-viewer-open' && reopened && scrolledBy === 0 && !after.open && after.unlocked && after.pageLength === picture.pageLength,
     JSON.stringify({ control: control.shown, open: viewed.open, name: viewed.name, same: viewed.same, labels: viewed.inDialog.map(l => l.t), zoom: +(zoomed / viewed.zoom).toFixed(3), closed, reopened, pageScrolledBehind: scrolledBy, after }))
@@ -499,7 +499,7 @@ async function measureFrame(page) {
   await page.mouse.move(3, 3)
   await page.mouse.move(picture.x, picture.y, { steps: 4 })
   await sleep(400)
-  const again = await page.evaluate(() => { const b = document.querySelector('.axt-viewer').shadowRoot.querySelector('.axt-viewer-open'); const r = b.getBoundingClientRect(); return { shown: b.hasAttribute('data-axt-shown'), x: r.left + 15, y: r.top + 15 } })
+  const again = await page.evaluate(() => { const b = document.querySelector('.axt-viewer-spot').shadowRoot.querySelector('.axt-viewer-open'); const r = b.getBoundingClientRect(); return { shown: b.hasAttribute('data-axt-shown'), x: r.left + 15, y: r.top + 15 } })
   if (again.shown) await page.mouse.click(again.x, again.y)
   await sleep(500)
   const underRestore = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); return { open: host.shadowRoot.querySelector('dialog').open, labels: host.querySelectorAll('.ltx_foreignobject_content').length } })
@@ -509,10 +509,83 @@ async function measureFrame(page) {
   await restorer.getByRole('button', { name: '显示原文', exact: true }).click()
   await restorer.close()
   await sleep(1500)
-  const restored = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); return { open: host.shadowRoot.querySelector('dialog').open, emptied: host.children.length === 0, on: document.documentElement.hasAttribute('data-axt-on'), unlocked: document.adoptedStyleSheets.length === 0 } })
+  const restored = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); return { open: host.shadowRoot.querySelector('dialog').open, emptied: host.children.length === 0, on: document.documentElement.hasAttribute('data-axt-on'), unlocked: document.adoptedStyleSheets.every(sheet => !/overflow: hidden/.test(sheet.cssRules[0]?.cssText ?? '')) } })
   check('the page restored under the open viewer: the dialog closes with the translations it showed, the page unlocked',
     underRestore.open && underRestore.labels >= 4 && !restored.open && restored.emptied && !restored.on && restored.unlocked,
     JSON.stringify({ underRestore, restored }))
+  // The control is bound to the figure by the browser (CSS anchor positioning), not placed by us: at the figure's top
+  // right within a pixel, and — scrolled until that corner lies under arXiv's sticky header — still there, with the
+  // header over it. It was a fixed box above everything, kept inside the window: it stood ON the header (reported
+  // 2026-09-21). Asked on the restored page: the viewer is there untranslated too, and nothing of ours may stay behind
+  {
+    const SPOT = () => {
+      const spot = document.querySelector('.axt-viewer-spot').getBoundingClientRect()
+      const figure = document.querySelector('[data-axt-viewed]')?.getBoundingClientRect()
+      const header = document.querySelector('header.arxiv-html-header').getBoundingClientRect()
+      const there = document.elementFromPoint(spot.left + 15, spot.top + 15)
+      return { attached: !!figure && Math.abs(figure.right - 8 - spot.right) < 1 && Math.abs(figure.top + 8 - spot.top) < 1, top: Math.round(spot.top), figureTop: figure ? Math.round(figure.top) : null, headerBottom: Math.round(header.bottom), there: there ? `${there.tagName.toLowerCase()}.${String(there.className).split(' ')[0]}` : null }
+    }
+    const at = await page.evaluate(() => {
+      const picture = [...document.querySelectorAll('svg.ltx_picture')].find(el => el.getBoundingClientRect().width > 300 && el.getBoundingClientRect().height > 250)
+      picture.scrollIntoView({ block: 'center' })
+      const r = picture.getBoundingClientRect()
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+    })
+    await page.mouse.move(3, 3)
+    await page.mouse.move(at.x, at.y, { steps: 4 })
+    await sleep(400)
+    const bound = await page.evaluate(SPOT)
+    const by = bound.figureTop - (bound.headerBottom - 25)
+    await page.mouse.wheel(0, by)
+    await sleep(500)
+    // A move keeps the pointer's place known to the page after the scroll, on the part of the figure still below the header
+    await page.mouse.move(at.x + 1, Math.max(bound.headerBottom + 40, at.y - by))
+    await sleep(300)
+    const covered = await page.evaluate(SPOT)
+    // A figure wider than the frame that clips it keeps its control inside the frame. Side's half column scrolls such
+    // a one, and a control at the figure's own corner stood over the other column (measured on 2312.17141: a column
+    // ending at 708 px, the control at 843–873). Which figures are so depends on how far a page's layout has settled,
+    // so the subject is made: the picture's block narrowed to six tenths of the picture and left to scroll
+    await page.mouse.move(3, 400)
+    await sleep(400)
+    await page.mouse.wheel(0, -by)
+    await sleep(400)
+    const narrowed = await page.evaluate(() => {
+      const picture = [...document.querySelectorAll('svg.ltx_picture')].find(el => el.getBoundingClientRect().width > 300 && el.getBoundingClientRect().height > 250)
+      const block = picture.parentElement
+      const width = picture.getBoundingClientRect().width
+      // The picture is held to its width — it gives way to its block otherwise — and the block is made the narrower
+      for (const [el, style] of [[picture, `;min-width:${Math.round(width)}px;max-width:none`], [block, `;display:block;overflow-x:auto;width:${Math.round(width * 0.6)}px`]]) {
+        el.setAttribute('data-e2e-style', el.getAttribute('style') ?? '')
+        el.style.cssText += style
+      }
+      const r = picture.getBoundingClientRect(), c = block.getBoundingClientRect()
+      return { x: c.left + c.width / 2, y: r.top + r.height / 2 }
+    })
+    await page.mouse.move(narrowed.x, narrowed.y, { steps: 3 })
+    await sleep(400)
+    const kept = await page.evaluate(() => {
+      const spot = document.querySelector('.axt-viewer-spot').getBoundingClientRect()
+      const frame = document.querySelector('[data-axt-viewed-frame]')?.getBoundingClientRect()
+      const figure = document.querySelector('[data-axt-viewed]')?.getBoundingClientRect()
+      const out = { controlRight: Math.round(spot.right), frameRight: frame ? Math.round(frame.right) : null, figureRight: figure ? Math.round(figure.right) : null }
+      for (const el of document.querySelectorAll('[data-e2e-style]')) {
+        el.setAttribute('style', el.getAttribute('data-e2e-style'))
+        if (el.getAttribute('style') === '') el.removeAttribute('style')
+        el.removeAttribute('data-e2e-style')
+      }
+      return out
+    })
+    check('the figure viewer\'s control keeps inside the frame that clips a figure wider than it: eight pixels in from the frame\'s edge, not the figure\'s',
+      kept.frameRight !== null && kept.figureRight !== null && kept.figureRight > kept.frameRight + 8 && Math.abs(kept.controlRight - (kept.frameRight - 8)) <= 1,
+      JSON.stringify(kept))
+    await page.mouse.move(3, 400)
+    await sleep(500)
+    const gone = await page.evaluate(() => ({ named: document.querySelectorAll('[data-axt-viewed], [data-axt-viewed-frame]').length, sheets: document.adoptedStyleSheets.length }))
+    check('the figure viewer\'s control is bound to the figure: at its top right, under the site\'s header when that corner is, and the pointer gone nothing of it is left on the page',
+      bound.attached && bound.there === 'div.axt-viewer-spot' && covered.attached && covered.top < covered.headerBottom && covered.there === 'header.arxiv-html-header' && gone.named === 0 && gone.sheets === 0,
+      `on the page ${JSON.stringify(bound)}; scrolled under the header ${JSON.stringify(covered)}; the pointer gone ${JSON.stringify(gone)}`)
+  }
   if (!process.env.AXT_E2E_IMAGES) {
     const back = await openOptions(context, extId)
     await setSwitch(back, FIGURES_SWITCH, false)
@@ -633,6 +706,7 @@ async function measureFrame(page) {
   check('side mode\'s mirrors do not land on translation units (no whole-block clone of the source in the right column)',
     dup.mirrors > 0 && dup.translations > 0 && dup.clonedCount === 0,
     `${dup.mirrors} mirrors, ${dup.translations} translations, ${dup.clonedCount} whole-block clones${dup.cloned.length ? `: ${dup.cloned.join(', ')}` : ''}`)
+
   await page.close()
 }
 
