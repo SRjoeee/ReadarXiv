@@ -232,7 +232,17 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
   const report = () => {
     if (!ledger.stopped()) options.onProgress?.(progress())
   }
-  const fail = (target: ImageTarget, reason: string) => ledger.settle(target, 'failed', reason)
+  /**
+   * A figure that failed shows no translation, as a failed block shows none (§7.6): the overlay a round before this
+   * one drew — after a change of target language, the other language's — goes with the failure, and the tidy layer is
+   * told, for side's copy holds one too (Devin on #281). `drawn`: this round drew what came back with the failure
+   * (`partial`), and that stays
+   */
+  const fail = (target: ImageTarget, reason: string, drawn = false) => {
+    const removed = !drawn && clearImage(target)
+    ledger.settle(target, 'failed', reason)
+    if (removed) options.onRendered?.([target])
+  }
 
   /** Match the segments that came back to their boxes; success and partial success share it */
   const labelsFrom = (segments: readonly { id: string; text: string }[], boxes: readonly Box[], target: ImageTarget): ImageLabel[] => {
@@ -352,12 +362,12 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
           // The claimed but unfinished ones (in flight, queued) are recorded as failed too, so the progress and failed() agree; the queued ones settle at once
           for (const other of ledger.inState('requested')) if (other !== target) fail(other, `stopped on a configuration error: ${res.error.message}`)
           for (const entry of queue.splice(0)) entry.done()
-          fail(target, `translation failed: ${res.error.message}`)
+          fail(target, `translation failed: ${res.error.message}`, done.length > 0)
           // The progress with fatal goes out at once: not after another worker still waiting on OCR (up to one recogniser timeout) finishes, before the popup learns of it (Codex on #89)
           report()
           return
         }
-        return fail(target, `translation failed: ${res.error.message}`)
+        return fail(target, `translation failed: ${res.error.message}`, done.length > 0)
       }
       const labels = labelsFrom(res.result.segments, boxes, target)
       if (labels.length === 0) return finishEmpty()
