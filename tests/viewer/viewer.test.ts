@@ -143,6 +143,32 @@ describe('the dialog', () => {
     expect(host.querySelector('.axt-img')).toBeNull()
   })
 
+  it('an external SVG figure looks in the dialog as it did on the page: what the page\'s sheet does to every <img> is not done to a figure that was none', () => {
+    // arXiv's dark theme dims every <img> — `brightness(0.8) contrast(1.2)` — and leaves an <object> as it is: shown
+    // as an image, the figure stood grey in the dialog, (219, 219, 219) where the page had it white (measured 2026-09-21)
+    const sheet = document.createElement('style')
+    sheet.textContent = 'img { filter: brightness(0.8) contrast(1.2); }'
+    document.head.append(sheet)
+    try {
+      const { control, host, dialog } = page(`<figure class="ltx_figure"><object class="ltx_graphics" id="obj" type="image/svg+xml" data="a.svg"></object><img class="ltx_graphics" id="bitmap" src="b.png"></figure>`)
+      const figure = document.getElementById('obj')!
+      place(figure, rect(100, 100, 400, 300))
+      over(figure)
+      control.click()
+      expect((host.querySelector('img') as HTMLElement).style.filter).toBe('none')
+      dialog.close()
+      // A bitmap was an <img> on the page too, and keeps what the page gave it
+      const bitmap = document.getElementById('bitmap')!
+      place(bitmap, rect(100, 500, 400, 300))
+      over(document.querySelector('article')!)
+      over(bitmap)
+      control.click()
+      expect((host.querySelector('img') as HTMLElement).style.filter).toBe('brightness(0.8) contrast(1.2)')
+    } finally {
+      sheet.remove()
+    }
+  })
+
   it('the overlay lies in the copy where it lay on the figure, and keeps what its style sheet lays it by', () => {
     // An SVG drawing fitted into a box of other proportions: the overlay is the drawing's rectangle, 50 px in from
     // either side (§15.5). Filling the frame, every label stood off its word in the dialog as it once did on the page

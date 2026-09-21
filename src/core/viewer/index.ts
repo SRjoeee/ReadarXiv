@@ -133,6 +133,10 @@ function copyOf(doc: Document, figure: Element, overlay: Element | null, ours: s
     image.src = figure instanceof HTMLImageElement ? figure.currentSrc || figure.src : figure.getAttribute('data') ?? ''
     image.alt = figure.getAttribute('alt') ?? ''
     image.draggable = false
+    // **What the page did to the figure, and no more**: a page's sheet may treat every `<img>` — arXiv's dark theme
+    // dims them, `brightness(0.8) contrast(1.2)` — and an `<object>` is none; shown as an image, an SVG figure stood
+    // grey in the dialog where the page had it white. The figure's own filter, whatever it was, is the copy's
+    image.style.filter = doc.defaultView?.getComputedStyle(figure).filter || 'none'
     copy = image
   } else {
     copy = figure.cloneNode(true) as Element

@@ -192,6 +192,27 @@ for (const name of ['上下', '左右', '仅译文']) await setImageMode(options
   check('one blur a figure, cut to the labels by a mask, and none a label',
     !!state && state.layer.blur === 'blur(15px)' && state.layer.masked && state.labels.every(label => label.blur === 'none'),
     state ? JSON.stringify(state.layer) : 'no overlay')
+  // The figure viewer is the other way round (§15.7): its copy is laid out at up to eighteen times the size, and a
+  // masked layer's mask with it — past some 155 million device pixels no mask at all, and the whole figure blurred
+  // (reported on Figure 15 of 2607.24653v2). What is asked here is the structure; the failure itself needs a GPU
+  let viewed = null
+  if (state) {
+    const box = await fitted.evaluate(() => { const r = document.getElementById('Sx1.F4.g1').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })
+    await fitted.mouse.move(box.x, box.y)
+    await sleep(400)
+    const control = await fitted.evaluate(() => { const b = document.querySelector('.axt-viewer').shadowRoot.querySelector('.axt-viewer-open'); const r = b.getBoundingClientRect(); return { x: r.left + 15, y: r.top + 15 } })
+    await fitted.mouse.click(control.x, control.y)
+    await sleep(800)
+    viewed = await fitted.evaluate(() => {
+      const host = document.querySelector('.axt-viewer')
+      const overlay = host.querySelector('.axt-img')
+      return { open: host.shadowRoot.querySelector('dialog').open, labels: overlay?.children.length ?? 0, layer: overlay ? getComputedStyle(overlay, '::before').content : null, label: overlay?.firstElementChild ? getComputedStyle(overlay.firstElementChild).backdropFilter : null }
+    })
+    await fitted.keyboard.press('Escape')
+  }
+  check('in the figure viewer each label blurs for itself and the one layer is gone',
+    !!viewed && viewed.open && viewed.labels >= 1 && viewed.layer === 'none' && viewed.label === 'blur(15px)',
+    JSON.stringify(viewed))
   await fitted.close()
 }
 
