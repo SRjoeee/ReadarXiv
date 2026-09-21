@@ -109,9 +109,12 @@ function contextPayload(context: CacheContext | undefined): unknown[] {
 const OCR_KEY_VERSION = 1
 
 /**
- * The OCR result's cache key (DESIGN §15.2): recognition is deterministic and varies with the image bytes and the
- * recogniser's version only; computed apart from the translation key — each line's translation goes through the ordinary text cache, whose key carries no imageHash
+ * The OCR result's cache key (DESIGN §15.2): recognition is deterministic and varies with the image bytes, the type
+ * they were served as and the recogniser's version; computed apart from the translation key — each line's translation
+ * goes through the ordinary text cache, whose key carries no imageHash. **The type is an input**: the frames are
+ * counted by a decoder chosen by it, and a file served under a type that decoder does not know counts as one frame —
+ * so the same bytes under another type may be an animation, which is not read at all (Devin on #281)
  */
-export function ocrCacheKey(imageHash: string, recogniserVersion: string): Promise<string> {
-  return sha256Hex(JSON.stringify(['ocr', OCR_KEY_VERSION, imageHash, recogniserVersion]))
+export function ocrCacheKey(imageHash: string, mime: string, recogniserVersion: string): Promise<string> {
+  return sha256Hex(JSON.stringify(['ocr', OCR_KEY_VERSION, imageHash, mime, recogniserVersion]))
 }

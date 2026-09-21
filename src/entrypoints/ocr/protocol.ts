@@ -10,5 +10,6 @@ export interface OcrWorkerRequest {
 }
 
 export type OcrWorkerReply =
-  | { id: number; ok: true; result: OcrResult }
+  /** `warm`: the recogniser has started in this worker — the runtime compiled, the models loaded. A figure that needed none of it (an animation) is answered without */
+  | { id: number; ok: true; result: OcrResult; warm: boolean }
   | { id: number; ok: false; kind: ProviderErrorKind; message: string }

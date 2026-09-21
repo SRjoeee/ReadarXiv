@@ -24,8 +24,11 @@ async function framesOf(image: Blob): Promise<number> {
 export async function readFigure(image: Blob, recogniser: () => Promise<Recogniser>): Promise<OcrResult> {
   // `createImageBitmap` turns the pixels by the file's EXIF orientation, as the page's <img> does: the corners come
   // out in the frame the reader sees
-  const [bitmap, frames] = await Promise.all([createImageBitmap(image), framesOf(image)])
+  const bitmap = await createImageBitmap(image)
+  // One after the other, inside the `try`: counted beside the decoding, a count that rejected left a bitmap that had
+  // decoded with nobody to close it (Devin on #281). The count is a few milliseconds
   try {
+    const frames = await framesOf(image)
     const { width, height } = bitmap
     // An animation gets no overlay (§15.2), so there is nothing to read it for
     if (frames > 1) return { width, height, frames, lines: [] }

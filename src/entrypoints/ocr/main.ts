@@ -41,7 +41,7 @@ onMessages({
       engine().postMessage({ id, image: message.image, mime: message.mime })
     }).then(reply => {
       if (waiting.size === 0) idle = setTimeout(() => window.close(), IDLE_MS)
-      return reply.ok ? { ok: true as const, result: reply.result } : { ok: false as const, kind: reply.kind, message: reply.message }
+      return reply.ok ? { ok: true as const, result: reply.result, warm: reply.warm } : { ok: false as const, kind: reply.kind, message: reply.message }
     })
   },
 })

@@ -1,6 +1,6 @@
 // The OCR service (DESIGN §15.2): the OCR cache first, the backend only on a miss, the result written back. The
-// cache is the Dexie store the translations use (cachePortOf); `ocrCacheKey` derives the key from the image bytes
-// and the recogniser's version alone. Which backend answers is `OcrBackend`'s business (DESIGN §15.3).
+// cache is the Dexie store the translations use (cachePortOf); `ocrCacheKey` derives the key from the image bytes,
+// the type they were served as and the recogniser's version. Which backend answers is `OcrBackend`'s business (DESIGN §15.3).
 import { ocrCacheKey } from '@/cache/key'
 import type { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { CACHE_READ_BUDGET_MS, type CachePort, readWithBudget } from '@/providers/translate-service'
@@ -46,7 +46,7 @@ export function createOcrService(deps: OcrServiceDeps): OcrService {
   return {
     async ocr(call) {
       if (call.scope && deps.cancelled.has(call.scope)) return aborted()
-      const key = await ocrCacheKey(call.imageHash, deps.backend.version)
+      const key = await ocrCacheKey(call.imageHash, call.mime, deps.backend.version)
       // IndexedDB may hang rather than reject: over budget counts as a miss, or the backend's timeout could never start and the message channel would stay open (Codex on #87)
       const [hit] = await readWithBudget(deps.cache, [key], deps.cacheReadBudgetMs ?? CACHE_READ_BUDGET_MS, deps.warn)
       // Dropped while the cache was being read: a hit is not returned either, and nothing goes to the backend

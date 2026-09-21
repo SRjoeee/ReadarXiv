@@ -40,7 +40,13 @@ export function createRecogniserClient(deps: RecogniserClientDeps): OcrBackend {
   const firstTimeoutMs = deps.firstTimeoutMs ?? DEFAULT_FIRST_TIMEOUT_MS
   const queue: Job[] = []
   let current: Job | null = null
-  /** A figure has come back from the document that is open now: its start-up is paid for */
+  /**
+   * The recogniser in the document that is open now has started: its start-up is paid for. **What the document says**,
+   * with every answer, not "a figure has come back": an animation is answered without the recogniser being started at
+   * all, and the still figure after it has the runtime to compile and the models to load on the short budget. After a
+   * failure it is taken for cold — the worker may have been replaced — which costs a hung figure a longer wait and a
+   * working one nothing (Codex on #281)
+   */
   let warmed = false
   let opening: Promise<void> | null = null
 
@@ -98,10 +104,14 @@ export function createRecogniserClient(deps: RecogniserClientDeps): OcrBackend {
     }, budget)
     send(job).then(
       reply => {
-        if (reply.ok) warmed = true
+        // After a timeout the answer is the closed document's, and says nothing of the one open now
+        if (!timedOut) warmed = reply.ok && reply.warm
         settle(job, () => (reply.ok ? job.resolve(reply.result) : job.reject(new OcrBackendError(reply.kind, `recogniser: ${reply.message}`))))
       },
-      (e: unknown) => settle(job, () => job.reject(new OcrBackendError('network', `the recogniser could not be reached: ${e instanceof Error ? e.message : String(e)}`))),
+      (e: unknown) => {
+        if (!timedOut) warmed = false
+        settle(job, () => job.reject(new OcrBackendError('network', `the recogniser could not be reached: ${e instanceof Error ? e.message : String(e)}`)))
+      },
     ).finally(() => {
       clearTimeout(timer)
       // After a timeout the closing of the document moves the queue on, not this late answer

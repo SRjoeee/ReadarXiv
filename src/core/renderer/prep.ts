@@ -133,7 +133,8 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
     // Split copies whose signature expired are dropped first: outside side, the overlay went into the hidden original
     // (§15.2), and a full pass rebuilds them on returning to side; in side as well — once a figure's only translation
     // (the overlay) is taken away, needsSplit is false, splitFigures skips it, and the old copy would hang on (Codex on #89)
-    for (const r of roots) dropStaleSplits(r)
+    let unsplit = 0
+    for (const r of roots) unsplit += dropStaleSplits(r)
     if (!options.isSide()) return
 
     // Figures are split whole first, mirrors filled in after: a split figure takes no part in mirroring (the two would duplicate a copy)
@@ -148,6 +149,13 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
       mirrorsDone = true
       // Mirrors are translation nodes too, subject to the site's adjacent-sibling rules the same way, so one more read after they are in — the only such pass in a session
       if (made) margins = [readPairMargins(doc)]
+    } else if (mirrorsDone && unsplit > 0) {
+      // A block that lost its copy and is due none — its overlay, all that paired it, is gone again — goes back to
+      // what it was before the overlay: mirrored. The session's one pass is over, and with neither a copy nor a mirror
+      // the block spans both columns (Codex on #282; a figure without a caption was as exposed as a loose graphic).
+      // Among these roots alone, and the pass is idempotent: what is paired is left as it is
+      for (const r of roots) made += createMirrors(r)
+      if (made) margins = roots.map(r => readPairMargins(r))
     }
     const t3 = performance.now()
     let fitted = 0
