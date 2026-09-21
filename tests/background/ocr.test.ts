@@ -48,7 +48,7 @@ describe('createOcrService', () => {
     expect(first).toEqual({ ok: true, result: RESULT, cached: false })
     expect(ocr).toHaveBeenCalledTimes(1)
     expect(ocr).toHaveBeenCalledWith({ image: 'AAAA', mime: 'image/png' }, 's1')
-    expect(cache.store.get(await ocrCacheKey('h1', '0.1.0'))).toBe(JSON.stringify(RESULT))
+    expect(cache.store.get(await ocrCacheKey('h1', 'image/png', '0.1.0'))).toBe(JSON.stringify(RESULT))
     const second = await service.ocr(call)
     expect(second).toEqual({ ok: true, result: RESULT, cached: true })
     expect(ocr).toHaveBeenCalledTimes(1)
@@ -68,7 +68,7 @@ describe('createOcrService', () => {
   it('something in the cache with a colliding key that is not our shape: treated as a miss', async () => {
     const { backend, ocr } = fakeBackend()
     const cache = memoryCache()
-    cache.store.set(await ocrCacheKey('h1', '0.1.0'), 'a translation rather than an OCR result')
+    cache.store.set(await ocrCacheKey('h1', 'image/png', '0.1.0'), 'a translation rather than an OCR result')
     const service = build({ backend, cache: cache.port })
     expect((await service.ocr(call)).ok).toBe(true)
     expect(ocr).toHaveBeenCalledTimes(1)
@@ -142,7 +142,7 @@ describe('createOcrService', () => {
   it('dropped during the cache read: a hit is answered aborted too (Codex on #87)', async () => {
     const { backend, ocr } = fakeBackend()
     const cache = memoryCache()
-    cache.store.set(await ocrCacheKey('h1', '0.1.0'), JSON.stringify(RESULT))
+    cache.store.set(await ocrCacheKey('h1', 'image/png', '0.1.0'), JSON.stringify(RESULT))
     const registry = new CancelledScopeRegistry()
     const service = build({ backend, cache: cache.port, cancelled: registry })
     const original = cache.port.getMany

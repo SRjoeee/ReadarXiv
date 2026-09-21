@@ -11,6 +11,8 @@ import type { OcrWorkerReply, OcrWorkerRequest } from './protocol'
 const asset = (name: string): string => new URL(`/ocr/${name}`, self.location.origin).href
 
 let recogniser: Promise<Recogniser> | undefined
+/** The recogniser has started: said with every answer, for the background gives a figure a longer budget until it has */
+let warm = false
 function ready(): Promise<Recogniser> {
   recogniser ??= (async () => {
     ort.env.wasm.numThreads = 1
@@ -19,7 +21,9 @@ function ready(): Promise<Recogniser> {
       fetch(asset('PP-OCRv6_tiny_rec.onnx')).then(r => r.arrayBuffer()),
       fetch(asset('PP-OCRv6_tiny_dict.txt')).then(r => r.text()),
     ])
-    return createRecogniser({ ort, detection, recognition, dictionary })
+    const started = await createRecogniser({ ort, detection, recognition, dictionary })
+    warm = true
+    return started
   })()
   // A failed start is not remembered: the next figure tries again
   recogniser.catch(() => { recogniser = undefined })
@@ -36,7 +40,8 @@ self.onmessage = async ({ data }: MessageEvent<OcrWorkerRequest>) => {
     return
   }
   try {
-    reply({ id: data.id, ok: true, result: await readFigure(image, ready) })
+    const result = await readFigure(image, ready)
+    reply({ id: data.id, ok: true, result, warm })
   } catch (e) {
     // A file the browser cannot decode is the request's fault; anything else is the recogniser's
     const undecodable = e instanceof DOMException && (e.name === 'InvalidStateError' || e.name === 'EncodingError')

@@ -38,10 +38,10 @@ describe('createRecogniserClient', () => {
     const second = client.ocr(FIGURE)
     await settle()
     expect(offscreen.create).toHaveBeenCalledTimes(1)
-    pending[0]!.answer({ ok: true, result: RESULT })
+    pending[0]!.answer({ ok: true, result: RESULT, warm: true })
     await expect(first).resolves.toEqual(RESULT)
     await settle()
-    pending[1]!.answer({ ok: true, result: RESULT })
+    pending[1]!.answer({ ok: true, result: RESULT, warm: true })
     await expect(second).resolves.toEqual(RESULT)
     expect(offscreen.create).toHaveBeenCalledTimes(1)
   })
@@ -52,7 +52,7 @@ describe('createRecogniserClient', () => {
     void client.ocr({ image: 'BBBB', mime: 'image/jpeg' })
     await settle()
     expect(run).toHaveBeenCalledTimes(1)
-    pending[0]!.answer({ ok: true, result: RESULT })
+    pending[0]!.answer({ ok: true, result: RESULT, warm: true })
     await first
     await settle()
     expect(run).toHaveBeenCalledTimes(2)
@@ -63,7 +63,7 @@ describe('createRecogniserClient', () => {
     const { client, offscreen, pending, shut } = harness()
     const first = client.ocr(FIGURE)
     await settle()
-    pending[0]!.answer({ ok: true, result: RESULT })
+    pending[0]!.answer({ ok: true, result: RESULT, warm: true })
     await first
     shut()
     void client.ocr(FIGURE)
@@ -97,7 +97,7 @@ describe('createRecogniserClient', () => {
     const next = client.ocr(FIGURE)
     await settle()
     expect(run).toHaveBeenCalledTimes(3)
-    pending[2]!.answer({ ok: true, result: RESULT })
+    pending[2]!.answer({ ok: true, result: RESULT, warm: true })
     await expect(next).resolves.toEqual(RESULT)
   })
 
@@ -129,15 +129,15 @@ describe('createRecogniserClient', () => {
     // figure waits for the second, which is still in the worker. The second's budget runs from the closing, at
     // 5 000: a millisecond short of it nothing more has been closed
     const third = client.ocr(FIGURE)
-    pending[0]!.answer({ ok: true, result: RESULT })
+    pending[0]!.answer({ ok: true, result: RESULT, warm: true })
     await vi.advanceTimersByTimeAsync(4_998)
     expect(offscreen.close).toHaveBeenCalledTimes(1)
     expect(run).toHaveBeenCalledTimes(2)
-    pending[1]!.answer({ ok: true, result: RESULT })
+    pending[1]!.answer({ ok: true, result: RESULT, warm: true })
     await expect(second).resolves.toEqual(RESULT)
     await vi.advanceTimersByTimeAsync(0)
     expect(run).toHaveBeenCalledTimes(3)
-    pending[2]!.answer({ ok: true, result: RESULT })
+    pending[2]!.answer({ ok: true, result: RESULT, warm: true })
     await expect(third).resolves.toEqual(RESULT)
   })
 
@@ -158,7 +158,7 @@ describe('createRecogniserClient', () => {
     // take the worker from it, and its budget with it
     expect(run).toHaveBeenCalledTimes(2)
     expect(pending.map(each => each.request.image)).toEqual(['BBBB'])
-    pending[0]!.answer({ ok: true, result: RESULT })
+    pending[0]!.answer({ ok: true, result: RESULT, warm: true })
     await expect(second).resolves.toEqual(RESULT)
   })
 
@@ -167,11 +167,60 @@ describe('createRecogniserClient', () => {
     const { client, pending } = harness({ timeoutMs: 1_000, firstTimeoutMs: 5_000 })
     const first = client.ocr(FIGURE)
     await vi.advanceTimersByTimeAsync(0)
-    pending[0]!.answer({ ok: true, result: RESULT })
+    pending[0]!.answer({ ok: true, result: RESULT, warm: true })
     await first
     const second = client.ocr(FIGURE).catch((e: OcrBackendError) => e.kind)
     await vi.advanceTimersByTimeAsync(1_001)
     expect(await second).toBe('timeout')
+  })
+
+  it('the budget is the ordinary one only once the recogniser has started: a figure answered without it — an animation, not read at all — leaves the next one the long budget (Codex on #281)', async () => {
+    vi.useFakeTimers()
+    const { client, offscreen, pending } = harness({ timeoutMs: 1_000, firstTimeoutMs: 5_000 })
+    const animation = client.ocr(FIGURE)
+    await vi.advanceTimersByTimeAsync(0)
+    pending[0]!.answer({ ok: true, result: { ...RESULT, frames: 12, lines: [] }, warm: false })
+    await animation
+    const still = client.ocr(FIGURE)
+    const outcome = still.catch((e: OcrBackendError) => e.kind)
+    // The models are still to be fetched and compiled: a second in is not too long
+    await vi.advanceTimersByTimeAsync(1_001)
+    expect(offscreen.close).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(await outcome).toBe('timeout')
+  })
+
+  it('and after a figure the recogniser failed on the next one has the long budget again: the worker may have been replaced, and starts cold', async () => {
+    vi.useFakeTimers()
+    const { client, offscreen, pending } = harness({ timeoutMs: 1_000, firstTimeoutMs: 5_000 })
+    const first = client.ocr(FIGURE)
+    await vi.advanceTimersByTimeAsync(0)
+    pending[0]!.answer({ ok: true, result: RESULT, warm: true })
+    await first
+    const failed = client.ocr(FIGURE).catch((e: OcrBackendError) => e.kind)
+    await vi.advanceTimersByTimeAsync(0)
+    pending[1]!.answer({ ok: false, kind: 'unknown', message: 'the recognition worker failed' })
+    expect(await failed).toBe('unknown')
+    void client.ocr(FIGURE).catch(() => undefined)
+    await vi.advanceTimersByTimeAsync(1_001)
+    expect(offscreen.close).not.toHaveBeenCalled()
+  })
+
+  it('a late answer from a document that was closed says nothing of the one open now', async () => {
+    vi.useFakeTimers()
+    const { client, offscreen, pending } = harness({ timeoutMs: 1_000, firstTimeoutMs: 5_000 })
+    void client.ocr(FIGURE).catch(() => undefined)
+    const animation = client.ocr(FIGURE)
+    await vi.advanceTimersByTimeAsync(5_001)
+    await vi.advanceTimersByTimeAsync(0)
+    // The fresh document answers the animation without starting; then the closed one's figure comes back, read
+    pending[1]!.answer({ ok: true, result: { ...RESULT, frames: 12, lines: [] }, warm: false })
+    await animation
+    pending[0]!.answer({ ok: true, result: RESULT, warm: true })
+    await vi.advanceTimersByTimeAsync(0)
+    void client.ocr(FIGURE).catch(() => undefined)
+    await vi.advanceTimersByTimeAsync(1_001)
+    expect(offscreen.close).toHaveBeenCalledTimes(1)
   })
 
   it('cancel withdraws a scope\'s figures — the queued ones never sent, the one in the worker answered at once and its result dropped — and leaves other scopes alone', async () => {
@@ -185,10 +234,10 @@ describe('createRecogniserClient', () => {
     expect(await queued).toBe('aborted')
     // The worker is still on the withdrawn figure: the other scope's goes in only when it comes back
     expect(run).toHaveBeenCalledTimes(1)
-    pending[0]!.answer({ ok: true, result: RESULT })
+    pending[0]!.answer({ ok: true, result: RESULT, warm: true })
     await settle()
     expect(run).toHaveBeenCalledTimes(2)
-    pending[1]!.answer({ ok: true, result: RESULT })
+    pending[1]!.answer({ ok: true, result: RESULT, warm: true })
     await expect(other).resolves.toEqual(RESULT)
     expect(client.cancel('s1')).toBe(0)
   })

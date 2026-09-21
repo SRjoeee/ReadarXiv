@@ -18,6 +18,19 @@ const FIGURE = new Blob([new Uint8Array(8)], { type: 'image/gif' })
 describe('readFigure', () => {
   afterEach(() => { vi.unstubAllGlobals() })
 
+  it('the frames cannot be counted — the decoder rejects the file — and the bitmap already decoded is given back, not left to the collector (Devin on #281)', async () => {
+    const decoders = browser(1)
+    vi.stubGlobal('ImageDecoder', class {
+      static isTypeSupported = async () => true
+      tracks = { ready: Promise.reject(new DOMException('truncated', 'EncodingError')), selectedTrack: null }
+      close(): void {}
+    })
+    const start = vi.fn(async () => ({ recognise: vi.fn(async () => []) }))
+    await expect(readFigure(FIGURE, start)).rejects.toThrow('truncated')
+    expect(decoders.closed()).toBe(true)
+    expect(start).not.toHaveBeenCalled()
+  })
+
   it('an animation is not read, and the recogniser is not so much as started for it: 14 MB of WebAssembly and two models, held for a minute, for a figure that gets no overlay (Codex on #281)', async () => {
     const decoders = browser(12)
     const start = vi.fn(async () => ({ recognise: vi.fn(async () => []) }))
