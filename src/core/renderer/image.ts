@@ -4,8 +4,9 @@
 // (marks.ts says why under IMG_CLASS) and is inserted on success only; pending and failure have no DOM node. In
 // keeping with §7.1: the <img> itself gains no attribute; restore removes the whole layer by INJECTED_SELECTOR.
 import { IMG_CLASS } from '@/core/marks'
-import { ANCHORS_ATTR, ANCHOR_ATTR, DIR_ATTR, FOR_ATTR, LANG_ATTR, MIRROR_CLASS } from './attrs'
+import { ANCHORS_ATTR, ANCHOR_ATTR, DIR_ATTR, FOR_ATTR, LANG_ATTR, MIRROR_CLASS, SPLIT_ROOT_ATTR } from './attrs'
 import { dropMirror } from './mirror'
+import { looseRootOf } from './side-layout'
 
 /** The mode gate on <html>: the set of modes the reader ticked, space-separated; CSS matches the current mode with ~= (the §15 setting) */
 export const IMG_MODES_ATTR = 'data-axt-img-modes'
@@ -76,12 +77,14 @@ export function markAnchor(overlay: Element): void {
   overlay.parentElement?.setAttribute(ANCHORS_ATTR, '')
 }
 
-/** Remove an overlay and the anchor marks that served it; the parent keeps its mark while another overlay is inside */
+/** Remove an overlay and the marks that served it; the parent, and a loose graphic's block, keep theirs while another overlay is inside */
 function dropOverlay(overlay: Element): void {
   const parent = overlay.parentElement
+  const root = overlay.closest(`[${SPLIT_ROOT_ATTR}]`)
   overlay.previousElementSibling?.removeAttribute(ANCHOR_ATTR)
   overlay.remove()
   if (parent && !parent.querySelector(`:scope > .${IMG_CLASS}`)) parent.removeAttribute(ANCHORS_ATTR)
+  if (root && !root.querySelector(`.${IMG_CLASS}`)) root.removeAttribute(SPLIT_ROOT_ATTR)
 }
 
 /**
@@ -164,5 +167,8 @@ export function renderImage(target: ImageTarget, labels: readonly ImageLabel[]):
   }
   target.el.after(node)
   markAnchor(node)
+  // A graphic in no figure: its block stands as one from here on, and side mode copies it with this overlay
+  // (side-layout.ts `looseRootOf`). In the same breath as the overlay, so the sheet never shows it on the original
+  looseRootOf(target.el)?.setAttribute(SPLIT_ROOT_ATTR, '')
   return node
 }
