@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node script the build config imports, deliberately dependency-free and untyped
-import { isInstallerRemote, readBuildRef } from '../../scripts/build-ref.mjs'
+import { isRepositoryRemote, readBuildRef } from '../../scripts/build-ref.mjs'
 
-// What the build stamps as the helper install ref (issue #158): the commit only when github.com/SRjoeee/ReadarXiv can serve it
+// The ref a build names in its diagnostics (issue #156): the commit only when github.com/SRjoeee/ReadarXiv can serve it
 
 const SHA = '0123456789abcdef0123456789abcdef01234567'
 const git = (answers: Record<string, string>) => (cmd: string) => {
@@ -15,16 +15,16 @@ const git = (answers: Record<string, string>) => (cmd: string) => {
 }
 const clean = { 'git status --porcelain': '', 'git rev-parse HEAD': SHA, [`git tag --points-at ${SHA}`]: '' }
 
-describe('isInstallerRemote', () => {
+describe('isRepositoryRemote', () => {
   it('accepts the repository on github.com in the https, git@ and ssh:// spellings, with or without .git', () => {
     for (const url of ['https://github.com/SRjoeee/ReadarXiv.git', 'https://github.com/SRjoeee/ReadarXiv', 'https://alice@github.com/srjoeee/readarxiv.git', 'git@github.com:SRjoeee/ReadarXiv.git', 'ssh://git@github.com/SRjoeee/ReadarXiv.git']) {
-      expect([url, isInstallerRemote(url)]).toEqual([url, true])
+      expect([url, isRepositoryRemote(url)]).toEqual([url, true])
     }
   })
 
   it('rejects another host, another repository, and a local path — the same name elsewhere cannot vouch for a commit (Codex on #214)', () => {
     for (const url of ['https://gitlab.com/SRjoeee/ReadarXiv.git', '/Users/alice/mirrors/SRjoeee/ReadarXiv.git', 'https://github.com/alice/ReadarXiv.git', 'https://github.com/SRjoeee/ReadarXiv-fork.git', 'https://github.com.evil.example/SRjoeee/ReadarXiv.git']) {
-      expect([url, isInstallerRemote(url)]).toEqual([url, false])
+      expect([url, isRepositoryRemote(url)]).toEqual([url, false])
     }
   })
 })
@@ -59,7 +59,7 @@ describe('readBuildRef', () => {
   it('against a real repository, an annotated release tag pushed to it stamps the tag (the canned answers above once assumed a peeled line git does not print)', () => {
     // v0.4.0 was built with its install command pinned to the commit: `git ls-remote --tags origin refs/tags/v0.4.0`
     // prints only the tag object's line, never the peeled `^{}` one, so an annotated tag never matched. Real git here,
-    // in a scratch clone of a scratch bare repository; only `git remote -v` is answered as the installer's repository
+    // in a scratch clone of a scratch bare repository; only `git remote -v` is answered as the public repository
     const root = mkdtempSync(join(tmpdir(), 'axt-build-ref-'))
     try {
       const sh = (cwd: string, cmd: string) => execSync(cmd, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()

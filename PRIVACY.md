@@ -1,6 +1,6 @@
 # Read arXiv privacy policy
 
-Applies to Read arXiv 0.4.0 and later, until this file says otherwise. Effective: 2026-09-17 (0.4.0). Earlier versions of this policy are in the repository's history.
+Applies to Read arXiv 0.4.1 and later, until this file says otherwise. Effective: 2026-09-21 (0.4.1). Earlier versions of this policy are in the repository's history.
 
 Read arXiv is a Chrome extension that translates arXiv's HTML papers in the page you are reading. This policy says what data the extension handles, where it goes, and what stays on your computer. arXiv, the Chrome Web Store, the translation services you use and GitHub run their own services under their own policies.
 

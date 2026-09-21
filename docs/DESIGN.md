@@ -686,7 +686,7 @@ WXT storage under `local:config`, a zod schema with `version` (`CONFIG_VERSION =
 | Providers and the service | Vitest, mock `fetch`, injected fakes | Request assembly and response parsing per engine; the queues (Read Frog's own tests ported); the chain; alignment and markers; the cache key's version history; the store; a fake `Translator` for every built-in branch |
 | Configuration | Vitest | Every migration with the previous version's fixture; no zod default anywhere; the chain / volatile classification covers every field |
 | Surfaces | Vitest + a render hook | The popup through `POPUP_FIXTURES` (P0–P16) and `derivePopupView`; the settings and popup data layers; the appearance editors |
-| Scripts | Vitest | The build-ref stamp, the remote installer's URL rules, the registration script, the boundary and English gates |
+| Scripts | Vitest | The build-ref stamp and its repository URL rules, the fixture fetcher, the third-party notices, the boundary and English gates |
 | Counter-examples | Vitest | From the independent audit of 2026-09-11: **held** (a lost placeholder does not move the formula to the sentence's end), **known lossy** (runs keeps links and positions, flattens `<em>`), **refused** (systemic failures are not halved, bad translations do not enter the cache), and the former "known behaviour to change" (a node swapped after serialisation), now the stale refusal of #212 |
 | Measurements | Vitest, `AXT_MEASURE=1 pnpm vitest run tests/perf` | The lazy scheduler at 880 blocks, the highlight observer under a burst, the cache port's writes and reads — readings, not assertions; the numbers are kept in §7.7, §9 and §10 |
 

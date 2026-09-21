@@ -2,7 +2,7 @@
 
 Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
-## 0.4.1 — unreleased
+## 0.4.1 — 2026-09-21
 
 - The toolbar button shows where the extension works: in colour on an arXiv abstract, PDF or full text, grey everywhere else. The mark itself is redrawn, a touch cleaner at small sizes.
 - Opening a paper's PDF on arXiv now offers its bilingual version: straight to the HTML full text, already translating. Where arXiv has no HTML version of a paper, the button says so.

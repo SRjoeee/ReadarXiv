@@ -137,7 +137,7 @@ flowchart LR
 
 ## 状态
 
-0.4.0 版（见 [`CHANGELOG.md`](CHANGELOG.md)）；Chrome 应用商店上架待办，目前从源码构建。
+0.4.1 版（见 [`CHANGELOG.md`](CHANGELOG.md)）；Chrome 应用商店上架待办，目前从源码构建。
 上面写到的功能今天都可用——翻译、三种读法、显示原文、四种服务、逐句对齐、图片翻译与设置页。
 路线图见 [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155)。
 
