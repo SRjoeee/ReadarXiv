@@ -1,16 +1,21 @@
 import { getConfig, setConfig, watchConfig } from '@/config/storage'
 import { startsTranslation } from '@/core/abstract/link'
 import { extract, paperContext } from '@/core/extractor'
+import { IMG_CLASS, T_CLASS } from '@/core/marks'
+import { SPLIT_CLASS } from '@/core/renderer/attrs'
 import { paperIdFromUrl } from '@/core/pipeline'
+import { FIGURE_SELECTORS } from '@/core/rules/latexml'
 import { createPageSession } from '@/core/session'
+import { installFigureViewer } from '@/core/viewer'
 import { installFloatingButton, type InstalledFloatingButton } from '@/shared/floating'
 import { onMessages, sendMessage } from '@/shared/messages'
 import { createMessageTransport } from '@/shared/transport'
 import { applyLocaleFrom } from '@/ui/apply-locale'
+import { S } from '@/ui/strings'
 import { enableDebug } from './debug'
 
 // Injected into arxiv.org/html/*. On page load it only extracts and keeps the Block[] in memory — the one DOM write
-// is the floating button's host on <body> (DESIGN §4.0c, §7.1); translation starts when the reader asks (DESIGN §4.1). A URL with #axt-debug draws outlines, one with #readarxiv starts of itself — for debugging and automated checks.
+// is the floating button's host on <body> (DESIGN §4.0c, §7.1), and the figure viewer's beside it (§15.7); translation starts when the reader asks (DESIGN §4.1). A URL with #axt-debug draws outlines, one with #readarxiv starts of itself — for debugging and automated checks.
 //
 // This file is an adapter (DESIGN §4.3): the session's state and decisions live in core/session; here
 // the browser's messages, the configuration subscription and the URL hash are mapped onto it.
@@ -73,6 +78,17 @@ export default defineContentScript({
     }).then(async installed => {
       floating = installed
       installed.setActive((await session.status()).progress.state === 'on')
+    })
+
+    // The figure viewer (DESIGN §15.7): nothing of the paper is touched, so it is there whether or not the page is
+    // translated. Its words are asked for when shown — the reader's language is applied once the session has read the settings
+    installFigureViewer(document, {
+      figures: FIGURE_SELECTORS.viewable,
+      overlay: `.${IMG_CLASS}`,
+      // A figure's block, or any copy side mode makes: the copy of a graphic that stands in no figure is one too (§7.2)
+      around: `${FIGURE_SELECTORS.figure}, .${SPLIT_CLASS}`,
+      ours: `.${T_CLASS}`,
+      strings: () => S.page.viewer,
     })
 
     if (location.hash === '#axt-debug') enableDebug(blocks)

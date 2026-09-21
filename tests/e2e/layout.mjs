@@ -444,6 +444,75 @@ async function measureFrame(page) {
     on.original.length >= 4 && on.original.every(l => !l.ours) && on.copy.every(l => l.ours) && same && new Set(on.copy.map(l => l.colour)).size >= 2,
     JSON.stringify(on.original.map((l, i) => `${l.text} → ${on.copy[i]?.text} Δ(${(on.copy[i]?.top ?? NaN) - l.top}, ${(on.copy[i]?.left ?? NaN) - l.left})`)))
   await page.screenshot({ path: `${SHOTS}/layout-picture-labels.png` })
+
+  // The figure viewer (DESIGN §15.7) on the same picture, from the translation's side: the dialog holds what the copy
+  // showed, set as the page sets it — no label wrapping otherwise — and the page itself is not touched
+  const picture = await page.evaluate(() => {
+    const anchor = [...document.querySelectorAll('svg .ltx_foreignobject_content:not(.axt-t)')].find(e => e.textContent.trim() === 'lower-bounded')
+    let figure = anchor.closest('figure')
+    while (figure.parentElement?.closest('figure')) figure = figure.parentElement.closest('figure')
+    const nth = [...figure.querySelectorAll('svg.ltx_picture')].indexOf(anchor.closest('svg.ltx_picture'))
+    const svg = figure.nextElementSibling.querySelectorAll('svg.ltx_picture')[nth]
+    svg.setAttribute('data-e2e-viewed', '')
+    const r = svg.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, pageLength: document.querySelector('.ltx_page_content').outerHTML.length }
+  })
+  await page.mouse.move(3, 3)
+  await page.mouse.move(picture.x, picture.y, { steps: 4 })
+  await sleep(400)
+  const control = await page.evaluate(() => { const b = document.querySelector('.axt-viewer').shadowRoot.querySelector('.axt-viewer-open'); const r = b.getBoundingClientRect(); return { shown: b.hasAttribute('data-axt-shown'), name: b.getAttribute('aria-label'), x: r.left + 15, y: r.top + 15 } })
+  if (control.shown) await page.mouse.click(control.x, control.y)
+  await sleep(500)
+  const viewed = await page.evaluate(() => {
+    const host = document.querySelector('.axt-viewer'), dialog = host.shadowRoot.querySelector('dialog')
+    const shown = el => el.getClientRects().length > 0
+    const labelsIn = svg => [...svg.querySelectorAll('.ltx_foreignobject_content')].filter(l => shown(l) && /\p{L}{2,}/u.test(l.textContent)).map(l => ({ t: l.textContent.trim(), lines: l.getClientRects().length }))
+    const onPage = labelsIn(document.querySelector('[data-e2e-viewed]')), inDialog = labelsIn(host.querySelector('svg'))
+    const frame = host.firstElementChild
+    return { open: dialog.open, name: dialog.getAttribute('aria-label'), same: JSON.stringify(onPage) === JSON.stringify(inDialog), inDialog, zoom: frame ? Number.parseFloat(frame.style.zoom) : 0 }
+  })
+  await page.evaluate(() => document.querySelector('.axt-viewer').shadowRoot.querySelector('.axt-viewer-bar button').click())
+  const zoomed = await page.evaluate(() => Number.parseFloat(document.querySelector('.axt-viewer').firstElementChild.style.zoom))
+  await page.keyboard.press('Escape')
+  await sleep(300)
+  const closed = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); return { open: host.shadowRoot.querySelector('dialog').open, emptied: host.children.length === 0, focus: host.shadowRoot.activeElement?.className ?? null } })
+  // Opened again, the page under the dialog stays put whatever has the focus: a modal dialog does not hold the
+  // document still of itself, and a press on the figure takes the focus off the buttons — on Chrome 131 onto the
+  // body (Codex on #279). Closed, the page is unlocked
+  await page.mouse.click(control.x, control.y)
+  await sleep(500)
+  const reopened = await page.evaluate(() => document.querySelector('.axt-viewer').shadowRoot.querySelector('dialog').open)
+  const scrolledFrom = await page.evaluate(() => scrollY)
+  const stage = await page.evaluate(() => { const r = document.querySelector('.axt-viewer').shadowRoot.querySelector('.axt-viewer-stage').getBoundingClientRect(); return { x: r.left + 20, y: r.bottom - 20 } })
+  await page.mouse.click(stage.x, stage.y)
+  for (const key of ['PageDown', 'End', 'Space', 'Meta+ArrowDown', 'Alt+ArrowDown', 'Control+End']) await page.keyboard.press(key)
+  await sleep(300)
+  const scrolledBy = await page.evaluate(y => scrollY - y, scrolledFrom)
+  await page.keyboard.press('Escape')
+  await sleep(300)
+  const after = await page.evaluate(() => { const out = { open: document.querySelector('.axt-viewer').shadowRoot.querySelector('dialog').open, unlocked: getComputedStyle(document.documentElement).overflowY === 'visible' && document.adoptedStyleSheets.length === 0, pageLength: document.querySelector('.ltx_page_content').outerHTML.length }; document.querySelector('[data-e2e-viewed]').removeAttribute('data-e2e-viewed'); return out })
+  check('the figure viewer, from the translation\'s side: the control over the picture, a named dialog holding the labels the copy showed, each on as many lines as on the page; a press zooms by 1.2; Escape closes it, the focus back on the control; opened again, no key moves the page after a press on the figure; closed, the page unlocked and as it was',
+    control.shown && viewed.open && viewed.name && viewed.name === control.name && viewed.same && viewed.inDialog.length >= 4 && viewed.inDialog.every(l => !/lower-bounded|Tensor Core/.test(l.t)) && Math.abs(zoomed / viewed.zoom - 1.2) < 0.001 && !closed.open && closed.emptied && closed.focus === 'axt-viewer-open' && reopened && scrolledBy === 0 && !after.open && after.unlocked && after.pageLength === picture.pageLength,
+    JSON.stringify({ control: control.shown, open: viewed.open, name: viewed.name, same: viewed.same, labels: viewed.inDialog.map(l => l.t), zoom: +(zoomed / viewed.zoom).toFixed(3), closed, reopened, pageScrolledBehind: scrolledBy, after }))
+  // Restoring the page under the open viewer: the sweep takes the copy's translations with the page's, and a picture
+  // with no labels at all was left in the dialog (Codex on #279) — the dialog closes instead
+  await page.mouse.move(3, 3)
+  await page.mouse.move(picture.x, picture.y, { steps: 4 })
+  await sleep(400)
+  const again = await page.evaluate(() => { const b = document.querySelector('.axt-viewer').shadowRoot.querySelector('.axt-viewer-open'); const r = b.getBoundingClientRect(); return { shown: b.hasAttribute('data-axt-shown'), x: r.left + 15, y: r.top + 15 } })
+  if (again.shown) await page.mouse.click(again.x, again.y)
+  await sleep(500)
+  const underRestore = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); return { open: host.shadowRoot.querySelector('dialog').open, labels: host.querySelectorAll('.ltx_foreignobject_content').length } })
+  const restorer = await context.newPage()
+  await restorer.goto(`chrome-extension://${extId}/popup.html`)
+  await page.bringToFront()
+  await restorer.getByRole('button', { name: '显示原文', exact: true }).click()
+  await restorer.close()
+  await sleep(1500)
+  const restored = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); return { open: host.shadowRoot.querySelector('dialog').open, emptied: host.children.length === 0, on: document.documentElement.hasAttribute('data-axt-on'), unlocked: document.adoptedStyleSheets.length === 0 } })
+  check('the page restored under the open viewer: the dialog closes with the translations it showed, the page unlocked',
+    underRestore.open && underRestore.labels >= 4 && !restored.open && restored.emptied && !restored.on && restored.unlocked,
+    JSON.stringify({ underRestore, restored }))
   if (!process.env.AXT_E2E_IMAGES) {
     const back = await openOptions(context, extId)
     await setSwitch(back, FIGURES_SWITCH, false)

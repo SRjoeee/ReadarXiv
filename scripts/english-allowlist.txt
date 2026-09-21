@@ -1,7 +1,7 @@
 # Files that may hold lines with CJK characters, and how many (scripts/check-english.mjs). The numbers are exact: the gate asks for an entry to be lowered when lines go, and raised only with a reason beside it.
 docs/DESIGN.md 10  # 2026-09-19: +1, §6.2 quotes what the Edge endpoint returned for a marker touching a word; 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
 docs/RELEASE.md 6  # 2026-09-17: the Chinese store listing (product copy the owner submits)
-docs/UI.md 183  # 2026-09-18: S-I-06 / S-I-06a / S-I-06b / S-I-06c (the floating button, its two side buttons and its menu), S-P-03b / S-P-33 / S-P-50b (the popup on entry pages), S-O-49b / S-O-49c (where the translation opens, the floating button switch), issue #169
+docs/UI.md 184  # 2026-09-18: S-I-06 / S-I-06a / S-I-06b / S-I-06c (the floating button, its two side buttons and its menu), S-P-03b / S-P-33 / S-P-50b (the popup on entry pages), S-O-49b / S-O-49c (where the translation opens, the floating button switch), issue #169; 2026-09-21: S-I-07 (the figure viewer, issue #276)
 README.md 1  # 2026-09-17: the link to the Chinese README
 helper/README.md 1
 src/config/languages.ts 188  # localisation data: the Chinese name table and the native names; four evidence quotes in comments
@@ -33,7 +33,7 @@ tests/core/marks.test.ts 8
 tests/e2e/a11y.mjs 2
 tests/e2e/extension.mjs 93  # raised 2026-09-17: the whole-paper preload check clicks two more stop labels and the cache check waits for the zero-count line; the unreadable-settings check locates the notice, its reset and the section that must be absent by their labels
 tests/e2e/image.mjs 16
-tests/e2e/layout.mjs 10  # 2026-09-20: +2, the reader's-place check finds the popup's mode, translate and restore buttons by their Chinese labels, as the rest of the suite does
+tests/e2e/layout.mjs 11  # 2026-09-20: +2, the reader's-place check finds the popup's mode, translate and restore buttons by their Chinese labels, as the rest of the suite does; 2026-09-21: +1, the figure viewer's restore-under-the-dialog check presses the popup's restore button by its label
 tests/e2e/local-endpoint.mjs 2
 tests/e2e/floating-button.mjs 5  # 2026-09-18: the settings switch, the main button's two labels, and the popup's button inside the control panel on a PDF and on the full text, located and checked by their Chinese copy, as the other suites locate controls (issue #169)
 tests/e2e/pdf-entry.mjs 5  # 2026-09-19: the popup's button (on the PDF and on the abstract page) and the no-HTML reason are located by their Chinese copy, as the other suites locate controls (issue #169)
