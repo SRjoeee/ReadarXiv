@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { IMG_CLASS, T_CLASS } from '@/core/marks'
 import { FOR_ATTR, LANG_ATTR, MIRROR_CLASS } from '@/core/renderer/attrs'
-import { IMG_MODES_ATTR, clearImage, clearImageEverywhere, emWidth, labelStyle, overlayOf, renderImage, setImageModes, type ImageLabel } from '@/core/renderer/image'
+import { IMG_MODES_ATTR, clearImage, emWidth, labelStyle, overlayOf, renderImage, setImageModes, type ImageLabel } from '@/core/renderer/image'
 import { enable, restore } from '@/core/renderer/page'
 import { splitFigures } from '@/core/renderer/split-figures'
 import { docOf } from './helpers'
@@ -153,29 +153,5 @@ describe('rotated labels (§15.5)', () => {
     const style = labelStyle(label())
     expect(style).toBe('left:10.000%;top:20.000%;width:5.000%;height:40.000%;font-size:min(28.80cqh,1.15cqw)')
     expect(style).not.toContain('transform')
-  })
-})
-
-describe('clearImageEverywhere (§15.5)', () => {
-  it('removes even the copy inside the side-mode split clone', () => {
-    // `clearImage` looks only at the image's own sibling position. The copy inside the clone is **the only visible one** in only mode —
-    // the original is hidden — so “no longer translating this image” has to take it too, or the reader sees the previous round's translation
-    const doc = docOf('<figure class="ltx_figure"><img class="ltx_graphics" id="g1"><figcaption class="ltx_caption" data-axt-id="c1">Fig 1.</figcaption><figcaption class="axt-t" data-axt-for="c1">图 1。</figcaption></figure>')
-    const img = doc.getElementById('g1') as HTMLImageElement
-    const target = { id: 'g1', el: img, kind: 'raster' as const }
-    renderImage(target, [{ x: 0, y: 0, w: 0.3, h: 0.05, lines: 1, source: 'Static', text: '静态' }])
-    // The copy must really come from `splitFigures`: a hand-made clone would leave `data-axt-for` on the overlay,
-    // while a real split wipes it through `stripIds` — code that finds the copy by `data-axt-for` would pass on a hand-made copy all the same
-    // (Codex on #134)
-    expect(splitFigures(doc)).toBe(1)
-    expect(doc.querySelectorAll(`.${IMG_CLASS}`)).toHaveLength(2)
-    expect(doc.querySelector(`.axt-split .${IMG_CLASS}`)?.getAttribute(FOR_ATTR)).toBeNull()
-
-    expect(clearImage(target)).toBe(true)
-    expect(doc.querySelectorAll(`.${IMG_CLASS}`)).toHaveLength(1) // the copy inside the clone is still there
-
-    renderImage(target, [{ x: 0, y: 0, w: 0.3, h: 0.05, lines: 1, source: 'Static', text: '静态' }])
-    expect(clearImageEverywhere(target)).toBe(2)
-    expect(doc.querySelectorAll(`.${IMG_CLASS}`)).toHaveLength(0)
   })
 })

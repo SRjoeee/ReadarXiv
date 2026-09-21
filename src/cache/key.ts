@@ -110,8 +110,8 @@ const OCR_KEY_VERSION = 1
 
 /**
  * The OCR result's cache key (DESIGN §15.2): recognition is deterministic and varies with the image bytes and the
- * helper version only; computed apart from the translation key — each line's translation goes through the ordinary text cache, whose key carries no imageHash
+ * recogniser's version only; computed apart from the translation key — each line's translation goes through the ordinary text cache, whose key carries no imageHash
  */
-export function ocrCacheKey(imageHash: string, helperVersion: string): Promise<string> {
-  return sha256Hex(JSON.stringify(['ocr', OCR_KEY_VERSION, imageHash, helperVersion]))
+export function ocrCacheKey(imageHash: string, recogniserVersion: string): Promise<string> {
+  return sha256Hex(JSON.stringify(['ocr', OCR_KEY_VERSION, imageHash, recogniserVersion]))
 }

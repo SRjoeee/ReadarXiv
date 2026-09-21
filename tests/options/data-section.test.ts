@@ -26,7 +26,7 @@ import { O, setLocale } from '@/ui/strings'
 
 const data = (): OptionsData => ({
   config: DEFAULT_CONFIG, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false, patch: async fn => fn(DEFAULT_CONFIG), pack: null, checkPack: async () => 'unsupported', fetchPack: async () => undefined,
-  helper: null, setHelper: () => undefined, platform: 'mac', cache: null, cacheError: '', clearCache: async () => undefined, cacheCleared: false,
+  cache: null, cacheError: '', clearCache: async () => undefined, cacheCleared: false,
 })
 const button = (container: HTMLElement) => Array.from(container.querySelectorAll('button')).find(b => b.textContent === O.data.diagnosticsExport)!
 

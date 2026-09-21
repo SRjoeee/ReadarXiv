@@ -5,15 +5,15 @@ import { readBuildRef } from './scripts/build-ref.mjs'
 import { licenceFiles, noteBundledPackages } from './scripts/third-party-notices.mjs'
 
 /**
- * The ref the popup's helper install command fetches from (issue #158): the commit this build is made from when a
- * reader's curl to the installer's repository can find it, `main` otherwise — scripts/build-ref.mjs decides, over git
+ * The commit this build is made from when it is one the repository holds, `main` otherwise — scripts/build-ref.mjs
+ * decides, over git. It goes into the diagnostics a reader exports (issue #156)
  */
 let stamped: string | undefined
 function buildRef(): string {
   // WXT asks for the vite config once per entrypoint: computed once, printed once
   if (stamped !== undefined) return stamped
   stamped = readBuildRef(cmd => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim())
-  console.log(`[build] helper install ref: ${stamped}`)
+  console.log(`[build] ref: ${stamped}`)
   return stamped
 }
 
@@ -22,7 +22,8 @@ export default defineConfig({
   srcDir: 'src',
   modules: ['@wxt-dev/module-react'],
   // In extension pages <link rel="modulepreload" crossorigin> triggers Chrome's "cross-world extension resource mismatch" warning (harmless but noisy); preloading is off
-  vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()) } }),
+  // The recogniser's worker (entrypoints/ocr) is a build of its own, and what it bundles goes into the same notices
+  vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()) } }),
   // The gallery is for `wxt` (serve) only: a release must not ship a debug page anyone can open
   hooks: {
     'entrypoints:found': (wxt, infos) => {
@@ -58,13 +59,12 @@ export default defineConfig({
     default_locale: 'en',
     description: '__MSG_description__',
     // contextMenus: the translate toggle in the context menu (issue #146) — it registers a menu item, not access to
-    // page content. alarms: wakes a fresh service worker after the reader grants `nativeMessaging` at runtime — a
-    // running worker never gains the API (DESIGN §15.3, verified 2026-09-13); no install warning
-    permissions: ['storage', 'contextMenus', 'alarms'],
-    // nativeMessaging: image translation on a Mac reads figures through the local helper (DESIGN §15). Optional (DESIGN
-    // §15.3): requested from the reader's own click in the popup or on the settings page, so the store listing does
-    // not name a native component to readers who never install it. The image e2e pre-grants it in a patched copy
-    optional_permissions: ['nativeMessaging'],
+    // page content. offscreen: the document the figure recogniser runs in (DESIGN §15.3) — a service worker cannot
+    // host it. Neither shows an install warning
+    permissions: ['storage', 'contextMenus', 'offscreen'],
+    // The recogniser is WebAssembly, which an extension page may compile only when its policy says so. Everything it
+    // compiles ships in the package; `script-src 'self'` stays as it was
+    content_security_policy: { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
     // The keyboard entry (UI.md S-P-50): the same toggle as the context menu. The popup shows the
     // binding Chrome reports, so a reader who rebinds or removes it sees the truth
     commands: { 'axt-toggle': { suggested_key: { default: 'Alt+T' }, description: '__MSG_toggle__' } },

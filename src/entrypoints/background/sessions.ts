@@ -215,7 +215,7 @@ export function createSessionRouter(deps: SessionRouterDeps): SessionRouter {
           return
         }
         // Answered, but with another session: the page really left, a certain end, sentenced — otherwise the requests hung
-        // on the helper handshake, in no queue yet, would go out as usual once they woke (Codex on #143)
+        // on something asynchronous, in no queue yet, would go out as usual once they woke (Codex on #143)
         const confirmed = scopes.filter((_, i) => answers[i] === 'other')
         const unsure = scopes.filter((_, i) => answers[i] === 'unknown')
         if (confirmed.length > 0) await drop(confirmed)

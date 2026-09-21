@@ -47,7 +47,6 @@ vi.mock('@/shared/messages', async importOriginal => ({
   ...(await importOriginal<typeof import('@/shared/messages')>()),
   sendMessage: (message: AxtMessage) => {
     if (message.type === 'axt:cache-stats') return Promise.resolve({ ok: true, entries: 0, bytes: 0 })
-    if (message.type === 'axt:helper-status') return Promise.resolve({ state: 'not-installed' })
     return Promise.resolve(undefined)
   },
 }))

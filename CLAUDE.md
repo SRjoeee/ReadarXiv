@@ -21,7 +21,7 @@ Each is a product promise, a legal requirement, or a contract with something out
 4. **Cache key** carries every input that changes a translation — today `CACHE_KEY_VERSION | providerId | model | PROMPT_VERSION | promptKey | context | RULES_VERSION | target | renderPath | normalizedText | cuts` (`src/cache/key.ts`); bump the matching version whenever a prompt, a rule or the request shape changes meaning.
 5. **Secrets**: API keys live only in WXT storage — never in logs, cache keys, fixtures or git. A third party's public client constant (the Google web translator's key in `providers/google-web.ts`) is not a secret.
 6. **Attribution**: code ported from the reference projects (KISS Translator, Read Frog, FluentRead — GPL-3.0) keeps the header `// Ported from reference/<repo>/<path>@<commit> (GPL-3.0), <YYYY-MM-DD>, modified` and an entry in `docs/THIRD_PARTY.md`.
-7. **External contracts** get migration or compatibility handling, never silent replacement: the saved configuration schema (`CONFIG_VERSION` and a migration, DESIGN §9), the Native Messaging protocol with the installed `axt-helper` (DESIGN §15.3), the installer surface (`helper/`).
+7. **External contracts** get migration or compatibility handling, never silent replacement: the saved configuration schema (`CONFIG_VERSION` and a migration, DESIGN §9), and whatever a reader's machine or another program holds that a new version must still meet.
 8. **The platform boundary** (DESIGN §4.2, checked by `pnpm lint` through `scripts/check-boundary.mjs`): `src/core`, `src/providers` and `src/cache` import nothing from `wxt`, the entry points, the UI, the locale packs, the WXT configuration store or runtime messaging; what the core needs from the host enters as a dependency, and what it shows a reader is a code the host turns into a sentence.
 9. **No `:has()` in the injected style sheets** (DESIGN §7.2, gate `tests/styles/no-has.test.ts`): Chrome answers a `:has()` in an author sheet by recalculating the whole document's styles on every DOM insertion. Every structural condition the layout needs is a `data-axt-*` mark written by the code that creates the structure; `:has()` stays available to TypeScript queries.
 
@@ -29,7 +29,7 @@ Two defaults, open to re-evaluation with evidence: `ltx_*` selectors live only i
 
 ## Stack
 
-WXT + React + TypeScript with pnpm · Vercel AI SDK for LLM providers (structured output via `generateText` + `Output.object` + zod) · Dexie for the translation cache · WXT storage with schema versions and migrations · Vitest + happy-dom for unit tests, Playwright for e2e · Biome, linter only · Swift for the macOS image-recognition helper. Target is Chrome MV3 (`minimum_chrome_version` in `wxt.config.ts`); no cross-browser branches or polyfills; runtime feature detection stays because a free API can be absent on the same Chrome.
+WXT + React + TypeScript with pnpm · Vercel AI SDK for LLM providers (structured output via `generateText` + `Output.object` + zod) · Dexie for the translation cache · WXT storage with schema versions and migrations · Vitest + happy-dom for unit tests, Playwright for e2e · Biome, linter only · ONNX Runtime Web with PaddleOCR's PP-OCRv6 tiny models for text in bitmap figures (DESIGN §15.3). Target is Chrome MV3 (`minimum_chrome_version` in `wxt.config.ts`); no cross-browser branches or polyfills; runtime feature detection stays because a free API can be absent on the same Chrome.
 
 ## Working rules
 
@@ -61,11 +61,10 @@ pnpm e2e:a11y            # A/B axe audit: only differences the extension introdu
 pnpm e2e:local-endpoint  # an http endpoint without CORS headers can translate a whole page
 pnpm e2e:pdf             # arXiv's PDF page: the button is drawn there, it and the popup open the bilingual version
 pnpm e2e:floating        # the floating button on the abstract, PDF and full-text pages: rest, hover, drag, hide, toggle, tick
-pnpm e2e:image           # image translation through the installed helper (SKIP without it)
+pnpm e2e:image           # image translation, bitmaps read by the recogniser the extension ships
 pnpm e2e:placeholders    # placeholder survival per sentence shape against a live engine (DESIGN §6.3)
 pnpm fixtures:fetch      # download and verify the fixtures the repository may not hold (tests/fixtures/README.md); pnpm test does it too
 pnpm fixtures:stats      # rule coverage audit over the fixtures
-pnpm helper:build        # Swift helper; pnpm helper:smoke talks to the binary over Native Messaging frames
 pnpm zip                 # the store archive; pnpm icons regenerates the icons
 AXT_MEASURE=1 pnpm vitest run tests/perf       # the cost measurements (readings, not assertions)
 AXT_CHROME=<binary> pnpm e2e                   # the e2e suite on a chosen Chrome; probes live in tests/e2e/probes/

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node script the build config imports, deliberately dependency-free and untyped
-import { noticesText, packageDirOf } from '../../scripts/third-party-notices.mjs'
+import { BUNDLED_DATA, noticesText, packageDirOf } from '../../scripts/third-party-notices.mjs'
 
 // The notices that ship in every build (docs/THIRD_PARTY.md, "npm packages"): which package a module belongs to, and
 // what the file says of it. The list itself is the bundle's and is checked on the real output (scripts/check-output.mjs)
@@ -57,9 +57,20 @@ describe('noticesText', () => {
     root = mkdtempSync(join(tmpdir(), 'axt-notices-'))
     const terms = 'TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION'
     const mit = pkg('only-mit', { version: '1.0.0', license: 'MIT' }, { LICENSE: 'MIT text' })
-    expect(noticesText(new Set([mit]))).not.toContain(terms)
+    expect(noticesText(new Set([mit]), [])).not.toContain(terms)
     const both = noticesText(new Set([mit, pkg('a', { version: '1.0.0', license: 'Apache-2.0' }, { LICENSE: 'notice a' }), pkg('b', { version: '1.0.0', license: 'Apache-2.0' }, { LICENSE: 'notice b' })]))
     expect(both.split(terms)).toHaveLength(2)
+  })
+
+  it('names the data a build ships that no package manifest names — the recogniser\'s models — after the packages, and their licence\'s text comes with them even when no package is under it', () => {
+    root = mkdtempSync(join(tmpdir(), 'axt-notices-'))
+    const text = noticesText(new Set([pkg('only-mit', { version: '1.0.0', license: 'MIT' }, { LICENSE: 'MIT text' })]))
+    expect(text).toContain('and the data named after them')
+    expect(text.indexOf('only-mit 1.0.0 — MIT')).toBeLessThan(text.indexOf('PP-OCRv6 tiny'))
+    // Every file public/ocr holds is accounted for, the one that is not the publisher's own byte for byte included
+    for (const file of ['PP-OCRv6_tiny_det.onnx', 'PP-OCRv6_tiny_rec.onnx', 'PP-OCRv6_tiny_dict.txt']) expect(text).toContain(`ocr/${file}`)
+    expect(text.split('TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION')).toHaveLength(2)
+    expect(BUNDLED_DATA.every((item: { licence: string }) => item.licence === 'Apache-2.0')).toBe(true)
   })
 
   it('one package installed twice at one version is one entry', () => {

@@ -62,7 +62,8 @@ cost you the ability to read it.
 
 **The words inside figures are translated too.** Labels and axes in vector charts, and text inside
 bitmap images, with the translation laid over the original; hover to see what was underneath.
-Bitmap figures are macOS-only for now.
+Text in a bitmap is recognised in your browser by a model that comes with the extension: nothing to
+install, on any system, and the image never leaves your machine.
 
 ![A figure's labels translated in place over the original](docs/images/figure.png)
 
@@ -95,12 +96,6 @@ HTML papers only — PDFs are not translated.
 **Updating.** Pull, run `pnpm build` again, then press the reload button on the extension's card in
 `chrome://extensions`. Restarting Chrome is not enough: it keeps running the previous build's
 background beside the new pages. Your settings are kept and carried over to the new version.
-
-### Translating figures (macOS)
-
-Words inside bitmap figures are read by a small recognition tool that runs on your own machine. The popup has
-a one-command installer under **Images**; it needs Xcode Command Line Tools and takes about a minute
-to build. See [`helper/README.md`](helper/README.md).
 
 ## Translation services
 
@@ -167,8 +162,7 @@ from source for now. Everything above works today — translating, the three lay
 original, the four services, sentence alignment, figure translation and the settings. The roadmap is
 [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155).
 
-Out of scope for now: other paper sites, PDFs, Firefox and Safari, and translating bitmap figures
-anywhere but macOS.
+Out of scope for now: other paper sites, PDFs, Firefox and Safari.
 
 ## Development
 
@@ -182,7 +176,7 @@ pnpm build
 pnpm e2e                 # real Chromium with the extension loaded
 pnpm e2e:layout          # side-mode layout contracts
 pnpm e2e:a11y            # A/B axe audit: only what the extension introduces
-pnpm e2e:image           # figure translation through the installed helper
+pnpm e2e:image           # figure translation, bitmaps read by the built-in recogniser
 pnpm e2e:placeholders    # placeholder survival through the real services
 pnpm fixtures:stats      # rule coverage across the fixture papers
 ```
@@ -217,8 +211,9 @@ Read arXiv ports code from three GPL-3.0 translation extensions, and is grateful
   viewport scheduling, the prompt library and the language tables
 - [FluentRead](https://github.com/Bistutu/FluentRead) — the Dexie cache
 
-The image recognition tool (`helper/`) is ported from [macos-vision-ocr](https://github.com/bytefer/macos-vision-ocr) (MIT),
-and the figure-overlay rendering follows
+Text in bitmap figures is recognised by [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)'s PP-OCRv6 tiny models
+(Apache-2.0) on [ONNX Runtime Web](https://github.com/microsoft/onnxruntime) (MIT), through
+[eSearch-OCR](https://github.com/xushengfeng/eSearch-OCR) (Apache-2.0); the figure-overlay rendering follows
 [ImageTrans](https://github.com/xulihang/ImageTrans_chrome_extension). Every ported file names its
 source in its header; [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md) is the register.
 

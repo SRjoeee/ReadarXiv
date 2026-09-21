@@ -1,14 +1,12 @@
-// The fixtures that are not in the repository (tests/fixtures/remote.json): five papers, one figure of one of them and
-// the recognition helper's reference image are under arXiv's non-exclusive licence — arXiv may distribute them, this
+// The fixtures that are not in the repository (tests/fixtures/remote.json): five papers and one figure of one of them
+// are under arXiv's non-exclusive licence — arXiv may distribute them, this
 // repository may not — and one more figure is under CC BY-NC-ND, whose terms a GPL tree cannot carry. Each is downloaded from the pinned version into the path the tests read, once, and only a copy
 // whose SHA-256 is the recorded one is accepted: the rule-coverage snapshots and the measured numbers in DESIGN were
 // taken from exactly these bytes.
 //
-//   pnpm fixtures:fetch                  # every fixture: download what is missing, verify everything
-//   pnpm fixtures:fetch --for tests      # only what one consumer reads (`tests`, `helper-smoke`)
+//   pnpm fixtures:fetch                  # download what is missing, verify everything
 //
-// `pnpm test` fetches the `tests` ones first (tests/global-setup.ts); `pnpm fixtures:stats` and `pnpm helper:smoke`
-// fetch theirs.
+// `pnpm test` fetches them first (tests/global-setup.ts), and so does `pnpm fixtures:stats`.
 import { createHash, randomBytes } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { lstat, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
@@ -28,10 +26,8 @@ const MAX_RETRY_AFTER_MS = 60_000
 /** A temporary file older than this is a crashed run's, not a concurrent one's (one lives only between its write and its rename) */
 const STALE_PARTIAL_MS = 10 * 60_000
 
-/** Where a fixture may be written: the two fixture directories, nowhere else */
-const FIXTURE_DIRS = ['tests/fixtures', 'helper/Tests/Fixtures']
-/** Who reads a fixture; an entry names the one it is for */
-export const CONSUMERS = ['tests', 'helper-smoke']
+/** Where a fixture may be written: the fixture directory, nowhere else */
+const FIXTURE_DIR = 'tests/fixtures'
 const ARXIV = 'https://arxiv.org/'
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -42,7 +38,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
  * inside a fixture directory that no other entry names, and an address on arXiv. The file is data a pull request can
  * change, and what it names is written to disk and cached by CI (Devin on #229)
  *
- * @returns {Promise<{ path: string; url: string; sha256: string; bytes: number; for: string }[]>}
+ * @returns {Promise<{ path: string; url: string; sha256: string; bytes: number }[]>}
  */
 export async function readManifest(root = ROOT) {
   const manifest = JSON.parse(await readFile(join(root, MANIFEST), 'utf8'))
@@ -50,19 +46,18 @@ export async function readManifest(root = ROOT) {
   const seen = new Set()
   for (const entry of manifest.fixtures) {
     const where = `${MANIFEST}: ${JSON.stringify(entry?.path)}`
-    if (typeof entry?.path !== 'string' || typeof entry.url !== 'string' || typeof entry.sha256 !== 'string' || typeof entry.for !== 'string') {
-      throw new Error(`${where}: an entry needs "path", "url", "sha256" and "for" as strings`)
+    if (typeof entry?.path !== 'string' || typeof entry.url !== 'string' || typeof entry.sha256 !== 'string') {
+      throw new Error(`${where}: an entry needs "path", "url" and "sha256" as strings`)
     }
     const inside = relative(root, resolve(root, entry.path)).split('\\').join('/')
-    if (isAbsolute(entry.path) || inside !== entry.path || !FIXTURE_DIRS.some(dir => inside.startsWith(`${dir}/`))) {
-      throw new Error(`${where} is not a plain path inside ${FIXTURE_DIRS.join(' or ')}`)
+    if (isAbsolute(entry.path) || inside !== entry.path || !inside.startsWith(`${FIXTURE_DIR}/`)) {
+      throw new Error(`${where} is not a plain path inside ${FIXTURE_DIR}`)
     }
     if (seen.has(entry.path)) throw new Error(`${where} is named twice`)
     seen.add(entry.path)
     if (!entry.url.startsWith(ARXIV)) throw new Error(`${where}: "${entry.url}" is not an ${ARXIV} address`)
     if (!/^[0-9a-f]{64}$/.test(entry.sha256)) throw new Error(`${where}: "sha256" is not 64 lowercase hex digits`)
     if (!Number.isInteger(entry.bytes) || entry.bytes <= 0) throw new Error(`${where}: "bytes" is not a positive integer`)
-    if (!CONSUMERS.includes(entry.for)) throw new Error(`${where}: "for" is not one of ${CONSUMERS.join(', ')}`)
   }
   return manifest.fixtures
 }
@@ -173,18 +168,16 @@ async function download(entry, fetchImpl, gapMs) {
 }
 
 /**
- * Make the remote fixtures present and verified — all of them, or those one consumer reads.
+ * Make the remote fixtures present and verified.
  *
- * @param {{ root?: string; fetchImpl?: typeof fetch; log?: (line: string) => void; gapMs?: number; for?: string }} [options]
+ * @param {{ root?: string; fetchImpl?: typeof fetch; log?: (line: string) => void; gapMs?: number }} [options]
  * @returns {Promise<{ verified: string[]; downloaded: string[] }>}
  */
-export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () => undefined, gapMs = GAP_MS, for: consumer } = {}) {
-  if (consumer !== undefined && !CONSUMERS.includes(consumer)) throw new Error(`no fixtures are for "${consumer}"; one of ${CONSUMERS.join(', ')}`)
+export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () => undefined, gapMs = GAP_MS } = {}) {
   const verified = []
   const downloaded = []
   const realRoot = await realpath(root)
   for (const entry of await readManifest(root)) {
-    if (consumer !== undefined && entry.for !== consumer) continue
     const file = join(root, entry.path)
     const dir = dirname(file)
     await dropStalePartials(file)
@@ -218,8 +211,8 @@ export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () 
     }
     await mkdir(dir, { recursive: true })
     const realDir = await realpath(dir)
-    if (!FIXTURE_DIRS.some(fixtures => `${realDir}/`.startsWith(`${join(realRoot, fixtures)}/`))) {
-      throw new Error(`${entry.path}: its directory resolves to ${realDir}, outside the fixture directories; nothing was written`)
+    if (!`${realDir}/`.startsWith(`${join(realRoot, FIXTURE_DIR)}/`)) {
+      throw new Error(`${entry.path}: its directory resolves to ${realDir}, outside the fixture directory; nothing was written`)
     }
     // Written beside the target under a name of this run's own, created exclusively (never through a link someone left
     // there), then renamed over the target: two runs fetching at once each land a whole file, and an interrupted run
@@ -248,17 +241,15 @@ const invoked = () => {
 }
 
 if (invoked()) {
-  // pnpm passes a literal `--` through when it is given one (`pnpm fixtures:fetch -- --for tests`)
-  const args = process.argv.slice(2).filter((arg, i) => !(i === 0 && arg === '--'))
-  // Nothing, or exactly `--for <consumer>`: anything else is a mistake that would otherwise fetch everything
-  if (!(args.length === 0 || (args.length === 2 && args[0] === '--for' && CONSUMERS.includes(args[1])))) {
-    console.error(`usage: fetch-fixtures.mjs [--for ${CONSUMERS.join('|')}]`)
+  // It takes no argument, and one given is a mistake. pnpm passes a literal `--` through when it is given one
+  // (`pnpm fixtures:fetch --`)
+  if (process.argv.slice(2).filter((arg, i) => !(i === 0 && arg === '--')).length > 0) {
+    console.error('usage: fetch-fixtures.mjs')
     process.exit(2)
   }
-  const consumer = args[1]
   try {
-    const { verified, downloaded } = await ensureFixtures({ log: line => console.log(line), ...(consumer ? { for: consumer } : {}) })
-    console.log(`remote fixtures${consumer ? ` for ${consumer}` : ''}: ${downloaded.length} downloaded, ${verified.length} already there, all verified`)
+    const { verified, downloaded } = await ensureFixtures({ log: line => console.log(line) })
+    console.log(`remote fixtures: ${downloaded.length} downloaded, ${verified.length} already there, all verified`)
   } catch (e) {
     console.error(e instanceof Error ? e.message : e)
     process.exit(1)

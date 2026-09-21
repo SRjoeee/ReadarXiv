@@ -94,7 +94,7 @@ export function createSurfaceConfig(deps: SurfaceConfigDeps): SurfaceConfig {
   const packs = createPackLookup({
     publish: pack => publish({ pack }),
     ...(deps.packState ? { state: deps.packState } : {}),
-    // The other surface may be open beside this one: tell it the download ended, as the helper's state is told
+    // The other surface may be open beside this one: tell it the download ended
     announce: deps.announce ?? (target => void sendMessage({ type: 'axt:pack-changed', target }).catch(() => undefined)),
   })
 

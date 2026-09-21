@@ -17,7 +17,7 @@ import { DOCUMENT_ROOT, FIGURE_MEDIA, SPLIT_ROOTS, isFigureText, isTableRoot, ta
 import { ID_ATTR } from '@/core/extractor'
 import { AXT_ATTR_PREFIX, IMG_CLASS, T_CLASS } from '@/core/marks'
 import { hashText } from '@/shared/hash'
-import { ERROR_CLASS, FOR_ATTR, MIRROR_CLASS, PENDING_CLASS, REAL_TRANSLATION, SPLIT_ATTR, SPLIT_CLASS, SPLIT_FOR_ATTR, SPLIT_OF_ATTR } from './attrs'
+import { ERROR_CLASS, FOR_ATTR, MIRROR_CLASS, PENDING_CLASS, REAL_TRANSLATION, SPLIT_ATTR, SPLIT_CLASS, SPLIT_OF_ATTR } from './attrs'
 import { REASON_ATTR, failureWidget } from './failed'
 import { imageModesOf, markAnchor } from './image'
 import { dropMirror } from './mirror'
@@ -193,11 +193,9 @@ export function setSplitDuplicatesHidden(root: Document | Element, hidden: boole
 function stripIds(root: Element): void {
   for (const el of [root, ...Array.from(root.querySelectorAll('*'))]) {
     const id = el.getAttribute('id')
-    const forId = el.classList.contains(IMG_CLASS) ? el.getAttribute(FOR_ATTR) : null
     el.removeAttribute('id')
     for (const name of el.getAttributeNames()) if (name.startsWith(AXT_ATTR_PREFIX)) el.removeAttribute(name)
     if (id) el.setAttribute(SPLIT_OF_ATTR, id)
-    if (forId) el.setAttribute(SPLIT_FOR_ATTR, forId)
   }
 }
 

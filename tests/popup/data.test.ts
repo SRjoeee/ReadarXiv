@@ -42,7 +42,6 @@ vi.mock('@/shared/messages', async importOriginal => ({
       wire.asks.push({ message, answer })
       return answer.promise
     }
-    if (message.type === 'axt:helper-status') return Promise.resolve({ state: 'not-installed' })
     return Promise.resolve(undefined)
   },
   sendToActiveTab: (message: AxtMessage) => {

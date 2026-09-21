@@ -6,7 +6,7 @@
 // error rate is zero rather than whatever OCR would get wrong. Measured over 58045 glyphs in 316
 // distinct figures, `data-text` is present on every one that is a glyph (DESIGN §15.5).
 //
-// The output is `OcrLine[]`, the same shape the OCR helper returns, so everything downstream —
+// The output is `OcrLine[]`, the same shape the recogniser of bitmaps returns, so everything downstream —
 // `linesToBoxes`, the translate call, the overlay — is shared with the bitmap path and knows
 // nothing about where the lines came from.
 //

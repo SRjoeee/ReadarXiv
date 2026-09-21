@@ -33,7 +33,7 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
       glossary: normalizeGlossary(v6.glossary),
       style: { preset: 'none' as const, customCss: '' },
     }),
-    // v7 -> v8: the image translation's mode gate added (§15), all three modes on by default — without the helper it does nothing, with it it works at once
+    // v7 -> v8: the image translation's mode gate added (§15), all three modes on by default
     8: (v7: Omit<Config, 'version' | 'image'> & { version: 7 }) => ({ ...v7, version: 8 as const, image: { modes: [...MODE_VALUES] } }),
     // v8 -> v9: three tunable parameters on the translation style (§7.5). The defaults must leave the appearance pixel for
     // pixel as before: an empty colour = follow the original, opacity 1 = opaque, an empty accent = each preset's own default

@@ -2,7 +2,7 @@
 // a figure spanning both columns gives up the comparison, so the whole thing is copied once and the copy keeps only the translations.
 import { describe, expect, it } from 'vitest'
 import { T_CLASS } from '@/core/marks'
-import { FOR_ATTR, MIRROR_CLASS, PANELS_ATTR, SPLIT_ATTR, SPLIT_CLASS, SPLIT_FOR_ATTR } from '@/core/renderer/attrs'
+import { FOR_ATTR, MIRROR_CLASS, PANELS_ATTR, SPLIT_ATTR, SPLIT_CLASS } from '@/core/renderer/attrs'
 import { renderImage, setImageModes } from '@/core/renderer/image'
 import { restore } from '@/core/renderer/page'
 import { markStructure } from '@/core/renderer/side-layout'
@@ -368,12 +368,10 @@ describe('a mirror is no translation (issue #46, measured on 2312.17141)', () =>
       expect(img).not.toBeNull()
       // The overlay follows the copy's image directly; anchor positioning relies on that adjacency
       expect(img.nextElementSibling?.classList.contains(IMG_CLASS)).toBe(true)
-      // The pairing mark must be absent (with it the copy's overlay would count as a second translation), but `data-axt-split-for` has to stay:
-      // on “no longer translating this image” `clearImageEverywhere` can find the copy's overlay by it alone (Codex on #134)
+      // The pairing mark must be absent — with it the copy's overlay would count as a second translation — and so is every other mark of ours
       const overlay = clone.querySelector(`.${IMG_CLASS}`)!
       expect(overlay.getAttribute(FOR_ATTR)).toBeNull()
-      expect(overlay.getAttribute(SPLIT_FOR_ATTR)).toBe('F1.g1')
-      expect(overlay.getAttributeNames().filter(n => n.startsWith('data-axt-'))).toEqual([SPLIT_FOR_ATTR])
+      expect(overlay.getAttributeNames().filter(n => n.startsWith('data-axt-'))).toEqual([])
       expect(clone.querySelector(`.${IMG_CLASS}`)!.textContent).toBe('静态电荷')
       // The anchor marks the sheet positions the overlay by were stripped with the other data-axt-* and written again for the copy (§15.2, DESIGN §7.2)
       expect(img.hasAttribute('data-axt-anchor')).toBe(true)

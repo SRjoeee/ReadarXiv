@@ -41,7 +41,7 @@ const extId = worker.url().split('/')[2]
 
 const options = await openOptions(context, extId)
 await chooseBuiltIn(options, 'Google 翻译')
-// Image translation (DESIGN §15) is on by default; with the helper installed on this machine the overlays and the split would disturb the layout / count assertions below,
+// Image translation (DESIGN §15) is on by default; its overlays and the figures it splits would disturb the layout / count assertions below,
 // so it is switched off here, and the dedicated e2e:image switches it back on (kept when AXT_E2E_IMAGES=1)
 const FIGURES_SWITCH = '图片翻译'
 if (!process.env.AXT_E2E_IMAGES) await setSwitch(options, FIGURES_SWITCH, false)

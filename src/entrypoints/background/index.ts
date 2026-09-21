@@ -3,15 +3,12 @@ import { pickTargetLanguage } from '@/config/first-target'
 import { chooseFirstTarget, getConfig, watchConfig } from '@/config/storage'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport } from '@/providers/transport'
-import { type AxtMessage, answerMessages, sendToTab } from '@/shared/messages'
-import { HELPER_HOST, type HelperStatus } from '@/shared/ocr'
+import { type AxtMessage, answerMessages, sendMessage, sendToTab } from '@/shared/messages'
 import { createChainHolder } from './chain'
 import { createHandlers } from './handlers'
-import { createHelperClient } from './helper'
-import { createHelperWaiter } from './helper-await'
-import { createHelperRestart } from './helper-restart'
 import { createConfigOffers, statusInForce } from './provider-status'
 import { createOcrService } from './ocr'
+import { createRecogniserClient } from './recogniser'
 import { createSessionRouter } from './sessions'
 import { installContextMenu, refreshContextMenu, installToggleCommand, toggleTranslation } from './context-menu'
 import { getFloatingEntry, patchFloatingEntry } from './floating-entry'
@@ -21,7 +18,7 @@ import { savedFromStatus } from '@/shared/page-action'
 import { BUILD_REF } from '@/shared/build'
 import { createDiagnostics } from './diagnostics'
 
-// The background: the engine chain, the queues, the cache and the helper, wired together (DESIGN §8.0); what it
+// The background: the engine chain, the queues, the cache and the recogniser, wired together (DESIGN §8.0); what it
 // answers is the table in ./handlers.ts.
 export default defineBackground(() => {
   // A new reader's target language follows the browser's languages, chosen once (config/first-target.ts). Registered
@@ -79,18 +76,18 @@ export default defineBackground(() => {
    * cancelled by its scope as before
    */
   /**
-   * The local OCR helper of image translation (DESIGN §15): connected lazily; the open port keeps the worker alive while
-   * a recognition is in flight (measured, helper.ts). Withdrawing a session withdraws its queued recognitions too (the router's onDrop)
+   * The recogniser of image translation (DESIGN §15.3): in an offscreen document, opened when the first bitmap needs
+   * reading. Withdrawing a session withdraws its queued recognitions too (the router's onDrop)
    */
-  const helper = createHelperClient({
-    connect: () => browser.runtime.connectNative(HELPER_HOST),
-    lastError: () => browser.runtime.lastError?.message,
-    // Optional permission (DESIGN §15.3): asked before each connection. The binding is missing in a worker started
-    // before the grant; `restarting` is what it reports until the alarm below has brought a fresh one
-    permitted: () => browser.permissions.contains({ permissions: ['nativeMessaging'] }),
-    bound: () => typeof browser.runtime.connectNative === 'function',
+  const recogniser = createRecogniserClient({
+    offscreen: {
+      has: () => browser.offscreen.hasDocument(),
+      create: () => browser.offscreen.createDocument({ url: browser.runtime.getURL('/ocr.html'), reasons: ['WORKERS'], justification: 'Runs text recognition for figure translation in a WebAssembly worker' }),
+      close: () => browser.offscreen.closeDocument(),
+    },
+    run: request => sendMessage({ type: 'axt:ocr-run', ...request }),
   })
-  const ocr = createOcrService({ backend: helper, cache, cancelled, warn: diag })
+  const ocr = createOcrService({ backend: recogniser, cache, cancelled, warn: diag })
   const router = createSessionRouter({
     current: transportOf,
     cancelled,
@@ -139,71 +136,6 @@ export default defineBackground(() => {
   // The context menu (issue #146): the second entry, the same message as the popup's action.
   // **Registered synchronously**, without waiting for the locale pack (context-menu.ts says why): the menu is built in
   // the fallback language first and rebuilt once the pack is read, so the title follows the interface language (UI.md §6)
-  /**
-   * Say something to every tab that will listen. No `tabs` permission is needed to enumerate ids,
-   * and a tab without our content script simply rejects — there is nothing to filter on and nothing
-   * to lose by asking
-   */
-  const tellTabs = async (message: { type: 'axt:helper-ready' }) => {
-    const tabs = await browser.tabs.query({}).catch(() => [])
-    for (const tab of tabs) if (tab.id !== undefined) void sendToTab(tab.id, message).catch(() => undefined)
-  }
-  /**
-   * The helper's state changed on the background's own initiative — the install wait found it, or the fresh worker
-   * after a runtime grant reported (DESIGN §15.3). Papers only need to hear "ready" (they park bitmaps until then); the
-   * extension pages take the state as is. Extension pages are not content scripts and get nothing from
-   * `tabs.sendMessage`, hence the second send; nobody listening is the normal case and it rejects
-   */
-  const broadcastHelper = (status: HelperStatus) => {
-    if (status.state === 'ready') void tellTabs({ type: 'axt:helper-ready' })
-    void browser.runtime.sendMessage({ type: 'axt:helper-state', status }).catch(() => undefined)
-  }
-
-  /**
-   * The guided install's wait (§15.4): once the reader has copied the install command, this probes on a timer and
-   * broadcasts a find — the reader need not come back to the extension and click anything. The deadline lives in
-   * **session** storage: once the browser is closed this install need not be waited for any more
-   */
-  const AWAIT_KEY = 'axt-helper-await-until'
-  const helperWaiter = createHelperWaiter({
-    probe: () => ocr.status({ recheck: true }),
-    announce: broadcastHelper,
-    now: () => Date.now(),
-    schedule: (run, ms) => self.setTimeout(run, ms),
-    cancel: id => self.clearTimeout(id),
-    load: async () => {
-      const stored = await browser.storage.session.get(AWAIT_KEY).catch(() => ({}) as Record<string, unknown>)
-      const value = stored[AWAIT_KEY]
-      return typeof value === 'number' ? value : undefined
-    },
-    save: async deadline => {
-      if (deadline === undefined) await browser.storage.session.remove(AWAIT_KEY).catch(() => undefined)
-      else await browser.storage.session.set({ [AWAIT_KEY]: deadline }).catch(() => undefined)
-    },
-    warn: (message, error) => console.debug(message, error),
-  })
-  // The wait is picked up as soon as the worker wakes: the reader may still be in the terminal, and this worker is a
-  // fresh one after the previous was reclaimed. **What wakes the worker is often the popup's own query**, so the query
-  // has to wait for this read of storage before answering, or it gets the null not yet restored (Codex on #166)
-  const helperRestored = helperWaiter.resume()
-
-  /**
-   * A grant while this worker runs leaves it without `runtime.connectNative` (helper-restart.ts says why). The alarm
-   * fires after the idle limit — into a fresh worker once this one has died — and the listener is registered at top
-   * level, as MV3 requires for an event to wake a worker
-   */
-  const RESTART_ALARM = 'axt-helper-restart'
-  const helperRestart = createHelperRestart({
-    probe: () => ocr.status({ recheck: true }),
-    arm: () => void browser.alarms.create(RESTART_ALARM, { delayInMinutes: 0.75 }),
-    announce: broadcastHelper,
-    // The one subscription fed by tabs that are not ours (see onTabUpdated below)
-    quiesce: () => browser.tabs.onUpdated.removeListener(onTabUpdated),
-  })
-  browser.alarms.onAlarm.addListener(alarm => {
-    if (alarm.name === RESTART_ALARM) void helperRestart.fired()
-  })
-
   /**
    * The saved settings as the toggle decides on them (shared/page-action.ts): their identity, and whether they run —
    * from the chain in force, which is built from them. The popup decides the same from the settings it holds
@@ -259,12 +191,6 @@ export default defineBackground(() => {
    * and the translations of its second half all come back aborted (reported by the owner on 2026-09-09). So the router
    * holds it for a while: one more request from this tab means the page is still there, and the withdrawal is cancelled
    */
-  // Named, because it comes off while a grant takes effect (DESIGN §15.3): a tab whose title ticks — a clock, a chat
-  // app's unread count — is an event every few seconds from a tab that is not ours, and each one resets the worker's
-  // idle timer, which would keep the stale worker alive for good (Codex, local review). The fresh worker
-  // registers it again at start-up. Until then a tab that closes still drops its sessions (onRemoved); a tab that
-  // navigates away is not noticed — the old session's queued batches run until they finish or this worker dies with
-  // them, and the fresh worker starts with no sessions and learns them from the pages' next calls
   const onTabUpdated: Parameters<typeof browser.tabs.onUpdated.addListener>[0] = (tabId, changeInfo) => {
     // **Both loading and complete press once.** When a cross-document navigation commits slowly, the old document is
     // still alive after loading, the probe at the deadline reaches it, it answers with the same session, and the
@@ -280,10 +206,6 @@ export default defineBackground(() => {
     router,
     offers,
     ocr,
-    helperWaiter,
-    helperRestored,
-    helperRestart,
-    tellTabs: message => void tellTabs(message),
     diagnostics,
     cache: translationCache,
     toggle: tabId => toggleTranslation({ send: sendToTab, saved }, tabId),

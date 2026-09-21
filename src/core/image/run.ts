@@ -29,11 +29,11 @@ export type { ImageTarget } from '@/core/renderer/image'
 
 /** The bitmap cap: arXiv figures are usually a few hundred KB, 6 MB is generous; a larger base64 through the message channel is not worth it */
 export const MAX_IMAGE_BYTES = 6 * 1024 * 1024
-/** The bitmap types the helper decodes; SVG and unknown types are not sent (§15.1: SVG is skipped whole) */
+/** The bitmap types sent to the recogniser; SVG and unknown types are not (§15.1: an SVG figure is read, not recognised) */
 const IMAGE_TYPES = /^image\/(png|jpe?g|gif|webp|bmp|tiff)$/i
 /** The length cap of a caption used as context: it enters the prompt and the cache key */
 const CAPTION_MAX_CHARS = 300
-/** Images in flight at once: the bytes, the base64 and the message payload all take memory, and the helper is sequential — more only hoards 6 MB images */
+/** Images in flight at once: the bytes, the base64 and the message payload all take memory, and the recogniser reads one figure at a time — more only hoards 6 MB images */
 const MAX_CONCURRENT = 2
 /** How long an `<object>` still loading is waited for (§15.5). Past that the image is skipped rather than holding the queue */
 const SVG_LOAD_TIMEOUT_MS = 5000
@@ -58,11 +58,10 @@ export interface ImageRunOptions {
   translate: (call: TranslateCall) => Promise<TranslateMessageResponse>
   /** The mode in effect is among the ones the reader ticked; otherwise an image entering the viewport parks, translated on resume */
   /**
-   * Can this target be translated now. **Asked per target, not one global switch**: the display mode applies to
-   * both kinds of image alike, but a bitmap waits for the local helper and an SVG figure does not (§15.5). A target
-   * answered false stays in parked; `resume()` releases it when the conditions change
+   * May images be translated now: the mode in effect is one the reader ticked, for both kinds of image alike. A
+   * target handed over while it is not stays in parked; `resume()` releases it when that changes
    */
-  isEnabled: (target: ImageTarget) => boolean
+  isEnabled: () => boolean
   /** Is the session still the current one (false after a restore / a restart) */
   isCurrent: () => boolean
   /** Test injection: the concurrency cap */
@@ -86,7 +85,7 @@ export interface ImageRun {
   failed(): ImageTarget[]
   progress(): ImageProgress
   /**
-   * The targets never requested so far, and whether each is parked behind the mode or helper gate. A diagnostic for
+   * The targets never requested so far, and whether each is parked behind the mode gate. A diagnostic for
    * the idle trace: `images idle: 5/5 of 6` says one target never entered the viewport, and only this says which
    */
   waiting(): { target: ImageTarget; parked: boolean }[]
@@ -323,7 +322,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
         ledger.settle(target, 'done')
         if (removed) options.onRendered?.([target])
       }
-      // An animated image: the helper recognised frame 0 only, the browser is showing later frames, the boxes would not line up — no overlay
+      // An animated image: the page is showing some later frame than a recogniser would read, the boxes would not line up — no overlay
       if (frames > 1) return finishEmpty()
       const boxes = linesToBoxes(lines)
       if (boxes.length === 0) return finishEmpty() // nothing translatable in the image
@@ -354,7 +353,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
           for (const other of ledger.inState('requested')) if (other !== target) fail(other, `stopped on a configuration error: ${res.error.message}`)
           for (const entry of queue.splice(0)) entry.done()
           fail(target, `translation failed: ${res.error.message}`)
-          // The progress with fatal goes out at once: not after another worker still waiting on OCR (up to one helper timeout) finishes, before the popup learns of it (Codex on #89)
+          // The progress with fatal goes out at once: not after another worker still waiting on OCR (up to one recogniser timeout) finishes, before the popup learns of it (Codex on #89)
           report()
           return
         }
@@ -372,8 +371,8 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
   }
 
   const translate = async (picked: ImageTarget[]): Promise<void> => {
-    // The gate is asked per target (§15.5): bitmaps wait for the helper, SVG figures do not; the refused ones park
-    const { taken: ready, held } = ledger.intake(picked, options.isEnabled)
+    // With the gate closed everything handed over parks
+    const { taken: ready, held } = ledger.intake(picked, () => options.isEnabled())
     for (const t of held) parked.add(t)
     options.onTrace?.(`images entered: ${picked.map(t => t.id || t.kind).join(', ')} → taken ${ready.length}, parked ${held.length}, unknown ${picked.length - ready.length - held.length}`)
     if (ready.length === 0) return
@@ -405,8 +404,8 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
   return {
     translate,
     resume() {
-      // No filtering here: `translate` asks `isEnabled` per target itself and returns the unfit ones to parked as they
-      // were; filtering would save one round trip and add one untestable branch
+      // No filtering here: `translate` asks `isEnabled` itself and returns what it may not take to parked as it
+      // was; filtering would save one round trip and add one untestable branch
       if (parked.size === 0) return
       const picked = Array.from(parked)
       parked.clear()

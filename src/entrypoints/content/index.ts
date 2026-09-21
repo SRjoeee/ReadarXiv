@@ -35,7 +35,6 @@ export default defineContentScript({
       context,
       backend: createMessageTransport(),
       ocr: call => sendMessage({ type: 'axt:ocr', ...call }),
-      helperStatus: () => sendMessage({ type: 'axt:helper-status' }),
       config: { get: getConfig, set: setConfig },
       applyLocale: applyLocaleFrom,
       // The floating button's tick follows the page, whoever started or restored it: the popup, the key, the menu,
@@ -56,7 +55,6 @@ export default defineContentScript({
       // A refused save (the stored settings unreadable, config/storage.ts) rejects after the page has switched: the popup says why
       'axt:set-mode': message => session.setMode(message.mode).then(r => ({ mode: r.effective, preference: r.mode })),
       'axt:retry-failed': async () => ({ retried: session.retryFailed() }),
-      'axt:helper-ready': async () => ({ resumed: session.resumeRaster() }),
       'axt:page-status': () => session.status(),
     })
 

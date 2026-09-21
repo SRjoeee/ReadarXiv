@@ -48,7 +48,6 @@ Status: **implemented** — the copy of §3, the tokens of §5 and the language 
 | retry failed | **重试** | |
 | fatal / stopped | **已暂停** | Part of the translation is still on the page, so “paused”, not “failed” |
 | image translation / overlay | **图片翻译**; the overlay has no name | §15 |
-| OCR helper | **识别助手** | The user need not know Native Messaging, Vision or helper |
 | `image.modes` | **在这些模式下显示图片译文** | Affects display only, no re-recognition |
 | reading typography (#47) | **排版** | Kept apart from “译文样式” (decoration): typography covers font size, line height, width, spacing |
 | split view (#83) | **分栏** | Experimental |
@@ -109,12 +108,6 @@ states, verbs for buttons, no spoken phrases (去填 / 去修 are out), every no
 | S-P-82 | Translation style · same row as the two switches | 译文样式 | [decided, 2026-09-11, the reader's final word] The last row is 对照高亮 · 图片翻译 · 译文样式 side by side — all three are "how this reads". The entry is plain text plus a chevron; the **preview is inside the menu**, where each style draws the shared sample sentence (§5.1's `PREVIEW_TARGET`) in itself — 淡一档 and 模糊 mean nothing as names. The list is `appearance.styles`, in the settings page's order, under the same name it has there. **The menu opens upward**: this row sits at the foot of the popup and the window does not grow to fit a panel below it. The page's config watcher redraws in the new style, so nothing restarts |
 | S-P-83 | Translation style menu · last row | 管理译文样式… | [decided, 2026-09-11, proposed by the reader] The same role as the service menu's “管理翻译服务…”: the menu's last row is not a style but the way in to managing them, so it carries no preview and takes no part in selection. Styles live in the options page's **阅读** section, so this row opens straight onto that section (`options.html#reading`) — `openOptionsPage` passes no hash, and landing in the “翻译服务” section is worse than one extra tab; the entries without a section (the gear at the top right, the “设置” in a note) still use `openOptionsPage`, which brings the tab already open to the front |
 | S-P-85 | Image translation row | 图片翻译 | Switch in the card (`image.enabled`, v11); saved at once, live on the page; the per-mode list stays on the options page |
-| S-P-86 | Under the image translation row · helper not installed (macOS) | 图片翻译需要安装识别助手 | Only while the switch is on and the helper is not detected |
-| S-P-86b | Under the image translation row · awaiting permission (macOS) | 图片翻译需要允许扩展与识别助手通信 | [2026-09-13, DESIGN §15.3] `nativeMessaging` became an optional permission; this row appears before S-P-86 |
-| S-P-86c | Permission action | 允许 | [2026-09-13, DESIGN §15.3] This click starts Chrome's permission prompt (`src/ui/HelperPermission.tsx`, shared with the options page); after a refusal the button stays |
-| S-P-86d | Under the image translation row · permission taking effect | 已允许，稍后自动生效 | [2026-09-13, DESIGN §15.3] The transitional state while the grant lands in an already running background; nothing to press, the card follows up by itself once the new worker is up |
-| S-P-87 | Under the image translation row · not macOS | 图片翻译目前仅支持 macOS | |
-| S-P-88 | Helper hint action | 安装 | [decided, 2026-09-12] Unfolds the S-O-27 guide in place, without jumping to the options page or opening a new window. Replaces the former two buttons “复制安装命令 · 教程” — the guide carries the command block and the tutorial link itself |
 | S-P-90 | Action failed | {原始信息} · 设置读取失败，更改未保存，请到设置页处理 | Red line under the primary button (`role=alert`), cleared before the next action. The second wording is for a change the store refused because the saved settings cannot be read (DESIGN §9): the popup's own write, or the mode's save on the page |
 
 Removed 2026-09-10: the state pills (S-P-12…18) and the config-fallback note (S-P-34; the options page announces it).
@@ -145,15 +138,6 @@ changes, and the two drawers commit with one button.
 | S-O-22 | Automatic switch | 出问题时自动改用免费服务 / API Key 失效、额度用尽或断网时，翻译不会停下 | On by default |
 | S-O-23 | Target language | 目标语言 | The popup's searchable menu (S-P-22/23) |
 | S-O-24 | Image translation | 图片翻译 / 译文叠在图上，鼠标悬停查看原文 | The switch the popup shows (S-P-85) |
-| S-O-25 | Helper · detecting / ready | 正在检测识别助手… / 识别助手已就绪 {版本} | |
-| S-O-27 | Helper · not installed (macOS) | 安装识别助手 / 图片翻译在本机识别图中的文字。识别助手仅需安装一次，后续自动生效。 | [decided, 2026-09-12, revised from the three-step version of 09-11] **Two steps and done** (`src/ui/HelperSetup.tsx`). **The popup and the options page share this one component**: both say the same thing, and two versions would only drift |
-| S-O-27a | Step one | 打开「终端」 / ⌘ 空格，输入 Terminal 后回车 | |
-| S-O-27b | Step two | 在终端中执行以下命令 / 点击复制 → 已复制 | The whole command is one button; a click anywhere copies it. **Wrapped rather than scrolled sideways**: this is a `curl \| bash`, and with the end out of sight there is no telling whether to run it |
-| S-O-27c | Waiting | 执行完成后自动生效，无需返回此处 | [decided, 2026-09-12] **Replaces the former “我已经装好了” button**: after the install the background detects it by itself (DESIGN §15.4), and the reader need not come back to the extension. Copying starts the wait |
-| S-O-27d | Not detected after 3 minutes | 尚未检测到识别助手。请确认命令已执行完毕且未出现报错。 | Replaces S-O-27c in place, no change of interface; the command block stays clickable and can be copied again at any time |
-| S-O-86 | Helper · awaiting permission (macOS) | 图片翻译需要允许扩展与识别助手通信 / 允许 | [2026-09-13, DESIGN §15.3] The permission button, before S-O-27; `src/ui/HelperPermission.tsx` shared with the popup |
-| S-O-86a | Permission refused | 未允许。允许后才能识别图中的文字 | One line of explanation in place; the button stays |
-| S-O-86b | Permission taking effect | 已允许，稍后自动生效 | Transitional; the background's new worker broadcasts the state once up, and this section follows by itself |
 | S-O-26 | Image modes | 在这些模式下显示图片译文 / 只影响显示：切到没勾的模式时叠加层隐藏，切回来再显示，不重新识别 | 上下 · 左右 · 仅译文 |
 | S-O-40 | Translation style | 译文样式 / 选中的样式立即生效 | A grid of tiles; the chosen one carries a pencil |
 | S-O-41 | List actions | 添加配置 / 重置 | 重置 restores the built-ins and keeps the reader's own |
@@ -231,9 +215,6 @@ the rows open at any time.
 | P11 | Image translation paused | `images.fatal` | per text state | S-P-35 + 设置 | text only | per text state | — |
 | P12 | Narrow window | `mode !== preference` | value | as the state | — | as the state | — |
 | P13 | Page behind the settings | on ∧ `running` ≠ settings ∧ !runnable | value (the saved one) | S-P-32 + 设置 | — | 重新翻译 **disabled** | 显示原文 |
-| P14 | Helper not installed | `image.enabled` ∧ helper = not-installed | value | S-P-86/87 under the image row | — | as the state | — |
-| P14a | Helper awaiting permission | `image.enabled` ∧ helper = permission-missing [2026-09-13, DESIGN §15.3] | value | S-P-86b/c under the image row | — | as the state | — |
-| P14b | Helper permission taking effect | `image.enabled` ∧ helper = restarting [2026-09-13, DESIGN §15.3] | value | S-P-86d under the image row | — | as the state | — |
 | P15 | Prompt menu | llm ∧ menu = prompt | value | as the state | — | as the state | — |
 | P16 | Style menu | menu = style | value | as the state | — | as the state | — |
 
@@ -254,8 +235,7 @@ Rules:
   window keeps its size while it is open; the list scrolls inside that room. The row toggles it,
   a click outside or Escape closes it.
 - Layout: the service/language card, the prompt row (LLM), then a separate bubble for anything
-  that needs attention (note with 设置, failures with 重试, the helper hint with 安装, which opens
-  the guided install in place),
+  that needs attention (note with 设置, failures with 重试),
   the primary button, the mode bar, and the two small switches under it.
 - Dev-only information (background version, block stats, raw `fatal` text) lives only in the
   dev-build gallery.
@@ -358,14 +338,13 @@ Every feature added on the main line is registered here first; a feature without
 | Config read-failure notice | §9 | done | top of the settings page (the popup's S-P-34 removed 2026-09-10) | S-O-02 |
 | Thinking switch | §8.2 | done | Settings · 更多选项 | S-O-30 |
 | Skeleton while loading / failed block retry | §7.6 | done | in page | S-I-01…02 |
-| **Image translation**: helper detection, multi-select modes, progress, pause, retry | §15, PR #87–89 | done | Settings · a section under 翻译服务; popup failure line and card note; in-page overlay | S-O-24…27d, S-P-35 / 60, S-I-04, P11, P14…P14b |
-| Helper permission button | DESIGN §15.3 | done [2026-09-13] | popup card; Settings · 图片翻译 | S-O-86…86b, S-P-86b…d |
+| **Image translation**: multi-select modes, progress, pause, retry | §15, PR #87–89 | done. [2026-09-21, issue #280] Bitmaps are read by the recogniser the extension ships (DESIGN §15.3): the macOS helper, its permission step and its guided install are gone, and with them S-P-86…88, S-O-25…27d, S-O-86…86b and P14…P14b — there is nothing left for a reader to set up | Settings · a section under 翻译服务; popup failure line and card note; in-page overlay | S-O-24, S-P-35 / 60, S-I-04, P11 |
 | **Reading typography** (font size / line height / width / spacing / colour / presets / reset) | #47 | decided, not built | Settings · 阅读 · typography card | — (no id yet; S-O-47 names the advanced CSS box since the renumbering) |
 | Split-view dragging | #83 | experimental | in-page handle; one “恢复居中” in settings | S-I-05 (the settings entry has no id yet) |
 | Free AI translation (hosted) | #97 | candidate | fourth item of the service list | — (no ids yet) |
 | Microsoft translation | #98 | done | the service list (the shipped default) | S-P-32c / 44 / 46, S-O-10 |
 | Hover highlight (sentence highlight on hover + the original floating up in translation-only mode) | #105 / #141 | done | popup card switch; Settings · 阅读 | S-P-80…81 |
-| Image translation switch + helper install hint | §15 | done (2026-09-10) | popup card switch and helper hint; Settings · 图片翻译 | S-P-85…88, S-O-24…27d |
+| Image translation switch | §15 | done (2026-09-10) | popup card switch; Settings · 图片翻译 | S-P-85, S-O-24 |
 | Translation services the reader adds | §8.5 | done (2026-09-10, config v12) | Settings · 翻译服务; popup service menu | S-O-12…22, S-P-45 / 46 |
 | Configuration lists for translation appearance and background highlight | §7.5 | done (2026-09-10, config v12) | Settings · 阅读 | S-O-40…49 |
 | In-page “switched” notice | proposed here | undecided | in page | S-I-03 |
@@ -379,4 +358,4 @@ Every feature added on the main line is registered here first; a feature without
 3. The field range and preset names of the typography card (#47), against the issue's acceptance items, if it is built.
 4. Whether to bundle Manrope (about 60 KB woff2, Latin glyphs only); the system font stack today.
 
-Decided and shipped, for the record: the product name (Read arXiv; DESIGN §3), the paused state's two buttons (S-P-52 / S-P-53), the searchable language list (S-P-22 / S-P-23), the name 识别助手 for the helper.
+Decided and shipped, for the record: the product name (Read arXiv; DESIGN §3), the paused state's two buttons (S-P-52 / S-P-53), the searchable language list (S-P-22 / S-P-23).

@@ -6,7 +6,7 @@ import type { StartResult } from '@/core/session'
 import type { ProviderStatus } from '@/providers/transport'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
 import type { EntrySettings, FloatingEntryState } from '@/shared/entry-settings'
-import type { HelperStatus, ImageProgress, OcrCall, OcrMessageResponse } from './ocr'
+import type { ImageProgress, OcrCall, OcrMessageResponse, OcrRunResponse } from './ocr'
 import type { DiagnosticSource, DiagnosticsExport } from '@/shared/diagnostics'
 
 /** What an abstract or PDF page answers the popup (§4.0b) */
@@ -25,7 +25,7 @@ export interface PageStatus {
   /** The mode the reader chose; the automatic fallback does not change it */
   preference: Mode
   progress: Progress
-  /** The image translation's progress (§15); absent without the helper or with every mode off in the settings */
+  /** The image translation's progress (§15); absent with every mode off in the settings */
   images?: ImageProgress
   /**
    * This page's session id right now (null when not translating).
@@ -146,36 +146,12 @@ export interface AxtMessages {
    * - neither — rebuild only. Later sessions see the new chain; the ones translating keep theirs.
    */
   'axt:engine-ready': { request: { id: string; scope?: string; rebindAll?: boolean }; response: { reset: boolean } }
-  /**
-   * options / popup / content → background: where the recognition helper stands (DESIGN §15.3: the ping, the four
-   * states). `recheck` re-probes a host that was reported missing; see OcrBackend.status
-   */
-  'axt:helper-status': { request: { recheck?: boolean }; response: HelperStatus }
-  /**
-   * background → popup / options: the helper's state changed on the background's own initiative — the install wait
-   * found it, or the fresh worker after a runtime grant reported (DESIGN §15.3). Pages set what they show from it.
-   * Nobody listening is the normal case, so the send may reject
-   */
-  'axt:helper-state': { request: { status: HelperStatus }; response: undefined }
   /** popup ↔ options: a download of this language pack ended on one surface; the other looks it up again */
   'axt:pack-changed': { request: { target: string }; response: undefined }
-  /**
-   * Sent to every tab when a re-probe finds the helper that was missing. A paper parks its bitmaps
-   * when the probe at session start came back empty-handed, and nothing else would ever tell it
-   * otherwise: the reader would install the helper, be told it is ready, and watch the open paper
-   * stay as it was (Codex on #161)
-   */
-  'axt:helper-ready': { request: Record<never, never>; response: { resumed: boolean } }
-  /**
-   * popup / options → background: the reader has copied the install command, so start looking for
-   * the helper. Nothing else can tell us it arrived — the script writes a native host manifest to
-   * disk and Chrome only reads it when `connectNative` runs (DESIGN §15.4). Without this the
-   * reader would have to come back and press a button to ask the question the program can answer
-   * itself, and by then the popup that asked is long closed.
-   */
-  'axt:helper-await': { request: { start?: boolean }; response: { until: number | null } }
   /** content → background: OCR one bitmap; the result is cached by imageHash (§15.2) */
   'axt:ocr': { request: OcrCall; response: OcrMessageResponse }
+  /** background → the offscreen document: recognise these bytes (§15.3). Answered by that page alone */
+  'axt:ocr-run': { request: { image: string; mime: string }; response: OcrRunResponse }
 }
 
 export type AxtMessageType = keyof AxtMessages
