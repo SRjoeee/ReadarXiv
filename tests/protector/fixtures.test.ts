@@ -32,8 +32,10 @@ describe('fixture round trip', () => {
         joinRuns(layout.runs, layout, block, doc)
       }
       const ms = Math.round(performance.now() - t0)
+      // A reading, not an assertion: the time is mostly happy-dom's and the runner's (6.5–8.5 s here, 11.6 s once on a
+      // CI runner for a change that touched none of this), and a budget on it failed builds while catching nothing.
+      // The line below stays, printed on every run, for anyone who changes the protector to compare against
       console.info(`[protector] ${f}: ${targets.length} blocks/cells round-tripped, ${dense} formula-dense blocks, ${ms} ms`)
-      expect(ms).toBeLessThan(10000)
       expect(doc.documentElement.outerHTML).toBe(before)
     })
   }
