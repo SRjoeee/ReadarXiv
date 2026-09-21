@@ -444,6 +444,41 @@ async function measureFrame(page) {
     on.original.length >= 4 && on.original.every(l => !l.ours) && on.copy.every(l => l.ours) && same && new Set(on.copy.map(l => l.colour)).size >= 2,
     JSON.stringify(on.original.map((l, i) => `${l.text} → ${on.copy[i]?.text} Δ(${(on.copy[i]?.top ?? NaN) - l.top}, ${(on.copy[i]?.left ?? NaN) - l.left})`)))
   await page.screenshot({ path: `${SHOTS}/layout-picture-labels.png` })
+
+  // The figure viewer (DESIGN §15.7) on the same picture, from the translation's side: the dialog holds what the copy
+  // showed, set as the page sets it — no label wrapping otherwise — and the page itself is not touched
+  const picture = await page.evaluate(() => {
+    const anchor = [...document.querySelectorAll('svg .ltx_foreignobject_content:not(.axt-t)')].find(e => e.textContent.trim() === 'lower-bounded')
+    let figure = anchor.closest('figure')
+    while (figure.parentElement?.closest('figure')) figure = figure.parentElement.closest('figure')
+    const nth = [...figure.querySelectorAll('svg.ltx_picture')].indexOf(anchor.closest('svg.ltx_picture'))
+    const svg = figure.nextElementSibling.querySelectorAll('svg.ltx_picture')[nth]
+    svg.setAttribute('data-e2e-viewed', '')
+    const r = svg.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, pageLength: document.querySelector('.ltx_page_content').outerHTML.length }
+  })
+  await page.mouse.move(3, 3)
+  await page.mouse.move(picture.x, picture.y, { steps: 4 })
+  await sleep(400)
+  const control = await page.evaluate(() => { const b = document.querySelector('.axt-viewer').shadowRoot.querySelector('.open'); const r = b.getBoundingClientRect(); return { shown: b.hasAttribute('data-shown'), x: r.left + 15, y: r.top + 15 } })
+  if (control.shown) await page.mouse.click(control.x, control.y)
+  await sleep(500)
+  const viewed = await page.evaluate(() => {
+    const host = document.querySelector('.axt-viewer'), dialog = host.shadowRoot.querySelector('dialog')
+    const shown = el => el.getClientRects().length > 0
+    const labelsIn = svg => [...svg.querySelectorAll('.ltx_foreignobject_content')].filter(l => shown(l) && /\p{L}{2,}/u.test(l.textContent)).map(l => ({ t: l.textContent.trim(), lines: l.getClientRects().length }))
+    const onPage = labelsIn(document.querySelector('[data-e2e-viewed]')), inDialog = labelsIn(host.querySelector('svg'))
+    const frame = host.firstElementChild
+    return { open: dialog.open, same: JSON.stringify(onPage) === JSON.stringify(inDialog), inDialog, width: frame ? Number.parseFloat(frame.style.width) : 0 }
+  })
+  await page.evaluate(() => document.querySelector('.axt-viewer').shadowRoot.querySelector('.bar button').click())
+  const zoomed = await page.evaluate(() => Number.parseFloat(document.querySelector('.axt-viewer').firstElementChild.style.width))
+  await page.keyboard.press('Escape')
+  await sleep(300)
+  const closed = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); const out = { open: host.shadowRoot.querySelector('dialog').open, emptied: host.children.length === 0, focus: host.shadowRoot.activeElement?.className ?? null, pageLength: document.querySelector('.ltx_page_content').outerHTML.length }; document.querySelector('[data-e2e-viewed]').removeAttribute('data-e2e-viewed'); return out })
+  check('the figure viewer, from the translation\'s side: the control over the picture, a dialog holding the labels the copy showed, each on as many lines as on the page; a press zooms by 1.2; Escape closes it, the focus back on the control, the page as it was',
+    control.shown && viewed.open && viewed.same && viewed.inDialog.length >= 4 && viewed.inDialog.every(l => !/lower-bounded|Tensor Core/.test(l.t)) && Math.abs(zoomed / viewed.width - 1.2) < 0.001 && !closed.open && closed.emptied && closed.focus === 'open' && closed.pageLength === picture.pageLength,
+    JSON.stringify({ control: control.shown, open: viewed.open, same: viewed.same, labels: viewed.inDialog.map(l => l.t), zoom: +(zoomed / viewed.width).toFixed(3), closed }))
   if (!process.env.AXT_E2E_IMAGES) {
     const back = await openOptions(context, extId)
     await setSwitch(back, FIGURES_SWITCH, false)

@@ -126,6 +126,7 @@ const S: Locale['S'] = {
       hideForNow: 'Hide for now',
       hideAlways: "Don't show again",
     },
+    viewer: { open: 'View larger', zoomIn: 'Zoom in', zoomOut: 'Zoom out', close: 'Close' },
     backendSilent: 'The extension did not respond',
     backendSilentWith: detail => `The extension did not respond: ${detail}`,
     noService: 'No API key yet. Add one in the settings',

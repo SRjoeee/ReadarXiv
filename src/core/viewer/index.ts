@@ -33,7 +33,8 @@ export interface FigureViewerOptions {
   around: string
   /** A node of ours inside a figure: a label's translation beside the label */
   ours: string
-  strings: FigureViewerStrings
+  /** The words, asked for each time they are shown: the reader's interface language arrives after the page loads, and may change */
+  strings: () => FigureViewerStrings
 }
 
 export interface FigureViewer {
@@ -68,8 +69,8 @@ const SHEET = `
 button { all: unset; box-sizing: border-box; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; cursor: pointer; color: inherit; opacity: 0.7; transition: opacity 0.15s; }
 button:hover, button:focus-visible { opacity: 1; }
 button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
-.open { position: fixed; z-index: 2147483000; color: #1c1c1e; background: rgb(255 255 255 / 0.86); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.16); opacity: 0; pointer-events: none; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1); }
-.open[data-shown] { opacity: 0.85; pointer-events: auto; }
+.open { position: fixed; z-index: 2147483000; color: #1c1c1e; background: rgb(255 255 255 / 0.86); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.16); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.15s; }
+.open[data-shown] { opacity: 0.85; visibility: visible; pointer-events: auto; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s; }
 .open[data-shown]:hover, .open[data-shown]:focus-visible { opacity: 1; }
 dialog { box-sizing: border-box; width: 90vw; height: 90vh; max-width: none; max-height: none; margin: auto; padding: 0; border: 0; border-radius: 12px; overflow: hidden; color: var(--ink, #1c1c1e); background: var(--paper, #f4f3f2); box-shadow: 0 24px 64px rgb(0 0 0 / 0.35); }
 dialog[open] { animation: enter 0.15s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -146,31 +147,40 @@ function copyOf(doc: Document, figure: Element, overlay: Element | null, ours: s
 export function installFigureViewer(doc: Document, options: FigureViewerOptions): FigureViewer {
   const view = doc.defaultView
   if (!view) return { remove: () => undefined }
-  const { strings } = options
   const host = doc.createElement('div')
   host.className = VIEWER_CLASS
   const root = host.attachShadow({ mode: 'open' })
-  const button = (className: string, label: string, d: string): HTMLButtonElement => {
+  const button = (className: string, d: string): HTMLButtonElement => {
     const el = doc.createElement('button')
     el.type = 'button'
     el.className = className
-    el.setAttribute('aria-label', label)
-    el.title = label
     el.innerHTML = icon(d)
     return el
   }
+  const name = (el: HTMLButtonElement, label: string): void => {
+    el.setAttribute('aria-label', label)
+    el.title = label
+  }
   const style = doc.createElement('style')
   style.textContent = SHEET
-  const open = button('open', strings.open, ICONS.open)
+  const open = button('open', ICONS.open)
   const dialog = doc.createElement('dialog')
   const stage = doc.createElement('div')
   stage.className = 'stage'
   stage.append(doc.createElement('slot'))
   const bar = doc.createElement('div')
   bar.className = 'bar'
-  const zoomIn = button('', strings.zoomIn, ICONS.zoomIn)
-  const zoomOut = button('', strings.zoomOut, ICONS.zoomOut)
-  const close = button('', strings.close, ICONS.close)
+  const zoomIn = button('', ICONS.zoomIn)
+  const zoomOut = button('', ICONS.zoomOut)
+  const close = button('', ICONS.close)
+  /** The words as the interface has them now */
+  const label = (): void => {
+    const words = options.strings()
+    name(open, words.open)
+    name(zoomIn, words.zoomIn)
+    name(zoomOut, words.zoomOut)
+    name(close, words.close)
+  }
   bar.append(zoomIn, zoomOut, close)
   dialog.append(stage, bar)
   root.append(style, open, dialog)
@@ -234,6 +244,7 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     if (current !== figure) {
       current = figure
       dress()
+      label()
       place()
     }
     open.setAttribute('data-shown', '')
@@ -307,16 +318,19 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   }
   const centre = (): [number, number] => [stage.clientWidth / 2, stage.clientHeight / 2]
   const show_ = (figure: Element): void => {
-    const lying = figure.nextElementSibling?.matches(options.overlay) ? figure.nextElementSibling : null
+    // The overlay goes with the figure only where it showed: a mode the reader did not tick hides it, and under side
+    // the original's is hidden while its copy's shows (DESIGN §15.2)
+    const next = figure.nextElementSibling
+    const lying = next?.matches(options.overlay) && next.getClientRects().length > 0 ? next : null
     const copy = copyOf(doc, figure, lying, options.ours)
     content = copy.node
     natural = { width: copy.width, height: copy.height }
     content.style.cssText += 'position:absolute;left:0;top:0;transform-origin:0 0;'
     host.replaceChildren(content)
-    hide()
+    // The control stays where it is under the dialog: closing hands the focus back to it
     dialog.showModal()
     // A fresh fit at every opening, with a margin about the figure
-    fit = Math.min((stage.clientWidth - 48) / natural.width, (stage.clientHeight - 48) / natural.height)
+    fit = Math.max(0.05, Math.min((stage.clientWidth - 48) / natural.width, (stage.clientHeight - 48) / natural.height))
     zoom = fit
     x = (stage.clientWidth - natural.width * zoom) / 2
     y = (stage.clientHeight - natural.height * zoom) / 2
@@ -326,6 +340,9 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   zoomIn.addEventListener('click', () => zoomAbout(BUTTON_STEP, ...centre()))
   zoomOut.addEventListener('click', () => zoomAbout(1 / BUTTON_STEP, ...centre()))
   close.addEventListener('click', () => dialog.close())
+  // The page under a modal dialog does not scroll: a wheel over the backdrop lands on the dialog itself, and over the
+  // stage it zooms. DeepWiki sets the body's overflow for this, which would be writing to the page
+  dialog.addEventListener('wheel', event => event.preventDefault(), { passive: false })
   // The backdrop is the dialog's own box outside its content: a press that lands on the dialog itself
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close() })
   dialog.addEventListener('close', () => {

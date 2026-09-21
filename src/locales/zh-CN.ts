@@ -134,6 +134,7 @@ const S = {
       hideForNow: '本次隐藏',
       hideAlways: '不再显示',
     },
+    viewer: { open: '放大查看', zoomIn: '放大', zoomOut: '缩小', close: '关闭' },
     backendSilent: '扩展后台没有响应',
     backendSilentWith: (detail: string) => `扩展后台没有响应：${detail}`,
     noService: '未配置 API key，请先到设置页填写',
