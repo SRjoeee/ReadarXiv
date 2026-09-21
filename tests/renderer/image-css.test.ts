@@ -65,6 +65,15 @@ describe('image.css', () => {
     expect(RULES.slice(supports)).not.toMatch(/\n {2}\.axt-img \{[^}]*display: none/)
   })
 
+  it('a label blurs what lies under it and veils it translucently — Safari\'s material: under a plain veil the original\'s letters showed through (DESIGN §15.2)', () => {
+    const label = RULES.slice(RULES.indexOf('.axt-img > span {'))
+    const block = label.slice(0, label.indexOf('}'))
+    expect(block).toMatch(/backdrop-filter:\s*blur\(15px\)/)
+    expect(block).toMatch(/background:\s*rgb\(252 250 248 \/ 0\.81\)/)
+    // The lightest grey that keeps 4.5 : 1 over the veil on black, where it composites to (204, 202, 201) (Codex on #278)
+    expect(block).toMatch(/color:\s*#555555/)
+  })
+
   it('the style sheet has no ltx_ selector: the image overlay knows nothing of the site\'s structure', () => {
     expect(RULES).not.toContain('ltx_')
   })
