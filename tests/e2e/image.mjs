@@ -200,7 +200,7 @@ for (const name of ['上下', '左右', '仅译文']) await setImageMode(options
     const box = await fitted.evaluate(() => { const r = document.getElementById('Sx1.F4.g1').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })
     await fitted.mouse.move(box.x, box.y)
     await sleep(400)
-    const control = await fitted.evaluate(() => { const b = document.querySelector('.axt-viewer').shadowRoot.querySelector('.axt-viewer-open'); const r = b.getBoundingClientRect(); return { x: r.left + 15, y: r.top + 15 } })
+    const control = await fitted.evaluate(() => { const b = document.querySelector('.axt-viewer-spot').shadowRoot.querySelector('.axt-viewer-open'); const r = b.getBoundingClientRect(); return { x: r.left + 15, y: r.top + 15 } })
     await fitted.mouse.click(control.x, control.y)
     await sleep(800)
     viewed = await fitted.evaluate(() => {

@@ -25,6 +25,14 @@
     anchor-name: --axt-img;
   }
 
+  /* A figure may be two things' anchor at once: its overlay's, and the figure viewer's control's, which names the
+     figure under the pointer by a mark and a sheet of its own (§15.7). `anchor-name` is one declaration — a second
+     replaces the first — and the viewer's rule is the less specific: alone it would lose here and leave the control
+     without an anchor on every translated figure. One rule that outranks both gives the two names */
+  html[data-axt-on] :is(img, object)[data-axt-anchor][data-axt-viewed] {
+    anchor-name: --axt-img, --axt-viewed;
+  }
+
   html[data-axt-on] [data-axt-anchors] {
     position: relative;
     anchor-scope: --axt-img;

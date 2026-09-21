@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { VIEWED_ATTR } from '@/core/marks'
 import { VIEWER_CLASS } from '@/core/viewer'
 
 // The image overlay's styles (DESIGN §15.2): happy-dom has no layout, so the rule itself is guarded here
@@ -48,6 +49,14 @@ describe('image.css', () => {
     expect(RULES).toMatch(new RegExp(`\\.${VIEWER_CLASS} \\.axt-img > span \\{\\s*backdrop-filter: blur\\(15px\\);`))
     // After the rules they override, which they outrank by the host's class alone
     expect(RULES.indexOf(`.${VIEWER_CLASS} .axt-img::before`)).toBeGreaterThan(RULES.indexOf('.axt-img > span {'))
+  })
+
+  it('a figure that is the anchor of its overlay and of the figure viewer\'s control keeps both names: a second `anchor-name` would replace the first', () => {
+    // The viewer names the figure under the pointer by a mark and a sheet of its own (§15.7), at a lower specificity
+    // than the overlay's rule here: alone it would lose, and the control would have no anchor on a translated figure;
+    // winning, it would take the overlay's. The one rule that outranks both gives the two names
+    expect(RULES).toMatch(new RegExp(`html\\[data-axt-on\\] :is\\(img, object\\)\\[data-axt-anchor\\]\\[${VIEWED_ATTR}\\] \\{\\s*anchor-name: --axt-img, --axt-viewed;`))
+    expect(RULES.indexOf(`[data-axt-anchor][${VIEWED_ATTR}]`)).toBeGreaterThan(RULES.indexOf(':is(img, object)[data-axt-anchor] {'))
   })
 
   it('out of the pairing grid, font size in container units, no interception of clicks on the image', () => {
