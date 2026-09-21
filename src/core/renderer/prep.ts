@@ -101,6 +101,12 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
   /** The way to stop watching the root's width; null while it is not watched */
   let unwatchWidth: (() => void) | null = null
   let mirrorsDone = false
+  /**
+   * A split copy has been dropped since the mirrors last ran: its block may be due a mirror again. **Remembered across
+   * passes**: outside side the pass stops once the stale copy is gone — there is no right column to fill — and the
+   * return to side is a pass in which nothing is dropped (Codex on #282)
+   */
+  let unmirrored = false
   let columnStale = true
   let column = 0
 
@@ -133,7 +139,7 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
     // Split copies whose signature expired are dropped first: outside side, the overlay went into the hidden original
     // (§15.2), and a full pass rebuilds them on returning to side; in side as well — once a figure's only translation
     // (the overlay) is taken away, needsSplit is false, splitFigures skips it, and the old copy would hang on (Codex on #89)
-    for (const r of roots) dropStaleSplits(r)
+    for (const r of roots) if (dropStaleSplits(r) > 0) unmirrored = true
     if (!options.isSide()) return
 
     // Figures are split whole first, mirrors filled in after: a split figure takes no part in mirroring (the two would duplicate a copy)
@@ -148,7 +154,16 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
       mirrorsDone = true
       // Mirrors are translation nodes too, subject to the site's adjacent-sibling rules the same way, so one more read after they are in — the only such pass in a session
       if (made) margins = [readPairMargins(doc)]
+    } else if (mirrorsDone && unmirrored) {
+      // A block that lost its copy and is due none — its overlay, all that paired it, is gone again — goes back to
+      // what it was before the overlay: mirrored. The session's one pass is over, and with neither a copy nor a mirror
+      // the block spans both columns (Codex on #282; a figure without a caption was as exposed as a loose graphic).
+      // Over the whole paper: the copy may have been dropped in an earlier pass, among other roots, and the mirrors
+      // are idempotent — what is paired is left as it is
+      made = createMirrors(doc)
+      if (made) margins = [readPairMargins(doc)]
     }
+    unmirrored = false
     const t3 = performance.now()
     let fitted = 0
     let scrolled = 0
@@ -237,6 +252,7 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
       unwatchWidth?.()
       unwatchWidth = null
       mirrorsDone = false
+      unmirrored = false
       columnStale = true
       resetFitCache()
     },

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { extract, markBlocks, type TextBlock } from '@/core/extractor'
 import { MIRROR_CLASS, SPLIT_ATTR, SPLIT_CLASS } from '@/core/renderer/attrs'
-import { renderImage } from '@/core/renderer/image'
+import { clearImage, renderImage } from '@/core/renderer/image'
 import { createPrep, rootsOf } from '@/core/renderer/prep'
 import { splitFigures } from '@/core/renderer/split-figures'
 import { resetFitCache } from '@/core/renderer/table-fit'
@@ -372,6 +372,57 @@ describe('createPrep × the image overlay (DESIGN §15.2)', () => {
     flush()
     expect(doc.querySelector(`.${SPLIT_CLASS}`)).toBeNull()
     expect(doc.querySelector(`[${SPLIT_ATTR}]`)).toBeNull()
+  })
+
+  it('the overlay gone again, what stood mirrored before it is mirrored again: a block with neither a copy nor a mirror spans both columns (Codex on #282)', () => {
+    // A graphic loose in the text, and a figure with no caption: both are mirrored as the session starts, lose the
+    // mirror to a split copy when the overlay arrives — and the mirrors run once a session
+    for (const html of [
+      `<section class="ltx_section"><div class="ltx_para"><p class="ltx_p" id="t1">Text.</p></div><div class="ltx_para" id="p2"><img class="ltx_graphics" src="teaser.png" id="p2.g1"></div></section>`,
+      `<section class="ltx_section"><div class="ltx_para"><p class="ltx_p" id="t1">Text.</p></div><figure class="ltx_figure" id="p2"><img class="ltx_graphics" src="a.png" id="p2.g1"></figure></section>`,
+    ]) {
+      const { doc, prep } = setup(html)
+      const block = doc.getElementById('p2')!
+      prep.side(true)
+      flush()
+      expect(block.nextElementSibling?.classList.contains(MIRROR_CLASS)).toBe(true)
+      const target = overlayOn(doc)
+      prep.touch([target])
+      flush()
+      expect(block.nextElementSibling?.classList.contains(SPLIT_CLASS)).toBe(true)
+      expect(doc.querySelector(`.${MIRROR_CLASS}`)).toBeNull()
+      clearImage(target)
+      prep.touch([target])
+      flush()
+      expect(doc.querySelector(`.${SPLIT_CLASS}`)).toBeNull()
+      expect(block.nextElementSibling?.classList.contains(MIRROR_CLASS)).toBe(true)
+      expect(block.hasAttribute('data-axt-mirrored')).toBe(true)
+    }
+  })
+
+  it('and when the overlay went while another mode was in effect, the block is mirrored again on the return to side (Codex on #282)', () => {
+    // Outside side the pass stops once the stale copy is dropped — there is no right column to fill — and on the return
+    // the mirrors' one pass is over and nothing was dropped in that pass: what was dropped before has to be remembered
+    const mode = { side: true }
+    const { doc, prep } = setup(`<section class="ltx_section"><div class="ltx_para"><p class="ltx_p" id="t1">Text.</p></div><figure class="ltx_figure" id="p2"><img class="ltx_graphics" src="a.png" id="p2.g1"></figure></section>`, mode)
+    const block = doc.getElementById('p2')!
+    prep.side(true)
+    flush()
+    const target = overlayOn(doc)
+    prep.touch([target])
+    flush()
+    expect(block.nextElementSibling?.classList.contains(SPLIT_CLASS)).toBe(true)
+    mode.side = false
+    prep.side(false)
+    clearImage(target)
+    prep.touch([target])
+    flush()
+    expect(doc.querySelector(`.${SPLIT_CLASS}`)).toBeNull()
+    expect(doc.querySelector(`.${MIRROR_CLASS}`)).toBeNull()
+    mode.side = true
+    prep.side(true)
+    flush()
+    expect(block.nextElementSibling?.classList.contains(MIRROR_CLASS)).toBe(true)
   })
 
   it('outside side a copy with a stale signature is dropped: the case of the overlay arriving only after side → only', () => {

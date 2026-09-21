@@ -37,7 +37,7 @@ describe('image.css', () => {
 
   it('under side only the overlay inside the copy shows, and that rule comes after the display rule (equal specificity, order wins)', () => {
     const show = RULES.indexOf('html[data-axt-mode="side"][data-axt-img-modes~="side"] .axt-img')
-    const hide = RULES.indexOf('html[data-axt-mode="side"][data-axt-img-modes~="side"] figure .axt-img:not(:where(.axt-split) *)')
+    const hide = RULES.indexOf('html[data-axt-mode="side"][data-axt-img-modes~="side"] :is(figure, [data-axt-split-root]) .axt-img:not(:where(.axt-split) *)')
     expect(show).toBeGreaterThan(-1)
     expect(hide).toBeGreaterThan(show)
     // side only: stack shows the original, only shows the copy, and the overlay follows whichever shows
@@ -48,9 +48,10 @@ describe('image.css', () => {
     // The overlay is inserted into the original first; the split waits for prep's debounced coalescer (delay 150 ms). Measured in that in-between state:
     // the white box was drawn at full-column width over the figure in the left column (960 / 797px), and only after the split became half a column (468px) and moved to the right
     expect(RULES).not.toContain('[data-axt-split] .axt-img')
-    // Images outside a figure are never split (collectImageTargets scans the whole text), so the hiding condition needs the figure premise,
-    // or their overlays would vanish for good under side
-    expect(RULES).toMatch(/html\[data-axt-mode="side"\]\[data-axt-img-modes~="side"\] figure \.axt-img/)
+    // An image beside running text is never split (its pairing is the grid's), so the hiding condition needs the premise
+    // “inside something that is split” — a figure, or the block of a graphic loose in the text, marked when its overlay is
+    // drawn — or such an overlay would vanish for good under side
+    expect(RULES).toMatch(/html\[data-axt-mode="side"\]\[data-axt-img-modes~="side"\] :is\(figure, \[data-axt-split-root\]\) \.axt-img/)
     // “Not inside any .axt-split descendant” rather than “the nearest figure is not .axt-split”:
     // nested subfigures are copied together with the outermost one, and inside the copy that nested figure has no .axt-split of its own
     expect(RULES).toContain(':not(:where(.axt-split) *)')

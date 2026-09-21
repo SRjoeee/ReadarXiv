@@ -1,6 +1,6 @@
 import { ID_ATTR } from '@/core/extractor'
 import { T_CLASS } from '@/core/marks'
-import { NOTE, pictureOf, SIDE_LAYOUT } from '@/core/rules/latexml'
+import { DOCUMENT_ROOT, NOTE, pictureOf, SIDE_LAYOUT, SPLIT_ROOTS } from '@/core/rules/latexml'
 import { MIRRORED_ATTR, PANELS_ATTR, REAL_TRANSLATION, SPLIT_ATTR, SPLIT_CLASS, TAGGED_ATTR, TAIL_ATTR, TRANSLATED_ATTR } from './attrs'
 // The structural decisions of side mode (DESIGN §7.2). This is the single source of truth; the lists of the same
 // names in modes.css are guarded by tests. Every `ltx_*` literal comes from the rules module's SIDE_LAYOUT
@@ -152,4 +152,24 @@ export function markTranslatedNote(el: Element): void {
   for (const outer of Array.from(note.querySelectorAll(NOTE.outer))) {
     outer.toggleAttribute(TRANSLATED_ATTR, outer.querySelector(`:scope > ${REAL_TRANSLATION}`) !== null)
   }
+}
+
+/**
+ * The block a graphic standing loose in the text is copied with in side mode (§7.2): **the highest ancestor that
+ * holds no translation unit** — what the mirrors copy whole (mirror.ts), found the same way. A teaser under the
+ * abstract is `div.ltx_para > img`, in no `<figure>`: the split had no root for it, so its paragraph was mirrored
+ * when the session started, before the image had an overlay; the overlay then lay on the original for good and the
+ * mirror — never made again, stripped of our nodes by design, inert as a whole — showed the figure untranslated
+ * (reported on 2609.20818v1).
+ *
+ * None when the graphic stands in a figure, which is the root itself, or beside running text — its parent holds a
+ * unit, and the pairing inside such a block is the grid's: copied whole it would be laid out twice
+ */
+export function looseRootOf(media: Element): Element | null {
+  if (media.closest(`${SPLIT_ROOTS}, .${T_CLASS}, [${ID_ATTR}]`)) return null
+  const holdsUnit = (el: Element): boolean => el.querySelector(`[${ID_ATTR}]`) !== null
+  let root = media.parentElement
+  if (!root || root.matches(DOCUMENT_ROOT) || holdsUnit(root)) return null
+  for (let outer = root.parentElement; outer && !outer.matches(DOCUMENT_ROOT) && !holdsUnit(outer); outer = outer.parentElement) root = outer
+  return root
 }

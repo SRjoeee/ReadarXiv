@@ -29,7 +29,7 @@ tests/config/storage.test.ts 20  # raised 2026-09-17: the migration test startin
 tests/core/marks.test.ts 8
 tests/e2e/a11y.mjs 2
 tests/e2e/extension.mjs 77  # raised 2026-09-17: the whole-paper preload check clicks two more stop labels and the cache check waits for the zero-count line; the unreadable-settings check locates the notice, its reset and the section that must be absent by their labels
-tests/e2e/image.mjs 13
+tests/e2e/image.mjs 17  # 2026-09-21: +4, the loose-graphic section (2609.20818v1's teaser) switches modes and ticks the image modes by the popup's and the settings page's Chinese labels, as the rest of the script does
 tests/e2e/layout.mjs 11  # 2026-09-20: +2, the reader's-place check finds the popup's mode, translate and restore buttons by their Chinese labels, as the rest of the suite does; 2026-09-21: +1, the figure viewer's restore-under-the-dialog check presses the popup's restore button by its label
 tests/e2e/local-endpoint.mjs 2
 tests/e2e/floating-button.mjs 5  # 2026-09-18: the settings switch, the main button's two labels, and the popup's button inside the control panel on a PDF and on the full text, located and checked by their Chinese copy, as the other suites locate controls (issue #169)
@@ -90,7 +90,7 @@ tests/renderer/render.test.ts 12
 tests/renderer/restore.test.ts 3
 tests/renderer/sentence-map.test.ts 3  # 2026-09-17: the block-pair tests place a translated note, paragraph and caption
 tests/renderer/side-layout.test.ts 5
-tests/renderer/split-figures.test.ts 14
+tests/renderer/split-figures.test.ts 18  # 2026-09-21: +4, a loose graphic's fixture carries a translated abstract and a translated label, the multilingual inputs the cases are about
 tests/renderer/table-fit.test.ts 1
 tests/renderer/table.test.ts 10
 tests/renderer/layout-marks.test.ts 14  # 2026-09-17: translated text placed by the renderer, the same inputs the sibling renderer tests use

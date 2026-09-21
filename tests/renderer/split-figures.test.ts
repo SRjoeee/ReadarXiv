@@ -2,10 +2,11 @@
 // a figure spanning both columns gives up the comparison, so the whole thing is copied once and the copy keeps only the translations.
 import { describe, expect, it } from 'vitest'
 import { T_CLASS } from '@/core/marks'
-import { FOR_ATTR, MIRROR_CLASS, PANELS_ATTR, SPLIT_ATTR, SPLIT_CLASS } from '@/core/renderer/attrs'
-import { renderImage, setImageModes } from '@/core/renderer/image'
+import { FOR_ATTR, MIRROR_CLASS, PANELS_ATTR, SPLIT_ATTR, SPLIT_CLASS, SPLIT_ROOT_ATTR } from '@/core/renderer/attrs'
+import { clearImage, renderImage, setImageModes } from '@/core/renderer/image'
 import { restore } from '@/core/renderer/page'
-import { markStructure } from '@/core/renderer/side-layout'
+import { rootsOf } from '@/core/renderer/prep'
+import { looseRootOf, markStructure } from '@/core/renderer/side-layout'
 import { DUPLICATE_ATTR, dropStaleSplits, setSplitDuplicatesHidden, splitFigures } from '@/core/renderer/split-figures'
 import { IMG_CLASS } from '@/core/marks'
 import { ID_ATTR } from '@/core/extractor'
@@ -402,6 +403,94 @@ describe('a mirror is no translation (issue #46, measured on 2312.17141)', () =>
       expect(splitFigures(doc)).toBe(1)
       expect(doc.querySelectorAll(`.${MIRROR_CLASS}`)).toHaveLength(0)
       expect(doc.querySelectorAll('figure')).toHaveLength(2) // original + copy
+    })
+
+    // A graphic that stands in no <figure> — a teaser under the abstract is `div.ltx_para > img` — had no root to be
+    // split by: its paragraph was mirrored as the session started, the overlay then lay on the original for good and
+    // the mirror showed the figure untranslated, inert as a whole (reported on 2609.20818v1)
+    describe('a graphic loose in the text', () => {
+      const TEASER = `<div class="ltx_abstract"><p class="ltx_p" ${ID_ATTR}="a1">Abstract.</p><p class="ltx_p ${T_CLASS}" data-axt-for="a1">摘要。</p></div>
+        <div class="ltx_para" id="p2"><img class="ltx_graphics" src="teaser.png" id="p2.g1"></div>
+        <section class="ltx_section"><div class="ltx_para"><p class="ltx_p" ${ID_ATTR}="s1">Text.</p></div></section>`
+      const target = (doc: Document) => { const el = doc.getElementById('p2.g1') as HTMLImageElement; return { id: el.id, el, kind: 'raster' as const } }
+      const draw = (doc: Document) => renderImage(target(doc), [{ x: 0.1, y: 0.1, w: 0.3, h: 0.05, lines: 1, source: 'novel view 1', text: '新视角 1' }])
+
+      it('its block stands as a figure from the moment the overlay is drawn, and no longer once the overlay is gone', () => {
+        const doc = docOf(TEASER)
+        const para = doc.getElementById('p2')!
+        expect(para.hasAttribute(SPLIT_ROOT_ATTR)).toBe(false)
+        draw(doc)
+        expect(para.hasAttribute(SPLIT_ROOT_ATTR)).toBe(true)
+        expect(clearImage(target(doc))).toBe(true)
+        expect(para.hasAttribute(SPLIT_ROOT_ATTR)).toBe(false)
+      })
+
+      it('mirrored as the session starts, it is split once the overlay arrives: the mirror goes, the copy carries the overlay, and only its image — not the block — is silenced', () => {
+        const doc = docOf(TEASER)
+        const para = doc.getElementById('p2')!
+        const mirror = para.cloneNode(true) as Element
+        mirror.classList.add(T_CLASS, MIRROR_CLASS)
+        mirror.setAttribute('inert', '')
+        para.after(mirror)
+        expect(splitFigures(doc)).toBe(0)
+        draw(doc)
+        expect(splitFigures(doc)).toBe(1)
+        expect(doc.querySelectorAll(`.${MIRROR_CLASS}`)).toHaveLength(0)
+        const copy = para.nextElementSibling!
+        expect(copy.classList.contains(SPLIT_CLASS)).toBe(true)
+        expect(copy.querySelector(`.${IMG_CLASS}`)?.textContent).toBe('新视角 1')
+        expect(copy.hasAttribute('inert')).toBe(false)
+        expect(copy.querySelector('img')!.hasAttribute(DUPLICATE_ATTR)).toBe(true)
+        // The copy is no root of a further split, and carries no id of the paper's
+        expect(copy.hasAttribute(SPLIT_ROOT_ATTR)).toBe(false)
+        expect(copy.querySelector('[id]')).toBeNull()
+        expect(splitFigures(doc)).toBe(0)
+      })
+
+      it('its overlay gone — a second round found nothing to draw — the copy goes with it, by the tidy of that one image', () => {
+        // The mark went with the overlay, and the mark was all the tidy found the block by: the copy kept showing
+        // the first round's translation, in side and in only (Devin and Codex on #282)
+        const doc = docOf(TEASER)
+        const para = doc.getElementById('p2')!
+        draw(doc)
+        splitFigures(doc)
+        expect(para.nextElementSibling?.classList.contains(SPLIT_CLASS)).toBe(true)
+        clearImage(target(doc))
+        // As prep tidies after one image: the roots that image needs, not the document
+        for (const root of rootsOf([target(doc).el])) dropStaleSplits(root)
+        expect(doc.querySelector(`.${SPLIT_CLASS}`)).toBeNull()
+        expect(para.hasAttribute(SPLIT_ATTR)).toBe(false)
+        expect(para.hasAttribute(SPLIT_ROOT_ATTR)).toBe(false)
+      })
+
+      it('restored, nothing of it is left', () => {
+        const doc = docOf(TEASER)
+        const before = doc.getElementById('p2')!.outerHTML
+        draw(doc)
+        splitFigures(doc)
+        restore(doc)
+        expect(doc.getElementById('p2')!.outerHTML).toBe(before)
+        expect(doc.querySelector(`.${SPLIT_CLASS}`)).toBeNull()
+      })
+
+      it('the block is the highest ancestor holding no translation unit — what the mirrors copy whole', () => {
+        const doc = docOf(`<div class="ltx_para" id="p2"><span class="ltx_inline-block"><img class="ltx_graphics" id="g"></span></div><div class="ltx_para"><p class="ltx_p" ${ID_ATTR}="s1">Text.</p></div>`)
+        expect(looseRootOf(doc.getElementById('g')!)).toBe(doc.getElementById('p2'))
+      })
+
+      it('in a figure the figure is the root, and beside running text there is none: the pairing inside such a block is the grid\'s', () => {
+        const inFigure = docOf(IMG_FIGURE)
+        expect(looseRootOf(inFigure.querySelector('img')!)).toBeNull()
+        overlayOn(inFigure)
+        expect(inFigure.querySelector(`[${SPLIT_ROOT_ATTR}]`)).toBeNull()
+
+        const beside = docOf(`<div class="ltx_para" id="p3"><p class="ltx_p" ${ID_ATTR}="t1">Some text.</p><img class="ltx_graphics" id="g3"></div>`)
+        const el = beside.getElementById('g3') as HTMLImageElement
+        expect(looseRootOf(el)).toBeNull()
+        renderImage({ id: el.id, el, kind: 'raster' as const }, [{ x: 0.1, y: 0.1, w: 0.3, h: 0.05, lines: 1, source: 'a', text: '甲' }])
+        expect(beside.querySelector(`[${SPLIT_ROOT_ATTR}]`)).toBeNull()
+        expect(splitFigures(beside)).toBe(0)
+      })
     })
 
     it('dropStaleSplits: outside side a copy with a stale signature is dropped and the original\'s mark removed; an equal signature is left alone', () => {

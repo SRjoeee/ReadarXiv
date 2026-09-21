@@ -17,7 +17,7 @@ import { DOCUMENT_ROOT, FIGURE_MEDIA, SPLIT_ROOTS, isFigureText, isTableRoot, ta
 import { ID_ATTR } from '@/core/extractor'
 import { AXT_ATTR_PREFIX, IMG_CLASS, T_CLASS } from '@/core/marks'
 import { hashText } from '@/shared/hash'
-import { ERROR_CLASS, FOR_ATTR, MIRROR_CLASS, PENDING_CLASS, REAL_TRANSLATION, SPLIT_ATTR, SPLIT_CLASS, SPLIT_OF_ATTR } from './attrs'
+import { ERROR_CLASS, FOR_ATTR, MIRROR_CLASS, PENDING_CLASS, REAL_TRANSLATION, SPLIT_ATTR, SPLIT_CLASS, SPLIT_OF_ATTR, SPLIT_ROOT_ATTR } from './attrs'
 import { REASON_ATTR, failureWidget } from './failed'
 import { imageModesOf, markAnchor } from './image'
 import { dropMirror } from './mirror'
@@ -34,6 +34,12 @@ import { mirrorBlock, mirrorSentences, sentenceSignatureOf } from './sentence-ma
 // mirrored, the next full pass took the mirror for “a translation”, removed it and cloned a figure with no translation
 // at all — the right column held a copy of the original; 2 of 7 split figures on the baseline were such false splits
 const PAIRED = `.${T_CLASS}:not(.${MIRROR_CLASS}, .${SPLIT_CLASS}), .${IMG_CLASS}`
+/**
+ * What is copied whole: a figure, an equation group — and the block of a graphic that stands in no figure, which is
+ * marked when its overlay is drawn (SPLIT_ROOT_ATTR): it takes the path a figure without a caption takes, mirrored
+ * when the session starts and split once the overlay arrives
+ */
+const ROOTS = `${SPLIT_ROOTS}, [${SPLIT_ROOT_ATTR}]`
 /** The signature of the paired content at clone time, to tell whether pairs were added, changed or changed state and the copy needs rebuilding */
 const KEY_ATTR = 'data-axt-split-key'
 /** Marks a node of the copy that duplicates one still visible in the original — media, silenced for assistive technology in side mode (issue #170) */
@@ -118,12 +124,18 @@ function pairNodes(from: Element, to: Element): Map<Node, Node> {
 /**
  * The outermost split root an element sits in (nested sub-figures and equation groups inside a figure are copied
  * with the outermost); null when not inside one. A root is not only `figure`: an equation group with a description
- * row is split in two whole as well (`SPLIT_ROOTS`, issue #152)
+ * row is split in two whole as well (`SPLIT_ROOTS`, issue #152).
+ *
+ * **A block that has been split counts while it is**, whatever it is a root by. A loose graphic's block is one by a
+ * mark that goes with its overlay, and the tidy that follows finds the stale copy from the block: asked after the
+ * mark had gone, there was no root, the tidy looked inside the image's parent and the copy beside the block kept the
+ * last round's translation, in side and in only (Devin and Codex on #282)
  */
 export function outermostFigure(el: Element): Element | null {
-  let fig = el.closest(SPLIT_ROOTS)
+  const roots = `${ROOTS}, [${SPLIT_ATTR}]`
+  let fig = el.closest(roots)
   while (fig?.parentElement) {
-    const outer = fig.parentElement.closest(SPLIT_ROOTS)
+    const outer = fig.parentElement.closest(roots)
     if (!outer) break
     fig = outer
   }
@@ -132,7 +144,7 @@ export function outermostFigure(el: Element): Element | null {
 
 function needsSplit(fig: Element): boolean {
   if (fig.classList.contains(T_CLASS)) return false // the clone itself
-  if (fig.parentElement?.closest(SPLIT_ROOTS)) return false // a nested sub-figure, or an equation group inside a figure, is copied with its outermost root
+  if (fig.parentElement?.closest(ROOTS)) return false // a nested sub-figure, or an equation group inside a figure, is copied with its outermost root
   if (!fig.querySelector(PAIRED)) return false // nothing paired in the whole block — pending and failed count, a mirror does not: left to the mirrors
   return hasLooseMedia(fig) // a float without loose media (a table) need not be copied whole: its table has a translation clone already
 }
@@ -209,7 +221,7 @@ export function splitFigures(root: Document | Element, options: SplitOptions = {
   if (!scope) return 0
   let made = 0
   const figures = figuresInSide(scope.ownerDocument)
-  for (const fig of Array.from(scope.querySelectorAll(SPLIT_ROOTS))) {
+  for (const fig of Array.from(scope.querySelectorAll(ROOTS))) {
     if (!needsSplit(fig)) continue
     const key = translationKey(fig)
     const sibling = fig.nextElementSibling

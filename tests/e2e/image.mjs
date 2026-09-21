@@ -236,6 +236,48 @@ const resumedClones = afterResume.filter(p => p.inClone && p.overlay?.visible)
 check('the mode gate: after switching to side the waiting images are released and translated, and overlays appear in the copy', !!resumed && resumedClones.length >= 1, `${resumed?.text ?? 'no images idle'}; copy overlays ${resumedClones.length}`)
 await popup2.close()
 
+// ── A graphic loose in the text: the teaser of 2609.20818v1 is `div.ltx_para > img`, in no <figure> ─────────────────────
+// It had no root to be split by: its paragraph was mirrored as the session started, the overlay then lay on the original
+// and the mirror — inert as a whole, never made again — showed the figure untranslated, in side and in only alike
+{
+  await options.bringToFront()
+  for (const name of ['上下', '左右', '仅译文']) await setImageMode(options, name, true)
+  const loose = await context.newPage()
+  await loose.goto('https://arxiv.org/html/2609.20818v1#readarxiv', { waitUntil: 'domcontentloaded' })
+  const LOOSE = () => {
+    const shown = el => !!el && el.getClientRects().length > 0
+    const of = img => { const next = img?.nextElementSibling; return img ? { shown: shown(img), overlay: next?.classList.contains('axt-img') ? shown(next) : null, labels: next?.classList.contains('axt-img') ? next.querySelectorAll('span').length : 0, x: Math.round(img.getBoundingClientRect().left), inertImage: img.inert, inertBlock: !!img.parentElement?.inert } : null }
+    const teasers = [...document.querySelectorAll('img.ltx_graphics')].filter(i => i.getAttribute('src')?.includes('teaser'))
+    return { mode: document.documentElement.getAttribute('data-axt-mode'), original: of(teasers.find(i => !i.closest('.axt-t'))), copy: of(teasers.find(i => i.closest('.axt-split'))), mirrors: teasers.filter(i => i.closest('.axt-mirror')).length }
+  }
+  const switchTo = async name => {
+    const p = await context.newPage()
+    await p.goto(`chrome-extension://${extId}/popup.html`)
+    await loose.bringToFront()
+    await p.getByRole('button', { name, exact: true }).waitFor({ timeout: 10_000 })
+    await p.getByRole('button', { name, exact: true }).click()
+    await p.close()
+    await sleep(1500)
+  }
+  await switchTo('左右')
+  let state = await loose.evaluate(LOOSE)
+  for (let i = 0; i < 80 && !state.copy?.overlay; i++) { await sleep(500); state = await loose.evaluate(LOOSE) }
+  check('a graphic in no figure, side: its block is copied — the translation shows on the copy, in the right column, and not on the original; the mirror is gone; the copy\'s image is silenced and its block is not',
+    state.mode === 'side' && state.original?.shown && state.original.overlay === false && state.copy?.shown && state.copy.overlay === true && state.copy.labels > 0 && state.copy.x > state.original.x && state.mirrors === 0 && state.copy.inertImage && !state.copy.inertBlock,
+    JSON.stringify(state))
+  await switchTo('仅译文')
+  state = await loose.evaluate(LOOSE)
+  check('a graphic in no figure, only: the copy shows with its translation, the original does not show',
+    state.mode === 'only' && state.original?.shown === false && state.copy?.shown && state.copy.overlay === true,
+    JSON.stringify(state))
+  await switchTo('上下')
+  state = await loose.evaluate(LOOSE)
+  check('a graphic in no figure, stack: the original shows with its translation, the copy does not show',
+    state.mode === 'stack' && state.original?.shown && state.original.overlay === true && state.copy?.shown !== true,
+    JSON.stringify(state))
+  await loose.close()
+}
+
 await context.close()
 const pass = results.filter(r => r.ok).length
 console.log(`${pass}/${results.length} passed; screenshots in ${SHOTS}`)

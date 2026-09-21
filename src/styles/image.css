@@ -99,16 +99,19 @@
      first and the figure is split only once prep's debounced coalescer (a deliberate batching delay) runs. That
      intermediate state measured 150–166 ms: the white box painted at full column width (960 / 797px) over the
      image in the left column, then vanished whole and reappeared at half width (468px) in the right — the “flash
-     when scrolling to an image” the owner saw (issue #109). It cannot be “hide unless inside .axt-split”: images
-     outside a figure (collectImageTargets scans the whole text, figures or not) are never split, and their
-     overlays would vanish for good in side. Nor “the nearest figure is not .axt-split”: a nested sub-figure is
+     when scrolling to an image” the owner saw (issue #109). It cannot be “hide unless inside .axt-split”: an image
+     whose block is no root of a split — it stands beside running text, where the pairing is the grid's
+     (side-layout.ts `looseRootOf`) — is never copied, and its overlay would vanish for good in side. A graphic
+     loose in a block of its own is a root: the block carries [data-axt-split-root] from the moment the overlay is
+     drawn, and is named here beside `figure` (the teaser of 2609.20818v1 showed its translation on the original
+     and none on the copy). Nor “the nearest figure is not .axt-split”: a nested sub-figure is
      copied with its outermost, and the nested figure inside the copy has no .axt-split of its own — hit by mistake.
 
      [data-axt-img-modes~="side"] is in the selector for **specificity**: the display rule is (0,3,1), `figure`
      alone is worth (0,0,1), and without the attribute the whole rule is (0,2,2), losing to the display rule and
      applying nowhere (the first version was written so, and the overlay measured 960px on the original all the
      same). With it the rule is (0,3,2) and wins outright */
-  html[data-axt-mode="side"][data-axt-img-modes~="side"] figure .axt-img:not(:where(.axt-split) *) {
+  html[data-axt-mode="side"][data-axt-img-modes~="side"] :is(figure, [data-axt-split-root]) .axt-img:not(:where(.axt-split) *) {
     display: none;
   }
 }
