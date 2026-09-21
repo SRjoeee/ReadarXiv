@@ -91,6 +91,42 @@ const PROBE = () => {
 const near = (a, b, tol = 1.5) => Math.abs(a - b) <= tol
 const coincide = (a, b) => near(a.x, b.x) && near(a.y, b.y) && near(a.w, b.w) && near(a.h, b.h)
 
+// ── The recogniser alone: what only a real canvas shows ─────────────────────────────────────────────
+// The same three labels drawn on white and on a transparent ground, handed to the offscreen document as the background
+// hands a figure over. A canvas starts transparent and the models take three channels: read without a white ground
+// under it, the transparent figure came back with no line at all (Codex on #281)
+{
+  const blank = await context.newPage()
+  await blank.goto('about:blank')
+  const draw = transparent => blank.evaluate(clear => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 900
+    canvas.height = 500
+    const c = canvas.getContext('2d')
+    if (!clear) { c.fillStyle = '#fff'; c.fillRect(0, 0, 900, 500) }
+    c.fillStyle = '#000'
+    c.font = '40px sans-serif'
+    c.fillText('Validation accuracy', 250, 120)
+    c.fillText('Training steps', 300, 440)
+    c.translate(80, 380)
+    c.rotate(-Math.PI / 2)
+    c.fillText('Cross entropy', 0, 0)
+    return canvas.toDataURL('image/png').split(',')[1]
+  }, transparent)
+  const read = image => worker.evaluate(async bytes => {
+    if (!(await chrome.offscreen.hasDocument())) await chrome.offscreen.createDocument({ url: 'ocr.html', reasons: ['WORKERS'], justification: 'e2e' })
+    const reply = await chrome.runtime.sendMessage({ type: 'axt:ocr-run', image: bytes, mime: 'image/png' })
+    return reply?.ok ? reply.result.lines : []
+  }, image)
+  const onWhite = await read(await draw(false))
+  const onNothing = await read(await draw(true))
+  const texts = lines => lines.map(line => line.text).sort().join(' | ')
+  check('recogniser: a figure with a transparent ground is read as it is on white', onWhite.length === 3 && texts(onNothing) === texts(onWhite), `white: ${texts(onWhite)} · transparent: ${texts(onNothing)}`)
+  const axis = onWhite.find(line => /entropy/i.test(line.text))
+  check('recogniser: a label on its side carries its direction and its own box', !!axis && Math.abs(axis.angle + Math.PI / 2) < 1e-9 && axis.len > 0.2 && axis.thick < 0.06, axis ? `angle ${(axis.angle * 180 / Math.PI).toFixed(0)}°, len ${axis.len.toFixed(3)}, thick ${axis.thick.toFixed(3)}` : 'not read')
+  await blank.close()
+}
+
 // ── The settings page: google-web, all three image translation modes ticked ────────────
 const options = await openOptions(context, extId)
 await chooseBuiltIn(options, 'Google 翻译')
