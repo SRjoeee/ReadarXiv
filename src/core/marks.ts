@@ -71,6 +71,16 @@ const normalizeUrl = (value: string) => {
  */
 export function stripInjected(root: Element, includeRoot = true): void {
   for (const stale of Array.from(root.querySelectorAll(INJECTED_SELECTOR))) stale.remove()
+  stripAttributes(root, includeRoot)
+}
+
+/**
+ * The attribute half of the clean-up alone: ids, our marks, behaviour attributes and script URLs go, every node stays.
+ * For a copy that keeps some of our nodes on purpose — the figure viewer's, which shows the translations the page
+ * showed (DESIGN §15.7) — and must still be a copy for reading: it used to strip ids and marks by hand and left the
+ * rest (Devin on #279)
+ */
+export function stripAttributes(root: Element, includeRoot = true): void {
   const targets = Array.from(root.querySelectorAll('*'))
   if (includeRoot) targets.unshift(root)
   for (const el of targets) {
