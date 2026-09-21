@@ -2,10 +2,10 @@
 //
 // The interaction is DeepWiki's, observed and measured on 2026-09-21: nothing at rest, a control fading in at the
 // figure's top right under the pointer (150 ms), a dialog of nine tenths of the window over a dimmed, blurred page,
-// `+` `−` `×` at its top right, a step of 1.2 a press, the wheel zooming about the pointer by 1.06 a notch, a drag
-// panning, a fresh fit at every opening, and Escape, the backdrop or `×` closing. Its own code uses no zoom library —
-// some sixty lines over pointer and wheel events — and a React dialog; here the dialog is the platform's `<dialog>`,
-// which also hands the focus back to where it came from, as theirs does not.
+// `+` `−` `×` at its top right, a step of 1.2 a press, the wheel zooming about the pointer, a drag panning, a fresh
+// fit at every opening, and Escape, the backdrop or `×` closing. Its own code uses no zoom library — some sixty lines
+// over pointer and wheel events — and a React dialog; here the dialog is the platform's `<dialog>`, which also hands
+// the focus back to where it came from, as theirs does not.
 //
 // **The paper is not touched.** The control is one button of ours in a shadow root, placed over the figure from its
 // rectangle; the figure in the dialog is a **copy**, and an `<object>` moved would load again. The copy is a light
@@ -45,7 +45,14 @@ export interface FigureViewer {
 const MIN_WIDTH_PX = 160
 const MIN_HEIGHT_PX = 100
 const BUTTON_STEP = 1.2
-const WHEEL_STEP = 1.06
+/**
+ * The wheel zooms by e^(−deltaY × rate), in proportion to the distance scrolled: 1.15 for 100 px, d3-zoom's rate. A
+ * trackpad sends a scroll as dozens of small deltas, and a fixed step an event took one gesture of 145 px from the
+ * fit to five times it (Codex on #279; the same gesture now 1.22)
+ */
+const WHEEL_RATE = 0.002 * Math.LN2
+/** Chrome sends a trackpad pinch as a wheel with the control key, its delta −100·ln of the scale (measured): the figure keeps to the fingers */
+const PINCH_RATE = 0.01
 /** How far in and out of the fit the reader may go */
 const MAX_ZOOM = 12
 const MIN_ZOOM = 0.5
@@ -55,6 +62,15 @@ const LEAVE_GRACE_MS = 120
 export const VIEWER_CLASS = 'axt-viewer'
 /** The marks the page's rules read on the paper's nodes (DESIGN §7.1) */
 const MARK_PREFIX = 'data-axt-'
+/**
+ * The page held still under the dialog, or closing it would not return the reader where they were. A modal dialog
+ * does not hold the document of itself, and a list of keys held in the dialog did not either: ⌘↓ and ⌥↓ passed it,
+ * and on Chrome 131 a press on the figure puts the focus on the body, out of the dialog's hearing (measured: PageDown
+ * 880 px, End and ⌘↓ to the paper's end, Space a page; Codex on #279). So the lock DeepWiki's dialog sets on the body,
+ * here a sheet the document adopts while the dialog is open — no node or attribute of the page is written. The
+ * gutter stays, or a scroll bar that takes room would go and the paper be laid out again 15 px wider (measured)
+ */
+const LOCK = ':root { overflow: hidden !important; scrollbar-gutter: stable !important; }'
 
 const ICONS = {
   open: '<path d="M15 3h6v6"/><path d="M21 3l-7 7"/><path d="M9 21H3v-6"/><path d="M3 21l7-7"/>',
@@ -72,7 +88,7 @@ button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
 .open { position: fixed; z-index: 2147483000; color: #1c1c1e; background: rgb(255 255 255 / 0.86); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.16); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.15s; }
 .open[data-shown] { opacity: 0.85; visibility: visible; pointer-events: auto; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s; }
 .open[data-shown]:hover, .open[data-shown]:focus-visible { opacity: 1; }
-dialog { box-sizing: border-box; width: 90vw; height: 90vh; max-width: none; max-height: none; margin: auto; padding: 0; border: 0; border-radius: 12px; overflow: hidden; touch-action: none; color: var(--ink, #1c1c1e); background: var(--paper, #f4f3f2); box-shadow: 0 24px 64px rgb(0 0 0 / 0.35); }
+dialog { box-sizing: border-box; width: 90vw; height: 90vh; max-width: none; max-height: none; margin: auto; padding: 0; border: 0; border-radius: 12px; overflow: hidden; color: var(--ink, #1c1c1e); background: var(--paper, #f4f3f2); box-shadow: 0 24px 64px rgb(0 0 0 / 0.35); }
 dialog[open] { animation: enter 0.15s cubic-bezier(0.4, 0, 0.2, 1); }
 dialog::backdrop { background: rgb(0 0 0 / 0.5); backdrop-filter: blur(4px); animation: fade 0.15s; }
 .stage { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
@@ -163,6 +179,8 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   }
   const style = doc.createElement('style')
   style.textContent = SHEET
+  const lock = new view.CSSStyleSheet()
+  lock.replaceSync(LOCK)
   const open = button('open', ICONS.open)
   const dialog = doc.createElement('dialog')
   const stage = doc.createElement('div')
@@ -340,7 +358,9 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     natural = { width: copy.width, height: copy.height }
     content.style.cssText += 'position:absolute;left:0;top:0;transform-origin:0 0;'
     host.replaceChildren(content)
-    // The control stays where it is under the dialog: closing hands the focus back to it
+    doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, lock]
+    // The control stays where it is under the dialog: closing hands the focus back to it — and with the pointer off
+    // the figure by then, the control fades and the focus falls to the body
     dialog.showModal()
     // A fresh fit at every opening, with a margin about the figure
     fit = Math.max(0.05, Math.min((stage.clientWidth - 48) / natural.width, (stage.clientHeight - 48) / natural.height))
@@ -358,13 +378,7 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   zoomIn.addEventListener('click', () => zoomAbout(BUTTON_STEP, ...centre()))
   zoomOut.addEventListener('click', () => zoomAbout(1 / BUTTON_STEP, ...centre()))
   close.addEventListener('click', () => dialog.close())
-  // The page under a modal dialog does not scroll, or closing it would not return the reader where they were: a
-  // modal dialog does not hold the document still of itself (measured: PageDown moved it 860 px, End to the paper's
-  // end, a swipe on the backdrop 385 px; Codex on #279). A wheel over the backdrop lands on the dialog itself and over
-  // the stage zooms; a touch is held by `touch-action` in the sheet; the keys that would scroll move the figure
-  // instead — the arrows pan it, + and − zoom it — and the page keys do nothing. DeepWiki sets the body's overflow
-  // for this, which would be writing to the page, and hiding the scroll bar would lay the whole paper out again
-  dialog.addEventListener('wheel', event => event.preventDefault(), { passive: false })
+  // The arrows pan the figure, + and − zoom it; with a modifier a key is the browser's
   const PAN_PX = 60
   const KEYS: Record<string, () => void> = {
     ArrowLeft: () => panBy(PAN_PX, 0),
@@ -374,10 +388,6 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     '+': () => zoomAbout(BUTTON_STEP, ...centre()),
     '=': () => zoomAbout(BUTTON_STEP, ...centre()),
     '-': () => zoomAbout(1 / BUTTON_STEP, ...centre()),
-    PageUp: () => undefined,
-    PageDown: () => undefined,
-    Home: () => undefined,
-    End: () => undefined,
   }
   dialog.addEventListener('keydown', event => {
     const act = KEYS[event.key]
@@ -388,15 +398,14 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   // The backdrop is the dialog's own box outside its content: a press that lands on the dialog itself
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close() })
   dialog.addEventListener('close', () => {
+    doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter(sheet => sheet !== lock)
     host.replaceChildren()
     content = null
   })
   stage.addEventListener('wheel', event => {
     event.preventDefault()
     const box = stage.getBoundingClientRect()
-    // A pinch on a trackpad arrives as a wheel with the control key, in finer steps than a notch
-    const step = event.ctrlKey ? Math.exp(-event.deltaY * 0.01) : event.deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP
-    zoomAbout(step, event.clientX - box.left, event.clientY - box.top)
+    zoomAbout(Math.exp(-event.deltaY * (event.ctrlKey ? PINCH_RATE : WHEEL_RATE)), event.clientX - box.left, event.clientY - box.top)
   }, { passive: false })
   let drag: { id: number; px: number; py: number; x: number; y: number } | null = null
   stage.addEventListener('pointerdown', event => {

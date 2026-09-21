@@ -199,30 +199,76 @@ describe('the dialog', () => {
     expect(control.hasAttribute('data-shown')).toBe(false)
   })
 
-  it('the page under the dialog stays where it is: the page keys do nothing, the arrows pan the figure, + and − zoom it (Codex on #279)', () => {
+  it('the page under the dialog stays where it is: the document adopts a scroll lock while the dialog is open, and gives back only that (Codex on #279)', () => {
+    const { control, dialog } = page(PICTURE)
+    const theirs = new CSSStyleSheet()
+    document.adoptedStyleSheets = [theirs]
+    const svg = document.querySelector('svg')!
+    place(svg, rect(100, 100, 400, 300))
+    over(svg)
+    control.click()
+    const lock = document.adoptedStyleSheets.find(sheet => sheet !== theirs)
+    expect(lock?.cssRules[0]?.cssText).toMatch(/^:root \{ overflow: hidden !important; scrollbar-gutter: stable !important; \}$/)
+    dialog.close()
+    expect(document.adoptedStyleSheets).toEqual([theirs])
+    // Opened again, locked again: the lock is one sheet, adopted once an opening
+    over(svg)
+    control.click()
+    expect(document.adoptedStyleSheets).toEqual([theirs, lock])
+    dialog.close()
+    document.adoptedStyleSheets = []
+  })
+
+  it('the arrows pan the figure, + and − zoom it; a key it has no use for, or one with a modifier, is the browser\'s', () => {
     const { control, dialog, host } = page(PICTURE)
     const svg = document.querySelector('svg')!
     place(svg, rect(100, 100, 400, 300))
     over(svg)
     control.click()
     const frame = host.firstElementChild as HTMLElement
-    const press = (key: string) => {
-      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+    const press = (key: string, init: KeyboardEventInit = {}) => {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init })
       dialog.dispatchEvent(event)
       return event.defaultPrevented
     }
-    for (const key of ['PageDown', 'PageUp', 'End', 'Home']) expect([key, press(key)]).toEqual([key, true])
     const before = frame.style.transform
     expect(press('ArrowRight')).toBe(true)
     expect(frame.style.transform).not.toBe(before)
     const zoom = Number.parseFloat(frame.style.zoom)
     press('+')
     expect(Number.parseFloat(frame.style.zoom) / zoom).toBeCloseTo(1.2, 5)
-    // A key the viewer has no use for, and a shortcut, are left to the browser
     expect(press('a')).toBe(false)
-    const shortcut = new KeyboardEvent('keydown', { key: 'ArrowDown', metaKey: true, bubbles: true, cancelable: true })
-    dialog.dispatchEvent(shortcut)
-    expect(shortcut.defaultPrevented).toBe(false)
+    expect(press('ArrowDown', { metaKey: true })).toBe(false)
+  })
+
+  it('the wheel zooms about the pointer in proportion to the distance scrolled — a trackpad\'s run of small deltas no faster than one long one — and a pinch keeps to the fingers', () => {
+    const { control, host } = page(PICTURE)
+    const svg = document.querySelector('svg')!
+    place(svg, rect(100, 100, 400, 300))
+    over(svg)
+    control.click()
+    const frame = host.firstElementChild as HTMLElement
+    const stage = host.shadowRoot!.querySelector('.stage')!
+    const zoomOf = () => Number.parseFloat(frame.style.zoom)
+    // happy-dom's WheelEvent is a UIEvent's: the pointer's position and the modifier keys are given to it here
+    const wheel = (deltaY: number, ctrlKey = false) => {
+      const event = new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true })
+      Object.defineProperties(event, { ctrlKey: { value: ctrlKey }, clientX: { value: 500 }, clientY: { value: 400 } })
+      stage.dispatchEvent(event)
+    }
+    const fit = zoomOf()
+    // A trackpad gesture as Chromium delivers it: 28 events, 145 px in all
+    for (const d of [2, 4, 6, 8, 10, 12, 12, 12, 10, 10, 8, 8, 6, 6, 5, 4, 4, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1]) wheel(-d)
+    expect(zoomOf() / fit).toBeCloseTo(2 ** (145 * 0.002), 5)
+    const run = zoomOf()
+    wheel(-145)
+    expect(zoomOf() / run).toBeCloseTo(2 ** (145 * 0.002), 5)
+    wheel(145)
+    // Chrome's pinch to twice the size: one wheel with the control key, −100·ln 2
+    const pinched = zoomOf()
+    wheel(-100 * Math.log(2), true)
+    expect(zoomOf() / pinched).toBeCloseTo(2, 5)
+    expect(frame.style.transform).toMatch(/^translate\(-?[\d.]+px, -?[\d.]+px\)$/)
   })
 
   it('removed, it takes its host away and no longer answers the pointer', () => {

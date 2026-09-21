@@ -473,18 +473,27 @@ async function measureFrame(page) {
   })
   await page.evaluate(() => document.querySelector('.axt-viewer').shadowRoot.querySelector('.bar button').click())
   const zoomed = await page.evaluate(() => Number.parseFloat(document.querySelector('.axt-viewer').firstElementChild.style.zoom))
-  // The page under the dialog stays put: a modal dialog does not hold the document still of itself (Codex on #279)
+  await page.keyboard.press('Escape')
+  await sleep(300)
+  const closed = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); return { open: host.shadowRoot.querySelector('dialog').open, emptied: host.children.length === 0, focus: host.shadowRoot.activeElement?.className ?? null } })
+  // Opened again, the page under the dialog stays put whatever has the focus: a modal dialog does not hold the
+  // document still of itself, and a press on the figure takes the focus off the buttons — on Chrome 131 onto the
+  // body (Codex on #279). Closed, the page is unlocked
+  await page.mouse.click(control.x, control.y)
+  await sleep(500)
+  const reopened = await page.evaluate(() => document.querySelector('.axt-viewer').shadowRoot.querySelector('dialog').open)
   const scrolledFrom = await page.evaluate(() => scrollY)
-  await page.keyboard.press('PageDown')
-  await page.keyboard.press('End')
+  const stage = await page.evaluate(() => { const r = document.querySelector('.axt-viewer').shadowRoot.querySelector('.stage').getBoundingClientRect(); return { x: r.left + 20, y: r.bottom - 20 } })
+  await page.mouse.click(stage.x, stage.y)
+  for (const key of ['PageDown', 'End', 'Space', 'Meta+ArrowDown', 'Alt+ArrowDown', 'Control+End']) await page.keyboard.press(key)
   await sleep(300)
   const scrolledBy = await page.evaluate(y => scrollY - y, scrolledFrom)
   await page.keyboard.press('Escape')
   await sleep(300)
-  const closed = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); const out = { open: host.shadowRoot.querySelector('dialog').open, emptied: host.children.length === 0, focus: host.shadowRoot.activeElement?.className ?? null, pageLength: document.querySelector('.ltx_page_content').outerHTML.length }; document.querySelector('[data-e2e-viewed]').removeAttribute('data-e2e-viewed'); return out })
-  check('the figure viewer, from the translation\'s side: the control over the picture, a dialog holding the labels the copy showed, each on as many lines as on the page; a press zooms by 1.2; PageDown and End leave the page where it is; Escape closes it, the focus back on the control, the page as it was',
-    control.shown && viewed.open && viewed.same && viewed.inDialog.length >= 4 && viewed.inDialog.every(l => !/lower-bounded|Tensor Core/.test(l.t)) && Math.abs(zoomed / viewed.zoom - 1.2) < 0.001 && scrolledBy === 0 && !closed.open && closed.emptied && closed.focus === 'open' && closed.pageLength === picture.pageLength,
-    JSON.stringify({ control: control.shown, open: viewed.open, same: viewed.same, labels: viewed.inDialog.map(l => l.t), zoom: +(zoomed / viewed.zoom).toFixed(3), pageScrolledBehind: scrolledBy, closed }))
+  const after = await page.evaluate(() => { const out = { open: document.querySelector('.axt-viewer').shadowRoot.querySelector('dialog').open, unlocked: getComputedStyle(document.documentElement).overflowY === 'visible' && document.adoptedStyleSheets.length === 0, pageLength: document.querySelector('.ltx_page_content').outerHTML.length }; document.querySelector('[data-e2e-viewed]').removeAttribute('data-e2e-viewed'); return out })
+  check('the figure viewer, from the translation\'s side: the control over the picture, a dialog holding the labels the copy showed, each on as many lines as on the page; a press zooms by 1.2; Escape closes it, the focus back on the control; opened again, no key moves the page after a press on the figure; closed, the page unlocked and as it was',
+    control.shown && viewed.open && viewed.same && viewed.inDialog.length >= 4 && viewed.inDialog.every(l => !/lower-bounded|Tensor Core/.test(l.t)) && Math.abs(zoomed / viewed.zoom - 1.2) < 0.001 && !closed.open && closed.emptied && closed.focus === 'open' && reopened && scrolledBy === 0 && !after.open && after.unlocked && after.pageLength === picture.pageLength,
+    JSON.stringify({ control: control.shown, open: viewed.open, same: viewed.same, labels: viewed.inDialog.map(l => l.t), zoom: +(zoomed / viewed.zoom).toFixed(3), closed, reopened, pageScrolledBehind: scrolledBy, after }))
   if (!process.env.AXT_E2E_IMAGES) {
     const back = await openOptions(context, extId)
     await setSwitch(back, FIGURES_SWITCH, false)
