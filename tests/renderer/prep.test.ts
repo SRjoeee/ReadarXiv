@@ -347,7 +347,7 @@ describe('createPrep × the image overlay (DESIGN §15.2)', () => {
   const overlayOn = (doc: Document) => {
     const el = doc.querySelector('img') as HTMLImageElement
     const target = { id: el.id, el, kind: 'raster' as const }
-    renderImage(target, [{ x: 0, y: 0, w: 0.3, h: 0.05, lines: 1, source: 'Static charge', text: '静态电荷' }])
+    renderImage(target, [{ x: 0, y: 0, w: 0.3, h: 0.05, lines: 1, source: 'Static charge', text: '静态电荷' }], { ratio: 4 / 3 })
     return target
   }
 

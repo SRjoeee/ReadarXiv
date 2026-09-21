@@ -11,13 +11,13 @@
 import { type RenderPath, wireFormatOf } from '@/cache/key'
 import { ID_ATTR } from '@/core/extractor'
 import { escapeText, unescapeText } from '@/core/protector/escape'
-import { type ImageLabel, type ImageTarget, clearImage, renderImage } from '@/core/renderer/image'
+import { type ImageFrame, type ImageLabel, type ImageTarget, clearImage, renderImage } from '@/core/renderer/image'
 import { DOCUMENT_ROOT, FIGURE_SELECTORS } from '@/core/rules/latexml'
 import { INJECTED_SELECTOR } from '@/core/marks'
 import { type CallBase, translateCall } from '@/core/run/call'
 import { createRunLedger } from '@/core/run/ledger'
 import type { PreloadOptions } from '@/core/scheduler/lazy'
-import { linesOf, looksLikeCode } from '@/core/svg'
+import { frameOf, linesOf, looksLikeCode } from '@/core/svg'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
 import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
 import { sha256Hex } from '@/shared/digest'
@@ -283,7 +283,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     return svg?.tagName.toLowerCase() === 'svg' ? svg : undefined
   }
 
-  const svgLines = async (target: ImageTarget): Promise<OcrLine[] | string> => {
+  const svgLines = async (target: ImageTarget): Promise<{ lines: OcrLine[]; frame: ImageFrame } | string> => {
     let svg = svgOf(target)
     if (!svg) {
       await new Promise<void>(resolve => {
@@ -299,18 +299,23 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
       svg = svgOf(target)
     }
     if (!svg) return 'the figure has not loaded yet'
-    return linesOf(svg).filter(line => !looksLikeCode(line.text))
+    const frame = frameOf(svg)
+    // No `viewBox` and no size: `linesOf` reads nothing from such a figure either
+    if (!frame) return { lines: [], frame: { ratio: 1 } }
+    return { lines: linesOf(svg).filter(line => !looksLikeCode(line.text)), frame }
   }
 
   const process = async (target: ImageTarget): Promise<void> => {
     try {
       let lines: readonly OcrLine[]
+      /** The figure's own shape, which the overlay is laid by: an SVG drawing's, fitted into its element, or the bitmap's pixels */
+      let frame: ImageFrame
       let frames = 1
       if (target.kind === 'svg') {
         const read = await svgLines(target)
         if (!alive()) return
         if (typeof read === 'string') return fail(target, read)
-        lines = read
+        ;({ lines, frame } = read)
       } else {
         const el = target.el as HTMLImageElement
         const { bytes, mime } = await fetchBytes(el.currentSrc || el.src, aborter.signal)
@@ -323,6 +328,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
         if (!alive()) return
         if (!ocr.ok) return fail(target, `recognition failed: ${ocr.error.message}`)
         lines = ocr.result.lines
+        frame = { ratio: ocr.result.width / ocr.result.height }
         frames = ocr.result.frames ?? 1
       }
       // No labels counts as done, but the overlay of the previous round has to go (after a target-language change the old translation must not hang on; Codex on #89)
@@ -351,7 +357,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
         // this round (Codex on #163, fifth round)
         const done = labelsFrom(res.partial ?? [], boxes, target)
         if (done.length > 0) {
-          renderImage(target, done)
+          renderImage(target, done, frame)
           options.onRendered?.([target])
         }
         // An invalid / missing key: as in the text pipeline, the scheduler stops on the first one, and later images are
@@ -371,7 +377,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
       }
       const labels = labelsFrom(res.result.segments, boxes, target)
       if (labels.length === 0) return finishEmpty()
-      renderImage(target, labels)
+      renderImage(target, labels, frame)
       ledger.settle(target, 'done')
       options.onRendered?.([target])
     } catch (e) {

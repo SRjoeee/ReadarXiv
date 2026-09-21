@@ -143,6 +143,24 @@ describe('the dialog', () => {
     expect(host.querySelector('.axt-img')).toBeNull()
   })
 
+  it('the overlay lies in the copy where it lay on the figure, and keeps what its style sheet lays it by', () => {
+    // An SVG drawing fitted into a box of other proportions: the overlay is the drawing's rectangle, 50 px in from
+    // either side (§15.5). Filling the frame, every label stood off its word in the dialog as it once did on the page
+    const { control, host } = page(`<figure class="ltx_figure"><object class="ltx_graphics" id="obj" type="image/svg+xml" data="a.svg"></object><div class="axt-img" style="--axt-img-ratio:1.4731;--axt-img-mask:url(&quot;data:image/svg+xml,m&quot;)"><span>label</span></div></figure>`)
+    const figure = document.getElementById('obj')!
+    place(figure, rect(100, 100, 466, 250))
+    place(document.querySelector('.axt-img')!, rect(150, 100, 366, 250))
+    over(figure)
+    control.click()
+    const overlay = host.querySelector('.axt-img') as HTMLElement
+    expect(overlay.style.left).toBe('10.7296%')
+    expect(overlay.style.top).toBe('0%')
+    expect(overlay.style.width).toBe('78.5408%')
+    expect(overlay.style.height).toBe('100%')
+    // The one blur is cut to the labels by the mask: lost, the style sheet blurs nothing (image.css)
+    expect(overlay.style.getPropertyValue('--axt-img-mask')).toContain('data:image/svg+xml,m')
+  })
+
   it('an external SVG figure is shown as an image of its file: inside an <object> the pointer would be its own document\'s', () => {
     const { control, host } = page(`<figure class="ltx_figure"><object class="ltx_graphics" id="obj" type="image/svg+xml" data="https://arxiv.org/x/plot.svg"></object></figure>`)
     const obj = document.getElementById('obj')!

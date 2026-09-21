@@ -152,8 +152,14 @@ function copyOf(doc: Document, figure: Element, overlay: Element | null, ours: s
   frame.append(copy)
   if (overlay) {
     const labels = overlay.cloneNode(true) as HTMLElement
-    // On the page the overlay is tied to its image by anchor positioning; in the frame it simply fills it
-    labels.style.cssText = 'display:block;position:absolute;inset:0;width:auto;height:auto;'
+    // On the page the overlay is tied to its image by anchor positioning; in the frame it lies **where it lay on the
+    // figure** — the whole of it for a bitmap, the drawing's rectangle for an SVG figure fitted into a box of other
+    // proportions (§15.5), whatever the style sheet made of it. Added to its inline style, not in place of it: the
+    // mask its one blur is cut to is there (image.css)
+    const lay = overlay.getBoundingClientRect()
+    const share = (length: number, of: number): string => `${of > 0 ? +((length / of) * 100).toFixed(4) : 0}%`
+    labels.style.cssText += `;display:block;position:absolute;inset:auto;margin:0;left:${share(lay.left - box.left, box.width)};top:${share(lay.top - box.top, box.height)};`
+      + `width:${share(lay.width, box.width)};height:${share(lay.height, box.height)};`
     frame.append(labels)
   }
   return { node: frame, width: box.width, height: box.height }

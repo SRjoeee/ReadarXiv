@@ -12,8 +12,9 @@
 //
 // **Read-only.** Nothing here writes to the embedded document. The overlay is built in the main
 // document from normalised coordinates, which works because a figure's `viewBox` maps linearly onto
-// its `<object>` element box (measured to four decimal places, DESIGN §15.5). §7.1's DOM invariant and
-// `restore()` are untouched, and there is no second document to define restore semantics for.
+// the rectangle the drawing takes in its `<object>` — the element's box where the two have the same
+// proportions, a centred part of it where they do not (`frameOf`, DESIGN §15.5). §7.1's DOM invariant
+// and `restore()` are untouched, and there is no second document to define restore semantics for.
 
 import type { OcrLine, Quad } from '@/shared/ocr'
 
@@ -315,6 +316,26 @@ export function viewBoxOf(svg: Element): { x: number; y: number; w: number; h: n
   const h = Number.parseFloat(svg.getAttribute('height') ?? '')
   if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) return { x: 0, y: 0, w, h }
   return undefined
+}
+
+/**
+ * The frame the labels are laid by: the drawing's proportions, and whether the browser **fits it whole and centred**
+ * into its element — `preserveAspectRatio`'s default, which all 80 figures sampled over 9 papers leave unset.
+ *
+ * It matters where the element has other proportions than the drawing: arXiv sizes the `<object>` from the source's
+ * `\includegraphics`, and the Transformer paper's Figure 4 is a drawing of 319 × 217 in a box of 476 × 254 — drawn
+ * with 50 px of air at either side at the width the reader saw it. The `viewBox` maps linearly onto the **drawing's**
+ * rectangle, which is the element's box only where the two agree (75 of the 80 within 1 %; the 5 that do not are that
+ * paper's): laid over the whole box, every label stood off its word, further the nearer the edge (reported 2026-09-21).
+ *
+ * `none` stretches the drawing over the box and any other alignment is not centred: neither is `fitted`, and the
+ * overlay keeps the whole box. Without a `viewBox` nothing is scaled to the box at all.
+ */
+export function frameOf(svg: Element): { ratio: number; fitted: boolean } | undefined {
+  const box = viewBoxOf(svg)
+  if (!box) return undefined
+  const [align = 'xMidYMid', fit = 'meet'] = (svg.getAttribute('preserveAspectRatio') ?? '').trim().split(/\s+/).filter(Boolean)
+  return { ratio: box.w / box.h, fitted: svg.hasAttribute('viewBox') && align === 'xMidYMid' && fit === 'meet' }
 }
 
 /**

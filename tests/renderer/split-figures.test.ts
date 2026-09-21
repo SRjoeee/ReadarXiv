@@ -357,7 +357,7 @@ describe('a mirror is no translation (issue #46, measured on 2312.17141)', () =>
     const IMG_FIGURE = '<figure class="ltx_figure" id="F1"><img class="ltx_graphics" src="a.png" id="F1.g1"><figcaption class="ltx_caption">Figure 1.</figcaption></figure>'
     const overlayOn = (doc: Document, text = '静态电荷') => {
       const el = doc.querySelector('img') as HTMLImageElement
-      return renderImage({ id: el.id, el, kind: 'raster' as const }, [{ x: 0.1, y: 0.1, w: 0.3, h: 0.05, lines: 1, source: 'Static charge', text }])
+      return renderImage({ id: el.id, el, kind: 'raster' as const }, [{ x: 0.1, y: 0.1, w: 0.3, h: 0.05, lines: 1, source: 'Static charge', text }], { ratio: 4 / 3 })
     }
 
     it('a figure with an overlay only and no text translation is split too: graphic and overlay are both in the copy, the overlay without a pairing mark', () => {
@@ -413,7 +413,7 @@ describe('a mirror is no translation (issue #46, measured on 2312.17141)', () =>
         <div class="ltx_para" id="p2"><img class="ltx_graphics" src="teaser.png" id="p2.g1"></div>
         <section class="ltx_section"><div class="ltx_para"><p class="ltx_p" ${ID_ATTR}="s1">Text.</p></div></section>`
       const target = (doc: Document) => { const el = doc.getElementById('p2.g1') as HTMLImageElement; return { id: el.id, el, kind: 'raster' as const } }
-      const draw = (doc: Document) => renderImage(target(doc), [{ x: 0.1, y: 0.1, w: 0.3, h: 0.05, lines: 1, source: 'novel view 1', text: '新视角 1' }])
+      const draw = (doc: Document) => renderImage(target(doc), [{ x: 0.1, y: 0.1, w: 0.3, h: 0.05, lines: 1, source: 'novel view 1', text: '新视角 1' }], { ratio: 4 / 3 })
 
       it('its block stands as a figure from the moment the overlay is drawn, and no longer once the overlay is gone', () => {
         const doc = docOf(TEASER)
@@ -487,7 +487,7 @@ describe('a mirror is no translation (issue #46, measured on 2312.17141)', () =>
         const beside = docOf(`<div class="ltx_para" id="p3"><p class="ltx_p" ${ID_ATTR}="t1">Some text.</p><img class="ltx_graphics" id="g3"></div>`)
         const el = beside.getElementById('g3') as HTMLImageElement
         expect(looseRootOf(el)).toBeNull()
-        renderImage({ id: el.id, el, kind: 'raster' as const }, [{ x: 0.1, y: 0.1, w: 0.3, h: 0.05, lines: 1, source: 'a', text: '甲' }])
+        renderImage({ id: el.id, el, kind: 'raster' as const }, [{ x: 0.1, y: 0.1, w: 0.3, h: 0.05, lines: 1, source: 'a', text: '甲' }], { ratio: 4 / 3 })
         expect(beside.querySelector(`[${SPLIT_ROOT_ATTR}]`)).toBeNull()
         expect(splitFigures(beside)).toBe(0)
       })

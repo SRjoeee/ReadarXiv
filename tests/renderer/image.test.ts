@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { IMG_CLASS, T_CLASS } from '@/core/marks'
 import { FOR_ATTR, LANG_ATTR, MIRROR_CLASS } from '@/core/renderer/attrs'
-import { IMG_MODES_ATTR, clearImage, emWidth, labelStyle, overlayOf, renderImage, setImageModes, type ImageLabel } from '@/core/renderer/image'
+import { IMG_MODES_ATTR, clearImage, emWidth, labelStyle, maskOf, overlayOf, renderImage, setImageModes, type ImageLabel } from '@/core/renderer/image'
 import { enable, restore } from '@/core/renderer/page'
 import { splitFigures } from '@/core/renderer/split-figures'
 import { docOf } from './helpers'
@@ -9,6 +9,8 @@ import { docOf } from './helpers'
 // The image overlay (DESIGN §15.2): the <img>'s next sibling, without axt-t, not one attribute added to the <img>, and the whole layer removed on restore
 
 const FIGURE = '<figure class="ltx_figure" id="F1"><img class="ltx_graphics" src="a.png" id="F1.g1" width="476" height="357"><figcaption class="ltx_caption">Figure 1.</figcaption></figure>'
+/** The figure of FIGURE: a bitmap 476 × 357, which fills its element */
+const FRAME = { ratio: 476 / 357 }
 const label = (text: string, source = text, extra: Partial<ImageLabel> = {}): ImageLabel => ({ x: 0.1, y: 0.2, w: 0.3, h: 0.05, lines: 1, source, text, ...extra })
 
 function setup(html = FIGURE) {
@@ -21,7 +23,7 @@ describe('renderImage', () => {
   it('the overlay is the <img>\'s next sibling with data-axt-for and without axt-t; the <img> gains the anchor mark and nothing else, its parent the scope mark', () => {
     const { doc, target } = setup()
     const before = target.el.outerHTML
-    const node = renderImage(target, [label('静态电荷', 'Static charge')])
+    const node = renderImage(target, [label('静态电荷', 'Static charge')], FRAME)
     expect(target.el.nextElementSibling).toBe(node)
     expect(node.classList.contains(IMG_CLASS)).toBe(true)
     expect(node.classList.contains(T_CLASS)).toBe(false)
@@ -41,7 +43,7 @@ describe('renderImage', () => {
   it('a label: the translation as content, the source as title, lang from <html data-axt-lang>; the inline style uses percentages and container units only', () => {
     const { doc, target } = setup()
     doc.documentElement.setAttribute(LANG_ATTR, 'zh-CN')
-    const node = renderImage(target, [label('静态电荷', 'Static charge'), label('过程', 'Processes', { x: 0.6, y: 0.03, w: 0.26, h: 0.035 })])
+    const node = renderImage(target, [label('静态电荷', 'Static charge'), label('过程', 'Processes', { x: 0.6, y: 0.03, w: 0.26, h: 0.035 })], FRAME)
     const spans = Array.from(node.children) as HTMLElement[]
     expect(spans).toHaveLength(2)
     expect(spans[0]!.textContent).toBe('静态电荷')
@@ -59,15 +61,15 @@ describe('renderImage', () => {
     const mirror = doc.createElement('img')
     mirror.className = `ltx_graphics ${T_CLASS} ${MIRROR_CLASS}`
     target.el.after(mirror)
-    const node = renderImage(target, [label('译')])
+    const node = renderImage(target, [label('译')], FRAME)
     expect(target.el.nextElementSibling).toBe(node)
     expect(doc.querySelector(`.${MIRROR_CLASS}`)).toBeNull()
   })
 
   it('rendering again replaces rather than stacks; clearImage removes it', () => {
     const { doc, target } = setup()
-    renderImage(target, [label('一')])
-    renderImage(target, [label('二')])
+    renderImage(target, [label('一')], FRAME)
+    renderImage(target, [label('二')], FRAME)
     expect(doc.querySelectorAll(`.${IMG_CLASS}`)).toHaveLength(1)
     expect(overlayOf(target)!.textContent).toBe('二')
     expect(clearImage(target)).toBe(true)
@@ -81,7 +83,7 @@ describe('renderImage', () => {
     enable(doc, 'stack')
     setImageModes(doc, ['side', 'stack'])
     expect(doc.documentElement.getAttribute(IMG_MODES_ATTR)).toBe('side stack')
-    renderImage(target, [label('译')])
+    renderImage(target, [label('译')], FRAME)
     const result = restore(doc)
     expect(doc.documentElement.outerHTML).toBe(before)
     expect(result.removedNodes).toBe(1)
@@ -153,5 +155,43 @@ describe('rotated labels (§15.5)', () => {
     const style = labelStyle(label())
     expect(style).toBe('left:10.000%;top:20.000%;width:5.000%;height:40.000%;font-size:min(28.80cqh,1.15cqw)')
     expect(style).not.toContain('transform')
+  })
+})
+
+describe('the figure\'s frame and the one blur under its labels (§15.2)', () => {
+  const upright: ImageLabel = { x: 0.1, y: 0.2, w: 0.3, h: 0.05, lines: 1, source: 'Static charge', text: '静态电荷' }
+  // A y-axis label on a figure twice as wide as high: 0.2 of the width long is 0.4 of the height
+  const turned: ImageLabel = { x: 0.1, y: 0.2, w: 0.05, h: 0.4, lines: 1, source: 'wall time', text: '每轮耗时', angle: -Math.PI / 2, len: 0.2, thick: 0.05 }
+  const maskIn = (node: Element) => decodeURIComponent(/--axt-img-mask:url\("data:image\/svg\+xml,([^"]+)"\)/.exec(node.getAttribute('style') ?? '')?.[1] ?? '')
+
+  it('an SVG figure fitted into a box of other proportions tells the overlay the drawing\'s; a bitmap fills its box and tells it nothing', () => {
+    const { target } = setup()
+    // The Transformer paper's Figure 4: a drawing of 319 × 217 in a box of 476 × 254, centred with air at both sides —
+    // laid over the whole box, every label stood off its word, further the nearer the edge (reported 2026-09-21)
+    expect(renderImage(target, [upright], { ratio: 319.181 / 216.666, fitted: true }).getAttribute('style')).toMatch(/^--axt-img-ratio:1\.4731;/)
+    expect(renderImage(target, [upright], { ratio: 476 / 357 }).getAttribute('style')).not.toContain('--axt-img-ratio')
+  })
+
+  it('the overlay carries one mask, a rounded rectangle where each label lies: the blur is one layer for the figure, not one for every label', () => {
+    const { target } = setup()
+    const mask = maskIn(renderImage(target, [upright, turned], { ratio: 2 }))
+    // A thousand units wide, as high as the figure's proportions make it, stretched over the overlay with it
+    expect(mask).toContain('viewBox=\'0 0 1000 500\' preserveAspectRatio=\'none\'')
+    // The corner is the label's own: 0.2 em of a font 3.6 % of the height
+    expect(mask).toContain('<rect x=\'100\' y=\'100\' width=\'300\' height=\'25\' rx=\'3.6\'/>')
+    expect(mask.match(/<rect /g)).toHaveLength(2)
+  })
+
+  it('a turned label is masked where it is drawn: about its centre, by its own length and thickness', () => {
+    expect(decodeURIComponent(maskOf([turned], 2))).toContain('<rect x=\'25\' y=\'175\' width=\'200\' height=\'50\' rx=\'7.2\' transform=\'rotate(-90 125 200)\'/>')
+  })
+
+  it('the split copy keeps both: they are the overlay\'s inline style, which a clone does not lose', () => {
+    const { doc, target } = setup()
+    doc.documentElement.setAttribute('data-axt-img-modes', 'side')
+    renderImage(target, [upright], { ratio: 2, fitted: true })
+    splitFigures(doc)
+    const copy = doc.querySelector(`.axt-split .${IMG_CLASS}`)
+    expect(copy?.getAttribute('style')).toMatch(/^--axt-img-ratio:2;--axt-img-mask:url\(/)
   })
 })

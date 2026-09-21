@@ -124,7 +124,7 @@ describe('data-axt-mirrored: the original a mirror follows', () => {
     renderText(blockOf(doc, 'p1'), frag(doc, '一。'))
     createMirrors(doc)
     const g = doc.getElementById('g')!
-    renderImage({ id: 'g', el: g, kind: 'svg' }, [{ x: 0, y: 0, w: 0.3, h: 0.05, lines: 1, source: 'Static charge', text: '静态电荷' }])
+    renderImage({ id: 'g', el: g, kind: 'svg' }, [{ x: 0, y: 0, w: 0.3, h: 0.05, lines: 1, source: 'Static charge', text: '静态电荷' }], { ratio: 4 / 3 })
     expect(doc.querySelector(`.${MIRROR_CLASS}`)).toBeNull()
     expect(g.nextElementSibling!.classList.contains(IMG_CLASS)).toBe(true)
     expect(g.hasAttribute(MIRRORED_ATTR)).toBe(false)
