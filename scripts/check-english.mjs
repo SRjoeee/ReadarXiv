@@ -5,15 +5,16 @@
 // ranges of regexes. A file over its allowance, or a file with CJK and no entry, fails the check — and so does an
 // entry granting more than its file holds, or naming a file that holds none: the list says what is there, exactly, so
 // the slack a removed line leaves cannot be spent on a new one unseen. Raising an entry is a review question. Locale
-// packs, localisation data, fixtures and the read-only reference checkouts are outside the check altogether (they
-// are product data, not prose). A pack's comments are English by convention like every other comment; telling a
+// packs, localisation data, fixtures, the figure recogniser's models with their character list (public/ocr: 6 174 of
+// the 6 904 characters the model reads are CJK) and the read-only reference checkouts are outside the check altogether
+// (they are product data, not prose). A pack's comments are English by convention like every other comment; telling a
 // comment from a string exactly needs a parser, and the repository's TypeScript (7, native) exposes none to scripts,
 // so review holds that line rather than a guess (Devin on #230).
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 
 const CJK = /[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uff00-\uffef]/
-const OUTSIDE = [/^src\/locales\//, /^public\/_locales\//, /^tests\/fixtures\//, /^reference\//, /\.zh-CN\.md$/, /^README\.zh/, /^scripts\/check-english\.mjs$/, /\.(png|jpg|jpeg|gif|webp|svg|ico|pdf|woff2?)$/]
+const OUTSIDE = [/^src\/locales\//, /^public\/_locales\//, /^public\/ocr\//, /^tests\/fixtures\//, /^reference\//, /\.zh-CN\.md$/, /^README\.zh/, /^scripts\/check-english\.mjs$/, /\.(png|jpg|jpeg|gif|webp|svg|ico|pdf|woff2?)$/]
 const ALLOW_FILE = 'scripts/english-allowlist.txt'
 const writing = process.argv.includes('--write')
 const allow = new Map()

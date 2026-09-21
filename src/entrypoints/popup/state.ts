@@ -1,5 +1,5 @@
 // What the popup knows and what it can do about it (docs/UI.md §4): the page's status and the asks that keep it
-// current, the two provider statuses, the helper, the open menu, the last error — and the actions, each of which may
+// current, the two provider statuses, the open menu, the last error — and the actions, each of which may
 // end in a restart of the page on the settings it just saved. No React here: `data.ts` binds it, and the tests drive
 // it through this interface with a scripted page and background.
 //
@@ -21,13 +21,12 @@ import type { Mode } from '@/core/renderer'
 import { promptExists } from '@/providers/prompt-library'
 import type { ProviderStatus } from '@/providers/transport'
 import type { AxtMessage, EntryStatus, MessageHandlers, PageStatus, sendMessage, sendToActiveTab } from '@/shared/messages'
-import type { HelperStatus } from '@/shared/ocr'
 import type { PackState } from '@/shared/pack'
 import { messageFor } from '@/shared/page-action'
 import { type SurfaceConfig, type SurfaceConfigDeps, createSurfaceConfig } from '@/shared/surface-config'
 import { S } from '@/ui/strings'
 import { createProviderAsks } from './provider-asks'
-import { MANAGE_SERVICES, MANAGE_STYLES, type MenuKind, type PopupInput, actionErrorText, pollsBackground, runnable, startRefusalText } from './view-model'
+import { MANAGE_SERVICES, MANAGE_STYLES, type MenuKind, type PopupInput, actionErrorText, runnable, startRefusalText } from './view-model'
 
 export interface PopupActions {
   translate(): void
@@ -51,8 +50,6 @@ export interface PopupActions {
   downloadPack(): void
   /** With `section` omitted, opens the settings page on its own default section; with it, straight to that section */
   openOptions(section?: OptionsSection): void
-  /** What the permission step found after a grant (ui/HelperPermission.tsx) */
-  helperStatus(status: HelperStatus): void
 }
 
 /** The settings page's section names, matching SECTIONS in options/App.tsx */
@@ -66,7 +63,7 @@ export interface PopupHost {
   /** To the active tab's content script; rejects when nothing listens, resolves `undefined` when a listener ignores the message */
   toTab: typeof sendToActiveTab
   toBackground: typeof sendMessage
-  /** The background's broadcasts to the open surfaces (`axt:helper-state`, `axt:pack-changed`); returns the way to stop */
+  /** The background's broadcasts to the open surfaces (`axt:pack-changed`); returns the way to stop */
   onBroadcast(handlers: MessageHandlers): () => void
   openTab(url: string): Promise<unknown>
   /** Brings a settings tab already open to the front rather than opening another */
@@ -75,8 +72,6 @@ export interface PopupHost {
   url(path: string): string
   /** The translate shortcut as bound right now, formatted by Chrome for the platform (⌥T / Alt+T); null when unbound */
   shortcut(): Promise<string | null>
-  platform(): Promise<'mac' | 'other'>
-  extensionId: string
   /** Framed beside the floating button rather than under the toolbar (embedded.ts) */
   embedded: boolean
   close(): void
@@ -106,8 +101,6 @@ export function createPopupState(host: PopupHost): PopupState {
   let entry: EntryStatus | null = null
   let saved: ProviderStatus | null = null
   let session: ProviderStatus | null = null
-  let helper: HelperStatus | null = null
-  let platform: 'mac' | 'other' | null = null
   let menu: MenuKind | null = null
   let shortcut: string | null = null
   let error: string | null = null
@@ -206,16 +199,15 @@ export function createPopupState(host: PopupHost): PopupState {
 
   /**
    * Progress while translation is on: scrolling keeps triggering, there is no "finished" (§10). The replaced-service
-   * state lives in the background and is asked alongside — measured at millisecond round-trips (DESIGN §8.0) —
-   * except while a grant takes effect: the background has to be left alone to idle out (view-model.ts says why)
+   * state lives in the background and is asked alongside — measured at millisecond round-trips (DESIGN §8.0)
    */
   const poll = () => {
     stopPoll()
     pollTimer = setInterval(() => {
       refresh()
       const scope = page?.session ?? null
-      if (pollsBackground(helper) && scope) void asks.session(scope)
-      else if (pollsBackground(helper)) void asks.saved()
+      if (scope) void asks.session(scope)
+      else void asks.saved()
     }, ASK_EVERY_MS)
   }
 
@@ -369,7 +361,6 @@ export function createPopupState(host: PopupHost): PopupState {
       void asks.saved()
     }),
     openOptions,
-    helperStatus: status => { helper = status; changed() },
   }
 
   return {
@@ -381,17 +372,7 @@ export function createPopupState(host: PopupHost): PopupState {
       // The page is not running until it says so: the saved settings' chain is what a start would run on
       void asks.saved()
       host.shortcut().then(found => { shortcut = found; changed() }).catch(() => { shortcut = null; changed() })
-      // `recheck`: the reader may have installed the helper since the worker last looked (options/data.ts says why)
-      host.toBackground({ type: 'axt:helper-status', recheck: true }).then(status => { helper = status; changed() }).catch(() => { helper = { state: 'not-installed' }; changed() })
-      host.platform().then(os => { platform = os; changed() }).catch(() => { platform = 'other'; changed() })
-      // The background broadcasts the helper's state when it changes on its own — the guided install's wait found it,
-      // or the fresh worker after a runtime grant reported (DESIGN §15.3). Without this the card would stay up until
-      // the reader closed and reopened the popup (§15.4)
       const stopBroadcasts = host.onBroadcast({
-        'axt:helper-state': message => {
-          if (message.status) { helper = message.status; changed() }
-          return undefined
-        },
         // A pack downloaded on the settings page: this popup's Download button must not stay over an installed pack
         'axt:pack-changed': message => {
           if (message.target) surface.receivePack(message.target)
@@ -410,7 +391,7 @@ export function createPopupState(host: PopupHost): PopupState {
       const { config, revision: savedRevision, pack } = surface.state()
       // The view gets both: the session's chain only while the page is on — unknown until it answers, never the saved
       // chain in its place (Codex on #185) — and the saved settings' chain for what a start would run on
-      snapshot ??= { input: { page, entry, saved, session: on() ? session : null, config, pack, helper, platform, menu, shortcut, extensionId: host.extensionId, savedRevision }, error }
+      snapshot ??= { input: { page, entry, saved, session: on() ? session : null, config, pack, menu, shortcut, savedRevision }, error }
       return snapshot
     },
     subscribe(listener) {

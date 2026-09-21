@@ -62,30 +62,6 @@ const S: Locale['S'] = {
     imagesPaused: reason => `Image translation paused: ${reason}`,
     noHtml: 'arXiv has no HTML version of this paper, so there is nothing to translate',
   },
-  helper: {
-    permission: 'Image translation needs permission to use the recognition tool',
-    allow: 'Allow',
-    denied: 'Not allowed. Allow it to recognise text in figures.',
-    enabling: 'Allowed. Takes effect shortly.',
-    install: 'Image translation needs the recognition tool',
-    macOnly: 'Image translation is macOS only for now',
-    start: 'Install',
-    copy: 'Copy the install command',
-    copied: 'Copied',
-    guide: 'Guide',
-  },
-  setup: {
-    title: 'Install the recognition tool',
-    intro: 'Image translation recognises text in figures on your own machine. The tool is installed once and stays available.',
-    step1: 'Open Terminal',
-    step1Hint: '⌘ Space, type Terminal, press Return',
-    step2: 'Run this command in Terminal',
-    step2Hint: 'Click to copy',
-    waiting: 'Takes effect automatically once the command finishes. No need to return here.',
-    notYet: 'The recognition tool was not detected. Check that the command finished without errors.',
-    copyFailed: 'Could not copy. Select the command and copy it manually.',
-    done: 'Recognition tool ready',
-  },
   primary: {
     // The popup's button on an abstract or PDF page: it opens the paper's bilingual version, it does not
     // translate the page in front of the reader (UI.md S-P-50b). The same words as the entry on the page itself
@@ -160,7 +136,6 @@ const O: Locale['O'] = {
     imagesHint: 'The translation sits over the figure; hover to see the original',
     imageModes: 'Show image translations in these modes',
     imageModesHint: 'Display only: switching to a mode that is unticked hides the overlays and switching back shows them again, with nothing read a second time',
-    detecting: 'Looking for the recognition tool…',
     autoFallback: 'Fall back to a free service on trouble',
     autoFallbackHint: 'An expired key, a spent quota or a dropped connection will not stop the translation',
     name: 'Name',

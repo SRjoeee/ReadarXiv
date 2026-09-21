@@ -3,12 +3,10 @@
 // language card, the prompt row for the LLM, then bubbles for anything that needs attention, the
 // primary button, the mode bar, and the two small switches under it.
 import type { ReactNode } from 'react'
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import type { Mode } from '@/core/renderer'
 import { BrandMark } from '@/ui/BrandMark'
 import { Button } from '@/ui/Button'
-import { HelperPermission } from '@/ui/HelperPermission'
-import { HelperSetup } from '@/ui/HelperSetup'
 import { Menu } from '@/ui/Menu'
 import { Segmented } from '@/ui/Segmented'
 import { MODE_ORDER, S } from '@/ui/strings'
@@ -32,11 +30,6 @@ const modes = () => MODE_ORDER.map(value => ({
 const CARD = 'rounded-card bg-card shadow-[0_1px_2px_rgba(30,30,36,0.06)]'
 
 export function PopupView({ view, error, actions }: { view: View; error: string | null; actions: PopupActions }) {
-  /**
-   * Whether the guided install is unfolded. Here rather than in the view model: it is the interface state of this one
-   * opening of the popup; what has to outlive the popup is “waiting”, and that lives in the background (DESIGN §15.4)
-   */
-  const [setupOpen, setSetupOpen] = useState(false)
   return (
     <main className="flex w-[320px] flex-col gap-3 bg-bg p-4 font-ui text-[13px] text-fg">
       <header className="flex items-center justify-between px-1">
@@ -76,25 +69,6 @@ export function PopupView({ view, error, actions }: { view: View; error: string 
               <Button variant="solid" onClick={actions.retryFailed}>{S.failed.retry}</Button>
             </Bubble>
           )}
-          {/* The card while the helper is not ready: one line and the step it calls for — “Allow” for the permission
-              (DESIGN §15.3), “Install” to unfold the guided install in place (UI.md S-P-86…88). Both steps are the components
-              the settings page uses: two surfaces, one wording */}
-          {view.helper && (
-            <div className={`${CARD} flex flex-col gap-2 px-3.5 py-3 text-[12px] leading-relaxed`}>
-              {setupOpen && view.helper.step === 'install' && view.helper.extensionId
-                ? <HelperSetup extensionId={view.helper.extensionId} />
-                : (
-                  <>
-                    <span className="text-fg-2">{view.helper.text}</span>
-                    {view.helper.step === 'allow' && <HelperPermission onStatus={actions.helperStatus} />}
-                    {view.helper.step === 'install' && (
-                      <Button variant="solid" className="self-start" onClick={() => setSetupOpen(true)}>{S.helper.start}</Button>
-                    )}
-                  </>
-                )}
-            </div>
-          )}
-
           {/* aria-label keeps the accessible name at the label alone, badge or not (the e2e suites find the button by name) */}
           <Button variant={view.primary.action === 'restore' ? 'secondary' : 'primary'} disabled={view.primary.disabled} aria-label={view.primary.label} onClick={actions[view.primary.action]}>
             {view.primary.label}

@@ -1,27 +1,21 @@
-// The end-to-end check of image translation (DESIGN §15): real Chromium + the local helper. A machine without the helper prints SKIP and exits 0 (CI).
+// The end-to-end check of image translation (DESIGN §15): real Chromium, and the recogniser the extension ships — in its
+// offscreen document, as a reader's browser runs it. Nothing to install, so it runs wherever the other suites do.
 //
-// Usage: pnpm build && pnpm e2e:image   (first: helper/install.sh <extension id>)
+// Usage: pnpm build && pnpm e2e:image
 // Environment: AXT_PAPER picks the paper (default 2507.00150v1: 6 plots); AXT_HEADED=1 watches it run.
 //
 // Guarded are §15.2's structural promises: the overlay is the image's next sibling and its rectangle coincides with the image (anchor positioning); under side the overlay is only inside the split copy and
 // coincides with the copy's image; visible under only; with the mode gate closed an image entering the viewport makes no request and translates once switched to an open mode; restoring the original leaves not one node or attribute.
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
-import { copyWithGrants } from './ext-copy.mjs'
 import { chooseBuiltIn, openOptions, setImageMode, setSwitch } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
-const SRC = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
-/** The build with `nativeMessaging` pre-granted: optional since DESIGN §15.3, and Chrome's prompt cannot be clicked here */
-const EXT = copyWithGrants(SRC, `${HERE}.ext-image`, { permissions: ['nativeMessaging'] })
+const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
 const PROFILE = `${HERE}.profile-image`
 const SHOTS = `${HERE}.shots`
 const PAPER = process.env.AXT_PAPER ?? '2507.00150v1'
-const HOST = 'io.github.srjoeee.arxivtranslate'
-/** Where the install script writes; Chrome looks in <user data dir>/NativeMessagingHosts/, so it has to be copied into Playwright's profile */
-const INSTALLED = `${homedir()}/Library/Application Support/Chromium/NativeMessagingHosts/${HOST}.json`
 
 const results = []
 const check = (name, ok, detail) => {
@@ -32,39 +26,15 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 rmSync(PROFILE, { recursive: true, force: true })
 mkdirSync(SHOTS, { recursive: true })
-if (!existsSync(INSTALLED)) {
-  console.log(`SKIP no helper host manifest (${INSTALLED}); the image translation e2e does not run`)
-  process.exit(0)
-}
-mkdirSync(`${PROFILE}/NativeMessagingHosts`, { recursive: true })
-/**
- * The installed manifest authorises only the extension id of the reader's everyday Chrome, while Playwright loads .output each time under
- * another id — copied as it is, the helper refuses the connection ("Access to the specified native messaging host
- * is forbidden."), and this e2e was forever SKIP on this machine. **The system's copy is not touched**: it is read, allowed_origins changed,
- * and written only into this throwaway profile. The id is known only after one launch, hence two launches
- */
-const writeManifest = id => {
-  const m = JSON.parse(readFileSync(INSTALLED, 'utf8'))
-  m.allowed_origins = [`chrome-extension://${id}/`]
-  mkdirSync(`${PROFILE}/NativeMessagingHosts`, { recursive: true })
-  writeFileSync(`${PROFILE}/NativeMessagingHosts/${HOST}.json`, JSON.stringify(m, null, 2))
-}
-const launch = () => chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, {
   channel: 'chromium',
   headless: !process.env.AXT_HEADED,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1440, height: 900 },
 })
-let context = await launch()
 let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')
-let extId = worker.url().split('/')[2]
-writeManifest(extId)
-await context.close()
-context = await launch()
-;[worker] = context.serviceWorkers()
-if (!worker) worker = await context.waitForEvent('serviceworker')
-extId = worker.url().split('/')[2]
+const extId = worker.url().split('/')[2]
 
 const IDLE = /session idle: (\d+)\/(\d+) requested of (\d+)/
 const IMAGES_IDLE = /images idle: (\d+)\/(\d+) of (\d+), (\d+) failed/
@@ -121,19 +91,47 @@ const PROBE = () => {
 const near = (a, b, tol = 1.5) => Math.abs(a - b) <= tol
 const coincide = (a, b) => near(a.x, b.x) && near(a.y, b.y) && near(a.w, b.w) && near(a.h, b.h)
 
-// ── The settings page: google-web, all three image translation modes ticked; exit if the helper is not detected ────────────
+// ── The recogniser alone: what only a real canvas shows ─────────────────────────────────────────────
+// The same three labels drawn on white and on a transparent ground, handed to the offscreen document as the background
+// hands a figure over. A canvas starts transparent and the models take three channels: read without a white ground
+// under it, the transparent figure came back with no line at all (Codex on #281)
+{
+  const blank = await context.newPage()
+  await blank.goto('about:blank')
+  const draw = transparent => blank.evaluate(clear => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 900
+    canvas.height = 500
+    const c = canvas.getContext('2d')
+    if (!clear) { c.fillStyle = '#fff'; c.fillRect(0, 0, 900, 500) }
+    c.fillStyle = '#000'
+    c.font = '40px sans-serif'
+    c.fillText('Validation accuracy', 250, 120)
+    c.fillText('Training steps', 300, 440)
+    c.translate(80, 380)
+    c.rotate(-Math.PI / 2)
+    c.fillText('Cross entropy', 0, 0)
+    return canvas.toDataURL('image/png').split(',')[1]
+  }, transparent)
+  const read = image => worker.evaluate(async bytes => {
+    if (!(await chrome.offscreen.hasDocument())) await chrome.offscreen.createDocument({ url: 'ocr.html', reasons: ['WORKERS'], justification: 'e2e' })
+    const reply = await chrome.runtime.sendMessage({ type: 'axt:ocr-run', image: bytes, mime: 'image/png' })
+    return reply?.ok ? reply.result.lines : []
+  }, image)
+  const onWhite = await read(await draw(false))
+  const onNothing = await read(await draw(true))
+  const texts = lines => lines.map(line => line.text).sort().join(' | ')
+  check('recogniser: a figure with a transparent ground is read as it is on white', onWhite.length === 3 && texts(onNothing) === texts(onWhite), `white: ${texts(onWhite)} · transparent: ${texts(onNothing)}`)
+  const axis = onWhite.find(line => /entropy/i.test(line.text))
+  check('recogniser: a label on its side carries its direction and its own box', !!axis && Math.abs(axis.angle + Math.PI / 2) < 1e-9 && axis.len > 0.2 && axis.thick < 0.06, axis ? `angle ${(axis.angle * 180 / Math.PI).toFixed(0)}°, len ${axis.len.toFixed(3)}, thick ${axis.thick.toFixed(3)}` : 'not read')
+  await blank.close()
+}
+
+// ── The settings page: google-web, all three image translation modes ticked ────────────
 const options = await openOptions(context, extId)
 await chooseBuiltIn(options, 'Google 翻译')
 await setSwitch(options, '图片翻译', true)
-// The section says whether the recognition helper answered; without it only SVG figures translate
-const helperHint = await options.getByText(/识别助手/).first().textContent()
-if (!/已就绪/.test(helperHint ?? '')) {
-  console.log(`SKIP the settings page says the recognition helper is unavailable: ${helperHint}`)
-  await context.close()
-  process.exit(0)
-}
 for (const name of ['上下', '左右', '仅译文']) await setImageMode(options, name, true)
-check('the settings page detects the recognition helper', /已就绪/.test(helperHint ?? ''), helperHint ?? '')
 
 // ── stack: whole-page translation, all 6 images get overlays, the overlay coincides with the image ─────────────────────────
 const page = await context.newPage()

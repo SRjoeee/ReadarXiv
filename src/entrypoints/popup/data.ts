@@ -22,8 +22,6 @@ const browserHost = (): PopupHost => ({
   openOptionsPage: () => void browser.runtime.openOptionsPage(),
   url: path => browser.runtime.getURL(path as Parameters<typeof browser.runtime.getURL>[0]),
   shortcut: async () => (await browser.commands.getAll()).find(c => c.name === COMMAND_ID)?.shortcut || null,
-  platform: async () => ((await browser.runtime.getPlatformInfo()).os === 'mac' ? 'mac' : 'other'),
-  extensionId: browser.runtime.id,
   embedded: EMBEDDED,
   close: closePopup,
   downloadPack,

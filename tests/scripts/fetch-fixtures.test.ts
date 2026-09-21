@@ -11,7 +11,7 @@ import { ensureFixtures, readManifest } from '../../scripts/fetch-fixtures.mjs'
 
 const BODY = Buffer.from('<html>the pinned bytes</html>')
 const sha = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
-const ENTRY = { path: 'tests/fixtures/arxiv/0000.00000.html', url: 'https://arxiv.org/html/0000.00000v1', sha256: sha(BODY), bytes: BODY.length, for: 'tests' }
+const ENTRY = { path: 'tests/fixtures/arxiv/0000.00000.html', url: 'https://arxiv.org/html/0000.00000v1', sha256: sha(BODY), bytes: BODY.length }
 
 let root: string
 const file = () => join(root, ENTRY.path)
@@ -172,9 +172,9 @@ describe('ensureFixtures', () => {
   })
 
   it('a fixture directory that does not exist yet is created, not taken for a link out of the tree', async () => {
-    writeFileSync(join(root, 'tests/fixtures/remote.json'), JSON.stringify({ fixtures: [{ ...ENTRY, path: 'helper/Tests/Fixtures/x.png', for: 'helper-smoke' }] }))
-    expect((await ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })).downloaded).toEqual(['helper/Tests/Fixtures/x.png'])
-    expect(readFileSync(join(root, 'helper/Tests/Fixtures/x.png'))).toEqual(BODY)
+    writeFileSync(join(root, 'tests/fixtures/remote.json'), JSON.stringify({ fixtures: [{ ...ENTRY, path: 'tests/fixtures/figures/x.png' }] }))
+    expect((await ensureFixtures({ root, fetchImpl: serving(BODY), gapMs: 0 })).downloaded).toEqual(['tests/fixtures/figures/x.png'])
+    expect(readFileSync(join(root, 'tests/fixtures/figures/x.png'))).toEqual(BODY)
   })
 
   it('a Retry-After in neither of its forms is ignored, not read as a date; an answer that is not the file has its body cancelled', async () => {
@@ -210,15 +210,6 @@ describe('ensureFixtures', () => {
     expect(readFileSync(file())).toEqual(BODY)
     expect(readdirSync(join(root, 'tests/fixtures/arxiv'))).toEqual(['0000.00000.html'])
   })
-
-  it('a consumer fetches only what it reads', async () => {
-    const helper = { ...ENTRY, path: 'helper/Tests/Fixtures/x.png', for: 'helper-smoke' }
-    writeFileSync(join(root, 'tests/fixtures/remote.json'), JSON.stringify({ fixtures: [ENTRY, helper] }))
-    const fetchImpl = serving(BODY)
-    expect((await ensureFixtures({ root, fetchImpl, gapMs: 0, for: 'tests' })).downloaded).toEqual([ENTRY.path])
-    expect(fetchImpl).toHaveBeenCalledTimes(1)
-    expect(existsSync(join(root, helper.path))).toBe(false)
-  })
 })
 
 describe('a manifest that names anything but a fixture of arXiv\'s is refused before a byte is fetched (Devin on #229)', () => {
@@ -239,7 +230,6 @@ describe('a manifest that names anything but a fixture of arXiv\'s is refused be
       [{ fixtures: [{ ...ENTRY, sha256: 42 }] }, /as strings/],
       [{ fixtures: [{ ...ENTRY, sha256: 'abc' }] }, /64 lowercase hex digits/],
       [{ fixtures: [{ ...ENTRY, bytes: '12' }] }, /"bytes" is not a positive integer/],
-      [{ fixtures: [{ ...ENTRY, for: 'e2e' }] }, /"for" is not one of tests, helper-smoke/],
       [{ fixtures: [ENTRY, ENTRY] }, /is named twice/],
     ]
     for (const [manifest, message] of cases) {
@@ -271,8 +261,7 @@ describe('the manifest', () => {
       expect(entry.url, entry.path).toMatch(/^https:\/\/arxiv\.org\/html\/\d{4}\.\d{5}v\d+(\/|$)/)
       expect(entry.sha256, entry.path).toMatch(/^[0-9a-f]{64}$/)
       expect(ignored, entry.path).toContain(`/${entry.path}`)
-      // Only the tests' fixtures are fetched in CI; the helper's image is for a smoke test CI cannot run
-      expect(cached.includes(entry.path), entry.path).toBe(entry.for === 'tests')
+      expect(cached, entry.path).toContain(entry.path)
     }
   })
 
@@ -288,8 +277,8 @@ describe('the manifest', () => {
     expect(blockOf('actions/cache/save@v4')).toBe(blockOf('actions/cache/restore@v4'))
   })
 
-  it('the script refuses arguments it does not understand, rather than fetching everything', () => {
-    for (const args of [['--fro', 'tests'], ['--for'], ['--for=tests'], ['--for', 'helper'], ['--', '--for', 'helper'], ['--', '--']]) {
+  it('the script takes no argument and refuses one, rather than fetch on a mistyped command', () => {
+    for (const args of [['--for', 'tests'], ['--fro'], ['x'], ['--', '--for', 'tests'], ['--', '--']]) {
       let status: number | null = 0
       try {
         execFileSync(process.execPath, [join(import.meta.dirname, '../../scripts/fetch-fixtures.mjs'), ...args], { stdio: 'pipe' })

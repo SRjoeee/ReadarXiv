@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { setLocale } from '@/ui/strings'
 import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
-import { MANAGE_STYLES, derivePopupView, pollsBackground, runnable } from '@/entrypoints/popup/view-model'
+import { MANAGE_STYLES, derivePopupView, runnable } from '@/entrypoints/popup/view-model'
 
 const input = (id: string) => POPUP_FIXTURES.find(f => f.id === id)!.input
 const view = (id: string) => derivePopupView(input(id))
@@ -68,7 +68,6 @@ describe('derivePopupView (UI.md §4)', () => {
     expect(v.note).toBeNull()
     expect(v.failed).toBeNull()
     expect(v.menu).toBeNull()
-    expect(v.helper).toBeNull()
     expect(v.primary).toEqual({ label: '翻译本页', action: 'translate', disabled: false, shortcut: '⌥T' })
     expect(v.secondary).toBeNull()
     expect(v.highlight).toBe(true)
@@ -188,28 +187,6 @@ describe('derivePopupView (UI.md §4)', () => {
     const idle = input('P7')
     expect(derivePopupView({ ...idle, session: { ...idle.saved!, fallback: undefined } }).primary.disabled).toBe(false)
     expect(derivePopupView({ ...idle, saved: { ...idle.saved!, fallback: undefined }, session: idle.saved }).primary.disabled).toBe(true)
-  })
-  it('P14 helper missing on macOS: install text plus the id the guided install needs', () => {
-    const v = view('P14')
-    // Only with an extensionId is there anything to install: the command is built from that id (the guide itself is in HelperSetup, §15.4)
-    expect(v.helper).toEqual({ text: '图片翻译需要安装识别助手', step: 'install', extensionId: 'abcdefghijklmnopabcdefghijklmnop' })
-    // Outside macOS there is one line of explanation and nothing to press — the install script exits at once elsewhere
-    expect(derivePopupView({ ...input('P14'), platform: 'other' }).helper).toEqual({ text: '图片翻译目前仅支持 macOS', step: null })
-    expect(derivePopupView({ ...input('P14'), config: { ...input('P14').config!, image: { enabled: false, modes: [] } } }).helper).toBeNull()
-  })
-  it('P14a / P14b the permission comes before the install (DESIGN §15.3): the allow step, then a line while the grant takes effect', () => {
-    expect(view('P14a').helper).toEqual({ text: '图片翻译需要允许扩展与识别助手通信', step: 'allow' })
-    expect(view('P14b').helper).toEqual({ text: '已允许，稍后自动生效', step: null })
-    // Other platforms are told so before anything is asked of them
-    expect(derivePopupView({ ...input('P14a'), platform: 'other' }).helper).toEqual({ text: '图片翻译目前仅支持 macOS', step: null })
-    expect(derivePopupView({ ...input('P14a'), config: { ...input('P14a').config!, image: { enabled: false, modes: [] } } }).helper).toBeNull()
-  })
-  it('the provider poll leaves the background alone while a grant takes effect, so the stale worker can idle out (DESIGN §15.3)', () => {
-    expect(pollsBackground({ state: 'restarting' })).toBe(false)
-    expect(pollsBackground({ state: 'permission-missing' })).toBe(true)
-    expect(pollsBackground({ state: 'not-installed' })).toBe(true)
-    expect(pollsBackground({ state: 'ready', version: '0.1.0' })).toBe(true)
-    expect(pollsBackground(null)).toBe(true)
   })
   it('P16 the style menu is what the settings page holds, in its order, with the chosen one marked', () => {
     const v = view('P16')

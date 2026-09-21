@@ -4,13 +4,10 @@ import { type HandlerDeps, createHandlers } from '@/entrypoints/background/handl
 import { ProviderError } from '@/providers/types'
 import { DEFAULT_FLOATING_ENTRY } from '@/shared/entry-settings'
 import type { AxtMessage, AxtMessageType, AxtResponse, MessageSender } from '@/shared/messages'
-import type { HelperStatus } from '@/shared/ocr'
 
 // The rules the background keeps per message (DESIGN §8.0), at the table's own interface: a message and a sender in,
 // the answer out. The modules behind it — the chain, the router, the status, the floating button's store — have their
 // own tests; what is faked here is only what a rule touches
-
-const READY: HelperStatus = { state: 'ready', version: '1.0.0' }
 
 function harness(over: Partial<HandlerDeps> = {}) {
   const lines: Array<[string, string]> = []
@@ -18,11 +15,7 @@ function harness(over: Partial<HandlerDeps> = {}) {
     chain: {},
     router: { forCall: vi.fn(), drop: vi.fn(async () => 0), bind: vi.fn() },
     offers: {},
-    ocr: { status: vi.fn(async () => READY), ocr: vi.fn() },
-    helperWaiter: { start: vi.fn(async () => undefined), until: vi.fn(() => null) },
-    helperRestored: Promise.resolve(),
-    helperRestart: { noticed: vi.fn() },
-    tellTabs: vi.fn(),
+    ocr: { ocr: vi.fn() },
     diagnostics: { record: (src: string, line: string) => void lines.push([src, line]), restored: Promise.resolve(), export: vi.fn() },
     cache: { clear: vi.fn(async () => 0), cleanup: vi.fn(async () => undefined), stats: vi.fn(async () => ({ entries: 0, bytes: 0 })) },
     toggle: vi.fn(async () => true),
@@ -76,53 +69,6 @@ describe('the background\'s handlers', () => {
     await expect(send({ type: 'axt:cancel-scope', scope: 's1' })).resolves.toEqual({ cancelled: 0 })
   })
 
-  describe('axt:helper-status', () => {
-    it('a plain query probes without a recheck, tells no tab, and lets the restart see the answer', async () => {
-      const { send, deps } = harness()
-      await expect(send({ type: 'axt:helper-status' })).resolves.toEqual(READY)
-      expect(deps.ocr.status).toHaveBeenCalledWith(undefined)
-      expect(deps.tellTabs).not.toHaveBeenCalled()
-      expect(deps.helperRestart.noticed).toHaveBeenCalledWith(READY)
-    })
-
-    it('a recheck that finds the helper tells the open papers, which parked their bitmaps', async () => {
-      const { send, deps } = harness()
-      await send({ type: 'axt:helper-status', recheck: true })
-      expect(deps.ocr.status).toHaveBeenCalledWith({ recheck: true })
-      expect(deps.tellTabs).toHaveBeenCalledWith({ type: 'axt:helper-ready' })
-    })
-
-    it('a recheck that finds nothing tells nobody; a stale worker is still noticed', async () => {
-      const stale: HelperStatus = { state: 'restarting' }
-      const { send, deps } = harness({ ocr: { status: vi.fn(async () => stale), ocr: vi.fn() } })
-      await expect(send({ type: 'axt:helper-status', recheck: true })).resolves.toEqual(stale)
-      expect(deps.tellTabs).not.toHaveBeenCalled()
-      expect(deps.helperRestart.noticed).toHaveBeenCalledWith(stale)
-    })
-  })
-
-  describe('axt:helper-await', () => {
-    it('with start it begins the wait and answers its deadline', async () => {
-      let until: number | null = null
-      const start = vi.fn(async () => { until = 1234 })
-      const { send } = harness({ helperWaiter: { start, until: () => until } })
-      await expect(send({ type: 'axt:helper-await', start: true })).resolves.toEqual({ until: 1234 })
-      expect(start).toHaveBeenCalledTimes(1)
-    })
-
-    it('without it, the answer waits for the previous worker\'s wait to be restored and starts nothing', async () => {
-      let until: number | null = null
-      let restore!: () => void
-      const helperRestored = new Promise<void>(resolve => { restore = () => { until = 5678; resolve() } })
-      const start = vi.fn(async () => undefined)
-      const { send } = harness({ helperWaiter: { start, until: () => until }, helperRestored })
-      const answer = send({ type: 'axt:helper-await' })
-      restore()
-      await expect(answer).resolves.toEqual({ until: 5678 })
-      expect(start).not.toHaveBeenCalled()
-    })
-  })
-
   describe('axt:ocr', () => {
     const call = { type: 'axt:ocr', imageHash: 'h', image: '', mime: 'image/png', paper: 'p', scope: 's1' } as const
 
@@ -130,7 +76,7 @@ describe('the background\'s handlers', () => {
       const order: string[] = []
       const bind = vi.fn(() => void order.push('bind'))
       const ocr = vi.fn(async () => { order.push('ocr'); return { ok: false as const, error: { kind: 'unknown' as const, message: 'x' } } })
-      const { send } = harness({ router: { bind } as unknown as HandlerDeps['router'], ocr: { status: vi.fn(), ocr } })
+      const { send } = harness({ router: { bind } as unknown as HandlerDeps['router'], ocr: { ocr } })
       await send(call)
       expect(bind).toHaveBeenCalledWith('s1', 7)
       expect(order).toEqual(['bind', 'ocr'])
@@ -139,7 +85,7 @@ describe('the background\'s handlers', () => {
     it('a call without a scope binds nothing, and a recognition that throws is answered as a failure', async () => {
       const bind = vi.fn()
       const ocr = vi.fn(async () => { throw new Error('port closed') })
-      const { send } = harness({ router: { bind } as unknown as HandlerDeps['router'], ocr: { status: vi.fn(), ocr } })
+      const { send } = harness({ router: { bind } as unknown as HandlerDeps['router'], ocr: { ocr } })
       const { scope: _scope, ...unscoped } = call
       await expect(send(unscoped)).resolves.toEqual({ ok: false, error: { kind: 'unknown', message: 'port closed' } })
       expect(bind).not.toHaveBeenCalled()
@@ -229,7 +175,7 @@ describe('the background\'s handlers', () => {
     const { deps } = harness()
     expect(Object.keys(createHandlers(deps)).sort()).toEqual([
       'axt:cache-clear', 'axt:cache-stats', 'axt:cancel-scope', 'axt:diag', 'axt:diag-export', 'axt:engine-ready',
-      'axt:entry-settings', 'axt:helper-await', 'axt:helper-status', 'axt:ocr', 'axt:open-settings',
+      'axt:entry-settings', 'axt:ocr', 'axt:open-settings',
       'axt:provider-status', 'axt:set-floating-entry', 'axt:toggle', 'axt:translate',
     ])
   })

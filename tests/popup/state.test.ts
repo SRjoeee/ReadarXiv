@@ -36,7 +36,6 @@ function world() {
     /** Held provider asks, when the test wants to decide the order of the answers */
     hold: false,
     held: [] as { message: AxtMessage<'axt:provider-status'>; resolve(s: ProviderStatus): void; reject(e: unknown): void }[],
-    helper: { state: 'ready', version: '1' } as unknown,
     broadcast: (_: unknown): void => undefined,
     opened: [] as string[],
     optionsPages: 0,
@@ -61,7 +60,6 @@ function world() {
         if (w.hold) return new Promise((resolve, reject) => { w.held.push({ message, resolve, reject }) })
         return status(message.scope ? `session:${message.scope}` : 'saved')
       }
-      if (message.type === 'axt:helper-status') return w.helper
       return undefined
     }) as PopupHost['toBackground'],
     // The real listener over the popup's handlers, so a broadcast is decoded as the browser's would be
@@ -74,8 +72,6 @@ function world() {
     openOptionsPage: () => { w.optionsPages++ },
     url: path => `ext://${path}`,
     shortcut: async () => '⌥T',
-    platform: async () => 'mac',
-    extensionId: 'test-extension',
     get embedded() { return w.embedded },
     close: () => { w.closed++ },
     downloadPack: async target => { w.downloads.push(target) },
@@ -92,7 +88,7 @@ async function opened(setup: (w: ReturnType<typeof world>['w']) => void = () => 
   const made = world()
   setup(made.w)
   const stop = made.popup.start()
-  await until(() => made.input().config !== null && made.input().helper !== null && made.input().saved !== null)
+  await until(() => made.input().config !== null && made.input().saved !== null)
   await flush()
   return { ...made, stop }
 }
@@ -107,7 +103,7 @@ beforeEach(async () => {
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
 
 describe('opening the popup', () => {
-  it('nothing is asked before it starts; then the page, the saved settings\' chain (with the barrier), the helper (rechecked), the shortcut and the platform', async () => {
+  it('nothing is asked before it starts; then the page, the saved settings\' chain (with the barrier) and the shortcut', async () => {
     const made = world()
     made.w.page = page('stopped', null)
     await flush()
@@ -117,8 +113,7 @@ describe('opening the popup', () => {
     await until(() => made.input().saved !== null && made.input().page !== null && made.input().config !== null)
     await flush()
     expect(made.asked()).toEqual([{ type: 'axt:provider-status', fresh: true }])
-    expect(made.w.toBackground).toContainEqual({ type: 'axt:helper-status', recheck: true })
-    expect(made.input()).toMatchObject({ page: { progress: { state: 'stopped' } }, entry: null, saved: { providerId: 'saved' }, session: null, helper: { state: 'ready' }, platform: 'mac', shortcut: '⌥T', menu: null, extensionId: 'test-extension', pack: 'available' })
+    expect(made.input()).toMatchObject({ page: { progress: { state: 'stopped' } }, entry: null, saved: { providerId: 'saved' }, session: null, shortcut: '⌥T', menu: null, pack: 'available' })
     expect(made.input().config).toEqual(BASE)
     expect(made.error()).toBeNull()
     stop()
@@ -132,17 +127,6 @@ describe('opening the popup', () => {
     expect(p.popup.state()).not.toBe(before)
     expect(p.input().menu).toBe('service')
     p.stop()
-  })
-
-  it('a helper that does not answer reads as not installed', async () => {
-    const made = world()
-    made.w.helper = undefined
-    made.popup.actions.helperStatus({ state: 'permission-missing' })
-    expect(made.input().helper).toEqual({ state: 'permission-missing' })
-    const host = made.popup
-    const stop = host.start()
-    await flush()
-    stop()
   })
 
   it('a page still loading is asked six more times, 500 ms apart, and no more; an answer ends the asking (Codex on #3)', async () => {
@@ -243,15 +227,6 @@ describe('while the page translates', () => {
     await flush()
     expect(made.input().session).toBeNull()
     stop()
-  })
-
-  it('while a grant takes effect the background is left alone: the page is still polled, the chain is not', async () => {
-    const p = await opened(w => { w.page = page('on', 's1'); w.helper = { state: 'restarting' } })
-    const before = p.w.toBackground.filter(m => m.type === 'axt:provider-status').length
-    vi.advanceTimersByTime(1500)
-    await flush()
-    expect(p.w.toBackground.filter(m => m.type === 'axt:provider-status')).toHaveLength(before)
-    p.stop()
   })
 })
 
@@ -491,10 +466,8 @@ describe('the offline service\'s pack and the broadcasts', () => {
     p.stop()
   })
 
-  it('the helper\'s state broadcast shows at once; a pack downloaded on the settings page is looked up again, another target\'s is not', async () => {
+  it('a pack downloaded on the settings page is looked up again, another target\'s is not', async () => {
     const p = await opened(w => { w.page = page('stopped', null); w.pack = 'downloadable' })
-    p.w.broadcast({ type: 'axt:helper-state', status: { state: 'not-installed' } })
-    expect(p.input().helper).toEqual({ state: 'not-installed' })
     p.w.pack = 'available'
     p.w.broadcast({ type: 'axt:pack-changed', target: 'jpn' })
     await flush()

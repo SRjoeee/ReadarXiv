@@ -97,8 +97,7 @@ export const configSchema = z.object({
   /**
    * Image translation (§15). `enabled` is the reader's switch (popup, v11); `modes` says in which
    * display modes the overlays show, a detail kept on the options page. Both are display gates:
-   * switching to a mode that is off only hides the overlays, nothing is re-requested. Without the
-   * helper the bitmap path does not run; SVG figures need no helper
+   * switching to a mode that is off only hides the overlays, nothing is re-requested
    */
   image: z.object({ enabled: z.boolean(), modes: z.array(modeSchema).max(3) }),
   /**

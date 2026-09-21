@@ -1,10 +1,10 @@
 // The OCR service (DESIGN §15.2): the OCR cache first, the backend only on a miss, the result written back. The
-// cache is the Dexie store the translations use (cachePortOf); `ocrCacheKey` derives the key from the image bytes
-// and the recognizer's version alone. Which backend answers is `OcrBackend`'s business (DESIGN §15.3).
+// cache is the Dexie store the translations use (cachePortOf); `ocrCacheKey` derives the key from the image bytes,
+// the type they were served as and the recogniser's version. Which backend answers is `OcrBackend`'s business (DESIGN §15.3).
 import { ocrCacheKey } from '@/cache/key'
 import type { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { CACHE_READ_BUDGET_MS, type CachePort, readWithBudget } from '@/providers/translate-service'
-import type { HelperStatus, OcrCall, OcrMessageResponse, OcrResult } from '@/shared/ocr'
+import type { OcrCall, OcrMessageResponse, OcrResult } from '@/shared/ocr'
 import { type OcrBackend, OcrBackendError } from './ocr-backend'
 
 export interface OcrServiceDeps {
@@ -15,7 +15,7 @@ export interface OcrServiceDeps {
   /**
    * Scopes the session router has ended for certain (DESIGN §8.5), the same registry the translate services read.
    * Checked at entry and again after the cache read: a drop can land in that window, when the request is not yet in
-   * the helper's queue and `helper.cancel` finds nothing (seen on a real machine)
+   * the backend's queue and its `cancel` finds nothing (seen on a real machine)
    */
   cancelled: Pick<CancelledScopeRegistry, 'has'>
   /** The cache read's waiting cap (tests); the same CACHE_READ_BUDGET_MS as translations by default */
@@ -23,8 +23,6 @@ export interface OcrServiceDeps {
 }
 
 export interface OcrService {
-  /** `recheck` re-probes a host reported missing; see OcrBackend.status */
-  status(options?: { recheck?: boolean }): Promise<HelperStatus>
   ocr(call: OcrCall): Promise<OcrMessageResponse>
   /** Drain the scope's queued and in-flight recognitions; returns how many. Refusing the scope's later calls is the registry's job */
   cancel(scope: string): number
@@ -42,37 +40,25 @@ function parseCached(raw: string | null | undefined): OcrResult | null {
   }
 }
 
-/** Why nothing can be recognised right now — the image run records it as the failure reason */
-const unavailable = (status: Exclude<HelperStatus, { state: 'ready' }>): string =>
-  status.state === 'not-installed' ? status.reason ?? 'recognition helper not installed'
-    : status.state === 'permission-missing' ? 'recognition helper: permission not granted'
-    : 'recognition helper: waiting for a fresh background worker'
-
 export function createOcrService(deps: OcrServiceDeps): OcrService {
   const aborted = (): OcrMessageResponse => ({ ok: false, error: { kind: 'aborted', message: 'session withdrawn' } })
 
   return {
-    status: options => deps.backend.status(options),
-
     async ocr(call) {
       if (call.scope && deps.cancelled.has(call.scope)) return aborted()
-      const status = await deps.backend.status()
-      if (status.state !== 'ready') return { ok: false, error: { kind: 'network', message: unavailable(status) } }
-      const key = await ocrCacheKey(call.imageHash, status.version)
-      // IndexedDB may hang rather than reject: over budget counts as a miss, or the helper's timeout could never start and the message channel would stay open (Codex on #87)
+      const key = await ocrCacheKey(call.imageHash, call.mime, deps.backend.version)
+      // IndexedDB may hang rather than reject: over budget counts as a miss, or the backend's timeout could never start and the message channel would stay open (Codex on #87)
       const [hit] = await readWithBudget(deps.cache, [key], deps.cacheReadBudgetMs ?? CACHE_READ_BUDGET_MS, deps.warn)
-      // Dropped while the status or the cache was being read: a hit is not returned either, and nothing goes to
-      // the helper (Codex on #87)
+      // Dropped while the cache was being read: a hit is not returned either, and nothing goes to the backend
+      // (Codex on #87)
       if (call.scope && deps.cancelled.has(call.scope)) return aborted()
       // OCR goes through the same cache port but stores its own JSON, unrelated to sentence alignment: the translation column only
       const cached = parseCached(hit?.translation)
       if (cached) return { ok: true, result: cached, cached: true }
       try {
-        const { result, version } = await deps.backend.ocr({ image: call.image }, call.scope)
-        // The port broke during the cache read and the reconnected helper is another version: the result is cached under
-        // the version of the connection it came on, not the old key. Writing the cache is an optimisation and is not awaited: with IndexedDB hung the recognition result goes back all the same (Codex on #87)
-        const storeKey = version === status.version ? key : await ocrCacheKey(call.imageHash, version)
-        deps.cache.putMany([{ key: storeKey, translation: JSON.stringify(result), paper: call.paper }]).catch((e: unknown) => { console.warn('[axt] OCR result cache write failed', e); deps.warn?.(`[axt] OCR result cache write failed: ${e instanceof Error ? e.message : String(e)}`) })
+        const result = await deps.backend.ocr({ image: call.image, mime: call.mime }, call.scope)
+        // Writing the cache is an optimisation and is not awaited: with IndexedDB hung the recognition result goes back all the same (Codex on #87)
+        deps.cache.putMany([{ key, translation: JSON.stringify(result), paper: call.paper }]).catch((e: unknown) => { console.warn('[axt] OCR result cache write failed', e); deps.warn?.(`[axt] OCR result cache write failed: ${e instanceof Error ? e.message : String(e)}`) })
         return { ok: true, result, cached: false }
       } catch (e) {
         if (e instanceof OcrBackendError) return { ok: false, error: { kind: e.kind, message: e.message } }

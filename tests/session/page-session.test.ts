@@ -1,19 +1,18 @@
 // The page session (DESIGN §4.3): what the content entry did before it became an adapter, fixed here
 // before anything about it is simplified. The pipeline, renderer and scheduler run for real against
-// the test document; only the browser-side dependencies (backend, OCR, helper probe, config store,
+// the test document; only the browser-side dependencies (backend, OCR, config store,
 // locale) are fakes.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import { extract } from '@/core/extractor'
 import { ID_ATTR } from '@/core/extractor'
 import { MODE_ATTR, ON_ATTR, STATE_ATTR, UNDERLINE_ATTR } from '@/core/renderer/attrs'
-import { IMG_CLASS } from '@/core/marks'
 import { IMG_MODES_ATTR } from '@/core/renderer/image'
 import { createPageSession, type PageSession, type SessionDeps } from '@/core/session'
 import type { ProviderStatus, TranslationTransport } from '@/providers/transport'
 import type { TranslateCall } from '@/providers/translate-service'
 import type { ImageBytes } from '@/core/image'
-import type { HelperStatus, OcrCall, OcrLine } from '@/shared/ocr'
+import type { OcrCall, OcrLine } from '@/shared/ocr'
 import { chainRevision } from '@/config/revision'
 import { behindSettings } from '@/shared/page-action'
 
@@ -41,7 +40,6 @@ interface HarnessOptions {
   /** What the backend says it translated with */
   provider?: string
   status?: (scope: string | undefined, call: number, options?: { fresh?: boolean }) => ProviderStatus | Promise<ProviderStatus>
-  helper?: boolean
   /** Hold the very first configuration read until `releaseConfig()` */
   holdFirstConfig?: boolean
   /** Hold the n-th backend status read until `releaseStatus()` */
@@ -89,7 +87,6 @@ function harness(options: HarnessOptions = {}) {
       if (!options.ocrLines) return { ok: false, error: { kind: 'unknown', message: 'no OCR in this test' } }
       return { ok: true, result: { width: 100, height: 100, lines: options.ocrLines }, cached: false }
     },
-    helperStatus: async () => (options.helper ? { state: 'ready', version: '0.1.0' } : { state: 'not-installed' }),
     ...(options.fetchImage ? { fetchImage: options.fetchImage } : {}),
     config: {
       get: async () => {
@@ -433,7 +430,6 @@ describe('page session', () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer
     const h = harness({
       page: PAGE + FIGURE,
-      helper: true,
       config: { image: { enabled: true, modes: ['side', 'stack', 'only'] } },
       fetchImage: async () => ({ bytes: png, mime: 'image/png' }),
       ocrLines: [{ text: 'Energy density', quad: [[0.1, 0.1], [0.5, 0.1], [0.5, 0.2], [0.1, 0.2]], conf: 0.99 }],
@@ -645,23 +641,25 @@ describe('page session', () => {
     expect(h.deps.applyLocale).toHaveBeenCalledWith('en')
   })
 
-  it('images: bitmaps wait for the helper, resumeRaster releases them once, the switch clears the overlays gate', async () => {
-    const h = harness({ page: PAGE + FIGURE, config: { image: { enabled: true, modes: ['side', 'stack', 'only'] } } })
+  it('images: a bitmap is read as soon as it is handed over — nothing is waited for — and the switch clears the overlays gate', async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer
+    const h = harness({
+      page: PAGE + FIGURE,
+      config: { image: { enabled: true, modes: ['side', 'stack', 'only'] } },
+      fetchImage: async () => ({ bytes: png, mime: 'image/png' }),
+      ocrLines: [{ text: 'Energy density', quad: [[0.1, 0.1], [0.5, 0.1], [0.5, 0.2], [0.1, 0.2]], conf: 0.99 }],
+    })
     live = h.session
     await h.session.start()
     await settle()
     expect(document.documentElement.getAttribute(IMG_MODES_ATTR)).toBe('side stack only')
     expect(h.trace().some(line => line.startsWith('images: 0 SVG + 1 bitmaps'))).toBe(true)
-    // the probe said "not available": the bitmap is parked, and the first resume releases it
-    expect(h.session.resumeRaster()).toBe(true)
-    expect(h.session.resumeRaster()).toBe(false)
+    await h.session.translateImages()
+    await settle(6)
+    expect(h.ocrCalls).toHaveLength(1)
     // switching image translation off mid-session drops the gate attribute
     h.session.onConfig({ ...h.config(), image: { enabled: false, modes: [] } })
     expect(document.documentElement.hasAttribute(IMG_MODES_ATTR)).toBe(false)
-    // outside a session nothing is parked
-    h.session.restore()
-    live = null
-    expect(h.session.resumeRaster()).toBe(false)
   })
 
   describe('a figure\'s text — the labels of a TikZ picture, blocks of the text run (§15.6) — is asked for where the reader has figures translated', () => {
@@ -708,53 +706,15 @@ describe('page session', () => {
     })
   })
 
-  it('images switched off mid-session leave no round behind: nothing to release, nothing to hand over', async () => {
+  it('images switched off mid-session leave no round behind: nothing to hand over', async () => {
     const h = harness({ page: PAGE + FIGURE, config: { image: { enabled: true, modes: ['side', 'stack', 'only'] } } })
     live = h.session
     await h.session.start()
     await settle()
-    // The probe said "not available": the bitmap is parked, and a release would find it
     h.session.onConfig({ ...h.config(), image: { enabled: false, modes: [] } })
-    // The helper arrives after the switch: there is no round to release, and the answer says so
-    expect(h.session.resumeRaster()).toBe(false)
     await h.session.translateImages()
     await settle(6)
     expect(h.ocrCalls).toEqual([])
     expect((await h.session.status()).images).toBeUndefined()
-  })
-
-  it('a replaced round is out of reach: its helper probe answering late does not clear what the round after it drew', async () => {
-    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer
-    const h = harness({
-      page: PAGE + FIGURE,
-      config: { image: { enabled: true, modes: ['side', 'stack', 'only'] } },
-      fetchImage: async () => ({ bytes: png, mime: 'image/png' }),
-      ocrLines: [{ text: 'Energy density', quad: [[0.1, 0.1], [0.5, 0.1], [0.5, 0.2], [0.1, 0.2]], conf: 0.99 }],
-    })
-    // A label translated to the words it already had is not drawn (image/run.ts): this backend answers with others
-    const echo = h.deps.backend.translate.bind(h.deps.backend)
-    h.deps.backend.translate = async call => {
-      const res = await echo(call)
-      return res.ok ? { ...res, result: { ...res.result, segments: res.result.segments.map(seg => ({ ...seg, text: `[t] ${seg.text}` })) } } : res
-    }
-    // The first round's probe hangs (a helper installed but slow to answer); every later one finds the helper
-    let answerFirst: (status: HelperStatus) => void = () => undefined
-    let probes = 0
-    h.deps.helperStatus = () => ++probes === 1 ? new Promise<HelperStatus>(resolve => { answerFirst = resolve }) : Promise.resolve({ state: 'ready', version: '0.1.0' })
-    live = h.session
-    await h.session.start()
-    await settle()
-    // The reader unticks a mode: the round is replaced, and the new one's probe finds the helper
-    h.session.onConfig({ ...h.config(), image: { enabled: true, modes: ['side', 'stack'] } })
-    await settle()
-    await h.session.translateImages()
-    await settle(6)
-    const overlays = () => document.querySelectorAll(`.${IMG_CLASS}`).length
-    expect(overlays()).toBeGreaterThan(0)
-    const drawn = overlays()
-    // The first round's probe gives up at last: "not there" is about a round that is gone
-    answerFirst({ state: 'not-installed' })
-    await settle()
-    expect(overlays()).toBe(drawn)
   })
 })

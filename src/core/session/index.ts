@@ -14,7 +14,7 @@ import { collectImageTargets, startImageTranslation, type ImageBytes, type Image
 import { startTranslation, type Progress, type TranslationRun } from '@/core/pipeline'
 import { escapeText, unescapeText } from '@/core/protector/escape'
 import {
-  applyStyle, clearImageEverywhere, createModeController, createPlaceKeeper, createPrep, installAnchorFallback, type Mode, type ModeController, relabelFailed, restore, type SentenceHighlight, setImageModes,
+  applyStyle, createModeController, createPlaceKeeper, createPrep, installAnchorFallback, type Mode, type ModeController, relabelFailed, restore, type SentenceHighlight, setImageModes,
   startSentenceHighlight,
 } from '@/core/renderer'
 import { translateCall } from '@/core/run/call'
@@ -25,7 +25,7 @@ import type { TranslationTransport } from '@/providers/transport'
 import { isFigureText } from '@/core/rules/latexml'
 import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
 import type { PageStatus } from '@/shared/messages'
-import type { HelperStatus, ImageProgress, OcrCall, OcrMessageResponse } from '@/shared/ocr'
+import type { ImageProgress, OcrCall, OcrMessageResponse } from '@/shared/ocr'
 import { createIdleTrace } from './idle-trace'
 import { parseFatal } from '@/core/pipeline/fatal'
 
@@ -40,8 +40,6 @@ export interface SessionDeps {
   backend: TranslationTransport
   /** OCR of one bitmap (`axt:ocr`) */
   ocr: (call: OcrCall) => Promise<OcrMessageResponse>
-  /** Is the recognition helper reachable (`axt:helper-status`) */
-  helperStatus: () => Promise<HelperStatus>
   /** Bytes of one bitmap; the image pipeline's own `fetch` through the HTTP cache when absent (tests inject) */
   fetchImage?: (url: string, signal?: AbortSignal) => Promise<ImageBytes>
   config: { get(): Promise<Config>; set(config: Config): Promise<void> }
@@ -83,8 +81,6 @@ export interface PageSession {
   translateImages(targets?: ImageTarget[]): Promise<void>
   /** Retry every failed block and image; returns how many were handed back */
   retryFailed(): number
-  /** The helper became available after this session started: release the parked bitmaps */
-  resumeRaster(): boolean
   /** A configuration change while the page is open (the `watchConfig` subscriber) */
   onConfig(config: Config): void
   status(): Promise<PageStatus>
@@ -98,8 +94,6 @@ interface ImageRound {
   run: ImageRun
   targets: ImageTarget[]
   progress(): ImageProgress | null
-  /** The helper became available: release this round's parked bitmaps. False when there was nothing to release */
-  resume(): boolean
 }
 
 /**
@@ -396,14 +390,13 @@ export function createPageSession(deps: SessionDeps): PageSession {
   }
 
   /**
-   * Image translation (§15): the background is asked first whether the local helper is there; without it the whole
-   * path does not run, and the page's translation is unaffected. Bitmaps are lazily loaded by viewport like text
-   * blocks; with the current mode outside the reader's ticked set, an image entering the viewport parks and is
+   * Image translation (§15): images are taken by viewport like text blocks, and the page's translation does not wait
+   * for them; with the current mode outside the reader's ticked set, an image entering the viewport parks and is
    * translated on switching back
    */
   function startImages(session: LiveSession, config: Config): ImageRound | null {
     // The overlays and the mode gate of the previous round (restarted after a fatal error without a restore) are taken
-    // off first: with the helper gone, image translation off or the target language changed, the old ones must not
+    // off first: with image translation off or the target language changed, the old ones must not
     // show; the new round replaces them when it reaches the image (Codex on #89)
     setImageModes(doc, [])
     if (!config.image.enabled || config.image.modes.length === 0) return null
@@ -414,14 +407,6 @@ export function createPageSession(deps: SessionDeps): PageSession {
     if (targets.length === 0) return null
     const alive = () => live === session
 
-    /**
-     * The helper decides **bitmaps** only (§15.5). So this round **starts at once**, without waiting for its probe:
-     * an SVG figure's text is read out of its contentDocument, and waiting for a handshake unrelated to it makes no
-     * sense — a handshake that takes 30 seconds to time out when the helper is installed but hung, and whose own
-     * failure would skip the whole stretch (Codex on #134). Bitmap targets park first and are released when the
-     * probe comes back.
-     */
-    let helperReady = false
     let progress: ImageProgress | null = null
     // Read by callbacks that may fire while the run starts
     let run: ImageRun | null = null
@@ -447,8 +432,8 @@ export function createPageSession(deps: SessionDeps): PageSession {
       translate: request => backend.translate(request),
       onTrace: line => trace(line),
       ...(deps.fetchImage ? { fetchBytes: deps.fetchImage } : {}),
-      // The mode gate is the same for both kinds of image; a bitmap additionally waits for the helper (§15.5)
-      isEnabled: t => config.image.enabled && config.image.modes.includes(session.modes.effective()) && (t.kind !== 'raster' || helperReady),
+      // The mode gate, the same for both kinds of image
+      isEnabled: () => config.image.enabled && config.image.modes.includes(session.modes.effective()),
       isCurrent: alive,
       onProgress: p => {
         if (!alive()) return
@@ -463,38 +448,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
     })
     trace(`images: ${targets.filter(t => t.kind === 'svg').length} SVG + ${targets.filter(t => t.kind === 'raster').length} bitmaps, modes ${config.image.modes.join('/')}`)
 
-    /**
-     * Bitmaps wait for the helper. **A failed or absent probe has to settle too**: the bitmap overlays the previous
-     * round drew are still on the page, and this round their targets park and would never reach `clearImage` — the
-     * old translations (even in the old target language) would just stay (Codex on #134)
-     */
-    const started = run
-    const round: ImageRound = {
-      run: started,
-      targets,
-      progress: () => progress,
-      // Once the recognition helper is installed, this page has to be released (Codex on #161): with the probe missing
-      // at session start the bitmaps park for good, and the page itself has no occasion to ask again
-      resume: () => {
-        if (helperReady || !inForce()) return false
-        settleRaster(true)
-        return true
-      },
-    }
-    /**
-     * Is this round still the session's. The probe below answers when it answers, and the settings may have replaced
-     * the round by then: a late “not there” must not clear the overlays the round after it drew
-     */
-    const inForce = () => alive() && session.images === round
-    const settleRaster = (available: boolean) => {
-      if (!inForce()) return
-      helperReady = available
-      if (available) started.resume()
-      else for (const t of targets) if (t.kind === 'raster') clearImageEverywhere(t)
-    }
-    deps.helperStatus()
-      .then(helper => settleRaster(helper.state === 'ready'))
-      .catch(e => { trace(`helper-status failed (${e instanceof Error ? e.name : typeof e})`); settleRaster(false) })
+    const round: ImageRound = { run, targets, progress: () => progress }
     return round
   }
 
@@ -648,7 +602,6 @@ export function createPageSession(deps: SessionDeps): PageSession {
       return failed.length + failedImages.length
     },
     // No round — image translation off, or switched off since — has nothing to release, and says so
-    resumeRaster: () => live?.images?.resume() ?? false,
     onConfig,
     // Wait for the first configuration read: one answer settles this round's popup mode bar (see the note on savedMode)
     status: () => ready.then(() => {

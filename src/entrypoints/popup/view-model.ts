@@ -19,10 +19,8 @@ import type { ProviderStatus } from '@/providers/transport'
 import type { EntryStatus, PageStatus } from '@/shared/messages'
 import type { StartResult } from '@/core/session'
 import { pageDecision } from '@/shared/page-action'
-import type { HelperStatus } from '@/shared/ocr'
 import type { PackState } from '@/shared/pack'
 import type { MenuItem } from '@/ui/Menu'
-import { helperStep } from '@/ui/helper-step'
 import { styleTile } from '@/ui/appearance/tiles'
 import { NoActiveTabError } from '@/shared/messages'
 import { PREVIEW_TARGET, S, languageLabel, languageName, parseFatal, profileName, reasonText, serviceName } from '@/ui/strings'
@@ -33,15 +31,6 @@ export const MANAGE_SERVICES = '__manage'
 /** The same for the style menu: not a profile, it opens the settings page at the section that holds them */
 export const MANAGE_STYLES = '__manage-styles'
 export type MenuKind = 'service' | 'language' | 'prompt' | 'style'
-
-/**
- * Whether the popup's 500 ms loop may ask the background for the provider line. Not while a grant is taking effect
- * (DESIGN §15.3): the stale worker is replaced only once it has idled out, and every message to it resets the idle
- * timer — a popup left open on a translating page would keep it alive, and the grant pending, for as long as it
- * stayed open (Codex, local review of #179). The page-status half of the loop goes to the content script and is
- * unaffected
- */
-export const pollsBackground = (helper: HelperStatus | null): boolean => helper?.state !== 'restarting'
 
 export interface PopupInput {
   page: PageStatus | null
@@ -56,9 +45,6 @@ export interface PopupInput {
   config: Config | null
   /** The offline service's language pack; null until asked */
   pack: PackState | null
-  /** The image-recognition helper; null until asked */
-  helper: HelperStatus | null
-  platform: 'mac' | 'other' | null
   /** `chainRevision` of the saved configuration; null until computed. A page whose `running.revision` differs is behind */
   savedRevision: string | null
   /** Which menu is open (the popup's own state) */
@@ -70,7 +56,6 @@ export interface PopupInput {
   entry: EntryStatus | null
   /** The translate shortcut as Chrome reports it; null when unbound or unknown */
   shortcut: string | null
-  extensionId: string
 }
 
 export interface Row { value: string; replaced?: string }
@@ -88,12 +73,6 @@ export interface PopupView {
   highlight: boolean
   images: boolean
   menu: { kind: MenuKind; label: string; items: MenuItem[]; search: boolean } | null
-  /**
-   * Under the image row while the helper is not ready: the line, and the step the reader can take — `allow` asks
-   * for the permission (S-P-86c), `install` opens the guided install, whose command needs `extensionId` (S-P-88);
-   * null is a line with nothing to press (macOS only, or a grant still taking effect — S-P-87 / 86d)
-   */
-  helper: { text: string; step: 'allow' | 'install' | null; extensionId?: string } | null
   note: Note | null
   failed: string | null
   primary: { label: string; action: 'translate' | 'restore' | 'retranslate' | 'openHtml'; disabled: boolean; shortcut?: string }
@@ -114,7 +93,6 @@ const empty = (): PopupView => ({
   highlight: true,
   images: true,
   menu: null,
-  helper: null,
   note: null,
   failed: null,
   primary: { label: S.primary.translate, action: 'translate', disabled: true },
@@ -182,8 +160,6 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
     highlight: config.reading.sentenceHighlight,
     images: config.image.enabled,
     menu: menu === null ? null : menuOf(menu, config, pack),
-    // The helper's prompt belongs where images are translated, which is the full text
-    helper: null,
     note: noHtml
       ? { text: S.note.noHtml, settings: false }
       : canRun ? null : { text: saved?.fallback ? S.note.willFallback(why(), named(saved.fallback.id)) : S.note.cannotRun(why()), settings: true },
@@ -197,7 +173,7 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
 }
 
 export function derivePopupView(input: PopupInput): PopupView {
-  const { page, saved, session, config, pack, helper, platform, menu, shortcut, extensionId, savedRevision, entry } = input
+  const { page, saved, session, config, pack, menu, shortcut, savedRevision, entry } = input
   // An abstract or PDF page: the popup works there too, and its button takes the reader to the HTML version.
   // `== null` on purpose: a tab whose content script ignores `axt:page-status` resolves `undefined` rather than
   // rejecting, and an undefined page is no page (it once rendered an empty popup on every PDF page)
@@ -245,15 +221,6 @@ export function derivePopupView(input: PopupInput): PopupView {
   if (!primary.disabled && shortcut) primary.shortcut = shortcut
   const secondary = behind || paused ? { label: S.primary.restore, action: 'restore' as const } : null
 
-  // Where the reader stands with the helper is one decision (ui/helper-step.ts); the popup shows it only while image
-  // translation is on and there is something to say — nothing while it is unknown, nothing once it is ready
-  const step = config.image.enabled ? helperStep(helper, platform) : 'ready'
-  const helperHint: PopupView['helper'] = step === 'detecting' || step === 'ready' ? null
-    : step === 'mac-only' ? { text: S.helper.macOnly, step: null }
-    : step === 'allow' ? { text: S.helper.permission, step: 'allow' }
-    : step === 'enabling' ? { text: S.helper.enabling, step: null }
-    : { text: S.helper.install, step: 'install', extensionId }
-
   return {
     empty: false,
     service,
@@ -263,7 +230,6 @@ export function derivePopupView(input: PopupInput): PopupView {
     highlight: config.reading.sentenceHighlight,
     images: config.image.enabled,
     menu: menu === null ? null : menuOf(menu, config, pack),
-    helper: helperHint,
     note,
     failed,
     primary,

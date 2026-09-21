@@ -40,7 +40,7 @@ describe('serviceName', () => {
 describe('the strings themselves', () => {
   it('carry the product name and no implementation words', () => {
     expect(S.brand).toBe('Read arXiv')
-    // Values only: keys are code (S.helper is a key, 识别助手 is the word a reader sees)
+    // Values only: keys are code (S.provider is a key, 翻译服务 is the word a reader sees)
     const values = (v: unknown): string => typeof v === 'string' ? v : typeof v === 'function' ? String(v('x', 'y', 'z')) : v && typeof v === 'object' ? Object.values(v).map(values).join(' ') : ''
     const all = values(S)
     expect(all).not.toMatch(/引擎|降级|块|会话|provider|fallback|helper/)
@@ -82,13 +82,9 @@ describe('the settings drawer issue sentence', () => {
   })
 })
 
-describe('helperInstallCommand', () => {
-  it('names the same ref twice — the script and the sources come from one place — and that ref is a commit, a release tag or main (issue #158)', async () => {
-    const { helperInstallCommand } = await import('@/ui/strings')
+describe('BUILD_REF', () => {
+  it('is a commit, a release tag or main — the three things readBuildRef stamps (scripts/build-ref.mjs); it names the build in a reader\'s diagnostics', async () => {
     const { BUILD_REF } = await import('@/shared/build')
-    const command = helperInstallCommand('abcdefghijklmnopabcdefghijklmnop')
-    expect(command).toBe(`curl -fsSL https://raw.githubusercontent.com/SRjoeee/ReadarXiv/${BUILD_REF}/helper/install-remote.sh | bash -s -- abcdefghijklmnopabcdefghijklmnop ${BUILD_REF}`)
-    // main, a commit, or a release tag — the three things readBuildRef stamps (scripts/build-ref.mjs)
     expect(BUILD_REF === 'main' || /^[0-9a-f]{40}$/.test(BUILD_REF) || /^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(BUILD_REF)).toBe(true)
   })
 })

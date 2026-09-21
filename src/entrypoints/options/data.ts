@@ -1,13 +1,11 @@
 // The settings page's data layer: the stored config and the few statuses the page shows. Every change is written
 // straight away (there is no save button). Reading, patching and following the configuration — and the reload an
 // interface language takes, which here waits for the page's drafts — is the surface configuration's
-// (shared/surface-config.ts); this adds the helper, the platform and the cache.
+// (shared/surface-config.ts); this adds the cache.
 import { useCallback, useEffect, useState } from 'react'
-import { browser } from 'wxt/browser'
 import { ConfigUnreadableError, type FallbackReason, getConfig } from '@/config/storage'
 import type { Config } from '@/config/schema'
 import { onMessages, sendMessage } from '@/shared/messages'
-import type { HelperStatus } from '@/shared/ocr'
 import { type PackState, downloadPack } from '@/shared/pack'
 import { drafts } from '@/ui/drafts'
 import { useSurfaceConfig } from '@/ui/use-surface-config'
@@ -28,11 +26,6 @@ export interface OptionsData {
   /** Re-query the pack for a language the reader just chose (the Chrome card would otherwise show the old one) */
   checkPack(target: string): Promise<PackState>
   fetchPack(): Promise<void>
-  helper: HelperStatus | null
-  /** What the permission step found after a grant (ui/HelperPermission.tsx) */
-  setHelper(status: HelperStatus): void
-  /** Which platform this is; the installer only runs on macOS */
-  platform: 'mac' | 'other' | null
   cache: CacheStats | null
   cacheError: string
   clearCache(): Promise<void>
@@ -42,8 +35,6 @@ export interface OptionsData {
 export function useOptionsData(): OptionsData {
   // A draft — a service being edited, a profile, a prompt — is local until its own save, and a reload would discard it
   const { surface, state } = useSurfaceConfig({ holds: drafts })
-  const [helper, setHelper] = useState<HelperStatus | null>(null)
-  const [platform, setPlatform] = useState<'mac' | 'other' | null>(null)
   const [cache, setCache] = useState<CacheStats | null>(null)
   const [cacheError, setCacheError] = useState('')
   const [cacheCleared, setCacheCleared] = useState(false)
@@ -61,20 +52,7 @@ export function useOptionsData(): OptionsData {
   }, [])
 
   useEffect(() => {
-    // `recheck` on every open of a page: the reader may have installed the helper since the worker
-    // last looked, and it remembers a missing host for its whole life. Chrome fails a connect to an
-    // absent host without spawning anything, so asking again costs nothing
-    // A background that does not answer reads as a helper that is not there, as in the popup. No reason goes with it:
-    // the field is the background's, for an image's failure line, and no surface shows it
-    sendMessage({ type: 'axt:helper-status', recheck: true }).then(setHelper).catch(() => setHelper({ state: 'not-installed' }))
-    browser.runtime.getPlatformInfo().then(info => setPlatform(info.os === 'mac' ? 'mac' : 'other')).catch(() => setPlatform('other'))
-    // The background broadcasts the helper's state when it changes on its own — the install wait found it, or the
-    // fresh worker after a runtime grant reported (DESIGN §15.3); the section follows without a reload
     const stopBroadcasts = onMessages({
-      'axt:helper-state': message => {
-        if (message.status) setHelper(message.status)
-        return undefined
-      },
       // A pack downloaded from the popup: the Chrome card here must not keep offering the download
       'axt:pack-changed': message => {
         if (message.target) surface.receivePack(message.target)
@@ -124,5 +102,5 @@ export function useOptionsData(): OptionsData {
     await loadCache()
   }, [loadCache])
 
-  return { config: state.config, fallbackReason: state.fallbackReason, patch, reset: surface.reset, resetFailed: state.resetFailed, pack: state.pack, checkPack: surface.checkPack, fetchPack, helper, setHelper, platform, cache, cacheError, clearCache, cacheCleared }
+  return { config: state.config, fallbackReason: state.fallbackReason, patch, reset: surface.reset, resetFailed: state.resetFailed, pack: state.pack, checkPack: surface.checkPack, fetchPack, cache, cacheError, clearCache, cacheCleared }
 }

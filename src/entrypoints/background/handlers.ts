@@ -14,8 +14,6 @@ import type { MessageHandlers } from '@/shared/messages'
 import type { ChainHolder } from './chain'
 import type { Diagnostics } from './diagnostics'
 import { engineReady } from './engine-ready'
-import type { HelperWaiter } from './helper-await'
-import type { HelperRestart } from './helper-restart'
 import type { OcrService } from './ocr'
 import { type ConfigOffers, providerStatus } from './provider-status'
 import type { SessionRouter } from './sessions'
@@ -24,13 +22,7 @@ export interface HandlerDeps {
   chain: ChainHolder
   router: SessionRouter
   offers: ConfigOffers
-  ocr: Pick<OcrService, 'status' | 'ocr'>
-  helperWaiter: Pick<HelperWaiter, 'start' | 'until'>
-  /** The wait left in session storage by the previous worker is picked up (helper-await.ts `resume`) */
-  helperRestored: Promise<unknown>
-  helperRestart: Pick<HelperRestart, 'noticed'>
-  /** Tell every paper that is open that the helper answers now */
-  tellTabs(message: { type: 'axt:helper-ready' }): void
+  ocr: Pick<OcrService, 'ocr'>
   diagnostics: Pick<Diagnostics, 'record' | 'restored' | 'export'>
   cache: { clear(): Promise<number>; cleanup(): Promise<unknown>; stats(): Promise<{ entries: number; bytes: number }> }
   /** The toggle of the key and the menu (context-menu.ts), for one tab */
@@ -86,22 +78,6 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
       .then(() => deps.cache.stats())
       .then(stats => ({ ok: true as const, ...stats }))
       .catch((e: unknown) => ({ ok: false as const, message: messageOf(e) })),
-
-    'axt:helper-status': message => deps.ocr.status(message.recheck ? { recheck: true } : undefined).then(status => {
-      // A re-probe that finds it has to reach the papers already open, which parked their
-      // bitmaps when the probe at their session start found nothing (Codex on #161)
-      if (message.recheck && status.state === 'ready') deps.tellTabs({ type: 'axt:helper-ready' })
-      // Granted a moment ago into this running worker: arrange the fresh one (DESIGN §15.3)
-      deps.helperRestart.noticed(status)
-      return status
-    }),
-
-    // One message, two uses: with start it is “copied, start waiting”, without it “still waiting?” — the popup is
-    // destroyed on losing focus and picks the same wait up again with the latter on reopening (DESIGN §15.4).
-    // **What wakes the worker is often the popup's own query**, so the query waits for the stored wait to be
-    // restored before answering, or it gets the null not yet restored (Codex on #166)
-    'axt:helper-await': message => (message.start ? deps.helperWaiter.start() : deps.helperRestored)
-      .then(() => ({ until: deps.helperWaiter.until() })),
 
     'axt:ocr': (message, sender) => {
       // The scope is bound to the sender's tab first: this may be the tab's first message carrying a scope, and unbound,

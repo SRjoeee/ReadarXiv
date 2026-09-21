@@ -1,10 +1,10 @@
 // OCR lines → translation boxes (DESIGN §15.1). Pure functions, one and the same under happy-dom and on a real machine.
 //
-// Vision returns lines; a label wrapped in the image ("Dynamical / charge", "Pair / Production") is two lines and
+// A recogniser returns lines; a label wrapped in the image ("Dynamical / charge", "Pair / Production") is two lines and
 // has to be sent as one sentence, so lines that are vertically adjacent, aligned (left edge or centre line) and
 // overlapping horizontally merge into one box. The filter follows the keep rules of §6: bare numbers (tick marks),
 // text without two consecutive letters (single-letter panel labels "B", "(a)", "E=+1") are not translated, and
-// low confidence is dropped — Vision gives these 0.5, and real words are almost all 1.0.
+// low confidence is dropped — Apple Vision, which the rules were first set against, gave these 0.5 and real words almost all 1.0.
 // The rule parameters were set against the real coordinates in tests/fixtures/ocr/qed3d-string-breaking.json.
 import { isNumericCell } from '@/core/rules/latexml'
 import type { OcrLine, Quad } from '@/shared/ocr'
@@ -28,7 +28,7 @@ export interface Box {
   /**
    * Text direction in radians; absent means upright (§15.5).
    *
-   * Set by the SVG path only, and the corpus has only 0 and -π/2. **A rotated line takes no part in merging**: the
+   * Set by the SVG path for any tilt, and by the recogniser for a line read on its side. **A rotated line takes no part in merging**: the
    * adjacency / alignment tests below are written for “lines stacking downwards”, while a vertical line stacks
    * sideways, and applying them would glue two unrelated axis labels together. A vertical label is rarely multi-line anyway.
    */

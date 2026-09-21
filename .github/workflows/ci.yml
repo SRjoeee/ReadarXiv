@@ -35,7 +35,7 @@ jobs:
             tests/fixtures/arxiv/2609.00245.html
             tests/fixtures/svg/2608.29808-bounter-case.svg
             tests/fixtures/svg/2607.24653-AET_blackbox_curve.svg
-      - run: pnpm fixtures:fetch --for tests
+      - run: pnpm fixtures:fetch
       - if: steps.fixtures-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:

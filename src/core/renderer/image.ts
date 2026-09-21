@@ -4,7 +4,7 @@
 // (marks.ts says why under IMG_CLASS) and is inserted on success only; pending and failure have no DOM node. In
 // keeping with §7.1: the <img> itself gains no attribute; restore removes the whole layer by INJECTED_SELECTOR.
 import { IMG_CLASS } from '@/core/marks'
-import { ANCHORS_ATTR, ANCHOR_ATTR, DIR_ATTR, FOR_ATTR, LANG_ATTR, MIRROR_CLASS, SPLIT_FOR_ATTR } from './attrs'
+import { ANCHORS_ATTR, ANCHOR_ATTR, DIR_ATTR, FOR_ATTR, LANG_ATTR, MIRROR_CLASS } from './attrs'
 import { dropMirror } from './mirror'
 
 /** The mode gate on <html>: the set of modes the reader ticked, space-separated; CSS matches the current mode with ~= (the §15 setting) */
@@ -82,24 +82,6 @@ function dropOverlay(overlay: Element): void {
   overlay.previousElementSibling?.removeAttribute(ANCHOR_ATTR)
   overlay.remove()
   if (parent && !parent.querySelector(`:scope > .${IMG_CLASS}`)) parent.removeAttribute(ANCHORS_ATTR)
-}
-
-/**
- * This image's overlays **anywhere in the document**, the one inside a side-mode split copy included.
- *
- * `clearImage` looks only at the image's own sibling slot, enough for “replace with a fresh one” — the copy is
- * rebuilt by signature at the next tidy. Not enough for “no longer translating this image”: the copy's overlay
- * stays, and in only mode **the original is hidden**, so what the reader sees is exactly the copy's overlay from
- * the previous run, or even the previous target language (Codex on #134)
- */
-export function clearImageEverywhere(target: ImageTarget): number {
-  const doc = target.el.ownerDocument
-  // The copy's overlay answers to `data-axt-split-for`: `stripIds` wipes every `data-axt-*` off the clone, so a lookup
-  // by `data-axt-for` alone would leave the copy's overlay there for good (Codex on #134)
-  const id = CSS.escape(target.id)
-  const stale = Array.from(doc.querySelectorAll(`.${IMG_CLASS}[${FOR_ATTR}="${id}"], .${IMG_CLASS}[${SPLIT_FOR_ATTR}="${id}"]`))
-  for (const node of stale) dropOverlay(node)
-  return stale.length
 }
 
 /**

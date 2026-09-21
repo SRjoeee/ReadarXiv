@@ -54,10 +54,8 @@ export const MIRROR_CLASS = 'axt-mirror'
 export const SPLIT_CLASS = 'axt-split'
 /** On the original: this figure has a split copy */
 export const SPLIT_ATTR = 'data-axt-split'
-/** In the copy, each element remembers the id of its original (the copy's ids are stripped; anchors and overlay clean-up find their way back by this) */
+/** In the copy, each element remembers the id of its original (the copy's ids are stripped; anchors find their way back by this) */
 export const SPLIT_OF_ATTR = 'data-axt-split-of'
-/** In the copy, an image overlay remembers which image it belongs to (the copy's data-axt-for is stripped) */
-export const SPLIT_FOR_ATTR = 'data-axt-split-for'
 
 /*
  * The marks the style sheets read where they once asked `:has()` (DESIGN §7.2). Chrome answers a `:has()` in an

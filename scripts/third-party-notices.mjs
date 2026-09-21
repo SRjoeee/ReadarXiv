@@ -81,8 +81,25 @@ function entryOf(dir) {
 
 const RULE = '-'.repeat(80)
 
+/**
+ * What a build ships that no package manifest names: the figure recogniser's models (public/ocr, DESIGN §15.3). Apache-2.0
+ * asks of a copy what it asks of code — the licence with it (§4(a)), and a word on any file that was changed (§4(b))
+ */
+export const BUNDLED_DATA = [{
+  name: 'PP-OCRv6 tiny — text detection and recognition models (PaddleOCR)',
+  licence: APACHE,
+  source: 'https://github.com/PaddlePaddle/PaddleOCR',
+  text: [
+    'Copyright (c) PaddlePaddle Authors. Licensed under the Apache License, Version 2.0.',
+    '',
+    'ocr/PP-OCRv6_tiny_det.onnx and ocr/PP-OCRv6_tiny_rec.onnx are the `inference.onnx` of PaddleOCR\'s official ONNX',
+    'packages of the two models, unchanged. ocr/PP-OCRv6_tiny_dict.txt is the recognition model\'s character list, written',
+    'out one character a line from the `character_dict` of that package\'s `inference.yml`; nothing else of it is changed.',
+  ].join('\n'),
+}]
+
 /** The file's text from the packages noted so far. Sorted, and with nothing of the machine it was built on, so two builds of one tree give one file */
-export function noticesText(dirs = bundled) {
+export function noticesText(dirs = bundled, data = BUNDLED_DATA) {
   const entries = [...dirs].map(entryOf).sort((a, b) => a.name.localeCompare(b.name))
   // Two copies of one package at different versions are two entries; the same version installed twice is one
   const seen = new Set()
@@ -92,11 +109,12 @@ export function noticesText(dirs = bundled) {
     'directory). Its source, and the list of what it ported from other GPL projects, is at',
     'https://github.com/SRjoeee/ReadarXiv.',
     '',
-    `The built extension also contains code from the ${unique.length} npm packages below, each under its own licence.`,
+    `The built extension also contains code from the ${unique.length} npm packages below${data.length > 0 ? ', and the data named after them' : ''}, each under its own licence.`,
   ].join('\n')
   const body = unique.map(entry => [RULE, `${entry.name} ${entry.version} — ${entry.licence}`, entry.source, RULE, '', entry.texts.join(`\n\n${'· '.repeat(20).trim()}\n\n`)].join('\n'))
-  if (unique.some(entry => entry.licence === APACHE)) {
-    body.push([RULE, 'The Apache License, Version 2.0 — the licence of every package marked Apache-2.0 above', RULE, '', read(join(KEPT_TEXTS, `${APACHE}.txt`))].join('\n'))
+  for (const item of data) body.push([RULE, `${item.name} — ${item.licence}`, item.source, RULE, '', item.text].join('\n'))
+  if ([...unique, ...data].some(entry => entry.licence === APACHE)) {
+    body.push([RULE, 'The Apache License, Version 2.0 — the licence of everything marked Apache-2.0 above', RULE, '', read(join(KEPT_TEXTS, `${APACHE}.txt`))].join('\n'))
   }
   return `${[head, ...body].join('\n\n')}\n`
 }

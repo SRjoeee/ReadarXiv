@@ -23,7 +23,7 @@ The extension runs on `arxiv.org` pages: on HTML papers (`arxiv.org/html/…`) i
 
 ## Figures
 
-For translating the words inside figures, vector figures are loaded from arXiv and read on your computer. Text inside bitmap figures is recognised only on macOS, through a separate helper program you install yourself and a permission Chrome asks you to grant; the image goes to that helper on your computer, which uses Apple's on-device text recognition. The words found in a figure are then translated like any other text, by the services above. Images are never uploaded to a translation service.
+For translating the words inside figures, vector figures are loaded from arXiv and read on your computer. Text inside bitmap figures is recognised inside the extension, in your browser, by a recognition model that is part of the extension's package: nothing is downloaded for it, and the image goes nowhere. The words found in a figure are then translated like any other text, by the services above. Images are never uploaded to a translation service.
 
 ## What is stored on your computer
 
@@ -31,7 +31,7 @@ For translating the words inside figures, vector figures are loaded from arXiv a
 - **A translation cache**, in the extension's IndexedDB database: translations and figure recognition results, filed under a hash of what was translated and how, so a paper you reopen appears at once. API keys are not part of the cache. Entries expire after 30 days; at most 20 000 are kept. Clearing the cache in the settings removes them; it leaves your settings as they are.
 - **A diagnostics log**, in the browser's session storage, which ends when the browser closes: the last 500 lines about what the extension did — for example that a request failed, with the kind of failure and the HTTP status, or that the page was handed to another service — with block and paper identifiers and counts. It never contains page text, API keys or the messages services send back. It leaves your computer only if you export it from the settings page and share it yourself.
 
-Uninstalling the extension removes its stored data through Chrome. It does not remove the separate macOS helper, and it cannot remove anything a translation service has already received.
+Uninstalling the extension removes its stored data through Chrome. It cannot remove anything a translation service has already received.
 
 ## What the extension does not do
 
@@ -39,7 +39,7 @@ It has no analytics, advertising or tracking, and it does not collect informatio
 
 ## Your choices
 
-You can choose the translation service, turn falling back off, remove a service and its key, withdraw the permissions granted for an added address or for the helper, clear the cache, show the original page at any moment, and uninstall the extension. Showing the original stops translating that page; it does not recall requests already sent. What a service has received is governed by that service's policy.
+You can choose the translation service, turn falling back off, remove a service and its key, withdraw the permissions granted for an added address, clear the cache, show the original page at any moment, and uninstall the extension. Showing the original stops translating that page; it does not recall requests already sent. What a service has received is governed by that service's policy.
 
 ## Contact and changes
 
