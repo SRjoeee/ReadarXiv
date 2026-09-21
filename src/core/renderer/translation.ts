@@ -8,7 +8,7 @@ import { tableCells } from '@/core/rules/latexml'
 import { type BlockState, DIR_ATTR, FOR_ATTR, IDENTITY_ATTR, INLINE_ATTR, LANG_ATTR, PARTIAL_ATTR, STATE_ATTR } from './attrs'
 import { markTail, markTranslatedNote } from './side-layout'
 import { delocalizeNotes } from './notes'
-import { shouldInline, translationClass, translationShell } from './shell'
+import { pendingOf, shouldInline, translationClass, translationShell } from './shell'
 import { cancelSkeletonsIn } from './skeleton'
 import { collectText, squash } from '@/core/text'
 
@@ -69,10 +69,43 @@ function isCellFragment(content: DocumentFragment): boolean {
   return cell !== null
 }
 
-/** A text block: a new element of the original's tag name, its content the fragment the protector filled back (the clone with ids stripped) */
+/**
+ * The skeleton's node, when the translation can take it over: it is this block's, of the tag a translation has, and
+ * the only node of ours the block has (a second one — what a previous round left — sends the block down the path
+ * that clears them all).
+ *
+ * Taken over rather than replaced because of what a child coming or going costs **in arXiv's own style sheet**: its
+ * positional rules (`.ltx_para:first-of-type`, `:nth-of-type`) leave Chrome one invalidation set for all of them, and
+ * that set marks the parent's **whole subtree** for recalculation. The document title's parent is `<article>`, so its
+ * translation arriving restyled every element of the paper — 50 ms on 2312.17141's 32 000, right as the first
+ * translations landed; a section heading's restyled its section. Filled in place, the recalculation that follows
+ * covers the node itself: 166 elements for the whole first screen (tests/e2e/probes/toggle-timeline.mjs, DESIGN §10)
+ */
+function pendingToFill(block: TextBlock): Element | undefined {
+  const pending = pendingOf(block)
+  if (!pending || pending.tagName !== block.el.tagName) return undefined
+  for (const sibling of Array.from(block.el.parentElement?.children ?? [])) {
+    if (sibling !== pending && sibling.classList.contains(T_CLASS) && sibling.getAttribute(FOR_ATTR) === block.id) return undefined
+  }
+  return pending
+}
+
+/**
+ * A text block: an element of the original's tag name, its content the fragment the protector filled back (the clone
+ * with ids stripped). The element is the block's skeleton node when it has one (`pendingToFill`), a new one otherwise;
+ * either way the page ends up with the same node, attribute for attribute
+ */
 export function renderText(block: TextBlock, content: DocumentFragment): Element {
-  clearTranslation(block)
-  const { node, slot } = translationShell(block)
+  const pending = pendingToFill(block)
+  if (pending) {
+    // The pending round cleared the block when its skeleton went in (renderPending); what is left to undo is the ring
+    // and the same-line mark, which the lines below decide afresh
+    cancelSkeletonsIn(pending)
+    block.el.removeAttribute(INLINE_ATTR)
+  } else {
+    clearTranslation(block)
+  }
+  const { node, slot } = translationShell(block, undefined, pending)
   // What was filled back is already a `<td>`: used as it is, no further shell (see isCellFragment)
   if (slot !== node && isCellFragment(content)) {
     slot.remove()
@@ -106,7 +139,7 @@ export function renderText(block: TextBlock, content: DocumentFragment): Element
   // long ago — not excluded, an outer block returned unchanged could never be judged identical, and stack mode would
   // keep the duplicate
   if (squash(ownText(node)) === squash(ownText(block.el))) node.setAttribute(IDENTITY_ATTR, '')
-  block.el.after(node)
+  if (!pending) block.el.after(node)
   setState(block, 'translated')
   markTail(block.el)
   markTranslatedNote(block.el)

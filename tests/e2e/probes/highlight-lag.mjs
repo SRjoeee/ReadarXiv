@@ -49,7 +49,7 @@ async function openPaper(id) {
   const page = await context.newPage()
   const logs = []
   page.on('console', m => { const t = m.text(); if (t.includes('[axt]')) logs.push({ t: Date.now(), text: t }) })
-  await page.goto(`https://arxiv.org/html/${id}#axt-translate`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`https://arxiv.org/html/${id}#readarxiv`, { waitUntil: 'domcontentloaded' })
   const cdp = await context.newCDPSession(page)
   await cdp.send('Performance.enable')
   return { page, logs, cdp }

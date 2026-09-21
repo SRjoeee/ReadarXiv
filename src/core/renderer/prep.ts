@@ -19,24 +19,34 @@
 import { ID_ATTR } from '@/core/extractor'
 import { DOCUMENT_ROOT } from '@/core/rules/latexml'
 import { createCoalescer, type Coalescer } from '@/core/scheduler/coalesce'
-import { applyMarginNotes, planMarginNotes } from './margin-notes'
+import { applyMarginNotes, clearMarginNotes, planMarginNotes } from './margin-notes'
 import { createMirrors } from './mirror'
 import { localizeNotes } from './notes'
-import { readPairMargins, writePairMargins, type PairMarginPlan } from './pair-margins'
-import { dropStaleSplits, outermostFigure, splitFigures } from './split-figures'
+import { clearPairMargins, readPairMargins, writePairMargins, type PairMarginPlan } from './pair-margins'
+import { dropStaleSplits, outermostFigure, setSplitDuplicatesHidden, splitFigures } from './split-figures'
 import { fitTables, measureColumn, resetFitCache, watchFontLoads } from './table-fit'
 
 export interface Prep {
   /** These blocks (or image targets, §15) just touched the DOM: schedule a pass tidying only their containers */
   touch(items: ReadonlyArray<{ el: Element }>): void
-  /** Schedule a full pass (entering side, the column width changed, a session started) */
-  touchAll(): void
-  /** Cancel the scheduled pass (leaving side) */
-  cancel(): void
-  /** A session starts or ends: the mirrors may run once more, the width cache is cleared, the column width is re-read, and the font subscription is dropped until the next touch */
+  /**
+   * The mode in effect is side, or no longer is — told at every change of it, and when a session starts in it.
+   * What side needs beyond the passes is the tidy layer's to know, not its caller's:
+   *
+   * - **Entering**: the column width is re-read and one full pass runs (coming back from stack / only, the alignment
+   *   margins were cleared and have to be computed afresh), and the root's width is watched from here on — the
+   *   column follows the window, and the zoom ratios with it. Only a width that really changed counts: scaling a
+   *   table makes the watched root report a size change itself, and without that gate the two would oscillate.
+   * - **Leaving**: the queued pass is withdrawn, the watch ends, and what the passes wrote **inline** is taken back —
+   *   the alignment margins and the margin-note offsets serve the two columns only, and in the other modes the
+   *   site's own margins and the floats' own heights are right. What a pass wrote as a `data-axt-*` mark needs no
+   *   undoing: the style sheet reads those under side alone.
+   * - **Either way** the split copies' duplicated media speak only where the original does not (§7.4b, issue #170):
+   *   `aria-hidden` is an attribute, and no style sheet can switch it.
+   */
+  side(on: boolean): void
+  /** A session starts or ends: the mirrors may run once more, the width cache is cleared, the column width is re-read, and the font subscription and the width watch are dropped — until the next touch, the next `side(true)` */
   reset(): void
-  /** The column width may have changed (window resized): re-read at the start of the next pass */
-  refreshColumn(): void
 }
 
 export interface PrepOptions {
@@ -45,8 +55,16 @@ export interface PrepOptions {
   trace?: (line: string) => void
   /** Retry a failed block by id — the pipeline's `translate([block])`; the split copies' widgets call it (issue #170) */
   retry?: (blockId: string) => void
+  /**
+   * A full pass under side is about to relayout the page — mirrors by the hundred, tables scaled — and Chrome's own
+   * scroll anchoring stands down for that frame (measured: 96 px in one pass, more with more tables above the reader).
+   * Called at the start of such a pass, where the layout is still clean (renderer/place.ts)
+   */
+  keepPlace?: () => void
   /** Test injection: the column width */
   columnWidth?: (root: Element) => number
+  /** Test injection: watch an element's width, returning the way to stop; a `ResizeObserver` when absent */
+  watchWidth?: (root: Element, onWidth: (width: number) => void) => () => void
   delay?: number
   maxWait?: number
 }
@@ -74,12 +92,28 @@ export function rootsOf(blocks: Iterable<Element>): Element[] {
 
 export function createPrep(doc: Document, options: PrepOptions): Prep {
   const columnWidth = options.columnWidth ?? measureColumn
+  const watchWidth = options.watchWidth ?? ((root: Element, onWidth: (width: number) => void) => {
+    if (typeof ResizeObserver !== 'function') return () => undefined
+    const observer = new ResizeObserver(entries => onWidth(Math.round(entries[0]?.contentRect.width ?? 0)))
+    observer.observe(root)
+    return () => observer.disconnect()
+  })
+  /** The way to stop watching the root's width; null while it is not watched */
+  let unwatchWidth: (() => void) | null = null
   let mirrorsDone = false
+  /**
+   * A split copy has been dropped since the mirrors last ran: its block may be due a mirror again. **Remembered across
+   * passes**: outside side the pass stops once the stale copy is gone — there is no right column to fill — and the
+   * return to side is a pass in which nothing is dropped (Codex on #282)
+   */
+  let unmirrored = false
   let columnStale = true
   let column = 0
 
   const run = (scope: Element[] | null) => {
     const t0 = performance.now()
+    // Before anything is read or written: the reader's place, across the one kind of pass that moves the whole page
+    if (scope === null && options.isSide()) options.keepPlace?.()
     // The column width: read before anything is written. The layout is clean at this moment (the last frame has just
     // rendered), so no whole-page forced layout is paid for. Measured from the **translation root**, not <html>:
     // measureColumn finds the grid track through closest(DOCUMENT_ROOT), which from <html> finds nothing, and the
@@ -105,7 +139,7 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
     // Split copies whose signature expired are dropped first: outside side, the overlay went into the hidden original
     // (§15.2), and a full pass rebuilds them on returning to side; in side as well — once a figure's only translation
     // (the overlay) is taken away, needsSplit is false, splitFigures skips it, and the old copy would hang on (Codex on #89)
-    for (const r of roots) dropStaleSplits(r)
+    for (const r of roots) if (dropStaleSplits(r) > 0) unmirrored = true
     if (!options.isSide()) return
 
     // Figures are split whole first, mirrors filled in after: a split figure takes no part in mirroring (the two would duplicate a copy)
@@ -120,7 +154,16 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
       mirrorsDone = true
       // Mirrors are translation nodes too, subject to the site's adjacent-sibling rules the same way, so one more read after they are in — the only such pass in a session
       if (made) margins = [readPairMargins(doc)]
+    } else if (mirrorsDone && unmirrored) {
+      // A block that lost its copy and is due none — its overlay, all that paired it, is gone again — goes back to
+      // what it was before the overlay: mirrored. The session's one pass is over, and with neither a copy nor a mirror
+      // the block spans both columns (Codex on #282; a figure without a caption was as exposed as a loose graphic).
+      // Over the whole paper: the copy may have been dropped in an earlier pass, among other roots, and the mirrors
+      // are idempotent — what is paired is left as it is
+      made = createMirrors(doc)
+      if (made) margins = [readPairMargins(doc)]
     }
+    unmirrored = false
     const t3 = performance.now()
     let fitted = 0
     let scrolled = 0
@@ -174,25 +217,44 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
       watchFonts()
       for (const item of items) coalescer.schedule(item.el)
     },
-    touchAll() {
-      watchFonts()
-      coalescer.schedule()
-    },
-    cancel() {
-      coalescer.cancel()
-      restack.cancel()
+    side(on) {
+      setSplitDuplicatesHidden(doc, on)
+      if (!on) {
+        unwatchWidth?.()
+        unwatchWidth = null
+        coalescer.cancel()
+        restack.cancel()
+        clearPairMargins(doc)
+        clearMarginNotes(doc)
+        return
+      }
+      const fullPass = () => {
+        columnStale = true
+        watchFonts()
+        coalescer.schedule()
+      }
+      fullPass()
+      if (unwatchWidth) return
+      const root = doc.querySelector(DOCUMENT_ROOT)
+      if (!root) return
+      let lastWidth = 0
+      unwatchWidth = watchWidth(root, width => {
+        if (width === lastWidth) return
+        lastWidth = width
+        fullPass()
+      })
     },
     reset() {
       coalescer.cancel()
       restack.cancel()
       unwatchFonts?.()
       unwatchFonts = null
+      unwatchWidth?.()
+      unwatchWidth = null
       mirrorsDone = false
+      unmirrored = false
       columnStale = true
       resetFitCache()
-    },
-    refreshColumn() {
-      columnStale = true
     },
   }
 }

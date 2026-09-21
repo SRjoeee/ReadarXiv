@@ -2,7 +2,6 @@
 // There is no save button — every control writes the config as it changes, and the drawers commit
 // with one button (docs/UI.md §3.2, rebuilt 2026-09-10).
 import { useEffect, useState } from 'react'
-import { browser } from 'wxt/browser'
 import { LOCALE_CODES, LOCALE_NAMES, type LocaleCode } from '@/locales'
 import { BrandMark } from '@/ui/BrandMark'
 import { Confirm } from '@/ui/Confirm'
@@ -87,7 +86,7 @@ export function App() {
           )}
           {/* The three sections that write are not shown over a configuration that cannot be read: what they would show is
               the defaults, not the reader's settings, and the store refuses their saves (S-O-02). “Data” writes none */}
-          {!data.fallbackReason && section === 'services' && <Services data={data} extensionId={browser.runtime.id} />}
+          {!data.fallbackReason && section === 'services' && <Services data={data} />}
           {!data.fallbackReason && section === 'reading' && <Reading data={data} />}
           {!data.fallbackReason && section === 'prompts' && <Prompts data={data} />}
           {section === 'data' && <Data data={data} />}

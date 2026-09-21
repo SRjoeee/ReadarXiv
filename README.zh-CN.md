@@ -56,7 +56,8 @@ Read arXiv 是一款专为 arXiv HTML 页面打造的阅读翻译扩展。
 ![译文里带编号的行间公式与行内公式都完好](docs/images/formulas.png)
 
 **图里的文字也能翻。** SVG 图表里的标注与坐标轴、位图图片里的文字都能翻译，译文盖在原处；
-把鼠标移上去就能看回底下的原文。位图图片目前仅支持 macOS。
+把鼠标移上去就能看回底下的原文。位图里的文字由扩展自带的模型在浏览器里识别：
+不用安装任何东西，不限系统，图片也不会离开你的机器。
 
 ![图中的标签在原位被译文覆盖](docs/images/figure.png)
 
@@ -79,17 +80,12 @@ Read arXiv 是一款专为 arXiv HTML 页面打造的阅读翻译扩展。
 2. **加载。** 打开 `chrome://extensions`，开启**开发者模式**，点**加载已解压的扩展程序**，
    选择 `.output/chrome-mv3`。
 
-3. **打开一篇论文**，地址形如 `arxiv.org/html/…`，按 <kbd>Alt</kbd>+<kbd>T</kbd>——
-   也可以用工具栏按钮、右键菜单或 popup。摘要页上，arXiv 自己的 HTML 链接旁会多一条**双语版**入口，
-   点它即可打开论文并直接开始翻译。
+3. **打开一篇论文**，地址形如 `arxiv.org/html/…`，点窗口边缘的悬浮按钮，或按 <kbd>Alt</kbd>+<kbd>T</kbd>——
+   也可以用工具栏按钮、右键菜单或 popup。在论文的摘要页或 PDF 页，同一个悬浮按钮会打开论文并直接开始翻译；
+   摘要页上 arXiv 自己的 HTML 链接旁还有一条**双语版**入口，作用相同。
 
 **更新。** 拉取新代码后重新 `pnpm build`，再到 `chrome://extensions` 里点这个扩展卡片上的重新加载按钮。
 只重启 Chrome 不够：它会继续运行上一版的后台，与新版页面混在一起。已保存的设置会保留，并自动升级到新版本。
-
-### 翻译图片（macOS）
-
-位图图片里的文字，由一个跑在你自己机器上的小程序读出来。popup 的「图片翻译」下有一条一键安装命令；
-它需要 Xcode Command Line Tools，编译约一分钟。详见 [`helper/README.md`](helper/README.md)。
 
 ## 翻译服务
 
@@ -141,11 +137,11 @@ flowchart LR
 
 ## 状态
 
-0.4.0 版（见 [`CHANGELOG.md`](CHANGELOG.md)）；Chrome 应用商店上架待办，目前从源码构建。
+0.4.1 版（见 [`CHANGELOG.md`](CHANGELOG.md)）；Chrome 应用商店上架待办，目前从源码构建。
 上面写到的功能今天都可用——翻译、三种读法、显示原文、四种服务、逐句对齐、图片翻译与设置页。
 路线图见 [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155)。
 
-暂不考虑：其他论文站点、PDF、Firefox 与 Safari、以及 macOS 以外平台的位图图片翻译。
+暂不考虑：其他论文站点、PDF、Firefox 与 Safari。
 
 ## 开发
 
@@ -159,7 +155,7 @@ pnpm build
 pnpm e2e                 # 真实 Chromium 加载扩展跑
 pnpm e2e:layout          # 左右对照模式的版式契约
 pnpm e2e:a11y            # A/B 无障碍审计，只报由扩展引入的差集
-pnpm e2e:image           # 经已安装的识别助手跑图片翻译
+pnpm e2e:image           # 图片翻译，位图由内置识别器读取
 pnpm e2e:placeholders    # 占位符在真实服务上的存活率
 pnpm fixtures:stats      # fixture 上的规则覆盖率
 ```
@@ -186,7 +182,8 @@ Read arXiv 移植了三个 GPL-3.0 翻译扩展的代码，在此一并致谢：
 - [Read Frog](https://github.com/mengxi-ream/read-frog)——请求队列、攒批、重试策略、视口调度、提示词库与语言表
 - [FluentRead](https://github.com/Bistutu/FluentRead)——基于 Dexie 的缓存
 
-OCR 小程序移植自 [macos-vision-ocr](https://github.com/bytefer/macos-vision-ocr)（MIT），
+位图文字的识别用的是 [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) 的 PP-OCRv6 tiny 模型（Apache-2.0），
+跑在 [ONNX Runtime Web](https://github.com/microsoft/onnxruntime)（MIT）上，经由 [eSearch-OCR](https://github.com/xushengfeng/eSearch-OCR)（Apache-2.0）；
 图上叠加层的渲染参考了 [ImageTrans](https://github.com/xulihang/ImageTrans_chrome_extension)。
 每个移植文件的文件头都写明了来源，[`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md) 是总登记表。
 

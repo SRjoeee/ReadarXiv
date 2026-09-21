@@ -25,6 +25,8 @@ interface MediaLike {
 export interface ModeControllerOptions {
   /** Test injection; window.matchMedia by default, and “not narrow” where the environment has none */
   media?: MediaLike | null
+  /** The mode in effect is about to move — the reader chose another, or the window crossed the breakpoint — and nothing is written yet: the moment to note the reader's place (renderer/place.ts) */
+  beforeChange?: () => void
   onChange?: (effective: Mode, preference: Mode) => void
 }
 
@@ -40,6 +42,7 @@ export function createModeController(doc: Document, preference: Mode, options: M
 
   const apply = (next: Mode) => {
     if (next === applied) return
+    options.beforeChange?.()
     applied = next
     setMode(doc, next)
     options.onChange?.(next, current)

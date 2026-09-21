@@ -3,28 +3,46 @@
 // The locale pack is read directly, not through `@/ui/strings`: that module pulls in 179 language names and the
 // appearance module, and this script runs on every arXiv abstract page. All it needs is one sentence (Codex on #161: the sentence used to be hard-coded Chinese).
 import { LOCALES, pickLocale } from '@/locales'
-import { injectBilingualLink, relabelBilingualLink } from '@/core/abstract/link'
+import { htmlHrefOn, injectBilingualLink, relabelBilingualLink, retargetBilingualLink } from '@/core/abstract/link'
+import { paperIdFrom } from '@/core/paper-id'
+import { announceUsablePage } from '@/shared/action-icon'
+import { answerEntryMessages } from '@/shared/entry-page'
+import { watchEntrySettings } from '@/shared/entry-settings'
+import { installFloatingButton } from '@/shared/floating'
 
 export default defineContentScript({
   matches: ['https://arxiv.org/abs/*'],
   runAt: 'document_idle',
   async main() {
-    // Reads that one field directly, not through `getConfig`: that would pull zod, the whole schema and the language
-    // table into this bundle, and only one string is needed here. Unreadable, it follows the browser, as everywhere else
-    const stored = await browser.storage.local.get('config').catch(() => ({}))
-    const chosen = (stored as { config?: { uiLanguage?: string } }).config?.uiLanguage
+    announceUsablePage()
+    // The interface language and where the translation opens come from the background, validated
+    // (shared/entry-settings.ts): this script loads no schema and reads no raw stored value
     const ui = browser.i18n?.getUILanguage?.()
     const languages = ui ? [ui] : [navigator.language]
-    const label = (uiLanguage: string | undefined) => {
+    const label = (uiLanguage: string) => {
       const { S } = LOCALES[pickLocale(uiLanguage, languages)]
       return S.page.abstractLink(S.brand)
     }
-    injectBilingualLink(document, label(chosen))
+    // The first answer inserts the line; every later one — the settings page stays open beside this one — relabels
+    // and retargets it (Codex on #161)
+    void watchEntrySettings(settings => {
+      const newTab = settings.openIn === 'new-tab'
+      if (!injectBilingualLink(document, label(settings.uiLanguage), { newTab })) {
+        relabelBilingualLink(document, label(settings.uiLanguage))
+        retargetBilingualLink(document, newTab)
+      }
+    })
 
-    // This page may stay open while the reader changes the interface language on the settings page: everywhere else follows, and so must this (Codex on #161)
-    browser.storage.local.onChanged.addListener(changes => {
-      const next = (changes.config?.newValue as { uiLanguage?: string } | undefined)?.uiLanguage
-      if (next !== undefined) relabelBilingualLink(document, label(next))
+    // The popup asks this page what it is: on an abstract page the translate button works, and takes the reader to
+    // the HTML version to translate it there (UI.md S-P-03b, the maintainer 2026-09-18)
+    answerEntryMessages({ paper: () => paperIdFrom(location.pathname, 'abs'), html: () => htmlHrefOn(document) })
+
+    // The floating button (DESIGN §4.0c), as on the PDF and the full text: here its main button follows the href
+    // arXiv gives, read once — the abstract page does not change under the reader
+    const href = htmlHrefOn(document)
+    void installFloatingButton(document, {
+      main: href !== null ? { kind: 'link', href } : { kind: 'none' },
+      label: S => (href !== null ? S.page.abstractLink(S.brand) : S.note.noHtml),
     })
   },
 })

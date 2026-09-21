@@ -4,7 +4,10 @@ import { T_CLASS } from '@/core/marks'
 import { FOR_ATTR, IDENTITY_ATTR, INLINE_ATTR, STATE_ATTR } from '@/core/renderer/attrs'
 import { shouldInline } from '@/core/renderer/shell'
 import { renderText, setState } from '@/core/renderer/translation'
-import { docOf, frag } from './helpers'
+import { docOfChecked, frag } from './helpers'
+
+// Every document a case renders into is held to the tail mark's invariant afterwards (helpers.ts)
+const docOf = docOfChecked()
 
 describe('renderText', () => {
   it('inserted as the next sibling: same tag, axt-t, data-axt-for; the original node gains data-axt-state only', () => {

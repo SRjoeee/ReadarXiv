@@ -11,9 +11,9 @@ import { PlaceholderIntegrityError, joinRuns, rehydrate, splitRuns, staleSlot, t
 import {
   clearAllPending, enable, markPartial, markStructure, registerSentences, renderFailed, renderPending, renderTable, renderText, setState, type Look, type Mode,
 } from '@/core/renderer'
+import { type CallBase, translateCall } from '@/core/run/call'
 import { createRunLedger } from '@/core/run/ledger'
 import type { PreloadOptions } from '@/core/scheduler/lazy'
-import { createWorkPacer, pauseIfBudgetSpent } from '@/core/scheduler/pacer'
 import type { RenderPath } from '@/cache/key'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
 import { planBatches, sectionTitles, type Batch, type Segment } from './batches'
@@ -64,16 +64,21 @@ export interface RunOptions {
   scope?: string
   /** The viewport trigger distance and threshold (§10) */
   preload: PreloadOptions
+  /**
+   * May this block be asked for now. A block refused waits, unasked, and is offered again on `resume()` — the image
+   * run's gate (§15), for the blocks that are a figure's text (§15.6). Absent, every block may
+   */
+  admit?: (block: Block) => boolean
 }
 
 export interface TranslationRun {
-  /** The marks and the observers are ready (marking is sliced, yielding the main thread) */
-  ready: Promise<void>
   /** Queue these blocks for translation: observer entry, retries and tests all come through here; blocks in flight are skipped */
   translate(blocks: Block[]): Promise<void>
   /** End the session: disconnect the observers, remove the pending nodes; nothing is rendered or reported after */
   stop(): void
   progress(): Progress
+  /** The gate may have opened: the blocks it refused are offered again */
+  resume(): void
   /** The blocks whose translation failed (document order); the popup's “retry failed” hands them to translate again */
   failed(): Block[]
   /** Every block still waiting for the viewport is queued now (the whole-paper range chosen mid-session, §10); returns how many */
@@ -133,46 +138,34 @@ export function startTranslation(options: RunOptions): TranslationRun {
     options.onProvider?.(id)
   }
 
+  // The block marks first, at once and unsliced (issue #67): both gates of side prep read data-axt-id — a container
+  // “with unmarked blocks still inside” would be taken for static content and **cloned whole** into the right column,
+  // and once the blocks inside were translated the right column would hold a whole extra passage of English.
+  // Measured (three prep passes while marking was sliced): 36 places on 2312.17141, 87 on 2609.00245, all large blocks
+  // like .ltx_para / .ltx_proof / .ltx_theorem. They are attribute writes no style of the page reads: 979 blocks
+  // written in 1.2 ms, and the scheduler's anchors below resolve through them
+  markBlocks(blocks)
+  // Where the blocks are is asked **before anything that changes the layout is written** (DESIGN §10): `enable`
+  // below restyles the whole paper, and the same question after it made the browser recalculate and lay out every
+  // element in the middle of this script — with the first screen's requests waiting behind it, 230 ms on a paper of
+  // 32 000 elements. The first screen is the one the reader was looking at when they asked
+  ledger.measure()
+
   // The translation's language goes on <html>, and renderText writes it onto each translation node: the page's lang
   // names the original (en on arXiv), and unmarked, a screen reader would read Chinese in an English voice
   enable(doc, options.mode, options.appearance, toBcp47(options.target))
   const sectionOf = sectionTitles(blocks)
-
-  // The block marks are written at once, unsliced (issue #67): both gates of side prep read data-axt-id — a
-  // container “with unmarked blocks still inside” would be taken for static content and **cloned whole** into the
-  // right column, and once the blocks inside were translated the right column would hold a whole extra passage of
-  // English. Measured (three prep passes while marking was sliced): 36 places on 2312.17141, 87 on 2609.00245, all
-  // large blocks like .ltx_para / .ltx_proof / .ltx_theorem. The slicing was meant to prevent “hundreds of attribute
-  // writes freezing the page” (Read Frog's #1881), but the sum does not add up: the loop is attribute writes only with
-  // no layout read, and Chromium measured 979 blocks written in 1.2 ms with a forced layout of 0 ms afterwards.
-  // Writing synchronously also settles the halted() race along the way — no await in between, restore cannot get in
-  markBlocks(blocks)
   // The structural marks the side-mode style sheet reads (multi-panel figures, tagged list items) go with them (DESIGN §7.2)
   markStructure(doc)
+  // The states too, in the same go: a thousand attribute writes cost a millisecond or two. They used to be written in
+  // slices with the scheduler started after the last, which is what put its geometry read behind `enable`. Nothing
+  // yields between here and the scheduler's start at the end of this function, so a restore cannot come in between
+  for (const block of blocks) setState(block, 'pending')
 
-  // The state attribute is still sliced: it carries styling (the pending skeleton) and does not affect side prep's decisions
-  const ready = (async () => {
-    const pacer = createWorkPacer()
-    for (const block of blocks) {
-      // Before each block is written the session has to be checked: while the main thread was yielded the reader may
-      // have “restored the original”; checked outside the loop only, this would keep writing states onto the DOM after
-      // restore cleaned it, leaving orphan data-axt-* on the page (the invariant of §7.1 broken, experiment 1 of issue #45)
-      if (halted()) return
-      setState(block, 'pending')
-      await pauseIfBudgetSpent(pacer)
-    }
-    if (halted()) return
-    ledger.observe()
-  })()
-
-  const send = (items: { id: string; text: string; cuts?: number[] }[], renderPath: RenderPath, sectionTitle?: string, opts: { bypassCache?: boolean } = {}) => {
-    const context: TranslateContext = { ...options.context, ...(sectionTitle ? { sectionTitle } : {}) }
-    return transport({
-      request: { segments: items, source: 'en', target: options.target, context: Object.keys(context).length ? context : undefined },
-      cache: { paper: options.paper, renderPath, ...(opts.bypassCache ? { bypass: true } : {}) },
-      ...(options.scope ? { scope: options.scope } : {}),
-    })
-  }
+  // The envelope is the session's, the same for the image labels and the title (run/call.ts)
+  const base: CallBase = { target: options.target, paper: options.paper, ...(options.scope ? { scope: options.scope } : {}), ...(options.context ? { context: options.context } : {}) }
+  const send = (items: { id: string; text: string; cuts?: number[] }[], renderPath: RenderPath, sectionTitle?: string, opts: { bypassCache?: boolean } = {}) =>
+    transport(translateCall(base, items, renderPath, { ...(sectionTitle ? { sectionTitle } : {}), ...(opts.bypassCache ? { bypassCache: true } : {}) }))
 
   /**
    * The sentence boundaries travel with the request (§8.6). Choosing the cut points needs the block itself — is a
@@ -373,13 +366,27 @@ export function startTranslation(options: RunOptions): TranslationRun {
     report()
   }
 
+  /** What the gate refused: not asked for, and offered again when the gate may have opened */
+  const held = new Set<Block>()
   async function translate(picked: Block[]): Promise<void> {
-    const { taken } = ledger.intake(picked)
+    const intake = ledger.intake(picked, options.admit)
+    for (const block of intake.held) held.add(block)
+    const { taken } = intake
+    for (const block of taken) held.delete(block)
     if (taken.length === 0) return
     const batches = planBatches(taken, { maxBatchChars: options.capabilities.maxBatchChars, maxBatchItems: options.capabilities.maxBatchItems, renderPath: options.capabilities.renderPath }, block => sectionOf.get(block))
     // The batch goes straight to the service: the number in flight is held by the ported request-queue's rate limit (§8.2); no worker pool here any more
     await Promise.all(batches.map(processBatch))
   }
 
-  return { ready, translate, stop: () => ledger.stop(), progress, failed: () => ledger.failed(), release: () => ledger.release() }
+  // Last, with everything it calls defined: the first screen enters here, so its skeletons and its requests go out in
+  // the task that enabled the page — one style recalculation and one layout show both, and the service is already
+  // working while the browser does them
+  ledger.observe()
+
+  const resume = (): void => {
+    if (held.size > 0) void translate([...held])
+  }
+
+  return { translate, stop: () => ledger.stop(), progress, failed: () => ledger.failed(), release: () => ledger.release(), resume }
 }

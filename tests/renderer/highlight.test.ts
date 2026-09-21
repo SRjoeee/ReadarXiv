@@ -1,3 +1,4 @@
+import { VIEWED_ATTR } from '@/core/marks'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { rehydrate, serialize } from '@/core/protector'
 import { clearSentenceHighlights, startSentenceHighlight } from '@/core/renderer/highlight'
@@ -69,7 +70,7 @@ function stubBrowser(doc: Document) {
     disconnect() { const at = resizes.indexOf(this.fn); if (at >= 0) resizes.splice(at, 1) }
   }
   // Same shape for MutationObserver: registered on observe, and the test hands it records
-  type StubRecord = { target: Node; type?: MutationRecordType }
+  type StubRecord = { target: Node; type?: MutationRecordType; attributeName?: string | null }
   const mutators: ((records: StubRecord[]) => void)[] = []
   const watching: MutationObserverInit[] = []
   view.MutationObserver = class {
@@ -130,8 +131,8 @@ function stubBrowser(doc: Document) {
       for (const fn of frames.splice(0)) fn()
     },
     /** DOM records reported by the MutationObserver, plus the frame they schedule */
-    mutate: (target: Node, type: MutationRecordType = 'childList') => {
-      for (const fn of mutators) fn([{ target, type }])
+    mutate: (target: Node, type: MutationRecordType = 'childList', attributeName: string | null = null) => {
+      for (const fn of mutators) fn([{ target, type, attributeName }])
       for (const fn of frames.splice(0)) fn()
     },
     /** A reflow reported by the ResizeObserver, plus the frame it schedules */
@@ -385,6 +386,11 @@ describe('hover sentence highlight (§7.7)', () => {
     // our own write into the layer changes nothing
     browser.starts()
     browser.mutate(doc.querySelector('.axt-hl')!)
+    expect(browser.starts()).toEqual([])
+
+    // nor does the mark the figure viewer names a figure by while its control shows (§15.7): it lays out nothing of
+    // the paper's, and is written at every arrival of the pointer on a figure
+    browser.mutate(source.parentElement!, 'attributes', VIEWED_ATTR)
     expect(browser.starts()).toEqual([])
 
     // a translation landing in the page does

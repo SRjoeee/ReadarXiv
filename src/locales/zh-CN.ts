@@ -64,34 +64,11 @@ const S = {
     serviceGone: '选中的翻译服务已被删除，请重新选择', // S-P-32d
     paused: (reason: string) => `${reason}。请检查设置后重新翻译`, // S-P-33
     imagesPaused: (reason: string) => `图片翻译已暂停：${reason}`, // S-P-35
-  },
-  helper: {
-    permission: '图片翻译需要允许扩展与识别助手通信', // S-P-86b, macOS: nativeMessaging is optional (DESIGN §15.3)
-    allow: '允许', // S-P-86c / S-O-86: Chrome's own prompt follows this click
-    denied: '未允许。允许后才能识别图中的文字', // S-O-86a
-    enabling: '已允许，稍后自动生效', // S-P-86d / S-O-86b: a fresh background worker is on its way (DESIGN §15.3)
-    install: '图片翻译需要安装识别助手', // S-P-86, macOS
-    macOnly: '图片翻译目前仅支持 macOS', // S-P-87
-    start: '安装', // S-P-88: opens the guide; the guide's own copy is in setup
-    copy: '复制安装命令', // S-P-88
-    copied: '已复制',
-    guide: '教程', // the link inside the guide (S-O-27 / S-P-88)
+    noHtml: 'arXiv 没有这篇论文的 HTML 版本，无法翻译',
   },
   /** The guided install on the settings page (S-O-30…36). The popup keeps the one-line version above */
-  setup: {
-    title: '安装识别助手', // S-O-27 / S-P-86a
-    intro: '图片翻译在本机识别图中的文字。识别助手仅需安装一次，后续自动生效。',
-    step1: '打开「终端」', // S-O-27a
-    step1Hint: '⌘ 空格，输入 Terminal 后回车',
-    step2: '在终端中执行以下命令', // S-O-27b
-    step2Hint: '点击复制',
-    // S-O-27c: replaced the old “I have installed it” button — the extension detects the install by itself (DESIGN §15.4)
-    waiting: '执行完成后自动生效，无需返回此处',
-    notYet: '尚未检测到识别助手。请确认命令已执行完毕且未出现报错。',
-    copyFailed: '无法复制，请手动选中命令后复制',
-    done: '识别助手已就绪',
-  },
   primary: {
+    bilingual: '双语版本',
     translate: '翻译本页', // S-P-50
     restore: '显示原文', // S-P-51 / S-P-53
     retranslate: '重新翻译', // S-P-52
@@ -123,6 +100,16 @@ const S = {
     notPaper: '不是 arXiv HTML 页面',
     nothingToTranslate: '这一页没有可翻译的内容',
     abstractLink: (brand: string) => `双语版本（${brand}）`, // the entry on the abstract page (issue #146)
+    /** The floating button on arXiv's pages (UI.md S-I-06); the corner controls' wording follows Read Frog's, whose they are */
+    floating: {
+      panel: '控制面板',
+      options: '悬浮按钮选项',
+      lock: '锁定位置',
+      unlock: '解锁位置',
+      hideForNow: '本次隐藏',
+      hideAlways: '不再显示',
+    },
+    viewer: { open: '放大查看', zoomIn: '放大', zoomOut: '缩小', close: '关闭' },
     backendSilent: '扩展后台没有响应',
     backendSilentWith: (detail: string) => `扩展后台没有响应：${detail}`,
     noService: '未配置 API key，请先到设置页填写',
@@ -160,7 +147,6 @@ const O = {
     imagesHint: '译文叠在图上，鼠标悬停查看原文',
     imageModes: '在这些模式下显示图片译文',
     imageModesHint: '只影响显示：切到没勾的模式时叠加层隐藏，切回来再显示，不重新识别',
-    detecting: '正在检测识别助手…',
     autoFallback: '出问题时自动改用免费服务',
     autoFallbackHint: 'API Key 失效、额度用尽或断网时，翻译不会停下',
     name: '名称',
@@ -227,6 +213,11 @@ const O = {
     preloadRange: '提前翻译的范围',
     preloadRangeHint: '屏幕下方多远的段落先翻；越近越省费用，整篇则一开始就全部请求',
     preloadStops: ['一屏', '两屏', '三屏', '整篇'],
+    openIn: '译文在哪里打开',
+    openInHint: '从论文的摘要页或 PDF 打开时，译文是这篇论文的 HTML 版本',
+    openInStops: ['新标签页', '当前标签页'],
+    floatingEntry: '显示悬浮按钮',
+    floatingEntryHint: '在 arXiv 的摘要页、PDF 和论文全文页贴在窗口边缘：翻译、控制面板、设置',
     threshold: '开始翻译的时机',
     thresholdHint: '段落露出多少才开始翻',
     thresholdStops: ['刚露出', '露出一半', '完全露出'],

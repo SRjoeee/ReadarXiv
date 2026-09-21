@@ -1,29 +1,35 @@
 import { cachePortOf, translationCache } from '@/cache'
-import { getConfig, watchConfig } from '@/config/storage'
+import { pickTargetLanguage } from '@/config/first-target'
+import { chooseFirstTarget, getConfig, watchConfig } from '@/config/storage'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport } from '@/providers/transport'
-import { toErrorInfo } from '@/providers/translate-service'
-import { isAxtMessage, replyWith, sendToTab } from '@/shared/messages'
-import { HELPER_HOST, type HelperStatus } from '@/shared/ocr'
+import { type AxtMessage, answerMessages, sendMessage, sendToTab } from '@/shared/messages'
 import { createChainHolder } from './chain'
-import { engineReady } from './engine-ready'
-import { createHelperClient } from './helper'
-import { createHelperWaiter } from './helper-await'
-import { createHelperRestart } from './helper-restart'
-import { createConfigOffers, providerStatus, statusInForce } from './provider-status'
+import { createHandlers } from './handlers'
+import { createConfigOffers, statusInForce } from './provider-status'
 import { createOcrService } from './ocr'
+import { createRecogniserClient } from './recogniser'
 import { createSessionRouter } from './sessions'
-import { installContextMenu, refreshContextMenu, installToggleCommand } from './context-menu'
+import { installContextMenu, refreshContextMenu, installToggleCommand, toggleTranslation } from './context-menu'
+import { getFloatingEntry, patchFloatingEntry } from './floating-entry'
 import { applyLocaleFrom, resolveLocale } from '@/ui/apply-locale'
 import { setLocale } from '@/ui/strings'
 import { savedFromStatus } from '@/shared/page-action'
 import { BUILD_REF } from '@/shared/build'
-import { failureLine } from '@/shared/diagnostics'
 import { createDiagnostics } from './diagnostics'
 
-// The background: message routing + the engine chain + the queues + the cache (DESIGN §8.0). WXT ≥0.20 ships no
-// polyfill, so an asynchronous response needs sendResponse + return true.
+// The background: the engine chain, the queues, the cache and the recogniser, wired together (DESIGN §8.0); what it
+// answers is the table in ./handlers.ts.
 export default defineBackground(() => {
+  // A new reader's target language follows the browser's languages, chosen once (config/first-target.ts). Registered
+  // at the top, synchronously, as MV3 asks of an event that may be what wakes the worker; an update is not an
+  // install, and an installation that already holds a configuration is left as it is (config/storage.ts)
+  browser.runtime.onInstalled.addListener(details => {
+    if (details.reason !== 'install') return
+    void chooseFirstTarget(() => pickTargetLanguage(navigator.languages ?? [], browser.i18n.getUILanguage?.()))
+      .catch(e => console.warn(`[axt] the first target language could not be saved (${e instanceof Error ? e.name : typeof e})`))
+  })
+
   const cache = cachePortOf(translationCache)
   /** Scopes ended for certain — one registry (DESIGN §8.5): the session router writes it, the chain's services and OCR read it */
   const cancelled = new CancelledScopeRegistry()
@@ -70,18 +76,18 @@ export default defineBackground(() => {
    * cancelled by its scope as before
    */
   /**
-   * The local OCR helper of image translation (DESIGN §15): connected lazily; the open port keeps the worker alive while
-   * a recognition is in flight (measured, helper.ts). Withdrawing a session withdraws its queued recognitions too (the router's onDrop)
+   * The recogniser of image translation (DESIGN §15.3): in an offscreen document, opened when the first bitmap needs
+   * reading. Withdrawing a session withdraws its queued recognitions too (the router's onDrop)
    */
-  const helper = createHelperClient({
-    connect: () => browser.runtime.connectNative(HELPER_HOST),
-    lastError: () => browser.runtime.lastError?.message,
-    // Optional permission (DESIGN §15.3): asked before each connection. The binding is missing in a worker started
-    // before the grant; `restarting` is what it reports until the alarm below has brought a fresh one
-    permitted: () => browser.permissions.contains({ permissions: ['nativeMessaging'] }),
-    bound: () => typeof browser.runtime.connectNative === 'function',
+  const recogniser = createRecogniserClient({
+    offscreen: {
+      has: () => browser.offscreen.hasDocument(),
+      create: () => browser.offscreen.createDocument({ url: browser.runtime.getURL('/ocr.html'), reasons: ['WORKERS'], justification: 'Runs text recognition for figure translation in a WebAssembly worker' }),
+      close: () => browser.offscreen.closeDocument(),
+    },
+    run: request => sendMessage({ type: 'axt:ocr-run', ...request }),
   })
-  const ocr = createOcrService({ backend: helper, cache, cancelled, warn: diag })
+  const ocr = createOcrService({ backend: recogniser, cache, cancelled, warn: diag })
   const router = createSessionRouter({
     current: transportOf,
     cancelled,
@@ -131,71 +137,6 @@ export default defineBackground(() => {
   // **Registered synchronously**, without waiting for the locale pack (context-menu.ts says why): the menu is built in
   // the fallback language first and rebuilt once the pack is read, so the title follows the interface language (UI.md §6)
   /**
-   * Say something to every tab that will listen. No `tabs` permission is needed to enumerate ids,
-   * and a tab without our content script simply rejects — there is nothing to filter on and nothing
-   * to lose by asking
-   */
-  const tellTabs = async (message: { type: 'axt:helper-ready' }) => {
-    const tabs = await browser.tabs.query({}).catch(() => [])
-    for (const tab of tabs) if (tab.id !== undefined) void sendToTab(tab.id, message).catch(() => undefined)
-  }
-  /**
-   * The helper's state changed on the background's own initiative — the install wait found it, or the fresh worker
-   * after a runtime grant reported (DESIGN §15.3). Papers only need to hear "ready" (they park bitmaps until then); the
-   * extension pages take the state as is. Extension pages are not content scripts and get nothing from
-   * `tabs.sendMessage`, hence the second send; nobody listening is the normal case and it rejects
-   */
-  const broadcastHelper = (status: HelperStatus) => {
-    if (status.state === 'ready') void tellTabs({ type: 'axt:helper-ready' })
-    void browser.runtime.sendMessage({ type: 'axt:helper-state', status }).catch(() => undefined)
-  }
-
-  /**
-   * The guided install's wait (§15.4): once the reader has copied the install command, this probes on a timer and
-   * broadcasts a find — the reader need not come back to the extension and click anything. The deadline lives in
-   * **session** storage: once the browser is closed this install need not be waited for any more
-   */
-  const AWAIT_KEY = 'axt-helper-await-until'
-  const helperWaiter = createHelperWaiter({
-    probe: () => ocr.status({ recheck: true }),
-    announce: broadcastHelper,
-    now: () => Date.now(),
-    schedule: (run, ms) => self.setTimeout(run, ms),
-    cancel: id => self.clearTimeout(id),
-    load: async () => {
-      const stored = await browser.storage.session.get(AWAIT_KEY).catch(() => ({}) as Record<string, unknown>)
-      const value = stored[AWAIT_KEY]
-      return typeof value === 'number' ? value : undefined
-    },
-    save: async deadline => {
-      if (deadline === undefined) await browser.storage.session.remove(AWAIT_KEY).catch(() => undefined)
-      else await browser.storage.session.set({ [AWAIT_KEY]: deadline }).catch(() => undefined)
-    },
-    warn: (message, error) => console.debug(message, error),
-  })
-  // The wait is picked up as soon as the worker wakes: the reader may still be in the terminal, and this worker is a
-  // fresh one after the previous was reclaimed. **What wakes the worker is often the popup's own query**, so the query
-  // has to wait for this read of storage before answering, or it gets the null not yet restored (Codex on #166)
-  const helperRestored = helperWaiter.resume()
-
-  /**
-   * A grant while this worker runs leaves it without `runtime.connectNative` (helper-restart.ts says why). The alarm
-   * fires after the idle limit — into a fresh worker once this one has died — and the listener is registered at top
-   * level, as MV3 requires for an event to wake a worker
-   */
-  const RESTART_ALARM = 'axt-helper-restart'
-  const helperRestart = createHelperRestart({
-    probe: () => ocr.status({ recheck: true }),
-    arm: () => void browser.alarms.create(RESTART_ALARM, { delayInMinutes: 0.75 }),
-    announce: broadcastHelper,
-    // The one subscription fed by tabs that are not ours (see onTabUpdated below)
-    quiesce: () => browser.tabs.onUpdated.removeListener(onTabUpdated),
-  })
-  browser.alarms.onAlarm.addListener(alarm => {
-    if (alarm.name === RESTART_ALARM) void helperRestart.fired()
-  })
-
-  /**
    * The saved settings as the toggle decides on them (shared/page-action.ts): their identity, and whether they run —
    * from the chain in force, which is built from them. The popup decides the same from the settings it holds
    */
@@ -231,6 +172,13 @@ export default defineBackground(() => {
     saved,
   })
 
+  // The floating button undoes the page's zoom (§4.0c): every tab is told when its zoom changes. A tab with none of
+  // our scripts has nobody listening, and that rejection is nothing to report
+  browser.tabs.onZoomChange.addListener(({ tabId, newZoomFactor }) => {
+    const message: AxtMessage<'axt:zoom-changed'> = { type: 'axt:zoom-changed', zoom: newZoomFactor }
+    void sendToTab(tabId, message).catch(() => undefined)
+  })
+
   browser.tabs.onRemoved.addListener(tabId => dropTab(tabId, 'closed'))
   /**
    * Navigating away withdraws too (Codex on #59): `onRemoved` covers closing only, and a tab moving to another URL
@@ -243,12 +191,6 @@ export default defineBackground(() => {
    * and the translations of its second half all come back aborted (reported by the owner on 2026-09-09). So the router
    * holds it for a while: one more request from this tab means the page is still there, and the withdrawal is cancelled
    */
-  // Named, because it comes off while a grant takes effect (DESIGN §15.3): a tab whose title ticks — a clock, a chat
-  // app's unread count — is an event every few seconds from a tab that is not ours, and each one resets the worker's
-  // idle timer, which would keep the stale worker alive for good (Codex, local review). The fresh worker
-  // registers it again at start-up. Until then a tab that closes still drops its sessions (onRemoved); a tab that
-  // navigates away is not noticed — the old session's queued batches run until they finish or this worker dies with
-  // them, and the fresh worker starts with no sessions and learns them from the pages' next calls
   const onTabUpdated: Parameters<typeof browser.tabs.onUpdated.addListener>[0] = (tabId, changeInfo) => {
     // **Both loading and complete press once.** When a cross-document navigation commits slowly, the old document is
     // still alive after loading, the probe at the deadline reaches it, it answers with the same session, and the
@@ -258,94 +200,27 @@ export default defineBackground(() => {
   }
   browser.tabs.onUpdated.addListener(onTabUpdated)
 
-  browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (!isAxtMessage(message)) return
-    switch (message.type) {
-      case 'axt:translate':
-        // A failed chain build (a provider constructor throwing) is answered honestly too: unanswered, the caller waits for “message channel closed”
-        router.forCall(message.scope, sender.tab?.id)
-          .then(t => t.translate(message))
-          .catch((e: unknown) => {
-            const error = toErrorInfo(e)
-            diag(`[axt] translate call failed before any request: ${failureLine(error.kind, error.message)}`)
-            return { ok: false as const, error }
-          })
-          .then(sendResponse)
-        return true
-      case 'axt:cancel-scope':
-        router.drop([message.scope])
-          .catch(() => 0)
-          .then(cancelled => sendResponse({ cancelled }))
-        return true
-      case 'axt:provider-status':
-        // A session's own chain, the chain in force, or — after a save — one built from what is stored now
-        // A failure (a build that failed, the status deadline) is replied, not only logged: the page that asked
-        // must see its request settle
-        replyWith(providerStatus({ chain, router, offers }, message, sender.tab?.id), sendResponse)
-        return true
-      case 'axt:engine-ready':
-        // Rebuild and move whom the sender says (./engine-ready.ts): a downloaded language pack moves one tab, a
-        // deleted service moves everyone and retires its chain — the movers act on the chain in force
-        replyWith(engineReady(chain, router, message), sendResponse)
-        return true
-      // With IndexedDB unavailable an answer still goes back, or the caller waits for “message channel closed” (Codex on #7)
-      case 'axt:cache-clear':
-        // A failure is reported as it is: swallowing the exception into { removed: 0 } would let the reader believe the cache cleared when IndexedDB is unusable (Codex on #52)
-        translationCache.clear()
-          .then(removed => sendResponse({ ok: true, removed }))
-          .catch((e: unknown) => sendResponse({ ok: false, message: e instanceof Error ? e.message : String(e) }))
-        return true
-      case 'axt:helper-status':
-        replyWith(ocr.status(message.recheck ? { recheck: true } : undefined).then(status => {
-          // A re-probe that finds it has to reach the papers already open, which parked their
-          // bitmaps when the probe at their session start found nothing (Codex on #161)
-          if (message.recheck && status.state === 'ready') void tellTabs({ type: 'axt:helper-ready' })
-          // Granted a moment ago into this running worker: arrange the fresh one (DESIGN §15.3)
-          helperRestart.noticed(status)
-          return status
-        }), sendResponse)
-        return true
-      case 'axt:helper-await':
-        // One message, two uses: with start it is “copied, start waiting”, without it “still waiting?” — the popup is
-        // destroyed on losing focus and picks the same wait up again with the latter on reopening (DESIGN §15.4)
-        if (message.start) {
-          replyWith(helperWaiter.start().then(() => ({ until: helperWaiter.until() })), sendResponse)
-          return true
-        }
-        replyWith(helperRestored.then(() => ({ until: helperWaiter.until() })), sendResponse)
-        return true
-      case 'axt:ocr':
-        // The scope is bound to the sender's tab first: this may be the tab's first message carrying a scope, and unbound,
-        // dropTab could not withdraw the queued recognition when the tab closes. The association only, no chain: OCR must not wait for the translation chain to build (Codex on #87, two rounds)
-        if (message.scope) router.bind(message.scope, sender.tab?.id)
-        ocr.ocr(message)
-          .catch((e: unknown) => ({ ok: false as const, error: { kind: 'unknown' as const, message: e instanceof Error ? e.message : String(e) } }))
-          .then(sendResponse)
-        return true
-      case 'axt:diag':
-        // Only our own contexts can reach runtime.onMessage (no externally_connectable), still the shape is checked:
-        // a line is a string, the source one of the pages'; the ring's cap and the coalesced save bound the rest (Devin on #214)
-        if (typeof message.line === 'string' && (message.src === 'content' || message.src === 'popup' || message.src === 'options')) diagnostics.record(message.src, message.line)
-        return false
-      case 'axt:diag-export':
-        // The environment a reader cannot be expected to report: the build, the browser, the platform
-        replyWith(Promise.all([diagnostics.restored, browser.runtime.getPlatformInfo().catch(() => ({ os: 'unknown' }))]).then(([, info]) =>
-          diagnostics.export({
-            extension: { version: browser.runtime.getManifest().version, buildRef: BUILD_REF },
-            browser: navigator.userAgent,
-            platform: info.os,
-          }),
-        ), sendResponse)
-        return true
-      case 'axt:cache-stats':
-        // The same protocol as cache-clear: a failure is reported as it is, and “IndexedDB unusable” must not show as “the
-        // cache is empty”. Expired entries are cleaned before counting — `get()` only treats them as misses and never
-        // deletes, and uncleaned the page would keep showing a heap of unusable counts and bytes; this is also cleanup()'s only call site at run time (Codex on #52)
-        translationCache.cleanup()
-          .then(() => translationCache.stats())
-          .then(stats => sendResponse({ ok: true, ...stats }))
-          .catch((e: unknown) => sendResponse({ ok: false, message: e instanceof Error ? e.message : String(e) }))
-        return true
-    }
-  })
+  // What this worker answers (./handlers.ts), behind the one listener that knows how to answer (shared/messages.ts)
+  browser.runtime.onMessage.addListener(answerMessages(createHandlers({
+    chain,
+    router,
+    offers,
+    ocr,
+    diagnostics,
+    cache: translationCache,
+    toggle: tabId => toggleTranslation({ send: sendToTab, saved }, tabId),
+    getConfig,
+    getFloatingEntry,
+    patchFloatingEntry,
+    zoomOf: tabId => browser.tabs.getZoom(tabId),
+    openSettings: () => browser.runtime.openOptionsPage(),
+    // A value set for one tab is the browser's to clear: it drops it when the tab navigates to another document, and
+    // the button falls back to the grey `default_icon` of the manifest
+    lightAction: tabId => browser.action.setIcon({ tabId, path: { 16: '/icon/mark-16.png', 32: '/icon/mark-32.png', 48: '/icon/mark-48.png' } }),
+    environment: async () => ({
+      extension: { version: browser.runtime.getManifest().version, buildRef: BUILD_REF },
+      browser: navigator.userAgent,
+      platform: (await browser.runtime.getPlatformInfo().catch(() => ({ os: 'unknown' }))).os,
+    }),
+  })))
 })

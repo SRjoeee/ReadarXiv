@@ -7,7 +7,7 @@ import { DEFAULT_APPEARANCE, appearanceSchema } from './appearance'
 import { BUILT_IN_SERVICES, SERVICE_ID_RE, serviceSchema } from './services'
 import { DEFAULT_LANG_CODE, langCodeSchema } from './languages'
 
-export const CONFIG_VERSION = 15
+export const CONFIG_VERSION = 18
 
 /** The three reading modes (DESIGN §7); `mode` is shared with the image translation's mode gate */
 export const MODE_VALUES = ['stack', 'side', 'only'] as const
@@ -87,12 +87,17 @@ export const configSchema = z.object({
    * both sides could be rebuilt, silent and free otherwise. Added at 7c02d83 by a schema default alone, without a bump;
    * v14 wrote it into every stored value (DESIGN §9)
    */
-  reading: z.object({ sentenceHighlight: z.boolean() }),
+  /**
+   * `openIn` (v16): where the translation opens when the reader asks for it **from a page that is not the full
+   * text** — the abstract page's entry, the PDF page's entry, and the popup's button on either. A new tab by
+   * default (the owner, 2026-09-18): the first version navigated the tab, and the paper the reader was looking at
+   * was gone. On the HTML full text nothing navigates at all, so this setting does not reach it
+   */
+  reading: z.object({ sentenceHighlight: z.boolean(), openIn: z.enum(['new-tab', 'same-tab']) }),
   /**
    * Image translation (§15). `enabled` is the reader's switch (popup, v11); `modes` says in which
    * display modes the overlays show, a detail kept on the options page. Both are display gates:
-   * switching to a mode that is off only hides the overlays, nothing is re-requested. Without the
-   * helper the bitmap path does not run; SVG figures need no helper
+   * switching to a mode that is off only hides the overlays, nothing is re-requested
    */
   image: z.object({ enabled: z.boolean(), modes: z.array(modeSchema).max(3) }),
   /**
@@ -120,7 +125,7 @@ export const DEFAULT_CONFIG: Config = {
   fallback: { enabled: true },
   prompts: DEFAULT_PROMPTS_CONFIG,
   preload: { ...DEFAULT_PRELOAD },
-  reading: { sentenceHighlight: true },
+  reading: { sentenceHighlight: true, openIn: 'new-tab' },
   image: { enabled: true, modes: [...MODE_VALUES] },
   uiLanguage: 'auto',
 }

@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { appearanceSchema } from '@/config/appearance'
 import { CONFIG_VERSION, DEFAULT_CONFIG, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
 import { serviceSchema } from '@/config/services'
-import { configItem, getConfig, setConfig } from '@/config/storage'
+import { chooseFirstTarget, configItem, getConfig, setConfig } from '@/config/storage'
 
 /** A reader-added service, the shape v12 stores */
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
@@ -420,7 +420,7 @@ describe('provider selection', () => {
     const c = await fresh.getConfig()
     expect(fresh.configFallbackReason()).toBeNull()
     expect(c.version).toBe(CONFIG_VERSION)
-    expect(c.reading).toEqual({ sentenceHighlight: true })
+    expect(c.reading).toEqual({ sentenceHighlight: true, openIn: 'new-tab' })
     expect(c.services[0]).toMatchObject({ id: SVC.id, apiKey: 'sk-keep', thinking: 'disabled' })
     expect(c.targetLanguage).toBe('jpn')
     // `null` is not "absent": a hand edit, and it falls back naming the field, as any wrong value does
@@ -449,12 +449,12 @@ describe('provider selection', () => {
     const stripped = await import('@/config/storage')
     expect(await stripped.getConfig()).toEqual(DEFAULT_CONFIG)
     expect(stripped.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'services.0.thinking' })
-    // A v13 value with both present migrates to the same value at 14
+    // A v13 value with both present migrates unchanged, apart from what later versions add: v16's `reading.openIn`
     const full = { ...DEFAULT_CONFIG, version: 13, reading: { sentenceHighlight: false }, provider: SVC.id, services: [{ ...SVC, thinking: 'enabled' as const }] }
     await fakeBrowser.storage.local.set({ config: full, config$: { v: 13 } })
     vi.resetModules()
     const again = await (await import('@/config/storage')).getConfig()
-    expect(again).toEqual({ ...full, version: CONFIG_VERSION })
+    expect(again).toEqual({ ...full, version: CONFIG_VERSION, reading: { sentenceHighlight: false, openIn: 'new-tab' } })
   })
 
   it('no field of the stored shape, at any depth, carries a zod default: the version alone says what is in storage (DESIGN §9)', () => {
@@ -539,6 +539,39 @@ describe('provider selection', () => {
     expect(c.services).toEqual([])
     // Every mode unticked was “off”: the switch says so, the list stays what the reader left
     expect(c.image).toEqual({ enabled: false, modes: [] })
+  })
+
+  it('a v15 configuration climbs to v16: the translation opens in a new tab, which is nobody\'s old choice to lose', async () => {
+    const v15 = { ...DEFAULT_CONFIG, version: 15, reading: { sentenceHighlight: false } } as Record<string, unknown>
+    await fakeBrowser.storage.local.set({ config: v15, config$: { v: 15 } })
+    // A fresh module, as the other migration cases do: the storage item reads its version once
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const config = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(config.version).toBe(CONFIG_VERSION)
+    // The reader's own choice about highlighting survives; the new field takes the default
+    expect(config.reading).toEqual({ sentenceHighlight: false, openIn: 'new-tab' })
+  })
+
+  it('v17 put the floating button\'s state into the configuration and v18 takes it out again: a test build\'s v17 value reads, without it', async () => {
+    const v17 = { ...DEFAULT_CONFIG, version: 17, reading: { sentenceHighlight: false, openIn: 'same-tab' }, floatingEntry: { enabled: false, side: 'left', position: 0.3, locked: true } } as Record<string, unknown>
+    await fakeBrowser.storage.local.set({ config: v17, config$: { v: 17 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const config = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(config.version).toBe(CONFIG_VERSION)
+    expect('floatingEntry' in config).toBe(false)
+    // Nothing the reader chose is touched
+    expect(config.reading).toEqual({ sentenceHighlight: false, openIn: 'same-tab' })
+    // A v16 value passes through both and ends the same
+    const v16: Record<string, unknown> = { ...v17, version: 16 }
+    delete v16.floatingEntry
+    await fakeBrowser.storage.local.set({ config: v16, config$: { v: 16 } })
+    vi.resetModules()
+    const again = await (await import('@/config/storage')).getConfig()
+    expect(again).toEqual(config)
   })
 
   it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a preload margin under one screen becoming one screen', async () => {
@@ -634,5 +667,33 @@ describe('provider selection', () => {
   it('an out-of-range preload range is refused by the schema', async () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, preload: { margin: -1, threshold: 0 } })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, preload: { margin: 1000, threshold: 1.5 } })).rejects.toThrow()
+  })
+})
+
+// A new reader's first target language (config/first-target.ts): written once, and only into an empty store
+describe('chooseFirstTarget', () => {
+  beforeEach(() => {
+    fakeBrowser.reset()
+  })
+
+  it('writes the chosen language over the defaults, with the version marker beside it, when nothing is stored', async () => {
+    expect(await chooseFirstTarget(() => 'jpn')).toBe(true)
+    expect(await fakeBrowser.storage.local.get(['config', 'config$'])).toEqual({ config: { ...DEFAULT_CONFIG, targetLanguage: 'jpn' }, config$: { v: CONFIG_VERSION } })
+    expect((await getConfig()).targetLanguage).toBe('jpn')
+  })
+
+  it('leaves a stored configuration alone: the reader\'s choice is theirs, and the browser is not asked again', async () => {
+    await setConfig({ ...DEFAULT_CONFIG, targetLanguage: 'kor' })
+    let asked = false
+    expect(await chooseFirstTarget(() => { asked = true; return 'jpn' })).toBe(false)
+    expect(asked).toBe(false)
+    expect((await getConfig()).targetLanguage).toBe('kor')
+  })
+
+  it('leaves alone a stored value this build cannot read, a newer build\'s included: never written over', async () => {
+    const newer = { ...DEFAULT_CONFIG, version: CONFIG_VERSION + 1 }
+    await fakeBrowser.storage.local.set({ config: newer, config$: { v: CONFIG_VERSION + 1 } })
+    expect(await chooseFirstTarget(() => 'jpn')).toBe(false)
+    expect((await fakeBrowser.storage.local.get('config')).config).toEqual(newer)
   })
 })

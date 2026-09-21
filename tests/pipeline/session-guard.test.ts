@@ -16,7 +16,7 @@ const docWith = (html: string) => new DOMParser().parseFromString(
 const paragraphs = (n: number) => Array.from({ length: n }, (_, i) => `<p class="ltx_p">Sentence ${i}.</p>`).join('')
 
 describe('restoring the original during start-up (issue #45, experiment 1)', () => {
-  it('after yielding the main thread no mark is written any more: after restore has cleaned up, no orphan data-axt-* may remain', async () => {
+  it('the start writes its marks in one synchronous go and nothing after it: once restore has cleaned up, no orphan data-axt-* may remain', async () => {
     const doc = docWith(paragraphs(40))
     const before = doc.documentElement.outerHTML
     const blocks = extract(doc)
@@ -32,10 +32,11 @@ describe('restoring the original during start-up (issue #45, experiment 1)', () 
       preload: { margin: 1000, threshold: 0 },
       transport: async () => ({ ok: false, error: { kind: 'aborted', message: 'no request should be sent', isolatable: false } }),
     })
-    // The marking loop stops as soon as it starts: the initialisation is interrupted when it yields the main thread
+    // The reader restores at once. The marking used to be sliced, and a slice after the restore wrote its marks onto
+    // the cleaned page; now nothing of the start is left to run later — waited for here, to be sure
     run.stop()
     restore(doc)
-    await run.ready
+    await new Promise(resolve => setTimeout(resolve))
 
     expect(doc.querySelectorAll('[data-axt-id]')).toHaveLength(0)
     expect(doc.querySelectorAll('[data-axt-state]')).toHaveLength(0)
@@ -185,7 +186,6 @@ describe('cancellation crosses the message boundary (issue #42)', () => {
       scope: 'session-1',
       transport: call => transport.translate(call),
     })
-    await run.ready
     const pending = run.translate(blocks)
     // The request has gone out and still hangs at the background's end
     await Promise.resolve()

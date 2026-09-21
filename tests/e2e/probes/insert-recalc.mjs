@@ -56,7 +56,7 @@ for (const id of PAPERS) {
   const page = await context.newPage()
   const logs = []
   page.on('console', m => { const t = m.text(); if (t.includes('[axt]')) logs.push({ t: Date.now(), text: t }) })
-  await page.goto(`https://arxiv.org/html/${id}#axt-translate`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`https://arxiv.org/html/${id}#readarxiv`, { waitUntil: 'domcontentloaded' })
   const cdp = await context.newCDPSession(page)
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
   for (let y = 0; y < height; y += 800) { await page.evaluate(top => window.scrollTo(0, top), y); await sleep(120) }

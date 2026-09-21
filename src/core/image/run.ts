@@ -11,28 +11,29 @@
 import { type RenderPath, wireFormatOf } from '@/cache/key'
 import { ID_ATTR } from '@/core/extractor'
 import { escapeText, unescapeText } from '@/core/protector/escape'
-import { type ImageLabel, type ImageTarget, clearImage, renderImage } from '@/core/renderer/image'
+import { type ImageFrame, type ImageLabel, type ImageTarget, clearImage, renderImage } from '@/core/renderer/image'
 import { DOCUMENT_ROOT, FIGURE_SELECTORS } from '@/core/rules/latexml'
 import { INJECTED_SELECTOR } from '@/core/marks'
+import { type CallBase, translateCall } from '@/core/run/call'
 import { createRunLedger } from '@/core/run/ledger'
 import type { PreloadOptions } from '@/core/scheduler/lazy'
-import { foreignLinesOf, linesOf, looksLikeCode, pictureTexts } from '@/core/svg'
+import { frameOf, linesOf, looksLikeCode } from '@/core/svg'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
 import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
 import { sha256Hex } from '@/shared/digest'
 import type { ImageProgress, OcrCall, OcrLine, OcrMessageResponse } from '@/shared/ocr'
-import { isTranslatable, linesToBoxes, type Box } from './boxes'
+import { linesToBoxes, type Box } from './boxes'
 import { squash } from '@/core/text'
 
 export type { ImageTarget } from '@/core/renderer/image'
 
 /** The bitmap cap: arXiv figures are usually a few hundred KB, 6 MB is generous; a larger base64 through the message channel is not worth it */
 export const MAX_IMAGE_BYTES = 6 * 1024 * 1024
-/** The bitmap types the helper decodes; SVG and unknown types are not sent (§15.1: SVG is skipped whole) */
+/** The bitmap types sent to the recogniser; SVG and unknown types are not (§15.1: an SVG figure is read, not recognised) */
 const IMAGE_TYPES = /^image\/(png|jpe?g|gif|webp|bmp|tiff)$/i
 /** The length cap of a caption used as context: it enters the prompt and the cache key */
 const CAPTION_MAX_CHARS = 300
-/** Images in flight at once: the bytes, the base64 and the message payload all take memory, and the helper is sequential — more only hoards 6 MB images */
+/** Images in flight at once: the bytes, the base64 and the message payload all take memory, and the recogniser reads one figure at a time — more only hoards 6 MB images */
 const MAX_CONCURRENT = 2
 /** How long an `<object>` still loading is waited for (§15.5). Past that the image is skipped rather than holding the queue */
 const SVG_LOAD_TIMEOUT_MS = 5000
@@ -57,11 +58,10 @@ export interface ImageRunOptions {
   translate: (call: TranslateCall) => Promise<TranslateMessageResponse>
   /** The mode in effect is among the ones the reader ticked; otherwise an image entering the viewport parks, translated on resume */
   /**
-   * Can this target be translated now. **Asked per target, not one global switch**: the display mode applies to
-   * both kinds of image alike, but a bitmap waits for the local helper and an SVG figure does not (§15.5). A target
-   * answered false stays in parked; `resume()` releases it when the conditions change
+   * May images be translated now: the mode in effect is one the reader ticked, for both kinds of image alike. A
+   * target handed over while it is not stays in parked; `resume()` releases it when that changes
    */
-  isEnabled: (target: ImageTarget) => boolean
+  isEnabled: () => boolean
   /** Is the session still the current one (false after a restore / a restart) */
   isCurrent: () => boolean
   /** Test injection: the concurrency cap */
@@ -85,7 +85,7 @@ export interface ImageRun {
   failed(): ImageTarget[]
   progress(): ImageProgress
   /**
-   * The targets never requested so far, and whether each is parked behind the mode or helper gate. A diagnostic for
+   * The targets never requested so far, and whether each is parked behind the mode gate. A diagnostic for
    * the idle trace: `images idle: 5/5 of 6` says one target never entered the viewport, and only this says which
    */
   waiting(): { target: ImageTarget; parked: boolean }[]
@@ -93,11 +93,6 @@ export interface ImageRun {
   observing(): number
   /** Every target still waiting for the viewport is taken now (the whole-paper range chosen mid-session, §10); the parked ones stay behind their gate */
   release(): number
-}
-
-/** Does this inline figure hold a label worth translating: a formula-only TikZ picture (most of the corpus) need not enter the scheduler */
-function hasPictureText(picture: Element): boolean {
-  return pictureTexts(picture).some(isTranslatable)
 }
 
 /**
@@ -112,16 +107,13 @@ export function collectImageTargets(doc: Document): ImageTarget[] {
   const used = new Set<string>()
   let n = 0
   const targets: ImageTarget[] = []
-  for (const el of Array.from(root.querySelectorAll(`${FIGURE_SELECTORS.graphics}, ${FIGURE_SELECTORS.picture}`))) {
+  // An inline TikZ picture is no target: its labels are HTML in the page and blocks of the text run (§15.6)
+  for (const el of Array.from(root.querySelectorAll(FIGURE_SELECTORS.graphics))) {
     if (el.closest(`[${ID_ATTR}]`) || el.closest(INJECTED_SELECTOR)) continue
-    const tag = el.tagName.toLowerCase()
-    // Inline TikZ pictures (§15.6): only those **with words**. Most of the 170 in the corpus draw formulas, and taking
-    // them would only give the scheduler a heap of targets that end with nothing; the test reads text, not geometry
-    if (tag === 'svg' && (el.parentElement?.closest(FIGURE_SELECTORS.picture) || !hasPictureText(el))) continue
     let id = el.id || `axt-img-${++n}`
     while (used.has(id)) id = `${id}-${++n}`
     used.add(id)
-    targets.push({ id, el, kind: tag === 'object' ? 'svg' : tag === 'svg' ? 'picture' : 'raster' })
+    targets.push({ id, el, kind: el.tagName.toLowerCase() === 'object' ? 'svg' : 'raster' })
   }
   return targets
 }
@@ -225,6 +217,8 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     },
   })
   const alive = () => !ledger.halted()
+  // The envelope is the session's, the same for the text run and the title (run/call.ts)
+  const base: CallBase = { target: options.target, paper: options.paper, scope: options.scope, ...(options.context ? { context: options.context } : {}) }
   /**
    * The run-level queue and worker pool: the concurrency cap applies to the whole run, not to each translate() call
    * on its own — every observer callback and every retry calls translate(), and a pool per call would make the cap a
@@ -238,7 +232,17 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
   const report = () => {
     if (!ledger.stopped()) options.onProgress?.(progress())
   }
-  const fail = (target: ImageTarget, reason: string) => ledger.settle(target, 'failed', reason)
+  /**
+   * A figure that failed shows no translation, as a failed block shows none (§7.6): the overlay a round before this
+   * one drew — after a change of target language, the other language's — goes with the failure, and the tidy layer is
+   * told, for side's copy holds one too (Devin on #281). `drawn`: this round drew what came back with the failure
+   * (`partial`), and that stays
+   */
+  const fail = (target: ImageTarget, reason: string, drawn = false) => {
+    const removed = !drawn && clearImage(target)
+    ledger.settle(target, 'failed', reason)
+    if (removed) options.onRendered?.([target])
+  }
 
   /** Match the segments that came back to their boxes; success and partial success share it */
   const labelsFrom = (segments: readonly { id: string; text: string }[], boxes: readonly Box[], target: ImageTarget): ImageLabel[] => {
@@ -279,7 +283,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     return svg?.tagName.toLowerCase() === 'svg' ? svg : undefined
   }
 
-  const svgLines = async (target: ImageTarget): Promise<OcrLine[] | string> => {
+  const svgLines = async (target: ImageTarget): Promise<{ lines: OcrLine[]; frame: ImageFrame } | string> => {
     let svg = svgOf(target)
     if (!svg) {
       await new Promise<void>(resolve => {
@@ -295,21 +299,23 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
       svg = svgOf(target)
     }
     if (!svg) return 'the figure has not loaded yet'
-    return linesOf(svg).filter(line => !looksLikeCode(line.text))
+    const frame = frameOf(svg)
+    // No `viewBox` and no size: `linesOf` reads nothing from such a figure either
+    if (!frame) return { lines: [], frame: { ratio: 1 } }
+    return { lines: linesOf(svg).filter(line => !looksLikeCode(line.text)), frame }
   }
 
   const process = async (target: ImageTarget): Promise<void> => {
     try {
       let lines: readonly OcrLine[]
+      /** The figure's own shape, which the overlay is laid by: an SVG drawing's, fitted into its element, or the bitmap's pixels */
+      let frame: ImageFrame
       let frames = 1
-      if (target.kind === 'picture') {
-        // An inline TikZ picture (§15.6): text and geometry are in the main document; nothing to fetch, wait for or recognise
-        lines = foreignLinesOf(target.el).filter(line => !looksLikeCode(line.text))
-      } else if (target.kind === 'svg') {
+      if (target.kind === 'svg') {
         const read = await svgLines(target)
         if (!alive()) return
         if (typeof read === 'string') return fail(target, read)
-        lines = read
+        ;({ lines, frame } = read)
       } else {
         const el = target.el as HTMLImageElement
         const { bytes, mime } = await fetchBytes(el.currentSrc || el.src, aborter.signal)
@@ -322,6 +328,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
         if (!alive()) return
         if (!ocr.ok) return fail(target, `recognition failed: ${ocr.error.message}`)
         lines = ocr.result.lines
+        frame = { ratio: ocr.result.width / ocr.result.height }
         frames = ocr.result.frames ?? 1
       }
       // No labels counts as done, but the overlay of the previous round has to go (after a target-language change the old translation must not hang on; Codex on #89)
@@ -331,26 +338,17 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
         ledger.settle(target, 'done')
         if (removed) options.onRendered?.([target])
       }
-      // An animated image: the helper recognised frame 0 only, the browser is showing later frames, the boxes would not line up — no overlay
+      // An animated image: the page is showing some later frame than a recogniser would read, the boxes would not line up — no overlay
       if (frames > 1) return finishEmpty()
-      // Every line of an inline picture is a complete TikZ node already and must not merge with its vertical neighbours (§15.6)
-      const boxes = linesToBoxes(lines, target.kind === 'picture' ? { merge: false } : {})
+      const boxes = linesToBoxes(lines)
       if (boxes.length === 0) return finishEmpty() // nothing translatable in the image
+      // The caption stands where a block's section heading does: the labels of a figure are read under it
       const caption = captionOf(target.el)
-      const context: TranslateContext = { ...options.context, ...(caption ? { sectionTitle: caption } : {}) }
-      const res = await options.translate({
-        request: {
-          segments: boxes.map((box, i) => ({ id: `${target.id}#L${i}`, text: escapeText(box.text, wireFormatOf(options.renderPath)) })),
-          source: 'en',
-          target: options.target,
-          context: Object.keys(context).length ? context : undefined,
-        },
-        cache: { paper: options.paper, renderPath: options.renderPath },
-        scope: options.scope,
-      })
+      const segments = boxes.map((box, i) => ({ id: `${target.id}#L${i}`, text: escapeText(box.text, wireFormatOf(options.renderPath)) }))
+      const res = await options.translate(translateCall(base, segments, options.renderPath, caption ? { sectionTitle: caption } : {}))
       if (!alive()) return
       if (!res.ok) {
-        // One image's labels may span several batches (an inline TikZ picture easily has a hundred nodes): when one
+        // One image's labels may span several batches (a dense plot has a hundred of them): when one
         // batch fails, the labels another batch had translated come back with the failure (`partial` of §8.2), and
         // they are drawn before the failure is handled — a few labels short beats an empty image, and on retry the
         // drawn ones hit the cache (Codex on #163; the text pipeline does the same already). **Drawn before the
@@ -359,7 +357,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
         // this round (Codex on #163, fifth round)
         const done = labelsFrom(res.partial ?? [], boxes, target)
         if (done.length > 0) {
-          renderImage(target, done)
+          renderImage(target, done, frame)
           options.onRendered?.([target])
         }
         // An invalid / missing key: as in the text pipeline, the scheduler stops on the first one, and later images are
@@ -370,16 +368,16 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
           // The claimed but unfinished ones (in flight, queued) are recorded as failed too, so the progress and failed() agree; the queued ones settle at once
           for (const other of ledger.inState('requested')) if (other !== target) fail(other, `stopped on a configuration error: ${res.error.message}`)
           for (const entry of queue.splice(0)) entry.done()
-          fail(target, `translation failed: ${res.error.message}`)
-          // The progress with fatal goes out at once: not after another worker still waiting on OCR (up to one helper timeout) finishes, before the popup learns of it (Codex on #89)
+          fail(target, `translation failed: ${res.error.message}`, done.length > 0)
+          // The progress with fatal goes out at once: not after another worker still waiting on OCR (up to one recogniser timeout) finishes, before the popup learns of it (Codex on #89)
           report()
           return
         }
-        return fail(target, `translation failed: ${res.error.message}`)
+        return fail(target, `translation failed: ${res.error.message}`, done.length > 0)
       }
       const labels = labelsFrom(res.result.segments, boxes, target)
       if (labels.length === 0) return finishEmpty()
-      renderImage(target, labels)
+      renderImage(target, labels, frame)
       ledger.settle(target, 'done')
       options.onRendered?.([target])
     } catch (e) {
@@ -389,8 +387,8 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
   }
 
   const translate = async (picked: ImageTarget[]): Promise<void> => {
-    // The gate is asked per target (§15.5): bitmaps wait for the helper, SVG figures do not; the refused ones park
-    const { taken: ready, held } = ledger.intake(picked, options.isEnabled)
+    // With the gate closed everything handed over parks
+    const { taken: ready, held } = ledger.intake(picked, () => options.isEnabled())
     for (const t of held) parked.add(t)
     options.onTrace?.(`images entered: ${picked.map(t => t.id || t.kind).join(', ')} → taken ${ready.length}, parked ${held.length}, unknown ${picked.length - ready.length - held.length}`)
     if (ready.length === 0) return
@@ -422,8 +420,8 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
   return {
     translate,
     resume() {
-      // No filtering here: `translate` asks `isEnabled` per target itself and returns the unfit ones to parked as they
-      // were; filtering would save one round trip and add one untestable branch
+      // No filtering here: `translate` asks `isEnabled` itself and returns what it may not take to parked as it
+      // was; filtering would save one round trip and add one untestable branch
       if (parked.size === 0) return
       const picked = Array.from(parked)
       parked.clear()

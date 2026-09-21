@@ -56,7 +56,7 @@ describe('restore', () => {
     enable(document, 'stack')
     setImageModes(document, ['stack', 'only'])
     const el = document.getElementById('g1') as HTMLImageElement
-    renderImage({ id: 'g1', el, kind: 'raster' as const }, [{ x: 0, y: 0, w: 0.2, h: 0.05, lines: 1, source: 'Cap', text: '说明' }])
+    renderImage({ id: 'g1', el, kind: 'raster' as const }, [{ x: 0, y: 0, w: 0.2, h: 0.05, lines: 1, source: 'Cap', text: '说明' }], { ratio: 4 / 3 })
     const result = restore(document)
     expect(document.documentElement.outerHTML).toBe(before)
     expect(result.removedNodes).toBe(1)

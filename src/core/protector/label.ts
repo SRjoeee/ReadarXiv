@@ -14,7 +14,7 @@
 // **Under-wrap, never mis-wrap.** Every check that fails leaves the translation exactly as it is
 // today. The wire text is never touched, so translations and cache keys do not change.
 
-import { LABEL_FORMATTING } from '@/core/rules/latexml'
+import { LABEL_FORMATTING, WHOLE_FORMATTING } from '@/core/rules/latexml'
 import { cloneWithoutIds } from './clone'
 import { indexSpans, type WireSpan, wireOffsetAt } from './offsets'
 import type { ProtectedBlock } from './serialize'
@@ -88,16 +88,21 @@ function wireText(el: Element, slots: ReadonlyMap<number, Node>): string {
  */
 function leadingLabel(root: Element, slots: ReadonlyMap<number, Node>): Label | undefined {
   const first = root.firstElementChild
-  if (!first?.matches(LABEL_FORMATTING)) return undefined
+  if (!first) return undefined
   for (let n = root.firstChild; n && n !== first; n = n.nextSibling) if (/\S/.test(n.textContent ?? '')) return undefined
   // A label that went out as a placeholder — all maths, or code — comes back as one: nothing to wrap
   for (const slot of slots.values()) if (slot === first) return undefined
-  const text = wireText(first, slots)
-  if (!text || text.split(' ').length > MAX_LABEL_WORDS) return undefined
   let rest = ''
   for (let n = first.nextSibling; n; n = n.nextSibling) rest += n.textContent ?? ''
+  // The block is nothing but this element: no separator has to be found and every word goes back inside, so any
+  // formatting element will do, at any length — a theorem set in italics, a picture's label in its own colour
+  const whole = !/\S/.test(rest)
+  if (!first.matches(whole ? WHOLE_FORMATTING : LABEL_FORMATTING)) return undefined
+  const text = wireText(first, slots)
+  if (!text) return undefined
   const length = text.length
-  if (!/\S/.test(rest)) return { el: first, text, separator: 'whole', inside: true, length }
+  if (whole) return { el: first, text, separator: 'whole', inside: true, length }
+  if (text.split(' ').length > MAX_LABEL_WORDS) return undefined
   // The separator must be the label's only one: the translation's *first* separator is what ends
   // the label, and a label carrying one inside — `J. Symbolic Comput.`, a journal name set in
   // italics — would be cut at that inner one, italicising `J.` alone (Codex on #151)

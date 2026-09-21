@@ -41,9 +41,10 @@ const extId = worker.url().split('/')[2]
 
 const options = await openOptions(context, extId)
 await chooseBuiltIn(options, 'Google 翻译')
-// Image translation (DESIGN §15) is on by default; with the helper installed on this machine the overlays and the split would disturb the layout / count assertions below,
+// Image translation (DESIGN §15) is on by default; its overlays and the figures it splits would disturb the layout / count assertions below,
 // so it is switched off here, and the dedicated e2e:image switches it back on (kept when AXT_E2E_IMAGES=1)
-if (!process.env.AXT_E2E_IMAGES) await setSwitch(options, '图片翻译', false)
+const FIGURES_SWITCH = '图片翻译'
+if (!process.env.AXT_E2E_IMAGES) await setSwitch(options, FIGURES_SWITCH, false)
 await options.close()
 
 /** Open the paper, choose side mode through the popup and start translating */
@@ -370,6 +371,229 @@ async function measureFrame(page) {
   await page.close()
 }
 
+// ── Paper 4b: 2607.24653v2 (Figure 13, four panels in two rows of two: the split copy keeps the rows) ──
+// The row break is ar5iv's `.ltx_flex_break`, which side hides in a single-column flex figure and leaves alone in a
+// multi-panel one — told apart by a mark, and the copy's marks go with every other data-axt-*. Without the mark
+// written again the copy ran its four panels in one row, each a quarter of the column (reader's report, 2026-09-21)
+{
+  const page = await openSide('2607.24653v2')
+  await page.setViewportSize({ width: 2000, height: 900 })
+  await page.evaluate(() => document.getElementById('S6.F13')?.scrollIntoView({ block: 'center' }))
+  await quiesce(page, 'a 2 × 2 figure')
+  const rows = await page.evaluate(() => {
+    const original = document.getElementById('S6.F13')
+    const copy = original?.nextElementSibling
+    // The row each panel falls in, in document order: a panel starting below the row before it opens the next
+    const pattern = fig => {
+      const out = []
+      let row = -1, bottom = -Infinity
+      for (const cell of fig?.querySelectorAll('.ltx_flex_figure > .ltx_flex_cell') ?? []) {
+        const box = cell.getBoundingClientRect()
+        if (box.top >= bottom - 1) { row++; bottom = box.bottom }
+        else bottom = Math.max(bottom, box.bottom)
+        out.push(row)
+      }
+      return out
+    }
+    return { split: copy?.classList.contains('axt-split') ?? false, original: pattern(original), copy: pattern(copy) }
+  })
+  check('a multi-panel figure\'s split copy lays its panels out in the rows the original has (2 × 2 stays 2 × 2)',
+    rows.split && rows.original.join() === '0,0,1,1' && rows.copy.join() === rows.original.join(),
+    JSON.stringify(rows))
+  await page.screenshot({ path: `${SHOTS}/layout-split-panels.png` })
+
+  // The same paper's Figure 3, a TikZ picture: its labels are blocks of the text run, each translation beside its
+  // label inside the node, one of the two showing (DESIGN §15.6). This script runs with figures not translated, so
+  // the gate comes first: a label reached is neither asked for nor replaced
+  const labels = () => page.evaluate(() => {
+    const anchor = [...document.querySelectorAll('svg .ltx_foreignobject_content:not(.axt-t)')].find(e => e.textContent.trim() === 'lower-bounded')
+    let figure = anchor?.closest('figure')
+    while (figure?.parentElement?.closest('figure')) figure = figure.parentElement.closest('figure')
+    const copy = figure?.nextElementSibling?.classList.contains('axt-split') ? figure.nextElementSibling : null
+    const shown = el => el.getClientRects().length > 0
+    // A label as the reader sees it: where it stands in its picture, in what colour, and whether its node is still ar5iv's flex box
+    // The same picture on both sides, by its place among the figure's pictures: the copy no longer holds the words it is known by
+    const nth = [...(figure?.querySelectorAll('svg.ltx_picture') ?? [])].indexOf(anchor?.closest('svg.ltx_picture'))
+    const rows = root => {
+      const picture = root?.querySelectorAll('svg.ltx_picture')[nth]
+      if (!picture) return []
+      const box = picture.getBoundingClientRect()
+      return [...picture.querySelectorAll('.ltx_foreignobject_content')].filter(l => shown(l) && /\p{L}{2,}/u.test(l.textContent)).map(l => {
+        const r = l.getBoundingClientRect()
+        return { ours: l.classList.contains('axt-t'), text: l.textContent.trim(), top: Math.round(r.top - box.top), left: Math.round(r.left - box.left), colour: getComputedStyle(l.firstElementChild ?? l).color, node: getComputedStyle(l.parentElement).display }
+      })
+    }
+    return { translationsInPictures: document.querySelectorAll('svg .axt-t').length, original: rows(figure), copy: rows(copy) }
+  })
+  await page.evaluate(() => [...document.querySelectorAll('svg .ltx_foreignobject_content')].find(e => e.textContent.trim() === 'lower-bounded')?.closest('figure')?.scrollIntoView({ block: 'center' }))
+  await quiesce(page, 'a picture, figures not translated')
+  const gated = await labels()
+  check('figures not translated: a picture\'s labels are neither asked for nor replaced, and stand as the paper has them',
+    gated.translationsInPictures === 0 && gated.original.length >= 4 && gated.original.every(l => !l.ours && l.node === 'flex'),
+    `${gated.translationsInPictures} translations inside pictures; ${gated.original.map(l => l.text).join(' / ')}`)
+
+  // The reader turns figures on while the session runs: the labels held back are asked for, and the figure's copy is made again
+  const settings = await openOptions(context, extId)
+  await setSwitch(settings, FIGURES_SWITCH, true)
+  await settings.close()
+  await page.bringToFront()
+  let on = await labels()
+  for (let i = 0; i < 60 && !(on.copy.length > 0 && on.copy.every(l => l.ours)); i++) { await sleep(500); on = await labels() }
+  const same = on.original.length === on.copy.length && on.original.every((l, i) => Math.abs(l.top - on.copy[i].top) <= 1 && Math.abs(l.left - on.copy[i].left) <= 1 && l.colour === on.copy[i].colour && on.copy[i].node === 'flex' && l.node === 'flex')
+  check('figures turned on mid-session: the original keeps its labels, the copy shows their translations — each where its label stands, in its colour, the node still ar5iv\'s own',
+    on.original.length >= 4 && on.original.every(l => !l.ours) && on.copy.every(l => l.ours) && same && new Set(on.copy.map(l => l.colour)).size >= 2,
+    JSON.stringify(on.original.map((l, i) => `${l.text} → ${on.copy[i]?.text} Δ(${(on.copy[i]?.top ?? NaN) - l.top}, ${(on.copy[i]?.left ?? NaN) - l.left})`)))
+  await page.screenshot({ path: `${SHOTS}/layout-picture-labels.png` })
+
+  // The figure viewer (DESIGN §15.7) on the same picture, from the translation's side: the dialog holds what the copy
+  // showed, set as the page sets it — no label wrapping otherwise — and the page itself is not touched
+  const picture = await page.evaluate(() => {
+    const anchor = [...document.querySelectorAll('svg .ltx_foreignobject_content:not(.axt-t)')].find(e => e.textContent.trim() === 'lower-bounded')
+    let figure = anchor.closest('figure')
+    while (figure.parentElement?.closest('figure')) figure = figure.parentElement.closest('figure')
+    const nth = [...figure.querySelectorAll('svg.ltx_picture')].indexOf(anchor.closest('svg.ltx_picture'))
+    const svg = figure.nextElementSibling.querySelectorAll('svg.ltx_picture')[nth]
+    svg.setAttribute('data-e2e-viewed', '')
+    const r = svg.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, pageLength: document.querySelector('.ltx_page_content').outerHTML.replaceAll(' data-axt-viewed=""', '').length }
+  })
+  await page.mouse.move(3, 3)
+  await page.mouse.move(picture.x, picture.y, { steps: 4 })
+  await sleep(400)
+  const control = await page.evaluate(() => { const b = document.querySelector('.axt-viewer-spot').shadowRoot.querySelector('.axt-viewer-open'); const r = b.getBoundingClientRect(); return { shown: b.hasAttribute('data-axt-shown'), name: b.getAttribute('aria-label'), x: r.left + 15, y: r.top + 15 } })
+  if (control.shown) await page.mouse.click(control.x, control.y)
+  await sleep(500)
+  const viewed = await page.evaluate(() => {
+    const host = document.querySelector('.axt-viewer'), dialog = host.shadowRoot.querySelector('dialog')
+    const shown = el => el.getClientRects().length > 0
+    const labelsIn = svg => [...svg.querySelectorAll('.ltx_foreignobject_content')].filter(l => shown(l) && /\p{L}{2,}/u.test(l.textContent)).map(l => ({ t: l.textContent.trim(), lines: l.getClientRects().length }))
+    const onPage = labelsIn(document.querySelector('[data-e2e-viewed]')), inDialog = labelsIn(host.querySelector('svg'))
+    const frame = host.firstElementChild
+    return { open: dialog.open, name: dialog.getAttribute('aria-label'), same: JSON.stringify(onPage) === JSON.stringify(inDialog), inDialog, zoom: frame ? Number.parseFloat(frame.style.zoom) : 0 }
+  })
+  await page.evaluate(() => document.querySelector('.axt-viewer').shadowRoot.querySelector('.axt-viewer-bar button').click())
+  const zoomed = await page.evaluate(() => Number.parseFloat(document.querySelector('.axt-viewer').firstElementChild.style.zoom))
+  await page.keyboard.press('Escape')
+  await sleep(300)
+  const closed = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); return { open: host.shadowRoot.querySelector('dialog').open, emptied: host.children.length === 0, focus: document.querySelector('.axt-viewer-spot').shadowRoot.activeElement?.className ?? null } })
+  // Opened again, the page under the dialog stays put whatever has the focus: a modal dialog does not hold the
+  // document still of itself, and a press on the figure takes the focus off the buttons — on Chrome 131 onto the
+  // body (Codex on #279). Closed, the page is unlocked
+  await page.mouse.click(control.x, control.y)
+  await sleep(500)
+  const reopened = await page.evaluate(() => document.querySelector('.axt-viewer').shadowRoot.querySelector('dialog').open)
+  const scrolledFrom = await page.evaluate(() => scrollY)
+  const stage = await page.evaluate(() => { const r = document.querySelector('.axt-viewer').shadowRoot.querySelector('.axt-viewer-stage').getBoundingClientRect(); return { x: r.left + 20, y: r.bottom - 20 } })
+  await page.mouse.click(stage.x, stage.y)
+  for (const key of ['PageDown', 'End', 'Space', 'Meta+ArrowDown', 'Alt+ArrowDown', 'Control+End']) await page.keyboard.press(key)
+  await sleep(300)
+  const scrolledBy = await page.evaluate(y => scrollY - y, scrolledFrom)
+  await page.keyboard.press('Escape')
+  await sleep(300)
+  const after = await page.evaluate(() => { const out = { open: document.querySelector('.axt-viewer').shadowRoot.querySelector('dialog').open, unlocked: getComputedStyle(document.documentElement).overflowY === 'visible' && document.adoptedStyleSheets.every(sheet => !/overflow: hidden/.test(sheet.cssRules[0]?.cssText ?? '')), pageLength: document.querySelector('.ltx_page_content').outerHTML.replaceAll(' data-axt-viewed=""', '').length }; document.querySelector('[data-e2e-viewed]').removeAttribute('data-e2e-viewed'); return out })
+  check('the figure viewer, from the translation\'s side: the control over the picture, a named dialog holding the labels the copy showed, each on as many lines as on the page; a press zooms by 1.2; Escape closes it, the focus back on the control; opened again, no key moves the page after a press on the figure; closed, the page unlocked and as it was',
+    control.shown && viewed.open && viewed.name && viewed.name === control.name && viewed.same && viewed.inDialog.length >= 4 && viewed.inDialog.every(l => !/lower-bounded|Tensor Core/.test(l.t)) && Math.abs(zoomed / viewed.zoom - 1.2) < 0.001 && !closed.open && closed.emptied && closed.focus === 'axt-viewer-open' && reopened && scrolledBy === 0 && !after.open && after.unlocked && after.pageLength === picture.pageLength,
+    JSON.stringify({ control: control.shown, open: viewed.open, name: viewed.name, same: viewed.same, labels: viewed.inDialog.map(l => l.t), zoom: +(zoomed / viewed.zoom).toFixed(3), closed, reopened, pageScrolledBehind: scrolledBy, after }))
+  // Restoring the page under the open viewer: the sweep takes the copy's translations with the page's, and a picture
+  // with no labels at all was left in the dialog (Codex on #279) — the dialog closes instead
+  await page.mouse.move(3, 3)
+  await page.mouse.move(picture.x, picture.y, { steps: 4 })
+  await sleep(400)
+  const again = await page.evaluate(() => { const b = document.querySelector('.axt-viewer-spot').shadowRoot.querySelector('.axt-viewer-open'); const r = b.getBoundingClientRect(); return { shown: b.hasAttribute('data-axt-shown'), x: r.left + 15, y: r.top + 15 } })
+  if (again.shown) await page.mouse.click(again.x, again.y)
+  await sleep(500)
+  const underRestore = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); return { open: host.shadowRoot.querySelector('dialog').open, labels: host.querySelectorAll('.ltx_foreignobject_content').length } })
+  const restorer = await context.newPage()
+  await restorer.goto(`chrome-extension://${extId}/popup.html`)
+  await page.bringToFront()
+  await restorer.getByRole('button', { name: '显示原文', exact: true }).click()
+  await restorer.close()
+  await sleep(1500)
+  const restored = await page.evaluate(() => { const host = document.querySelector('.axt-viewer'); return { open: host.shadowRoot.querySelector('dialog').open, emptied: host.children.length === 0, on: document.documentElement.hasAttribute('data-axt-on'), unlocked: document.adoptedStyleSheets.every(sheet => !/overflow: hidden/.test(sheet.cssRules[0]?.cssText ?? '')) } })
+  check('the page restored under the open viewer: the dialog closes with the translations it showed, the page unlocked',
+    underRestore.open && underRestore.labels >= 4 && !restored.open && restored.emptied && !restored.on && restored.unlocked,
+    JSON.stringify({ underRestore, restored }))
+  // The control is bound to the figure by the browser (CSS anchor positioning), not placed by us: at the figure's top
+  // right within a pixel, and — scrolled until that corner lies under arXiv's sticky header — still there, with the
+  // header over it. It was a fixed box above everything, kept inside the window: it stood ON the header (reported
+  // 2026-09-21). Asked on the restored page: the viewer is there untranslated too, and nothing of ours may stay behind
+  {
+    const SPOT = () => {
+      const spot = document.querySelector('.axt-viewer-spot').getBoundingClientRect()
+      const figure = document.querySelector('[data-axt-viewed]')?.getBoundingClientRect()
+      const header = document.querySelector('header.arxiv-html-header').getBoundingClientRect()
+      const there = document.elementFromPoint(spot.left + 15, spot.top + 15)
+      return { attached: !!figure && Math.abs(figure.right - 8 - spot.right) < 1 && Math.abs(figure.top + 8 - spot.top) < 1, top: Math.round(spot.top), figureTop: figure ? Math.round(figure.top) : null, headerBottom: Math.round(header.bottom), there: there ? `${there.tagName.toLowerCase()}.${String(there.className).split(' ')[0]}` : null }
+    }
+    const at = await page.evaluate(() => {
+      const picture = [...document.querySelectorAll('svg.ltx_picture')].find(el => el.getBoundingClientRect().width > 300 && el.getBoundingClientRect().height > 250)
+      picture.scrollIntoView({ block: 'center' })
+      const r = picture.getBoundingClientRect()
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+    })
+    await page.mouse.move(3, 3)
+    await page.mouse.move(at.x, at.y, { steps: 4 })
+    await sleep(400)
+    const bound = await page.evaluate(SPOT)
+    const by = bound.figureTop - (bound.headerBottom - 25)
+    await page.mouse.wheel(0, by)
+    await sleep(500)
+    // A move keeps the pointer's place known to the page after the scroll, on the part of the figure still below the header
+    await page.mouse.move(at.x + 1, Math.max(bound.headerBottom + 40, at.y - by))
+    await sleep(300)
+    const covered = await page.evaluate(SPOT)
+    // A figure wider than the frame that clips it keeps its control inside the frame. Side's half column scrolls such
+    // a one, and a control at the figure's own corner stood over the other column (measured on 2312.17141: a column
+    // ending at 708 px, the control at 843–873). Which figures are so depends on how far a page's layout has settled,
+    // so the subject is made: the picture's block narrowed to six tenths of the picture and left to scroll
+    await page.mouse.move(3, 400)
+    await sleep(400)
+    await page.mouse.wheel(0, -by)
+    await sleep(400)
+    const narrowed = await page.evaluate(() => {
+      const picture = [...document.querySelectorAll('svg.ltx_picture')].find(el => el.getBoundingClientRect().width > 300 && el.getBoundingClientRect().height > 250)
+      const block = picture.parentElement
+      const width = picture.getBoundingClientRect().width
+      // The picture is held to its width — it gives way to its block otherwise — and the block is made the narrower
+      for (const [el, style] of [[picture, `;min-width:${Math.round(width)}px;max-width:none`], [block, `;display:block;overflow-x:auto;width:${Math.round(width * 0.6)}px`]]) {
+        el.setAttribute('data-e2e-style', el.getAttribute('style') ?? '')
+        el.style.cssText += style
+      }
+      const r = picture.getBoundingClientRect(), c = block.getBoundingClientRect()
+      return { x: c.left + c.width / 2, y: r.top + r.height / 2 }
+    })
+    await page.mouse.move(narrowed.x, narrowed.y, { steps: 3 })
+    await sleep(400)
+    const kept = await page.evaluate(() => {
+      const spot = document.querySelector('.axt-viewer-spot').getBoundingClientRect()
+      const frame = document.querySelector('[data-axt-viewed-frame]')?.getBoundingClientRect()
+      const figure = document.querySelector('[data-axt-viewed]')?.getBoundingClientRect()
+      const out = { controlRight: Math.round(spot.right), frameRight: frame ? Math.round(frame.right) : null, figureRight: figure ? Math.round(figure.right) : null }
+      for (const el of document.querySelectorAll('[data-e2e-style]')) {
+        el.setAttribute('style', el.getAttribute('data-e2e-style'))
+        if (el.getAttribute('style') === '') el.removeAttribute('style')
+        el.removeAttribute('data-e2e-style')
+      }
+      return out
+    })
+    check('the figure viewer\'s control keeps inside the frame that clips a figure wider than it: eight pixels in from the frame\'s edge, not the figure\'s',
+      kept.frameRight !== null && kept.figureRight !== null && kept.figureRight > kept.frameRight + 8 && Math.abs(kept.controlRight - (kept.frameRight - 8)) <= 1,
+      JSON.stringify(kept))
+    await page.mouse.move(3, 400)
+    await sleep(500)
+    const gone = await page.evaluate(() => ({ named: document.querySelectorAll('[data-axt-viewed], [data-axt-viewed-frame]').length, sheets: document.adoptedStyleSheets.length }))
+    check('the figure viewer\'s control is bound to the figure: at its top right, under the site\'s header when that corner is, and the pointer gone nothing of it is left on the page',
+      bound.attached && bound.there === 'div.axt-viewer-spot' && covered.attached && covered.top < covered.headerBottom && covered.there === 'header.arxiv-html-header' && gone.named === 0 && gone.sheets === 0,
+      `on the page ${JSON.stringify(bound)}; scrolled under the header ${JSON.stringify(covered)}; the pointer gone ${JSON.stringify(gone)}`)
+  }
+  if (!process.env.AXT_E2E_IMAGES) {
+    const back = await openOptions(context, extId)
+    await setSwitch(back, FIGURES_SWITCH, false)
+    await back.close()
+  }
+  await page.close()
+}
+
 // ── The band below the gutter (1280–1535px): frontmatter acknowledgement / corresponding-author notes pair left and right too ──────────
 // side applies from ≥1280px, the gutter rule from ≥96rem (1536px), and the band between falls under neither: ar5iv leaves that note in the body flow
 // with a hard-coded 800px width, so it overflows the article sideways and the translation stacks right under the source, looking as if it fell into the left column (reader's report, 2026-09-06)
@@ -482,6 +706,7 @@ async function measureFrame(page) {
   check('side mode\'s mirrors do not land on translation units (no whole-block clone of the source in the right column)',
     dup.mirrors > 0 && dup.translations > 0 && dup.clonedCount === 0,
     `${dup.mirrors} mirrors, ${dup.translations} translations, ${dup.clonedCount} whole-block clones${dup.cloned.length ? `: ${dup.cloned.join(', ')}` : ''}`)
+
   await page.close()
 }
 
@@ -538,6 +763,65 @@ async function measureFrame(page) {
   check('with the cap between grid points the verdict has to align to the grid to receive that callback (issue #81)',
     slowMax < exactCap - 1e-6 && slowMax >= quantized - 1e-6,
     `exact cap ${exactCap.toFixed(4)}, the largest ratio a slow scroll got ${slowMax.toFixed(6)}; the aligned threshold ${quantized.toFixed(2)}`)
+  await page.close()
+}
+
+// The reader's place (DESIGN §10, core/renderer/place.ts): starting a translation, each change of mode and a restore
+// lay the whole paper out anew, and the paragraph the reader was on used to leave the screen by thousands of pixels
+// every time (tests/e2e/probes/reading-position.mjs has the numbers). The aim is the paragraph, not the pixel: it has
+// to stay on screen, within a few lines of where it stood
+{
+  const page = await context.newPage()
+  await page.goto('https://arxiv.org/html/2410.00260', { waitUntil: 'load' })
+  const popup = await context.newPage()
+  await popup.goto(`chrome-extension://${extId}/popup.html`)
+  await page.bringToFront()
+  const sideButton = popup.getByRole('button', { name: '左右', exact: true })
+  await sideButton.waitFor({ timeout: 10_000 })
+  await sideButton.click()
+  await sleep(1500)
+  await page.evaluate(() => {
+    // The reader's line as the extension takes it: a quarter of the way down the viewport
+    const line = innerHeight / 4
+    const own = () => [...document.querySelectorAll('article p.ltx_p')].filter(p => !p.closest('.axt-t'))
+    // Under translation only a translated original is hidden, and its translation stands beside it
+    const shown = p => (p.getClientRects().length ? p : p.nextElementSibling?.classList.contains('axt-t') ? p.nextElementSibling : null)
+    window.__place = {
+      note() {
+        let best = null
+        for (const p of own()) {
+          const el = shown(p)
+          if (!el) continue
+          const top = el.getBoundingClientRect().top
+          if (best === null || Math.abs(top - line) < Math.abs(best.top - line)) best = { p, top }
+        }
+        window.__place.p = best.p
+        return best.top
+      },
+      find() {
+        const el = shown(window.__place.p)
+        return el ? el.getBoundingClientRect().top : Number.NaN
+      },
+    }
+    const list = own()
+    const target = list[Math.floor(list.length * 0.45)]
+    scrollTo(0, target.getBoundingClientRect().top + scrollY - line)
+  })
+  await sleep(800)
+  const press = name => () => popup.getByRole('button', { name, exact: true }).click()
+  const steps = [['translate', press('翻译本页'), 6000], ['stacked', press('上下'), 2500], ['translation only', press('仅译文'), 2500], ['side by side', press('左右'), 3500], ['restore', press('显示原文'), 3000]]
+  const moves = []
+  for (const [name, act, wait] of steps) {
+    const before = await page.evaluate(() => window.__place.note())
+    await act()
+    await sleep(wait)
+    const after = await page.evaluate(() => ({ top: window.__place.find(), height: innerHeight }))
+    moves.push({ name, moved: Math.round(after.top - before), onScreen: after.top > 0 && after.top < after.height })
+  }
+  check('the reader keeps their place: the paragraph on the reader\'s line stays on screen, within a few lines of where it stood, across translate, every mode and restore (§10)',
+    moves.every(m => m.onScreen && Math.abs(m.moved) <= 80),
+    moves.map(m => `${m.name} ${m.moved > 0 ? '+' : ''}${m.moved} px${m.onScreen ? '' : ' OFF SCREEN'}`).join(', '))
+  await popup.close()
   await page.close()
 }
 

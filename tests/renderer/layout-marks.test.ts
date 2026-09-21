@@ -13,7 +13,10 @@ import { clearAllPending, renderPending } from '@/core/renderer/pending'
 import { markStructure } from '@/core/renderer/side-layout'
 import { splitFigures } from '@/core/renderer/split-figures'
 import { clearTranslation, renderText } from '@/core/renderer/translation'
-import { docOf, frag } from './helpers'
+import { docOfChecked, frag } from './helpers'
+
+// Every document a case renders into is held to the tail mark's invariant afterwards (helpers.ts)
+const docOf = docOfChecked()
 
 const blockOf = (doc: Document, id: string) => extract(doc).find(b => b.el.id === id) as TextBlock
 
@@ -121,7 +124,7 @@ describe('data-axt-mirrored: the original a mirror follows', () => {
     renderText(blockOf(doc, 'p1'), frag(doc, '一。'))
     createMirrors(doc)
     const g = doc.getElementById('g')!
-    renderImage({ id: 'g', el: g, kind: 'svg' }, [{ x: 0, y: 0, w: 0.3, h: 0.05, lines: 1, source: 'Static charge', text: '静态电荷' }])
+    renderImage({ id: 'g', el: g, kind: 'svg' }, [{ x: 0, y: 0, w: 0.3, h: 0.05, lines: 1, source: 'Static charge', text: '静态电荷' }], { ratio: 4 / 3 })
     expect(doc.querySelector(`.${MIRROR_CLASS}`)).toBeNull()
     expect(g.nextElementSibling!.classList.contains(IMG_CLASS)).toBe(true)
     expect(g.hasAttribute(MIRRORED_ATTR)).toBe(false)
@@ -186,7 +189,8 @@ describe('data-axt-note-translated: a footnote copy that carries its translation
     + '<span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup>English note</span></span></span></figcaption></figure>'
 
   it('a split figure\'s clone keeps the mark the strip took off, and a later localisation pass keeps it too (Devin on #221)', () => {
-    const doc = docOf(FIGURE)
+    // Hand-built: FIGURE carries its translations in the HTML, so no renderer kept their originals' tail marks
+    const doc = docOf.handBuilt(FIGURE)
     expect(localizeNotes(doc)).toBe(1)
     const original = doc.querySelector(`.${T_CLASS} .ltx_note_content`)!
     expect(original.hasAttribute(NOTE_TRANSLATED_ATTR)).toBe(true)

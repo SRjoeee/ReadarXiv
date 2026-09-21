@@ -6,14 +6,15 @@
 // error rate is zero rather than whatever OCR would get wrong. Measured over 58045 glyphs in 316
 // distinct figures, `data-text` is present on every one that is a glyph (DESIGN §15.5).
 //
-// The output is `OcrLine[]`, the same shape the OCR helper returns, so everything downstream —
+// The output is `OcrLine[]`, the same shape the recogniser of bitmaps returns, so everything downstream —
 // `linesToBoxes`, the translate call, the overlay — is shared with the bitmap path and knows
 // nothing about where the lines came from.
 //
 // **Read-only.** Nothing here writes to the embedded document. The overlay is built in the main
 // document from normalised coordinates, which works because a figure's `viewBox` maps linearly onto
-// its `<object>` element box (measured to four decimal places, DESIGN §15.5). §7.1's DOM invariant and
-// `restore()` are untouched, and there is no second document to define restore semantics for.
+// the rectangle the drawing takes in its `<object>` — the element's box where the two have the same
+// proportions, a centred part of it where they do not (`frameOf`, DESIGN §15.5). §7.1's DOM invariant
+// and `restore()` are untouched, and there is no second document to define restore semantics for.
 
 import type { OcrLine, Quad } from '@/shared/ocr'
 
@@ -27,6 +28,8 @@ interface Glyph {
   size: number
   /** Radians, from the transform matrix. Only 0 and -π/2 occur in the corpus. */
   angle: number
+  /** The id of the outline in `<defs>` that draws it */
+  outline: string
 }
 
 /** A run of glyphs sharing a baseline: one label, one tick, one line of a listing. */
@@ -66,6 +69,43 @@ export interface GlyphRun {
  * never reaches a translator.
  */
 const RUN_BREAK = 1.5
+
+/**
+ * In a figure that draws **no space glyph**, this much air between the ink of two glyphs, in font sizes, is a space.
+ *
+ * A figure made by TeX — pgfplots, TikZ compiled on its own, matplotlib under `usetex` — has none: to TeX a space is
+ * glue, not a character, and the converter can only write down the glyphs there are. Every label of such a figure
+ * arrived as one glued word (`CameraRepairManagementSystemReplication`), which an engine gives back unchanged, and a
+ * translation equal to its source draws nothing: the reader saw the title and an axis left in English (reported on
+ * 2607.24653v2, where 2 of the 11 figures are such; the 7.28 % of glyphs that are spaces (§15.5) is the corpus's
+ * average, not every file's).
+ *
+ * The air is measured between **outlines**, which the file holds in the font's own unit square, not between origins:
+ * an advance says nothing without the letter's width (`m` is four `i`s wide). Measured on the two figures, 269 pairs
+ * on a shared baseline:
+ *
+ * | | |
+ * |---|---|
+ * | letters of one word | ≤ 0.20 (side bearings; the widest a `1.`) |
+ * | a word gap | ≥ 0.26 in a sans face, ≥ 0.30 in Computer Modern |
+ *
+ * **Only where no space is drawn.** A figure that draws its spaces is exact as it stands.
+ *
+ * **And not in a fixed-pitch face**, where air says nothing: every glyph stands in a cell of one width, a full stop
+ * in as much as an `m`. Read by air, the listing fixture with its space glyphs deleted came out `self . cms` and
+ * `kwlist [ ]` — 81 spaces where none was drawn, though not one inside a word (Codex on #274). There a space is a
+ * **skipped cell**, which is exact: all 122 of the fixture's own come back that way and none is added, and the ones
+ * its syntax colouring dropped come back with them, their cells being there, empty (`staticint` → `static int`).
+ */
+const WORD_GAP = 0.22
+
+/**
+ * How far from a whole number of cells an advance may be and the face still be fixed-pitch, in font sizes, and how
+ * many advances it takes to say so. Measured on five figures: the listing's face strays 0.033 at its worst over 737
+ * advances (the coordinates are rounded), and the worst of each of the 14 proportional faces is 0.25 to 0.37
+ */
+const CELL_TOLERANCE = 0.05
+const CELL_EVIDENCE = 8
 
 /**
  * Decomposes `transform="matrix(a,b,c,d,e,f)"`.
@@ -124,6 +164,7 @@ function glyphsOf(svg: Element): Glyph[] {
       across: -t.x * sin + t.y * cos,
       size: t.size,
       angle: t.angle,
+      outline: (use.getAttribute('xlink:href') ?? use.getAttribute('href') ?? '').replace(/^#/, ''),
     })
   }
   return out
@@ -138,28 +179,127 @@ function sameLine(run: { angle: number; size: number; across: number }, g: Glyph
   return Math.abs(run.across - g.across) <= 0.05 * g.size
 }
 
+const PATH_COMMAND = /([MLHVCSQTAZmlhvcsqtaz])([^MLHVCSQTAZmlhvcsqtaz]*)/g
+const PATH_NUMBER = /-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi
+
+/**
+ * How far an outline reaches along the baseline, in font sizes, read from its path data alone — no layout, and the
+ * same under happy-dom. The converter writes absolute commands only (M L H V C Z over 260 outlines in five files):
+ * every pair's first number is an x, `H` holds nothing but, `V` none. A curve's control points stand in for the
+ * curve, which they bound. Anything else — a relative command, an arc — and the outline is not read, its glyph
+ * taking no part in the measure
+ */
+function reachOf(d: string): { from: number; to: number } | undefined {
+  let from = Number.POSITIVE_INFINITY
+  let to = Number.NEGATIVE_INFINITY
+  for (const [, command, args] of d.matchAll(PATH_COMMAND)) {
+    if (command === 'Z' || command === 'z' || command === 'V') continue
+    if (!'MLHCSQT'.includes(command!)) return undefined
+    const numbers = (args!.match(PATH_NUMBER) ?? []).map(Number)
+    for (let i = 0; i < numbers.length; i += command === 'H' ? 1 : 2) {
+      from = Math.min(from, numbers[i]!)
+      to = Math.max(to, numbers[i]!)
+    }
+  }
+  return from <= to ? { from, to } : undefined
+}
+
+/**
+ * Every outline's reach by the id a glyph names, read once per figure and only for a figure whose spaces are gaps.
+ *
+ * The converter writes an outline in one of two forms, by the kind of font and not by who made the figure: a Type 1
+ * face as `<path id>` in the unit square, a TrueType one as `<g id><path transform="matrix(.001,0,0,.001,0,0)">` in
+ * font units under a scale (the plot fixture is all of the second form; Codex and Devin on #274). So the id may be the
+ * path's or its group's, and a path's own matrix scales and shifts its reach. A matrix that turns or shears the
+ * outline has no reach along the baseline to speak of, and is left out
+ */
+function outlinesOf(svg: Element): Map<string, { from: number; to: number }> {
+  const out = new Map<string, { from: number; to: number }>()
+  for (const path of Array.from(svg.querySelectorAll('defs path'))) {
+    const id = path.id || path.parentElement?.id
+    const reach = reachOf(path.getAttribute('d') ?? '')
+    if (!id || !reach) continue
+    const [a = 1, b = 0, c = 0, , e = 0] = /matrix\(([^)]*)\)/.exec(path.getAttribute('transform') ?? '')?.[1]?.split(/[\s,]+/).map(Number) ?? []
+    if (b !== 0 || c !== 0 || !(a > 0)) continue
+    const from = reach.from * a + e
+    const to = reach.to * a + e
+    // A glyph drawn by several paths reaches as far as they do together
+    const so = out.get(id)
+    out.set(id, so ? { from: Math.min(so.from, from), to: Math.max(so.to, to) } : { from, to })
+  }
+  return out
+}
+
+/** The face a glyph is set in: the converter names an outline `font_<face>_<glyph>` (all five files read) */
+const faceOf = (outline: string): string => outline.slice(0, outline.lastIndexOf('_'))
+
+/**
+ * The cell width of every fixed-pitch face in the figure, in font sizes: a face whose every advance — origin to
+ * origin, between two glyphs that follow each other on one line — is a whole number of cells, the cell being the
+ * median advance (the smallest carries the rounding of one pair into every other). A proportional face fails on its
+ * second letter (`i` 0.28, `m` 0.83); too few advances to tell, and the face is taken for proportional, which a face
+ * in a figure nearly always is. A face that draws only digits passes, digits being of one width in any face: a
+ * number holds no space, and read by cells none is put into one
+ */
+function cellsOf(glyphs: readonly Glyph[]): Map<string, number> {
+  const advances = new Map<string, number[]>()
+  for (let i = 1; i < glyphs.length; i++) {
+    const before = glyphs[i - 1]!
+    const g = glyphs[i]!
+    const advance = (g.along - before.along) / before.size
+    if (!sameLine({ angle: before.angle, size: before.size, across: before.across }, g) || advance <= 0 || advance > RUN_BREAK) continue
+    const face = faceOf(before.outline)
+    advances.set(face, [...(advances.get(face) ?? []), advance])
+  }
+  const cells = new Map<string, number>()
+  for (const [face, seen] of advances) {
+    if (seen.length < CELL_EVIDENCE) continue
+    const cell = [...seen].sort((a, b) => a - b)[Math.floor(seen.length / 2)]!
+    if (seen.every(advance => Math.abs(advance - Math.max(1, Math.round(advance / cell)) * cell) <= CELL_TOLERANCE)) cells.set(face, cell)
+  }
+  return cells
+}
+
 /**
  * Glyphs to runs.
  *
  * The converter emits every glyph as a direct child of `<svg>` with no grouping whatsoever — one
  * figure is a flat list where ticks, axis titles and legend entries run together as
  * `"110100Number of terms N1015…"`. Document order within a run is exact, including the
- * spaces, which are glyphs of their own; all that has to be recovered is where one run ends.
+ * spaces where they are glyphs of their own; where the figure draws none they are put back from
+ * the air between two outlines (`WORD_GAP`). What is left to recover is where one run ends.
  */
 export function runsOf(svg: Element): GlyphRun[] {
   const runs: GlyphRun[] = []
   let current: GlyphRun | undefined
+  let last: Glyph | undefined
+  const glyphs = glyphsOf(svg)
+  const gaps = !glyphs.some(g => g.text === ' ')
+  const outlines = gaps ? outlinesOf(svg) : undefined
+  const cells = gaps ? cellsOf(glyphs) : undefined
+  /** Whether the figure left a space between the glyph before and this one: a skipped cell in a fixed-pitch face, air between the outlines in any other */
+  const spaceBefore = (g: Glyph): boolean => {
+    if (!last || !outlines || !cells) return false
+    const cell = cells.get(faceOf(last.outline))
+    if (cell !== undefined) return (g.along - last.along) / last.size >= 1.5 * cell
+    const before = outlines.get(last.outline)
+    const after = outlines.get(g.outline)
+    if (!before || !after) return false
+    return g.along + after.from * g.size - (last.along + before.to * last.size) >= WORD_GAP * g.size
+  }
 
-  for (const g of glyphsOf(svg)) {
+  for (const g of glyphs) {
     const gap = current ? g.along - current.to : 0
     if (current && sameLine(current, g) && gap >= 0 && gap <= RUN_BREAK * current.size) {
-      current.text += g.text
+      current.text += spaceBefore(g) ? ` ${g.text}` : g.text
       current.to = g.along
       current.glyphs++
+      last = g
       continue
     }
     if (current) runs.push(current)
     current = { text: g.text, angle: g.angle, size: g.size, from: g.along, to: g.along, across: g.across, glyphs: 1 }
+    last = g
   }
   if (current) runs.push(current)
   return runs
@@ -176,6 +316,26 @@ export function viewBoxOf(svg: Element): { x: number; y: number; w: number; h: n
   const h = Number.parseFloat(svg.getAttribute('height') ?? '')
   if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) return { x: 0, y: 0, w, h }
   return undefined
+}
+
+/**
+ * The frame the labels are laid by: the drawing's proportions, and whether the browser **fits it whole and centred**
+ * into its element — `preserveAspectRatio`'s default, which all 80 figures sampled over 9 papers leave unset.
+ *
+ * It matters where the element has other proportions than the drawing: arXiv sizes the `<object>` from the source's
+ * `\includegraphics`, and the Transformer paper's Figure 4 is a drawing of 319 × 217 in a box of 476 × 254 — drawn
+ * with 50 px of air at either side at the width the reader saw it. The `viewBox` maps linearly onto the **drawing's**
+ * rectangle, which is the element's box only where the two agree (75 of the 80 within 1 %; the 5 that do not are that
+ * paper's): laid over the whole box, every label stood off its word, further the nearer the edge (reported 2026-09-21).
+ *
+ * `none` stretches the drawing over the box and any other alignment is not centred: neither is `fitted`, and the
+ * overlay keeps the whole box. Without a `viewBox` nothing is scaled to the box at all.
+ */
+export function frameOf(svg: Element): { ratio: number; fitted: boolean } | undefined {
+  const box = viewBoxOf(svg)
+  if (!box) return undefined
+  const [align = 'xMidYMid', fit = 'meet'] = (svg.getAttribute('preserveAspectRatio') ?? '').trim().split(/\s+/).filter(Boolean)
+  return { ratio: box.w / box.h, fitted: svg.hasAttribute('viewBox') && align === 'xMidYMid' && fit === 'meet' }
 }
 
 /**

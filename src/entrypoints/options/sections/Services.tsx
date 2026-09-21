@@ -11,8 +11,6 @@ import { Row } from '@/ui/Field'
 import { Switch } from '@/ui/Switch'
 import { MODE_ORDER, O, S, languageLabel, languageName } from '@/ui/strings'
 import type { OptionsData } from '../data'
-import { HelperPermission } from '@/ui/HelperPermission'
-import { HelperSetup } from '@/ui/HelperSetup'
 import { ServiceDrawer } from './ServiceDrawer'
 
 /** Read at render, not at import: the pack is chosen after this module loads (ui/strings.ts) */
@@ -20,8 +18,8 @@ const modeName = (mode: (typeof MODE_VALUES)[number]): string => S.mode[mode]
 /** The radio's own look, so the control the reader clicks is the control itself */
 const RADIO = 'size-3.5 shrink-0 appearance-none rounded-full border-[1.5px] border-line checked:border-[5px] checked:border-accent disabled:opacity-40'
 
-export function Services({ data, extensionId }: { data: OptionsData; extensionId: string }) {
-  const { config, patch, pack, checkPack, fetchPack, helper, setHelper, platform } = data
+export function Services({ data }: { data: OptionsData }) {
+  const { config, patch, pack, checkPack, fetchPack } = data
   /** null = closed, 'new' = the add form, otherwise the service being edited */
   const [editing, setEditing] = useState<'new' | string | null>(null)
   if (!config) return null
@@ -113,17 +111,6 @@ export function Services({ data, extensionId }: { data: OptionsData; extensionId
               translation back on would show as enabled while no mode can run it (Codex on #157) */}
           <Switch checked={config.image.enabled} onChange={on => void patch(latest => ({ ...latest, image: { enabled: on, modes: on && latest.image.modes.length === 0 ? [...MODE_VALUES] : latest.image.modes } }))} label={S.rows.images} />
         </Row>
-        <div className="border-t border-line py-3 text-[12px] leading-relaxed text-fg-2">
-          {helper === null || platform === null ? O.services.detecting
-            : helper.state === 'ready' ? `${S.setup.done} ${helper.version}`
-            // The installer exits at once on anything but macOS, so offering it elsewhere would be
-            // an actionable-looking path that cannot work (Codex on #157)
-            : platform !== 'mac' ? S.helper.macOnly
-            // The permission comes before the install command (DESIGN §15.3); a grant into a running worker takes a moment
-            : helper.state === 'permission-missing' ? <div className="flex flex-col gap-2"><span>{S.helper.permission}</span><HelperPermission onStatus={setHelper} /></div>
-            : helper.state === 'restarting' ? S.helper.enabling
-            : <HelperSetup extensionId={extensionId} />}
-        </div>
         <fieldset className="border-0 border-t border-line p-0 py-3">
           <legend className="p-0 text-[12px] font-semibold text-fg-2">{O.services.imageModes}</legend>
           <span className="mt-2 flex gap-4">

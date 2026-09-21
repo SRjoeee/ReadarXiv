@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { extract, type Block } from '@/core/extractor'
 import { startTranslation, type Progress, type Transport } from '@/core/pipeline/run'
 import { T_CLASS } from '@/core/marks'
-import { ERROR_CLASS, FOR_ATTR, INLINE_ATTR, PARTIAL_ATTR, PENDING_CLASS, STATE_ATTR } from '@/core/renderer/attrs'
+import { ERROR_CLASS, FOR_ATTR, INLINE_ATTR, ON_ATTR, PARTIAL_ATTR, PENDING_CLASS, STATE_ATTR } from '@/core/renderer/attrs'
 import { TABLE_RULES } from '@/core/rules/latexml'
 import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
 import type { TranslateCall } from '@/providers/translate-service'
@@ -40,13 +40,12 @@ function makeTransport(mutate?: (req: TranslateCall, seg: { id: string; text: st
   return { transport, requests }
 }
 
-/** Start a session and wait for the marking; happy-dom has no IntersectionObserver, so blocks are handed over by translate by hand */
+/** Start a session; happy-dom has no IntersectionObserver, so blocks are handed over by translate by hand */
 async function start(doc: Document, blocks: Block[], transport: Transport, extra: Partial<Parameters<typeof startTranslation>[0]> = {}) {
   const run = startTranslation({
     doc, blocks, target: 'zh-CN', mode: 'stack', paper: 'test', transport, preload: DEFAULT_PRELOAD,
     capabilities: { maxBatchChars: 100_000, maxBatchItems: 100, renderPath: 'tags' }, ...extra,
   })
-  await run.ready
   return run
 }
 const byId = (blocks: Block[], id: string) => blocks.find(b => b.id === id)!
@@ -451,6 +450,56 @@ describe('startTranslation', () => {
   })
 })
 
+describe('the gate: a block refused is not asked for, and is offered again when the gate may have opened (§15.6)', () => {
+  const FIGURE = '<p class="ltx_p" id="p1">Body text.</p>'
+    + '<figure class="ltx_figure"><svg class="ltx_picture"><foreignObject><span class="ltx_foreignobject_container"><span class="ltx_foreignobject_content" id="label">Shared Expert</span></span></foreignObject></svg></figure>'
+
+  it('a figure\'s label is a block like any other: its translation is its next sibling inside the node, the formula beside the words kept', async () => {
+    const doc = docOf(FIGURE.replace('Shared Expert', 'Block <math class="ltx_Math"><mi>n</mi></math>'))
+    const blocks = extract(doc)
+    const { transport } = makeTransport((_req, seg) => seg.text.replace('Block', 'Bloc'))
+    const run = await start(doc, blocks, transport)
+    await run.translate(blocks)
+    const label = doc.getElementById('label')!
+    const translation = label.nextElementSibling!
+    expect(translation.classList.contains(T_CLASS)).toBe(true)
+    expect(translation.classList.contains('ltx_foreignobject_content')).toBe(true)
+    expect(translation.parentElement).toBe(label.parentElement)
+    expect(translation.textContent).toContain('Bloc')
+    expect(translation.querySelector('math')).not.toBeNull()
+    // The original is what it was (§7.1): a mark, and nothing else
+    expect(label.textContent).toBe('Block n')
+  })
+
+  it('refused, the label is neither requested nor rendered while the text beside it is; resume() asks for it once the gate is open, and only for it', async () => {
+    const doc = docOf(FIGURE)
+    const blocks = extract(doc)
+    const { transport, requests } = makeTransport()
+    let figures = false
+    const run = await start(doc, blocks, transport, { admit: block => block.id !== 'label' || figures })
+    await run.translate(blocks)
+    expect(requests.flatMap(r => r.request.segments.map(seg => seg.id))).toEqual(['p1'])
+    expect(doc.getElementById('label')!.nextElementSibling).toBeNull()
+    expect(run.progress()).toMatchObject({ total: 2, requested: 1, done: 1 })
+
+    // The gate still shut: resume asks for nothing
+    run.resume()
+    await Promise.resolve()
+    expect(requests).toHaveLength(1)
+
+    figures = true
+    run.resume()
+    await vi.waitFor(() => expect(run.progress()).toMatchObject({ requested: 2, done: 2 }))
+    expect(requests.flatMap(r => r.request.segments.map(seg => seg.id))).toEqual(['p1', 'label'])
+    expect(doc.getElementById('label')!.nextElementSibling?.classList.contains(T_CLASS)).toBe(true)
+
+    // Nothing is held any more: a second resume asks for nothing
+    run.resume()
+    await Promise.resolve()
+    expect(requests).toHaveLength(2)
+  })
+})
+
 describe('onRendered: hands over the blocks whose DOM just changed, for each batch (issue #46)', () => {
   it('twice per batch: once after the skeletons are inserted, once after the results are rendered, both with this batch\'s blocks', async () => {
     const doc = docOf()
@@ -499,6 +548,45 @@ describe('onRendered: hands over the blocks whose DOM just changed, for each bat
     await run.translate([p1]) // a failed block can be handed over again
     expect(seen).toHaveLength(4)
     expect(seen[3]).toEqual([p1])
+  })
+})
+
+// The start reads, then writes (DESIGN §10): asked after `enable` has restyled the paper, where a block is costs the
+// whole paper's style recalculation and layout in the middle of the script — 190 ms on 2312.17141 — and once more for
+// the frame after the states and the first skeletons were written behind it
+describe('the start of a run reads the layout before it writes to the page', () => {
+  const box = (top: number): DOMRect => ({ top, bottom: top + 20, left: 0, right: 100, width: 100, height: 20, x: 0, y: top, toJSON: () => ({}) })
+
+  it('every geometry read comes before the page is enabled, and none after', () => {
+    const doc = docOf()
+    const blocks = extract(doc)
+    const asked: boolean[] = []
+    for (const [i, block] of blocks.entries()) {
+      block.el.getBoundingClientRect = () => {
+        asked.push(doc.documentElement.hasAttribute(ON_ATTR))
+        return box(100 + i * 5000)
+      }
+    }
+    const { transport } = makeTransport()
+    startTranslation({ doc, blocks, target: 'zh-CN', mode: 'side', paper: 'test', transport, preload: DEFAULT_PRELOAD, capabilities: { maxBatchChars: 100_000, maxBatchItems: 100, renderPath: 'tags' } })
+    expect(asked.length).toBeGreaterThanOrEqual(blocks.length)
+    expect(asked).not.toContain(true)
+  })
+
+  it('when it returns the states are all written and the first screen has its skeleton and its request — nothing of the start is left for later', async () => {
+    const doc = docOf()
+    const blocks = extract(doc)
+    // The heading alone is on the reader's screen; everything else is far below any preload distance
+    for (const [i, block] of blocks.entries()) block.el.getBoundingClientRect = () => box(i === 0 ? 100 : 50_000 + i * 100)
+    vi.stubGlobal('innerHeight', 800)
+    const { transport, requests } = makeTransport()
+    startTranslation({ doc, blocks, target: 'zh-CN', mode: 'stack', paper: 'test', transport, preload: DEFAULT_PRELOAD, capabilities: { maxBatchChars: 100_000, maxBatchItems: 100, renderPath: 'tags' } })
+    expect(blocks.every(b => b.el.hasAttribute(STATE_ATTR))).toBe(true)
+    expect(doc.querySelectorAll(`.${PENDING_CLASS}`)).toHaveLength(1)
+    expect(doc.querySelector(`.${PENDING_CLASS}`)?.getAttribute(FOR_ATTR)).toBe('s1')
+    expect(requests).toHaveLength(1)
+    expect(requests[0]!.request.segments.map(seg => seg.id)).toEqual(['s1'])
+    vi.unstubAllGlobals()
   })
 })
 

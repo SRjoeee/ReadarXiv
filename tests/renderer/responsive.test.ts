@@ -86,6 +86,24 @@ describe('createModeController', () => {
     expect(() => c.stop()).not.toThrow()
   })
 
+  it('says so before the mode in effect moves, with nothing written yet — the reader\'s choice and the window\'s crossing alike — and not when it stays', () => {
+    // The moment the reader's place is noted (renderer/place.ts): after the write the layout is dirty, and a read then would force it
+    const doc = docOf()
+    const m = fakeMedia(false)
+    const seen: (string | null)[] = []
+    const c = createModeController(doc, 'side', { media: m.media, beforeChange: () => seen.push(modeOf(doc)) })
+    // Creating it writes the first mode, which is the start's own to announce
+    expect(seen).toEqual([])
+    c.choose('only')
+    expect(seen).toEqual(['side'])
+    c.choose('only')
+    expect(seen).toEqual(['side'])
+    c.choose('side')
+    m.resize(true)
+    expect(seen).toEqual(['side', 'only', 'side'])
+    expect(modeOf(doc)).toBe('stack')
+  })
+
   it('applying the same mode again does not call back again', () => {
     const doc = docOf()
     const m = fakeMedia(false)

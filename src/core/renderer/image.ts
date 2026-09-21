@@ -4,8 +4,9 @@
 // (marks.ts says why under IMG_CLASS) and is inserted on success only; pending and failure have no DOM node. In
 // keeping with §7.1: the <img> itself gains no attribute; restore removes the whole layer by INJECTED_SELECTOR.
 import { IMG_CLASS } from '@/core/marks'
-import { ANCHORS_ATTR, ANCHOR_ATTR, DIR_ATTR, FOR_ATTR, LANG_ATTR, MIRROR_CLASS, SPLIT_FOR_ATTR } from './attrs'
+import { ANCHORS_ATTR, ANCHOR_ATTR, DIR_ATTR, FOR_ATTR, LANG_ATTR, MIRROR_CLASS, SPLIT_ROOT_ATTR } from './attrs'
 import { dropMirror } from './mirror'
+import { looseRootOf } from './side-layout'
 
 /** The mode gate on <html>: the set of modes the reader ticked, space-separated; CSS matches the current mode with ~= (the §15 setting) */
 export const IMG_MODES_ATTR = 'data-axt-img-modes'
@@ -14,11 +15,11 @@ export interface ImageTarget {
   id: string
   el: Element
   /**
-   * A bitmap goes “bytes → OCR”, an external SVG figure reads the glyphs of its `contentDocument` directly (§15.5),
-   * an inline TikZ figure reads the HTML inside `foreignObject` and its rectangle (§15.6). The three meet in
-   * `linesToBoxes`; the overlay, the cache and the scheduling after that are one and the same
+   * A bitmap goes “bytes → OCR”, an external SVG figure reads the glyphs of its `contentDocument` directly (§15.5).
+   * The two meet in `linesToBoxes`; the overlay, the cache and the scheduling after that are one and the same. An
+   * inline TikZ picture is neither: its labels are HTML in the page, blocks of the text run (§15.6)
    */
-  kind: 'raster' | 'svg' | 'picture'
+  kind: 'raster' | 'svg'
 }
 
 /** One translated label: position and size in the image's normalised coordinates (0–1, top-left origin); lines is how many OCR lines were merged into it */
@@ -37,6 +38,23 @@ export interface ImageLabel {
   /** A tilted label's own length and thickness, both as fractions of the image's **width**; present with angle */
   len?: number
   thick?: number
+}
+
+/** The figure's own shape, which its labels are laid by */
+export interface ImageFrame {
+  /** Width over height: of a bitmap's pixels, of an SVG figure's `viewBox` */
+  ratio: number
+  /**
+   * The drawing is fitted whole and centred into its element, as the browser fits an SVG figure (`core/svg`
+   * `frameOf`): where the element has other proportions the overlay takes the drawing's rectangle inside it, not the
+   * whole box. A bitmap fills its element, and says nothing
+   */
+  fitted?: boolean
+}
+
+/** The modes figures are translated in, as the page has them now — the display gate's own record, for what a style rule cannot do (split-figures.ts) */
+export function imageModesOf(doc: Document): string[] {
+  return doc.documentElement.getAttribute(IMG_MODES_ATTR)?.split(' ').filter(Boolean) ?? []
 }
 
 export function setImageModes(doc: Document, modes: readonly string[]): void {
@@ -71,30 +89,14 @@ export function markAnchor(overlay: Element): void {
   overlay.parentElement?.setAttribute(ANCHORS_ATTR, '')
 }
 
-/** Remove an overlay and the anchor marks that served it; the parent keeps its mark while another overlay is inside */
+/** Remove an overlay and the marks that served it; the parent, and a loose graphic's block, keep theirs while another overlay is inside */
 function dropOverlay(overlay: Element): void {
   const parent = overlay.parentElement
+  const root = overlay.closest(`[${SPLIT_ROOT_ATTR}]`)
   overlay.previousElementSibling?.removeAttribute(ANCHOR_ATTR)
   overlay.remove()
   if (parent && !parent.querySelector(`:scope > .${IMG_CLASS}`)) parent.removeAttribute(ANCHORS_ATTR)
-}
-
-/**
- * This image's overlays **anywhere in the document**, the one inside a side-mode split copy included.
- *
- * `clearImage` looks only at the image's own sibling slot, enough for “replace with a fresh one” — the copy is
- * rebuilt by signature at the next tidy. Not enough for “no longer translating this image”: the copy's overlay
- * stays, and in only mode **the original is hidden**, so what the reader sees is exactly the copy's overlay from
- * the previous run, or even the previous target language (Codex on #134)
- */
-export function clearImageEverywhere(target: ImageTarget): number {
-  const doc = target.el.ownerDocument
-  // The copy's overlay answers to `data-axt-split-for`: `stripIds` wipes every `data-axt-*` off the clone, so a lookup
-  // by `data-axt-for` alone would leave the copy's overlay there for good (Codex on #134)
-  const id = CSS.escape(target.id)
-  const stale = Array.from(doc.querySelectorAll(`.${IMG_CLASS}[${FOR_ATTR}="${id}"], .${IMG_CLASS}[${SPLIT_FOR_ATTR}="${id}"]`))
-  for (const node of stale) dropOverlay(node)
-  return stale.length
+  if (root && !root.querySelector(`.${IMG_CLASS}`)) root.removeAttribute(SPLIT_ROOT_ATTR)
 }
 
 /**
@@ -125,11 +127,24 @@ export function emWidth(text: string): number {
  * left / top as `calc()` from the centre minus half — the two units subtract inside calc, both being percentages
  * of the same container.
  */
+/**
+ * The two bounds of a label's font size, in container query units: by the box across the text — 72 % of a line's
+ * share of it, in `cqh` for an upright label and `cqw` for a turned one, whose box is in fractions of the width — and
+ * by the text's length in `cqw`, 8 % kept as margin. One reckoning for the label's style and for its corner in the mask
+ */
+function fontBounds(label: ImageLabel): { turned: boolean; across: number; along: number } {
+  const lines = Math.max(1, label.lines)
+  const turned = !!(label.angle && label.len && label.thick)
+  const [length, thickness] = turned ? [label.len as number, label.thick as number] : [label.w, label.h]
+  // The text splits into `lines` rows of about emWidth / lines ems each
+  return { turned, across: (72 * thickness) / lines, along: (92 * length * lines) / emWidth(label.text) }
+}
+
 export function labelStyle(label: ImageLabel): string {
   const pct = (v: number) => `${(v * 100).toFixed(3)}%`
   const cq = (v: number) => `${(v * 100).toFixed(3)}cqw`
-  const lines = Math.max(1, label.lines)
-  if (label.angle && label.len && label.thick) {
+  const font = fontBounds(label)
+  if (font.turned && label.angle && label.len && label.thick) {
     // A tilted label sits along **its own axis**: the box is the text's own length and thickness (not the axis-aligned
     // bounding box — that one coincides with the text only at multiples of 90° and is a size larger at 5°), placed
     // centre on centre and then rotated as a whole. Both axes use cqw (a percentage of the image width, one length
@@ -137,16 +152,42 @@ export function labelStyle(label: ImageLabel): string {
     // of the container width”, wrong for the vertical length whenever the container is not square
     const cx = label.x + label.w / 2
     const cy = label.y + label.h / 2
-    const byThickness = (72 * label.thick) / lines
-    const byLength = (92 * label.len * lines) / emWidth(label.text)
     return `left:${pct(cx)};top:${pct(cy)};width:${cq(label.len)};height:${cq(label.thick)};`
       + `transform:translate(-50%,-50%) rotate(${((label.angle * 180) / Math.PI).toFixed(2)}deg);`
-      + `font-size:min(${byThickness.toFixed(2)}cqw,${byLength.toFixed(2)}cqw)`
+      + `font-size:min(${font.across.toFixed(2)}cqw,${font.along.toFixed(2)}cqw)`
   }
-  const byHeight = (72 * label.h) / lines
-  // The width cap: the text splits into `lines` rows of about emWidth / lines ems each; 8% margin kept
-  const byWidth = (92 * label.w * lines) / emWidth(label.text)
-  return `left:${pct(label.x)};top:${pct(label.y)};width:${pct(label.w)};height:${pct(label.h)};font-size:min(${byHeight.toFixed(2)}cqh,${byWidth.toFixed(2)}cqw)`
+  return `left:${pct(label.x)};top:${pct(label.y)};width:${pct(label.w)};height:${pct(label.h)};font-size:min(${font.across.toFixed(2)}cqh,${font.along.toFixed(2)}cqw)`
+}
+
+/** The mask's width in its own units; the height follows from the figure's proportions */
+const MASK_WIDTH = 1000
+
+/**
+ * Where the labels lie, as a mask image: what the overlay's one blur is cut to (image.css says why there is one and
+ * not one a label). An SVG a thousand units wide and as high as the figure's proportions make it, stretched over the
+ * overlay with it; a rounded rectangle for every label, from the same numbers `labelStyle` writes — an upright one by
+ * its box, a turned one about its centre by its own length and thickness, the corner 0.2 em of its font. **The
+ * proportions are needed for a turned label alone**, whose box is in fractions of the width on both its axes
+ */
+export function maskOf(labels: readonly ImageLabel[], ratio: number): string {
+  const width = MASK_WIDTH
+  const height = MASK_WIDTH / ratio
+  const n = (v: number) => String(+v.toFixed(1))
+  const rects = labels.map(label => {
+    const font = fontBounds(label)
+    if (font.turned && label.angle && label.len && label.thick) {
+      const cx = (label.x + label.w / 2) * width
+      const cy = (label.y + label.h / 2) * height
+      const [w, h] = [label.len * width, label.thick * width]
+      // Both bounds are in cqw, a hundredth of the width
+      const corner = 0.2 * Math.min(font.across, font.along) * (width / 100)
+      return `<rect x='${n(cx - w / 2)}' y='${n(cy - h / 2)}' width='${n(w)}' height='${n(h)}' rx='${n(corner)}' transform='rotate(${n((label.angle * 180) / Math.PI)} ${n(cx)} ${n(cy)})'/>`
+    }
+    const corner = 0.2 * Math.min(font.across * (height / 100), font.along * (width / 100))
+    return `<rect x='${n(label.x * width)}' y='${n(label.y * height)}' width='${n(label.w * width)}' height='${n(label.h * height)}' rx='${n(corner)}'/>`
+  })
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${n(width)} ${n(height)}' preserveAspectRatio='none'>${rects.join('')}</svg>`
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
 }
 
 /**
@@ -155,7 +196,7 @@ export function labelStyle(label: ImageLabel): string {
  * the image and the overlay — the overlay must be the image's **next** sibling (anchors resolve to “the nearest
  * preceding node of that name”, and `img:has(+ .axt-img)` accepts an adjacent one only)
  */
-export function renderImage(target: ImageTarget, labels: readonly ImageLabel[]): Element {
+export function renderImage(target: ImageTarget, labels: readonly ImageLabel[], frame: ImageFrame): Element {
   clearImage(target)
   const next = target.el.nextElementSibling
   if (next?.classList.contains(MIRROR_CLASS)) dropMirror(next)
@@ -163,6 +204,9 @@ export function renderImage(target: ImageTarget, labels: readonly ImageLabel[]):
   const node = doc.createElement('div')
   node.className = IMG_CLASS
   node.setAttribute(FOR_ATTR, target.id)
+  // What the style sheet lays the overlay by, in its inline style, which a split copy's clone keeps where it loses
+  // every `data-axt-*`: the drawing's proportions where it is fitted into its element, and the labels' mask
+  node.setAttribute('style', `${frame.fitted ? `--axt-img-ratio:${+frame.ratio.toFixed(4)};` : ''}--axt-img-mask:${maskOf(labels, frame.ratio)}`)
   const lang = doc.documentElement.getAttribute(LANG_ATTR)
   // A label in an image needs `dir` as well: an Arabic label under an ltr base direction puts its punctuation at the wrong end (§7.5)
   const dir = doc.documentElement.getAttribute(DIR_ATTR)
@@ -177,5 +221,8 @@ export function renderImage(target: ImageTarget, labels: readonly ImageLabel[]):
   }
   target.el.after(node)
   markAnchor(node)
+  // A graphic in no figure: its block stands as one from here on, and side mode copies it with this overlay
+  // (side-layout.ts `looseRootOf`). In the same breath as the overlay, so the sheet never shows it on the original
+  looseRootOf(target.el)?.setAttribute(SPLIT_ROOT_ATTR, '')
   return node
 }

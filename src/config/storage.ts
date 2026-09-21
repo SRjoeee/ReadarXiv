@@ -33,7 +33,7 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
       glossary: normalizeGlossary(v6.glossary),
       style: { preset: 'none' as const, customCss: '' },
     }),
-    // v7 -> v8: the image translation's mode gate added (§15), all three modes on by default — without the helper it does nothing, with it it works at once
+    // v7 -> v8: the image translation's mode gate added (§15), all three modes on by default
     8: (v7: Omit<Config, 'version' | 'image'> & { version: 7 }) => ({ ...v7, version: 8 as const, image: { modes: [...MODE_VALUES] } }),
     // v8 -> v9: three tunable parameters on the translation style (§7.5). The defaults must leave the appearance pixel for
     // pixel as before: an empty colour = follow the original, opacity 1 = opaque, an empty accent = each preset's own default
@@ -80,6 +80,29 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
       const preload = v14?.preload as { margin?: unknown; threshold?: unknown } | undefined
       const margin = typeof preload?.margin === 'number' && preload.margin < 900 ? 900 : preload?.margin
       return { ...v14, version: 15 as const, preload: { ...preload, margin } }
+    },
+    // v15 -> v16: where a translation asked for from an abstract or PDF page opens. Everyone gets the new default, a
+    // new tab: before this the entry navigated the tab, which took the reader's page away, and nobody chose that.
+    // **A `reading` that is not an object is passed through untouched**, as every migration here does: repairing a
+    // hand-edited value would hide it, and the documented fallback names the field instead (Copilot on #209)
+    16: (v15: (Omit<Config, 'version' | 'reading'> & { version: 15; reading?: unknown }) | null) => {
+      const reading = v15?.reading
+      const filled = reading !== null && typeof reading === 'object' && !Array.isArray(reading)
+        ? { ...(reading as Record<string, unknown>), openIn: 'new-tab' as const }
+        : reading
+      return { ...v15, version: 16 as const, reading: filled }
+    },
+    // v16 -> v17: the floating button's state, inside the configuration. Test builds of 0.4.1 stored this shape
+    17: (v16: (Omit<Config, 'version'> & { version: 16 }) | null) =>
+      ({ ...v16, version: 17 as const, floatingEntry: { enabled: true, side: 'right' as const, position: 0.66, locked: false } }),
+    // v17 -> v18: and out of it again, before any release: it is written by a drag, from any tab, and a whole-object
+    // write from one more context could put back a snapshot older than another context's save (Devin on #250). It
+    // lives under its own key with one writer (background/floating-entry.ts); where a test build had dragged it to
+    // is not carried over — a button back in its default place is no loss
+    18: (v17: (Omit<Config, 'version'> & { version: 17; floatingEntry?: unknown }) | null) => {
+      if (typeof v17 !== 'object' || v17 === null) return v17
+      const { floatingEntry: _moved, ...rest } = v17
+      return { ...rest, version: 18 as const }
     },
   },
 })
@@ -227,6 +250,25 @@ export async function resetConfig(): Promise<void> {
     { key: `${CONFIG_KEY}$`, value: { v: CONFIG_VERSION } },
   ])
   fallbackReason = null
+}
+
+/**
+ * A new reader's first target language (first-target.ts), written **only while nothing is stored**: an installation
+ * that already has a configuration — the reader's own, or one this build cannot read — is never touched. The value and
+ * the version marker go in one write, as in `resetConfig`. Says whether it wrote.
+ *
+ * The check and the write are two steps, and extension storage has no "create unless there" to make them one: a
+ * surface saving between them would be written over (Devin on #272). Left so, knowingly — the gap is one read and one
+ * write at the moment of installation, before any surface of ours can be open, and closing it for good is the
+ * background's single writer that §9 defers
+ */
+export async function chooseFirstTarget(pick: () => Config['targetLanguage']): Promise<boolean> {
+  if (await storage.getItem(CONFIG_KEY) !== null) return false
+  await storage.setItems([
+    { key: CONFIG_KEY, value: configSchema.parse({ ...DEFAULT_CONFIG, targetLanguage: pick() }) },
+    { key: `${CONFIG_KEY}$`, value: { v: CONFIG_VERSION } },
+  ])
+  return true
 }
 
 export function watchConfig(callback: (config: Config) => void) {

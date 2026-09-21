@@ -1,9 +1,8 @@
 # Files that may hold lines with CJK characters, and how many (scripts/check-english.mjs). The numbers are exact: the gate asks for an entry to be lowered when lines go, and raised only with a reason beside it.
-docs/DESIGN.md 10  # 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
+docs/DESIGN.md 10  # 2026-09-19: +1, §6.2 quotes what the Edge endpoint returned for a marker touching a word; 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
 docs/RELEASE.md 6  # 2026-09-17: the Chinese store listing (product copy the owner submits)
-docs/UI.md 174
+docs/UI.md 166  # 2026-09-18: S-I-06 / S-I-06a / S-I-06b / S-I-06c (the floating button, its two side buttons and its menu), S-P-03b / S-P-33 / S-P-50b (the popup on entry pages), S-O-49b / S-O-49c (where the translation opens, the floating button switch), issue #169; 2026-09-21: S-I-07 (the figure viewer, issue #276); −18, the macOS helper's rows went with the helper (issue #280)
 README.md 1  # 2026-09-17: the link to the Chinese README
-helper/README.md 1
 src/config/languages.ts 188  # localisation data: the Chinese name table and the native names; four evidence quotes in comments
 src/cache/key.ts 1
 src/config/appearance.ts 10
@@ -14,8 +13,6 @@ src/core/renderer/failed.ts 1
 src/core/renderer/highlight.ts 1
 src/core/renderer/image.ts 1
 src/core/rules/latexml.ts 8
-src/core/svg/foreign.ts 2
-src/entrypoints/background/helper.ts 1
 src/entrypoints/options/index.html 1
 src/entrypoints/popup/PopupView.tsx 1
 src/providers/alignment.ts 4
@@ -24,7 +21,6 @@ src/providers/glossary.ts 3
 src/providers/microsoft.ts 1
 src/ui/appearance/Preview.tsx 1
 src/ui/strings.ts 3
-tests/background/helper.test.ts 1
 tests/cache/key.test.ts 3
 tests/cache/store.test.ts 10
 tests/config/appearance.test.ts 1
@@ -32,26 +28,29 @@ tests/config/languages.test.ts 3
 tests/config/storage.test.ts 20  # raised 2026-09-17: the migration test starting from v8 carries a glossary entry with a Chinese translation in and out — the non-Latin value a migration must not mangle
 tests/core/marks.test.ts 8
 tests/e2e/a11y.mjs 2
-tests/e2e/extension.mjs 93  # raised 2026-09-17: the whole-paper preload check clicks two more stop labels and the cache check waits for the zero-count line; the unreadable-settings check locates the notice, its reset and the section that must be absent by their labels
-tests/e2e/image.mjs 16
-tests/e2e/layout.mjs 8
+tests/e2e/extension.mjs 77  # raised 2026-09-17: the whole-paper preload check clicks two more stop labels and the cache check waits for the zero-count line; the unreadable-settings check locates the notice, its reset and the section that must be absent by their labels
+tests/e2e/image.mjs 17  # 2026-09-21: +4, the loose-graphic section (2609.20818v1's teaser) switches modes and ticks the image modes by the popup's and the settings page's Chinese labels, as the rest of the script does
+tests/e2e/layout.mjs 11  # 2026-09-20: +2, the reader's-place check finds the popup's mode, translate and restore buttons by their Chinese labels, as the rest of the suite does; 2026-09-21: +1, the figure viewer's restore-under-the-dialog check presses the popup's restore button by its label
 tests/e2e/local-endpoint.mjs 2
+tests/e2e/floating-button.mjs 5  # 2026-09-18: the settings switch, the main button's two labels, and the popup's button inside the control panel on a PDF and on the full text, located and checked by their Chinese copy, as the other suites locate controls (issue #169)
+tests/e2e/pdf-entry.mjs 5  # 2026-09-19: the popup's button (on the PDF and on the abstract page) and the no-HTML reason are located by their Chinese copy, as the other suites locate controls (issue #169)
 tests/e2e/options-page.mjs 13
 tests/e2e/placeholders.mjs 7
 tests/e2e/probes/chrome-floor.mjs 1  # 2026-09-17: the settings page's download button, located by its reader-visible label
 tests/e2e/probes/highlight-lag.mjs 8  # 2026-09-17: the settings switches and the popup's mode buttons, located by their reader-visible labels
+tests/e2e/probes/reading-position.mjs 5  # 2026-09-20: the settings page's engine card and image switch and the popup's three mode buttons, located by their reader-visible labels
 tests/e2e/probes/ref-highlight.mjs 2  # 2026-09-17: the highlight switch and the two engine cards, located by their reader-visible labels
 tests/extractor/context.test.ts 1
 tests/extractor/extract.test.ts 2  # raised 2026-09-17: “any Unicode letter makes a block” moved here from the rules tests with its Chinese input, the rule being the extractor's
 tests/image/run.test.ts 11
-tests/image/svg-targets.test.ts 3
+tests/image/svg-targets.test.ts 2
 tests/options/prompts-section.test.ts 13
 tests/pipeline/run.test.ts 3
 tests/pipeline/session-guard.test.ts 5
-tests/popup/view-model.test.ts 35  # raised 2026-09-13: expectations for the locale-pack sentences (fallback text, drawer issue, popup action error)
+tests/popup/view-model.test.ts 36  # 2026-09-19: +1 for P17c's expectation, the Chinese label of the entry pages' button (issue #169); 2026-09-18: +5 for the P17 cases' expectations, the Chinese copy of S-P-03b / S-P-33
 tests/protector/clone.test.ts 5
 tests/protector/label.test.ts 50
-tests/protector/markers.test.ts 11
+tests/protector/markers.test.ts 12  # 2026-09-19: +1, the translations the wire-space cases fill back, all on one line
 tests/protector/offsets.test.ts 1
 tests/protector/rehydrate.test.ts 2
 tests/protector/runs.test.ts 11
@@ -77,7 +76,7 @@ tests/renderer/anchors.test.ts 7
 tests/renderer/authors.test.ts 6
 tests/renderer/direction.test.ts 2
 tests/renderer/failed.test.ts 3
-tests/renderer/image.test.ts 15
+tests/renderer/image.test.ts 14  # 2026-09-21: +2, the two translated labels the mask cases are drawn from (an upright one and a turned one), test inputs as the file's others are
 tests/renderer/intertext.test.ts 11
 tests/renderer/margin-notes.test.ts 2
 tests/renderer/mirror.test.ts 9
@@ -91,7 +90,7 @@ tests/renderer/render.test.ts 12
 tests/renderer/restore.test.ts 3
 tests/renderer/sentence-map.test.ts 3  # 2026-09-17: the block-pair tests place a translated note, paragraph and caption
 tests/renderer/side-layout.test.ts 5
-tests/renderer/split-figures.test.ts 14
+tests/renderer/split-figures.test.ts 18  # 2026-09-21: +4, a loose graphic's fixture carries a translated abstract and a translated label, the multilingual inputs the cases are about
 tests/renderer/table-fit.test.ts 1
 tests/renderer/table.test.ts 10
 tests/renderer/layout-marks.test.ts 14  # 2026-09-17: translated text placed by the renderer, the same inputs the sibling renderer tests use
@@ -100,7 +99,6 @@ tests/rules/selector-boundary.test.ts 6
 tests/scheduler/title.test.ts 6
 tests/shared/digest.test.ts 1
 tests/shared/transport.test.ts 1
-tests/svg/foreign.test.ts 1
 tests/ui/language-names.test.ts 9
 tests/ui/locales.test.ts 3
 tests/ui/strings.test.ts 13  # raised 2026-09-13: expectations for the locale-pack sentences (fallback text, drawer issue, popup action error)

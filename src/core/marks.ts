@@ -32,6 +32,14 @@ export function isInjected(el: Element): boolean {
 export const AXT_ATTR_PREFIX = 'data-axt-'
 /** The prefix of every injected class (the same rule); the paper context excludes our own nodes by it */
 export const AXT_CLASS_PREFIX = 'axt-'
+/**
+ * The figure the figure viewer's control stands on, while it shows (DESIGN §15.7): a style rule gives the figure an
+ * anchor name by this mark and the browser lays the control out at its corner. Written on a pointer's arrival and
+ * taken off when it has gone, on an untranslated page too — the one kind of thing §7.1 lets an original gain
+ */
+export const VIEWED_ATTR = `${AXT_ATTR_PREFIX}viewed`
+/** The frame that clips that figure sideways, where one does — side's half column scrolls a figure wider than itself: the control keeps inside it (§15.7) */
+export const VIEWED_FRAME_ATTR = `${AXT_ATTR_PREFIX}viewed-frame`
 
 /**
  * URLs that run script. **None in a clone**: a link's behaviour belongs to the original, and the clone is a copy for
@@ -71,6 +79,16 @@ const normalizeUrl = (value: string) => {
  */
 export function stripInjected(root: Element, includeRoot = true): void {
   for (const stale of Array.from(root.querySelectorAll(INJECTED_SELECTOR))) stale.remove()
+  stripAttributes(root, includeRoot)
+}
+
+/**
+ * The attribute half of the clean-up alone: ids, our marks, behaviour attributes and script URLs go, every node stays.
+ * For a copy that keeps some of our nodes on purpose — the figure viewer's, which shows the translations the page
+ * showed (DESIGN §15.7) — and must still be a copy for reading: it used to strip ids and marks by hand and left the
+ * rest (Devin on #279)
+ */
+export function stripAttributes(root: Element, includeRoot = true): void {
   const targets = Array.from(root.querySelectorAll('*'))
   if (includeRoot) targets.unshift(root)
   for (const el of targets) {

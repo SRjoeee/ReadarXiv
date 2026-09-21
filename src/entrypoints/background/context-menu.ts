@@ -1,5 +1,5 @@
-// The toggle in the context menu (issue #146) and on the keyboard command: a second and third entry to the same
-// action as the popup's main button — ask the page its state once, decide the way the button does, send what it
+// The toggle in the context menu (issue #146), on the keyboard command and behind the floating button's main button
+// (issue #169): three more entries to the same action as the popup's main button — ask the page its state once, decide the way the button does, send what it
 // would send.
 //
 // **The label does not follow the state**: `contextMenus.update` is global, not per tab, and following the current
@@ -51,9 +51,12 @@ export interface CommandDeps extends ToggleDeps {
  * button would. A page without a content script yet (just navigated, or the extension updated and the page not
  * reloaded) answers nothing and nothing happens, which is what the popup does in that situation too. The saved
  * settings are read for every toggle: the page's revision against their digest is the "behind" test, so ⌥T on a
- * page left behind by a change in another tab re-translates it, as the button it is badged on offers to
+ * page left behind by a change in another tab re-translates it, as the button it is badged on offers to.
+ *
+ * Resolves to whether a command was sent: the floating button (§4.0c), a fourth door on this toggle, opens the popup
+ * when nothing could be done, so a click is never met with silence
  */
-async function toggleTranslation(deps: ToggleDeps, tabId: number): Promise<void> {
+export async function toggleTranslation(deps: ToggleDeps, tabId: number): Promise<boolean> {
   try {
     const [status, saved] = await Promise.all([
       deps.send<Pick<PageStatus, 'progress' | 'running' | 'epoch'>>(tabId, { type: 'axt:page-status' }),
@@ -63,9 +66,12 @@ async function toggleTranslation(deps: ToggleDeps, tabId: number): Promise<void>
     // that is on still restores, nothing else starts — the popup with no configuration disables its button too
     // (Codex on #184)
     const decision = pageDecision(status, saved ?? { revision: null, canRun: false, fallback: false })
-    if (decision?.enabled) await deps.send(tabId, messageFor(decision.action, status.epoch))
+    if (!decision?.enabled) return false
+    await deps.send(tabId, messageFor(decision.action, status.epoch))
+    return true
   } catch {
     // See above
+    return false
   }
 }
 

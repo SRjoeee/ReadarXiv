@@ -122,7 +122,7 @@ const postsBeforePage = seen.post
 const page = await context.newPage()
 const pageRequests = []
 page.on('request', request => { if (request.url().includes(`127.0.0.1:${PORT}`)) pageRequests.push(request.url()) })
-await page.goto(`https://arxiv.org/html/${PAPER}#axt-translate`, { waitUntil: 'domcontentloaded' })
+await page.goto(`https://arxiv.org/html/${PAPER}#readarxiv`, { waitUntil: 'domcontentloaded' })
 await page.waitForFunction(mark => [...document.querySelectorAll('.axt-t')].some(el => el.textContent?.includes(mark)), MARK, { timeout: 90_000 })
   .catch(() => undefined)
 await sleep(2_000)

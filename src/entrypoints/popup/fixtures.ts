@@ -43,7 +43,7 @@ function provider(over: Partial<ProviderStatus> = {}): ProviderStatus {
 const llmProvider = (over: Partial<ProviderStatus> = {}) => provider({ providerId: SVC.id, chosen: SVC.id, model: SVC.model, renderPath: 'tags', engine: { id: SVC.id }, chain: [SVC.id, 'microsoft', 'google-web'], ...over })
 
 const base: PopupInput = {
-  page: page(), saved: provider(), session: null, config, pack: 'available', helper: { state: 'ready', version: '1.0' }, platform: 'mac', menu: null, shortcut: '⌥T', extensionId: 'abcdefghijklmnopabcdefghijklmnop',
+  page: page(), entry: null, saved: provider(), session: null, config, pack: 'available', menu: null, shortcut: '⌥T',
   // The saved settings' digest equals the running page's revision: nothing is behind unless a fixture says so
   savedRevision: 'r1',
 }
@@ -63,9 +63,11 @@ export const POPUP_FIXTURES: { id: string; name: string; when: string; input: Po
   { id: 'P11', name: 'Image translation paused', when: 'images.fatal', input: { ...base, config: llm, saved: llmProvider(), session: llmProvider(), page: page({ state: 'on', requested: 20, done: 12 }, { running: { provider: SVC.id, target: 'cmn', engine: SVC.id, revision: 'r1' }, images: { total: 6, requested: 2, done: 0, failed: 0, fatal: 'auth: User not found.' } }) } },
   { id: 'P12', name: 'Narrow window shown stacked', when: 'mode !== preference', input: { ...base, session: provider(), page: page({ state: 'on', requested: 10, done: 10 }, { preference: 'side', mode: 'stack' }) } },
   { id: 'P13', name: 'Switched to a service that cannot run', when: 'on ∧ running.revision ≠ savedRevision ∧ !runnable', input: { ...base, savedRevision: 'r2', config: llmNoKey, saved: llmProvider({ available: false, fallback: { id: 'microsoft' } }), session: provider(), page: page({ state: 'on', requested: 31, done: 24 }) } },
-  { id: 'P14', name: 'Helper not installed', when: 'images.enabled ∧ helper = not-installed', input: { ...base, helper: { state: 'not-installed', reason: 'host not registered' } } },
-  { id: 'P14a', name: 'Helper awaiting permission', when: 'images.enabled ∧ helper = permission-missing', input: { ...base, helper: { state: 'permission-missing' } } },
-  { id: 'P14b', name: 'Helper permission taking effect', when: 'images.enabled ∧ helper = restarting', input: { ...base, helper: { state: 'restarting' } } },
   { id: 'P15', name: 'Prompt menu', when: 'llm ∧ menu = prompt', input: { ...base, config: llm, saved: llmProvider(), menu: 'prompt' } },
   { id: 'P16', name: 'Style menu', when: 'menu = style', input: { ...base, menu: 'style' } },
+  // The two pages that are not the full text (§4.0b): the popup works there, and its button opens the HTML version
+  { id: 'P17', name: 'Abstract or PDF page', when: 'page === null ∧ entry.html', input: { ...base, page: null, entry: { paper: '2501.07202v1', html: 'https://arxiv.org/html/2501.07202v1#readarxiv' } } },
+  { id: 'P17a', name: 'Abstract or PDF page, no HTML version', when: 'page === null ∧ entry.html === null', input: { ...base, page: null, entry: { paper: 'hep-th/9711200', html: null } } },
+  { id: 'P17b', name: 'Abstract or PDF page, service cannot run, no fallback', when: 'page === null ∧ entry.html ∧ !runnable ∧ !fallback', input: { ...base, page: null, config: { ...llmNoKey, fallback: { enabled: false } }, saved: llmProvider({ available: false, chain: ['openai-compat'] }), entry: { paper: '2501.07202v1', html: 'https://arxiv.org/html/2501.07202v1#readarxiv' } } },
+  { id: 'P17c', name: 'Abstract or PDF page, service cannot run, a fallback available', when: 'page === null ∧ entry.html ∧ !runnable ∧ fallback', input: { ...base, page: null, config: llmNoKey, saved: llmProvider({ available: false, fallback: { id: 'microsoft' } }), entry: { paper: '2501.07202v1', html: 'https://arxiv.org/html/2501.07202v1#readarxiv' } } },
 ]

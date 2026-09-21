@@ -21,10 +21,16 @@
 }
 
 @supports (top: anchor(top)) and (anchor-scope: --x) {
-  /* An inline TikZ figure (§15.6) is an anchor too: the overlay sticks to its box the same way. The svg itself is
-     media to side's pairing rules, never a translation block */
-  html[data-axt-on] :is(img, object, svg)[data-axt-anchor] {
+  html[data-axt-on] :is(img, object)[data-axt-anchor] {
     anchor-name: --axt-img;
+  }
+
+  /* A figure may be two things' anchor at once: its overlay's, and the figure viewer's control's, which names the
+     figure under the pointer by a mark and a sheet of its own (§15.7). `anchor-name` is one declaration — a second
+     replaces the first — and the viewer's rule is the less specific: alone it would lose here and leave the control
+     without an anchor on every translated figure. One rule that outranks both gives the two names */
+  html[data-axt-on] :is(img, object)[data-axt-anchor][data-axt-viewed] {
+    anchor-name: --axt-img, --axt-viewed;
   }
 
   html[data-axt-on] [data-axt-anchors] {
@@ -32,19 +38,26 @@
     anchor-scope: --axt-img;
   }
 
+  /* The overlay takes **the drawing's rectangle**, which is the image's box unless it is told otherwise. An SVG figure
+     is fitted whole and centred into its <object> (`preserveAspectRatio`'s default), and arXiv sizes the <object>
+     from the source's \includegraphics: the Transformer paper's Figure 4 is a drawing of 319 × 217 in a box of
+     476 × 254, with 50 px of air at either side, and laid over the whole box every label stood off its word, further
+     the nearer the edge (reported 2026-09-21; 5 of 80 SVG figures sampled, all that paper's). So the overlay is the
+     largest box of the drawing's proportions (--axt-img-ratio, width over height, in its inline style) that fits the
+     image's, centred in it by the auto margins — still no geometry read, and still following the column. With no
+     ratio told — a bitmap fills its box — the fallbacks make each min() pick the box's own side */
   .axt-img {
     position: absolute;
     position-anchor: --axt-img;
-    top: anchor(top);
-    left: anchor(left);
-    width: anchor-size(width);
-    height: anchor-size(height);
+    inset: anchor(top) anchor(right) anchor(bottom) anchor(left);
+    margin: auto;
+    width: min(anchor-size(width), anchor-size(height) * var(--axt-img-ratio, 1e5));
+    height: min(anchor-size(height), anchor-size(width) / var(--axt-img-ratio, 1e-5));
     /* The label's font size is computed from the box height and the character count in container query units (cqh / cqw), reading no layout */
     container-type: size;
     /* The figure the image sits in may be a pairing grid container: out of the grid flow (precedent: .ltx_item > .ltx_tag in modes.css) */
     grid-column: auto;
     grid-row: auto;
-    margin: 0;
     padding: 0;
     border: 0;
     pointer-events: none;
@@ -61,7 +74,29 @@
     display: block;
   }
 
-  /* After Safari's look: a white rounded translucent box over the original text, the font size following the box height; the original shows on hover (title) */
+  /* The blur of the labels' material, below: **one for the figure, cut to the labels by a mask** (--axt-img-mask, an
+     SVG of their rectangles in the overlay's inline style, renderer/image.ts `maskOf`) — not `backdrop-filter` on
+     every label. A filtered backdrop is paid for by the element, whatever its size or radius: on the Transformer
+     paper, 242 labels showing over five figures, scrolling past them ran at 69–75 frames a second with 13–18 frames
+     over 25 ms a pass (M4 Pro, 120 Hz; the reader felt it); a 4 px blur a label was no better (86), one blur a
+     figure is 118 with none — what the page does with no overlay at all — and the labels look the same. Without a
+     mask (an overlay of an older build, still on the page) nothing is blurred, rather than the whole figure */
+  .axt-img::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    backdrop-filter: blur(15px);
+    mask-image: var(--axt-img-mask, linear-gradient(transparent, transparent));
+    mask-size: 100% 100%;
+    mask-repeat: no-repeat;
+  }
+
+  /* Safari's material, measured off its own rendering of the Transformer's Figure 1 (DESIGN §15.2): what lies under
+     the label is **blurred** (by the layer above), then veiled by a near-white at 81 % — so the node's colour tints the label and the
+     original's letters dissolve into it, where a plain veil let them show through its 8 % (the reader saw
+     `Feed Forward` behind its translation). A shadow falling downward lifts it off the figure; the letters are a mid grey, not
+     black, at the regular weight — Safari's #5a5a5a darkened to #555555, the lightest grey that keeps 4.5 : 1 over the veil
+     on the darkest figure there is: over black the veil composites to (204, 202, 201), where #5a5a5a had 4.2 : 1 (Codex on #278). The font size follows the box height; the original shows on hover (title) */
   .axt-img > span {
     position: absolute;
     box-sizing: border-box;
@@ -72,18 +107,36 @@
     overflow: hidden;
     text-align: center;
     line-height: 1.15;
-    color: #111;
-    background: rgb(255 255 255 / 0.92);
-    border-radius: 0.3em;
-    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.15);
+    color: #555555;
+    background: rgb(252 250 248 / 0.81);
+    border-radius: 0.2em;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 2px 10px rgb(0 0 0 / 0.1);
     font-family: system-ui, -apple-system, sans-serif;
-    font-weight: 500;
+    font-weight: 400;
     overflow-wrap: anywhere;
     pointer-events: auto;
     cursor: default;
     /* A vertical label rotates about its own centre (§15.5). That is the default, written out so the site's styles
        cannot change it — an origin off centre sends the label out of the image */
     transform-origin: 50% 50%;
+  }
+
+  /* **In the figure viewer (§15.7) each label blurs for itself, and the one layer is gone.** A masked backdrop filter
+     holds its mask as one texture of the element's size in device pixels. On the page the overlay is no wider than
+     the window; in the viewer the copy is laid out at up to eighteen times its size, and the mask with it — 108 million
+     pixels at a zoom of 13 on Figure 15 of 2607.24653v2 (M4 Pro, 2×; 430 MB at four bytes a pixel, the format not
+     checked), and past some 155 million no mask at all: the layer
+     then blurred the **whole** figure, by 15 px times the zoom, and the reader saw it flicker and go grey (reported
+     2026-09-21; mask-image of any kind loses it at that area, and clip-path does not cut a backdrop filter at all —
+     both measured). The viewer shows one figure, so what made a blur a label dear on the page — dozens of them
+     scrolled past — is not there: wheel zooming ran at 119 frames a second either way. After the rules it overrides,
+     which it outranks by the viewer's class alone */
+  .axt-viewer .axt-img::before {
+    content: none;
+  }
+
+  .axt-viewer .axt-img > span {
+    backdrop-filter: blur(15px);
   }
 
   /* side: the figure is split in two (§7.2); the overlay belongs to the translation-only copy, and the original's is
@@ -95,16 +148,19 @@
      first and the figure is split only once prep's debounced coalescer (a deliberate batching delay) runs. That
      intermediate state measured 150–166 ms: the white box painted at full column width (960 / 797px) over the
      image in the left column, then vanished whole and reappeared at half width (468px) in the right — the “flash
-     when scrolling to an image” the owner saw (issue #109). It cannot be “hide unless inside .axt-split”: images
-     outside a figure (collectImageTargets scans the whole text, figures or not) are never split, and their
-     overlays would vanish for good in side. Nor “the nearest figure is not .axt-split”: a nested sub-figure is
+     when scrolling to an image” the owner saw (issue #109). It cannot be “hide unless inside .axt-split”: an image
+     whose block is no root of a split — it stands beside running text, where the pairing is the grid's
+     (side-layout.ts `looseRootOf`) — is never copied, and its overlay would vanish for good in side. A graphic
+     loose in a block of its own is a root: the block carries [data-axt-split-root] from the moment the overlay is
+     drawn, and is named here beside `figure` (the teaser of 2609.20818v1 showed its translation on the original
+     and none on the copy). Nor “the nearest figure is not .axt-split”: a nested sub-figure is
      copied with its outermost, and the nested figure inside the copy has no .axt-split of its own — hit by mistake.
 
      [data-axt-img-modes~="side"] is in the selector for **specificity**: the display rule is (0,3,1), `figure`
      alone is worth (0,0,1), and without the attribute the whole rule is (0,2,2), losing to the display rule and
      applying nowhere (the first version was written so, and the overlay measured 960px on the original all the
      same). With it the rule is (0,3,2) and wins outright */
-  html[data-axt-mode="side"][data-axt-img-modes~="side"] figure .axt-img:not(:where(.axt-split) *) {
+  html[data-axt-mode="side"][data-axt-img-modes~="side"] :is(figure, [data-axt-split-root]) .axt-img:not(:where(.axt-split) *) {
     display: none;
   }
 }

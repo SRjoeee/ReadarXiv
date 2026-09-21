@@ -54,10 +54,14 @@ export const MIRROR_CLASS = 'axt-mirror'
 export const SPLIT_CLASS = 'axt-split'
 /** On the original: this figure has a split copy */
 export const SPLIT_ATTR = 'data-axt-split'
-/** In the copy, each element remembers the id of its original (the copy's ids are stripped; anchors and overlay clean-up find their way back by this) */
+/**
+ * On a block that stands as a figure though it is none: a graphic loose in the text — a teaser under the abstract, an
+ * image in a paragraph of its own — has no `<figure>` around it, and side mode copies a figure whole (split-figures.ts).
+ * Written with the image's overlay (renderer/image.ts), so the sheet hides the original's overlay at once (§15.2)
+ */
+export const SPLIT_ROOT_ATTR = 'data-axt-split-root'
+/** In the copy, each element remembers the id of its original (the copy's ids are stripped; anchors find their way back by this) */
 export const SPLIT_OF_ATTR = 'data-axt-split-of'
-/** In the copy, an image overlay remembers which image it belongs to (the copy's data-axt-for is stripped) */
-export const SPLIT_FOR_ATTR = 'data-axt-split-for'
 
 /*
  * The marks the style sheets read where they once asked `:has()` (DESIGN §7.2). Chrome answers a `:has()` in an

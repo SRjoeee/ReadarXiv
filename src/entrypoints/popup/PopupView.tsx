@@ -3,18 +3,18 @@
 // language card, the prompt row for the LLM, then bubbles for anything that needs attention, the
 // primary button, the mode bar, and the two small switches under it.
 import type { ReactNode } from 'react'
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import type { Mode } from '@/core/renderer'
 import { BrandMark } from '@/ui/BrandMark'
 import { Button } from '@/ui/Button'
-import { HelperPermission } from '@/ui/HelperPermission'
-import { HelperSetup } from '@/ui/HelperSetup'
 import { Menu } from '@/ui/Menu'
 import { Segmented } from '@/ui/Segmented'
 import { MODE_ORDER, S } from '@/ui/strings'
 import { Switch } from '@/ui/Switch'
 import type { PopupActions } from './data'
 import type { MenuKind, PopupView as View } from './view-model'
+import { Settings } from 'lucide'
+import { LucideIcon } from '@/ui/LucideIcon'
 
 /** Only the marks are constant; the words come from the pack in use, which is chosen after this
  *  module is imported (see the note at the top of ui/strings.ts) */
@@ -30,11 +30,6 @@ const modes = () => MODE_ORDER.map(value => ({
 const CARD = 'rounded-card bg-card shadow-[0_1px_2px_rgba(30,30,36,0.06)]'
 
 export function PopupView({ view, error, actions }: { view: View; error: string | null; actions: PopupActions }) {
-  /**
-   * Whether the guided install is unfolded. Here rather than in the view model: it is the interface state of this one
-   * opening of the popup; what has to outlive the popup is “waiting”, and that lives in the background (DESIGN §15.4)
-   */
-  const [setupOpen, setSetupOpen] = useState(false)
   return (
     <main className="flex w-[320px] flex-col gap-3 bg-bg p-4 font-ui text-[13px] text-fg">
       <header className="flex items-center justify-between px-1">
@@ -43,7 +38,8 @@ export function PopupView({ view, error, actions }: { view: View; error: string 
           <span className="text-[14px] font-bold">{S.brand}</span>
         </div>
         <button type="button" aria-label={S.settings} title={S.settings} onClick={() => actions.openOptions()} className="cursor-pointer text-fg-2 hover:text-fg">
-          <GearIcon />
+          {/* The same glyph as the floating button's settings button: one control, one icon */}
+          <LucideIcon node={Settings} />
         </button>
       </header>
 
@@ -73,25 +69,6 @@ export function PopupView({ view, error, actions }: { view: View; error: string 
               <Button variant="solid" onClick={actions.retryFailed}>{S.failed.retry}</Button>
             </Bubble>
           )}
-          {/* The card while the helper is not ready: one line and the step it calls for — “Allow” for the permission
-              (DESIGN §15.3), “Install” to unfold the guided install in place (UI.md S-P-86…88). Both steps are the components
-              the settings page uses: two surfaces, one wording */}
-          {view.helper && (
-            <div className={`${CARD} flex flex-col gap-2 px-3.5 py-3 text-[12px] leading-relaxed`}>
-              {setupOpen && view.helper.step === 'install' && view.helper.extensionId
-                ? <HelperSetup extensionId={view.helper.extensionId} />
-                : (
-                  <>
-                    <span className="text-fg-2">{view.helper.text}</span>
-                    {view.helper.step === 'allow' && <HelperPermission onStatus={actions.helperStatus} />}
-                    {view.helper.step === 'install' && (
-                      <Button variant="solid" className="self-start" onClick={() => setSetupOpen(true)}>{S.helper.start}</Button>
-                    )}
-                  </>
-                )}
-            </div>
-          )}
-
           {/* aria-label keeps the accessible name at the label alone, badge or not (the e2e suites find the button by name) */}
           <Button variant={view.primary.action === 'restore' ? 'secondary' : 'primary'} disabled={view.primary.disabled} aria-label={view.primary.label} onClick={actions[view.primary.action]}>
             {view.primary.label}
@@ -241,7 +218,4 @@ function SideIcon() {
 }
 function OnlyIcon() {
   return <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5" fill="currentColor" /><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5" stroke="var(--axt-card)" strokeWidth="1.6" strokeLinecap="round" /></svg>
-}
-function GearIcon() {
-  return <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
 }

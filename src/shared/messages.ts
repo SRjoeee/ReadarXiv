@@ -5,8 +5,17 @@ import type { Mode } from '@/core/renderer'
 import type { StartResult } from '@/core/session'
 import type { ProviderStatus } from '@/providers/transport'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
-import type { HelperStatus, ImageProgress, OcrCall, OcrMessageResponse } from './ocr'
+import type { EntrySettings, FloatingEntryState } from '@/shared/entry-settings'
+import type { ImageProgress, OcrCall, OcrMessageResponse, OcrRunResponse } from './ocr'
 import type { DiagnosticSource, DiagnosticsExport } from '@/shared/diagnostics'
+
+/** What an abstract or PDF page answers the popup (§4.0b) */
+export interface EntryStatus {
+  /** The paper this page is about, with the version the reader opened */
+  paper: string
+  /** Where its HTML full text is, already carrying `#readarxiv`; null when the paper has no HTML version */
+  html: string | null
+}
 
 export interface PageStatus {
   /** The current page's arXiv id; null when this is not an arXiv HTML page */
@@ -16,7 +25,7 @@ export interface PageStatus {
   /** The mode the reader chose; the automatic fallback does not change it */
   preference: Mode
   progress: Progress
-  /** The image translation's progress (§15); absent without the helper or with every mode off in the settings */
+  /** The image translation's progress (§15); absent with every mode off in the settings */
   images?: ImageProgress
   /**
    * This page's session id right now (null when not translating).
@@ -60,6 +69,42 @@ export interface AxtMessages {
   'axt:set-mode': { request: { mode: Mode }; response: { mode: Mode; preference: Mode } }
   /** popup → content: the progress */
   'axt:page-status': { request: Record<never, never>; response: PageStatus }
+  /**
+   * popup → content, on the two pages that are not the full text (§4.0b): which paper this is and where its HTML
+   * version is. The abstract page reads arXiv's own link; the PDF page has asked `HEAD` for it. `html` is null when
+   * the paper has none, and then the popup's translate button is there but disabled — the reader is told the answer
+   * rather than left with a button that would lead nowhere (the maintainer, 2026-09-18)
+   */
+  'axt:entry-status': { request: Record<never, never>; response: EntryStatus }
+  /** popup → content, on those pages: go to the HTML version and translate it. The page navigates itself, so no tabs permission is involved */
+  'axt:open-html': { request: Record<never, never>; response: { opened: boolean } }
+  /**
+   * content → background: the floating button's main button on the full text (§4.0c). The background decides as it
+   * does for the keyboard command and the context menu — one toggle, four doors — and tells this tab what to do.
+   * `acted: false` when nothing could be done (no service can run): the page opens its control panel, which says why
+   */
+  'axt:toggle': { request: Record<never, never>; response: { acted: boolean } }
+  /**
+   * content / options → background: what a page needs of the settings, read once and validated by the background
+   * (shared/entry-settings.ts): the interface language, where a translation opens, this tab's zoom, the floating
+   * button's state
+   */
+  'axt:entry-settings': { request: Record<never, never>; response: EntrySettings }
+  /** background → content: the reader changed this tab's zoom (`tabs.onZoomChange`) */
+  'axt:zoom-changed': { request: { zoom: number }; response: undefined }
+  /**
+   * content → background: this tab holds a page the extension works on — the abstract, the PDF or the full text.
+   * The toolbar button is grey everywhere else and lights for this tab (UI.md §5.1)
+   */
+  'axt:page-usable': { request: Record<never, never>; response: undefined }
+  /** content → background: open the settings page. A content script cannot call `openOptionsPage` itself */
+  'axt:open-settings': { request: Record<never, never>; response: { opened: boolean } }
+  /**
+   * content / options → background: the reader dragged, locked, hid or switched the floating button (§4.0c). A patch,
+   * merged by the background — its only writer — into what is stored at that moment, under the button's own key.
+   * The answer carries the state stored now: on a failure that is the old one, and the page shows it again
+   */
+  'axt:set-floating-entry': { request: { patch: Partial<FloatingEntryState> }; response: { saved: boolean; floating: FloatingEntryState } }
   /** content / options → background: translate a batch of segments (§8.0: the chain, the queues and the requests all live in the background) */
   'axt:translate': { request: TranslateCall; response: TranslateMessageResponse }
   /** content → background: withdraw a session's queued and in-flight requests (restore, restart) */
@@ -106,36 +151,12 @@ export interface AxtMessages {
    * - neither — rebuild only. Later sessions see the new chain; the ones translating keep theirs.
    */
   'axt:engine-ready': { request: { id: string; scope?: string; rebindAll?: boolean }; response: { reset: boolean } }
-  /**
-   * options / popup / content → background: where the recognition helper stands (DESIGN §15.3: the ping, the four
-   * states). `recheck` re-probes a host that was reported missing; see OcrBackend.status
-   */
-  'axt:helper-status': { request: { recheck?: boolean }; response: HelperStatus }
-  /**
-   * background → popup / options: the helper's state changed on the background's own initiative — the install wait
-   * found it, or the fresh worker after a runtime grant reported (DESIGN §15.3). Pages set what they show from it.
-   * Nobody listening is the normal case, so the send may reject
-   */
-  'axt:helper-state': { request: { status: HelperStatus }; response: undefined }
   /** popup ↔ options: a download of this language pack ended on one surface; the other looks it up again */
   'axt:pack-changed': { request: { target: string }; response: undefined }
-  /**
-   * Sent to every tab when a re-probe finds the helper that was missing. A paper parks its bitmaps
-   * when the probe at session start came back empty-handed, and nothing else would ever tell it
-   * otherwise: the reader would install the helper, be told it is ready, and watch the open paper
-   * stay as it was (Codex on #161)
-   */
-  'axt:helper-ready': { request: Record<never, never>; response: { resumed: boolean } }
-  /**
-   * popup / options → background: the reader has copied the install command, so start looking for
-   * the helper. Nothing else can tell us it arrived — the script writes a native host manifest to
-   * disk and Chrome only reads it when `connectNative` runs (DESIGN §15.4). Without this the
-   * reader would have to come back and press a button to ask the question the program can answer
-   * itself, and by then the popup that asked is long closed.
-   */
-  'axt:helper-await': { request: { start?: boolean }; response: { until: number | null } }
   /** content → background: OCR one bitmap; the result is cached by imageHash (§15.2) */
   'axt:ocr': { request: OcrCall; response: OcrMessageResponse }
+  /** background → the offscreen document: recognise these bytes (§15.3). Answered by that page alone */
+  'axt:ocr-run': { request: { image: string; mime: string }; response: OcrRunResponse }
 }
 
 export type AxtMessageType = keyof AxtMessages
@@ -170,6 +191,52 @@ export const isFailure = (value: unknown): value is FailureReply =>
 /** Reply to a message with the outcome of a promise: the value, or a typed failure the sender rejects on */
 export function replyWith<T>(promise: Promise<T>, sendResponse: (reply: T | FailureReply) => void): void {
   promise.then(sendResponse, error => sendResponse(failure(error)))
+}
+
+/** Who sent a message, as far as a handler may know: the tab, when a content script did — an extension page has none */
+export interface MessageSender {
+  tabId: number | undefined
+}
+
+/**
+ * The handlers of one listener, by message type, each typed by the table above: a request that does not match its
+ * type, or an answer that does not match its response, does not compile. A handler answers with a promise, or with
+ * `undefined` for a message nobody waits on
+ */
+export type MessageHandlers = {
+  [T in AxtMessageType]?: (message: AxtMessage<T>, sender: MessageSender) => Promise<AxtResponse<T>> | undefined
+}
+
+/**
+ * The listener for a table of handlers — what every `runtime.onMessage` listener of ours has to get right, once:
+ * a message that is not ours, or that this context has no handler for, passes by unanswered (another listener may
+ * take it); a handler's promise is answered through `replyWith`, so its rejection settles the sender's request as a
+ * failure instead of leaving it to wait for the worker to die; and the channel is kept open for exactly those — WXT
+ * ≥ 0.20 ships no polyfill, so an asynchronous response needs `sendResponse` and `return true`. A handler that
+ * throws before it has a promise is answered the same way
+ */
+export function answerMessages(handlers: MessageHandlers) {
+  return (message: unknown, sender: { tab?: { id?: number } }, sendResponse: (reply: unknown) => void): true | undefined => {
+    if (!isAxtMessage(message)) return undefined
+    const handler = handlers[message.type] as ((message: AxtMessage, sender: MessageSender) => Promise<unknown> | undefined) | undefined
+    if (!handler) return undefined
+    let answer: Promise<unknown> | undefined
+    try {
+      answer = handler(message, { tabId: sender.tab?.id })
+    } catch (error) {
+      answer = Promise.reject(error)
+    }
+    if (answer === undefined) return undefined
+    replyWith(answer, sendResponse)
+    return true
+  }
+}
+
+/** Answer these messages in this context for as long as it lives, or until the returned function is called */
+export function onMessages(handlers: MessageHandlers): () => void {
+  const listener = answerMessages(handlers)
+  browser.runtime.onMessage.addListener(listener)
+  return () => browser.runtime.onMessage.removeListener(listener)
 }
 
 /** The sender's side of `replyWith`: a failure reply becomes a rejection */

@@ -135,10 +135,16 @@ export function restore(doc: Document): { removedNodes: number; strippedAttrs: n
   }
   // Styles first, attributes after: the style mark is itself a data-axt-* attribute, and once stripped it cannot be found
   for (const style of Array.from(doc.querySelectorAll(`style[${STYLE_ATTR}]`))) style.remove()
-  for (const el of Array.from(doc.querySelectorAll('*'))) {
-    for (const attr of Array.from(el.attributes)) {
-      if (attr.name.startsWith(AXT_ATTR_PREFIX)) {
-        el.removeAttribute(attr.name)
+  // Every element of the document is visited — the rule is the prefix, not a list of names (§7.1) — so what is done
+  // per element is what this loop costs. `hasAttributes` and `getAttributeNames` hand back a flag and strings;
+  // `Array.from(el.attributes)` built a NamedNodeMap, an Attr wrapper per attribute and an array for each of 60 000
+  // elements, a third of the restore's script time and most of its garbage (measured on 2312.17141, 63 266 elements:
+  // 34 ms against 11 ms for the same 5 324 attributes found; tests/e2e/probes/restore-cost.mjs)
+  for (const el of doc.querySelectorAll('*')) {
+    if (!el.hasAttributes()) continue
+    for (const name of el.getAttributeNames()) {
+      if (name.startsWith(AXT_ATTR_PREFIX)) {
+        el.removeAttribute(name)
         strippedAttrs++
       }
     }

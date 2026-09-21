@@ -2,17 +2,18 @@ import { execSync } from 'node:child_process'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'wxt'
 import { readBuildRef } from './scripts/build-ref.mjs'
+import { licenceFiles, noteBundledPackages } from './scripts/third-party-notices.mjs'
 
 /**
- * The ref the popup's helper install command fetches from (issue #158): the commit this build is made from when a
- * reader's curl to the installer's repository can find it, `main` otherwise — scripts/build-ref.mjs decides, over git
+ * The commit this build is made from when it is one the repository holds, `main` otherwise — scripts/build-ref.mjs
+ * decides, over git. It goes into the diagnostics a reader exports (issue #156)
  */
 let stamped: string | undefined
 function buildRef(): string {
   // WXT asks for the vite config once per entrypoint: computed once, printed once
   if (stamped !== undefined) return stamped
   stamped = readBuildRef(cmd => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim())
-  console.log(`[build] helper install ref: ${stamped}`)
+  console.log(`[build] ref: ${stamped}`)
   return stamped
 }
 
@@ -21,7 +22,8 @@ export default defineConfig({
   srcDir: 'src',
   modules: ['@wxt-dev/module-react'],
   // In extension pages <link rel="modulepreload" crossorigin> triggers Chrome's "cross-world extension resource mismatch" warning (harmless but noisy); preloading is off
-  vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss()], define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()) } }),
+  // The recogniser's worker (entrypoints/ocr) is a build of its own, and what it bundles goes into the same notices
+  vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()) } }),
   // The gallery is for `wxt` (serve) only: a release must not ship a debug page anyone can open
   hooks: {
     'entrypoints:found': (wxt, infos) => {
@@ -30,6 +32,11 @@ export default defineConfig({
         if (at >= 0) infos.splice(at, 1)
       }
     },
+    // The licences that go with every copy (scripts/third-party-notices.mjs): WXT calls this once every entry point
+    // is built, so the list of what was bundled is complete; the project's own licence goes in beside it
+    'build:publicAssets': (_wxt, files) => {
+      files.push(...licenceFiles())
+    },
   },
   manifest: {
     // UI.md S-P-01 requires the store listing, the manifest and the site to carry one name
@@ -37,9 +44,11 @@ export default defineConfig({
     // Two marks, two surfaces (scripts/icons.mjs): `icons` is filled by WXT from public/icon/<size>.png,
     // the tile, for the card the extensions page and the store put an icon on. Everywhere the mark
     // stands on its own — this toolbar button, the page tabs, our own brand rows — it is the bare
-    // book, whose outline keeps it legible on a light and a dark surface alike
+    // book, whose outline keeps it legible on a light and a dark surface alike. The toolbar button
+    // starts grey: it has nothing to do on most pages, and a page it works on lights its own tab
+    // (shared/action-icon.ts, UI.md §5.1)
     action: {
-      default_icon: { 16: 'icon/mark-16.png', 32: 'icon/mark-32.png', 48: 'icon/mark-48.png' },
+      default_icon: { 16: 'icon/mark-off-16.png', 32: 'icon/mark-off-32.png', 48: 'icon/mark-off-48.png' },
     },
     // The image overlay uses CSS anchor positioning, and `anchor-scope` needs Chrome 131 (§15.2). The document always said so, but it never reached
     // the manifest: a Chrome below that version installs the extension all the same and gets a misplaced overlay, and its scroll containers do not enter
@@ -52,13 +61,12 @@ export default defineConfig({
     default_locale: 'en',
     description: '__MSG_description__',
     // contextMenus: the translate toggle in the context menu (issue #146) — it registers a menu item, not access to
-    // page content. alarms: wakes a fresh service worker after the reader grants `nativeMessaging` at runtime — a
-    // running worker never gains the API (DESIGN §15.3, verified 2026-09-13); no install warning
-    permissions: ['storage', 'contextMenus', 'alarms'],
-    // nativeMessaging: image translation on a Mac reads figures through the local helper (DESIGN §15). Optional (DESIGN
-    // §15.3): requested from the reader's own click in the popup or on the settings page, so the store listing does
-    // not name a native component to readers who never install it. The image e2e pre-grants it in a patched copy
-    optional_permissions: ['nativeMessaging'],
+    // page content. offscreen: the document the figure recogniser runs in (DESIGN §15.3) — a service worker cannot
+    // host it. Neither shows an install warning
+    permissions: ['storage', 'contextMenus', 'offscreen'],
+    // The recogniser is WebAssembly, which an extension page may compile only when its policy says so. Everything it
+    // compiles ships in the package; `script-src 'self'` stays as it was
+    content_security_policy: { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
     // The keyboard entry (UI.md S-P-50): the same toggle as the context menu. The popup shows the
     // binding Chrome reports, so a reader who rebinds or removes it sees the truth
     commands: { 'axt-toggle': { suggested_key: { default: 'Alt+T' }, description: '__MSG_toggle__' } },
@@ -69,6 +77,12 @@ export default defineConfig({
     // hope for `Access-Control-Allow-Origin` from the other side. Microsoft does return `*` today (measured), but that is a dependency
     // beyond our control — the day it stops, the whole engine becomes a `network` failure (Codex on #115; the line was missed when the provider was added)
     host_permissions: ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*'],
+    // The floating button (DESIGN §4.0c) frames the popup as its control panel, and a page may only load an extension
+    // file that is declared here. One file, and only to arXiv. What the popup loads for itself (its script, its
+    // style sheet) is asked for by the extension's own origin and needs no entry; the button's mark is inline vector. A page that
+    // may frame the popup could try to trick a click on it: the popup shows no key and no paper text, and what a
+    // click can do there is what the reader does there anyway — start or undo a translation, pick a mode or a service
+    web_accessible_resources: [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }],
     // A custom endpoint may be http on 127.0.0.1 / the LAN (Ollama, LM Studio); with only the localhost literal the request fails outright (Codex on #6).
     // This is only the range that may be requested; the real grant is still asked for per origin on the settings page
     optional_host_permissions: ['https://*/*', 'http://*/*'],

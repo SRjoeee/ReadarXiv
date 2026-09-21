@@ -7,8 +7,11 @@ import { restore } from '@/core/renderer/page'
 import { renderPending } from '@/core/renderer/pending'
 import { splitFigures } from '@/core/renderer/split-figures'
 import { clearTranslation, markPartial, renderTable } from '@/core/renderer/translation'
-import { docOf, frag } from './helpers'
+import { docOfChecked, frag } from './helpers'
 import { S, reasonText, setLocale } from '@/ui/strings'
+
+// Every document a case renders into is held to the tail mark's invariant afterwards (helpers.ts)
+const docOf = docOfChecked()
 
 const page = '<p class="ltx_p" id="p1">Text.</p>'
 

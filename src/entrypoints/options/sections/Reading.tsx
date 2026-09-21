@@ -14,6 +14,7 @@ import { Segmented } from '@/ui/Segmented'
 import { Switch } from '@/ui/Switch'
 import { O, copyName, S } from '@/ui/strings'
 import type { OptionsData } from '../data'
+import { useFloatingEntry } from '../floating-entry'
 
 /** The preload margin as screens rather than pixels — a number of pixels means nothing to a reader — and the whole paper (`all`, v15) */
 const MARGINS: readonly (number | 'all')[] = [900, 1800, 2700, 'all']
@@ -36,6 +37,7 @@ export function Reading({ data }: { data: OptionsData }) {
   /** The profiles being edited as this tab last saw them: a drawer outlives a deletion made elsewhere (below) */
   const lastStyle = useRef<StyleProfile | undefined>(undefined)
   const lastBand = useRef<HighlightProfile | undefined>(undefined)
+  const floating = useFloatingEntry()
   if (!config) return null
   const a = config.appearance
   const style = activeStyle(a)
@@ -114,6 +116,22 @@ export function Reading({ data }: { data: OptionsData }) {
         onReset={() => setAppearance(c => resetBuiltIns(c, 'highlights'))}
         renderTile={profile => <span className="text-[13px]"><span style={bandTile(profile)}>{O.reading.previewTarget}</span></span>}
       />
+
+      <h3 className="mb-1 text-[14px] font-bold">{O.reading.openIn}</h3>
+      <p className="mb-2 text-[11px] text-fg-2">{O.reading.openInHint}</p>
+      <div className="mb-6">
+        <Segmented
+          value={config.reading.openIn}
+          options={(['new-tab', 'same-tab'] as const).map((v, i) => ({ value: v, label: O.reading.openInStops[i]!, title: O.reading.openInStops[i]! }))}
+          onChange={next => void patch(latest => ({ ...latest, reading: { ...latest.reading, openIn: next === 'same-tab' ? 'same-tab' : 'new-tab' } }))}
+        />
+      </div>
+
+      <div className="mb-6 rounded-card border border-line bg-card px-3.5">
+        <Row label={O.reading.floatingEntry} hint={O.reading.floatingEntryHint}>
+          <Switch checked={floating.enabled ?? true} onChange={floating.setEnabled} label={O.reading.floatingEntry} />
+        </Row>
+      </div>
 
       <h3 className="mb-1 text-[14px] font-bold">{O.reading.preloadRange}</h3>
       <p className="mb-2 text-[11px] text-fg-2">{O.reading.preloadRangeHint}</p>

@@ -1,10 +1,10 @@
 // OCR lines → translation boxes (DESIGN §15.1). Pure functions, one and the same under happy-dom and on a real machine.
 //
-// Vision returns lines; a label wrapped in the image ("Dynamical / charge", "Pair / Production") is two lines and
+// A recogniser returns lines; a label wrapped in the image ("Dynamical / charge", "Pair / Production") is two lines and
 // has to be sent as one sentence, so lines that are vertically adjacent, aligned (left edge or centre line) and
 // overlapping horizontally merge into one box. The filter follows the keep rules of §6: bare numbers (tick marks),
 // text without two consecutive letters (single-letter panel labels "B", "(a)", "E=+1") are not translated, and
-// low confidence is dropped — Vision gives these 0.5, and real words are almost all 1.0.
+// low confidence is dropped — Apple Vision, which the rules were first set against, gave these 0.5 and real words almost all 1.0.
 // The rule parameters were set against the real coordinates in tests/fixtures/ocr/qed3d-string-breaking.json.
 import { isNumericCell } from '@/core/rules/latexml'
 import type { OcrLine, Quad } from '@/shared/ocr'
@@ -28,7 +28,7 @@ export interface Box {
   /**
    * Text direction in radians; absent means upright (§15.5).
    *
-   * Set by the SVG path only, and the corpus has only 0 and -π/2. **A rotated line takes no part in merging**: the
+   * Set by the SVG path for any tilt, and by the recogniser for a line read on its side. **A rotated line takes no part in merging**: the
    * adjacency / alignment tests below are written for “lines stacking downwards”, while a vertical line stacks
    * sideways, and applying them would glue two unrelated axis labels together. A vertical label is rarely multi-line anyway.
    */
@@ -38,16 +38,6 @@ export interface Box {
 export interface BoxOptions {
   /** Lines below this confidence are dropped */
   minConf?: number
-  /**
-   * Whether vertically adjacent, aligned lines are one label. True for anything that arrives as
-   * *lines* — OCR and glyph runs both cut a wrapped label into one per line, and translating the
-   * halves separately would be translating half sentences.
-   *
-   * The inline-picture path (§15.6) passes false: there a line is a whole TikZ node, already
-   * complete however it wraps, and two nodes stacked close together in a diagram ("Stable
-   * LatentMoE" over "Gated MLA") would otherwise be merged into one label across both boxes.
-   */
-  merge?: boolean
 }
 
 /** The axis-aligned bounding box of the four corners: a rotated axis label's corners are not axis-aligned, so its box is drawn first */
@@ -83,14 +73,13 @@ function adjacent(a: Box, b: { y: number; h: number }): boolean {
 
 export function linesToBoxes(lines: readonly OcrLine[], options: BoxOptions = {}): Box[] {
   const minConf = options.minConf ?? 0.3
-  const merge = options.merge ?? true
   const kept = lines
     .filter(line => line.conf >= minConf && isTranslatable(line.text))
-    .map(line => ({ ...quadBounds(line.quad), text: line.text.trim(), angle: line.angle, len: line.len, thick: line.thick, rows: line.rows }))
+    .map(line => ({ ...quadBounds(line.quad), text: line.text.trim(), angle: line.angle, len: line.len, thick: line.thick }))
     .sort((a, b) => a.y - b.y || a.x - b.x)
   const boxes: Box[] = []
   for (const line of kept) {
-    const host = !merge || line.angle ? undefined : boxes.find(box => !box.angle && adjacent(box, line) && aligned(box, line))
+    const host = line.angle ? undefined : boxes.find(box => !box.angle && adjacent(box, line) && aligned(box, line))
     if (host) {
       const right = Math.max(host.x + host.w, line.x + line.w)
       const bottom = Math.max(host.y + host.h, line.y + line.h)
@@ -101,9 +90,7 @@ export function linesToBoxes(lines: readonly OcrLine[], options: BoxOptions = {}
       host.text = `${host.text} ${line.text}`
       host.lines++
     } else {
-      // A picture label knows how many lines it wraps to (§15.6); everything else is one line
-      const { rows, ...rest } = line
-      boxes.push({ ...rest, lines: Math.max(1, rows ?? 1) })
+      boxes.push({ ...line, lines: 1 })
     }
   }
   return boxes

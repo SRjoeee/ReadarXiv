@@ -7,7 +7,6 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
-import { copyWithGrants } from './ext-copy.mjs'
 import { addService, chooseBuiltIn, chooseLanguage, chooseStyle, chooseUiLanguage, clearKeyAndReconnect, openOptions, openSection, pick, setImageMode, setPreload, setSwitch } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
@@ -66,7 +65,7 @@ const extensionWorker = () => context.serviceWorkers().find(w => w.url().startsW
 console.log(`extension ${extId} loaded from ${EXT}`)
 
 /**
- * Open a paper and start translating of itself (#axt-translate), collecting the [axt] log and the requests sent to the host.
+ * Open a paper and start translating of itself (#readarxiv), collecting the [axt] log and the requests sent to the host.
  *
  * Requests are listened for on the **context**, not the page: since 2026-09-06 the translation fetches leave from the background service worker
  * (DESIGN §8.0), and page-level events see none of them. The rings cannot be polled either — with the first screen all cached it is over in 38 ms,
@@ -124,7 +123,7 @@ async function openPaper(id, host) {
     if (document.documentElement) start()
     else document.addEventListener('readystatechange', start, { once: true })
   })
-  await page.goto(`https://arxiv.org/html/${id}#axt-translate`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`https://arxiv.org/html/${id}#readarxiv`, { waitUntil: 'domcontentloaded' })
   const originalTitle = await page.title()
   return { page, logs, requests, originalTitle, skeletonsSeen: () => page.evaluate(() => window.__axtSkeletonsSeen ?? 0).catch(() => 0) }
 }
@@ -251,7 +250,7 @@ const countDom = page => page.evaluate(() => ({
 // ── The settings page: choose Google translation, switch image translation off (changes apply at once, there is no save button) ──────────
 const options = await openOptions(context, extId)
 await chooseBuiltIn(options, 'Google 翻译')
-// Image translation (DESIGN §15) is on by default; with the helper installed on this machine the overlays and the split would disturb the layout / count assertions below,
+// Image translation (DESIGN §15) is on by default; its overlays and the figures it splits would disturb the layout / count assertions below,
 // so it is switched off here, and the dedicated e2e:image switches it back on (kept when AXT_E2E_IMAGES=1)
 if (!process.env.AXT_E2E_IMAGES) await setSwitch(options, '图片翻译', false)
 await options.screenshot({ path: `${SHOTS}/options.png` })
@@ -278,14 +277,14 @@ check('the settings page: the preload range set to two screens is still two scre
 }
 await setPreload(options, { range: '一屏' })
 
-// ── The settings page: the image translation mode gate (DESIGN §15) applies at once and survives a reload; **not greyed out for a missing helper** ──────
+// ── The settings page: the image translation mode gate (DESIGN §15) applies at once and survives a reload ──────
 {
   const names = ['上下', '左右', '仅译文']
   const boxOf = name => options.getByRole('checkbox', { name, exact: true })
   await openSection(options, 'services')
-  // §15.5: the recognition helper decides bitmaps only, SVG figures do not need it, so the checkboxes must be usable at all times
+  // Nothing has to be set up for figures to be translated (§15.3), so the checkboxes are usable from the first moment
   const enabled = await boxOf('上下').isEnabled()
-  check('the settings page: image translation is not greyed out whole for a missing recognition helper (§15.5)', enabled === true, `enabled ${enabled}`)
+  check('the settings page: the image translation modes can be ticked from the first moment', enabled === true, `enabled ${enabled}`)
 
   if (!process.env.AXT_E2E_IMAGES) {
     await setImageMode(options, '上下', true)
@@ -351,7 +350,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await chooseStyle(options, '淡一档')
 
   const page = await context.newPage()
-  await page.goto(`https://arxiv.org/html/${PAPER}#axt-translate`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`https://arxiv.org/html/${PAPER}#readarxiv`, { waitUntil: 'domcontentloaded' })
   // Only real translations count: the loading ring / failure widget / mirrors and split clones carry .axt-t too, but the appearance deliberately does not decorate them,
   // and a poll landing on a pending node would misreport “the opacity did not apply” as a broken configuration (Codex on #52)
   await page.waitForFunction(sel => document.querySelector(sel) !== null, `.axt-t:not([data-axt-inline])${REAL}`, { timeout: 60_000 }).catch(() => undefined)
@@ -402,9 +401,9 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await editor.getByRole('button', { name: '完成', exact: true }).click()
   // Switch to a math-heavy paper: PAPER's first screen has no inline formula, and the check would run empty
   const dashedPage = await context.newPage()
-  await dashedPage.goto('https://arxiv.org/html/2609.04056v1#axt-translate', { waitUntil: 'domcontentloaded' })
+  await dashedPage.goto('https://arxiv.org/html/2609.04056v1#readarxiv', { waitUntil: 'domcontentloaded' })
   // Both conditions have to be met (issue #82): waiting only for “the first translation with a formula appears”, the data-axt-style on `<html>`
-  // may not be written yet — enable() writes it inside startTranslation, and between the session #axt-translate starts and the preset the settings page just saved
+  // may not be written yet — enable() writes it inside startTranslation, and between the session #readarxiv starts and the preset the settings page just saved
   // lies one configuration read. One run hit exactly that: 22 formulas measured, block-level none/solid; the same build rerun gave 51 underline/dashed
   await dashedPage.waitForFunction(
     real => document.documentElement.dataset.axtUnderline === 'dashed' && document.querySelectorAll(`.axt-t${real} math`).length > 0,
@@ -520,6 +519,16 @@ check('the settings page: after deleting the custom prompt the default is chosen
   const again = idleOf(await waitForLog(logs, IDLE, 60_000))
   // cached counts passages (each table cell one), done counts blocks, so the two differing is normal; the point is no endpoint request
   check('reload and translate again: everything near the first screen hits the cache, no more endpoint requests', !!again && again.done === again.requested && again.cached >= again.done && requests.length === 0, `${again?.text ?? '(no idle line)'}; endpoint requests ${requests.length}`)
+
+  // ── A link made by 0.4.0 carries `#axt-translate`: a bookmark or a link passed on then still starts the translation (DESIGN §4.0b) ──
+  logs.length = 0
+  await page.goto(`https://arxiv.org/html/${PAPER}#axt-translate`, { waitUntil: 'domcontentloaded' })
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  const legacy = idleOf(await waitForLog(logs, IDLE, 60_000))
+  check('the hash of 0.4.0\'s links still starts the translation', !!legacy && legacy.done > 0 && legacy.done === legacy.requested, legacy?.text ?? '(no idle line)')
+  await page.goto(`https://arxiv.org/html/${PAPER}#readarxiv`, { waitUntil: 'domcontentloaded' })
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await waitForLog(logs, IDLE, 60_000)
 
   // ── The whole-paper stop (§10, v15): every block is requested as the session starts, without a scroll. The paper was scrolled through
   // above, so nearly everything is cached; a block the scroll never brought near the viewport (measured: one passage of 292) still goes to the endpoint ──
@@ -704,7 +713,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await chooseBuiltIn(options, 'Google 翻译')
 }
 
-// ── SVG figure translation (§15.5, #121): needs no helper, so it runs here rather than in e2e:image ────────────
+// ── SVG figure translation (§15.5, #121): read, not recognised — it runs here, and e2e:image covers the bitmaps ────────────
 // The only place that can prove the whole geometry chain holds: viewBox coordinates → normalised → percentages / container units in the main document.
 // The unit tests stub the <object>'s contentDocument; the real nested document exists only in a real browser
 {
@@ -719,6 +728,11 @@ check('the settings page: after deleting the custom prompt the default is chosen
   // A fixed 3-second sleep, on a slower or rate-limited endpoint, lets legitimate overlays arrive after the assertion, and the test fails intermittently
   // (Codex on #134)
   await scrollThrough(page)
+  // The image round says when it is done — every target entered and processed. It could not before the recogniser
+  // shipped with the extension: this paper's bitmaps parked for good in a profile without the macOS helper, and the
+  // round never reported `N/N of N`. Now they are read, their overlays land in a second wave after the SVG figures',
+  // and the counting below could end between the two (measured: 17 rebuilds of the side copies where there were 12)
+  await waitForLog(logs, /images idle: (\d+)\/(\d+) of (\d+)/, 120_000, m => m[1] === m[2] && m[2] === m[3])
   /**
    * Wait until **every SVG figure with text has its overlay**, rather than for a log line or a count that “looks settled”.
    *
@@ -751,6 +765,13 @@ check('the settings page: after deleting the custom prompt the default is chosen
   }
   check('SVG figures: every figure with text has its overlay (the assertions below presume it)',
     expected > 0 && overlays >= expected && stable >= 2, `${overlays} overlays, lower bound ${expected}, stable ${stable} times`)
+  // A side copy is made afresh when an overlay lands in its figure, and its <object> loads its document again: the
+  // geometry below is read out of those documents, so they are waited for (bounded) rather than assumed
+  for (let i = 0; i < 40; i++) {
+    const loading = await page.evaluate(() => [...document.querySelectorAll('object[type="image/svg+xml"]')].filter(o => !o.contentDocument?.querySelector('svg')).length)
+    if (loading === 0) break
+    await sleep(500)
+  }
 
   const svg = await page.evaluate(() => {
     const objs = [...document.querySelectorAll('object[type="image/svg+xml"]')]
@@ -801,7 +822,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   })
   check('SVG figures: every nested document reachable (§15.5)',
     svg.objects > 0 && svg.reachable === svg.objects, `${svg.reachable}/${svg.objects} readable`)
-  check('SVG figures: the overlay is inserted as the <object>\'s next sibling, translated without the helper too',
+  check('SVG figures: the overlay is inserted as the <object>\'s next sibling',
     svg.overlays > 0 && svg.sibling === svg.overlays, `${svg.overlays} overlays, all next siblings`)
   check('SVG figures: the overlay\'s rectangle coincides with the figure (anchor positioning holds for <object>)',
     svg.overlays > 0 && svg.aligned === svg.overlays, `${svg.aligned}/${svg.overlays} aligned`)
@@ -908,7 +929,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
 {
   const stall = await stallEndpoint(GOOGLE)
   const page = await context.newPage()
-  await page.goto(`https://arxiv.org/html/${PAPER2}#axt-translate`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`https://arxiv.org/html/${PAPER2}#readarxiv`, { waitUntil: 'domcontentloaded' })
   // The queue must really hold work not yet sent; only then is “will it still send requests” after closing a question at all; otherwise the assertion idles
   // (when this was first written the first screen happened to be all cached, only 2 requests went out, and nothing was measured)
   const q = await fillQueue(page, stall)
@@ -928,7 +949,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
 {
   const stall = await stallEndpoint(GOOGLE)
   const page = await context.newPage()
-  await page.goto(`https://arxiv.org/html/${PAPER3}#axt-translate`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`https://arxiv.org/html/${PAPER3}#readarxiv`, { waitUntil: 'domcontentloaded' })
   const q = await fillQueue(page, stall)
   const before = stall.held.length
   // Jump to a non-arXiv page: the content script is gone and will never send a new scope again
@@ -1022,17 +1043,24 @@ check('the settings page: after deleting the custom prompt the default is chosen
     }
   })
   check('the abstract page: the bilingual entry is inserted after arXiv\'s HTML link, exactly one (#146)',
-    link.exists && link.afterHtmlLink && link.inSameList && link.count === 1 && /\/html\/.*#axt-translate$/.test(link.href ?? ''),
+    link.exists && link.afterHtmlLink && link.inSameList && link.count === 1 && /\/html\/.*#readarxiv$/.test(link.href ?? ''),
     `“${link.text}” → ${link.href}; right after the HTML link ${link.afterHtmlLink}, same list ${link.inSameList}, ${link.count} in all`)
 
+  // The translation opens in a new tab by default (config `reading.openIn`, v16), and the abstract page stays where
+  // it was: the new tab is the one watched, its console from the first line on
+  context.once('page', opened => opened.on('console', m => { const t = m.text(); if (t.includes('[axt]')) logs.push({ t: Date.now(), text: t }) }))
+  const arriving = context.waitForEvent('page', { timeout: 30_000 })
   await page.click('.axt-abs-link')
-  await page.waitForURL(/\/html\/.*#axt-translate/, { timeout: 30_000 })
+  const paper = await arriving
+  await paper.waitForURL(/\/html\/.*#readarxiv/, { timeout: 30_000 })
   const idle = idleOf(await waitForLog(logs, IDLE, 120_000))
-  const rendered = await page.evaluate(() => document.querySelectorAll('.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)').length)
+  const rendered = await paper.evaluate(() => document.querySelectorAll('.axt-t:not(.axt-pending, .axt-error, .axt-mirror, .axt-split)').length)
+  const stayed = /\/abs\//.test(page.url())
+  await paper.close()
   await page.close()
-  check('the abstract page: clicked through, it is translating without touching the popup (#146)',
-    !!idle && idle.requested > 0 && rendered > 0,
-    `${idle?.text ?? '(no idle)'}; ${rendered} translation nodes on the page`)
+  check('the abstract page: clicked through, the paper opens in a new tab already translating, without touching the popup, and the abstract page stays (#146, S-O-49b)',
+    !!idle && idle.requested > 0 && rendered > 0 && stayed,
+    `${idle?.text ?? '(no idle)'}; ${rendered} translation nodes on the page; the abstract page still open: ${stayed}`)
 }
 
 // ── An in-page jump is not navigating away (the reader's 2026-09-09 report: clicking a citation jumps to the references, and that whole block fails) ──
@@ -1211,7 +1239,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   const popup = await context.newPage()
   await popup.goto(`chrome-extension://${extId}/popup.html`)
   await page.bringToFront()
-  // openPaper starts translating of itself with #axt-translate; only the mode is switched here — the switch changes the attribute on <html> only, no retranslation
+  // openPaper starts translating of itself with #readarxiv; only the mode is switched here — the switch changes the attribute on <html> only, no retranslation
   await popup.getByRole('button', { name: '仅译文', exact: true }).waitFor({ timeout: 10_000 })
   await popup.getByRole('button', { name: '仅译文', exact: true }).click()
   await sleep(500)
@@ -1444,133 +1472,6 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await chooseUiLanguage(options, 'Interface language', '简体中文')
   const back = await options.locator('nav').innerText()
   check('switched back to Chinese, the settings page follows back too', /翻译服务/.test(back), back.replace(/\n+/g, ' ').slice(0, 40))
-}
-
-// ── The recognition helper's guided install (DESIGN §15.4, issue #102) and the permission step before it (DESIGN §15.3) ───────────────
-// macOS only: on other platforms the install script exits at once, and the card is a single “macOS only” line.
-// `nativeMessaging` is an optional permission: Playwright's fresh profile has not granted it, so in the main context the card is the **permission** step
-// (S-P-86b/c, S-O-86), and Chrome's permission prompt is a native dialog that cannot be clicked. The guide itself (two steps, the wait) runs in a second context:
-// that build copy writes the permission back into the manifest, pre-granted (ext-copy.mjs); and the installed host manifest is not in that profile either,
-// so there it is **necessarily** “not installed”
-if (process.platform === 'darwin') {
-  const paper = await openPaper(PAPER, GOOGLE)
-  const popup = await context.newPage()
-  await popup.goto(`chrome-extension://${extId}/popup.html`)
-  await paper.page.bringToFront()
-  await popup.waitForTimeout(800)
-
-  // The earlier cases switched image translation off, and this card appears only with it on — switch it on first (and prove in passing that the card follows the switch)
-  const imagesSwitch = popup.getByRole('switch', { name: '图片翻译', exact: true })
-  if ((await imagesSwitch.getAttribute('aria-checked')) !== 'true') {
-    await imagesSwitch.click()
-    await popup.waitForTimeout(400)
-  }
-  const allow = popup.getByRole('button', { name: '允许', exact: true })
-  const shown = (await popup.locator('main').innerText()).replace(/\n+/g, ' | ')
-  check('permission: with the permission not granted the popup shows one line and “Allow”, and no install guide yet (S-P-86b/c)',
-    await allow.isVisible() && shown.includes('图片翻译需要允许扩展与识别助手通信') && !shown.includes('图片翻译需要安装识别助手'), shown.slice(0, 120))
-  await popup.screenshot({ path: `${SHOTS}/helper-permission.png` })
-  await popup.close()
-
-  const optionsPage = await openOptions(context, extId)
-  // The helper state arrives asynchronously (the page asks the background on mount): wait for the button, do not sample it
-  const allowOnOptions = await optionsPage.getByRole('button', { name: '允许', exact: true }).waitFor({ timeout: 5_000 }).then(() => true, () => false)
-  check('permission: the image translation section of the settings page offers the “Allow” button (S-O-86)', allowOnOptions, allowOnOptions ? '' : (await optionsPage.getByText(/识别助手/).first().textContent().catch(() => '')) ?? '')
-  await optionsPage.close()
-  await paper.page.close()
-
-  // ── The second context: the copy with the permission pre-granted → not installed → the two-step guide ──
-  const grantedExt = copyWithGrants(EXT, `${HERE}.ext-granted`, { permissions: ['nativeMessaging'] })
-  const GRANTED_PROFILE = `${HERE}.profile-granted`
-  rmSync(GRANTED_PROFILE, { recursive: true, force: true })
-  const granted = await chromium.launchPersistentContext(GRANTED_PROFILE, {
-    channel: 'chromium',
-    headless: !process.env.AXT_HEADED,
-    args: [`--disable-extensions-except=${grantedExt}`, `--load-extension=${grantedExt}`],
-    viewport: { width: 1440, height: 900 },
-  })
-  granted.setDefaultNavigationTimeout(90_000)
-  let [grantedWorker] = granted.serviceWorkers()
-  if (!grantedWorker) grantedWorker = await granted.waitForEvent('serviceworker')
-  const grantedId = grantedWorker.url().split('/')[2]
-  // The popup has to stand beside a paper (it looks at the active tab); this page is only opened, not translated
-  const paperTab = await granted.newPage()
-  await paperTab.goto(`https://arxiv.org/html/${PAPER}`, { waitUntil: 'domcontentloaded' })
-
-  const guide = await granted.newPage()
-  await guide.goto(`chrome-extension://${grantedId}/popup.html`)
-  await paperTab.bringToFront()
-  await guide.waitForTimeout(800)
-  const guideSwitch = guide.getByRole('switch', { name: '图片翻译', exact: true })
-  if ((await guideSwitch.getAttribute('aria-checked')) !== 'true') {
-    await guideSwitch.click()
-    await guide.waitForTimeout(400)
-  }
-  const install = guide.getByRole('button', { name: '安装', exact: true })
-  const card = (await guide.locator('main').innerText()).replace(/\n+/g, ' | ')
-  check('the guide: with the permission granted and no helper the popup shows one hint line and “Install” only', await install.isVisible() && card.includes('图片翻译需要安装识别助手'), card.slice(0, 120))
-
-  await install.click()
-  await guide.waitForTimeout(300)
-  const opened = (await guide.locator('main').innerText()).replace(/\n+/g, ' ')
-  // Two steps, no third: the old “I have installed it” button is gone
-  check('the guide: unfolds in place into two steps, without “I have installed it”',
-    /打开「终端」/.test(opened) && /在终端中执行以下命令/.test(opened) && !/我已经装好了/.test(opened),
-    opened.slice(0, 70))
-
-  const command = guide.locator('button[title]').filter({ hasText: 'curl -fsSL' })
-  check('the guide: the command block carries this extension\'s id', (await command.innerText()).includes(grantedId), grantedId)
-
-  await command.click()
-  await guide.waitForTimeout(500)
-  check('the guide: after the copy it says “no need to come back here” rather than asking the reader to return and confirm',
-    (await guide.locator('main').innerText()).includes('执行完成后自动生效，无需返回此处'), '')
-
-  // The crucial one: the wait lives in the background, and a popup closed and reopened picks it up (§15.4)
-  await guide.goto('about:blank')
-  await guide.goto(`chrome-extension://${grantedId}/popup.html`)
-  await paperTab.bringToFront()
-  await guide.waitForTimeout(800)
-  await guide.getByRole('button', { name: '安装', exact: true }).click()
-  await guide.waitForTimeout(400)
-  check('the guide: after reopening the popup the same wait is still there (the state is in the background, not the component)',
-    (await guide.locator('main').innerText()).includes('执行完成后自动生效'), '')
-
-  await guide.screenshot({ path: `${SHOTS}/helper-onboarding.png` })
-
-  // The service worker is reclaimed after 30 seconds idle, and **what wakes it is often exactly the popup's query**:
-  // the query must wait for `resume()` to finish reading storage before answering, or it gets the unrestored null (Codex on #166).
-  // With the worker not reclaimed this one takes the in-memory path and should pass just the same — neither path may lose the wait
-  await guide.waitForTimeout(35_000)
-  await guide.goto('about:blank')
-  await guide.goto(`chrome-extension://${grantedId}/popup.html`)
-  await paperTab.bringToFront()
-  await guide.waitForTimeout(1_000)
-  await guide.getByRole('button', { name: '安装', exact: true }).click()
-  await guide.waitForTimeout(400)
-  check('the guide: after the service worker is reclaimed the wait is still picked up',
-    (await guide.locator('main').innerText()).includes('执行完成后自动生效'), '')
-  await guide.close()
-
-  // With the clipboard blocked the path taken is “select the command and copy it by hand” — the reader does, installs,
-  // and the detection must be running already, or the figures waiting on the page wait forever (the confirm button is gone)
-  const denied = await granted.newPage()
-  await denied.addInitScript(() => {
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText: () => Promise.reject(new Error('denied')) }, configurable: true })
-  })
-  await denied.goto(`chrome-extension://${grantedId}/popup.html`)
-  await paperTab.bringToFront()
-  await denied.waitForTimeout(900)
-  await denied.getByRole('button', { name: '安装', exact: true }).click()
-  await denied.waitForTimeout(300)
-  await denied.locator('button[title]').filter({ hasText: 'curl -fsSL' }).click()
-  await denied.waitForTimeout(600)
-  const fallback = (await denied.locator('main').innerText()).replace(/\n+/g, ' | ')
-  check('the guide: when the copy fails it offers the manual way and starts the detection all the same',
-    fallback.includes('无法复制') && fallback.includes('执行完成后自动生效'), fallback.slice(-60))
-  await denied.close()
-
-  await granted.close()
 }
 
 await context.close()
