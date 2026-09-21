@@ -461,6 +461,42 @@ describe('startImageTranslation', () => {
     expect(rendered).toHaveLength(1)
   })
 
+  it('a new round that fails — the recogniser, the engine — takes the previous round\'s overlay off: after a change of target language it is the wrong language\'s (Devin on #281)', async () => {
+    const first = setup()
+    await first.run.translate(first.targets)
+    expect(first.doc.querySelector(`.${IMG_CLASS}`)).not.toBeNull()
+    const rendered: ImageTarget[][] = []
+    const offline = async () => ({ ok: false as const, error: { kind: 'network' as const, message: 'offline', isolatable: false } })
+    const second = startImageTranslation({ ...firstOptions(first), translate: offline, onRendered: ts => { rendered.push(ts) } })
+    await second.translate(first.targets)
+    expect(second.failed()).toHaveLength(1)
+    // As a failed block shows no older translation (§7.6); side's copy holds one too, so the tidy layer is told
+    expect(first.doc.querySelector(`.${IMG_CLASS}`)).toBeNull()
+    expect(rendered).toEqual([first.targets])
+    // The recogniser failing is the same
+    const third = startImageTranslation({ ...firstOptions(first), onRendered: ts => { rendered.push(ts) } })
+    await third.translate(first.targets)
+    expect(first.doc.querySelector(`.${IMG_CLASS}`)).not.toBeNull()
+    const fourth = startImageTranslation({ ...firstOptions(first), ocr: async () => ({ ok: false as const, error: { kind: 'timeout' as const, message: 'no answer' } }) })
+    await fourth.translate(first.targets)
+    expect(first.doc.querySelector(`.${IMG_CLASS}`)).toBeNull()
+  })
+
+  it('and what a failing round did draw stays: the labels that came back with the failure are this round\'s', async () => {
+    const first = setup()
+    await first.run.translate(first.targets)
+    const partly = async (call: { request: { segments: { id: string; text: string }[] } }) => ({
+      ok: false as const,
+      error: { kind: 'network' as const, message: 'offline', isolatable: false },
+      partial: call.request.segments.slice(0, 1).map(s => ({ id: s.id, text: `ja:${s.text}` })),
+    })
+    const second = startImageTranslation({ ...firstOptions(first), translate: partly })
+    await second.translate(first.targets)
+    const labels = Array.from(first.doc.querySelectorAll(`.${IMG_CLASS} span`), span => span.textContent)
+    expect(labels).toHaveLength(1)
+    expect(labels[0]).toMatch(/^ja:/)
+  })
+
   it('an animation (frames > 1) gets no translation overlay and is treated as done, the old overlay removed too (the helper recognised frame 0 only, Codex on #89)', async () => {
     const first = setup()
     await first.run.translate(first.targets)
