@@ -16,6 +16,8 @@ describe('paperIdFromPdfPath', () => {
       ['/pdf/hep-th/9711200', 'hep-th/9711200'],
       ['/pdf/hep-th/9711200v3', 'hep-th/9711200v3'],
       ['/pdf/math.GT/0309136', 'math.GT/0309136'],
+      // A subject class is not always two capitals: arXiv serves this PDF at this very path (measured 2026-09-21)
+      ['/pdf/cond-mat.mes-hall/0601001', 'cond-mat.mes-hall/0601001'],
     ]
     for (const [path, id] of cases) expect([path, paperIdFromPdfPath(path)]).toEqual([path, id])
   })

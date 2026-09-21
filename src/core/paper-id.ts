@@ -3,8 +3,12 @@
 
 /** New style since 2007, five digits since 2015 (`1501.00001`), optionally versioned */
 const NEW_STYLE = /^\d{4}\.\d{4,5}(v\d+)?$/
-/** Old style, with its optional subject class: `hep-th/9711200`, `math.GT/0309136` */
-const OLD_STYLE = /^[a-z-]+(\.[A-Z]{2})?\/\d{7}(v\d+)?$/
+/**
+ * Old style, with its optional subject class: `hep-th/9711200`, `math.GT/0309136`, `cond-mat.mes-hall/0601001` — a
+ * class is not always two capitals, and arXiv serves a PDF under any of these paths (Codex on #288). The same shape
+ * the full text's parser takes (core/pipeline/paper.ts)
+ */
+const OLD_STYLE = /^[a-z-]+(\.[A-Za-z-]+)?\/\d{7}(v\d+)?$/
 
 /**
  * The id under `/<section>/…`, or null when the path is not a paper's.
