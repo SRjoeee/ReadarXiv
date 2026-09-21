@@ -92,6 +92,11 @@ export interface AxtMessages {
   'axt:entry-settings': { request: Record<never, never>; response: EntrySettings }
   /** background → content: the reader changed this tab's zoom (`tabs.onZoomChange`) */
   'axt:zoom-changed': { request: { zoom: number }; response: undefined }
+  /**
+   * content → background: this tab holds a page the extension works on — the abstract, the PDF or the full text.
+   * The toolbar button is grey everywhere else and lights for this tab (UI.md §5.1)
+   */
+  'axt:page-usable': { request: Record<never, never>; response: undefined }
   /** content → background: open the settings page. A content script cannot call `openOptionsPage` itself */
   'axt:open-settings': { request: Record<never, never>; response: { opened: boolean } }
   /**

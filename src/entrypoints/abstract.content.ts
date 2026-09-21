@@ -5,6 +5,7 @@
 import { LOCALES, pickLocale } from '@/locales'
 import { htmlHrefOn, injectBilingualLink, relabelBilingualLink, retargetBilingualLink } from '@/core/abstract/link'
 import { paperIdFrom } from '@/core/paper-id'
+import { announceUsablePage } from '@/shared/action-icon'
 import { answerEntryMessages } from '@/shared/entry-page'
 import { watchEntrySettings } from '@/shared/entry-settings'
 import { installFloatingButton } from '@/shared/floating'
@@ -13,6 +14,7 @@ export default defineContentScript({
   matches: ['https://arxiv.org/abs/*'],
   runAt: 'document_idle',
   async main() {
+    announceUsablePage()
     // The interface language and where the translation opens come from the background, validated
     // (shared/entry-settings.ts): this script loads no schema and reads no raw stored value
     const ui = browser.i18n?.getUILanguage?.()

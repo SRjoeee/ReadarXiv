@@ -33,6 +33,8 @@ export interface HandlerDeps {
   /** The tab's zoom, the browser's to know; rejects for a tab that is gone */
   zoomOf(tabId: number): Promise<number>
   openSettings(): Promise<void>
+  /** Light the toolbar button for one tab; rejects for a tab that is gone */
+  lightAction(tabId: number): Promise<void>
   /** The environment a reader cannot be expected to report: the build, the browser, the platform */
   environment(): Promise<Omit<DiagnosticsExport, 'entries' | 'exportedAt'>>
 }
@@ -98,6 +100,13 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
       deps.getFloatingEntry(),
       sender.tabId === undefined ? 1 : deps.zoomOf(sender.tabId).catch(() => 1),
     ]).then(([config, floating, zoom]) => ({ uiLanguage: config.uiLanguage, openIn: config.reading.openIn, zoom, floating })),
+
+    // The toolbar button lights for the tab the page is in (UI.md §5.1). Nothing is answered: the page does not wait
+    // on it, and a tab closed meanwhile has no button to light
+    'axt:page-usable': (_message, sender) => {
+      if (sender.tabId !== undefined) void deps.lightAction(sender.tabId).catch(() => undefined)
+      return undefined
+    },
 
     // A content script cannot open the settings page itself; `openOptionsPage` brings an open one to the front
     'axt:open-settings': () => deps.openSettings().then(() => ({ opened: true })).catch(() => ({ opened: false })),

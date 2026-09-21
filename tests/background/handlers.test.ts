@@ -24,6 +24,7 @@ function harness(over: Partial<HandlerDeps> = {}) {
     patchFloatingEntry: vi.fn(),
     zoomOf: vi.fn(async () => 1),
     openSettings: vi.fn(async () => undefined),
+    lightAction: vi.fn(async () => undefined),
     environment: vi.fn(),
     ...over,
   } as unknown as HandlerDeps
@@ -127,6 +128,19 @@ describe('the background\'s handlers', () => {
     await expect(send({ type: 'axt:open-settings' })).resolves.toEqual({ opened: false })
   })
 
+  it('axt:page-usable lights the toolbar button for the sender\'s tab, answers nothing, and survives a tab gone meanwhile', async () => {
+    const lightAction = vi.fn(async () => undefined)
+    const { send } = harness({ lightAction })
+    expect(send({ type: 'axt:page-usable' }, { tabId: 7 })).toBeUndefined()
+    expect(lightAction).toHaveBeenCalledWith(7)
+    // From an extension page there is no tab, and no button of its own to light
+    expect(send({ type: 'axt:page-usable' }, { tabId: undefined })).toBeUndefined()
+    expect(lightAction).toHaveBeenCalledTimes(1)
+    lightAction.mockRejectedValueOnce(new Error('No tab with id: 7'))
+    expect(send({ type: 'axt:page-usable' }, { tabId: 7 })).toBeUndefined()
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+
   it('axt:diag records a page\'s line and answers nothing; a line of the wrong shape, or claiming to be the background\'s, is dropped', () => {
     const { send, lines } = harness()
     expect(send({ type: 'axt:diag', src: 'content', line: '[axt] a line' })).toBeUndefined()
@@ -175,7 +189,7 @@ describe('the background\'s handlers', () => {
     const { deps } = harness()
     expect(Object.keys(createHandlers(deps)).sort()).toEqual([
       'axt:cache-clear', 'axt:cache-stats', 'axt:cancel-scope', 'axt:diag', 'axt:diag-export', 'axt:engine-ready',
-      'axt:entry-settings', 'axt:ocr', 'axt:open-settings',
+      'axt:entry-settings', 'axt:ocr', 'axt:open-settings', 'axt:page-usable',
       'axt:provider-status', 'axt:set-floating-entry', 'axt:toggle', 'axt:translate',
     ])
   })
