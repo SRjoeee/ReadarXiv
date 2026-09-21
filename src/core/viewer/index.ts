@@ -198,6 +198,9 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     name(zoomIn, words.zoomIn)
     name(zoomOut, words.zoomOut)
     name(close, words.close)
+    // A dialog's name is the author's to give — its buttons and the figure do not name it (Codex on #279): it is
+    // called what the control that opens it is called
+    dialog.setAttribute('aria-label', words.open)
   }
   bar.append(zoomIn, zoomOut, close)
   dialog.append(stage, bar)
@@ -313,11 +316,23 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
       place()
     })
   }
+  // Out of the window straight from a figure, the pointer enters nothing, so nothing says it has gone (measured:
+  // the control stayed over the paper; Devin on #279). The document's own leaving is the word of it
+  const onLeave = (): void => {
+    if (dialog.open) return
+    clearTimeout(leaving)
+    leaving = setTimeout(hide, LEAVE_GRACE_MS)
+  }
   doc.addEventListener('pointerover', onOver, { passive: true })
+  doc.documentElement.addEventListener('pointerleave', onLeave, { passive: true })
   view.addEventListener('scroll', onScroll, { passive: true, capture: true })
 
   // ── The dialog: a copy of the figure, fitted, zoomed about a point, dragged ──
   let content: HTMLElement | null = null
+  // The copy stands in the document, its translations under the marks the page's sheets dress them by — so a sweep
+  // of the document takes them too: restoring the page under the open dialog left a picture with no labels at all
+  // (measured; Codex on #279). What the dialog showed is then gone, as it is from the page, and the dialog closes
+  const swept = new view.MutationObserver(() => dialog.close())
   let natural = { width: 1, height: 1 }
   let fit = 1
   let zoom = 1
@@ -358,6 +373,7 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     natural = { width: copy.width, height: copy.height }
     content.style.cssText += 'position:absolute;left:0;top:0;transform-origin:0 0;'
     host.replaceChildren(content)
+    swept.observe(host, { childList: true, subtree: true })
     doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, lock]
     // The control stays where it is under the dialog: closing hands the focus back to it — and with the pointer off
     // the figure by then, the control fades and the focus falls to the body
@@ -398,6 +414,7 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   // The backdrop is the dialog's own box outside its content: a press that lands on the dialog itself
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close() })
   dialog.addEventListener('close', () => {
+    swept.disconnect()
     doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter(sheet => sheet !== lock)
     host.replaceChildren()
     content = null
@@ -431,6 +448,7 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   return {
     remove() {
       doc.removeEventListener('pointerover', onOver)
+      doc.documentElement.removeEventListener('pointerleave', onLeave)
       follow(null)
       view.removeEventListener('scroll', onScroll, { capture: true })
       clearTimeout(leaving)

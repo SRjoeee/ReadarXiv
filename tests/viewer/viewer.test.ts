@@ -271,6 +271,54 @@ describe('the dialog', () => {
     expect(frame.style.transform).toMatch(/^translate\(-?[\d.]+px, -?[\d.]+px\)$/)
   })
 
+  it('out of the window straight from a figure the pointer enters nothing: the document\'s own leaving takes the control away, and an open dialog keeps it (Devin on #279)', async () => {
+    const { control, dialog } = page(PICTURE)
+    const svg = document.querySelector('svg')!
+    place(svg, rect(100, 100, 400, 300))
+    over(svg)
+    expect(control.hasAttribute('data-axt-shown')).toBe(true)
+    const leave = () => document.documentElement.dispatchEvent(new PointerEvent('pointerleave'))
+    leave()
+    await new Promise(resolve => setTimeout(resolve, 200))
+    expect(control.hasAttribute('data-axt-shown')).toBe(false)
+    // Under the open dialog the control stays where it is: closing hands the focus back to it
+    over(svg)
+    control.click()
+    leave()
+    await new Promise(resolve => setTimeout(resolve, 200))
+    expect(control.hasAttribute('data-axt-shown')).toBe(true)
+    dialog.close()
+  })
+
+  it('the dialog is named, as the control that opens it is: its buttons and the figure do not name it (Codex on #279)', () => {
+    const { control, dialog } = page(PICTURE)
+    const svg = document.querySelector('svg')!
+    place(svg, rect(100, 100, 400, 300))
+    over(svg)
+    control.click()
+    expect(dialog.getAttribute('aria-label')).toBe('View larger')
+  })
+
+  it('a sweep of the document under the open dialog — restoring the page removes every translation, the copy\'s among them — closes it, rather than leave a picture with no labels (Codex on #279)', async () => {
+    const { control, dialog, host } = page(PICTURE)
+    const svg = document.querySelector('svg')!
+    place(svg, rect(100, 100, 400, 300))
+    hide(document.getElementById('L1')!)
+    over(svg)
+    control.click()
+    expect(Array.from(host.querySelectorAll('.ltx_foreignobject_content'), el => el.textContent)).toEqual(['expert partage'])
+    for (const ours of Array.from(document.querySelectorAll('.axt-t'))) ours.remove()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(dialog.open).toBe(false)
+    expect(host.children).toHaveLength(0)
+    // Opened again it is whole, and stays open: the dialog's own emptying is not a sweep
+    over(document.querySelector('article')!)
+    over(svg)
+    control.click()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(dialog.open).toBe(true)
+  })
+
   it('removed, it takes its host away and no longer answers the pointer', () => {
     const { control } = page(PICTURE)
     const svg = document.querySelector('svg')!
