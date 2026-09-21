@@ -6,6 +6,7 @@
 //
 // Guarded are §15.2's structural promises: the overlay is the image's next sibling and its rectangle coincides with the image (anchor positioning); under side the overlay is only inside the split copy and
 // coincides with the copy's image; visible under only; with the mode gate closed an image entering the viewport makes no request and translates once switched to an open mode; restoring the original leaves not one node or attribute.
+// And two papers' own cases: a graphic that stands in no figure (2609.20818v1), and SVG figures whose <object> has other proportions than the drawing (1706.03762v7).
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
@@ -276,6 +277,52 @@ await popup2.close()
     state.mode === 'stack' && state.original?.shown && state.original.overlay === true && state.copy?.shown !== true,
     JSON.stringify(state))
   await loose.close()
+}
+
+// ── An SVG figure in a box of other proportions: the Transformer paper's attention figures ─────────────────────────────
+// arXiv sizes the <object> 476 × 254 and the drawing's viewBox is 319 × 217: the browser fits the drawing whole and
+// centres it, with air at both sides. Laid over the whole box, every label stood off its word — the first three of
+// Figure 4 lay on nothing at all (reported 2026-09-21). The glyphs' own rectangles are the truth a label is held to
+{
+  const fitted = await context.newPage()
+  const said = []
+  fitted.on('console', m => { const text = m.text(); if (/\[axt\] images/.test(text)) said.push(text) })
+  await fitted.goto('https://arxiv.org/html/1706.03762v7#readarxiv', { waitUntil: 'domcontentloaded' })
+  const FITTED = () => {
+    const object = document.getElementById('Sx1.F4.g1')
+    const overlay = object?.nextElementSibling?.classList.contains('axt-img') ? object.nextElementSibling : null
+    const svg = object?.contentDocument?.documentElement
+    if (!object || !overlay || !svg || overlay.getClientRects().length === 0) return { waiting: `object ${!!object}, overlay ${!!overlay}, document ${!!svg}, showing ${!!overlay && overlay.getClientRects().length > 0}, mode ${document.documentElement.getAttribute('data-axt-mode')}, next ${object?.nextElementSibling?.className ?? 'none'}` }
+    const base = object.getBoundingClientRect()
+    const glyphs = Array.from(svg.querySelectorAll('use[data-text]'), use => { const r = use.getBoundingClientRect(); return { text: use.getAttribute('data-text'), x: base.x + r.x + r.width / 2, y: base.y + r.y + r.height / 2 } })
+    const letters = text => Array.from(text.replace(/\s/g, '')).sort().join('')
+    const labels = Array.from(overlay.children, span => {
+      const r = span.getBoundingClientRect()
+      const held = glyphs.filter(g => g.x >= r.left - 1 && g.x <= r.right + 1 && g.y >= r.top - 1 && g.y <= r.bottom + 1).map(g => g.text).join('')
+      return { source: span.title, held, on: letters(held) === letters(span.title), blur: getComputedStyle(span).backdropFilter }
+    })
+    const layer = getComputedStyle(overlay, '::before')
+    return { box: [base.width, base.height].map(Math.round), overlay: [overlay.getBoundingClientRect().width, overlay.getBoundingClientRect().height].map(Math.round), labels, layer: { blur: layer.backdropFilter, masked: layer.maskImage.startsWith('url("data:image/svg+xml') } }
+  }
+  let state = null
+  let waiting = 'the page never answered'
+  for (let i = 0; i < 120 && !state; i++) {
+    await fitted.evaluate(() => document.getElementById('Sx1.F4.g1')?.scrollIntoView({ block: 'center' }))
+    await sleep(500)
+    const seen = await fitted.evaluate(FITTED)
+    if (seen.waiting) waiting = seen.waiting
+    else state = seen
+  }
+  const off = state?.labels.filter(label => !label.on) ?? []
+  check('an SVG figure in a box of other proportions: the overlay takes the drawing\'s rectangle, and every label holds exactly the glyphs of its own word',
+    // However many the engine gave back — a batch of a dense figure's labels fails now and then, and the rest are drawn
+    // (measured: 25 of 43 in one run of four) — each of them is held to its word
+    !!state && state.labels.length >= 1 && off.length === 0 && state.overlay[0] < state.box[0],
+    state ? `box ${state.box.join('×')}, overlay ${state.overlay.join('×')}, ${state.labels.length} labels, off their word: ${off.length}${off.length ? ` (${off.slice(0, 4).map(label => `${label.source} holds "${label.held}"`).join('; ')})` : ''}` : `no overlay on Figure 4: ${waiting}; ${said.slice(-2).join(' | ') || 'the image run said nothing'}`)
+  check('one blur a figure, cut to the labels by a mask, and none a label',
+    !!state && state.layer.blur === 'blur(15px)' && state.layer.masked && state.labels.every(label => label.blur === 'none'),
+    state ? JSON.stringify(state.layer) : 'no overlay')
+  await fitted.close()
 }
 
 await context.close()
