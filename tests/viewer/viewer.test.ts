@@ -226,9 +226,10 @@ describe('the dialog', () => {
     over(svg)
     control.click()
     const frame = host.firstElementChild as HTMLElement
-    const press = (key: string, init: KeyboardEventInit = {}) => {
-      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init })
-      dialog.dispatchEvent(event)
+    // From wherever the focus is: a key event is composed, and crosses the shadow root on its way up
+    const press = (key: string, init: KeyboardEventInit = {}, from: EventTarget = dialog) => {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, composed: true, cancelable: true, ...init })
+      from.dispatchEvent(event)
       return event.defaultPrevented
     }
     const before = frame.style.transform
@@ -239,6 +240,14 @@ describe('the dialog', () => {
     expect(Number.parseFloat(frame.style.zoom) / zoom).toBeCloseTo(1.2, 5)
     expect(press('a')).toBe(false)
     expect(press('ArrowDown', { metaKey: true })).toBe(false)
+    // A press on the figure takes the focus off the dialog's buttons — on Chrome 131 onto the body, where a listener
+    // on the dialog never heard the keys again (measured; Codex on #279)
+    const zoomed = Number.parseFloat(frame.style.zoom)
+    expect(press('+', {}, document.body)).toBe(true)
+    expect(Number.parseFloat(frame.style.zoom) / zoomed).toBeCloseTo(1.2, 5)
+    // Closed, the keys are the page's again
+    dialog.close()
+    expect(press('ArrowDown', {}, document.body)).toBe(false)
   })
 
   it('the wheel zooms about the pointer in proportion to the distance scrolled — a trackpad\'s run of small deltas no faster than one long one — and a pinch keeps to the fingers', () => {
@@ -317,6 +326,57 @@ describe('the dialog', () => {
     control.click()
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(dialog.open).toBe(true)
+  })
+
+  it('the page changes what it shows by its marks on <html> — another mode, figures no longer translated in it — and the dialog closes: the sheet\'s rules would hide the one label the copy kept (Codex on #279)', async () => {
+    const { control, dialog } = page(PICTURE)
+    const svg = document.querySelector('svg')!
+    place(svg, rect(100, 100, 400, 300))
+    hide(document.getElementById('L1')!)
+    over(svg)
+    control.click()
+    // Not any attribute of <html>: arXiv's own theme switch writes there too
+    document.documentElement.setAttribute('data-theme', 'dark')
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(dialog.open).toBe(true)
+    document.documentElement.setAttribute('data-axt-mode', 'only')
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(dialog.open).toBe(false)
+    // Closed, it no longer watches: a later switch opens nothing and closes nothing
+    over(document.querySelector('article')!)
+    over(svg)
+    control.click()
+    expect(dialog.open).toBe(true)
+    dialog.close()
+    document.documentElement.removeAttribute('data-axt-mode')
+    document.documentElement.removeAttribute('data-theme')
+  })
+
+  it('the copy is one for reading, as every clone of the paper\'s nodes is: no behaviour of the original\'s, no script URL — and the translation it kept stays (Devin on #279)', () => {
+    const { control, host } = page(`<figure class="ltx_figure" id="F1"><svg class="ltx_picture" id="F1.pic" onclick="window.__ran = true"><a href="javascript:void(0)"><foreignObject><span class="ltx_foreignobject_container">
+      <span class="ltx_foreignobject_content" id="L1" data-axt-id="L1">Shared Expert</span><span class="ltx_foreignobject_content axt-t" data-axt-for="L1">expert partage</span></span></foreignObject></a></svg></figure>`)
+    const svg = document.querySelector('svg')!
+    place(svg, rect(100, 100, 400, 300))
+    hide(document.getElementById('L1')!)
+    over(svg)
+    control.click()
+    const copy = host.querySelector('svg')!
+    expect(copy.hasAttribute('onclick')).toBe(false)
+    expect(copy.querySelector('a')!.hasAttribute('href')).toBe(false)
+    expect(Array.from(host.querySelectorAll('.ltx_foreignobject_content'), el => el.textContent)).toEqual(['expert partage'])
+    // The paper's own node keeps what it had
+    expect(svg.getAttribute('onclick')).toBe('window.__ran = true')
+  })
+
+  it('a figure that takes no pointer is found in any copy side mode makes, a graphic\'s that stands in no figure included: its copy is a paragraph, not a figure (2609.20818v1)', async () => {
+    document.body.innerHTML = '<article class="ltx_document"><div class="ltx_para" id="p2"><img class="ltx_graphics" id="g"></div><div class="ltx_para axt-t axt-split"><img class="ltx_graphics" inert></div></article>'
+    viewer = installFigureViewer(document, { ...OPTIONS, around: '.ltx_figure, .axt-split', strings: () => WORDS })
+    const control = document.querySelector(`.${VIEWER_CLASS}`)!.shadowRoot!.querySelector('.axt-viewer-open') as HTMLButtonElement
+    const copy = document.querySelector('.axt-split')!
+    place(copy.querySelector('img')!, rect(800, 100, 400, 300))
+    // The pointer is over the copy's block — its image is inert and is never the target
+    copy.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, composed: true, clientX: 900, clientY: 200 }))
+    expect(control.hasAttribute('data-axt-shown')).toBe(true)
   })
 
   it('removed, it takes its host away and no longer answers the pointer', () => {

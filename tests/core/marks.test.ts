@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { IMG_CLASS, INJECTED_SELECTOR, T_CLASS, isInjected, stripInjected } from '@/core/marks'
+import { IMG_CLASS, INJECTED_SELECTOR, T_CLASS, isInjected, stripAttributes, stripInjected } from '@/core/marks'
 import { serialize } from '@/core/protector'
 
 // Injection marks (DESIGN §7.1 / §15.2): the image overlay is the third kind of injected node, without axt-t, yet extraction, serialisation and clone cleanup all have to recognise it
@@ -43,6 +43,19 @@ describe('isInjected / stripInjected', () => {
     // javascript: removed; the data:image that really occurs in papers kept
     expect(root.querySelector('#js, a[href^="javascript"]')).toBeNull()
     expect(root.querySelector('img')!.getAttribute('src')).toMatch(/^data:image\/png/)
+  })
+
+  it('the attribute half alone, for a copy that keeps some of our nodes on purpose — the figure viewer\'s keeps the translation that showed: ids, marks, behaviour and script URLs go, every node stays (Devin on #279)', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `<span id="L1" data-axt-id="L1" data-axt-state="translated" onclick="x()">Shared Expert</span><span class="${T_CLASS}" data-axt-for="L1"><a href="javascript:void(0)" data-keep="1">expert partage</a></span>`
+    root.id = 'outer'
+    stripAttributes(root)
+    expect(root.querySelector(`.${T_CLASS}`)?.textContent).toBe('expert partage')
+    expect(root.querySelectorAll('[id], [onclick], [href]')).toHaveLength(0)
+    expect(root.hasAttribute('id')).toBe(false)
+    expect(Array.from(root.querySelectorAll('*')).flatMap(el => el.getAttributeNames()).filter(name => name.startsWith('data-axt-'))).toEqual([])
+    // What is neither ours nor a behaviour stays
+    expect(root.querySelector('a')?.getAttribute('data-keep')).toBe('1')
   })
 
   it('a URL with control characters inside the scheme counts as script-running too (Codex on #163)', () => {

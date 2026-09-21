@@ -2,6 +2,7 @@ import { getConfig, setConfig, watchConfig } from '@/config/storage'
 import { startsTranslation } from '@/core/abstract/link'
 import { extract, paperContext } from '@/core/extractor'
 import { IMG_CLASS, T_CLASS } from '@/core/marks'
+import { SPLIT_CLASS } from '@/core/renderer/attrs'
 import { paperIdFromUrl } from '@/core/pipeline'
 import { FIGURE_SELECTORS } from '@/core/rules/latexml'
 import { createPageSession } from '@/core/session'
@@ -84,7 +85,8 @@ export default defineContentScript({
     installFigureViewer(document, {
       figures: FIGURE_SELECTORS.viewable,
       overlay: `.${IMG_CLASS}`,
-      around: FIGURE_SELECTORS.figure,
+      // A figure's block, or any copy side mode makes: the copy of a graphic that stands in no figure is one too (§7.2)
+      around: `${FIGURE_SELECTORS.figure}, .${SPLIT_CLASS}`,
       ours: `.${T_CLASS}`,
       strings: () => S.page.viewer,
     })

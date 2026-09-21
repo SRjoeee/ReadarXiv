@@ -17,6 +17,8 @@
 // paper's own node (DESIGN §7.1), and opening by a click anywhere on the figure, which an `<object>` swallows — a
 // click inside one goes to its own document — and half of arXiv's figures are one.
 
+import { AXT_ATTR_PREFIX, stripAttributes } from '@/core/marks'
+
 export interface FigureViewerStrings {
   open: string
   zoomIn: string
@@ -60,8 +62,6 @@ const MIN_ZOOM = 0.5
 const LEAVE_GRACE_MS = 120
 
 export const VIEWER_CLASS = 'axt-viewer'
-/** The marks the page's rules read on the paper's nodes (DESIGN §7.1) */
-const MARK_PREFIX = 'data-axt-'
 /**
  * The page held still under the dialog, or closing it would not return the reader where they were. A modal dialog
  * does not hold the document of itself, and a list of keys held in the dialog did not either: ⌘↓ and ⌥↓ passed it,
@@ -143,11 +143,10 @@ function copyOf(doc: Document, figure: Element, overlay: Element | null, ours: s
     // copy refers to by one is found there
     const was = Array.from(figure.querySelectorAll('*'))
     const twins = Array.from(copy.querySelectorAll('*'))
-    const hidden = twins.filter((_, i) => was[i]!.matches(`${ours}, [${MARK_PREFIX}id]`) && was[i]!.getClientRects().length === 0)
+    const hidden = twins.filter((_, i) => was[i]!.matches(`${ours}, [${AXT_ATTR_PREFIX}id]`) && was[i]!.getClientRects().length === 0)
     for (const twin of hidden) twin.remove()
-    for (const el of [copy, ...twins]) {
-      for (const name of el.getAttributeNames()) if (name === 'id' || name.startsWith(MARK_PREFIX)) el.removeAttribute(name)
-    }
+    // A copy for reading, as every other clone of the paper's nodes is: no id, no mark, no behaviour of the original's
+    stripAttributes(copy)
   }
   ;(copy as HTMLElement | SVGElement).style.cssText += ';display:block;width:100%;height:100%;max-width:none;max-height:none;margin:0;'
   frame.append(copy)
@@ -332,7 +331,13 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   // The copy stands in the document, its translations under the marks the page's sheets dress them by — so a sweep
   // of the document takes them too: restoring the page under the open dialog left a picture with no labels at all
   // (measured; Codex on #279). What the dialog showed is then gone, as it is from the page, and the dialog closes
-  const swept = new view.MutationObserver(() => dialog.close())
+  // The same when the page changes what it shows by the marks on <html> — the mode, the modes figures are translated
+  // in: the sheet's rules decide by them which of a label and its translation shows, the copy kept only the one that
+  // showed, and a switch to a mode figures are not translated in left the dialog open on a picture with no labels
+  // (measured on Chrome 131; Codex on #279)
+  const swept = new view.MutationObserver(records => {
+    if (records.some(record => record.type === 'childList' || record.attributeName?.startsWith(AXT_ATTR_PREFIX))) dialog.close()
+  })
   let natural = { width: 1, height: 1 }
   let fit = 1
   let zoom = 1
@@ -374,6 +379,8 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     content.style.cssText += 'position:absolute;left:0;top:0;transform-origin:0 0;'
     host.replaceChildren(content)
     swept.observe(host, { childList: true, subtree: true })
+    swept.observe(doc.documentElement, { attributes: true })
+    doc.addEventListener('keydown', onKey)
     doc.adoptedStyleSheets = [...doc.adoptedStyleSheets, lock]
     // The control stays where it is under the dialog: closing hands the focus back to it — and with the pointer off
     // the figure by then, the control fades and the focus falls to the body
@@ -405,16 +412,20 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     '=': () => zoomAbout(BUTTON_STEP, ...centre()),
     '-': () => zoomAbout(1 / BUTTON_STEP, ...centre()),
   }
-  dialog.addEventListener('keydown', event => {
+  // Heard on the document while the dialog is open, not on the dialog: a press on the figure takes the focus off the
+  // dialog's buttons, and on Chrome 131 onto the body — the keys then never reached a listener on the dialog, and + and
+  // the arrows stopped answering after the viewer's first use (measured; Codex on #279)
+  const onKey = (event: KeyboardEvent): void => {
     const act = KEYS[event.key]
     if (!act || event.altKey || event.ctrlKey || event.metaKey) return
     event.preventDefault()
     act()
-  })
+  }
   // The backdrop is the dialog's own box outside its content: a press that lands on the dialog itself
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close() })
   dialog.addEventListener('close', () => {
     swept.disconnect()
+    doc.removeEventListener('keydown', onKey)
     doc.adoptedStyleSheets = doc.adoptedStyleSheets.filter(sheet => sheet !== lock)
     host.replaceChildren()
     content = null
