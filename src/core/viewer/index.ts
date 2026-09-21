@@ -85,19 +85,19 @@ const SHEET = `
 button { all: unset; box-sizing: border-box; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; cursor: pointer; color: inherit; opacity: 0.7; transition: opacity 0.15s; }
 button:hover, button:focus-visible { opacity: 1; }
 button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
-.open { position: fixed; z-index: 2147483000; color: #1c1c1e; background: rgb(255 255 255 / 0.86); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.16); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.15s; }
-.open[data-shown] { opacity: 0.85; visibility: visible; pointer-events: auto; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s; }
-.open[data-shown]:hover, .open[data-shown]:focus-visible { opacity: 1; }
-dialog { box-sizing: border-box; width: 90vw; height: 90vh; max-width: none; max-height: none; margin: auto; padding: 0; border: 0; border-radius: 12px; overflow: hidden; color: var(--ink, #1c1c1e); background: var(--paper, #f4f3f2); box-shadow: 0 24px 64px rgb(0 0 0 / 0.35); }
+.axt-viewer-open { position: fixed; z-index: 2147483000; color: #1c1c1e; background: rgb(255 255 255 / 0.86); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.16); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.15s; }
+.axt-viewer-open[data-axt-shown] { opacity: 0.85; visibility: visible; pointer-events: auto; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s; }
+.axt-viewer-open[data-axt-shown]:hover, .axt-viewer-open[data-axt-shown]:focus-visible { opacity: 1; }
+dialog { box-sizing: border-box; width: 90vw; height: 90vh; max-width: none; max-height: none; margin: auto; padding: 0; border: 0; border-radius: 12px; overflow: hidden; color: var(--axt-viewer-ink, #1c1c1e); background: var(--axt-viewer-paper, #f4f3f2); box-shadow: 0 24px 64px rgb(0 0 0 / 0.35); }
 dialog[open] { animation: enter 0.15s cubic-bezier(0.4, 0, 0.2, 1); }
 dialog::backdrop { background: rgb(0 0 0 / 0.5); backdrop-filter: blur(4px); animation: fade 0.15s; }
-.stage { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
-.stage[data-dragging] { cursor: grabbing; }
-.bar { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; padding: 2px; border-radius: 8px; background: color-mix(in srgb, var(--paper, #f4f3f2) 78%, transparent); }
+.axt-viewer-stage { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
+.axt-viewer-stage[data-axt-dragging] { cursor: grabbing; }
+.axt-viewer-bar { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; padding: 2px; border-radius: 8px; background: color-mix(in srgb, var(--axt-viewer-paper, #f4f3f2) 78%, transparent); }
 @keyframes enter { from { opacity: 0; transform: scale(0.95); } }
 @keyframes fade { from { opacity: 0; } }
-.open[data-dark] { color: #f5f5f4; background: rgb(40 40 40 / 0.86); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), 0 1px 3px rgb(0 0 0 / 0.4); }
-@media (prefers-reduced-motion: reduce) { dialog[open], dialog::backdrop { animation: none; } .open { transition: none; } }
+.axt-viewer-open[data-axt-dark] { color: #f5f5f4; background: rgb(40 40 40 / 0.86); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), 0 1px 3px rgb(0 0 0 / 0.4); }
+@media (prefers-reduced-motion: reduce) { dialog[open], dialog::backdrop { animation: none; } .axt-viewer-open { transition: none; } }
 `
 
 /**
@@ -181,13 +181,13 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   style.textContent = SHEET
   const lock = new view.CSSStyleSheet()
   lock.replaceSync(LOCK)
-  const open = button('open', ICONS.open)
+  const open = button('axt-viewer-open', ICONS.open)
   const dialog = doc.createElement('dialog')
   const stage = doc.createElement('div')
-  stage.className = 'stage'
+  stage.className = 'axt-viewer-stage'
   stage.append(doc.createElement('slot'))
   const bar = doc.createElement('div')
-  bar.className = 'bar'
+  bar.className = 'axt-viewer-bar'
   const zoomIn = button('', ICONS.zoomIn)
   const zoomOut = button('', ICONS.zoomOut)
   const close = button('', ICONS.close)
@@ -219,9 +219,9 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   }
   const dress = (): void => {
     const { paper, dark } = ground()
-    host.style.setProperty('--paper', paper)
-    host.style.setProperty('--ink', dark ? '#f5f5f4' : '#1c1c1e')
-    open.toggleAttribute('data-dark', dark)
+    host.style.setProperty('--axt-viewer-paper', paper)
+    host.style.setProperty('--axt-viewer-ink', dark ? '#f5f5f4' : '#1c1c1e')
+    open.toggleAttribute('data-axt-dark', dark)
   }
 
   // ── The control over the figure under the pointer ──
@@ -255,7 +255,7 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   }
   const hide = (): void => {
     current = null
-    open.removeAttribute('data-shown')
+    open.removeAttribute('data-axt-shown')
   }
   const show = (figure: Element): void => {
     clearTimeout(leaving)
@@ -265,7 +265,7 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
       label()
       place()
     }
-    open.setAttribute('data-shown', '')
+    open.setAttribute('data-axt-shown', '')
   }
   /**
    * The block whose moves are followed. Entering an element is one event, and a figure that takes no pointer is
@@ -412,7 +412,7 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
     if (event.button !== 0) return
     drag = { id: event.pointerId, px: event.clientX, py: event.clientY, x, y }
     stage.setPointerCapture(event.pointerId)
-    stage.setAttribute('data-dragging', '')
+    stage.setAttribute('data-axt-dragging', '')
   })
   stage.addEventListener('pointermove', event => {
     if (!drag || event.pointerId !== drag.id) return
@@ -423,7 +423,7 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   const release = (event: PointerEvent): void => {
     if (!drag || event.pointerId !== drag.id) return
     drag = null
-    stage.removeAttribute('data-dragging')
+    stage.removeAttribute('data-axt-dragging')
   }
   stage.addEventListener('pointerup', release)
   stage.addEventListener('pointercancel', release)

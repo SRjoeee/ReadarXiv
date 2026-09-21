@@ -37,11 +37,11 @@ function page(html: string): { root: ShadowRoot; control: HTMLButtonElement; dia
   viewer = installFigureViewer(document, { ...OPTIONS, strings: () => WORDS })
   const host = document.querySelector(`.${VIEWER_CLASS}`) as HTMLElement
   const root = host.shadowRoot!
-  const stage = root.querySelector('.stage') as HTMLElement
+  const stage = root.querySelector('.axt-viewer-stage') as HTMLElement
   Object.defineProperty(stage, 'clientWidth', { value: 1000, configurable: true })
   Object.defineProperty(stage, 'clientHeight', { value: 800, configurable: true })
   Object.defineProperty(stage, 'getBoundingClientRect', { value: () => rect(0, 0, 1000, 800), configurable: true })
-  return { root, host, control: root.querySelector('.open') as HTMLButtonElement, dialog: root.querySelector('dialog') as HTMLDialogElement }
+  return { root, host, control: root.querySelector('.axt-viewer-open') as HTMLButtonElement, dialog: root.querySelector('dialog') as HTMLDialogElement }
 }
 
 const PICTURE = `<figure class="ltx_figure" id="F1"><svg class="ltx_picture" id="F1.pic"><foreignObject><span class="ltx_foreignobject_container">
@@ -54,11 +54,11 @@ describe('the control over a figure', () => {
     const svg = document.querySelector('svg')!
     place(svg, rect(100, 100, 400, 300))
     over(svg)
-    expect(control.hasAttribute('data-shown')).toBe(true)
+    expect(control.hasAttribute('data-axt-shown')).toBe(true)
     expect(control.getAttribute('aria-label')).toBe('View larger')
     over(document.querySelector('article')!)
     await new Promise(resolve => setTimeout(resolve, 200))
-    expect(control.hasAttribute('data-shown')).toBe(false)
+    expect(control.hasAttribute('data-axt-shown')).toBe(false)
   })
 
   it('not over a small one — an icon in a table, a symbol in a line — nor over a picture drawn inside another', () => {
@@ -66,10 +66,10 @@ describe('the control over a figure', () => {
       <p><img class="ltx_graphics" id="icon" src="a.png"></p>`)
     place(document.getElementById('icon')!, rect(0, 0, 40, 20))
     over(document.getElementById('icon')!)
-    expect(control.hasAttribute('data-shown')).toBe(false)
+    expect(control.hasAttribute('data-axt-shown')).toBe(false)
     place(document.getElementById('inner')!, rect(0, 0, 400, 300))
     over(document.getElementById('inner')!)
-    expect(control.hasAttribute('data-shown')).toBe(false)
+    expect(control.hasAttribute('data-axt-shown')).toBe(false)
   })
 
   it('an overlay of ours lying on a figure stands for the figure, and a figure that takes no pointer — inert, as side makes a copy\'s — is found by where the pointer is', async () => {
@@ -77,20 +77,20 @@ describe('the control over a figure', () => {
     const img = document.getElementById('img')!
     place(img, rect(100, 100, 400, 300))
     over(document.querySelector('.axt-img span')!)
-    expect(control.hasAttribute('data-shown')).toBe(true)
+    expect(control.hasAttribute('data-axt-shown')).toBe(true)
     over(document.querySelector('article')!)
     await new Promise(resolve => setTimeout(resolve, 200))
-    expect(control.hasAttribute('data-shown')).toBe(false)
+    expect(control.hasAttribute('data-axt-shown')).toBe(false)
     // The pointer meets the figure's block, not the inert image: outside the image's box nothing, inside it the image
     over(document.getElementById('fig')!, 50, 50)
     await new Promise(resolve => setTimeout(resolve, 200))
-    expect(control.hasAttribute('data-shown')).toBe(false)
+    expect(control.hasAttribute('data-axt-shown')).toBe(false)
     over(document.getElementById('fig')!, 300, 250)
-    expect(control.hasAttribute('data-shown')).toBe(true)
+    expect(control.hasAttribute('data-axt-shown')).toBe(true)
     // Off the image and still in its block, the caption say: no element is entered, and the move alone says so (Devin on #279)
     document.getElementById('fig')!.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 300, clientY: 450 }))
     await new Promise(resolve => setTimeout(resolve, 200))
-    expect(control.hasAttribute('data-shown')).toBe(false)
+    expect(control.hasAttribute('data-axt-shown')).toBe(false)
   })
 })
 
@@ -174,7 +174,7 @@ describe('the dialog', () => {
       return [(500 - tx * zoomOf()) / zoomOf(), (400 - ty * zoomOf()) / zoomOf()]
     }
     const [cx, cy] = underCentre()
-    const zoomIn = root.querySelector('.bar button') as HTMLButtonElement
+    const zoomIn = root.querySelector('.axt-viewer-bar button') as HTMLButtonElement
     zoomIn.click()
     expect(size()[0] / w0).toBeCloseTo(1.2, 5)
     // A press zooms about the dialog's centre: the point of the figure there stays there
@@ -192,11 +192,11 @@ describe('the dialog', () => {
     const svg = document.querySelector('svg')!
     place(svg, rect(100, 100, 400, 300))
     over(svg)
-    expect(control.hasAttribute('data-shown')).toBe(true)
+    expect(control.hasAttribute('data-axt-shown')).toBe(true)
     document.getElementById('F1')!.remove()
     control.click()
     expect(dialog.open).toBe(false)
-    expect(control.hasAttribute('data-shown')).toBe(false)
+    expect(control.hasAttribute('data-axt-shown')).toBe(false)
   })
 
   it('the page under the dialog stays where it is: the document adopts a scroll lock while the dialog is open, and gives back only that (Codex on #279)', () => {
@@ -248,7 +248,7 @@ describe('the dialog', () => {
     over(svg)
     control.click()
     const frame = host.firstElementChild as HTMLElement
-    const stage = host.shadowRoot!.querySelector('.stage')!
+    const stage = host.shadowRoot!.querySelector('.axt-viewer-stage')!
     const zoomOf = () => Number.parseFloat(frame.style.zoom)
     // happy-dom's WheelEvent is a UIEvent's: the pointer's position and the modifier keys are given to it here
     const wheel = (deltaY: number, ctrlKey = false) => {
@@ -279,6 +279,6 @@ describe('the dialog', () => {
     viewer = null
     expect(document.querySelector(`.${VIEWER_CLASS}`)).toBeNull()
     over(svg)
-    expect(control.hasAttribute('data-shown')).toBe(false)
+    expect(control.hasAttribute('data-axt-shown')).toBe(false)
   })
 })
