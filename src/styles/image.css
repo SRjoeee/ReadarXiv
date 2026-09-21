@@ -115,8 +115,9 @@
 
   /* **In the figure viewer (§15.7) each label blurs for itself, and the one layer is gone.** A masked backdrop filter
      holds its mask as one texture of the element's size in device pixels. On the page the overlay is no wider than
-     the window; in the viewer the copy is laid out at up to eighteen times its size, and the mask with it — 430 MB at
-     a zoom of 13 on Figure 15 of 2607.24653v2 (M4 Pro, 2×), and past some 155 million pixels no mask at all: the layer
+     the window; in the viewer the copy is laid out at up to eighteen times its size, and the mask with it — 108 million
+     pixels at a zoom of 13 on Figure 15 of 2607.24653v2 (M4 Pro, 2×; 430 MB at four bytes a pixel, the format not
+     checked), and past some 155 million no mask at all: the layer
      then blurred the **whole** figure, by 15 px times the zoom, and the reader saw it flicker and go grey (reported
      2026-09-21; mask-image of any kind loses it at that area, and clip-path does not cut a backdrop filter at all —
      both measured). The viewer shows one figure, so what made a blur a label dear on the page — dozens of them

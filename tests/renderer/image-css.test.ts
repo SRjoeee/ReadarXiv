@@ -39,7 +39,7 @@ describe('image.css', () => {
 
   it('in the figure viewer a label blurs for itself and the one layer is gone: a masked backdrop filter holds a texture as large as the overlay, and there the overlay grows eighteen times', () => {
     // Measured on the maintainer's report (Figure 15 of 2607.24653v2, 41 labels, M4 Pro at 2×): the mask is one texture
-    // of the overlay's size in device pixels — 430 MB at a zoom of 13 — and past some 155 million pixels it is not
+    // of the overlay's size in device pixels — 108 million of them at a zoom of 13 — and past some 155 million it is not
     // made at all: the layer then blurs the whole figure, by 15 px × the zoom, and nothing of it can be read. On the
     // page the overlay is no wider than the window. The viewer shows one figure, and a blur a label zooms at 119
     // frames a second there, as the one layer did
