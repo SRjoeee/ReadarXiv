@@ -14,7 +14,7 @@ import { isTranslatable, linesToBoxes, renderImage, setImageModes } from './lib/
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { openPaper, runLive } from './live.mjs'
 import { openEngine, paperContext } from './engine.mjs'
-import { appearanceRule, getConfig, LANG_CODE_TO_LOCALE_NAME, lookOf, setConfig, watchConfig } from './lib/axt/extension.mjs'
+import { appearanceRule, createSurfaceConfig, LANG_CODE_TO_LOCALE_NAME, lookOf } from './lib/axt/extension.mjs'
 import { isName, plainSource, WIRE } from './mt.mjs'
 import { unpackSource } from './tar.mjs'
 
@@ -68,13 +68,23 @@ const LANGUAGES = ['cmn', 'cmn-Hant', 'jpn', 'kor', 'deu', 'spa', 'fra', 'por', 
 const MODES = ['original', 'translation', 'bilingual']
 const PREFS = 'axtPdfReader'
 const prefs = await chrome.storage.local.get(PREFS).then(r => r[PREFS] ?? {}).catch(() => ({}))
+/** the reader's own preferences, merged into what storage holds when they are written: another reader page may have
+ *  saved since this one opened (Devin on #297) */
+const savePrefs = patch => chrome.storage.local.get(PREFS).then(r => chrome.storage.local.set({ [PREFS]: { ...(r[PREFS] ?? {}), ...patch } })).catch(() => undefined)
 let mode = MODES.includes(params.get('mode')) ? params.get('mode') : MODES.includes(prefs.mode) ? prefs.mode : 'original'
 function showMode() {
   document.documentElement.setAttribute('data-axt-pdf-mode', mode)
   for (const b of $('modes').children) b.setAttribute('aria-checked', String(b.dataset.mode === mode))
 }
 showMode()
-let config = await getConfig()
+// The extension's settings as its popup and settings page have them (shared/surface-config.ts): each change a patch on
+// what storage holds when its turn comes, one after another, and a configuration that could not be read said so (Codex
+// on #297). The reader's bar is in English alone, so no interface language asks for a reload
+const surface = createSurfaceConfig({ localeStale: () => false, reload: () => location.reload() })
+await new Promise(resolve => { const off = surface.subscribe(() => { if (surface.state().config) { off(); resolve() } }); surface.start() })
+let config = surface.state().config
+/** why the stored settings could not be read, for the bar (config/storage.ts FallbackReason) */
+const unreadable = why => ({ tooNew: `saved by a newer version of the extension (${why.stored}; this one reads ${why.supported})`, upgradeFailed: `version ${why.stored} could not be brought to ${why.supported}`, invalid: `${why.where}: ${why.message}` })[why.kind] ?? 'for a reason not known'
 function showSettings() {
   let sheet = document.getElementById('axt-look')
   if (!sheet) { sheet = document.createElement('style'); sheet.id = 'axt-look'; document.head.append(sheet) }
@@ -82,18 +92,27 @@ function showSettings() {
   const target = config.targetLanguage, look = config.appearance
   $('lang').replaceChildren(...[...new Set([...LANGUAGES, target])].map(code => new Option(LANG_CODE_TO_LOCALE_NAME[code] ?? code, code, false, code === target)))
   $('band').replaceChildren(...look.highlights.map(h => new Option(h.name, h.id, false, h.id === look.activeHighlight)))
+  // the defaults are in effect — the service and its key set on the settings page are not — until they are repaired there
+  const why = surface.state().fallbackReason
+  $('notice').hidden = !why
+  $('notice').textContent = $('notice').title = why ? `The extension's settings could not be read (${unreadable(why)}): its defaults are in use until they are repaired on its settings page` : ''
 }
 showSettings()
-const save = patch => getConfig().then(c => setConfig({ ...c, ...patch(c) })).catch(e => status(`Could not save the setting: ${e.message ?? e}`))
-$('lang').onchange = () => save(() => ({ targetLanguage: $('lang').value }))
-$('band').onchange = () => save(c => ({ appearance: { ...c.appearance, activeHighlight: $('band').value } }))
+/** this page's own writes, in the order they were made: a new language reloads the page only once they have landed */
+let writes = Promise.resolve()
+const save = patch => (writes = writes.then(() => surface.patch(c => ({ ...c, ...patch(c) }))).catch(e => status(`Could not save the setting: ${e.message ?? e}`)))
+// the value chosen, taken when it is chosen: a write lands after the menus are drawn again from the one before it
+$('lang').onchange = () => { const code = $('lang').value; save(() => ({ targetLanguage: code })) }
+$('band').onchange = () => { const id = $('band').value; save(c => ({ appearance: { ...c.appearance, activeHighlight: id } })) }
 /** true once the translation has started: a new language then means another document, and the page starts again */
 let translating = false
-watchConfig(next => {
+surface.subscribe(() => {
+  const next = surface.state().config
+  if (!next) return
   const language = next.targetLanguage !== config.targetLanguage
   config = next
   showSettings()
-  if (language && translating) location.reload()
+  if (language && translating) void writes.then(() => location.reload())
 })
 let wantTranslation = null
 const translationWanted = new Promise(resolve => { wantTranslation = resolve })
@@ -104,7 +123,7 @@ $('modes').onclick = e => {
   const from = mode
   mode = next
   showMode()
-  chrome.storage.local.set({ [PREFS]: { ...prefs, mode } }).catch(() => undefined)
+  void savePrefs({ mode })
   relayout(from)
   if (mode !== 'original') wantTranslation()
 }
@@ -785,6 +804,10 @@ function attach(side) {
   side.eventBus.on('pagesinit', invalidate)
 }
 for (const side of sides) attach(side)
+/** where the original is being read, in PDF.js's terms (its page, and the point at the top left of the view in PDF
+ *  units), as long as it is in view: the same file opens on the right at the same place */
+let readAt = null
+left.eventBus.on('updateviewarea', ({ location }) => { if (shown(left)) readAt = location })
 $('figures').onchange = repaintFigures
 $('zoomIn').onclick = () => { for (const s of sides) if (shown(s)) s.viewer.currentScale = Math.min(4, s.viewer.currentScale * 1.15) }
 $('zoomOut').onclick = () => { for (const s of sides) if (shown(s)) s.viewer.currentScale = Math.max(0.25, s.viewer.currentScale / 1.15) }
@@ -879,16 +902,16 @@ async function live() {
   const site = params.get('site') ?? 'http://127.0.0.1:8071', endpoint = params.get('endpoint') ?? 'http://localhost:8070'
   const srcUrl = params.get('src') ?? `https://arxiv.org/src/${paper}`, pdfUrl = params.get('pdf') ?? `https://arxiv.org/pdf/${paper}`
   const L = (window.__reader.live = { events: [], t0: performance.now() })
-  let shown = 0, total = 0, engine = null, setContext = null
+  let got = 0, total = 0, engine = null, setContext = null
   let compiledOnce = false
   paperCtx = new Promise(resolve => { setContext = resolve })
   const note = (event, data = {}) => {
     L.events.push({ t: Math.round(performance.now() - L.t0), event, ...data })
-    if (event === 'translated') shown = data.total
+    if (event === 'translated') got = data.total
     if ((event === 'preview' || event === 'final') && data.ok) compiledOnce = true
     const said = { preview: data.ok ? 'preview compiled' : `compile failed (${data.strategy}): ${data.error ?? ''}`, final: data.ok ? 'final compiled' : `final compile failed (${data.strategy}): ${data.error ?? ''}`, 'next strategy': `trying ${data.strategy}`, done: compiledOnce ? 'done' : 'done — the translation did not compile; the right side still shows the original' }[event] ?? event
     const by = engine ? ` into ${engine.lang} by ${engine.engine}` : ''
-    status(`${total ? `${shown} of ${total} translated${by}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
+    status(`${total ? `${got} of ${total} translated${by}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
   }
   const fail = (event, text) => { setContext({}); note(event); status(text); L.done = true; L.failed = text }
   // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
@@ -904,13 +927,15 @@ async function live() {
   try { engine = await theEngine() } catch (e) { return fail('no engine', `Cannot translate: ${e.message ?? e}`) }
   const lang = engine.lang
   note('engine', { lang, format: engine.format, engine: engine.engine })
-  // the original on the right too, replaced as the translation comes in
+  // the original on the right too, replaced as the translation comes in; opened where the original was being read, as a
+  // side coming into view does (relayout, which has no document there yet to go by: Codex on #297)
   status(`Fetching ${paper}'s source from arXiv…`)
+  const rightLaid = new Promise(resolve => right.eventBus.on('pagesinit', resolve, { once: true }))
   let srcBytes
   try {
     ;[srcBytes] = await Promise.all([
       fetch(srcUrl).then(r => { if (!r.ok) throw new Error(`the source: HTTP ${r.status}`); return r.arrayBuffer() }).then(b => new Uint8Array(b)),
-      open(right, pdfUrl),
+      open(right, pdfUrl).then(() => rightLaid).then(() => { if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true }) }),
     ])
   } catch (e) { return fail('fetch failed', `Could not fetch ${paper} from arXiv (${e.message ?? e})`) }
   note('source fetched')
@@ -954,9 +979,10 @@ async function live() {
     lang, compile, note,
     format: engine.format,
     translate: texts => engine.translate(texts, context),
-    // nearest the reading line on the page first, what lies ahead before what lies behind
+    // nearest the reading line on the page first, what lies ahead before what lies behind; on the side in view, since
+    // the other one, out of the display, does not move with the reader (Codex on #297)
     rank: i => {
-      const top = unitDocTop(left, i), c = left.container
+      const side = shown(left) ? left : right, top = unitDocTop(side, i), c = side.container
       if (top == null) return 1e9 + i
       const d = top - (c.scrollTop + c.clientHeight * readingLine)
       return d >= -c.clientHeight * 0.3 ? Math.abs(d) : 2 * Math.abs(d)

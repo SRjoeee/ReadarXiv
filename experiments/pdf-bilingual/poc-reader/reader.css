@@ -11,6 +11,9 @@ header #close { width: auto; padding: 0 8px; }
 #status { margin-left: auto; color: #666; min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 header > * { flex: none; }
 header > #status { flex: 0 1 auto; }
+/* the extension's settings could not be read, and its defaults are in use (reader.js showSettings) */
+#notice { margin-left: auto; color: #9a3412; min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#notice:not([hidden]) + #status { margin-left: 8px; }
 /* an author display (header form's flex) would otherwise override the attribute */
 [hidden] { display: none !important; }
 main { position: absolute; top: var(--bar); bottom: 0; left: 0; right: 0; display: grid; grid-template-columns: 1fr 1fr; }

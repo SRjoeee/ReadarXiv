@@ -708,3 +708,14 @@ Figure 1 has its translated labels from the first preview on, with its frame cov
 The live run end to end:
 - Microsoft, Simplified Chinese: previews swapped in about 250 ms each, the final in 811 ms, with 0 px drift each time; 26 of 26 sampled paragraphs were level within 4 px.
 - The LLM path, through a mock service: 23 of 24 were level. The one off, by 240 px, is a paragraph on the last page, where the right side cannot scroll any further. That is the scroll sync's end of document, which the sync research takes up.
+
+The first review of #297 (Devin, Codex; Copilot was out of quota), on the viewer's first features:
+- **Taken**:
+  - the right side opens where the original was being read: a reader who scrolled the original and then chose Side by side was shown page 1. It now opens at the original's place, in PDF.js's own terms: the same file, the same page and point. Measured: the left at 9,935 px, the right at 9,935 px.
+  - In Translation alone, the translation is ranked from the side in view.
+  - The settings are read and written through the extension's own surface module (`shared/surface-config.ts`), as the popup and the settings page do. Each write is a patch on what storage holds when its turn comes, one after another. A configuration that could not be read is said so on the bar, with its defaults in use.
+    - Measured: a stored configuration from a newer version showed the notice.
+    - Measured: the language and the band changed at once both held. The band had been lost to a menu redrawn by the language's write, read after it; the chosen value is now taken when it is chosen.
+  - The reader's own preferences are merged into what storage holds when they are written.
+  - `e2e:pdf` goes through the reader when the build has it: the page opens in the reader, and the way back brings the floating button the suite goes on to check. 16 of 16 passed with the reader built in.
+- **Not reproduced**: that previews stay hidden in Translation alone, and that swaps never end once Original is chosen during a translation. PDF.js finds the pages in view by their geometry, not by the style sheet's `visibility`, and a hidden pane has no pages in view to wait for. Measured: Translation alone showed 5 previews and the final. Original chosen after the first preview still showed 6 previews and the final. Side by side then showed the final's 29 pages.
