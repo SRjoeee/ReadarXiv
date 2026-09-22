@@ -11,9 +11,9 @@ import type { TranslationTransport } from '@/providers/transport'
 const chainOf = (name: string, engines: string[], retired: string[]): TranslationTransport => {
   let gone = false
   return {
-    translate: async () => ({ ok: true, result: { segments: [], provider: name }, cached: 0 }),
+    translate: async () => ({ ok: true, result: { segments: [], provider: name, kind: 'mt' }, cached: 0 }),
     cancel: async () => 0,
-    status: async () => ({ providerId: name, chosen: name, revision: name, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags' as const, segmentsAlone: true, targetLanguage: 'cmn', promptId: 'default', chain: engines, demotions: [], engine: { id: name } }),
+    status: async () => ({ providerId: name, chosen: name, revision: name, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags' as const, targetLanguage: 'cmn', promptId: 'default', chain: engines, demotions: [], engine: { id: name } }),
     retire: () => { gone = true; retired.push(name); return 0 },
     isRetired: () => gone,
   }

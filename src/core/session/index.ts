@@ -108,8 +108,6 @@ interface LiveSession {
   config: Config
   context: TranslateContext
   renderPath: RenderPath
-  /** The engine translates each segment on its own (ProviderStatus.segmentsAlone): a figure's names are kept from it (§15.1) */
-  segmentsAlone: boolean
   /** What the session runs on (PageStatus.running) */
   running: NonNullable<PageStatus['running']>
   /**
@@ -322,7 +320,6 @@ export function createPageSession(deps: SessionDeps): PageSession {
       config,
       context,
       renderPath: status.renderPath,
-      segmentsAlone: status.segmentsAlone,
       running: { provider: status.chosen, target, engine: startEngine, revision: status.revision },
       restarted: false,
       modes: createModeController(doc, requested ?? config.mode, { beforeChange: () => place.keep(), onChange: enterSide }),
@@ -451,7 +448,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       scope: session.id,
       preload: config.preload,
       context: session.context,
-      ...(session.segmentsAlone ? { names } : {}),
+      names,
       ocr: call => deps.ocr(call),
       translate: request => backend.translate(request),
       onTrace: line => trace(line),

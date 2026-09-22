@@ -8,9 +8,9 @@ import type { TranslationTransport } from '@/providers/transport'
 // built from what is stored now, without the popup polling for it
 
 const chainOf = (provider: string): TranslationTransport => ({
-  translate: async () => ({ ok: true, result: { segments: [], provider }, cached: 0 }),
+  translate: async () => ({ ok: true, result: { segments: [], provider, kind: 'mt' }, cached: 0 }),
   cancel: async () => 0,
-  status: async () => ({ providerId: provider, chosen: provider, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags' as const, segmentsAlone: true, targetLanguage: 'cmn', promptId: 'default', revision: provider, chain: [provider], demotions: [], engine: { id: provider } }),
+  status: async () => ({ providerId: provider, chosen: provider, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags' as const, targetLanguage: 'cmn', promptId: 'default', revision: provider, chain: [provider], demotions: [], engine: { id: provider } }),
 })
 
 function harness() {

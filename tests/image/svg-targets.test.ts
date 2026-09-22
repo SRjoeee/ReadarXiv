@@ -49,7 +49,7 @@ function setup(markup: string | null, extra: Partial<ImageRunOptions> = {}) {
   const ocr = vi.fn(async (_call: OcrCall) => ({ ok: true as const, result: { width: 1, height: 1, lines: [] }, cached: false }))
   const translate = vi.fn(async (call: { request: { segments: { id: string; text: string }[] } }) => ({
     ok: true as const,
-    result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock' },
+    result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock', kind: 'mt' as const },
     cached: 0,
   }))
   const options: ImageRunOptions = {
@@ -130,7 +130,7 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
     })
     const translate = vi.fn(async (call: { request: { segments: { id: string; text: string }[] } }) => ({
       ok: true as const,
-      result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock' },
+      result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock', kind: 'mt' as const },
       cached: 0,
     }))
     const run = startImageTranslation({
@@ -168,7 +168,7 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
     })
     const translate = vi.fn(async (call: { request: { segments: { id: string; text: string }[] } }) => ({
       ok: true as const,
-      result: { segments: call.request.segments.map(s => ({ id: s.id, text: `tr:${s.text}` })), provider: 'mock' },
+      result: { segments: call.request.segments.map(s => ({ id: s.id, text: `tr:${s.text}` })), provider: 'mock', kind: 'mt' as const },
       cached: 0,
     }))
     const run = startImageTranslation({

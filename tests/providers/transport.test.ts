@@ -42,7 +42,7 @@ describe('createLocalTransport: translation', () => {
   it('the successful response shape', async () => {
     const t = await withChain([mockProvider(async r => ({ segments: r.segments.map(s => ({ ...s, text: `译:${s.text}` })), provider: 'mock' }))])
     // The model rides only on the chosen service's engine: changing it must not expire a free engine's cache
-    expect(await t.translate({ request: req })).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }], provider: 'mock' }, cached: 0 })
+    expect(await t.translate({ request: req })).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }], provider: 'mock', kind: 'llm' }, cached: 0 })
   })
 
   it('retries successfully after one rate limit', async () => {
@@ -585,7 +585,6 @@ describe('createLocalTransport: status', () => {
       maxBatchChars: 1000,
       maxBatchItems: 4,
       renderPath: 'tags',
-      segmentsAlone: true,
       targetLanguage: 'cmn',
       promptId: 'default',
       chain: [SVC.id, 'google-web'],
@@ -594,19 +593,25 @@ describe('createLocalTransport: status', () => {
     })
   })
 
-  it('segmentsAlone follows the engine the next request lands on: an LLM reads a request\'s segments together, a free engine each on its own (§15.1)', async () => {
-    const llm = (available: boolean): TranslationProvider => ({ ...engine(SVC.id, available), kind: 'llm' })
-    expect((await (await withChain([llm(true), engine('google-web', true)])).status()).segmentsAlone).toBe(false)
-    // The LLM unavailable (no key yet): the requests land straight on the free engine, and it is that one's way that counts
-    expect((await (await withChain([llm(false), engine('google-web', true)])).status()).segmentsAlone).toBe(true)
-    // Put aside by a failure: the engine now in use
+  it('an answer names the kind of engine that gave it: the LLM\'s, then, the same call handed over after a transient failure that restarts no page, the free engine\'s (§15.1)', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const failing = { ...llm(true), translate: async () => { throw new ProviderError('auth', 'bad key') } }
-    const ok = { ...engine('google-web', true), translate: async (r: TranslateRequest) => ({ segments: r.segments, provider: 'google-web' }) }
-    const t = await withChain([failing, ok])
-    expect((await t.status()).segmentsAlone).toBe(false)
-    expect((await t.translate({ request: req })).ok).toBe(true)
-    expect((await t.status()).segmentsAlone).toBe(true)
+    let broken = false
+    const llm: TranslationProvider = {
+      ...engine(SVC.id, true),
+      kind: 'llm',
+      translate: async r => {
+        // A systemic failure (the answer is not JSON at all): no retry and no smaller batch helps, so the chain hands over at once
+        if (broken) throw new ProviderError('invalid-response', 'not JSON', { isolatable: false })
+        return { segments: r.segments, provider: SVC.id }
+      },
+    }
+    const free = { ...engine('google-web', true), translate: async (r: TranslateRequest) => ({ segments: r.segments, provider: 'google-web' }) }
+    const t = await withChain([llm, free])
+    expect(await t.translate({ request: req })).toMatchObject({ ok: true, result: { provider: SVC.id, kind: 'llm' } })
+    broken = true
+    // A new segment, so no step answers from the cache
+    expect(await t.translate({ request: { ...req, segments: [{ id: 'b', text: 'y' }] } })).toMatchObject({ ok: true, result: { provider: 'google-web', kind: 'mt' } })
+    expect((await t.status()).demotions).toEqual([{ id: SVC.id, kind: 'invalid-response' }])
   })
 
   it('a saved service id naming nothing: the status says which service was chosen and which engine it resolved to, so the toggle can tell them apart (local review)', async () => {
@@ -668,9 +673,9 @@ describe('createLocalTransport: the cache', () => {
     const calls: string[][] = []
     const t = await withChain([echo(calls)], { cache: portOf(cacheOf()) })
     const first = await t.translate({ request: two, cache: withCache })
-    expect(first).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }, { id: 'b', text: '译:y' }], provider: 'mock' }, cached: 0 })
+    expect(first).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }, { id: 'b', text: '译:y' }], provider: 'mock', kind: 'llm' }, cached: 0 })
     const second = await t.translate({ request: two, cache: withCache })
-    expect(second).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }, { id: 'b', text: '译:y' }], provider: 'mock' }, cached: 2 })
+    expect(second).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }, { id: 'b', text: '译:y' }], provider: 'mock', kind: 'llm' }, cached: 2 })
     expect(calls).toEqual([['a', 'b']])
   })
 

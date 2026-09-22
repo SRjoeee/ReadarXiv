@@ -20,7 +20,7 @@ import { BatchCountMismatchError, BatchQueue, type BatchExecutionMeta, type Batc
 import { type CancelledScopeRegistry, isTranslationCancelledError, TranslationCancelledError } from './request/cancellation'
 import { REQUEST_TIMEOUT_ERROR_NAME, RequestQueue, type QueueOptions } from './request/request-queue'
 import { attachRequestErrorMeta , getRequestErrorMeta } from './request/retry-policy'
-import { ProviderError, isPermanentErrorKind, type ProviderErrorKind, type TranslatedSegment, type TranslateRequest, type TranslationProvider, type TranslateSegment } from './types'
+import { ProviderError, isPermanentErrorKind, type ProviderErrorKind, type ProviderKind, type TranslatedSegment, type TranslateRequest, type TranslationProvider, type TranslateSegment } from './types'
 import { failureLine } from '@/shared/diagnostics'
 
 /**
@@ -68,7 +68,9 @@ export type TranslateCall = TranslateMessageRequest & {
 
 export type TranslateMessageResponse =
   // `alignment` is plain number arrays, so it survives the structured clone across the message boundary
-  | { ok: true; result: { segments: TranslatedSegment[]; provider: string; model?: string }; cached: number }
+  // `kind` is the answering engine's: a hand-over down the chain (§8.5) can put a free engine behind a call that set out
+  // for an LLM, and what a figure's names may become depends on which of them read it (§15.1)
+  | { ok: true; result: { segments: TranslatedSegment[]; provider: string; kind: ProviderKind; model?: string }; cached: number }
   /**
    * `partial` carries the segments of this call that did come through — a call can be split into
    * several `BatchQueue` batches, and one batch failing must not bury another's finished work
@@ -579,7 +581,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
         const outcome = translated.get(s.id)
         return outcome?.alignment ? { id: s.id, text: outcome.text, alignment: outcome.alignment } : { id: s.id, text: outcome?.text ?? '' }
       })
-      return { ok: true, result: { segments, provider: provider.id, model: model || undefined }, cached }
+      return { ok: true, result: { segments, provider: provider.id, kind: provider.kind, model: model || undefined }, cached }
     } catch (e) {
       return { ok: false, error: toErrorInfo(e) }
     }

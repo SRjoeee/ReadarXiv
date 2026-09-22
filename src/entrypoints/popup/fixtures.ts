@@ -32,7 +32,6 @@ function provider(over: Partial<ProviderStatus> = {}): ProviderStatus {
     maxBatchChars: 4000,
     maxBatchItems: 20,
     renderPath: 'markers',
-    segmentsAlone: true,
     targetLanguage: 'cmn',
     promptId: 'default',
     engine: { id: 'microsoft' },

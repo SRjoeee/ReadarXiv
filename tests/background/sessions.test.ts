@@ -10,11 +10,11 @@ function fakeTransport(name: string, cancelled: string[] = []): TranslationTrans
   return {
     name,
     cancelled,
-    translate: async () => ({ ok: true, result: { segments: [], provider: name }, cached: 0 }),
+    translate: async () => ({ ok: true, result: { segments: [], provider: name, kind: 'mt' as const }, cached: 0 }),
     cancel: async scope => { cancelled.push(`${name}:${scope}`); return 1 },
     retire: () => { retired = true; cancelled.push(`${name} retired`); return 1 },
     isRetired: () => retired,
-    status: async () => ({ providerId: name, chosen: name, revision: name, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags' as const, segmentsAlone: true, targetLanguage: 'cmn', promptId: 'default', chain: [name], demotions: [], engine: { id: name } }),
+    status: async () => ({ providerId: name, chosen: name, revision: name, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags' as const, targetLanguage: 'cmn', promptId: 'default', chain: [name], demotions: [], engine: { id: name } }),
   } as TranslationTransport & { name: string; cancelled: string[] }
 }
 
