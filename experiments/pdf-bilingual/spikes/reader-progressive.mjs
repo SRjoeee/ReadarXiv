@@ -10,7 +10,7 @@ const { context, readerUrl } = await launchWithReader({ profile: 'reader' })
 const page = await context.newPage()
 const errors = []
 page.on('pageerror', e => { errors.push(e.message); console.error('pageerror', e.message) }); page.on('console', m => { if (m.type() === 'error' || m.text().startsWith('[swap]')) console.error(m.type(), m.text()) })
-await page.goto(readerUrl({ paper, progressive: '1', every }))
+await page.goto(readerUrl({ paper, mode: 'bilingual', progressive: '1', every }))
 await page.waitForFunction(() => window.__reader?.ready, null, { timeout: 120000 })
 // the reader in the middle of the paper, the pointer over the left page's text column
 await page.mouse.move(300, 500)

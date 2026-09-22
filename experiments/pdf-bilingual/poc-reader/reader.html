@@ -14,13 +14,19 @@
     <button title="Into the language, and by the service, set in the extension's settings">Translate</button>
   </form>
   <select id="paper" title="The precompiled demo papers"></select>
+  <span id="modes" role="radiogroup" aria-label="Display">
+    <button type="button" role="radio" data-mode="original">Original</button><button type="button" role="radio" data-mode="translation">Translation</button><button type="button" role="radio" data-mode="bilingual">Side by side</button>
+  </span>
+  <select id="lang" title="The translation's language: the extension's setting, the same as on arXiv's HTML pages"></select>
+  <select id="band" title="The highlight's colour: the extension's setting, the same as on arXiv's HTML pages"></select>
   <button id="zoomOut" title="Zoom out">−</button>
   <span id="zoom">100%</span>
   <button id="zoomIn" title="Zoom in">+</button>
-  <label><input type="checkbox" id="sync" checked> Sync scrolling</label>
+  <label id="sync-label"><input type="checkbox" id="sync" checked> Sync scrolling</label>
   <label title="Translate the text inside the paper's own figures"><input type="checkbox" id="figures" checked> Figure text</label>
   <label title="Start from the untranslated document and replace it as the translation comes in"><input type="checkbox" id="progressive"> Progressive demo</label>
   <span id="status"></span>
+  <button id="close" type="button" title="Show this PDF in the browser's own viewer" hidden>Browser viewer</button>
 </header>
 <main>
   <section class="pane"><h2>Original</h2><div class="viewerContainer" id="left"><div class="pdfViewer"></div></div></section>

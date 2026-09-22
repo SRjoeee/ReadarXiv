@@ -8,7 +8,7 @@ const [paper, ...pages] = process.argv.slice(2)
 const { context, readerUrl } = await launchWithReader({ profile: 'reader' })
 const page = await context.newPage()
 page.on('pageerror', e => console.error('pageerror', e.stack ?? e.message))
-await page.goto(readerUrl(`paper=${paper}`))
+await page.goto(readerUrl({ paper, mode: 'bilingual' }))
 await page.waitForFunction(() => window.__reader?.ready, null, { timeout: 120000 })
 for (const n of pages.map(Number)) {
   await page.evaluate(n => { const { right, setDriver } = window.__reader.debug; setDriver(right); const pv = right.viewer.getPageView(n - 1); right.container.scrollTop = pv.div.offsetTop - 10 }, n)

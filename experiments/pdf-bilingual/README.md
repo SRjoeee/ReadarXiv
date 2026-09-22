@@ -15,7 +15,7 @@ Rules and techniques here are expected to change; what settles is to be refactor
 |---|---|
 | `poc-reader/` | The reader: a page of the extension on this branch (`wxt.config.ts` copies it in as `pdf-reader/`), with two PDF.js viewers. `live.mjs` is the translation pipeline (viewport-first translation, progressive previews, final compile); `latex-front.mjs` reads and patches the LaTeX source (units, marks, engine shims); `scripts.mjs` is how each writing system is typeset (engine, encoding or faces, line spacing, babel's locale); `anchors.mjs` locates every unit on both PDFs; `engine.mjs` reaches the extension's translation chain; `mt.mjs` puts units into its wire formats and back (and holds the Microsoft client the Node spikes use); `figures.mjs` finds figure text in a PDF; `reader.js` is the viewer, the sync and the click alignment. |
 | `poc-site/` | "Our site": the TeX page the reader frames, running BusyTeX. |
-| `shared/` | Entry points that compile the extension's own modules (figure boxes, overlay, recogniser, the message transport to its translation chain) into `poc-reader/lib/axt` — no copies of product code. |
+| `shared/` | Entry points that compile the extension's own modules (figure boxes, overlay, recogniser, the message transport to its translation chain, its settings and look) into `poc-reader/lib/axt` — no copies of product code. |
 | `spikes/` | Measurement and verification scripts; each file's header says what it measures and how to run it. `lang-gate.mjs` is the multi-language gate: run it before and after any change to how a translation is typeset. |
 | `busytex/research.diff` | Our patches to BusyTeX's pipeline and biber drivers. |
 | `upstream/` | The same fixes as filed upstream, with self-made reproductions. |
@@ -38,10 +38,10 @@ Rules and techniques here are expected to change; what settles is to be refactor
 Run:
 1. `node spikes/serve-live.mjs` here, for our site's TeX page, with the file server of Setup's step 4 running.
 2. At the repository root, `pnpm dev` (or `pnpm build`). The extension's build then holds the reader, once Setup's step 3 has filled `poc-reader/lib`.
-3. Load `.output/chrome-mv3-dev` (or `.output/chrome-mv3`) unpacked in Chrome, and open `chrome-extension://<its id>/pdf-reader/reader.html`.
-4. Paste an arXiv link or id.
+3. Load `.output/chrome-mv3-dev` (or `.output/chrome-mv3`) unpacked in Chrome.
+4. Open any arXiv PDF (`arxiv.org/pdf/<id>`). The reader is laid over it, on the original; choose Translation or Side by side to translate it, and the display is kept. A button in its bar goes back to the browser's viewer. Its own page, `chrome-extension://<its id>/pdf-reader/reader.html`, takes a pasted link or id.
 
-The service and the target language are the extension's settings, as for the HTML page. An LLM service is added there, on the settings page.
+The service, the target language and the highlight's band are the extension's settings, as for the HTML page; the reader's bar changes the language and the band there too. An LLM service is added on the settings page.
 
 ## What is not here, and why
 

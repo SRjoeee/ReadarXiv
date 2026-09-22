@@ -14,7 +14,7 @@ const page = await context.newPage()
 page.on('pageerror', e => console.error('pageerror', e.message))
 page.on('console', m => { if (m.text().startsWith('[who]')) console.log(m.text().slice(0, 600)) })
 let site = null
-const query = { paper }
+const query = { paper, mode: 'bilingual' }
 if (process.env.LIVE) { site = await serveSite(); Object.assign(query, { live: '1', site: `http://127.0.0.1:${site.address().port}`, endpoint: 'http://localhost:8070' }) }
 await page.goto(readerUrl(query))
 await page.waitForFunction(() => (window.__reader?.live ? window.__reader.live.done : window.__reader?.ready), null, { timeout: 900_000, polling: 500 })

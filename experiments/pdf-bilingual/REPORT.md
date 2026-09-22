@@ -639,3 +639,24 @@ The maintainer's decision: the single-language reader comes first. Of the engine
   - Its mark had gone before a unit's first placeholder. That put text before a table's `\toprule`, which broke the table and the bibliography after it: `\bibdata` never reached the aux, and every citation was undefined.
   - The mark now goes before the first letter, as a translation's words do.
   - `live-node.mjs` has the same echo (`ECHO=1`), and the final's note now lists undefined citations.
+
+## Thirteenth addendum, 2026-09-23: the viewer's first features
+
+The owner's order: the viewer's features first, with a plain interface; its interface designed and its features brought together last, so that the extension's present interface is left as it is; synchronized scrolling researched and tried on its own.
+
+- **The highlight is a block, not lines.** It is one wash per run of a unit's lines down one column of one page, multiplied into the page. The paper under it takes the colour and the letters keep theirs, as the HTML page's band behind the text looks. On 2608.02163, an eight-line paragraph lit as one block on each side. It had been eight line boxes over the text, with gaps between them, which read as a selection.
+- **The band and the language are the extension's settings.** The extension's look sheet (`appearanceRule`) gives the band's colour and strength. The bar's two menus write the settings the HTML page reads, and both follow a change made elsewhere; a new language starts the translation again. Measured:
+  - choosing Sand over Soft green in the bar changed the settings, and the reader's highlight followed;
+  - choosing Japanese wrote `jpn`, and the paper came back translated into Japanese.
+- **Three displays**:
+  - the original alone: only its PDF is fetched, and nothing is translated or compiled;
+  - the translation alone;
+  - both side by side.
+
+  The reader's choice is kept in its own storage until the reader is part of the extension's settings. A document shown alone stands at a reading width (1,100 px), centred. A side opened out of view waits for its width, since a page-width scale on a hidden pane came out negative.
+- **arXiv's PDF page opens in the reader.** The content script lays the reader over the browser's viewer, and the address stays the paper's. A button in the bar takes the reader away again and shows the floating button. A build without the reader leaves the page as it was.
+
+Checks, on 2608.02163 in Chromium:
+- a walkthrough of the page: the reader over it on the original; side by side; the hover; the band; the display after a reload; the way back;
+- the translation alone, and the language switch;
+- the zoom through all three displays.

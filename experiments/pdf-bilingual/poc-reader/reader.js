@@ -14,6 +14,7 @@ import { isTranslatable, linesToBoxes, renderImage, setImageModes } from './lib/
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { openPaper, runLive } from './live.mjs'
 import { openEngine, paperContext } from './engine.mjs'
+import { appearanceRule, getConfig, LANG_CODE_TO_LOCALE_NAME, lookOf, setConfig, watchConfig } from './lib/axt/extension.mjs'
 import { isName, plainSource, WIRE } from './mt.mjs'
 import { unpackSource } from './tar.mjs'
 
@@ -56,6 +57,65 @@ $('paper').onchange = reload
 $('progressive').checked = params.get('progressive') === '1'
 $('progressive').onchange = reload
 $('paper').hidden = $('progressive').parentElement.hidden = !DEMO
+
+// ---------------------------------------------------------------- the extension's settings, and the display
+// The target language and the highlight's band are the extension's settings, read and written as its settings page
+// does and followed as they change, so that the PDF and the HTML page agree. The display is the reader's own, kept
+// until the reader is part of the extension's settings: the original alone (nothing is translated or compiled until
+// the reader asks for more), the translation alone, or both side by side.
+/** the languages whose typesetting the gate measures (scripts.mjs; the others wait for #295) */
+const LANGUAGES = ['cmn', 'cmn-Hant', 'jpn', 'kor', 'deu', 'spa', 'fra', 'por', 'rus']
+const MODES = ['original', 'translation', 'bilingual']
+const PREFS = 'axtPdfReader'
+const prefs = await chrome.storage.local.get(PREFS).then(r => r[PREFS] ?? {}).catch(() => ({}))
+let mode = MODES.includes(params.get('mode')) ? params.get('mode') : MODES.includes(prefs.mode) ? prefs.mode : 'original'
+function showMode() {
+  document.documentElement.setAttribute('data-axt-pdf-mode', mode)
+  for (const b of $('modes').children) b.setAttribute('aria-checked', String(b.dataset.mode === mode))
+}
+showMode()
+let config = await getConfig()
+function showSettings() {
+  let sheet = document.getElementById('axt-look')
+  if (!sheet) { sheet = document.createElement('style'); sheet.id = 'axt-look'; document.head.append(sheet) }
+  sheet.textContent = appearanceRule(lookOf(config))
+  const target = config.targetLanguage, look = config.appearance
+  $('lang').replaceChildren(...[...new Set([...LANGUAGES, target])].map(code => new Option(LANG_CODE_TO_LOCALE_NAME[code] ?? code, code, false, code === target)))
+  $('band').replaceChildren(...look.highlights.map(h => new Option(h.name, h.id, false, h.id === look.activeHighlight)))
+}
+showSettings()
+const save = patch => getConfig().then(c => setConfig({ ...c, ...patch(c) })).catch(e => status(`Could not save the setting: ${e.message ?? e}`))
+$('lang').onchange = () => save(() => ({ targetLanguage: $('lang').value }))
+$('band').onchange = () => save(c => ({ appearance: { ...c.appearance, activeHighlight: $('band').value } }))
+/** true once the translation has started: a new language then means another document, and the page starts again */
+let translating = false
+watchConfig(next => {
+  const language = next.targetLanguage !== config.targetLanguage
+  config = next
+  showSettings()
+  if (language && translating) location.reload()
+})
+let wantTranslation = null
+const translationWanted = new Promise(resolve => { wantTranslation = resolve })
+if (mode !== 'original') wantTranslation()
+$('modes').onclick = e => {
+  const next = e.target.closest('button')?.dataset.mode
+  if (!next || next === mode) return
+  const from = mode
+  mode = next
+  showMode()
+  chrome.storage.local.set({ [PREFS]: { ...prefs, mode } }).catch(() => undefined)
+  relayout(from)
+  if (mode !== 'original') wantTranslation()
+}
+// Opened over arXiv's PDF page (the extension's content script there): the page's own paper, and a way back to the
+// browser's viewer, which the content script keeps underneath
+const EMBEDDED = params.get('embedded') === '1'
+if (EMBEDDED) {
+  for (const el of [$('open'), $('paper'), $('progressive').parentElement]) el.hidden = true
+  $('close').hidden = false
+  $('close').onclick = () => parent.postMessage({ type: 'axt-pdf-reader-close' }, 'https://arxiv.org')
+}
 
 // ---------------------------------------------------------------- the two viewers
 function makeSide(container) {
@@ -123,16 +183,33 @@ function paint(side) {
   if (lit == null) return
   const a = side.anchors.get(lit)
   if (!a) return
-  for (const r of a.rects) {
+  for (const r of blocksOf(a.rects)) {
     const pv = pageView(side, r.page)
     if (!pv?.div) continue
     let layer = pv.div.querySelector(':scope > .axt-hl-layer')
     if (!layer) { layer = document.createElement('div'); layer.className = 'axt-hl-layer'; pv.div.append(layer) }
     const box = toPageBox(side, r), el = document.createElement('div')
     el.className = 'axt-hl'
-    Object.assign(el.style, { left: `${box.left - 1}px`, top: `${box.top - 1}px`, width: `${box.width + 2}px`, height: `${box.height + 2}px` })
+    Object.assign(el.style, { left: `${box.left - 4}px`, top: `${box.top - 3}px`, width: `${box.width + 8}px`, height: `${box.height + 6}px` })
     layer.append(el)
   }
+}
+/**
+ * A unit's lines as blocks: one per run of them down one column of one page, from the run's first line to its last and
+ * across its widest, so that a paragraph reads as one wash behind its text, as on the HTML page, not as a selection of
+ * lines with gaps between them (the owner, 2026-09-23). A line starts a new block on another page, in another column
+ * (its span across the page no longer overlapping the block's), or far below the block (a large display between)
+ */
+function blocksOf(rects) {
+  const out = []
+  for (const r of rects) {
+    const b = out.at(-1), h = r.y1 - r.y0
+    const across = b && Math.min(b.x1, r.x1) - Math.max(b.x0, r.x0)
+    if (b && b.page === r.page && across > 0.3 * Math.min(b.x1 - b.x0, r.x1 - r.x0) && r.y1 <= b.y1 + h && b.y0 - r.y1 < 6 * h) {
+      b.x0 = Math.min(b.x0, r.x0); b.x1 = Math.max(b.x1, r.x1); b.y0 = Math.min(b.y0, r.y0)
+    } else out.push({ page: r.page, x0: r.x0, x1: r.x1, y0: r.y0, y1: r.y1 })
+  }
+  return out
 }
 function light(id) { if (id === lit) return; lit = id; for (const s of sides) paint(s) }
 
@@ -354,7 +431,7 @@ let frame = 0, settleTimer = 0, pointerX = null
 function syncFrom(side) {
   const mine = placed.get(side.container)
   if (mine != null) { placed.delete(side.container); if (Math.abs(mine - side.container.scrollTop) < 1) return }
-  if (!$('sync').checked || side !== driver || !left.anchors.size) return
+  if (!$('sync').checked || mode !== 'bilingual' || side !== driver || !left.anchors.size) return
   clearTimeout(settleTimer)
   settleTimer = setTimeout(() => settle(side), 160)
   if (frame) return
@@ -365,9 +442,27 @@ function syncFrom(side) {
     target.container.scrollTop = there - target.container.clientHeight * readingLine
   })
 }
+/** whether a side's pane is in the display: a hidden one has no width, and a page-width scale there comes out negative */
+const shown = side => side.container.clientWidth > 0
+/**
+ * The display changed: the viewers now shown are laid out again at their pane's width, and a side coming into view
+ * opens where the other one was being read, by the table the sync scrolls with
+ */
+function relayout(from) {
+  requestAnimationFrame(() => {
+    for (const s of sides) if (s.doc && shown(s)) { s.viewer.currentScaleValue = 'page-width'; s.viewer.update() }
+    const came = from === 'original' ? right : from === 'translation' ? left : null
+    requestAnimationFrame(() => {
+      if (!came || !left.anchors.size || !right.anchors.size || !came.doc) return
+      const went = other(came), c = went.container
+      invalidate()
+      put(came.container, map(went === left, c.scrollTop + c.clientHeight * readingLine) - came.container.clientHeight * readingLine)
+    })
+  })
+}
 /** the paragraph at the reading line brought level on the other side, at the same place within it */
 function settle(side) {
-  if (!$('sync').checked || side !== driver) return
+  if (!$('sync').checked || mode !== 'bilingual' || side !== driver) return
   const c = side.container, y = c.scrollTop + c.clientHeight * readingLine
   // the page at the reading line, and the pointer's place across it (the first column when the pointer is away)
   let page = 1
@@ -575,14 +670,15 @@ function attach(side) {
   })
   // PDF.js re-renders a page's div on zoom and as pages come into view: the highlight is drawn again there
   side.eventBus.on('pagerendered', ({ pageNumber }) => { if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start; paint(side); if (side === right) paintFigures(side, pageNumber) })
-  side.eventBus.on('pagesinit', () => { side.viewer.currentScaleValue = side.scale ?? 'page-width' })
-  side.eventBus.on('scalechanging', ({ scale }) => { invalidate(); if (side === left) $('zoom').textContent = `${Math.round(scale * 100)}%` })
+  // a side opened out of the display (the original, while the translation alone is shown) waits at 1 for its width (relayout)
+  side.eventBus.on('pagesinit', () => { const value = side.scale ?? 'page-width'; side.viewer.currentScaleValue = shown(side) || typeof value === 'number' ? value : 1 })
+  side.eventBus.on('scalechanging', ({ scale }) => { invalidate(); if (shown(side) && (side === left || !shown(left))) $('zoom').textContent = `${Math.round(scale * 100)}%` })
   side.eventBus.on('pagesinit', invalidate)
 }
 for (const side of sides) attach(side)
 $('figures').onchange = repaintFigures
-$('zoomIn').onclick = () => { for (const s of sides) s.viewer.currentScale = Math.min(4, s.viewer.currentScale * 1.15) }
-$('zoomOut').onclick = () => { for (const s of sides) s.viewer.currentScale = Math.max(0.25, s.viewer.currentScale / 1.15) }
+$('zoomIn').onclick = () => { for (const s of sides) if (shown(s)) s.viewer.currentScale = Math.min(4, s.viewer.currentScale * 1.15) }
+$('zoomOut').onclick = () => { for (const s of sides) if (shown(s)) s.viewer.currentScale = Math.max(0.25, s.viewer.currentScale / 1.15) }
 
 // ---------------------------------------------------------------- anchoring one side
 /** every unit located on a side: `texts` is the unit's text as that PDF has it; `marks` null = read them from the PDF */
@@ -678,21 +774,27 @@ async function live() {
   const fail = (event, text) => { setContext({}); note(event); status(text); L.done = true; L.failed = text }
   // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
   // told at once
+  // the original first, in every display; nothing is translated or compiled until a display that shows a translation is chosen
+  status(`Fetching ${paper} from arXiv…`)
+  try { await open(left, pdfUrl) } catch (e) { return fail('fetch failed', `Could not fetch ${paper}'s PDF from arXiv (${e.message ?? e})`) }
+  note('opened')
+  if (mode === 'original') status(`${paper}, the original. Choose Translation or Side by side to translate it`)
+  await translationWanted
+  translating = true
   status('Asking the extension which service translates…')
   try { engine = await theEngine() } catch (e) { return fail('no engine', `Cannot translate: ${e.message ?? e}`) }
   const lang = engine.lang
   note('engine', { lang, format: engine.format, engine: engine.engine })
-  // the original on both sides at once; the right side is replaced as the translation comes in
-  status(`Fetching ${paper} from arXiv…`)
+  // the original on the right too, replaced as the translation comes in
+  status(`Fetching ${paper}'s source from arXiv…`)
   let srcBytes
   try {
     ;[srcBytes] = await Promise.all([
       fetch(srcUrl).then(r => { if (!r.ok) throw new Error(`the source: HTTP ${r.status}`); return r.arrayBuffer() }).then(b => new Uint8Array(b)),
-      open(left, pdfUrl).catch(e => { throw new Error(`the PDF: ${e.message ?? e}`) }),
       open(right, pdfUrl),
     ])
   } catch (e) { return fail('fetch failed', `Could not fetch ${paper} from arXiv (${e.message ?? e})`) }
-  note('opened')
+  note('source fetched')
   const { files, pdf: noSource } = await unpackSource(srcBytes)
   if (noSource) return fail('no source', `arXiv has no LaTeX source for ${paper} (a PDF-only submission): nothing to translate this way`)
   const paperData = openPaper(files), units = paperData.units
