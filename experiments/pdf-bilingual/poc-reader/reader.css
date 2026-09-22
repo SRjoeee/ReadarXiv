@@ -38,9 +38,10 @@ html:not([data-axt-pdf-mode="bilingual"]) #sync-label { display: none; }
 header select { height: 26px; }
 /* a newer compile being laid out and drawn under the one in view */
 .viewerContainer.axt-incoming { visibility: hidden; }
-/* a figure's place on a translation page, holding the empty <img> the extension's image overlay is anchored to */
+/* a figure's place on a translation page, holding the empty <img> the extension's image overlay is anchored to and, over
+   a draft preview's frame, the left's figure drawn beneath it */
 .axt-fig { position: absolute; pointer-events: none; z-index: 2; }
-.axt-fig > div, .axt-fig img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.axt-fig > div, .axt-fig > canvas, .axt-fig img { position: absolute; inset: 0; width: 100%; height: 100%; }
 .axt-fig img { opacity: 0; }
 .axt-fig .axt-img > span { pointer-events: auto; }
 header form { display: flex; gap: 4px; align-items: center; margin-right: 8px; }

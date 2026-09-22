@@ -94,10 +94,12 @@ for (const visit of ['first visit', 'returning visit']) {
       left.container.dispatchEvent(new PointerEvent('pointermove', { clientX: pv.div.getBoundingClientRect().left + pv.div.clientLeft + cx, bubbles: true }))
       left.container.scrollTop = want
       await new Promise(res => setTimeout(res, 800))
-      errs.push(Math.abs(Math.round(unitDocTop(right, id) - right.container.scrollTop - (top - left.container.scrollTop))))
+      errs.push({ id, e: Math.abs(Math.round(unitDocTop(right, id) - right.container.scrollTop - (top - left.container.scrollTop))) })
     }
-    errs.sort((a, b) => a - b)
-    return { linked: ids.length, units: left.anchors.size, sampled: errs.length, within4px: errs.filter(e => e <= 4).length, max: errs.at(-1) }
+    errs.sort((a, b) => a.e - b.e)
+    // the paragraphs not level, by unit id and kind, to look into
+    const off = errs.filter(x => x.e > 4).map(x => `${x.id}:${window.__reader.debug.unitKind.get(x.id)}:${x.e}px`)
+    return { linked: ids.length, units: left.anchors.size, sampled: errs.length, within4px: errs.filter(x => x.e <= 4).length, max: errs.at(-1)?.e, off }
   })
   console.log(`\n${paper} — ${visit}`)
   for (const e of events) { const { t, event, ...rest } = e; console.log(`  ${(t / 1000).toFixed(1).padStart(6)} s  ${event.padEnd(14)} ${JSON.stringify(rest)}`) }

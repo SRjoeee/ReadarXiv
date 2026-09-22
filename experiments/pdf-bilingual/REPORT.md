@@ -660,3 +660,51 @@ Checks, on 2608.02163 in Chromium:
 - a walkthrough of the page: the reader over it on the original; side by side; the hover; the band; the display after a reload; the way back;
 - the translation alone, and the language switch;
 - the zoom through all three displays.
+
+## Fourteenth addendum, 2026-09-23: three faults found reading 2608.02163
+
+The owner, reading 2608.02163 in the reader, found three faults:
+- a figure showed its translated labels, then a frame with its file name, then the figure again with no labels;
+- many translated headings did not light;
+- in Japanese, a paragraph lit from its second line on the right.
+
+They came from four causes, one of them behind two of the faults.
+
+- **No marks in any translation set by XeLaTeX.** xdvipdfmx drops the named destinations that nothing in the PDF refers to, as ours are, unless a special on the first page sets its flag C 0x0010. So every CJK translation had no marks, and the right side located its units by text alone. The Japanese paragraph is an example: its opening words were matched in another paragraph that has the same words. `MARK_DEF` now sets the flag.
+- **An end mark on a line of its own.** With the marks back, Figure 1's caption still could not be bounded, because its end mark sat alone on an extra line.
+  - The cause: xeCJK sets glue after a full-width stop, and a mark after that glue makes the glue a place to break. With the caption's last line full, the browser's XeTeX broke there. The caption got one line more, and the mark had no word beside it.
+  - The fix: the end mark (`\axtend`) takes the glue off, sets the mark against the last letter, and puts the same glue back. It starts with `\relax`, because XeTeX sets a word, and xeCJK's glue after it, only when a command that does not expand comes; a test made before one looked at the list without them.
+  - Checked by replaying the captured final source in the browser: the mark stands at the end of the caption's last line. Against the same source with no marks, no word moved except a 0.1 pt rounding on three lines and one centred caption 1.2 pt aside. There, a start mark between a Latin piece and CJK text takes away xeCJK's space between them; it is left as it is.
+  - The patch identity gate: 113 of 113.
+- **Headings between their neighbours in the text.** A heading carries no marks and is searched between the marked units around it. Two changes:
+  - A caption or a footnote, which TeX sets elsewhere, is no neighbour: a caption placed a column later had made the range end before the heading began.
+  - In that range, the heading's words in a row, at the last place they come, before 3-grams: 3-grams took a four-character heading from the text around it, which used the same characters. A heading is followed by its own text; a running head with its words comes before it.
+
+  A float's text that its range does not hold is searched in the whole document, since its float may stand anywhere. `spikes/anchors-cases.mjs` keeps the three heading cases; the previous code fails all three.
+- **Figures.** Three changes:
+  - *The final had no figure text on the pages in view.* A new compile's pages are drawn out of sight before it takes the right side's place, and figure text was laid only on the side that was already the right one. Now every translation page lays its figures as it is drawn, and the swap waits for those in view, 1.5 s at most.
+  - *Previews showed frames.* Previews set images as frames of their size (graphicx's draft), because images dominate a pass. The alternatives, measured in the browser's BusyTeX:
+
+    | a preview pass of | frames | images | PNGs as 1,200 px thumbnails |
+    |---|---|---|---|
+    | 2608.02163 (6 PNGs, 4.1 MB) | 1.6 s | 4.9 s | 2.8 s |
+    | 2608.10091 (3 PNGs, 9.7 MB) | 1.1 s | 9.9 s | 2.5 s |
+    | 2608.02055 (25 PDF figures) | 1.9 s | 8.9 s | 8.9 s (none to shrink) |
+
+    So the frames stay, and the reader covers them. Each frame's corners are marked (`live.mjs` DRAFT, wrapping graphicx's `\Gin@setfile`), and the figure of arXiv's PDF that the frame stands for is drawn over it. A frame and a figure on the left stand for each other when three things hold: they are next to the same caption, of the same size, and in the same place in reading order. A frame that no figure stands for is left as it is; this includes a transformed include, whose marks keep the frame's size before the transformation.
+  - *One figure, one reading.* The figure text of every translation page is the left figure's, read once (by the recogniser or from the text layer) and translated once. The translation pages are arXiv's PDF on the right before the first preview, each preview, and the final. Before, the final read its figures again. arXiv's PDF on the right is the left's file (the same fingerprint), so its figures are the left's page for page.
+
+On 2608.02163, units located on the right side:
+
+| | Traditional Chinese, before → after | Japanese, before → after |
+|---|---|---|
+| headings (42) | 23 → 42 | 25 → 42 |
+| paragraphs (97) | 84 → 97 | 81 → 97 |
+| captions (17) | 16 → 17 | 14 → 17 |
+| table cells located on both sides (193) | 12 → 44 | 12 → 57 |
+
+Figure 1 has its translated labels from the first preview on, with its frame covered, and the final shows the same labels. With the text around it translated, the Japanese paragraph now lights from its first line on both sides.
+
+The live run end to end:
+- Microsoft, Simplified Chinese: previews swapped in about 250 ms each, the final in 811 ms, with 0 px drift each time; 26 of 26 sampled paragraphs were level within 4 px.
+- The LLM path, through a mock service: 23 of 24 were level. The one off, by 240 px, is a paragraph on the last page, where the right side cannot scroll any further. That is the scroll sync's end of document, which the sync research takes up.

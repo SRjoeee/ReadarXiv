@@ -123,7 +123,9 @@ function makeSide(container) {
   const linkService = new PDFLinkService({ eventBus })
   const viewer = new PDFViewer({ container, eventBus, linkService, textLayerMode: 1, removePageBorders: false })
   linkService.setViewer(viewer)
-  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), byPage: new Map() }
+  // figs: each page's figures being laid (paintFigures), and figGen the latest call's number, by page; frames: a draft
+  // preview's frames (pdfFrames), a promise; anchored: the side's units located, a promise, where they come after its pages
+  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), byPage: new Map(), figs: new Map(), figGen: new Map(), frames: null, anchored: null }
 }
 const left = makeSide($('left'))
 let right = makeSide($('right'))
@@ -152,8 +154,24 @@ async function pdfMarks(doc) {
   for (const [name, d] of await doc.getDestinations()) if (/^axt-\d+[se]$/.test(name) && d) out.set(name.slice(4), { page: (await doc.getPageIndex(d[0])) + 1, x: d[2], y: d[3] })
   return out
 }
+/** the frames our previews set where images go (live.mjs DRAFT): page → [{ n, x0, y0, x1, y1 }] in PDF units, from each
+ *  frame's three marks; marks that make no upright rectangle (a transformed include) are left out */
+async function pdfFrames(doc) {
+  const corners = new Map()
+  for (const [name, d] of await doc.getDestinations()) {
+    const m = /^axt-g(\d+)([abt])$/.exec(name)
+    if (m && d) (corners.get(m[1]) ?? corners.set(m[1], {}).get(m[1]))[m[2]] = { page: (await doc.getPageIndex(d[0])) + 1, x: d[2], y: d[3] }
+  }
+  const out = new Map()
+  for (const [n, { a, b, t }] of corners) {
+    if (!a || !b || !t || a.page !== b.page || b.page !== t.page || Math.abs(a.y - b.y) > 0.5 || Math.abs(b.x - t.x) > 0.5 || b.x - a.x < 1 || t.y - b.y < 1) continue
+    ;(out.get(a.page) ?? out.set(a.page, []).get(a.page)).push({ n: Number(n), x0: a.x, y0: a.y, x1: b.x, y1: t.y })
+  }
+  return out
+}
 function index(side, anchors) {
   side.anchors = anchors
+  side.groups = null
   side.byPage = new Map()
   for (const [id, a] of anchors) if (a) a.rects.forEach((r, k) => (side.byPage.get(r.page) ?? side.byPage.set(r.page, []).get(r.page)).push({ id, r, k }))
 }
@@ -232,32 +250,28 @@ let unitKind = new Map()
 document.documentElement.setAttribute('data-axt-on', '')
 document.documentElement.setAttribute('data-axt-mode', 'only')
 setImageModes(document, ['only'])
-const regionsOf = (() => {
-  const byDoc = new WeakMap() // doc → Map page → Promise<regions>
-  /** the figures placed on a page (figures.mjs figureRegions), read once a document */
-  return (side, n) => {
-    let byPage = byDoc.get(side.doc)
-    if (!byPage) byDoc.set(side.doc, (byPage = new Map()))
-    if (!byPage.has(n)) byPage.set(n, side.doc.getPage(n).then(page => page.getOperatorList()).then(ops => figureRegions(ops, pdfjsLib.OPS)))
-    return byPage.get(n)
+/** the figures placed on a page (figures.mjs figureRegions); from the operator list the viewer draws the page by (its
+ *  annotation mode), which PDF.js then builds once for both */
+const regionsOf = perDoc((side, n) => side.doc.getPage(n).then(page => page.getOperatorList({ annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS })).then(ops => figureRegions(ops, pdfjsLib.OPS)))
+/** `make(side, ...args)` once a document and arguments, kept as long as the document is */
+function perDoc(make) {
+  const byDoc = new WeakMap()
+  return (side, ...args) => {
+    let m = byDoc.get(side.doc)
+    if (!m) byDoc.set(side.doc, (m = new Map()))
+    const key = args.join(':')
+    if (!m.has(key)) m.set(key, make(side, ...args))
+    return m.get(key)
   }
-})()
-const figuresOf = new WeakMap() // doc → Map page → Promise<[{ region, lines }]>
-function pageFigures(side, n) {
-  let byPage = figuresOf.get(side.doc)
-  if (!byPage) figuresOf.set(side.doc, (byPage = new Map()))
-  if (!byPage.has(n)) byPage.set(n, (async () => {
-    const page = await side.doc.getPage(n)
-    const [regions, text] = await Promise.all([regionsOf(side, n), page.getTextContent()])
-    const labels = figureLabels(text.items, regions)
-    return Promise.all(regions.map(async (region, k) => ({
-      region,
-      kind: region.kind,
-      lines: region.kind === 'raster' ? (region.image ? await recognise(page, region.image) : []) : vectorLines(labels.filter(l => l.figure === k), region),
-    })))
-  })())
-  return byPage.get(n)
 }
+/** the labels in a page's figures (figures.mjs figureLabels), from its text layer */
+const labelsOn = perDoc(async (side, n) => figureLabels((await (await side.doc.getPage(n)).getTextContent()).items, await regionsOf(side, n)))
+/** one figure's lines — a bitmap read by the recogniser, a vector figure's labels: { region, kind, lines } */
+const figureOf = perDoc(async (side, n, k) => {
+  const region = (await regionsOf(side, n))[k]
+  if (region.kind !== 'raster') return { region, kind: region.kind, lines: vectorLines((await labelsOn(side, n)).filter(l => l.figure === k), region) }
+  return { region, kind: 'raster', lines: region.image ? await recognise(await side.doc.getPage(n), region.image) : [] }
+})
 let ocrWorker = null, ocrSeq = 0
 const ocrWaiting = new Map()
 /** a bitmap of the page, by its object id → its lines, read in the worker (a copy: PDF.js keeps drawing its own) */
@@ -307,37 +321,132 @@ async function translateBoxes(boxes) {
   await Promise.all(single.map(async i => { const got = await send(run(boxes[i].text)); out[i] = got == null ? null : unrun(got) }))
   return out
 }
+// A figure on a translation page — in arXiv's PDF shown there until the first preview, in a preview, in the final — is
+// one of arXiv's (the left's): its text is read and translated once, there, and every translation shows the same
+// overlay. A draft preview sets a frame where an image goes (live.mjs DRAFT), and the left's figure is drawn over it.
+const overlaps = (a, b) => Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0)
+/** the caption next to a figure's rectangle on a side's page (PDF units): a caption located there whose first line lies
+ *  just below the rectangle, else whose last line lies just above it, across its column; the nearest, or null */
+function captionNear(side, page, r) {
+  const col = columnOf(side, page, r)
+  let below = null, above = null
+  for (const [id, a] of side.anchors) {
+    if (!a || unitKind.get(id) !== 'caption') continue
+    const first = a.rects[0], last = a.rects.at(-1), near = 3 * (first.y1 - first.y0) + 24
+    const down = first.page === page && overlaps(first, col) ? r.y0 - first.y1 : NaN, up = last.page === page && overlaps(last, col) ? last.y0 - r.y1 : NaN
+    if (down > -2 && down < near && !(below?.gap <= down)) below = { id, gap: down }
+    if (up > -2 && up < near && !(above?.gap <= up)) above = { id, gap: up }
+  }
+  return (below ?? above)?.id ?? null
+}
+/** rectangles' indices in reading order: rows from the top, each from the left; a rectangle is in a row when it shares
+ *  half its height with the row's first */
+function readingOrder(rs) {
+  const rest = rs.map((r, i) => i).sort((a, b) => rs[b].y1 - rs[a].y1), out = []
+  while (rest.length) {
+    const top = rs[rest[0]], row = rest.filter(i => Math.min(rs[i].y1, top.y1) - Math.max(rs[i].y0, top.y0) > 0.5 * Math.min(rs[i].y1 - rs[i].y0, top.y1 - top.y0))
+    out.push(...row.sort((a, b) => rs[a].x0 - rs[b].x0))
+    for (const i of row) rest.splice(rest.indexOf(i), 1)
+  }
+  return out
+}
+/**
+ * The figures of the left that rectangles on a translation page stand for (its figures, or a draft preview's frames):
+ * those next to one caption on both sides and of one size, paired in reading order. A float keeps its contents and
+ * their order whatever the language, so two figures can only be confused if they share both; one with no caption, or
+ * found with none on either side, stands for none. Map index in `rects` → { page, k, region } on the left
+ */
+async function leftFor(side, n, rects) {
+  const out = new Map(), groups = new Map()
+  rects.forEach((r, i) => { const c = captionNear(side, n, r); if (c != null) (groups.get(c) ?? groups.set(c, []).get(c)).push(i) })
+  for (const [c, mine] of groups) {
+    const theirs = await leftGroup(c), order = readingOrder(theirs.map(t => t.region)), used = new Set()
+    for (const i of readingOrder(mine.map(i => rects[i])).map(j => mine[j])) {
+      const r = rects[i]
+      const j = order.find(j => !used.has(j) && Math.abs(theirs[j].region.x1 - theirs[j].region.x0 - (r.x1 - r.x0)) < 1.5 && Math.abs(theirs[j].region.y1 - theirs[j].region.y0 - (r.y1 - r.y0)) < 1.5)
+      if (j !== undefined) { used.add(j); out.set(i, theirs[j]) }
+    }
+  }
+  return out
+}
+/** the figures next to a caption on the left, [{ page, k, region }]: kept until the left is located again (index) */
+function leftGroup(c) {
+  left.groups ??= new Map()
+  if (!left.groups.has(c)) left.groups.set(c, (async () => {
+    const out = []
+    for (const p of new Set(left.anchors.get(c)?.rects.map(r => r.page))) (await regionsOf(left, p)).forEach((region, k) => { if (captionNear(left, p, region) === c) out.push({ page: p, k, region }) })
+    return out
+  })())
+  return left.groups.get(c)
+}
+/** a figure of the left drawn at a size in device pixels, for a frame: its page drawn once per figure and size (the
+ *  latest size kept), a copy for each frame; in the viewer's annotation mode, so that PDF.js reads the page once. Kept
+ *  while previews come in (replaceRight empties it for the final: a figure's drawing is megabytes) */
+const copies = new Map() // `${page}:${k}` → { w, h, canvas: Promise<HTMLCanvasElement> }
+async function copyOf({ page, k, region }, w, h) {
+  let c = copies.get(`${page}:${k}`)
+  if (!c || c.w !== w || c.h !== h) copies.set(`${page}:${k}`, (c = { w, h, canvas: (async () => {
+    const pdfPage = await left.doc.getPage(page), viewport = pdfPage.getViewport({ scale: w / (region.x1 - region.x0) })
+    const [x, y] = viewport.convertToViewportPoint(region.x0, region.y1)
+    const canvas = Object.assign(document.createElement('canvas'), { width: w, height: h })
+    await pdfPage.render({ canvas, viewport, transform: [1, 0, 0, 1, -x, -y], annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS }).promise
+    return canvas
+  })() }))
+  const out = Object.assign(document.createElement('canvas'), { width: w, height: h })
+  out.getContext('2d').drawImage(await c.canvas, 0, 0)
+  return out
+}
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+/**
+ * A translation page's figures (any side but the left), each with the overlay of its text: the text of the left's
+ * figure it stands for (leftFor), else its own; on a draft preview, the left's figure drawn over each frame too, and a
+ * frame that stands for none left as it is. The page's overlays are replaced in one step once the new ones are ready,
+ * so that a page drawn again never shows its figures bare in between; a newer call for the page wins.
+ */
 async function paintFigures(side, n) {
   const pv = pageView(side, n)
-  if (!pv?.div) return
-  pv.div.querySelectorAll(':scope > .axt-fig').forEach(el => el.remove())
-  if (!$('figures').checked) return
-  const figures = await pageFigures(side, n)
-  const vp = pv.viewport
-  for (const [k, f] of figures.entries()) {
-    // a line that is only a name joins no box and keeps its text (mt.mjs isName): merged, a legend's
-    // Average / DirectHarm4 / HarmBench / HEx-PHI went as one text and DirectHarm4 came back as 直接伤害 4; alone, the
-    // HTML mode's tick names came back as 地狱之战 (HellaSwag) and 魔法师 (Magicoder). Proposed for the shared module
-    const boxes = linesToBoxes(f.lines.filter(l => !isName(l.text, prose)))
-    if (!boxes.length) continue
-    const done = await translateBoxes(boxes)
-    const labels = boxes.flatMap((b, i) => (done[i] && done[i] !== b.text ? [{ ...b, source: b.text, text: done[i] }] : []))
-    if (!labels.length || side !== right) continue
-    // the figure's place on the page, in CSS pixels; the overlay is laid by the style sheet over the <img> there
-    const [ax, ay] = vp.convertToViewportPoint(f.region.x0, f.region.y1), [bx, by] = vp.convertToViewportPoint(f.region.x1, f.region.y0)
-    const holder = document.createElement('div')
-    holder.className = 'axt-fig'
-    Object.assign(holder.style, { left: `${Math.min(ax, bx)}px`, top: `${Math.min(ay, by)}px`, width: `${Math.abs(bx - ax)}px`, height: `${Math.abs(by - ay)}px` })
-    const inner = document.createElement('div')
-    const img = Object.assign(document.createElement('img'), { alt: '', src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' })
-    inner.append(img); holder.append(inner)
-    pv.div.querySelectorAll(`:scope > .axt-fig[data-figure="${k}"]`).forEach(el => el.remove())
-    holder.dataset.figure = String(k)
-    pv.div.append(holder)
-    renderImage({ id: `p${n}-f${k}`, el: img, kind: f.kind === 'raster' ? 'raster' : 'svg' }, labels, { ratio: Math.abs(bx - ax) / Math.max(1, Math.abs(by - ay)) })
+  if (!pv?.div || side === left) return
+  const gen = (side.figGen.get(n) ?? 0) + 1
+  side.figGen.set(n, gen)
+  let laid = []
+  if ($('figures').checked) {
+    const frames = side.frames && ((await side.frames).get(n) ?? [])
+    const rects = frames ?? (await regionsOf(side, n))
+    // arXiv's PDF itself, shown on the right until the first preview: its figures are the left's, page for page
+    const same = !frames && left.doc && side.doc.fingerprints[0] === left.doc.fingerprints[0]
+    const theirs = same ? new Map(rects.map((region, k) => [k, { page: n, k, region }])) : (await side.anchored, await leftFor(side, n, rects))
+    const vp = pv.viewport, dpr = devicePixelRatio || 1
+    laid = await Promise.all(rects.map(async (r, i) => {
+      const from = theirs.get(i)
+      if (frames && !from) return null
+      const fig = await (from ? figureOf(left, from.page, from.k) : figureOf(side, n, i))
+      // a line that is only a name joins no box and keeps its text (mt.mjs isName): merged, a legend's
+      // Average / DirectHarm4 / HarmBench / HEx-PHI went as one text and DirectHarm4 came back as 直接伤害 4; alone, the
+      // HTML mode's tick names came back as 地狱之战 (HellaSwag) and 魔法师 (Magicoder). Proposed for the shared module
+      const boxes = linesToBoxes(fig.lines.filter(l => !isName(l.text, prose)))
+      const done = boxes.length ? await translateBoxes(boxes) : []
+      const labels = boxes.flatMap((b, j) => (done[j] && done[j] !== b.text ? [{ ...b, source: b.text, text: done[j] }] : []))
+      if (!labels.length && !frames) return null
+      // the figure's place on the page, in CSS pixels; the overlay is laid by the style sheet over the <img> there
+      const [ax, ay] = vp.convertToViewportPoint(r.x0, r.y1), [bx, by] = vp.convertToViewportPoint(r.x1, r.y0)
+      const width = Math.abs(bx - ax), height = Math.abs(by - ay)
+      const holder = Object.assign(document.createElement('div'), { className: 'axt-fig' })
+      Object.assign(holder.style, { left: `${Math.min(ax, bx)}px`, top: `${Math.min(ay, by)}px`, width: `${width}px`, height: `${height}px` })
+      if (frames) {
+        const copy = await copyOf(from, Math.max(1, Math.round(width * dpr)), Math.max(1, Math.round(height * dpr))).catch(e => { console.warn('[figure copy]', e); return null })
+        if (!copy) return null
+        holder.append(copy)
+      }
+      const inner = document.createElement('div'), img = Object.assign(document.createElement('img'), { alt: '', src: BLANK })
+      inner.append(img); holder.append(inner)
+      return { holder, img, labels, id: `p${n}-f${i}`, kind: fig.kind === 'raster' ? 'raster' : 'svg', ratio: width / Math.max(1, height) }
+    }))
   }
+  if (side.figGen.get(n) !== gen) return
+  pv.div.querySelectorAll(':scope > .axt-fig').forEach(el => el.remove())
+  for (const f of laid) if (f) { pv.div.append(f.holder); if (f.labels.length) renderImage({ id: f.id, el: f.img, kind: f.kind }, f.labels, { ratio: f.ratio }) }
 }
-function repaintFigures() { for (const pv of right.viewer._pages ?? []) if (pv.renderingState === 3) paintFigures(right, pv.id) }
+function repaintFigures() { for (const pv of right.viewer._pages ?? []) if (pv.renderingState === 3) right.figs.set(pv.id, paintFigures(right, pv.id).catch(e => console.warn('[figures]', e))) }
 
 /** a pointer event's place on its page: the page and the point in PDF units, or null off the pages */
 function pointOf(side, event) {
@@ -668,8 +777,8 @@ function attach(side) {
     if (!p || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4 || e.timeStamp - p.t > 600 || !(getSelection()?.isCollapsed ?? true)) return
     void alignClick(side, e)
   })
-  // PDF.js re-renders a page's div on zoom and as pages come into view: the highlight is drawn again there
-  side.eventBus.on('pagerendered', ({ pageNumber }) => { if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start; paint(side); if (side === right) paintFigures(side, pageNumber) })
+  // PDF.js re-renders a page's div on zoom and as pages come into view: the highlight and the figures are laid again there
+  side.eventBus.on('pagerendered', ({ pageNumber }) => { if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start; paint(side); if (side !== left) side.figs.set(pageNumber, paintFigures(side, pageNumber).catch(e => console.warn('[figures]', e))) })
   // a side opened out of the display (the original, while the translation alone is shown) waits at 1 for its width (relayout)
   side.eventBus.on('pagesinit', () => { const value = side.scale ?? 'page-width'; side.viewer.currentScaleValue = shown(side) || typeof value === 'number' ? value : 1 })
   side.eventBus.on('scalechanging', ({ scale }) => { invalidate(); if (shown(side) && (side === left || !shown(left))) $('zoom').textContent = `${Math.round(scale * 100)}%` })
@@ -681,12 +790,15 @@ $('zoomIn').onclick = () => { for (const s of sides) if (shown(s)) s.viewer.curr
 $('zoomOut').onclick = () => { for (const s of sides) if (shown(s)) s.viewer.currentScale = Math.max(0.25, s.viewer.currentScale / 1.15) }
 
 // ---------------------------------------------------------------- anchoring one side
+/** the units TeX sets away from where the source has them: a caption with its float, a footnote at the foot of its
+ *  page, a table's cells, a picture's text (anchors.mjs anchorUnits) */
+const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
 /** every unit located on a side: `texts` is the unit's text as that PDF has it; `marks` null = read them from the PDF */
 async function anchorSide(side, texts, marks) {
   const pages = await textPages(side.doc)
   const doc = tokenizeDocument(pages)
   const bounds = boundsFromMarks(doc, marks ?? (await pdfMarks(side.doc)))
-  index(side, anchorUnits(doc, texts, { bounds }))
+  index(side, anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(unitKind.get(id)) }))
   return bounds.size
 }
 
@@ -711,9 +823,12 @@ function scrollFor(side, place) {
   return pageTop(side, r.page) + box.top + (pos - lj) * box.height - side.container.clientHeight * readingLine
 }
 /** a newer compile on the right: loaded into a second viewer out of sight, anchored, scrolled so that the paragraph at
- *  the reading line stays put, its visible pages rendered, then shown in place of the old one */
-async function replaceRight(url, texts) {
+ *  the reading line stays put, its visible pages drawn with their figures, then shown in place of the old one. `draft`:
+ *  a preview whose images are frames (live.mjs DRAFT), the left's figures drawn over them (paintFigures) */
+let rightTexts = null // the units' texts on the right as it was last anchored, for the test harness
+async function replaceRight(url, texts, { draft = false } = {}) {
   const t0 = performance.now()
+  rightTexts = texts
   const place = placeOf(right)
   const offset = place && scrollFor(right, place) - right.container.scrollTop // 0 unless the reader is between lines
   const container = document.createElement('div')
@@ -724,18 +839,22 @@ async function replaceRight(url, texts) {
   next.scale = right.viewer.currentScale
   attach(next)
   const inited = new Promise(r => next.eventBus.on('pagesinit', r, { once: true }))
-  await open(next, url)
-  await inited
-  await anchorSide(next, texts)
+  const opened = open(next, url)
+  if (draft) next.frames = opened.then(pdfFrames).catch(() => new Map())
+  next.anchored = opened.then(() => inited).then(() => anchorSide(next, texts))
+  await next.anchored
   const top = scrollFor(next, place)
   if (top != null) next.container.scrollTop = top - (offset ?? 0)
   else next.container.scrollTop = right.container.scrollTop
-  // wait for the pages in view to be drawn
+  // wait for the pages in view to be drawn, then for their figures, a while at most: a figure whose text is still being
+  // read comes in after the swap rather than hold the whole page back
   await new Promise(resolve => {
     const want = () => next.viewer._getVisiblePages().views.map(v => v.view).filter(v => v.renderingState !== 3)
     const check = () => (want().length ? setTimeout(check, 30) : resolve())
     next.viewer.update(); check()
   })
+  await Promise.race([Promise.all(next.viewer._getVisiblePages().views.map(v => next.figs.get(v.id))), new Promise(r => setTimeout(r, 1500))])
+  if (!draft) copies.clear()
   const old = right
   right = next; sides[1] = next
   if (driver === old) driver = next
@@ -807,7 +926,7 @@ async function live() {
   note('source', { units: units.length, files: files.size })
   await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
   note('anchored')
-  window.__reader.debug = { left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, units: units.map((u, i) => ({ i, kind: u.kind, text: src[i].text })) }
+  window.__reader.debug = { left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, units: units.map((u, i) => ({ i, kind: u.kind, text: src[i].text })), get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf }
   window.__reader.ready = true
   // the compiler: our site's TeX page
   const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
@@ -842,7 +961,7 @@ async function live() {
       const d = top - (c.scrollTop + c.clientHeight * readingLine)
       return d >= -c.clientHeight * 0.3 ? Math.abs(d) : 2 * Math.abs(d)
     },
-    onUpdate: ({ pdf, texts, translated, final }) => { swaps = swaps.then(async () => { const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts); URL.revokeObjectURL(url); note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
+    onUpdate: ({ pdf, texts, translated, final }) => { swaps = swaps.then(async () => { const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
     onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const n = await anchorSide(left, src, await marksOfPdf(pdf)); invalidate(); paint(left); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
   }).catch(e => ({ error: e.message ?? String(e) }))
   if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`)

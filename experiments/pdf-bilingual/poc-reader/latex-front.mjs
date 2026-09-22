@@ -507,20 +507,38 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
   return out
 }
 
+/** \\axtend{name}: a unit's end mark, which must not change where a line breaks. A mark after glue — the glue xeCJK sets
+ *  after a full-width stop — makes that glue a place to break before it, and in a full last line TeX took it: the mark
+ *  alone on a line of its own, one line more in the caption, and no word beside the mark to bound the unit with (the
+ *  owner's Figure 1, 2026-09-23, in the browser's XeTeX). So the glue is taken off, the mark set against the last
+ *  letter, and the same glue put back after it: where a paragraph ends \\par takes it off as before, and inside a line
+ *  it breaks where it did. \\relax first: XeTeX sets a word, and xeCJK's glue after it, only when a command that does
+ *  not expand comes, so a test before one would look at the list without them. On one line: a line end in the macro
+ *  would be a space */
+const END_MARK = [
+  '\\protected\\def\\axtend#1{\\relax\\ifhmode\\ifnum\\lastnodetype=11 \\edef\\axtskip{\\the\\lastskip}\\unskip\\nobreak\\axtmark{#1}\\hskip\\axtskip\\relax%',
+  '\\else\\axtmark{#1}\\fi\\else\\axtmark{#1}\\fi}',
+]
 /** \\axtmark{name}: a PDF destination named axt-<name> at the current point, in each engine's own way. Protected, so
- *  it survives being written to the .aux and moving arguments unexpanded. Goes first in the main file */
+ *  it survives being written to the .aux and moving arguments unexpanded. Goes first in the main file.
+ *  xdvipdfmx, XeTeX's PDF writer, drops every named destination nothing in the PDF refers to, as ours are, unless told
+ *  not to (its flag C 0x0010) by a special on the first page: without it every translation set by XeLaTeX — every CJK
+ *  one — had no marks, and the reader located its units by text alone (the owner, 2026-09-23: headings that did not
+ *  light, a Japanese paragraph lit from its second line) */
 export const MARK_DEF = [
   '\\ifdefined\\XeTeXrevision\\protected\\def\\axtmark#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}',
+  '\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\special{dvipdfmx:config C 0x0010}}\\fi',
   '\\else\\ifdefined\\pdfextension\\protected\\def\\axtmark#1{\\pdfextension dest name{axt-#1} xyz\\relax}',
   '\\else\\ifdefined\\pdfdest\\protected\\def\\axtmark#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} xyz\\relax\\fi}',
   '\\else\\protected\\def\\axtmark#1{}\\fi\\fi\\fi',
+  ...END_MARK,
 ].join('\n') + '\n'
 // pieces that are always set on the line: inline formulas and references
 const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]ref)(?![A-Za-z]))/
 /** marks for the units whose place a reader shows: not headings (their text is also typeset in running heads and
  *  tables of contents), not table cells, not the texts of a TikZ picture (set through the picture's own transformation,
  *  which a destination's position does not follow) */
-export const markUnits = units => { const id = new Map(units.map((u, i) => [u, i])); return u => (u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtmark{${id.get(u)}e}` }) }
+export const markUnits = units => { const id = new Map(units.map((u, i) => [u, i])); return u => (u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` }) }
 
 /** Goes before \\begin{document} of the original's own compile: the log then says which font families the document set
  *  for its roles, however it set them (its class, a package, a conference style) */

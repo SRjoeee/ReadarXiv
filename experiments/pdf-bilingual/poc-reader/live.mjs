@@ -26,7 +26,17 @@ export const lostIn = log => new Set([...(log ?? '').matchAll(/^(?:Missing chara
  *  `known` holds the characters the paper's own full compile could not set either: the original lacks them too, and a
  *  translation that also lacks them is no worse. The chain moves on from it as from a compile with no PDF */
 export const unsettable = (r, known = new Set()) => /^! Font .* not loadable/m.test(r.log ?? '') || [...lostIn(r.log)].some(c => !known.has(c))
-const DRAFT = '\\PassOptionsToPackage{draft}{graphicx}\n'
+/** images as frames of their own size (graphicx's draft), each frame's corners marked — g<n>a and g<n>b at its left and
+ *  right ends on its baseline, g<n>t at its top right, n counting \includegraphics in the order TeX runs them — so that
+ *  the reader lays the left's figure over its frame (reader.js leftFor). A transformed include (\rotatebox or
+ *  \resizebox around it, angle=) turns or scales its frame and not the marks, whose rectangle then has the size of no
+ *  figure on the left, and the reader leaves that frame as it is */
+const DRAFT = [
+  '\\PassOptionsToPackage{draft}{graphicx}',
+  '\\makeatletter\\AddToHook{package/graphics/after}{\\newcount\\axt@g\\let\\axt@setfile\\Gin@setfile%',
+  '\\def\\Gin@setfile#1#2#3{\\leavevmode\\global\\advance\\axt@g\\@ne\\axtmark{g\\the\\axt@g a}\\axt@setfile{#1}{#2}{#3}%',
+  '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
+].join('\n') + '\n'
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
 const stemOf = main => main.replace(/\.[^./]+$/, '')
 /** why a compile gave no PDF: the first TeX error, or what the compiler said */
