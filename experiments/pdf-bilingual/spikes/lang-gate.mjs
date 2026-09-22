@@ -96,14 +96,14 @@ async function openOne(id) {
   const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
   const paper = openPaper(files)
   const made = fingerprint(probeFiles(paper), originalFiles(paper))
-  if (originals[id]?.made !== made || !originals[id].originalMissing) {
+  if (originals[id]?.made !== made || !originals[id].originalLost) {
     const { meta, project } = paper
     const probe = await compile(files, join(WORK, id, 'probe'), { main: project.main, engine: meta.compiler, rerun: false, overrides: probeFiles(paper) })
     const orig = await compile(files, join(WORK, id, 'orig'), { main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper) })
     const text = orig.ok ? pdfText(orig.pdf) : ''
-    // the characters the paper's own full compile could not set (the probe has no body): a translation is judged by the
-    // ones it adds, as the reader judges it
-    originals[id] = { made, fonts: readFontProbe(probe.log), originalMissing: [...lostIn(orig.log)], ok: orig.ok, pages: orig.ok ? pagesOf(orig.pdf) : null, unresolved: count(text, /\?\?/g), ...logSignals(orig.log), ms: orig.ms }
+    // the characters the paper's own full compile could not set, each with how often (the probe has no body): a
+    // translation is judged by the losses it adds, as the reader judges it
+    originals[id] = { made, fonts: readFontProbe(probe.log), originalLost: Object.fromEntries(lostIn(orig.log)), ok: orig.ok, pages: orig.ok ? pagesOf(orig.pdf) : null, unresolved: count(text, /\?\?/g), ...logSignals(orig.log), ms: orig.ms }
     rmSync(join(WORK, id), { recursive: true, force: true })
     writeFileSync(ORIGINALS, JSON.stringify(originals, null, 1))
   }
@@ -118,7 +118,7 @@ async function one({ files, paper, original }, id, lang) {
   // each attempt in a directory of its own: the other languages of this paper compile beside it at the same time
   const dirOf = k => join(WORK, id, `${lang}-${k}`)
   let r = null, strategy = null
-  const known = new Set(original.originalMissing)
+  const known = new Map(Object.entries(original.originalLost))
   for (const [k, s] of strategiesFor(meta, lang).entries()) {
     strategy = s
     r = await compile(files, dirOf(k), { main: project.main, engine: s.engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, translated, { strategy: s, fonts: original.fonts, draft: false, aux: null, bbl: null }) })
