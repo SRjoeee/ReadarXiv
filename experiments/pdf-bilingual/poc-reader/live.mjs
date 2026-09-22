@@ -132,12 +132,12 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
       const r = await compile({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bbl, overrides: translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft: true, aux, bbl }) })
       if (r.aux) aux = r.aux
       if (r.bbl) bbl = r.bbl
-      // shown when it set every letter, or when no strategy is left to do better; the note says ok for what is shown
-      const last = s + 1 >= strategies.length
-      const shown = settled(r) || (r.ok && last)
+      // shown only when it set every letter: a translation with letters missing is not one (Devin on #294); the note says
+      // ok for what is shown, and with no strategy left the reader keeps what it has
+      const shown = settled(r)
       note('preview', { ok: shown, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, error: shown ? undefined : whyFailed(r) ?? 'a letter it could not set' })
       if (shown) { previews++; onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false }) }
-      else if (!last) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
+      else if (s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
       continue
     }
     if (mtDone) break
@@ -150,13 +150,12 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
   let r
   for (;;) {
     r = await compile({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl }) })
-    const last = s + 1 >= strategies.length
-    note('final', { ok: settled(r) || (r.ok && last), ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, error: settled(r) ? undefined : whyFailed(r) ?? 'a letter it could not set' })
-    if (settled(r) || last) break
+    note('final', { ok: settled(r), ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, error: settled(r) ? undefined : whyFailed(r) ?? 'a letter it could not set' })
+    if (settled(r) || s + 1 >= strategies.length) break
     s++; aux = null
     note('next strategy', { strategy: strategy().name })
   }
-  if (r.ok) onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
+  if (settled(r)) onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
   if (!originalDone) await original()
   return { previews, translated: translated.size, units: units.length }
 }

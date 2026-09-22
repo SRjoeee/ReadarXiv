@@ -5,7 +5,8 @@
 // it. Per result: whether it compiled with every letter set, and with which strategy; the target script's letters found in the PDF's text
 // against those put in (a font without them drops them, and the reader anchors on that text); "Missing character"
 // lines; TeX errors; overfull boxes and pages against the original's; references left unresolved.
-//   node spikes/lang-gate.mjs [--langs=zh,ja] [--papers=id,id] [--parallel=5] [--accept | --check]
+//   node spikes/lang-gate.mjs [--langs=zh,ja] [--papers=id,id] [--parallel=5] [--accept | --check] [--tune=Jpan.leading=1.1,…]
+// --tune tries other values of a script's parameters (scripts.mjs: CJK) and writes out/lang-gate-tune-<values>.json
 // Writes out/lang-gate.json and each PDF to out/lang-gate/; --accept stores the result as the baseline, --check
 // compares with it and exits 1 on a loss (a result lost, letters lost, more errors, unresolved references, or more overfull
 // boxes; pages are reported, not judged: a change to the spacing moves them on purpose). The baseline is the corpus's,
@@ -18,7 +19,7 @@ import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { pseudoTranslate, readFontProbe } from '../poc-reader/latex-front.mjs'
 import { openPaper, originalFiles, probeFiles, translationFiles, unsettable } from '../poc-reader/live.mjs'
-import { scriptOf, strategiesFor } from '../poc-reader/scripts.mjs'
+import { CJK, scriptOf, strategiesFor } from '../poc-reader/scripts.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
 import { unpackSource } from '../poc-reader/tar.mjs'
 
@@ -33,10 +34,17 @@ const SAMPLE = ['2608.02163', '2608.05876', '2608.09746', '2608.12333', '2608.18
 const LANGS = arg('langs', 'zh,zh-Hant,ja,ko,de,es,fr,pt,ru').split(',')
 const PAPERS = arg('papers', SAMPLE.join(',')).split(',')
 const PARALLEL = Number(arg('parallel', '5'))
-const OUT = join(root, 'out/lang-gate.json')
+const TUNE = arg('tune', '')
+for (const setting of TUNE ? TUNE.split(',') : []) {
+  const [path, value] = setting.split('='), [script, key] = path.split('.')
+  if (!CJK[script] || !(key in CJK[script])) throw new Error(`--tune: no parameter ${path}`)
+  CJK[script][key] = Number(value)
+}
+const tag = TUNE ? `-tune-${TUNE.replace(/[^A-Za-z0-9.]+/g, '_')}` : ''
+const OUT = join(root, `out/lang-gate${tag}.json`)
 const BASELINE = join(root, 'out/lang-gate-baseline.json')
 const ORIGINALS = join(root, 'out/lang-gate-orig.json')
-const PDFS = join(root, 'out/lang-gate')
+const PDFS = join(root, `out/lang-gate${tag}`)
 const WORK = join(root, 'data/runs/lang-gate')
 
 /** the letters that show a language's text reached the page: its script's, or for a Latin one the letters beyond ASCII */

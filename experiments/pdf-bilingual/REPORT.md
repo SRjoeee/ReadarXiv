@@ -518,8 +518,8 @@ The baseline, the pipeline before this work with the same pseudo-translation, co
 
 What a translation needs besides its text follows from the script its language is written in (`Intl.Locale(lang).maximize().script`). The language names only the locale babel loads by its tag (`\babelprovide[import=<tag>,main]`), which brings the captions (图, 圖, 図, 그림, Abbildung, Figura, Рис.), the hyphenation patterns and the direction for every language babel has an ini file for.
 
-- **CJK**: XeLaTeX with xeCJK. The script gets a family of its own (Fandol, AR PL Mingti and Kaiti, IPAex, UnBatang), the paper's Latin faces in their OpenType form set the rest, and Hangul's word spaces are kept; CJKutf8 under the paper's own pdfLaTeX when XeLaTeX cannot take the paper. Line spacing ×1.3 (ctex's Chinese scheme), multiplying the paper's own. Measured on the PDFs (`spikes/typo-metrics.mjs`): 1.10× → 1.43× of the CJK size on an AAAI paper, 1.20× → 1.56× on an IEEEtran one. Service H sets ctex's factor as a fixed value at load time: its Chinese PDFs measured 1.43× where the class's own spacing is 1.10×, and 1.14× on an ICASSP paper whose `\ninept` resets the spacing in the body (2026-09-22; its PDFs are kept outside this repository). That is the density the owner saw in ours.
-- **Alphabets** stay with the paper's own pdfLaTeX, their letters' font encoding made the document's default: none for Latin, T2A for Cyrillic. The paper's families fall back to the encoding's own where they have none (Times has no T2A: Russian comes out in Computer Modern's Cyrillic, hyphenated by babel's Russian patterns), as a Russian author's pdfLaTeX paper does. T2A also sets the Latin letters of the paper's own names: a reference's Mądry, its ogonek in place.
+- **CJK**: XeLaTeX with xeCJK. The script gets a family of its own (Fandol, AR PL Mingti and Kaiti, IPAex, UnBatang), the paper's Latin faces in their OpenType form set the rest, and Hangul's word spaces are kept; CJKutf8 under the paper's own pdfLaTeX when XeLaTeX cannot take the paper. Line spacing ×1.3 (ctex's Chinese scheme), multiplying the paper's own; since the owner's review (below), for Chinese only. Measured on the PDFs (`spikes/typo-metrics.mjs`): 1.10× → 1.43× of the CJK size on an AAAI paper, 1.20× → 1.56× on an IEEEtran one. Service H sets ctex's factor as a fixed value at load time: its Chinese PDFs measured 1.43× where the class's own spacing is 1.10×, and 1.14× on an ICASSP paper whose `\ninept` resets the spacing in the body (2026-09-22; its PDFs are kept outside this repository). That is the density the owner saw in ours.
+- **Alphabets** stay with the paper's own pdfLaTeX, their letters' font encoding made the document's default: none for Latin, T2A for Cyrillic. The paper's families fall back to the encoding's own where they have none (Times has no T2A: Russian came out in Computer Modern's Cyrillic, and since the owner's review in a face of Times' design, below), as a Russian author's pdfLaTeX paper does; babel's Russian patterns hyphenate it. T2A also sets the Latin letters of the paper's own names: a reference's Mądry, its ogonek in place.
 - **A letter an engine cannot set** makes the chain move on (`unsettable`: pdfLaTeX's "Unicode character … not set up"), to XeLaTeX with faces that have it.
 - A paper the author set with XeLaTeX or LuaLaTeX keeps its engine (not measured: the corpus has none).
 
@@ -537,7 +537,7 @@ Open, and older than this work, all three on XeLaTeX, which a pdfLaTeX paper rea
 
 ### Results
 
-The final run (`--check` against the baseline), the first batch:
+The final run, the first batch, as archived on 2026-09-23. Since the owner's review (below), Japanese and Korean are at the paper's own spacing, and Russian is set in faces of the paper's design:
 
 | | zh | zh-Hant | ja | ko | de | es | fr | pt | ru |
 |---|---|---|---|---|---|---|---|---|---|
@@ -546,7 +546,7 @@ The final run (`--check` against the baseline), the first batch:
 | letters found / put in, median | 1.002 | 1.001 | 1.001 | 1.002 | 1.012 | 1.018 | 1.009 | 1.014 | 1.002 |
 | papers with a missing character | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | papers with a TeX error | 6 | 6 | 2 | 2 | 0 | 0 | 1 | 0 | 0 |
-| pages against the original's, median | 1.00 | 1.04 | 1.20 | 1.17 | 1.10 | 1.07 | 1.07 | 1.05 | 1.11 |
+| pages against the original's, median | 1.00 | 1.04 | 1.00 | 1.00 | 1.10 | 1.07 | 1.07 | 1.05 | 1.10 |
 | moved on to XeLaTeX | – | – | – | – | 0 | 0 | 2 | 0 | 0 |
 
 (A found/put-in ratio above 1 is the original's own non-ASCII letters, names and references, counted with the translation's.) The errors are the ones named above: in zh and zh-Hant, the four papers of item 5, the paper that loads CJKutf8 and the paper whose math fonts fail under XeLaTeX; in ja and ko, those last two; in fr, that same paper. The gate's six "losses" against the baseline are item 5's four and the paper that loads CJKutf8 (nine errors to ten). Vietnamese, still with T5 in this run, also compiled 24 of 24: the ogonek's error on one paper, the math-font paper on another, three moved on to XeLaTeX.
@@ -562,4 +562,34 @@ A native gate passed what the browser failed. In Chromium with BusyTeX and Micro
 - **The chain's rules**: a compile succeeds only with a PDF that has something in it, and a font that cannot be loaded (`! Font … not loadable`) makes the chain move on, like a letter with no definition. The reader's notes say `ok` for what it will show (Devin on #294).
 - **End to end** on 2608.02163, first visit: Russian on the paper's own pdfLaTeX, previews in 0.7–0.9 s each, the final at 19 s; Korean on XeLaTeX with xeCJK, previews in about 1.6 s, the final at 18.7 s. Paragraph by paragraph, with the reader level at its reading line: Russian 25 of 25 sampled units within 4 px (at most 3 px), 162 of 350 units linked; Korean 26 of 26 within 4 px (at most 2 px), 136 of 350 linked. The spike's check had read a constant the reader no longer has (`READING_LINE`, now the `readingLine` that follows clicks), and so measured nothing before.
 
-The review of #294 also made the gate judge references that stop resolving and overfull boxes beyond max(2, 10 %) of the baseline's (pages are reported, not judged), and key its cache of originals by what their compiles are made of. LuaLaTeX papers are left as they are, since none of the corpus's 123 is one.
+The review of #294 also made the gate judge references that stop resolving and overfull boxes beyond max(2, 10 %) of the baseline's (pages are reported, not judged), and key its cache of originals by what their compiles are made of. LuaLaTeX papers are left as they are, since none of the corpus's 123 is one. Its second round:
+- A translation with a letter missing is never shown, not even from the chain's last strategy; the reader keeps what it has.
+- Classic LaTeX, which an EPS-only paper gets, is an 8-bit engine like pdfLaTeX: fontspec, which refuses both, was loaded under it for Cyrillic.
+- babel is not loaded into a polyglossia document, where it stopped the compile (`! Font \__xpg_add_font_feature_language:ee= not loadable`, emergency stop); the paper's captions stay its own there.
+
+The corpus has neither kind of paper, so both were checked on minimal documents: a Times article under classic LaTeX in Russian (Tempora, PT Sans, PT Mono) and Chinese (CJKutf8), and a polyglossia article in Russian, German and Chinese.
+
+### The owner's review of real translations — FIXED, and the rest deferred (#295)
+
+The owner reviewed Microsoft's translations of 2608.02163 (25 pages) and 2608.02785 as the reader compiles them (2026-09-23):
+
+- **Russian tables were wider than the original's, and code was no longer monospaced.** With T2A the default, every role whose face lacks T2A fell back to LaTeX's one default, Computer Modern's roman. A Times paper came out in CM roman throughout, and CM is wider than Times. Now each role keeps its face where the face has T2A, which TeX checks at compile time (`\IfFileExists{t2a<family>.fd}`). Otherwise it takes a face of the same design (Times → Tempora, Helvetica → PT Sans, Courier → PT Mono, Latin Modern → Computer Modern), or at least of the same role. Table 1 of 2608.02163 has the original's width again.
+
+  Only the shapes the face declares are mapped. The kernel's `\DeclareFontFamilySubstitution` maps every shape, and on the gate it stopped at the first shape a face lacked. Russian lost letters on nine papers of 24: eight to small capitals, which Tempora has none of, and one to a bold series that Computer Modern's sans has only as `bx`. A missing shape now falls back as it does within any family, to the upright with a warning, and the gate is back to 24 of 24 with no missing letter and no error.
+
+  One loss stands: 2608.06007 has 9 overfull boxes, where the previous Russian had 6 and the English original 5. The lines that overflow hold inline code. The paper sets its code in Bera Mono at full size, and PT Mono's letters are as wide (0.600 em against 0.602). The Computer Modern typewriter face before was narrower (0.525 em).
+- **The CJK versions were long**: Chinese 29 pages, Korean 31, Japanese 32. The ×1.3 was measured for Chinese alone, and Japanese and Korean translations are longer than Chinese ones: 0.494 and 0.578 grapheme clusters per English letter against 0.344. Each script now has its own factor (`CJK.leading`, `--tune` on the gate). At the paper's own spacing, 2608.02163 came out at 26 pages in Japanese and 25 in Korean.
+
+  | Pages against the original's, median (papers within 10 %, of 24) | zh | zh-Hant | ja | ko |
+  |---|---|---|---|---|
+  | spacing ×1.3 | **1.00** (19) | **1.04** (19) | 1.20 (1) | 1.17 (1) |
+  | ×1.2 | 0.95 (19) | 1.00 (20) | | |
+  | ×1.15 | 0.93 (20) | 0.95 (21) | | |
+  | the paper's own | | | **1.00** (22) | **1.00** (22) |
+  | ×1.15, CJK face at 0.925 | | | 1.07 (17) | 1.03 (20) |
+  | ×1.2, CJK face at 0.925 | | | 1.09 (14) | 1.07 (16) |
+
+  Bold is what is kept. 2608.02163's Chinese is long at every spacing (29, 28 and 26 pages), so its excess is in its translation.
+- **Korean reads large.** CJK faces fill about 0.91–0.96 of their em, while Times' capitals reach 0.66. A smaller CJK face with more spacing came out longer (table) and was not taken.
+
+**Deferred** (the maintainer, 2026-09-23): the single-language reader comes first. What is left for more than one language is #295, with the candidates TeX Live has and these numbers. Above all it records the maintainer's direction: before changing a language's size or spacing, look for the face that suits the language and a paper and corresponds to the paper's Latin face.
