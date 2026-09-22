@@ -13,6 +13,7 @@ import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anc
 import { isTranslatable, linesToBoxes, renderImage, setImageModes } from './lib/axt/figures.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { openPaper, runLive } from './live.mjs'
+import { verified, VERIFIED } from './scripts.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { isName, plainSource, WIRE } from './mt.mjs'
 import { unpackSource } from './tar.mjs'
@@ -148,8 +149,8 @@ function light(id) { if (id === lit) return; lit = id; for (const s of sides) pa
 let prose = '', paperCtx = Promise.resolve({})
 /** the extension's chain for this page's paper (engine.mjs), opened once: the units' translation and the figures' text */
 let engineP = null
-// withdrawn when the page goes, whichever mode opened it: an extension page is no tab the background watches (Devin and Codex on #296)
-const theEngine = () => (engineP ??= openEngine({ paper }).then(engine => { addEventListener('pagehide', () => engine.close(), { once: true }); return engine }))
+// its scope is withdrawn when the page goes, whichever mode opened it (engine.mjs)
+const theEngine = () => (engineP ??= openEngine({ paper }))
 /** each unit's kind (para, caption, heading, …), by id: a caption anchors its float's contents (placeAt) */
 let unitKind = new Map()
 document.documentElement.setAttribute('data-axt-on', '')
@@ -682,6 +683,8 @@ async function live() {
   try { engine = await theEngine() } catch (e) { return fail('no engine', `Cannot translate: ${e.message ?? e}`) }
   const lang = engine.lang
   note('engine', { lang, format: engine.format, engine: engine.engine })
+  // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
+  if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
   // the original on both sides at once; the right side is replaced as the translation comes in
   status(`Fetching ${paper} from arXiv…`)
   let srcBytes

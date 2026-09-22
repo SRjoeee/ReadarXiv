@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { pseudoTranslate, readFontProbe } from '../poc-reader/latex-front.mjs'
 import { lostIn, openPaper, originalFiles, probeFiles, translationFiles, unsettable } from '../poc-reader/live.mjs'
-import { CJK, scriptOf, strategiesFor } from '../poc-reader/scripts.mjs'
+import { CJK, scriptOf, strategiesFor, VERIFIED } from '../poc-reader/scripts.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
 import { unpackSource } from '../poc-reader/tar.mjs'
 
@@ -31,7 +31,7 @@ const flag = name => process.argv.includes(`--${name}`)
 // revtex4-2 3, acmart 2, amsart 2, and one each of llncs, elsarticle, achemso, ieeeconf, sn-jnl, aastex631
 const SAMPLE = ['2608.02163', '2608.05876', '2608.09746', '2608.12333', '2608.18090', '2608.23393', '2608.26528', '2608.29867', '2608.06701', '2608.15016', '2608.25750', '2608.06233', '2608.20847', '2608.23586', '2608.06007', '2608.24839', '2608.02785', '2608.24503', '2608.21180', '2608.15761', '2608.25928', '2608.09038', '2608.02991', '2608.12606']
 // the first batch (REPORT, eleventh addendum): CJK, Latin-script languages whose letters T1 holds, Cyrillic
-const LANGS = arg('langs', 'zh,zh-Hant,ja,ko,de,es,fr,pt,ru').split(',')
+const LANGS = arg('langs', VERIFIED.join(',')).split(',')
 const PAPERS = arg('papers', SAMPLE.join(',')).split(',')
 const PARALLEL = Number(arg('parallel', '5'))
 const TUNE = arg('tune', '')
