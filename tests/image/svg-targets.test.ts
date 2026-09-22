@@ -149,6 +149,44 @@ describe('SVG figures in the image pipeline (§15.5)', () => {
     expect(translate.mock.calls[0]![0].request.segments.map(s => s.text)).toContain('closure')
   })
 
+  it('waits for a figure whose document is still loading: read then, only part of its glyphs are there', async () => {
+    // A session started with the page (#readarxiv) can reach a figure while its <object>'s document has the <svg> root
+    // and only some of the glyphs (measured on 2608.04322's Figure 2: 278 of 969, then 726); read then, the overlay got
+    // 40 of the figure's 70 labels
+    const doc = docOf(FIGURE)
+    markBlocks(extract(doc))
+    const targets = collectImageTargets(doc)
+    const el = targets[0]!.el
+    let loading = true
+    Object.defineProperty(el, 'contentDocument', {
+      configurable: true,
+      get: () => {
+        const svg = new DOMParser().parseFromString(loading ? tilted('Loss', 0) : PLOT, 'image/svg+xml')
+        if (loading) Object.defineProperty(svg, 'readyState', { value: 'loading' })
+        return svg
+      },
+    })
+    const translate = vi.fn(async (call: { request: { segments: { id: string; text: string }[] } }) => ({
+      ok: true as const,
+      result: { segments: call.request.segments.map(s => ({ id: s.id, text: `tr:${s.text}` })), provider: 'mock' },
+      cached: 0,
+    }))
+    const run = startImageTranslation({
+      doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
+      fetchBytes: async () => { throw new Error('must not fetch bytes') },
+      ocr: vi.fn(async () => ({ ok: true as const, result: { width: 1, height: 1, lines: [] }, cached: false })),
+      translate, isEnabled: () => true, isCurrent: () => true,
+    })
+    const pending = run.translate(targets)
+    loading = false
+    el.dispatchEvent(new Event('load'))
+    await pending
+
+    const sent = translate.mock.calls[0]![0].request.segments.map(s => s.text)
+    expect(sent).toContain('closure')
+    expect(sent).not.toContain('Loss')
+  })
+
   it('skips code drawn as a figure', async () => {
     const listing = readFileSync(join(import.meta.dirname, '../fixtures/svg/2608.29808-bounter-case.svg'), 'utf8')
     const { targets, run, translate } = setup(listing)

@@ -289,13 +289,14 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
    *
    * **Not yet loaded, its `load` is awaited** rather than failing on the spot: the viewport scheduling is one-shot,
    * and after a failure the `load` event would not hand the figure over again, so it would stay untranslated until
-   * the reader retried by hand (Codex on #134). Measured over 44 figures in 4 papers: all reachable after the page's
-   * load, even before any scroll (DESIGN §15.5), so this path is normally never taken — but a session can start
-   * while the page is still loading.
+   * the reader retried by hand (Codex on #134). **Still loading counts as not loaded**: a session started with the
+   * page (`#readarxiv`) reaches a figure while its document already has the `<svg>` root and only part of the glyphs,
+   * and read then the overlay got part of the labels (DESIGN §15.5). `interactive` has the whole tree.
    */
   const svgOf = (target: ImageTarget): Element | undefined => {
-    const svg = (target.el as HTMLObjectElement).contentDocument?.documentElement
-    return svg?.tagName.toLowerCase() === 'svg' ? svg : undefined
+    const svgDoc = (target.el as HTMLObjectElement).contentDocument
+    const svg = svgDoc?.documentElement
+    return svgDoc?.readyState !== 'loading' && svg?.tagName.toLowerCase() === 'svg' ? svg : undefined
   }
 
   const svgLines = async (target: ImageTarget): Promise<{ lines: OcrLine[]; frame: ImageFrame } | string> => {
