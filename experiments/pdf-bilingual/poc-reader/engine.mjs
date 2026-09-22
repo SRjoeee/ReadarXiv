@@ -45,7 +45,14 @@ export async function openEngine({ paper }) {
   const transport = createMessageTransport()
   const scope = `axt-pdf-${crypto.randomUUID()}`
   const status = await transport.status(scope, { fresh: true })
-  if (!status.available && !status.fallback) throw new EngineError('unavailable', `the chosen service (${status.chosen}) cannot translate now: see the extension's settings`)
+  if (!status.available && !status.fallback) {
+    // the status call bound the scope; nothing withdraws it but us (Codex on #296)
+    await transport.cancel(scope)
+    throw new EngineError('unavailable', `the chosen service (${status.chosen}) cannot translate now: see the extension's settings`)
+  }
+  // the service that answers: the chosen one, its fallback while it cannot, and after a hand-over the one that took
+  // over, as each answer names it (Codex on #296)
+  let serving = status.available ? (status.model ? `${status.providerId} (${status.model})` : status.providerId) : status.fallback.id
   const target = status.targetLanguage
   const cache = { paper, renderPath: status.renderPath }
   /** texts in the chain's wire format → their translations, null where one did not come back */
@@ -57,7 +64,7 @@ export async function openEngine({ paper }) {
       const segments = idx.map(i => ({ id: String(i), text: texts[i] }))
       const res = await transport.translate({ request: { segments, source: 'en', target, ...withContext }, cache, scope })
       for (const s of res.ok ? res.result.segments : (res.partial ?? [])) out[Number(s.id)] = s.text
-      if (res.ok) return
+      if (res.ok) { serving = res.result.model ? `${res.result.provider} (${res.result.model})` : res.result.provider; return }
       if (isPermanentErrorKind(res.error.kind)) throw new EngineError(res.error.kind, res.error.message)
       // one text the engine cannot take must not sink its batch: halves, as the HTML page's session splits (run.ts)
       const left = idx.filter(i => out[i] == null)
@@ -69,7 +76,7 @@ export async function openEngine({ paper }) {
   return {
     lang: toBcp47(target),
     format: status.renderPath,
-    engine: status.model ? `${status.providerId} (${status.model})` : status.providerId,
+    get engine() { return serving },
     translate,
     close: () => transport.cancel(scope),
   }

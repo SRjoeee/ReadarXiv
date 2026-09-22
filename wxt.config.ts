@@ -25,12 +25,19 @@ function buildRef(): string {
  * `pdf-reader/reader.html`, a page of this extension, so that it translates through the background as the HTML page
  * does. Its files are copied as they are: research code, neither bundled nor type-checked. They are copied only once
  * the experiment's setup has filled its lib/ (experiments/pdf-bilingual/README.md); without it the build is the
- * extension alone
+ * extension alone.
+ * - Only the reader's own files and lib/: poc-reader/papers holds demo papers made locally from arXiv's, which may not
+ *   be redistributed (Devin and Codex on #296).
+ * - lib/axt holds modules compiled from this extension's source; it is compiled again with every build, so that the page
+ *   never runs a message transport older than the background it talks to (Devin on #296).
  */
 const PDF_READER = fileURLToPath(new URL('./experiments/pdf-bilingual/poc-reader', import.meta.url))
 function pdfReaderFiles(): { absoluteSrc: string; relativeDest: string }[] {
   if (!existsSync(join(PDF_READER, 'lib/pdf.min.mjs'))) return []
-  return readdirSync(PDF_READER, { recursive: true, encoding: 'utf8' })
+  execSync('node spikes/build-shared.mjs', { cwd: join(PDF_READER, '..'), stdio: 'ignore' })
+  const own = readdirSync(PDF_READER).filter(name => /\.(?:html|m?js|css)$/.test(name))
+  const lib = readdirSync(join(PDF_READER, 'lib'), { recursive: true, encoding: 'utf8' }).map(path => join('lib', path))
+  return [...own, ...lib]
     .filter(path => statSync(join(PDF_READER, path)).isFile())
     .map(path => ({ absoluteSrc: join(PDF_READER, path), relativeDest: `pdf-reader/${path}` }))
 }

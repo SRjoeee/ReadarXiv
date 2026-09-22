@@ -262,7 +262,9 @@ function walk(s, from, to, b, ctx) {
         // the footnote's text is a unit of its own, rendered inside its paragraph's unit so the two ranges never overlap
         endText()
         const parent = b.cur, before = b.units.length
-        b.cur = null; b.kind = 'footnote'; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.kind = saved
+        // …and never the title, even inside it: \title{A\thanks{Supported by B}} (Devin and Codex on #296)
+        const title = b.title
+        b.cur = null; b.kind = 'footnote'; b.title = false; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.kind = saved; b.title = title
         const made = b.units.length - before
         b.cur = parent
         if (parent && made === 1) { const inner = b.units[b.units.length - 1]; inner.nested = true; parent.pieces.push({ t: 'nested', pre: s.slice(i, inner.start), unit: inner, post: s.slice(inner.end, e) }); parent.end = e }

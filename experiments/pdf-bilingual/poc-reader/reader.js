@@ -143,10 +143,13 @@ function light(id) { if (id === lit) return; lit = id; for (const s of sides) pa
 // input: where each figure sits and which lines are in it (figures.mjs — the text layer for a vector figure, the
 // recogniser for a bitmap), as normalised lines in the recogniser's shape. Each figure's overlay hangs on an empty
 // <img> laid over it, the anchor the style sheet positions an overlay by.
-let prose = '', paperCtx = {} // the paper's title and abstract, with every batch (engine.mjs)
+/** the paper's title and abstract, with every batch (engine.mjs); in live mode known once the source is read, and the
+ *  figures' text waits for it rather than go out without it and be cached so (Codex on #296) */
+let prose = '', paperCtx = Promise.resolve({})
 /** the extension's chain for this page's paper (engine.mjs), opened once: the units' translation and the figures' text */
 let engineP = null
-const theEngine = () => (engineP ??= openEngine({ paper }))
+// withdrawn when the page goes, whichever mode opened it: an extension page is no tab the background watches (Devin and Codex on #296)
+const theEngine = () => (engineP ??= openEngine({ paper }).then(engine => { addEventListener('pagehide', () => engine.close(), { once: true }); return engine }))
 /** each unit's kind (para, caption, heading, …), by id: a caption anchors its float's contents (placeAt) */
 let unitKind = new Map()
 document.documentElement.setAttribute('data-axt-on', '')
@@ -212,7 +215,8 @@ async function translateBoxes(boxes) {
   const out = boxes.map(() => null)
   const engine = await theEngine().catch(() => null)
   if (!engine) return out
-  const send = wire => { if (!translated.has(wire)) translated.set(wire, engine.translate([wire], paperCtx).then(r => r[0]).catch(() => null)); return translated.get(wire) }
+  const context = await paperCtx
+  const send = wire => { if (!translated.has(wire)) translated.set(wire, engine.translate([wire], context).then(r => r[0]).catch(() => null)); return translated.get(wire) }
   const single = []
   for (let k = 0; k < todo.length; k += 40) {
     const chunk = todo.slice(k, k + 40)
@@ -660,24 +664,23 @@ async function live() {
   const site = params.get('site') ?? 'http://127.0.0.1:8071', endpoint = params.get('endpoint') ?? 'http://localhost:8070'
   const srcUrl = params.get('src') ?? `https://arxiv.org/src/${paper}`, pdfUrl = params.get('pdf') ?? `https://arxiv.org/pdf/${paper}`
   const L = (window.__reader.live = { events: [], t0: performance.now() })
-  let shown = 0, total = 0, by = ''
+  let shown = 0, total = 0, engine = null, setContext = null
   let compiledOnce = false
+  paperCtx = new Promise(resolve => { setContext = resolve })
   const note = (event, data = {}) => {
     L.events.push({ t: Math.round(performance.now() - L.t0), event, ...data })
     if (event === 'translated') shown = data.total
     if ((event === 'preview' || event === 'final') && data.ok) compiledOnce = true
     const said = { preview: data.ok ? 'preview compiled' : `compile failed (${data.strategy}): ${data.error ?? ''}`, final: data.ok ? 'final compiled' : `final compile failed (${data.strategy}): ${data.error ?? ''}`, 'next strategy': `trying ${data.strategy}`, done: compiledOnce ? 'done' : 'done — the translation did not compile; the right side still shows the original' }[event] ?? event
+    const by = engine ? ` into ${engine.lang} by ${engine.engine}` : ''
     status(`${total ? `${shown} of ${total} translated${by}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
   }
-  const fail = (event, text) => { note(event); status(text); L.done = true; L.failed = text }
+  const fail = (event, text) => { setContext({}); note(event); status(text); L.done = true; L.failed = text }
   // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
   // told at once
   status('Asking the extension which service translates…')
-  let engine
   try { engine = await theEngine() } catch (e) { return fail('no engine', `Cannot translate: ${e.message ?? e}`) }
   const lang = engine.lang
-  by = ` into ${lang} by ${engine.engine}`
-  addEventListener('pagehide', () => engine.close(), { once: true })
   note('engine', { lang, format: engine.format, engine: engine.engine })
   // the original on both sides at once; the right side is replaced as the translation comes in
   status(`Fetching ${paper} from arXiv…`)
@@ -695,7 +698,9 @@ async function live() {
   const paperData = openPaper(files), units = paperData.units
   total = units.length - paperData.kept.size
   const src = units.map((u, i) => ({ id: i, text: plainSource(u) }))
-  prose = src.map(x => x.text).join('\n'); paperCtx = paperContext(units)
+  prose = src.map(x => x.text).join('\n')
+  const context = paperContext(units)
+  setContext(context)
   unitKind = new Map(units.map((u, i) => [i, u.kind]))
   note('source', { units: units.length, files: files.size })
   await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
@@ -727,7 +732,7 @@ async function live() {
   const result = await runLive(paperData, {
     lang, compile, note,
     format: engine.format,
-    translate: texts => engine.translate(texts, paperCtx),
+    translate: texts => engine.translate(texts, context),
     // nearest the reading line on the page first, what lies ahead before what lies behind
     rank: i => {
       const top = unitDocTop(left, i), c = left.container
