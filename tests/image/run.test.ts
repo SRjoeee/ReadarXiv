@@ -4,6 +4,7 @@ import { MAX_IMAGE_BYTES, captionOf, collectImageTargets, readImageResponse, sta
 import { IMG_CLASS } from '@/core/marks'
 import { restore } from '@/core/renderer/page'
 import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
+import { nameEvidence } from '@/core/names'
 import type { OcrCall, OcrLine } from '@/shared/ocr'
 import { docOf } from '../renderer/helpers'
 
@@ -12,6 +13,8 @@ import { docOf } from '../renderer/helpers'
 const FIGURE = '<figure class="ltx_figure" id="F1"><img class="ltx_graphics" src="https://arxiv.org/html/x/a.png" id="F1.g1" width="476" height="357">'
   + '<figcaption class="ltx_caption" id="F1.cap">Figure 1. Escape velocity versus radius.</figcaption></figure>'
 const line = (text: string, y: number): OcrLine => ({ text, conf: 1, quad: [[0.1, y], [0.3, y], [0.3, y + 0.03], [0.1, y + 0.03]] })
+/** The source text of every label an overlay drew */
+const drawn = (doc: Document) => Array.from(doc.querySelectorAll(`.${IMG_CLASS} > span`)).map(span => (span as HTMLElement).title)
 const LINES = [line('Static charge', 0.1), line('Even sites', 0.5), line('12.5', 0.9)]
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]).buffer
 
@@ -31,7 +34,7 @@ function setup(overrides: Partial<ImageRunOptions> = {}) {
   const ocr = vi.fn(async (_call: OcrCall) => ({ ok: true as const, result: { width: 476, height: 357, lines: LINES }, cached: false }))
   const translate = vi.fn(async (call: { request: { segments: { id: string; text: string }[] } }) => ({
     ok: true as const,
-    result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock' },
+    result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock', kind: 'mt' as const },
     cached: 0,
   }))
   const rendered: ImageTarget[][] = []
@@ -93,7 +96,7 @@ describe('startImageTranslation', () => {
     const { doc, targets, run } = setup({
       ocr: async () => ({ ok: true, result: { width: 1, height: 1, lines: [line('ab < cd & ef', 0.1)] }, cached: false }),
       // The engine returns the escaped text by the placeholder protocol, with a prefix in front (an identity translation is not drawn)
-      translate: async (call: { request: { segments: { id: string; text: string }[] } }) => ({ ok: true, result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock' }, cached: 0 }),
+      translate: async (call: { request: { segments: { id: string; text: string }[] } }) => ({ ok: true, result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock', kind: 'mt' as const }, cached: 0 }),
     })
     await run.translate(targets)
     // Sent out is `ab &lt; cd &amp; ef`; decoded on return, the label holds the characters as they were
@@ -141,7 +144,7 @@ describe('startImageTranslation', () => {
       isCurrent: () => current,
       translate: async (call: { request: { segments: { id: string; text: string }[] } }) => {
         current = false // the session changed before the reply arrived
-        return { ok: true, result: { segments: call.request.segments.map(s => ({ id: s.id, text: '译' })), provider: 'mock' }, cached: 0 }
+        return { ok: true, result: { segments: call.request.segments.map(s => ({ id: s.id, text: '译' })), provider: 'mock', kind: 'mt' as const }, cached: 0 }
       },
     })
     await run.translate(targets)
@@ -190,10 +193,73 @@ describe('startImageTranslation', () => {
     expect(empty.translate).not.toHaveBeenCalled()
   })
 
+  it('an answer from an engine that translates each box on its own: a box that is only a name went out with the rest and is not drawn; the words beside it are (§15.1)', async () => {
+    const LEGEND = [line('Accuracy on GSM8K', 0.1), line('Mooncake', 0.4), line('(a) Llama3', 0.6), line('Even sites', 0.8)]
+    const names = vi.fn(() => nameEvidence('We serve it with Mooncake and compare with the even sites of the lattice.'))
+    const { doc, targets, run, translate } = setup({ ocr: async () => ({ ok: true, result: { width: 476, height: 357, lines: LEGEND }, cached: false }), names })
+    await run.translate(targets)
+    // Every box goes: which engine answers is known only from the answer (a hand-over down the chain, §8.5)
+    expect((translate.mock.calls[0]![0] as { request: { segments: { text: string }[] } }).request.segments.map(s => s.text)).toEqual(['Accuracy on GSM8K', 'Mooncake', '(a) Llama3', 'Even sites'])
+    expect(drawn(doc)).toEqual(['Accuracy on GSM8K', 'Even sites'])
+    expect(names).toHaveBeenCalledTimes(1)
+  })
+
+  it('an answer from an engine that reads the boxes together (an LLM) is drawn whole, names included, and the prose is never read for names', async () => {
+    const LEGEND = [line('Mooncake', 0.4), line('(a) Llama3', 0.6)]
+    const names = vi.fn(() => nameEvidence('We serve it with Mooncake.'))
+    const { doc, targets, run } = setup({
+      ocr: async () => ({ ok: true, result: { width: 476, height: 357, lines: LEGEND }, cached: false }),
+      names,
+      translate: async call => ({ ok: true, result: { segments: call.request.segments.map(s => ({ id: s.id, text: `tr:${s.text}` })), provider: 'svc-1', kind: 'llm' }, cached: 0 }),
+    })
+    await run.translate(targets)
+    expect(drawn(doc)).toEqual(['Mooncake', '(a) Llama3'])
+    expect(names).not.toHaveBeenCalled()
+  })
+
+  it('an answer that came with a failure (partial) holds its names back: it does not say which engine of the chain translated which box', async () => {
+    const LEGEND = [line('Mooncake', 0.4), line('Energy density', 0.6)]
+    const names = vi.fn(() => nameEvidence('We serve it with Mooncake.'))
+    const { doc, targets, run } = setup({
+      ocr: async () => ({ ok: true, result: { width: 476, height: 357, lines: LEGEND }, cached: false }),
+      names,
+      translate: async call => ({ ok: false, error: { kind: 'timeout', message: 'slow', isolatable: false }, partial: call.request.segments.map(s => ({ id: s.id, text: `tr:${s.text}` })) }),
+    })
+    await run.translate(targets)
+    expect(drawn(doc)).toEqual(['Energy density'])
+    expect(run.progress()).toMatchObject({ requested: 1, failed: 1 })
+  })
+
+  it('a figure of names only, answered by an engine that translates each box on its own: done, no overlay; an image with no boxes never asks for the names', async () => {
+    const names = vi.fn(() => nameEvidence('We serve it with Mooncake.'))
+    const doc = docOf(FIGURE + FIGURE.replaceAll('F1', 'F2'))
+    markBlocks(extract(doc))
+    const targets = collectImageTargets(doc)
+    const translate = vi.fn(async (call: { request: { segments: { id: string; text: string }[] } }) => ({
+      ok: true as const,
+      result: { segments: call.request.segments.map(s => ({ id: s.id, text: `tr:${s.text}` })), provider: 'mock', kind: 'mt' as const },
+      cached: 0,
+    }))
+    const run = startImageTranslation({
+      doc, targets, paper: '2507.00150', target: 'cmn', scope: 's1', renderPath: 'tags', preload: DEFAULT_PRELOAD,
+      fetchBytes: async () => ({ bytes: PNG, mime: 'image/png' }),
+      ocr: async () => ({ ok: true, result: { width: 1, height: 1, lines: [line('Mooncake', 0.4), line('GSM8K', 0.6)] }, cached: false }),
+      translate, names, isEnabled: () => true, isCurrent: () => true,
+    })
+    await run.translate(targets)
+    expect(translate).toHaveBeenCalledTimes(2)
+    expect(doc.querySelector(`.${IMG_CLASS}`)).toBeNull()
+    expect(run.progress()).toEqual({ total: 2, requested: 2, done: 2, failed: 0 })
+    expect(names).toHaveBeenCalledTimes(2)
+    const bare = setup({ ocr: async () => ({ ok: true, result: { width: 1, height: 1, lines: [line('12.5', 0.1)] }, cached: false }), names })
+    await bare.run.translate(bare.targets)
+    expect(names).toHaveBeenCalledTimes(2)
+  })
+
   it('labels whose translation equals the source are not drawn (units, variable names, the engine returning as it was); with all equal no overlay is inserted', async () => {
     const identity = async (call: { request: { segments: { id: string; text: string }[] } }) => ({
       ok: true as const,
-      result: { segments: call.request.segments.map(s => ({ id: s.id, text: s.text === 'Static charge' ? '静态电荷' : s.text })), provider: 'mock' },
+      result: { segments: call.request.segments.map(s => ({ id: s.id, text: s.text === 'Static charge' ? '静态电荷' : s.text })), provider: 'mock', kind: 'mt' as const },
       cached: 0,
     })
     const some = setup({ translate: identity })
@@ -336,7 +402,7 @@ describe('startImageTranslation', () => {
     const run = startImageTranslation({
       doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
       fetchBytes: async () => ({ bytes: PNG, mime: 'image/png' }), ocr, maxConcurrent: 2,
-      translate: async (call: { request: { segments: { id: string; text: string }[] } }) => ({ ok: true as const, result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock' }, cached: 0 }),
+      translate: async (call: { request: { segments: { id: string; text: string }[] } }) => ({ ok: true as const, result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock', kind: 'mt' as const }, cached: 0 }),
       isEnabled: () => true, isCurrent: () => true,
     })
     const all = run.translate(targets)
@@ -370,7 +436,7 @@ describe('startImageTranslation', () => {
     const run = startImageTranslation({
       doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
       fetchBytes: async () => ({ bytes: PNG, mime: 'image/png' }), ocr, maxConcurrent: 2,
-      translate: async (call: { request: { segments: { id: string; text: string }[] } }) => ({ ok: true as const, result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock' }, cached: 0 }),
+      translate: async (call: { request: { segments: { id: string; text: string }[] } }) => ({ ok: true as const, result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock', kind: 'mt' as const }, cached: 0 }),
       isEnabled: () => true, isCurrent: () => true,
     })
     const first = run.translate(targets.slice(0, 3))
@@ -448,7 +514,7 @@ describe('startImageTranslation', () => {
     await first.run.translate(first.targets)
     expect(first.doc.querySelector(`.${IMG_CLASS}`)).not.toBeNull()
     // A second round on the same DOM: the translation comes back as it was
-    const identity = async (call: { request: { segments: { id: string; text: string }[] } }) => ({ ok: true as const, result: { segments: call.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock' }, cached: 0 })
+    const identity = async (call: { request: { segments: { id: string; text: string }[] } }) => ({ ok: true as const, result: { segments: call.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock', kind: 'mt' as const }, cached: 0 })
     const rendered: ImageTarget[][] = []
     const second = startImageTranslation({ ...firstOptions(first), translate: identity, onRendered: ts => { rendered.push(ts) } })
     await second.translate(first.targets)

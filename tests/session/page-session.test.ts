@@ -7,10 +7,12 @@ import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import { extract } from '@/core/extractor'
 import { ID_ATTR } from '@/core/extractor'
 import { MODE_ATTR, ON_ATTR, STATE_ATTR, UNDERLINE_ATTR } from '@/core/renderer/attrs'
+import { IMG_CLASS } from '@/core/marks'
 import { IMG_MODES_ATTR } from '@/core/renderer/image'
 import { createPageSession, type PageSession, type SessionDeps } from '@/core/session'
 import type { ProviderStatus, TranslationTransport } from '@/providers/transport'
 import type { TranslateCall } from '@/providers/translate-service'
+import type { ProviderKind } from '@/providers/types'
 import type { ImageBytes } from '@/core/image'
 import type { OcrCall, OcrLine } from '@/shared/ocr'
 import { chainRevision } from '@/config/revision'
@@ -39,6 +41,10 @@ interface HarnessOptions {
   config?: Partial<Config>
   /** What the backend says it translated with */
   provider?: string
+  /** The kind of engine the backend says answered; a free engine's (`mt`) when absent */
+  kind?: ProviderKind
+  /** What the backend gives back for a segment's text; the text itself when absent */
+  translated?: (text: string) => string
   status?: (scope: string | undefined, call: number, options?: { fresh?: boolean }) => ProviderStatus | Promise<ProviderStatus>
   /** Hold the very first configuration read until `releaseConfig()` */
   holdFirstConfig?: boolean
@@ -65,7 +71,8 @@ function harness(options: HarnessOptions = {}) {
   const backend: TranslationTransport = {
     async translate(call) {
       calls.push(call)
-      return { ok: true, result: { segments: call.request.segments.map(s => ({ id: s.id, text: s.text })), provider: options.provider ?? 'microsoft' }, cached: 0 }
+      const translated = options.translated ?? (text => text)
+      return { ok: true, result: { segments: call.request.segments.map(s => ({ id: s.id, text: translated(s.text) })), provider: options.provider ?? 'microsoft', kind: options.kind ?? 'mt' }, cached: 0 }
     },
     async cancel(scope) { cancelled.push(scope); return 0 },
     async status(scope, statusOptions) {
@@ -660,6 +667,35 @@ describe('page session', () => {
     // switching image translation off mid-session drops the gate attribute
     h.session.onConfig({ ...h.config(), image: { enabled: false, modes: [] } })
     expect(document.documentElement.hasAttribute(IMG_MODES_ATTR)).toBe(false)
+  })
+
+  it('images: a figure\'s names go to every engine, and are drawn from one that reads the boxes together, kept from one that translates each on its own — by the engine that answered (§15.1)', async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer
+    const answeredBy = async (kind: ProviderKind) => {
+      const h = harness({
+        page: PAGE + FIGURE,
+        config: { image: { enabled: true, modes: ['side', 'stack', 'only'] } },
+        kind,
+        translated: text => `tr:${text}`,
+        fetchImage: async () => ({ bytes: png, mime: 'image/png' }),
+        ocrLines: [
+          { text: 'HellaSwag', quad: [[0.1, 0.1], [0.5, 0.1], [0.5, 0.2], [0.1, 0.2]], conf: 0.99 },
+          { text: 'Energy density', quad: [[0.1, 0.6], [0.5, 0.6], [0.5, 0.7], [0.1, 0.7]], conf: 0.99 },
+        ],
+      })
+      live = h.session
+      await h.session.start()
+      await settle()
+      await h.session.translateImages()
+      await settle(6)
+      const sent = h.calls.flatMap(call => call.request.segments).filter(seg => seg.id.includes('#L')).map(seg => seg.text)
+      const drawn = Array.from(document.querySelectorAll(`.${IMG_CLASS} > span`)).map(span => (span as HTMLElement).title)
+      h.session.restore()
+      return { sent, drawn }
+    }
+    // The session starts on the same engine both times: what is drawn follows the answer, as after a hand-over mid-session
+    expect(await answeredBy('mt')).toEqual({ sent: ['HellaSwag', 'Energy density'], drawn: ['Energy density'] })
+    expect(await answeredBy('llm')).toEqual({ sent: ['HellaSwag', 'Energy density'], drawn: ['HellaSwag', 'Energy density'] })
   })
 
   describe('a figure\'s text — the labels of a TikZ picture, blocks of the text run (§15.6) — is asked for where the reader has figures translated', () => {

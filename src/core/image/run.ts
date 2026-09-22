@@ -4,13 +4,15 @@
 //
 // Per image: fetch the bytes (same origin, through the HTTP cache) → SHA-256 → OCR in the background (cached by
 // imageHash) → merge lines into boxes, drop numbers and single letters → send the boxes' text to the existing provider
-// on translateTitle's plain-text path (the caption as context, one batch) → insert the overlay. **The session is
+// on translateTitle's plain-text path (the caption as context, one batch) → insert the overlay, less the boxes that
+// are only names when the engine that answered translates each box on its own. **The session is
 // re-checked after every await** (the pattern of the text pipeline): a result arriving after a restore / a restart is
 // dropped. Pending and failure have no DOM node (§15.2): failures are recorded here, shown by the popup and handled
 // by the retry button.
 import { type RenderPath, wireFormatOf } from '@/cache/key'
 import { ID_ATTR } from '@/core/extractor'
 import { escapeText, unescapeText } from '@/core/protector/escape'
+import { type NameEvidence, isName } from '@/core/names'
 import { type ImageFrame, type ImageLabel, type ImageTarget, clearImage, renderImage } from '@/core/renderer/image'
 import { DOCUMENT_ROOT, FIGURE_SELECTORS } from '@/core/rules/latexml'
 import { INJECTED_SELECTOR } from '@/core/marks'
@@ -19,7 +21,7 @@ import { createRunLedger } from '@/core/run/ledger'
 import type { PreloadOptions } from '@/core/scheduler/lazy'
 import { frameOf, linesOf, looksLikeCode } from '@/core/svg'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
-import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
+import { isPermanentErrorKind, type ProviderKind, type TranslateContext } from '@/providers/types'
 import { sha256Hex } from '@/shared/digest'
 import type { ImageProgress, OcrCall, OcrLine, OcrMessageResponse } from '@/shared/ocr'
 import { linesToBoxes, type Box } from './boxes'
@@ -33,6 +35,7 @@ export const MAX_IMAGE_BYTES = 6 * 1024 * 1024
 const IMAGE_TYPES = /^image\/(png|jpe?g|gif|webp|bmp|tiff)$/i
 /** The length cap of a caption used as context: it enters the prompt and the cache key */
 const CAPTION_MAX_CHARS = 300
+const NONE: ReadonlySet<number> = new Set()
 /** Images in flight at once: the bytes, the base64 and the message payload all take memory, and the recogniser reads one figure at a time — more only hoards 6 MB images */
 const MAX_CONCURRENT = 2
 /** How long an `<object>` still loading is waited for (§15.5). Past that the image is skipped rather than holding the queue */
@@ -54,6 +57,13 @@ export interface ImageRunOptions {
   renderPath: RenderPath
   preload: PreloadOptions
   context?: TranslateContext
+  /**
+   * What the paper's prose says of names (`core/names.ts`). A box that is only a name — a dataset, a model — is left as
+   * it is when the engine that answered translates each box on its own (a free engine), which gives a name alone back
+   * as other words; an LLM reads a figure's boxes together with the caption and its answer is drawn whole (§15.1).
+   * Asked for only when an answer needs it, so a session an LLM serves never builds it
+   */
+  names?: () => NameEvidence
   ocr: (call: OcrCall) => Promise<OcrMessageResponse>
   translate: (call: TranslateCall) => Promise<TranslateMessageResponse>
   /** The mode in effect is among the ones the reader ticked; otherwise an image entering the viewport parks, translated on resume */
@@ -217,6 +227,18 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     },
   })
   const alive = () => !ledger.halted()
+  /**
+   * The boxes whose translation is not drawn: those that are only a name, when `kind`, the engine that answered,
+   * translates each box on its own (§15.1). Decided by the answer, not before the call: a hand-over down the chain
+   * (§8.5) sends a call that set out for an LLM to a free engine, the call that caused it included, and a session-level
+   * flag would still send the free engine its names (Devin and Codex on #293). Undefined `kind` is an answer that came
+   * with a failure (`partial`), which does not say which engine translated which box: its names are held back too
+   */
+  const namesIn = (boxes: readonly Box[], kind: ProviderKind | undefined): ReadonlySet<number> => {
+    if (!options.names || kind === 'llm') return NONE
+    const evidence = options.names()
+    return new Set(boxes.flatMap((box, i) => (isName(box.text, evidence) ? [i] : [])))
+  }
   // The envelope is the session's, the same for the text run and the title (run/call.ts)
   const base: CallBase = { target: options.target, paper: options.paper, scope: options.scope, ...(options.context ? { context: options.context } : {}) }
   /**
@@ -244,12 +266,13 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     if (removed) options.onRendered?.([target])
   }
 
-  /** Match the segments that came back to their boxes; success and partial success share it */
-  const labelsFrom = (segments: readonly { id: string; text: string }[], boxes: readonly Box[], target: ImageTarget): ImageLabel[] => {
+  /** Match the segments that came back to their boxes, less those in `held`; success and partial success share it */
+  const labelsFrom = (segments: readonly { id: string; text: string }[], boxes: readonly Box[], target: ImageTarget, held: ReadonlySet<number>): ImageLabel[] => {
     // Escaped in the negotiated format, unescaped in the same one: the format used to go untold here, and under markers a plain-text run was decoded by the HTML entity rules
     const translated = new Map(segments.map(s => [s.id, unescapeText(s.text, wireFormatOf(options.renderPath))]))
     const labels: ImageLabel[] = []
     for (const [i, box] of boxes.entries()) {
+      if (held.has(i)) continue
       const text = translated.get(`${target.id}#L${i}`)?.trim()
       // A translation equal to the original (units, variable names, what the engine returned as it was) is not drawn: a white box over the image would only turn a well-set subscript into text OCR read askew
       if (!text || sameText(text, box.text)) continue
@@ -274,13 +297,14 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
    *
    * **Not yet loaded, its `load` is awaited** rather than failing on the spot: the viewport scheduling is one-shot,
    * and after a failure the `load` event would not hand the figure over again, so it would stay untranslated until
-   * the reader retried by hand (Codex on #134). Measured over 44 figures in 4 papers: all reachable after the page's
-   * load, even before any scroll (DESIGN §15.5), so this path is normally never taken — but a session can start
-   * while the page is still loading.
+   * the reader retried by hand (Codex on #134). **Still loading counts as not loaded**: a session started with the
+   * page (`#readarxiv`) reaches a figure while its document already has the `<svg>` root and only part of the glyphs,
+   * and read then the overlay got part of the labels (DESIGN §15.5). `interactive` has the whole tree.
    */
   const svgOf = (target: ImageTarget): Element | undefined => {
-    const svg = (target.el as HTMLObjectElement).contentDocument?.documentElement
-    return svg?.tagName.toLowerCase() === 'svg' ? svg : undefined
+    const svgDoc = (target.el as HTMLObjectElement).contentDocument
+    const svg = svgDoc?.documentElement
+    return svgDoc?.readyState !== 'loading' && svg?.tagName.toLowerCase() === 'svg' ? svg : undefined
   }
 
   const svgLines = async (target: ImageTarget): Promise<{ lines: OcrLine[]; frame: ImageFrame } | string> => {
@@ -355,7 +379,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
         // fatal branch**: segments an earlier step of the fallback chain translated come back with the last step's
         // auth failure, and the fatal branch stops the whole scheduler on the spot — this image gets no second chance
         // this round (Codex on #163, fifth round)
-        const done = labelsFrom(res.partial ?? [], boxes, target)
+        const done = labelsFrom(res.partial ?? [], boxes, target, namesIn(boxes, undefined))
         if (done.length > 0) {
           renderImage(target, done, frame)
           options.onRendered?.([target])
@@ -375,7 +399,7 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
         }
         return fail(target, `translation failed: ${res.error.message}`, done.length > 0)
       }
-      const labels = labelsFrom(res.result.segments, boxes, target)
+      const labels = labelsFrom(res.result.segments, boxes, target, namesIn(boxes, res.result.kind))
       if (labels.length === 0) return finishEmpty()
       renderImage(target, labels, frame)
       ledger.settle(target, 'done')

@@ -1,5 +1,5 @@
 # Files that may hold lines with CJK characters, and how many (scripts/check-english.mjs). The numbers are exact: the gate asks for an entry to be lowered when lines go, and raised only with a reason beside it.
-docs/DESIGN.md 10  # 2026-09-19: +1, §6.2 quotes what the Edge endpoint returned for a marker touching a word; 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
+docs/DESIGN.md 11  # 2026-09-22: +1, §15.1 quotes what the Edge endpoint returned for names sent alone; 2026-09-19: +1, §6.2 quotes what the Edge endpoint returned for a marker touching a word; 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
 docs/RELEASE.md 6  # 2026-09-17: the Chinese store listing (product copy the owner submits)
 docs/UI.md 166  # 2026-09-18: S-I-06 / S-I-06a / S-I-06b / S-I-06c (the floating button, its two side buttons and its menu), S-P-03b / S-P-33 / S-P-50b (the popup on entry pages), S-O-49b / S-O-49c (where the translation opens, the floating button switch), issue #169; 2026-09-21: S-I-07 (the figure viewer, issue #276); −18, the macOS helper's rows went with the helper (issue #280)
 README.md 1  # 2026-09-17: the link to the Chinese README
@@ -7,6 +7,7 @@ src/config/languages.ts 188  # localisation data: the Chinese name table and the
 src/cache/key.ts 1
 src/config/appearance.ts 10
 src/config/storage.ts 3
+src/core/names.ts 1  # 2026-09-22: engine output quoted as the rule's evidence — names sent alone, turned into other words
 src/core/protector/label.ts 9
 src/core/protector/serialize.ts 1
 src/core/renderer/failed.ts 1

@@ -10,7 +10,7 @@ function fakeTransport(name: string, cancelled: string[] = []): TranslationTrans
   return {
     name,
     cancelled,
-    translate: async () => ({ ok: true, result: { segments: [], provider: name }, cached: 0 }),
+    translate: async () => ({ ok: true, result: { segments: [], provider: name, kind: 'mt' as const }, cached: 0 }),
     cancel: async scope => { cancelled.push(`${name}:${scope}`); return 1 },
     retire: () => { retired = true; cancelled.push(`${name} retired`); return 1 },
     isRetired: () => retired,
