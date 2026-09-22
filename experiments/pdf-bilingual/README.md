@@ -28,7 +28,9 @@ Rules and techniques here are expected to change; what settles is to be refactor
    applied). `BUSYTEX_FROM=<dir>` reuses a directory that already holds `busytex/`.
 4. A TeX Live 2026 file server on `http://localhost:8070`: TeXlyre's `texlive-server`
    (<https://github.com/TeXlyre/texlyre-busytex-build>, AGPL-3.0) over a TeX Live 2026 tree built from the release ISO,
-   the snapshot BusyTeX's formats come from. It is not vendored here.
+   the snapshot BusyTeX's formats come from. It is not vendored here. Into that tree, the METAFONT outputs TeX Live
+   does not ship and BusyTeX cannot make (the metrics Cyrillic needs under pdfLaTeX): `node spikes/make-metafont.mjs`,
+   then copy `data/metafont/tfm` to `texmf-dist/fonts/tfm/axt-metafont/` and restart the server, which indexes at start.
 5. Optional: 600 dpi PK files for METAFONT-only fonts (for example `bbm10`, `bbm7`) generated natively with `mktexpk`,
    in `data/pk-flat` — without them, papers that use such fonts do not compile in the browser (`upstream/`, issue E).
 

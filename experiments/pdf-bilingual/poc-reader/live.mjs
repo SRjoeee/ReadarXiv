@@ -17,8 +17,9 @@ import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mj
 
 /** A compile that gave a PDF but could not set some letter of the translation: the paper's pdfLaTeX meeting a letter no
  *  encoding it has loaded holds (Vietnamese's, under T1), or one a class's primitive \uppercase broke into bytes (amsart's
- *  titles, a French apostrophe). The chain moves on from it as from a compile with no PDF */
-export const unsettable = r => /^! LaTeX Error: Unicode character /m.test(r.log ?? '')
+ *  titles, a French apostrophe); or a font whose metrics are nowhere (a size of a METAFONT-only font the file server does
+ *  not have). The chain moves on from it as from a compile with no PDF */
+export const unsettable = r => /^! (?:LaTeX Error: Unicode character |Font .* not loadable)/m.test(r.log ?? '')
 const settled = r => r.ok && !unsettable(r)
 const DRAFT = '\\PassOptionsToPackage{draft}{graphicx}\n'
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
@@ -131,10 +132,11 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
       const r = await compile({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bbl, overrides: translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft: true, aux, bbl }) })
       if (r.aux) aux = r.aux
       if (r.bbl) bbl = r.bbl
-      note('preview', { ok: r.ok, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, error: whyFailed(r) })
-      // shown when it set every letter, or when no strategy is left to do better
+      // shown when it set every letter, or when no strategy is left to do better; the note says ok for what is shown
       const last = s + 1 >= strategies.length
-      if (settled(r) || (r.ok && last)) { previews++; onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false }) }
+      const shown = settled(r) || (r.ok && last)
+      note('preview', { ok: shown, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, error: shown ? undefined : whyFailed(r) ?? 'a letter it could not set' })
+      if (shown) { previews++; onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false }) }
       else if (!last) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
       continue
     }
@@ -148,8 +150,9 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
   let r
   for (;;) {
     r = await compile({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl }) })
-    note('final', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, error: whyFailed(r) })
-    if (settled(r) || s + 1 >= strategies.length) break
+    const last = s + 1 >= strategies.length
+    note('final', { ok: settled(r) || (r.ok && last), ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, error: settled(r) ? undefined : whyFailed(r) ?? 'a letter it could not set' })
+    if (settled(r) || last) break
     s++; aux = null
     note('next strategy', { strategy: strategy().name })
   }

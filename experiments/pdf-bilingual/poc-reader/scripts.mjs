@@ -9,8 +9,9 @@
 // pdfLaTeX paper does. That keeps the paper's fonts, microtype and every package that works only under pdfTeX
 // (switched to XeLaTeX, one paper of 24 lost its math fonts in every language). CJK goes to XeLaTeX with xeCJK. When an
 // engine cannot set a letter it says so (`unsettable` in live.mjs), and the chain moves on. A paper the author set with
-// XeLaTeX or LuaLaTeX keeps its engine. A script not listed here has no typesetting yet: the reader shows the translation
-// from the HTML instead. Every font named is in TeX Live 2026. Measured with spikes/lang-gate.mjs.
+// XeLaTeX keeps its engine; so does a LuaLaTeX one for an alphabet, while for CJK it goes to XeLaTeX with xeCJK, where
+// Lua-only code fails (none of the corpus's 123 papers is set with LuaLaTeX, so no LuaLaTeX CJK path could be measured).
+// When no strategy gives a PDF, and for a script not listed here, the reader shows the translation from the HTML instead. Every font named is in TeX Live 2026. Measured with spikes/lang-gate.mjs.
 import { latinFontsFor } from './latex-front.mjs'
 
 export const scriptOf = lang => new Intl.Locale(lang).maximize().script

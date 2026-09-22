@@ -34,8 +34,9 @@ async function compile(msg) {
   const steps = r.logs ?? []
   const tex = steps.filter(l => !/^(bibtex|biber|makeindex|xdvipdfmx)/.test(l.cmd ?? '')).at(-1)
   const bib = steps.filter(l => /^bibtex/.test(l.cmd ?? '')).at(-1)
-  const pdf = r.pdf ? r.pdf.slice().buffer : null
-  return [{ type: 'compiled', id: msg.id, ok: !!r.pdf, ms: Math.round(performance.now() - t0), pdf, aux: tex?.aux ?? null, bbl: bib?.aux ?? null, log: String(r.log ?? '') }, pdf ? [pdf] : []]
+  // an empty PDF is no PDF: BusyTeX returns one after a fatal error (a font whose metrics it cannot find)
+  const pdf = r.pdf?.byteLength ? r.pdf.slice().buffer : null
+  return [{ type: 'compiled', id: msg.id, ok: !!pdf, ms: Math.round(performance.now() - t0), pdf, aux: tex?.aux ?? null, bbl: bib?.aux ?? null, log: String(r.log ?? '') }, pdf ? [pdf] : []]
 }
 
 addEventListener('message', e => {

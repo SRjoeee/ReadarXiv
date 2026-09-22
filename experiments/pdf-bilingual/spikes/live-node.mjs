@@ -9,6 +9,7 @@ import { promisify } from 'node:util'
 import { unpackSource } from '../poc-reader/tar.mjs'
 import { openPaper, runLive } from '../poc-reader/live.mjs'
 import { translateTexts } from '../poc-reader/mt.mjs'
+import { faithfulDockerArgs } from './faithful.mjs'
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname
 const [id, lang = 'zh'] = process.argv.slice(2)
@@ -23,12 +24,12 @@ async function compile({ main, engine, rerun, bibtex, overrides }) {
   for (const [p, b] of overrides) { const f = join(dir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
   // TeX writes its output where it runs, the project's root, whatever directory the main file is in
   const stem = main.split('/').pop().replace(/\.[^./]+$/, ''), start = Date.now()
-  const docker = cmd => run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
+  const docker = cmd => run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', ...faithfulDockerArgs(root), '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
   if (rerun) await docker(['latexmk', { xelatex: '-xelatex', lualatex: '-lualatex' }[engine] ?? '-pdf', ...(bibtex === false ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main])
   else { await docker([engine, '-interaction=nonstopmode', main]); if (bibtex) await docker(['bibtex', stem]) }
   const read = (ext, enc) => { const f = join(dir, `${stem}.${ext}`); return existsSync(f) ? readFileSync(f, enc) : null }
   const pdf = read('pdf')
-  return { ok: !!pdf, pdf, aux: read('aux', 'utf8'), bbl: bibtex ? read('bbl', 'utf8') : null, log: read('log', 'latin1') ?? '', ms: Date.now() - start }
+  return { ok: !!pdf?.length, pdf, aux: read('aux', 'utf8'), bbl: bibtex ? read('bbl', 'utf8') : null, log: read('log', 'latin1') ?? '', ms: Date.now() - start }
 }
 const r = await runLive(paper, {
   lang, compile, translate: texts => translateTexts(texts, lang),

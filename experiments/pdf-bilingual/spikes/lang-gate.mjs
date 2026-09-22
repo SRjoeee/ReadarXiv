@@ -7,14 +7,19 @@
 // lines; TeX errors; overfull boxes and pages against the original's; references left unresolved.
 //   node spikes/lang-gate.mjs [--langs=zh,ja] [--papers=id,id] [--parallel=5] [--accept | --check]
 // Writes out/lang-gate.json and each PDF to out/lang-gate/; --accept stores the result as the baseline, --check
-// compares with it and exits 1 on a loss. The originals and the font probes are cached in out/lang-gate-orig.json.
+// compares with it and exits 1 on a loss (a result lost, letters lost, more errors, unresolved references, or more overfull
+// boxes; pages are reported, not judged: a change to the spacing moves them on purpose). The baseline is the corpus's,
+// local like the corpus: store it on the commit before a change, check the change against it. The originals and the
+// font probes are cached in out/lang-gate-orig.json.
 import { execFile, execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { pseudoTranslate, readFontProbe } from '../poc-reader/latex-front.mjs'
 import { openPaper, originalFiles, probeFiles, translationFiles, unsettable } from '../poc-reader/live.mjs'
 import { scriptOf, strategiesFor } from '../poc-reader/scripts.mjs'
+import { faithfulDockerArgs } from './faithful.mjs'
 import { unpackSource } from '../poc-reader/tar.mjs'
 
 const run = promisify(execFile)
@@ -50,19 +55,21 @@ const LETTERS = {
 }
 const lettersIn = (text, lang) => (text.normalize('NFKC').match(LETTERS[scriptOf(lang)]) ?? []).length
 
+const FAITHFUL = faithfulDockerArgs(root)
 const sh = (cmd, args) => { try { return execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] }) } catch { return null } }
-/** a compile in TeX Live 2026 (Docker): the source, the pipeline's files over it, latexmk to the end or one pass */
+/** a compile in TeX Live 2026 (Docker), as the browser's BusyTeX can run it (faithful.mjs): the source, the pipeline's
+ *  files over it, latexmk to the end or one pass */
 async function compile(files, dir, { main, engine, rerun, bibtex, overrides }) {
   rmSync(dir, { recursive: true, force: true })
   for (const [p, b] of files) { const f = join(dir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
   for (const [p, b] of overrides) { const f = join(dir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
   // TeX writes its output where it runs, the project's root, whatever directory the main file is in
   const stem = main.split('/').pop().replace(/\.[^./]+$/, ''), t0 = Date.now()
-  const docker = cmd => run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
+  const docker = cmd => run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', ...FAITHFUL, '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
   if (rerun) await docker(['latexmk', { xelatex: '-xelatex', lualatex: '-lualatex' }[engine] ?? '-pdf', ...(bibtex === false ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main])
   else await docker([engine, '-interaction=nonstopmode', main])
   const pdf = join(dir, `${stem}.pdf`), logFile = join(dir, `${stem}.log`)
-  return { ok: existsSync(pdf), pdf, log: existsSync(logFile) ? readFileSync(logFile, 'utf8') : '', ms: Date.now() - t0 }
+  return { ok: existsSync(pdf) && statSync(pdf).size > 0, pdf, log: existsSync(logFile) ? readFileSync(logFile, 'utf8') : '', ms: Date.now() - t0 }
 }
 const pdfText = pdf => (sh('pdftotext', ['-q', pdf, '-']) ?? '').replace(/-\n/g, '')
 const pagesOf = pdf => Number(sh('pdfinfo', [pdf])?.match(/^Pages:\s+(\d+)/m)?.[1]) || null
@@ -74,16 +81,19 @@ const logSignals = log => ({
   firstError: log.match(/^! .*$/m)?.[0]?.slice(0, 160) ?? null,
 })
 
+/** the originals, cached by what their compiles are made of: the pipeline's files for the probe and the marked original */
 const originals = existsSync(ORIGINALS) ? JSON.parse(readFileSync(ORIGINALS, 'utf8')) : {}
+const fingerprint = (...overrides) => { const h = createHash('sha256'); for (const o of overrides) for (const [p, b] of [...o].sort(([a], [c]) => a.localeCompare(c))) h.update(p).update(b); return h.digest('hex').slice(0, 16) }
 async function openOne(id) {
   const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
   const paper = openPaper(files)
-  if (!originals[id]) {
+  const made = fingerprint(probeFiles(paper), originalFiles(paper))
+  if (originals[id]?.made !== made) {
     const { meta, project } = paper
     const probe = await compile(files, join(WORK, id, 'probe'), { main: project.main, engine: meta.compiler, rerun: false, overrides: probeFiles(paper) })
     const orig = await compile(files, join(WORK, id, 'orig'), { main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper) })
     const text = orig.ok ? pdfText(orig.pdf) : ''
-    originals[id] = { fonts: readFontProbe(probe.log), ok: orig.ok, pages: orig.ok ? pagesOf(orig.pdf) : null, unresolved: count(text, /\?\?/g), ...logSignals(orig.log), ms: orig.ms }
+    originals[id] = { made, fonts: readFontProbe(probe.log), ok: orig.ok, pages: orig.ok ? pagesOf(orig.pdf) : null, unresolved: count(text, /\?\?/g), ...logSignals(orig.log), ms: orig.ms }
     rmSync(join(WORK, id), { recursive: true, force: true })
     writeFileSync(ORIGINALS, JSON.stringify(originals, null, 1))
   }
@@ -147,6 +157,9 @@ function losses(rows, base) {
       if (r.coverage != null && b.coverage != null && r.coverage < b.coverage - 0.02) why.push(`coverage ${b.coverage} → ${r.coverage}`)
       if (r.missing > b.missing) why.push(`missing characters ${b.missing} → ${r.missing}`)
       if (r.errors > b.errors) why.push(`errors ${b.errors} → ${r.errors} (${r.firstError})`)
+      if (r.unresolved > b.unresolved) why.push(`unresolved references ${b.unresolved} → ${r.unresolved}`)
+      // overfull boxes move with any change to the text; a loss is a clear rise, not a box or two
+      if (r.overfull > b.overfull + Math.max(2, Math.ceil(b.overfull * 0.1))) why.push(`overfull boxes ${b.overfull} → ${r.overfull}`)
     }
     if (why.length) out.push(`${r.id} ${r.lang}: ${why.join('; ')}`)
   }
