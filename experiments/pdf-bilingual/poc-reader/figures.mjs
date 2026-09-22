@@ -2,6 +2,7 @@
 // form for a vector figure, an image for a bitmap — placed by the page's content stream), and which of the page's text
 // lies inside it. Whatever class or package set the paper, an included figure is one of those two, so this needs
 // nothing from the source. Pure: PDF.js's operator list and text items in, rectangles and labels out.
+import { decode } from './mt.mjs'
 
 const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]]
 const apply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]]
@@ -74,11 +75,28 @@ export function figureLabels(items, regions) {
   return labels.map(l => ({ ...l, text: l.text.replace(/\s+/g, ' ').trim() }))
 }
 
-/** a block's lines as one text for the engine, a marker between lines (a literal @ goes as @@, as in the units) */
-export const blockWire = texts => texts.map(t => t.replace(/@/g, '@@')).join(' @a# ')
-/** the engine's answer → one text per line, or null when the markers did not come back one for one */
-export function splitBlock(text, n) {
-  const parts = text.split(/\s*@a#?\s*(?![a-z])/).map(t => t.replace(/@@/g, '@').trim())
+/**
+ * A block's lines as one text for the engine, in the chain's wire format (mt.mjs WIRE), a placeholder between lines:
+ * markers `@a#` (a literal @ goes as @@, as in the units), tags `<x id="n"/>` numbered in order. An engine that keeps
+ * no placeholder (runs) gets no block: null, and the lines go one by one
+ */
+export function blockWire(texts, format = 'markers') {
+  if (format === 'markers') return texts.map(t => t.replace(/@/g, '@@')).join(' @a# ')
+  if (format === 'tags') return texts.map(t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')).map((t, i) => (i ? `<x id="${i}"/> ${t}` : t)).join(' ')
+  return null
+}
+/** the engine's answer → one text per line, or null when the placeholders did not come back one for one, in order */
+export function splitBlock(text, n, format = 'markers') {
+  let parts
+  if (format === 'markers') parts = text.split(/\s*@a#?\s*(?![a-z])/).map(t => t.replace(/@@/g, '@').trim())
+  else {
+    const re = /\s*<x\s+id\s*=\s*["']?(\d+)["']?\s*\/?>(?:\s*<\/x>)?\s*/g
+    parts = []
+    let last = 0, m, want = 1
+    while ((m = re.exec(text))) { if (Number(m[1]) !== want++) return null; parts.push(text.slice(last, m.index)); last = re.lastIndex }
+    parts.push(text.slice(last))
+    parts = parts.map(t => decode(t).trim())
+  }
   return parts.length === n && parts.every(Boolean) ? parts : null
 }
 

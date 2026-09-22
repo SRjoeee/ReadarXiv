@@ -71,7 +71,9 @@ const MODELS = {
   'ocr/PP-OCRv6_tiny_dict.txt': 'c5cbe34ef40c29c4df07ed012bf96569cb69a2d2a01a07027e9f13cb832bd9cd',
 }
 const filesUnder = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => (entry.isDirectory() ? filesUnder(join(dir, entry.name)) : [join(dir, entry.name)]))
-const built = filesUnder(OUT)
+// On this experiment branch the PDF reader is copied in as it is (wxt.config.ts, `pdf-reader/`): research code with its
+// own pdf.js decoders and its own copy of the runtime, which this check of the extension's own package does not count
+const built = filesUnder(OUT).filter(path => !path.startsWith(join(OUT, 'pdf-reader')))
 const wasm = built.filter(path => path.endsWith('.wasm'))
 const carriers = built.filter(path => path.endsWith('.js') && readFileSync(path, 'utf8').includes('ort-wasm-simd-threaded'))
 for (const [what, ok, detail] of [

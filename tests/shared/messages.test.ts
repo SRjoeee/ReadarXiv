@@ -69,6 +69,12 @@ describe('answerMessages', () => {
     // An extension page has no tab
     listen({ type: 'axt:cancel-scope', scope: 's2' }, {}, reply)
     expect(handler).toHaveBeenLastCalledWith({ type: 'axt:cancel-scope', scope: 's2' }, { tabId: undefined })
+    // …nor has one opened in a tab, which Chrome gives `tab` too: its URL is on the extension's own origin
+    listen({ type: 'axt:cancel-scope', scope: 's3' }, { tab: { id: 9 }, url: `${location.origin}/pdf-reader/reader.html` }, reply)
+    expect(handler).toHaveBeenLastCalledWith({ type: 'axt:cancel-scope', scope: 's3' }, { tabId: undefined })
+    // A content script's page is on another origin
+    listen({ type: 'axt:cancel-scope', scope: 's4' }, { tab: { id: 7 }, url: 'https://arxiv.org/html/2608.02163' }, reply)
+    expect(handler).toHaveBeenLastCalledWith({ type: 'axt:cancel-scope', scope: 's4' }, { tabId: 7 })
   })
 
   it('a rejection settles the sender\'s request as a failure, and so does a handler that throws before it has a promise', async () => {

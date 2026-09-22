@@ -1,4 +1,7 @@
 import { execSync } from 'node:child_process'
+import { existsSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'wxt'
 import { readBuildRef } from './scripts/build-ref.mjs'
@@ -15,6 +18,21 @@ function buildRef(): string {
   stamped = readBuildRef(cmd => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim())
   console.log(`[build] ref: ${stamped}`)
   return stamped
+}
+
+/**
+ * The bilingual PDF reader (experiments/pdf-bilingual, issue #290), on this experiment branch only. It is served as
+ * `pdf-reader/reader.html`, a page of this extension, so that it translates through the background as the HTML page
+ * does. Its files are copied as they are: research code, neither bundled nor type-checked. They are copied only once
+ * the experiment's setup has filled its lib/ (experiments/pdf-bilingual/README.md); without it the build is the
+ * extension alone
+ */
+const PDF_READER = fileURLToPath(new URL('./experiments/pdf-bilingual/poc-reader', import.meta.url))
+function pdfReaderFiles(): { absoluteSrc: string; relativeDest: string }[] {
+  if (!existsSync(join(PDF_READER, 'lib/pdf.min.mjs'))) return []
+  return readdirSync(PDF_READER, { recursive: true, encoding: 'utf8' })
+    .filter(path => statSync(join(PDF_READER, path)).isFile())
+    .map(path => ({ absoluteSrc: join(PDF_READER, path), relativeDest: `pdf-reader/${path}` }))
 }
 
 // The WXT project configuration.
@@ -35,7 +53,7 @@ export default defineConfig({
     // The licences that go with every copy (scripts/third-party-notices.mjs): WXT calls this once every entry point
     // is built, so the list of what was bundled is complete; the project's own licence goes in beside it
     'build:publicAssets': (_wxt, files) => {
-      files.push(...licenceFiles())
+      files.push(...licenceFiles(), ...pdfReaderFiles())
     },
   },
   manifest: {
@@ -76,7 +94,8 @@ export default defineConfig({
     // Every network engine has to be here: an MV3 background fetch is still bound by CORS, and without a host permission it can only
     // hope for `Access-Control-Allow-Origin` from the other side. Microsoft does return `*` today (measured), but that is a dependency
     // beyond our control — the day it stops, the whole engine becomes a `network` failure (Codex on #115; the line was missed when the provider was added)
-    host_permissions: ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*'],
+    // arxiv.org, on this experiment branch: the PDF reader (above) fetches a paper's source and PDF from its extension page
+    host_permissions: ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*', 'https://arxiv.org/*'],
     // The floating button (DESIGN §4.0c) frames the popup as its control panel, and a page may only load an extension
     // file that is declared here. One file, and only to arXiv. What the popup loads for itself (its script, its
     // style sheet) is asked for by the extension's own origin and needs no entry; the button's mark is inline vector. A page that

@@ -602,3 +602,38 @@ The owner reviewed Microsoft's translations of 2608.02163 (25 pages) and 2608.02
 - **Korean reads large.** CJK faces fill about 0.91–0.96 of their em, while Times' capitals reach 0.66. A smaller CJK face with more spacing came out longer (table) and was not taken.
 
 **Deferred** (the maintainer, 2026-09-23): the single-language reader comes first. What is left for more than one language is #295, with the candidates TeX Live has and these numbers. Above all it records the maintainer's direction: before changing a language's size or spacing, look for the face that suits the language and a paper and corresponds to the paper's Latin face.
+
+## Twelfth addendum, 2026-09-23: the reader as a page of the extension, with LLM translation
+
+The maintainer's decision: the single-language reader comes first. Of the engines, the minimal prototype has Microsoft, which was there, and an LLM, which was to be added; no others yet. The maintainer chose to make the reader a page of the extension itself on this branch, translating through its background as the HTML page does, over a second LLM client inside the prototype.
+
+### BUILT
+
+- **The build.** It copies `poc-reader/` in as `pdf-reader/`, once setup has filled its `lib/` (`wxt.config.ts`). The output check counts only the extension's own files. On this branch `arxiv.org` is a host permission: the reader fetches a paper's source and PDF.
+- **`engine.mjs`: the extension's chain, reached through the message transport the HTML session uses** (`src/shared/transport.ts`, built through `shared/`).
+  - The chain's status gives the service, the target language and the wire format (`renderPath`): tags for an LLM, markers for Microsoft.
+  - One scope per paper, withdrawn when the page goes.
+  - The paper's title and abstract go with every batch, the abstract cut where the HTML page cuts it.
+  - A batch the engine cannot take is split in halves, as the HTML session splits one.
+  - A permanent error (no key, a key refused) stops the reader, which shows the reason.
+- **`mt.mjs`.** It has the tags format beside markers; that is the spike `c1-mt`'s, now shared rather than copied. `translateUnits` works by format, and figure text goes in the chain's format too.
+- **The background** (`src/shared/messages.ts`, with a test). An extension page opened in a tab is no longer taken for a content script's tab. A scope bound to such a tab would be withdrawn at the tab's first status change: the check behind that asks the tab's content script, which the page does not have.
+- **What went.**
+  - The reader's language menu: the language is the settings'.
+  - The prototype's own manifest and worker.
+  - The five spikes that drive the reader now load the extension's build (`spikes/extension.mjs`).
+
+### MEASURED (Chromium, the build, 2608.02163)
+
+- **Microsoft, the default service (markers).**
+  - First visit: 330 of 350 units translated (20 kept as names), 4 previews, and the final at 15.8 s.
+  - 26 of 26 sampled units stood within 4 px of each other.
+  - The returning visit's translations came from the extension's cache.
+- **An LLM service**, added on the settings page. It is backed by an OpenAI-compatible endpoint on this machine that gives every segment back marked (`LLM_MOCK=1 node spikes/reader-live.mjs`).
+  - It worked in tags, and every unit came back whole: 6 previews, then the final, with every citation resolved.
+  - The endpoint answers at once, yet the extension's queue spread its 109 requests for 321 segments over 52 s: the LLM batching and rate the settings give.
+  - What a real model's translation reads like is for the maintainer to try with a real service.
+- **Found on the way: a mock's own mistake.**
+  - Its mark had gone before a unit's first placeholder. That put text before a table's `\toprule`, which broke the table and the bibliography after it: `\bibdata` never reached the aux, and every citation was undefined.
+  - The mark now goes before the first letter, as a translation's words do.
+  - `live-node.mjs` has the same echo (`ECHO=1`), and the final's note now lists undefined citations.

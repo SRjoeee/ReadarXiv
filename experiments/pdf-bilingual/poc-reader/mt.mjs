@@ -65,6 +65,54 @@ export function rehydrate(text, { slots, lead, trail }, tolerant = false) {
   return { pieces }
 }
 
+// ---------------------------------------------------------------- tags wire format (DESIGN §6: LLMs)
+const escapeTags = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+/** a unit → the wire text: <x id="n"/> for an opaque piece, <t id="n">…</t> around a formatting pair, which LLMs keep */
+export function serializeTags(u) {
+  const slots = [], pairSlot = new Map()
+  let wire = ''
+  const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
+  const trail = u.pieces.at(-1)?.t === 'text' ? u.pieces.at(-1).s.match(/\s*$/)[0] : ''
+  u.pieces.forEach((p, k) => {
+    if (p.t === 'text') { let s = utf8(p.s).replace(/\s+/g, ' '); if (k === 0) s = s.trimStart(); if (k === u.pieces.length - 1) s = s.trimEnd(); wire += escapeTags(s); return }
+    if (p.t === 'open') { slots.push({ open: p }); pairSlot.set(p.id, slots.length); wire += `<t id="${slots.length}">`; return }
+    if (p.t === 'close') { const n = pairSlot.get(p.id); if (n) slots[n - 1].close = p; wire += '</t>'; return }
+    slots.push({ void: p }); wire += `<x id="${slots.length}"/>`
+  })
+  return { wire, slots, lead, trail }
+}
+/** the translation → pieces, or why it cannot be used; the model's common spellings of a tag are read as the extension reads them */
+export function rehydrateTags(text, { slots, lead, trail }) {
+  const pieces = [], seenVoid = new Set(), seenPair = new Set(), stack = []
+  const re = /<x\s+id\s*=\s*["']?(\d+)["']?\s*\/?>(?:\s*<\/x>)?|<t\s+id\s*=\s*["']?(\d+)["']?\s*>|<\/t\s*>/g
+  let last = 0, m
+  const pushText = s => { const d = decode(s); if (d) pieces.push({ t: 'text', tr: true, s: texEscape(d) }) }
+  while ((m = re.exec(text))) {
+    pushText(text.slice(last, m.index)); last = re.lastIndex
+    if (m[1]) { const n = Number(m[1]), slot = slots[n - 1]; if (!slot?.void || seenVoid.has(n)) return { error: slot?.void ? 'duplicated placeholder' : 'unknown placeholder' }; seenVoid.add(n); pieces.push(slot.void) }
+    else if (m[2]) { const n = Number(m[2]), slot = slots[n - 1]; if (!slot?.open || !slot.close || seenPair.has(n)) return { error: 'bad pair' }; seenPair.add(n); stack.push(n); pieces.push(slot.open) }
+    else { const n = stack.pop(); if (!n) return { error: 'bad pair' }; pieces.push(slots[n - 1].close) }
+  }
+  pushText(text.slice(last))
+  if (stack.length) return { error: 'bad pair' }
+  if (seenVoid.size !== slots.filter(x => x.void).length) return { error: 'lost placeholder' }
+  if (seenPair.size !== slots.filter(x => x.open && x.close).length) return { error: 'lost pair' }
+  if (lead) pieces.unshift({ t: 'text', s: lead }); if (trail) pieces.push({ t: 'text', s: trail })
+  return { pieces }
+}
+
+/**
+ * The wire formats as the extension's chain negotiates them (src/core/protector/tokens.ts), by `renderPath`: tags for an
+ * LLM, markers for the free engines, runs for an engine that keeps no placeholder. Per format: a unit → its wire; a
+ * translation → its pieces, and for markers once more tolerantly; a run's text on the wire and back. Under runs every
+ * unit goes as its runs, escaped as tags are (src/cache/key.ts)
+ */
+export const WIRE = {
+  markers: { serialize, rehydrate: (text, ser) => rehydrate(text, ser), tolerant: (text, ser) => rehydrate(text, ser, true), run: escape, unrun: s => decode(s.replace(/@@/g, '@')) },
+  tags: { serialize: serializeTags, rehydrate: rehydrateTags, run: escapeTags, unrun: decode },
+  runs: { run: escapeTags, unrun: decode },
+}
+
 // ---------------------------------------------------------------- Microsoft's free endpoint, as the extension calls it
 export const MICROSOFT_LANG = { zh: 'zh-Hans', ja: 'ja', de: 'de' }
 /** one request: texts → translations (null where the engine returned nothing) */
@@ -126,31 +174,34 @@ export function nameCells(units) {
 }
 
 /**
- * Units → Map unit → translated pieces. `send(texts)` returns the translations of a list of wire texts. What the
- * markers cannot bring back even tolerantly goes again as runs; a unit none of whose runs came back is left out (it
- * stays in the source language). `how` counts each way.
+ * Units → Map unit → translated pieces. `send(texts)` returns the translations of a list of wire texts in `format`
+ * (WIRE). What the placeholders cannot bring back, even tolerantly where the format has a tolerant reading, goes again
+ * as runs; a unit none of whose runs came back is left out (it stays in the source language). `how` counts each way.
  */
-export async function translateUnits(units, send) {
-  const sers = units.map(serialize)
-  const texts = await send(sers.map(s => s.wire))
-  const translated = new Map(), how = { markers: 0, tolerant: 0, runs: 0, untranslated: 0 }, failed = []
-  units.forEach((u, i) => {
-    if (texts[i] == null) { failed.push(u); return }
-    const strict = rehydrate(texts[i], sers[i])
-    if (!strict.error) { translated.set(u, strict.pieces); how.markers++; return }
-    const loose = rehydrate(texts[i], sers[i], true)
-    if (!loose.error) { translated.set(u, loose.pieces); how.tolerant++; return }
-    failed.push(u)
-  })
+export async function translateUnits(units, send, format = 'markers') {
+  const wire = WIRE[format]
+  const translated = new Map(), how = { whole: 0, tolerant: 0, runs: 0, untranslated: 0 }, failed = []
+  if (wire.serialize) {
+    const sers = units.map(wire.serialize)
+    const texts = await send(sers.map(s => s.wire))
+    units.forEach((u, i) => {
+      if (texts[i] == null) { failed.push(u); return }
+      const strict = wire.rehydrate(texts[i], sers[i])
+      if (!strict.error) { translated.set(u, strict.pieces); how.whole++; return }
+      const loose = wire.tolerant?.(texts[i], sers[i])
+      if (loose && !loose.error) { translated.set(u, loose.pieces); how.tolerant++; return }
+      failed.push(u)
+    })
+  } else failed.push(...units)
   const runs = []
-  for (const u of failed) u.pieces.forEach((p, k) => { if (p.t === 'text' && (utf8(p.s).match(/\p{L}/gu) ?? []).length >= 2) runs.push({ u, k, wire: escape(utf8(p.s).replace(/\s+/g, ' ').trim()) }) })
+  for (const u of failed) u.pieces.forEach((p, k) => { if (p.t === 'text' && (utf8(p.s).match(/\p{L}/gu) ?? []).length >= 2) runs.push({ u, k, wire: wire.run(utf8(p.s).replace(/\s+/g, ' ').trim()) }) })
   const runTexts = runs.length ? await send(runs.map(r => r.wire)) : []
   const byUnit = new Map()
   runs.forEach((r, j) => { if (runTexts[j] != null) (byUnit.get(r.u) ?? byUnit.set(r.u, new Map()).get(r.u)).set(r.k, runTexts[j]) })
   for (const u of failed) {
     const got = byUnit.get(u)
     if (!got?.size) { how.untranslated++; continue }
-    translated.set(u, u.pieces.map((p, k) => (got.has(k) ? { t: 'text', tr: true, s: p.s.match(/^\s*/)[0] + texEscape(decode(got.get(k).replace(/@@/g, '@'))) + p.s.match(/\s*$/)[0] } : p)))
+    translated.set(u, u.pieces.map((p, k) => (got.has(k) ? { t: 'text', tr: true, s: p.s.match(/^\s*/)[0] + texEscape(wire.unrun(got.get(k))) + p.s.match(/\s*$/)[0] } : p)))
     how.runs++
   }
   return { translated, how }

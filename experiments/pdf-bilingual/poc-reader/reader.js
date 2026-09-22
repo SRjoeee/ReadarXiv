@@ -13,7 +13,8 @@ import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anc
 import { isTranslatable, linesToBoxes, renderImage, setImageModes } from './lib/axt/figures.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { openPaper, runLive } from './live.mjs'
-import { isName, plainSource, translateTexts } from './mt.mjs'
+import { openEngine, paperContext } from './engine.mjs'
+import { isName, plainSource, WIRE } from './mt.mjs'
 import { unpackSource } from './tar.mjs'
 
 // the viewer components read the core library from this global
@@ -41,11 +42,12 @@ $('open').onsubmit = e => {
   e.preventDefault()
   const id = arxivId($('arxiv').value)
   if (!id) { status('Not an arXiv link or id'); return }
-  const next = new URLSearchParams({ live: '1', paper: id, lang: $('lang').value })
+  // the language and the engine are the extension's settings
+  const next = new URLSearchParams({ live: '1', paper: id })
   for (const k of ['site', 'endpoint']) if (params.has(k)) next.set(k, params.get(k))
   location.search = `?${next}`
 }
-if (params.get('live') === '1') { $('arxiv').value = paper; $('lang').value = params.get('lang') ?? 'zh' }
+if (params.get('live') === '1') $('arxiv').value = paper
 const reload = () => { location.search = `?paper=${$('paper').value}${$('progressive').checked ? '&progressive=1' : ''}` }
 $('paper').onchange = reload
 $('progressive').checked = params.get('progressive') === '1'
@@ -137,7 +139,10 @@ function light(id) { if (id === lit) return; lit = id; for (const s of sides) pa
 // input: where each figure sits and which lines are in it (figures.mjs — the text layer for a vector figure, the
 // recogniser for a bitmap), as normalised lines in the recogniser's shape. Each figure's overlay hangs on an empty
 // <img> laid over it, the anchor the style sheet positions an overlay by.
-let prose = '', figureLang = 'zh'
+let prose = '', paperCtx = {} // the paper's title and abstract, with every batch (engine.mjs)
+/** the extension's chain for this page's paper (engine.mjs), opened once: the units' translation and the figures' text */
+let engineP = null
+const theEngine = () => (engineP ??= openEngine({ paper }))
 /** each unit's kind (para, caption, heading, …), by id: a caption anchors its float's contents (placeAt) */
 let unitKind = new Map()
 document.documentElement.setAttribute('data-axt-on', '')
@@ -193,24 +198,28 @@ async function recognise(page, id) {
 }
 const translated = new Map() // a figure's wire text → its translation (a Promise while it is out)
 /**
- * A figure's boxes → their translations, null for a box left as it is. A figure's boxes go as one text with a marker
- * between them, so that each is translated in the figure's context (alone, a box's "Score" came back as 配乐); a text
- * whose markers do not come back one for one goes again box by box. Proposed for the shared module, with the name
- * rule below.
+ * A figure's boxes → their translations, null for a box left as it is. A figure's boxes go as one text with a
+ * placeholder between them, in the chain's wire format, so that each is translated in the figure's context (alone, a
+ * box's "Score" came back as 配乐); a text whose placeholders do not come back one for one goes again box by box.
+ * Proposed for the shared module, with the name rule below.
  */
 async function translateBoxes(boxes) {
   const todo = boxes.map((b, i) => i).filter(i => isTranslatable(boxes[i].text))
   const out = boxes.map(() => null)
-  const send = wire => { if (!translated.has(wire)) translated.set(wire, translateTexts([wire], figureLang).then(r => r[0]).catch(() => null)); return translated.get(wire) }
+  const engine = await theEngine().catch(() => null)
+  if (!engine) return out
+  const send = wire => { if (!translated.has(wire)) translated.set(wire, engine.translate([wire], paperCtx).then(r => r[0]).catch(() => null)); return translated.get(wire) }
   const single = []
   for (let k = 0; k < todo.length; k += 40) {
     const chunk = todo.slice(k, k + 40)
-    if (chunk.length === 1) { single.push(...chunk); continue }
-    const got = await send(blockWire(chunk.map(i => boxes[i].text)))
-    const parts = got && splitBlock(got, chunk.length)
+    const wire = chunk.length > 1 && blockWire(chunk.map(i => boxes[i].text), engine.format)
+    if (!wire) { single.push(...chunk); continue }
+    const got = await send(wire)
+    const parts = got && splitBlock(got, chunk.length, engine.format)
     if (parts) chunk.forEach((i, j) => { out[i] = parts[j] }); else single.push(...chunk)
   }
-  await Promise.all(single.map(async i => { out[i] = await send(boxes[i].text) }))
+  const { run, unrun } = WIRE[engine.format]
+  await Promise.all(single.map(async i => { const got = await send(run(boxes[i].text)); out[i] = got == null ? null : unrun(got) }))
   return out
 }
 async function paintFigures(side, n) {
@@ -644,21 +653,30 @@ async function marksOfPdf(bytes) {
 }
 async function live() {
   // our TeX page and the TeX Live file server, as spikes/serve-live.mjs starts them on this machine
-  const lang = params.get('lang') ?? 'zh', site = params.get('site') ?? 'http://127.0.0.1:8071', endpoint = params.get('endpoint') ?? 'http://localhost:8070'
+  const site = params.get('site') ?? 'http://127.0.0.1:8071', endpoint = params.get('endpoint') ?? 'http://localhost:8070'
   const srcUrl = params.get('src') ?? `https://arxiv.org/src/${paper}`, pdfUrl = params.get('pdf') ?? `https://arxiv.org/pdf/${paper}`
   const L = (window.__reader.live = { events: [], t0: performance.now() })
-  let shown = 0, total = 0
+  let shown = 0, total = 0, by = ''
   let compiledOnce = false
   const note = (event, data = {}) => {
     L.events.push({ t: Math.round(performance.now() - L.t0), event, ...data })
     if (event === 'translated') shown = data.total
     if ((event === 'preview' || event === 'final') && data.ok) compiledOnce = true
     const said = { preview: data.ok ? 'preview compiled' : `compile failed (${data.strategy}): ${data.error ?? ''}`, final: data.ok ? 'final compiled' : `final compile failed (${data.strategy}): ${data.error ?? ''}`, 'next strategy': `trying ${data.strategy}`, done: compiledOnce ? 'done' : 'done — the translation did not compile; the right side still shows the original' }[event] ?? event
-    status(`${total ? `${shown} of ${total} translated` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
+    status(`${total ? `${shown} of ${total} translated${by}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
   }
+  const fail = (event, text) => { note(event); status(text); L.done = true; L.failed = text }
+  // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
+  // told at once
+  status('Asking the extension which service translates…')
+  let engine
+  try { engine = await theEngine() } catch (e) { return fail('no engine', `Cannot translate: ${e.message ?? e}`) }
+  const lang = engine.lang
+  by = ` into ${lang} by ${engine.engine}`
+  addEventListener('pagehide', () => engine.close(), { once: true })
+  note('engine', { lang, format: engine.format, engine: engine.engine })
   // the original on both sides at once; the right side is replaced as the translation comes in
   status(`Fetching ${paper} from arXiv…`)
-  const fail = (event, text) => { note(event); status(text); L.done = true; L.failed = text }
   let srcBytes
   try {
     ;[srcBytes] = await Promise.all([
@@ -673,7 +691,7 @@ async function live() {
   const paperData = openPaper(files), units = paperData.units
   total = units.length - paperData.kept.size
   const src = units.map((u, i) => ({ id: i, text: plainSource(u) }))
-  prose = src.map(x => x.text).join('\n'); figureLang = lang
+  prose = src.map(x => x.text).join('\n'); paperCtx = paperContext(units)
   unitKind = new Map(units.map((u, i) => [i, u.kind]))
   note('source', { units: units.length, files: files.size })
   await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
@@ -704,7 +722,8 @@ async function live() {
   // a language with no typesetting yet (scripts.mjs) fails at once, before anything is sent
   const result = await runLive(paperData, {
     lang, compile, note,
-    translate: texts => translateTexts(texts, lang),
+    format: engine.format,
+    translate: texts => engine.translate(texts, paperCtx),
     // nearest the reading line on the page first, what lies ahead before what lies behind
     rank: i => {
       const top = unitDocTop(left, i), c = left.container

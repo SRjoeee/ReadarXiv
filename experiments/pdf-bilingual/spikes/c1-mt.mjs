@@ -9,7 +9,7 @@ import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, rmSync, sta
 import { dirname, join, relative } from 'node:path'
 import { promisify } from 'node:util'
 import { latinFontsFor, loadProject, MARK_DEF, markUnits, patch, XETEX_SHIM } from './latex-front.mjs'
-import { decode, escape, nameCells, plainSource, plainTranslated, rehydrate, serialize, texEscape, translateMicrosoft, utf8 } from '../poc-reader/mt.mjs'
+import { decode, escape, nameCells, plainSource, plainTranslated, rehydrate, rehydrateTags, serialize, serializeTags, texEscape, translateMicrosoft, utf8 } from '../poc-reader/mt.mjs'
 import { analyze } from './paper-meta.mjs'
 
 const run = promisify(execFile)
@@ -39,40 +39,6 @@ const TAG = (LLM ? '-llm' : '') + (MARK ? '-marks' : '')
 const outFile = join(root, `out/c1-mt${TAG}-${lang}.json`)
 
 // ---------------------------------------------------------------- markers wire format (DESIGN §6)
-/** tags format (LLM): <x id="n"/> for an opaque piece, <t id="n">…</t> for a formatting pair */
-function serializeTags(u) {
-  const slots = [], pairSlot = new Map()
-  let wire = ''
-  const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
-  const trail = u.pieces.at(-1)?.t === 'text' ? u.pieces.at(-1).s.match(/\s*$/)[0] : ''
-  u.pieces.forEach((p, k) => {
-    if (p.t === 'text') { let s = utf8(p.s).replace(/\s+/g, ' '); if (k === 0) s = s.trimStart(); if (k === u.pieces.length - 1) s = s.trimEnd(); wire += s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); return }
-    if (p.t === 'open') { slots.push({ open: p }); pairSlot.set(p.id, slots.length); wire += `<t id="${slots.length}">`; return }
-    if (p.t === 'close') { const n = pairSlot.get(p.id); if (n) slots[n - 1].close = p; wire += '</t>'; return }
-    slots.push({ void: p }); wire += `<x id="${slots.length}"/>`
-  })
-  return { wire, slots, lead, trail }
-}
-function rehydrateTags(text, { slots, lead, trail }) {
-  const pieces = [], seenVoid = new Set(), seenPair = new Set(), stack = []
-  const re = /<x\s+id\s*=\s*["']?(\d+)["']?\s*\/?>(?:\s*<\/x>)?|<t\s+id\s*=\s*["']?(\d+)["']?\s*>|<\/t\s*>/g
-  let last = 0, m
-  const pushText = s => { const d = decode(s); if (d) pieces.push({ t: 'text', tr: true, s: texEscape(d) }) }
-  while ((m = re.exec(text))) {
-    pushText(text.slice(last, m.index)); last = re.lastIndex
-    if (m[1]) { const n = Number(m[1]), slot = slots[n - 1]; if (!slot?.void || seenVoid.has(n)) return { error: slot?.void ? 'duplicated placeholder' : 'unknown placeholder' }; seenVoid.add(n); pieces.push(slot.void) }
-    else if (m[2]) { const n = Number(m[2]), slot = slots[n - 1]; if (!slot?.open || !slot.close || seenPair.has(n)) return { error: 'bad pair' }; seenPair.add(n); stack.push(n); pieces.push(slot.open) }
-    else { const n = stack.pop(); if (!n) return { error: 'bad pair' }; pieces.push(slots[n - 1].close) }
-  }
-  pushText(text.slice(last))
-  if (stack.length) return { error: 'bad pair' }
-  const voids = slots.filter(x => x.void).length, pairs = slots.filter(x => x.open && x.close).length
-  if (seenVoid.size !== voids) return { error: 'lost placeholder' }
-  if (seenPair.size !== pairs) return { error: 'lost pair' }
-  if (lead) pieces.unshift({ t: 'text', s: lead }); if (trail) pieces.push({ t: 'text', s: trail })
-  return { pieces }
-}
-
 // ---------------------------------------------------------------- the engine, as the extension calls it
 const SYSTEM = `You are translating a scientific paper from English into ${LANG_NAME}. The text may contain placeholders: <x id="N"/> stands for a formula, a citation, a reference or a command, and must appear exactly once in your translation; <t id="N">…</t> marks formatted text: translate what is inside and keep the pair around it. Do not add, remove or renumber placeholders. Keep technical terms accurate. Output only the translation.`
 // one shared cool-down: a 429 pauses every worker, doubling each time it recurs, reset by a success

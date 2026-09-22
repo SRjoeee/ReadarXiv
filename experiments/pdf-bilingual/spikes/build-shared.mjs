@@ -1,6 +1,7 @@
 // The reader prototype's shared modules, compiled from the extension's source — no copies: the HTML mode's figure
-// boxes and overlay (src/core/image/boxes.ts, src/core/renderer/image.ts, src/styles/image.css) and its bitmap
-// recogniser (src/core/ocr). Run again after the extension's source changes.
+// boxes and overlay (src/core/image/boxes.ts, src/core/renderer/image.ts, src/styles/image.css), its bitmap
+// recogniser (src/core/ocr), and the message transport to the background's translation chain (src/shared/transport.ts)
+// with the language table's BCP 47 tags. Run again after the extension's source changes.
 //   node spikes/build-shared.mjs
 import { copyFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -14,7 +15,7 @@ if (!through) throw new Error('esbuild not found: run `pnpm install` at the repo
 const { build } = createRequire(`${EXTENSION}/`)(through)
 const root = new URL('..', import.meta.url).pathname
 const out = join(root, 'poc-reader/lib/axt')
-for (const [entry, file] of [['figures-entry.ts', 'figures.mjs'], ['ocr-entry.ts', 'ocr-core.mjs']]) {
+for (const [entry, file] of [['figures-entry.ts', 'figures.mjs'], ['ocr-entry.ts', 'ocr-core.mjs'], ['translate-entry.ts', 'translate.mjs']]) {
   await build({ entryPoints: [join(root, 'shared', entry)], outfile: join(out, file), bundle: true, format: 'esm', platform: 'browser', target: 'chrome131', alias: { '@': `${EXTENSION}/src` }, nodePaths: [`${EXTENSION}/node_modules`], logLevel: 'warning', legalComments: 'inline' })
 }
 copyFileSync(`${EXTENSION}/src/styles/image.css`, join(out, 'image.css'))

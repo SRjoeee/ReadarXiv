@@ -199,6 +199,16 @@ export interface MessageSender {
 }
 
 /**
+ * The tab a message came from, for a content script only. Chrome gives `sender.tab` to an extension page opened in a
+ * tab as well (the PDF reader, the settings page), but that tab is not a page the handlers act on or watch: a scope
+ * bound to it would be withdrawn by the tab's first status change, since the check behind that asks the tab's content
+ * script, which such a page does not have. The extension's own pages are told apart by their URL, on this context's origin
+ */
+function tabOf(sender: { tab?: { id?: number }; url?: string }): number | undefined {
+  return sender.url?.startsWith(`${globalThis.location?.origin}/`) ? undefined : sender.tab?.id
+}
+
+/**
  * The handlers of one listener, by message type, each typed by the table above: a request that does not match its
  * type, or an answer that does not match its response, does not compile. A handler answers with a promise, or with
  * `undefined` for a message nobody waits on
@@ -216,13 +226,13 @@ export type MessageHandlers = {
  * throws before it has a promise is answered the same way
  */
 export function answerMessages(handlers: MessageHandlers) {
-  return (message: unknown, sender: { tab?: { id?: number } }, sendResponse: (reply: unknown) => void): true | undefined => {
+  return (message: unknown, sender: { tab?: { id?: number }; url?: string }, sendResponse: (reply: unknown) => void): true | undefined => {
     if (!isAxtMessage(message)) return undefined
     const handler = handlers[message.type] as ((message: AxtMessage, sender: MessageSender) => Promise<unknown> | undefined) | undefined
     if (!handler) return undefined
     let answer: Promise<unknown> | undefined
     try {
-      answer = handler(message, { tabId: sender.tab?.id })
+      answer = handler(message, { tabId: tabOf(sender) })
     } catch (error) {
       answer = Promise.reject(error)
     }

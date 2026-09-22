@@ -77,12 +77,13 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
- * `translate(texts)` → translations; `rank(i)` → how far unit i is from the reader's place (lower comes first);
+ * `translate(texts)` → translations of wire texts in `format` (mt.mjs WIRE: the chain's renderPath); `rank(i)` → how
+ * far unit i is from the reader's place (lower comes first);
  * `onUpdate({ pdf,
  * texts, translated, final })` gets each compiled translation; `onOriginal({ pdf })` the marked original; `note(event,
  * data)` every step, for the timeline. Resolves when the final compile is in.
  */
-export async function runLive(paper, { lang, compile, translate, rank = i => i, onUpdate, onOriginal, note = () => {} }) {
+export async function runLive(paper, { lang, compile, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {} }) {
   const { units, kept, meta, project } = paper
   // the chain: a compile that gives no PDF moves on to the next strategy, which is tried at once
   const strategies = strategiesFor(meta, lang)
@@ -111,7 +112,7 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
       const batch = nextBatch(first ? 2500 : 12000)
       batch.forEach(i => todo.delete(i))
       const t0 = Date.now()
-      const { translated: got, how } = await translateUnits(batch.map(i => units[i]), translate)
+      const { translated: got, how } = await translateUnits(batch.map(i => units[i]), translate, format)
       for (const [u, pieces] of got) translated.set(u, pieces)
       note('translated', { units: batch.length, how, ms: Date.now() - t0, total: translated.size })
       dirty = true; signal()
@@ -163,7 +164,7 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
   for (;;) {
     r = await compile({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl }) })
     ok = await settled(r)
-    note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, error: ok ? undefined : whyFailed(r) ?? 'a letter it could not set' })
+    note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, undefinedCitations: [...new Set([...(r.log ?? '').matchAll(/^(?:LaTeX|Package natbib) Warning: Citation [`']([^']+)' .*undefined/gm)].map(m => m[1]))].slice(0, 8), error: ok ? undefined : whyFailed(r) ?? 'a letter it could not set' })
     if (ok || s + 1 >= strategies.length) break
     s++; aux = null
     note('next strategy', { strategy: strategy().name })
