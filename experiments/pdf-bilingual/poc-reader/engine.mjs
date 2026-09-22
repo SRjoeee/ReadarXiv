@@ -38,15 +38,20 @@ function chunks(texts, chars, items) {
 /**
  * The chain as the reader uses it for one paper: `paper` names the cache's entries; `translate(texts, context)` sends
  * the paper's title and abstract ({ paperTitle, abstract }) with every batch, as the HTML page does, for an LLM's
- * prompt. One scope for the whole paper, withdrawn by `close()`: an extension page is no tab the background watches
- * (shared/messages.ts), so the reader says when it is done
+ * prompt. One scope for the whole paper, withdrawn by `close()` or when the page goes: an extension page is no tab the
+ * background watches (shared/messages.ts), so the reader says when it is done
  */
 export async function openEngine({ paper }) {
   const transport = createMessageTransport()
   const scope = `axt-pdf-${crypto.randomUUID()}`
+  // withdrawn when the page goes, from before the status call that binds it: an extension page is no tab the background
+  // watches, and a page closed while that call was out left its scope bound (Devin and Codex on #296)
+  const withdraw = () => void transport.cancel(scope)
+  addEventListener('pagehide', withdraw, { once: true })
   const status = await transport.status(scope, { fresh: true })
   if (!status.available && !status.fallback) {
     // the status call bound the scope; nothing withdraws it but us (Codex on #296)
+    removeEventListener('pagehide', withdraw)
     await transport.cancel(scope)
     throw new EngineError('unavailable', `the chosen service (${status.chosen}) cannot translate now: see the extension's settings`)
   }
@@ -78,6 +83,6 @@ export async function openEngine({ paper }) {
     format: status.renderPath,
     get engine() { return serving },
     translate,
-    close: () => transport.cancel(scope),
+    close: () => { removeEventListener('pagehide', withdraw); return transport.cancel(scope) },
   }
 }

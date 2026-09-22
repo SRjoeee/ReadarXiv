@@ -15,7 +15,7 @@ if (!through) throw new Error('esbuild not found: run `pnpm install` at the repo
 const { build } = createRequire(`${EXTENSION}/`)(through)
 const root = new URL('..', import.meta.url).pathname
 const out = join(root, 'poc-reader/lib/axt')
-for (const [entry, file] of [['figures-entry.ts', 'figures.mjs'], ['ocr-entry.ts', 'ocr-core.mjs'], ['extension-entry.ts', 'extension.mjs']]) {
+for (const [entry, file] of [['figures-entry.ts', 'figures.mjs'], ['ocr-entry.ts', 'ocr-core.mjs'], ['extension-entry.ts', 'extension.mjs'], ['wire-entry.ts', 'wire.mjs']]) {
   await build({ entryPoints: [join(root, 'shared', entry)], outfile: join(out, file), bundle: true, format: 'esm', platform: 'browser', target: 'chrome131', alias: { '@': `${EXTENSION}/src` }, nodePaths: [`${EXTENSION}/node_modules`], logLevel: 'warning', legalComments: 'inline' })
 }
 copyFileSync(`${EXTENSION}/src/styles/image.css`, join(out, 'image.css'))

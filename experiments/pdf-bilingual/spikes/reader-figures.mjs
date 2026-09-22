@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { launchWithReader } from './extension.mjs'
 const root = new URL('..', import.meta.url).pathname
 const [paper, ...pages] = process.argv.slice(2)
-const { context, readerUrl } = await launchWithReader({ profile: 'reader' })
+const { context, readerUrl } = await launchWithReader({ profile: 'reader', demos: true })
 const page = await context.newPage()
 page.on('pageerror', e => console.error('pageerror', e.stack ?? e.message))
 await page.goto(readerUrl({ paper, mode: 'bilingual' }))

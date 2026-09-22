@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { pseudoTranslate, readFontProbe } from '../poc-reader/latex-front.mjs'
 import { lostIn, openPaper, originalFiles, probeFiles, translationFiles, unsettable } from '../poc-reader/live.mjs'
-import { CJK, scriptOf, strategiesFor } from '../poc-reader/scripts.mjs'
+import { CJK, scriptOf, strategiesFor, VERIFIED } from '../poc-reader/scripts.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
 import { unpackSource } from '../poc-reader/tar.mjs'
 
@@ -31,7 +31,7 @@ const flag = name => process.argv.includes(`--${name}`)
 // revtex4-2 3, acmart 2, amsart 2, and one each of llncs, elsarticle, achemso, ieeeconf, sn-jnl, aastex631
 const SAMPLE = ['2608.02163', '2608.05876', '2608.09746', '2608.12333', '2608.18090', '2608.23393', '2608.26528', '2608.29867', '2608.06701', '2608.15016', '2608.25750', '2608.06233', '2608.20847', '2608.23586', '2608.06007', '2608.24839', '2608.02785', '2608.24503', '2608.21180', '2608.15761', '2608.25928', '2608.09038', '2608.02991', '2608.12606']
 // the first batch (REPORT, eleventh addendum): CJK, Latin-script languages whose letters T1 holds, Cyrillic
-const LANGS = arg('langs', 'zh,zh-Hant,ja,ko,de,es,fr,pt,ru').split(',')
+const LANGS = arg('langs', VERIFIED.join(',')).split(',')
 const PAPERS = arg('papers', SAMPLE.join(',')).split(',')
 const PARALLEL = Number(arg('parallel', '5'))
 const TUNE = arg('tune', '')
@@ -96,14 +96,14 @@ async function openOne(id) {
   const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
   const paper = openPaper(files)
   const made = fingerprint(probeFiles(paper), originalFiles(paper))
-  if (originals[id]?.made !== made || !originals[id].originalMissing) {
+  if (originals[id]?.made !== made || !originals[id].originalLost) {
     const { meta, project } = paper
     const probe = await compile(files, join(WORK, id, 'probe'), { main: project.main, engine: meta.compiler, rerun: false, overrides: probeFiles(paper) })
     const orig = await compile(files, join(WORK, id, 'orig'), { main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper) })
     const text = orig.ok ? pdfText(orig.pdf) : ''
-    // the characters the paper's own full compile could not set (the probe has no body): a translation is judged by the
-    // ones it adds, as the reader judges it
-    originals[id] = { made, fonts: readFontProbe(probe.log), originalMissing: [...lostIn(orig.log)], ok: orig.ok, pages: orig.ok ? pagesOf(orig.pdf) : null, unresolved: count(text, /\?\?/g), ...logSignals(orig.log), ms: orig.ms }
+    // the characters the paper's own full compile could not set, each with how often (the probe has no body): a
+    // translation is judged by the losses it adds, as the reader judges it
+    originals[id] = { made, fonts: readFontProbe(probe.log), originalLost: Object.fromEntries(lostIn(orig.log)), ok: orig.ok, pages: orig.ok ? pagesOf(orig.pdf) : null, unresolved: count(text, /\?\?/g), ...logSignals(orig.log), ms: orig.ms }
     rmSync(join(WORK, id), { recursive: true, force: true })
     writeFileSync(ORIGINALS, JSON.stringify(originals, null, 1))
   }
@@ -118,7 +118,7 @@ async function one({ files, paper, original }, id, lang) {
   // each attempt in a directory of its own: the other languages of this paper compile beside it at the same time
   const dirOf = k => join(WORK, id, `${lang}-${k}`)
   let r = null, strategy = null
-  const known = new Set(original.originalMissing)
+  const known = new Map(Object.entries(original.originalLost))
   for (const [k, s] of strategiesFor(meta, lang).entries()) {
     strategy = s
     r = await compile(files, dirOf(k), { main: project.main, engine: s.engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, translated, { strategy: s, fonts: original.fonts, draft: false, aux: null, bbl: null }) })

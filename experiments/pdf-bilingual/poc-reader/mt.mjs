@@ -3,10 +3,10 @@
 // the engine's slips are forgiven where they are unambiguous, and what still fails goes as runs — each stretch of text
 // between opaque pieces on its own — so that nothing is left untranslated.
 import { latin1Bytes } from './latex-front.mjs'
+import { fromAlpha, TAG_RE, toAlpha } from './lib/axt/wire.mjs'
 
 // ---------------------------------------------------------------- markers wire format
-export const toAlpha = id => { let n = id, out = ''; while (n > 0) { const r = (n - 1) % 26; out = String.fromCharCode(97 + r) + out; n = (n - 1 - r) / 26 } return out }
-export const fromAlpha = s => [...s].reduce((n, c) => n * 26 + c.charCodeAt(0) - 96, 0)
+export { fromAlpha, toAlpha }
 export const escape = s => s.replace(/@/g, '@@').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 export const decode = s => s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (m, b) => b[0] === '#' ? String.fromCodePoint(b[1].toLowerCase() === 'x' ? parseInt(b.slice(2), 16) : parseInt(b.slice(1), 10)) : { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }[b.toLowerCase()])
 /** source text is read byte for byte (latin1); its characters are UTF-8 */
@@ -84,13 +84,15 @@ export function serializeTags(u) {
 /** the translation → pieces, or why it cannot be used; the model's common spellings of a tag are read as the extension reads them */
 export function rehydrateTags(text, { slots, lead, trail }) {
   const pieces = [], seenVoid = new Set(), seenPair = new Set(), stack = []
-  const re = /<x\s+id\s*=\s*["']?(\d+)["']?\s*\/?>(?:\s*<\/x>)?|<t\s+id\s*=\s*["']?(\d+)["']?\s*>|<\/t\s*>/g
+  // the tags as the background's tokenizer reads them (src/core/protector/tokens.ts): `<x id="1"></x >` is one void
+  const re = new RegExp(TAG_RE.source, 'g')
   let last = 0, m
   const pushText = s => { const d = decode(s); if (d) pieces.push({ t: 'text', tr: true, s: texEscape(d) }) }
   while ((m = re.exec(text))) {
     pushText(text.slice(last, m.index)); last = re.lastIndex
-    if (m[1]) { const n = Number(m[1]), slot = slots[n - 1]; if (!slot?.void || seenVoid.has(n)) return { error: slot?.void ? 'duplicated placeholder' : 'unknown placeholder' }; seenVoid.add(n); pieces.push(slot.void) }
-    else if (m[2]) { const n = Number(m[2]), slot = slots[n - 1]; if (!slot?.open || !slot.close || seenPair.has(n)) return { error: 'bad pair' }; seenPair.add(n); stack.push(n); pieces.push(slot.open) }
+    const x = m[1] ?? m[2] ?? m[3], t = m[4] ?? m[5] ?? m[6]
+    if (x) { const n = Number(x), slot = slots[n - 1]; if (!slot?.void || seenVoid.has(n)) return { error: slot?.void ? 'duplicated placeholder' : 'unknown placeholder' }; seenVoid.add(n); pieces.push(slot.void) }
+    else if (t) { const n = Number(t), slot = slots[n - 1]; if (!slot?.open || !slot.close || seenPair.has(n)) return { error: 'bad pair' }; seenPair.add(n); stack.push(n); pieces.push(slot.open) }
     else { const n = stack.pop(); if (!n) return { error: 'bad pair' }; pieces.push(slots[n - 1].close) }
   }
   pushText(text.slice(last))

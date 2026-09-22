@@ -3,6 +3,7 @@
 // lies inside it. Whatever class or package set the paper, an included figure is one of those two, so this needs
 // nothing from the source. Pure: PDF.js's operator list and text items in, rectangles and labels out.
 import { decode, escape, fromAlpha, toAlpha, WIRE } from './mt.mjs'
+import { TAG_RE } from './lib/axt/wire.mjs'
 
 const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]]
 const apply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]]
@@ -87,17 +88,19 @@ export function blockWire(texts, format = 'markers') {
   return null
 }
 /** the engine's answer → one text per line, or null when the placeholders did not come back one for one, in order. A
- *  marker whose closing # the engine dropped still counts where no letter follows it, as a unit's tolerant reading does */
+ *  marker whose closing # the engine dropped still counts where no letter follows it, as a unit's tolerant reading does;
+ *  a tag is read as the background reads it (src/core/protector/tokens.ts), and a pair's tag, which no block holds,
+ *  sends the block box by box */
 export function splitBlock(text, n, format = 'markers') {
   // markers as mt.mjs's tolerant reading has them: the closing # preferred, ids no longer than the block's last
   const L = toAlpha(Math.max(1, n - 1)).length
-  const re = format === 'markers' ? new RegExp(`@@|\\s*@([a-z]{1,${L}})#\\s*|\\s*@([a-z]{1,${L}})(?![a-z#])\\s*`, 'g') : /\s*<x\s+id\s*=\s*["']?(\d+)["']?\s*\/?>(?:\s*<\/x>)?\s*/g
-  const id = format === 'markers' ? fromAlpha : Number
+  const re = format === 'markers' ? new RegExp(`@@|\\s*@([a-z]{1,${L}})#\\s*|\\s*@([a-z]{1,${L}})(?![a-z#])\\s*`, 'g') : new RegExp(`\\s*(?:${TAG_RE.source})\\s*`, 'g')
+  const idOf = format === 'markers' ? m => fromAlpha(m[1] ?? m[2]) : m => Number(m[1] ?? m[2] ?? m[3] ?? NaN)
   const parts = []
   let last = 0, m, want = 1
   while ((m = re.exec(text))) {
     if (m[0] === '@@') continue
-    if (id(m[1] ?? m[2]) !== want++) return null
+    if (idOf(m) !== want++) return null
     parts.push(text.slice(last, m.index)); last = re.lastIndex
   }
   parts.push(text.slice(last))

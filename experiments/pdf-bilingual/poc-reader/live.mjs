@@ -17,15 +17,26 @@ import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mj
 
 /** The characters a compile could not set, as its log names them: a glyph a font lacks (TeX logs it and goes on) or a
  *  letter no encoding holds (LaTeX's error; pdfTeX goes on without it). By code point where the log gives one, so that
- *  either message about a character is the same loss */
-export const lostIn = log => new Set([...(log ?? '').matchAll(/^(?:Missing character: There is no (.+?) in font |! LaTeX Error: Unicode character (.+)$)/gm)].map(m => { const c = m[1] ?? m[2]; return c.match(/\(U\+([0-9A-F]+)\)/)?.[1] ?? c.trim() }))
+ *  either message about a character is the same loss, each with the number of times it was lost. Counted in the TeX
+ *  log of the last pass alone: the browser's compiler (poc-site/tex.js) joins each step's log with its terminal output,
+ *  which repeats the errors and carries every earlier pass's; a native compile's .log is the last pass's already */
+export const lostIn = log => {
+  const text = (log ?? '').includes('\n==\nSTDOUT:') ? [...log.matchAll(/^LOG:\n([\s\S]*?)\n==\nSTDOUT:/gm)].map(m => m[1]).join('\n') : log ?? ''
+  const out = new Map()
+  for (const m of text.matchAll(/^(?:Missing character: There is no (.+?) in font |! LaTeX Error: Unicode character (.+)$)/gm)) {
+    const c = m[1] ?? m[2], at = c.match(/\(U\+([0-9A-F]+)\)/)?.[1] ?? c.trim()
+    out.set(at, (out.get(at) ?? 0) + 1)
+  }
+  return out
+}
 /** A compile that gave a PDF but could not set some letter of the translation: the paper's pdfLaTeX meeting a letter no
  *  encoding it has loaded holds (Vietnamese's, under T1), or one a class's primitive \uppercase broke into bytes (amsart's
  *  titles, a French apostrophe); or a font whose metrics are nowhere (a size of a METAFONT-only font the file server does
  *  not have); or a character its font lacks, which leaves a gap in the PDF where it was (Devin and Codex on #294).
- *  `known` holds the characters the paper's own full compile could not set either: the original lacks them too, and a
- *  translation that also lacks them is no worse. The chain moves on from it as from a compile with no PDF */
-export const unsettable = (r, known = new Set()) => /^! Font .* not loadable/m.test(r.log ?? '') || [...lostIn(r.log)].some(c => !known.has(c))
+ *  `known` counts the characters the paper's own full compile could not set: the original lacks them too, and a
+ *  translation that loses a character no more often is no worse; one more loss of it is a gap the translation added
+ *  (Devin and Codex on #294). The chain moves on from it as from a compile with no PDF */
+export const unsettable = (r, known = new Map()) => /^! Font .* not loadable/m.test(r.log ?? '') || [...lostIn(r.log)].some(([c, n]) => n > (known.get(c) ?? 0))
 /** images as frames of their own size (graphicx's draft), each frame's corners marked — g<n>a and g<n>b at its left and
  *  right ends on its baseline, g<n>t at its top right, n counting \includegraphics in the order TeX runs them — so that
  *  the reader lays the left's figure over its frame (reader.js leftFor). A transformed include (\rotatebox or

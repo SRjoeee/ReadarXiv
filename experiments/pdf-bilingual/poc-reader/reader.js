@@ -13,8 +13,9 @@ import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anc
 import { isTranslatable, linesToBoxes, renderImage, setImageModes } from './lib/axt/figures.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { openPaper, runLive } from './live.mjs'
+import { verified, VERIFIED } from './scripts.mjs'
 import { openEngine, paperContext } from './engine.mjs'
-import { appearanceRule, createSurfaceConfig, LANG_CODE_TO_LOCALE_NAME, lookOf } from './lib/axt/extension.mjs'
+import { appearanceRule, createSurfaceConfig, LANG_CODE_TO_LOCALE_NAME, lookOf, toBcp47 } from './lib/axt/extension.mjs'
 import { isName, plainSource, WIRE } from './mt.mjs'
 import { unpackSource } from './tar.mjs'
 
@@ -63,8 +64,9 @@ $('paper').hidden = $('progressive').parentElement.hidden = !DEMO
 // does and followed as they change, so that the PDF and the HTML page agree. The display is the reader's own, kept
 // until the reader is part of the extension's settings: the original alone (nothing is translated or compiled until
 // the reader asks for more), the translation alone, or both side by side.
-/** the languages whose typesetting the gate measures (scripts.mjs; the others wait for #295) */
-const LANGUAGES = ['cmn', 'cmn-Hant', 'jpn', 'kor', 'deu', 'spa', 'fra', 'por', 'rus']
+/** the languages whose typesetting the gate verifies (scripts.mjs VERIFIED), as the extension's table names them; the
+ *  others wait for #295 */
+const LANGUAGES = Object.keys(LANG_CODE_TO_LOCALE_NAME).filter(code => verified(toBcp47(code)))
 const MODES = ['original', 'translation', 'bilingual']
 const PREFS = 'axtPdfReader'
 const prefs = await chrome.storage.local.get(PREFS).then(r => r[PREFS] ?? {}).catch(() => ({}))
@@ -262,8 +264,8 @@ function light(id) { if (id === lit) return; lit = id; for (const s of sides) pa
 let prose = '', paperCtx = Promise.resolve({})
 /** the extension's chain for this page's paper (engine.mjs), opened once: the units' translation and the figures' text */
 let engineP = null
-// withdrawn when the page goes, whichever mode opened it: an extension page is no tab the background watches (Devin and Codex on #296)
-const theEngine = () => (engineP ??= openEngine({ paper }).then(engine => { addEventListener('pagehide', () => engine.close(), { once: true }); return engine }))
+// its scope is withdrawn when the page goes, whichever mode opened it (engine.mjs)
+const theEngine = () => (engineP ??= openEngine({ paper }))
 /** each unit's kind (para, caption, heading, …), by id: a caption anchors its float's contents (placeAt) */
 let unitKind = new Map()
 document.documentElement.setAttribute('data-axt-on', '')
@@ -927,6 +929,8 @@ async function live() {
   try { engine = await theEngine() } catch (e) { return fail('no engine', `Cannot translate: ${e.message ?? e}`) }
   const lang = engine.lang
   note('engine', { lang, format: engine.format, engine: engine.engine })
+  // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
+  if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
   // the original on the right too, replaced as the translation comes in; opened where the original was being read, as a
   // side coming into view does (relayout, which has no document there yet to go by: Codex on #297)
   status(`Fetching ${paper}'s source from arXiv…`)

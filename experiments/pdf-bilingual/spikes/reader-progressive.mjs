@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { launchWithReader } from './extension.mjs'
 const root = new URL('..', import.meta.url).pathname
 const [paper = '2608.00055', every = '3000'] = process.argv.slice(2)
-const { context, readerUrl } = await launchWithReader({ profile: 'reader' })
+const { context, readerUrl } = await launchWithReader({ profile: 'reader', demos: true })
 const page = await context.newPage()
 const errors = []
 page.on('pageerror', e => { errors.push(e.message); console.error('pageerror', e.message) }); page.on('console', m => { if (m.type() === 'error' || m.text().startsWith('[swap]')) console.error(m.type(), m.text()) })
