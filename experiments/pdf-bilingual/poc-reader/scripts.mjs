@@ -109,8 +109,13 @@ const FACES = {
  *  does not load babel itself, and then without its \cite and \ref rewriting (safe=none): coming after the cite
  *  package, that rewriting takes cite's \@citex for the kernel's and breaks every citation; a language imported from its
  *  ini file makes no character active, which is all the rewriting guards against. Not at all where polyglossia manages
- *  the paper's languages, since the two do not work together: its captions then stay the paper's (Codex on #294) */
-const babel = lang => `\\IfPackageLoadedTF{polyglossia}{}{\\IfPackageLoadedTF{babel}{}{\\usepackage[safe=none]{babel}}\\babelprovide[import=${lang},main]{axttarget}}\n`
+ *  the paper's languages, since the two do not work together: its captions then stay the paper's (Codex on #294). The
+ *  locale imported is the first babel has an ini file for, which TeX checks at compile time: the language's own tag,
+ *  then its language and script, then its language alone. The extension names Traditional Chinese zh-TW, which babel has
+ *  no file for, while it has zh-Hant; without the check its captions stayed English, with three errors */
+const babelTags = lang => { const l = new Intl.Locale(lang); return [...new Set([lang, `${l.language}-${l.maximize().script}`, l.language])] }
+const provide = ([tag, ...rest]) => (rest.length ? `\\IfFileExists{babel-${tag}.ini}{\\babelprovide[import=${tag},main]{axttarget}}{${provide(rest)}}` : `\\babelprovide[import=${tag},main]{axttarget}`)
+const babel = lang => `\\IfPackageLoadedTF{polyglossia}{}{\\IfPackageLoadedTF{babel}{}{\\usepackage[safe=none]{babel}}${provide(babelTags(lang))}}\n`
 /** After fontspec: the fonts declared from here on carry exactly the features given them. A paper's class may set
  *  fontspec's defaults for its own faces — newtxtext, which AAAI's style loads, sets Extension=.otf under XeTeX — and
  *  every font declared later inherits them: a .ttf face (bsmi00lp, ipaexm, UnBatang) is then looked for as .otf and

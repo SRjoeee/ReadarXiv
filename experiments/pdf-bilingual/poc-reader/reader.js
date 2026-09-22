@@ -25,6 +25,9 @@ const { EventBus, PDFLinkService, PDFViewer } = await import('./lib/pdf_viewer.m
 const PAPERS = ['2608.04322', '2608.00055']
 const params = new URLSearchParams(location.search)
 const paper = params.get('paper') ?? PAPERS[0]
+/** a precompiled demo paper (poc-reader/papers/, made locally, never in the repository) only when one is asked for by
+ *  `paper` without `live`; the page opens on its form otherwise */
+const DEMO = params.get('live') !== '1' && params.has('paper')
 const $ = id => document.getElementById(id)
 const status = text => { $('status').textContent = text }
 const timing = { start: performance.now() }
@@ -52,6 +55,7 @@ const reload = () => { location.search = `?paper=${$('paper').value}${$('progres
 $('paper').onchange = reload
 $('progressive').checked = params.get('progressive') === '1'
 $('progressive').onchange = reload
+$('paper').hidden = $('progressive').parentElement.hidden = !DEMO
 
 // ---------------------------------------------------------------- the two viewers
 function makeSide(container) {
@@ -783,4 +787,5 @@ async function demo() {
 }
 
 if (params.get('live') === '1') await live()
-else await demo()
+else if (DEMO) await demo()
+else { status('Paste an arXiv link or id, then Translate'); window.__reader.ready = true }

@@ -618,6 +618,8 @@ The maintainer's decision: the single-language reader comes first. Of the engine
   - A permanent error (no key, a key refused) stops the reader, which shows the reason.
 - **`mt.mjs`.** It has the tags format beside markers; that is the spike `c1-mt`'s, now shared rather than copied. `translateUnits` works by format, and figure text goes in the chain's format too.
 - **The background** (`src/shared/messages.ts`, with a test). An extension page opened in a tab is no longer taken for a content script's tab. A scope bound to such a tab would be withdrawn at the tab's first status change: the check behind that asks the tab's content script, which the page does not have.
+- **The language is the settings'.** The extension names Traditional Chinese `zh-TW`, and babel has no ini file for that tag: the captions stayed English, with three errors. The locale imported is now the first one babel has a file for, which TeX checks at compile time: the tag, then its language and script, then its language alone. So `zh-TW` becomes `zh-Hant`, and every tag babel has a file for stays as it was. Checked on a sample in seven languages, each with its own caption names, and on three papers of the gate in all nine languages: nothing lost.
+- **The page opens on its form.** Opened without a paper, it used to go to the precompiled demo, whose papers are made locally and were missing. So the owner's first try showed an error.
 - **What went.**
   - The reader's language menu: the language is the settings'.
   - The prototype's own manifest and worker.
