@@ -569,9 +569,12 @@ The review of #294 also made the gate judge references that stop resolving and o
 
 The corpus has neither kind of paper, so both were checked on minimal documents: a Times article under classic LaTeX in Russian (Tempora, PT Sans, PT Mono) and Chinese (CJKutf8), and a polyglossia article in Russian, German and Chinese.
 
-Its third round (Devin, Codex): a glyph a font lacks. TeX logs it (`Missing character: There is no …`) and goes on, and the PDF has a gap where the letter was. Such a compile is now unsettable too, but only for a character the paper's own compile set: what the original cannot set, its PDF lacks as well. Otherwise every strategy would fail on such a paper and no translation would ever be shown. Checked on a real XeLaTeX log, where Fandol lacks two Extension B characters:
-- it counts as unsettable when neither character is known, and when only one is;
-- it counts as set when both are known.
+Its third and fourth rounds (Devin, Codex): a character the compile could not set. TeX logs a glyph its font lacks (`Missing character: There is no …`) and goes on, and the PDF has a gap where the letter was. LaTeX reports a letter no encoding holds (`Unicode character … not set up`), and pdfTeX goes on without it. Either now makes a compile unsettable, counted by code point where the log gives one, and only for a character the paper's own compile set: what the original cannot set, its PDF lacks as well. Otherwise every strategy would fail on such a paper and no translation would ever be shown. The characters the original loses come from its full compile. The font probe, which the third round read them from, has no body (`probeFiles` replaces it), so that scope was empty until the fourth round. The reader asks for the original's compile ahead of its turn only when a translation loses a character at all, so a clean translation waits for nothing more. Checked:
+- On the log lines of each kind (XeTeX, LaTeX, pdfTeX) and on a real XeLaTeX log, where Fandol lacks two Extension B characters.
+- With a scripted compile, which compiles run and what is shown, in three cases:
+  - a clean translation: probe, preview, final, then the original, as before;
+  - a loss the original has too: the original moves ahead of the final, and the final is shown;
+  - a loss of its own: the chain moves on, and at its end nothing is shown.
 
 None of the gate's 216 compiles and none of the compiles of real Microsoft Chinese translations of 2608.02163 and 2608.02785 logged a missing character, so nothing shown before is held back now. The scripts' header had promised an HTML fallback for a language with no typesetting; there is none. The reader now says it cannot translate the paper, naming the language, where the rejection had gone nowhere.
 

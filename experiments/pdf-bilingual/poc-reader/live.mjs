@@ -15,15 +15,17 @@ import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadPr
 import { strategiesFor } from './scripts.mjs'
 import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
 
-/** The characters a compile could not set, as its log names them: TeX logs a glyph a font lacks and goes on */
-export const missingIn = log => new Set([...(log ?? '').matchAll(/^Missing character: There is no (.+?) in font /gm)].map(m => m[1]))
+/** The characters a compile could not set, as its log names them: a glyph a font lacks (TeX logs it and goes on) or a
+ *  letter no encoding holds (LaTeX's error; pdfTeX goes on without it). By code point where the log gives one, so that
+ *  either message about a character is the same loss */
+export const lostIn = log => new Set([...(log ?? '').matchAll(/^(?:Missing character: There is no (.+?) in font |! LaTeX Error: Unicode character (.+)$)/gm)].map(m => { const c = m[1] ?? m[2]; return c.match(/\(U\+([0-9A-F]+)\)/)?.[1] ?? c.trim() }))
 /** A compile that gave a PDF but could not set some letter of the translation: the paper's pdfLaTeX meeting a letter no
  *  encoding it has loaded holds (Vietnamese's, under T1), or one a class's primitive \uppercase broke into bytes (amsart's
  *  titles, a French apostrophe); or a font whose metrics are nowhere (a size of a METAFONT-only font the file server does
  *  not have); or a character its font lacks, which leaves a gap in the PDF where it was (Devin and Codex on #294).
- *  `known` holds the characters the paper's own compile could not set either: the original lacks them too, and a
+ *  `known` holds the characters the paper's own full compile could not set either: the original lacks them too, and a
  *  translation that also lacks them is no worse. The chain moves on from it as from a compile with no PDF */
-export const unsettable = (r, known = new Set()) => /^! (?:LaTeX Error: Unicode character |Font .* not loadable)/m.test(r.log ?? '') || [...missingIn(r.log)].some(c => !known.has(c))
+export const unsettable = (r, known = new Set()) => /^! Font .* not loadable/m.test(r.log ?? '') || [...lostIn(r.log)].some(c => !known.has(c))
 const DRAFT = '\\PassOptionsToPackage{draft}{graphicx}\n'
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
 const stemOf = main => main.replace(/\.[^./]+$/, '')
@@ -92,10 +94,7 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
   const sleep = () => new Promise(r => { wake = r })
 
   // 1. the document's fonts, while the first batch is out
-  // …and the characters it could not set: a translation is judged by the ones it adds (unsettable)
-  let known = new Set()
-  const settled = r => r.ok && !unsettable(r, known)
-  const fontsP = compile({ main: project.main, engine: meta.compiler, rerun: false, bibtex: false, overrides: probeFiles(paper) }).then(r => { const fonts = readFontProbe(r.log ?? ''); known = missingIn(r.log); note('fonts', { fonts, ms: r.ms, missing: known.size }); return fonts })
+  const fontsP = compile({ main: project.main, engine: meta.compiler, rerun: false, bibtex: false, overrides: probeFiles(paper) }).then(r => { const fonts = readFontProbe(r.log ?? ''); note('fonts', { fonts, ms: r.ms }); return fonts })
 
   // 2. translation nearest the reader first, asked afresh for every batch: the reader may have moved
   const todo = new Set(units.map((u, i) => i).filter(i => !kept.has(units[i])))
@@ -124,13 +123,20 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
   const fonts = await fontsP
   // each unit's text as that compile has it: translated if it was in the snapshot, the source's otherwise
   const texts = done => units.map((u, i) => ({ id: i, text: done.has(u) ? plainTranslated(done.get(u)) : plainSource(u) }))
-  let aux = null, bbl = null, originalDone = false, previews = 0
-  const original = async () => {
-    originalDone = true
-    const o = await compile({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper) })
+  let aux = null, bbl = null, previews = 0, originalP = null
+  // the marked original, compiled once: the left side's anchors, and the characters the paper's own compile could not set
+  const original = () => (originalP ??= compile({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper) }).then(o => {
     note('original', { ok: o.ok, ms: o.ms, error: whyFailed(o) })
     if (o.ok) onOriginal?.({ pdf: o.pdf })
-  }
+    return o
+  }))
+  /**
+   * Whether a compile set the translation (unsettable). A character its font lacks counts only if the paper's own
+   * compile set it, which only the original's full compile tells: the font probe has no body (probeFiles). So the
+   * original is asked for ahead of its turn, and only when a translation leaves a character out at all (Devin and
+   * Codex on #294)
+   */
+  const settled = async r => r.ok && !unsettable(r, lostIn(r.log).size ? lostIn((await original()).log) : undefined)
   while (true) {
     if (dirty) {
       dirty = false
@@ -140,7 +146,7 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
       if (r.bbl) bbl = r.bbl
       // shown only when it set every letter: a translation with letters missing is not one (Devin on #294); the note says
       // ok for what is shown, and with no strategy left the reader keeps what it has
-      const shown = settled(r)
+      const shown = await settled(r)
       note('preview', { ok: shown, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, error: shown ? undefined : whyFailed(r) ?? 'a letter it could not set' })
       if (shown) { previews++; onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false }) }
       else if (s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
@@ -148,20 +154,21 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
     }
     if (mtDone) break
     // nothing new to compile yet: the original, if it is still to do, else wait for the next batch
-    if (!originalDone && previews) { await original(); continue }
+    if (!originalP && previews) { await original(); continue }
     await sleep()
   }
   await mt
   const all = new Map(translated), t0 = Date.now()
-  let r
+  let r, ok
   for (;;) {
     r = await compile({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl }) })
-    note('final', { ok: settled(r), ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, error: settled(r) ? undefined : whyFailed(r) ?? 'a letter it could not set' })
-    if (settled(r) || s + 1 >= strategies.length) break
+    ok = await settled(r)
+    note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, error: ok ? undefined : whyFailed(r) ?? 'a letter it could not set' })
+    if (ok || s + 1 >= strategies.length) break
     s++; aux = null
     note('next strategy', { strategy: strategy().name })
   }
-  if (settled(r)) onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
-  if (!originalDone) await original()
+  if (ok) onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
+  await original()
   return { previews, translated: translated.size, units: units.length }
 }
