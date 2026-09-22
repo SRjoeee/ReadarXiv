@@ -11,6 +11,7 @@ import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import type { Block } from '@/core/extractor'
 import type { PaperContext } from '@/core/extractor/context'
 import { collectImageTargets, startImageTranslation, type ImageBytes, type ImageRun, type ImageTarget } from '@/core/image'
+import { type NameEvidence, nameEvidence } from '@/core/names'
 import { startTranslation, type Progress, type TranslationRun } from '@/core/pipeline'
 import { escapeText, unescapeText } from '@/core/protector/escape'
 import {
@@ -22,7 +23,7 @@ import { createSerialQueue } from '@/core/scheduler/serial'
 import { newSessionId } from '@/core/scheduler/session'
 import { translateTitle, type TitleTranslator } from '@/core/scheduler/title'
 import type { TranslationTransport } from '@/providers/transport'
-import { isFigureText } from '@/core/rules/latexml'
+import { isFigureText, visibleText } from '@/core/rules/latexml'
 import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
 import type { PageStatus } from '@/shared/messages'
 import type { ImageProgress, OcrCall, OcrMessageResponse } from '@/shared/ocr'
@@ -107,6 +108,8 @@ interface LiveSession {
   config: Config
   context: TranslateContext
   renderPath: RenderPath
+  /** The engine translates each segment on its own (ProviderStatus.segmentsAlone): a figure's names are kept from it (§15.1) */
+  segmentsAlone: boolean
   /** What the session runs on (PageStatus.running) */
   running: NonNullable<PageStatus['running']>
   /**
@@ -127,6 +130,15 @@ interface LiveSession {
   images: ImageRound | null
 }
 
+/**
+ * The paper's running text, the evidence of the name rule (§15.1): the visible text of the text blocks — formulas and
+ * code left out, as for every test on what a reader sees (§5.3) — less the labels of a figure drawn in the paper
+ * (§15.6), which are what the rule is asked about, not evidence of it
+ */
+function proseOf(blocks: readonly Block[]): string {
+  return blocks.filter(block => block.kind === 'text' && !isFigureText(block.el)).map(block => visibleText(block.el)).join('\n')
+}
+
 export function createPageSession(deps: SessionDeps): PageSession {
   const { doc, blocks, paper, backend } = deps
   const trace = deps.trace ?? (() => undefined)
@@ -144,6 +156,16 @@ export function createPageSession(deps: SessionDeps): PageSession {
    * the mode in effect, the tidy layer's full pass. Told **before** the writes, each time; it lives as long as the page
    */
   const place = createPlaceKeeper(doc, blocks)
+  /** The page's prose read for names once, when a figure first needs it: the blocks are the page's, whichever session asks */
+  let evidence: NameEvidence | undefined
+  const names = (): NameEvidence => {
+    if (evidence) return evidence
+    const t0 = now()
+    const prose = proseOf(blocks)
+    evidence = nameEvidence(prose)
+    trace(`names: ${prose.length} characters of prose read in ${Math.round(now() - t0)} ms`)
+    return evidence
+  }
   /**
    * The mode the reader saved. **A status request waits for it to come back**: the popup stops retrying the moment
    * it gets a non-empty status, so any guess before then may pin the mode bar on the wrong stop — a reader who
@@ -300,6 +322,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       config,
       context,
       renderPath: status.renderPath,
+      segmentsAlone: status.segmentsAlone,
       running: { provider: status.chosen, target, engine: startEngine, revision: status.revision },
       restarted: false,
       modes: createModeController(doc, requested ?? config.mode, { beforeChange: () => place.keep(), onChange: enterSide }),
@@ -428,6 +451,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       scope: session.id,
       preload: config.preload,
       context: session.context,
+      ...(session.segmentsAlone ? { names } : {}),
       ocr: call => deps.ocr(call),
       translate: request => backend.translate(request),
       onTrace: line => trace(line),

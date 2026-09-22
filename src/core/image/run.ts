@@ -3,14 +3,16 @@
 // of its own and reuses only the viewport scheduler, the session id and the plain-text translation path.
 //
 // Per image: fetch the bytes (same origin, through the HTTP cache) → SHA-256 → OCR in the background (cached by
-// imageHash) → merge lines into boxes, drop numbers and single letters → send the boxes' text to the existing provider
-// on translateTitle's plain-text path (the caption as context, one batch) → insert the overlay. **The session is
+// imageHash) → merge lines into boxes, drop numbers and single letters, and for an engine that translates each box on
+// its own the boxes that are only names → send the boxes' text to the existing provider on translateTitle's
+// plain-text path (the caption as context, one batch) → insert the overlay. **The session is
 // re-checked after every await** (the pattern of the text pipeline): a result arriving after a restore / a restart is
 // dropped. Pending and failure have no DOM node (§15.2): failures are recorded here, shown by the popup and handled
 // by the retry button.
 import { type RenderPath, wireFormatOf } from '@/cache/key'
 import { ID_ATTR } from '@/core/extractor'
 import { escapeText, unescapeText } from '@/core/protector/escape'
+import { type NameEvidence, isName } from '@/core/names'
 import { type ImageFrame, type ImageLabel, type ImageTarget, clearImage, renderImage } from '@/core/renderer/image'
 import { DOCUMENT_ROOT, FIGURE_SELECTORS } from '@/core/rules/latexml'
 import { INJECTED_SELECTOR } from '@/core/marks'
@@ -54,6 +56,13 @@ export interface ImageRunOptions {
   renderPath: RenderPath
   preload: PreloadOptions
   context?: TranslateContext
+  /**
+   * What the paper's prose says of names (`core/names.ts`), given when the engine translates each segment on its own
+   * (a free engine): a box that is only a name — a dataset, a model — is then left as it is, neither sent nor drawn,
+   * for such an engine gives a name alone back as other words (§15.1). Absent for an LLM, which reads a figure's boxes
+   * together with the caption. Asked for when a figure has boxes, so a paper whose figures hold none never builds it
+   */
+  names?: () => NameEvidence
   ocr: (call: OcrCall) => Promise<OcrMessageResponse>
   translate: (call: TranslateCall) => Promise<TranslateMessageResponse>
   /** The mode in effect is among the ones the reader ticked; otherwise an image entering the viewport parks, translated on resume */
@@ -217,6 +226,12 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
     },
   })
   const alive = () => !ledger.halted()
+  /** The boxes that go to the engine: all of them, or without the names when the engine reads each alone */
+  const toTranslate = (boxes: Box[]): Box[] => {
+    if (!options.names || boxes.length === 0) return boxes
+    const evidence = options.names()
+    return boxes.filter(box => !isName(box.text, evidence))
+  }
   // The envelope is the session's, the same for the text run and the title (run/call.ts)
   const base: CallBase = { target: options.target, paper: options.paper, scope: options.scope, ...(options.context ? { context: options.context } : {}) }
   /**
@@ -340,8 +355,8 @@ export function startImageTranslation(options: ImageRunOptions): ImageRun {
       }
       // An animated image: the page is showing some later frame than a recogniser would read, the boxes would not line up — no overlay
       if (frames > 1) return finishEmpty()
-      const boxes = linesToBoxes(lines)
-      if (boxes.length === 0) return finishEmpty() // nothing translatable in the image
+      const boxes = toTranslate(linesToBoxes(lines))
+      if (boxes.length === 0) return finishEmpty() // nothing translatable in the image, or only names
       // The caption stands where a block's section heading does: the labels of a figure are read under it
       const caption = captionOf(target.el)
       const segments = boxes.map((box, i) => ({ id: `${target.id}#L${i}`, text: escapeText(box.text, wireFormatOf(options.renderPath)) }))

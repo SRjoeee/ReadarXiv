@@ -27,7 +27,7 @@ const settle = async (rounds = 4) => { for (let i = 0; i < rounds; i++) await ti
 
 function providerStatus(over: Partial<ProviderStatus> = {}): ProviderStatus {
   return {
-    providerId: 'microsoft', available: true, maxBatchChars: 100_000, maxBatchItems: 100, renderPath: 'tags',
+    providerId: 'microsoft', available: true, maxBatchChars: 100_000, maxBatchItems: 100, renderPath: 'tags', segmentsAlone: true,
     targetLanguage: 'cmn', promptId: 'default', revision: 'r1', chosen: 'microsoft', engine: { id: 'microsoft' },
     chain: ['microsoft'], demotions: [], ...over,
   }
@@ -660,6 +660,32 @@ describe('page session', () => {
     // switching image translation off mid-session drops the gate attribute
     h.session.onConfig({ ...h.config(), image: { enabled: false, modes: [] } })
     expect(document.documentElement.hasAttribute(IMG_MODES_ATTR)).toBe(false)
+  })
+
+  it('images: a figure\'s names are kept from an engine that translates each box on its own, and sent to one that reads them together (§15.1)', async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer
+    const sentFor = async (segmentsAlone: boolean) => {
+      const h = harness({
+        page: PAGE + FIGURE,
+        config: { image: { enabled: true, modes: ['side', 'stack', 'only'] } },
+        status: () => providerStatus({ segmentsAlone }),
+        fetchImage: async () => ({ bytes: png, mime: 'image/png' }),
+        ocrLines: [
+          { text: 'HellaSwag', quad: [[0.1, 0.1], [0.5, 0.1], [0.5, 0.2], [0.1, 0.2]], conf: 0.99 },
+          { text: 'Energy density', quad: [[0.1, 0.6], [0.5, 0.6], [0.5, 0.7], [0.1, 0.7]], conf: 0.99 },
+        ],
+      })
+      live = h.session
+      await h.session.start()
+      await settle()
+      await h.session.translateImages()
+      await settle(6)
+      const sent = h.calls.flatMap(call => call.request.segments).filter(seg => seg.id.includes('#L')).map(seg => seg.text)
+      h.session.restore()
+      return sent
+    }
+    expect(await sentFor(true)).toEqual(['Energy density'])
+    expect(await sentFor(false)).toEqual(['HellaSwag', 'Energy density'])
   })
 
   describe('a figure\'s text — the labels of a TikZ picture, blocks of the text run (§15.6) — is asked for where the reader has figures translated', () => {

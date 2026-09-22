@@ -43,6 +43,13 @@ export interface ProviderStatus {
   maxBatchItems: number
   /** The negotiated render path (§8.5): one per session; the content side serialises and computes cache keys by it */
   renderPath: RenderPath
+  /**
+   * Whether the engine the next request lands on translates each segment of a request on its own — the free engines
+   * — rather than reading them together in one prompt, as an LLM does with the caption beside them. The content side
+   * leaves a figure's boxes that are only names out of what it sends the first kind, which gives a name alone back as
+   * other words (§15.1)
+   */
+  segmentsAlone: boolean
   /** The config this chain was built from: the popup waits for these to match what it just saved before restarting a page */
   targetLanguage: string
   promptId: string
@@ -197,6 +204,8 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     }
     const live = service.status()
     const active = chain.find(engine => engine.id === live.activeId) ?? primary
+    // The engine the next request lands on: the one in use, or, with the first choice unavailable, the fallback found above
+    const serving = available ? active : (chain.find(engine => engine.id === fallback?.id) ?? active)
     return {
       providerId: primary.id,
       chosen: config.provider,
@@ -207,6 +216,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       maxBatchChars: primary.maxBatchChars,
       maxBatchItems: primary.maxBatchItems,
       renderPath,
+      segmentsAlone: serving.kind !== 'llm',
       targetLanguage: config.targetLanguage,
       promptId: config.prompts.promptId,
       chain: chain.map(engine => engine.id),

@@ -4,6 +4,7 @@ import { MAX_IMAGE_BYTES, captionOf, collectImageTargets, readImageResponse, sta
 import { IMG_CLASS } from '@/core/marks'
 import { restore } from '@/core/renderer/page'
 import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
+import { nameEvidence } from '@/core/names'
 import type { OcrCall, OcrLine } from '@/shared/ocr'
 import { docOf } from '../renderer/helpers'
 
@@ -188,6 +189,46 @@ describe('startImageTranslation', () => {
     expect(empty.run.progress()).toEqual({ total: 1, requested: 1, done: 1, failed: 0 })
     expect(empty.doc.querySelector(`.${IMG_CLASS}`)).toBeNull()
     expect(empty.translate).not.toHaveBeenCalled()
+  })
+
+  it('an engine that translates each box on its own (names given): a box that is only a name is neither sent nor drawn, the words beside it are (§15.1)', async () => {
+    const LEGEND = [line('Accuracy on GSM8K', 0.1), line('Mooncake', 0.4), line('(a) Llama3', 0.6), line('Even sites', 0.8)]
+    const names = vi.fn(() => nameEvidence('We serve it with Mooncake and compare with the even sites of the lattice.'))
+    const { doc, targets, run, translate } = setup({ ocr: async () => ({ ok: true, result: { width: 476, height: 357, lines: LEGEND }, cached: false }), names })
+    await run.translate(targets)
+    const sent = (translate.mock.calls[0]![0] as { request: { segments: { text: string }[] } }).request.segments.map(s => s.text)
+    expect(sent).toEqual(['Accuracy on GSM8K', 'Even sites'])
+    expect(Array.from(doc.querySelectorAll(`.${IMG_CLASS} > span`)).map(s => (s as HTMLElement).title)).toEqual(['Accuracy on GSM8K', 'Even sites'])
+    expect(names).toHaveBeenCalledTimes(1)
+  })
+
+  it('an engine that reads the boxes together (no names, an LLM): every box goes, names included', async () => {
+    const LEGEND = [line('Mooncake', 0.4), line('(a) Llama3', 0.6)]
+    const { targets, run, translate } = setup({ ocr: async () => ({ ok: true, result: { width: 476, height: 357, lines: LEGEND }, cached: false }) })
+    await run.translate(targets)
+    expect((translate.mock.calls[0]![0] as { request: { segments: { text: string }[] } }).request.segments.map(s => s.text)).toEqual(['Mooncake', '(a) Llama3'])
+  })
+
+  it('a figure of names only is done with no request and no overlay; an image with no boxes never asks for the names', async () => {
+    const names = vi.fn(() => nameEvidence('We serve it with Mooncake.'))
+    const doc = docOf(FIGURE + FIGURE.replaceAll('F1', 'F2'))
+    markBlocks(extract(doc))
+    const targets = collectImageTargets(doc)
+    const translate = vi.fn(async () => ({ ok: true as const, result: { segments: [], provider: 'mock' }, cached: 0 }))
+    const run = startImageTranslation({
+      doc, targets, paper: '2507.00150', target: 'cmn', scope: 's1', renderPath: 'tags', preload: DEFAULT_PRELOAD,
+      fetchBytes: async () => ({ bytes: PNG, mime: 'image/png' }),
+      ocr: async () => ({ ok: true, result: { width: 1, height: 1, lines: [line('Mooncake', 0.4), line('GSM8K', 0.6)] }, cached: false }),
+      translate, names, isEnabled: () => true, isCurrent: () => true,
+    })
+    await run.translate(targets)
+    expect(translate).not.toHaveBeenCalled()
+    expect(doc.querySelector(`.${IMG_CLASS}`)).toBeNull()
+    expect(run.progress()).toEqual({ total: 2, requested: 2, done: 2, failed: 0 })
+    expect(names).toHaveBeenCalledTimes(2)
+    const bare = setup({ ocr: async () => ({ ok: true, result: { width: 1, height: 1, lines: [line('12.5', 0.1)] }, cached: false }), names })
+    await bare.run.translate(bare.targets)
+    expect(names).toHaveBeenCalledTimes(2)
   })
 
   it('labels whose translation equals the source are not drawn (units, variable names, the engine returning as it was); with all equal no overlay is inserted', async () => {

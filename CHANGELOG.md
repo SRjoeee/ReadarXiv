@@ -2,6 +2,10 @@
 
 Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
+## 0.4.2 — unreleased
+
+- Names in figures stay as the paper writes them. With Microsoft's or Google's translator, or the one built into Chrome, a figure's labels are translated one at a time, and a name standing alone — a model, a benchmark, a method — came back as ordinary words: `HellaSwag` became "hell's battle" in Chinese, `Claude Opus 4.8` "Claude's works 4.8". A label that is only a name, by the way the paper's own text uses it, is now left as it is. An AI service you have added reads a figure's labels together and keeps names itself; for it nothing changes.
+
 ## 0.4.1 — 2026-09-21
 
 - The toolbar button shows where the extension works: in colour on an arXiv abstract, PDF or full text, grey everywhere else. The mark itself is redrawn, a touch cleaner at small sizes.

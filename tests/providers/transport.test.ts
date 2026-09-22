@@ -585,12 +585,28 @@ describe('createLocalTransport: status', () => {
       maxBatchChars: 1000,
       maxBatchItems: 4,
       renderPath: 'tags',
+      segmentsAlone: true,
       targetLanguage: 'cmn',
       promptId: 'default',
       chain: [SVC.id, 'google-web'],
       demotions: [],
       engine: { id: SVC.id },
     })
+  })
+
+  it('segmentsAlone follows the engine the next request lands on: an LLM reads a request\'s segments together, a free engine each on its own (§15.1)', async () => {
+    const llm = (available: boolean): TranslationProvider => ({ ...engine(SVC.id, available), kind: 'llm' })
+    expect((await (await withChain([llm(true), engine('google-web', true)])).status()).segmentsAlone).toBe(false)
+    // The LLM unavailable (no key yet): the requests land straight on the free engine, and it is that one's way that counts
+    expect((await (await withChain([llm(false), engine('google-web', true)])).status()).segmentsAlone).toBe(true)
+    // Put aside by a failure: the engine now in use
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const failing = { ...llm(true), translate: async () => { throw new ProviderError('auth', 'bad key') } }
+    const ok = { ...engine('google-web', true), translate: async (r: TranslateRequest) => ({ segments: r.segments, provider: 'google-web' }) }
+    const t = await withChain([failing, ok])
+    expect((await t.status()).segmentsAlone).toBe(false)
+    expect((await t.translate({ request: req })).ok).toBe(true)
+    expect((await t.status()).segmentsAlone).toBe(true)
   })
 
   it('a saved service id naming nothing: the status says which service was chosen and which engine it resolved to, so the toggle can tell them apart (local review)', async () => {
