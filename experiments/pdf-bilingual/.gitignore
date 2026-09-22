@@ -1,0 +1,9 @@
+# Kept out of the repository (see README.md, "What is not here"): papers and everything made from them, and
+# third-party files the setup fetches or builds
+data/
+out/
+compare/
+node_modules/
+poc-reader/lib/
+poc-reader/papers/
+.profile*/

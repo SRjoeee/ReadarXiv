@@ -1,0 +1,29 @@
+--- a/web/busytex_pipeline.js
++++ b/web/busytex_pipeline.js
+@@ -155,13 +155,22 @@
+         });
+     }
+ 
+-    resolve(files, bib_tex_commands = ['\\bibliography', '\\printbibliography']) {
+-        return this.matches(files, bib_tex_commands);
++    static uncommented(contents) {
++        return BusytexBibtexResolver.text(contents).replace(/(^|[^\\])%.*$/gm, '$1');
+     }
+ 
+-    resolve_backend(files, biblatex_backend_options = ['backend=biber', 'backend = biber']) {
+-        return this.matches(files, biblatex_backend_options) ? 'biber' : 'bibtex8';
++    resolve(files) {
++        return files.some(f => f.path.endsWith('.tex') && /\\(bibliography|printbibliography|addbibresource)\b/.test(BusytexBibtexResolver.uncommented(f.contents)));
+     }
++
++    // biber is biblatex's default backend: a document that loads biblatex without choosing another backend needs biber
++    resolve_backend(files) {
++        const tex = files.filter(f => /\.(tex|sty|cls)$/.test(f.path)).map(f => BusytexBibtexResolver.uncommented(f.contents)).join('\n');
++        if (!/\\(usepackage|RequirePackage)\s*(\[[^\]]*\])?\s*\{[^}]*\bbiblatex\b/.test(tex))
++            return 'bibtex8';
++        const backend = tex.match(/\bbackend\s*=\s*(\w+)/)?.[1];
++        return !backend || backend == 'biber' ? 'biber' : 'bibtex8';
++    }
+ }
+ 
+ class BusytexPipeline {

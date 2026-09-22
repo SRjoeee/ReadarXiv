@@ -1,0 +1,162 @@
+// Machine translation of LaTeX units, shared by the spikes (Node) and the reader (browser). A unit goes out as one
+// wire text with its opaque pieces as markers (DESIGN §6: `@a#`, `@@` for a literal @), comes back as pieces again;
+// the engine's slips are forgiven where they are unambiguous, and what still fails goes as runs — each stretch of text
+// between opaque pieces on its own — so that nothing is left untranslated.
+import { latin1Bytes } from './latex-front.mjs'
+
+// ---------------------------------------------------------------- markers wire format
+const toAlpha = id => { let n = id, out = ''; while (n > 0) { const r = (n - 1) % 26; out = String.fromCharCode(97 + r) + out; n = (n - 1 - r) / 26 } return out }
+const fromAlpha = s => [...s].reduce((n, c) => n * 26 + c.charCodeAt(0) - 96, 0)
+export const escape = s => s.replace(/@/g, '@@').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+export const decode = s => s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (m, b) => b[0] === '#' ? String.fromCodePoint(b[1].toLowerCase() === 'x' ? parseInt(b.slice(2), 16) : parseInt(b.slice(1), 10)) : { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }[b.toLowerCase()])
+/** source text is read byte for byte (latin1); its characters are UTF-8 */
+export const utf8 = s => new TextDecoder().decode(latin1Bytes(s))
+// the engine's text is plain text: TeX's special characters in it (a % for "percent", a # for "number") are escaped
+export const texEscape = s => s.replace(/[\\#$%&_{}~^]/g, c => ({ '\\': '\\textbackslash{}', '~': '\\textasciitilde{}', '^': '\\textasciicircum{}' })[c] ?? `\\${c}`)
+
+/** a unit → the wire text, and the table from marker id back to the original piece */
+export function serialize(u) {
+  const slots = []
+  let wire = ''
+  const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
+  const trail = u.pieces.at(-1)?.t === 'text' ? u.pieces.at(-1).s.match(/\s*$/)[0] : ''
+  u.pieces.forEach((p, k) => {
+    if (p.t === 'text') { let s = utf8(p.s).replace(/\s+/g, ' '); if (k === 0) s = s.trimStart(); if (k === u.pieces.length - 1) s = s.trimEnd(); wire += escape(s); return }
+    slots.push(p)
+    const m = `@${toAlpha(slots.length)}#`
+    // a marker touching a letter is read as part of the word by the engine (#254): a space of ours around it
+    const before = /\p{L}$/u.test(wire) ? ' ' : ''
+    const nextText = u.pieces[k + 1]?.t === 'text' ? u.pieces[k + 1].s : ''
+    const after = /^\p{L}/u.test(utf8(nextText)) ? ' ' : ''
+    wire += before + m + after
+  })
+  return { wire, slots, lead, trail }
+}
+
+/** the translation → pieces, or why it cannot be used */
+export function rehydrate(text, { slots, lead, trail }, tolerant = false) {
+  const pieces = [], seen = new Map()
+  let last = 0
+  const pushText = s => { if (s) pieces.push({ t: 'text', tr: true, s: texEscape(s) }) }
+  // tolerant: the engine sometimes drops the closing # before a CJK character or punctuation (@b形, @g。). A lone @ can only
+  // be a marker's remains, because a literal @ went out as @@; accepted only when no letter follows, never inside a word
+  const L = toAlpha(Math.max(1, slots.length)).length
+  const re = tolerant ? new RegExp(`@@|@([a-z]{1,${L}})#|@([a-z]{1,${L}})(?![a-z#])`, 'g') : /@@|@([a-z]+)#/g
+  let m, buf = ''
+  while ((m = re.exec(text))) {
+    buf += text.slice(last, m.index); last = re.lastIndex
+    if (m[0] === '@@') { buf += '@'; continue }
+    const id = fromAlpha(m[1] ?? m[2])
+    if (!slots[id - 1]) return { error: 'unknown marker' }
+    if (seen.has(id)) return { error: 'duplicated marker' }
+    pushText(decode(buf)); buf = ''
+    seen.set(id, pieces.length); pieces.push(slots[id - 1])
+  }
+  buf += text.slice(last); pushText(decode(buf))
+  if (seen.size !== slots.length) return { error: 'lost marker' }
+  // the two ends of a formatting group must stay in order and properly nested, or the braces stop balancing
+  const stack = []
+  for (const p of pieces) {
+    if (p.t === 'open') stack.push(p.id)
+    else if (p.t === 'close') { if (stack.pop() !== p.id) return { error: 'pair out of order' } }
+  }
+  if (stack.length) return { error: 'pair out of order' }
+  if (lead) pieces.unshift({ t: 'text', s: lead }); if (trail) pieces.push({ t: 'text', s: trail })
+  return { pieces }
+}
+
+// ---------------------------------------------------------------- Microsoft's free endpoint, as the extension calls it
+export const MICROSOFT_LANG = { zh: 'zh-Hans', ja: 'ja', de: 'de' }
+/** one request: texts → translations (null where the engine returned nothing) */
+export async function translateMicrosoft(texts, to) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const res = await fetch(`https://edge.microsoft.com/translate/translatetext?${new URLSearchParams({ from: '', to: MICROSOFT_LANG[to] ?? to, isEnterpriseClient: 'false' })}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(texts) })
+      if (res.status === 429 || res.status >= 500) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      return json.map(item => item?.translations?.[0]?.text ?? null)
+    } catch (e) { if (attempt === 3) throw e; await new Promise(r => setTimeout(r, 1500 * (attempt + 1))) }
+  }
+}
+/** texts in requests of at most 2000 characters or 100 texts, `parallel` requests at a time */
+export async function translateTexts(texts, to, { parallel = 4, send = translateMicrosoft } = {}) {
+  const batches = []
+  let cur = [], chars = 0
+  for (const [i, w] of texts.entries()) { if (cur.length && (chars + w.length > 2000 || cur.length >= 100)) { batches.push(cur); cur = []; chars = 0 } cur.push(i); chars += w.length }
+  if (cur.length) batches.push(cur)
+  const out = new Array(texts.length).fill(null)
+  let next = 0
+  await Promise.all(Array.from({ length: parallel }, async () => {
+    while (next < batches.length) {
+      const b = batches[next++]
+      const got = await send(b.map(i => texts[i]), to).catch(() => b.map(() => null))
+      b.forEach((i, k) => { out[i] = got[k] ?? null })
+    }
+  }))
+  return out
+}
+
+// ---------------------------------------------------------------- names
+/**
+ * Whether a short text (a table cell, a figure label) is only a name — a dataset, a model, a method — which, sent
+ * alone and with no context, comes back as words (HellaSwag → 地狱之战, Magicoder → 魔法师), while the prose keeps
+ * names as they are. At most three words, each of them a name: one with a digit or an inner capital (GSM8K,
+ * DirectHarm4), all capitals (MATH, ASR), or a capitalised word the prose treats as a proper noun and never as a
+ * common one — capitalised in the middle of a sentence (… and Aegis [16]) or as the start of a longer name (Beaver for
+ * BeaverTails), and never in lower case. A capitalised word the prose writes in lower case too is a word, set in title
+ * case in a heading or a term (Average, Score, Safety Dataset); one the prose never treats as a name is a word as well
+ * (Compute). Of the two mistakes, translating a name (Aegis → 宙斯盾) misleads, leaving a word untranslated does not:
+ * a doubtful case stays a name only on both kinds of evidence. `prose` is the running text.
+ */
+export function isName(text, prose) {
+  const words = text.replace(/\s+/g, ' ').trim().split(' ')
+  if (words.length > 3) return false
+  const quote = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const proper = w => new RegExp(`[a-z,;:)\\]] ${quote(w)}(?![a-z])`).test(prose) || new RegExp(`(^|[^A-Za-z])${quote(w)}[A-Z]`).test(prose)
+  const common = w => new RegExp(`(^|[^A-Za-z])${quote(w.toLowerCase())}($|[^A-Za-z])`).test(prose)
+  const nameWord = w => { const bare = w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, ''); return !bare || /[0-9]/.test(bare) || /^[A-Z][^a-z]*$/.test(bare) || /^[A-Za-z][a-z]*[A-Z]/.test(bare) || (/^[A-Z][a-z]+$/.test(bare) && proper(bare) && !common(bare)) }
+  return words.every(nameWord)
+}
+/** the table cells and figure texts that are only names (isName): they keep their source */
+export function nameCells(units) {
+  const short = u => u.kind === 'cell' || u.kind === 'figure'
+  const textOf = u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join(' ')
+  const prose = units.filter(u => !short(u)).map(textOf).join('\n')
+  return new Set(units.filter(u => short(u) && isName(textOf(u), prose)))
+}
+
+/**
+ * Units → Map unit → translated pieces. `send(texts)` returns the translations of a list of wire texts. What the
+ * markers cannot bring back even tolerantly goes again as runs; a unit none of whose runs came back is left out (it
+ * stays in the source language). `how` counts each way.
+ */
+export async function translateUnits(units, send) {
+  const sers = units.map(serialize)
+  const texts = await send(sers.map(s => s.wire))
+  const translated = new Map(), how = { markers: 0, tolerant: 0, runs: 0, untranslated: 0 }, failed = []
+  units.forEach((u, i) => {
+    if (texts[i] == null) { failed.push(u); return }
+    const strict = rehydrate(texts[i], sers[i])
+    if (!strict.error) { translated.set(u, strict.pieces); how.markers++; return }
+    const loose = rehydrate(texts[i], sers[i], true)
+    if (!loose.error) { translated.set(u, loose.pieces); how.tolerant++; return }
+    failed.push(u)
+  })
+  const runs = []
+  for (const u of failed) u.pieces.forEach((p, k) => { if (p.t === 'text' && (utf8(p.s).match(/\p{L}/gu) ?? []).length >= 2) runs.push({ u, k, wire: escape(utf8(p.s).replace(/\s+/g, ' ').trim()) }) })
+  const runTexts = runs.length ? await send(runs.map(r => r.wire)) : []
+  const byUnit = new Map()
+  runs.forEach((r, j) => { if (runTexts[j] != null) (byUnit.get(r.u) ?? byUnit.set(r.u, new Map()).get(r.u)).set(r.k, runTexts[j]) })
+  for (const u of failed) {
+    const got = byUnit.get(u)
+    if (!got?.size) { how.untranslated++; continue }
+    translated.set(u, u.pieces.map((p, k) => (got.has(k) ? { t: 'text', tr: true, s: p.s.match(/^\s*/)[0] + texEscape(decode(got.get(k).replace(/@@/g, '@'))) + p.s.match(/\s*$/)[0] } : p)))
+    how.runs++
+  }
+  return { translated, how }
+}
+
+/** a unit's plain text in the source (placeholders dropped: anchors are found from text alone) */
+export const plainSource = u => u.pieces.map(p => (p.t === 'text' ? utf8(p.s) : ' ')).join('').replace(/\s+/g, ' ').trim()
+/** a unit's plain text in its translation, as the compiled PDF shows it */
+export const plainTranslated = pieces => pieces.map(p => (p.t === 'text' ? (p.tr ? p.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1') : utf8(p.s)) : ' ')).join('').replace(/\s+/g, ' ').trim()

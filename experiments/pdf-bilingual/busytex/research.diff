@@ -1,0 +1,84 @@
+--- busytex_pipeline.js
++++ busytex_pipeline.js
+@@ -155,12 +155,17 @@
+         });
+     }
+ 
+-    resolve(files, bib_tex_commands = ['\\bibliography', '\\printbibliography']) {
+-        return this.matches(files, bib_tex_commands);
++    resolve(files) {
++        // [research patch] comments stripped before looking for a bibliography
++        return files.some(f => (f.path.endsWith('.tex')) && /\\(bibliography|printbibliography|addbibresource)\b/.test(BusytexBibtexResolver.text(f.contents).replace(/(^|[^\\])%.*$/gm, '$1')));
+     }
+ 
+-    resolve_backend(files, biblatex_backend_options = ['backend=biber', 'backend = biber']) {
+-        return this.matches(files, biblatex_backend_options) ? 'biber' : 'bibtex8';
++    resolve_backend(files) {
++        // [research patch] comments stripped; biblatex's default backend is biber
++        const tex = files.filter(f => f.path.endsWith('.tex') || f.path.endsWith('.sty') || f.path.endsWith('.cls')).map(f => BusytexBibtexResolver.text(f.contents).replace(/(^|[^\\])%.*$/gm, '$1')).join('\n');
++        if (!/\\(usepackage|RequirePackage)\s*(\[[^\]]*\])?\s*\{[^}]*\bbiblatex\b/.test(tex)) return 'bibtex8';
++        const backend = tex.match(/backend\s*=\s*(\w+)/)?.[1];
++        return !backend || backend === 'biber' ? 'biber' : 'bibtex8';
+     }
+ }
+ 
+@@ -614,13 +619,13 @@
+         const verbose_args_for = key => (this.verbose_args[verbose] || this.verbose_args[BusytexPipeline.VerboseSilent])[key];
+         const shell_escape_args = shell_escape ? ['--shell-escape'] : ['--no-shell-escape'];
+ 
+-        const xetex_cmd = ['xelatex', '-synctex=1', ...shell_escape_args, '--interaction=batchmode', '--halt-on-error', '--no-pdf', '--fmt', this.fmt.xetex, tex_path].concat(verbose_args_for('xetex'));
+-        const pdftex_final = ['pdflatex', '-synctex=1', ...shell_escape_args, '--interaction=nonstopmode', '--halt-on-error', '--output-format=pdf', '--fmt', this.fmt.pdftex, tex_path].concat(verbose_args_for('pdftex'));
+-        const pdftex_nonfinal = ['pdflatex', '-synctex=1', ...shell_escape_args, '--interaction=batchmode', '--halt-on-error', '--fmt', this.fmt.pdftex, tex_path].concat(verbose_args_for('pdftex'));
+-        const luahbtex_final = ['luahblatex', '-synctex=1', ...shell_escape_args, '--interaction=nonstopmode', '--halt-on-error', '--output-format=pdf', '--fmt', this.fmt.luahbtex, '--nosocket', tex_path].concat(verbose_args_for('luahbtex'));
+-        const luahbtex_nonfinal = ['luahblatex', '-synctex=1', ...shell_escape_args, '--interaction=nonstopmode', '--halt-on-error', '--fmt', this.fmt.luahbtex, '--nosocket', tex_path].concat(verbose_args_for('luahbtex'));
+-        const luatex_final = ['lualatex', '-synctex=1', ...shell_escape_args, '--interaction=nonstopmode', '--halt-on-error', '--output-format=pdf', '--fmt', this.fmt.luatex, '--nosocket', tex_path].concat(verbose_args_for('luahbtex'));
+-        const luatex_nonfinal = ['lualatex', '-synctex=1', ...shell_escape_args, '--interaction=nonstopmode', '--halt-on-error', '--fmt', this.fmt.luatex, '--nosocket', tex_path].concat(verbose_args_for('luahbtex'));
++        const xetex_cmd = ['xelatex', '-synctex=1', ...shell_escape_args, '--interaction=batchmode', '--halt-on-error', '--no-pdf', '--fmt', this.fmt.xetex, main_tex_path].concat(verbose_args_for('xetex'));
++        const pdftex_final = ['pdflatex', '-synctex=1', ...shell_escape_args, '--interaction=nonstopmode', '--halt-on-error', '--output-format=pdf', '--fmt', this.fmt.pdftex, main_tex_path].concat(verbose_args_for('pdftex'));
++        const pdftex_nonfinal = ['pdflatex', '-synctex=1', ...shell_escape_args, '--interaction=batchmode', '--halt-on-error', '--fmt', this.fmt.pdftex, main_tex_path].concat(verbose_args_for('pdftex'));
++        const luahbtex_final = ['luahblatex', '-synctex=1', ...shell_escape_args, '--interaction=nonstopmode', '--halt-on-error', '--output-format=pdf', '--fmt', this.fmt.luahbtex, '--nosocket', main_tex_path].concat(verbose_args_for('luahbtex'));
++        const luahbtex_nonfinal = ['luahblatex', '-synctex=1', ...shell_escape_args, '--interaction=nonstopmode', '--halt-on-error', '--fmt', this.fmt.luahbtex, '--nosocket', main_tex_path].concat(verbose_args_for('luahbtex'));
++        const luatex_final = ['lualatex', '-synctex=1', ...shell_escape_args, '--interaction=nonstopmode', '--halt-on-error', '--output-format=pdf', '--fmt', this.fmt.luatex, '--nosocket', main_tex_path].concat(verbose_args_for('luahbtex'));
++        const luatex_nonfinal = ['lualatex', '-synctex=1', ...shell_escape_args, '--interaction=nonstopmode', '--halt-on-error', '--fmt', this.fmt.luatex, '--nosocket', main_tex_path].concat(verbose_args_for('luahbtex'));
+         const bibtex8_cmd = ['bibtex8', '--8bit'].concat(verbose_args_for('bibtex8')).concat([aux_path]);
+         const makeindex_cmd = ['makeindex', idx_path];
+         const xdvipdfmx_cmd = ['xdvipdfmx'].concat(verbose_args_for('xdvipdfmx')).concat(['-o', pdf_path, xdv_path]);
+@@ -649,8 +654,8 @@
+             }
+         }
+ 
+-        const source_dir = PATH.join(this.project_dir, dirname);
+-        FS.chdir(source_dir);
++        // [research patch] run from the package root, as arXiv does
++        FS.chdir(this.project_dir);
+ 
+         const mem_header = Uint8Array.from(Module.HEAPU8.slice(0, this.mem_header_size));
+         const logs = [];
+@@ -666,8 +671,15 @@
+         if (exit_code == 0 && bibtex) {
+             if (bib_backend == 'biber' && this.biber != null)
+                 exit_code = await this._run_biber(FS, tex_path, files, verbose_args_for('biber'), logs);
+-            else
++            else {
++                // [research patch] bibtex8 appends .bib/.bst to a name that already has it; standard BibTeX does not
++                try {
++                    const aux = FS.readFile(aux_path, { encoding: 'utf8' });
++                    const fixed = aux.replace(/\\bibdata\{([^}]*)\}/g, (m, l) => '\\bibdata{' + l.split(',').map(x => x.trim().replace(/\.bib$/, '')).join(',') + '}').replace(/\\bibstyle\{([^}]*)\}/g, (m, l) => '\\bibstyle{' + l.trim().replace(/\.bst$/, '') + '}');
++                    if (fixed !== aux) FS.writeFile(aux_path, fixed);
++                } catch (e) { }
+                 ({ exit_code } = run(bibtex8_cmd, this.error_messages_fatal));
++            }
+ 
+             if (exit_code == 0 && this.read_all_text(FS, bbl_path).trim() == '') {
+                 this.print('$ # bibtex found no citation commands, skipping extra passes');
+--- busytex_biber.js
++++ busytex_biber.js
+@@ -64,7 +64,7 @@
+ 
+         const bcf = basename(bcf_path);
+         const bbl = bcf.replace(/\.bcf$/, '.bbl');
+-        const argv = [this.bin_biber, '--output-format=bbl', `--outfile=${bbl}`, '--nolog', ...verbose_args, bcf];
++        const argv = [this.bin_biber, '--output-format=bbl', `--outfile=${bbl}`, '--nolog', '--output-safechars', /* [research patch] non-ASCII as LaTeX macros */ ...verbose_args, bcf];
+ 
+         const cmdline = '$ biber ' + argv.slice(1).join(' ');
+         this.last_output += cmdline + '\n';

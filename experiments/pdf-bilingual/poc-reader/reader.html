@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reader prototype</title>
+<link rel="stylesheet" href="lib/pdf_viewer.css">
+<link rel="stylesheet" href="lib/axt/image.css">
+<link rel="stylesheet" href="reader.css">
+</head>
+<body>
+<header>
+  <form id="open" title="Any arXiv paper: its abs, pdf or html link, or its id">
+    <input id="arxiv" placeholder="arXiv link or id" size="30" spellcheck="false">
+    <select id="lang"><option value="zh">中文</option><option value="ja">日本語</option><option value="de">Deutsch</option></select>
+    <button>Translate</button>
+  </form>
+  <select id="paper" title="The precompiled demo papers"></select>
+  <button id="zoomOut" title="Zoom out">−</button>
+  <span id="zoom">100%</span>
+  <button id="zoomIn" title="Zoom in">+</button>
+  <label><input type="checkbox" id="sync" checked> Sync scrolling</label>
+  <label title="Translate the text inside the paper's own figures"><input type="checkbox" id="figures" checked> Figure text</label>
+  <label title="Start from the untranslated document and replace it as the translation comes in"><input type="checkbox" id="progressive"> Progressive demo</label>
+  <span id="status"></span>
+</header>
+<main>
+  <section class="pane"><h2>Original</h2><div class="viewerContainer" id="left"><div class="pdfViewer"></div></div></section>
+  <section class="pane"><h2>Translation</h2><div class="viewerContainer" id="right"><div class="pdfViewer"></div></div></section>
+</main>
+<script type="module" src="reader.js"></script>
+</body>
+</html>

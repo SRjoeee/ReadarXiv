@@ -1,0 +1,16 @@
+{
+  "name": "readarxiv-pdf-bilingual-experiment",
+  "private": true,
+  "description": "Experiment: bilingual PDF reading by translating a paper's LaTeX source and compiling it in the browser (issues #290, #292)",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "setup": "node setup.mjs",
+    "serve": "node spikes/serve-live.mjs"
+  },
+  "dependencies": {
+    "linkedom": "^0.18.13",
+    "pdfjs-dist": "^6.3.289",
+    "texlyre-busytex": "^1.4.0"
+  }
+}

@@ -1,0 +1,27 @@
+:root { --bar: 40px; --hl: rgba(255, 196, 0, 0.28); --hl-edge: rgba(214, 150, 0, 0.9); }
+/* our own chrome only: PDF.js sizes its page boxes as content boxes, and border-box squeezes the canvas inside */
+header, header * { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; font: 13px system-ui, sans-serif; background: #e9e9ec; color: #222; }
+header { height: var(--bar); display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #fff; border-bottom: 1px solid #ccc; }
+header button { width: 28px; height: 26px; }
+#status { margin-left: auto; color: #666; }
+main { position: absolute; top: var(--bar); bottom: 0; left: 0; right: 0; display: grid; grid-template-columns: 1fr 1fr; }
+.pane { position: relative; border-right: 1px solid #bbb; min-width: 0; }
+.pane h2 { position: absolute; z-index: 2; top: 6px; left: 10px; margin: 0; font-size: 11px; font-weight: 600; color: #555; background: rgba(255,255,255,.85); padding: 1px 6px; border-radius: 3px; }
+/* PDF.js requires the container to be absolutely positioned */
+/* no scroll anchoring: the reader sets both sides' positions itself, and the browser nudging one after a page is drawn
+   in it (a highlight or figure layer inserted) put two paragraphs levelled by a click a few to tens of pixels apart */
+.viewerContainer { position: absolute; inset: 0; overflow: auto; overflow-anchor: none; }
+/* the highlight layer sits over the text layer, never catches the pointer */
+.axt-hl-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.axt-hl { position: absolute; background: var(--hl); border-radius: 2px; }
+/* a newer compile being laid out and drawn under the one in view */
+.viewerContainer.axt-incoming { visibility: hidden; }
+/* a figure's place on a translation page, holding the empty <img> the extension's image overlay is anchored to */
+.axt-fig { position: absolute; pointer-events: none; z-index: 2; }
+.axt-fig > div, .axt-fig img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.axt-fig img { opacity: 0; }
+.axt-fig .axt-img > span { pointer-events: auto; }
+header form { display: flex; gap: 4px; align-items: center; margin-right: 8px; }
+header form input { height: 24px; padding: 0 6px; font: inherit; }
+header form button { width: auto; padding: 0 10px; }

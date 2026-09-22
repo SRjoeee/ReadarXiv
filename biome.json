@@ -17,6 +17,21 @@
 	},
 	"overrides": [
 		{
+			"includes": ["experiments/**"],
+			"linter": {
+				"rules": {
+					"complexity": { "noCommaOperator": "off" },
+					"correctness": { "noUnusedFunctionParameters": "off" },
+					"style": { "useTemplate": "off" },
+					"suspicious": {
+						"noAssignInExpressions": "off",
+						"noShadowRestrictedNames": "off",
+						"useIterableCallbackReturn": "off"
+					}
+				}
+			}
+		},
+		{
 			"includes": ["src/providers/request/**", "tests/providers/request/**"],
 			"linter": {
 				"rules": {
