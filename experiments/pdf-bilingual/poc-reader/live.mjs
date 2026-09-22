@@ -11,27 +11,15 @@
 //     or after the final compile: the translation comes first;
 //  5. when every unit is in, the final compile: every pass, the images themselves.
 import { analyze } from './paper-meta.mjs'
-import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, latinFontsFor, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { strategiesFor } from './scripts.mjs'
 import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
 
-// C1's strategies, in the order of its chain (REPORT, fourth addendum): XeLaTeX with xeCJK first; when that does not
-// compile, pdfLaTeX with CJKutf8 — for a paper pdfLaTeX sets, the chain took Chinese from 98 to 106 of 113. German
-// keeps the paper's own engine
-const XECJK = {
-  zh: '\\usepackage{xeCJK}\n\\setCJKmainfont[BoldFont=FandolSong-Bold.otf,ItalicFont=FandolKai-Regular.otf]{FandolSong-Regular.otf}\n',
-  ja: '\\usepackage{xeCJK}\n\\setCJKmainfont[AutoFakeBold=2.5]{ipaexm.ttf}\n',
-}
-const CJKUTF8 = {
-  zh: '\\usepackage{CJKutf8}\n\\AtBeginDocument{\\begin{CJK}{UTF8}{gbsn}}\n\\AtEndDocument{\\end{CJK}}\n',
-  ja: '\\usepackage{CJKutf8}\n\\AtBeginDocument{\\begin{CJK}{UTF8}{ipxm}}\n\\AtEndDocument{\\end{CJK}}\n',
-}
-/** the strategies to try for a paper, in order: { name, engine, pre, xe } */
-export function strategiesFor(meta, lang) {
-  if (!XECJK[lang]) return [{ name: 'own engine', engine: meta.compiler, pre: '', xe: meta.compiler === 'xelatex' }]
-  const out = [{ name: 'XeLaTeX + xeCJK', engine: 'xelatex', pre: XECJK[lang], xe: true }]
-  if (meta.compiler === 'pdflatex') out.push({ name: 'pdfLaTeX + CJKutf8', engine: 'pdflatex', pre: CJKUTF8[lang], xe: false })
-  return out
-}
+/** A compile that gave a PDF but could not set some letter of the translation: the paper's pdfLaTeX meeting a letter no
+ *  encoding it has loaded holds (Vietnamese's, under T1), or one a class's primitive \uppercase broke into bytes (amsart's
+ *  titles, a French apostrophe). The chain moves on from it as from a compile with no PDF */
+export const unsettable = r => /^! LaTeX Error: Unicode character /m.test(r.log ?? '')
+const settled = r => r.ok && !unsettable(r)
 const DRAFT = '\\PassOptionsToPackage{draft}{graphicx}\n'
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
 const stemOf = main => main.replace(/\.[^./]+$/, '')
@@ -62,13 +50,13 @@ export function originalFiles({ fsys, project }) {
   return out
 }
 
-/** the translation so far, with unit marks, set by one of strategiesFor */
+/** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs) */
 export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl }) {
   const xe = strategy.xe
   const out = patch(project, translated, { mark: markUnits(project.units) })
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
-  main = main.slice(0, at) + FORBIDDEN_TO_WARNING + strategy.pre + (xe && strategy.engine !== meta.compiler ? latinFontsFor(fonts) : '') + main.slice(at)
+  main = main.slice(0, at) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   if (xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
@@ -144,8 +132,10 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
       if (r.aux) aux = r.aux
       if (r.bbl) bbl = r.bbl
       note('preview', { ok: r.ok, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, error: whyFailed(r) })
-      if (r.ok) { previews++; onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false }) }
-      else if (s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
+      // shown when it set every letter, or when no strategy is left to do better
+      const last = s + 1 >= strategies.length
+      if (settled(r) || (r.ok && last)) { previews++; onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false }) }
+      else if (!last) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
       continue
     }
     if (mtDone) break
@@ -159,7 +149,7 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
   for (;;) {
     r = await compile({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl }) })
     note('final', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, error: whyFailed(r) })
-    if (r.ok || s + 1 >= strategies.length) break
+    if (settled(r) || s + 1 >= strategies.length) break
     s++; aux = null
     note('next strategy', { strategy: strategy().name })
   }

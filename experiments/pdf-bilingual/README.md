@@ -12,10 +12,10 @@ Rules and techniques here are expected to change; what settles is to be refactor
 
 | Path | What it is |
 |---|---|
-| `poc-reader/` | The reader: an unpacked extension page with two PDF.js viewers. `live.mjs` is the translation pipeline (viewport-first translation, progressive previews, final compile); `latex-front.mjs` reads and patches the LaTeX source (units, marks, engine shims); `anchors.mjs` locates every unit on both PDFs; `mt.mjs` sends units to an engine; `figures.mjs` finds figure text in a PDF; `reader.js` is the viewer, the sync and the click alignment. |
+| `poc-reader/` | The reader: an unpacked extension page with two PDF.js viewers. `live.mjs` is the translation pipeline (viewport-first translation, progressive previews, final compile); `latex-front.mjs` reads and patches the LaTeX source (units, marks, engine shims); `scripts.mjs` is how each writing system is typeset (engine, encoding or faces, line spacing, babel's locale); `anchors.mjs` locates every unit on both PDFs; `mt.mjs` sends units to an engine; `figures.mjs` finds figure text in a PDF; `reader.js` is the viewer, the sync and the click alignment. |
 | `poc-site/` | "Our site": the TeX page the reader frames, running BusyTeX. |
 | `shared/` | Entry points that compile the extension's own modules (figure boxes, overlay, recogniser) into `poc-reader/lib/axt` — no copies of product code. |
-| `spikes/` | Measurement and verification scripts; each file's header says what it measures and how to run it. |
+| `spikes/` | Measurement and verification scripts; each file's header says what it measures and how to run it. `lang-gate.mjs` is the multi-language gate: run it before and after any change to how a translation is typeset. |
 | `busytex/research.diff` | Our patches to BusyTeX's pipeline and biber drivers. |
 | `upstream/` | The same fixes as filed upstream, with self-made reproductions. |
 

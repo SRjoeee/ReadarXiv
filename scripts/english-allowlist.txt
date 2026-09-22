@@ -2,9 +2,9 @@
 docs/DESIGN.md 10  # 2026-09-19: +1, §6.2 quotes what the Edge endpoint returned for a marker touching a word; 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
 docs/RELEASE.md 6  # 2026-09-17: the Chinese store listing (product copy the owner submits)
 docs/UI.md 166  # 2026-09-18: S-I-06 / S-I-06a / S-I-06b / S-I-06c (the floating button, its two side buttons and its menu), S-P-03b / S-P-33 / S-P-50b (the popup on entry pages), S-O-49b / S-O-49c (where the translation opens, the floating button switch), issue #169; 2026-09-21: S-I-07 (the figure viewer, issue #276); −18, the macOS helper's rows went with the helper (issue #280)
-experiments/pdf-bilingual/REPORT.md 10  # 2026-09-22: the experiment's record; engine outputs quoted as the evidence its decisions rest on
+experiments/pdf-bilingual/REPORT.md 11  # 2026-09-22: the experiment's record; engine outputs quoted as the evidence its decisions rest on; +1, the captions babel gives each CJK language (#32)
 experiments/pdf-bilingual/poc-reader/anchors.mjs 2  # 2026-09-22: the CJK ranges of the tokenizer's regexes
-experiments/pdf-bilingual/poc-reader/latex-front.mjs 3  # 2026-09-22: the pseudo-translation's zh and ja sample text; a control word glued to a CJK character, quoted
+experiments/pdf-bilingual/poc-reader/latex-front.mjs 4  # 2026-09-22: the pseudo-translation's zh, zh-Hant and ja sample text (+1, zh-Hant, #32); a control word glued to a CJK character, quoted
 experiments/pdf-bilingual/poc-reader/mt.mjs 3  # 2026-09-22: engine outputs quoted as evidence
 experiments/pdf-bilingual/poc-reader/reader.html 1  # 2026-09-22: the language menu's native names (reader-facing)
 experiments/pdf-bilingual/poc-reader/reader.js 3  # 2026-09-22: engine outputs quoted as evidence

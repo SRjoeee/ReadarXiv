@@ -380,23 +380,51 @@ export function unitText(u) {
 }
 
 // ---------------------------------------------------------------- pseudo-translation
-const SAMPLES = {
-  zh: '本文提出一种新的方法用于分析数据并在多个基准上验证其有效性实验结果表明该方法在准确率与效率方面均优于现有工作',
-  ja: '本研究では新しい手法を提案し複数のベンチマークでその有効性を検証する実験の結果この手法は精度と効率の両面で既存の研究を上回ることが示された',
-  de: 'Wir schlagen eine neue Methode zur Analyse der Daten vor und prüfen ihre Wirksamkeit an mehreren Vergleichsmaßstäben; die Ergebnisse zeigen Vorzüge bei Genauigkeit und Effizienz gegenüber früheren Arbeiten ',
+/**
+ * Per target language, the length of a real translation in grapheme clusters per letter of the English it comes from,
+ * and a sample text (one English sentence as Microsoft's free endpoint translates it). Measured over 48 prose units of
+ * four papers of four document classes (spikes/lang-ratio.mjs, 2026-09-22; each language's quartiles lie within 10 %
+ * of its ratio): a page count or a line break measured on the pseudo-translation stands for the real one's only if it
+ * is as long and written like the language. The first ratios, guessed (zh 0.45, ja 0.55, de 1.15), were a third too
+ * long for Chinese and a sixth too short for German.
+ */
+const PSEUDO = {
+  zh: { ratio: 0.344, sample: '本文提出了一种新的数据分析方法，并验证了其在多个基准上的有效性;实验结果显示，该方法在准确性和效率上均优于现有工作。' },
+  'zh-Hant': { ratio: 0.348, sample: '本文提出一種新的數據分析方法，並驗證其在多項基準上的有效性;實驗結果顯示，該方法在準確度與效率上均優於現有工作。' },
+  ja: { ratio: 0.494, sample: '本論文は新しいデータ解析手法を提案し、その効果を複数のベンチマークで検証します。実験結果は、この手法が精度と効率の両面で既存の研究を上回っていることを示しています。' },
+  ko: { ratio: 0.578, sample: '이 논문은 데이터 분석 방법을 제안하고 여러 벤치마크에서 그 효과를 검증합니다; 실험 결과는 이 방법이 정확성과 효율성 모두에서 기존 연구보다 우수한 성능을 보였음을 보여줍니다.' },
+  ar: { ratio: 0.983, sample: 'تقترح هذه الورقة طريقة جديدة لتحليل البيانات وتؤكد فعاليتها على عدة معايير؛ تظهر النتائج التجريبية أن الطريقة تتفوق على الأعمال الحالية من حيث الدقة والكفاءة.' },
+  ru: { ratio: 1.273, sample: 'В данной статье предлагается новый метод анализа данных и подтверждается его эффективность на нескольких эталонах; Экспериментальные результаты показывают, что метод превосходит существующие работы как по точности, так и по эффективности.' },
+  hi: { ratio: 0.815, sample: 'यह पत्र डेटा का विश्लेषण करने के लिए एक नई विधि का प्रस्ताव करता है और कई बेंचमार्क पर इसकी प्रभावशीलता की पुष्टि करता है; प्रायोगिक परिणाम बताते हैं कि विधि सटीकता और दक्षता दोनों में मौजूदा काम से बेहतर प्रदर्शन करती है।' },
+  de: { ratio: 1.403, sample: 'Dieses Papier schlägt eine neue Methode zur Datenanalyse vor und überprüft deren Wirksamkeit auf mehreren Benchmarks; Die experimentellen Ergebnisse zeigen, dass die Methode bestehende Arbeit sowohl in Genauigkeit als auch Effizienz übertrifft.' },
+  es: { ratio: 1.378, sample: 'Este artículo propone un nuevo método para analizar datos y verifica su efectividad en varios puntos de referencia; Los resultados experimentales muestran que el método supera al trabajo existente tanto en precisión como en eficiencia.' },
+  fr: { ratio: 1.422, sample: 'Cet article propose une nouvelle méthode d’analyse des données et en vérifie l’efficacité sur plusieurs références ; Les résultats expérimentaux montrent que la méthode surpasse le travail existant en précision et en efficacité.' },
+  pt: { ratio: 1.297, sample: 'Este artigo propõe um novo método para analisar dados e verifica sua eficácia em vários benchmarks; Os resultados experimentais mostram que o método supera o trabalho existente tanto em precisão quanto em eficiência.' },
+  vi: { ratio: 1.205, sample: 'Bài báo này đề xuất một phương pháp mới để phân tích dữ liệu và xác minh hiệu quả của nó trên một số tiêu chuẩn; Kết quả thực nghiệm cho thấy phương pháp này vượt trội hơn các công trình hiện có về cả độ chính xác lẫn hiệu quả.' },
 }
-const RATIO = { zh: 0.45, ja: 0.55, de: 1.15 } // characters of translation per letter of English, roughly
-/** the same pieces, text replaced by target-language text of similar length; placeholders in the same order */
+const segmenter = new Intl.Segmenter('und', { granularity: 'grapheme' })
+const clusters = new Map()
+/** a language's sample as grapheme clusters; a space-separated one ends with a space, so that it follows on from itself */
+const clustersOf = lang => {
+  if (!clusters.has(lang)) {
+    const { sample } = PSEUDO[lang]
+    clusters.set(lang, Array.from(segmenter.segment(/\s/.test(sample) ? `${sample} ` : sample), s => s.segment))
+  }
+  return clusters.get(lang)
+}
+/** the same pieces, text replaced by target-language text of similar length; placeholders in the same order. Filled by
+ *  grapheme cluster, so a script whose letters combine (Devanagari's vowel signs) is never cut inside one */
 export function pseudoTranslate(u, lang) {
-  const sample = SAMPLES[lang]
+  const { ratio } = PSEUDO[lang]
+  const sample = clustersOf(lang)
   let k = 0
   return u.pieces.map(p => {
     if (p.t !== 'text') return p
     const letters = (p.s.match(/\p{L}/gu) ?? []).length
     if (!letters) return p
-    const n = Math.max(1, Math.round(letters * RATIO[lang]))
+    const n = Math.max(1, Math.round(letters * ratio))
     let out = ''
-    while (out.length < n) { out += sample[k % sample.length]; k++ }
+    for (let i = 0; i < n; i++, k++) out += sample[k % sample.length]
     // keep the piece's leading and trailing whitespace: it separates the text from commands next to it
     return { t: 'text', tr: true, s: (p.s.match(/^\s*/)[0]) + out + (p.s.match(/\s*$/)[0]) }
   })

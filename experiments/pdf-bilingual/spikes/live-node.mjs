@@ -21,7 +21,8 @@ async function compile({ main, engine, rerun, bibtex, overrides }) {
   const dir = join(out, `c${++n}`)
   for (const [p, b] of files) { const f = join(dir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
   for (const [p, b] of overrides) { const f = join(dir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
-  const stem = main.replace(/\.[^./]+$/, ''), start = Date.now()
+  // TeX writes its output where it runs, the project's root, whatever directory the main file is in
+  const stem = main.split('/').pop().replace(/\.[^./]+$/, ''), start = Date.now()
   const docker = cmd => run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
   if (rerun) await docker(['latexmk', { xelatex: '-xelatex', lualatex: '-lualatex' }[engine] ?? '-pdf', ...(bibtex === false ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main])
   else { await docker([engine, '-interaction=nonstopmode', main]); if (bibtex) await docker(['bibtex', stem]) }
