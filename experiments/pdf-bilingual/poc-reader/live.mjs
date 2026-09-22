@@ -15,12 +15,15 @@ import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadPr
 import { strategiesFor } from './scripts.mjs'
 import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
 
+/** The characters a compile could not set, as its log names them: TeX logs a glyph a font lacks and goes on */
+export const missingIn = log => new Set([...(log ?? '').matchAll(/^Missing character: There is no (.+?) in font /gm)].map(m => m[1]))
 /** A compile that gave a PDF but could not set some letter of the translation: the paper's pdfLaTeX meeting a letter no
  *  encoding it has loaded holds (Vietnamese's, under T1), or one a class's primitive \uppercase broke into bytes (amsart's
  *  titles, a French apostrophe); or a font whose metrics are nowhere (a size of a METAFONT-only font the file server does
- *  not have). The chain moves on from it as from a compile with no PDF */
-export const unsettable = r => /^! (?:LaTeX Error: Unicode character |Font .* not loadable)/m.test(r.log ?? '')
-const settled = r => r.ok && !unsettable(r)
+ *  not have); or a character its font lacks, which leaves a gap in the PDF where it was (Devin and Codex on #294).
+ *  `known` holds the characters the paper's own compile could not set either: the original lacks them too, and a
+ *  translation that also lacks them is no worse. The chain moves on from it as from a compile with no PDF */
+export const unsettable = (r, known = new Set()) => /^! (?:LaTeX Error: Unicode character |Font .* not loadable)/m.test(r.log ?? '') || [...missingIn(r.log)].some(c => !known.has(c))
 const DRAFT = '\\PassOptionsToPackage{draft}{graphicx}\n'
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
 const stemOf = main => main.replace(/\.[^./]+$/, '')
@@ -89,7 +92,10 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
   const sleep = () => new Promise(r => { wake = r })
 
   // 1. the document's fonts, while the first batch is out
-  const fontsP = compile({ main: project.main, engine: meta.compiler, rerun: false, bibtex: false, overrides: probeFiles(paper) }).then(r => { const fonts = readFontProbe(r.log ?? ''); note('fonts', { fonts, ms: r.ms }); return fonts })
+  // …and the characters it could not set: a translation is judged by the ones it adds (unsettable)
+  let known = new Set()
+  const settled = r => r.ok && !unsettable(r, known)
+  const fontsP = compile({ main: project.main, engine: meta.compiler, rerun: false, bibtex: false, overrides: probeFiles(paper) }).then(r => { const fonts = readFontProbe(r.log ?? ''); known = missingIn(r.log); note('fonts', { fonts, ms: r.ms, missing: known.size }); return fonts })
 
   // 2. translation nearest the reader first, asked afresh for every batch: the reader may have moved
   const todo = new Set(units.map((u, i) => i).filter(i => !kept.has(units[i])))

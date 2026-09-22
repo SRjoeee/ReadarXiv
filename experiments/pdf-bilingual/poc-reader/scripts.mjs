@@ -11,7 +11,9 @@
 // engine cannot set a letter it says so (`unsettable` in live.mjs), and the chain moves on. A paper the author set with
 // XeLaTeX keeps its engine; so does a LuaLaTeX one for an alphabet, while for CJK it goes to XeLaTeX with xeCJK, where
 // Lua-only code fails (none of the corpus's 123 papers is set with LuaLaTeX, so no LuaLaTeX CJK path could be measured).
-// When no strategy gives a PDF, and for a script not listed here, the reader shows the translation from the HTML instead. Every font named is in TeX Live 2026. Measured with spikes/lang-gate.mjs.
+// When no strategy sets the translation, the reader keeps what it shows. A script not listed here has no strategy yet:
+// strategiesFor throws, and the reader says it cannot typeset that language (Devin on #294). Every font named is in
+// TeX Live 2026. Measured with spikes/lang-gate.mjs.
 import { latinFontsFor } from './latex-front.mjs'
 
 export const scriptOf = lang => new Intl.Locale(lang).maximize().script

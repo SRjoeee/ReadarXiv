@@ -569,6 +569,12 @@ The review of #294 also made the gate judge references that stop resolving and o
 
 The corpus has neither kind of paper, so both were checked on minimal documents: a Times article under classic LaTeX in Russian (Tempora, PT Sans, PT Mono) and Chinese (CJKutf8), and a polyglossia article in Russian, German and Chinese.
 
+Its third round (Devin, Codex): a glyph a font lacks. TeX logs it (`Missing character: There is no …`) and goes on, and the PDF has a gap where the letter was. Such a compile is now unsettable too, but only for a character the paper's own compile set: what the original cannot set, its PDF lacks as well. Otherwise every strategy would fail on such a paper and no translation would ever be shown. Checked on a real XeLaTeX log, where Fandol lacks two Extension B characters:
+- it counts as unsettable when neither character is known, and when only one is;
+- it counts as set when both are known.
+
+None of the gate's 216 compiles and none of the compiles of real Microsoft Chinese translations of 2608.02163 and 2608.02785 logged a missing character, so nothing shown before is held back now. The scripts' header had promised an HTML fallback for a language with no typesetting; there is none. The reader now says it cannot translate the paper, naming the language, where the rejection had gone nowhere.
+
 ### The owner's review of real translations — FIXED, and the rest deferred (#295)
 
 The owner reviewed Microsoft's translations of 2608.02163 (25 pages) and 2608.02785 as the reader compiles them (2026-09-23):
