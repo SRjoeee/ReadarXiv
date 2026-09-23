@@ -9,7 +9,8 @@ import { serveSite } from './live-site.mjs'
 import { launchWithReader } from './extension.mjs'
 const root = new URL('..', import.meta.url).pathname
 const [paper = '2608.04322'] = process.argv.slice(2)
-const { context, readerUrl } = await launchWithReader({ profile: 'reader-click', demos: true })
+// the demo papers only for a demo run: a live one needs none made (Codex on #296)
+const { context, readerUrl } = await launchWithReader({ profile: 'reader-click', demos: !process.env.LIVE })
 const page = await context.newPage()
 page.on('pageerror', e => console.error('pageerror', e.message))
 page.on('console', m => { if (m.text().startsWith('[who]')) console.log(m.text().slice(0, 600)) })

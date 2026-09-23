@@ -182,11 +182,22 @@ export function nameCells(units) {
  */
 export async function translateUnits(units, send, format = 'markers') {
   const wire = WIRE[format]
-  const translated = new Map(), how = { whole: 0, tolerant: 0, runs: 0, untranslated: 0 }, failed = []
+  const translated = new Map(), how = { whole: 0, tolerant: 0, runs: 0, untranslated: 0, lost: 0 }, failed = []
+  // what came back, when some texts did not for a reason not theirs (engine.mjs, EngineError's `lost`): those stay in
+  // the source language, counted, and the failure is kept — sent again piece by piece they would only fail again, as
+  // many times over as they have pieces (Codex on #296)
+  const ask = async texts => {
+    try { return { texts: await send(texts), lost: null } } catch (e) {
+      if (!e?.partial) throw e
+      how.error ??= e.kind
+      return { texts: e.partial, lost: e.lost }
+    }
+  }
   if (wire.serialize) {
     const sers = units.map(wire.serialize)
-    const texts = await send(sers.map(s => s.wire))
+    const { texts, lost } = await ask(sers.map(s => s.wire))
     units.forEach((u, i) => {
+      if (lost?.has(i)) { how.lost++; return }
       if (texts[i] == null) { failed.push(u); return }
       const strict = wire.rehydrate(texts[i], sers[i])
       if (!strict.error) { translated.set(u, strict.pieces); how.whole++; return }
@@ -197,12 +208,13 @@ export async function translateUnits(units, send, format = 'markers') {
   } else failed.push(...units)
   const runs = []
   for (const u of failed) u.pieces.forEach((p, k) => { if (p.t === 'text' && (utf8(p.s).match(/\p{L}/gu) ?? []).length >= 2) runs.push({ u, k, wire: wire.run(utf8(p.s).replace(/\s+/g, ' ').trim()) }) })
-  const runTexts = runs.length ? await send(runs.map(r => r.wire)) : []
+  const { texts: runTexts, lost: runsLost } = runs.length ? await ask(runs.map(r => r.wire)) : { texts: [], lost: null }
   const byUnit = new Map()
   runs.forEach((r, j) => { if (runTexts[j] != null) (byUnit.get(r.u) ?? byUnit.set(r.u, new Map()).get(r.u)).set(r.k, runTexts[j]) })
+  const lostUnits = new Set(runs.filter((r, j) => runsLost?.has(j)).map(r => r.u))
   for (const u of failed) {
     const got = byUnit.get(u)
-    if (!got?.size) { how.untranslated++; continue }
+    if (!got?.size) { if (lostUnits.has(u)) how.lost++; else how.untranslated++; continue }
     translated.set(u, u.pieces.map((p, k) => (got.has(k) ? { t: 'text', tr: true, s: p.s.match(/^\s*/)[0] + texEscape(wire.unrun(got.get(k))) + p.s.match(/\s*$/)[0] } : p)))
     how.runs++
   }

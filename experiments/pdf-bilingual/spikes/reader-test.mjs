@@ -1,23 +1,18 @@
 // Drives the reader prototype in Chromium: open it, wait for the anchors, hover a paragraph, scroll one side and check
 // the other follows, take screenshots, and read the timings and the renderer's memory.
+// A precompiled demo paper, in the extension's build (node spikes/reader-papers.mjs first).
 //   node spikes/reader-test.mjs [paper]
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createRequire } from 'node:module'
-const { chromium } = createRequire(new URL('../../../', import.meta.url))('playwright')
+import { launchWithReader } from './extension.mjs'
 const root = new URL('..', import.meta.url).pathname
 const paper = process.argv[2] ?? '2608.04322'
-const EXT = join(root, 'poc-reader')
 const rss = () => { try { return Math.round(execFileSync('ps', ['-axo', 'rss=,command='], { encoding: 'utf8', maxBuffer: 1 << 24 }).split('\n').filter(l => l.includes('ms-playwright') && l.includes('--type=renderer')).reduce((a, l) => a + Number(l.trim().split(/\s+/)[0]), 0) / 1024) } catch { return null } }
-const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'reader-')), { channel: 'chromium', headless: true, viewport: { width: 1600, height: 1000 }, args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`] })
-const [worker] = context.serviceWorkers().length ? context.serviceWorkers() : [await context.waitForEvent('serviceworker')]
-const id = new URL(worker.url()).host
+const { context, readerUrl } = await launchWithReader({ profile: 'reader-test', demos: true })
 const page = await context.newPage()
 const errors = []
 page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); else if (m.text().startsWith('misaligned')) console.error(m.text()) })
-await page.goto(`chrome-extension://${id}/reader.html?paper=${paper}`)
+await page.goto(readerUrl({ paper, mode: 'bilingual' }))
 await page.waitForFunction(() => window.__reader?.ready, null, { timeout: 120000 })
 await page.waitForTimeout(800)
 const info = await page.evaluate(() => { const r = window.__reader; return { timing: Object.fromEntries(Object.entries(r.timing).map(([k, v]) => [k, Math.round(v)])), units: r.units, linked: r.linked, leftPages: r.leftPages, rightPages: r.rightPages } })
@@ -52,13 +47,13 @@ const back = trace.filter((t, n) => n && t[1] < trace[n - 1][1] - 0.5).length
 // alignment once scrolling stops: each sampled paragraph brought to the reading line on the left, the pointer over its
 // column; how far from the reading line its first line stands on the right after the settle
 const sync = await page.evaluate(async () => {
-  const { left, right, unitDocTop, pageView, setDriver, READING_LINE } = window.__reader.debug
+  const { left, right, unitDocTop, pageView, setDriver, readingLine } = window.__reader.debug
   const ids = [...left.anchors].filter(([id, a]) => a && right.anchors.get(id)).map(([id]) => id)
   const sample = ids.filter((_, n) => n % Math.max(1, Math.floor(ids.length / 40)) === 0)
   const errs = []
   for (const id of sample) {
     const r = left.anchors.get(id).rects[0], top = unitDocTop(left, id)
-    const want = top + 2 - left.container.clientHeight * READING_LINE
+    const want = top + 2 - left.container.clientHeight * readingLine
     if (want < 0 || want > left.container.scrollHeight - left.container.clientHeight) continue
     setDriver(left)
     const pv = pageView(left, r.page), [cx] = pv.viewport.convertToViewportPoint((r.x0 + r.x1) / 2, r.y0)
