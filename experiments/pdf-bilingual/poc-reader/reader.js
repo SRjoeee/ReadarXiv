@@ -72,8 +72,10 @@ const MODES = ['original', 'translation', 'bilingual']
 const PREFS = 'axtPdfReader'
 const prefs = await chrome.storage.local.get(PREFS).then(r => r[PREFS] ?? {}).catch(() => ({}))
 /** the reader's own preferences, merged into what storage holds when they are written: another reader page may have
- *  saved since this one opened (Devin on #297) */
-const savePrefs = patch => chrome.storage.local.get(PREFS).then(r => chrome.storage.local.set({ [PREFS]: { ...(r[PREFS] ?? {}), ...patch } })).catch(() => undefined)
+ *  saved since this one opened (Devin on #297). One write after another: two made at once read the same object, and
+ *  the one landing last dropped the other's change (Codex on #297) */
+let prefWrites = Promise.resolve()
+const savePrefs = patch => (prefWrites = prefWrites.then(() => chrome.storage.local.get(PREFS)).then(r => chrome.storage.local.set({ [PREFS]: { ...(r[PREFS] ?? {}), ...patch } })).catch(() => undefined))
 let mode = MODES.includes(params.get('mode')) ? params.get('mode') : MODES.includes(prefs.mode) ? prefs.mode : 'original'
 function showMode() {
   document.documentElement.setAttribute('data-axt-pdf-mode', mode)
@@ -980,6 +982,9 @@ function stopGlide() { if (gliding) cancelAnimationFrame(gliding); gliding = 0 }
  */
 let lastAlign = null // how the last click was levelled, for the test harness
 async function alignClick(from, event) {
+  // with one document shown there is no other side to level: the hidden one has no scroll range, and the correction
+  // meant for it would move the one being read (Codex on #297)
+  if (mode !== 'bilingual') return
   bake()
   const to = other(from), c = from.container, y = event.clientY - c.getBoundingClientRect().top
   const hit = hitAt(from, event)
