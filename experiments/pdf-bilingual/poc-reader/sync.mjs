@@ -1,6 +1,7 @@
 // Synchronised scrolling, the part with no DOM: the units both sides are read by, a coordinate through them that does
-// not depend on either layout, and maps between the two sides' scroll positions. The reader (reader.js) measures the
-// lines and moves the panes; the modes it offers are REPORT's fifteenth addendum.
+// not depend on either layout, and a map between the two sides' scroll positions, whose slope over the reader's view is
+// the speed the "matched" mode moves the other side at. The reader (reader.js) measures the lines and moves the panes
+// (REPORT, sixteenth addendum).
 //
 // The coordinate λ: the chain's k-th unit covers [k, k + 1), and on each side its i-th of n lines covers
 // [k + i/n, k + (i + 1)/n). A side's position at λ is a height in its scroll coordinates, and the line at a height is a λ:
@@ -50,45 +51,21 @@ export function posAt(table, lam) {
   const l = table[lineIndex(table, lam)], f = Math.min(1, Math.max(0, (lam - l.lam0) / (l.lam1 - l.lam0)))
   return l.top + f * (l.bot - l.top)
 }
-/** the line of a table that holds λ */
-export const lineAtLam = (table, lam) => (table.length ? table[lineIndex(table, lam)] : null)
-
-/** whether a line counts for a column: a line across the page counts for either */
-const inBand = (l, band) => !band || l.band === 'full' || l.band === band
 /**
- * The λ at a height in one column of a side (`band` 'left' | 'right', or null for any): the line there, in proportion;
- * in a gap between two lines of the column, across the gap from the one above to the one below when they follow in
- * reading order; `reach` bounds how far a line may be to count. Null when no line of the column is near
+ * Knots (pairs of heights, left and right) of the map between the two sides: at every line boundary of either side —
+ * within a unit, a line's end on one side meets the same λ on the other — where both sides' lines run across the page;
+ * where either side sets the text in two columns no map keeps every paragraph level (reading order is not scroll order
+ * there), and one knot per page of the left side stands for its lines: their mean height against the mean height of
+ * their λ on the right. Kept only where both heights rise, between the two documents' ends
  */
-export function lambdaAt(table, y, band, reach) {
-  let above = null, below = null
-  for (const l of table) {
-    if (!inBand(l, band)) continue
-    if (y >= l.top && y <= l.bot) return l.lam0 + ((y - l.top) / Math.max(1, l.bot - l.top)) * (l.lam1 - l.lam0)
-    if (l.bot < y && y - l.bot < reach && (!above || l.bot > above.bot)) above = l
-    if (l.top > y && l.top - y < reach && (!below || l.top < below.top)) below = l
-  }
-  if (above && below && above.lam1 <= below.lam0) return above.lam1 + ((y - above.bot) / Math.max(1, below.top - above.bot)) * (below.lam0 - above.lam1)
-  return below ? below.lam0 : above ? above.lam1 : null
-}
-
-/**
- * Knots (pairs of heights, left and right) of the map between the two sides. `exact`: at every line boundary of either
- * side — within a unit, a line's end on one side meets the same λ on the other — where both sides' lines run across the
- * page; where either side sets the text in two columns no map keeps every paragraph level (reading order is not scroll
- * order there), and one knot per page of the left side stands for its lines: their mean height against the mean
- * height of their λ on the right. Not `exact`: a unit's first line and last line, and both sides of a page break inside
- * a unit. Kept only where both heights rise, between the two documents' ends
- */
-export function knots(chain, L, R, { exact, endL, endR }) {
+export function knots(chain, L, R, { endL, endR }) {
   const raw = []
   const isDouble = k => chain[k].L.lines.some(l => l.band !== 'full') || chain[k].R.lines.some(l => l.band !== 'full')
   // a side's height just before λ (the end of the line that ends there) and just after it (the line that starts there)
   const before = (t, lam) => { const i = lineIndex(t, lam); return t[i].lam0 === lam && i > 0 ? t[i - 1].bot : posAt(t, lam) }
   const after = (t, lam) => posAt(t, lam)
-  const pageBreak = (t, lam) => { const i = lineIndex(t, lam); return t[i].lam0 === lam && i > 0 && t[i - 1].page !== t[i].page }
   for (let k = 0; k < chain.length; k++) {
-    if (exact && isDouble(k)) {
+    if (isDouble(k)) {
       // a run of two-column units: one knot per left page, its ends tied to the units around it
       let e = k
       while (e + 1 < chain.length && isDouble(e + 1)) e++
@@ -104,7 +81,7 @@ export function knots(chain, L, R, { exact, endL, endR }) {
       continue
     }
     const cuts = new Set([k, k + 1])
-    for (const t of [L, R]) for (const l of t) if (l.k === k && l.lam0 > k && (exact || pageBreak(t, l.lam0))) cuts.add(l.lam0)
+    for (const t of [L, R]) for (const l of t) if (l.k === k && l.lam0 > k) cuts.add(l.lam0)
     for (const lam of [...cuts].sort((a, b) => a - b)) {
       if (lam > k) raw.push([before(L, lam), before(R, lam)])
       if (lam < k + 1) raw.push([after(L, lam), after(R, lam)])
@@ -139,49 +116,28 @@ function rising(raw, endL, endR) {
 }
 
 /**
- * A map through knots, both ways: `linear` straight between them, else a monotone C¹ curve (Steffen's tangents: no
- * overshoot, so the follower never runs back while the driver runs on). { ltr(y), rtl(y), slope(y) }
+ * A map through knots, both ways, as a monotone C¹ curve (Steffen's tangents: no overshoot, so a slope taken over a view
+ * is never negative). { ltr(y), rtl(y) }
  */
-export function makeMap(pts, { linear = false } = {}) {
+export function makeMap(pts) {
   const mono = (xs, ys) => {
     const n = xs.length, h = [], s = [], m = new Array(n).fill(0)
     for (let i = 0; i + 1 < n; i++) { h.push(xs[i + 1] - xs[i]); s.push((ys[i + 1] - ys[i]) / h[i]) }
-    if (!linear) {
-      for (let i = 1; i + 1 < n; i++) {
-        const p = (s[i - 1] * h[i] + s[i] * h[i - 1]) / (h[i - 1] + h[i])
-        m[i] = (Math.sign(s[i - 1]) + Math.sign(s[i])) * Math.min(Math.abs(s[i - 1]), Math.abs(s[i]), 0.5 * Math.abs(p))
-      }
-      if (n > 1) { m[0] = s[0]; m[n - 1] = s[n - 2] }
+    for (let i = 1; i + 1 < n; i++) {
+      const p = (s[i - 1] * h[i] + s[i] * h[i - 1]) / (h[i - 1] + h[i])
+      m[i] = (Math.sign(s[i - 1]) + Math.sign(s[i])) * Math.min(Math.abs(s[i - 1]), Math.abs(s[i]), 0.5 * Math.abs(p))
     }
-    const at = x => {
+    if (n > 1) { m[0] = s[0]; m[n - 1] = s[n - 2] }
+    return x => {
       if (n < 2) return ys[0] ?? x
       let lo = 0, hi = n - 1
-      if (x <= xs[0]) return ys[0] + (x - xs[0]) * (s[0] ?? 1)
-      if (x >= xs[hi]) return ys[hi] + (x - xs[hi]) * (s[n - 2] ?? 1)
+      if (x <= xs[0]) return ys[0] + (x - xs[0]) * s[0]
+      if (x >= xs[hi]) return ys[hi] + (x - xs[hi]) * s[n - 2]
       while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (xs[mid] <= x) lo = mid; else hi = mid }
-      const t = (x - xs[lo]) / h[lo]
-      if (linear) return ys[lo] + t * (ys[hi] - ys[lo])
-      const t2 = t * t, t3 = t2 * t
+      const t = (x - xs[lo]) / h[lo], t2 = t * t, t3 = t2 * t
       return (2 * t3 - 3 * t2 + 1) * ys[lo] + (t3 - 2 * t2 + t) * h[lo] * m[lo] + (-2 * t3 + 3 * t2) * ys[hi] + (t3 - t2) * h[lo] * m[hi]
     }
-    return at
   }
   const xs = pts.map(p => p[0]), ys = pts.map(p => p[1])
-  const ltr = mono(xs, ys), rtl = mono(ys, xs)
-  return { ltr, rtl }
+  return { ltr: mono(xs, ys), rtl: mono(ys, xs) }
 }
-
-/**
- * The reading line, as a share of the view's height, at driver position D of Dmax: `base` through the document, eased
- * to the top in its first screen and to the bottom in its last, so that both documents reach their ends together (Meld
- * and CodeMirror move theirs so; a fixed line a quarter down left the shorter one short of its end)
- */
-export function readingShare(D, Dmax, H, base) {
-  if (Dmax <= 0) return base
-  if (D < H) return base * (D / H)
-  if (Dmax - D < H) return 1 - (1 - base) * ((Dmax - D) / H)
-  return base
-}
-
-/** slow in, slow out */
-export const ease = k => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2)

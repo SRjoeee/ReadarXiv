@@ -1,7 +1,7 @@
-// The six sync modes on one paper in the live reader, by wheel: the reader scrolls the left side down in steps and each
-// mode's follower is read at every step — where it ends, how far it ran back on the way (a hand-off in C, or a fault),
-// and where it stands after the driver rests. A smoke check for the modes REPORT's fifteenth addendum offers; how they
-// feel is judged by hand. Local corpus, the build's default service.
+// The sync modes on one paper in the live reader, by wheel: the reader scrolls the left side down in steps and each
+// mode's follower is read at every step — where it ends, how far it ran back on the way (a fault), and where it stands
+// once the driver has rested (the together modes level the top then). A smoke check for the modes REPORT's sixteenth
+// addendum offers; how they feel is judged by hand. Local corpus, the build's default service.
 //   node spikes/sync-smoke.mjs [id]
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
@@ -27,7 +27,7 @@ await page.goto(readerUrl({ paper, live: '1', mode: 'bilingual', site: `http://1
 await page.waitForFunction(() => window.__reader?.live?.done, null, { timeout: 600000, polling: 500 })
 const box = await page.locator('#left').boundingBox()
 const both = () => page.evaluate(() => { const d = window.__reader.debug; return [d.left.container.scrollTop, d.right.container.scrollTop] })
-for (const m of ['off', 'current', 'A', 'B', 'BD', 'C']) {
+for (const m of ['off', 'current', 'same', 'matched']) {
   await page.selectOption('#sync', m)
   await page.evaluate(() => { const d = window.__reader.debug; d.left.container.scrollTop = 0; d.right.container.scrollTop = 0 })
   await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.4)

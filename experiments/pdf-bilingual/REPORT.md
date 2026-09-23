@@ -760,3 +760,22 @@ A's shortfall was the knot filter. Taken greedily, one knot set low on the right
 **Not yet verified in a browser.** The smoke check could not run again after that fix. In the session, the operating system stopped resolving the user's account (`getpwuid` fails, `dscl` answers `eServerError`), and Chromium aborts at start when that happens. This is to be rerun once the machine resolves the account again.
 
 The patent the research found (Naver, US 11,531,509 B2) concerns levelling paragraphs on a reference line and on a selection. It is for the owner to take legal advice on before any of these modes ships.
+
+## Sixteenth addendum, 2026-09-24: scrolling together, the owner's design
+
+The owner tried the fifteenth addendum's modes and found every one of them clumsy. Each maps one pane's scroll position onto the other's, and the motion that mapping makes is not what a reader wants to see. The owner reads both sides and switches between them, on a trackpad. The owner proposed this design instead, now built:
+
+- **While the reader scrolls, the two sides move as one sheet.** The side under the pointer drives, which is where a trackpad's scroll goes anyway, and the other moves by the same step. Nothing jitters, and the two panes never fight.
+- **Once the scroll has ended, the other side glides into place.** "Ended" means the trackpad's glide included (`scrollend`), and 150 ms more without a scroll. The glide brings the content at the top of the driver's view to the same height on the other side:
+  - the anchor is the first paragraph or heading whose start shows in the upper half of the view, in the column under the pointer where the page has two;
+  - failing that, the first whole line in view, at its place in its paragraph;
+  - at either end of the driver's document, the other side goes to the same end.
+- **The glide is a critically damped spring,** taking 250–450 ms as the distance asks, with no overshoot and no bounce. A new scroll stops it, and the other side goes on from where it stands. With reduced motion it is one step.
+
+The step is taken in two ways, both in the **Sync** menu to compare by hand:
+- **Together · same speed**: 1:1.
+- **Together · matched speed**: the step scaled by how much taller one layout is than the other over the driver's view (the slope of `sync.mjs`'s map there, between 0.6 and 1.6). The drift the glide has to take up stays small.
+
+The menu keeps Off and Current to compare against. The fifteenth addendum's A, B, B+D and C are gone, with the code only they called.
+
+The gate passes, and `spikes/sync-cases.mjs` checks the map. The browser smoke check (`spikes/sync-smoke.mjs`) could not run for the same reason as before: in this session the operating system does not resolve the user's account, and Chromium aborts at start.

@@ -13,7 +13,7 @@ import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anc
 import { isTranslatable, linesToBoxes, renderImage, setImageModes } from './lib/axt/figures.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { openPaper, runLive } from './live.mjs'
-import { ease, flowChain, knots, lambdaAt, lineAtLam, lineTable, makeMap, posAt, readingShare } from './sync.mjs'
+import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { verified, VERIFIED } from './scripts.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { appearanceRule, createSurfaceConfig, LANG_CODE_TO_LOCALE_NAME, lookOf, toBcp47 } from './lib/axt/extension.mjs'
@@ -251,15 +251,7 @@ function blocksOf(rects) {
   }
   return out
 }
-/** the unit under the pointer lit; with none, the pair the sync follows in the modes that light it (B+D, C) */
-let hover = null
-function light(id) { hover = id; showLit() }
-function showLit() {
-  const want = hover ?? ((syncMode === 'BD' || syncMode === 'C') && mode === 'bilingual' ? follow.focusId : null)
-  if (want === lit) return
-  lit = want
-  for (const s of sides) paint(s)
-}
+function light(id) { if (id === lit) return; lit = id; for (const s of sides) paint(s) }
 
 // ---------------------------------------------------------------- figure text
 // The HTML mode's image translation, run on the translation's pages: the extension's own modules, compiled from its
@@ -568,20 +560,27 @@ function lineAt(side, y, x) {
 }
 let frame = 0, settleTimer = 0, pointerX = null
 
-// How the other side follows, the reader's choice among the designs the scroll-sync research proposed, to be compared
-// by hand (REPORT, fifteenth addendum): off; the current table and settle; A, that design repaired; B, line by line;
-// B+D, line by line with the counterpart kept in view and lit; C, following the column being read.
-const SYNC_MODES = ['off', 'current', 'A', 'B', 'BD', 'C']
-let syncMode = SYNC_MODES.includes(prefs.syncMode) ? prefs.syncMode : 'B'
+// How the other side follows, the reader's choice (REPORT, sixteenth addendum): off; the design as it was (a table of
+// unit tops, and a settle 160 ms after the last scroll); or together — while the reader scrolls, the other side moves
+// with it as one sheet, at the same speed or at the speed the two layouts' local ratio asks, and once the scroll has
+// ended (a trackpad's glide included) it glides so that the content at the top of the reader's side stands level on both.
+const SYNC_MODES = ['off', 'current', 'same', 'matched']
+let syncMode = SYNC_MODES.includes(prefs.syncMode) ? prefs.syncMode : 'same'
+const together = () => syncMode === 'same' || syncMode === 'matched'
 const reduced = matchMedia('(prefers-reduced-motion: reduce)')
 /**
- * The follower's state across frames. `delta`: an offset the follower keeps from the map — after a click, a settle or a
- * change of driver it takes up the difference, so that nothing jumps, and fades as the driver scrolls on, never while it
- * is still. `band`: the column the pointer reads on the driver, after it has stayed there 150 ms. `focusId`: the pair
- * lit and kept in view. `anim`: C's hand-off under way
+ * The follower as the together modes move it. `pos`: its position, fractional — scrollTop rounds to device pixels, and
+ * steps of the same size must not drift by it; `lastD`: the driver's position last seen, null when it is to be read
+ * afresh (a layout changed); `rest`: the wait after the scroll's end; `spring`: the glide under way
  */
-const follow = { delta: 0, resync: true, lastD: null, lastT: null, lastLam: 0, band: null, pending: null, pendingSince: 0, focusId: null, anim: null }
-/** the units of both sides in reading order, their lines, and the maps A and B follow by, measured once per layout */
+const follow = { pos: null, lastD: null, rest: 0, spring: 0 }
+/** the positions to go on from: the driver's as it is, the follower's as it is — after a click, a glide or a new driver */
+function rebase() {
+  if (!driver) return
+  follow.lastD = driver.container.scrollTop
+  follow.pos = other(driver).container.scrollTop
+}
+/** the map between the two layouts that `matched` takes its speed from, measured once per layout (sync.mjs) */
 let flow = null
 function buildFlow() {
   // a page is set in two columns where some line starts past its middle; there a line not across the middle is in one
@@ -601,97 +600,92 @@ function buildFlow() {
   // what is read in order: not a caption, a footnote, a cell or a picture's text, which TeX sets elsewhere
   for (const [id, a] of left.anchors) { const b = right.anchors.get(id); if (a && b && !FLOATING.has(unitKind.get(id))) units.push({ id, L: geom(left, a, twoL), R: geom(right, b, twoR) }) }
   units.sort((x, y) => x.id - y.id)
-  const chain = flowChain(units), L = lineTable(chain, 'L'), R = lineTable(chain, 'R')
-  const ends = { endL: left.container.scrollHeight, endR: right.container.scrollHeight }
-  flow = { chain, L, R, A: makeMap(knots(chain, L, R, { exact: false, ...ends }), { linear: true }), B: makeMap(knots(chain, L, R, { exact: true, ...ends })) }
+  const chain = flowChain(units)
+  flow = makeMap(knots(chain, lineTable(chain, 'L'), lineTable(chain, 'R'), { endL: left.container.scrollHeight, endR: right.container.scrollHeight }))
 }
-/** the column the pointer is over on a side's page, taken once it has stayed there 150 ms */
-function noteColumn(side, e) {
-  const at = pointOf(side, e)
-  if (!at) return
-  const [x0, , x1] = pageView(side, at.page).pdfPage.view, band = at.x < (x0 + x1) / 2 ? 'left' : 'right'
-  if (band !== follow.pending?.band || side !== follow.pending.side) follow.pending = { side, band, since: e.timeStamp }
-  else if (e.timeStamp - follow.pending.since >= 150) follow.band = { side, band }
-}
-/** the λ being read on the driver at height y: in the pointer's column, else in the column that goes on from the last */
-function focusLam(side, y, H) {
-  const t = side === left ? flow.L : flow.R, at = band => lambdaAt(t, y, band, H / 4)
-  let lam = at(follow.band?.side === side ? follow.band.band : null)
-  if (lam == null) { const found = ['left', 'right'].map(at).filter(l => l != null).sort((a, b) => a - b); lam = found.find(l => l >= follow.lastLam - 1e-3) ?? found[0] ?? null }
-  if (lam != null) follow.lastLam = lam
-  return lam
-}
-/** one frame of the new modes: the follower placed for the driver's position */
-function followFrame(side) {
-  if (!flow) buildFlow()
-  if (!flow.chain.length) return
-  if (gliding) { stopGlide(); follow.resync = true } // one writer: a settle still gliding stops when the reader scrolls
-  const to = other(side), dc = side.container, tc = to.container, H = dc.clientHeight, Ht = tc.clientHeight
-  const D = dc.scrollTop, share = readingShare(D, dc.scrollHeight - H, H, readingLine), y = D + share * H
-  const dD = follow.lastD == null ? 0 : D - follow.lastD
+/**
+ * One frame of the together modes while the driver scrolls: the follower moved by the driver's step — the same step,
+ * or scaled by how much taller one layout is than the other over the driver's view, between 0.6 and 1.6, a ratio that
+ * changes as slowly as the view slides. A glide under way stops, and the follower goes on from where it stands
+ */
+function togetherFrame(side) {
+  const tc = other(side).container, D = side.container.scrollTop
+  clearTimeout(follow.rest)
+  if (follow.spring) { stopSpring(); follow.pos = tc.scrollTop }
+  if (follow.lastD == null || follow.pos == null) { follow.lastD = D; follow.pos = tc.scrollTop; return }
+  const step = D - follow.lastD
   follow.lastD = D
-  const fromLeft = side === left, mine = fromLeft ? flow.L : flow.R, theirs = fromLeft ? flow.R : flow.L
-  const m = syncMode === 'A' ? flow.A : flow.B
-  let target = (fromLeft ? m.ltr(y) : m.rtl(y)) - share * Ht
-  let lam = null
-  if (syncMode === 'C' || syncMode === 'BD') lam = focusLam(side, y, H)
-  if (syncMode === 'C' && lam != null) target = posAt(theirs, lam) - share * Ht
-  if (follow.resync) { follow.delta = tc.scrollTop - target; follow.resync = false; follow.lastT = null }
-  else follow.delta *= Math.exp(-Math.abs(dD) / (0.5 * H))
-  target += follow.delta
-  if (lam != null) {
-    const l = lineAtLam(theirs, lam)
-    follow.focusId = flow.chain[l.k].id
-    if (syncMode === 'BD') {
-      // the counterpart's line kept between 8 % and 85 % of the view: the least shift, at most half the driver's step,
-      // never against the driver's way
-      const shift = l.top < target + 0.08 * Ht ? l.top - 0.08 * Ht - target : l.bot > target + 0.85 * Ht ? l.bot - 0.85 * Ht - target : 0
-      if (shift && Math.sign(shift) === Math.sign(dD)) { const s = Math.sign(shift) * Math.min(Math.abs(shift), 0.5 * Math.abs(dD)); follow.delta += s; target += s }
-    }
-    showLit()
+  let ratio = 1
+  if (syncMode === 'matched') {
+    if (!flow) buildFlow()
+    const H = side.container.clientHeight, f = side === left ? flow.ltr : flow.rtl
+    ratio = Math.min(1.6, Math.max(0.6, (f(D + H) - f(D)) / H))
   }
-  if (syncMode === 'C') {
-    // level while the pair moves on smoothly; where it jumps — the counterpart in another column or on another page — a
-    // hand-off, slow in and slow out, whose end follows the target as the driver goes on
-    const T = target, continuous = follow.lastT == null || Math.abs(T - follow.lastT) <= 1.5 * Math.abs(dD) + 0.08 * Ht
-    follow.lastT = T
-    if (follow.anim) { follow.anim.to = T; return }
-    if (!continuous) return handOff(tc, T)
-  }
-  put(tc, target)
+  follow.pos = Math.min(tc.scrollHeight - tc.clientHeight, Math.max(0, follow.pos + step * ratio))
+  put(tc, follow.pos)
 }
-function handOff(tc, to) {
-  const from = tc.scrollTop, d = reduced.matches ? 0 : Math.min(480, Math.max(220, 180 + 0.35 * Math.abs(to - from)))
-  follow.anim = { from, to, t0: performance.now(), d }
+/**
+ * The content at the top of a side's view that the other side is levelled by: the first paragraph or heading whose
+ * start shows in the upper half of the view — in the column under the pointer where the page has two — else the first
+ * line whole in view, at its place in its paragraph. { id, at, y }: the unit, the share of it before that point (lines
+ * counted), and the point's height in scroll coordinates
+ */
+function topAnchor(side) {
+  const c = side.container, D = c.scrollTop, H = c.clientHeight
+  let column = null
+  if (pointerX?.side === side) {
+    let page = 1
+    for (let p = 1; p <= side.doc.numPages; p++) if (pageTop(side, p) <= D + H * 0.25) page = p
+    const pv = pageView(side, page), pr = pv.div.getBoundingClientRect(), [x0, , x1] = pv.pdfPage.view
+    const [x] = pv.viewport.convertToPdfPoint(pointerX.x - pr.left - pv.div.clientLeft, 0)
+    const twoCols = linkedLines(side).some(l => l.page === page && l.x0 > (x0 + x1) / 2 + 1)
+    if (twoCols) column = { page, mid: (x0 + x1) / 2, left: x < (x0 + x1) / 2 }
+  }
+  const inColumn = l => !column || l.page !== column.page || (l.x0 < column.mid - 1 && l.x1 > column.mid + 1) || (column.left ? l.x1 <= column.mid + 1 : l.x0 >= column.mid - 1)
+  const shown = linkedLines(side).filter(l => l.top >= D - 0.5 && l.top < D + H && inColumn(l))
+  const start = shown.filter(l => l.li === 0 && l.top < D + H / 2).sort((a, b) => a.top - b.top)[0]
+  if (start) return { id: start.id, at: 0, y: start.top }
+  const first = shown.sort((a, b) => a.top - b.top)[0]
+  return first ? { id: first.id, at: first.li / first.n, y: first.top } : null
+}
+/** the scroll ended on the driver: the other side glides so that the top content stands at the same height on both; at
+ *  either end of the driver's document, the other side goes to the same end */
+function alignTop(side) {
+  if (!together() || mode !== 'bilingual' || side !== driver || !left.anchors.size || !right.anchors.size) return
+  const to = other(side), dc = side.container, tc = to.container, D = dc.scrollTop
+  const most = tc.scrollHeight - tc.clientHeight
+  let target
+  if (D <= 1) target = 0
+  else if (D >= dc.scrollHeight - dc.clientHeight - 1) target = most
+  else {
+    const a = topAnchor(side), there = a && spot(to, a.id, a.at)
+    if (there == null) return
+    target = there - (a.y - D) + (tc.getBoundingClientRect().top - dc.getBoundingClientRect().top)
+  }
+  target = Math.min(most, Math.max(0, target))
+  if (Math.abs(target - tc.scrollTop) < 1) return rebase()
+  springTo(tc, target)
+}
+/** a critically damped spring to a position: no overshoot, no bounce, 250–450 ms as the distance asks; one step with
+ *  reduced motion */
+function springTo(tc, target) {
+  stopSpring()
+  const x0 = tc.scrollTop, d = target - x0, T = reduced.matches ? 0 : Math.min(450, 250 + 0.25 * Math.abs(d)), w = T ? 6.6 / T : 0, t0 = performance.now()
   const step = now => {
-    const a = follow.anim
-    if (!a) return
-    const k = a.d ? Math.min(1, (now - a.t0) / a.d) : 1
-    put(tc, a.from + (a.to - a.from) * ease(k))
-    if (k < 1) requestAnimationFrame(step)
-    else follow.anim = null
+    const t = now - t0, x = T ? target - d * (1 + w * t) * Math.exp(-w * t) : target
+    if (!T || Math.abs(target - x) < 0.5) { put(tc, target); follow.spring = 0; rebase(); return }
+    put(tc, x)
+    follow.spring = requestAnimationFrame(step)
   }
-  requestAnimationFrame(step)
+  follow.spring = requestAnimationFrame(step)
 }
-/** the driver's scroll ended: A settles; B+D brings the lit counterpart in if it is out of view; the others do nothing */
-function atRest(side) {
-  if (mode !== 'bilingual' || !left.anchors.size || !right.anchors.size) return
-  if (syncMode === 'A') return settle(side)
-  if (syncMode !== 'BD' || !flow) return
-  const tc = other(side).container, Ht = tc.clientHeight, theirs = side === left ? flow.R : flow.L
-  const l = follow.lastLam != null && lineAtLam(theirs, follow.lastLam)
-  if (!l) return
-  const F = tc.scrollTop
-  const want = l.bot < F ? l.top - 0.08 * Ht : l.top > F + Ht ? l.bot - 0.85 * Ht : null
-  if (want != null) glide(tc, want, { ms: Math.min(450, 200 + 0.3 * Math.abs(want - F)), curve: ease, done: () => { follow.resync = true } })
-}
+function stopSpring() { if (follow.spring) cancelAnimationFrame(follow.spring); follow.spring = 0 }
 $('sync').value = syncMode
 $('sync').onchange = () => {
   syncMode = $('sync').value
   void savePrefs({ syncMode })
-  stopGlide(); clearTimeout(settleTimer)
-  Object.assign(follow, { anim: null, resync: true, lastD: null, focusId: null })
-  showLit()
+  stopGlide(); stopSpring(); clearTimeout(settleTimer); clearTimeout(follow.rest)
+  rebase()
 }
 function syncFrom(side) {
   const mine = placed.get(side.container)
@@ -701,7 +695,7 @@ function syncFrom(side) {
   if (frame) return
   frame = requestAnimationFrame(() => {
     frame = 0
-    if (syncMode !== 'current') return followFrame(side)
+    if (syncMode !== 'current') return togetherFrame(side)
     const target = other(side), c = side.container
     const there = map(side === left, c.scrollTop + c.clientHeight * readingLine)
     target.container.scrollTop = there - target.container.clientHeight * readingLine
@@ -725,11 +719,10 @@ function relayout(from) {
     })
   })
 }
-/** the paragraph at the reading line brought level on the other side, at the same place within it. In the current
- *  design after 160 ms without a scroll, in a quick glide; in A once the driver's scroll has ended, slow in and slow out,
- *  and what it moved is kept rather than taken back on the next scroll (followFrame's offset) */
+/** the current design's settle: the paragraph at the reading line brought level on the other side, at the same place
+ *  within it, 160 ms after the last scroll */
 function settle(side) {
-  if ((syncMode !== 'current' && syncMode !== 'A') || mode !== 'bilingual' || side !== driver) return
+  if (syncMode !== 'current' || mode !== 'bilingual' || side !== driver) return
   const c = side.container, y = c.scrollTop + c.clientHeight * readingLine
   // the page at the reading line, and the pointer's place across it (the first column when the pointer is away)
   let page = 1
@@ -744,10 +737,7 @@ function settle(side) {
   const pos = ((l.li + f) / l.n) * b.rects.length, lj = Math.min(b.rects.length - 1, Math.floor(pos))
   const t = other(side), r = b.rects[lj], box = toPageBox(t, r)
   const top = pageTop(t, r.page) + box.top + (pos - lj) * box.height - t.container.clientHeight * readingLine
-  if (Math.abs(top - t.container.scrollTop) <= 2) return
-  if (syncMode === 'current') return glide(t.container, top)
-  const d = Math.abs(top - t.container.scrollTop)
-  glide(t.container, top, { ms: Math.min(450, 200 + 0.3 * d), curve: ease, done: () => { follow.resync = true } })
+  if (Math.abs(top - t.container.scrollTop) > 2) glide(t.container, top)
 }
 /** a unit's lines in the container's scroll coordinates, with their place across the page (PDF units) */
 const linesIn = (side, id) => (side.anchors.get(id)?.rects ?? []).map(r => { const box = toPageBox(side, r), top = pageTop(side, r.page) + box.top; return { top, bottom: top + box.height } })
@@ -783,7 +773,7 @@ function level(from, y, there) {
   const short = tc.scrollTop - want
   if (Math.abs(short) > 0.5) put(fc, fc.scrollTop + short)
   readingLine = Math.min(0.95, Math.max(0.05, (there - tc.scrollTop + dy) / fc.clientHeight))
-  follow.resync = true
+  rebase()
 }
 /** a side's scroll position set by the reader itself, its scroll event not taken for the reader's own scrolling */
 const placed = new WeakMap()
@@ -797,14 +787,13 @@ function put(container, top) {
  * glide carried the other side on to where it had been going (10 to 50 px off, measured)
  */
 let gliding = 0
-function glide(container, top, { ms = 220, curve = k => 1 - (1 - k) ** 3, done } = {}) {
+function glide(container, top) {
   stopGlide()
-  const start = container.scrollTop, t0 = performance.now(), span = reduced.matches ? 0 : ms
+  const start = container.scrollTop, t0 = performance.now(), ms = reduced.matches ? 0 : 220
   const step = now => {
-    const k = span ? Math.min(1, (now - t0) / span) : 1
-    put(container, start + (top - start) * curve(k))
+    const k = ms ? Math.min(1, (now - t0) / ms) : 1
+    put(container, start + (top - start) * (1 - (1 - k) ** 3))
     gliding = k < 1 ? requestAnimationFrame(step) : 0
-    if (k >= 1) done?.()
   }
   gliding = requestAnimationFrame(step)
 }
@@ -920,15 +909,16 @@ function columnOf(side, page, r) {
   const [x0, , x1] = pageView(side, page).pdfPage.view, mid = (x0 + x1) / 2
   return r.x0 < mid - 1 && r.x1 > mid + 1 ? { x0, x1 } : r.x1 <= mid + 1 ? { x0, x1: mid } : { x0: mid, x1 }
 }
-const invalidate = () => { table = null; lines = null; flow = null; follow.resync = true; follow.lastD = null }
+const invalidate = () => { table = null; lines = null; flow = null; follow.lastD = null }
 addEventListener('resize', invalidate)
 
 function attach(side) {
   side.container.addEventListener('scroll', () => syncFrom(side), { passive: true })
-  // a new driver: the follower goes on from where it is (followFrame's offset), not from where the map would put it
-  for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) side.container.addEventListener(type, () => { if (driver !== side) { follow.resync = true; follow.lastD = null } driver = side }, { passive: true })
-  side.container.addEventListener('pointermove', e => { pointerX = { side, x: e.clientX }; noteColumn(side, e) }, { passive: true })
-  side.container.addEventListener('scrollend', () => { if (side === driver) atRest(side) }, { passive: true })
+  // a new driver: the other side goes on from where it stands, before the new driver's first step is taken
+  for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) side.container.addEventListener(type, () => { if (driver !== side) { driver = side; stopSpring(); clearTimeout(follow.rest); rebase() } }, { passive: true })
+  side.container.addEventListener('pointermove', e => { pointerX = { side, x: e.clientX } }, { passive: true })
+  // the scroll's end — a trackpad's glide included — and 150 ms more without a scroll: the together modes level the top
+  side.container.addEventListener('scrollend', () => { if (side === driver && together()) { clearTimeout(follow.rest); follow.rest = setTimeout(() => alignTop(side), 150) } }, { passive: true })
   side.container.addEventListener('mousemove', e => light(unitAt(side, e)))
   side.container.addEventListener('mouseleave', () => light(null))
   // A click, told apart from a drag that selects text, by the pointer's press and release: PDF.js moves its selection
