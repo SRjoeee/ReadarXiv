@@ -35,8 +35,10 @@ async function compile({ main, engine, rerun, bibtex, overrides }) {
   const pdf = read('pdf')
   return { ok: !!pdf?.length, pdf, aux: read('aux', 'utf8'), bbl: bibtex ? read('bbl', 'utf8') : null, log: read('log', 'latin1') ?? '', ms: Date.now() - start }
 }
+const asAnswer = text => (text == null ? null : { text, by: null })
 const r = await runLive(paper, {
-  lang, compile, ...(process.env.ECHO ? { format: 'tags', translate: async texts => texts.map(echo) } : { translate: texts => translateTexts(texts, lang) }),
+  // translateUnits takes each text as { text, by } (engine.mjs); this engine has no identity of the background's
+  lang, compile, ...(process.env.ECHO ? { format: 'tags', translate: async texts => texts.map(echo).map(asAnswer) } : { translate: texts => translateTexts(texts, lang).then(r => r.map(asAnswer)) }),
   onUpdate: ({ pdf, texts, translated, final }) => { const f = join(out, final ? 'final.pdf' : `preview-${translated}.pdf`); writeFileSync(f, pdf); if (final) writeFileSync(join(out, 'final-texts.json'), JSON.stringify(texts)); console.log(at(), final ? 'FINAL' : 'preview', translated, 'units →', f.slice(root.length)) },
   onOriginal: ({ pdf }) => { writeFileSync(join(out, 'original-marked.pdf'), pdf); console.log(at(), 'original with marks') },
   note: (event, data) => console.log(at(), event, JSON.stringify(data)),

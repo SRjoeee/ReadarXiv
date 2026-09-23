@@ -17,8 +17,9 @@ export function paperContext(units) {
 /**
  * Why the reader cannot translate: no engine on the chain can run, or one refused for good (no key, a key refused).
  * Or some texts did not come back for a reason not theirs — a network down, a timeout, a rate limit the background's
- * queue has already retried: then `partial` holds what did come back (null elsewhere) and `lost` the indices of the
- * texts that did not, which are not to be sent again piece by piece (Codex on #296)
+ * queue has already retried: then `partial` holds what did come back, `{ text, by }` as translate() gives it (null
+ * elsewhere), and `lost` the indices of the texts that did not, which are not to be sent again piece by piece (Codex on
+ * #296)
  */
 export class EngineError extends Error {
   constructor(kind, message, { partial, lost } = {}) {
@@ -67,8 +68,9 @@ export async function openEngine({ paper }) {
   const target = status.targetLanguage
   const cache = { paper, renderPath: status.renderPath }
   /**
-   * Texts in the chain's wire format → their translations, null where one did not come back: a text the engine could
-   * not take. A failure not of the texts' making is thrown once every batch has answered (EngineError's `lost`)
+   * Texts in the chain's wire format → their translations, `{ text, by }` with `by` the identity that translated the
+   * text (the background's TranslatedSegment.identity), null where one did not come back: a text the engine could not
+   * take. A failure not of the texts' making is thrown once every batch has answered (EngineError's `lost`)
    */
   async function translate(texts, context = {}) {
     // an empty context is left out, not sent as {}: it enters the cache key (src/core/run/call.ts)
@@ -78,7 +80,7 @@ export async function openEngine({ paper }) {
     const call = async idx => {
       const segments = idx.map(i => ({ id: String(i), text: texts[i] }))
       const res = await transport.translate({ request: { segments, source: 'en', target, ...withContext }, cache, scope })
-      for (const s of res.ok ? res.result.segments : (res.partial ?? [])) out[Number(s.id)] = s.text
+      for (const s of res.ok ? res.result.segments : (res.partial ?? [])) out[Number(s.id)] = { text: s.text, by: s.identity ?? null }
       if (res.ok) { serving = res.result.model ? `${res.result.provider} (${res.result.model})` : res.result.provider; return }
       if (isPermanentErrorKind(res.error.kind)) throw new EngineError(res.error.kind, res.error.message)
       // one text the engine cannot take must not sink its batch: halves, as the HTML page's session splits (run.ts)
@@ -96,6 +98,10 @@ export async function openEngine({ paper }) {
     lang: toBcp47(target),
     format: status.renderPath,
     get engine() { return serving },
+    /** the identity of the engine that answers, as the status said when the paper opened */
+    identity: status.identity,
+    /** the identity that would answer now, from a fresh status: what a run's result is judged against when it ends */
+    now: async () => (await transport.status(scope, { fresh: true })).identity,
     translate,
     close: () => { removeEventListener('pagehide', withdraw); return transport.cancel(scope) },
   }

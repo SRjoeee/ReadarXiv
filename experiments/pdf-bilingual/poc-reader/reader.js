@@ -331,7 +331,7 @@ async function translateBoxes(boxes) {
   const engine = await theEngine().catch(() => null)
   if (!engine) return out
   const context = await paperCtx
-  const send = wire => { if (!translated.has(wire)) translated.set(wire, engine.translate([wire], context).then(r => r[0]).catch(() => null)); return translated.get(wire) }
+  const send = wire => { if (!translated.has(wire)) translated.set(wire, engine.translate([wire], context).then(r => r[0]?.text ?? null).catch(() => null)); return translated.get(wire) }
   const single = []
   for (let k = 0; k < todo.length; k += 40) {
     const chunk = todo.slice(k, k + 40)

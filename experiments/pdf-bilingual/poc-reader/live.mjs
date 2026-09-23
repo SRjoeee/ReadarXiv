@@ -133,8 +133,8 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
       const batch = nextBatch(first ? 2500 : 12000)
       batch.forEach(i => todo.delete(i))
       const t0 = Date.now()
-      const { translated: got, how } = await translateUnits(batch.map(i => units[i]), translate, format)
-      for (const [u, pieces] of got) translated.set(u, pieces)
+      const { results: got, how } = await translateUnits(batch.map(i => units[i]), translate, format)
+      for (const [u, r] of got) if (r.pieces) translated.set(u, r.pieces)
       note('translated', { units: batch.length, how, ms: Date.now() - t0, total: translated.size })
       dirty = true; signal()
     }
