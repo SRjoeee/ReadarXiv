@@ -719,3 +719,44 @@ The first review of #297 (Devin, Codex; Copilot was out of quota), on the viewer
   - The reader's own preferences are merged into what storage holds when they are written.
   - `e2e:pdf` goes through the reader when the build has it: the page opens in the reader, and the way back brings the floating button the suite goes on to check. 16 of 16 passed with the reader built in.
 - **Not reproduced**: that previews stay hidden in Translation alone, and that swaps never end once Original is chosen during a translation. PDF.js finds the pages in view by their geometry, not by the style sheet's `visibility`, and a hidden pane has no pages in view to wait for. Measured: Translation alone showed 5 previews and the final. Original chosen after the first preview still showed 6 previews and the final. Side by side then showed the final's 29 pages.
+
+## Fifteenth addendum, 2026-09-23: synchronized scrolling, six modes to compare by hand
+
+The scroll-sync research measured the current design. On a two-column paper, the follower glides a median of about 500 px after every stop. On the next wheel event it throws that back by 400–680 px, and 60 of the 132 linked units never enter its table. The research then proposed five designs. The owner chose to have them all built behind one switch and to judge them by hand, rather than to run the comparison experiment first. The bar's **Sync** menu now offers six modes. The choice is kept in the reader's preferences, and the default is B.
+
+| mode | what the follower does |
+|---|---|
+| Off | Nothing: each side scrolls on its own. |
+| Current | The design as it was: a table of unit tops, and a settle 160 ms after the last scroll. Kept to compare against. |
+| A · repaired | The same idea, repaired. The table is built from the units read in order (below), not from heights. The settle comes once the driver's scroll has ended, slow in and slow out. What the settle moved is kept, not thrown back on the next scroll. |
+| B · line by line | Each line on one side is levelled with the same place on the other, through a monotone C¹ curve (Steffen's tangents), with no settle. Where either side sets two columns, one knot per page stands for its lines. |
+| B+D · keep in view | B, and the counterpart of the line being read is kept between 8 % and 85 % of the view. It moves by at most half the driver's step, never against the driver's way. The pair is lit. |
+| C · follow the column | The follower stays level with the line being read in the column under the pointer. When that line's counterpart is in another column or on another page, it hands off, slow in and slow out, in 220–480 ms. The pair is lit. |
+
+All the modes but Current share these parts:
+- **The reading chain.** The units read in order are neither captions, footnotes, cells nor a picture's text. The chain keeps the heaviest run of them whose text-layer reading order rises on both sides.
+- **A coordinate λ through those units, line by line.** `poc-reader/sync.mjs` computes it, with no DOM.
+- **A moving reading line.** It is at the top in the document's first screen, at the bottom in its last, and at the clicked height in between, so both documents reach their ends together.
+- **A carried offset.** After a click, a settle or a change of driver, the follower takes up the difference instead of jumping. The offset fades as the driver scrolls on.
+- **Reduced motion** turns glides and hand-offs into single steps.
+
+`spikes/sync-cases.mjs` checks the maps on made-up layouts: a one-column pair is level at every line start, the maps rise and meet both ends, and a unit found out of order leaves the chain. `spikes/sync-smoke.mjs` drives each mode by wheel in the live reader.
+
+The first smoke run, on 2608.02163 (two columns, 60 wheel steps to a left position of 7,200 px), gave these right positions:
+
+| mode | right position | notes |
+|---|---|---|
+| Off | 0 | |
+| Current | 7,268 | |
+| A | 2,910 | fault, below |
+| B | 7,130 | |
+| B+D | 7,022 | |
+| C | 7,273 | ran back 1,298 px in all: its hand-offs at column changes |
+
+No mode ran back while the driver went down except C, and the run had no page errors.
+
+A's shortfall was the knot filter. Taken greedily, one knot set low on the right dropped every knot after it that stood higher. The knots now keep the longest run rising on both sides.
+
+**Not yet verified in a browser.** The smoke check could not run again after that fix. In the session, the operating system stopped resolving the user's account (`getpwuid` fails, `dscl` answers `eServerError`), and Chromium aborts at start when that happens. This is to be rerun once the machine resolves the account again.
+
+The patent the research found (Naver, US 11,531,509 B2) concerns levelling paragraphs on a reference line and on a selection. It is for the owner to take legal advice on before any of these modes ships.
