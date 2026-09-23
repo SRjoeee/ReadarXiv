@@ -892,7 +892,10 @@ There is one record per paper version and target language.
    - **A record found is shown at once.** The right side opens from the decrypted bytes. It is anchored by the record's translated texts, and the left by its source texts and marks. No source is fetched and nothing is compiled; anchoring takes about 0.3 s.
    - **The paper's state comes from the record, before the right side opens.** It is otherwise made by parsing the source, which a hit does not do (local Codex review):
      - `paperCtx`, from `context`: the figures' translations wait for it;
-     - the figures' translations, from `figures`: the entries made under the current identity, or all of them while no service can answer. So a cached paper shows its figures translated offline too (local Codex review). `translateBoxes()` looks there first, in the format each entry was made in, before it asks for the engine, which it cannot have offline.
+     - the figures' translations, from `figures`. **They are shown whatever identity made them**, as the paragraphs' old translations are. `translateBoxes()` finds them in the format each entry was made in, before it asks for the engine, which it cannot have offline. So a cached paper shows its figures translated at once, offline too (local Codex review).
+       - An entry made under another identity is translated again once the engine answers, and replaced when that succeeds.
+       - A failure keeps the old label.
+       - Its `by` records which identity the label shown came from.
      - `prose`, from the units' source texts: names are told apart by it;
      - `unitKind`, from their kinds.
    - **Only then is the engine asked for its status.** `openEngine()` throws when no service can answer, so it must come after the lookup. With no service able to answer (offline, or a key removed), the copy stays, and the status line says it could not be checked against the settings (local Codex review).
@@ -992,7 +995,7 @@ There is one record per paper version and target language.
   - a unit a new engine could not take keeps the old translation, with `by` the old identity and `tried` the new;
   - a mixed-engine run is not current, and a unit whose runs two engines answered is `mixed`;
   - a pipeline changed compiles the final even with no text changed;
-  - the figures' translations are found before the engine is asked for, in their own format;
+  - the figures' translations are found before the engine is asked for, in their own format; an old one stays shown until the current engine's replaces it, and stays if that fails;
   - the write order: pipeline, units tried, units whole then partial, units lost, marks, then the newer;
   - a run that changes only units' `by` or `state` updates the record without a compile.
 - **`tests/providers/transport.test.ts`** and the fallback's tests:
