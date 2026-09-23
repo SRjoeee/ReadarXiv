@@ -44,6 +44,11 @@ export interface TranslateRequest {
  */
 export interface TranslatedSegment extends TranslateSegment {
   alignment?: SentenceAlignment
+  /**
+   * The identity it was translated under (cache/key.ts translationIdentity), set by the service that translated it, so
+   * that a fallback's gathered answer keeps each segment's engine; absent on a call made without a cache
+   */
+  identity?: string
 }
 
 export interface TranslateResult {

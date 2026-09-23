@@ -172,6 +172,13 @@ describe('partial success along the fallback chain', () => {
     if (!res.ok) expect(res.partial?.map(p => p.id).sort()).toEqual(['A', 'B'])
   })
 
+  it('a gathered answer keeps each segment\'s identity, from the engine that translated it', async () => {
+    const first = step('llm', [{ ok: false, error: { kind: 'rate-limit', message: '429', isolatable: false }, partial: [{ id: 'a', text: 'A', identity: 'id-llm' }] }])
+    const second = step('google-web', [{ ok: false, error: { kind: 'network', message: 'down', isolatable: false }, partial: [{ id: 'b', text: 'B', identity: 'id-google' }] }])
+    const res = await createFallbackService([first, second]).translate(call)
+    expect(!res.ok && res.partial).toEqual([{ id: 'a', text: 'A', identity: 'id-llm' }, { id: 'b', text: 'B', identity: 'id-google' }])
+  })
+
   it('a later step translating the same segment wins: that is the newer result', async () => {
     const first = step('a', [partialFail('network', ['A'])])
     const second = step('b', [{ ok: false, error: { kind: 'network', message: 'x', isolatable: true }, partial: [{ id: 'A', text: '新译文' }] }])

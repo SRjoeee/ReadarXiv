@@ -14,7 +14,7 @@ import { applyLocaleFrom } from '@/ui/apply-locale'
 
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
 const BASE: Config = { ...DEFAULT_CONFIG, uiLanguage: 'en', services: [SVC] }
-const status = (id: string): ProviderStatus => ({ providerId: id, chosen: id, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags', targetLanguage: 'cmn', promptId: 'default', revision: id, chain: [id], demotions: [], engine: { id } })
+const status = (id: string): ProviderStatus => ({ providerId: id, chosen: id, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags', targetLanguage: 'cmn', promptId: 'default', revision: id, chain: [id], demotions: [], identity: '', engine: { id } })
 const page = (state: 'on' | 'stopped', session: string | null, epoch = 'd#1'): PageStatus => ({ paper: '2401.00001', mode: 'side', preference: 'side', progress: { state, total: 1, requested: 1, done: 1, failed: 0, cached: 0, inFlight: 0 }, session, epoch })
 
 const until = async (done: () => boolean) => {

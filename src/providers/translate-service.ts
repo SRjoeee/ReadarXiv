@@ -7,7 +7,7 @@
 import type { WireFormat } from '@/core/protector'
 import { wireFormatOf } from '@/cache/key'
 import type { CachedEntry } from '@/cache/store'
-import { cacheKeyFor, type RenderPath } from '@/cache/key'
+import { cacheKeyFor, translationIdentity, type RenderPath } from '@/cache/key'
 import { type SentenceAlignment, verifyAlignment } from './alignment'
 import { markSentences, stripMarkers, unmarkSentences, type MarkedText } from './sentence-markers'
 // validate is imported deep rather than through the protector's barrel: serialize / rehydrate touch the DOM and must not enter the background bundle
@@ -225,6 +225,17 @@ export async function readWithBudget(store: CachePort, keys: string[], budgetMs:
   return keys.map(() => null)
 }
 
+/** A translation's identity (cache/key.ts translationIdentity), made once per set of parts: one digest per engine, not per call */
+const identities = new Map<string, Promise<string>>()
+function identityOf(parts: Parameters<typeof translationIdentity>[0]): Promise<string> {
+  const key = JSON.stringify(parts)
+  let p = identities.get(key)
+  if (!p) identities.set(key, (p = translationIdentity(parts)))
+  return p
+}
+/** A segment with the identity it was translated under, when the call had one */
+const tag = <T extends TranslatedSegment>(segment: T, identity: string | undefined): T => (identity ? { ...segment, identity } : segment)
+
 export function createTranslateService(deps: TranslateServiceDeps): TranslateService {
   const queues = new Map<string, ProviderQueues>()
   /** A call that must not go on: its scope is dead, or this whole chain is */
@@ -429,6 +440,9 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
       const provider = await deps.getProvider(providerId)
       const model = (await deps.getModel?.()) ?? ''
       const store = cache && deps.cache ? deps.cache : null
+      // Who translates this call, on every segment it gives back (types.ts TranslatedSegment.identity). Awaited only
+      // when the answer is put together: awaited here, it changed the order calls reach the batch queue in
+      const identityP = cache ? identityOf({ providerId: provider.cacheId ?? provider.id, model, promptKey: provider.promptKey ?? '', target: request.target, renderPath: cache.renderPath }) : Promise.resolve(undefined)
 
       // Only the glossary terms this segment really uses are sent (§8.2): the whole table in every batch could double
       // the request and sat in the cache key too — one term changed, the whole site's cache void. Matched against **the
@@ -563,10 +577,11 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
           // missed, and its later batches still go out (Codex on #113). Every caller gets this refusal itself, so recording here misses none.
           // The successful ones go back with the failure: they are in the cache already, but the caller has to **render**
           // them by this, or the reader sees “this batch all failed” and a retry answers them from the cache in a moment (Codex on #163)
+          const identity = await identityP
           const partial = request.segments.flatMap(s => {
             const done = translated.get(s.id)
             if (!done) return []
-            return [done.alignment ? { id: s.id, text: done.text, alignment: done.alignment } : { id: s.id, text: done.text }]
+            return [tag(done.alignment ? { id: s.id, text: done.text, alignment: done.alignment } : { id: s.id, text: done.text }, identity)]
           })
           return partial.length > 0
             ? { ok: false, error: toErrorInfo(error), partial }
@@ -575,9 +590,10 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
       }
 
       // 4. Merged in the original order
+      const identity = await identityP
       const segments = request.segments.map(s => {
         const outcome = translated.get(s.id)
-        return outcome?.alignment ? { id: s.id, text: outcome.text, alignment: outcome.alignment } : { id: s.id, text: outcome?.text ?? '' }
+        return tag(outcome?.alignment ? { id: s.id, text: outcome.text, alignment: outcome.alignment } : { id: s.id, text: outcome?.text ?? '' }, identity)
       })
       return { ok: true, result: { segments, provider: provider.id, model: model || undefined }, cached }
     } catch (e) {

@@ -6,7 +6,7 @@
 // Two files for bundle size: this one pulls in three providers and the AI SDK, which the content script would parse on every paper opened.
 import type { Config } from '@/config/schema'
 import { chosenService, serviceOf } from '@/config/services'
-import type { RenderPath } from '@/cache/key'
+import { translationIdentity, type RenderPath } from '@/cache/key'
 import { buildChain } from '.'
 import { createOpenAICompatProvider } from './openai-compat'
 import { createFallbackService } from './fallback'
@@ -58,6 +58,11 @@ export interface ProviderStatus {
    * (Codex on #157)
    */
   demotions: { id: string; kind: ProviderErrorKind }[]
+  /**
+   * The identity (cache/key.ts translationIdentity) of the engine that would answer now: the first choice, or its
+   * fallback while it cannot. The PDF reader's cached copies are current by it
+   */
+  identity: string
 }
 
 export interface TranslationTransport {
@@ -195,6 +200,9 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
         }
       }
     }
+    const serving = available ? primary : (chain.find(engine => engine.id === fallback?.id) ?? primary)
+    // the same parts the service tags its segments with (translate-service.ts): its model is the chosen service's alone
+    const identity = await translationIdentity({ providerId: serving.cacheId ?? serving.id, model: serving.id === chosen?.id ? (chosen.model ?? '') : '', promptKey: serving.promptKey ?? '', target: config.targetLanguage, renderPath })
     const live = service.status()
     const active = chain.find(engine => engine.id === live.activeId) ?? primary
     return {
@@ -211,6 +219,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       promptId: config.prompts.promptId,
       chain: chain.map(engine => engine.id),
       demotions: live.demotions.map(d => ({ id: d.id, kind: d.kind })),
+      identity,
       engine: {
         id: active.id,
         ...(live.activeId !== live.configuredId && live.demoted

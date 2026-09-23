@@ -8,6 +8,7 @@ import { createChainHolder } from '@/entrypoints/background/chain'
 import { createSessionRouter } from '@/entrypoints/background/sessions'
 import { CHAIN_CONFIG_FIELDS, VOLATILE_CONFIG_FIELDS, chainConfigChanged, chainRevision } from '@/config/revision'
 import { createLocalTransport } from '@/providers/transport'
+import { translationIdentity } from '@/cache/key'
 import type { CachePort } from '@/providers/translate-service'
 import { ProviderError, type TranslateRequest, type TranslationProvider } from '@/providers/types'
 
@@ -590,6 +591,7 @@ describe('createLocalTransport: status', () => {
       chain: [SVC.id, 'google-web'],
       demotions: [],
       engine: { id: SVC.id },
+      identity: expect.stringMatching(/^[0-9a-f]{64}$/),
     })
   })
 
@@ -652,9 +654,11 @@ describe('createLocalTransport: the cache', () => {
     const calls: string[][] = []
     const t = await withChain([echo(calls)], { cache: portOf(cacheOf()) })
     const first = await t.translate({ request: two, cache: withCache })
-    expect(first).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }, { id: 'b', text: '译:y' }], provider: 'mock' }, cached: 0 })
+    // a call with a cache: each segment carries its identity, a cache hit's included (types.ts TranslatedSegment.identity)
+    const segs = [{ id: 'a', text: '译:x', identity: expect.any(String) }, { id: 'b', text: '译:y', identity: expect.any(String) }]
+    expect(first).toEqual({ ok: true, result: { segments: segs, provider: 'mock' }, cached: 0 })
     const second = await t.translate({ request: two, cache: withCache })
-    expect(second).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }, { id: 'b', text: '译:y' }], provider: 'mock' }, cached: 2 })
+    expect(second).toEqual({ ok: true, result: { segments: segs, provider: 'mock' }, cached: 2 })
     expect(calls).toEqual([['a', 'b']])
   })
 
@@ -742,5 +746,22 @@ describe('chainRevision: the identity of the settings a chain is built from', ()
     for (const field of VOLATILE_CONFIG_FIELDS) {
       expect(await chainRevision({ ...base, [field]: { changed: true } } as unknown as Config), field).toBe(a)
     }
+  })
+})
+
+describe('createLocalTransport: the status identity', () => {
+  it('is the chosen engine\'s while it can answer, and its fallback\'s while it cannot', async () => {
+    const first = mockProvider(async r => ({ segments: r.segments, provider: SVC.id }), { id: SVC.id })
+    const second = mockProvider(async r => ({ segments: r.segments, provider: 'google-web' }), { id: 'google-web', kind: 'mt' })
+    const t = await withChain([first, second])
+    expect((await t.status()).identity).toBe(await translationIdentity({ providerId: SVC.id, model: SVC.model, promptKey: '', target: DEFAULT_CONFIG.targetLanguage, renderPath: 'tags' }))
+    const down = await withChain([mockProvider(first.translate, { id: SVC.id, isAvailable: async () => false }), second])
+    expect((await down.status()).identity).toBe(await translationIdentity({ providerId: 'google-web', model: '', promptKey: '', target: DEFAULT_CONFIG.targetLanguage, renderPath: 'tags' }))
+  })
+  it('equals the identity on the segments the same engine translates', async () => {
+    const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: SVC.id }), { id: SVC.id })])
+    // the target the reader sends is the status's own (engine.mjs), as here
+    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags' } })
+    expect(res.ok && res.result.segments[0]!.identity).toBe((await t.status()).identity)
   })
 })
