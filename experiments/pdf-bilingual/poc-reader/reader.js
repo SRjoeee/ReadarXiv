@@ -12,11 +12,12 @@ import * as pdfjsLib from './lib/pdf.min.mjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
 import { isTranslatable, linesToBoxes, renderImage, setImageModes } from './lib/axt/figures.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
-import { openPaper, runLive } from './live.mjs'
+import { openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
 import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { verified, VERIFIED } from './scripts.mjs'
 import { openEngine, paperContext } from './engine.mjs'
-import { appearanceRule, createSurfaceConfig, LANG_CODE_TO_LOCALE_NAME, lookOf, toBcp47 } from './lib/axt/extension.mjs'
+import { appearanceRule, createPdfStore, createSurfaceConfig, isCurrent, LANG_CODE_TO_LOCALE_NAME, lookOf, toBcp47 } from './lib/axt/extension.mjs'
+import { decideWrite, digestOf, figureKey, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { isName, plainSource, WIRE } from './mt.mjs'
 import { unpackSource } from './tar.mjs'
 
@@ -271,6 +272,18 @@ let engineP = null
 const theEngine = () => (engineP ??= openEngine({ paper }))
 /** each unit's kind (para, caption, heading, …), by id: a caption anchors its float's contents (placeAt) */
 let unitKind = new Map()
+/** this machine's copies of compiled translations (src/cache/pdf-store.ts), and the record shown if one was */
+const pdfCache = createPdfStore()
+let cached = null
+/**
+ * The figures' texts translated, figureKey(format, wire) → { format, wire, text, by }: seeded from a copy and kept in
+ * its record. A copy's own are shown whatever identity made them, and replaced when the current engine's come
+ */
+let figureEntries = new Map()
+let cacheKey = null // { digest, lang } of the paper open, once its PDF is read
+let saveTimer = 0, repaintTimer = 0
+const saveFiguresSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { if (cacheKey) void pdfCache.patchFigures(cacheKey.digest, cacheKey.lang, [...figureEntries.values()]) }, 2000) }
+const repaintFiguresSoon = () => { clearTimeout(repaintTimer); repaintTimer = setTimeout(() => { for (const [n] of right.figs) right.figs.set(n, paintFigures(right, n).catch(e => console.warn('[figures]', e))) }, 300) }
 document.documentElement.setAttribute('data-axt-on', '')
 document.documentElement.setAttribute('data-axt-mode', 'only')
 setImageModes(document, ['only'])
@@ -318,7 +331,7 @@ async function recognise(page, id) {
   if (reply.error) console.warn('[ocr]', reply.error)
   return reply.lines ?? []
 }
-const translated = new Map() // a figure's wire text → its translation (a Promise while it is out)
+const translated = new Map() // figureKey(format, wire) → a figure's translation, a Promise while it is out
 /**
  * A figure's boxes → their translations, null for a box left as it is. A figure's boxes go as one text with a
  * placeholder between them, in the chain's wire format, so that each is translated in the figure's context (alone, a
@@ -328,20 +341,36 @@ const translated = new Map() // a figure's wire text → its translation (a Prom
 async function translateBoxes(boxes) {
   const todo = boxes.map((b, i) => i).filter(i => isTranslatable(boxes[i].text))
   const out = boxes.map(() => null)
+  // the engine when one answers; while none does, a copy's own entries in its format are all there is
   const engine = await theEngine().catch(() => null)
-  if (!engine) return out
+  const format = engine?.format ?? cached?.format
+  if (!format) return out
   const context = await paperCtx
-  const send = wire => { if (!translated.has(wire)) translated.set(wire, engine.translate([wire], context).then(r => r[0]?.text ?? null).catch(() => null)); return translated.get(wire) }
+  const send = wire => {
+    const key = figureKey(format, wire), known = figureEntries.get(key)
+    if (known && (!engine || known.by === engine.identity)) return Promise.resolve(known.text)
+    if (!engine) return Promise.resolve(null)
+    if (!translated.has(key)) translated.set(key, engine.translate([wire], context).then(r => {
+      const got = r[0]
+      if (!got) return known?.text ?? null
+      figureEntries.set(key, { format, wire, text: got.text, by: got.by })
+      saveFiguresSoon()
+      if (known && known.text !== got.text) repaintFiguresSoon()
+      return got.text
+    }).catch(() => known?.text ?? null))
+    // an old label is shown until the current engine's replaces it, and stays if that fails (REPORT, eighteenth addendum)
+    return known ? Promise.resolve(known.text) : translated.get(key)
+  }
   const single = []
   for (let k = 0; k < todo.length; k += 40) {
     const chunk = todo.slice(k, k + 40)
-    const wire = chunk.length > 1 && blockWire(chunk.map(i => boxes[i].text), engine.format)
+    const wire = chunk.length > 1 && blockWire(chunk.map(i => boxes[i].text), format)
     if (!wire) { single.push(...chunk); continue }
     const got = await send(wire)
-    const parts = got && splitBlock(got, chunk.length, engine.format)
+    const parts = got && splitBlock(got, chunk.length, format)
     if (parts) chunk.forEach((i, j) => { out[i] = parts[j] }); else single.push(...chunk)
   }
-  const { run, unrun } = WIRE[engine.format]
+  const { run, unrun } = WIRE[format]
   await Promise.all(single.map(async i => { const got = await send(run(boxes[i].text)); out[i] = got == null ? null : unrun(got) }))
   return out
 }
@@ -1229,12 +1258,39 @@ async function marksOfPdf(bytes) {
   const doc = await task.promise
   try { return markWords(tokenizeDocument(await textPages(doc)), await pdfMarks(doc)) } finally { task.destroy() }
 }
+/** the test harness's hooks (spikes/*): the sides, the anchoring's and the sync's helpers, the cache's; getters stay live */
+const harness = () => ({ left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()) })
+/**
+ * A copy from this machine shown (REPORT, eighteenth addendum): the paper's state from the record rather than the
+ * source — the figures' context, the prose names are told by, the units' kinds, the figures' entries — then the
+ * translation opened and both sides anchored, as the demo does
+ */
+async function showCached(record, setContext) {
+  prose = record.units.map(u => u.src).join('\n')
+  unitKind = new Map(record.units.map((u, i) => [i, u.kind]))
+  setContext(record.context)
+  figureEntries = new Map(record.figures.map(f => [figureKey(f.format, f.wire), f]))
+  const url = URL.createObjectURL(new Blob([record.pdf], { type: 'application/pdf' }))
+  try {
+    const laid = new Promise(resolve => right.eventBus.on('pagesinit', resolve, { once: true }))
+    await open(right, url)
+    await laid
+    if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true })
+    await Promise.all([
+      anchorSide(left, record.units.map((u, i) => ({ id: i, text: u.src })), new Map(record.marks)),
+      anchorSide(right, record.units.map((u, i) => ({ id: i, text: u.tr ?? u.src }))),
+    ])
+  } finally { URL.revokeObjectURL(url) }
+  invalidate(); paint(left); paint(right)
+}
 async function live() {
   // our TeX page and the TeX Live file server, as spikes/serve-live.mjs starts them on this machine
   const site = params.get('site') ?? 'http://127.0.0.1:8071', endpoint = params.get('endpoint') ?? 'http://localhost:8070'
   const srcUrl = params.get('src') ?? `https://arxiv.org/src/${paper}`, pdfUrl = params.get('pdf') ?? `https://arxiv.org/pdf/${paper}`
   const L = (window.__reader.live = { events: [], t0: performance.now() })
   let got = 0, total = 0, engine = null, setContext = null, lost = 0, lostWhy = null
+  // this machine's copy on screen, being translated again with the current settings (REPORT, eighteenth addendum)
+  let again = false
   let compiledOnce = false
   paperCtx = new Promise(resolve => { setContext = resolve })
   const note = (event, data = {}) => {
@@ -1245,7 +1301,7 @@ async function live() {
     const by = engine ? ` into ${engine.lang} by ${engine.engine}` : ''
     // paragraphs the service failed on (a network down, a rate limit) stay in English, and the reader is told
     const missed = lost ? ` (${lost} not: ${lostWhy})` : ''
-    status(`${total ? `${got} of ${total} translated${by}${missed}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
+    status(`${again ? 'translating again · ' : ''}${total ? `${got} of ${total} translated${by}${missed}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
   }
   const fail = (event, text) => { setContext({}); note(event); status(text); L.done = true; L.failed = text }
   // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
@@ -1254,13 +1310,38 @@ async function live() {
   status(`Fetching ${paper} from arXiv…`)
   try { await open(left, pdfUrl) } catch (e) { return fail('fetch failed', `Could not fetch ${paper}'s PDF from arXiv (${e.message ?? e})`) }
   note('opened')
+  // the key of this paper's copy: arXiv's whole PDF's digest, read once the left side is open (after its first page)
+  const digestP = left.doc.getData().then(digestOf).catch(() => null)
   if (mode === 'original') status(`${paper}, the original. Choose Translation or Side by side to translate it`)
   await translationWanted
   translating = true
+  // this machine's copy first: it needs no service (REPORT, eighteenth addendum, "Opening a paper")
+  const lang0 = config?.targetLanguage ? toBcp47(config.targetLanguage) : null, digest = await digestP
+  cacheKey = digest && lang0 ? { digest, lang: lang0 } : null
+  cached = cacheKey ? await pdfCache.get(digest, lang0) : undefined
+  if (cached) {
+    note('cache hit', { engine: cached.engine, pipeline: cached.pipeline })
+    // opened, whatever follows: the least recently opened go first (a run that writes nothing would not say so)
+    void pdfCache.touch(digest, lang0)
+    await showCached(cached, setContext)
+    total = cached.units.filter(u => u.state !== 'kept').length; got = total
+    window.__reader.debug = Object.assign(harness(), { units: cached.units.map((u, i) => ({ i, kind: u.kind, text: u.src })) })
+    note('shown cached')
+    window.__reader.ready = true
+  }
   status('Asking the extension which service translates…')
-  try { engine = await theEngine() } catch (e) { return fail('no engine', `Cannot translate: ${e.message ?? e}`) }
+  try { engine = await theEngine() } catch (e) {
+    if (cached) { status(`${paper}, this machine's copy (${cached.engine}, ${new Date(cached.createdAt).toLocaleDateString()}) · not checked against the settings: ${e.message ?? e}`); L.done = true; return }
+    return fail('no engine', `Cannot translate: ${e.message ?? e}`)
+  }
   const lang = engine.lang
   note('engine', { lang, format: engine.format, engine: engine.engine })
+  if (cached && isCurrent(cached, { identity: engine.identity, pipeline: PIPELINE_VERSION })) {
+    status(`${paper}, this machine's copy · translated into ${lang} by ${cached.engine}`)
+    note('cache current')
+    L.done = true
+    return
+  }
   // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
   if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
   // the original on the right too, replaced as the translation comes in; opened where the original was being read, as a
@@ -1271,7 +1352,8 @@ async function live() {
   try {
     ;[srcBytes] = await Promise.all([
       fetch(srcUrl).then(r => { if (!r.ok) throw new Error(`the source: HTTP ${r.status}`); return r.arrayBuffer() }).then(b => new Uint8Array(b)),
-      open(right, pdfUrl).then(() => rightLaid).then(() => { if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true }) }),
+      // the original on the right until a translation comes, unless this machine's copy is there already
+      cached ? Promise.resolve() : open(right, pdfUrl).then(() => rightLaid).then(() => { if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true }) }),
     ])
   } catch (e) { return fail('fetch failed', `Could not fetch ${paper} from arXiv (${e.message ?? e})`) }
   note('source fetched')
@@ -1280,14 +1362,19 @@ async function live() {
   const paperData = openPaper(files), units = paperData.units
   total = units.length - paperData.kept.size
   const src = units.map((u, i) => ({ id: i, text: plainSource(u) }))
-  prose = src.map(x => x.text).join('\n')
   const context = paperContext(units)
   setContext(context)
-  unitKind = new Map(units.map((u, i) => [i, u.kind]))
   note('source', { units: units.length, files: files.size })
-  await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
+  // a copy on screen: the old translation is the run's base, matched by source; its units' indices are this run's
+  // only with the same pipeline, so until the first preview the copy keeps its own anchors and state
+  const sameUnits = cached?.pipeline === PIPELINE_VERSION
+  const { seed, hashes } = cached ? await seedFrom(cached, units) : { seed: null, hashes: await Promise.all(units.map(sourceHash)) }
+  const adoptUnits = () => { prose = src.map(x => x.text).join('\n'); unitKind = new Map(units.map((u, i) => [i, u.kind])) }
+  let leftCurrent = !cached || sameUnits
+  if (leftCurrent) adoptUnits()
+  if (!cached) await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
   note('anchored')
-  window.__reader.debug = { left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, units: units.map((u, i) => ({ i, kind: u.kind, text: src[i].text })), get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf }
+  window.__reader.debug = Object.assign(harness(), { units: units.map((u, i) => ({ i, kind: u.kind, text: src[i].text })) })
   window.__reader.ready = true
   // the compiler: our site's TeX page
   const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
@@ -1311,8 +1398,12 @@ async function live() {
   // one replacement at a time, in the order the compiles came in
   let swaps = Promise.resolve()
   // a language with no typesetting yet (scripts.mjs) fails at once, before anything is sent
+  let finalPdf = null, leftMarks = null
+  again = !!cached
   const result = await runLive(paperData, {
     lang, compile, note,
+    seed, identity: engine.identity, pipelineCurrent: sameUnits,
+    marks: sameUnits ? new Map(cached.marks) : null,
     format: engine.format,
     translate: texts => engine.translate(texts, context),
     // nearest the reading line on the page first, what lies ahead before what lies behind; on the side in view, since
@@ -1323,11 +1414,22 @@ async function live() {
       const d = top - (c.scrollTop + c.clientHeight * readingLine)
       return d >= -c.clientHeight * 0.3 ? Math.abs(d) : 2 * Math.abs(d)
     },
-    onUpdate: ({ pdf, texts, translated, final }) => { swaps = swaps.then(async () => { const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
-    onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const n = await anchorSide(left, src, await marksOfPdf(pdf)); invalidate(); paint(left); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
+    onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; swaps = swaps.then(async () => { if (!leftCurrent) { adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
+    onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorSide(left, src, marks); invalidate(); paint(left); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
   }).catch(e => ({ error: e.message ?? String(e) }))
   if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`)
   await swaps
+  // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
+  // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
+  if (cacheKey) {
+    const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, context, units: unitsOf(units, paperData.kept, hashes, result.results), marks: leftMarks ?? (sameUnits ? cached.marks : []), figures: [...figureEntries.values()] }
+    const how = decideWrite({ result, cached, units: record.units })
+    const pdf = how === 'full' ? finalPdf : how === 'provenance' ? cached.pdf : null
+    if (pdf) {
+      const now = { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION }
+      note('cache write', { how, written: await pdfCache.put({ ...record, pdf }, now) })
+    }
+  }
   note('done', result)
   L.done = true
 }
@@ -1360,7 +1462,7 @@ async function demo() {
   Object.assign(window.__reader, { ready: true, units: units.length, linked: linked(), leftPages: left.doc.numPages, rightPages: right.doc.numPages })
   status(`${linked()} of ${units.length} paragraphs linked · text and anchors ${Math.round(timing.anchors)} ms`)
   // for the test harness
-  window.__reader.debug = { left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf }
+  window.__reader.debug = harness()
 
   if (stages) {
     window.__reader.swaps = []
