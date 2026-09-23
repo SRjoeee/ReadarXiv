@@ -876,10 +876,10 @@ There is one record per paper version and target language.
 |---|---|
 | `digest`, `lang` | The key. `digest` is the SHA-256 of arXiv's whole PDF, taken from `doc.getData()` once the left side is open: the exact file, whatever the paper. `lang` is the settings' target language. PDF.js's `fingerprints[0]` would cost less but proves less (local Codex review): it is the PDF trailer's first ID, or an MD5 of the first 1,024 bytes when there is none. |
 | `pdf`, `iv` | The final, encrypted, and its 12-byte initialisation vector, fresh for each record |
-| `units` | Every unit: its kind; its source as plain text; the SHA-256 of its source pieces; its translation as plain text and its translated pieces, when it has one; `by`, the identity its translation was made or tried under; and `state`: `whole`, `partial` (runs, some not back), `none` (the engine could not take it, runs included), `lost` (a failure of the service) or `kept` (a name, left in the source). The two sides are anchored by these texts, and a translation made again starts from these pieces. |
+| `units` | Every unit: its kind; its source as plain text; the SHA-256 of its source pieces; its translation as plain text and its translated pieces, when it has one; `by`, the identity its translation was made or tried under, or `mixed` when its pieces came from more than one (a unit sent in runs whose runs two engines answered; local Codex review), which is never current; and `state`: `whole`, `partial` (runs, some not back), `none` (the engine could not take it, runs included), `lost` (a failure of the service) or `kept` (a name, left in the source). The two sides are anchored by these texts, and a translation made again starts from these pieces. |
 | `marks` | The left side's mark words, which anchor arXiv's PDF, from the marked original compile |
 | `context` | The paper's title and abstract as `paperContext()` gives them, which an LLM's prompt and the figures' translations take |
-| `figures` | The figures' texts translated so far, each with its translation and `by` (wire text → { translation, by }). Figure labels are translated when their page is drawn, so this grows as pages are viewed. It is written to the record's field alone, a few seconds after new ones come, never with the PDF. |
+| `figures` | The figures' texts translated so far, keyed by the wire format and the wire text they were sent in, each with its translation and `by` ({ format, wire } → { translation, by }). Figure labels are translated when their page is drawn, so this grows as pages are viewed. It is written to the record's field alone, a few seconds after new ones come, never with the PDF. |
 | `engine`, `pipeline` | The service's name for the status line; `PIPELINE_VERSION` |
 | `paper`, `bytes`, `createdAt`, `openedAt` | The id as asked, the record's size, when it was made, when it was last opened |
 
@@ -892,7 +892,7 @@ There is one record per paper version and target language.
    - **A record found is shown at once.** The right side opens from the decrypted bytes. It is anchored by the record's translated texts, and the left by its source texts and marks. No source is fetched and nothing is compiled; anchoring takes about 0.3 s.
    - **The paper's state comes from the record, before the right side opens.** It is otherwise made by parsing the source, which a hit does not do (local Codex review):
      - `paperCtx`, from `context`: the figures' translations wait for it;
-     - the figures' translations, from `figures`: the entries made under the current identity, or all of them while no service can answer. So a cached paper shows its figures translated offline too (local Codex review).
+     - the figures' translations, from `figures`: the entries made under the current identity, or all of them while no service can answer. So a cached paper shows its figures translated offline too (local Codex review). `translateBoxes()` looks there first, in the format each entry was made in, before it asks for the engine, which it cannot have offline.
      - `prose`, from the units' source texts: names are told apart by it;
      - `unitKind`, from their kinds.
    - **Only then is the engine asked for its status.** `openEngine()` throws when no service can answer, so it must come after the lookup. With no service able to answer (offline, or a key removed), the copy stays, and the status line says it could not be checked against the settings (local Codex review).
@@ -916,7 +916,7 @@ There is one record per paper version and target language.
    - The seed is matched by the source's hash, not by index. A unit the pipeline has since cut differently has no seed.
    - **No preview makes a translated paragraph English again** (local Codex review). A preview is shown only when every unit that is not kept in the source has a translation, from the seed or new. Until then the copy stays on screen. With the service changed, the seed covers every unit, and the previews replace it one batch at a time. With the pipeline changed, the units cut differently are translated first, as the order puts them, and the previews follow.
    - **A new result replaces a seed only when it is whole.** A unit that went by runs with some runs not back, or was lost to a failure of the service, keeps its seed. Its `state` and `by` say so: `partial` or `none` under the current identity, or `lost`.
-   - **A run in which no unit's text changed compiles nothing.** Every batch lost while offline is one such run.
+   - **A run in which no unit's text changed compiles nothing, if the pipeline is the current one.** Every batch lost while offline is one such run. With the pipeline changed, the final is compiled even so: the new pipeline may set the same text differently (local Codex review).
    - **What such a run writes.** If no unit's `by` or `state` changed either, it writes nothing. If they changed, it writes them into the stored record, which keeps its PDF. One case is a new service that cannot take a unit either, which keeps its seed; without this write, every visit would try it again (local Codex review).
    - It is given `marks` when the pipeline is the same, so the marked original is compiled only if a lost character needs its log.
    - Its previews are drafts, as a first translation's are: images are frames, with the original's figure drawn over each. The final has its figures.
@@ -984,7 +984,9 @@ There is one record per paper version and target language.
   - a preview is held while a unit has no translation;
   - a run with no change compiles nothing;
   - a copy is current only with every unit tried under the current identity;
-  - a mixed-engine run is not current;
+  - a mixed-engine run is not current, and a unit whose runs two engines answered is `mixed`;
+  - a pipeline changed compiles the final even with no text changed;
+  - the figures' translations are found before the engine is asked for, in their own format;
   - the write order: pipeline, units tried, units whole then partial, units lost, marks, then the newer;
   - a run that changes only units' `by` or `state` updates the record without a compile.
 - **`tests/providers/transport.test.ts`** and the fallback's tests:
