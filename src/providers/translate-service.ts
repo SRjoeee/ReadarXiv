@@ -229,9 +229,11 @@ export async function readWithBudget(store: CachePort, keys: string[], budgetMs:
 const identities = new Map<string, Promise<string>>()
 function identityOf(parts: Parameters<typeof translationIdentity>[0]): Promise<string> {
   const key = JSON.stringify(parts)
-  let p = identities.get(key)
-  if (!p) identities.set(key, (p = translationIdentity(parts)))
-  return p
+  const known = identities.get(key)
+  if (known) return known
+  const made = translationIdentity(parts)
+  identities.set(key, made)
+  return made
 }
 /** A segment with the identity it was translated under, when the call had one */
 const tag = <T extends TranslatedSegment>(segment: T, identity: string | undefined): T => (identity ? { ...segment, identity } : segment)

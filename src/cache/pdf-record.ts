@@ -55,7 +55,7 @@ export interface PdfRecordBody {
 
 export interface PdfRecord extends PdfRecordBody {
   /** the compiled translation, decrypted */
-  pdf: Uint8Array
+  pdf: Uint8Array<ArrayBuffer>
   createdAt: number
   openedAt: number
 }

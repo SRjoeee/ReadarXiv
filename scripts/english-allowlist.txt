@@ -85,7 +85,7 @@ tests/providers/prompt.test.ts 7
 tests/providers/request/concurrency-cap.test.ts 10
 tests/providers/sentence-markers.test.ts 9
 tests/providers/translate-service.test.ts 54
-tests/providers/transport.test.ts 6
+tests/providers/transport.test.ts 5
 tests/renderer/highlight.test.ts 5  # 2026-09-17: the whole-block fallback tests place translations, the same inputs the sibling renderer tests use
 tests/renderer/a11y.test.ts 5
 tests/renderer/anchors.test.ts 7
