@@ -896,8 +896,12 @@ There is one record per paper version and target language.
      - `prose`, from the units' source texts: names are told apart by it;
      - `unitKind`, from their kinds.
    - **Only then is the engine asked for its status.** `openEngine()` throws when no service can answer, so it must come after the lookup. With no service able to answer (offline, or a key removed), the copy stays, and the status line says it could not be checked against the settings (local Codex review).
-2. **Whether the copy is current.** It is when its pipeline is the current one and every unit to translate was tried under the current identity: its `tried` is that identity, and its `state` is not `lost`. A current copy is the end of it.
-   - **Units to translate** are all but the `kept` ones, the names left in the source, which no engine is asked for (local Codex review).
+2. **Whether the copy is current.** It is when its pipeline is the current one and every unit to translate is current. A current copy is the end of it. A unit is current:
+   - when `whole`, if its `by` is the current identity; so a `mixed` unit never is;
+   - when `partial` or `none`, if its `tried` is the current identity;
+   - when `lost`, never.
+
+   Units to translate are all but the `kept` ones, the names left in the source, which no engine is asked for (local Codex review).
    - **Settled units.** A unit the current engine could not take whole (`partial`, `none`) is settled, since trying again would fail again. It shows what it has: the old engine's translation when one was kept (its `by` says so), else what came back. The HTML page does not try such a unit again on its own either.
    - **What the identity is.** It is a SHA-256 the background computes (`identity`, src/providers/transport.ts). It is taken over the parts of the translation cache's key that are not the text (src/cache/key.ts):
      - the key's version;
@@ -926,7 +930,7 @@ There is one record per paper version and target language.
 5. **Writing.** A run that ends with a final that settled is written for its key.
    - **The write is conditional, in one transaction: a record replaces the stored one only if it is at least as good.** Records are compared, in this order:
      1. is the pipeline the current one;
-     2. how many units to translate were tried under the current identity and not lost (the `kept` ones are not counted);
+     2. how many units to translate are current, by the definition in 2 above (the `kept` ones are not counted);
      3. how many units are `whole`, then how many `partial`: translation beats the source (local Codex review);
      4. how few units were lost;
      5. does it have the left side's marks.
