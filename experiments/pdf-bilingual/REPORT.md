@@ -876,7 +876,7 @@ There is one record per paper version and target language.
 |---|---|
 | `digest`, `lang` | The key. `digest` is the SHA-256 of arXiv's whole PDF, taken from `doc.getData()` once the left side is open: the exact file, whatever the paper. `lang` is the settings' target language. PDF.js's `fingerprints[0]` would cost less but proves less (local Codex review): it is the PDF trailer's first ID, or an MD5 of the first 1,024 bytes when there is none. |
 | `pdf`, `iv` | The final, encrypted, and its 12-byte initialisation vector, fresh for each record |
-| `units` | Every unit: its kind; its source as plain text; the SHA-256 of its source pieces; its translation as plain text and its translated pieces, when it has one; `by`, the identity its translation was made or tried under, or `mixed` when its pieces came from more than one (a unit sent in runs whose runs two engines answered; local Codex review), which is never current; and `state`: `whole`, `partial` (runs, some not back), `none` (the engine could not take it, runs included), `lost` (a failure of the service) or `kept` (a name, left in the source). The two sides are anchored by these texts, and a translation made again starts from these pieces. |
+| `units` | Every unit: its kind; its source as plain text; the SHA-256 of its source pieces; its translation as plain text and its translated pieces, when it has one; `by`, the identity the translation shown was made under, or `mixed` when its pieces came from more than one (a unit sent in runs whose runs two engines answered); `tried`, the identity it was last tried under, which differs from `by` when a new engine could not take a unit and its old translation was kept (local Codex review); and `state`: `whole`, `partial` (runs, some not back), `none` (the engine could not take it, runs included), `lost` (a failure of the service) or `kept` (a name, left in the source). The two sides are anchored by these texts, and a translation made again starts from these pieces. |
 | `marks` | The left side's mark words, which anchor arXiv's PDF, from the marked original compile |
 | `context` | The paper's title and abstract as `paperContext()` gives them, which an LLM's prompt and the figures' translations take |
 | `figures` | The figures' texts translated so far, keyed by the wire format and the wire text they were sent in, each with its translation and `by` ({ format, wire } → { translation, by }). Figure labels are translated when their page is drawn, so this grows as pages are viewed. It is written to the record's field alone, a few seconds after new ones come, never with the PDF. |
@@ -896,8 +896,9 @@ There is one record per paper version and target language.
      - `prose`, from the units' source texts: names are told apart by it;
      - `unitKind`, from their kinds.
    - **Only then is the engine asked for its status.** `openEngine()` throws when no service can answer, so it must come after the lookup. With no service able to answer (offline, or a key removed), the copy stays, and the status line says it could not be checked against the settings (local Codex review).
-2. **Whether the copy is current.** It is when its pipeline is the current one and every unit was tried under the current identity: the unit's `by` is that identity, and its `state` is not `lost`. A current copy is the end of it.
-   - **Settled units.** A unit the current engine could not take whole (`partial`, `none`) is settled, since trying again would fail again. The HTML page does not try it again on its own either.
+2. **Whether the copy is current.** It is when its pipeline is the current one and every unit to translate was tried under the current identity: its `tried` is that identity, and its `state` is not `lost`. A current copy is the end of it.
+   - **Units to translate** are all but the `kept` ones, the names left in the source, which no engine is asked for (local Codex review).
+   - **Settled units.** A unit the current engine could not take whole (`partial`, `none`) is settled, since trying again would fail again. It shows what it has: the old engine's translation when one was kept (its `by` says so), else what came back. The HTML page does not try such a unit again on its own either.
    - **What the identity is.** It is a SHA-256 the background computes (`identity`, src/providers/transport.ts). It is taken over the parts of the translation cache's key that are not the text (src/cache/key.ts):
      - the key's version;
      - the provider's cache id, which names an OpenAI-compatible endpoint;
@@ -915,9 +916,9 @@ There is one record per paper version and target language.
    - It is given `seed`: the translated pieces by source hash. The run starts with every unit present and replaces them batch by batch, nearest the reader first.
    - The seed is matched by the source's hash, not by index. A unit the pipeline has since cut differently has no seed.
    - **No preview makes a translated paragraph English again** (local Codex review). A preview is shown only when every unit that is not kept in the source has a translation, from the seed or new. Until then the copy stays on screen. With the service changed, the seed covers every unit, and the previews replace it one batch at a time. With the pipeline changed, the units cut differently are translated first, as the order puts them, and the previews follow.
-   - **A new result replaces a seed only when it is whole.** A unit that went by runs with some runs not back, or was lost to a failure of the service, keeps its seed. Its `state` and `by` say so: `partial` or `none` under the current identity, or `lost`.
+   - **A new result replaces a seed only when it is whole.** A unit that went by runs with some runs not back, or was lost to a failure of the service, keeps its seed. Its `by` stays the seed's; its `tried` and `state` say what happened: `partial` or `none` under the current identity, or `lost`.
    - **A run in which no unit's text changed compiles nothing, if the pipeline is the current one.** Every batch lost while offline is one such run. With the pipeline changed, the final is compiled even so: the new pipeline may set the same text differently (local Codex review).
-   - **What such a run writes.** If no unit's `by` or `state` changed either, it writes nothing. If they changed, it writes them into the stored record, which keeps its PDF. One case is a new service that cannot take a unit either, which keeps its seed; without this write, every visit would try it again (local Codex review).
+   - **What such a run writes.** If no unit's `tried` or `state` changed either, it writes nothing. If they changed, it writes them into the stored record, which keeps its PDF. One case is a new service that cannot take a unit either, which keeps its seed; without this write, every visit would try it again (local Codex review).
    - It is given `marks` when the pipeline is the same, so the marked original is compiled only if a lost character needs its log.
    - Its previews are drafts, as a first translation's are: images are frames, with the original's figure drawn over each. The final has its figures.
    - The status line says the translation is being made again, with which service. With only the pipeline changed, the translations come from the extension's cache, and the run is its compiles alone.
@@ -925,7 +926,7 @@ There is one record per paper version and target language.
 5. **Writing.** A run that ends with a final that settled is written for its key.
    - **The write is conditional, in one transaction: a record replaces the stored one only if it is at least as good.** Records are compared, in this order:
      1. is the pipeline the current one;
-     2. how many units were tried under the current identity and not lost;
+     2. how many units to translate were tried under the current identity and not lost (the `kept` ones are not counted);
      3. how many units are `whole`, then how many `partial`: translation beats the source (local Codex review);
      4. how few units were lost;
      5. does it have the left side's marks.
@@ -983,7 +984,8 @@ There is one record per paper version and target language.
   - a partial result keeps the seed;
   - a preview is held while a unit has no translation;
   - a run with no change compiles nothing;
-  - a copy is current only with every unit tried under the current identity;
+  - a copy is current only with every unit to translate tried under the current identity, and a paper with names kept in the source can be current;
+  - a unit a new engine could not take keeps the old translation, with `by` the old identity and `tried` the new;
   - a mixed-engine run is not current, and a unit whose runs two engines answered is `mixed`;
   - a pipeline changed compiles the final even with no text changed;
   - the figures' translations are found before the engine is asked for, in their own format;
