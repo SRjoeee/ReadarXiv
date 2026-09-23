@@ -832,3 +832,121 @@ A 300 px glide at rest runs on the spring on both paths, with steps of 14, 31, 3
 
 The gate passes.
 
+## Eighteenth addendum, 2026-09-24: a local cache of compiled translations — DESIGN, not built yet
+
+A paper read once should open again at once. The design below was settled with the owner on 2026-09-24; nothing of it is built yet.
+
+### Why: what a returning visit costs today — MEASURED
+
+These measurements are on 2608.02163, opened a second time in the same browser profile, with every translation in the extension's cache.
+
+- **The network is not the cost.** arXiv sends `ETag` and `Last-Modified` with its PDFs and sources, but no `Cache-Control`, so the browser caches them heuristically.
+  - The source came back in 80 ms.
+  - The PDF, loaded by PDF.js from the reader's own page, came back with 0 bytes transferred: 36 ms for 25 pages, after a reload too.
+  - The HTTP cache already keeps the original and the source. Storing them again would be a second copy.
+- **The translations are not the cost either.** They came from the extension's translation cache in 7 to 414 ms per batch, as the HTML page's do.
+- **The cost is TeX.** The final still came at 12.2 s, after five compiles: the font probe (0.26 s), two previews (1.77 and 1.53 s), the final (6.5 s) and the marked original (2.4 s). Peak memory was about 1 GB. Every one of them recomputed what the previous visit had made.
+
+So the one thing worth keeping is the compiled translation, the only result that is expensive to make again.
+
+### Decisions (the owner's, 2026-09-24)
+
+1. **Only the final compiled translation, kept on this machine.** It is kept with the few kilobytes needed to show it. The original PDF, the source, the previews and the compile's intermediate files are not kept.
+2. **The figures stay in the stored PDF.** A copy without them, with the figures drawn from the original at view time as the draft previews do, would be 84 % smaller on figure-heavy papers. Measured on 2608.02163 it is 4.1 MB → 0.68 MB, of which images are 3.4 MB. The bulk left in it is fonts, already subset; gzip saves 2 %. But it would not read the same:
+   - a figure would arrive after its page, a flash while scrolling or zooming;
+   - labels set over an image (overpic, TikZ) would bring the original's labels along;
+   - a frame paired with the wrong figure would show the wrong figure.
+
+   The reader's experience comes first. This option is kept below in case space ever becomes the problem.
+3. **A copy made with other settings is shown at once and translated again.** "Other settings" means another service or model, or an older pipeline; an incomplete copy is treated the same way.
+   - The current settings translate it again in the background.
+   - The new translation replaces the old one paragraph by paragraph, from the view outwards, as a first translation replaces the original.
+   - The base of the previews is the old translation, not the source. Built on the source, as a first translation is, every paragraph not yet translated again would fall back to English between previews.
+4. **Kept from casual extraction.** The stored PDF is encrypted with AES-GCM under a key the page cannot export. This is not DRM, and deliberately so: it stops a file being copied out of the browser profile, not someone with DevTools. That is the level wanted while a download of the full PDF, possibly paid, is not offered.
+
+   The rejected alternatives are DRM, obfuscated code, blocking DevTools and PDF permission flags (which PDF.js ignores): heavy, fragile and slow, and no barrier to someone determined.
+
+   When a download comes, it is the record decrypted and saved; nothing is compiled again. Before charging for it, the papers' licences need a look. arXiv's default licence lets arXiv alone distribute; CC BY-ND forbids sharing derivatives. A reader keeping their own translation is personal use.
+
+### What is stored
+
+There is one record per paper version and target language.
+
+| Field | What |
+|---|---|
+| `fingerprint`, `lang` | The key. `fingerprint` is PDF.js's `fingerprints[0]` of arXiv's PDF: it names the exact version, costs no request, and is known once the left side is open. `lang` is the settings' target language, as `engine.lang` gives it. |
+| `pdf`, `iv` | The final, encrypted, and its 12-byte initialisation vector, fresh for each record |
+| `units` | Every unit: its kind and its source as plain text. For a unit translated, also its translation as plain text, the SHA-256 of its source pieces, and its translated pieces, the base of a translation made again. A unit kept in the source (a name) has no translation. The two sides are anchored by these texts. |
+| `marks` | The left side's mark words, which anchor arXiv's PDF, from the marked original compile |
+| `engine`, `format`, `pipeline` | The service that answered (with its model), the wire format, and `PIPELINE_VERSION` |
+| `complete` | False when paragraphs were lost to a failure of the service (`how.lost`) |
+| `paper`, `bytes`, `createdAt`, `openedAt` | The id as asked, the record's size, when it was made, when it was last opened |
+
+- **Size.** The final is about 1.2 times arXiv's PDF: 0.34 → 0.42 MB and 3.55 → 4.21 MB, measured. The corpus's 123 originals have a median of 1.0 MB, a mean of 3.9 MB, a p90 of 9.5 MB and a maximum of 46 MB. The units come to tens or hundreds of kilobytes.
+- **The cap** is 500 MB, about a hundred papers at the corpus's mean. The least recently opened records go first.
+
+### Opening a paper
+
+1. The left side opens, from the HTTP cache. Its fingerprint and the engine's status (the target language, the service, the wire format) give the key.
+2. **A hit made with the current settings** means the service that would answer now, the same wire format and pipeline, and complete. "Would answer now" is the chosen service, or its fallback while the chosen one cannot answer, as the status says. So a copy made by the fallback is not translated again on every visit while the chosen service stays unavailable. The right side opens from the decrypted bytes. The right side is anchored by the record's translated texts, the left by its source texts and marks. No source is fetched and nothing is compiled; anchoring takes about 0.3 s.
+3. **A hit made with other settings** is shown as in 2. Then the live run starts:
+   - It is given `seed`: the translated pieces by source hash. The run starts with every unit present and replaces them batch by batch, nearest the reader first.
+   - The seed is matched by the source's hash, not by index. A unit the pipeline has since cut differently is left out, and shows the source until it is translated; this holds whatever the paper.
+   - It is given `marks` when the pipeline is the same, so the marked original is compiled only if a lost character needs its log.
+   - Its previews are drafts, as a first translation's are: images are frames, with the original's figure drawn over each. The final has its figures.
+   - The status line says the translation is being made again, with which service. With only the pipeline changed, the translations come from the extension's cache, and the run is its compiles alone.
+4. **A miss** runs the live flow as today.
+5. **Writing.** A run that ends with a final that settled is written, replacing any record for the same key.
+   - It is written when the run has ended, not when the final is shown: the marked original, which gives the left side's marks, is compiled after the final.
+   - A record whose marked original failed is written without marks; the left side is then anchored by its text alone, as it was before marks.
+   - A final that does not settle is not written.
+   - A run ended before its final writes nothing; its translations are in the extension's cache anyway.
+6. **Failures.** Any failure of the store is a miss, as in the translation cache (`src/cache/store.ts`). A record that does not decrypt is deleted.
+7. **The Original display.** Opened in the Original display, the reader waits as today until a translation is asked for, then looks the paper up.
+
+### The store: `src/cache/pdf-store.ts`
+
+- **Database.** Its own Dexie database, `axt-pdf`, version 1, with two tables:
+  - `translations`: primary key `[fingerprint+lang]`, index `openedAt`;
+  - `keys`: the one `CryptoKey`.
+
+  It is kept apart from the translation cache, so that neither's schema or migrations touch the other.
+- **Interface.** `createPdfStore({ db?, maxBytes = 500 MB })` gives:
+  - `get(fingerprint, lang)`: decrypted, or undefined;
+  - `put(record)`: encrypted, written, then the least recently opened records evicted until the total is under the cap;
+  - `touch(fingerprint, lang)`: sets `openedAt` on a hit;
+  - `clear()`;
+  - `usage()`: the number of records and their bytes.
+- **Encryption.** The key comes from `crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])`, made on first use and stored in `keys`: IndexedDB keeps a `CryptoKey` whole. Each record gets a fresh 12-byte IV. The test measures the cost; milliseconds per megabyte are expected.
+- **Where it sits.** The reader reaches it through `shared/extension-entry.ts`, as it reaches `createSurfaceConfig`, so the product can later use the same module. The platform boundary holds: `src/cache` imports Dexie and nothing of WXT.
+
+### The reader's changes
+
+- **`PIPELINE_VERSION`** (live.mjs) is raised whenever a change alters what a compile puts out: latex-front, mt, the fonts, the scripts' strategies, the marks or the TeX tree. It follows the convention `RULES_VERSION` has for the HTML page's cache.
+- **`live()`** looks the paper up, as in "Opening a paper" above, and writes the final when it settles.
+- **`runLive()`** takes `seed`, which fills `translated` at the start, and `marks`, which skips the marked original unless a lost character needs its log.
+- **The status line** says a copy is from this machine (by which service, when made), and that it is being translated again (with which service, how far along).
+
+### Tests
+
+- **`tests/cache/pdf-store.test.ts`**, with fake-indexeddb and Node's WebCrypto:
+  - a round trip;
+  - what is stored is not the PDF (no `%PDF`);
+  - eviction by `openedAt` under the cap, and `touch` changing the order;
+  - a record that does not decrypt is a miss and is deleted;
+  - a failing database is a miss;
+  - the key outlives a new store instance;
+  - the cost of encrypting 10 MB.
+- **A case file for the seed**: units matched by source hash, and a unit changed since left out.
+- **In the browser** (`spikes/cache-revisit.mjs`):
+  - A first visit writes the record.
+  - A second visit shows the final within 1 s of the left side, with no compile.
+  - With the settings' service changed to the LLM mock, the copy is shown at once. No preview shows a paragraph in English that the copy had translated. The final replaces the record, whose service is now the mock.
+
+### Not now
+
+- **The settings page's control to clear the cache**, which comes with the reader's interface pass.
+- **The download.**
+- **`unlimitedStorage`**, a manifest permission for the product to decide. Without it the extension's storage is best-effort: the browser may clear it when the disk is nearly full.
+- **The copy without figures**, from decision 2.
+
