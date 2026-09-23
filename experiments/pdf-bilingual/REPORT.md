@@ -879,6 +879,7 @@ There is one record per paper version and target language.
 | `units` | Every unit: its kind; its source as plain text; the SHA-256 of its source pieces; its translation as plain text and its translated pieces, when it has one; `by`, the identity its translation was made or tried under; and `state`: `whole`, `partial` (runs, some not back), `none` (the engine could not take it, runs included), `lost` (a failure of the service) or `kept` (a name, left in the source). The two sides are anchored by these texts, and a translation made again starts from these pieces. |
 | `marks` | The left side's mark words, which anchor arXiv's PDF, from the marked original compile |
 | `context` | The paper's title and abstract as `paperContext()` gives them, which an LLM's prompt and the figures' translations take |
+| `figures` | The figures' texts translated so far, each with its translation and `by` (wire text → { translation, by }). Figure labels are translated when their page is drawn, so this grows as pages are viewed. It is written to the record's field alone, a few seconds after new ones come, never with the PDF. |
 | `engine`, `pipeline` | The service's name for the status line; `PIPELINE_VERSION` |
 | `paper`, `bytes`, `createdAt`, `openedAt` | The id as asked, the record's size, when it was made, when it was last opened |
 
@@ -891,6 +892,7 @@ There is one record per paper version and target language.
    - **A record found is shown at once.** The right side opens from the decrypted bytes. It is anchored by the record's translated texts, and the left by its source texts and marks. No source is fetched and nothing is compiled; anchoring takes about 0.3 s.
    - **The paper's state comes from the record, before the right side opens.** It is otherwise made by parsing the source, which a hit does not do (local Codex review):
      - `paperCtx`, from `context`: the figures' translations wait for it;
+     - the figures' translations, from `figures`: the entries made under the current identity, or all of them while no service can answer. So a cached paper shows its figures translated offline too (local Codex review).
      - `prose`, from the units' source texts: names are told apart by it;
      - `unitKind`, from their kinds.
    - **Only then is the engine asked for its status.** `openEngine()` throws when no service can answer, so it must come after the lookup. With no service able to answer (offline, or a key removed), the copy stays, and the status line says it could not be checked against the settings (local Codex review).
@@ -906,7 +908,8 @@ There is one record per paper version and target language.
      - the wire format.
 
      A service or model alone would miss a custom prompt edited, or an endpoint changed under the same service (local Codex review). The paper's context is the same on every visit, and `RULES_VERSION` belongs to the HTML page; neither is in it.
-   - **Why per unit.** One run can be served by two engines: the chosen one, then its fallback after a hand-over (local Codex review). The background says which identity answered each call.
+   - **Why per unit.** One run can be served by two engines: the chosen one, then its fallback after a hand-over (local Codex review).
+   - **The background says which identity translated each segment**, not each answer. The fallback chain gathers the segments several engines translated into one failed answer (`gathered`, src/providers/fallback.ts), so an answer can hold two engines' work.
    - **Which identity is current.** It is the one that would answer now: the chosen service, or its fallback while the chosen one cannot answer. So a copy made by the fallback is not translated again on every visit while the chosen service stays unavailable.
 3. **A copy that is not current** stays on screen, and the live run starts:
    - It is given `seed`: the translated pieces by source hash. The run starts with every unit present and replaces them batch by batch, nearest the reader first.
@@ -957,7 +960,12 @@ There is one record per paper version and target language.
 - **`live()`** looks the paper up, as in "Opening a paper" above, and writes the final when it settles.
 - **`runLive()`** takes `seed`, which fills `translated` at the start, and `marks`, which skips the marked original unless a lost character needs its log. With a seed, a preview waits until every unit has a translation, and a result replaces a seed only when whole.
 - **`translateUnits()`** (mt.mjs) gives each unit's `state` and `by`, so that a partial result does not replace a seed and the record says what each unit is.
-- **The background** gains `identity` in its status (the engine that would answer now) and in each translation's answer, success or failure (the engine that answered). It is in src/providers/transport.ts, with a test that it changes with each part it is made of and with nothing else. engine.mjs passes the answer's identity through for each text.
+- **The background** gains an identity in two places:
+  - in its status, the engine that would answer now (src/providers/transport.ts), with a test that it changes with each part it is made of and with nothing else;
+  - on each translated segment (`TranslatedSegment.identity`, src/providers/types.ts), set by the service that translated it, so that a fallback's gathered partial answer keeps each segment's engine.
+
+  engine.mjs passes each segment's identity through with its text.
+- **The figures' translations** (`translateBoxes`) start from the record's `figures`, and new ones are added to it.
 - **The status line** says a copy is from this machine (by which service, when made), and that it is being translated again (with which service, how far along).
 
 ### Tests
@@ -979,14 +987,17 @@ There is one record per paper version and target language.
   - a mixed-engine run is not current;
   - the write order: pipeline, units tried, units whole then partial, units lost, marks, then the newer;
   - a run that changes only units' `by` or `state` updates the record without a compile.
-- **`tests/providers/transport.test.ts`**: the identity changes with a custom prompt's text, the endpoint, the model, the target and the wire format, and follows the fallback while the chosen service is unavailable.
+- **`tests/providers/transport.test.ts`** and the fallback's tests:
+  - the identity changes with a custom prompt's text, the endpoint, the model, the target and the wire format;
+  - it follows the fallback while the chosen service is unavailable;
+  - in a call where the chosen engine and its fallback each translate some segments, every segment carries its own engine's identity.
 - **In the browser** (`spikes/cache-revisit.mjs`):
   - A first visit writes the record.
   - A second visit shows the final within 1 s of the left side, with no compile, and its figures' translations are drawn.
   - With the settings' service changed to the LLM mock, the copy is shown at once. No preview shows a paragraph in English that the copy had translated. The final replaces the record, whose service is now the mock.
   - With the custom prompt edited, the copy is not current.
   - Two reader tabs on the same paper, one on the old settings finishing last: the record kept is the current settings' one.
-  - With every service unavailable (the LLM mock stopped, no fallback), a cached paper still opens, and says it could not be checked.
+  - With every service unavailable (the LLM mock stopped, no fallback), a cached paper still opens with its figures' labels translated, and says it could not be checked.
 
 ### Not now
 
