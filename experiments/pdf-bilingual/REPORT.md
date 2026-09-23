@@ -878,6 +878,7 @@ There is one record per paper version and target language.
 | `pdf`, `iv` | The final, encrypted, and its 12-byte initialisation vector, fresh for each record |
 | `units` | Every unit: its kind; its source as plain text; the SHA-256 of its source pieces; its translation as plain text and its translated pieces, when it has one; `by`, the identity its translation was made or tried under; and `state`: `whole`, `partial` (runs, some not back), `none` (the engine could not take it, runs included), `lost` (a failure of the service) or `kept` (a name, left in the source). The two sides are anchored by these texts, and a translation made again starts from these pieces. |
 | `marks` | The left side's mark words, which anchor arXiv's PDF, from the marked original compile |
+| `context` | The paper's title and abstract as `paperContext()` gives them, which an LLM's prompt and the figures' translations take |
 | `engine`, `pipeline` | The service's name for the status line; `PIPELINE_VERSION` |
 | `paper`, `bytes`, `createdAt`, `openedAt` | The id as asked, the record's size, when it was made, when it was last opened |
 
@@ -888,6 +889,10 @@ There is one record per paper version and target language.
 
 1. **The lookup needs no service.** The left side opens, from the HTTP cache. The digest of its bytes and the settings' target language give the key; the settings are the extension's configuration, which the reader already reads.
    - **A record found is shown at once.** The right side opens from the decrypted bytes. It is anchored by the record's translated texts, and the left by its source texts and marks. No source is fetched and nothing is compiled; anchoring takes about 0.3 s.
+   - **The paper's state comes from the record, before the right side opens.** It is otherwise made by parsing the source, which a hit does not do (local Codex review):
+     - `paperCtx`, from `context`: the figures' translations wait for it;
+     - `prose`, from the units' source texts: names are told apart by it;
+     - `unitKind`, from their kinds.
    - **Only then is the engine asked for its status.** `openEngine()` throws when no service can answer, so it must come after the lookup. With no service able to answer (offline, or a key removed), the copy stays, and the status line says it could not be checked against the settings (local Codex review).
 2. **Whether the copy is current.** It is when its pipeline is the current one and every unit was tried under the current identity: the unit's `by` is that identity, and its `state` is not `lost`. A current copy is the end of it.
    - **Settled units.** A unit the current engine could not take whole (`partial`, `none`) is settled, since trying again would fail again. The HTML page does not try it again on its own either.
@@ -908,7 +913,8 @@ There is one record per paper version and target language.
    - The seed is matched by the source's hash, not by index. A unit the pipeline has since cut differently has no seed.
    - **No preview makes a translated paragraph English again** (local Codex review). A preview is shown only when every unit that is not kept in the source has a translation, from the seed or new. Until then the copy stays on screen. With the service changed, the seed covers every unit, and the previews replace it one batch at a time. With the pipeline changed, the units cut differently are translated first, as the order puts them, and the previews follow.
    - **A new result replaces a seed only when it is whole.** A unit that went by runs with some runs not back, or was lost to a failure of the service, keeps its seed. Its `state` and `by` say so: `partial` or `none` under the current identity, or `lost`.
-   - **A run in which no unit's translation changed** (every batch lost while offline, say) compiles nothing and writes nothing.
+   - **A run in which no unit's text changed compiles nothing.** Every batch lost while offline is one such run.
+   - **What such a run writes.** If no unit's `by` or `state` changed either, it writes nothing. If they changed, it writes them into the stored record, which keeps its PDF. One case is a new service that cannot take a unit either, which keeps its seed; without this write, every visit would try it again (local Codex review).
    - It is given `marks` when the pipeline is the same, so the marked original is compiled only if a lost character needs its log.
    - Its previews are drafts, as a first translation's are: images are frames, with the original's figure drawn over each. The final has its figures.
    - The status line says the translation is being made again, with which service. With only the pipeline changed, the translations come from the extension's cache, and the run is its compiles alone.
@@ -917,8 +923,9 @@ There is one record per paper version and target language.
    - **The write is conditional, in one transaction: a record replaces the stored one only if it is at least as good.** Records are compared, in this order:
      1. is the pipeline the current one;
      2. how many units were tried under the current identity and not lost;
-     3. how few units were lost;
-     4. does it have the left side's marks.
+     3. how many units are `whole`, then how many `partial`: translation beats the source (local Codex review);
+     4. how few units were lost;
+     5. does it have the left side's marks.
 
      A tie goes to the newer record. The current identity is read from a fresh status when the run ends. So neither a tab still on old settings nor a worse run on the same ones can overwrite a better copy (local Codex review, both rounds).
    - It is written when the run has ended, not when the final is shown: the marked original, which gives the left side's marks, is compiled after the final.
@@ -970,11 +977,12 @@ There is one record per paper version and target language.
   - a run with no change compiles nothing;
   - a copy is current only with every unit tried under the current identity;
   - a mixed-engine run is not current;
-  - the write order: pipeline, units tried, units lost, marks, then the newer.
+  - the write order: pipeline, units tried, units whole then partial, units lost, marks, then the newer;
+  - a run that changes only units' `by` or `state` updates the record without a compile.
 - **`tests/providers/transport.test.ts`**: the identity changes with a custom prompt's text, the endpoint, the model, the target and the wire format, and follows the fallback while the chosen service is unavailable.
 - **In the browser** (`spikes/cache-revisit.mjs`):
   - A first visit writes the record.
-  - A second visit shows the final within 1 s of the left side, with no compile.
+  - A second visit shows the final within 1 s of the left side, with no compile, and its figures' translations are drawn.
   - With the settings' service changed to the LLM mock, the copy is shown at once. No preview shows a paragraph in English that the copy had translated. The final replaces the record, whose service is now the mock.
   - With the custom prompt edited, the copy is not current.
   - Two reader tabs on the same paper, one on the old settings finishing last: the record kept is the current settings' one.
