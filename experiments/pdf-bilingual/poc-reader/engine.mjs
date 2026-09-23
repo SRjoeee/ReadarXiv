@@ -14,12 +14,18 @@ export function paperContext(units) {
   return { ...(title ? { paperTitle: plainSource(title) } : {}), ...(abstract ? { abstract: clip(abstract) } : {}) }
 }
 
-/** Why the reader cannot translate: no engine on the chain can run, or one refused for good (no key, a key refused) */
+/**
+ * Why the reader cannot translate: no engine on the chain can run, or one refused for good (no key, a key refused).
+ * Or some texts did not come back for a reason not theirs — a network down, a timeout, a rate limit the background's
+ * queue has already retried: then `partial` holds what did come back (null elsewhere) and `lost` the indices of the
+ * texts that did not, which are not to be sent again piece by piece (Codex on #296)
+ */
 export class EngineError extends Error {
-  constructor(kind, message) {
+  constructor(kind, message, { partial, lost } = {}) {
     super(message)
     this.name = 'EngineError'
     this.kind = kind
+    if (partial) Object.assign(this, { partial, lost })
   }
 }
 
@@ -60,11 +66,15 @@ export async function openEngine({ paper }) {
   let serving = status.available ? (status.model ? `${status.providerId} (${status.model})` : status.providerId) : status.fallback.id
   const target = status.targetLanguage
   const cache = { paper, renderPath: status.renderPath }
-  /** texts in the chain's wire format → their translations, null where one did not come back */
+  /**
+   * Texts in the chain's wire format → their translations, null where one did not come back: a text the engine could
+   * not take. A failure not of the texts' making is thrown once every batch has answered (EngineError's `lost`)
+   */
   async function translate(texts, context = {}) {
     // an empty context is left out, not sent as {}: it enters the cache key (src/core/run/call.ts)
     const withContext = Object.keys(context).length ? { context } : {}
-    const out = new Array(texts.length).fill(null)
+    const out = new Array(texts.length).fill(null), lost = new Set()
+    let failure = null
     const call = async idx => {
       const segments = idx.map(i => ({ id: String(i), text: texts[i] }))
       const res = await transport.translate({ request: { segments, source: 'en', target, ...withContext }, cache, scope })
@@ -73,9 +83,13 @@ export async function openEngine({ paper }) {
       if (isPermanentErrorKind(res.error.kind)) throw new EngineError(res.error.kind, res.error.message)
       // one text the engine cannot take must not sink its batch: halves, as the HTML page's session splits (run.ts)
       const left = idx.filter(i => out[i] == null)
-      if (res.error.isolatable && left.length > 1) await Promise.all([call(left.slice(0, left.length >> 1)), call(left.slice(left.length >> 1))])
+      if (res.error.isolatable) { if (left.length > 1) await Promise.all([call(left.slice(0, left.length >> 1)), call(left.slice(left.length >> 1))]); return }
+      // a failure of the service, not of these texts: split or sent again it fails the same way, as many times over
+      for (const i of left) lost.add(i)
+      failure = res.error
     }
     await Promise.all(chunks(texts, status.maxBatchChars, status.maxBatchItems).map(call))
+    if (failure) throw new EngineError(failure.kind, failure.message, { partial: out, lost })
     return out
   }
   return {

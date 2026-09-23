@@ -1229,16 +1229,18 @@ async function live() {
   const site = params.get('site') ?? 'http://127.0.0.1:8071', endpoint = params.get('endpoint') ?? 'http://localhost:8070'
   const srcUrl = params.get('src') ?? `https://arxiv.org/src/${paper}`, pdfUrl = params.get('pdf') ?? `https://arxiv.org/pdf/${paper}`
   const L = (window.__reader.live = { events: [], t0: performance.now() })
-  let got = 0, total = 0, engine = null, setContext = null
+  let got = 0, total = 0, engine = null, setContext = null, lost = 0, lostWhy = null
   let compiledOnce = false
   paperCtx = new Promise(resolve => { setContext = resolve })
   const note = (event, data = {}) => {
     L.events.push({ t: Math.round(performance.now() - L.t0), event, ...data })
-    if (event === 'translated') got = data.total
+    if (event === 'translated') { got = data.total; if (data.how?.lost) { lost += data.how.lost; lostWhy = data.how.error } }
     if ((event === 'preview' || event === 'final') && data.ok) compiledOnce = true
     const said = { preview: data.ok ? 'preview compiled' : `compile failed (${data.strategy}): ${data.error ?? ''}`, final: data.ok ? 'final compiled' : `final compile failed (${data.strategy}): ${data.error ?? ''}`, 'next strategy': `trying ${data.strategy}`, done: compiledOnce ? 'done' : 'done — the translation did not compile; the right side still shows the original' }[event] ?? event
     const by = engine ? ` into ${engine.lang} by ${engine.engine}` : ''
-    status(`${total ? `${got} of ${total} translated${by}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
+    // paragraphs the service failed on (a network down, a rate limit) stay in English, and the reader is told
+    const missed = lost ? ` (${lost} not: ${lostWhy})` : ''
+    status(`${total ? `${got} of ${total} translated${by}${missed}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
   }
   const fail = (event, text) => { setContext({}); note(event); status(text); L.done = true; L.failed = text }
   // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
