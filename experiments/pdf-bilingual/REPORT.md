@@ -779,3 +779,56 @@ The step is taken in two ways, both in the **Sync** menu to compare by hand:
 The menu keeps Off and Current to compare against. The fifteenth addendum's A, B, B+D and C are gone, with the code only they called.
 
 The gate passes, and `spikes/sync-cases.mjs` checks the map. The browser smoke check (`spikes/sync-smoke.mjs`) could not run for the same reason as before: in this session the operating system does not resolve the user's account, and Chromium aborts at start.
+
+## Seventeenth addendum, 2026-09-24: the pointer's paragraph, and a follower that keeps every frame
+
+The owner kept same speed as the direction and asked for two things:
+- a version levelled by the paragraph the pointer rests on, not by the top of the view;
+- a fix for the follower dropping frames while the driver stays smooth.
+
+### BUILT
+
+- **Together · pointer's paragraph** (the Sync menu). The panes move 1:1. At rest, the paragraph or heading under the pointer's last position is levelled. Its first line is taken when that line shows. Otherwise the point under the pointer is taken, at its place in the paragraph. Off the text (between paragraphs, in a margin), the paragraph with the nearest line within 64 px is taken. With the pointer on the other side, or away from the text, the top is taken as in Together · top. The menu now reads Off / Current / Together · top / Together · pointer's paragraph / Together · top, matched speed.
+- **The follower on the compositor** (the Compositor checkbox, on by default). The cause of the dropped frames:
+  - the driver scrolls on the compositor's thread;
+  - the follower was set by script, one frame later on the main thread;
+  - so it stalled whenever PDF.js drew pages coming into view.
+
+  The follower's page stack now moves on the compositor too:
+  - **While scrolling**: a transform animation on a `ScrollTimeline` of the driver. Its keyframes are the follower's position for every position of the driver: straight at the same speed, integrated every 32 px at matched speed, and clamped at the follower's ends.
+  - **At rest**: the glide is a WAAPI transform animation. Its easing is the critically damped spring, sampled into CSS `linear()`.
+  - **Bake**: when anything is about to read the follower's position, the transform's shift is written into `scrollTop` and the transform is removed, in one task. That happens at the rest's levelling, on a new driver, a click, a layout change or the swap of a new translation.
+  - **Binding ahead**: the follower is bound at rest, and when the pointer comes over a side. The input events that tell a scroll has begun reach the page after the compositor's first steps.
+  - **PDF.js** draws the pages the follower shows, not the ones its `scrollTop` says. During the motion its viewer is lent a scroll container that adds the shift (`_getVisiblePages`).
+  - **Other scrolls**: a scroll of the follower by something else (a link, PDF.js, the find bar) gives up the transform, and the follower is bound again from where it stands.
+  - **Fallback**: with the box unchecked, or without `ScrollTimeline`, the script follower is used.
+- **Two faults found by measuring, both in the script path too**:
+  - The rest's wait was cancelled when the scroll's end came in the same frame as its last step, because the frame's callback cleared it after `scrollend`. The wait is now restarted in the scroll event itself.
+  - After an outside scroll of the follower, the next step pulled it back to where it had been. The together modes now take the follower's position afresh.
+
+### MEASURED (`spikes/sync-frames.mjs`, Chromium, the build, same speed)
+
+The left pane is panned 3,000 px at 1,500 px/s by CDP's synthetic scroll gesture. The composited frames are captured by the screencast, after one warm-up pan. Each pane's step per frame is found by matching its rows. "Busy" adds 35 ms of main-thread work every 80 ms, as PDF.js's drawing does.
+
+| Paper | Follower | Page | Frames the follower's step ≠ the driver's | Frames it stood still | The two apart, p95 / most |
+|---|---|---|---|---|---|
+| 2608.02163 | script | idle | 93 of 120 | 6 | 51 / 114 px |
+| 2608.02163 | compositor | idle | 0 of 121 | 0 | 0 / 0 px |
+| 2608.02163 | script | busy | 77 of 101 | 19 | 87 / 89 px |
+| 2608.02163 | compositor | busy | 0 of 121 | 0 | 0 / 0 px |
+| 2608.18090 | script | idle | 73 of 118 | 3 | 38 / 73 px |
+| 2608.18090 | compositor | idle | 0 of 121 | 0 | 0 / 0 px |
+| 2608.18090 | script | busy | 79 of 98 | 26 | 127 / 176 px |
+| 2608.18090 | compositor | busy | 0 of 122 | 0 | 0 / 0 px |
+
+The script follower's count of frames off varies from run to run: 35 to 93 of 120 on 2608.02163 idle, over three runs. The compositor's was 0 in every run. Idle, neither follower caused a long task on the main thread during the pan.
+
+A 300 px glide at rest runs on the spring on both paths, with steps of 14, 31, 37, 37, 34 … 2, 1, 1 px. There is no jump where it ends. Where 2608.18090's capture skipped frames, the steps seen are sums of neighbouring steps of the same curve.
+
+`spikes/sync-smoke.mjs` (wheel steps, every mode, both followers) finds:
+- no mode ran back while scrolling;
+- every together mode at rest within 1 px of level;
+- the pointer's mode levelling the paragraph under the pointer (unit 152), and the top modes the paragraph at the top (unit 149).
+
+The gate passes.
+

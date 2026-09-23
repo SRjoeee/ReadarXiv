@@ -22,9 +22,9 @@
   <button id="zoomOut" title="Zoom out">−</button>
   <span id="zoom">100%</span>
   <button id="zoomIn" title="Zoom in">+</button>
-  <label id="sync-label" title="How the other side follows the one scrolled. Together: both move as one sheet, and once the scroll ends the other side glides to the same content at the top">Sync <select id="sync">
-    <option value="off">Off</option><option value="current">Current</option><option value="same">Together · same speed</option><option value="matched">Together · matched speed</option>
-  </select></label>
+  <label id="sync-label" title="How the other side follows the one scrolled. Together: both move as one sheet, and once the scroll ends the other side glides until the same content stands level — the top of the view, or the paragraph under the pointer">Sync <select id="sync">
+    <option value="off">Off</option><option value="current">Current</option><option value="same">Together · top</option><option value="pointer">Together · pointer's paragraph</option><option value="matched">Together · top, matched speed</option>
+  </select> <input type="checkbox" id="compositor" title="Move the other side on the compositor, as smoothly as the side scrolled; off: by script, each frame"> Compositor</label>
   <label title="Translate the text inside the paper's own figures"><input type="checkbox" id="figures" checked> Figure text</label>
   <label title="Start from the untranslated document and replace it as the translation comes in"><input type="checkbox" id="progressive"> Progressive demo</label>
   <span id="notice" role="alert" hidden></span>

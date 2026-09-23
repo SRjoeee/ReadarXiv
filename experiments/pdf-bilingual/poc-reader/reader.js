@@ -560,20 +560,28 @@ function lineAt(side, y, x) {
 }
 let frame = 0, settleTimer = 0, pointerX = null
 
-// How the other side follows, the reader's choice (REPORT, sixteenth addendum): off; the design as it was (a table of
-// unit tops, and a settle 160 ms after the last scroll); or together — while the reader scrolls, the other side moves
-// with it as one sheet, at the same speed or at the speed the two layouts' local ratio asks, and once the scroll has
-// ended (a trackpad's glide included) it glides so that the content at the top of the reader's side stands level on both.
-const SYNC_MODES = ['off', 'current', 'same', 'matched']
+// How the other side follows, the reader's choice (REPORT, sixteenth and seventeenth addenda): off; the design as it was
+// (a table of unit tops, and a settle 160 ms after the last scroll); or together — while the reader scrolls, the other
+// side moves with it as one sheet, at the same speed or at the speed the two layouts' local ratio asks, and once the
+// scroll has ended (a trackpad's glide included) it glides so that the content the reader's side is levelled by — the
+// top of its view, or the paragraph under the pointer — stands at the same height on both.
+const SYNC_MODES = ['off', 'current', 'same', 'pointer', 'matched']
 let syncMode = SYNC_MODES.includes(prefs.syncMode) ? prefs.syncMode : 'same'
-const together = () => syncMode === 'same' || syncMode === 'matched'
+const together = () => syncMode === 'same' || syncMode === 'pointer' || syncMode === 'matched'
 const reduced = matchMedia('(prefers-reduced-motion: reduce)')
+/** a critically damped spring's way from 0 to 1 over its time, k from 0 to 1: no overshoot, no bounce */
+const springAt = k => { const y = t => 1 - (1 + 6.6 * t) * Math.exp(-6.6 * t); return y(Math.min(1, Math.max(0, k))) / y(1) }
+/** the same curve as a CSS easing, for the glide the compositor runs */
+const SPRING = `linear(${Array.from({ length: 41 }, (_, i) => +springAt(i / 40).toFixed(4)).join(', ')})`
+/** how long a glide takes for a distance: 250–450 ms, longer the further; none with reduced motion */
+const glideMs = d => (reduced.matches ? 0 : Math.min(450, 250 + 0.25 * Math.abs(d)))
 /**
  * The follower as the together modes move it. `pos`: its position, fractional — scrollTop rounds to device pixels, and
  * steps of the same size must not drift by it; `lastD`: the driver's position last seen, null when it is to be read
- * afresh (a layout changed); `rest`: the wait after the scroll's end; `spring`: the glide under way
+ * afresh (a layout changed); `rest`: the wait after the scroll's end; `spring`: the glide under way; `moving`: the
+ * driver scrolling, from its first step to its scroll's end
  */
-const follow = { pos: null, lastD: null, rest: 0, spring: 0 }
+const follow = { pos: null, lastD: null, rest: 0, spring: 0, moving: false }
 /** the positions to go on from: the driver's as it is, the follower's as it is — after a click, a glide or a new driver */
 function rebase() {
   if (!driver) return
@@ -609,8 +617,13 @@ function buildFlow() {
  * changes as slowly as the view slides. A glide under way stops, and the follower goes on from where it stands
  */
 function togetherFrame(side) {
+  if (onCompositor()) {
+    // the compositor moves the follower; PDF.js is asked to draw the pages it now shows (showAt)
+    if (!glass.anim) arm()
+    other(side).viewer.update()
+    return
+  }
   const tc = other(side).container, D = side.container.scrollTop
-  clearTimeout(follow.rest)
   if (follow.spring) { stopSpring(); follow.pos = tc.scrollTop }
   if (follow.lastD == null || follow.pos == null) { follow.lastD = D; follow.pos = tc.scrollTop; return }
   const step = D - follow.lastD
@@ -648,49 +661,208 @@ function topAnchor(side) {
   const first = shown.sort((a, b) => a.top - b.top)[0]
   return first ? { id: first.id, at: first.li / first.n, y: first.top } : null
 }
-/** the scroll ended on the driver: the other side glides so that the top content stands at the same height on both; at
- *  either end of the driver's document, the other side goes to the same end */
+/**
+ * The paragraph or heading under the pointer where it last stood on a side: its first line when that shows in the view,
+ * else the point under the pointer, at its place in the paragraph (lines counted). Off the text — between two
+ * paragraphs, in the margin beside them — the one with the nearest line, within 64 px. Null with the pointer on the
+ * other side or away from the text: the top is taken
+ */
+function pointerAnchor(side) {
+  if (pointerX?.side !== side || pointerX.y == null) return null
+  const c = side.container, D = c.scrollTop, H = c.clientHeight, y = D + pointerX.y - c.getBoundingClientRect().top
+  if (y < D || y > D + H) return null
+  let page = 1
+  for (let p = 1; p <= side.doc.numPages; p++) if (pageTop(side, p) <= y) page = p
+  const pv = pageView(side, page), pr = pv.div.getBoundingClientRect()
+  const [x] = pv.viewport.convertToPdfPoint(pointerX.x - pr.left - pv.div.clientLeft, 0)
+  // how far a line is from the pointer: across (PDF units at the page's scale) and down, in CSS pixels
+  const gap = l => Math.max(0, l.x0 - x, x - l.x1) * pv.viewport.scale + Math.max(0, l.top - y, y - l.bottom)
+  let hit = null
+  for (const l of linkedLines(side)) if (l.page === page && gap(l) < 64 && (!hit || gap(l) < gap(hit))) hit = l
+  if (!hit) return null
+  const first = linkedLines(side).find(l => l.id === hit.id && l.li === 0)
+  if (first && first.top >= D - 0.5) return { id: hit.id, at: 0, y: first.top }
+  const f = Math.min(1, Math.max(0, (y - hit.top) / Math.max(1, hit.bottom - hit.top)))
+  return { id: hit.id, at: (hit.li + f) / hit.n, y: hit.top + f * (hit.bottom - hit.top) }
+}
+/** the scroll ended on the driver: the other side glides so that the content the driver is levelled by stands at the
+ *  same height on both; at either end of the driver's document, the other side goes to the same end */
 function alignTop(side) {
   if (!together() || mode !== 'bilingual' || side !== driver || !left.anchors.size || !right.anchors.size) return
+  bake()
   const to = other(side), dc = side.container, tc = to.container, D = dc.scrollTop
   const most = tc.scrollHeight - tc.clientHeight
   let target
   if (D <= 1) target = 0
   else if (D >= dc.scrollHeight - dc.clientHeight - 1) target = most
   else {
-    const a = topAnchor(side), there = a && spot(to, a.id, a.at)
-    if (there == null) return
+    const a = (syncMode === 'pointer' && pointerAnchor(side)) || topAnchor(side), there = a && spot(to, a.id, a.at)
+    if (there == null) { rebase(); arm(); return }
     target = there - (a.y - D) + (tc.getBoundingClientRect().top - dc.getBoundingClientRect().top)
   }
   target = Math.min(most, Math.max(0, target))
-  if (Math.abs(target - tc.scrollTop) < 1) return rebase()
-  springTo(tc, target)
+  if (Math.abs(target - tc.scrollTop) < 1) { rebase(); arm(); return }
+  if (onCompositor()) glideOn(to, target)
+  else springTo(tc, target)
 }
 /** a critically damped spring to a position: no overshoot, no bounce, 250–450 ms as the distance asks; one step with
  *  reduced motion */
 function springTo(tc, target) {
   stopSpring()
-  const x0 = tc.scrollTop, d = target - x0, T = reduced.matches ? 0 : Math.min(450, 250 + 0.25 * Math.abs(d)), w = T ? 6.6 / T : 0, t0 = performance.now()
+  const x0 = tc.scrollTop, d = target - x0, T = glideMs(d), t0 = performance.now()
   const step = now => {
-    const t = now - t0, x = T ? target - d * (1 + w * t) * Math.exp(-w * t) : target
-    if (!T || Math.abs(target - x) < 0.5) { put(tc, target); follow.spring = 0; rebase(); return }
-    put(tc, x)
+    const k = T ? (now - t0) / T : 1
+    if (k >= 1) { put(tc, target); follow.spring = 0; rebase(); return }
+    put(tc, x0 + d * springAt(k))
     follow.spring = requestAnimationFrame(step)
   }
   follow.spring = requestAnimationFrame(step)
 }
 function stopSpring() { if (follow.spring) cancelAnimationFrame(follow.spring); follow.spring = 0 }
+
+// ---------------------------------------------------------------- the follower on the compositor
+// The driver scrolls on the compositor's thread, and stays smooth however busy the page is; a follower set by script
+// each frame moves on the main thread a frame later, and misses frames whenever PDF.js draws the pages coming into view
+// (the scroll-sync research measured up to 97 px behind). So the together modes move the follower's page stack on the
+// compositor too: while the reader scrolls, by a transform a ScrollTimeline on the driver runs, its keyframes the
+// follower's position for every position of the driver; at rest, by a glide the compositor runs on the spring's curve.
+// Its scrollTop stays where it was meanwhile, and takes the position shown — in one task, so no frame shows a jump —
+// whenever something is to read it (bake): the rest's levelling, a new driver, a click, a layout's change. The follower
+// is bound ahead, at rest and when the pointer comes over a side, so that it keeps up from a scroll's first frame: the
+// input events that tell a scroll has begun reach the page after the compositor has taken its first steps.
+const CAN_COMPOSIT = typeof ScrollTimeline === 'function'
+let compositing = CAN_COMPOSIT && prefs.compositor !== false
+const onCompositor = () => compositing && together() && mode === 'bilingual'
+/** the follower's motion under way: `anim` the transform, `kind` 'scroll' (bound to `from`, the driver) or 'glide',
+ *  `side` the follower, `shift()` how far the transform shows it from its scrollTop, down positive */
+const glass = { anim: null, kind: null, side: null, from: null, shift: null }
+/** PDF.js told a side's position as it shows, not as its scrollTop says: it finds the pages to draw from a scroll
+ *  container's four sizes, and is lent one that adds the transform's shift; null gives it back its own */
+function showAt(side, shift) {
+  if (!shift) { delete side.viewer._getVisiblePages; return }
+  side.viewer._getVisiblePages = function () {
+    const real = this.container
+    this.container = { scrollTop: real.scrollTop + shift(), scrollLeft: real.scrollLeft, clientHeight: real.clientHeight, clientWidth: real.clientWidth }
+    try { return Object.getPrototypeOf(this)._getVisiblePages.call(this) } finally { this.container = real }
+  }
+}
+/**
+ * The motion under way ended where it stands: the transform's shift into the follower's scrollTop, on top of whatever
+ * the reader scrolled it by meanwhile, and the transform gone. The together modes go on from there: the follower's
+ * position, against the driver's as it is (bound) or as it was when the glide began, the driver still since
+ */
+function bake() {
+  if (!glass.anim) return
+  const c = glass.side.container, pos = c.scrollTop + glass.shift(), g = unbind()
+  put(c, pos)
+  if (g.kind === 'scroll') follow.lastD = g.from.container.scrollTop
+  follow.pos = pos
+  g.side.viewer.update()
+}
+/** the motion under way given up, the follower left at its scrollTop */
+function drop() { if (glass.anim) unbind().side.viewer.update() }
+/** the motion under way taken off — its animation, and the container lent to PDF.js — and what it was */
+function unbind() {
+  const g = { ...glass }
+  g.anim.cancel()
+  showAt(g.side, null)
+  Object.assign(glass, { anim: null, kind: null, side: null, from: null, shift: null })
+  return g
+}
+/**
+ * The follower bound to the driver's scroll: for every position of the driver, the follower's — where it stands, plus
+ * the driver's steps since the positions the together modes go on from, the same steps or scaled by the layouts' local
+ * ratio (togetherFrame's), within the follower's ends — as keyframes of a ScrollTimeline on the driver, linear between
+ */
+function arm() {
+  if (!onCompositor() || !driver || glass.anim || !left.anchors.size || !right.anchors.size) return
+  const d = driver, f = other(d), dc = d.container, tc = f.container
+  const Dmax = dc.scrollHeight - dc.clientHeight, Fmax = tc.scrollHeight - tc.clientHeight, F0 = tc.scrollTop
+  if (Dmax < 1 || !dc.clientHeight || !tc.clientHeight) return
+  if (follow.lastD == null || follow.pos == null) rebase()
+  const Db = follow.lastD, Fb = follow.pos, clamp = v => Math.min(Fmax, Math.max(0, v))
+  let pts
+  if (syncMode === 'matched') {
+    if (!flow) buildFlow()
+    const H = dc.clientHeight, m = d === left ? flow.ltr : flow.rtl, ratio = D => Math.min(1.6, Math.max(0.6, (m(D + H) - m(D)) / H)), step = 32
+    const up = [], down = []
+    for (let D = Db, F = Fb; D < Dmax; ) { const n = Math.min(Dmax, D + step); F += (n - D) * ratio(D); D = n; up.push([D, clamp(F)]) }
+    for (let D = Db, F = Fb; D > 0; ) { const n = Math.max(0, D - step); F -= (D - n) * ratio(n); D = n; down.unshift([D, clamp(F)]) }
+    pts = [...down, [Db, clamp(Fb)], ...up]
+  } else {
+    // the same steps: straight, but for where the follower meets one of its ends
+    pts = [0, Db - Fb, Db + Fmax - Fb, Dmax].filter(D => D >= 0 && D <= Dmax).sort((a, b) => a - b).map(D => [D, clamp(Fb + D - Db)])
+  }
+  pts = pts.filter((p, i) => i === 0 || p[0] > pts[i - 1][0])
+  if (pts[0][0] > 0) pts.unshift([0, pts[0][1]])
+  if (pts.at(-1)[0] < Dmax) pts.push([Dmax, pts.at(-1)[1]])
+  const shift = () => {
+    const D = Math.min(Dmax, Math.max(0, dc.scrollTop))
+    let lo = 0, hi = pts.length - 1
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (pts[mid][0] <= D) lo = mid; else hi = mid }
+    const [a, b] = [pts[lo], pts[hi]], t = b[0] === a[0] ? 0 : (D - a[0]) / (b[0] - a[0])
+    return a[1] + Math.min(1, Math.max(0, t)) * (b[1] - a[1]) - F0
+  }
+  const anim = f.viewer.viewer.animate(pts.map(([D, F]) => ({ offset: D / Dmax, transform: `translateY(${F0 - F}px)` })), { timeline: new ScrollTimeline({ source: dc, axis: 'block' }), fill: 'both' })
+  Object.assign(glass, { anim, kind: 'scroll', side: f, from: d, shift })
+  showAt(f, shift)
+}
+/** the glide at rest on the compositor: the follower's stack moved to `target` on the spring's curve, then baked, and
+ *  bound to the driver again */
+function glideOn(side, target) {
+  const tc = side.container, d = target - tc.scrollTop, T = glideMs(d)
+  if (!T) { put(tc, target); rebase(); arm(); return }
+  const anim = side.viewer.viewer.animate([{ transform: 'translateY(0px)' }, { transform: `translateY(${-d}px)` }], { duration: T, easing: SPRING, fill: 'both' })
+  Object.assign(glass, { anim, kind: 'glide', side, from: null, shift: () => d * springAt((anim.currentTime ?? 0) / T) })
+  showAt(side, glass.shift)
+  const tick = () => { if (glass.anim !== anim) return; side.viewer.update(); requestAnimationFrame(tick) }
+  requestAnimationFrame(tick)
+  anim.onfinish = () => { if (glass.anim !== anim) return; bake(); rebase(); arm() }
+}
+/** a side's position as the screen shows it: its scrollTop, and the transform's shift while it follows on the compositor */
+const shownAt = side => side.container.scrollTop + (glass.side === side ? glass.shift() : 0)
+/** for the harness: what the driver is levelled by at rest, and how far its counterpart stands from level (px) */
+function levelOf(side) {
+  const a = (syncMode === 'pointer' && pointerAnchor(side)) || topAnchor(side), to = other(side)
+  const there = a && spot(to, a.id, a.at)
+  if (there == null) return null
+  const y = a.y - side.container.scrollTop + side.container.getBoundingClientRect().top, ty = there - shownAt(to) + to.container.getBoundingClientRect().top
+  return { id: a.id, at: a.at, error: ty - y }
+}
+/** a side becomes the driver: what moves ends where it stands, and the other side goes on from where it stands */
+function take(side) {
+  if (driver === side) return
+  bake(); driver = side; stopSpring(); clearTimeout(follow.rest); follow.rest = 0; rebase()
+}
 $('sync').value = syncMode
+$('compositor').checked = compositing
+$('compositor').disabled = !CAN_COMPOSIT
+$('compositor').onchange = () => {
+  bake(); stopSpring(); clearTimeout(follow.rest)
+  compositing = CAN_COMPOSIT && $('compositor').checked
+  void savePrefs({ compositor: compositing })
+  rebase(); arm()
+}
 $('sync').onchange = () => {
+  bake()
   syncMode = $('sync').value
   void savePrefs({ syncMode })
   stopGlide(); stopSpring(); clearTimeout(settleTimer); clearTimeout(follow.rest)
-  rebase()
+  rebase(); arm()
 }
 function syncFrom(side) {
   const mine = placed.get(side.container)
   if (mine != null) { placed.delete(side.container); if (Math.abs(mine - side.container.scrollTop) < 1) return }
+  // the follower scrolled by something else — a link, PDF.js, the find bar: it stands where that put it, and the
+  // together modes go on from there; on the compositor its transform is given up, and it is bound again
+  if (driver && side !== driver) {
+    if (glass.side === side) { drop(); rebase(); arm() } else if (together()) rebase()
+    return
+  }
   if (syncMode === 'off' || mode !== 'bilingual' || side !== driver || !left.anchors.size || !right.anchors.size) return
+  // a scroll under way, its rest's wait begun again: here, with the event, since the scroll's end comes in the same
+  // frame as its last step, before a frame's callback would run
+  if (together()) { clearTimeout(follow.rest); follow.rest = 0; follow.moving = true }
   if (syncMode === 'current') { clearTimeout(settleTimer); settleTimer = setTimeout(() => settle(side), 160) }
   if (frame) return
   frame = requestAnimationFrame(() => {
@@ -708,6 +880,7 @@ const shown = side => side.container.clientWidth > 0
  * opens where the other one was being read, by the table the sync scrolls with
  */
 function relayout(from) {
+  bake()
   requestAnimationFrame(() => {
     for (const s of sides) if (s.doc && shown(s)) { s.viewer.currentScaleValue = 'page-width'; s.viewer.update() }
     const came = from === 'original' ? right : from === 'translation' ? left : null
@@ -773,7 +946,7 @@ function level(from, y, there) {
   const short = tc.scrollTop - want
   if (Math.abs(short) > 0.5) put(fc, fc.scrollTop + short)
   readingLine = Math.min(0.95, Math.max(0.05, (there - tc.scrollTop + dy) / fc.clientHeight))
-  rebase()
+  rebase(); arm()
 }
 /** a side's scroll position set by the reader itself, its scroll event not taken for the reader's own scrolling */
 const placed = new WeakMap()
@@ -807,6 +980,7 @@ function stopGlide() { if (gliding) cancelAnimationFrame(gliding); gliding = 0 }
  */
 let lastAlign = null // how the last click was levelled, for the test harness
 async function alignClick(from, event) {
+  bake()
   const to = other(from), c = from.container, y = event.clientY - c.getBoundingClientRect().top
   const hit = hitAt(from, event)
   if (hit && to.anchors.get(hit.id)) {
@@ -909,16 +1083,31 @@ function columnOf(side, page, r) {
   const [x0, , x1] = pageView(side, page).pdfPage.view, mid = (x0 + x1) / 2
   return r.x0 < mid - 1 && r.x1 > mid + 1 ? { x0, x1 } : r.x1 <= mid + 1 ? { x0, x1: mid } : { x0: mid, x1 }
 }
-const invalidate = () => { table = null; lines = null; flow = null; follow.lastD = null }
+const invalidate = () => { bake(); table = null; lines = null; flow = null; follow.lastD = null }
 addEventListener('resize', invalidate)
 
 function attach(side) {
   side.container.addEventListener('scroll', () => syncFrom(side), { passive: true })
-  // a new driver: the other side goes on from where it stands, before the new driver's first step is taken
-  for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) side.container.addEventListener(type, () => { if (driver !== side) { driver = side; stopSpring(); clearTimeout(follow.rest); rebase() } }, { passive: true })
-  side.container.addEventListener('pointermove', e => { pointerX = { side, x: e.clientX } }, { passive: true })
-  // the scroll's end — a trackpad's glide included — and 150 ms more without a scroll: the together modes level the top
-  side.container.addEventListener('scrollend', () => { if (side === driver && together()) { clearTimeout(follow.rest); follow.rest = setTimeout(() => alignTop(side), 150) } }, { passive: true })
+  // a new driver: the other side goes on from where it stands, before the new driver's first step is taken; on the
+  // compositor, a glide under way ends where it stands, and the follower is bound to the driver
+  for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) side.container.addEventListener(type, () => {
+    take(side)
+    if (glass.kind === 'glide') bake()
+    arm()
+  }, { passive: true })
+  // the pointer tells which side the next scroll will move, so on the compositor the follower is bound ahead — but not
+  // while a scroll, its rest's wait or its glide is under way on the other side, which the pointer passing over would cut off
+  side.container.addEventListener('pointermove', e => {
+    pointerX = { side, x: e.clientX, y: e.clientY }
+    if (onCompositor() && driver !== side && !follow.moving && !follow.rest && glass.kind !== 'glide') { take(side); arm() }
+  }, { passive: true })
+  // the scroll's end — a trackpad's glide included — and 150 ms more without a scroll: the together modes level the two
+  side.container.addEventListener('scrollend', () => {
+    if (side !== driver || !together()) return
+    follow.moving = false
+    clearTimeout(follow.rest)
+    follow.rest = setTimeout(() => { follow.rest = 0; alignTop(side) }, 150)
+  }, { passive: true })
   side.container.addEventListener('mousemove', e => light(unitAt(side, e)))
   side.container.addEventListener('mouseleave', () => light(null))
   // A click, told apart from a drag that selects text, by the pointer's press and release: PDF.js moves its selection
@@ -987,6 +1176,7 @@ function scrollFor(side, place) {
 let rightTexts = null // the units' texts on the right as it was last anchored, for the test harness
 async function replaceRight(url, texts, { draft = false } = {}) {
   const t0 = performance.now()
+  bake()
   rightTexts = texts
   const place = placeOf(right)
   const offset = place && scrollFor(right, place) - right.container.scrollTop // 0 unless the reader is between lines
@@ -1014,6 +1204,7 @@ async function replaceRight(url, texts, { draft = false } = {}) {
   })
   await Promise.race([Promise.all(next.viewer._getVisiblePages().views.map(v => next.figs.get(v.id))), new Promise(r => setTimeout(r, 1500))])
   if (!draft) copies.clear()
+  bake()
   const old = right
   right = next; sides[1] = next
   if (driver === old) driver = next
@@ -1089,7 +1280,7 @@ async function live() {
   note('source', { units: units.length, files: files.size })
   await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
   note('anchored')
-  window.__reader.debug = { left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, units: units.map((u, i) => ({ i, kind: u.kind, text: src[i].text })), get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf }
+  window.__reader.debug = { left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, units: units.map((u, i) => ({ i, kind: u.kind, text: src[i].text })), get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf }
   window.__reader.ready = true
   // the compiler: our site's TeX page
   const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
@@ -1162,7 +1353,7 @@ async function demo() {
   Object.assign(window.__reader, { ready: true, units: units.length, linked: linked(), leftPages: left.doc.numPages, rightPages: right.doc.numPages })
   status(`${linked()} of ${units.length} paragraphs linked · text and anchors ${Math.round(timing.anchors)} ms`)
   // for the test harness
-  window.__reader.debug = { left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind } }
+  window.__reader.debug = { left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf }
 
   if (stages) {
     window.__reader.swaps = []
