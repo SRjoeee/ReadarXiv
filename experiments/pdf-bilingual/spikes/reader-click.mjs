@@ -3,24 +3,21 @@
 // line). Then the same after scrolling on, and for clicks on headings, figures and captions. Demo mode by default;
 // LIVE=1 runs the live mode on an arXiv id (the TeX Live server on :8070 must be running).
 //   node spikes/reader-click.mjs [id]
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createRequire } from 'node:module'
 import { serveSite } from './live-site.mjs'
-const { chromium } = createRequire(new URL('../../../', import.meta.url))('playwright')
+import { launchWithReader } from './extension.mjs'
 const root = new URL('..', import.meta.url).pathname
 const [paper = '2608.04322'] = process.argv.slice(2)
-const EXT = join(root, 'poc-reader')
-const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'reader-click-')), { channel: 'chromium', headless: true, viewport: { width: 1600, height: 1000 }, args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`] })
-const [worker] = context.serviceWorkers().length ? context.serviceWorkers() : [await context.waitForEvent('serviceworker')]
+// the demo papers only for a demo run: a live one needs none made (Codex on #296)
+const { context, readerUrl } = await launchWithReader({ profile: 'reader-click', demos: !process.env.LIVE })
 const page = await context.newPage()
 page.on('pageerror', e => console.error('pageerror', e.message))
 page.on('console', m => { if (m.text().startsWith('[who]')) console.log(m.text().slice(0, 600)) })
 let site = null
 const query = { paper }
 if (process.env.LIVE) { site = await serveSite(); Object.assign(query, { live: '1', site: `http://127.0.0.1:${site.address().port}`, endpoint: 'http://localhost:8070' }) }
-await page.goto(`chrome-extension://${new URL(worker.url()).host}/reader.html?${new URLSearchParams(query)}`)
+await page.goto(readerUrl(query))
 await page.waitForFunction(() => (window.__reader?.live ? window.__reader.live.done : window.__reader?.ready), null, { timeout: 900_000, polling: 500 })
 await page.waitForTimeout(1500)
 const sleep = ms => page.waitForTimeout(ms)

@@ -1,22 +1,18 @@
 // Which units the live reader links on both sides, by kind: the reader's live mode on one paper, fetched from arXiv,
 // until the final compile is shown; then every unit's kind and whether each side located it.
 //   node spikes/diag-anchors.mjs <arXiv id>
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createRequire } from 'node:module'
 import { serveSite } from './live-site.mjs'
-const { chromium } = createRequire(new URL('../../../', import.meta.url))('playwright')
+import { launchWithReader } from './extension.mjs'
 const root = new URL('..', import.meta.url).pathname
 const [paper = '2212.06817'] = process.argv.slice(2)
 const site = await serveSite()
 const siteOrigin = `http://127.0.0.1:${site.address().port}`
-const EXT = join(root, 'poc-reader')
-const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'diag-anchors-')), { channel: 'chromium', headless: true, viewport: { width: 1600, height: 1000 }, args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`] })
-const [worker] = context.serviceWorkers().length ? context.serviceWorkers() : [await context.waitForEvent('serviceworker')]
+const { context, readerUrl } = await launchWithReader({ profile: 'diag-anchors' })
 const page = await context.newPage()
 page.on('pageerror', e => console.error('pageerror', e.message))
-await page.goto(`chrome-extension://${new URL(worker.url()).host}/reader.html?${new URLSearchParams({ paper, live: '1', site: siteOrigin, endpoint: 'http://localhost:8070' })}`)
+await page.goto(readerUrl({ paper, live: '1', site: siteOrigin, endpoint: 'http://localhost:8070' }))
 await page.waitForFunction(() => window.__reader?.live?.done, null, { timeout: 900_000, polling: 1000 })
 const out = await page.evaluate(() => {
   const d = window.__reader.debug

@@ -2,6 +2,8 @@
 // form for a vector figure, an image for a bitmap — placed by the page's content stream), and which of the page's text
 // lies inside it. Whatever class or package set the paper, an included figure is one of those two, so this needs
 // nothing from the source. Pure: PDF.js's operator list and text items in, rectangles and labels out.
+import { decode, escape, fromAlpha, toAlpha, WIRE } from './mt.mjs'
+import { TAG_RE } from './lib/axt/wire.mjs'
 
 const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]]
 const apply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]]
@@ -74,12 +76,36 @@ export function figureLabels(items, regions) {
   return labels.map(l => ({ ...l, text: l.text.replace(/\s+/g, ' ').trim() }))
 }
 
-/** a block's lines as one text for the engine, a marker between lines (a literal @ goes as @@, as in the units) */
-export const blockWire = texts => texts.map(t => t.replace(/@/g, '@@')).join(' @a# ')
-/** the engine's answer → one text per line, or null when the markers did not come back one for one */
-export function splitBlock(text, n) {
-  const parts = text.split(/\s*@a#?\s*(?![a-z])/).map(t => t.replace(/@@/g, '@').trim())
-  return parts.length === n && parts.every(Boolean) ? parts : null
+/**
+ * A block's lines as one text for the engine, in the chain's wire format (mt.mjs WIRE), a placeholder numbered in order
+ * between lines: markers `@a#`, `@b#` … escaped as a unit's text is, tags `<x id="1"/>` …. Every id once, as the
+ * background's check wants before it caches a translation (Codex on #296). An engine that keeps no placeholder (runs)
+ * gets no block: null, and the lines go one by one
+ */
+export function blockWire(texts, format = 'markers') {
+  if (format === 'markers') return texts.map(escape).map((t, i) => (i ? `@${toAlpha(i)}# ${t}` : t)).join(' ')
+  if (format === 'tags') return texts.map(t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')).map((t, i) => (i ? `<x id="${i}"/> ${t}` : t)).join(' ')
+  return null
+}
+/** the engine's answer → one text per line, or null when the placeholders did not come back one for one, in order. A
+ *  marker whose closing # the engine dropped still counts where no letter follows it, as a unit's tolerant reading does;
+ *  a tag is read as the background reads it (src/core/protector/tokens.ts), and a pair's tag, which no block holds,
+ *  sends the block box by box */
+export function splitBlock(text, n, format = 'markers') {
+  // markers as mt.mjs's tolerant reading has them: the closing # preferred, ids no longer than the block's last
+  const L = toAlpha(Math.max(1, n - 1)).length
+  const re = format === 'markers' ? new RegExp(`@@|\\s*@([a-z]{1,${L}})#\\s*|\\s*@([a-z]{1,${L}})(?![a-z#])\\s*`, 'g') : new RegExp(`\\s*(?:${TAG_RE.source})\\s*`, 'g')
+  const idOf = format === 'markers' ? m => fromAlpha(m[1] ?? m[2]) : m => Number(m[1] ?? m[2] ?? m[3] ?? NaN)
+  const parts = []
+  let last = 0, m, want = 1
+  while ((m = re.exec(text))) {
+    if (m[0] === '@@') continue
+    if (idOf(m) !== want++) return null
+    parts.push(text.slice(last, m.index)); last = re.lastIndex
+  }
+  parts.push(text.slice(last))
+  const texts = parts.map(t => (format === 'markers' ? WIRE.markers.unrun(t) : decode(t)).trim())
+  return texts.length === n && texts.every(Boolean) ? texts : null
 }
 
 /**

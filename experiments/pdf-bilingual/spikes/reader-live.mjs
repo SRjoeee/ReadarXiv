@@ -1,17 +1,21 @@
 // The reader's live mode (#292) in Chromium, end to end: our "site" (the TeX page and BusyTeX) on one origin, the
 // paper's source (standing in for arXiv's /src/) on another, TeX Live's files from the local package server, the
-// translation from Microsoft's free endpoint. Twice in one profile: a first visit and a returning one (the compiler's
-// files then come from the browser's cache). Prints the timeline; screenshots at the first preview and the final.
+// translation through the extension's background (spikes/extension.mjs), by its default service unless LLM_MOCK. Twice
+// in one profile: a first visit and a returning one (the compiler's files and the translations then come from the
+// caches). Prints the timeline; screenshots at the first preview and the final.
 //   node spikes/reader-live.mjs id [start: 0–1, where the reader stands when the translation starts]
 //   ONLINE=1 node spikes/reader-live.mjs id   — the paper fetched from arXiv itself, as a reader's would be
-//   TARGET=ko node spikes/reader-live.mjs id  — into another language than the reader's default
+//   LLM_MOCK=1 node spikes/reader-live.mjs id — through an LLM service: an OpenAI-compatible endpoint on this machine
+//     that gives every segment back with a mark (as tests/e2e/local-endpoint.mjs's does), added on the settings page:
+//     the tags wire, the LLM provider and its structured output, end to end
+// The language is the build's setting, the default one.
 import { createServer } from 'node:http'
 import { serveSite } from './live-site.mjs'
-import { mkdtempSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createRequire } from 'node:module'
-const { chromium } = createRequire(new URL('../../../', import.meta.url))('playwright')
+import { copyWithGrants } from '../../../tests/e2e/ext-copy.mjs'
+import { addService, openOptions } from '../../../tests/e2e/options-page.mjs'
+import { BUILD, launchWithReader } from './extension.mjs'
 const root = new URL('..', import.meta.url).pathname
 const [paper = '2608.04322', start = '0'] = process.argv.slice(2)
 const serve = handler => new Promise(r => { const s = createServer(handler).listen(0, '127.0.0.1', () => r(s)) })
@@ -25,16 +29,42 @@ const src = await serve((req, res) => {
 })
 const siteOrigin = `http://127.0.0.1:${site.address().port}`, srcOrigin = `http://127.0.0.1:${src.address().port}`
 
-const EXT = join(root, 'poc-reader')
-const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'reader-live-')), { channel: 'chromium', headless: true, viewport: { width: 1600, height: 1000 }, args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`] })
-const [worker] = context.serviceWorkers().length ? context.serviceWorkers() : [await context.waitForEvent('serviceworker')]
-const extId = new URL(worker.url()).host
+// the LLM: segments come in as JSON in the user message (src/providers/prompt.ts) and go back with the mark before their
+// first letter, placeholders untouched: a mark before a leading placeholder puts text before a table's \toprule, as no
+// translation does, and breaks the table
+const MARK = 'LLMECHO '
+const marked = text => { let done = false; return text.split(/(<[^>]*>)/).map(part => (done || part.startsWith('<') || !/\p{L}/u.test(part) ? part : ((done = true), part.replace(/\p{L}/u, l => MARK + l)))).join('') }
+const llm = { requests: 0, segments: 0 }
+const echo = process.env.LLM_MOCK && await serve((req, res) => {
+  let body = ''
+  req.on('data', c => { body += c })
+  req.on('end', () => {
+    llm.requests++
+    const user = [...(JSON.parse(body || '{}').messages ?? [])].reverse().find(m => m.role === 'user')?.content ?? ''
+    const at = user.indexOf('[{"id":')
+    let segments = null
+    for (let end = user.lastIndexOf(']'); at >= 0 && end > at && !segments; end = user.lastIndexOf(']', end - 1)) { try { segments = JSON.parse(user.slice(at, end + 1)) } catch {} }
+    if (!Array.isArray(segments)) { res.writeHead(400).end(); return }
+    llm.segments += segments.length
+    const content = JSON.stringify({ segments: segments.map(s => ({ id: s.id, text: marked(s.text) })) })
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ id: 'echo', object: 'chat.completion', created: 0, model: 'echo', choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } }))
+  })
+})
+// the settings page asks for an endpoint's origin when it is saved, a prompt Playwright cannot answer: granted in a copy's manifest, as the e2e does
+const extension = echo ? join(root, 'data/ext-llm-echo') : BUILD
+if (echo) copyWithGrants(BUILD, extension, { hostPermissions: ['http://127.0.0.1/*'] })
+const { context, id, readerUrl } = await launchWithReader({ profile: 'reader-live', extension })
+if (echo) {
+  const options = await openOptions(context, id)
+  console.log('LLM service:', await addService(options, { name: 'echo', baseURL: `http://127.0.0.1:${echo.address().port}/v1`, model: 'echo' }))
+  await options.close()
+}
 
 for (const visit of ['first visit', 'returning visit']) {
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', e => { errors.push(e.message); console.error('pageerror', e.stack ?? e.message) }); page.on('console', m => { if (m.type() === 'error') { errors.push(m.text()); console.error('console', m.text().slice(0, 300)) } })
-  await page.goto(`chrome-extension://${extId}/reader.html?${new URLSearchParams({ paper, live: '1', site: siteOrigin, endpoint: 'http://localhost:8070', ...(process.env.TARGET ? { lang: process.env.TARGET } : {}), ...(process.env.ONLINE ? {} : { src: `${srcOrigin}/src/${paper}`, pdf: `${srcOrigin}/pdf/${paper}` }) })}`)
+  await page.goto(readerUrl({ paper, live: '1', site: siteOrigin, endpoint: 'http://localhost:8070', ...(process.env.ONLINE ? {} : { src: `${srcOrigin}/src/${paper}`, pdf: `${srcOrigin}/pdf/${paper}` }) }))
   await page.waitForFunction(() => window.__reader?.ready || window.__reader?.live?.done, null, { timeout: Number(process.env.WAIT ?? 120000) }).catch(async e => { console.error('not ready:', JSON.stringify(await page.evaluate(() => ({ status: document.getElementById('status')?.textContent, live: window.__reader?.live })))); throw e })
   if (await page.evaluate(() => window.__reader.live?.failed)) { console.log(`\n${paper} — ${visit}: ${await page.evaluate(() => window.__reader.live.failed)}`); await page.close(); break }
   // the reader already somewhere in the paper when the translation starts: it is translated from there outwards
@@ -84,4 +114,5 @@ for (const visit of ['first visit', 'returning visit']) {
   await page.close()
   context.t0 = undefined
 }
+if (echo) { console.log('LLM endpoint:', JSON.stringify(llm)); echo.close() }
 await context.close(); site.close(); src.close()

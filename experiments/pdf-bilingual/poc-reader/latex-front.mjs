@@ -123,6 +123,8 @@ class Builder {
     // trim placeholders and whitespace at both ends out of the unit: they stay in the source untouched
     const letters = u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
     if ((letters.match(/\p{L}/gu) ?? []).length < 2) return
+    // the paper's title, which goes with every batch to an LLM as the HTML page's does (DESIGN §8.2)
+    if (this.title) u.title = true
     this.units.push(u)
   }
 }
@@ -260,7 +262,9 @@ function walk(s, from, to, b, ctx) {
         // the footnote's text is a unit of its own, rendered inside its paragraph's unit so the two ranges never overlap
         endText()
         const parent = b.cur, before = b.units.length
-        b.cur = null; b.kind = 'footnote'; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.kind = saved
+        // …and never the title, even inside it: \title{A\thanks{Supported by B}} (Devin and Codex on #296)
+        const title = b.title
+        b.cur = null; b.kind = 'footnote'; b.title = false; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.kind = saved; b.title = title
         const made = b.units.length - before
         b.cur = parent
         if (parent && made === 1) { const inner = b.units[b.units.length - 1]; inner.nested = true; parent.pieces.push({ t: 'nested', pre: s.slice(i, inner.start), unit: inner, post: s.slice(inner.end, e) }); parent.end = e }
@@ -269,7 +273,7 @@ function walk(s, from, to, b, ctx) {
         i = e; continue
       }
       endText(); b.flush()
-      b.kind = CAPTIONS.has(name) ? 'caption' : 'heading'; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.kind = saved
+      b.kind = CAPTIONS.has(name) ? 'caption' : 'heading'; b.title = name === 'title'; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.kind = saved
       i = e; continue
     }
     // \multicolumn{n}{spec}{text}, \multirow{n}{width}{text}, \makecell{text}: only the last argument is prose
@@ -359,7 +363,7 @@ export function loadProject(root, main, { tables = false } = {}) {
       // the preamble: only the title is prose
       const pre = m ? f.text.slice(0, m.index) : ''
       const t = pre.match(/\\title\s*(\[[^\]]*\])?\s*\{/)
-      if (t) { const s0 = t.index + t[0].length - 1, e0 = matchGroup(f.text, s0); if (e0 > 0) { b.kind = 'heading'; walk(f.text, s0 + 1, e0 - 1, b, ctx); b.flush(); b.kind = undefined } }
+      if (t) { const s0 = t.index + t[0].length - 1, e0 = matchGroup(f.text, s0); if (e0 > 0) { b.kind = 'heading'; b.title = true; walk(f.text, s0 + 1, e0 - 1, b, ctx); b.flush(); b.title = false; b.kind = undefined } }
       from = m ? m.index + m[0].length : 0
       const e = f.text.match(/\\end\s*\{document\}/); to = e ? e.index : to
     }

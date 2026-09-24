@@ -2,20 +2,15 @@
 // The reader sits in the middle of the paper; per replacement: how long it took (load, anchors, drawing the pages in
 // view out of sight) and how far the paragraph at the reading line moved. A screenshot after each.
 //   node spikes/reader-progressive.mjs paper [every ms]
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createRequire } from 'node:module'
-const { chromium } = createRequire(new URL('../../../', import.meta.url))('playwright')
+import { launchWithReader } from './extension.mjs'
 const root = new URL('..', import.meta.url).pathname
 const [paper = '2608.00055', every = '3000'] = process.argv.slice(2)
-const EXT = join(root, 'poc-reader')
-const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'reader-')), { channel: 'chromium', headless: true, viewport: { width: 1600, height: 1000 }, args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`] })
-const [worker] = context.serviceWorkers().length ? context.serviceWorkers() : [await context.waitForEvent('serviceworker')]
+const { context, readerUrl } = await launchWithReader({ profile: 'reader', demos: true })
 const page = await context.newPage()
 const errors = []
 page.on('pageerror', e => { errors.push(e.message); console.error('pageerror', e.message) }); page.on('console', m => { if (m.type() === 'error' || m.text().startsWith('[swap]')) console.error(m.type(), m.text()) })
-await page.goto(`chrome-extension://${new URL(worker.url()).host}/reader.html?paper=${paper}&progressive=1&every=${every}`)
+await page.goto(readerUrl({ paper, progressive: '1', every }))
 await page.waitForFunction(() => window.__reader?.ready, null, { timeout: 120000 })
 // the reader in the middle of the paper, the pointer over the left page's text column
 await page.mouse.move(300, 500)
