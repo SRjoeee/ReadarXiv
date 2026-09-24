@@ -1,0 +1,106 @@
+/* The PDF reader's page (the reader's design, §4, §5, §11.5): its own tokens, not the extension's ui.css, with
+   Tailwind's theme and utilities and **without Preflight**, whose resets would reach inside PDF.js's viewers: their
+   layout assumes the browser's defaults (a box-sizing of ours once shifted the highlight, 2026-09-22). The chrome — every
+   control the page draws — takes its own small base under the class `chrome`; the viewers keep theirs */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* §4.1: one cool neutral ramp at hue 255 and one status hue; dark by the system, or chosen (data-theme) */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --n-0: oklch(1 0 0); --n-1: oklch(0.985 0.002 255); --n-2: oklch(0.962 0.004 255); --n-3: oklch(0.935 0.006 255);
+  --n-4: oklch(0.905 0.007 255); --n-5: oklch(0.86 0.008 255); --n-7: oklch(0.62 0.012 255); --n-8: oklch(0.505 0.014 255);
+  --n-10: oklch(0.235 0.012 255);
+  --danger: oklch(0.545 0.17 28);
+  --focus: oklch(0.55 0.15 255);
+  --page-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.05), 0 1px 2px oklch(0 0 0 / 0.04);
+  --float-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.08), 0 4px 16px oklch(0 0 0 / 0.08);
+  --pop-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.08), 0 12px 32px oklch(0 0 0 / 0.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --n-0: oklch(0.255 0.006 255); --n-1: oklch(0.215 0.006 255); --n-2: oklch(0.185 0.006 255); --n-3: oklch(0.275 0.007 255);
+    --n-4: oklch(0.31 0.008 255); --n-5: oklch(0.36 0.009 255); --n-7: oklch(0.56 0.01 255); --n-8: oklch(0.71 0.01 255);
+    --n-10: oklch(0.935 0.005 255);
+    --danger: oklch(0.69 0.15 28);
+    --focus: oklch(0.72 0.12 255);
+    --page-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.4), 0 4px 16px oklch(0 0 0 / 0.35);
+    --float-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.08), 0 6px 20px oklch(0 0 0 / 0.4);
+    --pop-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.1), 0 14px 36px oklch(0 0 0 / 0.5);
+  }
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --n-0: oklch(0.255 0.006 255); --n-1: oklch(0.215 0.006 255); --n-2: oklch(0.185 0.006 255); --n-3: oklch(0.275 0.007 255);
+  --n-4: oklch(0.31 0.008 255); --n-5: oklch(0.36 0.009 255); --n-7: oklch(0.56 0.01 255); --n-8: oklch(0.71 0.01 255);
+  --n-10: oklch(0.935 0.005 255);
+  --danger: oklch(0.69 0.15 28);
+  --focus: oklch(0.72 0.12 255);
+  --page-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.4), 0 4px 16px oklch(0 0 0 / 0.35);
+  --float-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.08), 0 6px 20px oklch(0 0 0 / 0.4);
+  --pop-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.1), 0 14px 36px oklch(0 0 0 / 0.5);
+}
+/* the roles (§4.1) */
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "PingFang SC", "Noto Sans SC", sans-serif;
+  --bar: 44px;
+  --side: 236px;
+  --canvas: var(--n-3); --chrome: var(--n-0); --chrome-line: var(--n-4); --ink: var(--n-10); --ink-2: var(--n-8); --ink-3: var(--n-7);
+  --fill: var(--n-3); --well: var(--n-3); --lift: var(--n-0);
+  --float-bg: color-mix(in oklab, var(--n-0) 90%, transparent);
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+@theme inline {
+  --color-canvas: var(--canvas); --color-chrome: var(--chrome); --color-line: var(--chrome-line);
+  --color-ink: var(--ink); --color-ink-2: var(--ink-2); --color-ink-3: var(--ink-3);
+  --color-fill: var(--fill); --color-well: var(--well); --color-lift: var(--lift); --color-float: var(--float-bg);
+  --color-danger: var(--danger); --color-focus: var(--focus);
+  --font-sans: var(--font);
+  --ease-reader: cubic-bezier(0.2, 0, 0, 1);
+  --shadow-float: var(--float-shadow); --shadow-pop: var(--pop-shadow);
+}
+
+@layer base {
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: var(--canvas); color: var(--ink); font: 13px/1.4 var(--font); -webkit-font-smoothing: antialiased; }
+  [hidden] { display: none !important; }
+  /* the chrome: border-box and bare controls; PDF.js's viewers keep the browser's defaults (the note at the top) */
+  .chrome, .chrome * { box-sizing: border-box; }
+  .chrome button, .chrome input { font: inherit; color: inherit; margin: 0; }
+  .chrome button { background: none; border: 0; padding: 0; cursor: pointer; }
+  .chrome button:disabled, .chrome [aria-disabled="true"] { cursor: default; }
+  .chrome :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  kbd { font: inherit; }
+}
+
+/* ----- §5: the toolbar fixed at the top, three zones; the document area under it, moved by the contents ----- */
+header[role="toolbar"] {
+  position: fixed; inset: 0 0 auto 0; z-index: 20; height: var(--bar);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px;
+  padding-inline: 8px; background: var(--chrome); box-shadow: 0 0.5px 0 var(--chrome-line); color: var(--ink);
+}
+.doc { position: fixed; inset: var(--bar) 0 0 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; transition: left 200ms var(--ease); }
+html[data-axt-contents] .doc { left: var(--side); }
+.pane { position: relative; min-width: 0; overflow: hidden; timeline-scope: --pane-y; }
+.pane .viewerContainer { scroll-timeline: --pane-y block; scrollbar-width: none; }
+/* one display alone, or side by side in a narrow window: the scroller spans the window, the page centred in it (§3) */
+html[data-axt-pdf-mode="original"] .doc, html[data-axt-pdf-mode="translation"] .doc, html[data-axt-narrow] .doc { grid-template-columns: minmax(0, 1fr); column-gap: 0; }
+html[data-axt-pdf-mode="original"] .pane[data-side="right"],
+html[data-axt-pdf-mode="translation"] .pane[data-side="left"],
+html[data-axt-pdf-mode="bilingual"][data-axt-narrow] .pane[data-side="left"] { display: none; }
+html[data-axt-pdf-mode="bilingual"][data-axt-swapped] .pane[data-side="left"] { order: 2; }
+@media (prefers-reduced-motion: reduce) { .doc { transition: none; } }
+
+/* ----- PDF.js's pages: a hairline and a soft shadow, 14 px apart (§4.1); PDF.js's own border and its margin, whose
+   foot is negative, give way (as in the harness the maintainer approved) ----- */
+.pdfViewer .page { border: 0 !important; margin-block: 14px !important; box-shadow: var(--page-shadow); }
+/* dark pages (§4.3): the canvas alone inverted, a page not drawn yet already its colour, so nothing flashes white; the
+   highlight and the figures keep their colours, the band screened over the dark page as it is multiplied over a white one */
+html[data-axt-dim] .pdfViewer .page { background-color: rgb(29 29 29) !important; }
+html[data-axt-dim] .pdfViewer .page canvas { filter: invert(88.8%) hue-rotate(180deg); }
+html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
+/* the appearance changes as one crossfade of the whole page (the View Transitions API) */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; animation-timing-function: var(--ease); }

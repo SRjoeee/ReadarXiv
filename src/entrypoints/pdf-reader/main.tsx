@@ -1,7 +1,7 @@
 import 'pdfjs-dist/web/pdf_viewer.css'
 import '@/styles/image.css'
 import '@/pdf-reader/engine/engine.css'
-import './page.css'
+import './reader.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createController, type Session } from '@/pdf-reader/controller'

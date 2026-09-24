@@ -64,6 +64,7 @@ await new Promise(resolve => { const off = surface.subscribe(() => { if (surface
 config = surface.state().config
 /** the display: the one the address names (a probe's page), else the one the settings ask for */
 let mode = MODES.includes(params.get('mode')) ? params.get('mode') : displayOf(config)
+let narrow = false // the window too narrow for two sides (setNarrow)
 function showMode() {
   document.documentElement.setAttribute('data-axt-pdf-mode', mode)
   host.emit({ type: 'display', mode })
@@ -951,11 +952,20 @@ function readingPlace(side) {
   const f = Math.min(1, Math.max(0, (y - l.top) / Math.max(1, l.bottom - l.top)))
   return { doc, id: l.id, at: (l.li + f) / l.n }
 }
+/** CSS px: the widest a page is fitted in a single display (the reader's design, §3), the width the old 1100 px column gave */
+const READING_WIDTH = 1060
+/** the scale that fits a side's pages to its pane, never beyond a reading width while one side alone is shown */
+function fitWidth(side) {
+  const view = side.viewer.getPageView(0)?.pdfPage?.view
+  if (!view || mode === 'bilingual' && !narrow) return 'page-width'
+  const cap = READING_WIDTH / ((view[2] - view[0]) * (96 / 72))
+  return side.container.clientWidth - 40 > READING_WIDTH ? cap : 'page-width'
+}
 /** the display changed from `from`: the sides shown laid out to its width, and the side it brought in put at `place` */
 function relayout(from, place = null) {
   bake()
   requestAnimationFrame(() => {
-    for (const s of sides) if (s.doc && shown(s)) { s.viewer.currentScaleValue = 'page-width'; s.viewer.update() }
+    for (const s of sides) if (s.doc && shown(s)) { s.viewer.currentScaleValue = fitWidth(s); s.viewer.update() }
     const came = from === 'original' ? right : from === 'translation' ? left : null
     requestAnimationFrame(() => {
       if (!came?.doc || !place) return
@@ -1200,7 +1210,7 @@ function attach(side) {
   // PDF.js re-renders a page's div on zoom and as pages come into view: the highlight and the figures are laid again there
   side.eventBus.on('pagerendered', ({ pageNumber }) => { if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start; paint(side); if (side !== left) side.figs.set(pageNumber, paintFigures(side, pageNumber).catch(e => console.warn('[figures]', e))) })
   // a side opened out of the display (the original, while the translation alone is shown) waits at 1 for its width (relayout)
-  side.eventBus.on('pagesinit', () => { const value = side.scale ?? 'page-width'; side.viewer.currentScaleValue = shown(side) || typeof value === 'number' ? value : 1 })
+  side.eventBus.on('pagesinit', () => { const value = side.scale ?? fitWidth(side); side.viewer.currentScaleValue = shown(side) || typeof value === 'number' ? value : 1 })
   side.eventBus.on('scalechanging', ({ scale }) => { invalidate(); if (shown(side) && (side === left || !shown(left))) host.emit({ type: 'scale', scale }) })
   side.eventBus.on('pagesinit', invalidate)
   // each side's page, for its pill; a viewer being laid out out of sight (replaceRight's) reports once it is the right
@@ -1218,8 +1228,8 @@ left.eventBus.on('updateviewarea', ({ location }) => { if (shown(left)) readAt =
 export function setFigures(on) { void save(c => ({ ...c, image: { ...c.image, enabled: on } })) } // figure text on or off, in the settings; followFigures shows it
 /** the sides shown scaled by a factor, within PDF.js's range */
 export function zoomBy(factor) { for (const s of sides) if (shown(s)) s.viewer.currentScale = Math.min(4, Math.max(0.25, s.viewer.currentScale * factor)) }
-/** the sides shown at a scale or a fit (page-width, page-fit, page-actual) */
-export function zoomTo(value) { for (const s of sides) if (shown(s)) s.viewer.currentScaleValue = String(value) }
+/** the sides shown at a scale or a fit (page-width, page-fit, page-actual); fitting the width keeps to a reading width */
+export function zoomTo(value) { for (const s of sides) if (shown(s)) s.viewer.currentScaleValue = value === 'page-width' ? fitWidth(s) : String(value) }
 /** a side at a page */
 export function goToPage(which, page) { const s = which === 'left' ? left : right; if (s.doc) s.viewer.currentPageNumber = page }
 
