@@ -42,7 +42,9 @@ cases.push(['the units a record keeps: kept names, a result, a seed kept with th
 }])
 cases.push(['when a run writes: a settled final in full, provenance alone, or nothing', () => {
   const units = [{ hash: 'h', state: 'whole', by: 'B', tried: 'B' }]
-  assert.equal(decideWrite({ result: { settled: true, changed: true }, cached: null, units }), 'full')
+  assert.equal(decideWrite({ result: { settled: true, changed: true }, cached: null, units, shown: true }), 'full')
+  // a final that settled but could not be put on screen: its right side's marks would be the old document's (Devin on #298)
+  assert.equal(decideWrite({ result: { settled: true, changed: true }, cached: null, units, shown: false }), null)
   assert.equal(decideWrite({ result: { settled: false, changed: true }, cached: null, units }), null)
   assert.equal(decideWrite({ result: { settled: false, changed: false }, cached: { units: [{ hash: 'h', state: 'whole', by: 'B', tried: 'A' }] }, units }), 'provenance')
   assert.equal(decideWrite({ result: { settled: false, changed: false }, cached: { units }, units }), null)

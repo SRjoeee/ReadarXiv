@@ -1426,7 +1426,8 @@ async function live() {
   // one replacement at a time, in the order the compiles came in
   let swaps = Promise.resolve()
   // a language with no typesetting yet (scripts.mjs) fails at once, before anything is sent
-  let finalPdf = null, leftMarks = null
+  // the final's bytes once compiled, and whether it is on screen: the right side's marks are read from what is shown
+  let finalPdf = null, finalShown = false, leftMarks = null
   again = !!cached
   const result = await runLive(paperData, {
     lang, compile, note,
@@ -1442,7 +1443,7 @@ async function live() {
       const d = top - (c.scrollTop + c.clientHeight * readingLine)
       return d >= -c.clientHeight * 0.3 ? Math.abs(d) : 2 * Math.abs(d)
     },
-    onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!leftCurrent) { adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
+    onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!leftCurrent) { adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); if (final) finalShown = true; note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
     onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorSide(left, src, marks); invalidate(); paint(left); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
   }).catch(e => ({ error: e.message ?? String(e) }))
   if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`)
@@ -1451,7 +1452,7 @@ async function live() {
   // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
   if (cacheKey) {
     const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, context, units: unitsOf(units, paperData.kept, hashes, result.results), marks: leftMarks ?? (sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
-    const how = decideWrite({ result, cached, units: record.units, marks: record.marks })
+    const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: finalShown })
     const pdf = how === 'full' ? finalPdf : how === 'provenance' ? cached.pdf : null
     // the right side's marks, as its PDF names them: the final's once it is on screen, else the copy's own
     record.rightMarks = how === 'full' ? [...(right.marks ?? [])] : (cached?.rightMarks ?? [])

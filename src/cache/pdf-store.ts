@@ -63,6 +63,9 @@ export interface PdfStore {
   usage(): Promise<{ count: number; bytes: number }>
 }
 
+/** Whether two IVs are the same bytes: a fresh one is drawn for every write, so it tells one version of a record from the next */
+const sameBytes = (a: Uint8Array, b: Uint8Array) => a.byteLength === b.byteLength && a.every((x, i) => x === b[i])
+
 /** A record's size as stored: the ciphertext, and its body's text as UTF-8 */
 const sizeOf = (dataBytes: number, body: PdfRecordBody) => dataBytes + new TextEncoder().encode(JSON.stringify(body)).byteLength
 
@@ -122,9 +125,15 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
           const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: pdf.iv }, key, pdf.data)
           return { ...row.body, pdf: new Uint8Array(plain), createdAt: entry.createdAt, openedAt: entry.openedAt }
         } catch (e) {
-          // A record that does not decrypt (a torn write, its key gone with the site's data) is no copy
+          // A record that does not decrypt (a torn write, its key gone with the site's data) is no copy. Deleted only if
+          // it is still the one read: another tab may have replaced it while this one decrypted (Devin on #298)
           warn(`[axt-pdf] a record did not decrypt and was deleted: ${(e as Error).message}`)
-          await remove(digest, lang).catch(() => undefined)
+          await db
+            .transaction('rw', db.entries, db.bodies, db.pdfs, async () => {
+              const current = await db.pdfs.get([digest, lang])
+              if (current && sameBytes(current.iv, pdf.iv)) await remove(digest, lang)
+            })
+            .catch(() => undefined)
           return undefined
         }
       } catch (e) {
@@ -160,14 +169,18 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
 
     async patchFigures(digest, lang, figures) {
       try {
-        await db.transaction('rw', db.entries, db.bodies, async () => {
+        // the pdfs table in scope for the eviction alone: the patch reads and writes no PDF
+        await db.transaction('rw', db.entries, db.bodies, db.pdfs, async () => {
           const row = await db.bodies.get([digest, lang])
           const entry = await db.entries.get([digest, lang])
           if (!row || !entry) return
           const body = { ...row.body, figures: mergeFigures(row.body.figures, figures) }
           await db.bodies.put({ ...row, body })
           // the size less the old body, plus the new: the ciphertext's is unchanged
-          await db.entries.put({ ...entry, bytes: entry.bytes - sizeOf(0, row.body) + sizeOf(0, body) })
+          const bytes = entry.bytes - sizeOf(0, row.body) + sizeOf(0, body)
+          await db.entries.put({ ...entry, bytes })
+          // grown past the cap, the least recently opened go, as after a write (Devin on #298)
+          if (bytes > entry.bytes) await evict([digest, lang])
         })
       } catch (e) {
         warn(`[axt-pdf] figures not saved: ${(e as Error).message}`)

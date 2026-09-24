@@ -932,7 +932,7 @@ There is one record per paper version and target language.
    - Its previews are drafts, as a first translation's are: images are frames, with the original's figure drawn over each. The final has its figures.
    - The status line says the translation is being made again, with which service. With only the pipeline changed, the translations come from the extension's cache, and the run is its compiles alone.
 4. **A miss** runs the live flow as today.
-5. **Writing.** A run that ends with a final that settled is written for its key.
+5. **Writing.** A run that ends with a final that settled and is on screen is written for its key. The right side's marks are read from the document shown, and a swap that failed leaves the old one there (Devin on #298).
    - **The write is conditional, in one transaction: a record replaces the stored one only if it is at least as good.** Records are compared, in this order:
      1. is the pipeline the current one;
      2. how many units to translate are current, by the definition in 2 above (the `kept` ones are not counted);
@@ -945,7 +945,7 @@ There is one record per paper version and target language.
    - A record whose marked original failed is written without marks; the left side is then anchored by its text alone, as it was before marks.
    - A final that does not settle is not written.
    - A run ended before its final writes nothing; its translations are in the extension's cache anyway.
-6. **Failures.** Any failure of the store is a miss, as in the translation cache (`src/cache/store.ts`). A record that does not decrypt is deleted, and so is one the reader cannot show. A key that cannot be read is a miss, and deletes nothing: the record may be good, and it costs a whole run to make again (final review).
+6. **Failures.** Any failure of the store is a miss, as in the translation cache (`src/cache/store.ts`). A record that does not decrypt is deleted, unless another tab has replaced it in the meantime (the IV, fresh for each write, tells; Devin on #298), and so is one the reader cannot show. A key that cannot be read is a miss, and deletes nothing: the record may be good, and it costs a whole run to make again (final review).
 7. **The Original display.** Opened in the Original display, the reader waits as today until a translation is asked for, then looks the paper up.
 
 ### The store: `src/cache/pdf-store.ts`
@@ -959,7 +959,7 @@ There is one record per paper version and target language.
 - **Interface.** `createPdfStore({ db?, maxBytes = 500 MB })` gives:
   - `get(digest, lang)`: decrypted, or undefined;
   - `put(record, { identity, pipeline })`: encrypted and written if it is at least as good as the stored record, by the order above, keeping the stored figures' entries the record lacks; then the least recently opened records evicted until the total is under the cap, in the same transaction: two tabs writing at once, each evicting apart and protecting its own record, removed each other's (Devin on #298). A record's bytes are the ciphertext and its body's text as UTF-8;
-  - `patchFigures(digest, lang, figures)`: the entries merged into the stored ones by key, the new winning, and the bytes updated; the PDF is not read or written;
+  - `patchFigures(digest, lang, figures)`: the entries merged into the stored ones by key, the new winning, and the bytes updated; the PDF is not read or written. A record grown past the cap evicts the least recently opened, as a write does (Devin on #298);
   - `touch(digest, lang)`: sets `openedAt` on a hit;
   - `delete(digest, lang)`: a copy the reader could not show;
   - `clear()`;
@@ -1042,11 +1042,16 @@ There is one record per paper version and target language.
   6. A copy with no left-side marks was taken to have them, so later visits never compiled them (`spikes/cache-cases.mjs`).
   7. The digest ran before the left side's first page, and in the Original display too (`spikes/cache-faults.mjs`).
   8. A copy that could not be shown held the paper forever; and a run that compiled nothing ended saying the original was shown (the same).
-- **Devin's review of #298** found four more, each fixed with a test that failed first:
+- **Devin's review of #298**, in two rounds, found eight more. Seven were fixed, each with a test that failed first:
   1. With the chosen service unavailable, the status's identity took the first fallback whose probe said yes, though the chain had set it aside; a copy the next fallback made looked stale (`tests/providers/transport.test.ts`).
   2. Two tabs writing at once beyond the cap each evicted the other's record, and neither stayed (`tests/cache/pdf-store.test.ts`).
   3. A run that compiled nothing skipped the marked original, so a copy without marks became current without them (`spikes/cache-cases.mjs`).
   4. Repeated paragraphs share a hash, and the provenance check kept one of them: a change to another went unwritten, and the copy was translated again on every visit. The seed of repeated paragraphs now prefers a whole translation (the same).
+  5. A record that did not decrypt was deleted by key, so a good copy another tab wrote meanwhile went with it (`tests/cache/pdf-store.test.ts`).
+  6. A final that settled but failed to swap in was written with the right side's marks of the document still shown (`spikes/cache-cases.mjs`).
+  7. A figures patch could grow the cache past its cap until the next write (`tests/cache/pdf-store.test.ts`).
+
+  One was declined: figures translated again while a copy is shown use the context the copy restored, not the one parsed afterwards. The two are the same paper's title and abstract, and differ only after a pipeline change to their extraction; figure entries are translated again only if the service has changed as well.
 - **Also found, not part of this feature:**
   - On this branch `engine.mjs` cannot load in Node. `lib/axt/extension.mjs` exports the settings, whose WXT storage runs when the module loads; this has been so since #296 merged in. The case files make their errors in `EngineError`'s shape instead.
   - On 2608.18090, a run from scratch through the LLM echo mock failed its final in two tabs at once, with "a letter it could not set". Two tabs on the default service both settle. The mock is the suspect (it marks each segment's first letter); not looked into.

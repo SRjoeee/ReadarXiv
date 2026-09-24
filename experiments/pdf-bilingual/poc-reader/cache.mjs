@@ -54,11 +54,12 @@ export const knownMarks = (cached, samePipeline) => (samePipeline && cached?.mar
 
 /**
  * What a run writes (REPORT, eighteenth addendum, "Writing"): the whole record when it ended with a final that
- * settled; with nothing typeset changed, the units' provenance alone, if it changed, or the left side's marks, if the
+ * settled and is on screen (`shown`), since the right side's marks are read from the document shown (Devin on #298);
+ * with nothing typeset changed, the units' provenance alone, if it changed, or the left side's marks, if the
  * copy had none and this run compiled them; else nothing — a run ended before its final among them
  */
-export function decideWrite({ result, cached, units, marks }) {
-  if (result.changed) return result.settled ? 'full' : null
+export function decideWrite({ result, cached, units, marks, shown }) {
+  if (result.changed) return result.settled && shown ? 'full' : null
   if (!cached) return null
   // the units compared as a whole, not by hash: repeated paragraphs share one (Devin on #298)
   const tally = us => us.map(u => `${u.hash}|${u.state}|${u.by}|${u.tried}`).sort().join('\n')

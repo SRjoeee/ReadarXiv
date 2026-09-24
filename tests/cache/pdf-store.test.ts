@@ -1,5 +1,5 @@
 import { IDBKeyRange, indexedDB } from 'fake-indexeddb'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createPdfDb, createPdfStore } from '@/cache/pdf-store'
 import type { PdfRecordBody } from '@/cache/pdf-record'
 
@@ -74,6 +74,33 @@ describe('createPdfStore', () => {
     const [a, b] = [createPdfStore({ db, maxBytes: 1500, clock }), createPdfStore({ db, maxBytes: 1500, clock })]
     expect(await Promise.all([a.put({ ...body('a'), pdf: pdfOf(1000) }, now), b.put({ ...body('b'), pdf: pdfOf(1000) }, now)])).toEqual([true, true])
     expect((await a.usage()).count).toBe(1)
+  })
+
+  it('a record that does not decrypt is deleted only if no other tab has replaced it meanwhile (Devin on #298)', async () => {
+    const db = dbOf()
+    const reader = createPdfStore({ db, warn: () => {} }), writer = createPdfStore({ db })
+    await writer.put({ ...body('d'), pdf: pdfOf(100, 1) }, now)
+    // the decryption fails, and before it does another tab writes a good copy of the same paper
+    const spy = vi.spyOn(crypto.subtle, 'decrypt').mockImplementationOnce(async () => {
+      await writer.put({ ...body('d'), pdf: pdfOf(100, 2) }, now)
+      throw new Error('tag mismatch')
+    })
+    expect(await reader.get('d', 'zh-CN')).toBeUndefined()
+    spy.mockRestore()
+    expect((await writer.get('d', 'zh-CN'))?.pdf).toEqual(pdfOf(100, 2))
+  })
+
+  it('a figures patch beyond the cap evicts as a write does, keeping the record patched (Devin on #298)', async () => {
+    const db = dbOf()
+    let t = 0
+    const clock = () => ++t
+    const open = createPdfStore({ db, clock })
+    await open.put({ ...body('a'), pdf: pdfOf(1000) }, now)
+    await open.put({ ...body('b'), pdf: pdfOf(1000) }, now)
+    const capped = createPdfStore({ db, maxBytes: (await open.usage()).bytes + 50, clock })
+    await capped.patchFigures('b', 'zh-CN', [{ key: '["w"]', texts: ['x'.repeat(200)], by: 'B' }])
+    expect(await capped.get('a', 'zh-CN')).toBeUndefined()
+    expect((await capped.get('b', 'zh-CN'))?.figures).toHaveLength(1)
   })
 
   it('a record that does not decrypt is a miss, and is deleted', async () => {
