@@ -5960,3 +5960,1174 @@ with the equivalence snippet of Task 6).
   appended here, and reviewed with the maintainer before it is executed. It includes the in-place 重试 that replaces
   Task 23's reload.
 - [ ] **Step 3:** Commit both.
+
+---
+
+# Part 4: the engine's measured changes
+
+Written against the code as Part 3 left it (`6fccf8cb`). Its tasks continue the numbering. The spec's sections it
+builds: §10.1–§10.4 (§10.4's heading level was Part 3's), and §8's recovery: "when the network comes back the
+translation goes on by itself; 重试 asks only for the paragraphs that are missing, the rest come from the cache".
+
+**What changes from the overview, and why**
+
+1. **A replaced viewer is torn down, not only aborted.** Reading PDF.js 6.3.289 for §10.4 found two things the spec did
+   not know:
+   - Its text layers register in one static map for the whole page (`TextLayerBuilder.#textLayers`) and leave it only
+     when their page view cancels them. A viewer taken off the page with its document destroyed never does, so each
+     replaced right side may keep its drawn text layers alive: a viewer per compile of a run.
+   - The document-level selection listener that every text layer shares is bound to the abort signal of whichever
+     viewer's text layer registered first (`#enableGlobalSelectionListener`). Aborting that viewer's signal would take
+     text selection away from the viewers still on screen, and the listener is not enabled again while any text layer
+     remains.
+
+   Task 28 measures both before changing anything. The planned remedy is the viewer's own teardown,
+   `viewer.setDocument(null)` and `linkService.setDocument(null)`, which cancels its pages and their text layers. An
+   abort signal is added only if the measurement finds a listener that teardown leaves. §10.4 is rewritten to the
+   result.
+2. **The overlays' repaint after a redraw goes.** With the overlays scaled by transform and put back when PDF.js removes
+   them, a page drawn again at a new scale still shows the same overlays in the right place. So `pagerendered` no longer
+   repaints a page's figures once they are laid. The exception is a draft preview's copies of the left's figures: they
+   are bitmaps drawn for the scale they were laid at. This is §10.2's "nothing is recomputed unless their content
+   changes".
+3. **Stopping early covers the figures too.** The figures' text goes through the same service. Once a run has stopped
+   for the service, no figure's text is sent until the translation is retried.
+4. **The notice counts the paragraphs left in the source language.** Say a paragraph a stored copy had translated is
+   tried again, and the service fails it: it keeps its old translation on screen, so it is not one of the {n}. The
+   paragraphs not sent because the run stopped are counted.
+5. **Retry in place** replaces Part 3's reload (Task 23). The translation runs again from the step that failed, keeping
+   what the visit already has:
+   - the service's answer is asked again, since a key may be set by then;
+   - the paper's source and the compiler are kept;
+   - what the last run made seeds the next.
+
+   Every paragraph is sent again, and the background's cache answers the ones done, so only the missing reach the
+   service. A page whose paper never opened, or whose session crashed, has nothing on screen to keep: it is loaded again.
+6. **Recovery by itself** (§8):
+   - A run the network stopped runs again when the browser says it is back online (`online`).
+   - A run stopped for any reason runs again when the services change, on the settings page or in the reader's own
+     service menu. Most often that change is the key the card sent the reader to set.
+7. **A service chosen while a run is under way** is measured first (Task 32, Step 1). The run keeps the wire format of
+   the service it opened with, while the chain the background rebuilt may be another service's. If what comes back
+   cannot be read, the language's rule from Part 2 (a reload) extends to the services, in the same task.
+8. **The pinch probe is committed** as `spikes/pinch-overlays.mjs`. It drives the reader's own pinch (Ctrl with the
+   wheel over the pages, as a trackpad sends it) and needs no harness.
+9. **A compile that did not answer keeps its strategy** (Task 33, found by Part 3's checks). BusyTeX gives up after
+   180 s, and the TeX page reports that as a failed compile (`Error: Compilation timeout`). `runLive` then took the
+   failure for the strategy's and moved to the next. On a loaded machine (the load at 20–86, the disk full) a preview
+   of 2608.02163 timed out, the run moved to the CJK package strategy, and aaai's class refused that package
+   (`Package CJK is forbidden`): the final failed where the same build had set the paper an hour before. A timeout
+   says the machine was slow, not that the strategy is wrong.
+
+**File structure after this part**
+
+| Path | Responsibility |
+|---|---|
+| `src/pdf-reader/engine/overlay.mjs` + `overlay.d.mts` | An overlay's box pinned to its page's scale (`pinned`); the overlays PDF.js removes, put back (`keepOverlays`) |
+| `src/pdf-reader/engine/session.mjs` | Both used; a replaced viewer torn down; the figures' latch; the translation run again in place (`retry`, the network's return, the services) |
+| `src/pdf-reader/engine/live.mjs` | `runLive` stops at the service's first failure, and says what is missing; a compile that did not answer keeps its strategy |
+| `src/pdf-reader/settings.ts` | `followOf` also answers whether a stopped translation runs again |
+| `tests/pdf-reader/overlay.test.ts`, `tests/pdf-reader/pdfjs-pin.test.ts` | The overlays' two functions; the PDF.js version the internals were checked on |
+| `experiments/pdf-bilingual/spikes/pinch-overlays.mjs` | The pinch probe (§10.1, §10.2) |
+| `experiments/pdf-bilingual/spikes/service-faults.mjs` | A service that fails, then comes back, in a real browser (§10.3, §8) |
+
+## Part 4 Review Focus
+
+- **A page PDF.js drops from its buffer and draws again when scrolled back**, not zoomed. Its overlays are kept: not
+  repainted, not doubled. Pinned in Task 30: the unit test (a reset that removes them), and the probe (scroll far and
+  back, then one set of overlays per page).
+- **A draft preview's figure copies after a zoom** are drawn again at the new scale, not left as a stretched bitmap.
+  Pinned in Task 30: the `pagerendered` rule, and its unit test on a side with frames.
+- **Retry pressed twice**, or pressed after the network's return has already started a run: one run. Pinned in Task 32's
+  probe, by counting the `translating` notes.
+- **Retry while the service is still down**: the run stops again at its first batch. The same card comes back, with no
+  second compiler frame and no compile. Pinned in Task 32's probe.
+- **The notice's count after a retry that brings back some paragraphs** is the paragraphs still missing, not the sum
+  over both runs. Pinned in Task 31 (`missing`, from the run's results) and Task 32's probe.
+
+---
+
+### Task 27: PDF.js's internals, pinned
+
+The engine reads PDF.js internals, and an upgrade that changes one must fail at once (§10.4):
+
+- `viewer._pages` and `viewer._getVisiblePages()`;
+- a page view's `renderingState`, `pdfPage.view`, `div`, `id` and `viewport`;
+- the `--total-scale-factor` custom property, which Task 29's transform reads.
+
+PDF.js's modern build does not run in Node: it calls `Map.prototype.getOrInsertComputed`, which Node 22 lacks (tried:
+constructing a `PDFViewer` under happy-dom throws on it). So the internals are checked in the browser, and a unit test
+is the tripwire on the version they were checked at.
+
+**Files:**
+- Create: `tests/pdf-reader/pdfjs-pin.test.ts`
+- Modify: `experiments/pdf-bilingual/spikes/reader-ui.mjs` (a section after Task 13's)
+
+**Interfaces:**
+- Consumes: `window.__reader.debug.left` (`makeSide`'s `{ viewer }`), as the other checks do.
+- Produces: nothing later tasks call.
+
+- [ ] **Step 1: The tripwire**
+
+```ts
+// The PDF.js internals the engine reads (session.mjs) are checked in a real browser, by
+// experiments/pdf-bilingual/spikes/reader-ui.mjs ("the PDF.js internals the engine reads"): PDF.js's modern build does
+// not run in Node. This test fails on any other version of pdfjs-dist until that check has passed on it and CHECKED
+// names it (the reader's design, §10.4)
+import { readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+
+const CHECKED = '6.3.289'
+const read = (path: string) => JSON.parse(readFileSync(path, 'utf8'))
+
+describe('pdfjs-dist', () => {
+  it('is the version whose internals the browser check read', () => {
+    const pkg = read('package.json')
+    expect(pkg.dependencies?.['pdfjs-dist'] ?? pkg.devDependencies?.['pdfjs-dist']).toBe(CHECKED)
+    expect(read('node_modules/pdfjs-dist/package.json').version).toBe(CHECKED)
+  })
+})
+```
+
+- [ ] **Step 2: Watch it fail, then pass** — with `CHECKED = '6.3.290'`:
+  `pnpm vitest run tests/pdf-reader/pdfjs-pin.test.ts`. Expected: FAIL, expected '6.3.289' to be '6.3.290'. Put back
+  `'6.3.289'`. Expected: PASS.
+
+- [ ] **Step 3: The browser check** — in `reader-ui.mjs`, a block after Task 13's:
+
+```js
+// ---------------------------------------------------------------- Task 27: the PDF.js internals the engine reads
+// session.mjs reads these; an upgrade of pdfjs-dist that changes them fails here (tests/pdf-reader/pdfjs-pin.test.ts)
+{
+  const page = await open({ mode: 'bilingual' })
+  const internals = await page.evaluate(() => {
+    const v = window.__reader.debug.left.viewer, pv = v.getPageView(0), visible = v._getVisiblePages()
+    return {
+      pages: Array.isArray(v._pages) && v._pages.length === v.pagesCount && v._pages[0] === pv,
+      visible: Array.isArray(visible?.views) && visible.views.length > 0 && visible.views.every(x => x.view && typeof x.id === 'number'),
+      drawn: visible.views.some(x => x.view.renderingState === 3),
+      page: Array.isArray(pv.pdfPage?.view) && pv.pdfPage.view.length === 4 && pv.div instanceof HTMLElement && pv.id === 1,
+      viewport: typeof pv.viewport?.convertToPdfPoint === 'function' && pv.viewport.scale > 0,
+      scale: getComputedStyle(pv.div).getPropertyValue('--total-scale-factor').trim() !== '',
+    }
+  })
+  check('the PDF.js internals the engine reads are there', Object.values(internals).every(Boolean), JSON.stringify(internals))
+  await page.close()
+}
+```
+
+- [ ] **Step 4: Watch it fail, then pass** — `pnpm build >/dev/null && node experiments/pdf-bilingual/spikes/reader-ui.mjs`.
+  Expected: `all passed`, the new line `ok`. It pins what exists, so misspell one name in the evaluate once (`v._pagez`).
+  Expected: that line FAILs with `"pages":false`. Restore it.
+
+- [ ] **Step 5: Commit**
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test >/dev/null && git add tests/pdf-reader/pdfjs-pin.test.ts experiments/pdf-bilingual/spikes/reader-ui.mjs && git commit -m "test(pdf-reader): pin the PDF.js internals the engine reads"
+```
+
+### Task 28: a replaced viewer lets go of its pages
+
+**Files:**
+- Modify: `src/pdf-reader/engine/session.mjs` (`replaceRight`; the harness's `swapRight`)
+- Modify: `experiments/pdf-bilingual/spikes/reader-ui.mjs` (a section after Task 27's)
+- Modify: `experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md` §10.4
+
+**Interfaces:**
+- Consumes: `replaceRight(url, texts)` (session.mjs), `rightTexts`.
+- Produces: `window.__reader.debug.swapRight(): Promise<{ ms: number; drift: number | null }>`. It swaps the right side
+  for a copy of the document it shows; Task 30's probe uses it too.
+
+- [ ] **Step 1: The harness's swap** — in `harness()` (session.mjs), after `identityNow`:
+
+```js
+  // the right side replaced by a copy of what it shows, as a new compile replaces it (replaceRight)
+  swapRight: async () => {
+    const url = URL.createObjectURL(new Blob([await right.doc.getData()], { type: 'application/pdf' }))
+    try { return await replaceRight(url, rightTexts ?? []) } finally { URL.revokeObjectURL(url) }
+  },
+```
+
+- [ ] **Step 2: The measurement, as a check** — in `reader-ui.mjs`, after Task 27's block:
+
+```js
+// ---------------------------------------------------------------- Task 28: a replaced viewer lets go of its pages
+// three swaps of the right side, then the text layers still alive off the page (the heap, by CDP) and the page's
+// selection listener, which PDF.js shares between all its text layers (the reader's design, §10.4)
+{
+  const page = await open({ mode: 'bilingual' })
+  const cdp = await context.newCDPSession(page)
+  const offPage = async () => {
+    await cdp.send('HeapProfiler.collectGarbage')
+    const { result: proto } = await cdp.send('Runtime.evaluate', { expression: 'HTMLDivElement.prototype' })
+    const { objects } = await cdp.send('Runtime.queryObjects', { prototypeObjectId: proto.objectId })
+    const { result } = await cdp.send('Runtime.callFunctionOn', { objectId: objects.objectId, returnByValue: true, functionDeclaration: 'function () { return this.filter(d => !d.isConnected && d.classList.contains("textLayer")).length }' })
+    return result.value
+  }
+  const selection = async () => {
+    const { result } = await cdp.send('Runtime.evaluate', { expression: 'document' })
+    return (await cdp.send('DOMDebugger.getEventListeners', { objectId: result.objectId })).listeners.filter(l => l.type === 'selectionchange').length
+  }
+  const before = { layers: await offPage(), selection: await selection() }
+  for (let i = 0; i < 3; i++) await page.evaluate(() => window.__reader.debug.swapRight())
+  await page.waitForTimeout(500)
+  const after = { layers: await offPage(), selection: await selection() }
+  check('a replaced viewer lets go of its text layers', after.layers <= before.layers, JSON.stringify({ before, after }))
+  check('text selection keeps its listener after a swap', after.selection >= 1, JSON.stringify({ before, after }))
+  await page.close()
+}
+```
+
+- [ ] **Step 3: Run it on the code as it is** —
+  `pnpm build >/dev/null && node experiments/pdf-bilingual/spikes/reader-ui.mjs 2>&1 | grep -E "replaced viewer|selection keeps|passed|failed"`.
+  Expected: `FAIL a replaced viewer lets go of its text layers`, `after.layers` more than `before.layers` (the text
+  layers drawn in the three replaced viewers). Selection `ok`.
+
+  If it passes, the hypothesis is wrong. Then ledger a ruling with the numbers, skip Step 4's change and keep the check,
+  and write §10.4 in Step 6 from what was measured.
+
+- [ ] **Step 4: The teardown** — in `replaceRight`, after `old.container.remove()`:
+
+```js
+  // the old viewer lets go of its pages (the reader's design, §10.4): its document set to none cancels every page view
+  // and their text layers, which PDF.js otherwise keeps in the one map all its text layers share — a viewer per compile
+  old.viewer.setDocument(null)
+  old.linkService.setDocument(null)
+```
+
+- [ ] **Step 5: Run it again** — the command of Step 3. Expected: both lines `ok`, `all passed`. If a listener outside
+  the text layers is still found, check the old viewer's `watchScroll` and `ResizeObserver` with `DOMDebugger` on its
+  container. Only then pass `abortSignal` to `makeSide`'s `PDFViewer`, aborted after the teardown, and ledger a ruling
+  with the finding.
+
+- [ ] **Step 6: §10.4, rewritten** — the line on `abortSignal` becomes, with Step 3's and Step 5's numbers:
+
+```markdown
+- A replaced viewer lets go of its pages: `setDocument(null)` on it and on its link service cancels its page views and
+  their text layers. PDF.js otherwise keeps every text layer in one map that all its viewers share, until the layer is
+  cancelled (measured: <N> text layers off the page after three swaps before, <M> after). PDF.js's `abortSignal` is not
+  used: the document-level selection listener that all text layers share is bound to the signal of whichever viewer's
+  text layer came first, so aborting that viewer would take text selection from the viewers still on screen.
+```
+
+- [ ] **Step 7: Commit**
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test >/dev/null && git add src/pdf-reader/engine/session.mjs experiments/pdf-bilingual/spikes/reader-ui.mjs experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md && git commit -m "fix(pdf-reader): a replaced viewer lets go of its pages"
+```
+
+### Task 29: the overlays follow a pinch (§10.1)
+
+**Files:**
+- Create: `src/pdf-reader/engine/overlay.mjs`, `src/pdf-reader/engine/overlay.d.mts`
+- Create: `tests/pdf-reader/overlay.test.ts`
+- Create: `experiments/pdf-bilingual/spikes/pinch-overlays.mjs`
+- Modify: `src/pdf-reader/engine/session.mjs` (`paint`, `paintFigures`)
+
+**Interfaces:**
+- Produces:
+  `pinned(box: { left: number; top: number; width: number; height: number }, s0: number): { left: string; top: string; width: string; height: string; transformOrigin: string; scale: string }`,
+  a style for `Object.assign(el.style, …)`.
+- Produces: `spikes/pinch-overlays.mjs`, run as `node experiments/pdf-bilingual/spikes/pinch-overlays.mjs [runs]`, with
+  `AXT_BUILD=<dir>` naming another build. It prints one JSON line per run and a summary table, and exits non-zero when
+  an overlay drifts more than 1 px.
+
+- [ ] **Step 1: The probe, first** — `spikes/pinch-overlays.mjs`:
+
+```js
+// The overlays through a pinch (the reader's design, §10.1–§10.2), on the demo paper in a headed window. Each run
+// lights a band on both sides, waits for the right side's first figure overlay, then pinches with the reader's own
+// pinch (Ctrl and the wheel over the pages, 36 steps, 83 % → about 245 %). It measures:
+//   - the drift: every overlay against where the fractions of its page box, read at rest, put it; at steps 8, 16 and
+//     24, and after PDF.js has drawn the pages again;
+//   - the cost: layout, style and main-thread time over the pinch (CDP Performance.getMetrics), and the frames over
+//     1.5× the median;
+//   - how long no figure overlay was on the right after the redraw, and the figures laid again after it
+//     (window.__reader.debug.paintsOf, from Task 30, over the pages laid before the pinch).
+// Load 1 is the paper's own overlays; load 20 clones the first figure overlay 20 times. Exits 1 on a drift over 1 px.
+//   node experiments/pdf-bilingual/spikes/pinch-overlays.mjs [runs]     AXT_BUILD=<dir> for another build
+import { launchWithReader } from './extension.mjs'
+
+const RUNS = Number(process.argv[2] ?? 3), paper = '2608.02163'
+const results = []
+for (let run = 1; run <= RUNS; run++) for (const load of [1, 20]) {
+  const { context, readerUrl } = await launchWithReader({ profile: 'pinch-overlays', demos: true, headless: false, viewport: { width: 1440, height: 900 }, ...(process.env.AXT_BUILD ? { extension: process.env.AXT_BUILD } : {}) })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', e => errors.push(e.message))
+  await page.goto(readerUrl({ paper, mode: 'bilingual' }))
+  await page.waitForFunction(() => window.__reader?.ready, null, { timeout: 90000 })
+  // the second page in view on both sides, a band lit there, and the right side's figure overlays waited for
+  await page.evaluate(() => { const { left, right } = window.__reader.debug; for (const s of [left, right]) s.viewer.currentPageNumber = 2 })
+  await page.waitForTimeout(1500)
+  await page.evaluate(() => { const d = window.__reader.debug, id = [...d.left.anchors.keys()].find(k => d.left.anchors.get(k)?.rects?.[0]?.page === 2); d.light(id) })
+  const figures = await page.waitForFunction(() => document.querySelectorAll('#right .axt-fig .axt-img > span').length > 0, null, { timeout: 60000 }).then(() => true, () => false)
+  await page.waitForTimeout(1000)
+  const counts = await page.evaluate(load => {
+    const figs = [...document.querySelectorAll('#right .axt-fig')]
+    const keeper = window.__reader.debug.right.keeper
+    figs.slice(1).forEach(f => (keeper ? keeper.drop(f) : f.remove()))
+    if (figs[0]) for (let i = 1; i < load; i++) figs[0].after(figs[0].cloneNode(true))
+    return { figures: document.querySelectorAll('.axt-fig').length, labels: document.querySelectorAll('.axt-fig .axt-img > span').length, bands: document.querySelectorAll('.axt-hl').length }
+  }, load)
+  // every overlay, as fractions of its page box at rest
+  const boxes = () => page.evaluate(() => [...document.querySelectorAll('.axt-fig, .axt-hl')].map(el => { const p = el.closest('.page').getBoundingClientRect(), r = el.getBoundingClientRect(); return [p.left, p.top, p.width, p.height, r.left, r.top, r.width, r.height] }))
+  const rest = (await boxes()).map(([pl, pt, pw, ph, l, t, w, h]) => [(l - pl) / pw, (t - pt) / ph, w / pw, h / ph])
+  const drift = async () => {
+    const now = await boxes()
+    return +Math.max(0, ...now.map(([pl, pt, pw, ph, l, t, w, h], k) => { const [fx, fy, fw, fh] = rest[k] ?? [0, 0, 0, 0]; return Math.max(Math.abs(l - (pl + fx * pw)), Math.abs(t - (pt + fy * ph)), Math.abs(w - fw * pw), Math.abs(h - fh * ph)) })).toFixed(1)
+  }
+  await page.evaluate(() => {
+    window.__frames = []
+    const f = t => { window.__frames.push(t); requestAnimationFrame(f) }
+    requestAnimationFrame(f)
+    const right = document.querySelector('#right')
+    window.__bare = 0
+    let since = 0
+    new MutationObserver(() => { const none = !right.querySelector('.axt-fig'); if (none && !since) since = performance.now(); if (!none && since) { window.__bare += performance.now() - since; since = 0 } }).observe(right, { childList: true, subtree: true })
+    // the right side's pages laid before the pinch, and how often each has been laid
+    const d = window.__reader.debug
+    window.__laid0 = d.paintsOf ? [...new Set([...right.querySelectorAll('.page')].filter(p => d.right.laid?.has(Number(p.dataset.pageNumber))).map(p => Number(p.dataset.pageNumber)))].map(n => [n, d.paintsOf(n)]) : null
+  })
+  const cdp = await context.newCDPSession(page)
+  await cdp.send('Performance.enable')
+  const metrics = async () => Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map(m => [m.name, m.value]))
+  await page.mouse.move(1080, 500)
+  const m0 = await metrics(), t0 = await page.evaluate(() => performance.now())
+  const mid = []
+  await page.keyboard.down('Control')
+  for (let i = 1; i <= 36; i++) {
+    await page.mouse.wheel(0, -1.5)
+    await page.waitForTimeout(16)
+    if (i % 8 === 0 && i <= 24) mid.push(await drift())
+  }
+  await page.keyboard.up('Control')
+  const t1 = await page.evaluate(() => performance.now()), m1 = await metrics()
+  await page.waitForTimeout(2500)
+  const settled = await drift()
+  const after = await page.evaluate(([t0, t1]) => {
+    const fr = window.__frames.filter(t => t >= t0 && t <= t1), iv = fr.slice(1).map((t, i) => t - fr[i]).sort((a, b) => a - b)
+    const med = iv[Math.floor(iv.length / 2)] ?? 0
+    const d = window.__reader.debug
+    const repaints = window.__laid0 && window.__laid0.reduce((sum, [n, k]) => sum + d.paintsOf(n) - k, 0)
+    return { frames: iv.length, long: iv.filter(x => x > med * 1.5).length, bareMs: Math.round(window.__bare), repaints, scale: window.__reader.controller.getState().scale }
+  }, [t0, t1])
+  const d = k => +((m1[k] - m0[k]) * 1000).toFixed(1)
+  const r = { run, load, figures, ...counts, mid, settled, ...after, layout: d('LayoutDuration'), style: d('RecalcStyleDuration'), task: d('TaskDuration'), errors }
+  results.push(r)
+  console.log(JSON.stringify(r))
+  await context.close()
+}
+const worst = Math.max(...results.flatMap(r => [...r.mid, r.settled]))
+console.log('\nload | layout ms | style ms | main thread ms | frames over 1.5× | drift mid-pinch / settled px | bare ms | repaints')
+for (const load of [1, 20]) {
+  const rs = results.filter(r => r.load === load), span = k => `${Math.min(...rs.map(r => r[k]))}–${Math.max(...rs.map(r => r[k]))}`
+  console.log(`${load} | ${span('layout')} | ${span('style')} | ${span('task')} | ${span('long')} | ${Math.max(...rs.flatMap(r => r.mid))} / ${Math.max(...rs.map(r => r.settled))} | ${span('bareMs')} | ${rs.map(r => r.repaints).join(',')}`)
+}
+const errors = results.flatMap(r => r.errors)
+console.log(errors.length ? `page errors: ${errors.join('; ')}` : 'page errors: none')
+console.log(worst <= 1 && !errors.length ? 'all passed' : `FAIL: an overlay drifted ${worst} px`)
+process.exit(worst <= 1 && !errors.length ? 0 : 1)
+```
+
+- [ ] **Step 2: Run it on the code as it is** — `pnpm build >/dev/null && node experiments/pdf-bilingual/spikes/pinch-overlays.mjs 1`.
+  Expected: `FAIL: an overlay drifted …` with the mid-pinch drift in the tens to hundreds of pixels (the nineteenth
+  addendum's 54 → 209 px). Keep the table: it is the before.
+
+- [ ] **Step 3: The unit test** — `tests/pdf-reader/overlay.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { pinned } from '@/pdf-reader/engine/overlay.mjs'
+
+describe('pinned: an overlay that scales with its page (the reader\'s design, §10.1)', () => {
+  const box = { left: 12, top: 30.5, width: 100, height: 20 }
+
+  it('keeps the box in the pixels it was drawn at', () => {
+    expect(pinned(box, 1.5)).toMatchObject({ left: '12px', top: '30.5px', width: '100px', height: '20px' })
+  })
+
+  it('scales about the page\'s origin, by the page\'s scale over the one it was drawn at', () => {
+    expect(pinned(box, 1.5)).toMatchObject({ transformOrigin: '-12px -30.5px', scale: 'calc(var(--total-scale-factor) / 1.5)' })
+  })
+})
+```
+
+  Run: `pnpm vitest run tests/pdf-reader/overlay.test.ts`. Expected: FAIL, the module cannot be resolved.
+
+- [ ] **Step 4: `overlay.mjs`, `overlay.d.mts`**
+
+```js
+// The engine's overlays on PDF.js's pages — the highlight's bands, the figures' text — kept in place through a zoom
+// (the reader's design, §10.1–§10.2)
+
+/**
+ * An overlay's box in its page's CSS pixels at the viewport scale it was drawn at, `s0`, scaled with the page about the
+ * page's origin by PDF.js's --total-scale-factor. While a pinch lasts PDF.js scales the page by CSS alone, and the
+ * overlay follows on the compositor, with no layout and no script. Measured: within 0.7 px mid-pinch, at no cost over
+ * pixels; percent of the page box cost the whole page's layout on every frame (REPORT, nineteenth addendum)
+ */
+export function pinned({ left, top, width, height }, s0) {
+  return { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px`, transformOrigin: `${-left}px ${-top}px`, scale: `calc(var(--total-scale-factor) / ${s0})` }
+}
+```
+
+```ts
+// overlay.mjs's functions for TypeScript
+export interface Box { left: number; top: number; width: number; height: number }
+export interface PinnedStyle { left: string; top: string; width: string; height: string; transformOrigin: string; scale: string }
+export function pinned(box: Box, s0: number): PinnedStyle
+```
+
+  Run: `pnpm vitest run tests/pdf-reader/overlay.test.ts`. Expected: PASS, 2 tests.
+
+- [ ] **Step 5: The session uses it** — `import { pinned } from './overlay.mjs'`; in `paint`:
+
+```js
+    const box = toPageBox(side, r), el = document.createElement('div')
+    el.className = 'axt-hl'
+    Object.assign(el.style, pinned({ left: box.left - 4, top: box.top - 3, width: box.width + 8, height: box.height + 6 }, pv.viewport.scale))
+```
+
+  and in `paintFigures`, the holder's style:
+
+```js
+      Object.assign(holder.style, pinned({ left: Math.min(ax, bx), top: Math.min(ay, by), width, height }, vp.scale))
+```
+
+- [ ] **Step 6: The probe again** — `pnpm build >/dev/null && node experiments/pdf-bilingual/spikes/pinch-overlays.mjs 1`.
+  Expected: the mid-pinch drift ≤ 1 px at loads 1 and 20. `settled` ≤ 1 px too: the redraw lays them again at the new
+  scale, until Task 30 keeps them. The layout and main-thread spans are within Step 2's.
+
+  If the figure overlay never came (`figures: false`: the free service did not answer), the bands alone are measured.
+  Say so in the ledger.
+
+- [ ] **Step 7: Commit**
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test >/dev/null && git add src/pdf-reader/engine/overlay.mjs src/pdf-reader/engine/overlay.d.mts src/pdf-reader/engine/session.mjs tests/pdf-reader/overlay.test.ts experiments/pdf-bilingual/spikes/pinch-overlays.mjs && git commit -m "feat(pdf-reader): the overlays follow a pinch"
+```
+
+### Task 30: the overlays kept across a redraw (§10.2)
+
+**Files:**
+- Modify: `src/pdf-reader/engine/overlay.mjs`, `overlay.d.mts` (`keepOverlays`)
+- Modify: `tests/pdf-reader/overlay.test.ts`
+- Modify: `src/pdf-reader/engine/session.mjs` (`makeSide`, `attach`, `paintFigures`, `replaceRight`, the harness)
+
+**Interfaces:**
+- Produces: `keepOverlays(selector: string): { observe(page: Element): void; drop(el: Element): void; disconnect(): void }`.
+  An overlay matching `selector` that anything else removes from an observed page is put back in the same task, before
+  the frame is painted. `drop` removes one for good.
+- Produces: `side.keeper` (one per side) and `side.laid: Map<page, scale>`, the scale each page's figures were laid at.
+  Also `window.__reader.debug.paintsOf(n): number`: how many times `paintFigures` laid the right side's page `n`, for
+  the checks.
+
+- [ ] **Step 1: The unit tests** — added to `overlay.test.ts` (happy-dom has `MutationObserver`):
+
+```ts
+import { keepOverlays, pinned } from '@/pdf-reader/engine/overlay.mjs'
+
+const settle = () => new Promise(resolve => setTimeout(resolve, 0))
+function pageWith(...classes: string[]) {
+  const page = document.createElement('div')
+  for (const c of classes) page.append(Object.assign(document.createElement('div'), { className: c }))
+  document.body.append(page)
+  return page
+}
+
+describe('keepOverlays: what PDF.js removes from a page it draws again is put back (§10.2)', () => {
+  it('puts back an overlay removed by anyone else, and leaves PDF.js\'s own layers removed', async () => {
+    const page = pageWith('canvasWrapper', 'axt-fig', 'axt-hl-layer'), keeper = keepOverlays('.axt-fig, .axt-hl-layer')
+    keeper.observe(page)
+    for (let i = page.childNodes.length - 1; i >= 0; i--) page.childNodes[i].remove() // PDFPageView.reset()
+    await settle()
+    expect([...page.children].map(c => c.className).sort()).toEqual(['axt-fig', 'axt-hl-layer'])
+    keeper.disconnect()
+  })
+
+  it('leaves removed an overlay the reader drops', async () => {
+    const page = pageWith('axt-fig'), keeper = keepOverlays('.axt-fig')
+    keeper.observe(page)
+    keeper.drop(page.firstElementChild as Element)
+    await settle()
+    expect(page.children.length).toBe(0)
+    keeper.disconnect()
+  })
+
+  it('puts back nothing once disconnected: a viewer being torn down', async () => {
+    const page = pageWith('axt-fig'), keeper = keepOverlays('.axt-fig')
+    keeper.observe(page)
+    keeper.disconnect()
+    page.firstElementChild?.remove()
+    await settle()
+    expect(page.children.length).toBe(0)
+  })
+
+  it('does not double an overlay put back by someone else first', async () => {
+    const page = pageWith('axt-fig'), keeper = keepOverlays('.axt-fig'), fig = page.firstElementChild as Element
+    keeper.observe(page)
+    fig.remove()
+    page.append(fig)
+    await settle()
+    expect(page.querySelectorAll('.axt-fig').length).toBe(1)
+    keeper.disconnect()
+  })
+})
+```
+
+  Run: `pnpm vitest run tests/pdf-reader/overlay.test.ts`. Expected: FAIL, `keepOverlays` is not exported.
+
+- [ ] **Step 2: `keepOverlays`** — added to `overlay.mjs` (and its type to `overlay.d.mts`):
+
+```js
+/**
+ * Overlays that outlive PDF.js drawing a page again (the reader's design, §10.2): a page view's reset() removes every
+ * node of its page it does not own, before a redraw after a zoom and when the page leaves PDF.js's buffer. An overlay
+ * removed so is put back in the same task, before the frame is painted: with its transform (pinned) it is right at the
+ * new scale, and nothing is recomputed. Measured: a figure bare for 40–300 ms before, 0 after, at no cost. Those the
+ * reader removes itself go through drop()
+ */
+export function keepOverlays(selector) {
+  const dropped = new WeakSet()
+  const observer = new MutationObserver(records => {
+    for (const { target, removedNodes } of records) for (const node of removedNodes) {
+      if (node.nodeType === 1 && node.matches(selector) && !dropped.has(node) && !node.isConnected) target.append(node)
+    }
+  })
+  return {
+    observe: page => observer.observe(page, { childList: true }),
+    drop: el => { dropped.add(el); el.remove() },
+    disconnect: () => observer.disconnect(),
+  }
+}
+```
+
+```ts
+export interface Keeper { observe(page: Element): void; drop(el: Element): void; disconnect(): void }
+export function keepOverlays(selector: string): Keeper
+```
+
+  Run: `pnpm vitest run tests/pdf-reader/overlay.test.ts`. Expected: PASS, 6 tests.
+
+- [ ] **Step 3: The session keeps them**:
+  - In `makeSide`'s returned object, add `keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map()`.
+  - In `attach`, observe each page as PDF.js makes them:
+
+```js
+  // the overlays outlive a page drawn again (overlay.mjs keepOverlays): each page's div watched from the start
+  side.eventBus.on('pagesinit', () => { for (const pv of side.viewer._pages) side.keeper.observe(pv.div) })
+```
+
+  - In `paintFigures`, the step that replaces a page's overlays drops the old ones:
+    `pv.div.querySelectorAll(':scope > .axt-fig').forEach(el => side.keeper.drop(el))`. After the new ones are appended:
+    `side.laid.set(n, vp.scale)`, and when `side === right`, `paints.set(n, (paints.get(n) ?? 0) + 1)`, with
+    `const paints = new Map()` beside `lit`. A replaced right side starts afresh: `paints.clear()` in `replaceRight`
+    beside `copies.clear()`. In `harness()`: `paintsOf: n => paints.get(n) ?? 0`.
+  - `pagerendered` lays a page's figures only when they are not laid yet, or when they hold a draft preview's copies
+    drawn at another scale:
+
+```js
+  side.eventBus.on('pagerendered', ({ pageNumber }) => {
+    if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start
+    paint(side)
+    // figures laid once per page: kept through a redraw (keepOverlays), scaled with it (pinned); a draft preview's
+    // copies of the left's figures are bitmaps drawn for one scale, and are drawn again at another
+    const at = side.laid.get(pageNumber)
+    if (side !== left && (at === undefined || (side.frames && at !== pageView(side, pageNumber).viewport.scale))) side.figs.set(pageNumber, paintFigures(side, pageNumber).catch(e => console.warn('[figures]', e)))
+  })
+```
+
+  - `repaintFigures` and `repaintFiguresSoon` call `paintFigures` directly, as now, so a change of content still lays
+    them again.
+  - In `replaceRight`, before Task 28's `old.viewer.setDocument(null)`: `old.keeper.disconnect()`.
+  - Grep for any other removal of `.axt-fig` or `.axt-hl-layer` (`grep -n "axt-fig\|axt-hl-layer" src/pdf-reader/engine/session.mjs`)
+    and route it through `drop`. `paint`'s `layer.replaceChildren()` removes bands, which are not observed: it stays.
+
+- [ ] **Step 4: The probe** — `pnpm build >/dev/null && node experiments/pdf-bilingual/spikes/pinch-overlays.mjs 3`. Expected:
+  - `all passed`;
+  - drift ≤ 1 px mid-pinch and settled, at loads 1 and 20;
+  - `bare ms` 0 in every run (Step 2 of Task 29 had about 40);
+  - `repaints` 0: the figures were not laid again after the redraw;
+  - layout, style and main-thread spans within Task 29 Step 2's before.
+
+  The numbers are Part 4's record (Task 33).
+
+- [ ] **Step 5: A page dropped from PDF.js's buffer and drawn again** — in `reader-ui.mjs`, after Task 28's block:
+
+```js
+// ---------------------------------------------------------------- Task 30: overlays kept across a redraw
+// a page PDF.js drops from its buffer when it is scrolled far away, and draws again on the way back: its overlays kept,
+// not laid again, not doubled (§10.2)
+{
+  const page = await open({ mode: 'bilingual' })
+  const at = () => page.evaluate(() => ({ bands: document.querySelectorAll('#right .page[data-page-number="1"] > .axt-hl-layer').length, paints: window.__reader.debug.paintsOf(1), drawn: window.__reader.debug.right.viewer.getPageView(0).renderingState }))
+  await page.evaluate(() => { const d = window.__reader.debug, id = [...d.right.anchors.keys()].find(k => d.right.anchors.get(k)?.rects?.[0]?.page === 1); d.light(id) })
+  const before = await at()
+  // every page in turn: PDF.js keeps ten page views drawn, so page 1 is dropped on the way (its renderingState back to 0)
+  const pages = await page.evaluate(() => window.__reader.debug.right.viewer.pagesCount)
+  let dropped = false
+  for (let n = 2; n <= pages; n++) {
+    await page.evaluate(n => { window.__reader.debug.right.viewer.currentPageNumber = n }, n)
+    await page.waitForTimeout(150)
+    dropped ||= (await at()).drawn === 0
+  }
+  await page.evaluate(() => { window.__reader.debug.right.viewer.currentPageNumber = 1 })
+  await page.waitForTimeout(1500)
+  const after = await at()
+  check('a page dropped by PDF.js and drawn again keeps one highlight layer, its figures not laid again', dropped && after.drawn === 3 && after.bands === 1 && after.paints === before.paints, JSON.stringify({ before, after, dropped }))
+  await page.close()
+}
+```
+
+  Run: `node experiments/pdf-bilingual/spikes/reader-ui.mjs`. Expected: `all passed`. `dropped` must be true, or the
+  check proved nothing: if PDF.js kept page 1 drawn, walk further (a smaller zoom first) until it drops. Then
+  temporarily make the `pagerendered` guard always lay (`if (side !== left)`) and rebuild. Expected: the line FAILs on
+  `paints`. Restore it.
+
+- [ ] **Step 6: Commit**
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test >/dev/null && git add src/pdf-reader/engine/overlay.mjs src/pdf-reader/engine/overlay.d.mts src/pdf-reader/engine/session.mjs tests/pdf-reader/overlay.test.ts experiments/pdf-bilingual/spikes/reader-ui.mjs && git commit -m "feat(pdf-reader): the overlays kept across a redraw"
+```
+
+### Task 31: stopping early when the service fails (§10.3)
+
+**Files:**
+- Modify: `src/pdf-reader/engine/live.mjs` (`runLive`)
+- Modify: `src/pdf-reader/engine/session.mjs` (the run's end, the figures' latch, the lost count)
+- Modify: `experiments/pdf-bilingual/spikes/cache-cases.mjs` (the run's cases, over its fake compiler)
+- Modify: `experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md` §10.3
+
+**Interfaces:**
+- Produces: `runLive(…)` resolves with `stopped: ProviderErrorKind | null` (why the run stopped short) and
+  `missing: number`, the units left in the source language for the service's failure: state `lost`, no pieces. A unit
+  not sent because the run stopped is in `results` as `{ state: 'lost', tried: identity }`, with the seed's pieces and
+  `by` when it had a seed. `note('stopped', { kind, untried })` is sent once, when the run stops. It no longer rejects
+  on a refusal for good.
+- Produces: `serviceDown` (session.mjs, module level). It is set when a run stops, and while it is set no figure's text
+  is sent.
+
+- [ ] **Step 1: The cases** — in `cache-cases.mjs`, before the runner:
+
+```js
+cases.push(['a failure of the service stops the run: the batches after it are not sent (§10.3)', async () => {
+  const long = n => `Paragraph ${n} ${'words of the paper that go on. '.repeat(230)}`
+  const paper = openPaper(tex([long(1), long(2), long(3)])), c = compiler(), events = []
+  let calls = 0
+  // the first batch comes back; the second fails as a network down does (engine.mjs: partial, lost)
+  const translate = async texts => {
+    calls++
+    if (calls === 1) return texts.map(text => ({ text, by: 'B' }))
+    throw Object.assign(new Error('network'), { kind: 'network', partial: texts.map(() => null), lost: new Set(texts.keys()) })
+  }
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', marks: new Map(), identity: 'B', note: (e, d) => events.push([e, d]) })
+  assert.equal(calls, 2, 'the third batch is not sent')
+  assert.equal(r.stopped, 'network')
+  assert.equal(r.missing, 2)
+  assert.deepEqual(events.filter(([e]) => e === 'stopped').map(([, d]) => d), [{ kind: 'network', untried: 1 }])
+  assert.ok(c.calls.some(q => q.rerun), 'what there is is compiled')
+}])
+cases.push(['nothing translated when the service fails: nothing is compiled, and the run says why', async () => {
+  const paper = openPaper(tex(PARAS)), c = compiler()
+  const translate = async texts => { throw Object.assign(new Error('network'), { kind: 'network', partial: texts.map(() => null), lost: new Set(texts.keys()) }) }
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', marks: null, identity: 'B' })
+  assert.equal(r.stopped, 'network')
+  assert.equal(r.translated, 0)
+  assert.equal(r.missing, paper.units.length - paper.kept.size)
+  assert.equal(c.calls.filter(q => q.rerun).length, 0, 'no final, no marked original')
+}])
+cases.push(['a key refused midway stops the run as a failure of the service does, and the run resolves', async () => {
+  const long = n => `Paragraph ${n} ${'words of the paper that go on. '.repeat(230)}`
+  const paper = openPaper(tex([long(1), long(2), long(3)])), c = compiler()
+  let calls = 0
+  const translate = async texts => { if (++calls === 1) return texts.map(text => ({ text, by: 'B' })); throw Object.assign(new Error('invalid api key'), { kind: 'auth' }) }
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', marks: new Map(), identity: 'B' })
+  assert.equal(r.stopped, 'auth')
+  assert.equal(calls, 2)
+  assert.equal(r.missing, 2)
+}])
+cases.push(['a seeded paragraph whose new try failed keeps its old translation, and is not missing', async () => {
+  const paper = openPaper(tex(PARAS)), c = compiler()
+  const seed = await seedOf(paper, echo('A'), 'A')
+  const translate = async texts => { throw Object.assign(new Error('network'), { kind: 'network', partial: texts.map(() => null), lost: new Set(texts.keys()) }) }
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', seed, marks: new Map(), identity: 'B', pipelineCurrent: true })
+  assert.equal(r.stopped, 'network')
+  assert.equal(r.missing, 0)
+  assert.ok([...r.results.values()].every(x => x.pieces && x.state === 'lost'))
+}])
+```
+
+  Run: `cd experiments/pdf-bilingual && pnpm exec tsx spikes/cache-cases.mjs`. Expected: the four new cases FAIL
+  (`calls` 3; `r.stopped` undefined; the refused key rejects). The others pass.
+
+- [ ] **Step 2: `runLive` stops** — in `live.mjs`:
+  - Beside `let changed = false`: `let stopped = null`.
+  - The mt loop:
+
+```js
+  const mt = (async () => {
+    try {
+    for (let first = true; todo.size && !stopped; first = false) {
+      const batch = nextBatch(first ? 2500 : 12000)
+      batch.forEach(i => todo.delete(i))
+      const t0 = Date.now()
+      let got, how
+      try { ({ results: got, how } = await translateUnits(batch.map(i => units[i]), translate, format)) } catch (e) {
+        // a refusal for good (engine.mjs: a key missing or refused) stops the run, as a failure of the service does
+        if (!e?.kind) throw e
+        stopped = e.kind
+        batch.forEach(i => todo.add(i))
+        break
+      }
+      // … the per-unit loop and note('translated', …) exactly as they are …
+      // a failure of the service, not of these texts (engine.mjs EngineError's lost): the batches after it would fail
+      // the same way, each after the background's retries (the reader's design, §10.3)
+      if (how.error) stopped = how.error
+      if (fresh) { dirty = true; signal() }
+    }
+    // stopped short: what was not sent is lost to the service, a seed's translation kept on screen
+    if (stopped) {
+      for (const i of todo) { const old = seed?.get(i); results.set(i, { ...(old ? { pieces: old.pieces, by: old.by } : {}), state: 'lost', tried: identity }) }
+      note('stopped', { kind: stopped, untried: todo.size })
+      todo.clear()
+    }
+    } finally { mtDone = true; signal() }
+  })()
+  // awaited after the compiles: handled from now, so that an error inside is no unhandled rejection meanwhile
+  mt.catch(() => {})
+```
+
+  - The units left in the source for the service, and the early return with nothing translated. Before
+    `// 3–5. compiles`:
+
+```js
+  const missing = () => [...results.values()].filter(r => r.state === 'lost' && !r.pieces).length
+```
+
+    After `await mt`:
+
+```js
+  // nothing to show: nothing compiled, not even the marked original; the reader says why (the reader's design, §10.3)
+  if (stopped && !translated.size) return { previews, translated: 0, units: units.length, results, changed: false, settled: false, stopped, missing: missing() }
+```
+
+  - `stopped, missing: missing()` go into the two other returns (`unchanged`, and the last).
+
+  Run: `cd experiments/pdf-bilingual && pnpm exec tsx spikes/cache-cases.mjs`. Expected: every case `ok`. Then the
+  other runLive cases: `for c in mt-cases lost-cases; do pnpm exec tsx spikes/$c.mjs >/dev/null 2>&1 && echo "$c ok" || echo "$c FAILED"; done`.
+  Expected: both `ok`.
+
+- [ ] **Step 3: The session** — in `live()`:
+  - The lost count is the run's `missing`, not a sum over batches. Keep `lost += data.how.lost` on `translated` for the
+    status line. After `runLive` resolves, add `lost = result.missing ?? lost`. Then, before `await swaps`:
+
+```js
+  // stopped with nothing on screen translated: the card, with the service's reason (the reader's design, §8)
+  if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
+```
+
+  - `note('stopped', …)` sets the figures' latch. In `note`: `if (event === 'stopped') serviceDown = true`, with
+    `let serviceDown = false` beside `translated` (the figures' map).
+  - In `translateBoxes`:
+    `const engine = serviceDown ? null : await theEngine().catch(() => null)`. While the service is down, a copy's
+    entries are all there is, as with no service.
+
+- [ ] **Step 4: §10.3, completed** — the section gains:
+
+```markdown
+Measured on the fake compiler (`spikes/cache-cases.mjs`): a failure in the second of three batches sends no third, and
+the final is compiled with the first; nothing translated compiles nothing, not even the marked original. A key refused
+midway stops the run the same way. The figures' text goes through the same service: once a run has stopped, none is
+sent until it runs again. The notice's {n} is the paragraphs left in the source language: a paragraph a stored copy had
+translated keeps it when its new try fails, and is not counted.
+```
+
+- [ ] **Step 5: In the browser** —
+  `pnpm build >/dev/null && node experiments/pdf-bilingual/spikes/cache-revisit.mjs; node experiments/pdf-bilingual/spikes/viewer-faults.mjs`.
+  Expected: both `all passed`. `cache-revisit`'s page errors are none: its refused-key case had one unhandled
+  `invalid api key` (Part 1's deferred minor), now gone. If a final times out (`Compilation timeout`), check the load
+  first (`uptime`) and rerun alone.
+
+- [ ] **Step 6: Commit**
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test >/dev/null && git add src/pdf-reader/engine/live.mjs src/pdf-reader/engine/session.mjs experiments/pdf-bilingual/spikes/cache-cases.mjs experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md && git commit -m "feat(pdf-reader): a translation stops at the service's first failure"
+```
+
+### Task 32: retry in place, and recovery by itself (§8)
+
+**Files:**
+- Create: `experiments/pdf-bilingual/spikes/service-faults.mjs`
+- Modify: `src/pdf-reader/settings.ts` (`followOf` → `retry`), `tests/pdf-reader/settings.test.ts`
+- Modify: `src/pdf-reader/engine/session.mjs`:
+  - `live` split into the visit's opening and a re-entrant `translation`;
+  - `retry`;
+  - the network's return;
+  - `landed`.
+- Modify: `src/pdf-reader/engine/session.d.mts` (`retry`'s comment)
+
+**Interfaces:**
+- Consumes: Task 31's `result.stopped`, `result.missing` and `serviceDown`.
+- Produces:
+  - `followOf(…)` returns `{ reload, display, sync, retry }`. `retry` is true when `at.stopped` and a field of the chain
+    changed (`chainConfigChanged`, config/revision.ts); a new language while translating reloads first. `at` gains
+    `stopped: boolean`.
+  - `retry()` (session.mjs) runs the translation again in place. It does nothing while one runs or when nothing
+    stopped, and it reloads the page when its paper never opened or its session crashed.
+  - A module-level `let stopped = null`, `{ event, kind }`:
+    - `fail` sets it for a failure a retry can mend: 'fetch failed', 'no engine', 'no compiler', 'failed';
+    - a run that ends without failing sets it from `result.stopped`, or to null.
+
+- [ ] **Step 1: The probe's setup, and a service chosen mid-run, measured on the code as it is** —
+  `spikes/service-faults.mjs`:
+  - The setup follows `viewer-faults.mjs`: its corpus server, the TeX page (`serveSite`), the extension copy with
+    `http://127.0.0.1/*` granted (`copyWithGrants`), `launchWithReader`, `openOptions`.
+  - The endpoint follows `tests/e2e/local-endpoint.mjs`'s server: OpenAI-compatible, each segment echoed with a mark,
+    every received text recorded.
+  - `endpoint.down = true` destroys each request's socket (`req.socket.destroy()`), a network failure.
+    `endpoint.upTo = n` answers the first `n` requests, then goes down.
+  - `addService(options, { name: 'Echo', baseURL, model: 'echo', apiKey: 'sk-echo' })` while the endpoint is up (the
+    drawer's connect button needs an answer). `setSwitch(options, <the fallback switch's label>, false)`, so that a failure is not
+    handed to the built-in service.
+  - The chosen service stays Microsoft for case 0.
+
+```js
+// A translation service that fails, then comes back, with the reader in a real browser (the reader's design, §8, §10.3).
+// A local OpenAI-compatible endpoint echoes each segment with a mark, and can be taken down: its socket destroyed, a
+// network failure. Local corpus, the TeX Live file server on :8070.
+//   node experiments/pdf-bilingual/spikes/service-faults.mjs [paper]
+// Cases:
+//   0. a service chosen while a run is under way (Microsoft, markers → the echo, tags): what the next batches bring back
+//   1. down from the start: the card with the network's reason once the first batch has failed, no compile, no page error
+//   2. back up, the card's retry pressed twice: one run, in place (the page not loaded again), a preview shown
+//   3. down after the first requests: the run stops, what there is is compiled, the notice counts the rest; back up and
+//      the browser online again: the translation goes on by itself, and only the missing paragraphs reach the endpoint
+```
+
+  Case 0:
+  1. Open the paper live in the Translation display and wait for the first `translated` event in `window.__reader.live.events`.
+  2. Then `patchSettings(c => ({ ...c, provider: c.services[0].id }))`.
+  3. Wait for `done`, and print each `translated` event's `how` from before and after the change.
+
+  Run: `pnpm build >/dev/null && node experiments/pdf-bilingual/spikes/service-faults.mjs` (case 0 alone so far).
+  Expected, if the background's rebuilt chain cannot read the markers the run keeps sending: `how.runs` or
+  `how.untranslated` rising after the change, against `whole` before. Ledger what was seen:
+  - If the texts came back readable, case 0 stays as a check that they do.
+  - If not, a change of the chain while translating reloads, as the language does. That is one more condition in
+    Step 3's `followOf`, `at.translating && chainConfigChanged(prev, next)` → `reload`, and one more case in Step 2's
+    tests. Case 0 then checks the reload: the `translating` phase after it, in the new format.
+
+- [ ] **Step 2: `followOf`'s tests** — in `settings.test.ts`'s `followOf` block, where `at()` gains `stopped: false` and
+  the existing cases' expected objects gain `retry: false`:
+
+```ts
+  it('runs a stopped translation again when the services change: a key set on the settings page, a service chosen here', () => {
+    expect(followOf(side, { ...side, fallback: { enabled: false } }, 'elsewhere', at({ stopped: true })).retry).toBe(true)
+    expect(followOf(side, { ...side, provider: 'google-web' }, 'own', at({ stopped: true })).retry).toBe(true)
+  })
+
+  it('runs nothing again for a change of what is not the chain, nor when nothing stopped', () => {
+    expect(followOf(side, only, 'elsewhere', at({ stopped: true })).retry).toBe(false)
+    expect(followOf(side, { ...side, provider: 'google-web' }, 'elsewhere', at()).retry).toBe(false)
+  })
+
+  it('reloads for a new language rather than run again', () => {
+    const f = followOf(side, { ...side, targetLanguage: 'deu' as const }, 'elsewhere', at({ stopped: true, translating: true }))
+    expect([f.reload, f.retry]).toEqual([true, false])
+  })
+```
+
+  `'google-web'` must be one of `BUILT_IN_SERVICES` (config/services.ts). If it is not, use one that is.
+
+  Run: `pnpm vitest run tests/pdf-reader/settings.test.ts`. Expected: FAIL (`retry` undefined; the old cases' `toEqual`
+  now expect `retry: false`).
+
+- [ ] **Step 3: `followOf`**
+
+```ts
+import { chainConfigChanged } from '@/config/revision'
+// …
+export interface Follow { reload: boolean; display: EngineDisplay | null; sync: 'same' | 'off' | null; retry: boolean }
+
+export function followOf(
+  prev: Config,
+  next: Config,
+  from: Landing,
+  at: { translating: boolean; stopped: boolean; addressDisplay: boolean; addressSync: boolean; display: EngineDisplay; syncMode: string },
+): Follow {
+  const none: Follow = { reload: false, display: null, sync: null, retry: false }
+  if (from === 'refused' || from === 'first') return none
+  if (at.translating && next.targetLanguage !== prev.targetLanguage) return { ...none, reload: true }
+  const wanted = displayOf(next)
+  const display = !at.addressDisplay && wanted !== displayOf(prev) && wanted !== at.display ? wanted : null
+  const sync = next.pdfReader.sync ? 'same' : 'off'
+  const switchable = at.syncMode === 'same' || at.syncMode === 'off'
+  return {
+    reload: false,
+    display,
+    sync: !at.addressSync && switchable && next.pdfReader.sync !== prev.pdfReader.sync && sync !== at.syncMode ? sync : null,
+    // a translation that stopped short runs again once the services change: most often the key the card sent the
+    // reader to set (the reader's design, §8)
+    retry: at.stopped && chainConfigChanged(prev, next),
+  }
+}
+```
+
+  Run: `pnpm vitest run tests/pdf-reader/settings.test.ts`. Expected: PASS.
+
+- [ ] **Step 4: The translation, re-entrant** — in `session.mjs`.
+
+  **Module level**, beside `translating`:
+
+```js
+/** why the last translation stopped short, when a retry can mend it: { event, kind }; null otherwise (the reader's design, §8) */
+let stopped = null
+/** the translation under way, and the way to run it again in place, which live() sets once the paper is open; null
+ *  before that and after a crash, when a retry loads the page again */
+let running = null, runAgain = null
+/** the figures' texts the service did not answer (translateBoxes), asked again when the translation runs again */
+const unanswered = new Set()
+```
+
+  **`translateBoxes`'s `ask`**: where `make()`'s promise resolves to no `got`, and in its `.catch`, add the key to
+  `unanswered`.
+
+  **`landed`**: pass `stopped: !!stopped` in `at`, and after the reload line add
+  `if (follow.retry) void writes.then(() => runAgain?.())`.
+
+  **`retry`** becomes:
+
+```js
+/** Retry (the reader's design, §8): the translation again, in place, from the step that failed, only the missing
+ *  paragraphs reaching the service; a page whose paper never opened, or whose session crashed, has nothing on screen
+ *  to keep, and is loaded again */
+export function retry() { if (runAgain) runAgain(); else location.reload() }
+```
+
+  **The crash**: the module's last `.catch` sets `runAgain = null` before it emits.
+
+  **`live()`** keeps everything up to and including the cache lookup unchanged: the setup, `note`, `fail`, the left's
+  open, the digest and `showCached`. `fail` gains a first line:
+
+```js
+    stopped = ['fetch failed', 'no engine', 'no compiler', 'failed'].includes(event) ? { event, kind: kind ?? 'unknown' } : null
+```
+
+  **The rest of `live()`**, from `status('Asking the extension which service translates…')` to its end, moves into an
+  inner `async function translation(retrying)`. Everything else in it moves as it is; the changes, in order:
+
+  1. **The visit's own state, kept from run to run**, declared above `translation`:
+     `let paperP = null, compilerP = null, made = null, leftMarks = null, finalShown = false, leftCurrent = true`.
+     `leftMarks`, `finalShown` and `leftCurrent` move out of the run to here. `finalPdf` and `swaps` stay per run.
+  2. **The copy's check**: `if (!retrying && cached && isCurrent(…))`, so that a retry never stops at "this machine's
+     copy is current".
+  3. **The counts**: `again = !!cached && !retrying`, and `lost = 0` at every run. A retry's progress starts from what
+     the last run left translated. Before `note('translating')`, which stays where it is:
+     `if (retrying) got = [...(made?.values() ?? [])].filter(r => r.pieces).length`. The last run's results hold every
+     unit it tried, and the untried ones too once it stopped (Task 31).
+  4. **The source, read once.** The lines from ``status(`Fetching ${paper}'s source from arXiv…`)`` through
+     `window.__reader.ready = true` move into
+     `const readPaper = async () => { … return { paperData, units, src, context, seed, hashes, sameUnits, adoptUnits } }`.
+     - Its `fail` returns become throws of `Object.assign(new Error(text), { event, kind })`.
+     - The right side's open is guarded: `cached || right.doc ? Promise.resolve() : open(right, pdfUrl)…`.
+     - In `translation`:
+
+```js
+    let p
+    try { p = await (paperP ??= readPaper().catch(e => { paperP = null; throw e })) } catch (e) { return fail(e.event ?? 'fetch failed', e.message, e.kind) }
+```
+
+  5. **The compiler, opened once.** The frame's lines through the `project` message move into
+     `const openCompiler = async () => { … return compile }`. When the frame does not answer, it removes the frame and
+     throws `Object.assign(new Error(…), { event: 'no compiler' })`. In `translation`: the same memo,
+     `compilerP ??= openCompiler().catch(e => { compilerP = null; throw e })`, with the same `fail` on a throw.
+  6. **The seed**: what the last run made, laid over the copy's.
+
+```js
+    // a run again: what the visit's last run made seeds it, over the copy's, so that only the missing are asked again —
+    // the rest, sent too, the background's cache answers
+    const seed = new Map(p.seed ?? [])
+    for (const [i, r] of made ?? []) if (r.pieces) seed.set(i, { pieces: r.pieces, by: r.by, tried: r.tried, state: r.state })
+```
+
+  7. **`runLive`'s options**:
+     - `seed: seed.size ? seed : null`;
+     - `pipelineCurrent: p.sameUnits || finalShown`;
+     - `marks: leftMarks ? new Map(leftMarks) : knownMarks(cached, p.sameUnits)`.
+  8. **After the run**: `made = result.results` when there are results. Then, after Task 31's fail-return with
+     nothing translated: `stopped = result.stopped ? { event: 'stopped', kind: result.stopped } : null`.
+  9. **The cache write**: once written, `cached = { ...record, pdf }`. The next run's `decideWrite` then compares with
+     what this visit wrote.
+
+  **After `showCached`'s block** in `live()`:
+
+```js
+  runAgain = () => {
+    if (running || !stopped) return
+    stopped = null
+    serviceDown = false
+    // the service asked again: a key may be set by then, or another service chosen
+    const was = engineP
+    engineP = null
+    void was?.then(e => e.close(), () => {})
+    for (const key of unanswered) translated.delete(key)
+    unanswered.clear()
+    running = translation(true)
+      .catch(e => { runAgain = null; console.error('[reader]', e); host.emit({ type: 'fail', event: 'crashed', text: String(e?.message ?? e) }) })
+      .finally(() => { running = null; repaintFigures() })
+  }
+  // the network back, as the browser tells it: a translation it stopped goes on by itself (the reader's design, §8)
+  addEventListener('online', () => { if (stopped?.kind === 'network') runAgain() })
+  running = translation(false).finally(() => { running = null })
+  await running
+```
+
+  `translated` here is the figures' map (`figureKeyOf` → their translations). Clearing the unanswered keys lets
+  `repaintFigures` ask for them again.
+
+  Run: `pnpm typecheck && pnpm vitest run tests/pdf-reader`. Expected: PASS.
+
+- [ ] **Step 5: The probe's cases 1–3** — each a `check(name, ok, detail)` line, as in `viewer-faults.mjs`.
+  - **1. Down from the start.** A fresh profile, the Echo service chosen, the endpoint down.
+    - The card shows the network's reason, read from the locale pack (`reasonText('network')`).
+    - `window.__reader.live.events` has no `preview` and no `final`.
+    - No page error.
+    - From the first `translated` event to the card: under 90 s, one batch's retries, against the 215 s the design
+      measured for the whole paper. This pins stopping early in the browser.
+  - **2. Back up, the retry pressed twice.**
+    - Set a marker, `window.__stay = 1`. Before the click, count the controller's phase changes into `translating`
+      through `window.__reader.controller.subscribe`.
+    - With the endpoint up, click the card's `重试` twice, 50 ms apart.
+    - `window.__stay === 1`: the page was not loaded again.
+    - Exactly one change into `translating`.
+    - The capsule says `正在翻译`, and a `shown preview` event comes.
+    - One compiler frame: `document.querySelectorAll('iframe[src$="/tex.html"]').length === 1`.
+    - Then wait for `done`, with a generous timeout: finals are CPU-bound, and time out at BusyTeX's 180 s under load.
+      Check the load (`uptime`) before reading a timeout as a failure.
+  - **3. Down after the first requests.** A fresh profile and visit, with `endpoint.upTo = 3`.
+    - The run stops, and ends with `done`.
+    - The notice shows `{n} 处翻译失败`, with n the controller's `failedUnits`, more than 0.
+    - Record the texts the endpoint did not answer.
+    - Bring the endpoint up, then fire `online`: `context.setOffline(true)`, then `setOffline(false)`.
+    - The capsule progresses, and the next `done` has `failedUnits` 0.
+    - Every text the endpoint receives after the return is one of those it did not answer: no paragraph already
+      translated reached it again.
+
+  Run: `pnpm build >/dev/null && node experiments/pdf-bilingual/spikes/service-faults.mjs`. Expected: `all passed`.
+  Also watch case 2 fail on Task 31's commit (a worktree built there): the retry reloads (`window.__stay` undefined).
+
+- [ ] **Step 6: The engine's other checks** —
+  `node experiments/pdf-bilingual/spikes/cache-revisit.mjs; node experiments/pdf-bilingual/spikes/viewer-faults.mjs; node experiments/pdf-bilingual/spikes/reader-settings.mjs; node experiments/pdf-bilingual/spikes/reader-ui-live.mjs`.
+  Expected: each `all passed`. The moved code must not change a first visit or a revisit.
+
+- [ ] **Step 7: Commit**
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test >/dev/null && git add src/pdf-reader/engine/session.mjs src/pdf-reader/engine/session.d.mts src/pdf-reader/settings.ts tests/pdf-reader/settings.test.ts experiments/pdf-bilingual/spikes/service-faults.mjs && git commit -m "feat(pdf-reader): retry in place, and a translation that goes on by itself"
+```
+
+### Task 33: a compile that did not answer keeps its strategy
+
+**Files:**
+- Modify: `src/pdf-reader/engine/live.mjs` (`runLive`'s preview and final loops)
+- Modify: `experiments/pdf-bilingual/spikes/cache-cases.mjs`
+
+**Interfaces:**
+- Produces:
+  - A compile result `{ ok: false, error }` whose error names BusyTeX's timeout is `timedOut`.
+  - A timed-out preview does not move the strategy.
+  - A timed-out final is tried once more with the same strategy, `note('final again', { strategy })`. After a second
+    timeout the run ends with what is shown: `settled: false`, so nothing is written.
+
+- [ ] **Step 1: The cases** — in `cache-cases.mjs`:
+
+```js
+/** a compiler whose calls answer as `answers` says, one by one (then as compiler() does): a timeout is the TeX page's reply to BusyTeX giving up */
+function slow(...answers) {
+  const c = compiler(), base = c.compile
+  return { calls: c.calls, compile: async req => { const a = answers.shift(); if (a === 'timeout') { c.calls.push(req); return { ok: false, error: 'Error: Compilation timeout', log: '', ms: 180000 } } return base(req) } }
+}
+cases.push(['a preview that did not answer keeps the strategy: the machine was slow, not the strategy wrong', async () => {
+  const paper = openPaper(tex(PARAS)), events = []
+  // the fonts probe answers, then the first preview times out
+  const c = slow('ok', 'timeout')
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: e => events.push(e) })
+  assert.equal(events.filter(e => e === 'next strategy').length, 0)
+  assert.equal(r.settled, true)
+}])
+cases.push(['a final that did not answer is tried again with the same strategy, once', async () => {
+  const paper = openPaper(tex(PARAS)), events = []
+  const c = slow('ok', 'ok', 'timeout')
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: (e, d) => events.push([e, d?.strategy]) })
+  assert.equal(events.filter(([e]) => e === 'next strategy').length, 0)
+  assert.equal(events.filter(([e]) => e === 'final again').length, 1)
+  assert.equal(new Set(events.filter(([e]) => e === 'final' || e === 'final again').map(([, s]) => s)).size, 1)
+  assert.equal(r.settled, true)
+}])
+cases.push(['a final that twice did not answer ends the run with what is shown, and writes nothing', async () => {
+  const paper = openPaper(tex(PARAS))
+  const c = slow('ok', 'ok', 'timeout', 'timeout')
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B' })
+  assert.equal(r.settled, false)
+  assert.equal(c.calls.filter(q => q.rerun).length, 2)
+}])
+```
+
+  The order of the answers follows the run: the fonts probe, then a preview, then the final. The marked original is
+  not compiled, since `marks` is given. If the run has no preview before its final (one batch, and the seedless run
+  previews after it), the first case's second answer is the final's. Then set the answers from the order
+  `c.calls` shows in a first run, and ledger it.
+
+  Run: `cd experiments/pdf-bilingual && pnpm exec tsx spikes/cache-cases.mjs`. Expected: the three new cases FAIL (a
+  `next strategy` note; no `final again`).
+
+- [ ] **Step 2: `runLive`** — in `live.mjs`, beside `whyFailed`:
+
+```js
+/** a compile the TeX page gave up on (BusyTeX's 180 s): the machine was slow, not the strategy wrong */
+const timedOut = r => !r.ok && /Compilation timeout/.test(r.error ?? '')
+```
+
+  In the preview loop, the strategy moves only for a compile that answered:
+  `else if (!timedOut(r) && s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }`.
+
+  The final loop:
+
+```js
+  let retried = false
+  for (;;) {
+    r = await compile({ … as now … })
+    ok = await settled(r)
+    note('final', { … as now … })
+    if (ok) break
+    // not answered: once more with the same strategy, then what is shown stays (the reader's design, §10.3's spirit:
+    // a slow machine is no reason to change how the paper is set)
+    if (timedOut(r)) { if (retried) break; retried = true; note('final again', { strategy: strategy().name }); continue }
+    if (s + 1 >= strategies.length) break
+    s++; aux = null
+    note('next strategy', { strategy: strategy().name })
+  }
+```
+
+  Run: `cd experiments/pdf-bilingual && pnpm exec tsx spikes/cache-cases.mjs`. Expected: every case `ok`.
+
+- [ ] **Step 3: Commit**
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test >/dev/null && git add src/pdf-reader/engine/live.mjs experiments/pdf-bilingual/spikes/cache-cases.mjs && git commit -m "fix(pdf-reader): a compile that did not answer keeps its strategy"
+```
+
+### Task 34: Part 4's record, and Part 5's plan
+
+- [ ] **Step 1:** `REPORT.md`, the addendum after Part 3's final review's:
+  - the four changes as built;
+  - Task 28's measurement and the §10.4 decision;
+  - the pinch table against the nineteenth addendum's;
+  - the service's failures in the browser (`service-faults.mjs`);
+  - the service chosen mid-run (Task 32, Step 1).
+- [ ] **Step 2:** Part 5's plan (the extension around the reader, §2, §9.2–§9.3), written against the code as Part 4
+  left it and appended here, to be reviewed with the maintainer before it is executed. It takes up Part 2's declined
+  item: the HTML page's mode switch does not clear `pdfReader.original`.
+- [ ] **Step 3:** Commit both, then a test package for the maintainer
+  (`~/Downloads/readarxiv-test/readarxiv-0.4.1dev-pdf-reader-<sha>/` and its zip).
