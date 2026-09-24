@@ -197,6 +197,19 @@ await sleep(3000)
   await popup.close()
 }
 
+// Only the reader's own page can take the reader away: a page its frame has been sent to cannot (Devin on #297). The
+// frame goes to a data: page, whose origin is opaque, and asks from there
+if (READER) {
+  await page.goto(`https://arxiv.org/pdf/${WITH_HTML}`, { waitUntil: 'load' })
+  const frame = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null)
+  const reader = await frame?.contentFrame()
+  await reader?.goto('data:text/html,<p>elsewhere</p>').catch(() => undefined)
+  await reader?.evaluate(() => parent.postMessage({ type: 'axt-pdf-reader-close' }, '*')).catch(() => undefined)
+  await sleep(1000)
+  const stays = await page.evaluate(() => !!document.querySelector('iframe[data-axt-pdf-reader]'))
+  check('a page the reader\'s frame was sent to cannot take the reader away', !!frame && stays, frame ? (stays ? 'the reader stays' : 'the reader was taken away') : 'no reader')
+}
+
 await context.close()
 const pass = results.filter(r => r.ok).length
 console.log(`\n${pass}/${results.length} passed; screenshots in ${SHOTS}`)

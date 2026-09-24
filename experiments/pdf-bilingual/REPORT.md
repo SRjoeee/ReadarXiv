@@ -665,7 +665,11 @@ Two faults the review of #297 found, measured and fixed (`spikes/viewer-faults.m
 - **Straight between Original and Translation, the other side opened at the paper's top**, both ways: the original at 0.60 of its length, the translation shown at 0.00. The display hides the side left before the place is read, and a hidden side's scroll offset and its pages' offsets are all 0. The place is now read while the side is still shown, as the unit at the reading line and the place within it, and the side brought in is put there: 0.15 → 0.13 and 0.80 → 0.79 on 2608.02163, by the unit. Where no unit is located, as on its references and appendix, the place goes by its share of the document.
 - **The Translation display with no service able to answer was blank**: the original hidden, nothing on the translation's side. It now falls back to the original for that visit, the choice kept.
 
-Two concerns of the same review were measured and are not faults: the Original display finishes loading, and embedded in a page its frame fires `load`, though the translation waits for a click; and the loss count reads the last TeX pass alone (poc-site's BusyTeX empties every earlier pass's log, and xdvipdfmx's step reads none).
+Two concerns of the same review were measured and are not faults: the Original display finishes loading, and embedded in a page its frame fires `load`, though the translation waits for a click; and the loss count reads the last TeX pass alone. BusyTeX's pipeline empties every earlier pass's log, and `lostIn` now takes the last TeX step's log itself rather than rely on that (#294's re-review; `spikes/lost-cases.mjs`, and the same counts on the 119 browser compile logs kept).
+
+Devin's re-review found two more, fixed with checks that failed first:
+- **A link out of the paper opened in the reader's own frame**, which on arXiv's PDF page is the reader laid over it: the reader was replaced by the linked site. PDF.js's link service now opens it in a new tab (`spikes/viewer-faults.mjs`).
+- **Any page the frame was sent to could take the reader away**, by posting the close message: the content script checked the message's window, not its origin. It now checks both (`pnpm e2e:pdf`, from a `data:` page).
 
 ## Fourteenth addendum, 2026-09-23: three faults found reading 2608.02163
 
