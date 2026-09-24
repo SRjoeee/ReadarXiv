@@ -1100,3 +1100,45 @@ There is one record per paper version and target language.
 - **`unlimitedStorage`**, a manifest permission for the product to decide. Without it the extension's storage is best-effort: the browser may clear it when the disk is nearly full.
 - **The copy without figures**, from decision 2.
 
+
+## Nineteenth addendum, 2026-09-25: the reader's interface — DESIGNED
+
+The maintainer and I settled the reader's interface over nine rounds of a variants harness on 2026-09-24 and 09-25. The design is `plans/2026-09-25-reader-interface-design.md`; the harness stayed local and goes once the reader is built. Recorded here is the measurement one of its decisions rests on, since the design first proposed the opposite.
+
+### The overlays during a pinch — MEASURED
+
+While a pinch lasts, PDF.js scales a page by CSS alone and draws it again 400 ms after the pinch ends. The highlight bands and the figure overlays are positioned in pixels of the page as drawn, so they stayed behind: 54, 108, then 209 px off their figures between 83 % and 114 %. The question was how to make them follow without costing frames.
+
+**Method.**
+
+- **Setup.** 2608.02163, the right side's Figure 2 overlay (11 labels). For the heavy case, the same overlay cloned 20 times on its page, 220 labels.
+- **Variants.** A copy of the build per way, `reader.js` patched by text replacement:
+  - pixels, the code as it was;
+  - percent of the page box;
+  - pixels plus a transform tied to `--total-scale-factor`;
+  - the same with `will-change: transform` while pinching;
+  - the transform plus putting back what a redraw removes;
+  - hidden while pinching.
+- **The pinch.** The harness's pinch: Ctrl and the wheel, driving `updateScale` on both sides with `drawingDelay: 400`. It went 83 % → 245 % in 36 events.
+- **The recording.** Chrome's `Performance.getMetrics` before and after the pinch gave layout, style and main-thread time. `requestAnimationFrame` intervals gave the frames. A `MutationObserver` gave how long no overlay was on the right side after the redraw.
+- **Runs.** Three runs per way, in a headed Chromium on a 120 Hz display.
+- **Drift.** Each overlay's box against where the fractions of its page box, read at rest, put it; read at 8, 16 and 24 steps of a pinch.
+
+The first series was discarded: other rendering ran on the machine at the time, and the load varied between runs with the number of figures drawn. The figures below are the series with one fixed load per run.
+
+| Way | Layout per pinch (1 figure / 220 labels) | Main thread | Frames over 1.5× the median | Drift mid-pinch | No overlay after the redraw |
+|---|---|---|---|---|---|
+| Pixels (before) | 29 / 86 ms | 303 / 528 ms | 1–3 | 54 → 209 px | about 40 ms |
+| Percent of the page box | 357 / 787 ms (second series) | 833 / 1941 ms | 7–56 | 0 | — |
+| Transform | 30 / 84 ms | 335 / 476 ms | 1–2 | ≤ 0.7 px | about 40 ms |
+| Transform, `will-change` while pinching | 30 / 116 ms | 312 / 624 ms | 2–5 | ≤ 0.7 px | about 40 ms |
+| Transform, put back on redraw | 31 / 85 ms | 324 / 462 ms | 1–2 | ≤ 0.7 px | 0 |
+| Hidden while pinching | 29 / 91 ms | 295 / 431 ms | 0–2 | hidden | about 40 ms |
+
+**Findings.**
+
+- **Percent positioning is a trap.** One child of a page sized in percent makes every frame of a pinch lay out the whole page again. The cost is the same with 1 figure or 20 and still 2.5× with the labels removed. PDF.js hides its own text layer while a pinch lasts (`hideTextLayer: postponeDrawing`), for the same reason.
+- **The transform costs nothing measurable.** It sits within the pixels' noise, and a little under it with 220 labels. It keeps each overlay within 0.7 px of its place. The overlay keeps its pixel geometry and gains `transform-origin: <−left>px <−top>px` and `scale: calc(var(--total-scale-factor) / s0)`, `s0` being the viewport scale it was drawn at.
+- **`will-change` while pinching buys nothing**, and it costs more under load (the layers are made at the pinch's start).
+- **Hiding works but loses the overlays.** It is the cheapest on the main thread, but the overlays are gone for as long as the pinch lasts. With the transform free, there is no reason to hide them.
+- **PDF.js's `reset()` removes every node it does not own when it redraws a page.** The overlays came back only after the figure pipeline ran again: 40 ms here, up to 300 ms in the first series. Until then a figure showed its original labels. A `MutationObserver` that puts a removed overlay back in the same task, except the ones the reader removes itself, brings that to 0, at no cost.
