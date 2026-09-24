@@ -11,10 +11,14 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   const right = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     if (!left.current || !right.current) return
-    void controller.attach({ left: left.current, right: right.current }).then(session => {
-      // the probes' hooks (experiments/pdf-bilingual/spikes): beside the session's own on window.__reader
-      Object.assign((window as unknown as { __reader: object }).__reader, { controller, session })
-    })
+    // a session that cannot open is in the controller's state (a failure); nothing is left to catch here
+    void controller.attach({ left: left.current, right: right.current }).then(
+      session => {
+        // the probes' hooks (experiments/pdf-bilingual/spikes): beside the session's own on window.__reader
+        Object.assign((window as unknown as { __reader: object }).__reader, { controller, session })
+      },
+      () => {},
+    )
   }, [controller])
   // the panes' ids are the probes' too, as they were on the prototype's page
   return (

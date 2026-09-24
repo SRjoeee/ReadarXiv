@@ -19,14 +19,64 @@ describe('reduce: the session events folded into the reader state', () => {
   })
 
   it("counts the translation's progress and the paragraphs the service failed on", () => {
-    const state = fold([note('digest'), note('source', { total: 40 }), note('translated', { got: 10, total: 40, lost: 2 })])
+    const state = fold([note('digest'), note('engine'), note('translating'), note('source', { total: 40 }), note('translated', { got: 10, total: 40, lost: 2 })])
     expect(state.phase).toBe('translating')
     expect(state.progress).toBeCloseTo(0.25)
     expect(state.failedUnits).toBe(2)
   })
 
   it("says translating again when this machine's copy is being made again", () => {
-    expect(fold([note('cache hit'), note('shown cached'), note('translated', { got: 1, total: 4, again: true })]).phase).toBe('retranslating')
+    expect(fold([note('cache hit'), note('shown cached'), note('engine'), note('translating', { again: true }), note('translated', { got: 1, total: 4, again: true })]).phase).toBe('retranslating')
+  })
+
+  // the phases a run passes through, each once, in order: what the capsule would show (the design, §8)
+  const phases = (events: SessionEvent[]) => {
+    const seen: string[] = []
+    events.reduce((state, event) => {
+      const next = reduce(state, event)
+      if (seen.at(-1) !== next.phase) seen.push(next.phase)
+      return next
+    }, INITIAL)
+    return seen
+  }
+  const bilingual: SessionEvent = { type: 'display', mode: 'bilingual' }
+  const copyShown = [note('digest'), note('cache hit'), note('cached opened'), note('shown cached')]
+
+  it("goes from loading to reading on a revisit with a current copy, never through translating (final review)", () => {
+    expect(phases([bilingual, note('opened'), ...copyShown, note('engine'), note('cache current')])).toEqual(['loading', 'ready'])
+  })
+
+  it("reads this machine's copy when no service can check it (final review)", () => {
+    expect(phases([bilingual, note('opened'), ...copyShown, note('done')])).toEqual(['loading', 'ready'])
+  })
+
+  it("keeps reading this machine's copy when the network is down, the failure kept (final review)", () => {
+    const events: SessionEvent[] = [bilingual, note('opened'), ...copyShown, note('engine'), note('translating', { again: true }), { type: 'fail', event: 'fetch failed', text: '', kind: 'network' }]
+    expect(fold(events)).toMatchObject({ phase: 'ready', failure: 'network' })
+    expect(phases(events)).not.toContain('failed')
+  })
+
+  it("translates again, never as a first translation, when this machine's copy is being replaced (final review)", () => {
+    const run = [note('source fetched', { again: true }), note('source', { total: 4, again: true }), note('anchored', { again: true }), note('translated', { got: 4, total: 4, again: true }), note('shown preview', { again: true }), note('shown final', { again: true }), note('done', { again: true })]
+    expect(phases([bilingual, note('opened'), ...copyShown, note('engine'), note('translating', { again: true }), ...run])).toEqual(['loading', 'ready', 'retranslating', 'ready'])
+  })
+
+  it('loads, then translates, when a translation is asked for after the original alone was read', () => {
+    expect(phases([note('opened'), bilingual, note('digest'), note('engine'), note('translating'), note('source', { total: 4 }), note('shown final'), note('done')])).toEqual(['ready', 'loading', 'translating', 'ready'])
+  })
+
+  it('has a final to download while a copy or the final is on screen, not while a draft replaces it (final review)', () => {
+    const copy = fold(copyShown)
+    expect(copy.finalReady).toBe(true)
+    const draft = fold([note('engine'), note('translating', { again: true }), note('shown preview', { again: true })], copy)
+    expect(draft.finalReady).toBe(false)
+    expect(fold([note('shown final', { again: true })], draft).finalReady).toBe(true)
+    expect(fold([note('digest'), note('cache hit'), note('cached opened'), note('cache unusable')]).finalReady).toBe(false)
+  })
+
+  it("names a failure by the chain's error kinds alone, the popup's reasons (final review)", () => {
+    expect(fold([{ type: 'fail', event: 'failed', text: '', kind: 'auth' }]).failure).toBe('auth')
+    expect(fold([{ type: 'fail', event: 'no engine', text: '', kind: 'unavailable' }]).failure).toBe('unknown')
   })
 
   it('has the final ready once it is on screen, or once a current copy is', () => {
@@ -93,6 +143,19 @@ describe('createController', () => {
     await Promise.resolve()
     expect(session.setDisplay).toHaveBeenCalledWith('bilingual')
     expect(vi.mocked(session.setSyncMode).mock.calls).toEqual([['same'], ['off']])
+  })
+
+  it('reports a session that could not be opened as a failure, and drops the commands queued for it (final review)', async () => {
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+    const controller = createController({ open: () => Promise.reject(new Error('no module')), params: new URLSearchParams() })
+    controller.setDisplay('bilingual')
+    await expect(controller.attach(panes())).rejects.toThrow('no module')
+    controller.setDisplay('translation')
+    await new Promise(r => setTimeout(r, 0))
+    process.off('unhandledRejection', unhandled)
+    expect(controller.getState()).toMatchObject({ phase: 'failed', failure: 'unknown' })
+    expect(unhandled).not.toHaveBeenCalled()
   })
 
   it('stops telling a listener that unsubscribed', async () => {

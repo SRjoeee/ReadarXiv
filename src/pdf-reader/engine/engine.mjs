@@ -4,6 +4,7 @@
 // format (`format`: tags for an LLM, markers for Microsoft, runs for an engine that keeps no placeholder) and the
 // target language; the reader serialises its units by the one and typesets for the other.
 import { toBcp47 } from '@/config/languages'
+import { isBuiltInService } from '@/config/services'
 import { ABSTRACT_MAX_CHARS } from '@/core/extractor/context'
 import { isPermanentErrorKind } from '@/providers/types'
 import { createMessageTransport } from '@/shared/transport'
@@ -63,7 +64,10 @@ export async function openEngine({ paper }) {
     // the status call bound the scope; nothing withdraws it but us (Codex on #296)
     removeEventListener('pagehide', withdraw)
     await transport.cancel(scope)
-    throw new EngineError('unavailable', `the chosen service (${status.chosen}) cannot translate now: see the extension's settings`)
+    // why, as the chain's error kinds, so that the reader words it as the popup does: the reason it was put aside; a
+    // service of the reader's own that cannot run has no key (an LLM runs once it has one); a built-in engine, unknown
+    const kind = status.demotions?.find(d => d.id === status.providerId)?.kind ?? (isBuiltInService(status.chosen) ? 'unknown' : 'no-key')
+    throw new EngineError(kind, `the chosen service (${status.chosen}) cannot translate now: see the extension's settings`)
   }
   // the service that answers: the chosen one, its fallback while it cannot, and after a hand-over the one that took
   // over, as each answer names it (Codex on #296)

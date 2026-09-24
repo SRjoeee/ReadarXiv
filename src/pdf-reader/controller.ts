@@ -1,12 +1,15 @@
 // The one boundary between the reader's engine and its interface (the reader's design, §11.3): the session's events
 // folded into a state the interface subscribes to, and the interface's commands passed on to the session. pdfslick's
 // per-viewer store, adopted: the engine's events drive the store, and nothing reads the viewers back
+import { PROVIDER_ERROR_KINDS, type ProviderErrorKind } from '@/providers/types'
 import type { EngineDisplay, SessionEvent, SessionHost } from './engine/session.mjs'
 import type * as SessionModule from './engine/session.mjs'
 
 export type Display = EngineDisplay
 export type Side = 'left' | 'right'
 export type Phase = 'loading' | 'translating' | 'retranslating' | 'ready' | 'failed'
+/** what the translation's side shows: nothing yet, this machine's copy, a draft being typeset, or the final */
+export type Shown = 'none' | 'copy' | 'preview' | 'final'
 
 export interface ReaderState {
   display: Display
@@ -17,10 +20,11 @@ export interface ReaderState {
   progress: number
   /** the paragraphs the service failed on: the notice's {n} */
   failedUnits: number
-  /** why nothing could be translated, as the chain's error kind (the popup's REASON); null otherwise */
-  failure: string | null
+  /** why the last run could not translate, as the chain's error kind (the popup's REASON); null otherwise */
+  failure: ProviderErrorKind | null
   languageSupported: boolean
-  /** the final translation is on screen: the translation's PDF can be downloaded */
+  shown: Shown
+  /** a final translation is on screen, this machine's copy or the run's: the translation's PDF can be downloaded */
   finalReady: boolean
   scale: number
   sides: Record<Side, { page: number; pages: number }>
@@ -36,6 +40,7 @@ export const INITIAL: ReaderState = {
   failedUnits: 0,
   failure: null,
   languageSupported: true,
+  shown: 'none',
   finalReady: false,
   scale: 1,
   sides: { left: { page: 1, pages: 0 }, right: { page: 1, pages: 0 } },
@@ -48,10 +53,18 @@ export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 
 /** the runs that end without a translation because of the paper, or of the language: not failures a reader can retry */
 const CANNOT_BE_HAD = new Set(['no source'])
 const NOT_SUPPORTED = new Set(['not verified'])
-/** the steps of a run that mean a translation is being made (live.mjs and session.mjs note) */
-const MAKING = new Set(['digest', 'source', 'anchored', 'translated', 'preview', 'shown preview', 'final'])
+/** what each step of a run puts on the translation's side (session.mjs note) */
+const SHOWS: Record<string, Shown> = { 'shown cached': 'copy', 'cache unusable': 'none', 'shown preview': 'preview', 'shown final': 'final' }
+const making = (phase: Phase) => phase === 'translating' || phase === 'retranslating'
+/** the engine's error kinds are the chain's (engine.mjs); anything else, a crash included, is the popup's unknown */
+const kindOf = (kind: string | undefined): ProviderErrorKind => (PROVIDER_ERROR_KINDS as readonly string[]).includes(kind ?? '') ? (kind as ProviderErrorKind) : 'unknown'
 
-/** one event folded into the state; the same object when nothing changed, so that no listener hears of it */
+/**
+ * One event folded into the state; the same object when nothing changed, so that no listener hears of it. The phase
+ * moves at named steps only (the design, §8): loading until the cache is answered, reading once a translation is on
+ * screen, translating from the session's decision to translate (`translating`, again when a copy is being replaced)
+ * until the run ends. A failure over a translation on screen leaves it readable: reading, the failure kept
+ */
 export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
   switch (event.type) {
     case 'display':
@@ -65,16 +78,27 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     case 'fail':
       if (CANNOT_BE_HAD.has(event.event)) return { ...state, available: false, phase: 'ready' }
       if (NOT_SUPPORTED.has(event.event)) return { ...state, languageSupported: false, phase: 'ready' }
-      return { ...state, phase: 'failed', failure: event.kind ?? 'unknown' }
+      return { ...state, phase: state.shown === 'none' ? 'failed' : 'ready', failure: kindOf(event.kind) }
     case 'note': {
+      const shown = SHOWS[event.event] ?? state.shown
+      const next = shown === state.shown ? state : { ...state, shown, finalReady: shown === 'copy' || shown === 'final' }
+      switch (event.event) {
+        case 'opened':
+          return state.display === 'original' && state.phase === 'loading' ? { ...next, phase: 'ready' } : next
+        case 'digest':
+          return shown === 'none' && state.phase === 'ready' ? { ...next, phase: 'loading' } : next
+        case 'shown cached':
+          return state.phase === 'loading' ? { ...next, phase: 'ready' } : next
+        case 'cache current':
+          return { ...next, phase: 'ready', progress: 1 }
+        case 'translating':
+          return { ...next, phase: event.again ? 'retranslating' : 'translating', failure: null, progress: event.total ? event.got / event.total : 0, failedUnits: event.lost }
+        case 'done':
+          return { ...next, phase: state.phase === 'failed' ? 'failed' : 'ready', failedUnits: event.lost, ...(shown === 'final' ? { progress: 1 } : {}) }
+      }
+      if (!making(state.phase)) return next
       const progress = event.total ? Math.min(1, event.got / event.total) : state.progress
-      if (event.event === 'opened') return state.display === 'original' ? { ...state, phase: 'ready' } : state
-      if (event.event === 'cache current') return { ...state, phase: 'ready', finalReady: true, progress: 1 }
-      if (event.event === 'shown cached') return { ...state, finalReady: true }
-      if (event.event === 'shown final') return { ...state, finalReady: true, progress: 1 }
-      if (event.event === 'done') return { ...state, phase: state.phase === 'failed' ? 'failed' : 'ready', failedUnits: event.lost }
-      if (MAKING.has(event.event)) return { ...state, phase: event.again ? 'retranslating' : 'translating', progress, failedUnits: event.lost }
-      return state
+      return progress === state.progress && event.lost === state.failedUnits && next === state ? state : { ...next, progress, failedUnits: event.lost }
     }
     default:
       return state
@@ -104,8 +128,11 @@ export function createController({ open, params }: { open: (host: SessionHost) =
     state = next
     for (const listener of listeners) listener()
   }
-  /** a command: carried out once the session is open, in the order given (a click while the paper opens is not lost) */
-  const later = (act: (s: Session) => void) => void session?.then(act)
+  /**
+   * A command: carried out once the session is open, in the order given (a click while the paper opens is not lost);
+   * one given before `attach` has no session to wait for and is dropped, as is one for a session that could not open
+   */
+  const later = (act: (s: Session) => void) => void session?.then(act, () => {})
   return {
     getState: () => state,
     subscribe(listener) {
@@ -115,7 +142,11 @@ export function createController({ open, params }: { open: (host: SessionHost) =
       }
     },
     attach(panes) {
-      session ??= open({ ...panes, params, emit })
+      // a session that cannot be opened (its module not loaded) is a failure the interface shows, as a crash is
+      session ??= open({ ...panes, params, emit }).catch((e: unknown) => {
+        emit({ type: 'fail', event: 'crashed', text: String((e as Error)?.message ?? e) })
+        throw e
+      })
       return session
     },
     setDisplay: display => later(s => s.setDisplay(display)),

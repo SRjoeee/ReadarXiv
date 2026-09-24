@@ -1381,6 +1381,11 @@ async function live() {
   }
   // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
   if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
+  // the decision to translate, the step the controller's phase moves at: a copy on screen is translated again, and
+  // its progress counted from nothing (final review)
+  again = !!cached
+  if (again) got = 0
+  note('translating')
   // the original on the right too, replaced as the translation comes in; opened where the original was being read, as a
   // side coming into view does (relayout, which has no document there yet to go by: Codex on #297)
   status(`Fetching ${paper}'s source from arXiv…`)
@@ -1437,7 +1442,6 @@ async function live() {
   // a language with no typesetting yet (scripts.mjs) fails at once, before anything is sent
   // the final's bytes once compiled, and whether it is on screen: the right side's marks are read from what is shown
   let finalPdf = null, finalShown = false, leftMarks = null
-  again = !!cached
   const result = await runLive(paperData, {
     lang, compile, note,
     seed, identity: engine.identity, pipelineCurrent: sameUnits,
@@ -1454,8 +1458,9 @@ async function live() {
     },
     onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!leftCurrent) { adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); if (final) finalShown = true; note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
     onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorSide(left, src, marks); invalidate(); paint(left); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
-  }).catch(e => ({ error: e.message ?? String(e) }))
-  if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`)
+  }).catch(e => ({ error: e.message ?? String(e), kind: e?.kind }))
+  // the engine's kind kept (engine.mjs EngineError), so that a key refused midway is worded as the popup words it
+  if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`, result.kind)
   await swaps
   // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
   // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
