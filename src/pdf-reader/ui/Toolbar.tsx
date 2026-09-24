@@ -10,6 +10,7 @@ import { DisplaySwitch } from './DisplaySwitch'
 import { Icon } from './icons'
 import { DownloadMenu, LanguageMenu, ServiceMenu, ZoomMenu } from './Menus'
 import { PaperTitle } from './PaperTitle'
+import { ReadingOptions } from './ReadingOptions'
 import { ToolbarButton } from './ToolbarButton'
 import { useReader } from './use-reader'
 
@@ -50,7 +51,7 @@ export function Toolbar({ controller, embedded }: { controller: ReaderController
         <span className="divider" />
         <LanguageMenu controller={controller} />
         <ServiceMenu controller={controller} />
-        {/* the reading options (Task 20) */}
+        <ReadingOptions controller={controller} />
         <span className="divider" />
         <DownloadMenu controller={controller} />
         <ToolbarButton label={S.settings} onClick={openSettings}>

@@ -118,6 +118,29 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.close()
 }
 
+// ---------------------------------------------------------------- Task 20: the reading options
+{
+  const page = await open({ mode: 'bilingual' })
+  await page.getByRole('button', { name: '阅读选项' }).click()
+  await page.waitForTimeout(300)
+  await page.getByRole('radio', { name: '深色' }).click()
+  await page.waitForTimeout(600)
+  check('the appearance chosen in the options applies at once', await page.evaluate(() => document.documentElement.dataset.theme === 'dark'))
+  check('a wide window keeps the language and service menus in the bar, not in the options', await page.evaluate(() => [...document.querySelectorAll('.pop:popover-open .narrow-only')].every(el => getComputedStyle(el).display === 'none')))
+  await shot(page, '20-options-dark')
+  await page.getByRole('radio', { name: '跟随系统' }).click()
+  await page.keyboard.press('Escape')
+  await page.setViewportSize({ width: 880, height: 900 })
+  await page.waitForTimeout(400)
+  const inBar = await page.evaluate(() => getComputedStyle(document.querySelector('[data-zone="trail"] > button[aria-label="目标语言"]')).display)
+  await page.getByRole('button', { name: '阅读选项' }).click()
+  await page.waitForTimeout(300)
+  const inOptions = await page.evaluate(() => { const b = document.querySelector('.pop:popover-open .narrow-only button[aria-label="目标语言"]'); return !!b && b.getBoundingClientRect().width > 0 })
+  check('under 900 px the language menu leaves the bar for the options', inBar === 'none' && inOptions, JSON.stringify({ inBar, inOptions }))
+  await shot(page, '20-options-narrow')
+  await page.close()
+}
+
 console.log(failed ? `${failed} failed` : 'all passed')
 await context.close()
 process.exit(failed ? 1 : 0)
