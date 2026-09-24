@@ -127,10 +127,13 @@ $('modes').onclick = e => {
   const next = e.target.closest('button')?.dataset.mode
   if (!next || next === mode) return
   const from = mode
+  // where the reader is, read while that side is still shown: a side the display hides has no layout (Codex on #297)
+  const place = from === 'bilingual' ? null : readingPlace(from === 'original' ? left : right)
+  window.__reader.place = place
   mode = next
   showMode()
   void savePrefs({ mode })
-  relayout(from)
+  relayout(from, place)
   if (mode !== 'original') wantTranslation()
 }
 // Opened over arXiv's PDF page (the extension's content script there): the page's own paper, and a way back to the
@@ -921,16 +924,39 @@ const shown = side => side.container.clientWidth > 0
  * The display changed: the viewers now shown are laid out again at their pane's width, and a side coming into view
  * opens where the other one was being read, by the table the sync scrolls with
  */
-function relayout(from) {
+/**
+ * Where the reader is on a side, in terms that outlast its layout: the unit at the reading line and the place within it
+ * (its lines counted from 0 to 1), and the place in the whole document for when no unit is located there. Read while
+ * the side is shown: once the display hides it, its scrollTop and its pages' offsets are all 0, and a switch straight
+ * between Original and Translation opened the other side at the paper's top (Codex on #297, measured by
+ * spikes/viewer-faults.mjs)
+ */
+function readingPlace(side) {
+  const c = side.container
+  const doc = c.scrollTop / Math.max(1, c.scrollHeight - c.clientHeight)
+  if (!side.doc || !side.anchors.size || !shown(side)) return { doc }
+  invalidate()
+  const y = c.scrollTop + c.clientHeight * readingLine
+  let page = 1
+  for (let p = 1; p <= side.doc.numPages; p++) if (pageTop(side, p) <= y) page = p
+  // the first column, as the settle takes it with no pointer
+  const pv = pageView(side, page), [x] = pv.viewport.convertToPdfPoint(pv.div.clientWidth * 0.25, 0)
+  const l = lineAt(side, y, x)
+  if (!l) return { doc }
+  const f = Math.min(1, Math.max(0, (y - l.top) / Math.max(1, l.bottom - l.top)))
+  return { doc, id: l.id, at: (l.li + f) / l.n }
+}
+/** the display changed from `from`: the sides shown laid out to its width, and the side it brought in put at `place` */
+function relayout(from, place = null) {
   bake()
   requestAnimationFrame(() => {
     for (const s of sides) if (s.doc && shown(s)) { s.viewer.currentScaleValue = 'page-width'; s.viewer.update() }
     const came = from === 'original' ? right : from === 'translation' ? left : null
     requestAnimationFrame(() => {
-      if (!came || !left.anchors.size || !right.anchors.size || !came.doc) return
-      const went = other(came), c = went.container
+      if (!came?.doc || !place) return
       invalidate()
-      put(came.container, map(went === left, c.scrollTop + c.clientHeight * readingLine) - came.container.clientHeight * readingLine)
+      const c = came.container, y = place.id != null ? spot(came, place.id, place.at) : null
+      put(c, y != null ? y - c.clientHeight * readingLine : place.doc * (c.scrollHeight - c.clientHeight))
     })
   })
 }
@@ -1319,7 +1345,11 @@ async function live() {
     const missed = lost ? ` (${lost} not: ${lostWhy})` : ''
     status(`${again ? 'translating again · ' : ''}${total ? `${got} of ${total} translated${by}${missed}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
   }
-  const fail = (event, text) => { setContext({}); note(event); status(text); L.done = true; L.failed = text }
+  const fail = (event, text) => {
+    setContext({}); note(event); status(text); L.done = true; L.failed = text
+    // the Translation display with nothing on its side would be blank: the original, for this visit (Codex on #297)
+    if (mode === 'translation' && !right.doc) { mode = 'original'; showMode(); relayout('translation') }
+  }
   // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
   // told at once
   // the original first, in every display; nothing is translated or compiled until a display that shows a translation is chosen
