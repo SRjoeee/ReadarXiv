@@ -104,3 +104,23 @@ html[data-axt-dim] .pdfViewer .page canvas { filter: invert(88.8%) hue-rotate(18
 html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
 /* the appearance changes as one crossfade of the whole page (the View Transitions API) */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; animation-timing-function: var(--ease); }
+/* ----- the controls (§6, §7): component classes, the layout around them in utilities ----- */
+@layer components {
+  .tbtn { position: relative; height: 30px; min-width: 30px; flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 7px; color: var(--ink-2); transition: background-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out; }
+  .tbtn::before { content: ""; position: absolute; inset: -7px -2px; }
+  .tbtn:hover, .tbtn[aria-expanded="true"], .tbtn[aria-pressed="true"] { background: var(--fill); color: var(--ink); }
+  .tbtn:active { scale: 0.96; }
+  .tbtn[aria-disabled="true"] { background: none; color: var(--ink-3); opacity: 0.55; }
+  .tbtn[aria-disabled="true"]:active { scale: 1; }
+  .divider { width: 0.5px; height: 18px; margin-inline: 6px; flex: none; background: var(--chrome-line); }
+
+  /* tooltips: below their control, centred on it, kept inside the window; one line always */
+  .tip { position: fixed; inset: auto; margin: 8px 0 0; position-area: bottom; position-try-fallbacks: bottom span-right, bottom span-left;
+    padding: 5px 8px; border: 0; border-radius: 6px; background: oklch(0.22 0.01 255); color: oklch(0.96 0 0); font: 12px/1.2 var(--font);
+    white-space: nowrap; display: none; gap: 10px; box-shadow: 0 4px 12px oklch(0 0 0 / 0.2); pointer-events: none; overflow: visible; }
+  .tip:popover-open { display: flex; animation: tip-in 120ms ease-out; }
+  .tip[data-side="right"] { margin: 0 0 0 8px; position-area: right; position-try-fallbacks: none; }
+  .tip kbd { color: oklch(0.74 0.01 255); }
+}
+@keyframes tip-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tbtn, .tbtn:active { transition: none; scale: 1; } }
