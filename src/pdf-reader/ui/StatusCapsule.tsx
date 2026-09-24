@@ -2,13 +2,13 @@
 // region present from the first paint, so that what it says later is announced; it rises in (240 ms) and leaves lighter
 // (160 ms); a new state of the same kind changes its words in place. Progress is its own background filling from the
 // left. A notice has a chip and a close, the close remembered for the visit; the narrow window's words leave by
-// themselves after 4 s. A failure never takes the focus
+// themselves after 4 s. A failure never takes the focus; the card's reason is said in this region
 import { Info, X } from 'lucide'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { R, S } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { Icon } from './icons'
-import { type Capsule, capsuleOf } from './status'
+import { type Capsule, capsuleOf, cardOf } from './status'
 import { useReader } from './use-reader'
 
 export function StatusCapsule({ controller, onChooseLanguage }: { controller: ReaderController; onChooseLanguage: () => void }) {
@@ -48,8 +48,11 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
     width.current = { kind: now.kind, w }
   }, [now?.kind, now?.text])
   const capsule = now ?? leaving
+  // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
+  const card = cardOf(state)
   return (
     <div role="status" className="capsule-slot">
+      {card && <span className="sr-only">{card.reason}</span>}
       {capsule && (
         <div ref={box} key={capsule.kind} className="chrome capsule" data-kind={capsule.kind} data-out={now ? undefined : ''}>
           {capsule.kind === 'progress' && <span className="fill" aria-hidden="true" style={{ scale: `${Math.max(0.04, capsule.progress)} 1` }} />}

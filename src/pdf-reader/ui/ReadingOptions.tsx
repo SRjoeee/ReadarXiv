@@ -1,11 +1,13 @@
 // The reading options (the reader's design, §6.1): the highlight and its colour, figure text, the appearance and the
 // dark pages — all settings, the same values the popup and the settings page change, each written at once
 import { SlidersHorizontal } from 'lucide'
+import { useRef } from 'react'
 import { R, S, profileName } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { Icon } from './icons'
 import { LanguageMenu, ServiceMenu } from './Menus'
 import { Popover, usePopover } from './Popover'
+import { radioKeys } from './radio'
 import { Switch } from './Switch'
 import { ToolbarButton } from './ToolbarButton'
 import { useReader } from './use-reader'
@@ -15,10 +17,12 @@ const APPEARANCES = ['light', 'dark', 'system'] as const
 export function ReadingOptions({ controller }: { controller: ReaderController }) {
   const state = useReader(controller)
   const pop = usePopover('dialog', 'options')
+  const radios = useRef<(HTMLButtonElement | null)[]>([])
   const config = state.settings
   if (!config) return null
   const names = { light: R.options.light, dark: R.options.dark, system: R.options.system }
   const appearance = config.pdfReader.appearance
+  const setAppearance = (a: (typeof APPEARANCES)[number]) => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, appearance: a } }))
   return (
     <>
       <ToolbarButton label={R.options.name} anchor={pop.anchor} {...pop.trigger}>
@@ -56,11 +60,12 @@ export function ReadingOptions({ controller }: { controller: ReaderController })
         <div className="sep" />
         <div className="row">
           {R.options.appearance}
-          <div role="radiogroup" aria-label={R.options.appearance} className="seg small w-[180px]" style={{ '--i': APPEARANCES.indexOf(appearance) } as React.CSSProperties}>
+          <div role="radiogroup" aria-label={R.options.appearance} className="seg small w-[180px]" style={{ '--i': APPEARANCES.indexOf(appearance) } as React.CSSProperties}
+            onKeyDown={radioKeys(APPEARANCES, appearance, () => true, setAppearance, i => radios.current[i]?.focus())}>
             <span className="thumb" aria-hidden="true" />
-            {APPEARANCES.map(a => (
-              // biome-ignore lint/a11y/useSemanticElements: an ARIA radio drawn as a segment (the design, §6.1), as the display switch's
-              <button key={a} type="button" role="radio" aria-checked={a === appearance} tabIndex={a === appearance ? 0 : -1} onClick={() => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, appearance: a } }))}>
+            {APPEARANCES.map((a, i) => (
+              // biome-ignore lint/a11y/useSemanticElements: an ARIA radio drawn as a segment (the design, §6.1), as the display switch's; its keys are the group's
+              <button key={a} ref={el => { radios.current[i] = el }} type="button" role="radio" aria-checked={a === appearance} tabIndex={a === appearance ? 0 : -1} onClick={() => setAppearance(a)}>
                 {names[a]}
               </button>
             ))}

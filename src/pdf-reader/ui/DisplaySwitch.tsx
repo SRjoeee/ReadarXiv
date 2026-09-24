@@ -2,10 +2,11 @@
 // language, the chosen one on a lifted thumb that slides; icons, the words in tooltips and to screen readers. A single
 // choice, so a radio group: arrows move the choice (a display that cannot be had skipped), and 1, 2, 3 choose anywhere on
 // the page outside a text field
-import { type KeyboardEvent, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { R } from '@/ui/strings'
 import type { Display } from '../controller'
 import { DisplayIcon } from './icons'
+import { radioKeys } from './radio'
 import { useTip } from './tip'
 
 const ORDER: readonly Display[] = ['original', 'bilingual', 'translation']
@@ -16,21 +17,11 @@ const theirs = (t: EventTarget | null) => t instanceof HTMLElement && (t.isConte
 export function DisplaySwitch({ value, translatable, onChange }: { value: Display; translatable: boolean; onChange: (display: Display) => void }) {
   const can = (d: Display) => d === 'original' || translatable
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
-  const choose = (d: Display, focus = false) => {
+  const choose = (d: Display) => {
     if (!can(d) || d === value) return
     onChange(d)
-    if (focus) buttons.current[ORDER.indexOf(d)]?.focus()
   }
-  const onKey = (e: KeyboardEvent) => {
-    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
-    if (!step) return
-    e.preventDefault()
-    let i = ORDER.indexOf(value)
-    for (let k = 0; k < ORDER.length; k++) {
-      i = (i + step + ORDER.length) % ORDER.length
-      if (can(ORDER[i]!)) return choose(ORDER[i]!, true)
-    }
-  }
+  const onKey = radioKeys(ORDER, value, can, d => choose(d), i => buttons.current[i]?.focus())
   // 1, 2, 3 anywhere on the page, outside a text field, a menu or a dialog, without a modifier (⌘1 is the browser's),
   // and when nothing took the key before
   const latest = useRef(choose)

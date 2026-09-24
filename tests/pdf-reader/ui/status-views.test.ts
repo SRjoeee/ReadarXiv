@@ -23,6 +23,14 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     expect(region.textContent).toContain('正在翻译')
   })
 
+  it('the card\'s reason is said in the status region, as the card takes no focus (the final review)', async () => {
+    const fake = fakeController({ phase: 'loading' })
+    const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
+    const region = container.querySelector('[role="status"]')!
+    await act(async () => fake.set({ phase: 'failed', failure: 'no-key' }))
+    expect(region.textContent).toContain('尚未配置 API Key')
+  })
+
   it('a notice\'s 重试 retries, and its close is remembered for the visit', async () => {
     const fake = fakeController({ phase: 'ready', failedUnits: 2 })
     const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))

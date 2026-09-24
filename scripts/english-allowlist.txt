@@ -48,11 +48,11 @@ tests/pdf-reader/ui/copy.test.ts 4  # 2026-09-25: the reader's words, zh-CN expe
 tests/pdf-reader/ui/display-switch.test.ts 3  # 2026-09-25: the display switch's choices found by their Chinese names
 tests/pdf-reader/ui/languages.test.ts 1  # 2026-09-25: the nine languages each named in its own language, the expectation
 tests/pdf-reader/ui/menus.test.ts 2  # 2026-09-25: the menus' items found by their Chinese names
-tests/pdf-reader/ui/reading-options.test.ts 6  # 2026-09-25: the reading options' controls found by their Chinese names
+tests/pdf-reader/ui/reading-options.test.ts 7  # 2026-09-25: the reading options' controls found by their Chinese names; +1, the appearance radio the arrows focus
 tests/pdf-reader/controller.test.ts 1  # 2026-09-25: the contents' titles as a Chinese reader sees them, the expectations
 tests/pdf-reader/ui/outline.test.ts 8  # 2026-09-25: the contents' titles as a Chinese reader sees them, the expectations
 tests/pdf-reader/ui/pane-floats.test.ts 1  # 2026-09-25: the pills' fields found by their Chinese names
-tests/pdf-reader/ui/status-views.test.ts 5  # 2026-09-25: the states' words as the reader shows them, the expectations
+tests/pdf-reader/ui/status-views.test.ts 6  # 2026-09-25: the states' words as the reader shows them, the expectations; +1, the card's reason said in the status region
 tests/pdf-reader/ui/status.test.ts 10  # 2026-09-25: the states' words as the reader shows them, the expectations
 tests/pdf-reader/ui/tip.test.ts 3  # 2026-09-25: the reader's controls found by their Chinese names, as the interface shows them
 tests/pdf-reader/ui/toolbar.test.ts 10  # 2026-09-25: the toolbar's controls found by their Chinese names

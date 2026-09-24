@@ -32,6 +32,17 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
     expect([...container.querySelectorAll('[role="radio"]')].map(r => [r.textContent, r.getAttribute('aria-checked')])).toEqual([['浅色', 'false'], ['深色', 'false'], ['跟随系统', 'true']])
   })
 
+  it('moves the appearance with the arrows, the focus going with it, as a radio group does (the final review)', async () => {
+    const { container, written } = await open()
+    const group = container.querySelector<HTMLElement>('[role="radiogroup"]')!
+    const arrow = (key: string) => act(async () => { group.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })) })
+    // the defaults follow the system, the last choice: the right arrow wraps to the first, light; the left one goes to dark
+    await arrow('ArrowRight')
+    expect([written().pdfReader.appearance, document.activeElement?.textContent]).toEqual(['light', '浅色'])
+    await arrow('ArrowLeft')
+    expect(written().pdfReader.appearance).toBe('dark')
+  })
+
   it('holds the language and service menus as its first rows, for a window under 900 px (§5)', async () => {
     const { container } = await open()
     const rows = [...container.querySelectorAll('[popover="auto"] > .narrow-only.row')]
