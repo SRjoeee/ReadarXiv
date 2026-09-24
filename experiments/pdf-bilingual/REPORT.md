@@ -1253,3 +1253,42 @@ Chrome 131 has none of these; Chromium 153 has them all (measured in both). Now 
 - The session follows a landing of the settings through the surface's `onLanded`, and only what changed. It never follows on a refused write, and a display this visit holds (the original after a failure) outlives it. Before, the plan re-applied the display on every landing, including the defaults a refused write lands.
 - The browser check sends its changes as plain objects: the extension's policy has no `unsafe-eval`, and the plan's `new Function` would have thrown.
 - The browser check gains the unreadable-settings case and an unrelated change.
+
+## Twenty-second addendum, 2026-09-25: the reader on the extension's settings (Part 2) — BUILT
+
+Part 2 of `plans/2026-09-25-reader-interface.md`. The reader's own preferences key (`axtPdfReader`) is gone. The reader reads and writes the extension's settings, as the popup and the settings page do, through the same surface (`shared/surface-config.ts`). That surface is the page's only writer; the interface reaches it through the controller (`patchSettings`).
+
+**What it reads.**
+
+- **The display** is the HTML page's `mode`: side by side or stacked show both sides, the translation alone shows it alone. The exception is a reader last left on the original alone, which the new `pdfReader.original` records (`src/pdf-reader/settings.ts`).
+- **The sync** is `pdfReader.sync`.
+- **The highlight's band** is `reading.sentenceHighlight`.
+- **Figure text** follows the image switch and the modes ticked, as on the HTML page.
+- **The interface language**: a new one reloads the page, as it reloads the popup.
+- **The target language**: a new one, once a translation has started, reloads the page, as before.
+
+The settings group is `pdfReader`, configuration v19: `enabled`, `original`, `sync`, `swapped`, `appearance`, `dimPages`. Its migration writes the defaults, and none of it is part of the translation chain.
+
+**What it writes.**
+
+- A display chosen in the reader writes the mode. Stacked stays stacked, since it is already a side-by-side choice for the HTML page. The original alone writes `pdfReader.original`.
+- The sync switch writes `pdfReader.sync`; the figure switch writes `image.enabled`.
+- An address that names a display or a sync mode (the probes' pages) holds for its page and writes nothing.
+
+**What it follows.** A landing of the settings is followed only in what changed since the one before. A landing from the page's own write changes nothing already on screen.
+
+- **A refused write is never followed.** It lands the defaults, and the display the reader chose outlives them. Made to follow it, the browser check fails: the display snaps back to side by side.
+- **A display this visit holds** outlives a change of the settings. This is the original, once a failure left the translation's side with nothing to show. A display chosen in the reader lets it go.
+
+**Found on the way.** An unreadable value written elsewhere is not followed at all: `watchConfig` passes valid values alone. So the reader learns the settings are unreadable when its own write is refused, or when it opens on them. The plan's check had expected it to know at once; the check now tests both of these ways.
+
+**MEASURED.**
+
+| Check | Result |
+|---|---|
+| `spikes/reader-settings.mjs` (new) | 19 checks, all passed. Among them: another reader follows and writes nothing back; stacked kept; the sync and its switch; no band and no figure text with their switches off; an unrelated change leaves the display; unreadable settings, a refused write and a reader opened on them |
+| `e2e:pdf` | 19/19 |
+| `spikes/viewer-faults.mjs` | all passed |
+| `spikes/sync-frames.mjs` | the follower on the compositor 0 frames off, p95 0 px, idle and busy |
+| `spikes/cache-revisit.mjs` | 26 checks, all passed; a revisit shown from this machine's copy in 181 ms (opened → cache hit 115 ms), offline in 149 ms, both tabs' finals compiled |
+| `pnpm test` | 2251 passed |
