@@ -2,10 +2,11 @@
 // a text the engine could not take is sent again in runs, the text pieces between its placeholders; texts lost to a
 // failure of the service (a network down, a rate limit already retried) are not, since each piece would only fail again
 // (Codex on #296). A unit is whole, partial, none or lost, and by the identity that answered it, MIXED when two did
-// (REPORT, eighteenth addendum). Exits non-zero on a failure. Build lib/axt first: node spikes/build-shared.mjs
+// (REPORT, eighteenth addendum). Exits non-zero on a failure. From the repository root:
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/mt-cases.mjs
 import assert from 'node:assert/strict'
-import { translateUnits } from '../poc-reader/mt.mjs'
-import { MIXED } from '../poc-reader/lib/axt/wire.mjs'
+import { translateUnits } from '../../../src/pdf-reader/engine/mt.mjs'
+import { MIXED } from '../../../src/cache/pdf-record.ts'
 
 /** a unit of two text pieces around a formula */
 const unit = n => ({ pieces: [{ t: 'text', s: `first part ${n} ` }, { t: 'math', s: '$x$' }, { t: 'text', s: ` second part ${n}` }] })

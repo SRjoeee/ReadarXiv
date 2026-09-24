@@ -3,7 +3,8 @@
 // the engine's slips are forgiven where they are unambiguous, and what still fails goes as runs — each stretch of text
 // between opaque pieces on its own — so that nothing is left untranslated.
 import { latin1Bytes } from './latex-front.mjs'
-import { fromAlpha, MIXED, TAG_RE, toAlpha } from './lib/axt/wire.mjs'
+import { MIXED } from '@/cache/pdf-record'
+import { fromAlpha, TAG_RE, toAlpha } from '@/core/protector/tokens'
 
 // ---------------------------------------------------------------- markers wire format
 export { fromAlpha, toAlpha }

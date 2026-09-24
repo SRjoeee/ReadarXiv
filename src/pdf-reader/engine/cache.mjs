@@ -1,7 +1,7 @@
 // The reader's side of its cache of compiled translations (REPORT, eighteenth addendum): the seed a translation made
 // again starts from, the units a record keeps, when a run writes, the figures' keys. The store itself is the
-// extension's (src/cache/pdf-store.ts, through lib/axt/extension.mjs). Pure but for the hash, so that
-// spikes/cache-cases.mjs runs it in Node.
+// extension's (src/cache/pdf-store.ts). Pure but for the hash, so that experiments/pdf-bilingual/spikes/cache-cases.mjs
+// runs it in Node.
 import { plainSource, plainTranslated } from './mt.mjs'
 
 const hex = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('')

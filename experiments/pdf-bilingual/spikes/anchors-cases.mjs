@@ -1,8 +1,8 @@
 // The heading cases anchors.mjs keeps, on made-up documents: a heading, which carries no marks, found between the
 // marked units of the text around it (2608.02163, 2026-09-23). Exits non-zero on a failure.
-//   node spikes/anchors-cases.mjs [path to anchors.mjs]
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/anchors-cases.mjs [path to anchors.mjs]   (from the repository root)
 import assert from 'node:assert/strict'
-const { anchorUnits, tokens } = await import(process.argv[2] ?? '../poc-reader/anchors.mjs')
+const { anchorUnits, tokens } = await import(process.argv[2] ?? '../../../src/pdf-reader/engine/anchors.mjs')
 
 /** words → the token stream anchors.mjs reads, one line of 10 per 12 points down page 1 */
 function docOf(text) {

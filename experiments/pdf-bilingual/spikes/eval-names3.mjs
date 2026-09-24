@@ -4,7 +4,7 @@
 // every distinct box by hand: the words are listed here, every other box the rule keeps was read as a name.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isName } from '../poc-reader/mt.mjs'
+import { isName } from '../../../src/pdf-reader/engine/mt.mjs'
 const root = new URL('..', import.meta.url).pathname
 const papers = new Map(JSON.parse(readFileSync(join(root, 'out/eval-labels.json'), 'utf8')).map(p => [p.id, p.prose]))
 export const WORDS = new Set(['LLM-based', 'Germanic', 'Sinitic Semitic', 'EEG', 'BabyLM-100M 2-layer', 'BabyLM-100M 4-layer', 'BabyLM-10M 2-layer', 'BabyLM-10M 4-layer', 'BabyLM-10M 2layer', 'BabyLM-10M 4layer', 'BabyLM-100M 2layer', 'BabyLM-100M 4layer', 'Less', 'ASR (Harm)', 'Paraphrase', 'Random Forest', 'CONTENTS', 'CPU', 'TimeStep', 'Probability', 'United States', 'China', 'United Kingdom', 'Switzerland', 'France Canada', 'Fixed-5', 'TBD', 'LLM', '⊕: 𝐶ℎ𝑎𝑛𝑛𝑒𝑙 𝐶𝑜𝑛𝑐𝑎𝑡', '8×8 Patch', '4×4 Patch', 'Mismatch', 'Table', 'Template', 'Inpainting', 'Outpainting', 'SKUs', 'Expressive Candid', 'Candid', 'Expressive', 'LTGOV INTL', 'Softmax', 'REFERENCES', 'En', 'EN', 'CN', 'RH', 'LH', 'PRETRAINED MODEL', 'Forward-Backward', 'w/ DQC', 'w/ AC', 'w/ MASD', 'w/ DCI', 'Self-Distill', 'Dirac--Fock', 'Dirac–Padé', 'Content-Scrambled'])

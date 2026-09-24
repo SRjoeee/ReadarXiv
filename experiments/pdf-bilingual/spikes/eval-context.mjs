@@ -5,9 +5,9 @@
 // Writes out/eval-context-<lang>.json.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isName, translateTexts } from '../poc-reader/mt.mjs'
-import { blockWire, splitBlock } from '../poc-reader/figures.mjs'
-import { isTranslatable } from '../poc-reader/lib/axt/figures.mjs'
+import { isName, translateTexts } from '../../../src/pdf-reader/engine/mt.mjs'
+import { blockWire, splitBlock } from '../../../src/pdf-reader/engine/figures.mjs'
+import { isTranslatable } from '../../../src/core/image/boxes.ts'
 const root = new URL('..', import.meta.url).pathname
 const lang = process.argv[2] ?? 'zh'
 const papers = JSON.parse(readFileSync(join(root, 'out/eval-labels.json'), 'utf8'))

@@ -1,7 +1,7 @@
-// The sync's pure part (poc-reader/sync.mjs) on made-up layouts: a one-column pair is level line by line, the map rises
+// The sync's pure part (src/pdf-reader/engine/sync.mjs) on made-up layouts: a one-column pair is level line by line, the map rises
 // everywhere and meets both ends, and the reading chain drops a unit found out of order. Exits non-zero on a failure.
 import assert from 'node:assert/strict'
-import { flowChain, knots, lineTable, makeMap, posAt } from '../poc-reader/sync.mjs'
+import { flowChain, knots, lineTable, makeMap, posAt } from '../../../src/pdf-reader/engine/sync.mjs'
 
 /** units of `n` lines each, one column, line height h, a gap g between units, starting at y0 */
 function column(counts, { h, g, y0 }) {

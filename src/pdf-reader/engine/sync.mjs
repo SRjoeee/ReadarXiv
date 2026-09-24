@@ -1,6 +1,6 @@
 // Synchronised scrolling, the part with no DOM: the units both sides are read by, a coordinate through them that does
 // not depend on either layout, and a map between the two sides' scroll positions, whose slope over the reader's view is
-// the speed the "matched" mode moves the other side at. The reader (reader.js) measures the lines and moves the panes
+// the speed the "matched" mode moves the other side at. The reader (session.mjs) measures the lines and moves the panes
 // (REPORT, sixteenth addendum).
 //
 // The coordinate λ: the chain's k-th unit covers [k, k + 1), and on each side its i-th of n lines covers

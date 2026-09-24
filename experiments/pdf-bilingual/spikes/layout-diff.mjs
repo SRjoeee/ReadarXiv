@@ -3,7 +3,7 @@
 //   node spikes/layout-diff.mjs a.pdf b.pdf
 import { readFileSync } from 'node:fs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { tokenizeDocument } from '../poc-reader/anchors.mjs'
+import { tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
 const root = new URL('..', import.meta.url).pathname
 async function tokensOf(file) {
   const pdf = await getDocument({ data: new Uint8Array(readFileSync(file)), verbosity: 0, standardFontDataUrl: `${root}node_modules/pdfjs-dist/standard_fonts/` }).promise

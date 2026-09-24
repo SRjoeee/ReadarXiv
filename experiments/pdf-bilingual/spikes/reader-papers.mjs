@@ -6,7 +6,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { markWords, tokenizeDocument } from '../poc-reader/anchors.mjs'
+import { markWords, tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
 const root = new URL('..', import.meta.url).pathname
 const pdfIn = d => join(d, readdirSync(d).find(f => f.endsWith('.pdf')))
 for (const id of process.argv.slice(2)) {

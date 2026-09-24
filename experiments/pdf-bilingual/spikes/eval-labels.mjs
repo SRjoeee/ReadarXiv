@@ -5,11 +5,11 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { figureLabels, figureRegions, vectorLines } from '../poc-reader/figures.mjs'
-import { linesToBoxes } from '../poc-reader/lib/axt/figures.mjs'
-import { loadProject } from '../poc-reader/latex-front.mjs'
-import { analyze } from '../poc-reader/paper-meta.mjs'
-import { plainSource } from '../poc-reader/mt.mjs'
+import { figureLabels, figureRegions, vectorLines } from '../../../src/pdf-reader/engine/figures.mjs'
+import { linesToBoxes } from '../../../src/core/image/boxes.ts'
+import { loadProject } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { analyze } from '../../../src/pdf-reader/engine/paper-meta.mjs'
+import { plainSource } from '../../../src/pdf-reader/engine/mt.mjs'
 const root = new URL('..', import.meta.url).pathname
 const ids = JSON.parse(readFileSync(join(root, 'out/c0-browser-patched-full.json'), 'utf8')).filter(r => r.result === 'pass').map(r => r.id)
 const out = []

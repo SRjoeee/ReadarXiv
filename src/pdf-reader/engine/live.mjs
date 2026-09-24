@@ -48,7 +48,7 @@ export const lostIn = log => {
 export const unsettable = (r, known = new Map()) => /^! Font .* not loadable/m.test(r.log ?? '') || [...lostIn(r.log)].some(([c, n]) => n > (known.get(c) ?? 0))
 /** images as frames of their own size (graphicx's draft), each frame's corners marked — g<n>a and g<n>b at its left and
  *  right ends on its baseline, g<n>t at its top right, n counting \includegraphics in the order TeX runs them — so that
- *  the reader lays the left's figure over its frame (reader.js leftFor). A transformed include (\rotatebox or
+ *  the reader lays the left's figure over its frame (session.mjs leftFor). A transformed include (\rotatebox or
  *  \resizebox around it, angle=) turns or scales its frame and not the marks, whose rectangle then has the size of no
  *  figure on the left, and the reader leaves that frame as it is */
 const DRAFT = [

@@ -1,9 +1,10 @@
 // The tag spellings an engine's answer may use, read as the background reads them before it caches a translation
 // (src/core/protector/tokens.ts): a unit's placeholders put back (mt.mjs rehydrateTags) and a figure's block cut into
-// its lines (figures.mjs splitBlock). Exits non-zero on a failure. Build lib/axt first: node spikes/build-shared.mjs
+// its lines (figures.mjs splitBlock). Exits non-zero on a failure. From the repository root:
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/wire-cases.mjs
 import assert from 'node:assert/strict'
-import { splitBlock } from '../poc-reader/figures.mjs'
-import { rehydrateTags } from '../poc-reader/mt.mjs'
+import { splitBlock } from '../../../src/pdf-reader/engine/figures.mjs'
+import { rehydrateTags } from '../../../src/pdf-reader/engine/mt.mjs'
 
 const unit = { slots: [{ void: { t: 'ph', src: '$x$' } }], lead: '', trail: '' }
 const texts = pieces => pieces.map(p => (p.t === 'text' ? p.s : `[${p.src}]`)).join('')

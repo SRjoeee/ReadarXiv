@@ -1,6 +1,6 @@
 // The METAFONT outputs TeX Live does not ship and its fonts need. BusyTeX cannot run METAFONT (upstream/, issue E), so
 // a font TeX Live has only as METAFONT source is missing in the browser, where native TeX Live makes it on the way.
-// Today that is the LH fonts' metrics — Cyrillic under pdfLaTeX (T2A, poc-reader/scripts.mjs): every size of every family
+// Today that is the LH fonts' metrics — Cyrillic under pdfLaTeX (T2A, src/pdf-reader/engine/scripts.mjs): every size of every family
 // the T2A font definitions name. TeX Live ships 37 of those 350, METAFONT makes 307 in 11 minutes (1.2 MB), 6 have no
 // source; a heading at 14.4 pt already needs one TeX Live lacks. The outlines are cm-super's, in TeX Live. Made natively
 // once, into data/metafont/tfm; copy that into the file server's tree (fonts/tfm/axt-metafont) and restart the server,

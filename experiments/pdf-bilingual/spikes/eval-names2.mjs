@@ -4,7 +4,7 @@
 // 140 distinct boxes, by hand, recorded here; a stricter rule is scored on the same verdicts (it can only drop boxes).
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isName } from '../poc-reader/mt.mjs'
+import { isName } from '../../../src/pdf-reader/engine/mt.mjs'
 const root = new URL('..', import.meta.url).pathname
 const d = JSON.parse(readFileSync(join(root, 'out/eval-join2-zh.json'), 'utf8'))
 const papers = new Map(JSON.parse(readFileSync(join(root, 'out/eval-labels.json'), 'utf8')).map(p => [p.id, p.prose]))

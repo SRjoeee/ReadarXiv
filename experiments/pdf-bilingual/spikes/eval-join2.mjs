@@ -7,8 +7,8 @@
 // box closer to its neighbour's translation than to its own. Writes out/eval-join2-<lang>.json.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isName, translateTexts } from '../poc-reader/mt.mjs'
-import { linesToBoxes } from '../poc-reader/lib/axt/figures.mjs'
+import { isName, translateTexts } from '../../../src/pdf-reader/engine/mt.mjs'
+import { linesToBoxes } from '../../../src/core/image/boxes.ts'
 const root = new URL('..', import.meta.url).pathname
 const lang = process.argv[2] ?? 'zh'
 const papers = JSON.parse(readFileSync(join(root, 'out/eval-labels.json'), 'utf8'))

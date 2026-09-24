@@ -6,10 +6,10 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-const { anchorUnits, boundsFromMarks, lineRects, markWords, tokenizeDocument } = await import(process.env.ANCHORS ?? '../poc-reader/anchors.mjs')
-import { loadProject } from '../poc-reader/latex-front.mjs'
-import { analyze } from '../poc-reader/paper-meta.mjs'
-import { plainSource } from '../poc-reader/mt.mjs'
+const { anchorUnits, boundsFromMarks, lineRects, markWords, tokenizeDocument } = await import(process.env.ANCHORS ?? '../../../src/pdf-reader/engine/anchors.mjs')
+import { loadProject } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { analyze } from '../../../src/pdf-reader/engine/paper-meta.mjs'
+import { plainSource } from '../../../src/pdf-reader/engine/mt.mjs'
 const root = new URL('..', import.meta.url).pathname
 const label = process.argv[2] ?? 'run'
 const ids = readdirSync(join(root, 'data/runs/gt-orig')).filter(id => existsSync(join(root, 'data/corpus', id, 'arxiv.pdf')))

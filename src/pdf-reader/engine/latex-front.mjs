@@ -6,7 +6,8 @@
 // operations (`folder` for a directory under Node, `inMemory` for an unpacked source), and bytes are Uint8Arrays.
 
 // ---------------------------------------------------------------- files and bytes
-const nodeFs = typeof process !== 'undefined' && process.versions?.node ? await import('node:fs') : null
+// Node's file system for the spikes; in the page the branch is never taken, and the bundler is told not to follow it
+const nodeFs = typeof process !== 'undefined' && process.versions?.node ? await import(/* @vite-ignore */ 'node:fs') : null
 /** a directory under Node, as a project's file system: { list(): relative paths, read(path): bytes or null } */
 export function folder(dir) {
   const { readdirSync, readFileSync } = nodeFs
