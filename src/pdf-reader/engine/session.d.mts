@@ -8,6 +8,8 @@ export type SessionEvent =
   | { type: 'status'; text: string }
   /** why the extension's settings could not be read (config/storage.ts FallbackReason), or null when they could */
   | { type: 'notice'; why: unknown }
+  /** the sides scroll together, as the reader applies it (off, or any other mode) */
+  | { type: 'sync'; on: boolean }
   /** the extension's settings, each time they land */
   | { type: 'settings'; config: Config }
   | { type: 'display'; mode: EngineDisplay }

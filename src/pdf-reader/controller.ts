@@ -33,6 +33,8 @@ export interface ReaderState {
   settingsUnreadable: boolean
   /** the extension's settings as they last landed; null before the first read */
   settings: Config | null
+  /** the sides scroll together, as the reader applies it — not the stored setting, which a refused write or an address may not match */
+  sync: boolean
 }
 
 export const INITIAL: ReaderState = {
@@ -49,6 +51,7 @@ export const INITIAL: ReaderState = {
   sides: { left: { page: 1, pages: 0 }, right: { page: 1, pages: 0 } },
   settingsUnreadable: false,
   settings: null,
+  sync: true,
 }
 
 /** the session's commands the controller passes on */
@@ -79,6 +82,8 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       return { ...state, sides: { ...state.sides, [event.side]: { page: event.page, pages: event.pages } } }
     case 'notice':
       return (event.why != null) === state.settingsUnreadable ? state : { ...state, settingsUnreadable: event.why != null }
+    case 'sync':
+      return event.on === state.sync ? state : { ...state, sync: event.on }
     case 'settings':
       return event.config === state.settings ? state : { ...state, settings: event.config }
     case 'fail':

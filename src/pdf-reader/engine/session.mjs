@@ -24,7 +24,8 @@ import { createSurfaceConfig } from '@/shared/surface-config'
 import { localeStale } from '@/ui/use-surface-config'
 import { ocrCall } from '../ocr'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFViewer, pdfjsLib } from '../pdfjs'
-import { displayOf, figuresShown, withDisplay } from '../settings'
+import { displayOf, figuresShown, followOf, withDisplay } from '../settings'
+import { whenVisible } from '../visible'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
 import { decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { openEngine, paperContext } from './engine.mjs'
@@ -92,19 +93,26 @@ let viewersMade = false
 /** the display this visit holds whatever the settings say: the original, once the translation's side had nothing to
  *  show (fail); a display chosen in the reader lets it go */
 let held = null
-/** settings that landed (shared/surface-config.ts Landing): shown, and what changed followed. A refused write lands
- *  the defaults, which the reader's own choices on screen outlive (final review) */
+/** settings that landed (shared/surface-config.ts Landing): shown, and what changed followed (settings.ts followOf),
+ *  the highlight and figure text as they now are. A refused write lands the defaults, which the reader's own choices on
+ *  screen outlive: nothing is followed, not even a target language the defaults name (Part 2's final review) */
 function landed(next, from) {
   if (!config || from === 'first') return
   const prev = config
   config = next
   showSettings()
-  if (next.targetLanguage !== prev.targetLanguage && translating) void writes.then(() => location.reload())
-  else if (viewersMade && from !== 'refused') followSettings(prev)
+  if (!viewersMade || from === 'refused') return
+  const follow = followOf(prev, next, from, { translating, addressDisplay: MODES.includes(params.get('mode')), addressSync: SYNC_MODES.includes(params.get('sync')), held: held != null, display: mode, syncMode })
+  if (follow.reload) { void writes.then(() => location.reload()); return }
+  if (follow.display) changeDisplay(follow.display, false)
+  if (follow.sync) applySync(follow.sync)
+  if (!config.reading.sentenceHighlight) light(null)
+  followFigures()
 }
 let wantTranslation = null
 const translationWanted = new Promise(resolve => { wantTranslation = resolve })
-if (mode !== 'original') wantTranslation()
+// a reader in a tab in the background translates once it is shown: what is not seen takes no resources
+if (mode !== 'original') whenVisible(wantTranslation)
 /** the display changed: where the reader is read first, on the side still shown (Codex on #297); written when the
  *  reader chose it here, not when it follows the settings */
 function changeDisplay(next, write) {
@@ -117,20 +125,10 @@ function changeDisplay(next, write) {
   if (write) void save(c => withDisplay(c, mode))
   relayout(from, place)
   followFigures()
-  if (mode !== 'original') wantTranslation()
+  if (mode !== 'original') whenVisible(wantTranslation)
 }
 /** the display chosen in the reader */
 export function setDisplay(next) { held = null; changeDisplay(next, true) }
-/** the settings changed elsewhere — the popup, the settings page, another reader — or here: what changed of the
- *  display and the sync is followed, the highlight and figure text as they now are; what the address names, and a
- *  display this visit holds, stay (final review: a follow on every landing flipped them back) */
-function followSettings(prev) {
-  if (!params.has('mode') && !held && displayOf(config) !== displayOf(prev)) changeDisplay(displayOf(config), false)
-  const sync = config.pdfReader.sync ? 'same' : 'off'
-  if (!params.has('sync') && config.pdfReader.sync !== prev.pdfReader.sync && (syncMode === 'same' || syncMode === 'off') && sync !== syncMode) applySync(sync)
-  if (!config.reading.sentenceHighlight) light(null)
-  followFigures()
-}
 
 // ---------------------------------------------------------------- the two viewers
 function makeSide(container) {
@@ -613,6 +611,9 @@ let frame = 0, settleTimer = 0, pointerX = null
 // top of its view, or the paragraph under the pointer — stands at the same height on both.
 const SYNC_MODES = ['off', 'current', 'same', 'pointer', 'matched']
 let syncMode = SYNC_MODES.includes(params.get('sync')) ? params.get('sync') : config.pdfReader.sync ? 'same' : 'off'
+/** the sync the reader applies, for its switch: not the stored setting, which a refused write or an address may not match */
+const reportSync = () => host.emit({ type: 'sync', on: syncMode !== 'off' })
+reportSync()
 const together = () => syncMode === 'same' || syncMode === 'pointer' || syncMode === 'matched'
 const reduced = matchMedia('(prefers-reduced-motion: reduce)')
 /** a critically damped spring's way from 0 to 1 over its time, k from 0 to 1: no overshoot, no bounce */
@@ -891,6 +892,7 @@ export function setCompositor(on) {
 function applySync(next) {
   bake()
   syncMode = next
+  reportSync()
   stopGlide(); stopSpring(); clearTimeout(settleTimer); clearTimeout(follow.rest)
   rebase(); arm()
 }

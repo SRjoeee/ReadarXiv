@@ -97,6 +97,11 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(fold([{ type: 'notice', why: { kind: 'tooNew' } }, { type: 'notice', why: null }]).settingsUnreadable).toBe(false)
   })
 
+  it('holds the sync the reader applies, whatever the settings say (Part 2\'s final review)', () => {
+    expect(INITIAL.sync).toBe(true)
+    expect(fold([{ type: 'sync', on: false }]).sync).toBe(false)
+  })
+
   it('holds the settings the session read', () => {
     expect(INITIAL.settings).toBeNull()
     expect(fold([{ type: 'settings', config: DEFAULT_CONFIG }]).settings).toBe(DEFAULT_CONFIG)
