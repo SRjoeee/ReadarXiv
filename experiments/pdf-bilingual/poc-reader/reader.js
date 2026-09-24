@@ -13,15 +13,17 @@ import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anc
 import { isTranslatable, linesToBoxes, renderImage, setImageModes } from './lib/axt/figures.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { openPaper, runLive } from './live.mjs'
+import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { verified, VERIFIED } from './scripts.mjs'
 import { openEngine, paperContext } from './engine.mjs'
+import { appearanceRule, createSurfaceConfig, LANG_CODE_TO_LOCALE_NAME, lookOf, toBcp47 } from './lib/axt/extension.mjs'
 import { isName, plainSource, WIRE } from './mt.mjs'
 import { unpackSource } from './tar.mjs'
 
 // the viewer components read the core library from this global
 globalThis.pdfjsLib = pdfjsLib
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./lib/pdf.worker.min.mjs', import.meta.url).href
-const { EventBus, PDFLinkService, PDFViewer } = await import('./lib/pdf_viewer.mjs')
+const { EventBus, LinkTarget, PDFLinkService, PDFViewer } = await import('./lib/pdf_viewer.mjs')
 
 const PAPERS = ['2608.04322', '2608.00055']
 const params = new URLSearchParams(location.search)
@@ -58,13 +60,101 @@ $('progressive').checked = params.get('progressive') === '1'
 $('progressive').onchange = reload
 $('paper').hidden = $('progressive').parentElement.hidden = !DEMO
 
+// ---------------------------------------------------------------- the extension's settings, and the display
+// The target language and the highlight's band are the extension's settings, read and written as its settings page
+// does and followed as they change, so that the PDF and the HTML page agree. The display is the reader's own, kept
+// until the reader is part of the extension's settings: the original alone (nothing is translated or compiled until
+// the reader asks for more), the translation alone, or both side by side.
+/** the languages whose typesetting the gate verifies (scripts.mjs VERIFIED), as the extension's table names them; the
+ *  others wait for #295 */
+const LANGUAGES = Object.keys(LANG_CODE_TO_LOCALE_NAME).filter(code => verified(toBcp47(code)))
+const MODES = ['original', 'translation', 'bilingual']
+const PREFS = 'axtPdfReader'
+const prefs = await chrome.storage.local.get(PREFS).then(r => r[PREFS] ?? {}).catch(() => ({}))
+/** the reader's own preferences, merged into what storage holds when they are written: another reader page may have
+ *  saved since this one opened (Devin on #297). One write after another: two made at once read the same object, and
+ *  the one landing last dropped the other's change (Codex on #297) */
+let prefWrites = Promise.resolve()
+const savePrefs = patch => (prefWrites = prefWrites.then(() => chrome.storage.local.get(PREFS)).then(r => chrome.storage.local.set({ [PREFS]: { ...(r[PREFS] ?? {}), ...patch } })).catch(() => undefined))
+let mode = MODES.includes(params.get('mode')) ? params.get('mode') : MODES.includes(prefs.mode) ? prefs.mode : 'original'
+function showMode() {
+  document.documentElement.setAttribute('data-axt-pdf-mode', mode)
+  for (const b of $('modes').children) b.setAttribute('aria-checked', String(b.dataset.mode === mode))
+}
+showMode()
+// The extension's settings as its popup and settings page have them (shared/surface-config.ts): each change a patch on
+// what storage holds when its turn comes, one after another, and a configuration that could not be read said so (Codex
+// on #297). The reader's bar is in English alone, so no interface language asks for a reload
+const surface = createSurfaceConfig({ localeStale: () => false, reload: () => location.reload() })
+await new Promise(resolve => { const off = surface.subscribe(() => { if (surface.state().config) { off(); resolve() } }); surface.start() })
+let config = surface.state().config
+/** why the stored settings could not be read, for the bar (config/storage.ts FallbackReason) */
+const unreadable = why => ({ tooNew: `saved by a newer version of the extension (${why.stored}; this one reads ${why.supported})`, upgradeFailed: `version ${why.stored} could not be brought to ${why.supported}`, invalid: `${why.where}: ${why.message}` })[why.kind] ?? 'for a reason not known'
+function showSettings() {
+  let sheet = document.getElementById('axt-look')
+  if (!sheet) { sheet = document.createElement('style'); sheet.id = 'axt-look'; document.head.append(sheet) }
+  sheet.textContent = appearanceRule(lookOf(config))
+  const target = config.targetLanguage, look = config.appearance
+  $('lang').replaceChildren(...[...new Set([...LANGUAGES, target])].map(code => new Option(LANG_CODE_TO_LOCALE_NAME[code] ?? code, code, false, code === target)))
+  $('band').replaceChildren(...look.highlights.map(h => new Option(h.name, h.id, false, h.id === look.activeHighlight)))
+  // the defaults are in effect — the service and its key set on the settings page are not — until they are repaired there
+  const why = surface.state().fallbackReason
+  $('notice').hidden = !why
+  $('notice').textContent = $('notice').title = why ? `The extension's settings could not be read (${unreadable(why)}): its defaults are in use until they are repaired on its settings page` : ''
+}
+showSettings()
+/** this page's own writes, in the order they were made: a new language reloads the page only once they have landed */
+let writes = Promise.resolve()
+const save = patch => (writes = writes.then(() => surface.patch(c => ({ ...c, ...patch(c) }))).catch(e => status(`Could not save the setting: ${e.message ?? e}`)))
+// the value chosen, taken when it is chosen: a write lands after the menus are drawn again from the one before it
+$('lang').onchange = () => { const code = $('lang').value; save(() => ({ targetLanguage: code })) }
+$('band').onchange = () => { const id = $('band').value; save(c => ({ appearance: { ...c.appearance, activeHighlight: id } })) }
+/** true once the translation has started: a new language then means another document, and the page starts again */
+let translating = false
+surface.subscribe(() => {
+  const next = surface.state().config
+  if (!next) return
+  const language = next.targetLanguage !== config.targetLanguage
+  config = next
+  showSettings()
+  if (language && translating) void writes.then(() => location.reload())
+})
+let wantTranslation = null
+const translationWanted = new Promise(resolve => { wantTranslation = resolve })
+if (mode !== 'original') wantTranslation()
+$('modes').onclick = e => {
+  const next = e.target.closest('button')?.dataset.mode
+  if (!next || next === mode) return
+  const from = mode
+  // where the reader is, read while that side is still shown: a side the display hides has no layout (Codex on #297)
+  const place = from === 'bilingual' ? null : readingPlace(from === 'original' ? left : right)
+  window.__reader.place = place
+  mode = next
+  showMode()
+  void savePrefs({ mode })
+  relayout(from, place)
+  if (mode !== 'original') wantTranslation()
+}
+// Opened over arXiv's PDF page (the extension's content script there): the page's own paper, and a way back to the
+// browser's viewer, which the content script keeps underneath
+const EMBEDDED = params.get('embedded') === '1'
+if (EMBEDDED) {
+  for (const el of [$('open'), $('paper'), $('progressive').parentElement]) el.hidden = true
+  $('close').hidden = false
+  $('close').onclick = () => parent.postMessage({ type: 'axt-pdf-reader-close' }, 'https://arxiv.org')
+}
+
 // ---------------------------------------------------------------- the two viewers
 function makeSide(container) {
   const eventBus = new EventBus()
-  const linkService = new PDFLinkService({ eventBus })
+  // a link out of the paper opens in a new tab: in this frame it would replace the reader, which on arXiv's PDF page is
+  // laid over the page (Devin on #297)
+  const linkService = new PDFLinkService({ eventBus, externalLinkTarget: LinkTarget.BLANK })
   const viewer = new PDFViewer({ container, eventBus, linkService, textLayerMode: 1, removePageBorders: false })
   linkService.setViewer(viewer)
-  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), byPage: new Map() }
+  // figs: each page's figures being laid (paintFigures), and figGen the latest call's number, by page; frames: a draft
+  // preview's frames (pdfFrames), a promise; anchored: the side's units located, a promise, where they come after its pages
+  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), byPage: new Map(), figs: new Map(), figGen: new Map(), frames: null, anchored: null }
 }
 const left = makeSide($('left'))
 let right = makeSide($('right'))
@@ -93,8 +183,24 @@ async function pdfMarks(doc) {
   for (const [name, d] of await doc.getDestinations()) if (/^axt-\d+[se]$/.test(name) && d) out.set(name.slice(4), { page: (await doc.getPageIndex(d[0])) + 1, x: d[2], y: d[3] })
   return out
 }
+/** the frames our previews set where images go (live.mjs DRAFT): page → [{ n, x0, y0, x1, y1 }] in PDF units, from each
+ *  frame's three marks; marks that make no upright rectangle (a transformed include) are left out */
+async function pdfFrames(doc) {
+  const corners = new Map()
+  for (const [name, d] of await doc.getDestinations()) {
+    const m = /^axt-g(\d+)([abt])$/.exec(name)
+    if (m && d) (corners.get(m[1]) ?? corners.set(m[1], {}).get(m[1]))[m[2]] = { page: (await doc.getPageIndex(d[0])) + 1, x: d[2], y: d[3] }
+  }
+  const out = new Map()
+  for (const [n, { a, b, t }] of corners) {
+    if (!a || !b || !t || a.page !== b.page || b.page !== t.page || Math.abs(a.y - b.y) > 0.5 || Math.abs(b.x - t.x) > 0.5 || b.x - a.x < 1 || t.y - b.y < 1) continue
+    ;(out.get(a.page) ?? out.set(a.page, []).get(a.page)).push({ n: Number(n), x0: a.x, y0: a.y, x1: b.x, y1: t.y })
+  }
+  return out
+}
 function index(side, anchors) {
   side.anchors = anchors
+  side.groups = null
   side.byPage = new Map()
   for (const [id, a] of anchors) if (a) a.rects.forEach((r, k) => (side.byPage.get(r.page) ?? side.byPage.set(r.page, []).get(r.page)).push({ id, r, k }))
 }
@@ -124,16 +230,33 @@ function paint(side) {
   if (lit == null) return
   const a = side.anchors.get(lit)
   if (!a) return
-  for (const r of a.rects) {
+  for (const r of blocksOf(a.rects)) {
     const pv = pageView(side, r.page)
     if (!pv?.div) continue
     let layer = pv.div.querySelector(':scope > .axt-hl-layer')
     if (!layer) { layer = document.createElement('div'); layer.className = 'axt-hl-layer'; pv.div.append(layer) }
     const box = toPageBox(side, r), el = document.createElement('div')
     el.className = 'axt-hl'
-    Object.assign(el.style, { left: `${box.left - 1}px`, top: `${box.top - 1}px`, width: `${box.width + 2}px`, height: `${box.height + 2}px` })
+    Object.assign(el.style, { left: `${box.left - 4}px`, top: `${box.top - 3}px`, width: `${box.width + 8}px`, height: `${box.height + 6}px` })
     layer.append(el)
   }
+}
+/**
+ * A unit's lines as blocks: one per run of them down one column of one page, from the run's first line to its last and
+ * across its widest, so that a paragraph reads as one wash behind its text, as on the HTML page, not as a selection of
+ * lines with gaps between them (the owner, 2026-09-23). A line starts a new block on another page, in another column
+ * (its span across the page no longer overlapping the block's), or far below the block (a large display between)
+ */
+function blocksOf(rects) {
+  const out = []
+  for (const r of rects) {
+    const b = out.at(-1), h = r.y1 - r.y0
+    const across = b && Math.min(b.x1, r.x1) - Math.max(b.x0, r.x0)
+    if (b && b.page === r.page && across > 0.3 * Math.min(b.x1 - b.x0, r.x1 - r.x0) && r.y1 <= b.y1 + h && b.y0 - r.y1 < 6 * h) {
+      b.x0 = Math.min(b.x0, r.x0); b.x1 = Math.max(b.x1, r.x1); b.y0 = Math.min(b.y0, r.y0)
+    } else out.push({ page: r.page, x0: r.x0, x1: r.x1, y0: r.y0, y1: r.y1 })
+  }
+  return out
 }
 function light(id) { if (id === lit) return; lit = id; for (const s of sides) paint(s) }
 
@@ -156,32 +279,28 @@ let unitKind = new Map()
 document.documentElement.setAttribute('data-axt-on', '')
 document.documentElement.setAttribute('data-axt-mode', 'only')
 setImageModes(document, ['only'])
-const regionsOf = (() => {
-  const byDoc = new WeakMap() // doc → Map page → Promise<regions>
-  /** the figures placed on a page (figures.mjs figureRegions), read once a document */
-  return (side, n) => {
-    let byPage = byDoc.get(side.doc)
-    if (!byPage) byDoc.set(side.doc, (byPage = new Map()))
-    if (!byPage.has(n)) byPage.set(n, side.doc.getPage(n).then(page => page.getOperatorList()).then(ops => figureRegions(ops, pdfjsLib.OPS)))
-    return byPage.get(n)
+/** the figures placed on a page (figures.mjs figureRegions); from the operator list the viewer draws the page by (its
+ *  annotation mode), which PDF.js then builds once for both */
+const regionsOf = perDoc((side, n) => side.doc.getPage(n).then(page => page.getOperatorList({ annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS })).then(ops => figureRegions(ops, pdfjsLib.OPS)))
+/** `make(side, ...args)` once a document and arguments, kept as long as the document is */
+function perDoc(make) {
+  const byDoc = new WeakMap()
+  return (side, ...args) => {
+    let m = byDoc.get(side.doc)
+    if (!m) byDoc.set(side.doc, (m = new Map()))
+    const key = args.join(':')
+    if (!m.has(key)) m.set(key, make(side, ...args))
+    return m.get(key)
   }
-})()
-const figuresOf = new WeakMap() // doc → Map page → Promise<[{ region, lines }]>
-function pageFigures(side, n) {
-  let byPage = figuresOf.get(side.doc)
-  if (!byPage) figuresOf.set(side.doc, (byPage = new Map()))
-  if (!byPage.has(n)) byPage.set(n, (async () => {
-    const page = await side.doc.getPage(n)
-    const [regions, text] = await Promise.all([regionsOf(side, n), page.getTextContent()])
-    const labels = figureLabels(text.items, regions)
-    return Promise.all(regions.map(async (region, k) => ({
-      region,
-      kind: region.kind,
-      lines: region.kind === 'raster' ? (region.image ? await recognise(page, region.image) : []) : vectorLines(labels.filter(l => l.figure === k), region),
-    })))
-  })())
-  return byPage.get(n)
 }
+/** the labels in a page's figures (figures.mjs figureLabels), from its text layer */
+const labelsOn = perDoc(async (side, n) => figureLabels((await (await side.doc.getPage(n)).getTextContent()).items, await regionsOf(side, n)))
+/** one figure's lines — a bitmap read by the recogniser, a vector figure's labels: { region, kind, lines } */
+const figureOf = perDoc(async (side, n, k) => {
+  const region = (await regionsOf(side, n))[k]
+  if (region.kind !== 'raster') return { region, kind: region.kind, lines: vectorLines((await labelsOn(side, n)).filter(l => l.figure === k), region) }
+  return { region, kind: 'raster', lines: region.image ? await recognise(await side.doc.getPage(n), region.image) : [] }
+})
 let ocrWorker = null, ocrSeq = 0
 const ocrWaiting = new Map()
 /** a bitmap of the page, by its object id → its lines, read in the worker (a copy: PDF.js keeps drawing its own) */
@@ -231,37 +350,132 @@ async function translateBoxes(boxes) {
   await Promise.all(single.map(async i => { const got = await send(run(boxes[i].text)); out[i] = got == null ? null : unrun(got) }))
   return out
 }
+// A figure on a translation page — in arXiv's PDF shown there until the first preview, in a preview, in the final — is
+// one of arXiv's (the left's): its text is read and translated once, there, and every translation shows the same
+// overlay. A draft preview sets a frame where an image goes (live.mjs DRAFT), and the left's figure is drawn over it.
+const overlaps = (a, b) => Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0)
+/** the caption next to a figure's rectangle on a side's page (PDF units): a caption located there whose first line lies
+ *  just below the rectangle, else whose last line lies just above it, across its column; the nearest, or null */
+function captionNear(side, page, r) {
+  const col = columnOf(side, page, r)
+  let below = null, above = null
+  for (const [id, a] of side.anchors) {
+    if (!a || unitKind.get(id) !== 'caption') continue
+    const first = a.rects[0], last = a.rects.at(-1), near = 3 * (first.y1 - first.y0) + 24
+    const down = first.page === page && overlaps(first, col) ? r.y0 - first.y1 : NaN, up = last.page === page && overlaps(last, col) ? last.y0 - r.y1 : NaN
+    if (down > -2 && down < near && !(below?.gap <= down)) below = { id, gap: down }
+    if (up > -2 && up < near && !(above?.gap <= up)) above = { id, gap: up }
+  }
+  return (below ?? above)?.id ?? null
+}
+/** rectangles' indices in reading order: rows from the top, each from the left; a rectangle is in a row when it shares
+ *  half its height with the row's first */
+function readingOrder(rs) {
+  const rest = rs.map((r, i) => i).sort((a, b) => rs[b].y1 - rs[a].y1), out = []
+  while (rest.length) {
+    const top = rs[rest[0]], row = rest.filter(i => Math.min(rs[i].y1, top.y1) - Math.max(rs[i].y0, top.y0) > 0.5 * Math.min(rs[i].y1 - rs[i].y0, top.y1 - top.y0))
+    out.push(...row.sort((a, b) => rs[a].x0 - rs[b].x0))
+    for (const i of row) rest.splice(rest.indexOf(i), 1)
+  }
+  return out
+}
+/**
+ * The figures of the left that rectangles on a translation page stand for (its figures, or a draft preview's frames):
+ * those next to one caption on both sides and of one size, paired in reading order. A float keeps its contents and
+ * their order whatever the language, so two figures can only be confused if they share both; one with no caption, or
+ * found with none on either side, stands for none. Map index in `rects` → { page, k, region } on the left
+ */
+async function leftFor(side, n, rects) {
+  const out = new Map(), groups = new Map()
+  rects.forEach((r, i) => { const c = captionNear(side, n, r); if (c != null) (groups.get(c) ?? groups.set(c, []).get(c)).push(i) })
+  for (const [c, mine] of groups) {
+    const theirs = await leftGroup(c), order = readingOrder(theirs.map(t => t.region)), used = new Set()
+    for (const i of readingOrder(mine.map(i => rects[i])).map(j => mine[j])) {
+      const r = rects[i]
+      const j = order.find(j => !used.has(j) && Math.abs(theirs[j].region.x1 - theirs[j].region.x0 - (r.x1 - r.x0)) < 1.5 && Math.abs(theirs[j].region.y1 - theirs[j].region.y0 - (r.y1 - r.y0)) < 1.5)
+      if (j !== undefined) { used.add(j); out.set(i, theirs[j]) }
+    }
+  }
+  return out
+}
+/** the figures next to a caption on the left, [{ page, k, region }]: kept until the left is located again (index) */
+function leftGroup(c) {
+  left.groups ??= new Map()
+  if (!left.groups.has(c)) left.groups.set(c, (async () => {
+    const out = []
+    for (const p of new Set(left.anchors.get(c)?.rects.map(r => r.page))) (await regionsOf(left, p)).forEach((region, k) => { if (captionNear(left, p, region) === c) out.push({ page: p, k, region }) })
+    return out
+  })())
+  return left.groups.get(c)
+}
+/** a figure of the left drawn at a size in device pixels, for a frame: its page drawn once per figure and size (the
+ *  latest size kept), a copy for each frame; in the viewer's annotation mode, so that PDF.js reads the page once. Kept
+ *  while previews come in (replaceRight empties it for the final: a figure's drawing is megabytes) */
+const copies = new Map() // `${page}:${k}` → { w, h, canvas: Promise<HTMLCanvasElement> }
+async function copyOf({ page, k, region }, w, h) {
+  let c = copies.get(`${page}:${k}`)
+  if (!c || c.w !== w || c.h !== h) copies.set(`${page}:${k}`, (c = { w, h, canvas: (async () => {
+    const pdfPage = await left.doc.getPage(page), viewport = pdfPage.getViewport({ scale: w / (region.x1 - region.x0) })
+    const [x, y] = viewport.convertToViewportPoint(region.x0, region.y1)
+    const canvas = Object.assign(document.createElement('canvas'), { width: w, height: h })
+    await pdfPage.render({ canvas, viewport, transform: [1, 0, 0, 1, -x, -y], annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS }).promise
+    return canvas
+  })() }))
+  const out = Object.assign(document.createElement('canvas'), { width: w, height: h })
+  out.getContext('2d').drawImage(await c.canvas, 0, 0)
+  return out
+}
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+/**
+ * A translation page's figures (any side but the left), each with the overlay of its text: the text of the left's
+ * figure it stands for (leftFor), else its own; on a draft preview, the left's figure drawn over each frame too, and a
+ * frame that stands for none left as it is. The page's overlays are replaced in one step once the new ones are ready,
+ * so that a page drawn again never shows its figures bare in between; a newer call for the page wins.
+ */
 async function paintFigures(side, n) {
   const pv = pageView(side, n)
-  if (!pv?.div) return
-  pv.div.querySelectorAll(':scope > .axt-fig').forEach(el => el.remove())
-  if (!$('figures').checked) return
-  const figures = await pageFigures(side, n)
-  const vp = pv.viewport
-  for (const [k, f] of figures.entries()) {
-    // a line that is only a name joins no box and keeps its text (mt.mjs isName): merged, a legend's
-    // Average / DirectHarm4 / HarmBench / HEx-PHI went as one text and DirectHarm4 came back as 直接伤害 4; alone, the
-    // HTML mode's tick names came back as 地狱之战 (HellaSwag) and 魔法师 (Magicoder). Proposed for the shared module
-    const boxes = linesToBoxes(f.lines.filter(l => !isName(l.text, prose)))
-    if (!boxes.length) continue
-    const done = await translateBoxes(boxes)
-    const labels = boxes.flatMap((b, i) => (done[i] && done[i] !== b.text ? [{ ...b, source: b.text, text: done[i] }] : []))
-    if (!labels.length || side !== right) continue
-    // the figure's place on the page, in CSS pixels; the overlay is laid by the style sheet over the <img> there
-    const [ax, ay] = vp.convertToViewportPoint(f.region.x0, f.region.y1), [bx, by] = vp.convertToViewportPoint(f.region.x1, f.region.y0)
-    const holder = document.createElement('div')
-    holder.className = 'axt-fig'
-    Object.assign(holder.style, { left: `${Math.min(ax, bx)}px`, top: `${Math.min(ay, by)}px`, width: `${Math.abs(bx - ax)}px`, height: `${Math.abs(by - ay)}px` })
-    const inner = document.createElement('div')
-    const img = Object.assign(document.createElement('img'), { alt: '', src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' })
-    inner.append(img); holder.append(inner)
-    pv.div.querySelectorAll(`:scope > .axt-fig[data-figure="${k}"]`).forEach(el => el.remove())
-    holder.dataset.figure = String(k)
-    pv.div.append(holder)
-    renderImage({ id: `p${n}-f${k}`, el: img, kind: f.kind === 'raster' ? 'raster' : 'svg' }, labels, { ratio: Math.abs(bx - ax) / Math.max(1, Math.abs(by - ay)) })
+  if (!pv?.div || side === left) return
+  const gen = (side.figGen.get(n) ?? 0) + 1
+  side.figGen.set(n, gen)
+  let laid = []
+  if ($('figures').checked) {
+    const frames = side.frames && ((await side.frames).get(n) ?? [])
+    const rects = frames ?? (await regionsOf(side, n))
+    // arXiv's PDF itself, shown on the right until the first preview: its figures are the left's, page for page
+    const same = !frames && left.doc && side.doc.fingerprints[0] === left.doc.fingerprints[0]
+    const theirs = same ? new Map(rects.map((region, k) => [k, { page: n, k, region }])) : (await side.anchored, await leftFor(side, n, rects))
+    const vp = pv.viewport, dpr = devicePixelRatio || 1
+    laid = await Promise.all(rects.map(async (r, i) => {
+      const from = theirs.get(i)
+      if (frames && !from) return null
+      const fig = await (from ? figureOf(left, from.page, from.k) : figureOf(side, n, i))
+      // a line that is only a name joins no box and keeps its text (mt.mjs isName): merged, a legend's
+      // Average / DirectHarm4 / HarmBench / HEx-PHI went as one text and DirectHarm4 came back as 直接伤害 4; alone, the
+      // HTML mode's tick names came back as 地狱之战 (HellaSwag) and 魔法师 (Magicoder). Proposed for the shared module
+      const boxes = linesToBoxes(fig.lines.filter(l => !isName(l.text, prose)))
+      const done = boxes.length ? await translateBoxes(boxes) : []
+      const labels = boxes.flatMap((b, j) => (done[j] && done[j] !== b.text ? [{ ...b, source: b.text, text: done[j] }] : []))
+      if (!labels.length && !frames) return null
+      // the figure's place on the page, in CSS pixels; the overlay is laid by the style sheet over the <img> there
+      const [ax, ay] = vp.convertToViewportPoint(r.x0, r.y1), [bx, by] = vp.convertToViewportPoint(r.x1, r.y0)
+      const width = Math.abs(bx - ax), height = Math.abs(by - ay)
+      const holder = Object.assign(document.createElement('div'), { className: 'axt-fig' })
+      Object.assign(holder.style, { left: `${Math.min(ax, bx)}px`, top: `${Math.min(ay, by)}px`, width: `${width}px`, height: `${height}px` })
+      if (frames) {
+        const copy = await copyOf(from, Math.max(1, Math.round(width * dpr)), Math.max(1, Math.round(height * dpr))).catch(e => { console.warn('[figure copy]', e); return null })
+        if (!copy) return null
+        holder.append(copy)
+      }
+      const inner = document.createElement('div'), img = Object.assign(document.createElement('img'), { alt: '', src: BLANK })
+      inner.append(img); holder.append(inner)
+      return { holder, img, labels, id: `p${n}-f${i}`, kind: fig.kind === 'raster' ? 'raster' : 'svg', ratio: width / Math.max(1, height) }
+    }))
   }
+  if (side.figGen.get(n) !== gen) return
+  pv.div.querySelectorAll(':scope > .axt-fig').forEach(el => el.remove())
+  for (const f of laid) if (f) { pv.div.append(f.holder); if (f.labels.length) renderImage({ id: f.id, el: f.img, kind: f.kind }, f.labels, { ratio: f.ratio }) }
 }
-function repaintFigures() { for (const pv of right.viewer._pages ?? []) if (pv.renderingState === 3) paintFigures(right, pv.id) }
+function repaintFigures() { for (const pv of right.viewer._pages ?? []) if (pv.renderingState === 3) right.figs.set(pv.id, paintFigures(right, pv.id).catch(e => console.warn('[figures]', e))) }
 
 /** a pointer event's place on its page: the page and the point in PDF units, or null off the pages */
 function pointOf(side, event) {
@@ -352,23 +566,366 @@ function lineAt(side, y, x) {
   return hit ?? below
 }
 let frame = 0, settleTimer = 0, pointerX = null
+
+// How the other side follows, the reader's choice (REPORT, sixteenth and seventeenth addenda): off; the design as it was
+// (a table of unit tops, and a settle 160 ms after the last scroll); or together — while the reader scrolls, the other
+// side moves with it as one sheet, at the same speed or at the speed the two layouts' local ratio asks, and once the
+// scroll has ended (a trackpad's glide included) it glides so that the content the reader's side is levelled by — the
+// top of its view, or the paragraph under the pointer — stands at the same height on both.
+const SYNC_MODES = ['off', 'current', 'same', 'pointer', 'matched']
+let syncMode = SYNC_MODES.includes(prefs.syncMode) ? prefs.syncMode : 'same'
+const together = () => syncMode === 'same' || syncMode === 'pointer' || syncMode === 'matched'
+const reduced = matchMedia('(prefers-reduced-motion: reduce)')
+/** a critically damped spring's way from 0 to 1 over its time, k from 0 to 1: no overshoot, no bounce */
+const springAt = k => { const y = t => 1 - (1 + 6.6 * t) * Math.exp(-6.6 * t); return y(Math.min(1, Math.max(0, k))) / y(1) }
+/** the same curve as a CSS easing, for the glide the compositor runs */
+const SPRING = `linear(${Array.from({ length: 41 }, (_, i) => +springAt(i / 40).toFixed(4)).join(', ')})`
+/** how long a glide takes for a distance: 250–450 ms, longer the further; none with reduced motion */
+const glideMs = d => (reduced.matches ? 0 : Math.min(450, 250 + 0.25 * Math.abs(d)))
+/**
+ * The follower as the together modes move it. `pos`: its position, fractional — scrollTop rounds to device pixels, and
+ * steps of the same size must not drift by it; `lastD`: the driver's position last seen, null when it is to be read
+ * afresh (a layout changed); `rest`: the wait after the scroll's end; `spring`: the glide under way; `moving`: the
+ * driver scrolling, from its first step to its scroll's end
+ */
+const follow = { pos: null, lastD: null, rest: 0, spring: 0, moving: false }
+/** the positions to go on from: the driver's as it is, the follower's as it is — after a click, a glide or a new driver */
+function rebase() {
+  if (!driver) return
+  follow.lastD = driver.container.scrollTop
+  follow.pos = other(driver).container.scrollTop
+}
+/** the map between the two layouts that `matched` takes its speed from, measured once per layout (sync.mjs) */
+let flow = null
+function buildFlow() {
+  // a page is set in two columns where some line starts past its middle; there a line not across the middle is in one
+  const twoColumn = side => {
+    const out = new Set()
+    for (const [, a] of side.anchors) if (a) for (const r of a.rects) { const [x0, , x1] = pageView(side, r.page).pdfPage.view; if (r.x0 > (x0 + x1) / 2 + 1) out.add(r.page) }
+    return out
+  }
+  const geom = (side, a, two) => ({
+    stream: a.tokens[0],
+    lines: a.rects.map(r => {
+      const box = toPageBox(side, r), top = pageTop(side, r.page) + box.top, [x0, , x1] = pageView(side, r.page).pdfPage.view, mid = (x0 + x1) / 2
+      return { top, bot: top + box.height, page: r.page, band: !two.has(r.page) || (r.x0 < mid - 1 && r.x1 > mid + 1) ? 'full' : r.x1 <= mid + 1 ? 'left' : 'right' }
+    }),
+  })
+  const twoL = twoColumn(left), twoR = twoColumn(right), units = []
+  // what is read in order: not a caption, a footnote, a cell or a picture's text, which TeX sets elsewhere
+  for (const [id, a] of left.anchors) { const b = right.anchors.get(id); if (a && b && !FLOATING.has(unitKind.get(id))) units.push({ id, L: geom(left, a, twoL), R: geom(right, b, twoR) }) }
+  units.sort((x, y) => x.id - y.id)
+  const chain = flowChain(units)
+  flow = makeMap(knots(chain, lineTable(chain, 'L'), lineTable(chain, 'R'), { endL: left.container.scrollHeight, endR: right.container.scrollHeight }))
+}
+/**
+ * One frame of the together modes while the driver scrolls: the follower moved by the driver's step — the same step,
+ * or scaled by how much taller one layout is than the other over the driver's view, between 0.6 and 1.6, a ratio that
+ * changes as slowly as the view slides. A glide under way stops, and the follower goes on from where it stands
+ */
+function togetherFrame(side) {
+  if (onCompositor()) {
+    // the compositor moves the follower; PDF.js is asked to draw the pages it now shows (showAt)
+    if (!glass.anim) arm()
+    other(side).viewer.update()
+    return
+  }
+  const tc = other(side).container, D = side.container.scrollTop
+  if (follow.spring) { stopSpring(); follow.pos = tc.scrollTop }
+  if (follow.lastD == null || follow.pos == null) { follow.lastD = D; follow.pos = tc.scrollTop; return }
+  const step = D - follow.lastD
+  follow.lastD = D
+  let ratio = 1
+  if (syncMode === 'matched') {
+    if (!flow) buildFlow()
+    const H = side.container.clientHeight, f = side === left ? flow.ltr : flow.rtl
+    ratio = Math.min(1.6, Math.max(0.6, (f(D + H) - f(D)) / H))
+  }
+  follow.pos = Math.min(tc.scrollHeight - tc.clientHeight, Math.max(0, follow.pos + step * ratio))
+  put(tc, follow.pos)
+}
+/**
+ * The content at the top of a side's view that the other side is levelled by: the first paragraph or heading whose
+ * start shows in the upper half of the view — in the column under the pointer where the page has two — else the first
+ * line whole in view, at its place in its paragraph. { id, at, y }: the unit, the share of it before that point (lines
+ * counted), and the point's height in scroll coordinates
+ */
+function topAnchor(side) {
+  const c = side.container, D = c.scrollTop, H = c.clientHeight
+  let column = null
+  if (pointerX?.side === side) {
+    let page = 1
+    for (let p = 1; p <= side.doc.numPages; p++) if (pageTop(side, p) <= D + H * 0.25) page = p
+    const pv = pageView(side, page), pr = pv.div.getBoundingClientRect(), [x0, , x1] = pv.pdfPage.view
+    const [x] = pv.viewport.convertToPdfPoint(pointerX.x - pr.left - pv.div.clientLeft, 0)
+    const twoCols = linkedLines(side).some(l => l.page === page && l.x0 > (x0 + x1) / 2 + 1)
+    if (twoCols) column = { page, mid: (x0 + x1) / 2, left: x < (x0 + x1) / 2 }
+  }
+  const inColumn = l => !column || l.page !== column.page || (l.x0 < column.mid - 1 && l.x1 > column.mid + 1) || (column.left ? l.x1 <= column.mid + 1 : l.x0 >= column.mid - 1)
+  const shown = linkedLines(side).filter(l => l.top >= D - 0.5 && l.top < D + H && inColumn(l))
+  const start = shown.filter(l => l.li === 0 && l.top < D + H / 2).sort((a, b) => a.top - b.top)[0]
+  if (start) return { id: start.id, at: 0, y: start.top }
+  const first = shown.sort((a, b) => a.top - b.top)[0]
+  return first ? { id: first.id, at: first.li / first.n, y: first.top } : null
+}
+/**
+ * The paragraph or heading under the pointer where it last stood on a side: its first line when that shows in the view,
+ * else the point under the pointer, at its place in the paragraph (lines counted). Off the text — between two
+ * paragraphs, in the margin beside them — the one with the nearest line, within 64 px. Null with the pointer on the
+ * other side or away from the text: the top is taken
+ */
+function pointerAnchor(side) {
+  if (pointerX?.side !== side || pointerX.y == null) return null
+  const c = side.container, D = c.scrollTop, H = c.clientHeight, y = D + pointerX.y - c.getBoundingClientRect().top
+  if (y < D || y > D + H) return null
+  let page = 1
+  for (let p = 1; p <= side.doc.numPages; p++) if (pageTop(side, p) <= y) page = p
+  const pv = pageView(side, page), pr = pv.div.getBoundingClientRect()
+  const [x] = pv.viewport.convertToPdfPoint(pointerX.x - pr.left - pv.div.clientLeft, 0)
+  // how far a line is from the pointer: across (PDF units at the page's scale) and down, in CSS pixels
+  const gap = l => Math.max(0, l.x0 - x, x - l.x1) * pv.viewport.scale + Math.max(0, l.top - y, y - l.bottom)
+  let hit = null
+  for (const l of linkedLines(side)) if (l.page === page && gap(l) < 64 && (!hit || gap(l) < gap(hit))) hit = l
+  if (!hit) return null
+  const first = linkedLines(side).find(l => l.id === hit.id && l.li === 0)
+  if (first && first.top >= D - 0.5) return { id: hit.id, at: 0, y: first.top }
+  const f = Math.min(1, Math.max(0, (y - hit.top) / Math.max(1, hit.bottom - hit.top)))
+  return { id: hit.id, at: (hit.li + f) / hit.n, y: hit.top + f * (hit.bottom - hit.top) }
+}
+/** the scroll ended on the driver: the other side glides so that the content the driver is levelled by stands at the
+ *  same height on both; at either end of the driver's document, the other side goes to the same end */
+function alignTop(side) {
+  if (!together() || mode !== 'bilingual' || side !== driver || !left.anchors.size || !right.anchors.size) return
+  bake()
+  const to = other(side), dc = side.container, tc = to.container, D = dc.scrollTop
+  const most = tc.scrollHeight - tc.clientHeight
+  let target
+  if (D <= 1) target = 0
+  else if (D >= dc.scrollHeight - dc.clientHeight - 1) target = most
+  else {
+    const a = (syncMode === 'pointer' && pointerAnchor(side)) || topAnchor(side), there = a && spot(to, a.id, a.at)
+    if (there == null) { rebase(); arm(); return }
+    target = there - (a.y - D) + (tc.getBoundingClientRect().top - dc.getBoundingClientRect().top)
+  }
+  target = Math.min(most, Math.max(0, target))
+  if (Math.abs(target - tc.scrollTop) < 1) { rebase(); arm(); return }
+  if (onCompositor()) glideOn(to, target)
+  else springTo(tc, target)
+}
+/** a critically damped spring to a position: no overshoot, no bounce, 250–450 ms as the distance asks; one step with
+ *  reduced motion */
+function springTo(tc, target) {
+  stopSpring()
+  const x0 = tc.scrollTop, d = target - x0, T = glideMs(d), t0 = performance.now()
+  const step = now => {
+    const k = T ? (now - t0) / T : 1
+    if (k >= 1) { put(tc, target); follow.spring = 0; rebase(); return }
+    put(tc, x0 + d * springAt(k))
+    follow.spring = requestAnimationFrame(step)
+  }
+  follow.spring = requestAnimationFrame(step)
+}
+function stopSpring() { if (follow.spring) cancelAnimationFrame(follow.spring); follow.spring = 0 }
+
+// ---------------------------------------------------------------- the follower on the compositor
+// The driver scrolls on the compositor's thread, and stays smooth however busy the page is; a follower set by script
+// each frame moves on the main thread a frame later, and misses frames whenever PDF.js draws the pages coming into view
+// (the scroll-sync research measured up to 97 px behind). So the together modes move the follower's page stack on the
+// compositor too: while the reader scrolls, by a transform a ScrollTimeline on the driver runs, its keyframes the
+// follower's position for every position of the driver; at rest, by a glide the compositor runs on the spring's curve.
+// Its scrollTop stays where it was meanwhile, and takes the position shown — in one task, so no frame shows a jump —
+// whenever something is to read it (bake): the rest's levelling, a new driver, a click, a layout's change. The follower
+// is bound ahead, at rest and when the pointer comes over a side, so that it keeps up from a scroll's first frame: the
+// input events that tell a scroll has begun reach the page after the compositor has taken its first steps.
+const CAN_COMPOSIT = typeof ScrollTimeline === 'function'
+let compositing = CAN_COMPOSIT && prefs.compositor !== false
+const onCompositor = () => compositing && together() && mode === 'bilingual'
+/** the follower's motion under way: `anim` the transform, `kind` 'scroll' (bound to `from`, the driver) or 'glide',
+ *  `side` the follower, `shift()` how far the transform shows it from its scrollTop, down positive */
+const glass = { anim: null, kind: null, side: null, from: null, shift: null }
+/** PDF.js told a side's position as it shows, not as its scrollTop says: it finds the pages to draw from a scroll
+ *  container's four sizes, and is lent one that adds the transform's shift; null gives it back its own */
+function showAt(side, shift) {
+  if (!shift) { delete side.viewer._getVisiblePages; return }
+  side.viewer._getVisiblePages = function () {
+    const real = this.container
+    this.container = { scrollTop: real.scrollTop + shift(), scrollLeft: real.scrollLeft, clientHeight: real.clientHeight, clientWidth: real.clientWidth }
+    try { return Object.getPrototypeOf(this)._getVisiblePages.call(this) } finally { this.container = real }
+  }
+}
+/**
+ * The motion under way ended where it stands: the transform's shift into the follower's scrollTop, on top of whatever
+ * the reader scrolled it by meanwhile, and the transform gone. The together modes go on from there: the follower's
+ * position, against the driver's as it is (bound) or as it was when the glide began, the driver still since
+ */
+function bake() {
+  if (!glass.anim) return
+  const c = glass.side.container, pos = c.scrollTop + glass.shift(), g = unbind()
+  put(c, pos)
+  if (g.kind === 'scroll') follow.lastD = g.from.container.scrollTop
+  follow.pos = pos
+  g.side.viewer.update()
+}
+/** the motion under way given up, the follower left at its scrollTop */
+function drop() { if (glass.anim) unbind().side.viewer.update() }
+/** the motion under way taken off — its animation, and the container lent to PDF.js — and what it was */
+function unbind() {
+  const g = { ...glass }
+  g.anim.cancel()
+  showAt(g.side, null)
+  Object.assign(glass, { anim: null, kind: null, side: null, from: null, shift: null })
+  return g
+}
+/**
+ * The follower bound to the driver's scroll: for every position of the driver, the follower's — where it stands, plus
+ * the driver's steps since the positions the together modes go on from, the same steps or scaled by the layouts' local
+ * ratio (togetherFrame's), within the follower's ends — as keyframes of a ScrollTimeline on the driver, linear between
+ */
+function arm() {
+  if (!onCompositor() || !driver || glass.anim || !left.anchors.size || !right.anchors.size) return
+  const d = driver, f = other(d), dc = d.container, tc = f.container
+  const Dmax = dc.scrollHeight - dc.clientHeight, Fmax = tc.scrollHeight - tc.clientHeight, F0 = tc.scrollTop
+  if (Dmax < 1 || !dc.clientHeight || !tc.clientHeight) return
+  if (follow.lastD == null || follow.pos == null) rebase()
+  const Db = follow.lastD, Fb = follow.pos, clamp = v => Math.min(Fmax, Math.max(0, v))
+  let pts
+  if (syncMode === 'matched') {
+    if (!flow) buildFlow()
+    const H = dc.clientHeight, m = d === left ? flow.ltr : flow.rtl, ratio = D => Math.min(1.6, Math.max(0.6, (m(D + H) - m(D)) / H)), step = 32
+    const up = [], down = []
+    for (let D = Db, F = Fb; D < Dmax; ) { const n = Math.min(Dmax, D + step); F += (n - D) * ratio(D); D = n; up.push([D, clamp(F)]) }
+    for (let D = Db, F = Fb; D > 0; ) { const n = Math.max(0, D - step); F -= (D - n) * ratio(n); D = n; down.unshift([D, clamp(F)]) }
+    pts = [...down, [Db, clamp(Fb)], ...up]
+  } else {
+    // the same steps: straight, but for where the follower meets one of its ends
+    pts = [0, Db - Fb, Db + Fmax - Fb, Dmax].filter(D => D >= 0 && D <= Dmax).sort((a, b) => a - b).map(D => [D, clamp(Fb + D - Db)])
+  }
+  pts = pts.filter((p, i) => i === 0 || p[0] > pts[i - 1][0])
+  if (pts[0][0] > 0) pts.unshift([0, pts[0][1]])
+  if (pts.at(-1)[0] < Dmax) pts.push([Dmax, pts.at(-1)[1]])
+  const shift = () => {
+    const D = Math.min(Dmax, Math.max(0, dc.scrollTop))
+    let lo = 0, hi = pts.length - 1
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (pts[mid][0] <= D) lo = mid; else hi = mid }
+    const [a, b] = [pts[lo], pts[hi]], t = b[0] === a[0] ? 0 : (D - a[0]) / (b[0] - a[0])
+    return a[1] + Math.min(1, Math.max(0, t)) * (b[1] - a[1]) - F0
+  }
+  const anim = f.viewer.viewer.animate(pts.map(([D, F]) => ({ offset: D / Dmax, transform: `translateY(${F0 - F}px)` })), { timeline: new ScrollTimeline({ source: dc, axis: 'block' }), fill: 'both' })
+  Object.assign(glass, { anim, kind: 'scroll', side: f, from: d, shift })
+  showAt(f, shift)
+}
+/** the glide at rest on the compositor: the follower's stack moved to `target` on the spring's curve, then baked, and
+ *  bound to the driver again */
+function glideOn(side, target) {
+  const tc = side.container, d = target - tc.scrollTop, T = glideMs(d)
+  if (!T) { put(tc, target); rebase(); arm(); return }
+  const anim = side.viewer.viewer.animate([{ transform: 'translateY(0px)' }, { transform: `translateY(${-d}px)` }], { duration: T, easing: SPRING, fill: 'both' })
+  Object.assign(glass, { anim, kind: 'glide', side, from: null, shift: () => d * springAt((anim.currentTime ?? 0) / T) })
+  showAt(side, glass.shift)
+  const tick = () => { if (glass.anim !== anim) return; side.viewer.update(); requestAnimationFrame(tick) }
+  requestAnimationFrame(tick)
+  anim.onfinish = () => { if (glass.anim !== anim) return; bake(); rebase(); arm() }
+}
+/** a side's position as the screen shows it: its scrollTop, and the transform's shift while it follows on the compositor */
+const shownAt = side => side.container.scrollTop + (glass.side === side ? glass.shift() : 0)
+/** for the harness: what the driver is levelled by at rest, and how far its counterpart stands from level (px) */
+function levelOf(side) {
+  const a = (syncMode === 'pointer' && pointerAnchor(side)) || topAnchor(side), to = other(side)
+  const there = a && spot(to, a.id, a.at)
+  if (there == null) return null
+  const y = a.y - side.container.scrollTop + side.container.getBoundingClientRect().top, ty = there - shownAt(to) + to.container.getBoundingClientRect().top
+  return { id: a.id, at: a.at, error: ty - y }
+}
+/** a side becomes the driver: what moves ends where it stands, and the other side goes on from where it stands */
+function take(side) {
+  if (driver === side) return
+  bake(); driver = side; stopSpring(); clearTimeout(follow.rest); follow.rest = 0; rebase()
+}
+$('sync').value = syncMode
+$('compositor').checked = compositing
+$('compositor').disabled = !CAN_COMPOSIT
+$('compositor').onchange = () => {
+  bake(); stopSpring(); clearTimeout(follow.rest)
+  compositing = CAN_COMPOSIT && $('compositor').checked
+  void savePrefs({ compositor: compositing })
+  rebase(); arm()
+}
+$('sync').onchange = () => {
+  bake()
+  syncMode = $('sync').value
+  void savePrefs({ syncMode })
+  stopGlide(); stopSpring(); clearTimeout(settleTimer); clearTimeout(follow.rest)
+  rebase(); arm()
+}
 function syncFrom(side) {
   const mine = placed.get(side.container)
   if (mine != null) { placed.delete(side.container); if (Math.abs(mine - side.container.scrollTop) < 1) return }
-  if (!$('sync').checked || side !== driver || !left.anchors.size) return
-  clearTimeout(settleTimer)
-  settleTimer = setTimeout(() => settle(side), 160)
+  // the follower scrolled by something else — a link, PDF.js, the find bar: it stands where that put it, and the
+  // together modes go on from there; on the compositor its transform is given up, and it is bound again
+  if (driver && side !== driver) {
+    if (glass.side === side) { drop(); rebase(); arm() } else if (together()) rebase()
+    return
+  }
+  if (syncMode === 'off' || mode !== 'bilingual' || side !== driver || !left.anchors.size || !right.anchors.size) return
+  // a scroll under way, its rest's wait begun again: here, with the event, since the scroll's end comes in the same
+  // frame as its last step, before a frame's callback would run
+  if (together()) { clearTimeout(follow.rest); follow.rest = 0; follow.moving = true }
+  if (syncMode === 'current') { clearTimeout(settleTimer); settleTimer = setTimeout(() => settle(side), 160) }
   if (frame) return
   frame = requestAnimationFrame(() => {
     frame = 0
+    if (syncMode !== 'current') return togetherFrame(side)
     const target = other(side), c = side.container
     const there = map(side === left, c.scrollTop + c.clientHeight * readingLine)
     target.container.scrollTop = there - target.container.clientHeight * readingLine
   })
 }
-/** the paragraph at the reading line brought level on the other side, at the same place within it */
+/** whether a side's pane is in the display: a hidden one has no width, and a page-width scale there comes out negative */
+const shown = side => side.container.clientWidth > 0
+/**
+ * The display changed: the viewers now shown are laid out again at their pane's width, and a side coming into view
+ * opens where the other one was being read, by the table the sync scrolls with
+ */
+/**
+ * Where the reader is on a side, in terms that outlast its layout: the unit at the reading line and the place within it
+ * (its lines counted from 0 to 1), and the place in the whole document for when no unit is located there. Read while
+ * the side is shown: once the display hides it, its scrollTop and its pages' offsets are all 0, and a switch straight
+ * between Original and Translation opened the other side at the paper's top (Codex on #297, measured by
+ * spikes/viewer-faults.mjs)
+ */
+function readingPlace(side) {
+  const c = side.container
+  const doc = c.scrollTop / Math.max(1, c.scrollHeight - c.clientHeight)
+  if (!side.doc || !side.anchors.size || !shown(side)) return { doc }
+  invalidate()
+  const y = c.scrollTop + c.clientHeight * readingLine
+  let page = 1
+  for (let p = 1; p <= side.doc.numPages; p++) if (pageTop(side, p) <= y) page = p
+  // the first column, as the settle takes it with no pointer
+  const pv = pageView(side, page), [x] = pv.viewport.convertToPdfPoint(pv.div.clientWidth * 0.25, 0)
+  const l = lineAt(side, y, x)
+  if (!l) return { doc }
+  const f = Math.min(1, Math.max(0, (y - l.top) / Math.max(1, l.bottom - l.top)))
+  return { doc, id: l.id, at: (l.li + f) / l.n }
+}
+/** the display changed from `from`: the sides shown laid out to its width, and the side it brought in put at `place` */
+function relayout(from, place = null) {
+  bake()
+  requestAnimationFrame(() => {
+    for (const s of sides) if (s.doc && shown(s)) { s.viewer.currentScaleValue = 'page-width'; s.viewer.update() }
+    const came = from === 'original' ? right : from === 'translation' ? left : null
+    requestAnimationFrame(() => {
+      if (!came?.doc || !place) return
+      invalidate()
+      const c = came.container, y = place.id != null ? spot(came, place.id, place.at) : null
+      put(c, y != null ? y - c.clientHeight * readingLine : place.doc * (c.scrollHeight - c.clientHeight))
+    })
+  })
+}
+/** the current design's settle: the paragraph at the reading line brought level on the other side, at the same place
+ *  within it, 160 ms after the last scroll */
 function settle(side) {
-  if (!$('sync').checked || side !== driver) return
+  if (syncMode !== 'current' || mode !== 'bilingual' || side !== driver) return
   const c = side.container, y = c.scrollTop + c.clientHeight * readingLine
   // the page at the reading line, and the pointer's place across it (the first column when the pointer is away)
   let page = 1
@@ -419,6 +976,7 @@ function level(from, y, there) {
   const short = tc.scrollTop - want
   if (Math.abs(short) > 0.5) put(fc, fc.scrollTop + short)
   readingLine = Math.min(0.95, Math.max(0.05, (there - tc.scrollTop + dy) / fc.clientHeight))
+  rebase(); arm()
 }
 /** a side's scroll position set by the reader itself, its scroll event not taken for the reader's own scrolling */
 const placed = new WeakMap()
@@ -434,9 +992,9 @@ function put(container, top) {
 let gliding = 0
 function glide(container, top) {
   stopGlide()
-  const start = container.scrollTop, t0 = performance.now(), ms = 220
+  const start = container.scrollTop, t0 = performance.now(), ms = reduced.matches ? 0 : 220
   const step = now => {
-    const k = Math.min(1, (now - t0) / ms)
+    const k = ms ? Math.min(1, (now - t0) / ms) : 1
     put(container, start + (top - start) * (1 - (1 - k) ** 3))
     gliding = k < 1 ? requestAnimationFrame(step) : 0
   }
@@ -452,6 +1010,10 @@ function stopGlide() { if (gliding) cancelAnimationFrame(gliding); gliding = 0 }
  */
 let lastAlign = null // how the last click was levelled, for the test harness
 async function alignClick(from, event) {
+  // with one document shown there is no other side to level: the hidden one has no scroll range, and the correction
+  // meant for it would move the one being read (Codex on #297)
+  if (mode !== 'bilingual') return
+  bake()
   const to = other(from), c = from.container, y = event.clientY - c.getBoundingClientRect().top
   const hit = hitAt(from, event)
   if (hit && to.anchors.get(hit.id)) {
@@ -554,13 +1116,31 @@ function columnOf(side, page, r) {
   const [x0, , x1] = pageView(side, page).pdfPage.view, mid = (x0 + x1) / 2
   return r.x0 < mid - 1 && r.x1 > mid + 1 ? { x0, x1 } : r.x1 <= mid + 1 ? { x0, x1: mid } : { x0: mid, x1 }
 }
-const invalidate = () => { table = null; lines = null }
+const invalidate = () => { bake(); table = null; lines = null; flow = null; follow.lastD = null }
 addEventListener('resize', invalidate)
 
 function attach(side) {
   side.container.addEventListener('scroll', () => syncFrom(side), { passive: true })
-  for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) side.container.addEventListener(type, () => { driver = side }, { passive: true })
-  side.container.addEventListener('pointermove', e => { pointerX = { side, x: e.clientX } }, { passive: true })
+  // a new driver: the other side goes on from where it stands, before the new driver's first step is taken; on the
+  // compositor, a glide under way ends where it stands, and the follower is bound to the driver
+  for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) side.container.addEventListener(type, () => {
+    take(side)
+    if (glass.kind === 'glide') bake()
+    arm()
+  }, { passive: true })
+  // the pointer tells which side the next scroll will move, so on the compositor the follower is bound ahead — but not
+  // while a scroll, its rest's wait or its glide is under way on the other side, which the pointer passing over would cut off
+  side.container.addEventListener('pointermove', e => {
+    pointerX = { side, x: e.clientX, y: e.clientY }
+    if (onCompositor() && driver !== side && !follow.moving && !follow.rest && glass.kind !== 'glide') { take(side); arm() }
+  }, { passive: true })
+  // the scroll's end — a trackpad's glide included — and 150 ms more without a scroll: the together modes level the two
+  side.container.addEventListener('scrollend', () => {
+    if (side !== driver || !together()) return
+    follow.moving = false
+    clearTimeout(follow.rest)
+    follow.rest = setTimeout(() => { follow.rest = 0; alignTop(side) }, 150)
+  }, { passive: true })
   side.container.addEventListener('mousemove', e => light(unitAt(side, e)))
   side.container.addEventListener('mouseleave', () => light(null))
   // A click, told apart from a drag that selects text, by the pointer's press and release: PDF.js moves its selection
@@ -574,24 +1154,32 @@ function attach(side) {
     if (!p || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4 || e.timeStamp - p.t > 600 || !(getSelection()?.isCollapsed ?? true)) return
     void alignClick(side, e)
   })
-  // PDF.js re-renders a page's div on zoom and as pages come into view: the highlight is drawn again there
-  side.eventBus.on('pagerendered', ({ pageNumber }) => { if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start; paint(side); if (side === right) paintFigures(side, pageNumber) })
-  side.eventBus.on('pagesinit', () => { side.viewer.currentScaleValue = side.scale ?? 'page-width' })
-  side.eventBus.on('scalechanging', ({ scale }) => { invalidate(); if (side === left) $('zoom').textContent = `${Math.round(scale * 100)}%` })
+  // PDF.js re-renders a page's div on zoom and as pages come into view: the highlight and the figures are laid again there
+  side.eventBus.on('pagerendered', ({ pageNumber }) => { if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start; paint(side); if (side !== left) side.figs.set(pageNumber, paintFigures(side, pageNumber).catch(e => console.warn('[figures]', e))) })
+  // a side opened out of the display (the original, while the translation alone is shown) waits at 1 for its width (relayout)
+  side.eventBus.on('pagesinit', () => { const value = side.scale ?? 'page-width'; side.viewer.currentScaleValue = shown(side) || typeof value === 'number' ? value : 1 })
+  side.eventBus.on('scalechanging', ({ scale }) => { invalidate(); if (shown(side) && (side === left || !shown(left))) $('zoom').textContent = `${Math.round(scale * 100)}%` })
   side.eventBus.on('pagesinit', invalidate)
 }
 for (const side of sides) attach(side)
+/** where the original is being read, in PDF.js's terms (its page, and the point at the top left of the view in PDF
+ *  units), as long as it is in view: the same file opens on the right at the same place */
+let readAt = null
+left.eventBus.on('updateviewarea', ({ location }) => { if (shown(left)) readAt = location })
 $('figures').onchange = repaintFigures
-$('zoomIn').onclick = () => { for (const s of sides) s.viewer.currentScale = Math.min(4, s.viewer.currentScale * 1.15) }
-$('zoomOut').onclick = () => { for (const s of sides) s.viewer.currentScale = Math.max(0.25, s.viewer.currentScale / 1.15) }
+$('zoomIn').onclick = () => { for (const s of sides) if (shown(s)) s.viewer.currentScale = Math.min(4, s.viewer.currentScale * 1.15) }
+$('zoomOut').onclick = () => { for (const s of sides) if (shown(s)) s.viewer.currentScale = Math.max(0.25, s.viewer.currentScale / 1.15) }
 
 // ---------------------------------------------------------------- anchoring one side
+/** the units TeX sets away from where the source has them: a caption with its float, a footnote at the foot of its
+ *  page, a table's cells, a picture's text (anchors.mjs anchorUnits) */
+const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
 /** every unit located on a side: `texts` is the unit's text as that PDF has it; `marks` null = read them from the PDF */
 async function anchorSide(side, texts, marks) {
   const pages = await textPages(side.doc)
   const doc = tokenizeDocument(pages)
   const bounds = boundsFromMarks(doc, marks ?? (await pdfMarks(side.doc)))
-  index(side, anchorUnits(doc, texts, { bounds }))
+  index(side, anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(unitKind.get(id)) }))
   return bounds.size
 }
 
@@ -616,9 +1204,13 @@ function scrollFor(side, place) {
   return pageTop(side, r.page) + box.top + (pos - lj) * box.height - side.container.clientHeight * readingLine
 }
 /** a newer compile on the right: loaded into a second viewer out of sight, anchored, scrolled so that the paragraph at
- *  the reading line stays put, its visible pages rendered, then shown in place of the old one */
-async function replaceRight(url, texts) {
+ *  the reading line stays put, its visible pages drawn with their figures, then shown in place of the old one. `draft`:
+ *  a preview whose images are frames (live.mjs DRAFT), the left's figures drawn over them (paintFigures) */
+let rightTexts = null // the units' texts on the right as it was last anchored, for the test harness
+async function replaceRight(url, texts, { draft = false } = {}) {
   const t0 = performance.now()
+  bake()
+  rightTexts = texts
   const place = placeOf(right)
   const offset = place && scrollFor(right, place) - right.container.scrollTop // 0 unless the reader is between lines
   const container = document.createElement('div')
@@ -629,18 +1221,23 @@ async function replaceRight(url, texts) {
   next.scale = right.viewer.currentScale
   attach(next)
   const inited = new Promise(r => next.eventBus.on('pagesinit', r, { once: true }))
-  await open(next, url)
-  await inited
-  await anchorSide(next, texts)
+  const opened = open(next, url)
+  if (draft) next.frames = opened.then(pdfFrames).catch(() => new Map())
+  next.anchored = opened.then(() => inited).then(() => anchorSide(next, texts))
+  await next.anchored
   const top = scrollFor(next, place)
   if (top != null) next.container.scrollTop = top - (offset ?? 0)
   else next.container.scrollTop = right.container.scrollTop
-  // wait for the pages in view to be drawn
+  // wait for the pages in view to be drawn, then for their figures, a while at most: a figure whose text is still being
+  // read comes in after the swap rather than hold the whole page back
   await new Promise(resolve => {
     const want = () => next.viewer._getVisiblePages().views.map(v => v.view).filter(v => v.renderingState !== 3)
     const check = () => (want().length ? setTimeout(check, 30) : resolve())
     next.viewer.update(); check()
   })
+  await Promise.race([Promise.all(next.viewer._getVisiblePages().views.map(v => next.figs.get(v.id))), new Promise(r => setTimeout(r, 1500))])
+  if (!draft) copies.clear()
+  bake()
   const old = right
   right = next; sides[1] = next
   if (driver === old) driver = next
@@ -665,39 +1262,51 @@ async function live() {
   const site = params.get('site') ?? 'http://127.0.0.1:8071', endpoint = params.get('endpoint') ?? 'http://localhost:8070'
   const srcUrl = params.get('src') ?? `https://arxiv.org/src/${paper}`, pdfUrl = params.get('pdf') ?? `https://arxiv.org/pdf/${paper}`
   const L = (window.__reader.live = { events: [], t0: performance.now() })
-  let shown = 0, total = 0, engine = null, setContext = null, lost = 0, lostWhy = null
+  let got = 0, total = 0, engine = null, setContext = null, lost = 0, lostWhy = null
   let compiledOnce = false
   paperCtx = new Promise(resolve => { setContext = resolve })
   const note = (event, data = {}) => {
     L.events.push({ t: Math.round(performance.now() - L.t0), event, ...data })
-    if (event === 'translated') { shown = data.total; if (data.how?.lost) { lost += data.how.lost; lostWhy = data.how.error } }
+    if (event === 'translated') { got = data.total; if (data.how?.lost) { lost += data.how.lost; lostWhy = data.how.error } }
     if ((event === 'preview' || event === 'final') && data.ok) compiledOnce = true
     const said = { preview: data.ok ? 'preview compiled' : `compile failed (${data.strategy}): ${data.error ?? ''}`, final: data.ok ? 'final compiled' : `final compile failed (${data.strategy}): ${data.error ?? ''}`, 'next strategy': `trying ${data.strategy}`, done: compiledOnce ? 'done' : 'done — the translation did not compile; the right side still shows the original' }[event] ?? event
     const by = engine ? ` into ${engine.lang} by ${engine.engine}` : ''
     // paragraphs the service failed on (a network down, a rate limit) stay in English, and the reader is told
     const missed = lost ? ` (${lost} not: ${lostWhy})` : ''
-    status(`${total ? `${shown} of ${total} translated${by}${missed}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
+    status(`${total ? `${got} of ${total} translated${by}${missed}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
   }
-  const fail = (event, text) => { setContext({}); note(event); status(text); L.done = true; L.failed = text }
+  const fail = (event, text) => {
+    setContext({}); note(event); status(text); L.done = true; L.failed = text
+    // the Translation display with nothing on its side would be blank: the original, for this visit (Codex on #297)
+    if (mode === 'translation' && !right.doc) { mode = 'original'; showMode(); relayout('translation') }
+  }
   // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
   // told at once
+  // the original first, in every display; nothing is translated or compiled until a display that shows a translation is chosen
+  status(`Fetching ${paper} from arXiv…`)
+  try { await open(left, pdfUrl) } catch (e) { return fail('fetch failed', `Could not fetch ${paper}'s PDF from arXiv (${e.message ?? e})`) }
+  note('opened')
+  if (mode === 'original') status(`${paper}, the original. Choose Translation or Side by side to translate it`)
+  await translationWanted
+  translating = true
   status('Asking the extension which service translates…')
   try { engine = await theEngine() } catch (e) { return fail('no engine', `Cannot translate: ${e.message ?? e}`) }
   const lang = engine.lang
   note('engine', { lang, format: engine.format, engine: engine.engine })
   // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
   if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
-  // the original on both sides at once; the right side is replaced as the translation comes in
-  status(`Fetching ${paper} from arXiv…`)
+  // the original on the right too, replaced as the translation comes in; opened where the original was being read, as a
+  // side coming into view does (relayout, which has no document there yet to go by: Codex on #297)
+  status(`Fetching ${paper}'s source from arXiv…`)
+  const rightLaid = new Promise(resolve => right.eventBus.on('pagesinit', resolve, { once: true }))
   let srcBytes
   try {
     ;[srcBytes] = await Promise.all([
       fetch(srcUrl).then(r => { if (!r.ok) throw new Error(`the source: HTTP ${r.status}`); return r.arrayBuffer() }).then(b => new Uint8Array(b)),
-      open(left, pdfUrl).catch(e => { throw new Error(`the PDF: ${e.message ?? e}`) }),
-      open(right, pdfUrl),
+      open(right, pdfUrl).then(() => rightLaid).then(() => { if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true }) }),
     ])
   } catch (e) { return fail('fetch failed', `Could not fetch ${paper} from arXiv (${e.message ?? e})`) }
-  note('opened')
+  note('source fetched')
   const { files, pdf: noSource } = await unpackSource(srcBytes)
   if (noSource) return fail('no source', `arXiv has no LaTeX source for ${paper} (a PDF-only submission): nothing to translate this way`)
   const paperData = openPaper(files), units = paperData.units
@@ -710,7 +1319,7 @@ async function live() {
   note('source', { units: units.length, files: files.size })
   await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
   note('anchored')
-  window.__reader.debug = { left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, units: units.map((u, i) => ({ i, kind: u.kind, text: src[i].text })) }
+  window.__reader.debug = { left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, units: units.map((u, i) => ({ i, kind: u.kind, text: src[i].text })), get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf }
   window.__reader.ready = true
   // the compiler: our site's TeX page
   const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
@@ -738,14 +1347,15 @@ async function live() {
     lang, compile, note,
     format: engine.format,
     translate: texts => engine.translate(texts, context),
-    // nearest the reading line on the page first, what lies ahead before what lies behind
+    // nearest the reading line on the page first, what lies ahead before what lies behind; on the side in view, since
+    // the other one, out of the display, does not move with the reader (Codex on #297)
     rank: i => {
-      const top = unitDocTop(left, i), c = left.container
+      const side = shown(left) ? left : right, top = unitDocTop(side, i), c = side.container
       if (top == null) return 1e9 + i
       const d = top - (c.scrollTop + c.clientHeight * readingLine)
       return d >= -c.clientHeight * 0.3 ? Math.abs(d) : 2 * Math.abs(d)
     },
-    onUpdate: ({ pdf, texts, translated, final }) => { swaps = swaps.then(async () => { const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts); URL.revokeObjectURL(url); note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
+    onUpdate: ({ pdf, texts, translated, final }) => { swaps = swaps.then(async () => { const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
     onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const n = await anchorSide(left, src, await marksOfPdf(pdf)); invalidate(); paint(left); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
   }).catch(e => ({ error: e.message ?? String(e) }))
   if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`)
@@ -782,7 +1392,7 @@ async function demo() {
   Object.assign(window.__reader, { ready: true, units: units.length, linked: linked(), leftPages: left.doc.numPages, rightPages: right.doc.numPages })
   status(`${linked()} of ${units.length} paragraphs linked · text and anchors ${Math.round(timing.anchors)} ms`)
   // for the test harness
-  window.__reader.debug = { left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind } }
+  window.__reader.debug = { left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf }
 
   if (stages) {
     window.__reader.swaps = []

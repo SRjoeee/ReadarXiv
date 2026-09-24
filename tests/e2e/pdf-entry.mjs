@@ -9,7 +9,7 @@
 //
 // Usage: pnpm build && pnpm e2e:pdf     (first time: npx playwright install chromium)
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build.
-import { mkdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 
@@ -50,6 +50,23 @@ const check = (name, ok, detail) => {
 }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
+/**
+ * On the PDF experiment's branch a build may carry the bilingual PDF reader (experiments/pdf-bilingual, copied in by
+ * wxt.config.ts once the experiment's setup has run): the page then opens in it, and the reader's way back to the
+ * browser's viewer brings the floating button the rest of this suite checks. A build without it (CI's) goes straight on
+ */
+const READER = existsSync(`${EXT}/pdf-reader/reader.html`)
+async function throughReader(paper) {
+  if (!READER) return
+  const frame = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null)
+  const reader = await frame?.contentFrame()
+  const back = await reader?.waitForSelector('#close:not([hidden])', { timeout: 30_000 }).catch(() => null)
+  check(`the PDF page opens in the reader, with its way back to the browser's viewer (${paper})`, !!back, back ? 'the reader over the page' : `reader ${!!frame}, way back ${!!back}`)
+  await back?.click()
+  const gone = await page.waitForFunction(() => !document.querySelector('iframe[data-axt-pdf-reader]'), null, { timeout: 10_000 }).then(() => true, () => false)
+  check(`the way back takes the reader away (${paper})`, gone, gone ? 'the browser\'s viewer underneath' : 'the reader is still there')
+}
+
 rmSync(PROFILE, { recursive: true, force: true })
 mkdirSync(SHOTS, { recursive: true })
 
@@ -84,6 +101,7 @@ const readEntry = () => page.evaluate(() => {
 })
 
 await page.goto(`https://arxiv.org/pdf/${WITH_HTML}`, { waitUntil: 'load' })
+await throughReader(WITH_HTML)
 await sleep(6000)
 const entry = await readEntry()
 check('a content script runs on Chrome\'s PDF page and the floating button is drawn there',
@@ -142,6 +160,7 @@ await page.bringToFront()
 
 await sleep(3000)
 await page.goto(`https://arxiv.org/pdf/${WITHOUT_HTML}`, { waitUntil: 'load' })
+await throughReader(WITHOUT_HTML)
 await sleep(6000)
 const none = await readEntry()
 check('a paper with no HTML version keeps the button, its main button disabled and saying why, rather than a link that leads nowhere',
@@ -176,6 +195,19 @@ await sleep(3000)
     `opened ${opened?.url().slice(0, 60) ?? 'nothing'}, first tab ${page.url().slice(0, 40)}…`)
   await opened?.close()
   await popup.close()
+}
+
+// Only the reader's own page can take the reader away: a page its frame has been sent to cannot (Devin on #297). The
+// frame goes to a data: page, whose origin is opaque, and asks from there
+if (READER) {
+  await page.goto(`https://arxiv.org/pdf/${WITH_HTML}`, { waitUntil: 'load' })
+  const frame = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null)
+  const reader = await frame?.contentFrame()
+  await reader?.goto('data:text/html,<p>elsewhere</p>').catch(() => undefined)
+  await reader?.evaluate(() => parent.postMessage({ type: 'axt-pdf-reader-close' }, '*')).catch(() => undefined)
+  await sleep(1000)
+  const stays = await page.evaluate(() => !!document.querySelector('iframe[data-axt-pdf-reader]'))
+  check('a page the reader\'s frame was sent to cannot take the reader away', !!frame && stays, frame ? (stays ? 'the reader stays' : 'the reader was taken away') : 'no reader')
 }
 
 await context.close()

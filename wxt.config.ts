@@ -108,7 +108,8 @@ export default defineConfig({
     // style sheet) is asked for by the extension's own origin and needs no entry; the button's mark is inline vector. A page that
     // may frame the popup could try to trick a click on it: the popup shows no key and no paper text, and what a
     // click can do there is what the reader does there anyway — start or undo a translation, pick a mode or a service
-    web_accessible_resources: [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }],
+    // On this experiment branch the PDF reader too (above): arXiv's PDF page opens in it (entrypoints/pdf.content.ts)
+    web_accessible_resources: [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }, { resources: ['pdf-reader/*'], matches: ['https://arxiv.org/*'] }],
     // A custom endpoint may be http on 127.0.0.1 / the LAN (Ollama, LM Studio); with only the localhost literal the request fails outright (Codex on #6).
     // This is only the range that may be requested; the real grant is still asked for per origin on the settings page
     optional_host_permissions: ['https://*/*', 'http://*/*'],

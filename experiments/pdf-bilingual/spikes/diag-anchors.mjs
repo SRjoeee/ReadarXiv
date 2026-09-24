@@ -12,7 +12,7 @@ const siteOrigin = `http://127.0.0.1:${site.address().port}`
 const { context, readerUrl } = await launchWithReader({ profile: 'diag-anchors' })
 const page = await context.newPage()
 page.on('pageerror', e => console.error('pageerror', e.message))
-await page.goto(readerUrl({ paper, live: '1', site: siteOrigin, endpoint: 'http://localhost:8070' }))
+await page.goto(readerUrl({ paper, live: '1', mode: 'bilingual', site: siteOrigin, endpoint: 'http://localhost:8070' }))
 await page.waitForFunction(() => window.__reader?.live?.done, null, { timeout: 900_000, polling: 1000 })
 const out = await page.evaluate(() => {
   const d = window.__reader.debug

@@ -1,9 +1,9 @@
 // The extension's own translation, for the reader: the background's chain — the engine the reader chose on the settings
 // page, an LLM or Microsoft, with its fallbacks, its cache and its queues (DESIGN §8) — reached through the messages
-// the HTML page's session sends (lib/axt/translate.mjs, built from src/shared/transport.ts). The chain decides the wire
+// the HTML page's session sends (lib/axt/extension.mjs, built from src/shared/transport.ts). The chain decides the wire
 // format (`format`: tags for an LLM, markers for Microsoft, runs for an engine that keeps no placeholder) and the
 // target language; the reader serialises its units by the one and typesets for the other.
-import { ABSTRACT_MAX_CHARS, createMessageTransport, isPermanentErrorKind, toBcp47 } from './lib/axt/translate.mjs'
+import { ABSTRACT_MAX_CHARS, createMessageTransport, isPermanentErrorKind, toBcp47 } from './lib/axt/extension.mjs'
 import { plainSource } from './mt.mjs'
 
 /** the paper's title and abstract for an LLM's prompt, the abstract cut as the HTML page cuts it (src/core/extractor/context.ts) */

@@ -7,7 +7,7 @@ const rss = () => Math.round(execFileSync('ps', ['-axo', 'rss=,command='], { enc
 for (const only of ['none', 'left', 'both']) {
   const { context, readerUrl } = await launchWithReader({ profile: 'mem', demos: true })
   const page = await context.newPage()
-  await page.goto(readerUrl({ paper: process.argv[2] ?? '2608.04322', ...(only === 'both' ? {} : { only }) }))
+  await page.goto(readerUrl({ paper: process.argv[2] ?? '2608.04322', mode: 'bilingual', ...(only === 'both' ? {} : { only }) }))
   await page.waitForFunction(() => window.__reader?.ready, null, { timeout: 120000 })
   await page.waitForTimeout(1500)
   const loaded = rss()

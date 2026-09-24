@@ -639,3 +639,324 @@ The maintainer's decision: the single-language reader comes first. Of the engine
   - Its mark had gone before a unit's first placeholder. That put text before a table's `\toprule`, which broke the table and the bibliography after it: `\bibdata` never reached the aux, and every citation was undefined.
   - The mark now goes before the first letter, as a translation's words do.
   - `live-node.mjs` has the same echo (`ECHO=1`), and the final's note now lists undefined citations.
+
+## Thirteenth addendum, 2026-09-23: the viewer's first features
+
+The owner's order: the viewer's features first, with a plain interface; its interface designed and its features brought together last, so that the extension's present interface is left as it is; synchronized scrolling researched and tried on its own.
+
+- **The highlight is a block, not lines.** It is one wash per run of a unit's lines down one column of one page, multiplied into the page. The paper under it takes the colour and the letters keep theirs, as the HTML page's band behind the text looks. On 2608.02163, an eight-line paragraph lit as one block on each side. It had been eight line boxes over the text, with gaps between them, which read as a selection.
+- **The band and the language are the extension's settings.** The extension's look sheet (`appearanceRule`) gives the band's colour and strength. The bar's two menus write the settings the HTML page reads, and both follow a change made elsewhere; a new language starts the translation again. Measured:
+  - choosing Sand over Soft green in the bar changed the settings, and the reader's highlight followed;
+  - choosing Japanese wrote `jpn`, and the paper came back translated into Japanese.
+- **Three displays**:
+  - the original alone: only its PDF is fetched, and nothing is translated or compiled;
+  - the translation alone;
+  - both side by side.
+
+  The reader's choice is kept in its own storage until the reader is part of the extension's settings. A document shown alone stands at a reading width (1,100 px), centred. A side opened out of view waits for its width, since a page-width scale on a hidden pane came out negative.
+- **arXiv's PDF page opens in the reader.** The content script lays the reader over the browser's viewer, and the address stays the paper's. A button in the bar takes the reader away again and shows the floating button. A build without the reader leaves the page as it was.
+
+Checks, on 2608.02163 in Chromium:
+- a walkthrough of the page: the reader over it on the original; side by side; the hover; the band; the display after a reload; the way back;
+- the translation alone, and the language switch;
+- the zoom through all three displays.
+
+Two faults the review of #297 found, measured and fixed (`spikes/viewer-faults.mjs`, which failed first):
+- **Straight between Original and Translation, the other side opened at the paper's top**, both ways: the original at 0.60 of its length, the translation shown at 0.00. The display hides the side left before the place is read, and a hidden side's scroll offset and its pages' offsets are all 0. The place is now read while the side is still shown, as the unit at the reading line and the place within it, and the side brought in is put there: 0.15 → 0.13 and 0.80 → 0.79 on 2608.02163, by the unit. Where no unit is located, as on its references and appendix, the place goes by its share of the document.
+- **The Translation display with no service able to answer was blank**: the original hidden, nothing on the translation's side. It now falls back to the original for that visit, the choice kept.
+
+Two concerns of the same review were measured and are not faults: the Original display finishes loading, and embedded in a page its frame fires `load`, though the translation waits for a click; and the loss count reads the last TeX pass alone. BusyTeX's pipeline empties every earlier pass's log, and `lostIn` now takes the last TeX step's log itself rather than rely on that (#294's re-review; `spikes/lost-cases.mjs`, and the same counts on the 119 browser compile logs kept).
+
+Devin's re-review found two more, fixed with checks that failed first:
+- **A link out of the paper opened in the reader's own frame**, which on arXiv's PDF page is the reader laid over it: the reader was replaced by the linked site. PDF.js's link service now opens it in a new tab (`spikes/viewer-faults.mjs`).
+- **Any page the frame was sent to could take the reader away**, by posting the close message: the content script checked the message's window, not its origin. It now checks both (`pnpm e2e:pdf`, from a `data:` page).
+
+## Fourteenth addendum, 2026-09-23: three faults found reading 2608.02163
+
+The owner, reading 2608.02163 in the reader, found three faults:
+- a figure showed its translated labels, then a frame with its file name, then the figure again with no labels;
+- many translated headings did not light;
+- in Japanese, a paragraph lit from its second line on the right.
+
+They came from four causes, one of them behind two of the faults.
+
+- **No marks in any translation set by XeLaTeX.** xdvipdfmx drops the named destinations that nothing in the PDF refers to, as ours are, unless a special on the first page sets its flag C 0x0010. So every CJK translation had no marks, and the right side located its units by text alone. The Japanese paragraph is an example: its opening words were matched in another paragraph that has the same words. `MARK_DEF` now sets the flag.
+- **An end mark on a line of its own.** With the marks back, Figure 1's caption still could not be bounded, because its end mark sat alone on an extra line.
+  - The cause: xeCJK sets glue after a full-width stop, and a mark after that glue makes the glue a place to break. With the caption's last line full, the browser's XeTeX broke there. The caption got one line more, and the mark had no word beside it.
+  - The fix: the end mark (`\axtend`) takes the glue off, sets the mark against the last letter, and puts the same glue back. It starts with `\relax`, because XeTeX sets a word, and xeCJK's glue after it, only when a command that does not expand comes; a test made before one looked at the list without them.
+  - Checked by replaying the captured final source in the browser: the mark stands at the end of the caption's last line. Against the same source with no marks, no word moved except a 0.1 pt rounding on three lines and one centred caption 1.2 pt aside. There, a start mark between a Latin piece and CJK text takes away xeCJK's space between them; it is left as it is.
+  - The patch identity gate: 113 of 113.
+- **Headings between their neighbours in the text.** A heading carries no marks and is searched between the marked units around it. Two changes:
+  - A caption or a footnote, which TeX sets elsewhere, is no neighbour: a caption placed a column later had made the range end before the heading began.
+  - In that range, the heading's words in a row, at the last place they come, before 3-grams: 3-grams took a four-character heading from the text around it, which used the same characters. A heading is followed by its own text; a running head with its words comes before it.
+
+  A float's text that its range does not hold is searched in the whole document, since its float may stand anywhere. `spikes/anchors-cases.mjs` keeps the three heading cases; the previous code fails all three.
+- **Figures.** Three changes:
+  - *The final had no figure text on the pages in view.* A new compile's pages are drawn out of sight before it takes the right side's place, and figure text was laid only on the side that was already the right one. Now every translation page lays its figures as it is drawn, and the swap waits for those in view, 1.5 s at most.
+  - *Previews showed frames.* Previews set images as frames of their size (graphicx's draft), because images dominate a pass. The alternatives, measured in the browser's BusyTeX:
+
+    | a preview pass of | frames | images | PNGs as 1,200 px thumbnails |
+    |---|---|---|---|
+    | 2608.02163 (6 PNGs, 4.1 MB) | 1.6 s | 4.9 s | 2.8 s |
+    | 2608.10091 (3 PNGs, 9.7 MB) | 1.1 s | 9.9 s | 2.5 s |
+    | 2608.02055 (25 PDF figures) | 1.9 s | 8.9 s | 8.9 s (none to shrink) |
+
+    So the frames stay, and the reader covers them. Each frame's corners are marked (`live.mjs` DRAFT, wrapping graphicx's `\Gin@setfile`), and the figure of arXiv's PDF that the frame stands for is drawn over it. A frame and a figure on the left stand for each other when three things hold: they are next to the same caption, of the same size, and in the same place in reading order. A frame that no figure stands for is left as it is; this includes a transformed include, whose marks keep the frame's size before the transformation.
+  - *One figure, one reading.* The figure text of every translation page is the left figure's, read once (by the recogniser or from the text layer) and translated once. The translation pages are arXiv's PDF on the right before the first preview, each preview, and the final. Before, the final read its figures again. arXiv's PDF on the right is the left's file (the same fingerprint), so its figures are the left's page for page.
+
+On 2608.02163, units located on the right side:
+
+| | Traditional Chinese, before → after | Japanese, before → after |
+|---|---|---|
+| headings (42) | 23 → 42 | 25 → 42 |
+| paragraphs (97) | 84 → 97 | 81 → 97 |
+| captions (17) | 16 → 17 | 14 → 17 |
+| table cells located on both sides (193) | 12 → 44 | 12 → 57 |
+
+Figure 1 has its translated labels from the first preview on, with its frame covered, and the final shows the same labels. With the text around it translated, the Japanese paragraph now lights from its first line on both sides.
+
+The live run end to end:
+- Microsoft, Simplified Chinese: previews swapped in about 250 ms each, the final in 811 ms, with 0 px drift each time; 26 of 26 sampled paragraphs were level within 4 px.
+- The LLM path, through a mock service: 23 of 24 were level. The one off, by 240 px, is a paragraph on the last page, where the right side cannot scroll any further. That is the scroll sync's end of document, which the sync research takes up.
+
+The first review of #297 (Devin, Codex; Copilot was out of quota), on the viewer's first features:
+- **Taken**:
+  - the right side opens where the original was being read: a reader who scrolled the original and then chose Side by side was shown page 1. It now opens at the original's place, in PDF.js's own terms: the same file, the same page and point. Measured: the left at 9,935 px, the right at 9,935 px.
+  - In Translation alone, the translation is ranked from the side in view.
+  - The settings are read and written through the extension's own surface module (`shared/surface-config.ts`), as the popup and the settings page do. Each write is a patch on what storage holds when its turn comes, one after another. A configuration that could not be read is said so on the bar, with its defaults in use.
+    - Measured: a stored configuration from a newer version showed the notice.
+    - Measured: the language and the band changed at once both held. The band had been lost to a menu redrawn by the language's write, read after it; the chosen value is now taken when it is chosen.
+  - The reader's own preferences are merged into what storage holds when they are written.
+  - `e2e:pdf` goes through the reader when the build has it: the page opens in the reader, and the way back brings the floating button the suite goes on to check. 16 of 16 passed with the reader built in.
+- **Not reproduced**: that previews stay hidden in Translation alone, and that swaps never end once Original is chosen during a translation. PDF.js finds the pages in view by their geometry, not by the style sheet's `visibility`, and a hidden pane has no pages in view to wait for. Measured: Translation alone showed 5 previews and the final. Original chosen after the first preview still showed 6 previews and the final. Side by side then showed the final's 29 pages.
+
+## Fifteenth addendum, 2026-09-23: synchronized scrolling, six modes to compare by hand
+
+The scroll-sync research measured the current design. On a two-column paper, the follower glides a median of about 500 px after every stop. On the next wheel event it throws that back by 400–680 px, and 60 of the 132 linked units never enter its table. The research then proposed five designs. The owner chose to have them all built behind one switch and to judge them by hand, rather than to run the comparison experiment first. The bar's **Sync** menu now offers six modes. The choice is kept in the reader's preferences, and the default is B.
+
+| mode | what the follower does |
+|---|---|
+| Off | Nothing: each side scrolls on its own. |
+| Current | The design as it was: a table of unit tops, and a settle 160 ms after the last scroll. Kept to compare against. |
+| A · repaired | The same idea, repaired. The table is built from the units read in order (below), not from heights. The settle comes once the driver's scroll has ended, slow in and slow out. What the settle moved is kept, not thrown back on the next scroll. |
+| B · line by line | Each line on one side is levelled with the same place on the other, through a monotone C¹ curve (Steffen's tangents), with no settle. Where either side sets two columns, one knot per page stands for its lines. |
+| B+D · keep in view | B, and the counterpart of the line being read is kept between 8 % and 85 % of the view. It moves by at most half the driver's step, never against the driver's way. The pair is lit. |
+| C · follow the column | The follower stays level with the line being read in the column under the pointer. When that line's counterpart is in another column or on another page, it hands off, slow in and slow out, in 220–480 ms. The pair is lit. |
+
+All the modes but Current share these parts:
+- **The reading chain.** The units read in order are neither captions, footnotes, cells nor a picture's text. The chain keeps the heaviest run of them whose text-layer reading order rises on both sides.
+- **A coordinate λ through those units, line by line.** `poc-reader/sync.mjs` computes it, with no DOM.
+- **A moving reading line.** It is at the top in the document's first screen, at the bottom in its last, and at the clicked height in between, so both documents reach their ends together.
+- **A carried offset.** After a click, a settle or a change of driver, the follower takes up the difference instead of jumping. The offset fades as the driver scrolls on.
+- **Reduced motion** turns glides and hand-offs into single steps.
+
+`spikes/sync-cases.mjs` checks the maps on made-up layouts: a one-column pair is level at every line start, the maps rise and meet both ends, and a unit found out of order leaves the chain. `spikes/sync-smoke.mjs` drives each mode by wheel in the live reader.
+
+The first smoke run, on 2608.02163 (two columns, 60 wheel steps to a left position of 7,200 px), gave these right positions:
+
+| mode | right position | notes |
+|---|---|---|
+| Off | 0 | |
+| Current | 7,268 | |
+| A | 2,910 | fault, below |
+| B | 7,130 | |
+| B+D | 7,022 | |
+| C | 7,273 | ran back 1,298 px in all: its hand-offs at column changes |
+
+No mode ran back while the driver went down except C, and the run had no page errors.
+
+A's shortfall was the knot filter. Taken greedily, one knot set low on the right dropped every knot after it that stood higher. The knots now keep the longest run rising on both sides.
+
+**Not yet verified in a browser.** The smoke check could not run again after that fix. In the session, the operating system stopped resolving the user's account (`getpwuid` fails, `dscl` answers `eServerError`), and Chromium aborts at start when that happens. This is to be rerun once the machine resolves the account again.
+
+The patent the research found (Naver, US 11,531,509 B2) concerns levelling paragraphs on a reference line and on a selection. It is for the owner to take legal advice on before any of these modes ships.
+
+## Sixteenth addendum, 2026-09-24: scrolling together, the owner's design
+
+The owner tried the fifteenth addendum's modes and found every one of them clumsy. Each maps one pane's scroll position onto the other's, and the motion that mapping makes is not what a reader wants to see. The owner reads both sides and switches between them, on a trackpad. The owner proposed this design instead, now built:
+
+- **While the reader scrolls, the two sides move as one sheet.** The side under the pointer drives, which is where a trackpad's scroll goes anyway, and the other moves by the same step. Nothing jitters, and the two panes never fight.
+- **Once the scroll has ended, the other side glides into place.** "Ended" means the trackpad's glide included (`scrollend`), and 150 ms more without a scroll. The glide brings the content at the top of the driver's view to the same height on the other side:
+  - the anchor is the first paragraph or heading whose start shows in the upper half of the view, in the column under the pointer where the page has two;
+  - failing that, the first whole line in view, at its place in its paragraph;
+  - at either end of the driver's document, the other side goes to the same end.
+- **The glide is a critically damped spring,** taking 250–450 ms as the distance asks, with no overshoot and no bounce. A new scroll stops it, and the other side goes on from where it stands. With reduced motion it is one step.
+
+The step is taken in two ways, both in the **Sync** menu to compare by hand:
+- **Together · same speed**: 1:1.
+- **Together · matched speed**: the step scaled by how much taller one layout is than the other over the driver's view (the slope of `sync.mjs`'s map there, between 0.6 and 1.6). The drift the glide has to take up stays small.
+
+The menu keeps Off and Current to compare against. The fifteenth addendum's A, B, B+D and C are gone, with the code only they called.
+
+The gate passes, and `spikes/sync-cases.mjs` checks the map. The browser smoke check (`spikes/sync-smoke.mjs`) could not run for the same reason as before: in this session the operating system does not resolve the user's account, and Chromium aborts at start.
+
+## Seventeenth addendum, 2026-09-24: the pointer's paragraph, and a follower that keeps every frame
+
+The owner kept same speed as the direction and asked for two things:
+- a version levelled by the paragraph the pointer rests on, not by the top of the view;
+- a fix for the follower dropping frames while the driver stays smooth.
+
+### BUILT
+
+- **Together · pointer's paragraph** (the Sync menu). The panes move 1:1. At rest, the paragraph or heading under the pointer's last position is levelled. Its first line is taken when that line shows. Otherwise the point under the pointer is taken, at its place in the paragraph. Off the text (between paragraphs, in a margin), the paragraph with the nearest line within 64 px is taken. With the pointer on the other side, or away from the text, the top is taken as in Together · top. The menu now reads Off / Current / Together · top / Together · pointer's paragraph / Together · top, matched speed.
+- **The follower on the compositor** (the Compositor checkbox, on by default). The cause of the dropped frames:
+  - the driver scrolls on the compositor's thread;
+  - the follower was set by script, one frame later on the main thread;
+  - so it stalled whenever PDF.js drew pages coming into view.
+
+  The follower's page stack now moves on the compositor too:
+  - **While scrolling**: a transform animation on a `ScrollTimeline` of the driver. Its keyframes are the follower's position for every position of the driver: straight at the same speed, integrated every 32 px at matched speed, and clamped at the follower's ends.
+  - **At rest**: the glide is a WAAPI transform animation. Its easing is the critically damped spring, sampled into CSS `linear()`.
+  - **Bake**: when anything is about to read the follower's position, the transform's shift is written into `scrollTop` and the transform is removed, in one task. That happens at the rest's levelling, on a new driver, a click, a layout change or the swap of a new translation.
+  - **Binding ahead**: the follower is bound at rest, and when the pointer comes over a side. The input events that tell a scroll has begun reach the page after the compositor's first steps.
+  - **PDF.js** draws the pages the follower shows, not the ones its `scrollTop` says. During the motion its viewer is lent a scroll container that adds the shift (`_getVisiblePages`).
+  - **Other scrolls**: a scroll of the follower by something else (a link, PDF.js, the find bar) gives up the transform, and the follower is bound again from where it stands.
+  - **Fallback**: with the box unchecked, or without `ScrollTimeline`, the script follower is used.
+- **Two faults found by measuring, both in the script path too**:
+  - The rest's wait was cancelled when the scroll's end came in the same frame as its last step, because the frame's callback cleared it after `scrollend`. The wait is now restarted in the scroll event itself.
+  - After an outside scroll of the follower, the next step pulled it back to where it had been. The together modes now take the follower's position afresh.
+
+### MEASURED (`spikes/sync-frames.mjs`, Chromium, the build, same speed)
+
+The left pane is panned 3,000 px at 1,500 px/s by CDP's synthetic scroll gesture. The composited frames are captured by the screencast, after one warm-up pan. Each pane's step per frame is found by matching its rows. "Busy" adds 35 ms of main-thread work every 80 ms, as PDF.js's drawing does.
+
+| Paper | Follower | Page | Frames the follower's step ≠ the driver's | Frames it stood still | The two apart, p95 / most |
+|---|---|---|---|---|---|
+| 2608.02163 | script | idle | 93 of 120 | 6 | 51 / 114 px |
+| 2608.02163 | compositor | idle | 0 of 121 | 0 | 0 / 0 px |
+| 2608.02163 | script | busy | 77 of 101 | 19 | 87 / 89 px |
+| 2608.02163 | compositor | busy | 0 of 121 | 0 | 0 / 0 px |
+| 2608.18090 | script | idle | 73 of 118 | 3 | 38 / 73 px |
+| 2608.18090 | compositor | idle | 0 of 121 | 0 | 0 / 0 px |
+| 2608.18090 | script | busy | 79 of 98 | 26 | 127 / 176 px |
+| 2608.18090 | compositor | busy | 0 of 122 | 0 | 0 / 0 px |
+
+The script follower's count of frames off varies from run to run: 35 to 93 of 120 on 2608.02163 idle, over three runs. The compositor's was 0 in every run. Idle, neither follower caused a long task on the main thread during the pan.
+
+A 300 px glide at rest runs on the spring on both paths, with steps of 14, 31, 37, 37, 34 … 2, 1, 1 px. There is no jump where it ends. Where 2608.18090's capture skipped frames, the steps seen are sums of neighbouring steps of the same curve.
+
+`spikes/sync-smoke.mjs` (wheel steps, every mode, both followers) finds:
+- no mode ran back while scrolling;
+- every together mode at rest within 1 px of level;
+- the pointer's mode levelling the paragraph under the pointer (unit 152), and the top modes the paragraph at the top (unit 149).
+
+The gate passes.
+
+## Eighteenth addendum, 2026-09-24: a local cache of compiled translations — DESIGN, not built yet
+
+A paper read once should open again at once. The design below was settled with the owner on 2026-09-24; nothing of it is built yet.
+
+### Why: what a returning visit costs today — MEASURED
+
+These measurements are on 2608.02163, opened a second time in the same browser profile, with every translation in the extension's cache.
+
+- **The network is not the cost.** arXiv sends `ETag` and `Last-Modified` with its PDFs and sources, but no `Cache-Control`, so the browser caches them heuristically.
+  - The source came back in 80 ms.
+  - The PDF, loaded by PDF.js from the reader's own page, came back with 0 bytes transferred: 36 ms for 25 pages, after a reload too.
+  - The HTTP cache already keeps the original and the source. Storing them again would be a second copy.
+- **The translations are not the cost either.** They came from the extension's translation cache in 7 to 414 ms per batch, as the HTML page's do.
+- **The cost is TeX.** The final still came at 12.2 s, after five compiles: the font probe (0.26 s), two previews (1.77 and 1.53 s), the final (6.5 s) and the marked original (2.4 s). Peak memory was about 1 GB. Every one of them recomputed what the previous visit had made.
+
+So the one thing worth keeping is the compiled translation, the only result that is expensive to make again.
+
+### Decisions (the owner's, 2026-09-24)
+
+1. **Only the final compiled translation, kept on this machine.** It is kept with the few kilobytes needed to show it. The original PDF, the source, the previews and the compile's intermediate files are not kept.
+2. **The figures stay in the stored PDF.** A copy without them, with the figures drawn from the original at view time as the draft previews do, would be 84 % smaller on figure-heavy papers. Measured on 2608.02163 it is 4.1 MB → 0.68 MB, of which images are 3.4 MB. The bulk left in it is fonts, already subset; gzip saves 2 %. But it would not read the same:
+   - a figure would arrive after its page, a flash while scrolling or zooming;
+   - labels set over an image (overpic, TikZ) would bring the original's labels along;
+   - a frame paired with the wrong figure would show the wrong figure.
+
+   The reader's experience comes first. This option is kept below in case space ever becomes the problem.
+3. **A copy made with other settings is shown at once and translated again.** "Other settings" means another service or model, or an older pipeline; an incomplete copy is treated the same way.
+   - The current settings translate it again in the background.
+   - The new translation replaces the old one paragraph by paragraph, from the view outwards, as a first translation replaces the original.
+   - The base of the previews is the old translation, not the source. Built on the source, as a first translation is, every paragraph not yet translated again would fall back to English between previews.
+4. **Kept from casual extraction.** The stored PDF is encrypted with AES-GCM under a key the page cannot export. This is not DRM, and deliberately so: it stops a file being copied out of the browser profile, not someone with DevTools. That is the level wanted while a download of the full PDF, possibly paid, is not offered.
+
+   The rejected alternatives are DRM, obfuscated code, blocking DevTools and PDF permission flags (which PDF.js ignores): heavy, fragile and slow, and no barrier to someone determined.
+
+   When a download comes, it is the record decrypted and saved; nothing is compiled again. Before charging for it, the papers' licences need a look. arXiv's default licence lets arXiv alone distribute; CC BY-ND forbids sharing derivatives. A reader keeping their own translation is personal use.
+
+### What is stored
+
+There is one record per paper version and target language.
+
+| Field | What |
+|---|---|
+| `fingerprint`, `lang` | The key. `fingerprint` is PDF.js's `fingerprints[0]` of arXiv's PDF: it names the exact version, costs no request, and is known once the left side is open. `lang` is the settings' target language, as `engine.lang` gives it. |
+| `pdf`, `iv` | The final, encrypted, and its 12-byte initialisation vector, fresh for each record |
+| `units` | Every unit: its kind and its source as plain text. For a unit translated, also its translation as plain text, the SHA-256 of its source pieces, and its translated pieces, the base of a translation made again. A unit kept in the source (a name) has no translation. The two sides are anchored by these texts. |
+| `marks` | The left side's mark words, which anchor arXiv's PDF, from the marked original compile |
+| `engine`, `format`, `pipeline` | The service that answered (with its model), the wire format, and `PIPELINE_VERSION` |
+| `complete` | False when paragraphs were lost to a failure of the service (`how.lost`) |
+| `paper`, `bytes`, `createdAt`, `openedAt` | The id as asked, the record's size, when it was made, when it was last opened |
+
+- **Size.** The final is about 1.2 times arXiv's PDF: 0.34 → 0.42 MB and 3.55 → 4.21 MB, measured. The corpus's 123 originals have a median of 1.0 MB, a mean of 3.9 MB, a p90 of 9.5 MB and a maximum of 46 MB. The units come to tens or hundreds of kilobytes.
+- **The cap** is 500 MB, about a hundred papers at the corpus's mean. The least recently opened records go first.
+
+### Opening a paper
+
+1. The left side opens, from the HTTP cache. Its fingerprint and the engine's status (the target language, the service, the wire format) give the key.
+2. **A hit made with the current settings** means the service that would answer now, the same wire format and pipeline, and complete. "Would answer now" is the chosen service, or its fallback while the chosen one cannot answer, as the status says. So a copy made by the fallback is not translated again on every visit while the chosen service stays unavailable. The right side opens from the decrypted bytes. The right side is anchored by the record's translated texts, the left by its source texts and marks. No source is fetched and nothing is compiled; anchoring takes about 0.3 s.
+3. **A hit made with other settings** is shown as in 2. Then the live run starts:
+   - It is given `seed`: the translated pieces by source hash. The run starts with every unit present and replaces them batch by batch, nearest the reader first.
+   - The seed is matched by the source's hash, not by index. A unit the pipeline has since cut differently is left out, and shows the source until it is translated; this holds whatever the paper.
+   - It is given `marks` when the pipeline is the same, so the marked original is compiled only if a lost character needs its log.
+   - Its previews are drafts, as a first translation's are: images are frames, with the original's figure drawn over each. The final has its figures.
+   - The status line says the translation is being made again, with which service. With only the pipeline changed, the translations come from the extension's cache, and the run is its compiles alone.
+4. **A miss** runs the live flow as today.
+5. **Writing.** A run that ends with a final that settled is written, replacing any record for the same key.
+   - It is written when the run has ended, not when the final is shown: the marked original, which gives the left side's marks, is compiled after the final.
+   - A record whose marked original failed is written without marks; the left side is then anchored by its text alone, as it was before marks.
+   - A final that does not settle is not written.
+   - A run ended before its final writes nothing; its translations are in the extension's cache anyway.
+6. **Failures.** Any failure of the store is a miss, as in the translation cache (`src/cache/store.ts`). A record that does not decrypt is deleted.
+7. **The Original display.** Opened in the Original display, the reader waits as today until a translation is asked for, then looks the paper up.
+
+### The store: `src/cache/pdf-store.ts`
+
+- **Database.** Its own Dexie database, `axt-pdf`, version 1, with two tables:
+  - `translations`: primary key `[fingerprint+lang]`, index `openedAt`;
+  - `keys`: the one `CryptoKey`.
+
+  It is kept apart from the translation cache, so that neither's schema or migrations touch the other.
+- **Interface.** `createPdfStore({ db?, maxBytes = 500 MB })` gives:
+  - `get(fingerprint, lang)`: decrypted, or undefined;
+  - `put(record)`: encrypted, written, then the least recently opened records evicted until the total is under the cap;
+  - `touch(fingerprint, lang)`: sets `openedAt` on a hit;
+  - `clear()`;
+  - `usage()`: the number of records and their bytes.
+- **Encryption.** The key comes from `crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])`, made on first use and stored in `keys`: IndexedDB keeps a `CryptoKey` whole. Each record gets a fresh 12-byte IV. The test measures the cost; milliseconds per megabyte are expected.
+- **Where it sits.** The reader reaches it through `shared/extension-entry.ts`, as it reaches `createSurfaceConfig`, so the product can later use the same module. The platform boundary holds: `src/cache` imports Dexie and nothing of WXT.
+
+### The reader's changes
+
+- **`PIPELINE_VERSION`** (live.mjs) is raised whenever a change alters what a compile puts out: latex-front, mt, the fonts, the scripts' strategies, the marks or the TeX tree. It follows the convention `RULES_VERSION` has for the HTML page's cache.
+- **`live()`** looks the paper up, as in "Opening a paper" above, and writes the final when it settles.
+- **`runLive()`** takes `seed`, which fills `translated` at the start, and `marks`, which skips the marked original unless a lost character needs its log.
+- **The status line** says a copy is from this machine (by which service, when made), and that it is being translated again (with which service, how far along).
+
+### Tests
+
+- **`tests/cache/pdf-store.test.ts`**, with fake-indexeddb and Node's WebCrypto:
+  - a round trip;
+  - what is stored is not the PDF (no `%PDF`);
+  - eviction by `openedAt` under the cap, and `touch` changing the order;
+  - a record that does not decrypt is a miss and is deleted;
+  - a failing database is a miss;
+  - the key outlives a new store instance;
+  - the cost of encrypting 10 MB.
+- **A case file for the seed**: units matched by source hash, and a unit changed since left out.
+- **In the browser** (`spikes/cache-revisit.mjs`):
+  - A first visit writes the record.
+  - A second visit shows the final within 1 s of the left side, with no compile.
+  - With the settings' service changed to the LLM mock, the copy is shown at once. No preview shows a paragraph in English that the copy had translated. The final replaces the record, whose service is now the mock.
+
+### Not now
+
+- **The settings page's control to clear the cache**, which comes with the reader's interface pass.
+- **The download.**
+- **`unlimitedStorage`**, a manifest permission for the product to decide. Without it the extension's storage is best-effort: the browser may clear it when the disk is nearly full.
+- **The copy without figures**, from decision 2.
+

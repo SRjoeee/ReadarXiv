@@ -1,10 +1,21 @@
-:root { --bar: 40px; --hl: rgba(255, 196, 0, 0.28); --hl-edge: rgba(214, 150, 0, 0.9); }
+/* --axt-green is the extension's default band colour (src/styles/presets.css); the active band's own colour and
+   strength come in as --axt-hl-color and --axt-hl-mix from the look sheet (reader.js, the extension's appearanceRule) */
+:root { --bar: 40px; --axt-green: oklch(0.693 0.17 162.48); }
 /* our own chrome only: PDF.js sizes its page boxes as content boxes, and border-box squeezes the canvas inside */
 header, header * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; font: 13px system-ui, sans-serif; background: #e9e9ec; color: #222; }
 header { height: var(--bar); display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #fff; border-bottom: 1px solid #ccc; }
 header button { width: 28px; height: 26px; }
-#status { margin-left: auto; color: #666; }
+header #close { width: auto; padding: 0 8px; }
+/* the status gives way before the controls do: it is cut short rather than pushing them off the bar */
+#status { margin-left: auto; color: #666; min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+header > * { flex: none; }
+header > #status { flex: 0 1 auto; }
+/* the extension's settings could not be read, and its defaults are in use (reader.js showSettings) */
+#notice { margin-left: auto; color: #9a3412; min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#notice:not([hidden]) + #status { margin-left: 8px; }
+/* an author display (header form's flex) would otherwise override the attribute */
+[hidden] { display: none !important; }
 main { position: absolute; top: var(--bar); bottom: 0; left: 0; right: 0; display: grid; grid-template-columns: 1fr 1fr; }
 .pane { position: relative; border-right: 1px solid #bbb; min-width: 0; }
 .pane h2 { position: absolute; z-index: 2; top: 6px; left: 10px; margin: 0; font-size: 11px; font-weight: 600; color: #555; background: rgba(255,255,255,.85); padding: 1px 6px; border-radius: 3px; }
@@ -12,14 +23,28 @@ main { position: absolute; top: var(--bar); bottom: 0; left: 0; right: 0; displa
 /* no scroll anchoring: the reader sets both sides' positions itself, and the browser nudging one after a page is drawn
    in it (a highlight or figure layer inserted) put two paragraphs levelled by a click a few to tens of pixels apart */
 .viewerContainer { position: absolute; inset: 0; overflow: auto; overflow-anchor: none; }
-/* the highlight layer sits over the text layer, never catches the pointer */
+/* the highlight layer sits over the text layer, never catches the pointer. Its blocks are the HTML page's band: one wash
+   per run of a paragraph's lines, multiplied into the page, so the paper stays white under nothing and the letters
+   stay their own colour, as a band behind the text looks on an HTML page (reader.js, blocksOf) */
 .axt-hl-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
-.axt-hl { position: absolute; background: var(--hl); border-radius: 2px; }
+.axt-hl { position: absolute; border-radius: 3px; mix-blend-mode: multiply;
+  background: color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) var(--axt-hl-mix, 22%), transparent); }
+/* the three displays: the original alone, the translation alone, or the two side by side */
+/* one document alone: at a reading width, centred, rather than across a wide screen */
+html[data-axt-pdf-mode="original"] main, html[data-axt-pdf-mode="translation"] main { grid-template-columns: minmax(0, 1100px); justify-content: center; }
+html[data-axt-pdf-mode="original"] .pane:last-child, html[data-axt-pdf-mode="translation"] .pane:first-child { display: none; }
+html:not([data-axt-pdf-mode="bilingual"]) #sync-label { display: none; }
+#modes { display: inline-flex; }
+#modes button { width: auto; padding: 0 8px; border: 1px solid #aaa; background: #f6f6f7; }
+#modes button + button { border-left: 0; }
+#modes button[aria-checked="true"] { background: #333; color: #fff; border-color: #333; }
+header select { height: 26px; }
 /* a newer compile being laid out and drawn under the one in view */
 .viewerContainer.axt-incoming { visibility: hidden; }
-/* a figure's place on a translation page, holding the empty <img> the extension's image overlay is anchored to */
+/* a figure's place on a translation page, holding the empty <img> the extension's image overlay is anchored to and, over
+   a draft preview's frame, the left's figure drawn beneath it */
 .axt-fig { position: absolute; pointer-events: none; z-index: 2; }
-.axt-fig > div, .axt-fig img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.axt-fig > div, .axt-fig > canvas, .axt-fig img { position: absolute; inset: 0; width: 100%; height: 100%; }
 .axt-fig img { opacity: 0; }
 .axt-fig .axt-img > span { pointer-events: auto; }
 header form { display: flex; gap: 4px; align-items: center; margin-right: 8px; }

@@ -208,13 +208,15 @@ function between(doc, owner, self, a, b) {
   return true
 }
 
-/** the token indices of `ws` found in a row in doc[lo..hi] (tokens with no text passed over), or null unless exactly once */
-function once(doc, ws, lo, hi) {
+/** the token indices of `ws` found in a row in doc[lo..hi] (tokens with no text passed over): `last`, the last place
+ *  they come; else only if they come exactly once; or null */
+function inRow(doc, ws, lo, hi, last) {
   const live = []
   for (let k = Math.max(0, lo); k <= Math.min(doc.length - 1, hi); k++) if (doc[k].t) live.push(k)
   let found = null
-  for (let m = 0; m + ws.length <= live.length; m++) {
+  for (let m = live.length - ws.length; m >= 0; m--) {
     if (!ws.every((w, j) => doc[live[m + j]].t === w)) continue
+    if (last) return live.slice(m, m + ws.length)
     if (found) return null
     found = live.slice(m, m + ws.length)
   }
@@ -226,25 +228,39 @@ function once(doc, ws, lo, hi) {
  * it was not found. `units` is [{ id, text }] in document order. With `bounds` (boundsFromMarks) a unit's first and
  * last token are known and its text is matched inside them only; a unit without marks is searched between its
  * marked neighbours. Without any marks the whole document is searched and a unit needs 60 % of its tokens matched.
+ * `floating(id)`: a unit TeX sets away from where the source has it — a caption, with its float; a footnote, at the
+ * foot of the page — which is no neighbour to search between: a heading's neighbours in the source were a caption
+ * placed a column later, and the heading was searched in a range that ended before it began (2608.02163, Japanese).
  */
-export function anchorUnits(doc, units, { minCoverage = 0.6, bounds } = {}) {
+export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false } = {}) {
   const index = buildIndex(doc)
   const hard = units.map(u => bounds?.get(String(u.id)) ?? null)
   // a unit without marks — a heading, whose words are also in the running head of every page of its section — is
-  // searched between its marked neighbours only, with room for a float or a footnote that the stream passes through
+  // searched between its marked neighbours in the text only, with room for a float or a footnote that the stream
+  // passes through
   const MARGIN = 100
   const before = [], after = []
-  for (let u = 0, e = -1; u < units.length; u++) { before[u] = e; if (hard[u]) e = hard[u][1] }
-  for (let u = units.length - 1, a = doc.length; u >= 0; u--) { after[u] = a; if (hard[u]) a = hard[u][0] }
+  const inText = u => hard[u] && !floating(units[u].id)
+  for (let u = 0, e = -1; u < units.length; u++) { before[u] = e; if (inText(u)) e = hard[u][1] }
+  for (let u = units.length - 1, a = doc.length; u >= 0; u--) { after[u] = a; if (inText(u)) a = hard[u][0] }
   const found = []
-  units.forEach(({ text }, u) => {
+  units.forEach(({ id, text }, u) => {
     const ws = tokens(text ?? '').map(x => x.t)
     const b = hard[u]
     const [lo, hi] = b ?? (bounds?.size ? [Math.max(0, before[u] + 1 - MARGIN), Math.min(doc.length - 1, after[u] - 1 + MARGIN)] : [0, doc.length - 1])
-    let m = ws.length >= K && lo <= hi ? locate(doc, index, ws, lo, hi, !!b) : null
-    // too short for 3-grams (a heading of one or two words): the words in a row, once, in the gap between its
-    // located neighbours alone — no margin, where a running head or the next section's text would repeat them
-    if (!m && !b && ws.length && ws.length < K && bounds?.size) m = once(doc, ws, before[u] + 1, after[u] - 1)
+    // a heading — no marks, in the text between its located neighbours: its words in a row in the gap between them
+    // alone, no margin, the last place they come there, since a heading is followed by its own text; a running head
+    // with its words comes before it, and the next section's text is past the gap. By 3-grams it was taken from a
+    // paragraph beside it that has the same words (2608.02163 in Chinese: a heading of four characters the text
+    // around it keeps using)
+    let m = !b && bounds?.size && ws.length && !floating(id) ? inRow(doc, ws, before[u] + 1, after[u] - 1, true) : null
+    if (!m && ws.length >= K && lo <= hi) m = locate(doc, index, ws, lo, hi, !!b)
+    // a float's text too short for 3-grams (a table's cell of one or two words): the words in a row, once, in the gap
+    // between its located neighbours alone
+    if (!m && !b && ws.length && ws.length < K && bounds?.size) m = inRow(doc, ws, before[u] + 1, after[u] - 1, false)
+    // a float's text that is not there: its float may stand anywhere, so the whole document, as with no marks at all —
+    // the words of a located unit are that unit's (owner, below)
+    if (!m && !b && ws.length >= K && bounds?.size && floating(id)) m = locate(doc, index, ws, 0, doc.length - 1, false)
     const coverage = m ? m.length / ws.length : 0
     if (!b && (!m || coverage < minCoverage)) { found.push(null); return }
     found.push({ m: m ?? [], coverage, bounded: b })
