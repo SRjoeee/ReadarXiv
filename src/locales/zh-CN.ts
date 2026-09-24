@@ -303,9 +303,32 @@ const O = {
   },
 } as const
 
-/** The PDF reader's words (the reader's design §15; docs/UI.md surface R comes with Part 6) */
+/**
+ * The PDF reader's words (the reader's design §15; docs/UI.md §3.5, S-R). Where the popup says the same thing the
+ * reader takes the popup's string (S), so the two never drift apart: the service and language rows, the language
+ * search, 对照高亮, 图片翻译, 设置, the failures' count and 重试, the reasons
+ */
 const R = {
-  leave: '在默认查看器中打开',
+  bar: '阅读器', // S-R-01: the toolbar's name, for screen readers
+  contents: '目录', // S-R-02
+  abstract: '在 arXiv 打开摘要页', // S-R-03
+  display: { name: '显示', original: '原文', bilingual: '对照', translation: '译文' }, // S-R-04
+  swap: '交换左右', // S-R-05
+  sync: '同步滚动', // S-R-06
+  zoom: { out: '缩小', in: '放大', value: '缩放比例', width: '适合宽度', page: '适合页面', actual: '实际大小' }, // S-R-07
+  options: { name: '阅读选项', color: '高亮颜色', appearance: '外观', light: '浅色', dark: '深色', system: '跟随系统', dim: '深色时调暗页面' }, // S-R-08
+  download: { name: '下载', translation: '译文 PDF', original: '原文 PDF' }, // S-R-09
+  leave: '在默认查看器中打开', // S-R-10
+  pill: { original: '原文页码', translation: '译文页码', previous: '上一页', next: '下一页' }, // S-R-11
+  status: {
+    loading: '正在加载', // S-R-12
+    translating: '正在翻译',
+    again: '正在按当前设置重新翻译',
+    close: '关闭', // S-R-15: a notice's close button
+    unsupported: (language: string) => `PDF 对照暂不支持${language}`, // S-R-13
+    chooseLanguage: '选择语言',
+    narrow: '窗口较窄，暂只显示译文', // S-R-14, after S-P-74
+  },
 }
 
 const REASON: Record<ProviderErrorKind, string> = {

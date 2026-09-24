@@ -288,7 +288,26 @@ const O: Locale['O'] = {
 }
 
 const R: Locale['R'] = {
+  bar: 'Reader',
+  contents: 'Contents',
+  abstract: 'Open the abstract on arXiv',
+  display: { name: 'Display', original: 'Original', bilingual: 'Side by side', translation: 'Translation' },
+  swap: 'Swap sides',
+  sync: 'Sync scrolling',
+  zoom: { out: 'Zoom out', in: 'Zoom in', value: 'Zoom', width: 'Fit width', page: 'Fit page', actual: 'Actual size' },
+  options: { name: 'Reading options', color: 'Highlight colour', appearance: 'Appearance', light: 'Light', dark: 'Dark', system: 'System', dim: 'Dim pages in dark mode' },
+  download: { name: 'Download', translation: 'Translation PDF', original: 'Original PDF' },
   leave: 'Open in the default viewer',
+  pill: { original: "Original's page", translation: "Translation's page", previous: 'Previous page', next: 'Next page' },
+  status: {
+    loading: 'Loading',
+    translating: 'Translating',
+    again: 'Translating again with the current settings',
+    close: 'Close',
+    unsupported: (language: string) => `A bilingual PDF isn't available in ${language} yet`,
+    chooseLanguage: 'Choose language',
+    narrow: 'The window is narrow, so this shows the translation alone for now',
+  },
 }
 
 const REASON: Locale['REASON'] = {

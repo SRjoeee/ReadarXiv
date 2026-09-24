@@ -194,6 +194,31 @@ changes, and the two drawers commit with one button.
 
 ---
 
+### 3.5 PDF reader (S-R) [decided 2026-09-25, built in the reader's Part 3]
+
+The bilingual PDF reader's own words (the reader's design, `experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md`
+§15). Where the popup already says the same thing, the reader shows the popup's string: 翻译服务 (S-P-10), 目标语言
+(S-P-20), 搜索语言 and 没有匹配的语言 (S-P-22/23), 对照高亮 (S-P-80), 图片翻译 (S-P-85), 设置 (S-P-02), {n} 处翻译失败 and
+重试 (S-P-60/61), and the reasons (S-E). No reader-facing string names a technical path (a test checks both packs).
+
+| ID | Where | Copy | Notes |
+|---|---|---|---|
+| S-R-01 | The toolbar's name | 阅读器 | `aria-label`, for screen readers |
+| S-R-02 | Contents toggle, and the sidebar's header | 目录 | Pressed while the sidebar is open |
+| S-R-03 | The arXiv id's tooltip | 在 arXiv 打开摘要页 | The id links to the abstract page, in a new tab |
+| S-R-04 | The display switch | 显示 · 原文 · 对照 · 译文 | The radio group's name and its three choices, in tooltips and to screen readers; keys 1 2 3 |
+| S-R-05 | Swap sides | 交换左右 | 对照 only; greyed in the single displays |
+| S-R-06 | Sync scrolling | 同步滚动 | 对照 only; greyed in the single displays |
+| S-R-07 | Zoom | 缩小 · 放大 · 缩放比例 · 适合宽度 · 适合页面 · 实际大小 | ⌘− and ⌘+ (Ctrl elsewhere) |
+| S-R-08 | Reading options | 阅读选项 · 高亮颜色 · 外观 · 浅色 · 深色 · 跟随系统 · 深色时调暗页面 | With S-P-80 and S-P-85 |
+| S-R-09 | Download | 下载 · 译文 PDF · 原文 PDF | 译文 PDF greyed until the final translation is on screen |
+| S-R-10 | Leave | 在默认查看器中打开 | Back to the browser's own viewer |
+| S-R-11 | Page pills | 原文页码 · 译文页码 · 上一页 · 下一页 | |
+| S-R-12 | The status capsule | 正在加载 · 正在翻译 · 正在按当前设置重新翻译 | Progress fills the capsule |
+| S-R-13 | Language not supported | PDF 对照暂不支持{语言} · 选择语言 | The action opens the language menu |
+| S-R-14 | Narrow window | 窗口较窄，暂只显示译文 | Once, when 对照 shows the translation alone (after S-P-74) |
+| S-R-15 | A notice's close button | 关闭 | |
+
 ## 4. Popup state table [decided, 2026-09-10 revised on ui/phase-1]
 
 Columns are elements, cells what they show, "—" absent. Conditions use the code's fields. The card
