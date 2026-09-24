@@ -21,8 +21,10 @@ import { appearanceRule } from '@/core/renderer/style-preset'
 import { renderImage, setImageModes } from '@/core/renderer/image'
 import { sendMessage } from '@/shared/messages'
 import { createSurfaceConfig } from '@/shared/surface-config'
+import { localeStale } from '@/ui/use-surface-config'
 import { ocrCall } from '../ocr'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFViewer, pdfjsLib } from '../pdfjs'
+import { displayOf, figuresShown, withDisplay } from '../settings'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
 import { decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { openEngine, paperContext } from './engine.mjs'
@@ -46,65 +48,87 @@ const timing = { start: performance.now() }
 window.__reader = { timing, ready: false }
 
 // ---------------------------------------------------------------- the extension's settings, and the display
-// The target language and the highlight's band are the extension's settings, read and written as its settings page
-// does and followed as they change, so that the PDF and the HTML page agree. The display is the reader's own, kept
-// until the reader is part of the extension's settings: the original alone (nothing is translated or compiled until
-// the reader asks for more), the translation alone, or both side by side.
+// The reader's settings are the extension's (the reader's design, §3, §9.1), read and written as its popup and
+// settings page do and followed as they change there: the display — the HTML page's mode, and whether the reader
+// was last left on the original alone, where nothing is translated or compiled until a translation is shown —, the
+// sync, the highlight, figure text and the target language. The page has one writer, this surface: the interface
+// writes through the controller (patchSettings).
 const MODES = ['original', 'translation', 'bilingual']
-const PREFS = 'axtPdfReader'
-const prefs = await chrome.storage.local.get(PREFS).then(r => r[PREFS] ?? {}).catch(() => ({}))
-/** the reader's own preferences, merged into what storage holds when they are written: another reader page may have
- *  saved since this one opened (Devin on #297). One write after another: two made at once read the same object, and
- *  the one landing last dropped the other's change (Codex on #297) */
-let prefWrites = Promise.resolve()
-const savePrefs = patch => (prefWrites = prefWrites.then(() => chrome.storage.local.get(PREFS)).then(r => chrome.storage.local.set({ [PREFS]: { ...(r[PREFS] ?? {}), ...patch } })).catch(() => undefined))
-let mode = MODES.includes(params.get('mode')) ? params.get('mode') : MODES.includes(prefs.mode) ? prefs.mode : 'original'
+// The extension's settings as its popup and settings page have them (shared/surface-config.ts): each change a patch
+// on what storage holds when its turn comes, one after another, and a configuration that could not be read said so
+// (Codex on #297); a new interface language reloads the page, as it does the popup
+/** the settings as they last landed; null until the first read */
+let config = null
+const surface = createSurfaceConfig({ localeStale, reload: () => location.reload(), onLanded: (next, from) => landed(next, from) })
+await new Promise(resolve => { const off = surface.subscribe(() => { if (surface.state().config) { off(); resolve() } }); surface.start() })
+config = surface.state().config
+/** the display: the one the address names (a probe's page), else the one the settings ask for */
+let mode = MODES.includes(params.get('mode')) ? params.get('mode') : displayOf(config)
 function showMode() {
   document.documentElement.setAttribute('data-axt-pdf-mode', mode)
   host.emit({ type: 'display', mode })
 }
 showMode()
-// The extension's settings as its popup and settings page have them (shared/surface-config.ts): each change a patch on
-// what storage holds when its turn comes, one after another, and a configuration that could not be read said so (Codex
-// on #297). The reader's bar is in English alone, so no interface language asks for a reload
-const surface = createSurfaceConfig({ localeStale: () => false, reload: () => location.reload() })
-await new Promise(resolve => { const off = surface.subscribe(() => { if (surface.state().config) { off(); resolve() } }); surface.start() })
-let config = surface.state().config
 function showSettings() {
   let sheet = document.getElementById('axt-look')
   if (!sheet) { sheet = document.createElement('style'); sheet.id = 'axt-look'; document.head.append(sheet) }
   sheet.textContent = appearanceRule(lookOf(config))
+  host.emit({ type: 'settings', config })
   // the defaults are in effect — the service and its key set on the settings page are not — until they are repaired there
   host.emit({ type: 'notice', why: surface.state().fallbackReason ?? null })
 }
 showSettings()
-/** this page's own writes of the settings, which a new language's reload waits for; it makes none until the reader's
- *  controls write through the controller (the plan's Part 2) */
-const writes = Promise.resolve()
+/** this page's writes of the settings, one after another; a new language's reload waits for them. A write the store
+ *  refuses (its stored value cannot be read, config/storage.ts) is dropped: what the reader chose still holds on screen */
+let writes = Promise.resolve()
+const save = change => (writes = writes.then(() => surface.patch(change)).catch(e => console.warn('[settings]', e?.message ?? e)))
+/** a change of the settings from the interface (the controller's patchSettings) */
+export function patchSettings(change) { void save(change) }
 /** true once the translation has started: a new language then means another document, and the page starts again */
 let translating = false
-surface.subscribe(() => {
-  const next = surface.state().config
-  if (!next) return
-  const language = next.targetLanguage !== config.targetLanguage
+/** the viewers exist: until then the settings are read as the viewers are made, and there is nothing to follow */
+let viewersMade = false
+/** the display this visit holds whatever the settings say: the original, once the translation's side had nothing to
+ *  show (fail); a display chosen in the reader lets it go */
+let held = null
+/** settings that landed (shared/surface-config.ts Landing): shown, and what changed followed. A refused write lands
+ *  the defaults, which the reader's own choices on screen outlive (final review) */
+function landed(next, from) {
+  if (!config || from === 'first') return
+  const prev = config
   config = next
   showSettings()
-  if (language && translating) void writes.then(() => location.reload())
-})
+  if (next.targetLanguage !== prev.targetLanguage && translating) void writes.then(() => location.reload())
+  else if (viewersMade && from !== 'refused') followSettings(prev)
+}
 let wantTranslation = null
 const translationWanted = new Promise(resolve => { wantTranslation = resolve })
 if (mode !== 'original') wantTranslation()
-/** the display chosen: where the reader is read first, on the side still shown (Codex on #297) */
-export function setDisplay(next) {
+/** the display changed: where the reader is read first, on the side still shown (Codex on #297); written when the
+ *  reader chose it here, not when it follows the settings */
+function changeDisplay(next, write) {
   if (!MODES.includes(next) || next === mode) return
   const from = mode
   const place = from === 'bilingual' ? null : readingPlace(from === 'original' ? left : right)
   window.__reader.place = place
   mode = next
   showMode()
-  void savePrefs({ mode })
+  if (write) void save(c => withDisplay(c, mode))
   relayout(from, place)
+  followFigures()
   if (mode !== 'original') wantTranslation()
+}
+/** the display chosen in the reader */
+export function setDisplay(next) { held = null; changeDisplay(next, true) }
+/** the settings changed elsewhere — the popup, the settings page, another reader — or here: what changed of the
+ *  display and the sync is followed, the highlight and figure text as they now are; what the address names, and a
+ *  display this visit holds, stay (final review: a follow on every landing flipped them back) */
+function followSettings(prev) {
+  if (!params.has('mode') && !held && displayOf(config) !== displayOf(prev)) changeDisplay(displayOf(config), false)
+  const sync = config.pdfReader.sync ? 'same' : 'off'
+  if (!params.has('sync') && config.pdfReader.sync !== prev.pdfReader.sync && (syncMode === 'same' || syncMode === 'off') && sync !== syncMode) applySync(sync)
+  if (!config.reading.sentenceHighlight) light(null)
+  followFigures()
 }
 
 // ---------------------------------------------------------------- the two viewers
@@ -220,7 +244,7 @@ function blocksOf(rects) {
   }
   return out
 }
-function light(id) { if (id === lit) return; lit = id; for (const s of sides) paint(s) }
+function light(id) { if (!config.reading.sentenceHighlight) id = null; if (id === lit) return; lit = id; for (const s of sides) paint(s) }
 
 // ---------------------------------------------------------------- figure text
 // The HTML mode's image translation, run on the translation's pages: the extension's own modules — lines merged into
@@ -250,7 +274,9 @@ let cacheKey = null // { digest, lang } of the paper open, once its PDF is read
 let saveTimer = 0, repaintTimer = 0
 const saveFiguresSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { if (cacheKey) void pdfCache.patchFigures(cacheKey.digest, cacheKey.lang, [...figureEntries.values()]) }, 2000) }
 const repaintFiguresSoon = () => { clearTimeout(repaintTimer); repaintTimer = setTimeout(() => { for (const [n] of right.figs) right.figs.set(n, paintFigures(right, n).catch(e => console.warn('[figures]', e))) }, 300) }
-let figuresOn = true // figure text, the reader's switch (setFigures)
+let figuresOn = figuresShown(config, mode) // figure text, as the settings say for this display (followFigures)
+/** figure text shown or not, as the settings say for the display now shown */
+function followFigures() { const on = figuresShown(config, mode); if (on !== figuresOn) { figuresOn = on; repaintFigures() } }
 document.documentElement.setAttribute('data-axt-on', '')
 document.documentElement.setAttribute('data-axt-mode', 'only')
 setImageModes(document, ['only'])
@@ -585,7 +611,7 @@ let frame = 0, settleTimer = 0, pointerX = null
 // scroll has ended (a trackpad's glide included) it glides so that the content the reader's side is levelled by — the
 // top of its view, or the paragraph under the pointer — stands at the same height on both.
 const SYNC_MODES = ['off', 'current', 'same', 'pointer', 'matched']
-let syncMode = SYNC_MODES.includes(prefs.syncMode) ? prefs.syncMode : 'same'
+let syncMode = SYNC_MODES.includes(params.get('sync')) ? params.get('sync') : config.pdfReader.sync ? 'same' : 'off'
 const together = () => syncMode === 'same' || syncMode === 'pointer' || syncMode === 'matched'
 const reduced = matchMedia('(prefers-reduced-motion: reduce)')
 /** a critically damped spring's way from 0 to 1 over its time, k from 0 to 1: no overshoot, no bounce */
@@ -750,7 +776,7 @@ function stopSpring() { if (follow.spring) cancelAnimationFrame(follow.spring); 
 // is bound ahead, at rest and when the pointer comes over a side, so that it keeps up from a scroll's first frame: the
 // input events that tell a scroll has begun reach the page after the compositor has taken its first steps.
 const CAN_COMPOSIT = typeof ScrollTimeline === 'function'
-let compositing = CAN_COMPOSIT && prefs.compositor !== false
+let compositing = CAN_COMPOSIT && params.get('compositor') !== '0' // a probe's page can ask for the follower by script
 const onCompositor = () => compositing && together() && mode === 'bilingual'
 /** the follower's motion under way: `anim` the transform, `kind` 'scroll' (bound to `from`, the driver) or 'glide',
  *  `side` the follower, `shift()` how far the transform shows it from its scrollTop, down positive */
@@ -857,17 +883,22 @@ function take(side) {
 export function setCompositor(on) {
   bake(); stopSpring(); clearTimeout(follow.rest)
   compositing = CAN_COMPOSIT && on
-  void savePrefs({ compositor: compositing })
   rebase(); arm()
 }
 /** how the other side follows (REPORT, sixteenth and seventeenth addenda); the interface's switch is same or off */
-export function setSyncMode(next) {
-  if (!SYNC_MODES.includes(next)) return
+/** a sync mode in effect, nothing written */
+function applySync(next) {
   bake()
   syncMode = next
-  void savePrefs({ syncMode })
   stopGlide(); stopSpring(); clearTimeout(settleTimer); clearTimeout(follow.rest)
   rebase(); arm()
+}
+/** how the other side follows (REPORT, sixteenth and seventeenth addenda): the interface's switch is same or off,
+ *  which is written to the settings; a probe's other modes are not */
+export function setSyncMode(next) {
+  if (!SYNC_MODES.includes(next)) return
+  applySync(next)
+  if (next === 'same' || next === 'off') void save(c => ({ ...c, pdfReader: { ...c.pdfReader, sync: next === 'same' } }))
 }
 function syncFrom(side) {
   const mine = placed.get(side.container)
@@ -1178,12 +1209,13 @@ function attach(side) {
   side.eventBus.on('pagesinit', reportPage)
 }
 for (const side of sides) attach(side)
+viewersMade = true
 /** where the original is being read, in PDF.js's terms (its page, and the point at the top left of the view in PDF
  *  units), as long as it is in view: the same file opens on the right at the same place */
 let readAt = null
 left.eventBus.on('updateviewarea', ({ location }) => { if (shown(left)) readAt = location })
 /** figure text on or off */
-export function setFigures(on) { figuresOn = on; repaintFigures() }
+export function setFigures(on) { void save(c => ({ ...c, image: { ...c.image, enabled: on } })) } // figure text on or off, in the settings; followFigures shows it
 /** the sides shown scaled by a factor, within PDF.js's range */
 export function zoomBy(factor) { for (const s of sides) if (shown(s)) s.viewer.currentScale = Math.min(4, Math.max(0.25, s.viewer.currentScale * factor)) }
 /** the sides shown at a scale or a fit (page-width, page-fit, page-actual) */
@@ -1283,7 +1315,7 @@ async function marksOfPdf(bytes) {
   try { return markWords(tokenizeDocument(await textPages(doc)), await pdfMarks(doc)) } finally { task.destroy() }
 }
 /** the test harness's hooks (spikes/*): the sides, the anchoring's and the sync's helpers, the cache's; getters stay live */
-const harness = () => ({ left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()) })
+const harness = () => ({ left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()) })
 /**
  * A copy from this machine shown (REPORT, eighteenth addendum): the paper's state from the record rather than the
  * source — the figures' context, the prose names are told by, the units' kinds, the figures' entries — then the
@@ -1335,7 +1367,7 @@ async function live() {
     host.emit({ type: 'fail', event, text, kind })
     setContext({}); note(event); status(text); L.done = true; L.failed = text
     // the Translation display with nothing on its side would be blank: the original, for this visit (Codex on #297)
-    if (mode === 'translation' && !right.doc) { mode = 'original'; showMode(); relayout('translation') }
+    if (mode === 'translation' && !right.doc) { held = 'original'; mode = 'original'; showMode(); relayout('translation') }
   }
   // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
   // told at once

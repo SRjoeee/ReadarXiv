@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { DEFAULT_CONFIG } from '@/config/schema'
 import { createController, INITIAL, reduce, type Session } from '@/pdf-reader/controller'
 import type { SessionEvent, SessionHost } from '@/pdf-reader/engine/session.mjs'
 
@@ -96,12 +97,17 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(fold([{ type: 'notice', why: { kind: 'tooNew' } }, { type: 'notice', why: null }]).settingsUnreadable).toBe(false)
   })
 
+  it('holds the settings the session read', () => {
+    expect(INITIAL.settings).toBeNull()
+    expect(fold([{ type: 'settings', config: DEFAULT_CONFIG }]).settings).toBe(DEFAULT_CONFIG)
+  })
+
   it('keeps the same state object for an event that changes nothing', () => {
     expect(reduce(INITIAL, { type: 'status', text: 'opening…' })).toBe(INITIAL)
   })
 })
 
-const fakeSession = (): Session => ({ setDisplay: vi.fn(), setSyncMode: vi.fn(), setCompositor: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn() })
+const fakeSession = (): Session => ({ setDisplay: vi.fn(), setSyncMode: vi.fn(), setCompositor: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), patchSettings: vi.fn() })
 const panes = () => ({ left: document.createElement('div'), right: document.createElement('div') })
 
 describe('createController', () => {
@@ -156,6 +162,18 @@ describe('createController', () => {
     process.off('unhandledRejection', unhandled)
     expect(controller.getState()).toMatchObject({ phase: 'failed', failure: 'unknown' })
     expect(unhandled).not.toHaveBeenCalled()
+  })
+
+  it('passes a change of the settings to the session, once it is open', async () => {
+    const session = fakeSession()
+    const controller = createController({ open: async () => session, params: new URLSearchParams() })
+    const change = (c: typeof DEFAULT_CONFIG) => ({ ...c, mode: 'only' as const })
+    controller.patchSettings(change)
+    await controller.attach(panes())
+    controller.patchSettings(change)
+    await Promise.resolve()
+    expect(session.patchSettings).toHaveBeenCalledOnce()
+    expect(session.patchSettings).toHaveBeenCalledWith(change)
   })
 
   it('stops telling a listener that unsubscribed', async () => {

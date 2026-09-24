@@ -1,6 +1,7 @@
 // The one boundary between the reader's engine and its interface (the reader's design, §11.3): the session's events
 // folded into a state the interface subscribes to, and the interface's commands passed on to the session. pdfslick's
 // per-viewer store, adopted: the engine's events drive the store, and nothing reads the viewers back
+import type { Config } from '@/config/schema'
 import { PROVIDER_ERROR_KINDS, type ProviderErrorKind } from '@/providers/types'
 import type { EngineDisplay, SessionEvent, SessionHost } from './engine/session.mjs'
 import type * as SessionModule from './engine/session.mjs'
@@ -30,6 +31,8 @@ export interface ReaderState {
   sides: Record<Side, { page: number; pages: number }>
   /** the extension's settings could not be read, and their defaults are in use */
   settingsUnreadable: boolean
+  /** the extension's settings as they last landed; null before the first read */
+  settings: Config | null
 }
 
 export const INITIAL: ReaderState = {
@@ -45,10 +48,11 @@ export const INITIAL: ReaderState = {
   scale: 1,
   sides: { left: { page: 1, pages: 0 }, right: { page: 1, pages: 0 } },
   settingsUnreadable: false,
+  settings: null,
 }
 
 /** the session's commands the controller passes on */
-export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage'>
+export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage' | 'patchSettings'>
 
 /** the runs that end without a translation because of the paper, or of the language: not failures a reader can retry */
 const CANNOT_BE_HAD = new Set(['no source'])
@@ -75,6 +79,8 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       return { ...state, sides: { ...state.sides, [event.side]: { page: event.page, pages: event.pages } } }
     case 'notice':
       return (event.why != null) === state.settingsUnreadable ? state : { ...state, settingsUnreadable: event.why != null }
+    case 'settings':
+      return event.config === state.settings ? state : { ...state, settings: event.config }
     case 'fail':
       if (CANNOT_BE_HAD.has(event.event)) return { ...state, available: false, phase: 'ready' }
       if (NOT_SUPPORTED.has(event.event)) return { ...state, languageSupported: false, phase: 'ready' }
@@ -116,6 +122,8 @@ export interface ReaderController {
   zoomBy(factor: number): void
   zoomTo(value: number | 'page-width' | 'page-fit' | 'page-actual'): void
   goToPage(side: Side, page: number): void
+  /** a change of the extension's settings, on top of what storage holds when its turn comes */
+  patchSettings(change: (latest: Config) => Config): void
 }
 
 export function createController({ open, params }: { open: (host: SessionHost) => Promise<Session>; params: URLSearchParams }): ReaderController {
@@ -156,5 +164,6 @@ export function createController({ open, params }: { open: (host: SessionHost) =
     zoomBy: factor => later(s => s.zoomBy(factor)),
     zoomTo: value => later(s => s.zoomTo(value)),
     goToPage: (side, page) => later(s => s.goToPage(side, page)),
+    patchSettings: change => later(s => s.patchSettings(change)),
   }
 }

@@ -2058,17 +2058,22 @@ await patch(a, { reading: { openIn: 'same-tab' } })
 await settle(b)
 check('a change of nothing it shows leaves the display', (await state(b)).display === 'translation', (await state(b)).display)
 
-// settings the extension cannot read: the display chosen here holds on screen, the writes dropped, nothing thrown
+// settings the extension cannot read. A value written elsewhere that cannot be read is not followed (config/storage.ts
+// watchConfig passes valid values alone): the reader learns of it when its own write is refused. The display chosen
+// then holds on screen, though the defaults refused into effect ask for another; the write is dropped, nothing thrown
 const stored0 = await b.evaluate(() => chrome.storage.local.get('config').then(r => r.config))
 const errors = []
 b.on('pageerror', e => errors.push(e.message))
 await b.evaluate(c => chrome.storage.local.set({ config: { ...c, mode: 'nonsense' } }), stored0)
 await settle(b)
-check('unreadable settings are known', (await state(b)).settingsUnreadable === true)
-await b.evaluate(() => window.__reader.controller.setDisplay('bilingual'))
+await b.evaluate(() => window.__reader.controller.setDisplay('original'))
 await settle(b)
-check('unreadable settings: the display chosen holds', (await state(b)).display === 'bilingual', (await state(b)).display)
+check('unreadable settings: a refused write says so', (await state(b)).settingsUnreadable === true)
+check('unreadable settings: the display chosen holds', (await state(b)).display === 'original', (await state(b)).display)
 check('unreadable settings: nothing thrown', errors.length === 0, errors.join('; '))
+const d = await open()
+check('unreadable settings: a reader opened on them knows at once', (await state(d)).settingsUnreadable === true)
+await d.close()
 await b.evaluate(c => chrome.storage.local.set({ config: c }), stored0)
 await settle(b)
 check('repaired settings are known', (await state(b)).settingsUnreadable === false)
