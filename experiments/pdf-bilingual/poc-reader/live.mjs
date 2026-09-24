@@ -15,13 +15,22 @@ import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadPr
 import { strategiesFor } from './scripts.mjs'
 import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
 
+/** The TeX log of a compile's last pass. The browser's compiler (poc-site/tex.js) joins each step's log with its terminal
+ *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
+ *  log is taken, as the one that made the PDF, whatever the earlier passes' logs hold (BusyTeX's pipeline empties them
+ *  today, Devin and Codex on #294). bibtex, biber, makeindex and xdvipdfmx are no TeX passes. A native compile's .log is
+ *  the last pass's already */
+const lastTexLog = log => {
+  if (!(log ?? '').includes('\n==\nSTDOUT:')) return log ?? ''
+  const steps = [...log.matchAll(/^\$ (\S+)[^\n]*\n[\s\S]*?^LOG:\n([\s\S]*?)\n==\nSTDOUT:/gm)]
+  return steps.filter(m => !/^(?:bibtex|biber|makeindex|xdvipdfmx)/.test(m[1])).at(-1)?.[2] ?? ''
+}
 /** The characters a compile could not set, as its log names them: a glyph a font lacks (TeX logs it and goes on) or a
  *  letter no encoding holds (LaTeX's error; pdfTeX goes on without it). By code point where the log gives one, so that
  *  either message about a character is the same loss, each with the number of times it was lost. Counted in the TeX
- *  log of the last pass alone: the browser's compiler (poc-site/tex.js) joins each step's log with its terminal output,
- *  which repeats the errors and carries every earlier pass's; a native compile's .log is the last pass's already */
+ *  log of the last pass alone (lastTexLog) */
 export const lostIn = log => {
-  const text = (log ?? '').includes('\n==\nSTDOUT:') ? [...log.matchAll(/^LOG:\n([\s\S]*?)\n==\nSTDOUT:/gm)].map(m => m[1]).join('\n') : log ?? ''
+  const text = lastTexLog(log)
   const out = new Map()
   for (const m of text.matchAll(/^(?:Missing character: There is no (.+?) in font |! LaTeX Error: Unicode character (.+)$)/gm)) {
     const c = m[1] ?? m[2], at = c.match(/\(U\+([0-9A-F]+)\)/)?.[1] ?? c.trim()
