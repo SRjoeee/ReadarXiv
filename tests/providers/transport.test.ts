@@ -758,6 +758,15 @@ describe('createLocalTransport: the status identity', () => {
     const down = await withChain([mockProvider(first.translate, { id: SVC.id, isAvailable: async () => false }), second])
     expect((await down.status()).identity).toBe(await translationIdentity({ providerId: 'google-web', model: '', promptKey: '', target: DEFAULT_CONFIG.targetLanguage, renderPath: 'tags' }))
   })
+  it('follows a demotion: after the chosen engine refuses its key, the fallback that answers is the identity (final review)', async () => {
+    // the chosen service's probe still says available (a key is set); the refusal demotes it for the session
+    const refusing = mockProvider(async () => { throw new ProviderError('auth', '401') }, { id: SVC.id })
+    const fallback = mockProvider(async r => ({ segments: r.segments, provider: 'google-web' }), { id: 'google-web', kind: 'mt' })
+    const t = await withChain([refusing, fallback])
+    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags' } })
+    expect(res.ok && res.result.provider).toBe('google-web')
+    expect((await t.status()).identity).toBe(res.ok ? res.result.segments[0]!.identity : 'no answer')
+  })
   it('equals the identity on the segments the same engine translates', async () => {
     const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: SVC.id }), { id: SVC.id })])
     // the target the reader sends is the status's own (engine.mjs), as here

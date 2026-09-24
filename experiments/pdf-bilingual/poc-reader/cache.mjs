@@ -42,6 +42,13 @@ export function unitsOf(units, kept, hashes, results) {
 }
 
 /**
+ * The left side's marks a run can go by instead of compiling the marked original: a copy's, on the same pipeline, and
+ * only if it has some — a copy whose marked original failed has none, and taken as known it would never get them
+ * (final review)
+ */
+export const knownMarks = (cached, samePipeline) => (samePipeline && cached?.marks?.length ? new Map(cached.marks) : null)
+
+/**
  * What a run writes (REPORT, eighteenth addendum, "Writing"): the whole record when it ended with a final that
  * settled; with nothing typeset changed, the units' provenance alone, if it changed; else nothing — a run ended
  * before its final among them

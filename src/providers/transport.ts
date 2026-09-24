@@ -200,11 +200,13 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
         }
       }
     }
-    const serving = available ? primary : (chain.find(engine => engine.id === fallback?.id) ?? primary)
-    // the same parts the service tags its segments with (translate-service.ts): its model is the chosen service's alone
-    const identity = await translationIdentity({ providerId: serving.cacheId ?? serving.id, model: serving.id === chosen?.id ? (chosen.model ?? '') : '', promptKey: serving.promptKey ?? '', target: config.targetLanguage, renderPath })
     const live = service.status()
     const active = chain.find(engine => engine.id === live.activeId) ?? primary
+    // The engine that would answer now: while the first choice's probe says it can, the first one not demoted — a key
+    // refused demotes it for the session, and its probe still says yes (final review); while it cannot, its fallback
+    const serving = available ? active : (chain.find(engine => engine.id === fallback?.id) ?? primary)
+    // the same parts the service tags its segments with (translate-service.ts): its model is the chosen service's alone
+    const identity = await translationIdentity({ providerId: serving.cacheId ?? serving.id, model: serving.id === chosen?.id ? (chosen.model ?? '') : '', promptKey: serving.promptKey ?? '', target: config.targetLanguage, renderPath })
     return {
       providerId: primary.id,
       chosen: config.provider,

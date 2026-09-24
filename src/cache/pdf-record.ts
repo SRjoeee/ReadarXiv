@@ -100,6 +100,16 @@ function worth(record: PdfRecordBody, now: Now): number[] {
   ]
 }
 
+/**
+ * Figures' entries merged by key: the incoming ones replace the entries of the same boxes, and the others are kept — a
+ * tab writing what it saw erased what another tab had saved (final review)
+ */
+export function mergeFigures(stored: FigureEntry[], incoming: FigureEntry[]): FigureEntry[] {
+  const out = new Map(stored.map(f => [f.key, f]))
+  for (const f of incoming) out.set(f.key, f)
+  return [...out.values()]
+}
+
 /** Whether `candidate` may replace `stored`: at least as good, `worth` compared in order; a tie goes to the newer, the candidate */
 export function atLeastAsGood(candidate: PdfRecordBody, stored: PdfRecordBody, now: Now): boolean {
   const a = worth(candidate, now)

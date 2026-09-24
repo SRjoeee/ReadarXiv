@@ -53,6 +53,17 @@ cases.push(['runs answered by two engines: by MIXED', async () => {
   const { results } = await translateUnits([u], e.send, 'markers')
   assert.deepEqual([results.get(u).state, results.get(u).by], ['whole', MIXED])
 }])
+cases.push(['a unit some of whose runs were lost to the service is lost, keeping what came back (final review)', async () => {
+  // the whole text is refused, then of its two runs the first comes back and the second is lost to the service
+  const e = engine((texts, call) => {
+    if (call === 1) return texts.map(() => null)
+    throw new EngineError('network', 'down', { partial: texts.map((text, i) => (i === 0 ? { text, by: 'B' } : null)), lost: new Set([1]) })
+  }), u = unit(1)
+  const { results, how } = await translateUnits([u], e.send, 'markers')
+  assert.equal(results.get(u).state, 'lost')
+  assert.ok(results.get(u).pieces?.some(p => p.tr), 'the run that came back is kept')
+  assert.equal(how.lost, 1)
+}])
 cases.push(['no run back, and none lost: none', async () => {
   const e = engine(texts => texts.map(() => null)), u = unit(1)
   const { results } = await translateUnits([u], e.send, 'markers')

@@ -17,7 +17,7 @@ import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { verified, VERIFIED } from './scripts.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { appearanceRule, createPdfStore, createSurfaceConfig, isCurrent, LANG_CODE_TO_LOCALE_NAME, lookOf, toBcp47 } from './lib/axt/extension.mjs'
-import { decideWrite, digestOf, figureKeyOf, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { isName, plainSource, WIRE } from './mt.mjs'
 import { unpackSource } from './tar.mjs'
 
@@ -1313,7 +1313,7 @@ async function live() {
     L.events.push({ t: Math.round(performance.now() - L.t0), event, ...data })
     if (event === 'translated') { got = data.total; if (data.how?.lost) { lost += data.how.lost; lostWhy = data.how.error } }
     if ((event === 'preview' || event === 'final') && data.ok) compiledOnce = true
-    const said = { preview: data.ok ? 'preview compiled' : `compile failed (${data.strategy}): ${data.error ?? ''}`, final: data.ok ? 'final compiled' : `final compile failed (${data.strategy}): ${data.error ?? ''}`, 'next strategy': `trying ${data.strategy}`, done: compiledOnce ? 'done' : 'done — the translation did not compile; the right side still shows the original' }[event] ?? event
+    const said = { preview: data.ok ? 'preview compiled' : `compile failed (${data.strategy}): ${data.error ?? ''}`, final: data.ok ? 'final compiled' : `final compile failed (${data.strategy}): ${data.error ?? ''}`, 'next strategy': `trying ${data.strategy}`, done: compiledOnce ? 'done' : cached ? 'done — this machine\'s copy is shown' : 'done — the translation did not compile; the right side still shows the original' }[event] ?? event
     const by = engine ? ` into ${engine.lang} by ${engine.engine}` : ''
     // paragraphs the service failed on (a network down, a rate limit) stay in English, and the reader is told
     const missed = lost ? ` (${lost} not: ${lostWhy})` : ''
@@ -1326,20 +1326,33 @@ async function live() {
   status(`Fetching ${paper} from arXiv…`)
   try { await open(left, pdfUrl) } catch (e) { return fail('fetch failed', `Could not fetch ${paper}'s PDF from arXiv (${e.message ?? e})`) }
   note('opened')
-  // the key of this paper's copy: arXiv's whole PDF's digest, read once the left side is open (after its first page)
-  const digestP = left.doc.getData().then(digestOf).catch(() => null)
+  // the left side's first page drawn (any page: a reading place restored may open elsewhere), two seconds at most
+  const drawnP = Promise.race([new Promise(resolve => left.eventBus.on('pagerendered', resolve, { once: true })), new Promise(resolve => setTimeout(resolve, 2000))])
   if (mode === 'original') status(`${paper}, the original. Choose Translation or Side by side to translate it`)
   await translationWanted
   translating = true
-  // this machine's copy first: it needs no service (REPORT, eighteenth addendum, "Opening a paper")
-  const lang0 = config?.targetLanguage ? toBcp47(config.targetLanguage) : null, digest = await digestP
+  // this machine's copy first: it needs no service (REPORT, eighteenth addendum, "Opening a paper"). Its key is arXiv's
+  // whole PDF's digest, read once a translation is wanted and the left side's first page is drawn: getData copies the
+  // whole file (46 MB at most) out of the worker, and the digest reads all of it (final review)
+  await drawnP
+  const digestAt = performance.now()
+  const digest = await left.doc.getData().then(digestOf).then(d => { note('digest', { startedAt: Math.round(digestAt - timing.start), ms: Math.round(performance.now() - digestAt) }); return d }).catch(() => null)
+  const lang0 = config?.targetLanguage ? toBcp47(config.targetLanguage) : null
   cacheKey = digest && lang0 ? { digest, lang: lang0 } : null
   cached = cacheKey ? await pdfCache.get(digest, lang0) : undefined
   if (cached) {
     note('cache hit', { engine: cached.engine, pipeline: cached.pipeline })
     // opened, whatever follows: the least recently opened go first (a run that writes nothing would not say so)
     void pdfCache.touch(digest, lang0)
-    await showCached(cached, setContext, note)
+    try { await showCached(cached, setContext, note) } catch (e) {
+      // a copy that cannot be shown is no copy: deleted, and the visit goes on as a miss (final review)
+      note('cache unusable', { error: String(e?.message ?? e).slice(0, 200) })
+      void pdfCache.delete(digest, lang0)
+      cached = undefined
+      figureEntries = new Map()
+    }
+  }
+  if (cached) {
     total = cached.units.filter(u => u.state !== 'kept').length; got = total
     window.__reader.debug = Object.assign(harness(), { units: cached.units.map((u, i) => ({ i, kind: u.kind, text: u.src })) })
     window.__reader.ready = true
@@ -1418,7 +1431,7 @@ async function live() {
   const result = await runLive(paperData, {
     lang, compile, note,
     seed, identity: engine.identity, pipelineCurrent: sameUnits,
-    marks: sameUnits ? new Map(cached.marks) : null,
+    marks: knownMarks(cached, sameUnits),
     format: engine.format,
     translate: texts => engine.translate(texts, context),
     // nearest the reading line on the page first, what lies ahead before what lies behind; on the side in view, since

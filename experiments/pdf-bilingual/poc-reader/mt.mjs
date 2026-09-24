@@ -226,12 +226,16 @@ export async function translateUnits(units, send, format = 'markers') {
       continue
     }
     const ids = new Set([...got.values()].map(g => g.by))
+    // some runs back and some lost to the service: lost, so that it is tried again — partial is for a unit the engine
+    // could not take whole, which another try would not change (final review); what came back is shown meanwhile
+    const whole = got.size === total.get(u)
     results.set(u, {
       pieces: u.pieces.map((p, k) => (got.has(k) ? { t: 'text', tr: true, s: p.s.match(/^\s*/)[0] + texEscape(wire.unrun(got.get(k).text)) + p.s.match(/\s*$/)[0] } : p)),
-      state: got.size === total.get(u) ? 'whole' : 'partial',
+      state: whole ? 'whole' : lostUnits.has(u) ? 'lost' : 'partial',
       by: ids.size === 1 ? [...ids][0] : MIXED,
     })
-    how.runs++
+    if (!whole && lostUnits.has(u)) how.lost++
+    else how.runs++
   }
   return { results, how }
 }

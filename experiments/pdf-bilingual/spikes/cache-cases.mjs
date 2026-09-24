@@ -3,7 +3,7 @@
 // a preview held while a unit has no translation, and nothing compiled when nothing changed. Exits non-zero on a failure.
 // Build lib/axt first: node spikes/build-shared.mjs
 import assert from 'node:assert/strict'
-import { decideWrite, seedFrom, sourceHash, unitsOf } from '../poc-reader/cache.mjs'
+import { decideWrite, knownMarks, seedFrom, sourceHash, unitsOf } from '../poc-reader/cache.mjs'
 import { openPaper, runLive } from '../poc-reader/live.mjs'
 import { translateUnits } from '../poc-reader/mt.mjs'
 
@@ -46,6 +46,13 @@ cases.push(['when a run writes: a settled final in full, provenance alone, or no
   assert.equal(decideWrite({ result: { settled: false, changed: true }, cached: null, units }), null)
   assert.equal(decideWrite({ result: { settled: false, changed: false }, cached: { units: [{ hash: 'h', state: 'whole', by: 'B', tried: 'A' }] }, units }), 'provenance')
   assert.equal(decideWrite({ result: { settled: false, changed: false }, cached: { units }, units }), null)
+}])
+cases.push(['a copy\'s marks are known only when it has some, on the same pipeline (final review)', () => {
+  // a copy whose marked original failed has none: the run compiles the original again rather than go on without
+  assert.equal(knownMarks({ marks: [] }, true), null)
+  assert.equal(knownMarks({ marks: [['1s', {}]] }, false), null)
+  assert.equal(knownMarks({ marks: [['1s', {}]] }, true)?.size, 1)
+  assert.equal(knownMarks(undefined, true), null)
 }])
 cases.push(['a seeded run with nothing changed and the pipeline current compiles nothing', async () => {
   const paper = openPaper(tex(PARAS)), c = compiler()

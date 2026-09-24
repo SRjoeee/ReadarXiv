@@ -30,7 +30,7 @@ describe('createPdfStore', () => {
     const db = dbOf()
     const s = createPdfStore({ db })
     await s.put({ ...body('d'), pdf: pdfOf(1000) }, now)
-    const row = await db.bodies.get(['d', 'zh-CN'])
+    const row = await db.pdfs.get(['d', 'zh-CN'])
     const head = new TextDecoder().decode(new Uint8Array(row!.data).slice(0, 5))
     expect(head).not.toBe('%PDF-')
     expect(row!.iv.byteLength).toBe(12)
@@ -70,10 +70,10 @@ describe('createPdfStore', () => {
     const db = dbOf()
     const s = createPdfStore({ db, warn: () => {} })
     await s.put({ ...body('d'), pdf: pdfOf(100) }, now)
-    const row = (await db.bodies.get(['d', 'zh-CN']))!
+    const row = (await db.pdfs.get(['d', 'zh-CN']))!
     const torn = new Uint8Array(row.data.slice(0))
     torn[0] = torn[0]! ^ 0xff
-    await db.bodies.put({ ...row, data: torn.buffer })
+    await db.pdfs.put({ ...row, data: torn.buffer })
     expect(await s.get('d', 'zh-CN')).toBeUndefined()
     expect(await db.entries.get(['d', 'zh-CN'])).toBeUndefined()
   })
@@ -98,6 +98,56 @@ describe('createPdfStore', () => {
     expect((await s.usage()).count).toBe(1)
     await s.clear()
     expect(await s.usage()).toEqual({ count: 0, bytes: 0 })
+  })
+
+  it('a figures patch touches no PDF: the ciphertext has a table of its own (final review)', async () => {
+    const db = dbOf()
+    const s = createPdfStore({ db })
+    await s.put({ ...body('d'), pdf: pdfOf(1000) }, now)
+    expect(await db.pdfs.get(['d', 'zh-CN'])).toBeDefined()
+    expect((await db.bodies.get(['d', 'zh-CN'])) as unknown as Record<string, unknown>).not.toHaveProperty('data')
+    let pdfWrites = 0
+    const put = db.pdfs.put.bind(db.pdfs)
+    db.pdfs.put = ((...a: Parameters<typeof put>) => { pdfWrites++; return put(...a) }) as typeof db.pdfs.put
+    await s.patchFigures('d', 'zh-CN', [{ key: 'k', texts: ['t'], by: 'B' }])
+    expect(pdfWrites).toBe(0)
+  })
+
+  it('figures merge by key: a patch keeps the entries it does not name, and counts them in the record\'s bytes', async () => {
+    const db = dbOf()
+    const s = createPdfStore({ db })
+    await s.put({ ...body('d', { figures: [{ key: 'a', texts: ['A'], by: 'B' }] }), pdf: pdfOf(100) }, now)
+    const before = (await db.entries.get(['d', 'zh-CN']))!.bytes
+    await s.patchFigures('d', 'zh-CN', [{ key: 'b', texts: ['B'.repeat(500)], by: 'B' }])
+    expect((await s.get('d', 'zh-CN'))?.figures.map(f => f.key).sort()).toEqual(['a', 'b'])
+    expect((await db.entries.get(['d', 'zh-CN']))!.bytes).toBeGreaterThan(before + 400)
+  })
+
+  it('a write keeps the stored figures it does not have, and replaces the ones it has', async () => {
+    const s = createPdfStore({ db: dbOf() })
+    await s.put({ ...body('d', { figures: [{ key: 'a', texts: ['old'], by: 'A' }, { key: 'c', texts: ['C'], by: 'B' }] }), pdf: pdfOf(100) }, now)
+    expect(await s.put({ ...body('d', { figures: [{ key: 'a', texts: ['new'], by: 'B' }] }), pdf: pdfOf(100, 2) }, now)).toBe(true)
+    const figures = (await s.get('d', 'zh-CN'))?.figures ?? []
+    expect(Object.fromEntries(figures.map(f => [f.key, f.texts[0]]))).toEqual({ a: 'new', c: 'C' })
+  })
+
+  it('a failed read of the key is a miss, not a record deleted (final review)', async () => {
+    const db = dbOf()
+    await createPdfStore({ db }).put({ ...body('d'), pdf: pdfOf(100) }, now)
+    const s = createPdfStore({ db, warn: () => {} })
+    const get = db.keys.get.bind(db.keys)
+    db.keys.get = (() => Promise.reject(new Error('the keys table cannot be read'))) as unknown as typeof db.keys.get
+    expect(await s.get('d', 'zh-CN')).toBeUndefined()
+    db.keys.get = get
+    expect(await s.get('d', 'zh-CN')).toBeDefined()
+  })
+
+  it('delete removes a record, whatever its state', async () => {
+    const s = createPdfStore({ db: dbOf() })
+    await s.put({ ...body('d'), pdf: pdfOf(100) }, now)
+    await s.delete('d', 'zh-CN')
+    expect(await s.get('d', 'zh-CN')).toBeUndefined()
+    expect((await s.usage()).count).toBe(0)
   })
 
   it('encrypting 10 MB takes well under a second (a reading, printed)', async () => {
