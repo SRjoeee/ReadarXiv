@@ -108,6 +108,7 @@ function Bubble({ tone = 'alert', children }: { tone?: 'alert' | 'neutral'; chil
 function MenuRow({ kind, label, row, view, actions, compact = false, last = false }: { kind: MenuKind; label: string; row: { value: string; replaced?: string }; view: View; actions: PopupActions; compact?: boolean; last?: boolean }) {
   const open = view.menu?.kind === kind
   const anchor = useRef<HTMLDivElement>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
   // The value is truncated when it is long — a language's full name runs to "Simplified Mandarin
   // Chinese (简体中文)" — so the whole of it is on the row for a reader who needs to check
   const value = (
@@ -119,6 +120,7 @@ function MenuRow({ kind, label, row, view, actions, compact = false, last = fals
   return (
     <div ref={anchor} className={last ? '' : 'border-b border-line'}>
       <button
+        ref={trigger}
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -143,6 +145,7 @@ function MenuRow({ kind, label, row, view, actions, compact = false, last = fals
       {open && view.menu && (
         <Menu
           anchor={anchor}
+          trigger={trigger}
           items={view.menu.items}
           label={view.menu.label}
           search={view.menu.search}

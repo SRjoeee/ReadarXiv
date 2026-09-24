@@ -6,7 +6,7 @@
 // flow, so the popup window keeps its size. It fills the room below the row and the list scrolls
 // inside it — or, when that room is too small to hold anything, it opens upward from the row
 // instead and hugs its own content (the appearance row sits at the foot of the popup).
-import { type CSSProperties, type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, type RefObject, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useMenuNav } from './menu-nav'
 import { Spinner } from './Spinner'
 
@@ -70,14 +70,16 @@ export function Menu({ anchor, trigger, hug = false, items, label, search, searc
     if (!q) return items
     return items.filter(i => `${i.name} ${i.keywords ?? ''} ${i.hint ?? ''}`.toLowerCase().includes(q))
   }, [items, query])
+  /** what opened the menu: the trigger, else the anchor's own button (a popup row is the anchor, its button inside it) */
+  const opener = () => trigger?.current ?? anchor.current?.querySelector<HTMLElement>('button') ?? anchor.current
   /** a pick or Escape closes the menu and gives the focus back to what opened it (§9.4); a press outside leaves it where the reader put it */
-  const close = () => { (trigger ?? anchor).current?.focus(); onClose() }
+  const close = () => { opener()?.focus(); onClose() }
   /** an item with an action that cannot be chosen yet (a language pack to download) runs its action when picked */
   const pick = (item?: MenuItem) => {
     if (!item) return
     if (item.action && item.disabled) { if (!item.action.busy) onAction?.(item.id); return }
     if (item.disabled) return
-    ;(trigger ?? anchor).current?.focus()
+    opener()?.focus()
     onSelect(item.id)
   }
   const nav = useMenuNav({ count: shown.length, initial: shown.findIndex(i => i.selected), isDisabled: i => !!shown[i]?.disabled && !shown[i]?.action, labelOf: i => shown[i]?.name ?? '', onPick: i => pick(shown[i]), onClose: close, typeahead: !search })
@@ -121,20 +123,19 @@ export function Menu({ anchor, trigger, hug = false, items, label, search, searc
     listRef.current?.querySelector<HTMLElement>(`[data-index="${nav.active}"]`)?.scrollIntoView({ block: 'nearest' })
   }, [nav.active])
   // The search field takes focus by itself; without one nothing inside would have it, and the
-  // arrows, Enter and Escape below would never reach this element — the trigger is a sibling, not
+  // arrows, Enter and Escape below would never reach the list — the trigger is a sibling, not
   // a descendant (Codex on #157)
   useEffect(() => {
-    if (!search) root.current?.focus()
+    if (!search) listRef.current?.focus()
   }, [search])
+  const listId = `${useId()}-list`
+  // the element with the focus takes the keys and names the active option: the search field, a combobox controlling
+  // the list, or the list itself; only that element, or a key would be handled twice as it bubbles (the final review)
+  const keys = { 'aria-activedescendant': nav.activeId, onKeyDown: nav.onKeyDown }
 
   return (
     <div
       ref={root}
-      role="listbox"
-      aria-label={label}
-      tabIndex={-1}
-      aria-activedescendant={nav.activeId}
-      onKeyDown={nav.onKeyDown}
       style={box ? { top: box.top, bottom: box.bottom, left: box.left, width: box.width, maxHeight: box.maxHeight } : { visibility: 'hidden' }}
       className="fixed z-10 flex flex-col overflow-hidden rounded-control border border-line bg-card shadow-[0_8px_24px_rgba(0,0,0,0.14)] outline-none"
     >
@@ -142,6 +143,11 @@ export function Menu({ anchor, trigger, hug = false, items, label, search, searc
         <input
           // biome-ignore lint/a11y/noAutofocus: the menu opened from a click; the search field is what the reader opened it for
           autoFocus
+          role="combobox"
+          aria-expanded="true"
+          aria-controls={listId}
+          aria-autocomplete="list"
+          {...keys}
           value={query}
           onChange={e => { setQuery(e.target.value); nav.setActive(0) }}
           placeholder={searchPlaceholder}
@@ -149,8 +155,9 @@ export function Menu({ anchor, trigger, hug = false, items, label, search, searc
           className="w-full shrink-0 border-b border-line bg-transparent px-3.5 py-2 text-[13px] text-fg outline-none placeholder:text-fg-2"
         />
       )}
-      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-1">
-        {shown.length === 0 && <p className="px-3.5 py-2 text-[12px] text-fg-2">{empty}</p>}
+      {shown.length === 0 && <p className="px-3.5 py-2 text-[12px] text-fg-2">{empty}</p>}
+      {/* the options alone: the search field and the no-match line are outside the list (the final review) */}
+      <div ref={listRef} id={listId} role="listbox" aria-label={label} tabIndex={search ? undefined : -1} {...(search ? {} : keys)} className={`min-h-0 flex-1 overflow-y-auto outline-none ${shown.length ? 'py-1' : ''}`}>
         {shown.map((item, index) => (
           // one option per row, no button inside it (§9.4): an action shows in its row and runs when the row is picked. The
           // focus stays on the list, which names the active option (aria-activedescendant) and takes the keys

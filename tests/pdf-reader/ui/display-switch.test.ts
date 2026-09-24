@@ -45,6 +45,20 @@ describe('the display switch (the reader\'s design, §6.2)', () => {
     expect(onChange).toHaveBeenCalledTimes(1)
   })
 
+  it('leaves a digit to a menu or a dialog that has the focus, and to whatever took the key first (the final review)', async () => {
+    // the zoom menu's letter jump: 1 goes to 100 %, and must not switch to the original, nor write it
+    const { onChange } = await mount('bilingual')
+    for (const role of ['menu', 'listbox', 'dialog']) {
+      const box = document.body.appendChild(document.createElement('div'))
+      box.setAttribute('role', role)
+      await key(box.appendChild(document.createElement('div')), '1')
+    }
+    const taker = document.body.appendChild(document.createElement('div'))
+    taker.addEventListener('keydown', e => e.preventDefault())
+    await act(async () => { taker.dispatchEvent(new KeyboardEvent('keydown', { key: '3', bubbles: true, cancelable: true })) })
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('greys the translated displays when there is no translation to be had, and skips them', async () => {
     const { container, onChange } = await mount('original', false)
     const radios = [...container.querySelectorAll('[role="radio"]')]

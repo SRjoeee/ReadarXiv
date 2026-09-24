@@ -1,8 +1,8 @@
-import { act, createElement } from 'react'
+import { act, createElement, type ReactNode } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
-import { fileName } from '@/pdf-reader/controller'
-import { DownloadMenu, LanguageMenu, ZoomMenu } from '@/pdf-reader/ui/Menus'
+import { fileName, type ReaderController } from '@/pdf-reader/controller'
+import { DownloadMenu, LanguageMenu, ServiceMenu, ZoomMenu } from '@/pdf-reader/ui/Menus'
 import { setLocale } from '@/ui/strings'
 import { mountElement } from '../../ui/render-hook'
 import { fakeController } from './fake-controller'
@@ -14,7 +14,7 @@ beforeAll(() => setLocale('zh-CN'))
 beforeEach(() => { restore = stubPopovers() })
 afterEach(() => { restore(); document.body.innerHTML = '' })
 
-async function openMenu(component: typeof ZoomMenu, over = {}) {
+async function openMenu(component: (props: { controller: ReaderController }) => ReactNode, over = {}) {
   const fake = fakeController(over)
   const mounted = await mountElement(createElement(component, { controller: fake.controller }))
   await act(async () => { mounted.container.querySelector<HTMLElement>('[popover="auto"]')!.showPopover() })
@@ -40,6 +40,38 @@ describe('the reader\'s menus (the reader\'s design, §6.1, §6.7)', () => {
     ;(options[0] as HTMLElement).click()
     const change = controller.patchSettings.mock.calls[0]![0] as (c: Config) => Config
     expect(change({ ...DEFAULT_CONFIG, targetLanguage: 'cmn' }).targetLanguage).toBe('deu')
+  })
+
+  it('language: the arrows move one language at a time from the search field, and Enter picks once (the final review)', async () => {
+    const { container, controller } = await openMenu(LanguageMenu)
+    const search = container.querySelector<HTMLInputElement>('input')!
+    const active = () => document.getElementById(search.getAttribute('aria-activedescendant') ?? '')?.textContent
+    const names = [...container.querySelectorAll('[role="option"]')].map(o => o.textContent)
+    const first = active()
+    await act(async () => { search.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })) })
+    expect(active()).toBe(names[(names.indexOf(first ?? '') + 1) % names.length])
+    await act(async () => { search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })) })
+    expect(controller.patchSettings).toHaveBeenCalledTimes(1)
+  })
+
+  it('language: the search field is a combobox naming the list and its active option, and the list holds options alone (the final review)', async () => {
+    const { container } = await openMenu(LanguageMenu)
+    const search = container.querySelector<HTMLInputElement>('input')!, list = container.querySelector<HTMLElement>('[role="listbox"]')!
+    expect([search.getAttribute('role'), search.getAttribute('aria-controls'), list.contains(search)]).toEqual(['combobox', list.id, false])
+    expect(document.getElementById(search.getAttribute('aria-activedescendant') ?? '')?.getAttribute('role')).toBe('option')
+    expect([...list.children].every(c => c.getAttribute('role') === 'option')).toBe(true)
+    // one list, not a listbox in a listbox: the popover itself takes no role
+    expect(container.querySelectorAll('[role="listbox"], [role="menu"]').length).toBe(1)
+  })
+
+  it('service and zoom: one list each, its separators not items of it (the final review)', async () => {
+    for (const menu of [ServiceMenu, ZoomMenu]) {
+      const { container } = await openMenu(menu)
+      const lists = container.querySelectorAll('[role="listbox"], [role="menu"]')
+      expect(lists.length).toBe(1)
+      expect([...lists[0]!.children].every(c => ['option', 'menuitemradio', 'none'].includes(c.getAttribute('role') ?? ''))).toBe(true)
+      restore(); document.body.innerHTML = ''; restore = stubPopovers()
+    }
   })
 
   it('download: the translation greyed until the final is on screen', async () => {

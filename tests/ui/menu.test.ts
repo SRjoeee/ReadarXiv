@@ -21,7 +21,8 @@ function rowAt(top: number) {
   ref.current = anchor
   return { anchor, ref }
 }
-const panel = (container: HTMLElement) => container.querySelector<HTMLElement>('[role="listbox"]')
+/** the positioned panel: the list's parent, which holds the search field too (the list holds its options alone) */
+const panel = (container: HTMLElement) => container.querySelector<HTMLElement>('[role="listbox"]')?.parentElement
 const px = (value: string) => (value === '' ? undefined : Number.parseFloat(value))
 
 describe('Menu placement', () => {
@@ -127,6 +128,13 @@ describe('Menu keyboard and semantics (the reader\'s design, §9.4)', () => {
     expect(active(list)).toBe('Delta')
   })
 
+  it('takes the letter it goes to, so that nothing else on the page acts on it (the final review)', async () => {
+    const { list } = await open()
+    const e = new KeyboardEvent('keydown', { key: 'd', bubbles: true, cancelable: true })
+    await act(async () => { list.dispatchEvent(e) })
+    expect([active(list), e.defaultPrevented]).toEqual(['Delta', true])
+  })
+
   it('puts no button inside the list, and runs an item\'s action when that item is picked', async () => {
     const acted: string[] = []
     const withAction = [...five.slice(0, 4), { id: 'pack', name: 'Pack', selected: false, disabled: true, action: { label: 'Get' } }]
@@ -135,6 +143,29 @@ describe('Menu keyboard and semantics (the reader\'s design, §9.4)', () => {
     await key('End')
     await key('Enter')
     expect(acted).toEqual(['pack'])
+  })
+
+  it('with a search field, the field is a combobox naming the list and its active option; Home and End stay the field\'s (the final review)', async () => {
+    await open({ search: true, searchPlaceholder: 'Search' })
+    const input = document.querySelector<HTMLInputElement>('input')!, list = document.querySelector<HTMLElement>('[role="listbox"]')!
+    expect([input.getAttribute('role'), input.getAttribute('aria-controls'), list.contains(input)]).toEqual(['combobox', list.id, false])
+    const activeOf = () => document.getElementById(input.getAttribute('aria-activedescendant') ?? '')?.textContent
+    expect(activeOf()).toBe('Beta')
+    const home = new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true })
+    await act(async () => { input.dispatchEvent(home) })
+    expect([activeOf(), home.defaultPrevented]).toEqual(['Beta', false])
+    await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })) })
+    expect(activeOf()).toBe('Delta')
+  })
+
+  it('gives the focus back to the button of its row when the row is its anchor, as the popup\'s rows are (the final review)', async () => {
+    const row = document.body.appendChild(document.createElement('div')), button = row.appendChild(document.createElement('button'))
+    const ref = createRef<HTMLElement>()
+    ref.current = row
+    const mounted = await mountElement(createElement(Menu, { anchor: ref, items: five, label: 'L', onSelect: () => {}, onClose: () => {} }))
+    const list = mounted.container.querySelector<HTMLElement>('[role="listbox"]')!
+    await act(async () => { list.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(document.activeElement).toBe(button)
   })
 
   it('gives the focus back to its trigger when it closes with a pick or Escape', async () => {

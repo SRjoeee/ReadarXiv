@@ -7,7 +7,7 @@ import { type KeyboardEvent, useId, useRef, useState } from 'react'
 export interface MenuNav {
   active: number
   setActive: (index: number) => void
-  /** on the element that has the focus: the list itself, or the search field before it */
+  /** on the element that has the focus, and on it alone: the list itself, or the search field before it */
   onKeyDown: (e: KeyboardEvent) => void
   /** the active item's element id, for aria-activedescendant on the element with the focus */
   activeId: string | undefined
@@ -21,7 +21,7 @@ export function useMenuNav({ count, initial, isDisabled, labelOf, onPick, onClos
   labelOf: (index: number) => string
   onPick: (index: number) => void
   onClose: () => void
-  /** off where a search field has the focus: the letters are its */
+  /** off where a search field has the focus: the letters, Home and End are its */
   typeahead?: boolean
 }): MenuNav {
   const base = useId()
@@ -40,8 +40,9 @@ export function useMenuNav({ count, initial, isDisabled, labelOf, onPick, onClos
     if (!count) return
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => step(a, 1)); return }
     if (e.key === 'ArrowUp') { e.preventDefault(); setActive(a => step(a, -1)); return }
-    if (e.key === 'Home') { e.preventDefault(); setActive(step(-1, 1)); return }
-    if (e.key === 'End') { e.preventDefault(); setActive(step(count, -1)); return }
+    // in a search field Home and End move its caret, as in any text field
+    if (e.key === 'Home' && typeahead) { e.preventDefault(); setActive(step(-1, 1)); return }
+    if (e.key === 'End' && typeahead) { e.preventDefault(); setActive(step(count, -1)); return }
     if (e.key === 'Enter' || (e.key === ' ' && typeahead)) { e.preventDefault(); onPick(active); return }
     if (!typeahead || e.key.length !== 1 || e.metaKey || e.ctrlKey || e.altKey) return
     const now = performance.now()
@@ -52,7 +53,8 @@ export function useMenuNav({ count, initial, isDisabled, labelOf, onPick, onClos
     const from = q.length > 1 ? active : active + 1
     for (let k = 0; k < count; k++) {
       const j = (from + k) % count
-      if (!isDisabled(j) && labelOf(j).toLowerCase().startsWith(q)) { setActive(j); return }
+      // the key is the menu's: nothing else on the page acts on it (the reader's display keys, 1 to 3)
+      if (!isDisabled(j) && labelOf(j).toLowerCase().startsWith(q)) { e.preventDefault(); setActive(j); return }
     }
   }
   const idOf = (index: number) => `${base}-item-${index}`

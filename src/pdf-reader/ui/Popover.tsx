@@ -61,9 +61,12 @@ export function Popover({ id, anchor, onOpenChange, role, label, onClosed, class
     el.addEventListener('toggle', onToggle)
     return () => el.removeEventListener('toggle', onToggle)
   }, [id, onOpenChange, onClosed])
+  // a dialog is the popover itself; a menu or a list is the element inside it, which carries the role and the name, so
+  // that there is one menu and not a menu in a menu (the final review)
+  const dialog = role === 'dialog'
   return (
-    // biome-ignore lint/a11y/useAriaPropsSupportedByRole: the role is the caller's, a menu, a listbox or a dialog, each named by its label
-    <div ref={ref} id={id} popover="auto" role={role} aria-label={label} className={`pop chrome ${className}`} style={{ positionAnchor: anchor } as React.CSSProperties}>
+    // biome-ignore lint/a11y/useAriaPropsSupportedByRole: a dialog, named by its label; nothing for a menu or a list
+    <div ref={ref} id={id} popover="auto" role={dialog ? 'dialog' : undefined} aria-label={dialog ? label : undefined} className={`pop chrome ${className}`} style={{ positionAnchor: anchor } as React.CSSProperties}>
       {children}
     </div>
   )

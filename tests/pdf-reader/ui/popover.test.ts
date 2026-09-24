@@ -27,6 +27,14 @@ describe('the reader\'s popover (the reader\'s design, §6.7)', () => {
     expect([isOpen(pop), trigger.getAttribute('aria-expanded')]).toEqual([true, 'true'])
   })
 
+  it('takes no role for a menu or a list, whose own element has it, and keeps a dialog\'s with its name (the final review)', async () => {
+    const { container } = await mountElement(createElement(Harness))
+    expect(container.querySelector('[popover]')!.getAttribute('role')).toBeNull()
+    const dialog = await mountElement(createElement(Popover, { id: 'pop-d', anchor: '--pop-d', onOpenChange: () => {}, role: 'dialog', label: 'Options' }))
+    const el = dialog.container.querySelector('[popover]')!
+    expect([el.getAttribute('role'), el.getAttribute('aria-label')]).toEqual(['dialog', 'Options'])
+  })
+
   it('draws its contents before it opens, so that it never shows empty, and puts the focus in them when it opens (Task 19)', async () => {
     const { container } = await mountElement(createElement(Harness))
     const pop = container.querySelector<HTMLElement>('[popover]')!

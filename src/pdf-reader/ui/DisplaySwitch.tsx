@@ -9,8 +9,9 @@ import { DisplayIcon } from './icons'
 import { useTip } from './tip'
 
 const ORDER: readonly Display[] = ['original', 'bilingual', 'translation']
-/** a key typed where text goes is the text's */
-const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))
+/** a key typed where text goes is the text's, and one in a menu or a dialog is theirs (a menu goes to the item a digit
+ *  begins: the zoom's 100 %) */
+const theirs = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.closest('[role="menu"], [role="listbox"], [role="dialog"]'))
 
 export function DisplaySwitch({ value, translatable, onChange }: { value: Display; translatable: boolean; onChange: (display: Display) => void }) {
   const can = (d: Display) => d === 'original' || translatable
@@ -30,13 +31,14 @@ export function DisplaySwitch({ value, translatable, onChange }: { value: Displa
       if (can(ORDER[i]!)) return choose(ORDER[i]!, true)
     }
   }
-  // 1, 2, 3 anywhere on the page, outside a text field and without a modifier (⌘1 is the browser's)
+  // 1, 2, 3 anywhere on the page, outside a text field, a menu or a dialog, without a modifier (⌘1 is the browser's),
+  // and when nothing took the key before
   const latest = useRef(choose)
   latest.current = choose
   useEffect(() => {
     const onDoc = (e: globalThis.KeyboardEvent) => {
       const n = ['1', '2', '3'].indexOf(e.key)
-      if (n < 0 || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return
+      if (n < 0 || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || theirs(e.target)) return
       latest.current(ORDER[n]!)
     }
     document.addEventListener('keydown', onDoc)
