@@ -292,11 +292,19 @@ async function bitmapOf(page, id) {
   if (bitmap.width < 32 || bitmap.height < 32) { bitmap.close(); return null }
   return bitmap
 }
+/**
+ * The reader's recognitions, one scope for the page's life: withdrawn when the page goes, since an extension page is no
+ * tab the background watches (shared/messages.ts), and what is not seen must not take the recogniser (final review)
+ */
+const ocrScope = `axt-pdf-ocr-${crypto.randomUUID()}`
+addEventListener('pagehide', () => void sendMessage({ type: 'axt:cancel-scope', scope: ocrScope }).catch(() => {}), { once: true })
 /** a bitmap's lines, read by the extension's recogniser through the background, as the HTML page's are (ocr.ts) */
 async function recognise(page, id) {
   const bitmap = await bitmapOf(page, id)
   if (!bitmap) return []
-  const reply = await sendMessage({ type: 'axt:ocr', ...(await ocrCall(bitmap, paper)) }).catch(e => ({ ok: false, error: { message: String(e?.message ?? e) } }))
+  const call = await ocrCall(bitmap, paper, ocrScope)
+  if (!call) return []
+  const reply = await sendMessage({ type: 'axt:ocr', ...call }).catch(e => ({ ok: false, error: { message: String(e?.message ?? e) } }))
   if (!reply.ok) { console.warn('[ocr]', reply.error.message); return [] }
   return reply.result.lines
 }
