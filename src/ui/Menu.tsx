@@ -7,6 +7,7 @@
 // inside it — or, when that room is too small to hold anything, it opens upward from the row
 // instead and hugs its own content (the appearance row sits at the foot of the popup).
 import { type CSSProperties, type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useMenuNav } from './menu-nav'
 import { Spinner } from './Spinner'
 
 export interface MenuItem {
@@ -69,7 +70,17 @@ export function Menu({ anchor, trigger, hug = false, items, label, search, searc
     if (!q) return items
     return items.filter(i => `${i.name} ${i.keywords ?? ''} ${i.hint ?? ''}`.toLowerCase().includes(q))
   }, [items, query])
-  const [active, setActive] = useState(() => Math.max(0, items.findIndex(i => i.selected)))
+  /** a pick or Escape closes the menu and gives the focus back to what opened it (§9.4); a press outside leaves it where the reader put it */
+  const close = () => { (trigger ?? anchor).current?.focus(); onClose() }
+  /** an item with an action that cannot be chosen yet (a language pack to download) runs its action when picked */
+  const pick = (item?: MenuItem) => {
+    if (!item) return
+    if (item.action && item.disabled) { if (!item.action.busy) onAction?.(item.id); return }
+    if (item.disabled) return
+    ;(trigger ?? anchor).current?.focus()
+    onSelect(item.id)
+  }
+  const nav = useMenuNav({ count: shown.length, initial: shown.findIndex(i => i.selected), isDisabled: i => !!shown[i]?.disabled && !shown[i]?.action, labelOf: i => shown[i]?.name ?? '', onPick: i => pick(shown[i]), onClose: close, typeahead: !search })
 
   // One read at open, then only writes. A transformed ancestor is the containing block of a fixed
   // element (the gallery frames every popup that way), so its rectangle is subtracted when there is one
@@ -107,8 +118,8 @@ export function Menu({ anchor, trigger, hug = false, items, label, search, searc
     return () => document.removeEventListener('pointerdown', onDown)
   }, [onClose, anchor, trigger])
   useEffect(() => {
-    listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' })
-  }, [active])
+    listRef.current?.querySelector<HTMLElement>(`[data-index="${nav.active}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [nav.active])
   // The search field takes focus by itself; without one nothing inside would have it, and the
   // arrows, Enter and Escape below would never reach this element — the trigger is a sibling, not
   // a descendant (Codex on #157)
@@ -116,24 +127,14 @@ export function Menu({ anchor, trigger, hug = false, items, label, search, searc
     if (!search) root.current?.focus()
   }, [search])
 
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') { e.preventDefault(); onClose(); return }
-    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => Math.min(shown.length - 1, a + 1)); return }
-    if (e.key === 'ArrowUp') { e.preventDefault(); setActive(a => Math.max(0, a - 1)); return }
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      const item = shown[active]
-      if (item && !item.disabled) onSelect(item.id)
-    }
-  }
-
   return (
     <div
       ref={root}
       role="listbox"
       aria-label={label}
       tabIndex={-1}
-      onKeyDown={onKey}
+      aria-activedescendant={nav.activeId}
+      onKeyDown={nav.onKeyDown}
       style={box ? { top: box.top, bottom: box.bottom, left: box.left, width: box.width, maxHeight: box.maxHeight } : { visibility: 'hidden' }}
       className="fixed z-10 flex flex-col overflow-hidden rounded-control border border-line bg-card shadow-[0_8px_24px_rgba(0,0,0,0.14)] outline-none"
     >
@@ -142,7 +143,7 @@ export function Menu({ anchor, trigger, hug = false, items, label, search, searc
           // biome-ignore lint/a11y/noAutofocus: the menu opened from a click; the search field is what the reader opened it for
           autoFocus
           value={query}
-          onChange={e => { setQuery(e.target.value); setActive(0) }}
+          onChange={e => { setQuery(e.target.value); nav.setActive(0) }}
           placeholder={searchPlaceholder}
           aria-label={searchPlaceholder}
           className="w-full shrink-0 border-b border-line bg-transparent px-3.5 py-2 text-[13px] text-fg outline-none placeholder:text-fg-2"
@@ -151,28 +152,32 @@ export function Menu({ anchor, trigger, hug = false, items, label, search, searc
       <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-1">
         {shown.length === 0 && <p className="px-3.5 py-2 text-[12px] text-fg-2">{empty}</p>}
         {shown.map((item, index) => (
-          <div key={item.id} data-index={index} className={`flex items-center gap-2 pr-2 ${index === active ? 'bg-control' : ''}`}>
-            <button
-              type="button"
-              role="option"
-              aria-selected={item.selected}
-              disabled={item.disabled}
-              onMouseEnter={() => setActive(index)}
-              onClick={() => onSelect(item.id)}
-              className={`flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 px-3.5 py-2 text-left disabled:cursor-default ${item.disabled ? 'text-fg-2' : 'text-fg'}`}
-            >
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate text-[13px] font-semibold">{item.name}</span>
-                {/* A preview is a sample drawn in the style, not information: it says nothing to a
-                    reader who cannot see it, and it would swallow the option's name in the
-                    accessible name. Every other hint here is real ("Free", "No API key yet") */}
-                {item.hint && <span aria-hidden={item.preview ? 'true' : undefined} style={item.preview} className={`truncate text-[11px] ${item.preview ? '' : 'text-fg-2'}`}>{item.hint}</span>}
-              </span>
-              {item.selected && <Check />}
-            </button>
+          // one option per row, no button inside it (§9.4): an action shows in its row and runs when the row is picked. The
+          // focus stays on the list, which names the active option (aria-activedescendant) and takes the keys
+          // biome-ignore lint/a11y/useKeyWithClickEvents: the list's keys choose it (menu-nav.ts)
+          <div
+            key={item.id}
+            id={nav.idOf(index)}
+            tabIndex={-1}
+            role="option"
+            aria-selected={item.selected}
+            aria-disabled={item.disabled || undefined}
+            data-index={index}
+            onMouseEnter={() => nav.setActive(index)}
+            onClick={() => pick(item)}
+            className={`flex cursor-pointer items-center justify-between gap-2 px-3.5 py-2 ${index === nav.active ? 'bg-control' : ''} ${item.disabled && !item.action ? 'cursor-default text-fg-2' : 'text-fg'}`}
+          >
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate text-[13px] font-semibold">{item.name}</span>
+              {/* A preview is a sample drawn in the style, not information: it says nothing to a
+                  reader who cannot see it, and it would swallow the option's name in the
+                  accessible name. Every other hint here is real ("Free", "No API key yet") */}
+              {item.hint && <span aria-hidden={item.preview ? 'true' : undefined} style={item.preview} className={`truncate text-[11px] ${item.preview ? '' : 'text-fg-2'}`}>{item.hint}</span>}
+            </span>
+            {item.selected && <Check />}
             {item.action && (item.action.busy
               ? <Spinner className="mr-1.5 text-accent" />
-              : <button type="button" onClick={() => onAction?.(item.id)} className="shrink-0 cursor-pointer rounded-full bg-accent px-3 py-1 text-[12px] font-semibold text-white">{item.action.label}</button>)}
+              : <span className="shrink-0 rounded-full bg-accent px-3 py-1 text-[12px] font-semibold text-white">{item.action.label}</span>)}
           </div>
         ))}
       </div>

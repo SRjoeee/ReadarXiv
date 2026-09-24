@@ -1,4 +1,4 @@
-import { createElement, createRef } from 'react'
+import { act, createElement, createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Menu } from '@/ui/Menu'
 import { mountElement } from './render-hook'
@@ -87,5 +87,63 @@ describe('Menu placement', () => {
     expect(s?.bottom).toBe('')
     narrow.remove()
     await mounted.unmount()
+  })
+})
+
+describe('Menu keyboard and semantics (the reader\'s design, §9.4)', () => {
+  const g = globalThis as { getComputedStyle: typeof getComputedStyle }
+  const saved = g.getComputedStyle
+  beforeEach(() => {
+    g.getComputedStyle = ((el: Element) => new Proxy(saved(el), { get: (t, k) => (k === 'transform' ? 'none' : Reflect.get(t, k)) })) as typeof getComputedStyle
+  })
+  afterEach(() => { g.getComputedStyle = saved; document.body.innerHTML = '' })
+  const five = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'].map((name, i) => ({ id: name.toLowerCase(), name, selected: i === 1, disabled: name === 'Gamma' }))
+  async function open(extra: Record<string, unknown> = {}) {
+    const trigger = document.body.appendChild(document.createElement('button'))
+    const ref = createRef<HTMLElement>()
+    ref.current = trigger
+    const picked: string[] = [], closed: number[] = []
+    const mounted = await mountElement(createElement(Menu, { anchor: ref, items: five, label: 'L', onSelect: (id: string) => picked.push(id), onClose: () => closed.push(1), ...extra }))
+    const list = mounted.container.querySelector<HTMLElement>('[role="listbox"]')!
+    const key = (k: string) => act(async () => { list.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true })) })
+    return { list, key, picked, closed, trigger }
+  }
+  const active = (list: HTMLElement) => document.getElementById(list.getAttribute('aria-activedescendant') ?? '')?.textContent
+
+  it('announces the active item, and skips a disabled one', async () => {
+    const { list, key } = await open()
+    expect(active(list)).toBe('Beta')
+    await key('ArrowDown')
+    expect(active(list)).toBe('Delta')
+  })
+
+  it('goes to either end with Home and End, and to an item by its first letter', async () => {
+    const { list, key } = await open()
+    await key('End')
+    expect(active(list)).toBe('Epsilon')
+    await key('Home')
+    expect(active(list)).toBe('Alpha')
+    await key('d')
+    expect(active(list)).toBe('Delta')
+  })
+
+  it('puts no button inside the list, and runs an item\'s action when that item is picked', async () => {
+    const acted: string[] = []
+    const withAction = [...five.slice(0, 4), { id: 'pack', name: 'Pack', selected: false, disabled: true, action: { label: 'Get' } }]
+    const { list, key } = await open({ items: withAction, onAction: (id: string) => acted.push(id) })
+    expect(list.querySelector('button')).toBeNull()
+    await key('End')
+    await key('Enter')
+    expect(acted).toEqual(['pack'])
+  })
+
+  it('gives the focus back to its trigger when it closes with a pick or Escape', async () => {
+    const { list, key, picked, closed, trigger } = await open()
+    await key('Enter')
+    expect([picked, document.activeElement]).toEqual([['beta'], trigger])
+    list.focus()
+    await key('Escape')
+    // a pick is the consumer's to close on; Escape closes it here
+    expect([closed.length, document.activeElement]).toEqual([1, trigger])
   })
 })
