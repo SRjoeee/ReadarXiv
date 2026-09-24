@@ -56,6 +56,11 @@ What changes on the extension's side is §9; here, the ways in.
   the popup in its frame, with the two entries — and the column's separate control-panel segment goes on those pages,
   since the logo now does what it did (the maintainer's ruling, 2026-09-24). The settings segment stays. On the HTML page
   nothing changes. **Inside the reader there is no floating button** (the maintainer: 「不出现」), as today.
+- **A browser the reader cannot run on**: PDF.js's modern build calls built-ins newer than the extension's floor
+  without a guard (Chrome 131 has none of them: measured 2026-09-25, Part 1's final review). There the reader is not
+  offered: arXiv's PDF stays in the browser's viewer with the floating button, and the popup's PDF entry is disabled without words,
+  as for a paper that cannot be had. `src/pdf-reader/support.ts` (`readerRuns`) decides; the modern build is kept for
+  every browser that has them.
 - **Leaving**: 在默认查看器中打开 closes the frame (the `axt-pdf-reader-close` message, its origin checked, as today); the
   browser's viewer is underneath, and the floating button comes with it.
 
@@ -440,8 +445,8 @@ was compiled.)
 - `src/entrypoints/pdf-reader/` (`index.html`, `main.tsx`, `App.tsx`), built by WXT with React and TypeScript.
   `pdf.content.ts` opens it in its frame with `?paper=<id>`; `web_accessible_resources` names it.
 - Its compile page stays where it is, on our static site, in an `iframe` (`?site=`), unchanged.
-- The demo papers stay reachable by address for the probes and the e2e checks (`?paper=<id>&demo`), never from the
-  interface.
+- The demo papers stay reachable by address for the probes and the e2e checks (`?paper=<id>` without `live=1`, the
+  probes' form since the prototype), never from the interface.
 
 ### 11.2 The engine, moved
 

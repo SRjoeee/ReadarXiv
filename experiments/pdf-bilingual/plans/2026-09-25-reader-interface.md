@@ -26,7 +26,8 @@ below (§n) are the design's.
 - PDF.js is `pdfjs-dist` **6.3.289**, exact.
 - The engine's behaviour is unchanged except where the design's §10 says, and except for the route its figure OCR takes
   (§11.2: the extension's own recogniser).
-- Chrome 131 is the floor (`minimum_chrome_version`); no polyfills, no cross-browser branches.
+- Chrome 131 is the floor (`minimum_chrome_version`); no polyfills, no cross-browser branches. The reader itself runs
+  only where PDF.js's modern build does (`readerRuns`, spec §2): elsewhere it is not offered (Part 1's final review).
 - The gate before each commit that ends a task: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`, judged by
   the exit code.
 - Commits are local; the stage goes out as one pull request when the last part is done (never `main`; merge commits).
@@ -1464,7 +1465,9 @@ EOF
 
 # Part 2: shared settings
 
-Written against the code as Part 1 left it (`acc1e6e7`). Its tasks continue Part 1's numbering.
+Written against the code as Part 1 left it (`acc1e6e7`), and revised after Part 1's final review (the three plan
+defects it found: a follow on every landing of the settings, a check built with `new Function`, which the extension's
+policy refuses, and the unreadable settings not checked). Its tasks continue Part 1's numbering.
 
 **What changes from the overview.** The `R` locale surface is filled in Part 3, with the components that show its words
 — strings nobody renders are dead weight. This part gives the interface one way to read and change the settings: the
@@ -1490,6 +1493,12 @@ session's own surface, the page's only writer, reached through the controller.
   and checked there.
 - **A change made in another tab**: the reader follows it without writing back, so two readers never echo each other's
   writes. Pinned in Task 10's browser check.
+- **A landing that changes nothing the reader shows** — where a link opens set in the popup, a pack looked up, the
+  defaults a refused write leaves in effect: the display and the sync stay as they are. Only what changed between the
+  settings before and after is followed, and never on a refused write (the surface's `onLanded` says which). Pinned in
+  Task 10's browser check.
+- **A display this visit holds**: once a failure has put the reader on the original (the translation's side has nothing
+  to show), a change of the settings does not take it back to an empty side; a display chosen in the reader does.
 - **An address that names a display or a sync mode** (the probes'): it holds for that page, whatever the settings say,
   and is never written. Pinned in Task 10.
 - **`CONFIG_VERSION` on another branch**: `next` may reach 19 first. The migration is written so that renumbering it at
@@ -1750,7 +1759,9 @@ EOF
 - Consumes: `displayOf`, `withDisplay`, `figuresShown` (Task 9); `Config['pdfReader']` (Task 8).
 - Produces: the session's `patchSettings(change: (latest: Config) => Config): void` and its event
   `{ type: 'settings'; config: Config }`; `ReaderState.settings: Config | null`; the controller's
-  `patchSettings(change)`. The address's `mode`, `sync` and `compositor=0` fix those for a probe's page.
+  `patchSettings(change)`. The address's `mode`, `sync` and `compositor=0` fix those for a probe's page. The session
+  follows a landing of the settings through the surface's `onLanded(config, from)` (`shared/surface-config.ts`,
+  `Landing`), comparing it with the settings before.
 
 - [ ] **Step 1: The failing tests** — in `tests/pdf-reader/controller.test.ts`, import `DEFAULT_CONFIG` from
   `@/config/schema`, add `patchSettings: vi.fn()` to `fakeSession()`, and add:
@@ -1822,9 +1833,11 @@ Expected: PASS, 13 tests.
      // The extension's settings as its popup and settings page have them (shared/surface-config.ts): each change a patch
      // on what storage holds when its turn comes, one after another, and a configuration that could not be read said so
      // (Codex on #297); a new interface language reloads the page, as it does the popup
-     const surface = createSurfaceConfig({ localeStale, reload: () => location.reload() })
+     /** the settings as they last landed; null until the first read */
+     let config = null
+     const surface = createSurfaceConfig({ localeStale, reload: () => location.reload(), onLanded: (next, from) => landed(next, from) })
      await new Promise(resolve => { const off = surface.subscribe(() => { if (surface.state().config) { off(); resolve() } }); surface.start() })
-     let config = surface.state().config
+     config = surface.state().config
      /** the display: the one the address names (a probe's page), else the one the settings ask for */
      let mode = MODES.includes(params.get('mode')) ? params.get('mode') : displayOf(config)
      function showMode() {
@@ -1851,15 +1864,19 @@ Expected: PASS, 13 tests.
      let translating = false
      /** the viewers exist: until then the settings are read as the viewers are made, and there is nothing to follow */
      let viewersMade = false
-     surface.subscribe(() => {
-       const next = surface.state().config
-       if (!next) return
-       const language = next.targetLanguage !== config.targetLanguage
+     /** the display this visit holds whatever the settings say: the original, once the translation's side had nothing to
+      *  show (fail); a display chosen in the reader lets it go */
+     let held = null
+     /** settings that landed (shared/surface-config.ts Landing): shown, and what changed followed. A refused write lands
+      *  the defaults, which the reader's own choices on screen outlive (final review) */
+     function landed(next, from) {
+       if (!config || from === 'first') return
+       const prev = config
        config = next
        showSettings()
-       if (language && translating) void writes.then(() => location.reload())
-       else if (viewersMade) followSettings()
-     })
+       if (next.targetLanguage !== prev.targetLanguage && translating) void writes.then(() => location.reload())
+       else if (viewersMade && from !== 'refused') followSettings(prev)
+     }
      let wantTranslation = null
      const translationWanted = new Promise(resolve => { wantTranslation = resolve })
      if (mode !== 'original') wantTranslation()
@@ -1878,13 +1895,14 @@ Expected: PASS, 13 tests.
        if (mode !== 'original') wantTranslation()
      }
      /** the display chosen in the reader */
-     export function setDisplay(next) { changeDisplay(next, true) }
-     /** the settings changed elsewhere — the popup, the settings page, another reader — or here: the display, the sync,
-      *  the highlight and figure text follow them; what the address names holds for its page */
-     function followSettings() {
-       if (!params.has('mode')) changeDisplay(displayOf(config), false)
+     export function setDisplay(next) { held = null; changeDisplay(next, true) }
+     /** the settings changed elsewhere — the popup, the settings page, another reader — or here: what changed of the
+      *  display and the sync is followed, the highlight and figure text as they now are; what the address names, and a
+      *  display this visit holds, stay (final review: a follow on every landing flipped them back) */
+     function followSettings(prev) {
+       if (!params.has('mode') && !held && displayOf(config) !== displayOf(prev)) changeDisplay(displayOf(config), false)
        const sync = config.pdfReader.sync ? 'same' : 'off'
-       if (!params.has('sync') && (syncMode === 'same' || syncMode === 'off') && sync !== syncMode) applySync(sync)
+       if (!params.has('sync') && config.pdfReader.sync !== prev.pdfReader.sync && (syncMode === 'same' || syncMode === 'off') && sync !== syncMode) applySync(sync)
        if (!config.reading.sentenceHighlight) light(null)
        followFigures()
      }
@@ -1929,7 +1947,8 @@ Expected: PASS, 13 tests.
   7. Replace `export function setFigures(on) { figuresOn = on; repaintFigures() }` with
      `export function setFigures(on) { void save(c => ({ ...c, image: { ...c.image, enabled: on } })) } // figure text on or off, in the settings; followFigures shows it`.
 
-  8. After `for (const side of sides) attach(side)`, add `viewersMade = true`.
+  8. After `for (const side of sides) attach(side)`, add `viewersMade = true`. In `live()`'s `fail`, where the
+     Translation display with nothing on its side goes to the original, set `held = 'original'` before `mode = 'original'`.
 
   9. In `harness`, add `get syncMode() { return syncMode },` beside `get readingLine()` (the browser check reads it).
 
@@ -1963,12 +1982,20 @@ const open = async (query = {}) => {
   return page
 }
 const state = page => page.evaluate(() => window.__reader.controller.getState())
-const patch = (page, change) => page.evaluate(src => window.__reader.controller.patchSettings(new Function('c', `return (${src})(c)`)), change)
+/**
+ * A change of the settings, as a plain object merged in the page one group deep: the extension's policy has no
+ * 'unsafe-eval', so no function can be sent (final review)
+ */
+const patch = (page, change) => page.evaluate(p => window.__reader.controller.patchSettings(c => {
+  const out = { ...c }
+  for (const [k, v] of Object.entries(p)) out[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...c[k], ...v } : v
+  return out
+}), change)
 const settle = page => page.waitForTimeout(700)
 
 // the display the settings ask for
 const a = await open()
-await patch(a, "c => ({ ...c, mode: 'only', pdfReader: { ...c.pdfReader, original: false } })")
+await patch(a, { mode: 'only', pdfReader: { original: false } })
 await settle(a)
 check('a change of the settings moves the display', (await state(a)).display === 'translation', (await state(a)).display)
 const b = await open()
@@ -1985,10 +2012,10 @@ await b.evaluate(() => window.__reader.controller.setDisplay('original'))
 await settle(b)
 const orig = (await state(b)).settings
 check('choosing the original marks it and keeps the mode', orig.pdfReader.original === true && orig.mode === 'side', `${orig.mode}, original ${orig.pdfReader.original}`)
-await patch(b, "c => ({ ...c, mode: 'stack', pdfReader: { ...c.pdfReader, original: false } })")
+await patch(b, { mode: 'stack', pdfReader: { original: false } })
 await settle(b)
 check('stacked shows side by side', (await state(b)).display === 'bilingual', (await state(b)).display)
-await patch(b, "c => ({ ...c, mode: 'stack', pdfReader: { ...c.pdfReader, original: true } })")
+await patch(b, { mode: 'stack', pdfReader: { original: true } })
 await settle(b)
 await b.evaluate(() => window.__reader.controller.setDisplay('bilingual'))
 await settle(b)
@@ -1996,7 +2023,7 @@ const kept = (await state(b)).settings
 check('side by side chosen with stacked stored keeps stacked', kept.mode === 'stack' && !kept.pdfReader.original, `${kept.mode}, original ${kept.pdfReader.original}`)
 
 // the sync follows its setting, and the reader's switch writes it
-await patch(b, "c => ({ ...c, pdfReader: { ...c.pdfReader, sync: false } })")
+await patch(b, { pdfReader: { sync: false } })
 await settle(b)
 check('the sync goes off with its setting', (await b.evaluate(() => window.__reader.debug.syncMode)) === 'off')
 await b.evaluate(() => window.__reader.controller.setSync(true))
@@ -2004,7 +2031,7 @@ await settle(b)
 check('the reader\'s switch writes it back', (await state(b)).settings.pdfReader.sync === true && (await b.evaluate(() => window.__reader.debug.syncMode)) === 'same')
 
 // the highlight and figure text follow their switches
-await patch(b, "c => ({ ...c, reading: { ...c.reading, sentenceHighlight: false }, image: { ...c.image, enabled: false } })")
+await patch(b, { reading: { sentenceHighlight: false }, image: { enabled: false } })
 await settle(b)
 const leftBox = await b.locator('#left').boundingBox()
 await b.mouse.move(leftBox.x + leftBox.width * 0.3, leftBox.y + leftBox.height * 0.5)
@@ -2012,7 +2039,7 @@ await b.waitForTimeout(300)
 check('no band with the highlight off', (await b.evaluate(() => document.querySelectorAll('.axt-hl').length)) === 0)
 await b.waitForTimeout(800)
 check('no figure text with the image switch off', (await b.evaluate(() => document.querySelectorAll('.axt-fig').length)) === 0)
-await patch(b, "c => ({ ...c, reading: { ...c.reading, sentenceHighlight: true }, image: { ...c.image, enabled: true } })")
+await patch(b, { reading: { sentenceHighlight: true }, image: { enabled: true } })
 await settle(b)
 
 // an address that names a display writes nothing, and holds it whatever the settings say
@@ -2020,9 +2047,31 @@ const stored = (await state(b)).settings.pdfReader.original
 const c = await open({ mode: 'original' })
 await settle(c)
 check('an address that names a display writes nothing', (await state(c)).settings.pdfReader.original === stored, `stored ${stored}, now ${(await state(c)).settings.pdfReader.original}`)
-await patch(c, "c => ({ ...c, mode: 'only', pdfReader: { ...c.pdfReader, original: false } })")
+await patch(c, { mode: 'only', pdfReader: { original: false } })
 await settle(c)
 check('and holds it whatever the settings say', (await state(c)).display === 'original', (await state(c)).display)
+
+// a change of something the reader does not show leaves the display and the sync as they are
+await b.evaluate(() => window.__reader.controller.setDisplay('translation'))
+await settle(b)
+await patch(a, { reading: { openIn: 'same-tab' } })
+await settle(b)
+check('a change of nothing it shows leaves the display', (await state(b)).display === 'translation', (await state(b)).display)
+
+// settings the extension cannot read: the display chosen here holds on screen, the writes dropped, nothing thrown
+const stored0 = await b.evaluate(() => chrome.storage.local.get('config').then(r => r.config))
+const errors = []
+b.on('pageerror', e => errors.push(e.message))
+await b.evaluate(c => chrome.storage.local.set({ config: { ...c, mode: 'nonsense' } }), stored0)
+await settle(b)
+check('unreadable settings are known', (await state(b)).settingsUnreadable === true)
+await b.evaluate(() => window.__reader.controller.setDisplay('bilingual'))
+await settle(b)
+check('unreadable settings: the display chosen holds', (await state(b)).display === 'bilingual', (await state(b)).display)
+check('unreadable settings: nothing thrown', errors.length === 0, errors.join('; '))
+await b.evaluate(c => chrome.storage.local.set({ config: c }), stored0)
+await settle(b)
+check('repaired settings are known', (await state(b)).settingsUnreadable === false)
 
 console.log(failed ? `${failed} failed` : 'all passed')
 await context.close()

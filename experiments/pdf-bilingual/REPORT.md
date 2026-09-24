@@ -1186,3 +1186,70 @@ Part 1 of `plans/2026-09-25-reader-interface.md`: the reader became the extensio
 
 - The probes reached the prototype's controls in more places than its markup names: the compositor's checkbox and the status line, besides the display buttons and the sync menu. They all go through `window.__reader` now: the controller, the session, and `status`.
 - The TeX Live container can be "Up" with its port unpublished: `curl` is refused while `docker ps` shows `8070/tcp` with no host side. `docker restart texlive-server` publishes it again.
+
+## Twenty-first addendum, 2026-09-25: Part 1's final review — FIXED
+
+A fresh review of Part 1's whole diff found no critical issue, six important ones and three defects in Part 2's plan. Each fix has a test that failed first. The browser checks ran on the build from before the fixes, where the six new checks of `cache-revisit.mjs` failed, and on the build after them.
+
+**The controller's phase follows what is on screen.** The state gains `shown`: none, this machine's copy, a draft being typeset, or the final. The phase now moves at named steps only:
+
+- loading until the cache has answered;
+- reading once a translation is on screen;
+- translating from the session's decision to translate, a new `translating` step that comes after the copy is shown and the language checked. It is "translating again" when a copy is being replaced, and its progress then counts from nothing.
+
+A failure while a translation is on screen leaves it readable: the phase is reading, and the failure is kept for the interface to mention. Before, a copy on screen passed through "translating" on every revisit. With no service able to check it, it stayed "translating" for good. When a key was refused while it was on screen, the state said "failed".
+
+`finalReady` follows `shown`: a copy or the final, not a draft.
+
+**Failures are the chain's error kinds.**
+
+- An engine that cannot run is reported by the reason the chain put it aside, if it put it aside. Otherwise a service of the reader's own is reported as "no key", since an LLM without one is the only reason it does not run, and a built-in engine as "unknown". Before, all three were reported as `unavailable`, which the popup's reasons do not word.
+- A run's failure keeps its kind. A key refused mid-run is now `auth`; before, it was `unknown`.
+- The controller turns any other kind into `unknown`.
+
+**A session that cannot load is a failure** the controller reports. Before, its state stayed "loading", and each queued command was another unhandled rejection.
+
+**Figure text recognition.**
+
+- The calls carry the reader's own scope, which the page withdraws when it goes: an extension page is no tab the background watches.
+- A PNG over the HTML page's 6 MB is not sent.
+- The PNG is base64-encoded with the browser's own `Uint8Array.prototype.toBase64`:
+
+| PNG | Script encoder (`image/run.ts`) | Native | Long task on the reader page, before → after |
+|---|---|---|---|
+| 0.7 MB | 14 ms | 0.2 ms | none → none |
+| 2.6 MB | 52 ms | 0.4 ms | 57 ms → none |
+| 5.9 MB | 133 ms | 1.0 ms | 144 ms → none |
+
+  After the change, the rest of the synchronous work is the message's serialisation, 1–10 ms. The HTML page's route uses the script encoder too, on a floor where the native one is not guaranteed; that is left to the HTML page.
+
+**Chrome 131, the extension's floor, cannot run the reader.** PDF.js 6.3.289's modern build calls these without a guard, and ships no polyfills:
+
+- `Map.prototype.getOrInsertComputed`, in its `EventBus` at every listener's registration;
+- `Math.sumPrecise`, `Uint8Array.fromBase64`, `toBase64` and `toHex`;
+- `RegExp.escape` and `Float16Array`.
+
+Chrome 131 has none of these; Chromium 153 has them all (measured in both). Now `readerRuns` (`src/pdf-reader/support.ts`) is checked before the reader is laid over a PDF. Where it is false, the PDF stays in the browser's viewer with the floating button. The modern build is kept for every browser that has them.
+
+`e2e:pdf` now also checks that the engine opened the paper, not only that the page was drawn:
+
+| Browser | Result |
+|---|---|
+| Chromium 153 | 19/19 |
+| Chrome 131 | 13/14. The reader stays away, as intended. The one failure is older than the reader: the check that Chrome's own viewer is left alone counts every `embed`, and Chrome 131's PDF page has its own `embed` with no extension installed (Chromium 153's has none). |
+
+**MEASURED after the fixes.**
+
+| Check | Result |
+|---|---|
+| `spikes/cache-revisit.mjs` | all passed, the controller's state now checked at every visit. The swap check (each side's page against its viewer's, after the right side was replaced) passed before the fixes too: the code was right, and now it is guarded. In the two-tab case one tab's final timed out while another browser check ran beside it; the record was still one and decrypted. |
+| `spikes/viewer-faults.mjs` | all passed |
+| `pnpm test` | 2241 passed (34 in `tests/pdf-reader/`) |
+
+**Seen, not fixed here.** A key refused mid-run leaves one unhandled rejection on the page (`invalid api key`), before the fixes and after. The run itself ends as it should. Part 4's stopping early (the design, §10.3) reworks that path.
+
+**Part 2's plan, revised.**
+
+- The session follows a landing of the settings through the surface's `onLanded`, and only what changed. It never follows on a refused write, and a display this visit holds (the original after a failure) outlives it. Before, the plan re-applied the display on every landing, including the defaults a refused write lands.
+- The browser check sends its changes as plain objects: the extension's policy has no `unsafe-eval`, and the plan's `new Function` would have thrown.
+- The browser check gains the unreadable-settings case and an unrelated change.
