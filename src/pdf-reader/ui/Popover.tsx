@@ -6,8 +6,10 @@
 // close (their key, `generation`)
 import { type ReactNode, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 
-export function usePopover(kind: 'menu' | 'listbox' | 'dialog') {
-  const raw = useId().replace(/[^\w-]/g, '')
+/** `name`: a fixed id for a popover another part of the page opens (the capsule's choose-language action); one per page */
+export function usePopover(kind: 'menu' | 'listbox' | 'dialog', name?: string) {
+  const auto = useId()
+  const raw = name ?? auto.replace(/[^\w-]/g, '')
   const id = `pop-${raw}`, anchor = `--pop-${raw}`
   const [open, setOpen] = useState(false)
   /** counts the closes: a key for contents that start afresh each time (a search, the active item) */

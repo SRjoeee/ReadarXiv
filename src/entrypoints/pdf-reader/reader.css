@@ -198,6 +198,28 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .indicator i { position: absolute; top: 0; width: 4px; height: var(--thumb, 40px); border-radius: 999px; background: color-mix(in oklab, var(--ink) 30%, transparent); transition: width 150ms ease-out, background-color 150ms; animation: thumb linear both; animation-timeline: --pane-y; }
   .indicator:hover i, .indicator[data-drag] i { width: 7px; background: color-mix(in oklab, var(--ink) 45%, transparent); cursor: grab; }
   .indicator[data-drag] i { cursor: grabbing; }
+  /* the status capsule (§6.6): fixed over the document area, above the pills, moved with it by the contents */
+  .capsule-slot { position: fixed; z-index: 7; inset: auto 0 58px 0; display: flex; justify-content: center; pointer-events: none; transition: left 200ms var(--ease); }
+  html[data-axt-contents] .capsule-slot { left: var(--side); }
+  .capsule { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 6px 0 12px; overflow: hidden; border-radius: 999px; white-space: nowrap; pointer-events: auto;
+    background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); color: var(--ink); font-size: 12.5px; animation: capsule-in 240ms var(--ease); }
+  .capsule[data-kind="progress"], .capsule[data-kind="narrow"] { padding-inline-end: 14px; }
+  .capsule[data-out] { animation: capsule-out 160ms ease-out forwards; pointer-events: none; }
+  .capsule svg { color: var(--ink-2); }
+  .capsule .fill { position: absolute; inset: 0; z-index: -1; background: color-mix(in oklab, var(--ink) 8%, transparent); transform-origin: 0 50%; transition: scale 600ms var(--ease); }
+  .capsule .words { animation: words-in 180ms ease-out; }
+  .capsule .chip { height: 24px; padding: 0 10px; border-radius: 999px; background: var(--fill); font-size: 12px; font-weight: 500; transition: scale 150ms; }
+  .capsule .chip:active { scale: 0.96; }
+  .capsule .close { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; color: var(--ink-3); }
+  .capsule .close:hover { background: var(--fill); color: var(--ink); }
+  /* the card (§6.6): centred in the translation's pane, which it covers (the pane marks itself: no relational selector in the sheet, §12) */
+  .pane[data-card] .viewerContainer { visibility: hidden; }
+  .card { position: absolute; z-index: 6; inset-block-start: 42%; inset-inline-start: 50%; translate: -50% -50%; width: min(300px, calc(100% - 48px)); padding: 22px 20px 18px; border-radius: 14px;
+    display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; background: var(--chrome); color: var(--ink); box-shadow: var(--pop-shadow); }
+  .card svg { color: var(--danger); }
+  .card p { margin: 0; font-size: 13px; font-weight: 500; text-wrap: balance; }
+  .card button { height: 30px; padding: 0 16px; border-radius: 8px; background: var(--ink); color: var(--chrome); font-weight: 500; transition: scale 150ms ease-out; }
+  .card button:active { scale: 0.96; }
 }
 @keyframes tip-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .tbtn, .tbtn:active { transition: none; scale: 1; } }
@@ -207,3 +229,11 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
 @media (width < 900px) { .pop .row.narrow-only { display: flex; } .pop .sep.narrow-only { display: block; } [data-zone="trail"] > .menu-btn { display: none; } }
 @keyframes thumb { from { translate: 0 0; } to { translate: 0 calc(var(--track, 100px) - var(--thumb, 40px)); } }
 @media (prefers-reduced-motion: reduce) { .pill, .indicator { transition: none; } }
+@keyframes capsule-in { from { opacity: 0; translate: 0 10px; scale: 0.96; } }
+@keyframes capsule-out { to { opacity: 0; translate: 0 6px; } }
+@keyframes words-in { from { opacity: 0; translate: 0 3px; } }
+@media (prefers-reduced-motion: reduce) {
+  @keyframes capsule-in { from { opacity: 0; } }
+  @keyframes capsule-out { to { opacity: 0; } }
+  @keyframes words-in { from { opacity: 0; } }
+}

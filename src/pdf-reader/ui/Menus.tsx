@@ -39,9 +39,10 @@ export function ZoomMenu({ controller }: { controller: ReaderController }) {
   )
 }
 
-export function LanguageMenu({ controller }: { controller: ReaderController }) {
+/** `name`: the toolbar's menu has one, so that the capsule's choose-language action can open it (usePopover) */
+export function LanguageMenu({ controller, name }: { controller: ReaderController; name?: string }) {
   const state = useReader(controller)
-  const pop = usePopover('listbox')
+  const pop = usePopover('listbox', name)
   const current = state.settings?.targetLanguage ?? ''
   return (
     <>

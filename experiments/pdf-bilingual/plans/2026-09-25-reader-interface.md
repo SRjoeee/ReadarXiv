@@ -1497,8 +1497,9 @@ session's own surface, the page's only writer, reached through the controller.
   defaults a refused write leaves in effect: the display and the sync stay as they are. Only what changed between the
   settings before and after is followed, and never on a refused write (the surface's `onLanded` says which). Pinned in
   Task 10's browser check.
-- **A display this visit holds**: once a failure has put the reader on the original (the translation's side has nothing
-  to show), a change of the settings does not take it back to an empty side; a display chosen in the reader does.
+- ~~**A display this visit holds**: once a failure has put the reader on the original (the translation's side has nothing
+  to show), a change of the settings does not take it back to an empty side; a display chosen in the reader does.~~
+  Removed in Part 3's Task 23: a failure no longer leaves its display; the card fills the translation's pane.
 - **An address that names a display or a sync mode** (the probes'): it holds for that page, whatever the settings say,
   and is never written. Pinned in Task 10.
 - **`CONFIG_VERSION` on another branch**: `next` may reach 19 first. The migration is written so that renumbering it at

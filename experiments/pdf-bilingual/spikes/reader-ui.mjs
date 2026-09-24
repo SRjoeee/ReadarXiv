@@ -195,6 +195,20 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.close()
 }
 
+// ---------------------------------------------------------------- Task 23: the states
+{
+  const page = await open({ mode: 'bilingual' }, { width: 800, height: 900 })
+  const s = await state(page)
+  const leftShown = () => page.evaluate(() => getComputedStyle(document.querySelector('.pane[data-side="left"]')).display !== 'none')
+  check('a narrow window: 对照 kept, the translation alone', s.display === 'bilingual' && s.narrow && !(await leftShown()), JSON.stringify({ display: s.display, narrow: s.narrow }))
+  check('…and the capsule says so', (await page.getByRole('status').textContent()).includes('窗口较窄'))
+  await shot(page, '23-narrow')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.waitForTimeout(600)
+  check('wide again: both sides', !(await state(page)).narrow && (await leftShown()))
+  await page.close()
+}
+
 console.log(failed ? `${failed} failed` : 'all passed')
 await context.close()
 process.exit(failed ? 1 : 0)

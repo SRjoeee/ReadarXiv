@@ -1,10 +1,13 @@
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReaderController, Side } from '@/pdf-reader/controller'
 import { type Appearance, applyAppearance, dimmed, themeOf } from '@/pdf-reader/ui/appearance'
+import { FailureCard } from '@/pdf-reader/ui/FailureCard'
 import { Outline } from '@/pdf-reader/ui/Outline'
 import { PagePill } from '@/pdf-reader/ui/PagePill'
 import { ScrollIndicator } from '@/pdf-reader/ui/ScrollIndicator'
 import { useScrollShow } from '@/pdf-reader/ui/scroll-show'
+import { cardOf } from '@/pdf-reader/ui/status'
+import { StatusCapsule } from '@/pdf-reader/ui/StatusCapsule'
 import { Toolbar } from '@/pdf-reader/ui/Toolbar'
 import { useReader } from '@/pdf-reader/ui/use-reader'
 
@@ -16,6 +19,15 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   const left = useRef<HTMLDivElement>(null)
   const right = useRef<HTMLDivElement>(null)
   const state = useReader(controller)
+  const doc = useRef<HTMLDivElement>(null)
+  // a document area under 840 px shows the translation alone in side by side (the design, §5); the session applies it
+  useEffect(() => {
+    const el = doc.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => { if (entry) controller.setNarrow(entry.contentRect.width < 840) })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [controller])
   useLayoutEffect(() => {
     if (!left.current || !right.current) return
     // a session that cannot open is in the controller's state (a failure); nothing is left to catch here
@@ -39,31 +51,40 @@ export function App({ controller, embedded }: { controller: ReaderController; em
     <>
       <Toolbar controller={controller} embedded={embedded} contents={contents} onContents={() => setContents(open => !open)} />
       <Outline controller={controller} open={contents} />
-      <div className="doc">
+      <div className="doc" ref={doc}>
         <Pane controller={controller} side="left" scroller={left} />
-        <Pane controller={controller} side="right" scroller={right} />
+        <Pane controller={controller} side="right" scroller={right} card={cardOf(state) !== null} />
       </div>
+      <StatusCapsule controller={controller} onChooseLanguage={chooseLanguage} />
     </>
   )
+}
+
+/** the capsule's choose-language action: the toolbar's language menu, or the reading options where it lives below 900 px (§5) */
+function chooseLanguage() {
+  const inBar = document.querySelector<HTMLElement>('[popovertarget="pop-language"]')
+  document.getElementById(inBar?.offsetParent ? 'pop-language' : 'pop-options')?.showPopover()
 }
 
 /**
  * One pane: the scroller the engine draws into (and owns: it replaces the right one as translations come), and what floats
  * over it, its page pill and its scroll indicator, shown while it scrolls without React rendering on a scroll
  */
-function Pane({ controller, side, scroller }: { controller: ReaderController; side: Side; scroller: RefObject<HTMLDivElement | null> }) {
+function Pane({ controller, side, scroller, card = false }: { controller: ReaderController; side: Side; scroller: RefObject<HTMLDivElement | null>; card?: boolean }) {
   const section = useRef<HTMLElement>(null)
   const pill = useRef<HTMLDivElement>(null)
   const indicator = useRef<HTMLDivElement>(null)
   const targets = useMemo<[RefObject<HTMLElement | null>, number][]>(() => [[pill, 2500], [indicator, 900]], [])
   useScrollShow(section, targets)
   return (
-    <section ref={section} className="pane" data-side={side}>
+    // data-card: the failure's card covers the pane's scroller (reader.css; no relational selector there, §12)
+    <section ref={section} className="pane" data-side={side} data-card={card || undefined}>
       <div className="viewerContainer" id={side} ref={scroller}>
         <div className="pdfViewer" />
       </div>
       <PagePill ref={pill} controller={controller} side={side} />
       <ScrollIndicator ref={indicator} controller={controller} side={side} />
+      {side === 'right' && <FailureCard controller={controller} />}
     </section>
   )
 }

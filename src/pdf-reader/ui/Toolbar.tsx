@@ -52,7 +52,7 @@ export function Toolbar({ controller, embedded, contents, onContents }: { contro
           </ToolbarButton>
         </div>
         <span className="divider" />
-        <LanguageMenu controller={controller} />
+        <LanguageMenu controller={controller} name="language" />
         <ServiceMenu controller={controller} />
         <ReadingOptions controller={controller} />
         <span className="divider" />

@@ -38,7 +38,7 @@ export interface ReaderState {
   settings: Config | null
   /** the paper: its id from the address, its title once known ('' until then, or when there is none) */
   paper: { id: string; title: string }
-  /** the window too narrow for two sides: side by side shows the translation alone (Task 23 sets it) */
+  /** the window too narrow for two sides: side by side shows the translation alone (setNarrow) */
   narrow: boolean
   /** the contents (outline.ts) */
   outline: OutlineEntry[]
@@ -76,7 +76,7 @@ export const INITIAL: ReaderState = {
 }
 
 /** the session's commands the controller passes on */
-export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage' | 'patchSettings' | 'pdfBytes' | 'goToUnit' | 'lead'>
+export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage' | 'patchSettings' | 'pdfBytes' | 'goToUnit' | 'lead' | 'retry' | 'setNarrow'>
 
 /** the runs that end without a translation because of the paper, or of the language: not failures a reader can retry */
 const CANNOT_BE_HAD = new Set(['no source'])
@@ -162,6 +162,10 @@ export interface ReaderController {
   goToPage(side: Side, page: number): void
   /** a change of the extension's settings, on top of what storage holds when its turn comes */
   patchSettings(change: (latest: Config) => Config): void
+  /** translate again what is missing (Part 3: the page starts again; Part 4 in place) */
+  retry(): void
+  /** the window too narrow for two sides, or wide enough again: told once per change */
+  setNarrow(on: boolean): void
   /** a side made the leading one, as a press in its pane makes it (a press on its scroll indicator) */
   lead(side: Side): void
   /** both sides shown taken to a heading from the contents */
@@ -216,6 +220,12 @@ export function createController({ open, params }: { open: (host: SessionHost) =
     patchSettings: change => later(s => s.patchSettings(change)),
     goToHeading: id => later(s => s.goToUnit(id)),
     lead: side => later(s => s.lead(side)),
+    retry: () => later(s => s.retry()),
+    setNarrow(on) {
+      if (state.narrow === on) return
+      set({ narrow: on })
+      later(s => s.setNarrow(on))
+    },
     async download(which) {
       const s = await session
       const bytes = await s?.pdfBytes(which)

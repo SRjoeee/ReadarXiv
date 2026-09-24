@@ -14,7 +14,7 @@ const APPEARANCES = ['light', 'dark', 'system'] as const
 
 export function ReadingOptions({ controller }: { controller: ReaderController }) {
   const state = useReader(controller)
-  const pop = usePopover('dialog')
+  const pop = usePopover('dialog', 'options')
   const config = state.settings
   if (!config) return null
   const names = { light: R.options.light, dark: R.options.dark, system: R.options.system }

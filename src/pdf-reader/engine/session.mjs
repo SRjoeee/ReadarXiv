@@ -111,9 +111,6 @@ export function patchSettings(change) { void save(change) }
 let translating = false
 /** the viewers exist: until then the settings are read as the viewers are made, and there is nothing to follow */
 let viewersMade = false
-/** the display this visit holds whatever the settings say: the original, once the translation's side had nothing to
- *  show (fail); a display chosen in the reader lets it go */
-let held = null
 /** settings that landed (shared/surface-config.ts Landing): shown, and what changed followed (settings.ts followOf),
  *  the highlight and figure text as they now are. A refused write lands the defaults, which the reader's own choices on
  *  screen outlive: nothing is followed, not even a target language the defaults name (Part 2's final review) */
@@ -123,7 +120,7 @@ function landed(next, from) {
   config = next
   showSettings()
   if (!viewersMade || from === 'refused') return
-  const follow = followOf(prev, next, from, { translating, addressDisplay: MODES.includes(params.get('mode')), addressSync: SYNC_MODES.includes(params.get('sync')), held: held != null, display: mode, syncMode })
+  const follow = followOf(prev, next, from, { translating, addressDisplay: MODES.includes(params.get('mode')), addressSync: SYNC_MODES.includes(params.get('sync')), display: mode, syncMode })
   if (follow.reload) { void writes.then(() => location.reload()); return }
   if (follow.display) changeDisplay(follow.display, false)
   if (follow.sync) applySync(follow.sync)
@@ -149,7 +146,7 @@ function changeDisplay(next, write) {
   if (mode !== 'original') whenVisible(wantTranslation)
 }
 /** the display chosen in the reader */
-export function setDisplay(next) { held = null; changeDisplay(next, true) }
+export function setDisplay(next) { changeDisplay(next, true) }
 
 // ---------------------------------------------------------------- the two viewers
 function makeSide(container) {
@@ -757,7 +754,7 @@ function pointerAnchor(side) {
 /** the scroll ended on the driver: the other side glides so that the content the driver is levelled by stands at the
  *  same height on both; at either end of the driver's document, the other side goes to the same end */
 function alignTop(side) {
-  if (!together() || mode !== 'bilingual' || side !== driver || !left.anchors.size || !right.anchors.size) return
+  if (!together() || !bothShown() || side !== driver || !left.anchors.size || !right.anchors.size) return
   bake()
   const to = other(side), dc = side.container, tc = to.container, D = dc.scrollTop
   const most = tc.scrollHeight - tc.clientHeight
@@ -801,7 +798,7 @@ function stopSpring() { if (follow.spring) cancelAnimationFrame(follow.spring); 
 // input events that tell a scroll has begun reach the page after the compositor has taken its first steps.
 const CAN_COMPOSIT = typeof ScrollTimeline === 'function'
 let compositing = CAN_COMPOSIT && params.get('compositor') !== '0' // a probe's page can ask for the follower by script
-const onCompositor = () => compositing && together() && mode === 'bilingual'
+const onCompositor = () => compositing && together() && bothShown()
 /** the follower's motion under way: `anim` the transform, `kind` 'scroll' (bound to `from`, the driver) or 'glide',
  *  `side` the follower, `shift()` how far the transform shows it from its scrollTop, down positive */
 const glass = { anim: null, kind: null, side: null, from: null, shift: null }
@@ -934,7 +931,7 @@ function syncFrom(side) {
     if (glass.side === side) { drop(); rebase(); arm() } else if (together()) rebase()
     return
   }
-  if (syncMode === 'off' || mode !== 'bilingual' || side !== driver || !left.anchors.size || !right.anchors.size) return
+  if (syncMode === 'off' || !bothShown() || side !== driver || !left.anchors.size || !right.anchors.size) return
   // a scroll under way, its rest's wait begun again: here, with the event, since the scroll's end comes in the same
   // frame as its last step, before a frame's callback would run
   if (together()) { clearTimeout(follow.rest); follow.rest = 0; follow.moving = true }
@@ -950,6 +947,8 @@ function syncFrom(side) {
 }
 /** whether a side's pane is in the display: a hidden one has no width, and a page-width scale there comes out negative */
 const shown = side => side.container.clientWidth > 0
+/** both sides are in the display: side by side, the window wide enough for them (setNarrow) */
+const bothShown = () => mode === 'bilingual' && !narrow
 /**
  * The display changed: the viewers now shown are laid out again at their pane's width, and a side coming into view
  * opens where the other one was being read, by the table the sync scrolls with
@@ -981,7 +980,7 @@ const READING_WIDTH = 1060
 /** the scale that fits a side's pages to its pane, never beyond a reading width while one side alone is shown */
 function fitWidth(side) {
   const view = side.viewer.getPageView(0)?.pdfPage?.view
-  if (!view || mode === 'bilingual' && !narrow) return 'page-width'
+  if (!view || bothShown()) return 'page-width'
   const cap = READING_WIDTH / ((view[2] - view[0]) * (96 / 72))
   return side.container.clientWidth - 40 > READING_WIDTH ? cap : 'page-width'
 }
@@ -1002,7 +1001,7 @@ function relayout(from, place = null) {
 /** the current design's settle: the paragraph at the reading line brought level on the other side, at the same place
  *  within it, 160 ms after the last scroll */
 function settle(side) {
-  if (syncMode !== 'current' || mode !== 'bilingual' || side !== driver) return
+  if (syncMode !== 'current' || !bothShown() || side !== driver) return
   const c = side.container, y = c.scrollTop + c.clientHeight * readingLine
   // the page at the reading line, and the pointer's place across it (the first column when the pointer is away)
   let page = 1
@@ -1089,7 +1088,7 @@ let lastAlign = null // how the last click was levelled, for the test harness
 async function alignClick(from, event) {
   // with one document shown there is no other side to level: the hidden one has no scroll range, and the correction
   // meant for it would move the one being read (Codex on #297)
-  if (mode !== 'bilingual') return
+  if (!bothShown()) return
   bake()
   const to = other(from), c = from.container, y = event.clientY - c.getBoundingClientRect().top
   const hit = hitAt(from, event)
@@ -1323,6 +1322,18 @@ function reportOutline() {
   readingHeading = undefined
   reportHeading()
 }
+/** again (the reader's design, §8): the translations made come back from the cache and the missing are asked again. A
+ *  reload in Part 3 of plans/2026-09-25-reader-interface.md; Part 4 retries in place, with stopping early (§10.3) */
+export function retry() { location.reload() }
+/** a window too narrow for two sides (§5): side by side shows the translation alone, the sync idle while it does */
+export function setNarrow(on) {
+  if (narrow === on) return
+  const place = on ? null : readingPlace(right)
+  bake()
+  narrow = on
+  document.documentElement.toggleAttribute('data-axt-narrow', on)
+  if (mode === 'bilingual') relayout(on ? 'bilingual' : 'translation', place)
+}
 /** a side made the leading one, as a press in its pane makes it: a press on its scroll indicator (the reader's design, §6.5) */
 export function lead(which) { const s = which === 'left' ? left : right; take(s); arm() }
 /** the heading being read: the last one whose top is above the reading line on the side read (the translation's when
@@ -1355,7 +1366,7 @@ export function goToUnit(id) {
   take(lead)
   lead.container.scrollTop = top - 28
   const second = other(lead)
-  if (!(mode === 'bilingual' && !narrow && together()) && second.doc && shown(second)) {
+  if (!(bothShown() && together()) && second.doc && shown(second)) {
     const there = unitDocTop(second, id)
     if (there != null) put(second.container, there - 28)
   }
@@ -1470,8 +1481,7 @@ async function live() {
   const fail = (event, text, kind) => {
     host.emit({ type: 'fail', event, text, kind })
     setContext({}); note(event); status(text); L.done = true; L.failed = text
-    // the Translation display with nothing on its side would be blank: the original, for this visit (Codex on #297)
-    if (mode === 'translation' && !right.doc) { held = 'original'; mode = 'original'; showMode(); relayout('translation') }
+    // a failure stays in its display: with nothing translated, the card fills the translation's pane (the reader's design, §8)
   }
   // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
   // told at once

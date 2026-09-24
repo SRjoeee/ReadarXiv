@@ -130,7 +130,7 @@ describe('reduce: the session events folded into the reader state', () => {
   })
 })
 
-const fakeSession = (): Session => ({ setDisplay: vi.fn(), setSyncMode: vi.fn(), setCompositor: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), patchSettings: vi.fn(), pdfBytes: vi.fn(async () => null), goToUnit: vi.fn(), lead: vi.fn() })
+const fakeSession = (): Session => ({ setDisplay: vi.fn(), setSyncMode: vi.fn(), setCompositor: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), patchSettings: vi.fn(), pdfBytes: vi.fn(async () => null), goToUnit: vi.fn(), lead: vi.fn(), retry: vi.fn(), setNarrow: vi.fn() })
 const panes = () => ({ left: document.createElement('div'), right: document.createElement('div') })
 
 describe('createController', () => {
@@ -212,6 +212,17 @@ describe('createController', () => {
     expect(controller.getState().zoom).toBe('page-fit')
     controller.zoomBy(1.1)
     expect(controller.getState().zoom).toBeNull()
+  })
+
+  it('knows the window is narrow once told, and tells the session once', async () => {
+    const session = { ...fakeSession(), setNarrow: vi.fn() }
+    const controller = createController({ open: async () => session, params: new URLSearchParams() })
+    await controller.attach(panes())
+    controller.setNarrow(true)
+    controller.setNarrow(true)
+    await Promise.resolve()
+    expect(controller.getState().narrow).toBe(true)
+    expect(session.setNarrow).toHaveBeenCalledOnce()
   })
 
   it('stops telling a listener that unsubscribed', async () => {
