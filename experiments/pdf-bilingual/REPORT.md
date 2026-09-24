@@ -661,6 +661,12 @@ Checks, on 2608.02163 in Chromium:
 - the translation alone, and the language switch;
 - the zoom through all three displays.
 
+Two faults the review of #297 found, measured and fixed (`spikes/viewer-faults.mjs`, which failed first):
+- **Straight between Original and Translation, the other side opened at the paper's top**, both ways: the original at 0.60 of its length, the translation shown at 0.00. The display hides the side left before the place is read, and a hidden side's scroll offset and its pages' offsets are all 0. The place is now read while the side is still shown, as the unit at the reading line and the place within it, and the side brought in is put there: 0.15 → 0.13 and 0.80 → 0.79 on 2608.02163, by the unit. Where no unit is located, as on its references and appendix, the place goes by its share of the document.
+- **The Translation display with no service able to answer was blank**: the original hidden, nothing on the translation's side. It now falls back to the original for that visit, the choice kept.
+
+Two concerns of the same review were measured and are not faults: the Original display finishes loading, and embedded in a page its frame fires `load`, though the translation waits for a click; and the loss count reads the last TeX pass alone (poc-site's BusyTeX empties every earlier pass's log, and xdvipdfmx's step reads none).
+
 ## Fourteenth addendum, 2026-09-23: three faults found reading 2608.02163
 
 The owner, reading 2608.02163 in the reader, found three faults:
