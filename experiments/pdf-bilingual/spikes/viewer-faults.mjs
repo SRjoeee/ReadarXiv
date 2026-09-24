@@ -1,6 +1,6 @@
 // The viewer where the review of #297 said it goes wrong, in the browser: the Original display finishing its load, the
-// reading place kept when the display goes straight between Original and Translation, and a Translation display with no
-// service able to answer and no copy on this machine. Local corpus, the TeX Live file server on :8070.
+// reading place kept when the display goes straight between Original and Translation, a link out of the paper, and a
+// Translation display with no service able to answer and no copy on this machine. Local corpus, the TeX Live file server on :8070.
 //   node spikes/viewer-faults.mjs [paper]
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
@@ -79,7 +79,23 @@ const left3 = await place('left'), by3 = await page.evaluate(() => window.__read
 check('Translation → Original keeps the reading place', Math.abs(left3 - right2) < 0.1, `the translation at ${right2.toFixed(2)}, the original shown at ${left3.toFixed(2)}; by ${JSON.stringify(by3)}`)
 check('… by the unit at the reading line', by3?.id != null)
 
-// 3. the Translation display with no service able to answer and no copy: the page is not blank (Codex on #297)
+// 3. a link out of the paper opens in a new tab, not in the reader's own frame, which on arXiv's PDF page is the reader
+//    laid over it (Devin on #297): the first one found on the pages drawn as the original is scrolled through
+await choose('bilingual')
+await page.waitForTimeout(800)
+const link = await page.evaluate(async () => {
+  const c = window.__reader.debug.left.container
+  for (let i = 0; i <= 40; i++) {
+    const a = document.querySelector('.annotationLayer a[href^="http"]')
+    if (a) return { href: a.href, target: a.target, rel: a.rel }
+    c.scrollTop = (c.scrollHeight - c.clientHeight) * (i / 40)
+    await new Promise(done => setTimeout(done, 250))
+  }
+  return null
+})
+check('a link out of the paper opens in a new tab', link?.target === '_blank', JSON.stringify(link))
+
+// 4. the Translation display with no service able to answer and no copy: the page is not blank (Codex on #297)
 const options = await openOptions(context, id)
 console.log('keyless service:', await addService(options, { name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' }))
 await setSwitch(options, '出问题时自动改用免费服务', false)

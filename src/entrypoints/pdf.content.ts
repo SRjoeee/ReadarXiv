@@ -58,8 +58,10 @@ async function openReader(id: string, closed: () => void): Promise<boolean> {
   Object.assign(frame.style, { position: 'fixed', inset: '0', width: '100%', height: '100%', border: '0', zIndex: '2147483647', background: '#e9e9ec' })
   document.documentElement.append(frame)
   frame.focus()
+  // the reader's own page alone takes it away: a page its frame has been sent to has another origin (Devin on #297)
+  const origin = new URL(url).origin
   const onMessage = (e: MessageEvent) => {
-    if (e.source !== frame.contentWindow || (e.data as { type?: unknown } | null)?.type !== 'axt-pdf-reader-close') return
+    if (e.source !== frame.contentWindow || e.origin !== origin || (e.data as { type?: unknown } | null)?.type !== 'axt-pdf-reader-close') return
     removeEventListener('message', onMessage)
     frame.remove()
     closed()

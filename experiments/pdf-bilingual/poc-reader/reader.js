@@ -23,7 +23,7 @@ import { unpackSource } from './tar.mjs'
 // the viewer components read the core library from this global
 globalThis.pdfjsLib = pdfjsLib
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./lib/pdf.worker.min.mjs', import.meta.url).href
-const { EventBus, PDFLinkService, PDFViewer } = await import('./lib/pdf_viewer.mjs')
+const { EventBus, LinkTarget, PDFLinkService, PDFViewer } = await import('./lib/pdf_viewer.mjs')
 
 const PAPERS = ['2608.04322', '2608.00055']
 const params = new URLSearchParams(location.search)
@@ -147,7 +147,9 @@ if (EMBEDDED) {
 // ---------------------------------------------------------------- the two viewers
 function makeSide(container) {
   const eventBus = new EventBus()
-  const linkService = new PDFLinkService({ eventBus })
+  // a link out of the paper opens in a new tab: in this frame it would replace the reader, which on arXiv's PDF page is
+  // laid over the page (Devin on #297)
+  const linkService = new PDFLinkService({ eventBus, externalLinkTarget: LinkTarget.BLANK })
   const viewer = new PDFViewer({ container, eventBus, linkService, textLayerMode: 1, removePageBorders: false })
   linkService.setViewer(viewer)
   // figs: each page's figures being laid (paintFigures), and figGen the latest call's number, by page; frames: a draft
