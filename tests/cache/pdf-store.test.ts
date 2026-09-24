@@ -13,7 +13,7 @@ const pdfOf = (size: number, fill = 7) => {
 }
 const body = (digest: string, extra: Partial<PdfRecordBody> = {}): PdfRecordBody => ({
   digest, lang: 'zh-CN', paper: digest, engine: 'e', format: 'tags', pipeline: '2', context: {},
-  units: [{ kind: 'para', src: 's', hash: 'h', state: 'whole', by: 'B', tried: 'B' }], marks: [], figures: [], ...extra,
+  units: [{ kind: 'para', src: 's', hash: 'h', state: 'whole', by: 'B', tried: 'B' }], marks: [], rightMarks: [], figures: [], ...extra,
 })
 
 describe('createPdfStore', () => {
@@ -91,9 +91,9 @@ describe('createPdfStore', () => {
   it('patchFigures changes the figures alone; usage and clear', async () => {
     const s = createPdfStore({ db: dbOf() })
     await s.put({ ...body('d'), pdf: pdfOf(100) }, now)
-    await s.patchFigures('d', 'zh-CN', [{ format: 'tags', wire: 'w', text: 't', by: 'B' }])
+    await s.patchFigures('d', 'zh-CN', [{ key: '["w"]', texts: ['t'], by: 'B' }])
     const got = await s.get('d', 'zh-CN')
-    expect(got?.figures).toEqual([{ format: 'tags', wire: 'w', text: 't', by: 'B' }])
+    expect(got?.figures).toEqual([{ key: '["w"]', texts: ['t'], by: 'B' }])
     expect(got?.pdf).toEqual(pdfOf(100))
     expect((await s.usage()).count).toBe(1)
     await s.clear()

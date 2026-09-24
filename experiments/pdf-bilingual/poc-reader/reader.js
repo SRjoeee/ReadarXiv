@@ -17,7 +17,7 @@ import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { verified, VERIFIED } from './scripts.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { appearanceRule, createPdfStore, createSurfaceConfig, isCurrent, LANG_CODE_TO_LOCALE_NAME, lookOf, toBcp47 } from './lib/axt/extension.mjs'
-import { decideWrite, digestOf, figureKey, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { decideWrite, digestOf, figureKeyOf, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { isName, plainSource, WIRE } from './mt.mjs'
 import { unpackSource } from './tar.mjs'
 
@@ -276,7 +276,7 @@ let unitKind = new Map()
 const pdfCache = createPdfStore()
 let cached = null
 /**
- * The figures' texts translated, figureKey(format, wire) → { format, wire, text, by }: seeded from a copy and kept in
+ * The figures' boxes translated, figureKeyOf(their texts) → { key, texts, by }: seeded from a copy and kept in
  * its record. A copy's own are shown whatever identity made them, and replaced when the current engine's come
  */
 let figureEntries = new Map()
@@ -331,7 +331,7 @@ async function recognise(page, id) {
   if (reply.error) console.warn('[ocr]', reply.error)
   return reply.lines ?? []
 }
-const translated = new Map() // figureKey(format, wire) → a figure's translation, a Promise while it is out
+const translated = new Map() // figureKeyOf(boxes' texts) → their translations, a Promise while they are out
 /**
  * A figure's boxes → their translations, null for a box left as it is. A figure's boxes go as one text with a
  * placeholder between them, in the chain's wire format, so that each is translated in the figure's context (alone, a
@@ -341,37 +341,48 @@ const translated = new Map() // figureKey(format, wire) → a figure's translati
 async function translateBoxes(boxes) {
   const todo = boxes.map((b, i) => i).filter(i => isTranslatable(boxes[i].text))
   const out = boxes.map(() => null)
-  // the engine when one answers; while none does, a copy's own entries in its format are all there is
+  // the engine when one answers; while none does, a copy's own entries are all there is
   const engine = await theEngine().catch(() => null)
-  const format = engine?.format ?? cached?.format
-  if (!format) return out
-  const context = await paperCtx
-  const send = wire => {
-    const key = figureKey(format, wire), known = figureEntries.get(key)
-    if (known && (!engine || known.by === engine.identity)) return Promise.resolve(known.text)
-    if (!engine) return Promise.resolve(null)
-    if (!translated.has(key)) translated.set(key, engine.translate([wire], context).then(r => {
-      const got = r[0]
-      if (!got) return known?.text ?? null
-      figureEntries.set(key, { format, wire, text: got.text, by: got.by })
+  const context = engine ? await paperCtx : null
+  /**
+   * Boxes' texts → their translations, one per box, null where one did not come back. From the entry kept for these
+   * texts, whatever engine or wire format made it, shown until the current engine's replaces it and kept if that
+   * fails (REPORT, eighteenth addendum); else from the engine, by `make` → { texts, by } or null
+   */
+  const ask = (texts, make) => {
+    const key = figureKeyOf(texts), known = figureEntries.get(key)
+    if (known && (!engine || known.by === engine.identity)) return Promise.resolve(known.texts)
+    if (!engine) return Promise.resolve(known?.texts ?? null)
+    if (!translated.has(key)) translated.set(key, make().then(got => {
+      if (!got) return known?.texts ?? null
+      figureEntries.set(key, { key, texts: got.texts, by: got.by })
       saveFiguresSoon()
-      if (known && known.text !== got.text) repaintFiguresSoon()
-      return got.text
-    }).catch(() => known?.text ?? null))
-    // an old label is shown until the current engine's replaces it, and stays if that fails (REPORT, eighteenth addendum)
-    return known ? Promise.resolve(known.text) : translated.get(key)
+      if (known && JSON.stringify(known.texts) !== JSON.stringify(got.texts)) repaintFiguresSoon()
+      return got.texts
+    }).catch(() => known?.texts ?? null))
+    return known ? Promise.resolve(known.texts) : translated.get(key)
   }
+  const one = wire => engine.translate([wire], context).then(r => r[0])
   const single = []
   for (let k = 0; k < todo.length; k += 40) {
-    const chunk = todo.slice(k, k + 40)
-    const wire = chunk.length > 1 && blockWire(chunk.map(i => boxes[i].text), format)
-    if (!wire) { single.push(...chunk); continue }
-    const got = await send(wire)
-    const parts = got && splitBlock(got, chunk.length, format)
+    const chunk = todo.slice(k, k + 40), texts = chunk.map(i => boxes[i].text)
+    if (chunk.length < 2) { single.push(...chunk); continue }
+    const parts = await ask(texts, async () => {
+      const wire = blockWire(texts, engine.format)
+      const got = wire && (await one(wire))
+      const split = got && splitBlock(got.text, chunk.length, engine.format)
+      return split ? { texts: split, by: got.by } : null
+    })
     if (parts) chunk.forEach((i, j) => { out[i] = parts[j] }); else single.push(...chunk)
   }
-  const { run, unrun } = WIRE[format]
-  await Promise.all(single.map(async i => { const got = await send(run(boxes[i].text)); out[i] = got == null ? null : unrun(got) }))
+  await Promise.all(single.map(async i => {
+    const got = await ask([boxes[i].text], async () => {
+      const { run, unrun } = WIRE[engine.format]
+      const r = await one(run(boxes[i].text))
+      return r ? { texts: [unrun(r.text)], by: r.by } : null
+    })
+    out[i] = got?.[0] ?? null
+  }))
   return out
 }
 // A figure on a translation page — in arXiv's PDF shown there until the first preview, in a preview, in the final — is
@@ -1179,7 +1190,9 @@ const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
 async function anchorSide(side, texts, marks) {
   const pages = await textPages(side.doc)
   const doc = tokenizeDocument(pages)
-  const bounds = boundsFromMarks(doc, marks ?? (await pdfMarks(side.doc)))
+  // the marks it went by, kept on the side: a cached copy keeps the right side's, which cost a second to read from its PDF
+  side.marks = marks ?? (await pdfMarks(side.doc))
+  const bounds = boundsFromMarks(doc, side.marks)
   index(side, anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(unitKind.get(id)) }))
   return bounds.size
 }
@@ -1259,26 +1272,29 @@ async function marksOfPdf(bytes) {
   try { return markWords(tokenizeDocument(await textPages(doc)), await pdfMarks(doc)) } finally { task.destroy() }
 }
 /** the test harness's hooks (spikes/*): the sides, the anchoring's and the sync's helpers, the cache's; getters stay live */
-const harness = () => ({ left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()) })
+const harness = () => ({ left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()) })
 /**
  * A copy from this machine shown (REPORT, eighteenth addendum): the paper's state from the record rather than the
  * source — the figures' context, the prose names are told by, the units' kinds, the figures' entries — then the
  * translation opened and both sides anchored, as the demo does
  */
-async function showCached(record, setContext) {
+async function showCached(record, setContext, note = () => {}) {
   prose = record.units.map(u => u.src).join('\n')
   unitKind = new Map(record.units.map((u, i) => [i, u.kind]))
   setContext(record.context)
-  figureEntries = new Map(record.figures.map(f => [figureKey(f.format, f.wire), f]))
+  figureEntries = new Map(record.figures.map(f => [f.key, f]))
   const url = URL.createObjectURL(new Blob([record.pdf], { type: 'application/pdf' }))
   try {
     const laid = new Promise(resolve => right.eventBus.on('pagesinit', resolve, { once: true }))
     await open(right, url)
+    note('cached opened')
     await laid
+    // shown: its pages laid out and drawing; the anchors, which the highlight and the sync need, follow
+    note('shown cached')
     if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true })
     await Promise.all([
-      anchorSide(left, record.units.map((u, i) => ({ id: i, text: u.src })), new Map(record.marks)),
-      anchorSide(right, record.units.map((u, i) => ({ id: i, text: u.tr ?? u.src }))),
+      anchorSide(left, record.units.map((u, i) => ({ id: i, text: u.src })), new Map(record.marks)).then(() => note('cached left anchored')),
+      anchorSide(right, record.units.map((u, i) => ({ id: i, text: u.tr ?? u.src })), record.rightMarks?.length ? new Map(record.rightMarks) : undefined).then(() => note('cached right anchored')),
     ])
   } finally { URL.revokeObjectURL(url) }
   invalidate(); paint(left); paint(right)
@@ -1323,10 +1339,9 @@ async function live() {
     note('cache hit', { engine: cached.engine, pipeline: cached.pipeline })
     // opened, whatever follows: the least recently opened go first (a run that writes nothing would not say so)
     void pdfCache.touch(digest, lang0)
-    await showCached(cached, setContext)
+    await showCached(cached, setContext, note)
     total = cached.units.filter(u => u.state !== 'kept').length; got = total
     window.__reader.debug = Object.assign(harness(), { units: cached.units.map((u, i) => ({ i, kind: u.kind, text: u.src })) })
-    note('shown cached')
     window.__reader.ready = true
   }
   status('Asking the extension which service translates…')
@@ -1414,7 +1429,7 @@ async function live() {
       const d = top - (c.scrollTop + c.clientHeight * readingLine)
       return d >= -c.clientHeight * 0.3 ? Math.abs(d) : 2 * Math.abs(d)
     },
-    onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; swaps = swaps.then(async () => { if (!leftCurrent) { adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
+    onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!leftCurrent) { adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
     onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorSide(left, src, marks); invalidate(); paint(left); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
   }).catch(e => ({ error: e.message ?? String(e) }))
   if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`)
@@ -1422,9 +1437,11 @@ async function live() {
   // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
   // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
   if (cacheKey) {
-    const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, context, units: unitsOf(units, paperData.kept, hashes, result.results), marks: leftMarks ?? (sameUnits ? cached.marks : []), figures: [...figureEntries.values()] }
+    const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, context, units: unitsOf(units, paperData.kept, hashes, result.results), marks: leftMarks ?? (sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
     const how = decideWrite({ result, cached, units: record.units })
     const pdf = how === 'full' ? finalPdf : how === 'provenance' ? cached.pdf : null
+    // the right side's marks, as its PDF names them: the final's once it is on screen, else the copy's own
+    record.rightMarks = how === 'full' ? [...(right.marks ?? [])] : (cached?.rightMarks ?? [])
     if (pdf) {
       const now = { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION }
       note('cache write', { how, written: await pdfCache.put({ ...record, pdf }, now) })

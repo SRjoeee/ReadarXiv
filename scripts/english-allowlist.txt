@@ -10,6 +10,7 @@ experiments/pdf-bilingual/poc-reader/reader.js 3  # 2026-09-22: engine outputs q
 experiments/pdf-bilingual/spikes/anchors-cases.mjs 2  # 2026-09-23: a Chinese heading and the paragraphs around it, the input of a case
 experiments/pdf-bilingual/spikes/align-tex.mjs 2  # 2026-09-22: the CJK ranges of the tokenizer's regexes
 experiments/pdf-bilingual/spikes/busytex.mjs 1  # 2026-09-22: a Chinese sentence to compile
+experiments/pdf-bilingual/spikes/cache-revisit.mjs 1  # 2026-09-24: the settings page's label the check turns the fallback chain off by (the e2e locate controls by their Chinese labels)
 experiments/pdf-bilingual/spikes/eval-context.mjs 1  # 2026-09-22: the CJK punctuation the comparison ignores
 experiments/pdf-bilingual/spikes/eval-join-google.mjs 1  # 2026-09-22: the CJK punctuation the comparison ignores
 experiments/pdf-bilingual/spikes/eval-names.mjs 1  # 2026-09-22: the CJK punctuation the comparison ignores

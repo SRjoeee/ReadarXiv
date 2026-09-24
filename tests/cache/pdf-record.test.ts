@@ -3,7 +3,7 @@ import { MIXED, atLeastAsGood, isCurrent, unitIsCurrent, type CachedUnit, type P
 
 const now = { identity: 'B', pipeline: '2' }
 const unit = (u: Partial<CachedUnit>): CachedUnit => ({ kind: 'para', src: 's', hash: 'h', state: 'whole', by: 'B', tried: 'B', ...u })
-const record = (units: CachedUnit[], extra: Partial<PdfRecordBody> = {}): PdfRecordBody => ({ digest: 'd', lang: 'zh-CN', paper: 'p', engine: 'e', format: 'tags', pipeline: '2', context: {}, units, marks: [['1s', {}]], figures: [], ...extra })
+const record = (units: CachedUnit[], extra: Partial<PdfRecordBody> = {}): PdfRecordBody => ({ digest: 'd', lang: 'zh-CN', paper: 'p', engine: 'e', format: 'tags', pipeline: '2', context: {}, units, marks: [['1s', {}]], rightMarks: [], figures: [], ...extra })
 
 describe('unitIsCurrent', () => {
   it('a whole unit by the identity it was made under; a mixed one never', () => {

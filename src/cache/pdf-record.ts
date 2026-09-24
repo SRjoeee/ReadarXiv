@@ -26,11 +26,14 @@ export interface CachedUnit {
   state: UnitState
 }
 
-/** A figure's text translated, keyed by the wire format and the wire text it was sent in */
+/**
+ * A figure's boxes translated: keyed by the boxes' source texts, so that whatever engine or wire format made it, the next
+ * one finds it — an entry keyed by the wire it was sent in was lost when a new service changed the format (measured on
+ * 2608.18090); `texts` one per box, null where one did not come back
+ */
 export interface FigureEntry {
-  format: string
-  wire: string
-  text: string
+  key: string
+  texts: (string | null)[]
   by: string
 }
 
@@ -43,13 +46,18 @@ export interface PdfRecordBody {
   paper: string
   /** the service's name, for the status line */
   engine: string
-  /** the wire format of the run that made it: the figures' texts are looked up in it while no engine answers */
+  /** the wire format of the run that made it */
   format: string
   pipeline: string
   context: { paperTitle?: string; abstract?: string }
   units: CachedUnit[]
   /** the left side's mark words: the entries of the Map marksOfPdf gives */
   marks: [string, unknown][]
+  /**
+   * the right side's marks as its PDF names them (the entries of pdfMarks' Map): read from the PDF they took 1.2 s of a
+   * copy's 1.3 s on 2608.02163, measured; empty when not known, and read from the PDF then
+   */
+  rightMarks: [string, unknown][]
   figures: FigureEntry[]
 }
 

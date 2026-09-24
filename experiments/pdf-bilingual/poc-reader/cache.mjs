@@ -1,5 +1,5 @@
 // The reader's side of its cache of compiled translations (REPORT, eighteenth addendum): the seed a translation made
-// again starts from, the units a record keeps, when a run writes, the figures' entries. The store itself is the
+// again starts from, the units a record keeps, when a run writes, the figures' keys. The store itself is the
 // extension's (src/cache/pdf-store.ts, through lib/axt/extension.mjs). Pure but for the hash, so that
 // spikes/cache-cases.mjs runs it in Node.
 import { plainSource, plainTranslated } from './mt.mjs'
@@ -9,8 +9,8 @@ const hex = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(
 export const digestOf = async bytes => hex(await crypto.subtle.digest('SHA-256', bytes))
 /** SHA-256 hex of a unit's source pieces: what a seed is matched by, whatever the unit's index */
 export const sourceHash = async u => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(u.pieces))))
-/** the key of a figure's text in the record's `figures` and in the reader's map of them */
-export const figureKey = (format, wire) => `${format}\n${wire}`
+/** the key of a figure's boxes in the record's `figures` and the reader's map of them: their source texts, whatever the wire format */
+export const figureKeyOf = texts => JSON.stringify(texts)
 
 /**
  * The seed for this paper's units from a record: index → { pieces, by, tried, state } for each unit whose source the

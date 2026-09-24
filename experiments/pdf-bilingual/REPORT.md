@@ -832,9 +832,9 @@ A 300 px glide at rest runs on the spring on both paths, with steps of 14, 31, 3
 
 The gate passes.
 
-## Eighteenth addendum, 2026-09-24: a local cache of compiled translations — DESIGN, not built yet
+## Eighteenth addendum, 2026-09-24: a local cache of compiled translations — BUILT
 
-A paper read once should open again at once. The design below was settled with the owner on 2026-09-24; nothing of it is built yet.
+A paper read once should open again at once. The owner settled the design below on 2026-09-24. It went through nine rounds of local adversarial Codex review and one standard review. It is built as designed, with the three changes the building found (BUILT, below), which are written into the design.
 
 ### Why: what a returning visit costs today — MEASURED
 
@@ -877,9 +877,9 @@ There is one record per paper version and target language.
 | `digest`, `lang` | The key. `digest` is the SHA-256 of arXiv's whole PDF, taken from `doc.getData()` once the left side is open: the exact file, whatever the paper. `lang` is the settings' target language. PDF.js's `fingerprints[0]` would cost less but proves less (local Codex review): it is the PDF trailer's first ID, or an MD5 of the first 1,024 bytes when there is none. |
 | `pdf`, `iv` | The final, encrypted, and its 12-byte initialisation vector, fresh for each record |
 | `units` | Every unit: its kind; its source as plain text; the SHA-256 of its source pieces; its translation as plain text and its translated pieces, when it has one; `by`, the identity the translation shown was made under, or `mixed` when its pieces came from more than one (a unit sent in runs whose runs two engines answered); `tried`, the identity it was last tried under, which differs from `by` when a new engine could not take a unit and its old translation was kept (local Codex review); and `state`: `whole`, `partial` (runs, some not back), `none` (the engine could not take it, runs included), `lost` (a failure of the service) or `kept` (a name, left in the source). The two sides are anchored by these texts, and a translation made again starts from these pieces. |
-| `marks` | The left side's mark words, which anchor arXiv's PDF, from the marked original compile |
+| `marks`, `rightMarks` | The left side's mark words, which anchor arXiv's PDF, from the marked original compile; and the right side's marks as its PDF names them. Read from the PDF, the right side's took 1.2 s of a copy's 1.3 s on 2608.02163 (measured while building): `getDestinations`, then one `getPageIndex` per mark. |
 | `context` | The paper's title and abstract as `paperContext()` gives them, which an LLM's prompt and the figures' translations take |
-| `figures` | The figures' texts translated so far, keyed by the wire format and the wire text they were sent in, each with its translation and `by` ({ format, wire } → { translation, by }). Figure labels are translated when their page is drawn, so this grows as pages are viewed. It is written to the record's field alone, a few seconds after new ones come, never with the PDF. |
+| `figures` | The figures' boxes translated so far: keyed by the boxes' source texts, with one translation per box and `by` ({ key, texts, by }). Keyed by the wire they were sent in, the entries were lost when a new service changed the wire format (found building, on 2608.18090). Figure labels are translated when their page is drawn, so this grows as pages are viewed. It is written to the record's field alone, a few seconds after new ones come, never with the PDF. |
 | `engine`, `pipeline` | The service's name for the status line; `PIPELINE_VERSION` |
 | `paper`, `bytes`, `createdAt`, `openedAt` | The id as asked, the record's size, when it was made, when it was last opened |
 
@@ -889,10 +889,10 @@ There is one record per paper version and target language.
 ### Opening a paper
 
 1. **The lookup needs no service.** The left side opens, from the HTTP cache. The digest of its bytes and the settings' target language give the key; the settings are the extension's configuration, which the reader already reads.
-   - **A record found is shown at once.** The right side opens from the decrypted bytes. It is anchored by the record's translated texts, and the left by its source texts and marks. No source is fetched and nothing is compiled; anchoring takes about 0.3 s.
+   - **A record found is shown at once.** The right side opens from the decrypted bytes and is shown once its pages are laid out. It is then anchored by the record's translated texts and its own marks, and the left by its source texts and marks. No source is fetched and nothing is compiled.
    - **The paper's state comes from the record, before the right side opens.** It is otherwise made by parsing the source, which a hit does not do (local Codex review):
      - `paperCtx`, from `context`: the figures' translations wait for it;
-     - the figures' translations, from `figures`. **They are shown whatever identity made them**, as the paragraphs' old translations are. `translateBoxes()` finds them in the format each entry was made in, before it asks for the engine, which it cannot have offline. So a cached paper shows its figures translated at once, offline too (local Codex review).
+     - the figures' translations, from `figures`. **They are shown whatever identity made them**, as the paragraphs' old translations are. `translateBoxes()` finds them by the boxes' texts, before it asks for the engine, which it cannot have offline. So a cached paper shows its figures translated at once, offline too (local Codex review).
        - An entry made under another identity is translated again once the engine answers, and replaced when that succeeds.
        - A failure keeps the old label.
        - Its `by` records which identity the label shown came from.
@@ -995,7 +995,7 @@ There is one record per paper version and target language.
   - a unit a new engine could not take keeps the old translation, with `by` the old identity and `tried` the new;
   - a mixed-engine run is not current, and a unit whose runs two engines answered is `mixed`;
   - a pipeline changed compiles the final even with no text changed;
-  - the figures' translations are found before the engine is asked for, in their own format; an old one stays shown until the current engine's replaces it, and stays if that fails;
+  - the figures' translations are found before the engine is asked for, by their boxes' texts whatever the wire format; an old one stays shown until the current engine's replaces it, and stays if that fails;
   - the write order: pipeline, units tried, units whole then partial, units lost, marks, then the newer;
   - a run that changes only units' `by` or `state` updates the record without a compile.
 - **`tests/providers/transport.test.ts`** and the fallback's tests:
@@ -1009,6 +1009,48 @@ There is one record per paper version and target language.
   - With the custom prompt edited, the copy is not current.
   - Two reader tabs on the same paper, one on the old settings finishing last: the record kept is the current settings' one.
   - With every service unavailable (the LLM mock stopped, no fallback), a cached paper still opens with its figures' labels translated, and says it could not be checked.
+
+### BUILT
+
+- **The background names each translation's identity** (`src/cache/key.ts` `translationIdentity`): in its status, for the engine that would answer now (`ProviderStatus.identity`), and on every translated segment (`TranslatedSegment.identity`). The service awaits the digest only when it puts an answer together. Awaited before the queue, it changed the order calls reach the batch queue in, and four timing tests caught it.
+- **The store** (`src/cache/pdf-store.ts`) and its rules (`src/cache/pdf-record.ts`), reached through `shared/extension-entry.ts`.
+- **The reader.**
+  - `poc-reader/cache.mjs`: the seed, the units a record keeps, when a run writes, the figures' keys.
+  - `live.mjs`: `PIPELINE_VERSION`, and `runLive`'s seed, known marks, identity and pipeline.
+  - `mt.mjs`: each unit's state and identity.
+  - `engine.mjs`: each text's identity, and the identity now.
+  - `reader.js`: the lookup, the copy shown, the run seeded, the write, the figures' entries.
+- **Tests.**
+  - Vitest: `tests/cache/pdf-record.test.ts` and `tests/cache/pdf-store.test.ts`, plus additions to the key, transport, service and fallback tests.
+  - Case files: `spikes/mt-cases.mjs`, `spikes/cache-cases.mjs`.
+  - In the browser: `spikes/cache-revisit.mjs`.
+- **Three changes the building found**, written into the design above:
+  1. **The right side's marks are kept too** (`rightMarks`). The copy is shown once its pages are laid out, and anchored after. Reading them from the PDF took 1.2 s of a copy's 1.3 s on 2608.02163.
+  2. **The figures' entries are keyed by their boxes' source texts**, one translation per box. On 2608.18090, keyed by the wire they were sent in, they were lost when a new service changed the wire format.
+  3. **The service's identity is awaited late**, as the first bullet says.
+- **Also found, not part of this feature:**
+  - On this branch `engine.mjs` cannot load in Node. `lib/axt/extension.mjs` exports the settings, whose WXT storage runs when the module loads; this has been so since #296 merged in. The case files make their errors in `EngineError`'s shape instead.
+  - On 2608.18090, a run from scratch through the LLM echo mock failed its final in two tabs at once, with "a letter it could not set". Two tabs on the default service both settle. The mock is the suspect (it marks each segment's first letter); not looked into.
+
+### MEASURED (Chromium, the build, `spikes/cache-revisit.mjs`)
+
+| | 2608.02163 (25 pages, 3.5 MB) | 2608.18090 (12 pages) |
+|---|---|---|
+| First visit, record written | at 23.6 s | at 20.2 s |
+| Again: the copy shown, from the left side opened (lookup, digest and decryption included) | 69 ms (14 ms) | 124 ms (5 ms) |
+| Again: compiles | none | none |
+| The left side's first page, first visit → again | 186 → 136 ms | 148 → 115 ms |
+| Another service: previews / paragraphs shown in English | 6 / 0 | 5 / 0 |
+| Offline: the copy shown | 78 ms | 162 ms |
+| Offline and with no service: figures' labels translated | 11 of 11 | 12 of 12 |
+| Two tabs at once, both translating | one record, decrypts | one record, decrypts |
+
+- **Before**, a returning visit's final came at 12.2 s after five compiles (above). Now the copy shows in about a tenth of a second.
+- **The store, in Node (fake-indexeddb):** 10 MB are encrypted and written in 26 ms, and read and decrypted in 10 ms.
+- **Every check passes on both papers:**
+  - the Original display looks nothing up until a translation is asked for;
+  - with no service able to answer, the copy opens and says it was not checked against the settings;
+  - a record replaced by another service's has every unit by the new identity.
 
 ### Not now
 
