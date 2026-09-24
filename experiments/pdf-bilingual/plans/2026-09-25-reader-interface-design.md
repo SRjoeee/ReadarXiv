@@ -10,7 +10,7 @@ document wins; where it is silent, the harness shows the agreed look.
 The bilingual PDF reader gets its real interface, built where it will stay: an extension page under
 `src/entrypoints/pdf-reader/`, React and TypeScript. The engine (the `poc-reader` modules that fetch, translate,
 compile, anchor and synchronise) moves behind a typed controller **unchanged**, except for the three measured changes
-and the two small ones in §10. The next stage, before the reader leaves the experiment, ports the engine to TypeScript
+and the small ones in §10. The next stage, before the reader leaves the experiment, ports the engine to TypeScript
 and pays #299's debt.
 
 Not in this stage: the engine's TypeScript port and #299; jumping back after a jump (#300); a draggable splitter (the
@@ -224,8 +224,10 @@ choose 原文, 对照, 译文 anywhere on the page outside a text field; the too
   (11 px, tabular, ink-2 — §4.1).
 - The section being read is marked (the fill, 600) and its branch expanded; the mark follows the reading as it scrolls.
   A row jumps both sides to the heading.
-- The headings and their levels come from the paper's source as the engine reads it (its units and `levelOf`); a
-  heading's page is the translation's.
+- The headings and their levels come from the paper's source as the engine reads it: the source parser
+  (`latex-front`) knows which sectioning command each heading unit comes from (`section`, `subsection`,
+  `subsubsection`, …) and keeps it on the unit as its level (§10.4); a copy stored before that has no levels and its
+  outline is flat. A heading's page is the translation's.
 
 ### 6.4 The page pills
 
@@ -421,8 +423,12 @@ way. With no paragraph translated nothing is compiled and the card shows the rea
 compiled and the notice counts the rest. (Before: every batch retried for 24–48 s, and after 215 s an English "translation"
 was compiled.)
 
-### 10.4 Two small ones
+### 10.4 Small ones
 
+- A heading unit keeps the level of its sectioning command, for the contents (§6.3).
+- A figure's bitmap is read by the extension's recogniser through the background (`axt:ocr`), as the HTML page's
+  are: the package carries one recogniser (its build check allows one runtime), and results are cached by the image's
+  hash.
 - A replaced viewer's listeners are removed through PDF.js's `abortSignal`.
 - A test pins the PDF.js internals the engine reads (`_pages`, the page views' `pdfPage.view`, `renderingState`), so an
   upgrade that changes them fails at once.
