@@ -1451,7 +1451,7 @@ async function live() {
   // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
   if (cacheKey) {
     const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, context, units: unitsOf(units, paperData.kept, hashes, result.results), marks: leftMarks ?? (sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
-    const how = decideWrite({ result, cached, units: record.units })
+    const how = decideWrite({ result, cached, units: record.units, marks: record.marks })
     const pdf = how === 'full' ? finalPdf : how === 'provenance' ? cached.pdf : null
     // the right side's marks, as its PDF names them: the final's once it is on screen, else the copy's own
     record.rightMarks = how === 'full' ? [...(right.marks ?? [])] : (cached?.rightMarks ?? [])

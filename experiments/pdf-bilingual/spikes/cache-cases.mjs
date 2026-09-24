@@ -47,6 +47,30 @@ cases.push(['when a run writes: a settled final in full, provenance alone, or no
   assert.equal(decideWrite({ result: { settled: false, changed: false }, cached: { units: [{ hash: 'h', state: 'whole', by: 'B', tried: 'A' }] }, units }), 'provenance')
   assert.equal(decideWrite({ result: { settled: false, changed: false }, cached: { units }, units }), null)
 }])
+cases.push(['repeated paragraphs: a change to any one\'s provenance is written (Devin on #298)', () => {
+  // two units of one source, as table cells often are: the first was lost, the second came back; now both are whole
+  const cached = { units: [{ hash: 'h', state: 'lost', tried: 'B' }, { hash: 'h', state: 'whole', by: 'B', tried: 'B' }] }
+  const units = [{ hash: 'h', state: 'whole', by: 'B', tried: 'B' }, { hash: 'h', state: 'whole', by: 'B', tried: 'B' }]
+  assert.equal(decideWrite({ result: { settled: false, changed: false }, cached, units }), 'provenance')
+}])
+cases.push(['repeated paragraphs: the seed is the best translation of their source, whole before partial', async () => {
+  const us = openPaper(tex(PARAS)).units
+  const h = await sourceHash(us[0])
+  const whole = [{ t: 'text', s: 'whole', tr: true }], partial = [{ t: 'text', s: 'partial', tr: true }]
+  const record = { units: [{ hash: h, pieces: whole, by: 'A', tried: 'A', state: 'whole' }, { hash: h, pieces: partial, by: 'B', tried: 'B', state: 'partial' }] }
+  const { seed } = await seedFrom(record, [us[0]])
+  assert.deepEqual([seed.get(0).pieces, seed.get(0).state], [whole, 'whole'])
+}])
+cases.push(['a copy without marks: a run that changes nothing compiles the marked original, and the marks are written (Devin on #298)', async () => {
+  const paper = openPaper(tex(PARAS)), c = compiler(), got = []
+  const seed = await seedOf(paper, echo('B'), 'B')
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', seed, marks: null, identity: 'B', pipelineCurrent: true, onOriginal: o => got.push(o) })
+  assert.equal(r.changed, false)
+  assert.equal(got.length, 1, 'the marked original is compiled')
+  const units = [{ hash: 'h', state: 'whole', by: 'B', tried: 'B' }]
+  assert.equal(decideWrite({ result: r, cached: { units, marks: [] }, units, marks: [['1s', {}]] }), 'provenance')
+  assert.equal(decideWrite({ result: r, cached: { units, marks: [['1s', {}]] }, units, marks: [['1s', {}]] }), null)
+}])
 cases.push(['a copy\'s marks are known only when it has some, on the same pipeline (final review)', () => {
   // a copy whose marked original failed has none: the run compiles the original again rather than go on without
   assert.equal(knownMarks({ marks: [] }, true), null)

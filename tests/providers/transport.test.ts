@@ -767,6 +767,16 @@ describe('createLocalTransport: the status identity', () => {
     expect(res.ok && res.result.provider).toBe('google-web')
     expect((await t.status()).identity).toBe(res.ok ? res.result.segments[0]!.identity : 'no answer')
   })
+  it('skips a fallback set aside: the chosen engine unavailable, the first fallback refusing, the second answering (Devin on #298)', async () => {
+    const down = mockProvider(async () => { throw new ProviderError('auth', 'no key') }, { id: SVC.id, isAvailable: async () => false })
+    // its probe says available; its key refused, the chain sets it aside for the session
+    const refusing = mockProvider(async () => { throw new ProviderError('auth', '401') }, { id: 'microsoft', kind: 'mt' })
+    const answering = mockProvider(async r => ({ segments: r.segments, provider: 'google-web' }), { id: 'google-web', kind: 'mt' })
+    const t = await withChain([down, refusing, answering])
+    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags' } })
+    expect(res.ok && res.result.provider).toBe('google-web')
+    expect((await t.status()).identity).toBe(res.ok ? res.result.segments[0]!.identity : 'no answer')
+  })
   it('equals the identity on the segments the same engine translates', async () => {
     const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: SVC.id }), { id: SVC.id })])
     // the target the reader sends is the status's own (engine.mjs), as here

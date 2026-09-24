@@ -889,7 +889,7 @@ There is one record per paper version and target language.
 ### Opening a paper
 
 1. **The lookup needs no service.** The left side opens, from the HTTP cache. The digest of its bytes and the settings' target language give the key; the settings are the extension's configuration, which the reader already reads.
-   - **The digest waits for the left side's first page**, 2 s at most, so that it never delays it (final review). On the corpus's largest PDF, 46 MB (2608.16117), it started as the first page was drawn and took 195 to 230 ms.
+   - **The digest waits for the left side's first page**, 2 s at most, so that it never delays it (final review). On the corpus's largest PDF, 46 MB (2608.16117), it started as the first page was drawn and took 55 to 230 ms.
    - **A record found is shown at once.** The right side opens from the decrypted bytes and is shown once its pages are laid out. It is then anchored by the record's translated texts and its own marks, and the left by its source texts and marks. No source is fetched and nothing is compiled.
    - **A copy that cannot be shown is no copy** (final review): its record is deleted, and the visit goes on as a miss.
    - **The paper's state comes from the record, before the right side opens.** It is otherwise made by parsing the source, which a hit does not do (local Codex review):
@@ -920,15 +920,15 @@ There is one record per paper version and target language.
      A service or model alone would miss a custom prompt edited, or an endpoint changed under the same service (local Codex review). The paper's context is the same on every visit, and `RULES_VERSION` belongs to the HTML page; neither is in it.
    - **Why per unit.** One run can be served by two engines: the chosen one, then its fallback after a hand-over (local Codex review).
    - **The background says which identity translated each segment**, not each answer. The fallback chain gathers the segments several engines translated into one failed answer (`gathered`, src/providers/fallback.ts), so an answer can hold two engines' work.
-   - **Which identity is current.** It is the one that would answer now: the chosen service, or its fallback while the chosen one cannot answer, or has been set aside this session after refusing (a key refused, say; final review). So a copy made by the fallback is not translated again on every visit while the chosen service stays unavailable.
+   - **Which identity is current.** It is the one that would answer now: the first engine on the chain that has not been set aside this session and whose probe says it can answer. An engine is set aside after refusing (a key refused, say), and its probe still says yes (final review; Devin on #298). So a copy made by the fallback is not translated again on every visit while the chosen service stays unavailable.
 3. **A copy that is not current** stays on screen, and the live run starts:
    - It is given `seed`: the translated pieces by source hash. The run starts with every unit present and replaces them batch by batch, nearest the reader first.
-   - The seed is matched by the source's hash, not by index. A unit the pipeline has since cut differently has no seed.
+   - The seed is matched by the source's hash, not by index. A unit the pipeline has since cut differently has no seed. Repeated paragraphs, table cells often, share a hash, and each takes the best translation of their source, whole before partial (Devin on #298).
    - **No preview makes a translated paragraph English again** (local Codex review). A preview is shown only when every unit that is not kept in the source has a translation, from the seed or new. Until then the copy stays on screen. With the service changed, the seed covers every unit, and the previews replace it one batch at a time. With the pipeline changed, the units cut differently are translated first, as the order puts them, and the previews follow.
    - **A new result replaces a seed only when it is whole.** A unit that went by runs with some runs not back, or was lost to a failure of the service in whole or in part, keeps its seed. Its `by` stays the seed's; its `tried` and `state` say what happened: `partial` or `none` under the current identity, or `lost`.
    - **A run in which no unit's translated pieces changed compiles nothing, if the pipeline is the current one.** The pieces are what is typeset, not their plain text: the same words moved across a formatting mark are a change (local Codex review). Every batch lost while offline is one such run. With the pipeline changed, the final is compiled even so: the new pipeline may set the same text differently (local Codex review).
-   - **What such a run writes.** If no unit's `tried` or `state` changed either, it writes nothing. If they changed, it writes them into the stored record, which keeps its PDF. One case is a new service that cannot take a unit either, which keeps its seed; without this write, every visit would try it again (local Codex review).
-   - It is given `marks` when the pipeline is the same and the copy has some, so the marked original is compiled only if a lost character needs its log. A copy whose marked original failed has none; taken as known, they would never come (final review).
+   - **What such a run writes.** If no unit's `tried` or `state` changed either, it writes nothing. If they changed, it writes them into the stored record, which keeps its PDF. The units are compared as a whole, not by hash, which repeated paragraphs share (Devin on #298). One case is a new service that cannot take a unit either, which keeps its seed; without this write, every visit would try it again (local Codex review).
+   - It is given `marks` when the pipeline is the same and the copy has some, so the marked original is compiled only if a lost character needs its log. A copy whose marked original failed has none; taken as known, they would never come (final review). So a run that compiles nothing still compiles the marked original for such a copy, and writes the marks it gets with the units' provenance (Devin on #298). A copy that is current is not run at all, and keeps its text-only anchoring until a pipeline change.
    - Its previews are drafts, as a first translation's are: images are frames, with the original's figure drawn over each. The final has its figures.
    - The status line says the translation is being made again, with which service. With only the pipeline changed, the translations come from the extension's cache, and the run is its compiles alone.
 4. **A miss** runs the live flow as today.
@@ -958,7 +958,7 @@ There is one record per paper version and target language.
   A fourth, `keys`, holds the one `CryptoKey`. The database is kept apart from the translation cache, so that neither's schema or migrations touch the other.
 - **Interface.** `createPdfStore({ db?, maxBytes = 500 MB })` gives:
   - `get(digest, lang)`: decrypted, or undefined;
-  - `put(record, { identity, pipeline })`: encrypted and written if it is at least as good as the stored record, by the order above, keeping the stored figures' entries the record lacks; then the least recently opened records evicted until the total is under the cap. A record's bytes are the ciphertext and its body's text as UTF-8;
+  - `put(record, { identity, pipeline })`: encrypted and written if it is at least as good as the stored record, by the order above, keeping the stored figures' entries the record lacks; then the least recently opened records evicted until the total is under the cap, in the same transaction: two tabs writing at once, each evicting apart and protecting its own record, removed each other's (Devin on #298). A record's bytes are the ciphertext and its body's text as UTF-8;
   - `patchFigures(digest, lang, figures)`: the entries merged into the stored ones by key, the new winning, and the bytes updated; the PDF is not read or written;
   - `touch(digest, lang)`: sets `openedAt` on a hit;
   - `delete(digest, lang)`: a copy the reader could not show;
@@ -1042,6 +1042,11 @@ There is one record per paper version and target language.
   6. A copy with no left-side marks was taken to have them, so later visits never compiled them (`spikes/cache-cases.mjs`).
   7. The digest ran before the left side's first page, and in the Original display too (`spikes/cache-faults.mjs`).
   8. A copy that could not be shown held the paper forever; and a run that compiled nothing ended saying the original was shown (the same).
+- **Devin's review of #298** found four more, each fixed with a test that failed first:
+  1. With the chosen service unavailable, the status's identity took the first fallback whose probe said yes, though the chain had set it aside; a copy the next fallback made looked stale (`tests/providers/transport.test.ts`).
+  2. Two tabs writing at once beyond the cap each evicted the other's record, and neither stayed (`tests/cache/pdf-store.test.ts`).
+  3. A run that compiled nothing skipped the marked original, so a copy without marks became current without them (`spikes/cache-cases.mjs`).
+  4. Repeated paragraphs share a hash, and the provenance check kept one of them: a change to another went unwritten, and the copy was translated again on every visit. The seed of repeated paragraphs now prefers a whole translation (the same).
 - **Also found, not part of this feature:**
   - On this branch `engine.mjs` cannot load in Node. `lib/axt/extension.mjs` exports the settings, whose WXT storage runs when the module loads; this has been so since #296 merged in. The case files make their errors in `EngineError`'s shape instead.
   - On 2608.18090, a run from scratch through the LLM echo mock failed its final in two tabs at once, with "a letter it could not set". Two tabs on the default service both settle. The mock is the suspect (it marks each segment's first letter); not looked into.
@@ -1059,7 +1064,7 @@ There is one record per paper version and target language.
 | Offline and with no service: figures' labels translated | 11 of 11 | 12 of 12 |
 | Two tabs at once, both translating | one record, decrypts | one record, decrypts |
 
-`spikes/cache-faults.mjs`, after the final review: on 2608.16117 (46 MB), the digest started as the left side's first page was drawn, in two runs at 387 and 1,244 ms, and took 195 and 230 ms. The Original display computed none. On 2608.02163, a record whose PDF was replaced by bytes that are none was deleted, and the visit went on as a miss and wrote a good copy.
+`spikes/cache-faults.mjs`, after the final review: on 2608.16117 (46 MB), the digest started as the left side's first page was drawn, in three runs at 165 to 1,244 ms, and took 55 to 230 ms. The Original display computed none. On 2608.02163, a record whose PDF was replaced by bytes that are none was deleted, and the visit went on as a miss and wrote a good copy.
 
 - **Before**, a returning visit's final came at 12.2 s after five compiles (above). Now the copy shows in about a fifth of a second.
 - **The lookup waits for the left side's first page** since the final review: before it, the copy came at 69 and 124 ms, the digest taken as soon as the left side opened. The left side comes first now, and the copy about 60 ms after its first page.

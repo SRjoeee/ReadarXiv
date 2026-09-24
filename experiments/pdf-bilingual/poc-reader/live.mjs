@@ -209,8 +209,10 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
     await sleep()
   }
   await mt
-  // a seeded run that changed nothing typeset, on the same pipeline: nothing to compile
+  // a seeded run that changed nothing typeset, on the same pipeline: nothing to compile but the marked original, for a
+  // copy that has no marks — else they would never come (Devin on #298)
   if (seed && !changed && pipelineCurrent) {
+    if (!marks) await original()
     note('unchanged')
     return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false }
   }

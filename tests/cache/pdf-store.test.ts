@@ -66,6 +66,16 @@ describe('createPdfStore', () => {
     expect(await small.get('x', 'zh-CN')).toBeDefined()
   })
 
+  it('two tabs writing at once beyond the cap keep one of their records, not neither (Devin on #298)', async () => {
+    const db = dbOf()
+    let t = 0
+    const clock = () => ++t
+    // room for one record: each tab's eviction, protecting its own, would otherwise remove the other's
+    const [a, b] = [createPdfStore({ db, maxBytes: 1500, clock }), createPdfStore({ db, maxBytes: 1500, clock })]
+    expect(await Promise.all([a.put({ ...body('a'), pdf: pdfOf(1000) }, now), b.put({ ...body('b'), pdf: pdfOf(1000) }, now)])).toEqual([true, true])
+    expect((await a.usage()).count).toBe(1)
+  })
+
   it('a record that does not decrypt is a miss, and is deleted', async () => {
     const db = dbOf()
     const s = createPdfStore({ db, warn: () => {} })

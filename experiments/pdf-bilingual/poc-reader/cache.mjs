@@ -14,10 +14,14 @@ export const figureKeyOf = texts => JSON.stringify(texts)
 
 /**
  * The seed for this paper's units from a record: index → { pieces, by, tried, state } for each unit whose source the
- * record has a translation of, matched by hash. A unit cut differently since has none. The hashes are kept for the record
+ * record has a translation of, matched by hash. A unit cut differently since has none. Repeated paragraphs (table
+ * cells, often) share a hash, and each takes the best translation of their source: whole before partial (Devin on
+ * #298). The hashes are kept for the record
  */
+const rankOf = u => (u.state === 'whole' ? 2 : u.state === 'partial' ? 1 : 0)
 export async function seedFrom(record, units) {
-  const byHash = new Map(record.units.filter(u => u.pieces).map(u => [u.hash, u]))
+  const byHash = new Map()
+  for (const u of record.units) if (u.pieces && rankOf(u) >= rankOf(byHash.get(u.hash) ?? { state: '' })) byHash.set(u.hash, u)
   const hashes = await Promise.all(units.map(sourceHash))
   const seed = new Map()
   hashes.forEach((h, i) => {
@@ -50,12 +54,14 @@ export const knownMarks = (cached, samePipeline) => (samePipeline && cached?.mar
 
 /**
  * What a run writes (REPORT, eighteenth addendum, "Writing"): the whole record when it ended with a final that
- * settled; with nothing typeset changed, the units' provenance alone, if it changed; else nothing — a run ended
- * before its final among them
+ * settled; with nothing typeset changed, the units' provenance alone, if it changed, or the left side's marks, if the
+ * copy had none and this run compiled them; else nothing — a run ended before its final among them
  */
-export function decideWrite({ result, cached, units }) {
+export function decideWrite({ result, cached, units, marks }) {
   if (result.changed) return result.settled ? 'full' : null
   if (!cached) return null
-  const before = new Map(cached.units.map(u => [u.hash, `${u.state}|${u.by}|${u.tried}`]))
-  return units.some(u => before.get(u.hash) !== `${u.state}|${u.by}|${u.tried}`) ? 'provenance' : null
+  // the units compared as a whole, not by hash: repeated paragraphs share one (Devin on #298)
+  const tally = us => us.map(u => `${u.hash}|${u.state}|${u.by}|${u.tried}`).sort().join('\n')
+  const marksGained = !cached.marks?.length && !!marks?.length
+  return tally(cached.units) !== tally(units) || marksGained ? 'provenance' : null
 }

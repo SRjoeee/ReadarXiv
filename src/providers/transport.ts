@@ -202,9 +202,18 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     }
     const live = service.status()
     const active = chain.find(engine => engine.id === live.activeId) ?? primary
-    // The engine that would answer now: while the first choice's probe says it can, the first one not demoted — a key
-    // refused demotes it for the session, and its probe still says yes (final review); while it cannot, its fallback
-    const serving = available ? active : (chain.find(engine => engine.id === fallback?.id) ?? primary)
+    // The engine that would answer now: the first on the chain that is not demoted and whose probe says it can — a key
+    // refused demotes an engine for the session, and its probe still says yes (final review; Devin on #298). None, the
+    // chain's own choice
+    const demoted = new Set(live.demotions.map(d => d.id))
+    let serving = active
+    for (const engine of chain) {
+      if (demoted.has(engine.id)) continue
+      if (engine === primary ? available : await engine.isAvailable()) {
+        serving = engine
+        break
+      }
+    }
     // the same parts the service tags its segments with (translate-service.ts): its model is the chosen service's alone
     const identity = await translationIdentity({ providerId: serving.cacheId ?? serving.id, model: serving.id === chosen?.id ? (chosen.model ?? '') : '', promptKey: serving.promptKey ?? '', target: config.targetLanguage, renderPath })
     return {

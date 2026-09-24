@@ -94,7 +94,11 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
       await db.pdfs.delete([digest, lang])
     })
 
-  /** Beyond the cap, the least recently opened first; the record just written stays even alone over it */
+  /**
+   * Beyond the cap, the least recently opened first; the record just written stays even alone over it. Run inside the
+   * write's transaction: two tabs evicting apart, each protecting its own record, could each remove the other's (Devin
+   * on #298)
+   */
   async function evict(keep: [string, string]) {
     const entries = await db.entries.orderBy('openedAt').toArray()
     let total = entries.reduce((sum, e) => sum + e.bytes, 0)
@@ -144,9 +148,9 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
           await db.entries.put({ digest: body.digest, lang: body.lang, paper: body.paper, engine: body.engine, bytes: sizeOf(data.byteLength, body), createdAt, openedAt: t })
           await db.bodies.put({ digest: body.digest, lang: body.lang, body })
           await db.pdfs.put({ digest: body.digest, lang: body.lang, iv, data })
+          await evict([body.digest, body.lang])
           return true
         })
-        if (written) await evict([candidate.digest, candidate.lang])
         return written
       } catch (e) {
         warn(`[axt-pdf] write failed: ${(e as Error).message}`)
