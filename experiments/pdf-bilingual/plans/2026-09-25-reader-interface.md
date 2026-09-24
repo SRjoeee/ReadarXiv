@@ -1459,3 +1459,612 @@ docs(experiments): the reader in the extension, Part 1
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
 EOF
 ```
+
+---
+
+# Part 2: shared settings
+
+Written against the code as Part 1 left it (`acc1e6e7`). Its tasks continue Part 1's numbering.
+
+**What changes from the overview.** The `R` locale surface is filled in Part 3, with the components that show its words
+— strings nobody renders are dead weight. This part gives the interface one way to read and change the settings: the
+session's own surface, the page's only writer, reached through the controller.
+
+**File structure after this part**
+
+| Path | Responsibility |
+|---|---|
+| `src/config/schema.ts`, `storage.ts`, `revision.ts` | The `pdfReader` group, `CONFIG_VERSION` 19 and its migration; the group classified as not part of the chain |
+| `src/pdf-reader/settings.ts` | The display the settings ask for, the settings a display writes, whether figure text shows in a display |
+| `src/pdf-reader/engine/session.mjs` | Reads the display, the sync, the highlight and figure text from the settings, writes what the reader chooses, follows changes made elsewhere; the reader's own `axtPdfReader` preferences go |
+| `src/pdf-reader/controller.ts` | `ReaderState.settings`; the `patchSettings` command |
+| `experiments/pdf-bilingual/spikes/reader-settings.mjs` | The browser check of all of it |
+
+## Part 2 Review Focus
+
+- **A stored `mode` of `'stack'`**: the reader shows the two sides; choosing side by side in the reader leaves
+  `'stack'` stored, since that is already a side-by-side choice for the HTML page (§9.1). Pinned in Task 9, and in Task
+  10's browser check.
+- **Settings the extension cannot read**: every write is refused (`ConfigUnreadableError`); the reader's display still
+  changes on screen, the write is dropped with a warning, and nothing throws. Pinned by the session's `save` in Task 10
+  and checked there.
+- **A change made in another tab**: the reader follows it without writing back, so two readers never echo each other's
+  writes. Pinned in Task 10's browser check.
+- **An address that names a display or a sync mode** (the probes'): it holds for that page, whatever the settings say,
+  and is never written. Pinned in Task 10.
+- **`CONFIG_VERSION` on another branch**: `next` may reach 19 first. The migration is written so that renumbering it at
+  the merge is a one-line change; the pull request says to check.
+
+### Task 8: the PDF reader's settings group
+
+**Files:**
+- Modify: `src/config/schema.ts`, `src/config/storage.ts`, `src/config/revision.ts`, `docs/DESIGN.md` (§9)
+- Test: `tests/config/storage.test.ts`
+
+**Interfaces:**
+- Produces: `Config['pdfReader']: { enabled: boolean; original: boolean; sync: boolean; swapped: boolean; appearance:
+  'light' | 'dark' | 'system'; dimPages: boolean }`; `DEFAULT_PDF_READER` exported from `src/config/schema.ts`;
+  `CONFIG_VERSION === 19`.
+
+- [ ] **Step 1: The failing test** — in `tests/config/storage.test.ts`, after the test that begins
+  `it('v17 put the floating button\'s state into the configuration and v18 takes it out again`, add:
+
+```ts
+  it('v19 adds the PDF reader\'s settings with their defaults, and touches nothing else', async () => {
+    const v18: Record<string, unknown> = { ...DEFAULT_CONFIG, version: 18, mode: 'only', reading: { sentenceHighlight: false, openIn: 'same-tab' } }
+    delete v18.pdfReader
+    await fakeBrowser.storage.local.set({ config: v18, config$: { v: 18 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const config = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(config.version).toBe(CONFIG_VERSION)
+    expect(config.pdfReader).toEqual({ enabled: true, original: false, sync: true, swapped: false, appearance: 'system', dimPages: true })
+    expect(config.mode).toBe('only')
+    expect(config.reading).toEqual({ sentenceHighlight: false, openIn: 'same-tab' })
+  })
+```
+
+- [ ] **Step 2: Run it to see it fail**
+
+```bash
+pnpm vitest run tests/config/storage.test.ts -t "v19 adds"
+```
+
+Expected: FAIL — `config.pdfReader` is `undefined`.
+
+- [ ] **Step 3: The schema** — in `src/config/schema.ts`: `export const CONFIG_VERSION = 19`; above `configSchema`,
+
+```ts
+/**
+ * The PDF reader's own settings (the reader's design, §9.1; v19): whether arXiv's PDFs open in it; whether it was last
+ * left on the original alone (the HTML page's translation-on is its tab's session, not a setting); whether its sides
+ * scroll together and are swapped; and its appearance — the extension's pages follow the system, the reader lets its
+ * reader choose, and dim the pages in the dark
+ */
+export const DEFAULT_PDF_READER = { enabled: true, original: false, sync: true, swapped: false, appearance: 'system', dimPages: true } as const
+```
+
+in `configSchema`, after `uiLanguage`:
+
+```ts
+  /** The PDF reader's own settings (DEFAULT_PDF_READER says what each is) */
+  pdfReader: z.object({
+    enabled: z.boolean(),
+    original: z.boolean(),
+    sync: z.boolean(),
+    swapped: z.boolean(),
+    appearance: z.enum(['light', 'dark', 'system']),
+    dimPages: z.boolean(),
+  }),
+```
+
+and in `DEFAULT_CONFIG`, after `uiLanguage: 'auto',`: `pdfReader: { ...DEFAULT_PDF_READER },`.
+
+- [ ] **Step 4: The migration** — in `src/config/storage.ts`, import `DEFAULT_PDF_READER` beside `DEFAULT_CONFIG`, and
+  after the `18:` migration add:
+
+```ts
+    // v18 -> v19: the PDF reader's settings (the reader's design, §9.1), with their defaults: until now it kept its own
+    // under another key, never released, which is not carried over
+    19: (v18: (Omit<Config, 'version' | 'pdfReader'> & { version: 18 }) | null) =>
+      typeof v18 !== 'object' || v18 === null ? v18 : { ...v18, version: 19 as const, pdfReader: { ...DEFAULT_PDF_READER } },
+```
+
+- [ ] **Step 5: Not the chain's** — in `src/config/revision.ts`, `VOLATILE_CONFIG_FIELDS` gains `'pdfReader'` at its
+  end: none of it changes what a service is asked.
+
+- [ ] **Step 6: Run the tests** — the new one, then the whole suite (a test that names the number 18 instead of
+  `CONFIG_VERSION` is a finding: make it read `CONFIG_VERSION`)
+
+```bash
+pnpm vitest run tests/config/storage.test.ts
+pnpm test
+```
+
+Expected: PASS, the new test with the rest.
+
+- [ ] **Step 7: The design's record** — in `docs/DESIGN.md` §9, `CONFIG_VERSION = 16` becomes `CONFIG_VERSION = 19`,
+  and the paragraph that lists the migrations that transform values gains, at its end: "v19 adds the PDF reader's own
+  settings (`pdfReader`: whether it opens arXiv's PDFs, whether it was last left on the original, sync, swapped sides,
+  its appearance, dim pages), with their defaults."
+
+- [ ] **Step 8: The gate and the commit**
+
+```bash
+git add src/config/schema.ts src/config/storage.ts src/config/revision.ts tests/config/storage.test.ts docs/DESIGN.md
+pnpm typecheck && pnpm lint && pnpm test
+git commit -F - <<'EOF'
+feat(config): the PDF reader's settings, CONFIG_VERSION 19
+
+pdfReader: whether arXiv's PDFs open in the reader, whether it was last left
+on the original alone, whether the sides scroll together and are swapped,
+its appearance and whether the pages dim in the dark. The migration from 18
+adds them with their defaults; none is part of the translation chain.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+EOF
+```
+
+### Task 9: the settings the reader reads and writes, as functions
+
+**Files:**
+- Create: `src/pdf-reader/settings.ts`
+- Test: `tests/pdf-reader/settings.test.ts`
+
+**Interfaces:**
+- Consumes: `Config` (Task 8), `EngineDisplay` (`session.d.mts`).
+- Produces: `displayOf(config: Config): EngineDisplay`; `withDisplay(config: Config, display: EngineDisplay): Config`;
+  `figuresShown(config: Config, display: EngineDisplay): boolean`.
+
+- [ ] **Step 1: The failing tests** — create `tests/pdf-reader/settings.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { DEFAULT_CONFIG, type Config } from '@/config/schema'
+import { displayOf, figuresShown, withDisplay } from '@/pdf-reader/settings'
+
+const with_ = (patch: Partial<Config>, reader: Partial<Config['pdfReader']> = {}): Config => ({ ...DEFAULT_CONFIG, ...patch, pdfReader: { ...DEFAULT_CONFIG.pdfReader, ...reader } })
+
+describe('displayOf: the display the shared settings ask for', () => {
+  it('is the HTML page\'s mode, side by side or the translation alone, unless the reader was left on the original', () => {
+    expect(displayOf(with_({ mode: 'side' }))).toBe('bilingual')
+    expect(displayOf(with_({ mode: 'stack' }))).toBe('bilingual')
+    expect(displayOf(with_({ mode: 'only' }))).toBe('translation')
+    expect(displayOf(with_({ mode: 'only' }, { original: true }))).toBe('original')
+  })
+})
+
+describe('withDisplay: what a display chosen in the reader writes', () => {
+  it('writes the HTML page\'s mode and leaves the original', () => {
+    expect(withDisplay(with_({ mode: 'side' }, { original: true }), 'translation')).toMatchObject({ mode: 'only', pdfReader: { original: false } })
+    expect(withDisplay(with_({ mode: 'only' }), 'bilingual')).toMatchObject({ mode: 'side', pdfReader: { original: false } })
+  })
+
+  it('keeps stacked, already a side-by-side choice for the HTML page', () => {
+    expect(withDisplay(with_({ mode: 'stack' }), 'bilingual').mode).toBe('stack')
+  })
+
+  it('marks the original and leaves the mode as it was', () => {
+    const next = withDisplay(with_({ mode: 'only' }), 'original')
+    expect(next.mode).toBe('only')
+    expect(next.pdfReader.original).toBe(true)
+  })
+
+  it('changes nothing else', () => {
+    const before = with_({ mode: 'side', targetLanguage: 'jpn' })
+    const after = withDisplay(before, 'translation')
+    expect({ ...after, mode: before.mode, pdfReader: before.pdfReader }).toEqual(before)
+  })
+})
+
+describe('figuresShown: figure text in a display', () => {
+  it('follows the switch and the modes ticked, a side-by-side display standing for the HTML page\'s side or stacked mode', () => {
+    expect(figuresShown(with_({}), 'bilingual')).toBe(true)
+    expect(figuresShown(with_({ image: { enabled: false, modes: ['stack', 'side', 'only'] } }), 'bilingual')).toBe(false)
+    expect(figuresShown(with_({ mode: 'side', image: { enabled: true, modes: ['only'] } }), 'bilingual')).toBe(false)
+    expect(figuresShown(with_({ mode: 'side', image: { enabled: true, modes: ['only'] } }), 'translation')).toBe(true)
+    expect(figuresShown(with_({ mode: 'stack', image: { enabled: true, modes: ['stack'] } }), 'bilingual')).toBe(true)
+  })
+
+  it('is off for the original alone, which has no figure text to show', () => {
+    expect(figuresShown(with_({}), 'original')).toBe(false)
+  })
+})
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+```bash
+pnpm vitest run tests/pdf-reader/settings.test.ts
+```
+
+Expected: FAIL, `Failed to resolve import "@/pdf-reader/settings"`.
+
+- [ ] **Step 3: The functions** — create `src/pdf-reader/settings.ts`:
+
+```ts
+// The reader's settings are the extension's (the reader's design, §3, §9.1): these say which display they ask for,
+// what a display chosen in the reader writes back, and whether figure text shows in a display
+import type { Config } from '@/config/schema'
+import type { EngineDisplay } from './engine/session.mjs'
+
+/** the display the settings ask for: the HTML page's mode, unless the reader was last left on the original alone */
+export function displayOf(config: Config): EngineDisplay {
+  if (config.pdfReader.original) return 'original'
+  return config.mode === 'only' ? 'translation' : 'bilingual'
+}
+
+/** the HTML page's mode a translated display stands for: stacked stays stacked, a side-by-side choice already */
+function modeOf(config: Config, display: Exclude<EngineDisplay, 'original'>): Config['mode'] {
+  if (display === 'translation') return 'only'
+  return config.mode === 'stack' ? 'stack' : 'side'
+}
+
+/** the settings a display chosen in the reader writes: the original is marked; a translated display is the mode */
+export function withDisplay(config: Config, display: EngineDisplay): Config {
+  if (display === 'original') return { ...config, pdfReader: { ...config.pdfReader, original: true } }
+  return { ...config, mode: modeOf(config, display), pdfReader: { ...config.pdfReader, original: false } }
+}
+
+/** figure text in a display: the switch on, and the display's mode among the modes ticked (as on the HTML page) */
+export function figuresShown(config: Config, display: EngineDisplay): boolean {
+  if (display === 'original' || !config.image.enabled) return false
+  return config.image.modes.includes(modeOf(config, display))
+}
+```
+
+- [ ] **Step 4: Run them to see them pass**
+
+```bash
+pnpm vitest run tests/pdf-reader/settings.test.ts
+```
+
+Expected: PASS, 7 tests.
+
+- [ ] **Step 5: The gate and the commit**
+
+```bash
+git add src/pdf-reader/settings.ts tests/pdf-reader/settings.test.ts
+pnpm typecheck && pnpm lint && pnpm test
+git commit -F - <<'EOF'
+feat(pdf-reader): the display and figure text, read from the shared settings
+
+The display the settings ask for is the HTML page's mode unless the reader
+was last left on the original; a display chosen in the reader writes the
+mode back, stacked kept as stacked. Figure text follows the image switch and
+the modes ticked, as on the HTML page.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+EOF
+```
+
+### Task 10: the session follows the shared settings, and writes what the reader chooses
+
+**Files:**
+- Modify: `src/pdf-reader/engine/session.mjs`, `session.d.mts`, `src/pdf-reader/controller.ts`
+- Test: `tests/pdf-reader/controller.test.ts`
+- Create: `experiments/pdf-bilingual/spikes/reader-settings.mjs`
+
+**Interfaces:**
+- Consumes: `displayOf`, `withDisplay`, `figuresShown` (Task 9); `Config['pdfReader']` (Task 8).
+- Produces: the session's `patchSettings(change: (latest: Config) => Config): void` and its event
+  `{ type: 'settings'; config: Config }`; `ReaderState.settings: Config | null`; the controller's
+  `patchSettings(change)`. The address's `mode`, `sync` and `compositor=0` fix those for a probe's page.
+
+- [ ] **Step 1: The failing tests** — in `tests/pdf-reader/controller.test.ts`, import `DEFAULT_CONFIG` from
+  `@/config/schema`, add `patchSettings: vi.fn()` to `fakeSession()`, and add:
+
+```ts
+  it('holds the settings the session read', () => {
+    expect(INITIAL.settings).toBeNull()
+    expect(fold([{ type: 'settings', config: DEFAULT_CONFIG }]).settings).toBe(DEFAULT_CONFIG)
+  })
+```
+
+  inside `describe('reduce: …')`, and inside `describe('createController', …)`:
+
+```ts
+  it('passes a change of the settings to the session, once it is open', async () => {
+    const session = fakeSession()
+    const controller = createController({ open: async () => session, params: new URLSearchParams() })
+    const change = (c: typeof DEFAULT_CONFIG) => ({ ...c, mode: 'only' as const })
+    controller.patchSettings(change)
+    await controller.attach(panes())
+    controller.patchSettings(change)
+    await Promise.resolve()
+    expect(session.patchSettings).toHaveBeenCalledOnce()
+    expect(session.patchSettings).toHaveBeenCalledWith(change)
+  })
+```
+
+  (the first call, before `attach`, has no session to wait for and is dropped, as any command is).
+
+```bash
+pnpm vitest run tests/pdf-reader/controller.test.ts
+```
+
+Expected: FAIL — `settings` is not in `INITIAL`, `patchSettings` is not a function.
+
+- [ ] **Step 2: The session's types** — in `session.d.mts`, add `import type { Config } from '@/config/schema'` at the
+  top, `| { type: 'settings'; config: Config }` to `SessionEvent` (with the comment: the extension's settings, each
+  time they land), and `export declare function patchSettings(change: (latest: Config) => Config): void`.
+
+- [ ] **Step 3: The controller** — in `src/pdf-reader/controller.ts`:
+  - import `type Config` from `@/config/schema`;
+  - `ReaderState` gains `/** the extension's settings as they last landed; null before the first read */ settings: Config | null`, and `INITIAL` gains `settings: null`;
+  - `reduce` gains `case 'settings': return event.config === state.settings ? state : { ...state, settings: event.config }`;
+  - `Session` picks `'patchSettings'` too; `ReaderController` gains
+    `/** a change of the extension's settings, on top of what storage holds when its turn comes */ patchSettings(change: (latest: Config) => Config): void`,
+    and `createController` returns `patchSettings: change => later(s => s.patchSettings(change))`.
+
+```bash
+pnpm vitest run tests/pdf-reader/controller.test.ts
+```
+
+Expected: PASS, 13 tests.
+
+- [ ] **Step 4: The session reads and writes the settings** — in `src/pdf-reader/engine/session.mjs`:
+
+  1. Imports: add `import { localeStale } from '@/ui/use-surface-config'` and
+     `import { displayOf, figuresShown, withDisplay } from '../settings'`.
+  2. Replace the whole section from `// ---------------------------------------------------------------- the extension's settings, and the display`
+     through the closing `}` of `export function setDisplay(next) { … }` with:
+
+     ```js
+     // ---------------------------------------------------------------- the extension's settings, and the display
+     // The reader's settings are the extension's (the reader's design, §3, §9.1), read and written as its popup and
+     // settings page do and followed as they change there: the display — the HTML page's mode, and whether the reader
+     // was last left on the original alone, where nothing is translated or compiled until a translation is shown —, the
+     // sync, the highlight, figure text and the target language. The page has one writer, this surface: the interface
+     // writes through the controller (patchSettings).
+     const MODES = ['original', 'translation', 'bilingual']
+     // The extension's settings as its popup and settings page have them (shared/surface-config.ts): each change a patch
+     // on what storage holds when its turn comes, one after another, and a configuration that could not be read said so
+     // (Codex on #297); a new interface language reloads the page, as it does the popup
+     const surface = createSurfaceConfig({ localeStale, reload: () => location.reload() })
+     await new Promise(resolve => { const off = surface.subscribe(() => { if (surface.state().config) { off(); resolve() } }); surface.start() })
+     let config = surface.state().config
+     /** the display: the one the address names (a probe's page), else the one the settings ask for */
+     let mode = MODES.includes(params.get('mode')) ? params.get('mode') : displayOf(config)
+     function showMode() {
+       document.documentElement.setAttribute('data-axt-pdf-mode', mode)
+       host.emit({ type: 'display', mode })
+     }
+     showMode()
+     function showSettings() {
+       let sheet = document.getElementById('axt-look')
+       if (!sheet) { sheet = document.createElement('style'); sheet.id = 'axt-look'; document.head.append(sheet) }
+       sheet.textContent = appearanceRule(lookOf(config))
+       host.emit({ type: 'settings', config })
+       // the defaults are in effect — the service and its key set on the settings page are not — until they are repaired there
+       host.emit({ type: 'notice', why: surface.state().fallbackReason ?? null })
+     }
+     showSettings()
+     /** this page's writes of the settings, one after another; a new language's reload waits for them. A write the store
+      *  refuses (its stored value cannot be read, config/storage.ts) is dropped: what the reader chose still holds on screen */
+     let writes = Promise.resolve()
+     const save = change => (writes = writes.then(() => surface.patch(change)).catch(e => console.warn('[settings]', e?.message ?? e)))
+     /** a change of the settings from the interface (the controller's patchSettings) */
+     export function patchSettings(change) { void save(change) }
+     /** true once the translation has started: a new language then means another document, and the page starts again */
+     let translating = false
+     /** the viewers exist: until then the settings are read as the viewers are made, and there is nothing to follow */
+     let viewersMade = false
+     surface.subscribe(() => {
+       const next = surface.state().config
+       if (!next) return
+       const language = next.targetLanguage !== config.targetLanguage
+       config = next
+       showSettings()
+       if (language && translating) void writes.then(() => location.reload())
+       else if (viewersMade) followSettings()
+     })
+     let wantTranslation = null
+     const translationWanted = new Promise(resolve => { wantTranslation = resolve })
+     if (mode !== 'original') wantTranslation()
+     /** the display changed: where the reader is read first, on the side still shown (Codex on #297); written when the
+      *  reader chose it here, not when it follows the settings */
+     function changeDisplay(next, write) {
+       if (!MODES.includes(next) || next === mode) return
+       const from = mode
+       const place = from === 'bilingual' ? null : readingPlace(from === 'original' ? left : right)
+       window.__reader.place = place
+       mode = next
+       showMode()
+       if (write) void save(c => withDisplay(c, mode))
+       relayout(from, place)
+       followFigures()
+       if (mode !== 'original') wantTranslation()
+     }
+     /** the display chosen in the reader */
+     export function setDisplay(next) { changeDisplay(next, true) }
+     /** the settings changed elsewhere — the popup, the settings page, another reader — or here: the display, the sync,
+      *  the highlight and figure text follow them; what the address names holds for its page */
+     function followSettings() {
+       if (!params.has('mode')) changeDisplay(displayOf(config), false)
+       const sync = config.pdfReader.sync ? 'same' : 'off'
+       if (!params.has('sync') && (syncMode === 'same' || syncMode === 'off') && sync !== syncMode) applySync(sync)
+       if (!config.reading.sentenceHighlight) light(null)
+       followFigures()
+     }
+     ```
+
+  3. Replace `let figuresOn = true // figure text, the reader's switch (setFigures)` with
+     `let figuresOn = figuresShown(config, mode) // figure text, as the settings say for this display (followFigures)`,
+     and add below it:
+
+     ```js
+     /** figure text shown or not, as the settings say for the display now shown */
+     function followFigures() { const on = figuresShown(config, mode); if (on !== figuresOn) { figuresOn = on; repaintFigures() } }
+     ```
+
+  4. In `light(id)`, make its first line `if (!config.reading.sentenceHighlight) id = null // the highlight is off in the settings`.
+
+  5. Replace `let compositing = CAN_COMPOSIT && prefs.compositor !== false` with
+     `let compositing = CAN_COMPOSIT && params.get('compositor') !== '0' // a probe's page can ask for the follower by script`,
+     and `let syncMode = SYNC_MODES.includes(prefs.syncMode) ? prefs.syncMode : 'same'` with
+     `let syncMode = SYNC_MODES.includes(params.get('sync')) ? params.get('sync') : config.pdfReader.sync ? 'same' : 'off'`.
+
+  6. In `setCompositor`, delete the line `void savePrefs({ compositor: compositing })` (a probe's switch, not a
+     setting). Replace `export function setSyncMode(next) { … }` with:
+
+     ```js
+     /** a sync mode in effect, nothing written */
+     function applySync(next) {
+       bake()
+       syncMode = next
+       stopGlide(); stopSpring(); clearTimeout(settleTimer); clearTimeout(follow.rest)
+       rebase(); arm()
+     }
+     /** how the other side follows (REPORT, sixteenth and seventeenth addenda): the interface's switch is same or off,
+      *  which is written to the settings; a probe's other modes are not */
+     export function setSyncMode(next) {
+       if (!SYNC_MODES.includes(next)) return
+       applySync(next)
+       if (next === 'same' || next === 'off') void save(c => ({ ...c, pdfReader: { ...c.pdfReader, sync: next === 'same' } }))
+     }
+     ```
+
+  7. Replace `export function setFigures(on) { figuresOn = on; repaintFigures() }` with
+     `export function setFigures(on) { void save(c => ({ ...c, image: { ...c.image, enabled: on } })) } // figure text on or off, in the settings; followFigures shows it`.
+
+  8. After `for (const side of sides) attach(side)`, add `viewersMade = true`.
+
+  9. In `harness`, add `get syncMode() { return syncMode },` beside `get readingLine()` (the browser check reads it).
+
+  Then check nothing of the reader's own preferences is left:
+
+  ```bash
+  grep -n "prefs\|savePrefs\|PREFS\|axtPdfReader" src/pdf-reader/engine/session.mjs
+  pnpm exec biome lint --only=correctness/noUndeclaredVariables src/pdf-reader/engine/session.mjs 2>&1 | grep "undeclared" | grep -v "The chrome variable"
+  ```
+
+  Expected: no output from either.
+
+- [ ] **Step 5: The browser check** — create `experiments/pdf-bilingual/spikes/reader-settings.mjs`:
+
+```js
+// The reader and the extension's settings (the reader's design, §3, §9.1), on a demo paper: the display the settings ask
+// for is the one it opens in; a display chosen in the reader is written back, stacked kept; another tab's change is
+// followed and not written back; the highlight and figure text follow their switches; a probe's address holds.
+// Exits non-zero on a failure. Build first; the demo papers made (spikes/reader-papers.mjs).
+//   node spikes/reader-settings.mjs
+import { launchWithReader } from './extension.mjs'
+
+const paper = '2608.02163'
+const { context, readerUrl } = await launchWithReader({ profile: 'reader-settings', demos: true, viewport: { width: 1440, height: 900 } })
+let failed = 0
+const check = (what, ok, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}${detail ? ` — ${detail}` : ''}`); if (!ok) failed++ }
+const open = async (query = {}) => {
+  const page = await context.newPage()
+  await page.goto(readerUrl({ paper, ...query }))
+  await page.waitForFunction(() => window.__reader?.ready && window.__reader?.controller?.getState().settings, null, { timeout: 90000 })
+  return page
+}
+const state = page => page.evaluate(() => window.__reader.controller.getState())
+const patch = (page, change) => page.evaluate(src => window.__reader.controller.patchSettings(new Function('c', `return (${src})(c)`)), change)
+const settle = page => page.waitForTimeout(700)
+
+// the display the settings ask for
+const a = await open()
+await patch(a, "c => ({ ...c, mode: 'only', pdfReader: { ...c.pdfReader, original: false } })")
+await settle(a)
+check('a change of the settings moves the display', (await state(a)).display === 'translation', (await state(a)).display)
+const b = await open()
+check('a reader opens in the display the settings ask for', (await state(b)).display === 'translation', (await state(b)).display)
+
+// a display chosen in the reader is written back; the other tab follows and writes nothing
+await b.evaluate(() => window.__reader.controller.setDisplay('bilingual'))
+await settle(b)
+const written = (await state(b)).settings
+check('choosing side by side writes the side mode', written.mode === 'side' && written.pdfReader.original === false, `${written.mode}, original ${written.pdfReader.original}`)
+await settle(a)
+check('another reader follows it', (await state(a)).display === 'bilingual', (await state(a)).display)
+await b.evaluate(() => window.__reader.controller.setDisplay('original'))
+await settle(b)
+const orig = (await state(b)).settings
+check('choosing the original marks it and keeps the mode', orig.pdfReader.original === true && orig.mode === 'side', `${orig.mode}, original ${orig.pdfReader.original}`)
+await patch(b, "c => ({ ...c, mode: 'stack', pdfReader: { ...c.pdfReader, original: false } })")
+await settle(b)
+check('stacked shows side by side', (await state(b)).display === 'bilingual', (await state(b)).display)
+await patch(b, "c => ({ ...c, mode: 'stack', pdfReader: { ...c.pdfReader, original: true } })")
+await settle(b)
+await b.evaluate(() => window.__reader.controller.setDisplay('bilingual'))
+await settle(b)
+const kept = (await state(b)).settings
+check('side by side chosen with stacked stored keeps stacked', kept.mode === 'stack' && !kept.pdfReader.original, `${kept.mode}, original ${kept.pdfReader.original}`)
+
+// the sync follows its setting, and the reader's switch writes it
+await patch(b, "c => ({ ...c, pdfReader: { ...c.pdfReader, sync: false } })")
+await settle(b)
+check('the sync goes off with its setting', (await b.evaluate(() => window.__reader.debug.syncMode)) === 'off')
+await b.evaluate(() => window.__reader.controller.setSync(true))
+await settle(b)
+check('the reader\'s switch writes it back', (await state(b)).settings.pdfReader.sync === true && (await b.evaluate(() => window.__reader.debug.syncMode)) === 'same')
+
+// the highlight and figure text follow their switches
+await patch(b, "c => ({ ...c, reading: { ...c.reading, sentenceHighlight: false }, image: { ...c.image, enabled: false } })")
+await settle(b)
+const leftBox = await b.locator('#left').boundingBox()
+await b.mouse.move(leftBox.x + leftBox.width * 0.3, leftBox.y + leftBox.height * 0.5)
+await b.waitForTimeout(300)
+check('no band with the highlight off', (await b.evaluate(() => document.querySelectorAll('.axt-hl').length)) === 0)
+await b.waitForTimeout(800)
+check('no figure text with the image switch off', (await b.evaluate(() => document.querySelectorAll('.axt-fig').length)) === 0)
+await patch(b, "c => ({ ...c, reading: { ...c.reading, sentenceHighlight: true }, image: { ...c.image, enabled: true } })")
+await settle(b)
+
+// an address that names a display writes nothing, and holds it whatever the settings say
+const stored = (await state(b)).settings.pdfReader.original
+const c = await open({ mode: 'original' })
+await settle(c)
+check('an address that names a display writes nothing', (await state(c)).settings.pdfReader.original === stored, `stored ${stored}, now ${(await state(c)).settings.pdfReader.original}`)
+await patch(c, "c => ({ ...c, mode: 'only', pdfReader: { ...c.pdfReader, original: false } })")
+await settle(c)
+check('and holds it whatever the settings say', (await state(c)).display === 'original', (await state(c)).display)
+
+console.log(failed ? `${failed} failed` : 'all passed')
+await context.close()
+process.exit(failed ? 1 : 0)
+```
+
+```bash
+cd "$(git rev-parse --show-toplevel)" && pnpm build && node experiments/pdf-bilingual/spikes/reader-settings.mjs
+```
+
+Expected: `all passed`, exit 0. Then the engine's checks again — the settings changed where the display and the sync
+come from:
+
+```bash
+node tests/e2e/pdf-entry.mjs
+cd experiments/pdf-bilingual && node spikes/viewer-faults.mjs && node spikes/cache-revisit.mjs && node spikes/sync-frames.mjs
+```
+
+Expected: 17/17; `all passed` for each probe; the compositor follower 0 frames off.
+
+- [ ] **Step 6: The gate and the commit**
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+git add src/pdf-reader/engine/session.mjs src/pdf-reader/engine/session.d.mts src/pdf-reader/controller.ts tests/pdf-reader/controller.test.ts experiments/pdf-bilingual/spikes/reader-settings.mjs
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
+git commit -F - <<'EOF'
+feat(pdf-reader): the reader follows the extension's settings
+
+The display, the sync, the highlight and figure text come from the shared
+settings and follow changes made elsewhere; what the reader chooses is
+written back through the page's one writer, and the interface reaches it
+through the controller. A new interface language reloads the page. The
+reader's own preferences key goes.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+EOF
+```
+
+### Task 11: Part 2's record, and Part 3's plan
+
+- [ ] **Step 1:** `REPORT.md`, a twenty-first addendum: what the reader reads and writes, and the browser check's output.
+- [ ] **Step 2:** Part 3's plan (the interface), written against the code as Part 2 left it, appended here, and reviewed
+  with the maintainer before it is executed.
+- [ ] **Step 3:** Commit both.

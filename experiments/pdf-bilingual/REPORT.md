@@ -1149,3 +1149,40 @@ Whether a paper can be had as a bilingual PDF is known before the reader opens, 
 
 - **On the abstract page**, from arXiv's own source link in the Access Paper list, `a.download-eprint` (TeX Source, to `/src/<id>`). 1706.03762 has it. 2608.07562, one of the corpus's 11 PDF-only submissions (third addendum), has only View PDF.
 - **Elsewhere**, from a HEAD on `arxiv.org/src/<id>`. A source answers `application/gzip` (1706.03762: `arXiv-1706.03762v7.tar.gz`). A PDF-only submission answers `application/pdf` (`arXiv-2608.07562v1.pdf`), which is what `spikes/corpus.mjs` already read.
+
+## Twentieth addendum, 2026-09-25: the reader in the extension (Part 1) — BUILT
+
+Part 1 of `plans/2026-09-25-reader-interface.md`: the reader became the extension's own page, its engine unchanged. The interface proper comes with Part 3; until then the page is the two panes and the way back.
+
+**What moved where.**
+
+- **The engine's modules** went from `poc-reader/` to `src/pdf-reader/engine/`: `anchors`, `sync`, `figures`, `engine`, `mt`, `live`, `latex-front`, `paper-meta`, `scripts`, `tar`, `cache`, `names`. They import the extension's source directly (`@/…`), so the `lib/axt` build (`shared/`, `spikes/build-shared.mjs`) is gone. They are still JavaScript, linted as the experiment is, until the next stage ports them.
+- **PDF.js** is `pdfjs-dist` 6.3.289, exact, bundled from npm (`src/pdf-reader/pdfjs.ts`). Its character maps, standard fonts (with their licences) and WebAssembly decoders are copied into `pdf-reader/pdfjs/`. `scripts/check-output.mjs` fails a build without them, or without the page.
+- **The page** is `pdf-reader.html` (`src/entrypoints/pdf-reader/`, React). arXiv's PDF page frames it with the same parameters as before. `poc-reader/` keeps only the demo papers, which are local and never committed, and the local variants harness, which goes with Part 3.
+
+**The session.** The prototype's page script is `src/pdf-reader/engine/session.mjs`, not wrapped in a function, so that git follows the move.
+
+- It still runs once, at load. It first waits for its host (`host.mjs`): the page hands it the two panes, the address's parameters and an event sink, then loads the module.
+- What its header controls did, it exports as commands: `setDisplay`, `setSyncMode`, `setCompositor`, `setFigures`, `zoomBy`, `zoomTo`, `goToPage`.
+- What it wrote into the header, it emits as events (`session.d.mts`): the display, the scale, each side's page, every step of a run with its counts, a failure with its kind, and the settings notice.
+- A swap of the right side reports the new viewer's page and page count.
+- **Figure OCR goes through the extension.** A bitmap is encoded as PNG and sent as `axt:ocr`, as the HTML page's images are (`src/pdf-reader/ocr.ts`). The reader's own worker and runtime would have been a second copy of the recogniser in the package, which the build check forbids; results are now cached by the image's hash, as on the HTML page.
+
+**The controller** (`src/pdf-reader/controller.ts`) folds the events into `ReaderState`: the display, whether the paper or its language cannot be had, the phase and progress of a run, the paragraphs that failed, whether the final is on screen, the scale, each side's page, and whether the settings could not be read. Commands given while the session is still loading wait for it and go in order. 12 unit tests (`tests/pdf-reader/`).
+
+**MEASURED on the new page.**
+
+| Check | Result |
+|---|---|
+| The six case spikes, now run with tsx | pass as before the move |
+| `e2e:pdf` | 17/17 |
+| `spikes/viewer-faults.mjs` | all passed |
+| `spikes/cache-revisit.mjs` | all passed; a revisit shown from this machine's copy in 191 ms (opened → cache hit 118 ms), nothing compiled; the two-tab and offline cases as before |
+| `spikes/cache-faults.mjs` | all passed |
+| `spikes/sync-frames.mjs` | the follower on the compositor 0 frames off, p95 0 px, idle and busy; by script it lags as before (off in 78 and 74 frames) |
+| The demo paper (2608.02163) on the pre-move reader, rebuilt from history, and on the new page | identical: 350 units, 172 linked, left 209, right 236, pages 25 / 26, the first units' rectangles to the last digit |
+
+**What the move found.**
+
+- The probes reached the prototype's controls in more places than its markup names: the compositor's checkbox and the status line, besides the display buttons and the sync menu. They all go through `window.__reader` now: the controller, the session, and `status`.
+- The TeX Live container can be "Up" with its port unpublished: `curl` is refused while `docker ps` shows `8070/tcp` with no host side. `docker restart texlive-server` publishes it again.
