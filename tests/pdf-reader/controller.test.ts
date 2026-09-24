@@ -106,9 +106,13 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(fold([{ type: 'sync', on: false }]).sync).toBe(false)
   })
 
+  it('holds the language pack beside the settings', () => {
+    expect(fold([{ type: 'settings', config: DEFAULT_CONFIG, pack: 'available' }]).pack).toBe('available')
+  })
+
   it('holds the settings the session read', () => {
     expect(INITIAL.settings).toBeNull()
-    expect(fold([{ type: 'settings', config: DEFAULT_CONFIG }]).settings).toBe(DEFAULT_CONFIG)
+    expect(fold([{ type: 'settings', config: DEFAULT_CONFIG, pack: null }]).settings).toBe(DEFAULT_CONFIG)
   })
 
   it('keeps the same state object for an event that changes nothing', () => {
@@ -116,7 +120,7 @@ describe('reduce: the session events folded into the reader state', () => {
   })
 })
 
-const fakeSession = (): Session => ({ setDisplay: vi.fn(), setSyncMode: vi.fn(), setCompositor: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), patchSettings: vi.fn() })
+const fakeSession = (): Session => ({ setDisplay: vi.fn(), setSyncMode: vi.fn(), setCompositor: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), patchSettings: vi.fn(), pdfBytes: vi.fn(async () => null) })
 const panes = () => ({ left: document.createElement('div'), right: document.createElement('div') })
 
 describe('createController', () => {
@@ -188,6 +192,16 @@ describe('createController', () => {
   it('knows the paper\'s id from the address before the session says anything', () => {
     const controller = createController({ open: async () => fakeSession(), params: new URLSearchParams('paper=hep-th/9711200') })
     expect(controller.getState().paper).toEqual({ id: 'hep-th/9711200', title: '' })
+  })
+
+  it('remembers the zoom chosen from the menu, and forgets it on a step', async () => {
+    const session = fakeSession()
+    const controller = createController({ open: async () => session, params: new URLSearchParams() })
+    await controller.attach(panes())
+    controller.zoomTo('page-fit')
+    expect(controller.getState().zoom).toBe('page-fit')
+    controller.zoomBy(1.1)
+    expect(controller.getState().zoom).toBeNull()
   })
 
   it('stops telling a listener that unsubscribed', async () => {

@@ -1,25 +1,33 @@
 // The reader's popovers (the reader's design, §6.7): anchored under their button, 6 px below it, kept within the window
 // (position-try); they grow from the button. The browser's own light-dismiss popover: its button opens and closes it
 // (popovertarget), Escape and a press outside close it; the focus comes back to the button when it closes with the
-// focus inside. Its contents are drawn only while it is open
-import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
+// focus inside. Its contents are drawn from the start, so that it never shows empty for a frame and a key pressed as it
+// opens is not lost; opening puts the focus on its [data-autofocus] element, and a menu's contents start afresh after each
+// close (their key, `generation`)
+import { type ReactNode, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 
 export function usePopover(kind: 'menu' | 'listbox' | 'dialog') {
   const raw = useId().replace(/[^\w-]/g, '')
   const id = `pop-${raw}`, anchor = `--pop-${raw}`
   const [open, setOpen] = useState(false)
+  /** counts the closes: a key for contents that start afresh each time (a search, the active item) */
+  const [generation, setGeneration] = useState(0)
+  const onOpenChange = useCallback((now: boolean) => {
+    setOpen(now)
+    if (!now) setGeneration(g => g + 1)
+  }, [])
   return {
     open,
     anchor,
+    generation,
     trigger: { popoverTarget: id, 'aria-haspopup': kind, 'aria-expanded': open } as const,
-    popover: { id, anchor, open, onOpenChange: setOpen },
+    popover: { id, anchor, onOpenChange },
   }
 }
 
-export function Popover({ id, anchor, open, onOpenChange, role, label, onClosed, className = '', children }: {
+export function Popover({ id, anchor, onOpenChange, role, label, onClosed, className = '', children }: {
   id: string
   anchor: string
-  open: boolean
   onOpenChange: (open: boolean) => void
   role: 'menu' | 'listbox' | 'dialog'
   label: string
@@ -28,13 +36,23 @@ export function Popover({ id, anchor, open, onOpenChange, role, label, onClosed,
   children?: ReactNode
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  // the element to focus carries the HTML autofocus attribute, which the browser's popover honours as it shows, in the
+  // same step: a key pressed at once goes to it (React's autoFocus writes no attribute). Set again as contents start afresh
+  useLayoutEffect(() => {
+    for (const el of ref.current?.querySelectorAll('[data-autofocus]:not([autofocus])') ?? []) el.setAttribute('autofocus', '')
+  })
   useEffect(() => {
     const el = ref.current
     if (!el) return
     const onToggle = (e: Event) => {
       const now = (e as Event & { newState?: string }).newState === 'open'
       onOpenChange(now)
-      if (now) return
+      if (now) {
+        // where the browser did not already (a popover shown by script in a test page)
+        const target = el.querySelector<HTMLElement>('[data-autofocus]')
+        if (target && document.activeElement !== target) target.focus()
+        return
+      }
       if (el.contains(document.activeElement) || document.activeElement === document.body) document.querySelector<HTMLElement>(`[popovertarget="${id}"]`)?.focus()
       onClosed?.()
     }
@@ -44,7 +62,7 @@ export function Popover({ id, anchor, open, onOpenChange, role, label, onClosed,
   return (
     // biome-ignore lint/a11y/useAriaPropsSupportedByRole: the role is the caller's, a menu, a listbox or a dialog, each named by its label
     <div ref={ref} id={id} popover="auto" role={role} aria-label={label} className={`pop chrome ${className}`} style={{ positionAnchor: anchor } as React.CSSProperties}>
-      {open && children}
+      {children}
     </div>
   )
 }

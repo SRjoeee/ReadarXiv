@@ -13,7 +13,7 @@ function Harness() {
   const [closedCount, setClosed] = useState(0)
   return createElement('div', null,
     createElement('button', { type: 'button', ...pop.trigger, 'data-trigger': '' }, 'open'),
-    createElement(Popover, { ...pop.popover, role: 'menu', label: 'Zoom', onClosed: () => setClosed(n => n + 1) }, createElement('button', { type: 'button', 'data-inside': '' }, 'item')),
+    createElement(Popover, { ...pop.popover, role: 'menu', label: 'Zoom', onClosed: () => setClosed(n => n + 1) }, createElement('button', { type: 'button', 'data-inside': '', 'data-autofocus': '' }, 'item')),
     createElement('output', null, String(closedCount)))
 }
 
@@ -25,6 +25,14 @@ describe('the reader\'s popover (the reader\'s design, §6.7)', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
     await act(async () => { pop.showPopover() })
     expect([isOpen(pop), trigger.getAttribute('aria-expanded')]).toEqual([true, 'true'])
+  })
+
+  it('draws its contents before it opens, so that it never shows empty, and puts the focus in them when it opens (Task 19)', async () => {
+    const { container } = await mountElement(createElement(Harness))
+    const pop = container.querySelector<HTMLElement>('[popover]')!
+    expect(pop.querySelector('[data-inside]')).not.toBeNull()
+    await act(async () => { pop.showPopover() })
+    expect(document.activeElement).toBe(pop.querySelector('[data-inside]'))
   })
 
   it('gives the focus back to its button when it closes with the focus inside', async () => {

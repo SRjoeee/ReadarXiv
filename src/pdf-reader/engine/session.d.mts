@@ -1,5 +1,6 @@
 // The session's types (session.mjs is JavaScript until the engine's port): what it reports, and what it takes
 import type { Config } from '@/config/schema'
+import type { PackState } from '@/shared/pack'
 
 export type EngineDisplay = 'original' | 'translation' | 'bilingual'
 export type SyncMode = 'off' | 'current' | 'same' | 'pointer' | 'matched'
@@ -13,7 +14,7 @@ export type SessionEvent =
   /** the sides scroll together, as the reader applies it (off, or any other mode) */
   | { type: 'sync'; on: boolean }
   /** the extension's settings, each time they land */
-  | { type: 'settings'; config: Config }
+  | { type: 'settings'; config: Config; pack: PackState | null }
   | { type: 'display'; mode: EngineDisplay }
   | { type: 'scale'; scale: number }
   | { type: 'page'; side: 'left' | 'right'; page: number; pages: number }
@@ -35,4 +36,5 @@ export declare function zoomBy(factor: number): void
 export declare function zoomTo(value: number | 'page-width' | 'page-fit' | 'page-actual'): void
 export declare function goToPage(side: 'left' | 'right', page: number): void
 export declare function patchSettings(change: (latest: Config) => Config): void
+export declare function pdfBytes(which: 'translation' | 'original'): Promise<Uint8Array | null>
 export declare const run: Promise<void>

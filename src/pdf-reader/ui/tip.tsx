@@ -19,12 +19,17 @@ export function useTip(label: string, hint?: string, { side = 'bottom' }: { side
   const show = () => {
     // no tip over an open menu or popover
     if (open.current || document.querySelector('.pop[data-open], .pop:popover-open')) return
-    ref.current?.showPopover()
-    open.current = true
+    // a tip never breaks the page: shown while another popover is being shown, the browser refuses it, and it is not shown
+    try {
+      ref.current?.showPopover()
+      open.current = true
+    } catch {}
   }
   const hide = () => {
     clearTimeout(timer.current)
-    if (open.current) ref.current?.hidePopover()
+    try {
+      if (open.current) ref.current?.hidePopover()
+    } catch {}
     open.current = false
   }
   return {
@@ -33,7 +38,8 @@ export function useTip(label: string, hint?: string, { side = 'bottom' }: { side
       onPointerEnter: () => { clearTimeout(timer.current); timer.current = window.setTimeout(show, 500) },
       onPointerLeave: hide,
       onPointerDown: () => { pressed.current = true; hide() },
-      onFocus: () => { if (!pressed.current) show() },
+      // the keyboard's focus alone: the focus a closing menu gives back to its button after a click is no reason for a tip
+      onFocus: e => { if (!pressed.current && (e.currentTarget as HTMLElement).matches(':focus-visible')) show() },
       onBlur: () => { pressed.current = false; hide() },
     },
     tip: (

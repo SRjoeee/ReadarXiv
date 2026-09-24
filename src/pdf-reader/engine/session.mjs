@@ -95,7 +95,7 @@ function showSettings() {
   let sheet = document.getElementById('axt-look')
   if (!sheet) { sheet = document.createElement('style'); sheet.id = 'axt-look'; document.head.append(sheet) }
   sheet.textContent = appearanceRule(lookOf(config))
-  host.emit({ type: 'settings', config })
+  host.emit({ type: 'settings', config, pack: surface.state().pack ?? null })
   // the defaults are in effect — the service and its key set on the settings page are not — until they are repaired there
   host.emit({ type: 'notice', why: surface.state().fallbackReason ?? null })
 }
@@ -1254,6 +1254,11 @@ export function zoomBy(factor) { for (const s of sides) if (shown(s)) s.viewer.c
 export function zoomTo(value) { for (const s of sides) if (shown(s)) s.viewer.currentScaleValue = value === 'page-width' ? fitWidth(s) : String(value) }
 /** a side at a page */
 export function goToPage(which, page) { const s = which === 'left' ? left : right; if (s.doc) s.viewer.currentPageNumber = page }
+/** a side's PDF as it is shown, for the download (the reader's design, §6.1): the original, or the translation on screen */
+export async function pdfBytes(which) {
+  const side = which === 'original' ? left : right
+  return side.doc ? side.doc.getData() : null
+}
 
 // ---------------------------------------------------------------- anchoring one side
 /** the units TeX sets away from where the source has them: a caption with its float, a footnote at the foot of its

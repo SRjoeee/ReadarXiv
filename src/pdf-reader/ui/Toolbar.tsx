@@ -8,6 +8,7 @@ import { R, S } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { DisplaySwitch } from './DisplaySwitch'
 import { Icon } from './icons'
+import { DownloadMenu, LanguageMenu, ServiceMenu, ZoomMenu } from './Menus'
 import { PaperTitle } from './PaperTitle'
 import { ToolbarButton } from './ToolbarButton'
 import { useReader } from './use-reader'
@@ -41,12 +42,17 @@ export function Toolbar({ controller, embedded }: { controller: ReaderController
           <ToolbarButton label={R.zoom.out} hint={`${MOD} −`} onClick={() => controller.zoomBy(1 / 1.1)} className="!w-[26px] !min-w-[26px]">
             <Icon node={Minus} />
           </ToolbarButton>
-          <span data-zoom-value className="min-w-[52px] px-1.5 text-center text-[12.5px] tabular-nums">{Math.round(state.scale * 100)}%</span>
+          <ZoomMenu controller={controller} />
           <ToolbarButton label={R.zoom.in} hint={`${MOD} +`} onClick={() => controller.zoomBy(1.1)} className="!w-[26px] !min-w-[26px]">
             <Icon node={Plus} />
           </ToolbarButton>
         </div>
         <span className="divider" />
+        <LanguageMenu controller={controller} />
+        <ServiceMenu controller={controller} />
+        {/* the reading options (Task 20) */}
+        <span className="divider" />
+        <DownloadMenu controller={controller} />
         <ToolbarButton label={S.settings} onClick={openSettings}>
           <Icon node={Settings} />
         </ToolbarButton>

@@ -1,7 +1,9 @@
 // The one boundary between the reader's engine and its interface (the reader's design, §11.3): the session's events
 // folded into a state the interface subscribes to, and the interface's commands passed on to the session. pdfslick's
 // per-viewer store, adopted: the engine's events drive the store, and nothing reads the viewers back
+import { toBcp47 } from '@/config/languages'
 import type { Config } from '@/config/schema'
+import type { PackState } from '@/shared/pack'
 import { PROVIDER_ERROR_KINDS, type ProviderErrorKind } from '@/providers/types'
 import type { EngineDisplay, SessionEvent, SessionHost } from './engine/session.mjs'
 import type * as SessionModule from './engine/session.mjs'
@@ -37,6 +39,10 @@ export interface ReaderState {
   paper: { id: string; title: string }
   /** the window too narrow for two sides: side by side shows the translation alone (Task 23 sets it) */
   narrow: boolean
+  /** the offline service's language pack, as the settings' surface knows it */
+  pack: PackState | null
+  /** the zoom last chosen from the menu; null after a step or a pinch */
+  zoom: 'page-width' | 'page-fit' | 'page-actual' | number | null
   /** the sides scroll together, as the reader applies it — not the stored setting, which a refused write or an address may not match */
   sync: boolean
 }
@@ -58,10 +64,12 @@ export const INITIAL: ReaderState = {
   paper: { id: '', title: '' },
   narrow: false,
   sync: true,
+  pack: null,
+  zoom: 'page-width',
 }
 
 /** the session's commands the controller passes on */
-export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage' | 'patchSettings'>
+export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage' | 'patchSettings' | 'pdfBytes'>
 
 /** the runs that end without a translation because of the paper, or of the language: not failures a reader can retry */
 const CANNOT_BE_HAD = new Set(['no source'])
@@ -93,7 +101,7 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     case 'sync':
       return event.on === state.sync ? state : { ...state, sync: event.on }
     case 'settings':
-      return event.config === state.settings ? state : { ...state, settings: event.config }
+      return event.config === state.settings && event.pack === state.pack ? state : { ...state, settings: event.config, pack: event.pack }
     case 'fail':
       if (CANNOT_BE_HAD.has(event.event)) return { ...state, available: false, phase: 'ready' }
       if (NOT_SUPPORTED.has(event.event)) return { ...state, languageSupported: false, phase: 'ready' }
@@ -124,6 +132,12 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
   }
 }
 
+/** a download's file name (the reader's design, §6.1): the paper's id, the translation's with its language; the slash of
+ *  an old-style id (hep-th/9711200) made safe */
+export function fileName(id: string, which: 'translation' | 'original', lang: string): string {
+  return `${id.replace(/\//g, '_')}${which === 'translation' ? `.${lang}` : ''}.pdf`
+}
+
 export interface ReaderController {
   getState(): ReaderState
   subscribe(listener: () => void): () => void
@@ -137,6 +151,8 @@ export interface ReaderController {
   goToPage(side: Side, page: number): void
   /** a change of the extension's settings, on top of what storage holds when its turn comes */
   patchSettings(change: (latest: Config) => Config): void
+  /** a side's PDF saved as a file, named by the paper (fileName) */
+  download(which: 'translation' | 'original'): Promise<void>
 }
 
 export function createController({ open, params }: { open: (host: SessionHost) => Promise<Session>; params: URLSearchParams }): ReaderController {
@@ -154,6 +170,11 @@ export function createController({ open, params }: { open: (host: SessionHost) =
    * one given before `attach` has no session to wait for and is dropped, as is one for a session that could not open
    */
   const later = (act: (s: Session) => void) => void session?.then(act, () => {})
+  /** a change of the state that is the controller's own (the zoom chosen), not the session's */
+  const set = (patch: Partial<ReaderState>) => {
+    state = { ...state, ...patch }
+    for (const listener of listeners) listener()
+  }
   return {
     getState: () => state,
     subscribe(listener) {
@@ -174,9 +195,18 @@ export function createController({ open, params }: { open: (host: SessionHost) =
     // the interface's switch is the owner's design or nothing (REPORT, sixteenth addendum): top alignment, or off
     setSync: on => later(s => s.setSyncMode(on ? 'same' : 'off')),
     setFigures: on => later(s => s.setFigures(on)),
-    zoomBy: factor => later(s => s.zoomBy(factor)),
-    zoomTo: value => later(s => s.zoomTo(value)),
+    zoomBy: factor => { set({ zoom: null }); later(s => s.zoomBy(factor)) },
+    zoomTo: value => { set({ zoom: value }); later(s => s.zoomTo(value)) },
     goToPage: (side, page) => later(s => s.goToPage(side, page)),
     patchSettings: change => later(s => s.patchSettings(change)),
+    async download(which) {
+      const s = await session
+      const bytes = await s?.pdfBytes(which)
+      if (!bytes) return
+      const lang = state.settings ? toBcp47(state.settings.targetLanguage) : ''
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' })), download: fileName(state.paper.id, which, lang) })
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+    },
   }
 }

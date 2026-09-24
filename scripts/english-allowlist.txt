@@ -4,7 +4,7 @@ docs/RELEASE.md 6  # 2026-09-17: the Chinese store listing (product copy the own
 docs/UI.md 184  # 2026-09-18: S-I-06 / S-I-06a / S-I-06b / S-I-06c (the floating button, its two side buttons and its menu), S-P-03b / S-P-33 / S-P-50b (the popup on entry pages), S-O-49b / S-O-49c (where the translation opens, the floating button switch), issue #169; 2026-09-21: S-I-07 (the figure viewer, issue #276); −18, the macOS helper's rows went with the helper (issue #280); 2026-09-25: §3.5, the PDF reader's surface (S-R), +18
 experiments/pdf-bilingual/REPORT.md 11  # 2026-09-22: the experiment's record; engine outputs quoted as the evidence its decisions rest on; +1, the captions babel gives each CJK language (#32)
 experiments/pdf-bilingual/plans/2026-09-25-reader-interface.md 136  # 2026-09-25: the reader's words the plan's code puts into the locale packs, and the design's copy it names (the controls a reader sees), quoted; +130 for Part 3: its zh-CN pack, docs/UI.md's S-R table, and the tests finding controls by their Chinese names, all verbatim
-experiments/pdf-bilingual/spikes/reader-ui.mjs 4  # 2026-09-25: the reader's controls found by their Chinese names in a real browser (grows task by task in the plan's Part 3)
+experiments/pdf-bilingual/spikes/reader-ui.mjs 10  # 2026-09-25: the reader's controls found by their Chinese names in a real browser (grows task by task in the plan's Part 3)
 experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md 120  # 2026-09-25: the reader's interface copy as the maintainer agreed it, and the maintainer's words each decision rests on, quoted (product copy the design fixes; the copy moves to docs/UI.md with the build)
 src/pdf-reader/engine/anchors.mjs 2  # 2026-09-22: the CJK ranges of the tokenizer's regexes
 src/pdf-reader/engine/latex-front.mjs 4  # 2026-09-22: the pseudo-translation's zh, zh-Hant and ja sample text (+1, zh-Hant, #32); a control word glued to a CJK character, quoted
@@ -45,8 +45,10 @@ src/ui/appearance/Preview.tsx 1
 src/ui/strings.ts 3
 tests/pdf-reader/ui/copy.test.ts 4  # 2026-09-25: the reader's words, zh-CN expectations and the technical terms checked in Chinese
 tests/pdf-reader/ui/display-switch.test.ts 3  # 2026-09-25: the display switch's choices found by their Chinese names
+tests/pdf-reader/ui/languages.test.ts 1  # 2026-09-25: the nine languages each named in its own language, the expectation
+tests/pdf-reader/ui/menus.test.ts 2  # 2026-09-25: the menus' items found by their Chinese names
 tests/pdf-reader/ui/tip.test.ts 3  # 2026-09-25: the reader's controls found by their Chinese names, as the interface shows them
-tests/pdf-reader/ui/toolbar.test.ts 8  # 2026-09-25: the toolbar's controls found by their Chinese names
+tests/pdf-reader/ui/toolbar.test.ts 9  # 2026-09-25: the toolbar's controls found by their Chinese names
 tests/cache/key.test.ts 3
 tests/cache/store.test.ts 10
 tests/config/appearance.test.ts 1

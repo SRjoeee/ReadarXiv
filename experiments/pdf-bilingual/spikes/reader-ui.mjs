@@ -97,6 +97,27 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.close()
 }
 
+// ---------------------------------------------------------------- Task 19: the menus
+{
+  const page = await open({ mode: 'bilingual' })
+  await page.getByRole('button', { name: '缩放比例' }).click()
+  await page.getByRole('menuitemradio', { name: '适合页面' }).click()
+  await page.waitForTimeout(500)
+  check('the zoom menu fits the page, and closes', (await state(page)).zoom === 'page-fit' && !(await page.evaluate(() => !!document.querySelector('.pop:popover-open'))))
+  await page.getByRole('button', { name: '目标语言' }).click()
+  await page.keyboard.type('fra')
+  check('the language menu searches as it is typed', (await page.getByRole('option').count()) === 1)
+  await page.keyboard.press('Escape')
+  check('Escape closes it, the focus back on its button', await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === '目标语言'))
+  const [download] = await Promise.all([page.waitForEvent('download'), (async () => { await page.getByRole('button', { name: '下载' }).click(); await page.getByRole('menuitem', { name: '原文 PDF' }).click() })()])
+  check('the original downloads, named by the paper', download.suggestedFilename() === `${paper}.pdf`, download.suggestedFilename())
+  await page.getByRole('button', { name: '翻译服务' }).click()
+  await page.waitForTimeout(300) // past the popover's 150 ms entrance
+  await shot(page, '19-service-menu')
+  await page.keyboard.press('Escape')
+  await page.close()
+}
+
 console.log(failed ? `${failed} failed` : 'all passed')
 await context.close()
 process.exit(failed ? 1 : 0)

@@ -13,7 +13,7 @@ export function fakeController(over: Partial<ReaderState> = {}) {
     getState: () => state,
     subscribe: (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } },
     attach: vi.fn(async () => ({})),
-    setDisplay: vi.fn(), setSync: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), patchSettings: vi.fn(),
+    setDisplay: vi.fn(), setSync: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), patchSettings: vi.fn(), download: vi.fn(async () => {}),
   } as unknown as Spied<ReaderController>
   return { controller, set(next: Partial<ReaderState>) { state = { ...state, ...next }; for (const l of listeners) l() } }
 }

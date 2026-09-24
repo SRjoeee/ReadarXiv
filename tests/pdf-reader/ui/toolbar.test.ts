@@ -47,7 +47,7 @@ describe('the toolbar (the reader\'s design, §6.1)', () => {
 
   it('zooms by a tenth each way, and shows the scale', async () => {
     const { container, controller } = await mount({ scale: 1.25 })
-    expect(container.querySelector('[data-zoom-value]')!.textContent).toBe('125%')
+    expect(container.querySelector('button[aria-label="缩放比例"] [data-zoom-value]')!.textContent).toBe('125%')
     button(container, '放大').click()
     button(container, '缩小').click()
     expect(controller.zoomBy.mock.calls).toEqual([[1.1], [1 / 1.1]])
