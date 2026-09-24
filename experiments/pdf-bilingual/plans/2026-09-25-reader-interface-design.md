@@ -45,10 +45,13 @@ What changes on the extension's side is §9; here, the ways in.
   - HTML 对照翻译 is disabled with the existing note when the paper has no HTML version (a thing a reader can see on
     arXiv).
   - PDF 对照翻译 is disabled **without words** when the paper cannot be had as a bilingual PDF (§1's rule).
-  - How that is known: on the abstract page, from arXiv's own source link in the Access Paper list, the way the HTML
-    link is read now, with no request. **[to verify]** the selector against the abstract fixtures; it goes into
-    `src/core/rules/abstract.ts`. On a PDF page with the reader closed: a HEAD on `arxiv.org/src/<id>`, as the HTML
-    version is checked there now. **[to verify]** what that answers for a submission without a source.
+  - How that is known (checked 2026-09-25 on 1706.03762, which has a source, and 2608.07562, one of the corpus's 11
+    PDF-only submissions):
+    - on the abstract page, arXiv's own source link in the Access Paper list, `a.download-eprint` (TeX Source, to
+      `/src/<id>`), read as the HTML link is now, with no request; a PDF-only submission has no such link. The selector
+      goes into `src/core/rules/abstract.ts`;
+    - on a PDF page with the reader closed, a HEAD on `arxiv.org/src/<id>`, as the HTML version is checked there now: a
+      source answers `application/gzip` (a `.tar.gz` or a gzipped file), a PDF-only submission `application/pdf`.
 - **The floating button**: on the abstract page, and on a PDF page with the reader closed, the logo opens the panel —
   the popup in its frame, with the two entries — and the column's separate control-panel segment goes on those pages,
   since the logo now does what it did (the maintainer's ruling, 2026-09-24). The settings segment stays. On the HTML page
@@ -581,6 +584,4 @@ the same thing, its string is reused (marked).
 - 文 may be refined by hand (§6.2); the committed path data is replaced when it is.
 - **For the maintainer**: the popup names the figure switch 图片翻译 (S-P-85); the reader says 翻译图片中的文字 as asked.
   One setting, two names: should the popup follow?
-- **[to verify]** before building §2: the abstract page's source link, and what `arxiv.org/src/<id>` answers for a
-  submission without a source.
 - Jump back (#300), the engine's TypeScript port and #299: the next stage.

@@ -1142,3 +1142,10 @@ The first series was discarded: other rendering ran on the machine at the time, 
 - **`will-change` while pinching buys nothing**, and it costs more under load (the layers are made at the pinch's start).
 - **Hiding works but loses the overlays.** It is the cheapest on the main thread, but the overlays are gone for as long as the pinch lasts. With the transform free, there is no reason to hide them.
 - **PDF.js's `reset()` removes every node it does not own when it redraws a page.** The overlays came back only after the figure pipeline ran again: 40 ms here, up to 300 ms in the first series. Until then a figure showed its original labels. A `MutationObserver` that puts a removed overlay back in the same task, except the ones the reader removes itself, brings that to 0, at no cost.
+
+### Two facts for the entries — CHECKED
+
+Whether a paper can be had as a bilingual PDF is known before the reader opens, with no download:
+
+- **On the abstract page**, from arXiv's own source link in the Access Paper list, `a.download-eprint` (TeX Source, to `/src/<id>`). 1706.03762 has it. 2608.07562, one of the corpus's 11 PDF-only submissions (third addendum), has only View PDF.
+- **Elsewhere**, from a HEAD on `arxiv.org/src/<id>`. A source answers `application/gzip` (1706.03762: `arXiv-1706.03762v7.tar.gz`). A PDF-only submission answers `application/pdf` (`arXiv-2608.07562v1.pdf`), which is what `spikes/corpus.mjs` already read.
