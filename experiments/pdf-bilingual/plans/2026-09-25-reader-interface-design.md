@@ -166,8 +166,10 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 3. The target language (its name and a chevron, **no icon**: the translation mark belongs to the display switch alone,
    and the name says what the menu is) and the service (its name and a chevron). Their menus are §6.7's.
 4. 阅读选项 (`sliders-horizontal`), a popover: 对照高亮 (switch), 高亮颜色 (a swatch for each highlight profile: the
-   three built-in, 柔和绿, 淡黄, 淡蓝, and any added in the settings), a separator, 翻译图片中的文字 (switch; the maintainer's wording), a separator, 外观 (a small segmented control: 浅色,
-   深色, 跟随系统), 深色时调暗页面 (switch). All are the extension's shared settings; a change applies at once.
+   three built-in, 柔和绿, 淡黄, 淡蓝, and any added in the settings), a separator, 图片翻译 (switch; the popup's word,
+   the maintainer's ruling of 2026-09-25), a separator, 外观 (a small segmented control: 浅色, 深色, 跟随系统),
+   深色时调暗页面 (switch). All are settings (§9.1), the same values the popup and the settings page change; a change
+   applies at once.
 5. 下载 (`download`), a menu of two items, text only: 译文 PDF, 原文 PDF (the maintainer: 「只要译文 PDF / 原文 PDF」).
    Files are named `<id>.pdf` and `<id>.<target>.pdf`. Free. 译文 PDF is the final translation: while the translation is
    still coming in (previews), the item is greyed.
@@ -325,7 +327,7 @@ the same values, and each follows the others through the shared configuration's 
 
 **Read, as they are**: `targetLanguage` (the nine are the reader's; §8 for the others), `provider` and `services`,
 `reading.sentenceHighlight` (对照高亮), `appearance.activeHighlight` among `appearance.highlights` (高亮颜色: the swatches are
-the configured highlight profiles, the three built-in and any added), `image.enabled` with `image.modes` (翻译图片中的文字:
+the configured highlight profiles, the three built-in and any added), `image.enabled` with `image.modes` (图片翻译:
 figure text is shown when it is on and the display's mode, §3, is among the modes, as on the HTML page), `uiLanguage`
 (the reader's words), `mode` (the display, §3).
 
@@ -564,7 +566,7 @@ the same thing, its string is reused (marked).
 | | 缩小 · 放大 · 缩放比例 · 适合宽度 · 适合页面 · 实际大小 | Zoom out · Zoom in · Zoom · Fit width · Fit page · Actual size |
 | | 目标语言 · 搜索语言 · 翻译服务 | Target language · Search languages · Translation service |
 | | 阅读选项 | Reading options |
-| | 对照高亮 (S-P-80, reused) · 高亮颜色 · 翻译图片中的文字 | Hover highlight · Highlight colour · Translate text in figures |
+| | 对照高亮 (S-P-80, reused) · 高亮颜色 · 图片翻译 (S-P-85, reused) | Hover highlight · Highlight colour · Images |
 | | 外观 · 浅色 · 深色 · 跟随系统 · 深色时调暗页面 | Appearance · Light · Dark · System · Dim pages in dark mode |
 | | 下载 · 译文 PDF · 原文 PDF | Download · Translation PDF · Original PDF |
 | | 设置 (S-P-02, reused) · 在默认查看器中打开 | Settings · Open in the default viewer |
@@ -582,6 +584,4 @@ the same thing, its string is reused (marked).
 ## 16. Open and deferred
 
 - 文 may be refined by hand (§6.2); the committed path data is replaced when it is.
-- **For the maintainer**: the popup names the figure switch 图片翻译 (S-P-85); the reader says 翻译图片中的文字 as asked.
-  One setting, two names: should the popup follow?
 - Jump back (#300), the engine's TypeScript port and #299: the next stage.
