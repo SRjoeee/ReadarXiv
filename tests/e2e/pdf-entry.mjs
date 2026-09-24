@@ -56,12 +56,28 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
  * suite checks. A build without it (main's) goes straight on
  */
 const READER = existsSync(`${EXT}/pdf-reader.html`)
+/**
+ * A browser the reader's PDF.js cannot run on (src/pdf-reader/support.ts; Chrome 131, the floor) keeps the browser's
+ * viewer: one of the built-ins it lacks stands for the rest
+ */
+const readerRunsHere = () => page.evaluate(() => typeof Map.prototype.getOrInsertComputed === 'function')
 async function throughReader(paper) {
   if (!READER) return
+  if (!(await readerRunsHere())) {
+    await sleep(3000)
+    const framed = await page.$('iframe[data-axt-pdf-reader]')
+    check(`on a browser the reader cannot run on, the PDF stays in the browser's viewer (${paper})`, !framed, framed ? 'the reader was laid over the page' : 'no reader')
+    return
+  }
   const frame = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null)
   const reader = await frame?.contentFrame()
   const back = await reader?.waitForSelector('button[data-leave]', { timeout: 30_000 }).catch(() => null)
   check(`the PDF page opens in the reader, with its way back to the browser's viewer (${paper})`, !!back, back ? 'the reader over the page' : `reader ${!!frame}, way back ${!!back}`)
+  // the interface is drawn before the engine loads: the session has opened only once the paper's pages are counted
+  // (final review: a browser the engine cannot run on would still show the way back)
+  const pages = await reader?.waitForFunction(() => window.__reader?.controller?.getState().sides.left.pages, null, { timeout: 60_000 }).then(h => h.jsonValue(), () => 0)
+  const state = pages ? null : await reader?.evaluate(() => window.__reader?.controller?.getState() ?? null).catch(() => null)
+  check(`the reader's engine opens the paper (${paper})`, pages > 0, pages ? `${pages} pages on the left` : `state ${JSON.stringify(state)}`)
   await back?.click()
   const gone = await page.waitForFunction(() => !document.querySelector('iframe[data-axt-pdf-reader]'), null, { timeout: 10_000 }).then(() => true, () => false)
   check(`the way back takes the reader away (${paper})`, gone, gone ? 'the browser\'s viewer underneath' : 'the reader is still there')
@@ -199,7 +215,7 @@ await sleep(3000)
 
 // Only the reader's own page can take the reader away: a page its frame has been sent to cannot (Devin on #297). The
 // frame goes to a data: page, whose origin is opaque, and asks from there
-if (READER) {
+if (READER && (await readerRunsHere())) {
   await page.goto(`https://arxiv.org/pdf/${WITH_HTML}`, { waitUntil: 'load' })
   const frame = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null)
   const reader = await frame?.contentFrame()

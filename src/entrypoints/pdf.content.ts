@@ -8,9 +8,10 @@
 //
 // On this experiment branch the page opens in the bilingual PDF reader instead (experiments/pdf-bilingual, #290), laid
 // over the browser's viewer, which stays underneath: the address stays the paper's, and the reader's way back to the
-// browser's viewer takes the reader away and shows the floating button. A build without the reader (the experiment's
-// setup not run, as on CI) leaves the page as it was.
+// browser's viewer takes the reader away and shows the floating button. A browser the reader's PDF.js cannot run on
+// (pdf-reader/support.ts) keeps the page as it was, with the floating button.
 import { htmlUrlOf, paperIdFromPdfPath, translatedHtmlUrlOf } from '@/core/pdf/entry'
+import { readerRuns } from '@/pdf-reader/support'
 import { announceUsablePage } from '@/shared/action-icon'
 import { answerEntryMessages } from '@/shared/entry-page'
 import { installFloatingButton } from '@/shared/floating'
@@ -44,10 +45,11 @@ export default defineContentScript({
 })
 
 /**
- * The bilingual PDF reader over the page, the extension's page pdf-reader.html: true once it is shown. `closed` runs
- * when the reader asks for the browser's viewer
+ * The bilingual PDF reader over the page, the extension's page pdf-reader.html: true once it is shown, false on a
+ * browser it cannot run on. `closed` runs when the reader asks for the browser's viewer
  */
 async function openReader(id: string, closed: () => void): Promise<boolean> {
+  if (!readerRuns()) return false
   const url = browser.runtime.getURL(`/pdf-reader.html?${new URLSearchParams({ live: '1', paper: id, embedded: '1' })}` as '/pdf-reader.html')
   const frame = document.createElement('iframe')
   frame.src = url
