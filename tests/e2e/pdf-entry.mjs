@@ -51,16 +51,16 @@ const check = (name, ok, detail) => {
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 /**
- * On the PDF experiment's branch a build may carry the bilingual PDF reader (experiments/pdf-bilingual, copied in by
- * wxt.config.ts once the experiment's setup has run): the page then opens in it, and the reader's way back to the
- * browser's viewer brings the floating button the rest of this suite checks. A build without it (CI's) goes straight on
+ * On the PDF experiment's branch every build carries the bilingual PDF reader (the extension's page pdf-reader.html): the
+ * PDF page opens in it, and the reader's way back to the browser's viewer brings the floating button the rest of this
+ * suite checks. A build without it (main's) goes straight on
  */
-const READER = existsSync(`${EXT}/pdf-reader/reader.html`)
+const READER = existsSync(`${EXT}/pdf-reader.html`)
 async function throughReader(paper) {
   if (!READER) return
   const frame = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null)
   const reader = await frame?.contentFrame()
-  const back = await reader?.waitForSelector('#close:not([hidden])', { timeout: 30_000 }).catch(() => null)
+  const back = await reader?.waitForSelector('button[data-leave]', { timeout: 30_000 }).catch(() => null)
   check(`the PDF page opens in the reader, with its way back to the browser's viewer (${paper})`, !!back, back ? 'the reader over the page' : `reader ${!!frame}, way back ${!!back}`)
   await back?.click()
   const gone = await page.waitForFunction(() => !document.querySelector('iframe[data-axt-pdf-reader]'), null, { timeout: 10_000 }).then(() => true, () => false)

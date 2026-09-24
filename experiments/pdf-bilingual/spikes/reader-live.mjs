@@ -65,7 +65,7 @@ for (const visit of ['first visit', 'returning visit']) {
   const errors = []
   page.on('pageerror', e => { errors.push(e.message); console.error('pageerror', e.stack ?? e.message) }); page.on('console', m => { if (m.type() === 'error') { errors.push(m.text()); console.error('console', m.text().slice(0, 300)) } })
   await page.goto(readerUrl({ paper, live: '1', mode: 'bilingual', site: siteOrigin, endpoint: 'http://localhost:8070', ...(process.env.ONLINE ? {} : { src: `${srcOrigin}/src/${paper}`, pdf: `${srcOrigin}/pdf/${paper}` }) }))
-  await page.waitForFunction(() => window.__reader?.ready || window.__reader?.live?.done, null, { timeout: Number(process.env.WAIT ?? 120000) }).catch(async e => { console.error('not ready:', JSON.stringify(await page.evaluate(() => ({ status: document.getElementById('status')?.textContent, live: window.__reader?.live })))); throw e })
+  await page.waitForFunction(() => window.__reader?.ready || window.__reader?.live?.done, null, { timeout: Number(process.env.WAIT ?? 120000) }).catch(async e => { console.error('not ready:', JSON.stringify(await page.evaluate(() => ({ status: window.__reader?.status, live: window.__reader?.live })))); throw e })
   if (await page.evaluate(() => window.__reader.live?.failed)) { console.log(`\n${paper} — ${visit}: ${await page.evaluate(() => window.__reader.live.failed)}`); await page.close(); break }
   // the reader already somewhere in the paper when the translation starts: it is translated from there outwards
   await page.mouse.move(300, 500)

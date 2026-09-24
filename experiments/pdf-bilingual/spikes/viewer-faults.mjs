@@ -34,7 +34,7 @@ const urlOf = mode => readerUrl({ paper, live: '1', mode, site: `http://127.0.0.
 const failures = []
 const check = (name, ok, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ` — ${detail}` : ''}`); if (!ok) failures.push(name) }
 const done = () => page.waitForFunction(() => window.__reader?.live?.done, null, { timeout: 900_000, polling: 500 })
-const choose = mode => page.click(`#modes button[data-mode="${mode}"]`)
+const choose = mode => page.evaluate(m => window.__reader.controller.setDisplay(m), mode)
 /** where a side is in its document: its scroll offset over the scrollable height, 0 to 1 */
 const place = side => page.evaluate(side => { const c = window.__reader.debug[side].container; return c.scrollTop / Math.max(1, c.scrollHeight - c.clientHeight) }, side)
 
@@ -104,7 +104,7 @@ await page.evaluate(() => window.__reader.debug?.pdfCache?.clear())
 await page.goto(urlOf('translation'))
 await done()
 const shown = await page.evaluate(() => [...document.querySelectorAll('.viewerContainer')].map(c => ({ visible: !!c.offsetParent && c.clientHeight > 0, pages: c.querySelectorAll('.page').length })))
-check('Translation with no service: a document is on screen', shown.some(s => s.visible && s.pages > 0), `${JSON.stringify(shown)}; ${await page.textContent('#status')}`)
+check('Translation with no service: a document is on screen', shown.some(s => s.visible && s.pages > 0), `${JSON.stringify(shown)}; ${await page.evaluate(() => window.__reader?.status ?? '')}`)
 
 await context.close(); site.close(); corpus.close()
 console.log(failures.length ? `\n${failures.length} failed: ${failures.join('; ')}` : '\nall passed')

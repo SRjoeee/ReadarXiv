@@ -16,6 +16,7 @@ export function App({ controller, embedded }: { controller: ReaderController; em
       Object.assign((window as unknown as { __reader: object }).__reader, { controller, session })
     })
   }, [controller])
+  // the panes' ids are the probes' too, as they were on the prototype's page
   return (
     <>
       {embedded && (
@@ -25,12 +26,12 @@ export function App({ controller, embedded }: { controller: ReaderController; em
       )}
       <main>
         <section className="pane">
-          <div className="viewerContainer" ref={left}>
+          <div className="viewerContainer" id="left" ref={left}>
             <div className="pdfViewer" />
           </div>
         </section>
         <section className="pane">
-          <div className="viewerContainer" ref={right}>
+          <div className="viewerContainer" id="right" ref={right}>
             <div className="pdfViewer" />
           </div>
         </section>

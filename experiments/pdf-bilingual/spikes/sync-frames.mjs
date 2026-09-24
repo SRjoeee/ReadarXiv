@@ -76,7 +76,7 @@ function stepOf(a, b, max = 400) {
 }
 
 async function run({ compositor, load }) {
-  await page.evaluate(on => { const c = document.getElementById('compositor'); c.checked = on; c.onchange() }, compositor)
+  await page.evaluate(on => window.__reader.session.setCompositor(on), compositor)
   const box = await panes()
   // the pointer over the left side, both sides at their tops, and a rest for the levelling
   await page.mouse.move(box.left.x + box.left.w * 0.5, box.left.y + box.left.h * 0.5)
@@ -124,7 +124,7 @@ async function run({ compositor, load }) {
 /** the rest's glide over a long way: the follower put 300 px off, a nudge of the driver, and the frames till it has
  *  settled — its steps, which should grow and then only shrink, and add up to the way */
 async function glide({ compositor }) {
-  await page.evaluate(on => { const c = document.getElementById('compositor'); c.checked = on; c.onchange() }, compositor)
+  await page.evaluate(on => window.__reader.session.setCompositor(on), compositor)
   await page.evaluate(() => { window.__reader.debug.right.container.scrollTop += 300 })
   await page.waitForTimeout(300)
   const box = await panes(), frames = []
@@ -141,7 +141,7 @@ async function glide({ compositor }) {
   return steps.filter(v => v)
 }
 
-await page.selectOption('#sync', 'same')
+await page.evaluate(() => window.__reader.session.setSyncMode('same'))
 // a pan down and back first, so that the pages the runs pass have been drawn once
 {
   const b = await panes(), at = { x: Math.round(b.left.x + b.left.w / 2), y: Math.round(b.left.y + b.left.h / 2) }

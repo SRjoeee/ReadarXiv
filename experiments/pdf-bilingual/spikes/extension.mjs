@@ -1,6 +1,6 @@
 // The extension with the PDF reader as one of its pages, for the spikes that drive the reader: Chromium with the
-// repository's build loaded (wxt.config.ts copies poc-reader/ in as `pdf-reader/` once setup has filled its lib/), and
-// the reader's address in it. The reader translates through that build's background, with its default settings unless
+// repository's build loaded (the reader is its page pdf-reader.html, src/entrypoints/pdf-reader), and the reader's
+// address in it. The reader translates through that build's background, with its default settings unless
 // a spike changes them. Build first: `pnpm build` at the repository root.
 import { cpSync, existsSync, mkdtempSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -18,7 +18,7 @@ export const BUILD = join(REPO, '.output/chrome-mv3')
  * be redistributed (Codex on #296)
  */
 export async function launchWithReader({ profile = 'reader', extension = BUILD, demos = false, headless = true, viewport = { width: 1600, height: 1000 } } = {}) {
-  if (!existsSync(join(extension, 'pdf-reader/reader.html'))) throw new Error(`no reader in ${extension}: \`node setup.mjs\` here, then \`pnpm build\` at the repository root`)
+  if (!existsSync(join(extension, 'pdf-reader.html'))) throw new Error(`no reader in ${extension}: \`pnpm build\` at the repository root`)
   if (demos) {
     const papers = new URL('../poc-reader/papers', import.meta.url).pathname
     if (!existsSync(papers)) throw new Error('no demo papers: node spikes/reader-papers.mjs first')
@@ -29,6 +29,6 @@ export async function launchWithReader({ profile = 'reader', extension = BUILD, 
   }
   const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), `${profile}-`)), { channel: 'chromium', headless, viewport, args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`] })
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
-  const id = new URL(worker.url()).host, base = `chrome-extension://${id}/pdf-reader/reader.html`
+  const id = new URL(worker.url()).host, base = `chrome-extension://${id}/pdf-reader.html`
   return { context, worker, id, readerUrl: query => `${base}?${typeof query === 'string' ? query : new URLSearchParams(query)}` }
 }

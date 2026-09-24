@@ -16,7 +16,7 @@ await page.goto(readerUrl({ paper, live: '1', mode: 'bilingual', site: siteOrigi
 await page.waitForFunction(() => window.__reader?.live?.done, null, { timeout: 900_000, polling: 1000 })
 const out = await page.evaluate(() => {
   const d = window.__reader.debug
-  return { status: document.getElementById('status').textContent, units: d.units.map(u => ({ ...u, left: !!d.left.anchors.get(u.i), right: !!d.right.anchors.get(u.i), leftMarked: !!d.left.anchors.get(u.i)?.bounded, rightMarked: !!d.right.anchors.get(u.i)?.bounded })) }
+  return { status: window.__reader.status, units: d.units.map(u => ({ ...u, left: !!d.left.anchors.get(u.i), right: !!d.right.anchors.get(u.i), leftMarked: !!d.left.anchors.get(u.i)?.bounded, rightMarked: !!d.right.anchors.get(u.i)?.bounded })) }
 })
 writeFileSync(join(root, `out/diag-anchors-${paper}.json`), JSON.stringify(out, null, 1))
 console.log(out.status)
