@@ -33,6 +33,10 @@ export interface ReaderState {
   settingsUnreadable: boolean
   /** the extension's settings as they last landed; null before the first read */
   settings: Config | null
+  /** the paper: its id from the address, its title once known ('' until then, or when there is none) */
+  paper: { id: string; title: string }
+  /** the window too narrow for two sides: side by side shows the translation alone (Task 23 sets it) */
+  narrow: boolean
   /** the sides scroll together, as the reader applies it — not the stored setting, which a refused write or an address may not match */
   sync: boolean
 }
@@ -51,6 +55,8 @@ export const INITIAL: ReaderState = {
   sides: { left: { page: 1, pages: 0 }, right: { page: 1, pages: 0 } },
   settingsUnreadable: false,
   settings: null,
+  paper: { id: '', title: '' },
+  narrow: false,
   sync: true,
 }
 
@@ -82,6 +88,8 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       return { ...state, sides: { ...state.sides, [event.side]: { page: event.page, pages: event.pages } } }
     case 'notice':
       return (event.why != null) === state.settingsUnreadable ? state : { ...state, settingsUnreadable: event.why != null }
+    case 'paper':
+      return { ...state, paper: { id: event.id, title: event.title } }
     case 'sync':
       return event.on === state.sync ? state : { ...state, sync: event.on }
     case 'settings':
@@ -132,7 +140,7 @@ export interface ReaderController {
 }
 
 export function createController({ open, params }: { open: (host: SessionHost) => Promise<Session>; params: URLSearchParams }): ReaderController {
-  let state = INITIAL
+  let state: ReaderState = { ...INITIAL, paper: { id: params.get('paper') ?? '', title: '' } }
   const listeners = new Set<() => void>()
   let session: Promise<Session> | null = null
   const emit = (event: SessionEvent) => {

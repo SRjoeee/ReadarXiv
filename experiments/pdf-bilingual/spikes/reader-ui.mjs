@@ -70,6 +70,33 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.close()
 }
 
+// ---------------------------------------------------------------- Task 17: the toolbar
+{
+  const page = await open({ mode: 'bilingual' })
+  const s = await state(page)
+  check('the title is known, from the PDF or its first heading', s.paper.title.length > 10, JSON.stringify(s.paper))
+  check('the tab carries the title', (await page.title()) === s.paper.title)
+  await page.getByRole('radio', { name: '译文' }).click()
+  await page.waitForTimeout(500)
+  check('the display switch changes the display', (await state(page)).display === 'translation')
+  check('sync and swap grey out in a single display', await page.evaluate(() => ['同步滚动', '交换左右'].every(n => document.querySelector(`button[aria-label="${n}"]`)?.getAttribute('aria-disabled') === 'true')))
+  await page.keyboard.press('2')
+  await page.waitForTimeout(500)
+  check('the 2 key comes back to side by side', (await state(page)).display === 'bilingual')
+  const before = (await state(page)).scale
+  await page.getByRole('button', { name: '放大' }).click()
+  await page.waitForTimeout(300)
+  check('zooming in scales both sides by a tenth', Math.abs((await state(page)).scale - before * 1.1) < 0.01, `${before} → ${(await state(page)).scale}`)
+  // the pointer comes onto the button from elsewhere: the press above left it there, and a pressed button shows no tip
+  await page.mouse.move(700, 400)
+  await page.getByRole('button', { name: '放大' }).hover()
+  await page.waitForTimeout(700)
+  const tip = await page.evaluate(() => { const t = [...document.querySelectorAll('.tip')].find(x => x.matches(':popover-open')); const r = t?.getBoundingClientRect(); return r && { text: t.textContent, h: r.height, left: r.left, right: r.right } })
+  check('a tooltip after the hover, one line, inside the window', !!tip && tip.h < 30 && tip.left >= 0 && tip.right <= 1440, JSON.stringify(tip))
+  await shot(page, '17-toolbar')
+  await page.close()
+}
+
 console.log(failed ? `${failed} failed` : 'all passed')
 await context.close()
 process.exit(failed ? 1 : 0)

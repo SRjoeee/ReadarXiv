@@ -8,6 +8,8 @@ export type SessionEvent =
   | { type: 'status'; text: string }
   /** why the extension's settings could not be read (config/storage.ts FallbackReason), or null when they could */
   | { type: 'notice'; why: unknown }
+  /** the paper's id and its title for the toolbar, '' until known or when there is none */
+  | { type: 'paper'; id: string; title: string }
   /** the sides scroll together, as the reader applies it (off, or any other mode) */
   | { type: 'sync'; on: boolean }
   /** the extension's settings, each time they land */

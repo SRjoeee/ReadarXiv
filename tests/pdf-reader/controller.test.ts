@@ -97,6 +97,10 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(fold([{ type: 'notice', why: { kind: 'tooNew' } }, { type: 'notice', why: null }]).settingsUnreadable).toBe(false)
   })
 
+  it('knows the paper and its title', () => {
+    expect(fold([{ type: 'paper', id: '2608.02163', title: 'A Title' }]).paper).toEqual({ id: '2608.02163', title: 'A Title' })
+  })
+
   it('holds the sync the reader applies, whatever the settings say (Part 2\'s final review)', () => {
     expect(INITIAL.sync).toBe(true)
     expect(fold([{ type: 'sync', on: false }]).sync).toBe(false)
@@ -179,6 +183,11 @@ describe('createController', () => {
     await Promise.resolve()
     expect(session.patchSettings).toHaveBeenCalledOnce()
     expect(session.patchSettings).toHaveBeenCalledWith(change)
+  })
+
+  it('knows the paper\'s id from the address before the session says anything', () => {
+    const controller = createController({ open: async () => fakeSession(), params: new URLSearchParams('paper=hep-th/9711200') })
+    expect(controller.getState().paper).toEqual({ id: 'hep-th/9711200', title: '' })
   })
 
   it('stops telling a listener that unsubscribed', async () => {

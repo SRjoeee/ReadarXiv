@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReaderController } from '@/pdf-reader/controller'
 import { type Appearance, applyAppearance, dimmed, themeOf } from '@/pdf-reader/ui/appearance'
+import { Toolbar } from '@/pdf-reader/ui/Toolbar'
 import { useReader } from '@/pdf-reader/ui/use-reader'
-import { R } from '@/ui/strings'
 
 /**
  * The reader's page (the reader's design, §5): the toolbar, the contents, the document area with its two panes (the
@@ -26,19 +26,11 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   useAppearance(state.settings?.pdfReader.appearance, state.settings?.pdfReader.dimPages)
   const swapped = state.settings?.pdfReader.swapped ?? false
   useEffect(() => { document.documentElement.toggleAttribute('data-axt-swapped', swapped) }, [swapped])
+  // the tab says what is being read; the product's name until the title is known
+  useEffect(() => { document.title = state.paper.title || 'Read arXiv' }, [state.paper.title])
   return (
     <>
-      <header role="toolbar" aria-label={R.bar} className="chrome">
-        <div data-zone="lead" className="flex min-w-0 items-center gap-1" />
-        <div data-zone="centre" className="flex items-center" />
-        <div data-zone="trail" className="flex items-center justify-self-end gap-1">
-          {embedded && (
-            <button type="button" data-leave onClick={() => parent.postMessage({ type: 'axt-pdf-reader-close' }, 'https://arxiv.org')}>
-              {R.leave}
-            </button>
-          )}
-        </div>
-      </header>
+      <Toolbar controller={controller} embedded={embedded} />
       <div className="doc">
         <section className="pane" data-side="left">
           <div className="viewerContainer" id="left" ref={left}>

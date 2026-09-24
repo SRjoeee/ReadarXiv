@@ -71,6 +71,26 @@ function showMode() {
   host.emit({ type: 'display', mode })
 }
 showMode()
+/**
+ * The paper's title for the toolbar (the reader's design, §6.1): the PDF's own metadata title; when it carries none,
+ * the abstract page's citation_title, one request to arXiv made only then (the extension may read arxiv.org); a demo's,
+ * its first heading. None found, the toolbar shows the id alone
+ */
+async function reportPaper(doc, fallback = '') {
+  const meta = await doc.getMetadata().catch(() => null)
+  let title = String(meta?.info?.Title ?? '').trim()
+  if (!title && !fallback) title = await abstractTitle()
+  host.emit({ type: 'paper', id: paper, title: title || fallback })
+}
+async function abstractTitle() {
+  try {
+    const res = await fetch(`https://arxiv.org/abs/${paper}`, { credentials: 'omit' })
+    if (!res.ok) return ''
+    return new DOMParser().parseFromString(await res.text(), 'text/html').querySelector('meta[name="citation_title"]')?.getAttribute('content')?.trim() ?? ''
+  } catch {
+    return ''
+  }
+}
 function showSettings() {
   let sheet = document.getElementById('axt-look')
   if (!sheet) { sheet = document.createElement('style'); sheet.id = 'axt-look'; document.head.append(sheet) }
@@ -1387,6 +1407,7 @@ async function live() {
   status(`Fetching ${paper} from arXiv…`)
   try { await open(left, pdfUrl) } catch (e) { return fail('fetch failed', `Could not fetch ${paper}'s PDF from arXiv (${e.message ?? e})`, 'network') }
   note('opened')
+  void reportPaper(left.doc)
   // the left side's first page drawn (any page: a reading place restored may open elsewhere), two seconds at most
   const drawnP = Promise.race([new Promise(resolve => left.eventBus.on('pagerendered', resolve, { once: true })), new Promise(resolve => setTimeout(resolve, 2000))])
   if (mode === 'original') status(`${paper}, the original. Choose Translation or Side by side to translate it`)
@@ -1542,6 +1563,7 @@ async function demo() {
   // progressive: the stages of the translation as they would come from the compiler, with how many units each has
   const stages = progressive ? await fetch(`${base}stages.json`).then(r => r.json()) : null
   const [units] = await Promise.all([fetch(`${base}units.json`).then(r => r.json()), open(left, `${base}original.pdf`), only === 'left' ? null : open(right, `${base}${stages ? stages[0].file : 'translation.pdf'}`)])
+  void reportPaper(left.doc, units.find(u => u.kind === 'heading')?.src ?? '')
   if (only === 'left') { window.__reader.ready = true; window.__reader.units = units.length; status('left only'); return }
   timing.opened = performance.now() - timing.start
   const t1 = performance.now()
