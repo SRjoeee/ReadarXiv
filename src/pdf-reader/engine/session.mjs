@@ -8,67 +8,48 @@
 // the page, translated from the reader's place outwards, compiled on our site's TeX page (an iframe) again and again
 // (live.mjs). Each newer compile is laid out and drawn out of sight, placed so that the paragraph at the reading line
 // stays where it is, then shown in one step.
-import * as pdfjsLib from './lib/pdf.min.mjs'
+// The session module: the prototype's page script, moved into the extension (the reader's design, §11.2). It runs
+// once, at load, after the page has handed it its host (host.mjs): the two panes, the address's parameters and the
+// sink for its events. What the prototype's header controls did, it now exports as commands; what it wrote into the
+// header, it reports as events (session.d.mts). The controller (../controller.ts) is its only caller.
+import { createPdfStore } from '@/cache/pdf-store'
+import { isCurrent } from '@/cache/pdf-record'
+import { lookOf } from '@/config/appearance'
+import { toBcp47 } from '@/config/languages'
+import { isTranslatable, linesToBoxes } from '@/core/image/boxes'
+import { appearanceRule } from '@/core/renderer/style-preset'
+import { renderImage, setImageModes } from '@/core/renderer/image'
+import { sendMessage } from '@/shared/messages'
+import { createSurfaceConfig } from '@/shared/surface-config'
+import { ocrCall } from '../ocr'
+import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFViewer, pdfjsLib } from '../pdfjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
-import { isTranslatable, linesToBoxes, renderImage, setImageModes } from './lib/axt/figures.mjs'
-import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
-import { openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
-import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
-import { verified, VERIFIED } from './scripts.mjs'
-import { openEngine, paperContext } from './engine.mjs'
-import { appearanceRule, createPdfStore, createSurfaceConfig, isCurrent, LANG_CODE_TO_LOCALE_NAME, lookOf, toBcp47 } from './lib/axt/extension.mjs'
 import { decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { openEngine, paperContext } from './engine.mjs'
+import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
+import { hostReady } from './host.mjs'
+import { openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
 import { isName, plainSource, WIRE } from './mt.mjs'
+import { verified, VERIFIED } from './scripts.mjs'
+import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { unpackSource } from './tar.mjs'
 
-// the viewer components read the core library from this global
-globalThis.pdfjsLib = pdfjsLib
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./lib/pdf.worker.min.mjs', import.meta.url).href
-const { EventBus, LinkTarget, PDFLinkService, PDFViewer } = await import('./lib/pdf_viewer.mjs')
-
-const PAPERS = ['2608.04322', '2608.00055']
-const params = new URLSearchParams(location.search)
-const paper = params.get('paper') ?? PAPERS[0]
-/** a precompiled demo paper (poc-reader/papers/, made locally, never in the repository) only when one is asked for by
- *  `paper` without `live`; the page opens on its form otherwise */
+const host = await hostReady
+const { params } = host
+const paper = params.get('paper') ?? ''
+/** a precompiled demo paper (made locally by spikes/reader-papers.mjs, never in the repository; the probes stage it into
+ *  a copy of the build at pdf-reader/papers/) when one is asked for by `paper` without `live` */
 const DEMO = params.get('live') !== '1' && params.has('paper')
-const $ = id => document.getElementById(id)
-const status = text => { $('status').textContent = text }
+/** the developer's status line, for the probes (window.__reader.status) and the log; the interface does not show it */
+const status = text => { window.__reader.status = text; host.emit({ type: 'status', text }) }
 const timing = { start: performance.now() }
 window.__reader = { timing, ready: false }
-
-for (const p of PAPERS.includes(paper) ? PAPERS : [...PAPERS, paper]) $('paper').append(new Option(p, p, false, p === paper))
-/** an arXiv id from whatever a reader pastes: an id with or without its version, arXiv:…, or an abs, pdf, html or src
- *  link; new ids (2608.04322v2) and old ones (hep-th/9901001, math.GT/0309136) */
-function arxivId(text) {
-  const t = text.trim().replace(/^arxiv:/i, '')
-  const m = /(\d{4}\.\d{4,5}(?:v\d+)?)/.exec(t) ?? /([a-z-]+(?:\.[A-Z]{2})?\/\d{7}(?:v\d+)?)/.exec(t)
-  return m ? m[1] : null
-}
-$('open').onsubmit = e => {
-  e.preventDefault()
-  const id = arxivId($('arxiv').value)
-  if (!id) { status('Not an arXiv link or id'); return }
-  // the language and the engine are the extension's settings
-  const next = new URLSearchParams({ live: '1', paper: id })
-  for (const k of ['site', 'endpoint']) if (params.has(k)) next.set(k, params.get(k))
-  location.search = `?${next}`
-}
-if (params.get('live') === '1') $('arxiv').value = paper
-const reload = () => { location.search = `?paper=${$('paper').value}${$('progressive').checked ? '&progressive=1' : ''}` }
-$('paper').onchange = reload
-$('progressive').checked = params.get('progressive') === '1'
-$('progressive').onchange = reload
-$('paper').hidden = $('progressive').parentElement.hidden = !DEMO
 
 // ---------------------------------------------------------------- the extension's settings, and the display
 // The target language and the highlight's band are the extension's settings, read and written as its settings page
 // does and followed as they change, so that the PDF and the HTML page agree. The display is the reader's own, kept
 // until the reader is part of the extension's settings: the original alone (nothing is translated or compiled until
 // the reader asks for more), the translation alone, or both side by side.
-/** the languages whose typesetting the gate verifies (scripts.mjs VERIFIED), as the extension's table names them; the
- *  others wait for #295 */
-const LANGUAGES = Object.keys(LANG_CODE_TO_LOCALE_NAME).filter(code => verified(toBcp47(code)))
 const MODES = ['original', 'translation', 'bilingual']
 const PREFS = 'axtPdfReader'
 const prefs = await chrome.storage.local.get(PREFS).then(r => r[PREFS] ?? {}).catch(() => ({}))
@@ -80,7 +61,7 @@ const savePrefs = patch => (prefWrites = prefWrites.then(() => chrome.storage.lo
 let mode = MODES.includes(params.get('mode')) ? params.get('mode') : MODES.includes(prefs.mode) ? prefs.mode : 'original'
 function showMode() {
   document.documentElement.setAttribute('data-axt-pdf-mode', mode)
-  for (const b of $('modes').children) b.setAttribute('aria-checked', String(b.dataset.mode === mode))
+  host.emit({ type: 'display', mode })
 }
 showMode()
 // The extension's settings as its popup and settings page have them (shared/surface-config.ts): each change a patch on
@@ -89,27 +70,16 @@ showMode()
 const surface = createSurfaceConfig({ localeStale: () => false, reload: () => location.reload() })
 await new Promise(resolve => { const off = surface.subscribe(() => { if (surface.state().config) { off(); resolve() } }); surface.start() })
 let config = surface.state().config
-/** why the stored settings could not be read, for the bar (config/storage.ts FallbackReason) */
-const unreadable = why => ({ tooNew: `saved by a newer version of the extension (${why.stored}; this one reads ${why.supported})`, upgradeFailed: `version ${why.stored} could not be brought to ${why.supported}`, invalid: `${why.where}: ${why.message}` })[why.kind] ?? 'for a reason not known'
 function showSettings() {
   let sheet = document.getElementById('axt-look')
   if (!sheet) { sheet = document.createElement('style'); sheet.id = 'axt-look'; document.head.append(sheet) }
   sheet.textContent = appearanceRule(lookOf(config))
-  const target = config.targetLanguage, look = config.appearance
-  $('lang').replaceChildren(...[...new Set([...LANGUAGES, target])].map(code => new Option(LANG_CODE_TO_LOCALE_NAME[code] ?? code, code, false, code === target)))
-  $('band').replaceChildren(...look.highlights.map(h => new Option(h.name, h.id, false, h.id === look.activeHighlight)))
   // the defaults are in effect — the service and its key set on the settings page are not — until they are repaired there
-  const why = surface.state().fallbackReason
-  $('notice').hidden = !why
-  $('notice').textContent = $('notice').title = why ? `The extension's settings could not be read (${unreadable(why)}): its defaults are in use until they are repaired on its settings page` : ''
+  host.emit({ type: 'notice', why: surface.state().fallbackReason ?? null })
 }
 showSettings()
 /** this page's own writes, in the order they were made: a new language reloads the page only once they have landed */
 let writes = Promise.resolve()
-const save = patch => (writes = writes.then(() => surface.patch(c => ({ ...c, ...patch(c) }))).catch(e => status(`Could not save the setting: ${e.message ?? e}`)))
-// the value chosen, taken when it is chosen: a write lands after the menus are drawn again from the one before it
-$('lang').onchange = () => { const code = $('lang').value; save(() => ({ targetLanguage: code })) }
-$('band').onchange = () => { const id = $('band').value; save(c => ({ appearance: { ...c.appearance, activeHighlight: id } })) }
 /** true once the translation has started: a new language then means another document, and the page starts again */
 let translating = false
 surface.subscribe(() => {
@@ -123,11 +93,10 @@ surface.subscribe(() => {
 let wantTranslation = null
 const translationWanted = new Promise(resolve => { wantTranslation = resolve })
 if (mode !== 'original') wantTranslation()
-$('modes').onclick = e => {
-  const next = e.target.closest('button')?.dataset.mode
-  if (!next || next === mode) return
+/** the display chosen: where the reader is read first, on the side still shown (Codex on #297) */
+export function setDisplay(next) {
+  if (!MODES.includes(next) || next === mode) return
   const from = mode
-  // where the reader is, read while that side is still shown: a side the display hides has no layout (Codex on #297)
   const place = from === 'bilingual' ? null : readingPlace(from === 'original' ? left : right)
   window.__reader.place = place
   mode = next
@@ -135,14 +104,6 @@ $('modes').onclick = e => {
   void savePrefs({ mode })
   relayout(from, place)
   if (mode !== 'original') wantTranslation()
-}
-// Opened over arXiv's PDF page (the extension's content script there): the page's own paper, and a way back to the
-// browser's viewer, which the content script keeps underneath
-const EMBEDDED = params.get('embedded') === '1'
-if (EMBEDDED) {
-  for (const el of [$('open'), $('paper'), $('progressive').parentElement]) el.hidden = true
-  $('close').hidden = false
-  $('close').onclick = () => parent.postMessage({ type: 'axt-pdf-reader-close' }, 'https://arxiv.org')
 }
 
 // ---------------------------------------------------------------- the two viewers
@@ -157,14 +118,13 @@ function makeSide(container) {
   // preview's frames (pdfFrames), a promise; anchored: the side's units located, a promise, where they come after its pages
   return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), byPage: new Map(), figs: new Map(), figGen: new Map(), frames: null, anchored: null }
 }
-const left = makeSide($('left'))
-let right = makeSide($('right'))
+const left = makeSide(host.left)
+let right = makeSide(host.right)
 const sides = [left, right]
 const other = side => (side === left ? right : left)
 
-const LIB = new URL('./lib/', import.meta.url).href
 async function open(side, url) {
-  side.task = pdfjsLib.getDocument({ url, cMapUrl: `${LIB}cmaps/`, cMapPacked: true, standardFontDataUrl: `${LIB}standard_fonts/`, wasmUrl: `${LIB}wasm/` })
+  side.task = pdfjsLib.getDocument({ url, ...ASSETS })
   const doc = await side.task.promise
   side.doc = doc
   side.viewer.setDocument(doc)
@@ -262,9 +222,9 @@ function blocksOf(rects) {
 function light(id) { if (id === lit) return; lit = id; for (const s of sides) paint(s) }
 
 // ---------------------------------------------------------------- figure text
-// The HTML mode's image translation, run on the translation's pages: the extension's own modules, compiled from its
-// source into lib/axt (spikes/build-shared.mjs) — lines merged into boxes (core/image/boxes.ts), the overlay and its
-// material (core/renderer/image.ts, styles/image.css), the bitmap recogniser (core/ocr). What is the PDF's own is the
+// The HTML mode's image translation, run on the translation's pages: the extension's own modules — lines merged into
+// boxes (core/image/boxes.ts), the overlay and its material (core/renderer/image.ts, styles/image.css), the bitmap
+// recogniser (core/ocr, through the background: ../ocr.ts). What is the PDF's own is the
 // input: where each figure sits and which lines are in it (figures.mjs — the text layer for a vector figure, the
 // recogniser for a bitmap), as normalised lines in the recogniser's shape. Each figure's overlay hangs on an empty
 // <img> laid over it, the anchor the style sheet positions an overlay by.
@@ -289,6 +249,7 @@ let cacheKey = null // { digest, lang } of the paper open, once its PDF is read
 let saveTimer = 0, repaintTimer = 0
 const saveFiguresSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { if (cacheKey) void pdfCache.patchFigures(cacheKey.digest, cacheKey.lang, [...figureEntries.values()]) }, 2000) }
 const repaintFiguresSoon = () => { clearTimeout(repaintTimer); repaintTimer = setTimeout(() => { for (const [n] of right.figs) right.figs.set(n, paintFigures(right, n).catch(e => console.warn('[figures]', e))) }, 300) }
+let figuresOn = true // figure text, the reader's switch (setFigures)
 document.documentElement.setAttribute('data-axt-on', '')
 document.documentElement.setAttribute('data-axt-mode', 'only')
 setImageModes(document, ['only'])
@@ -314,10 +275,8 @@ const figureOf = perDoc(async (side, n, k) => {
   if (region.kind !== 'raster') return { region, kind: region.kind, lines: vectorLines((await labelsOn(side, n)).filter(l => l.figure === k), region) }
   return { region, kind: 'raster', lines: region.image ? await recognise(await side.doc.getPage(n), region.image) : [] }
 })
-let ocrWorker = null, ocrSeq = 0
-const ocrWaiting = new Map()
-/** a bitmap of the page, by its object id → its lines, read in the worker (a copy: PDF.js keeps drawing its own) */
-async function recognise(page, id) {
+/** a bitmap of the page, by its object id: a copy (PDF.js keeps drawing its own), or null when it is too small to hold text */
+async function bitmapOf(page, id) {
   const obj = await new Promise(resolve => page.objs.get(id, resolve))
   let bitmap
   if (obj?.bitmap) bitmap = await createImageBitmap(obj.bitmap)
@@ -326,15 +285,19 @@ async function recognise(page, id) {
     // PDF.js's kinds: 1 one bit per pixel, 2 RGB, 3 RGBA
     if (kind === 3) rgba.set(data)
     else if (kind === 2) for (let i = 0, j = 0; i < width * height; i++, j += 3) rgba.set([data[j], data[j + 1], data[j + 2], 255], i * 4)
-    else return []
+    else return null
     bitmap = await createImageBitmap(new ImageData(rgba, width, height))
-  } else return []
-  if (bitmap.width < 32 || bitmap.height < 32) { bitmap.close(); return [] }
-  ocrWorker ??= Object.assign(new Worker(new URL('./ocr-worker.mjs', import.meta.url), { type: 'module' }), { onmessage: ({ data }) => { ocrWaiting.get(data.id)?.(data); ocrWaiting.delete(data.id) } })
-  const seq = ++ocrSeq
-  const reply = await new Promise(resolve => { ocrWaiting.set(seq, resolve); ocrWorker.postMessage({ id: seq, bitmap }, [bitmap]) })
-  if (reply.error) console.warn('[ocr]', reply.error)
-  return reply.lines ?? []
+  } else return null
+  if (bitmap.width < 32 || bitmap.height < 32) { bitmap.close(); return null }
+  return bitmap
+}
+/** a bitmap's lines, read by the extension's recogniser through the background, as the HTML page's are (ocr.ts) */
+async function recognise(page, id) {
+  const bitmap = await bitmapOf(page, id)
+  if (!bitmap) return []
+  const reply = await sendMessage({ type: 'axt:ocr', ...(await ocrCall(bitmap, paper)) }).catch(e => ({ ok: false, error: { message: String(e?.message ?? e) } }))
+  if (!reply.ok) { console.warn('[ocr]', reply.error.message); return [] }
+  return reply.result.lines
 }
 const translated = new Map() // figureKeyOf(boxes' texts) → their translations, a Promise while they are out
 /**
@@ -478,7 +441,7 @@ async function paintFigures(side, n) {
   const gen = (side.figGen.get(n) ?? 0) + 1
   side.figGen.set(n, gen)
   let laid = []
-  if ($('figures').checked) {
+  if (figuresOn) {
     const frames = side.frames && ((await side.frames).get(n) ?? [])
     const rects = frames ?? (await regionsOf(side, n))
     // arXiv's PDF itself, shown on the right until the first preview: its figures are the left's, page for page
@@ -881,18 +844,18 @@ function take(side) {
   if (driver === side) return
   bake(); driver = side; stopSpring(); clearTimeout(follow.rest); follow.rest = 0; rebase()
 }
-$('sync').value = syncMode
-$('compositor').checked = compositing
-$('compositor').disabled = !CAN_COMPOSIT
-$('compositor').onchange = () => {
+/** the follower on the compositor or by script (REPORT, seventeenth addendum) */
+export function setCompositor(on) {
   bake(); stopSpring(); clearTimeout(follow.rest)
-  compositing = CAN_COMPOSIT && $('compositor').checked
+  compositing = CAN_COMPOSIT && on
   void savePrefs({ compositor: compositing })
   rebase(); arm()
 }
-$('sync').onchange = () => {
+/** how the other side follows (REPORT, sixteenth and seventeenth addenda); the interface's switch is same or off */
+export function setSyncMode(next) {
+  if (!SYNC_MODES.includes(next)) return
   bake()
-  syncMode = $('sync').value
+  syncMode = next
   void savePrefs({ syncMode })
   stopGlide(); stopSpring(); clearTimeout(settleTimer); clearTimeout(follow.rest)
   rebase(); arm()
@@ -1198,17 +1161,26 @@ function attach(side) {
   side.eventBus.on('pagerendered', ({ pageNumber }) => { if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start; paint(side); if (side !== left) side.figs.set(pageNumber, paintFigures(side, pageNumber).catch(e => console.warn('[figures]', e))) })
   // a side opened out of the display (the original, while the translation alone is shown) waits at 1 for its width (relayout)
   side.eventBus.on('pagesinit', () => { const value = side.scale ?? 'page-width'; side.viewer.currentScaleValue = shown(side) || typeof value === 'number' ? value : 1 })
-  side.eventBus.on('scalechanging', ({ scale }) => { invalidate(); if (shown(side) && (side === left || !shown(left))) $('zoom').textContent = `${Math.round(scale * 100)}%` })
+  side.eventBus.on('scalechanging', ({ scale }) => { invalidate(); if (shown(side) && (side === left || !shown(left))) host.emit({ type: 'scale', scale }) })
   side.eventBus.on('pagesinit', invalidate)
+  // each side's page, for its pill; a viewer being laid out out of sight (replaceRight's) reports once it is the right
+  const reportPage = () => { if (side === left || side === right) host.emit({ type: 'page', side: side === left ? 'left' : 'right', page: side.viewer.currentPageNumber, pages: side.viewer.pagesCount }) }
+  side.eventBus.on('pagechanging', reportPage)
+  side.eventBus.on('pagesinit', reportPage)
 }
 for (const side of sides) attach(side)
 /** where the original is being read, in PDF.js's terms (its page, and the point at the top left of the view in PDF
  *  units), as long as it is in view: the same file opens on the right at the same place */
 let readAt = null
 left.eventBus.on('updateviewarea', ({ location }) => { if (shown(left)) readAt = location })
-$('figures').onchange = repaintFigures
-$('zoomIn').onclick = () => { for (const s of sides) if (shown(s)) s.viewer.currentScale = Math.min(4, s.viewer.currentScale * 1.15) }
-$('zoomOut').onclick = () => { for (const s of sides) if (shown(s)) s.viewer.currentScale = Math.max(0.25, s.viewer.currentScale / 1.15) }
+/** figure text on or off */
+export function setFigures(on) { figuresOn = on; repaintFigures() }
+/** the sides shown scaled by a factor, within PDF.js's range */
+export function zoomBy(factor) { for (const s of sides) if (shown(s)) s.viewer.currentScale = Math.min(4, Math.max(0.25, s.viewer.currentScale * factor)) }
+/** the sides shown at a scale or a fit (page-width, page-fit, page-actual) */
+export function zoomTo(value) { for (const s of sides) if (shown(s)) s.viewer.currentScaleValue = String(value) }
+/** a side at a page */
+export function goToPage(which, page) { const s = which === 'left' ? left : right; if (s.doc) s.viewer.currentPageNumber = page }
 
 // ---------------------------------------------------------------- anchoring one side
 /** the units TeX sets away from where the source has them: a caption with its float, a footnote at the foot of its
@@ -1287,6 +1259,8 @@ async function replaceRight(url, texts, { draft = false } = {}) {
   old.container.remove()
   old.task.destroy() // the document and its worker-side state; PDF.js 6 destroys through the loading task
   invalidate(); paint(right)
+  // the right is a new viewer: its page and page count, not the old one's
+  host.emit({ type: 'page', side: 'right', page: right.viewer.currentPageNumber, pages: right.viewer.pagesCount })
   const drift = place ? Math.round(scrollFor(right, place) - right.container.scrollTop - (offset ?? 0)) : null
   return { ms: Math.round(performance.now() - t0), drift }
 }
@@ -1295,7 +1269,7 @@ async function replaceRight(url, texts, { draft = false } = {}) {
 const waitFor = (origin, type) => new Promise(r => addEventListener('message', function h(e) { if (e.origin === origin && e.data?.type === type) { removeEventListener('message', h); r(e.data) } }))
 /** our compile of the original, with unit marks → each mark with the word it stands by, to carry over to arXiv's PDF */
 async function marksOfPdf(bytes) {
-  const task = pdfjsLib.getDocument({ data: bytes, cMapUrl: `${LIB}cmaps/`, cMapPacked: true, standardFontDataUrl: `${LIB}standard_fonts/`, wasmUrl: `${LIB}wasm/` })
+  const task = pdfjsLib.getDocument({ data: bytes, ...ASSETS })
   const doc = await task.promise
   try { return markWords(tokenizeDocument(await textPages(doc)), await pdfMarks(doc)) } finally { task.destroy() }
 }
@@ -1338,8 +1312,9 @@ async function live() {
   let compiledOnce = false
   paperCtx = new Promise(resolve => { setContext = resolve })
   const note = (event, data = {}) => {
-    L.events.push({ t: Math.round(performance.now() - L.t0), event, ...data })
     if (event === 'translated') { got = data.total; if (data.how?.lost) { lost += data.how.lost; lostWhy = data.how.error } }
+    host.emit({ type: 'note', event, data, got, total, lost, again })
+    L.events.push({ t: Math.round(performance.now() - L.t0), event, ...data })
     if ((event === 'preview' || event === 'final') && data.ok) compiledOnce = true
     const said = { preview: data.ok ? 'preview compiled' : `compile failed (${data.strategy}): ${data.error ?? ''}`, final: data.ok ? 'final compiled' : `final compile failed (${data.strategy}): ${data.error ?? ''}`, 'next strategy': `trying ${data.strategy}`, done: compiledOnce ? 'done' : cached ? 'done — this machine\'s copy is shown' : 'done — the translation did not compile; the right side still shows the original' }[event] ?? event
     const by = engine ? ` into ${engine.lang} by ${engine.engine}` : ''
@@ -1347,7 +1322,8 @@ async function live() {
     const missed = lost ? ` (${lost} not: ${lostWhy})` : ''
     status(`${again ? 'translating again · ' : ''}${total ? `${got} of ${total} translated${by}${missed}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
   }
-  const fail = (event, text) => {
+  const fail = (event, text, kind) => {
+    host.emit({ type: 'fail', event, text, kind })
     setContext({}); note(event); status(text); L.done = true; L.failed = text
     // the Translation display with nothing on its side would be blank: the original, for this visit (Codex on #297)
     if (mode === 'translation' && !right.doc) { mode = 'original'; showMode(); relayout('translation') }
@@ -1356,7 +1332,7 @@ async function live() {
   // told at once
   // the original first, in every display; nothing is translated or compiled until a display that shows a translation is chosen
   status(`Fetching ${paper} from arXiv…`)
-  try { await open(left, pdfUrl) } catch (e) { return fail('fetch failed', `Could not fetch ${paper}'s PDF from arXiv (${e.message ?? e})`) }
+  try { await open(left, pdfUrl) } catch (e) { return fail('fetch failed', `Could not fetch ${paper}'s PDF from arXiv (${e.message ?? e})`, 'network') }
   note('opened')
   // the left side's first page drawn (any page: a reading place restored may open elsewhere), two seconds at most
   const drawnP = Promise.race([new Promise(resolve => left.eventBus.on('pagerendered', resolve, { once: true })), new Promise(resolve => setTimeout(resolve, 2000))])
@@ -1392,7 +1368,7 @@ async function live() {
   status('Asking the extension which service translates…')
   try { engine = await theEngine() } catch (e) {
     if (cached) { status(`${paper}, this machine's copy (${cached.engine}, ${new Date(cached.createdAt).toLocaleDateString()}) · not checked against the settings: ${e.message ?? e}`); L.done = true; return }
-    return fail('no engine', `Cannot translate: ${e.message ?? e}`)
+    return fail('no engine', `Cannot translate: ${e.message ?? e}`, e?.kind ?? 'unknown')
   }
   const lang = engine.lang
   note('engine', { lang, format: engine.format, engine: engine.engine })
@@ -1415,7 +1391,7 @@ async function live() {
       // the original on the right until a translation comes, unless this machine's copy is there already
       cached ? Promise.resolve() : open(right, pdfUrl).then(() => rightLaid).then(() => { if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true }) }),
     ])
-  } catch (e) { return fail('fetch failed', `Could not fetch ${paper} from arXiv (${e.message ?? e})`) }
+  } catch (e) { return fail('fetch failed', `Could not fetch ${paper} from arXiv (${e.message ?? e})`, 'network') }
   note('source fetched')
   const { files, pdf: noSource } = await unpackSource(srcBytes)
   if (noSource) return fail('no source', `arXiv has no LaTeX source for ${paper} (a PDF-only submission): nothing to translate this way`)
@@ -1500,7 +1476,7 @@ async function live() {
 // ---------------------------------------------------------------- the precompiled demo
 async function demo() {
   status('loading…')
-  const base = new URL(`./papers/${paper}/`, import.meta.url).href
+  const base = new URL(`/pdf-reader/papers/${paper}/`, location.href).href
   // ?only=left|none: for measuring what one document costs
   const only = params.get('only')
   if (only === 'none') { window.__reader.ready = true; status('no documents'); return }
@@ -1526,6 +1502,8 @@ async function demo() {
   status(`${linked()} of ${units.length} paragraphs linked · text and anchors ${Math.round(timing.anchors)} ms`)
   // for the test harness
   window.__reader.debug = harness()
+  // a demo is a translation already made: final, on screen
+  for (const event of ['shown final', 'done']) host.emit({ type: 'note', event, data: { demo: true }, got: units.length, total: units.length, lost: 0, again: false })
 
   if (stages) {
     window.__reader.swaps = []
@@ -1539,6 +1517,6 @@ async function demo() {
   }
 }
 
-if (params.get('live') === '1') await live()
-else if (DEMO) await demo()
-else { status('Paste an arXiv link or id, then Translate'); window.__reader.ready = true }
+/** the run: live, a demo, or nothing without a paper; a crash is a failure the controller hears of */
+export const run = (params.get('live') === '1' ? live() : DEMO ? demo() : Promise.resolve().then(() => { status('no paper'); window.__reader.ready = true }))
+  .catch(e => { console.error('[reader]', e); host.emit({ type: 'fail', event: 'crashed', text: String(e?.message ?? e) }) })
