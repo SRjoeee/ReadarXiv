@@ -47,13 +47,14 @@ export function followOf(
   prev: Config,
   next: Config,
   from: Landing,
-  at: { translating: boolean; addressDisplay: boolean; addressSync: boolean; display: EngineDisplay; syncMode: string },
+  /** held: the original, held for the visit, since its paper or its language cannot be had as a bilingual PDF */
+  at: { translating: boolean; held: boolean; addressDisplay: boolean; addressSync: boolean; display: EngineDisplay; syncMode: string },
 ): Follow {
   const none: Follow = { reload: false, display: null, sync: null }
   if (from === 'refused' || from === 'first') return none
   if (at.translating && next.targetLanguage !== prev.targetLanguage) return { ...none, reload: true }
   const wanted = displayOf(next)
-  const display = !at.addressDisplay && wanted !== displayOf(prev) && wanted !== at.display ? wanted : null
+  const display = !at.addressDisplay && !at.held && wanted !== displayOf(prev) && wanted !== at.display ? wanted : null
   const sync = next.pdfReader.sync ? 'same' : 'off'
   const switchable = at.syncMode === 'same' || at.syncMode === 'off'
   return { reload: false, display, sync: !at.addressSync && switchable && next.pdfReader.sync !== prev.pdfReader.sync && sync !== at.syncMode ? sync : null }

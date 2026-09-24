@@ -13,7 +13,7 @@ const scrollerOf = (track: HTMLElement | null) => track?.parentElement?.querySel
 export const thumbSize = (track: number, client: number, scroll: number) => Math.min(track, Math.max(32, Math.round((track * client) / Math.max(scroll, 1))))
 
 export const ScrollIndicator = forwardRef<HTMLDivElement, { controller: ReaderController; side: Side }>(function ScrollIndicator({ controller, side }, ref) {
-  const state = useReader(controller)
+  const state = useReader(controller, s => ({ scale: s.scale, pages: s.sides[side].pages, display: s.display, narrow: s.narrow }))
   const track = useRef<HTMLDivElement>(null)
   useImperativeHandle(ref, () => track.current as HTMLDivElement)
   const size = useCallback(() => {
@@ -25,7 +25,7 @@ export const ScrollIndicator = forwardRef<HTMLDivElement, { controller: ReaderCo
   }, [])
   // the length follows the pane's size, the scale and the page count; a frame after, once PDF.js has laid the pages
   // biome-ignore lint/correctness/useExhaustiveDependencies: these are the triggers, what changes the pages' height; size reads the elements
-  useEffect(() => { const id = requestAnimationFrame(size); return () => cancelAnimationFrame(id) }, [state.scale, state.sides[side].pages, state.display, state.narrow])
+  useEffect(() => { const id = requestAnimationFrame(size); return () => cancelAnimationFrame(id) }, [state.scale, state.pages, state.display, state.narrow])
   useEffect(() => {
     const pane = track.current?.parentElement
     if (!pane) return

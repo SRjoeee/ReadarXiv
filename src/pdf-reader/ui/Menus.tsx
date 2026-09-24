@@ -20,7 +20,7 @@ const openOptions = (section: string) => void browser.tabs.create({ url: (browse
 const shut = (id: string) => document.getElementById(id)?.hidePopover()
 
 export function ZoomMenu({ controller }: { controller: ReaderController }) {
-  const state = useReader(controller)
+  const state = useReader(controller, s => ({ zoom: s.zoom, scale: s.scale }))
   const pop = usePopover('menu')
   const items = [
     ...FITS.map(([id, name]) => ({ id, name: name(), checked: state.zoom === id })),
@@ -41,9 +41,8 @@ export function ZoomMenu({ controller }: { controller: ReaderController }) {
 
 /** `name`: the toolbar's menu has one, so that the capsule's choose-language action can open it (usePopover) */
 export function LanguageMenu({ controller, name }: { controller: ReaderController; name?: string }) {
-  const state = useReader(controller)
+  const current = useReader(controller, s => s.settings?.targetLanguage ?? '')
   const pop = usePopover('listbox', name)
-  const current = state.settings?.targetLanguage ?? ''
   return (
     <>
       <ToolbarButton label={S.rows.language} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
@@ -59,7 +58,7 @@ export function LanguageMenu({ controller, name }: { controller: ReaderControlle
 }
 
 export function ServiceMenu({ controller }: { controller: ReaderController }) {
-  const state = useReader(controller)
+  const state = useReader(controller, s => ({ settings: s.settings, pack: s.pack }))
   const pop = usePopover('listbox')
   const config = state.settings
   if (!config) return null
@@ -85,7 +84,7 @@ export function ServiceMenu({ controller }: { controller: ReaderController }) {
 }
 
 export function DownloadMenu({ controller }: { controller: ReaderController }) {
-  const state = useReader(controller)
+  const state = useReader(controller, s => ({ finalReady: s.finalReady }))
   const pop = usePopover('menu')
   const items = [{ id: 'translation', name: R.download.translation, disabled: !state.finalReady }, { id: 'original', name: R.download.original }]
   return (

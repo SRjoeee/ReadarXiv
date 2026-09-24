@@ -99,8 +99,10 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       return event.mode === state.display ? state : { ...state, display: event.mode }
     case 'scale':
       return event.scale === state.scale ? state : { ...state, scale: event.scale }
-    case 'page':
-      return { ...state, sides: { ...state.sides, [event.side]: { page: event.page, pages: event.pages } } }
+    case 'page': {
+      const now = state.sides[event.side]
+      return now.page === event.page && now.pages === event.pages ? state : { ...state, sides: { ...state.sides, [event.side]: { page: event.page, pages: event.pages } } }
+    }
     case 'notice':
       return (event.why != null) === state.settingsUnreadable ? state : { ...state, settingsUnreadable: event.why != null }
     case 'heading':
@@ -191,8 +193,10 @@ export function createController({ open, params }: { open: (host: SessionHost) =
    * one given before `attach` has no session to wait for and is dropped, as is one for a session that could not open
    */
   const later = (act: (s: Session) => void) => void session?.then(act, () => {})
-  /** a change of the state that is the controller's own (the zoom chosen), not the session's */
+  /** a change of the state that is the controller's own (the zoom chosen), not the session's; none, when nothing in it
+   *  differs (a pinch's every step sets no zoom: the final review) */
   const set = (patch: Partial<ReaderState>) => {
+    if ((Object.keys(patch) as (keyof ReaderState)[]).every(k => Object.is(state[k], patch[k]))) return
     state = { ...state, ...patch }
     for (const listener of listeners) listener()
   }

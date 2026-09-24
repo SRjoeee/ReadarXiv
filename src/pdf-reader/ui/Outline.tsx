@@ -12,13 +12,12 @@ import { useTip } from './tip'
 import { useReader } from './use-reader'
 
 export function Outline({ controller, open }: { controller: ReaderController; open: boolean }) {
-  const state = useReader(controller)
-  const entries = state.outline
+  const { outline: entries, currentHeading } = useReader(controller, s => ({ outline: s.outline, currentHeading: s.currentHeading }))
   const parents = useMemo(() => entries.map((e, k) => { for (let p = k - 1; p >= 0; p--) if (entries[p]!.level < e.level) return p; return -1 }), [entries])
   const hasKids = (k: number) => parents.includes(k)
   // the section being read is the session's to say, by the reading line: a heading at a page's foot, gone to, is read
   // though PDF.js counts the next page as the one shown
-  const current = entries.findIndex(e => e.id === state.currentHeading)
+  const current = entries.findIndex(e => e.id === currentHeading)
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
   // the section being read has its branch opened; what the reader folded elsewhere stays folded
   useEffect(() => {
@@ -31,7 +30,9 @@ export function Outline({ controller, open }: { controller: ReaderController; op
   }, [current, parents])
   const shownRow = (k: number): boolean => parents[k]! < 0 || (expanded.has(parents[k]!) && shownRow(parents[k]!))
   return (
-    <aside className="chrome toc" aria-label={R.contents} hidden={!open}>
+    // closed, inert, not hidden: out of the tab order and the accessibility tree, still displayed, so that the style
+    // sheet slides it (a hidden sidebar is display: none, which no transition leaves: the final review)
+    <aside className="chrome toc" aria-label={R.contents} inert={!open}>
       <div className="toc-h">{R.contents}</div>
       <ul className="toc-list">
         {entries.map((e, k) => (

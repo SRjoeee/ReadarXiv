@@ -4,7 +4,11 @@
    control the page draws — takes its own small base under the class `chrome`; the viewers keep theirs */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/utilities.css" layer(utilities);
+/* the utilities of the reader's own sources: Tailwind's scan of the whole tree brought the settings page's in, a :has()
+   among them (Part 3's final review; tests/styles/no-has.test.ts) */
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "./";
+@source "../../pdf-reader/";
 
 /* §4.1: one cool neutral ramp at hue 255 and one status hue; dark by the system, or chosen (data-theme) */
 :root,
@@ -82,7 +86,10 @@ header[role="toolbar"] {
   display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px;
   padding-inline: 8px; background: var(--chrome); box-shadow: 0 0.5px 0 var(--chrome-line); color: var(--ink);
 }
-.doc { position: fixed; inset: var(--bar) 0 0 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; transition: left 200ms var(--ease); }
+/* the contents move the document area at once, so that each side is refitted once to its new width; it is drawn sliding
+   there by a transform (App.tsx), on the compositor: a transition of `left` refitted both sides on every frame (the
+   final review: 12 scale changes a toggle) */
+.doc { position: fixed; inset: var(--bar) 0 0 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; }
 html[data-axt-contents] .doc { left: var(--side); }
 .pane { position: relative; min-width: 0; overflow: hidden; timeline-scope: --pane-y; }
 .pane .viewerContainer { scroll-timeline: --pane-y block; scrollbar-width: none; }
@@ -92,7 +99,6 @@ html[data-axt-pdf-mode="original"] .pane[data-side="right"],
 html[data-axt-pdf-mode="translation"] .pane[data-side="left"],
 html[data-axt-pdf-mode="bilingual"][data-axt-narrow] .pane[data-side="left"] { display: none; }
 html[data-axt-pdf-mode="bilingual"][data-axt-swapped] .pane[data-side="left"] { order: 2; }
-@media (prefers-reduced-motion: reduce) { .doc { transition: none; } }
 
 /* ----- PDF.js's pages: a hairline and a soft shadow, 14 px apart (§4.1); PDF.js's own border and its margin, whose
    foot is negative, give way (as in the harness the maintainer approved) ----- */
@@ -165,7 +171,6 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   /* the contents (§6.3): `toc`, since Tailwind's `contents` is display: contents */
   .toc { position: fixed; z-index: 15; inset: var(--bar) auto 0 0; width: var(--side); display: flex; flex-direction: column; background: var(--chrome); box-shadow: 0.5px 0 0 var(--chrome-line); translate: -100% 0; visibility: hidden; transition: translate 200ms var(--ease), visibility 0s linear 200ms; }
   html[data-axt-contents] .toc { translate: 0 0; visibility: visible; transition: translate 200ms var(--ease), visibility 0s; }
-  .toc[hidden] { display: flex !important; }
   .toc-h { display: flex; align-items: center; height: 36px; padding: 0 12px 0 14px; flex: none; color: var(--ink-2); font-size: 11.5px; font-weight: 600; }
   .toc-list { flex: 1; margin: 0; padding: 0 6px 16px; overflow: auto; list-style: none; overscroll-behavior: contain; scrollbar-width: thin; }
   .toc-list li[hidden] { display: none; }

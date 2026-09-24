@@ -51,7 +51,7 @@ describe('figuresShown: figure text in a display', () => {
 })
 
 describe("followOf: what a landing of the settings changes in the reader (Part 2's final review)", () => {
-  const at = (over: Partial<Parameters<typeof followOf>[3]> = {}) => ({ translating: false, addressDisplay: false, addressSync: false, display: 'bilingual' as const, syncMode: 'same', ...over })
+  const at = (over: Partial<Parameters<typeof followOf>[3]> = {}) => ({ translating: false, held: false, addressDisplay: false, addressSync: false, display: 'bilingual' as const, syncMode: 'same', ...over })
   const side = with_({ mode: 'side' }), only = with_({ mode: 'only' })
 
   it('follows a display chosen elsewhere', () => {
@@ -76,6 +76,10 @@ describe("followOf: what a landing of the settings changes in the reader (Part 2
 
   it('keeps a display the address names', () => {
     expect(followOf(side, only, 'elsewhere', at({ addressDisplay: true })).display).toBeNull()
+  })
+
+  it('keeps the original a paper or a language that cannot be had holds, whatever another page chooses (the final review)', () => {
+    expect(followOf(side, only, 'elsewhere', at({ held: true, display: 'original' })).display).toBeNull()
   })
 
   it('follows the sync switch, not over a sync the address names or a probe\'s other mode', () => {

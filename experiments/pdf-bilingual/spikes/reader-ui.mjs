@@ -229,6 +229,24 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.close()
 }
 
+// ---------------------------------------------------------------- Part 3's final review
+{
+  const page = await open({ mode: 'bilingual' })
+  // I5: the offline service's language pack is looked up after the settings land, and the service menu follows it
+  const pack = await page.waitForFunction(() => window.__reader.controller.getState().pack, null, { timeout: 8000 }).then(h => h.jsonValue(), () => null)
+  check('the service menu learns the offline pack\'s state', pack !== null, String(pack))
+  // I10: the contents slide the document area, and each side is refitted once, not on every frame of the slide
+  await page.evaluate(() => { window.__scales = 0; for (const s of [window.__reader.debug.left, window.__reader.debug.right]) s.eventBus.on('scalechanging', () => { window.__scales++ }) })
+  await page.getByRole('button', { name: '目录' }).click()
+  await page.waitForTimeout(700)
+  const opened = await page.evaluate(() => window.__scales)
+  await page.getByRole('button', { name: '目录' }).click()
+  await page.waitForTimeout(700)
+  const closed = await page.evaluate(() => window.__scales) - opened
+  check('the contents open and close with one refit of each side', opened <= 2 && closed <= 2, `${opened} scale changes opening, ${closed} closing`)
+  await page.close()
+}
+
 console.log(failed ? `${failed} failed` : 'all passed')
 await context.close()
 process.exit(failed ? 1 : 0)

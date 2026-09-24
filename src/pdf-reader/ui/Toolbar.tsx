@@ -19,8 +19,7 @@ const MOD = /Mac/.test(navigator.platform) ? '⌘' : 'Ctrl'
 const openSettings = () => void browser.tabs.create({ url: (browser.runtime.getURL as (p: string) => string)('/options.html#pdf-reader') })
 
 export function Toolbar({ controller, embedded, contents, onContents }: { controller: ReaderController; embedded: boolean; contents: boolean; onContents: () => void }) {
-  const state = useReader(controller)
-  const reader = state.settings?.pdfReader
+  const state = useReader(controller, s => ({ swapped: s.settings?.pdfReader.swapped ?? false, display: s.display, narrow: s.narrow, paper: s.paper, available: s.available, languageSupported: s.languageSupported, sync: s.sync }))
   const sideBySide = state.display === 'bilingual' && !state.narrow
   return (
     <header role="toolbar" aria-label={R.bar} className="chrome">
@@ -34,7 +33,7 @@ export function Toolbar({ controller, embedded, contents, onContents }: { contro
         <DisplaySwitch value={state.display} translatable={state.available && state.languageSupported} onChange={controller.setDisplay} />
       </div>
       <div data-zone="trail" className="flex items-center gap-1 justify-self-end">
-        <ToolbarButton label={R.swap} pressed={reader?.swapped ?? false} disabled={!sideBySide} onClick={() => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, swapped: !c.pdfReader.swapped } }))}>
+        <ToolbarButton label={R.swap} pressed={state.swapped} disabled={!sideBySide} onClick={() => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, swapped: !c.pdfReader.swapped } }))}>
           <Icon node={ArrowLeftRight} />
         </ToolbarButton>
         {/* the sync the reader applies, not the stored setting a refused write or an address may leave behind (Part 2's final review) */}

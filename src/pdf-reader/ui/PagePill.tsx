@@ -9,7 +9,7 @@ import { Icon } from './icons'
 import { useReader } from './use-reader'
 
 export const PagePill = forwardRef<HTMLDivElement, { controller: ReaderController; side: Side }>(function PagePill({ controller, side }, ref) {
-  const { page, pages } = useReader(controller).sides[side]
+  const { page, pages } = useReader(controller, s => s.sides[side])
   const [draft, setDraft] = useState<string | null>(null)
   const go = (n: number) => { if (Number.isInteger(n) && n >= 1 && n <= pages) controller.goToPage(side, n) }
   return (

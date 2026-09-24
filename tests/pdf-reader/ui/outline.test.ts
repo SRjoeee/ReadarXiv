@@ -28,6 +28,13 @@ describe('the contents (the reader\'s design, §6.3)', () => {
     expect(container.querySelector('[aria-current="true"]')!.textContent).toContain('引言')
   })
 
+  it('closed, the sidebar is inert, not hidden: the style sheet slides it out of view (§7, the final review)', async () => {
+    const fake = fakeController({ outline })
+    const { container } = await mountElement(createElement(Outline, { controller: fake.controller, open: false }))
+    const aside = container.querySelector<HTMLElement>('aside')!
+    expect([aside.hasAttribute('hidden'), aside.inert]).toEqual([false, true])
+  })
+
   it('a fold closes a branch; a row jumps to its heading', async () => {
     const fake = fakeController({ outline, currentHeading: 2 })
     const { container } = await mountElement(createElement(Outline, { controller: fake.controller, open: true }))

@@ -15,10 +15,9 @@ import { useReader } from './use-reader'
 const APPEARANCES = ['light', 'dark', 'system'] as const
 
 export function ReadingOptions({ controller }: { controller: ReaderController }) {
-  const state = useReader(controller)
+  const config = useReader(controller, s => s.settings)
   const pop = usePopover('dialog', 'options')
   const radios = useRef<(HTMLButtonElement | null)[]>([])
-  const config = state.settings
   if (!config) return null
   const names = { light: R.options.light, dark: R.options.dark, system: R.options.system }
   const appearance = config.pdfReader.appearance

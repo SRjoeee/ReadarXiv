@@ -19,7 +19,8 @@ import { useReader } from '@/pdf-reader/ui/use-reader'
 export function App({ controller, embedded }: { controller: ReaderController; embedded: boolean }) {
   const left = useRef<HTMLDivElement>(null)
   const right = useRef<HTMLDivElement>(null)
-  const state = useReader(controller)
+  // what the page itself shows; each part below takes its own (use-reader.ts)
+  const state = useReader(controller, s => ({ appearance: s.settings?.pdfReader.appearance, dimPages: s.settings?.pdfReader.dimPages, swapped: s.settings?.pdfReader.swapped ?? false, title: s.paper.title, card: cardOf(s) !== null }))
   const doc = useRef<HTMLDivElement>(null)
   usePinch(controller, doc)
   // a document area under 840 px shows the translation alone in side by side (the design, §5); the session applies it
@@ -41,21 +42,30 @@ export function App({ controller, embedded }: { controller: ReaderController; em
       () => {},
     )
   }, [controller])
-  useAppearance(state.settings?.pdfReader.appearance, state.settings?.pdfReader.dimPages)
-  // the contents sidebar, open or not: this visit's, not a setting; the document area moves with it (reader.css)
+  useAppearance(state.appearance, state.dimPages)
+  // the contents sidebar, open or not: this visit's, not a setting. The document area moves with it at once, each side
+  // refitted once to its new width, and is drawn sliding there by a transform, on the compositor (reader.css .doc)
   const [contents, setContents] = useState(false)
-  useEffect(() => { document.documentElement.toggleAttribute('data-axt-contents', contents) }, [contents])
-  const swapped = state.settings?.pdfReader.swapped ?? false
+  const toggled = useRef(false)
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    root.toggleAttribute('data-axt-contents', contents)
+    if (!toggled.current) { toggled.current = true; return }
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const side = Number.parseFloat(getComputedStyle(root).getPropertyValue('--side')) || 0
+    doc.current?.animate([{ translate: `${contents ? -side : side}px 0` }, { translate: '0 0' }], { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' })
+  }, [contents])
+  const swapped = state.swapped
   useEffect(() => { document.documentElement.toggleAttribute('data-axt-swapped', swapped) }, [swapped])
   // the tab says what is being read; the product's name until the title is known
-  useEffect(() => { document.title = state.paper.title || 'Read arXiv' }, [state.paper.title])
+  useEffect(() => { document.title = state.title || 'Read arXiv' }, [state.title])
   return (
     <>
       <Toolbar controller={controller} embedded={embedded} contents={contents} onContents={() => setContents(open => !open)} />
       <Outline controller={controller} open={contents} />
       <div className="doc" ref={doc}>
         <Pane controller={controller} side="left" scroller={left} />
-        <Pane controller={controller} side="right" scroller={right} card={cardOf(state) !== null} />
+        <Pane controller={controller} side="right" scroller={right} card={state.card} />
       </div>
       <StatusCapsule controller={controller} onChooseLanguage={chooseLanguage} />
     </>

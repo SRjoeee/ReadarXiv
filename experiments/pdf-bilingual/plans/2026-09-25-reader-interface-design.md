@@ -533,7 +533,11 @@ Each before the stage's pull request, on the heaviest demo paper, in a real wind
 - **Dark pages**: scrolling with the canvas filter on, and memory at 400 %; the filter must not cost frames.
 - The scroll indicators: no scroll listener other than a passive one that toggles their visibility.
 - The appearance crossfade: once per change; nothing while reading.
-- No `:has()` in the reader's style sheets (the extension's rule, DESIGN §7.2, applies here too).
+- No `:has()` in the reader's own style sheets (the extension's rule, DESIGN §7.2, applies here too), nor in the
+  utilities Tailwind generates for them, which come from the reader's own sources alone. PDF.js's viewer sheet keeps
+  its 17, all keyed to PDF.js's classes (annotation and editor layers, the thumbnails): a highlight band's insertion
+  costs the same with them and without them (0.3–0.9 ms against 0.4–0.5 ms for six, at 10 000 elements; Part 3's
+  final review). The gate is `tests/styles/no-has.test.ts`.
 
 ## 13. Accessibility
 

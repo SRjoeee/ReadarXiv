@@ -1335,8 +1335,9 @@ left 209, right 236, pages 25 / 26.
   - a page pill, with a field that goes to a page;
   - a scroll indicator whose thumb is a scroll-driven animation; a drag on it moves its side, and the other follows.
 
-  Both show while their pane scrolls and fade after. One passive scroll listener per pane toggles them. No React
-  render happens on scroll.
+  Both show while their pane scrolls and fade after. One passive scroll listener per pane toggles them. A scroll
+  renders only what it changes: a pane's pill when its page turns, the contents when the section being read does
+  (after Part 3's final review; before it, every change of the state rendered the whole interface).
 - **The states** (the design's §8):
   - the capsule, a live region present from the first paint: loading, translating, translating again, a notice with
     its retry, an unsupported language with its choice of another, the narrow window;

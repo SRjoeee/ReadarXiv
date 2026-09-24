@@ -9,7 +9,7 @@ import { cardOf } from './status'
 import { useReader } from './use-reader'
 
 export function FailureCard({ controller }: { controller: ReaderController }) {
-  const card = cardOf(useReader(controller))
+  const card = useReader(controller, cardOf)
   if (!card) return null
   const act = card.action === 'settings'
     ? () => void browser.tabs.create({ url: (browser.runtime.getURL as (p: string) => string)('/options.html#services') })

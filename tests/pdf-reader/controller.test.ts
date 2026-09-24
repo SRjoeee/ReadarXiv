@@ -152,6 +152,20 @@ describe('createController', () => {
     expect(heard).toHaveBeenCalledOnce()
   })
 
+  it('tells its listeners of nothing that did not change: a page reported again, a pinch or a step while no zoom is chosen (the final review)', async () => {
+    let host!: SessionHost
+    const controller = createController({ open: async h => { host = h; return fakeSession() }, params: new URLSearchParams() })
+    await controller.attach(panes())
+    host.emit({ type: 'page', side: 'left', page: 3, pages: 20 })
+    controller.pinch('left', 1.1, [0, 0])
+    const heard = vi.fn()
+    controller.subscribe(heard)
+    host.emit({ type: 'page', side: 'left', page: 3, pages: 20 })
+    controller.pinch('left', 1.1, [0, 0])
+    controller.zoomBy(1.1)
+    expect(heard).not.toHaveBeenCalled()
+  })
+
   it('carries out a command given while the session is still opening, once it is open', async () => {
     const session = fakeSession()
     let resolve!: (s: Session) => void

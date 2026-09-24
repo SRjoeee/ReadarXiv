@@ -26,7 +26,7 @@ import { ocrCall } from '../ocr'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFViewer, pdfjsLib } from '../pdfjs'
 import { displayOf, figuresShown, followOf, withDisplay } from '../settings'
 import { whenVisible } from '../visible'
-import { outlineOf } from '../outline'
+import { contentsOf, outlineOf } from '../outline'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
 import { decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { openEngine, paperContext } from './engine.mjs'
@@ -64,6 +64,10 @@ let config = null
 const surface = createSurfaceConfig({ localeStale, reload: () => location.reload(), onLanded: (next, from) => landed(next, from) })
 await new Promise(resolve => { const off = surface.subscribe(() => { if (surface.state().config) { off(); resolve() } }); surface.start() })
 config = surface.state().config
+// the offline service's language pack, which the surface looks up once the settings have landed: the service menu
+// follows it as it comes (the final review: it was read once, before it came, and the offline service stayed greyed)
+let pack = surface.state().pack ?? null
+surface.subscribe(() => { const now = surface.state().pack ?? null; if (now !== pack) { pack = now; host.emit({ type: 'settings', config, pack }) } })
 /** the display: the one the address names (a probe's page), else the one the settings ask for */
 let mode = MODES.includes(params.get('mode')) ? params.get('mode') : displayOf(config)
 let narrow = false // the window too narrow for two sides (setNarrow)
@@ -96,7 +100,8 @@ function showSettings() {
   let sheet = document.getElementById('axt-look')
   if (!sheet) { sheet = document.createElement('style'); sheet.id = 'axt-look'; document.head.append(sheet) }
   sheet.textContent = appearanceRule(lookOf(config))
-  host.emit({ type: 'settings', config, pack: surface.state().pack ?? null })
+  pack = surface.state().pack ?? null
+  host.emit({ type: 'settings', config, pack })
   // the defaults are in effect — the service and its key set on the settings page are not — until they are repaired there
   host.emit({ type: 'notice', why: surface.state().fallbackReason ?? null })
 }
@@ -109,6 +114,9 @@ const save = change => (writes = writes.then(() => surface.patch(change)).catch(
 export function patchSettings(change) { void save(change) }
 /** true once the translation has started: a new language then means another document, and the page starts again */
 let translating = false
+/** the original held for this visit: the paper or its language cannot be had as a bilingual PDF, and a display chosen
+ *  on another page is not followed into a translation there is none of (the final review) */
+let held = false
 /** the viewers exist: until then the settings are read as the viewers are made, and there is nothing to follow */
 let viewersMade = false
 /** settings that landed (shared/surface-config.ts Landing): shown, and what changed followed (settings.ts followOf),
@@ -120,7 +128,7 @@ function landed(next, from) {
   config = next
   showSettings()
   if (!viewersMade || from === 'refused') return
-  const follow = followOf(prev, next, from, { translating, addressDisplay: MODES.includes(params.get('mode')), addressSync: SYNC_MODES.includes(params.get('sync')), display: mode, syncMode })
+  const follow = followOf(prev, next, from, { translating, held, addressDisplay: MODES.includes(params.get('mode')), addressSync: SYNC_MODES.includes(params.get('sync')), display: mode, syncMode })
   if (follow.reload) { void writes.then(() => location.reload()); return }
   if (follow.display) changeDisplay(follow.display, false)
   if (follow.sync) applySync(follow.sync)
@@ -1356,8 +1364,7 @@ function reportHeading() {
   if (!side.anchors?.size) return
   const y = side.container.scrollTop + side.container.clientHeight * readingLine
   let id = null
-  for (const h of headings) {
-    if (h.title) continue
+  for (const h of contentsOf(headings)) {
     const top = unitDocTop(side, h.id)
     if (top != null && top <= y + 1) id = h.id
   }
@@ -1495,7 +1502,7 @@ async function live() {
     setContext({}); note(event); status(text); L.done = true; L.failed = text
     // a failure stays in its display: with nothing translated, the card fills the translation's pane (the reader's design,
     // §8). A language the reader cannot typeset, or a paper that cannot be had, shows the original, for this visit
-    if (event === 'not verified' || event === 'no source') changeDisplay('original', false)
+    if (event === 'not verified' || event === 'no source') { held = true; changeDisplay('original', false) }
   }
   // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
   // told at once

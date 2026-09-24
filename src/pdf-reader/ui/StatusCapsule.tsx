@@ -12,10 +12,11 @@ import { type Capsule, capsuleOf, cardOf } from './status'
 import { useReader } from './use-reader'
 
 export function StatusCapsule({ controller, onChooseLanguage }: { controller: ReaderController; onChooseLanguage: () => void }) {
-  const state = useReader(controller)
   const [closed, setClosed] = useState(false)
   const [narrowShown, setNarrowShown] = useState(false)
-  const now = capsuleOf(state, { closed, narrowShown })
+  const now = useReader(controller, s => capsuleOf(s, { closed, narrowShown }))
+  // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
+  const card = useReader(controller, cardOf)
   // a capsule that goes is kept 160 ms, leaving (reader.css .capsule[data-out]); one that comes replaces it at once
   const [leaving, setLeaving] = useState<Capsule | null>(null)
   const last = useRef<Capsule | null>(null)
@@ -48,8 +49,6 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
     width.current = { kind: now.kind, w }
   }, [now?.kind, now?.text])
   const capsule = now ?? leaving
-  // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
-  const card = cardOf(state)
   return (
     <div role="status" className="capsule-slot">
       {card && <span className="sr-only">{card.reason}</span>}
