@@ -6,7 +6,7 @@ import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
 import { DEFAULT_PROMPTS_CONFIG } from '@/providers/prompt-library'
 import { fromBcp47 } from './languages'
 import { type Appearance, BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, DEFAULT_APPEARANCE, type StyleProfile, newProfileId } from './appearance'
-import { CONFIG_VERSION, DEFAULT_CONFIG, MODE_VALUES, configSchema, normalizeGlossary, type Config } from './schema'
+import { CONFIG_VERSION, DEFAULT_CONFIG, DEFAULT_PDF_READER, MODE_VALUES, configSchema, normalizeGlossary, type Config } from './schema'
 import { defaultServiceName, newServiceId } from './services'
 
 const CONFIG_KEY = 'local:config'
@@ -104,6 +104,10 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
       const { floatingEntry: _moved, ...rest } = v17
       return { ...rest, version: 18 as const }
     },
+    // v18 -> v19: the PDF reader's settings (the reader's design, §9.1), with their defaults: until now it kept its own
+    // under another key, never released, which is not carried over
+    19: (v18: (Omit<Config, 'version' | 'pdfReader'> & { version: 18 }) | null) =>
+      typeof v18 !== 'object' || v18 === null ? v18 : { ...v18, version: 19 as const, pdfReader: { ...DEFAULT_PDF_READER } },
   },
 })
 
