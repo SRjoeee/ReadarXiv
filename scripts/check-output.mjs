@@ -80,6 +80,7 @@ for (const [what, ok, detail] of [
   ['the recogniser\'s page is built', existsSync(join(OUT, 'ocr.html')), 'ocr.html is missing'],
   ['one WebAssembly file, ONNX Runtime\'s', wasm.length === 1 && /ort-wasm-simd-threaded/.test(wasm[0]), wasm.join(', ') || 'none'],
   ['only the recogniser\'s worker carries the runtime', carriers.length === 1 && /assets[\\/]worker-/.test(carriers[0]), carriers.join(', ') || 'none'],
+  ['the PDF reader\'s page is built', existsSync(join(OUT, 'pdf-reader.html')), 'pdf-reader.html is missing'],
   ['PDF.js\'s character maps, fonts and decoders are in the build', ['pdfjs/cmaps/78-EUC-H.bcmap', 'pdfjs/standard_fonts/FoxitSerif.pfb', 'pdfjs/standard_fonts/LICENSE_FOXIT', 'pdfjs/wasm/openjpeg.wasm'].every(file => existsSync(join(OUT, 'pdf-reader', file))), 'pdf-reader/pdfjs/ is incomplete'],
   ...Object.entries(MODELS).map(([file, sha256]) => {
     const path = join(OUT, file)

@@ -1,0 +1,10 @@
+/* The reader's page, Part 1: the two panes the engine draws into, the whole window; the interface proper comes with
+   Part 3, and its tokens and layout replace this sheet */
+html, body { margin: 0; height: 100%; font: 13px system-ui, sans-serif; background: #e9e9ec; color: #222; }
+[hidden] { display: none !important; }
+main { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; }
+.pane { position: relative; min-width: 0; }
+/* one document alone: at a reading width, centred (the design's full-width single display is Part 3's) */
+html[data-axt-pdf-mode="original"] main, html[data-axt-pdf-mode="translation"] main { grid-template-columns: minmax(0, 1100px); justify-content: center; }
+html[data-axt-pdf-mode="original"] .pane:last-child, html[data-axt-pdf-mode="translation"] .pane:first-child { display: none; }
+.reader-leave { position: fixed; z-index: 10; inset-block-start: 8px; inset-inline-end: 12px; }

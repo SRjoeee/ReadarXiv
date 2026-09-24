@@ -303,6 +303,11 @@ const O = {
   },
 } as const
 
+/** The PDF reader's words (the reader's design §15; docs/UI.md surface R comes with Part 6) */
+const R = {
+  leave: '在默认查看器中打开',
+}
+
 const REASON: Record<ProviderErrorKind, string> = {
   'no-key': '尚未配置 API Key',
   auth: 'API Key 无效或已过期',
@@ -314,4 +319,4 @@ const REASON: Record<ProviderErrorKind, string> = {
   unknown: '翻译失败',
   aborted: '',
 }
-export const zh = { S, O, REASON } as const
+export const zh = { S, O, R, REASON } as const

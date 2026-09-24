@@ -44,13 +44,11 @@ export default defineContentScript({
 })
 
 /**
- * The bilingual PDF reader over the page, when this build has it: true once it is shown. `closed` runs when the reader
- * asks for the browser's viewer. The reader is copied into the build by wxt.config.ts, not a public asset WXT knows,
- * hence the untyped `getURL`
+ * The bilingual PDF reader over the page, the extension's page pdf-reader.html: true once it is shown. `closed` runs
+ * when the reader asks for the browser's viewer
  */
 async function openReader(id: string, closed: () => void): Promise<boolean> {
-  const url = (browser.runtime.getURL as (path: string) => string)(`/pdf-reader/reader.html?${new URLSearchParams({ live: '1', paper: id, embedded: '1' })}`)
-  if (!(await fetch(url, { method: 'HEAD' }).then(res => res.ok).catch(() => false))) return false
+  const url = browser.runtime.getURL(`/pdf-reader.html?${new URLSearchParams({ live: '1', paper: id, embedded: '1' })}` as '/pdf-reader.html')
   const frame = document.createElement('iframe')
   frame.src = url
   frame.setAttribute('data-axt-pdf-reader', '')

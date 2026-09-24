@@ -35,6 +35,8 @@ let current: Locale = LOCALES[FALLBACK_LOCALE]
 export let S: Locale['S'] = current.S
 /** The settings page's words (docs/UI.md §3.2) */
 export let O: Locale['O'] = current.O
+/** The PDF reader's words (the reader's design §15) */
+export let R: Locale['R'] = current.R
 
 /** Swap the pack. Everything already rendered has to be rendered again; see the note above */
 export function setLocale(code: LocaleCode): void {
@@ -42,6 +44,7 @@ export function setLocale(code: LocaleCode): void {
   current = LOCALES[code]
   S = current.S
   O = current.O
+  R = current.R
   installCoreStrings()
 }
 

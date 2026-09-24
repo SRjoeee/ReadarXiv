@@ -287,6 +287,10 @@ const O: Locale['O'] = {
   },
 }
 
+const R: Locale['R'] = {
+  leave: 'Open in the default viewer',
+}
+
 const REASON: Locale['REASON'] = {
   'no-key': 'No API key yet',
   auth: 'The API key is invalid or has expired',
@@ -299,4 +303,4 @@ const REASON: Locale['REASON'] = {
   aborted: '',
 }
 
-export const en = { S, O, REASON }
+export const en = { S, O, R, REASON }

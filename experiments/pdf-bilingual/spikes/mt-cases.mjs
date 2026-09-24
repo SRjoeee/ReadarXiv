@@ -18,7 +18,7 @@ function engine(answer) {
 const echo = by => texts => texts.map(text => ({ text, by }))
 /**
  * An error shaped as engine.mjs's EngineError, which translateUnits reads by its fields: engine.mjs itself is not
- * imported, since lib/axt/extension.mjs runs the settings' storage when it loads and cannot load in Node
+ * imported, since the message transport it opens (src/shared/transport.ts) needs the extension's runtime, not Node's
  */
 class EngineError extends Error {
   constructor(kind, message, { partial, lost } = {}) { super(message); this.name = 'EngineError'; this.kind = kind; if (partial) Object.assign(this, { partial, lost }) }
