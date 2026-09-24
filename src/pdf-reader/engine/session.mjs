@@ -1493,7 +1493,9 @@ async function live() {
   const fail = (event, text, kind) => {
     host.emit({ type: 'fail', event, text, kind })
     setContext({}); note(event); status(text); L.done = true; L.failed = text
-    // a failure stays in its display: with nothing translated, the card fills the translation's pane (the reader's design, §8)
+    // a failure stays in its display: with nothing translated, the card fills the translation's pane (the reader's design,
+    // §8). A language the reader cannot typeset, or a paper that cannot be had, shows the original, for this visit
+    if (event === 'not verified' || event === 'no source') changeDisplay('original', false)
   }
   // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
   // told at once
