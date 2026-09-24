@@ -78,8 +78,9 @@ function showSettings() {
   host.emit({ type: 'notice', why: surface.state().fallbackReason ?? null })
 }
 showSettings()
-/** this page's own writes, in the order they were made: a new language reloads the page only once they have landed */
-let writes = Promise.resolve()
+/** this page's own writes of the settings, which a new language's reload waits for; it makes none until the reader's
+ *  controls write through the controller (the plan's Part 2) */
+const writes = Promise.resolve()
 /** true once the translation has started: a new language then means another document, and the page starts again */
 let translating = false
 surface.subscribe(() => {
