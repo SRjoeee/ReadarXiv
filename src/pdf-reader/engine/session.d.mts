@@ -42,5 +42,6 @@ export declare function zoomTo(value: number | 'page-width' | 'page-fit' | 'page
 export declare function goToPage(side: 'left' | 'right', page: number): void
 export declare function patchSettings(change: (latest: Config) => Config): void
 export declare function goToUnit(id: number): void
+export declare function lead(which: 'left' | 'right'): void
 export declare function pdfBytes(which: 'translation' | 'original'): Promise<Uint8Array | null>
 export declare const run: Promise<void>

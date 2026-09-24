@@ -76,7 +76,7 @@ export const INITIAL: ReaderState = {
 }
 
 /** the session's commands the controller passes on */
-export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage' | 'patchSettings' | 'pdfBytes' | 'goToUnit'>
+export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage' | 'patchSettings' | 'pdfBytes' | 'goToUnit' | 'lead'>
 
 /** the runs that end without a translation because of the paper, or of the language: not failures a reader can retry */
 const CANNOT_BE_HAD = new Set(['no source'])
@@ -162,6 +162,8 @@ export interface ReaderController {
   goToPage(side: Side, page: number): void
   /** a change of the extension's settings, on top of what storage holds when its turn comes */
   patchSettings(change: (latest: Config) => Config): void
+  /** a side made the leading one, as a press in its pane makes it (a press on its scroll indicator) */
+  lead(side: Side): void
   /** both sides shown taken to a heading from the contents */
   goToHeading(id: number): void
   /** a side's PDF saved as a file, named by the paper (fileName) */
@@ -213,6 +215,7 @@ export function createController({ open, params }: { open: (host: SessionHost) =
     goToPage: (side, page) => later(s => s.goToPage(side, page)),
     patchSettings: change => later(s => s.patchSettings(change)),
     goToHeading: id => later(s => s.goToUnit(id)),
+    lead: side => later(s => s.lead(side)),
     async download(which) {
       const s = await session
       const bytes = await s?.pdfBytes(which)

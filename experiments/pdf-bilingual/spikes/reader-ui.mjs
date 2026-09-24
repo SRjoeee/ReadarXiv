@@ -163,6 +163,38 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.close()
 }
 
+// ---------------------------------------------------------------- Task 22: the pills and the indicators
+{
+  const page = await open({ mode: 'bilingual' })
+  const opacity = s => page.evaluate(sel => getComputedStyle(document.querySelector(sel)).opacity, s)
+  await page.waitForTimeout(3000) // past the 2.5 s the pill stays after PDF.js's own scroll as the pages are laid
+  check('the pill and the indicator are hidden at rest', (await opacity('.pane[data-side="left"] .pill')) === '0' && (await opacity('.pane[data-side="left"] .indicator')) === '0')
+  await page.mouse.move(300, 500)
+  await page.mouse.wheel(0, 1200)
+  await page.waitForTimeout(250)
+  check('scrolling shows the pane\'s pill and indicator', (await opacity('.pane[data-side="left"] .pill')) === '1' && (await opacity('.pane[data-side="left"] .indicator')) === '1')
+  await page.waitForTimeout(2800)
+  check('both fade after their delays', (await opacity('.pane[data-side="left"] .pill')) === '0')
+  const pill = page.getByRole('textbox', { name: '原文页码' })
+  await pill.focus()
+  await page.keyboard.type('5')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(600)
+  check('a page typed in the pill is gone to', (await state(page)).sides.left.page === 5, JSON.stringify((await state(page)).sides))
+  // a drag of the right indicator's thumb moves the right side, and the left follows through the sync
+  const leftTop = await page.evaluate(() => window.__reader.debug.left.container.scrollTop)
+  const thumb = await page.evaluate(() => { const r = document.querySelector('.pane[data-side="right"] .indicator i').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + 10 } })
+  await page.mouse.move(thumb.x, thumb.y)
+  await page.mouse.down()
+  await page.mouse.move(thumb.x, thumb.y + 120, { steps: 8 })
+  await page.mouse.up()
+  await page.waitForTimeout(900)
+  const after = await page.evaluate(() => ({ left: window.__reader.debug.left.container.scrollTop, right: window.__reader.debug.right.container.scrollTop }))
+  check('dragging an indicator moves its side, the other following', after.right > 0 && after.left !== leftTop, JSON.stringify({ leftTop, after }))
+  await shot(page, '22-pills')
+  await page.close()
+}
+
 console.log(failed ? `${failed} failed` : 'all passed')
 await context.close()
 process.exit(failed ? 1 : 0)

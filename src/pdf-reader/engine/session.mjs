@@ -1323,6 +1323,8 @@ function reportOutline() {
   readingHeading = undefined
   reportHeading()
 }
+/** a side made the leading one, as a press in its pane makes it: a press on its scroll indicator (the reader's design, §6.5) */
+export function lead(which) { const s = which === 'left' ? left : right; take(s); arm() }
 /** the heading being read: the last one whose top is above the reading line on the side read (the translation's when
  *  it is shown), told when it changes — as the reading moves (PDF.js's updateviewarea), and as the contents change */
 let readingHeading
