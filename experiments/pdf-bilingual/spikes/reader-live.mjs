@@ -4,6 +4,7 @@
 // files then come from the browser's cache). Prints the timeline; screenshots at the first preview and the final.
 //   node spikes/reader-live.mjs id [start: 0–1, where the reader stands when the translation starts]
 //   ONLINE=1 node spikes/reader-live.mjs id   — the paper fetched from arXiv itself, as a reader's would be
+//   TARGET=ko node spikes/reader-live.mjs id  — into another language than the reader's default
 import { createServer } from 'node:http'
 import { serveSite } from './live-site.mjs'
 import { mkdtempSync, readFileSync } from 'node:fs'
@@ -33,7 +34,7 @@ for (const visit of ['first visit', 'returning visit']) {
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', e => { errors.push(e.message); console.error('pageerror', e.stack ?? e.message) }); page.on('console', m => { if (m.type() === 'error') { errors.push(m.text()); console.error('console', m.text().slice(0, 300)) } })
-  await page.goto(`chrome-extension://${extId}/reader.html?${new URLSearchParams({ paper, live: '1', site: siteOrigin, endpoint: 'http://localhost:8070', ...(process.env.ONLINE ? {} : { src: `${srcOrigin}/src/${paper}`, pdf: `${srcOrigin}/pdf/${paper}` }) })}`)
+  await page.goto(`chrome-extension://${extId}/reader.html?${new URLSearchParams({ paper, live: '1', site: siteOrigin, endpoint: 'http://localhost:8070', ...(process.env.TARGET ? { lang: process.env.TARGET } : {}), ...(process.env.ONLINE ? {} : { src: `${srcOrigin}/src/${paper}`, pdf: `${srcOrigin}/pdf/${paper}` }) })}`)
   await page.waitForFunction(() => window.__reader?.ready || window.__reader?.live?.done, null, { timeout: Number(process.env.WAIT ?? 120000) }).catch(async e => { console.error('not ready:', JSON.stringify(await page.evaluate(() => ({ status: document.getElementById('status')?.textContent, live: window.__reader?.live })))); throw e })
   if (await page.evaluate(() => window.__reader.live?.failed)) { console.log(`\n${paper} — ${visit}: ${await page.evaluate(() => window.__reader.live.failed)}`); await page.close(); break }
   // the reader already somewhere in the paper when the translation starts: it is translated from there outwards
@@ -51,11 +52,12 @@ for (const visit of ['first visit', 'returning visit']) {
   const events = await page.evaluate(() => window.__reader.live.events)
   // the final state as a reader gets it: paragraphs linked on both sides, and how level they stand once scrolling stops
   const settled = await page.evaluate(async () => {
-    const { left, right, unitDocTop, pageView, setDriver, READING_LINE } = window.__reader.debug
+    // the reading line the reader keeps now (it follows the reader's clicks); READING_LINE, a constant once, is gone
+    const { left, right, unitDocTop, pageView, setDriver, readingLine } = window.__reader.debug
     const ids = [...left.anchors].filter(([id, a]) => a && right.anchors.get(id)).map(([id]) => id)
     const errs = []
     for (const id of ids.filter((_, n) => n % Math.max(1, Math.floor(ids.length / 25)) === 0)) {
-      const r = left.anchors.get(id).rects[0], top = unitDocTop(left, id), want = top + 2 - left.container.clientHeight * READING_LINE
+      const r = left.anchors.get(id).rects[0], top = unitDocTop(left, id), want = top + 2 - left.container.clientHeight * readingLine
       if (want < 0 || want > left.container.scrollHeight - left.container.clientHeight) continue
       setDriver(left)
       const pv = pageView(left, r.page), [cx] = pv.viewport.convertToViewportPoint((r.x0 + r.x1) / 2, r.y0)

@@ -701,6 +701,7 @@ async function live() {
   })
   // one replacement at a time, in the order the compiles came in
   let swaps = Promise.resolve()
+  // a language with no typesetting yet (scripts.mjs) fails at once, before anything is sent
   const result = await runLive(paperData, {
     lang, compile, note,
     translate: texts => translateTexts(texts, lang),
@@ -713,7 +714,8 @@ async function live() {
     },
     onUpdate: ({ pdf, texts, translated, final }) => { swaps = swaps.then(async () => { const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts); URL.revokeObjectURL(url); note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
     onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const n = await anchorSide(left, src, await marksOfPdf(pdf)); invalidate(); paint(left); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
-  })
+  }).catch(e => ({ error: e.message ?? String(e) }))
+  if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`)
   await swaps
   note('done', result)
   L.done = true

@@ -501,3 +501,104 @@ The owner compared the reader's figure text with the HTML mode's and found it wo
 Two findings to take back into the shared module, so that the HTML mode gets them too (screenshot of 2608.04322 Fig. 2 in HTML mode, from the owner):
 1. **Names**: the HTML mode translated the tick names HellaSwag → 地狱之战, Magicoder → 魔法师, MedQA → 医学质量保证, and "Llama3-8B-Instruct" → "Llama3-8B-指示"; merged into one box, a legend's DirectHarm4 came back as 直接伤害 4. A line that is only a name (`isName`, the rule the table cells use) should join no box and keep its text.
 2. **Context for engines without a context parameter**: the HTML mode sends a figure's boxes in one batch, but to Microsoft each is a separate text ("Score" → 配乐); a figure's boxes as one text with a marker between them, split back, gives each the figure's context.
+
+## Eleventh addendum, 2026-09-22 (night): typesetting by writing system, and the multi-language gate (#32)
+
+The owner's direction: one design that lifts every target language together, never one at another's expense; the first batch is what our technique sets most directly and with the most certain quality. It is CJK (Simplified and Traditional Chinese, Japanese, Korean), the Latin-script languages whose letters T1 holds (German, Spanish, French, Portuguese, and so on), and Cyrillic. Later: Vietnamese (below), the right-to-left scripts and the Indic ones. Those two typeset — LuaLaTeX with babel's `bidi=basic` set Arabic, XeLaTeX with FreeSerif set Hindi, no error either — but the text their PDFs give back is in visual order (Arabic as presentation forms, reversed; Devanagari's pre-base vowel sign before its consonant), and the reader anchors on that text; TeX Live's only Devanagari text face is FreeSerif.
+
+### The gate — BUILT (`spikes/lang-gate.mjs`)
+
+24 of the 113 papers that compile in the browser, by document class (article 8, IEEEtran 3, revtex4-2 3, acmart 2, amsart 2, one each of llncs, elsarticle, achemso, ieeeconf, sn-jnl, aastex631), each in every first-batch language: the live pipeline's final compile — `strategiesFor`, moving on as the reader does, `translationFiles`, latexmk to the end — with the pseudo-translation in place of an engine's, and the paper's own marked compile beside it. A result counts as compiled when it has a PDF and every letter set. Per result: the target script's letters found in the PDF's text against those put in (the reader anchors on that text), "Missing character" lines, TeX errors, overfull boxes and pages against the original's. `--check` compares with a stored baseline and exits 1 on a loss. About twelve minutes for nine languages, five compiles at a time.
+
+The pseudo-translation is measured, not guessed (`spikes/lang-ratio.mjs`): 48 prose units of four papers of four classes through Microsoft's free endpoint, the translation's grapheme clusters per English letter — zh 0.344, zh-Hant 0.348, ja 0.494, ko 0.578, de 1.403, es 1.378, fr 1.422, pt 1.297, ru 1.273, vi 1.205 (each language's quartiles within 10 % of its ratio). A language's sample text is one English sentence as the same engine translates it, filled in by grapheme cluster. The first ratios, guessed, were a third too long for Chinese and a sixth too short for German.
+
+The baseline, the pipeline before this work with the same pseudo-translation, compiled Chinese, Japanese and German on 24 of 24 papers and Traditional Chinese, Korean, Russian and Vietnamese on none. One of its Japanese "successes" had lost 18 000 characters (item 3 below): a PDF is not a translation, hence the gate's letter count.
+
+### Typesetting by writing system — BUILT (`poc-reader/scripts.mjs`)
+
+What a translation needs besides its text follows from the script its language is written in (`Intl.Locale(lang).maximize().script`). The language names only the locale babel loads by its tag (`\babelprovide[import=<tag>,main]`), which brings the captions (图, 圖, 図, 그림, Abbildung, Figura, Рис.), the hyphenation patterns and the direction for every language babel has an ini file for.
+
+- **CJK**: XeLaTeX with xeCJK. The script gets a family of its own (Fandol, AR PL Mingti and Kaiti, IPAex, UnBatang), the paper's Latin faces in their OpenType form set the rest, and Hangul's word spaces are kept; CJKutf8 under the paper's own pdfLaTeX when XeLaTeX cannot take the paper. Line spacing ×1.3 (ctex's Chinese scheme), multiplying the paper's own; since the owner's review (below), for Chinese only. Measured on the PDFs (`spikes/typo-metrics.mjs`): 1.10× → 1.43× of the CJK size on an AAAI paper, 1.20× → 1.56× on an IEEEtran one. Service H sets ctex's factor as a fixed value at load time: its Chinese PDFs measured 1.43× where the class's own spacing is 1.10×, and 1.14× on an ICASSP paper whose `\ninept` resets the spacing in the body (2026-09-22; its PDFs are kept outside this repository). That is the density the owner saw in ours.
+- **Alphabets** stay with the paper's own pdfLaTeX, their letters' font encoding made the document's default: none for Latin, T2A for Cyrillic. The paper's families fall back to the encoding's own where they have none (Times has no T2A: Russian came out in Computer Modern's Cyrillic, and since the owner's review in a face of Times' design, below), as a Russian author's pdfLaTeX paper does; babel's Russian patterns hyphenate it. T2A also sets the Latin letters of the paper's own names: a reference's Mądry, its ogonek in place.
+- **A letter an engine cannot set** makes the chain move on (`unsettable`: pdfLaTeX's "Unicode character … not set up"), to XeLaTeX with faces that have it.
+- A paper the author set with XeLaTeX or LuaLaTeX keeps its engine (not measured: the corpus has none).
+
+**Vietnamese is not in the first batch.** Its encoding, T5, holds its letters, but made the default it lacks T1's ogonek: the same reference's Mądry lost it, with an error. Loading T1 beside T5 does not help, since LaTeX switches encodings for letters and not for accent commands. Under XeLaTeX it meets the problems of item 4. It waits for a Unicode engine that can take a pdfLaTeX paper's fonts, which the right-to-left and Indic scripts need too.
+
+### What the gate found — each fixed where it arises, for every paper
+
+1. **An empty `\baselinestretch`**, the standard classes' own in the preamble, is 1 to LaTeX and an unfinished expression to `\fpeval`: the spacing factor reads it as 1.
+2. **babel loaded after the cite package** takes cite's `\@citex` for the kernel's and breaks every citation ("Paragraph ended before \org@@citex was complete", on an IEEEtran paper). We load babel only when the paper does not, and then with `safe=none`: a language imported from its ini file makes no character active, which is all that rewriting guards against.
+3. **newtxtext sets fontspec's global defaults** under XeTeX (`Extension=.otf`, `Scale`, stylistic sets), and every font declared after it inherits them. A `.ttf` face was looked for as `.otf`: Japanese, Traditional Chinese and Korean lost 12 000–18 000 characters on an AAAI paper, Japanese already in the baseline. Now `\defaultfontfeatures{}` comes before our faces; fontspec's own per-family defaults (TeX ligatures) stay, and the dashes in page ranges are still dashes.
+4. **XeLaTeX for an alphabet fights the paper's font setup.** newtxtext sets its faces at the end of the preamble, after ours (Russian, 40 000 characters missing); acmart's T1 put Vietnamese into an 8-bit face (10 000); only the serif role had Cyrillic, so sans and mono headings lost theirs; and one paper lost its math fonts in every language. The alphabets' pdfLaTeX set all of these without an error or a missing letter.
+5. **babel 26.12 with siunitx and Chinese**: siunitx's `translations` asks babel for the locale at `\begin{document}`, and babel builds a file name with an empty region (`babel-zh-Hans-.ini`) — one error in each of four papers, zh and zh-Hant. Harmless: the PDFs with and without babel differ, character by character, only in the captions. It is for babel upstream; nothing here works around it.
+
+Open, and older than this work, all three on XeLaTeX, which a pdfLaTeX paper reaches only for CJK. A paper that loads CJKutf8 itself conflicts with xeCJK: nine errors in every CJK language, the baseline's too, plus one from microtype meeting a TS1 fallback face at `\maketitle`; its own pdfLaTeX would suit it better. One paper's math fonts fail under XeLaTeX (24 errors in every CJK language), as in the baseline. Hangul breaks between syllables, as xeCJK and browsers do; breaking between words (kotex) would be closer to Korean book typesetting.
+
+### Results
+
+The final run, the first batch, as archived on 2026-09-23. Since the owner's review (below), Japanese and Korean are at the paper's own spacing, and Russian is set in faces of the paper's design:
+
+| | zh | zh-Hant | ja | ko | de | es | fr | pt | ru |
+|---|---|---|---|---|---|---|---|---|---|
+| compiled, every letter set (of 24) | 24 | 24 | 24 | 24 | 24 | 24 | 24 | 24 | 24 |
+| before this work | 24 | 0 | 24 | 0 | 24 | – | – | – | 0 |
+| letters found / put in, median | 1.002 | 1.001 | 1.001 | 1.002 | 1.012 | 1.018 | 1.009 | 1.014 | 1.002 |
+| papers with a missing character | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| papers with a TeX error | 6 | 6 | 2 | 2 | 0 | 0 | 1 | 0 | 0 |
+| pages against the original's, median | 1.00 | 1.04 | 1.00 | 1.00 | 1.10 | 1.07 | 1.07 | 1.05 | 1.10 |
+| moved on to XeLaTeX | – | – | – | – | 0 | 0 | 2 | 0 | 0 |
+
+(A found/put-in ratio above 1 is the original's own non-ASCII letters, names and references, counted with the translation's.) The errors are the ones named above: in zh and zh-Hant, the four papers of item 5, the paper that loads CJKutf8 and the paper whose math fonts fail under XeLaTeX; in ja and ko, those last two; in fr, that same paper. The gate's six "losses" against the baseline are item 5's four and the paper that loads CJKutf8 (nine errors to ten). Vietnamese, still with T5 in this run, also compiled 24 of 24: the ogonek's error on one paper, the math-font paper on another, three moved on to XeLaTeX.
+
+One more, open: amsart's `\uppercasenonmath` (titles, running heads) uses TeX's primitive `\uppercase`, which under pdfLaTeX changes the bytes of a UTF-8 character outside Latin-1 — a French apostrophe (’) became an invalid byte. The chain moved on to XeLaTeX, which upper-cases Unicode itself: clean on one paper, the math-font paper's 24 errors on the other. amsart switches to a Unicode-safe upper-casing when textcase's `\MakeTextUppercase` exists; defining it as the kernel's `\MakeUppercase` before the class recursed without end, so that was not pursued.
+
+### In the browser — MEASURED, and the gate made faithful to it
+
+A native gate passed what the browser failed. In Chromium with BusyTeX and Microsoft (`spikes/reader-live.mjs`, `TARGET=ru`, 2608.02163), Russian's final compile stopped at `Font T2A/ptm/m/n/14.4=larm1440 … Metric (TFM) file not found`. Its previews came back as empty PDFs, which the TeX page reported as successes, and the chain moved on to XeLaTeX. TeX Live ships the LH fonts' metrics for 37 of the 350 sizes and families the T2A definitions name; natively, mktextfm made the rest on the way with METAFONT, which BusyTeX cannot run (issue E).
+
+- **The gate now compiles as BusyTeX can** (`spikes/faithful.mjs`: `MKTEXTFM`, `MKTEXPK`, `MKTEXMF` off; `spikes/live-node.mjs` too). Run that way, CJK and the Latin-script languages came out exactly as natively, so neither has a hidden METAFONT dependency. Russian had missing characters on 15 papers of 24, and 8 moved on to XeLaTeX.
+- **The METAFONT outputs the file server adds to TeX Live** (`spikes/make-metafont.mjs`): the 307 LH metrics TeX Live lacks, made natively once (11 minutes, 1.2 MB; 6 sizes have no METAFONT source). They go into the served tree, which the server indexes at start, and onto the gate's font path. The outlines stay cm-super's, and the bitmaps METAFONT also draws are dropped, so that no bitmap can stand in for an outline. With them, Russian compiled 24 of 24 as BusyTeX runs it, with no missing character, no error and none moving on. Its one "loss", overfull boxes 8 → 11 on one paper, is the native count with every letter set. Every other number of the table above came out the same run this way, so the table holds for the browser.
+- **The chain's rules**: a compile succeeds only with a PDF that has something in it, and a font that cannot be loaded (`! Font … not loadable`) makes the chain move on, like a letter with no definition. The reader's notes say `ok` for what it will show (Devin on #294).
+- **End to end** on 2608.02163, first visit: Russian on the paper's own pdfLaTeX, previews in 0.7–0.9 s each, the final at 19 s; Korean on XeLaTeX with xeCJK, previews in about 1.6 s, the final at 18.7 s. Paragraph by paragraph, with the reader level at its reading line: Russian 25 of 25 sampled units within 4 px (at most 3 px), 162 of 350 units linked; Korean 26 of 26 within 4 px (at most 2 px), 136 of 350 linked. The spike's check had read a constant the reader no longer has (`READING_LINE`, now the `readingLine` that follows clicks), and so measured nothing before.
+
+The review of #294 also made the gate judge references that stop resolving and overfull boxes beyond max(2, 10 %) of the baseline's (pages are reported, not judged), and key its cache of originals by what their compiles are made of. LuaLaTeX papers are left as they are, since none of the corpus's 123 is one. Its second round:
+- A translation with a letter missing is never shown, not even from the chain's last strategy; the reader keeps what it has.
+- Classic LaTeX, which an EPS-only paper gets, is an 8-bit engine like pdfLaTeX: fontspec, which refuses both, was loaded under it for Cyrillic.
+- babel is not loaded into a polyglossia document, where it stopped the compile (`! Font \__xpg_add_font_feature_language:ee= not loadable`, emergency stop); the paper's captions stay its own there.
+
+The corpus has neither kind of paper, so both were checked on minimal documents: a Times article under classic LaTeX in Russian (Tempora, PT Sans, PT Mono) and Chinese (CJKutf8), and a polyglossia article in Russian, German and Chinese.
+
+Its third and fourth rounds (Devin, Codex): a character the compile could not set. TeX logs a glyph its font lacks (`Missing character: There is no …`) and goes on, and the PDF has a gap where the letter was. LaTeX reports a letter no encoding holds (`Unicode character … not set up`), and pdfTeX goes on without it. Either now makes a compile unsettable, counted by code point where the log gives one, and only for a character the paper's own compile set: what the original cannot set, its PDF lacks as well. Otherwise every strategy would fail on such a paper and no translation would ever be shown. The characters the original loses come from its full compile. The font probe, which the third round read them from, has no body (`probeFiles` replaces it), so that scope was empty until the fourth round. The reader asks for the original's compile ahead of its turn only when a translation loses a character at all, so a clean translation waits for nothing more. Checked:
+- On the log lines of each kind (XeTeX, LaTeX, pdfTeX) and on a real XeLaTeX log, where Fandol lacks two Extension B characters.
+- With a scripted compile, which compiles run and what is shown, in three cases:
+  - a clean translation: probe, preview, final, then the original, as before;
+  - a loss the original has too: the original moves ahead of the final, and the final is shown;
+  - a loss of its own: the chain moves on, and at its end nothing is shown.
+
+None of the gate's 216 compiles and none of the compiles of real Microsoft Chinese translations of 2608.02163 and 2608.02785 logged a missing character, so nothing shown before is held back now. The scripts' header had promised an HTML fallback for a language with no typesetting; there is none. The reader now says it cannot translate the paper, naming the language, where the rejection had gone nowhere.
+
+### The owner's review of real translations — FIXED, and the rest deferred (#295)
+
+The owner reviewed Microsoft's translations of 2608.02163 (25 pages) and 2608.02785 as the reader compiles them (2026-09-23):
+
+- **Russian tables were wider than the original's, and code was no longer monospaced.** With T2A the default, every role whose face lacks T2A fell back to LaTeX's one default, Computer Modern's roman. A Times paper came out in CM roman throughout, and CM is wider than Times. Now each role keeps its face where the face has T2A, which TeX checks at compile time (`\IfFileExists{t2a<family>.fd}`). Otherwise it takes a face of the same design (Times → Tempora, Helvetica → PT Sans, Courier → PT Mono, Latin Modern → Computer Modern), or at least of the same role. Table 1 of 2608.02163 has the original's width again.
+
+  Only the shapes the face declares are mapped. The kernel's `\DeclareFontFamilySubstitution` maps every shape, and on the gate it stopped at the first shape a face lacked. Russian lost letters on nine papers of 24: eight to small capitals, which Tempora has none of, and one to a bold series that Computer Modern's sans has only as `bx`. A missing shape now falls back as it does within any family, to the upright with a warning, and the gate is back to 24 of 24 with no missing letter and no error.
+
+  One loss stands: 2608.06007 has 9 overfull boxes, where the previous Russian had 6 and the English original 5. The lines that overflow hold inline code. The paper sets its code in Bera Mono at full size, and PT Mono's letters are as wide (0.600 em against 0.602). The Computer Modern typewriter face before was narrower (0.525 em).
+- **The CJK versions were long**: Chinese 29 pages, Korean 31, Japanese 32. The ×1.3 was measured for Chinese alone, and Japanese and Korean translations are longer than Chinese ones: 0.494 and 0.578 grapheme clusters per English letter against 0.344. Each script now has its own factor (`CJK.leading`, `--tune` on the gate). At the paper's own spacing, 2608.02163 came out at 26 pages in Japanese and 25 in Korean.
+
+  | Pages against the original's, median (papers within 10 %, of 24) | zh | zh-Hant | ja | ko |
+  |---|---|---|---|---|
+  | spacing ×1.3 | **1.00** (19) | **1.04** (19) | 1.20 (1) | 1.17 (1) |
+  | ×1.2 | 0.95 (19) | 1.00 (20) | | |
+  | ×1.15 | 0.93 (20) | 0.95 (21) | | |
+  | the paper's own | | | **1.00** (22) | **1.00** (22) |
+  | ×1.15, CJK face at 0.925 | | | 1.07 (17) | 1.03 (20) |
+  | ×1.2, CJK face at 0.925 | | | 1.09 (14) | 1.07 (16) |
+
+  Bold is what is kept. 2608.02163's Chinese is long at every spacing (29, 28 and 26 pages), so its excess is in its translation.
+- **Korean reads large.** CJK faces fill about 0.91–0.96 of their em, while Times' capitals reach 0.66. A smaller CJK face with more spacing came out longer (table) and was not taken.
+
+**Deferred** (the maintainer, 2026-09-23): the single-language reader comes first. What is left for more than one language is #295, with the candidates TeX Live has and these numbers. Above all it records the maintainer's direction: before changing a language's size or spacing, look for the face that suits the language and a paper and corresponds to the paper's Latin face.

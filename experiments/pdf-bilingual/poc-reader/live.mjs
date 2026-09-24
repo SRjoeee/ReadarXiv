@@ -11,27 +11,41 @@
 //     or after the final compile: the translation comes first;
 //  5. when every unit is in, the final compile: every pass, the images themselves.
 import { analyze } from './paper-meta.mjs'
-import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, latinFontsFor, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { strategiesFor } from './scripts.mjs'
 import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
 
-// C1's strategies, in the order of its chain (REPORT, fourth addendum): XeLaTeX with xeCJK first; when that does not
-// compile, pdfLaTeX with CJKutf8 — for a paper pdfLaTeX sets, the chain took Chinese from 98 to 106 of 113. German
-// keeps the paper's own engine
-const XECJK = {
-  zh: '\\usepackage{xeCJK}\n\\setCJKmainfont[BoldFont=FandolSong-Bold.otf,ItalicFont=FandolKai-Regular.otf]{FandolSong-Regular.otf}\n',
-  ja: '\\usepackage{xeCJK}\n\\setCJKmainfont[AutoFakeBold=2.5]{ipaexm.ttf}\n',
+/** The TeX log of a compile's last pass. The browser's compiler (poc-site/tex.js) joins each step's log with its terminal
+ *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
+ *  log is taken, as the one that made the PDF, whatever the earlier passes' logs hold (BusyTeX's pipeline empties them
+ *  today, Devin and Codex on #294). bibtex, biber, makeindex and xdvipdfmx are no TeX passes. A native compile's .log is
+ *  the last pass's already */
+const lastTexLog = log => {
+  if (!(log ?? '').includes('\n==\nSTDOUT:')) return log ?? ''
+  const steps = [...log.matchAll(/^\$ (\S+)[^\n]*\n[\s\S]*?^LOG:\n([\s\S]*?)\n==\nSTDOUT:/gm)]
+  return steps.filter(m => !/^(?:bibtex|biber|makeindex|xdvipdfmx)/.test(m[1])).at(-1)?.[2] ?? ''
 }
-const CJKUTF8 = {
-  zh: '\\usepackage{CJKutf8}\n\\AtBeginDocument{\\begin{CJK}{UTF8}{gbsn}}\n\\AtEndDocument{\\end{CJK}}\n',
-  ja: '\\usepackage{CJKutf8}\n\\AtBeginDocument{\\begin{CJK}{UTF8}{ipxm}}\n\\AtEndDocument{\\end{CJK}}\n',
-}
-/** the strategies to try for a paper, in order: { name, engine, pre, xe } */
-export function strategiesFor(meta, lang) {
-  if (!XECJK[lang]) return [{ name: 'own engine', engine: meta.compiler, pre: '', xe: meta.compiler === 'xelatex' }]
-  const out = [{ name: 'XeLaTeX + xeCJK', engine: 'xelatex', pre: XECJK[lang], xe: true }]
-  if (meta.compiler === 'pdflatex') out.push({ name: 'pdfLaTeX + CJKutf8', engine: 'pdflatex', pre: CJKUTF8[lang], xe: false })
+/** The characters a compile could not set, as its log names them: a glyph a font lacks (TeX logs it and goes on) or a
+ *  letter no encoding holds (LaTeX's error; pdfTeX goes on without it). By code point where the log gives one, so that
+ *  either message about a character is the same loss, each with the number of times it was lost. Counted in the TeX
+ *  log of the last pass alone (lastTexLog) */
+export const lostIn = log => {
+  const text = lastTexLog(log)
+  const out = new Map()
+  for (const m of text.matchAll(/^(?:Missing character: There is no (.+?) in font |! LaTeX Error: Unicode character (.+)$)/gm)) {
+    const c = m[1] ?? m[2], at = c.match(/\(U\+([0-9A-F]+)\)/)?.[1] ?? c.trim()
+    out.set(at, (out.get(at) ?? 0) + 1)
+  }
   return out
 }
+/** A compile that gave a PDF but could not set some letter of the translation: the paper's pdfLaTeX meeting a letter no
+ *  encoding it has loaded holds (Vietnamese's, under T1), or one a class's primitive \uppercase broke into bytes (amsart's
+ *  titles, a French apostrophe); or a font whose metrics are nowhere (a size of a METAFONT-only font the file server does
+ *  not have); or a character its font lacks, which leaves a gap in the PDF where it was (Devin and Codex on #294).
+ *  `known` counts the characters the paper's own full compile could not set: the original lacks them too, and a
+ *  translation that loses a character no more often is no worse; one more loss of it is a gap the translation added
+ *  (Devin and Codex on #294). The chain moves on from it as from a compile with no PDF */
+export const unsettable = (r, known = new Map()) => /^! Font .* not loadable/m.test(r.log ?? '') || [...lostIn(r.log)].some(([c, n]) => n > (known.get(c) ?? 0))
 const DRAFT = '\\PassOptionsToPackage{draft}{graphicx}\n'
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
 const stemOf = main => main.replace(/\.[^./]+$/, '')
@@ -62,13 +76,13 @@ export function originalFiles({ fsys, project }) {
   return out
 }
 
-/** the translation so far, with unit marks, set by one of strategiesFor */
+/** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs) */
 export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl }) {
   const xe = strategy.xe
   const out = patch(project, translated, { mark: markUnits(project.units) })
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
-  main = main.slice(0, at) + FORBIDDEN_TO_WARNING + strategy.pre + (xe && strategy.engine !== meta.compiler ? latinFontsFor(fonts) : '') + main.slice(at)
+  main = main.slice(0, at) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   if (xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
@@ -129,13 +143,20 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
   const fonts = await fontsP
   // each unit's text as that compile has it: translated if it was in the snapshot, the source's otherwise
   const texts = done => units.map((u, i) => ({ id: i, text: done.has(u) ? plainTranslated(done.get(u)) : plainSource(u) }))
-  let aux = null, bbl = null, originalDone = false, previews = 0
-  const original = async () => {
-    originalDone = true
-    const o = await compile({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper) })
+  let aux = null, bbl = null, previews = 0, originalP = null
+  // the marked original, compiled once: the left side's anchors, and the characters the paper's own compile could not set
+  const original = () => (originalP ??= compile({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper) }).then(o => {
     note('original', { ok: o.ok, ms: o.ms, error: whyFailed(o) })
     if (o.ok) onOriginal?.({ pdf: o.pdf })
-  }
+    return o
+  }))
+  /**
+   * Whether a compile set the translation (unsettable). A character its font lacks counts only if the paper's own
+   * compile set it, which only the original's full compile tells: the font probe has no body (probeFiles). So the
+   * original is asked for ahead of its turn, and only when a translation leaves a character out at all (Devin and
+   * Codex on #294)
+   */
+  const settled = async r => r.ok && !unsettable(r, lostIn(r.log).size ? lostIn((await original()).log) : undefined)
   while (true) {
     if (dirty) {
       dirty = false
@@ -143,27 +164,31 @@ export async function runLive(paper, { lang, compile, translate, rank = i => i, 
       const r = await compile({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bbl, overrides: translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft: true, aux, bbl }) })
       if (r.aux) aux = r.aux
       if (r.bbl) bbl = r.bbl
-      note('preview', { ok: r.ok, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, error: whyFailed(r) })
-      if (r.ok) { previews++; onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false }) }
+      // shown only when it set every letter: a translation with letters missing is not one (Devin on #294); the note says
+      // ok for what is shown, and with no strategy left the reader keeps what it has
+      const shown = await settled(r)
+      note('preview', { ok: shown, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, error: shown ? undefined : whyFailed(r) ?? 'a letter it could not set' })
+      if (shown) { previews++; onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false }) }
       else if (s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
       continue
     }
     if (mtDone) break
     // nothing new to compile yet: the original, if it is still to do, else wait for the next batch
-    if (!originalDone && previews) { await original(); continue }
+    if (!originalP && previews) { await original(); continue }
     await sleep()
   }
   await mt
   const all = new Map(translated), t0 = Date.now()
-  let r
+  let r, ok
   for (;;) {
     r = await compile({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl }) })
-    note('final', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, error: whyFailed(r) })
-    if (r.ok || s + 1 >= strategies.length) break
+    ok = await settled(r)
+    note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, error: ok ? undefined : whyFailed(r) ?? 'a letter it could not set' })
+    if (ok || s + 1 >= strategies.length) break
     s++; aux = null
     note('next strategy', { strategy: strategy().name })
   }
-  if (r.ok) onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
-  if (!originalDone) await original()
+  if (ok) onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
+  await original()
   return { previews, translated: translated.size, units: units.length }
 }
