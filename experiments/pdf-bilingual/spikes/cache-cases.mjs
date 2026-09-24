@@ -73,6 +73,16 @@ cases.push(['a copy without marks: a run that changes nothing compiles the marke
   assert.equal(decideWrite({ result: r, cached: { units, marks: [] }, units, marks: [['1s', {}]] }), 'provenance')
   assert.equal(decideWrite({ result: r, cached: { units, marks: [['1s', {}]] }, units, marks: [['1s', {}]] }), null)
 }])
+cases.push(['a seeded run compiles a preview only for a batch that changed what is typeset (Devin on #298)', async () => {
+  // three long paragraphs, one batch each; the engine changes the first alone, and gives the others back as seeded
+  const long = n => `Paragraph ${n} ${'words of the paper that go on. '.repeat(230)}`
+  const paper = openPaper(tex([long(1), long(2), long(3)])), c = compiler(), events = []
+  const seed = await seedOf(paper, echo('B'), 'B')
+  const translate = async texts => texts.map(text => ({ text: text.includes('Paragraph 1') ? text.replace('Paragraph', 'Absatz') : text, by: 'B' }))
+  await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', seed, marks: new Map(), identity: 'B', pipelineCurrent: true, note: e => events.push(e) })
+  assert.equal(events.filter(e => e === 'translated').length, 3, 'one batch per paragraph')
+  assert.equal(events.filter(e => e === 'preview').length, 1)
+}])
 cases.push(['a copy\'s marks are known only when it has some, on the same pipeline (final review)', () => {
   // a copy whose marked original failed has none: the run compiles the original again rather than go on without
   assert.equal(knownMarks({ marks: [] }, true), null)

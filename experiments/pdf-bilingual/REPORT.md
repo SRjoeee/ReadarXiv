@@ -1042,7 +1042,7 @@ There is one record per paper version and target language.
   6. A copy with no left-side marks was taken to have them, so later visits never compiled them (`spikes/cache-cases.mjs`).
   7. The digest ran before the left side's first page, and in the Original display too (`spikes/cache-faults.mjs`).
   8. A copy that could not be shown held the paper forever; and a run that compiled nothing ended saying the original was shown (the same).
-- **Devin's review of #298**, in two rounds, found eight more. Seven were fixed, each with a test that failed first:
+- **Devin's review of #298**, in three rounds, found eleven more. Eight were fixed, each with a test that failed first:
   1. With the chosen service unavailable, the status's identity took the first fallback whose probe said yes, though the chain had set it aside; a copy the next fallback made looked stale (`tests/providers/transport.test.ts`).
   2. Two tabs writing at once beyond the cap each evicted the other's record, and neither stayed (`tests/cache/pdf-store.test.ts`).
   3. A run that compiled nothing skipped the marked original, so a copy without marks became current without them (`spikes/cache-cases.mjs`).
@@ -1050,8 +1050,12 @@ There is one record per paper version and target language.
   5. A record that did not decrypt was deleted by key, so a good copy another tab wrote meanwhile went with it (`tests/cache/pdf-store.test.ts`).
   6. A final that settled but failed to swap in was written with the right side's marks of the document still shown (`spikes/cache-cases.mjs`).
   7. A figures patch could grow the cache past its cap until the next write (`tests/cache/pdf-store.test.ts`).
+  8. Once one batch of a seeded run had changed something, every later batch asked for a preview, though one that gives its seeds back changes nothing typeset: a preview compile each, for nothing (`spikes/cache-cases.mjs`).
 
-  One was declined: figures translated again while a copy is shown use the context the copy restored, not the one parsed afterwards. The two are the same paper's title and abstract, and differ only after a pipeline change to their extraction; figure entries are translated again only if the service has changed as well.
+  Three were declined:
+  - Figures translated again while a copy is shown use the context the copy restored, not the one parsed afterwards. The two are the same paper's title and abstract, and differ only after a pipeline change to their extraction; figure entries are translated again only if the service has changed as well.
+  - With the pipeline changed, batches are ordered by the copy's anchors, whose indices are the old cutting's, until the first preview (the ruling made building the reader's side). The order cannot be seen: a seeded run shows no preview until every unit has a translation, and the copy stays on screen until then.
+  - A tab on old settings can save its figures' labels after a newer tab wrote its own, and the later entry wins. Each entry carries the identity it was made under, and the next visit translates again, and replaces, every label not made under the current one; the store cannot tell which identity is current, least of all from a tab whose own is out of date.
 - **Also found, not part of this feature:**
   - On this branch `engine.mjs` cannot load in Node. `lib/axt/extension.mjs` exports the settings, whose WXT storage runs when the module loads; this has been so since #296 merged in. The case files make their errors in `EngineError`'s shape instead.
   - On 2608.18090, a run from scratch through the LLM echo mock failed its final in two tabs at once, with "a letter it could not set". Two tabs on the default service both settle. The mock is the suspect (it marks each segment's first letter); not looked into.

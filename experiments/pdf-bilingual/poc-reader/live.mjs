@@ -152,18 +152,20 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
       batch.forEach(i => todo.delete(i))
       const t0 = Date.now()
       const { results: got, how } = await translateUnits(batch.map(i => units[i]), translate, format)
+      // whether this batch changed what is typeset: a batch that gives back its seeds asks for no preview (Devin on #298)
+      let fresh = false
       for (const i of batch) {
         const r = got.get(units[i]), old = seed?.get(i)
         if (!r) continue
         // a new result replaces a seed only when whole; with no seed, anything is better than the source
         if (r.state === 'whole' || (!old && r.pieces)) {
-          if (!old || JSON.stringify(old.pieces) !== JSON.stringify(r.pieces)) changed = true
+          if (!old || JSON.stringify(old.pieces) !== JSON.stringify(r.pieces)) changed = fresh = true
           translated.set(units[i], r.pieces)
           results.set(i, { pieces: r.pieces, state: r.state, by: r.by, tried: identity })
         } else results.set(i, { ...(old ? { pieces: old.pieces, by: old.by } : {}), state: r.state, tried: identity })
       }
       note('translated', { units: batch.length, how, ms: Date.now() - t0, total: translated.size })
-      if (changed) { dirty = true; signal() }
+      if (fresh) { dirty = true; signal() }
     }
     } finally { mtDone = true; signal() }
   })()
