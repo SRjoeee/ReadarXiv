@@ -76,7 +76,7 @@ export const INITIAL: ReaderState = {
 }
 
 /** the session's commands the controller passes on */
-export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage' | 'patchSettings' | 'pdfBytes' | 'goToUnit' | 'lead' | 'retry' | 'setNarrow'>
+export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage' | 'patchSettings' | 'pdfBytes' | 'goToUnit' | 'lead' | 'retry' | 'setNarrow' | 'pinch'>
 
 /** the runs that end without a translation because of the paper, or of the language: not failures a reader can retry */
 const CANNOT_BE_HAD = new Set(['no source'])
@@ -162,6 +162,8 @@ export interface ReaderController {
   goToPage(side: Side, page: number): void
   /** a change of the extension's settings, on top of what storage holds when its turn comes */
   patchSettings(change: (latest: Config) => Config): void
+  /** a pinch over a side: both sides zoom together about the pointer, one call a frame (ui/pinch.ts) */
+  pinch(side: Side, factor: number, origin: [number, number]): void
   /** translate again what is missing (Part 3: the page starts again; Part 4 in place) */
   retry(): void
   /** the window too narrow for two sides, or wide enough again: told once per change */
@@ -221,6 +223,7 @@ export function createController({ open, params }: { open: (host: SessionHost) =
     goToHeading: id => later(s => s.goToUnit(id)),
     lead: side => later(s => s.lead(side)),
     retry: () => later(s => s.retry()),
+    pinch: (side, factor, origin) => { set({ zoom: null }); later(s => s.pinch(side, factor, origin)) },
     setNarrow(on) {
       if (state.narrow === on) return
       set({ narrow: on })

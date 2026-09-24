@@ -1265,6 +1265,18 @@ export function setFigures(on) { void save(c => ({ ...c, image: { ...c.image, en
 export function zoomBy(factor) { for (const s of sides) if (shown(s)) { s.fit = null; s.viewer.currentScale = Math.min(4, Math.max(0.25, s.viewer.currentScale * factor)) } }
 /** the sides shown at a scale or a fit (page-width, page-fit, page-actual); fitting the width keeps to a reading width */
 export function zoomTo(value) { for (const s of sides) if (shown(s)) { s.fit = typeof value === 'string' ? value : null; s.viewer.currentScaleValue = value === 'page-width' ? fitWidth(s) : String(value) } }
+/** a pinch over a side (the reader's design, §6.8): that side about the pointer, the other about its top quarter, both
+ *  by CSS until PDF.js draws them 400 ms after the last step; a fit given up */
+export function pinch(which, factor, origin) {
+  const s = which === 'left' ? left : right
+  if (!s.doc || !shown(s)) return
+  for (const side of sides) {
+    if (!side.doc || !shown(side)) continue
+    side.fit = null
+    const b = side.container.getBoundingClientRect()
+    side.viewer.updateScale({ scaleFactor: factor, origin: side === s ? origin : [b.left + b.width / 2, b.top + b.height / 4], drawingDelay: 400 })
+  }
+}
 /** a side at a page */
 export function goToPage(which, page) { const s = which === 'left' ? left : right; if (s.doc) s.viewer.currentPageNumber = page }
 /** a side's PDF as it is shown, for the download (the reader's design, §6.1): the original, or the translation on screen */

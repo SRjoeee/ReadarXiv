@@ -6,6 +6,7 @@ import { Outline } from '@/pdf-reader/ui/Outline'
 import { PagePill } from '@/pdf-reader/ui/PagePill'
 import { ScrollIndicator } from '@/pdf-reader/ui/ScrollIndicator'
 import { useScrollShow } from '@/pdf-reader/ui/scroll-show'
+import { usePinch } from '@/pdf-reader/ui/pinch'
 import { cardOf } from '@/pdf-reader/ui/status'
 import { StatusCapsule } from '@/pdf-reader/ui/StatusCapsule'
 import { Toolbar } from '@/pdf-reader/ui/Toolbar'
@@ -20,6 +21,7 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   const right = useRef<HTMLDivElement>(null)
   const state = useReader(controller)
   const doc = useRef<HTMLDivElement>(null)
+  usePinch(controller, doc)
   // a document area under 840 px shows the translation alone in side by side (the design, §5); the session applies it
   useEffect(() => {
     const el = doc.current

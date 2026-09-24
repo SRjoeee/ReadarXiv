@@ -209,6 +209,26 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.close()
 }
 
+// ---------------------------------------------------------------- Task 24: pinch zoom
+{
+  const page = await open({ mode: 'bilingual' })
+  const before = (await state(page)).scale
+  await page.mouse.move(400, 500)
+  await page.keyboard.down('Control')
+  for (let i = 0; i < 10; i++) await page.mouse.wheel(0, -8)
+  await page.keyboard.up('Control')
+  await page.waitForTimeout(900)
+  const after = await state(page)
+  const widths = await page.evaluate(() => [...document.querySelectorAll('.pane .page')].slice(0, 1).map(p => p.getBoundingClientRect().width))
+  check('a pinch zooms both sides together', after.scale > before * 1.05 && after.zoom === null, `${before} → ${after.scale}`)
+  check('…the page drawn at the new scale', widths[0] > 0)
+  const s0 = after.scale
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+=' : 'Control+=')
+  await page.waitForTimeout(400)
+  check('⌘+ (or Ctrl+) zooms in by a tenth', (await state(page)).scale > s0 * 1.05)
+  await page.close()
+}
+
 console.log(failed ? `${failed} failed` : 'all passed')
 await context.close()
 process.exit(failed ? 1 : 0)
