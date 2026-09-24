@@ -106,20 +106,38 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
 }
 
 /**
+ * The reader's pipeline version (REPORT, eighteenth addendum): raised with any change to what a compile puts out
+ * (latex-front, mt, the fonts, the scripts' strategies, the TeX tree) or to what a cached record holds (the units'
+ * cutting, kinds and texts, paperContext(), the marks). A record of another version is translated again
+ */
+export const PIPELINE_VERSION = '1'
+
+/**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
  * `translate(texts)` → translations of wire texts in `format` (mt.mjs WIRE: the chain's renderPath); `rank(i)` → how
  * far unit i is from the reader's place (lower comes first);
  * `onUpdate({ pdf,
  * texts, translated, final })` gets each compiled translation; `onOriginal({ pdf })` the marked original; `note(event,
- * data)` every step, for the timeline. Resolves when the final compile is in.
+ * data)` every step, for the timeline. A translation made again from a cached copy (REPORT, eighteenth addendum):
+ * `seed`, index → the old translation { pieces, by, tried, state }, fills the run at the start; `marks`, the left
+ * side's marks when known, skips the marked original; `identity` is what each unit is tried under; `pipelineCurrent`,
+ * whether the seed's pipeline is this one. Resolves when the final compile is in, with `results` (index → { pieces,
+ * state, by, tried }), `changed` (anything typeset changed) and `settled` (a final that set every letter).
  */
-export async function runLive(paper, { lang, compile, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {} }) {
+export async function runLive(paper, { lang, compile, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, identity = null, pipelineCurrent = false }) {
   const { units, kept, meta, project } = paper
   // the chain: a compile that gives no PDF moves on to the next strategy, which is tried at once
   const strategies = strategiesFor(meta, lang)
   let s = 0
   const strategy = () => strategies[s]
   const translated = new Map()
+  // index → { pieces, state, by, tried }: what the run made of each unit, for the record (cache.mjs unitsOf)
+  const results = new Map()
+  if (seed) for (const [i, s] of seed) translated.set(units[i], s.pieces)
+  let changed = false
+  // every unit to translate has a translation, seeded or new: a seeded run shows no preview before, or a paragraph the
+  // copy had translated would be shown in the source (REPORT, eighteenth addendum)
+  const complete = () => units.every(u => kept.has(u) || translated.has(u))
   let dirty = false, mtDone = false, wake = null
   const signal = () => { const w = wake; wake = null; w?.() }
   const sleep = () => new Promise(r => { wake = r })
@@ -142,10 +160,21 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
       const batch = nextBatch(first ? 2500 : 12000)
       batch.forEach(i => todo.delete(i))
       const t0 = Date.now()
-      const { translated: got, how } = await translateUnits(batch.map(i => units[i]), translate, format)
-      for (const [u, pieces] of got) translated.set(u, pieces)
+      const { results: got, how } = await translateUnits(batch.map(i => units[i]), translate, format)
+      // whether this batch changed what is typeset: a batch that gives back its seeds asks for no preview (Devin on #298)
+      let fresh = false
+      for (const i of batch) {
+        const r = got.get(units[i]), old = seed?.get(i)
+        if (!r) continue
+        // a new result replaces a seed only when whole; with no seed, anything is better than the source
+        if (r.state === 'whole' || (!old && r.pieces)) {
+          if (!old || JSON.stringify(old.pieces) !== JSON.stringify(r.pieces)) changed = fresh = true
+          translated.set(units[i], r.pieces)
+          results.set(i, { pieces: r.pieces, state: r.state, by: r.by, tried: identity })
+        } else results.set(i, { ...(old ? { pieces: old.pieces, by: old.by } : {}), state: r.state, tried: identity })
+      }
       note('translated', { units: batch.length, how, ms: Date.now() - t0, total: translated.size })
-      dirty = true; signal()
+      if (fresh) { dirty = true; signal() }
     }
     } finally { mtDone = true; signal() }
   })()
@@ -169,6 +198,8 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
    */
   const settled = async r => r.ok && !unsettable(r, lostIn(r.log).size ? lostIn((await original()).log) : undefined)
   while (true) {
+    // a seeded run shows a preview only once no unit it would show in the source is left
+    if (dirty && seed && !complete()) dirty = false
     if (dirty) {
       dirty = false
       const snapshot = new Map(translated), t0 = Date.now()
@@ -185,10 +216,17 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
     }
     if (mtDone) break
     // nothing new to compile yet: the original, if it is still to do, else wait for the next batch
-    if (!originalP && previews) { await original(); continue }
+    if (!marks && !originalP && previews) { await original(); continue }
     await sleep()
   }
   await mt
+  // a seeded run that changed nothing typeset, on the same pipeline: nothing to compile but the marked original, for a
+  // copy that has no marks — else they would never come (Devin on #298)
+  if (seed && !changed && pipelineCurrent) {
+    if (!marks) await original()
+    note('unchanged')
+    return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false }
+  }
   const all = new Map(translated), t0 = Date.now()
   let r, ok
   for (;;) {
@@ -200,6 +238,6 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
     note('next strategy', { strategy: strategy().name })
   }
   if (ok) onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
-  await original()
-  return { previews, translated: translated.size, units: units.length }
+  if (!marks) await original()
+  return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok }
 }

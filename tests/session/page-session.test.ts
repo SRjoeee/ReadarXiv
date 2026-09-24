@@ -29,7 +29,7 @@ function providerStatus(over: Partial<ProviderStatus> = {}): ProviderStatus {
   return {
     providerId: 'microsoft', available: true, maxBatchChars: 100_000, maxBatchItems: 100, renderPath: 'tags',
     targetLanguage: 'cmn', promptId: 'default', revision: 'r1', chosen: 'microsoft', engine: { id: 'microsoft' },
-    chain: ['microsoft'], demotions: [], ...over,
+    chain: ['microsoft'], demotions: [], identity: '', ...over,
   }
 }
 

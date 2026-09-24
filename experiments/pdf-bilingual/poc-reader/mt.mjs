@@ -3,7 +3,7 @@
 // the engine's slips are forgiven where they are unambiguous, and what still fails goes as runs — each stretch of text
 // between opaque pieces on its own — so that nothing is left untranslated.
 import { latin1Bytes } from './latex-front.mjs'
-import { fromAlpha, TAG_RE, toAlpha } from './lib/axt/wire.mjs'
+import { fromAlpha, MIXED, TAG_RE, toAlpha } from './lib/axt/wire.mjs'
 
 // ---------------------------------------------------------------- markers wire format
 export { fromAlpha, toAlpha }
@@ -182,7 +182,10 @@ export function nameCells(units) {
  */
 export async function translateUnits(units, send, format = 'markers') {
   const wire = WIRE[format]
-  const translated = new Map(), how = { whole: 0, tolerant: 0, runs: 0, untranslated: 0, lost: 0 }, failed = []
+  // unit → { pieces, state, by }: whole (read back strictly or tolerantly, or every run back), partial (some runs back),
+  // none (the engine could not take it, runs included), lost (a failure of the service; engine.mjs, EngineError's
+  // `lost`). `by` is the identity that answered, MIXED when runs of one unit had two (REPORT, eighteenth addendum)
+  const results = new Map(), how = { whole: 0, tolerant: 0, runs: 0, untranslated: 0, lost: 0 }, failed = []
   // what came back, when some texts did not for a reason not theirs (engine.mjs, EngineError's `lost`): those stay in
   // the source language, counted, and the failure is kept — sent again piece by piece they would only fail again, as
   // many times over as they have pieces (Codex on #296)
@@ -197,28 +200,44 @@ export async function translateUnits(units, send, format = 'markers') {
     const sers = units.map(wire.serialize)
     const { texts, lost } = await ask(sers.map(s => s.wire))
     units.forEach((u, i) => {
-      if (lost?.has(i)) { how.lost++; return }
-      if (texts[i] == null) { failed.push(u); return }
-      const strict = wire.rehydrate(texts[i], sers[i])
-      if (!strict.error) { translated.set(u, strict.pieces); how.whole++; return }
-      const loose = wire.tolerant?.(texts[i], sers[i])
-      if (loose && !loose.error) { translated.set(u, loose.pieces); how.tolerant++; return }
+      if (lost?.has(i)) { how.lost++; results.set(u, { state: 'lost' }); return }
+      const got = texts[i]
+      if (got == null) { failed.push(u); return }
+      const strict = wire.rehydrate(got.text, sers[i])
+      if (!strict.error) { results.set(u, { pieces: strict.pieces, state: 'whole', by: got.by }); how.whole++; return }
+      const loose = wire.tolerant?.(got.text, sers[i])
+      if (loose && !loose.error) { results.set(u, { pieces: loose.pieces, state: 'whole', by: got.by }); how.tolerant++; return }
       failed.push(u)
     })
   } else failed.push(...units)
   const runs = []
   for (const u of failed) u.pieces.forEach((p, k) => { if (p.t === 'text' && (utf8(p.s).match(/\p{L}/gu) ?? []).length >= 2) runs.push({ u, k, wire: wire.run(utf8(p.s).replace(/\s+/g, ' ').trim()) }) })
   const { texts: runTexts, lost: runsLost } = runs.length ? await ask(runs.map(r => r.wire)) : { texts: [], lost: null }
-  const byUnit = new Map()
-  runs.forEach((r, j) => { if (runTexts[j] != null) (byUnit.get(r.u) ?? byUnit.set(r.u, new Map()).get(r.u)).set(r.k, runTexts[j]) })
+  const byUnit = new Map(), total = new Map()
+  runs.forEach((r, j) => {
+    total.set(r.u, (total.get(r.u) ?? 0) + 1)
+    if (runTexts[j] != null) (byUnit.get(r.u) ?? byUnit.set(r.u, new Map()).get(r.u)).set(r.k, runTexts[j])
+  })
   const lostUnits = new Set(runs.filter((r, j) => runsLost?.has(j)).map(r => r.u))
   for (const u of failed) {
     const got = byUnit.get(u)
-    if (!got?.size) { if (lostUnits.has(u)) how.lost++; else how.untranslated++; continue }
-    translated.set(u, u.pieces.map((p, k) => (got.has(k) ? { t: 'text', tr: true, s: p.s.match(/^\s*/)[0] + texEscape(wire.unrun(got.get(k))) + p.s.match(/\s*$/)[0] } : p)))
-    how.runs++
+    if (!got?.size) {
+      if (lostUnits.has(u)) { how.lost++; results.set(u, { state: 'lost' }) } else { how.untranslated++; results.set(u, { state: 'none' }) }
+      continue
+    }
+    const ids = new Set([...got.values()].map(g => g.by))
+    // some runs back and some lost to the service: lost, so that it is tried again — partial is for a unit the engine
+    // could not take whole, which another try would not change (final review); what came back is shown meanwhile
+    const whole = got.size === total.get(u)
+    results.set(u, {
+      pieces: u.pieces.map((p, k) => (got.has(k) ? { t: 'text', tr: true, s: p.s.match(/^\s*/)[0] + texEscape(wire.unrun(got.get(k).text)) + p.s.match(/\s*$/)[0] } : p)),
+      state: whole ? 'whole' : lostUnits.has(u) ? 'lost' : 'partial',
+      by: ids.size === 1 ? [...ids][0] : MIXED,
+    })
+    if (!whole && lostUnits.has(u)) how.lost++
+    else how.runs++
   }
-  return { translated, how }
+  return { results, how }
 }
 
 /** a unit's plain text in the source (placeholders dropped: anchors are found from text alone) */

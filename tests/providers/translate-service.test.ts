@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RenderPath } from '@/cache/key'
+import { translationIdentity, type RenderPath } from '@/cache/key'
 import { BatchCountMismatchError } from '@/providers/request/batch-queue'
 import { attachRequestErrorMeta } from '@/providers/request/retry-policy'
 import type { CachedEntry } from '@/cache/store'
@@ -398,6 +398,18 @@ describe('createTranslateService', () => {
     // Writing to the cache is not enough; the two that succeeded have to go back to the caller with the failure: otherwise run.ts marks the whole batch failed,
     // the reader sees “all failed”, and on retry they come back from the cache in a second (Codex on #163)
     if (!res.ok) expect(res.partial?.map(p => `${p.id}=${p.text}`)).toEqual(['a=译:text-a', 'b=译:text-b'])
+    // each carries the identity it was translated under, which a fallback's gathered answer keeps (types.ts)
+    if (!res.ok) expect(res.partial?.every(p => typeof p.identity === 'string' && p.identity.length === 64)).toBe(true)
+  })
+
+  it('every segment it returns carries the identity it was translated under; none without a cache', async () => {
+    const expected = await translationIdentity({ providerId: 'mock', model: '', promptKey: '', target: 'zh-CN', renderPath: 'tags' })
+    const service = build({ getProvider: async () => provider(async r => ({ segments: r.segments.map(s => ({ ...s, text: `T:${s.text}` })), provider: 'mock' })) })
+    const request = { segments: [{ id: 'a', text: 'x' }], source: 'en' as const, target: 'zh-CN' }
+    const ok = await service.translate({ request, cache: { paper: 'p', renderPath: 'tags' } })
+    expect(ok.ok && ok.result.segments.every(s => s.identity === expected)).toBe(true)
+    const bare = await service.translate({ request })
+    expect(bare.ok && bare.result.segments.every(s => s.identity === undefined)).toBe(true)
   })
 
   it('ids do not match: BatchQueue retries the whole batch and then falls back one by one; RequestQueue itself does not retry (or it would hit 12 times before the fallback)', async () => {
