@@ -29,6 +29,9 @@ const concat = parts => { const out = new Uint8Array(parts.reduce((n, p) => n + 
 
 // ---------------------------------------------------------------- what carries prose
 const HEADINGS = new Set(['part', 'chapter', 'section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph', 'title'])
+/** a sectioning command's depth, as LaTeX's article and book classes count it: the reader's contents rank it (outline.ts);
+ *  a paragraph heading is not in the contents */
+const DEPTH = { part: -1, chapter: 0, section: 1, subsection: 2, subsubsection: 3 }
 const OWN_UNIT_ARG = new Set(['caption', 'subcaption', 'subcaptionbox', 'footnote', 'thanks', 'abstract', 'keywords']) // the argument is a unit of its own
 const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox'])
 const INLINE_TEXT = new Set(['textbf', 'textit', 'emph', 'textsl', 'textsc', 'underline', 'textup', 'textrm', 'textsf', 'textmd', 'uline'])
@@ -126,6 +129,7 @@ class Builder {
     if ((letters.match(/\p{L}/gu) ?? []).length < 2) return
     // the paper's title, which goes with every batch to an LLM as the HTML page's does (DESIGN §8.2)
     if (this.title) u.title = true
+    if (this.depth !== undefined) u.depth = this.depth
     this.units.push(u)
   }
 }
@@ -264,8 +268,8 @@ function walk(s, from, to, b, ctx) {
         endText()
         const parent = b.cur, before = b.units.length
         // …and never the title, even inside it: \title{A\thanks{Supported by B}} (Devin and Codex on #296)
-        const title = b.title
-        b.cur = null; b.kind = 'footnote'; b.title = false; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.kind = saved; b.title = title
+        const title = b.title, depth = b.depth
+        b.cur = null; b.kind = 'footnote'; b.title = false; b.depth = undefined; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.kind = saved; b.title = title; b.depth = depth
         const made = b.units.length - before
         b.cur = parent
         if (parent && made === 1) { const inner = b.units[b.units.length - 1]; inner.nested = true; parent.pieces.push({ t: 'nested', pre: s.slice(i, inner.start), unit: inner, post: s.slice(inner.end, e) }); parent.end = e }
@@ -274,7 +278,7 @@ function walk(s, from, to, b, ctx) {
         i = e; continue
       }
       endText(); b.flush()
-      b.kind = CAPTIONS.has(name) ? 'caption' : 'heading'; b.title = name === 'title'; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.kind = saved
+      b.kind = CAPTIONS.has(name) ? 'caption' : 'heading'; b.title = name === 'title'; b.depth = DEPTH[name]; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.depth = undefined; b.kind = saved
       i = e; continue
     }
     // \multicolumn{n}{spec}{text}, \multirow{n}{width}{text}, \makecell{text}: only the last argument is prose

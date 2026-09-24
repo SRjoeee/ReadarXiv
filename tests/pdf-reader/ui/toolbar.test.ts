@@ -13,9 +13,10 @@ beforeAll(() => setLocale('zh-CN'))
 beforeEach(() => { restore = stubPopovers(); fakeBrowser.reset() })
 afterEach(() => { restore(); document.body.innerHTML = '' })
 
+let onContents = () => {}
 const mount = (over = {}, embedded = true) => {
   const fake = fakeController(over)
-  return mountElement(createElement(Toolbar, { controller: fake.controller, embedded })).then(m => ({ ...m, ...fake }))
+  return mountElement(createElement(Toolbar, { controller: fake.controller, embedded, contents: false, onContents })).then(m => ({ ...m, ...fake }))
 }
 const button = (c: HTMLElement, name: string) => c.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)!
 
@@ -51,6 +52,15 @@ describe('the toolbar (the reader\'s design, §6.1)', () => {
     button(container, '放大').click()
     button(container, '缩小').click()
     expect(controller.zoomBy.mock.calls).toEqual([[1.1], [1 / 1.1]])
+  })
+
+  it('opens the contents from its lead', async () => {
+    let opened = 0
+    onContents = () => { opened++ }
+    const { container } = await mount()
+    button(container, '目录').click()
+    expect(opened).toBe(1)
+    onContents = () => {}
   })
 
   it('offers the way back only over arXiv\'s page', async () => {

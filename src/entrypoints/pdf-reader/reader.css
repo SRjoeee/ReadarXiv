@@ -162,6 +162,26 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   /* below 900 px the language and service menus leave the toolbar for the reading options' first rows (§5); as specific
      as the rows and separators they are, and after them, so that they stay hidden above it */
   .pop .narrow-only { display: none; }
+  /* the contents (§6.3): `toc`, since Tailwind's `contents` is display: contents */
+  .toc { position: fixed; z-index: 15; inset: var(--bar) auto 0 0; width: var(--side); display: flex; flex-direction: column; background: var(--chrome); box-shadow: 0.5px 0 0 var(--chrome-line); translate: -100% 0; visibility: hidden; transition: translate 200ms var(--ease), visibility 0s linear 200ms; }
+  html[data-axt-contents] .toc { translate: 0 0; visibility: visible; transition: translate 200ms var(--ease), visibility 0s; }
+  .toc[hidden] { display: flex !important; }
+  .toc-h { display: flex; align-items: center; height: 36px; padding: 0 12px 0 14px; flex: none; color: var(--ink-2); font-size: 11.5px; font-weight: 600; }
+  .toc-list { flex: 1; margin: 0; padding: 0 6px 16px; overflow: auto; list-style: none; overscroll-behavior: contain; scrollbar-width: thin; }
+  .toc-list li[hidden] { display: none; }
+  .entry { display: flex; align-items: center; gap: 2px; height: 28px; padding-inline: 0 8px; border-radius: 6px; }
+  .entry:hover, .entry[aria-current="true"] { background: var(--fill); }
+  .entry a { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 8px; color: inherit; text-decoration: none; }
+  .entry .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500; }
+  .entry[aria-current="true"] .t { font-weight: 600; }
+  .entry .p { flex: none; color: var(--ink-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+  [data-level="2"] > .entry { padding-inline-start: 14px; }
+  [data-level="3"] > .entry { padding-inline-start: 28px; }
+  :is([data-level="2"], [data-level="3"]) .t { font-size: 12px; font-weight: 400; color: var(--ink-2); }
+  .fold { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; color: var(--ink-3); }
+  .fold svg { transition: rotate 150ms ease-out; }
+  .fold[aria-expanded="true"] svg { rotate: 90deg; }
+  .fold.leaf { visibility: hidden; }
 }
 @keyframes tip-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .tbtn, .tbtn:active { transition: none; scale: 1; } }

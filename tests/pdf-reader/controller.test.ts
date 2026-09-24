@@ -110,6 +110,16 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(fold([{ type: 'settings', config: DEFAULT_CONFIG, pack: 'available' }]).pack).toBe('available')
   })
 
+  it('holds the heading being read, as the session places it (Task 21)', () => {
+    expect(INITIAL.currentHeading).toBeNull()
+    expect(fold([{ type: 'heading', id: 29 }]).currentHeading).toBe(29)
+  })
+
+  it('holds the contents', () => {
+    const entries = [{ id: 2, title: '引言', original: 'Introduction', level: 1 as const, page: 1 }]
+    expect(fold([{ type: 'outline', entries }]).outline).toEqual(entries)
+  })
+
   it('holds the settings the session read', () => {
     expect(INITIAL.settings).toBeNull()
     expect(fold([{ type: 'settings', config: DEFAULT_CONFIG, pack: null }]).settings).toBe(DEFAULT_CONFIG)
@@ -120,7 +130,7 @@ describe('reduce: the session events folded into the reader state', () => {
   })
 })
 
-const fakeSession = (): Session => ({ setDisplay: vi.fn(), setSyncMode: vi.fn(), setCompositor: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), patchSettings: vi.fn(), pdfBytes: vi.fn(async () => null) })
+const fakeSession = (): Session => ({ setDisplay: vi.fn(), setSyncMode: vi.fn(), setCompositor: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), patchSettings: vi.fn(), pdfBytes: vi.fn(async () => null), goToUnit: vi.fn() })
 const panes = () => ({ left: document.createElement('div'), right: document.createElement('div') })
 
 describe('createController', () => {

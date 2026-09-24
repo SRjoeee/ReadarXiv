@@ -1,6 +1,7 @@
 // The session's types (session.mjs is JavaScript until the engine's port): what it reports, and what it takes
 import type { Config } from '@/config/schema'
 import type { PackState } from '@/shared/pack'
+import type { OutlineEntry } from '../outline'
 
 export type EngineDisplay = 'original' | 'translation' | 'bilingual'
 export type SyncMode = 'off' | 'current' | 'same' | 'pointer' | 'matched'
@@ -9,6 +10,10 @@ export type SessionEvent =
   | { type: 'status'; text: string }
   /** why the extension's settings could not be read (config/storage.ts FallbackReason), or null when they could */
   | { type: 'notice'; why: unknown }
+  /** the contents: the paper's headings, each by its text and page on the translation's side (outline.ts) */
+  | { type: 'outline'; entries: OutlineEntry[] }
+  /** the heading being read: the last one above the reading line on the side read (the translation's when shown) */
+  | { type: 'heading'; id: number | null }
   /** the paper's id and its title for the toolbar, '' until known or when there is none */
   | { type: 'paper'; id: string; title: string }
   /** the sides scroll together, as the reader applies it (off, or any other mode) */
@@ -36,5 +41,6 @@ export declare function zoomBy(factor: number): void
 export declare function zoomTo(value: number | 'page-width' | 'page-fit' | 'page-actual'): void
 export declare function goToPage(side: 'left' | 'right', page: number): void
 export declare function patchSettings(change: (latest: Config) => Config): void
+export declare function goToUnit(id: number): void
 export declare function pdfBytes(which: 'translation' | 'original'): Promise<Uint8Array | null>
 export declare const run: Promise<void>

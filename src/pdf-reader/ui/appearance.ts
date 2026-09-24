@@ -14,7 +14,13 @@ export function applyAppearance(root: HTMLElement, look: { theme: 'light' | 'dar
     else delete root.dataset.theme
     root.toggleAttribute('data-axt-dim', look.dim)
   }
-  const doc = root.ownerDocument as Document & { startViewTransition?: (run: () => void) => unknown }
-  if (animate && doc.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) doc.startViewTransition(apply)
-  else apply()
+  type Transition = { ready?: Promise<unknown>; finished?: Promise<unknown>; updateCallbackDone?: Promise<unknown> }
+  const doc = root.ownerDocument as Document & { startViewTransition?: (run: () => void) => Transition | undefined }
+  if (!animate || !doc.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    apply()
+    return
+  }
+  const transition = doc.startViewTransition(apply)
+  // a crossfade cut short (the window resized as it ran) is no fault: the page is in its new appearance already
+  for (const step of [transition?.ready, transition?.finished, transition?.updateCallbackDone]) step?.catch(() => {})
 }

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReaderController } from '@/pdf-reader/controller'
 import { type Appearance, applyAppearance, dimmed, themeOf } from '@/pdf-reader/ui/appearance'
+import { Outline } from '@/pdf-reader/ui/Outline'
 import { Toolbar } from '@/pdf-reader/ui/Toolbar'
 import { useReader } from '@/pdf-reader/ui/use-reader'
 
@@ -24,13 +25,17 @@ export function App({ controller, embedded }: { controller: ReaderController; em
     )
   }, [controller])
   useAppearance(state.settings?.pdfReader.appearance, state.settings?.pdfReader.dimPages)
+  // the contents sidebar, open or not: this visit's, not a setting; the document area moves with it (reader.css)
+  const [contents, setContents] = useState(false)
+  useEffect(() => { document.documentElement.toggleAttribute('data-axt-contents', contents) }, [contents])
   const swapped = state.settings?.pdfReader.swapped ?? false
   useEffect(() => { document.documentElement.toggleAttribute('data-axt-swapped', swapped) }, [swapped])
   // the tab says what is being read; the product's name until the title is known
   useEffect(() => { document.title = state.paper.title || 'Read arXiv' }, [state.paper.title])
   return (
     <>
-      <Toolbar controller={controller} embedded={embedded} />
+      <Toolbar controller={controller} embedded={embedded} contents={contents} onContents={() => setContents(open => !open)} />
+      <Outline controller={controller} open={contents} />
       <div className="doc">
         <section className="pane" data-side="left">
           <div className="viewerContainer" id="left" ref={left}>

@@ -22,6 +22,19 @@ describe('the appearance (the reader\'s design, §4.3)', () => {
     expect(dimmed('light', true, true)).toBe(false)
   })
 
+  it('takes a crossfade cut short (the window resized as it ran) as no fault (Task 21)', async () => {
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+    const aborted = () => Promise.reject(new DOMException('Transition was aborted because of invalid state', 'InvalidStateError'))
+    vi.stubGlobal('matchMedia', () => ({ matches: false }))
+    Object.assign(document, { startViewTransition: (run: () => void) => { run(); return { ready: aborted(), finished: aborted(), updateCallbackDone: Promise.resolve() } } })
+    applyAppearance(document.documentElement, { theme: 'dark', dim: false }, true)
+    await new Promise(r => setTimeout(r, 0))
+    process.off('unhandledRejection', unhandled)
+    expect(unhandled).not.toHaveBeenCalled()
+    expect(document.documentElement.dataset.theme).toBe('dark')
+  })
+
   it('is applied to the root, crossfaded only when asked', () => {
     const transition = vi.fn((run: () => void) => run())
     vi.stubGlobal('matchMedia', () => ({ matches: false }))

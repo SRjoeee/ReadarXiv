@@ -141,6 +141,28 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.close()
 }
 
+// ---------------------------------------------------------------- Task 21: the contents
+{
+  const page = await open({ mode: 'bilingual' })
+  const widthBefore = await box(page, '#right .page')
+  await page.getByRole('button', { name: '目录' }).click()
+  await page.waitForTimeout(700)
+  const entries = (await state(page)).outline
+  check('the contents list the headings with levels', entries.length > 5 && entries.some(e => e.level === 2), `${entries.length} entries`)
+  const widthAfter = await box(page, '#right .page')
+  check('opening the contents refits the pages to the narrower panes', widthAfter.w < widthBefore.w, `${widthBefore.w} → ${widthAfter.w}`)
+  const target = entries.find(e => e.page >= 3)
+  await page.locator(`[data-entry="${target.id}"] a`).click()
+  await page.waitForTimeout(800)
+  // the heading put at the top of the translation's side, a line of room above it (goToUnit's 28 px)
+  const at = await page.evaluate(id => { const { debug } = window.__reader, r = debug.right; return Math.round(debug.unitDocTop(r, id) - r.container.scrollTop) }, target.id)
+  check('a row jumps to its heading on the translation\'s side', Math.abs(at - 28) <= 4, `${JSON.stringify(target)}: ${at} px from the top`)
+  check('…and the original follows it there', (await state(page)).sides.left.page > 1, JSON.stringify((await state(page)).sides))
+  check('the row is marked as the section being read', await page.evaluate(id => document.querySelector(`[data-entry="${id}"] .entry`)?.getAttribute('aria-current') === 'true', target.id))
+  await shot(page, '21-contents')
+  await page.close()
+}
+
 console.log(failed ? `${failed} failed` : 'all passed')
 await context.close()
 process.exit(failed ? 1 : 0)

@@ -4,6 +4,7 @@
 import { toBcp47 } from '@/config/languages'
 import type { Config } from '@/config/schema'
 import type { PackState } from '@/shared/pack'
+import type { OutlineEntry } from './outline'
 import { PROVIDER_ERROR_KINDS, type ProviderErrorKind } from '@/providers/types'
 import type { EngineDisplay, SessionEvent, SessionHost } from './engine/session.mjs'
 import type * as SessionModule from './engine/session.mjs'
@@ -39,6 +40,10 @@ export interface ReaderState {
   paper: { id: string; title: string }
   /** the window too narrow for two sides: side by side shows the translation alone (Task 23 sets it) */
   narrow: boolean
+  /** the contents (outline.ts) */
+  outline: OutlineEntry[]
+  /** the heading being read: the last one above the reading line on the side read; null before the first */
+  currentHeading: number | null
   /** the offline service's language pack, as the settings' surface knows it */
   pack: PackState | null
   /** the zoom last chosen from the menu; null after a step or a pinch */
@@ -64,12 +69,14 @@ export const INITIAL: ReaderState = {
   paper: { id: '', title: '' },
   narrow: false,
   sync: true,
+  outline: [],
+  currentHeading: null,
   pack: null,
   zoom: 'page-width',
 }
 
 /** the session's commands the controller passes on */
-export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage' | 'patchSettings' | 'pdfBytes'>
+export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage' | 'patchSettings' | 'pdfBytes' | 'goToUnit'>
 
 /** the runs that end without a translation because of the paper, or of the language: not failures a reader can retry */
 const CANNOT_BE_HAD = new Set(['no source'])
@@ -96,6 +103,10 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       return { ...state, sides: { ...state.sides, [event.side]: { page: event.page, pages: event.pages } } }
     case 'notice':
       return (event.why != null) === state.settingsUnreadable ? state : { ...state, settingsUnreadable: event.why != null }
+    case 'heading':
+      return event.id === state.currentHeading ? state : { ...state, currentHeading: event.id }
+    case 'outline':
+      return { ...state, outline: event.entries }
     case 'paper':
       return { ...state, paper: { id: event.id, title: event.title } }
     case 'sync':
@@ -151,6 +162,8 @@ export interface ReaderController {
   goToPage(side: Side, page: number): void
   /** a change of the extension's settings, on top of what storage holds when its turn comes */
   patchSettings(change: (latest: Config) => Config): void
+  /** both sides shown taken to a heading from the contents */
+  goToHeading(id: number): void
   /** a side's PDF saved as a file, named by the paper (fileName) */
   download(which: 'translation' | 'original'): Promise<void>
 }
@@ -199,6 +212,7 @@ export function createController({ open, params }: { open: (host: SessionHost) =
     zoomTo: value => { set({ zoom: value }); later(s => s.zoomTo(value)) },
     goToPage: (side, page) => later(s => s.goToPage(side, page)),
     patchSettings: change => later(s => s.patchSettings(change)),
+    goToHeading: id => later(s => s.goToUnit(id)),
     async download(which) {
       const s = await session
       const bytes = await s?.pdfBytes(which)

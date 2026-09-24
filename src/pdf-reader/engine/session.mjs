@@ -26,6 +26,7 @@ import { ocrCall } from '../ocr'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFViewer, pdfjsLib } from '../pdfjs'
 import { displayOf, figuresShown, followOf, withDisplay } from '../settings'
 import { whenVisible } from '../visible'
+import { outlineOf } from '../outline'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
 import { decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { openEngine, paperContext } from './engine.mjs'
@@ -160,7 +161,8 @@ function makeSide(container) {
   linkService.setViewer(viewer)
   // figs: each page's figures being laid (paintFigures), and figGen the latest call's number, by page; frames: a draft
   // preview's frames (pdfFrames), a promise; anchored: the side's units located, a promise, where they come after its pages
-  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), byPage: new Map(), figs: new Map(), figGen: new Map(), frames: null, anchored: null }
+  // fit: the fit the side was last given (page-width, page-fit, page-actual), kept as its pane's width changes; null at a scale
+  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), byPage: new Map(), figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width' }
 }
 const left = makeSide(host.left)
 let right = makeSide(host.right)
@@ -987,7 +989,7 @@ function fitWidth(side) {
 function relayout(from, place = null) {
   bake()
   requestAnimationFrame(() => {
-    for (const s of sides) if (s.doc && shown(s)) { s.viewer.currentScaleValue = fitWidth(s); s.viewer.update() }
+    for (const s of sides) if (s.doc && shown(s)) { s.fit = 'page-width'; s.viewer.currentScaleValue = fitWidth(s); s.viewer.update() }
     const came = from === 'original' ? right : from === 'translation' ? left : null
     requestAnimationFrame(() => {
       if (!came?.doc || !place) return
@@ -1237,11 +1239,23 @@ function attach(side) {
   side.eventBus.on('pagesinit', invalidate)
   // each side's page, for its pill; a viewer being laid out out of sight (replaceRight's) reports once it is the right
   const reportPage = () => { if (side === left || side === right) host.emit({ type: 'page', side: side === left ? 'left' : 'right', page: side.viewer.currentPageNumber, pages: side.viewer.pagesCount }) }
+  // the heading being read follows the reading on the side read
+  side.eventBus.on('updateviewarea', () => { if (side === left || side === right) reportHeading() })
   side.eventBus.on('pagechanging', reportPage)
   side.eventBus.on('pagesinit', reportPage)
 }
 for (const side of sides) attach(side)
 viewersMade = true
+/** a side at a fit keeps it as its pane's width changes: the contents opening, the window resized, a narrow window */
+const refit = new ResizeObserver(entries => {
+  for (const { target } of entries) {
+    const s = sides.find(x => x.container === target)
+    if (!s?.doc || !s.fit || !shown(s)) continue
+    invalidate()
+    s.viewer.currentScaleValue = s.fit === 'page-width' ? fitWidth(s) : s.fit
+  }
+})
+for (const s of sides) refit.observe(s.container)
 /** where the original is being read, in PDF.js's terms (its page, and the point at the top left of the view in PDF
  *  units), as long as it is in view: the same file opens on the right at the same place */
 let readAt = null
@@ -1249,9 +1263,9 @@ left.eventBus.on('updateviewarea', ({ location }) => { if (shown(left)) readAt =
 /** figure text on or off */
 export function setFigures(on) { void save(c => ({ ...c, image: { ...c.image, enabled: on } })) } // figure text on or off, in the settings; followFigures shows it
 /** the sides shown scaled by a factor, within PDF.js's range */
-export function zoomBy(factor) { for (const s of sides) if (shown(s)) s.viewer.currentScale = Math.min(4, Math.max(0.25, s.viewer.currentScale * factor)) }
+export function zoomBy(factor) { for (const s of sides) if (shown(s)) { s.fit = null; s.viewer.currentScale = Math.min(4, Math.max(0.25, s.viewer.currentScale * factor)) } }
 /** the sides shown at a scale or a fit (page-width, page-fit, page-actual); fitting the width keeps to a reading width */
-export function zoomTo(value) { for (const s of sides) if (shown(s)) s.viewer.currentScaleValue = value === 'page-width' ? fitWidth(s) : String(value) }
+export function zoomTo(value) { for (const s of sides) if (shown(s)) { s.fit = typeof value === 'string' ? value : null; s.viewer.currentScaleValue = value === 'page-width' ? fitWidth(s) : String(value) } }
 /** a side at a page */
 export function goToPage(which, page) { const s = which === 'left' ? left : right; if (s.doc) s.viewer.currentPageNumber = page }
 /** a side's PDF as it is shown, for the download (the reader's design, §6.1): the original, or the translation on screen */
@@ -1299,6 +1313,52 @@ function scrollFor(side, place) {
  *  the reading line stays put, its visible pages drawn with their figures, then shown in place of the old one. `draft`:
  *  a preview whose images are frames (live.mjs DRAFT), the left's figures drawn over them (paintFigures) */
 let rightTexts = null // the units' texts on the right as it was last anchored, for the test harness
+/** the paper's headings, as the source (or a stored copy, or a demo's levels) has them: { id, src, depth, title } */
+let headings = []
+/** the contents, each heading by its text on the translation's side and its page there; the original's while it alone is laid */
+function reportOutline() {
+  const texts = new Map((rightTexts ?? []).map(t => [t.id, t.text]))
+  const side = right.anchors?.size ? right : left
+  host.emit({ type: 'outline', entries: outlineOf(headings, id => texts.get(id), id => side.anchors?.get(id)?.rects?.[0]?.page ?? null) })
+  readingHeading = undefined
+  reportHeading()
+}
+/** the heading being read: the last one whose top is above the reading line on the side read (the translation's when
+ *  it is shown), told when it changes — as the reading moves (PDF.js's updateviewarea), and as the contents change */
+let readingHeading
+function reportHeading() {
+  const side = shown(right) && right.anchors?.size ? right : left
+  if (!side.anchors?.size) return
+  const y = side.container.scrollTop + side.container.clientHeight * readingLine
+  let id = null
+  for (const h of headings) {
+    if (h.title) continue
+    const top = unitDocTop(side, h.id)
+    if (top != null && top <= y + 1) id = h.id
+  }
+  if (id === readingHeading) return
+  readingHeading = id
+  host.emit({ type: 'heading', id })
+}
+/**
+ * A heading, from the contents (the reader's design, §6.3): the side read (the translation's when shown) takes it to its
+ * top, a line of room above it, as a scroll of its own that the sync follows — the other side need not have located the
+ * heading, arXiv's numbered one often has not; with no sync, the other side is put there too, where it has it
+ */
+export function goToUnit(id) {
+  const lead = shown(right) && right.anchors?.size ? right : left
+  invalidate()
+  const top = unitDocTop(lead, id)
+  if (top == null) return
+  take(lead)
+  lead.container.scrollTop = top - 28
+  const second = other(lead)
+  if (!(mode === 'bilingual' && !narrow && together()) && second.doc && shown(second)) {
+    const there = unitDocTop(second, id)
+    if (there != null) put(second.container, there - 28)
+  }
+  reportHeading()
+}
 async function replaceRight(url, texts, { draft = false } = {}) {
   const t0 = performance.now()
   bake()
@@ -1332,6 +1392,7 @@ async function replaceRight(url, texts, { draft = false } = {}) {
   bake()
   const old = right
   right = next; sides[1] = next
+  next.fit = old.fit; refit.unobserve(old.container); refit.observe(next.container)
   if (driver === old) driver = next
   container.classList.remove('axt-incoming')
   old.container.remove()
@@ -1339,6 +1400,7 @@ async function replaceRight(url, texts, { draft = false } = {}) {
   invalidate(); paint(right)
   // the right is a new viewer: its page and page count, not the old one's
   host.emit({ type: 'page', side: 'right', page: right.viewer.currentPageNumber, pages: right.viewer.pagesCount })
+  reportOutline()
   const drift = place ? Math.round(scrollFor(right, place) - right.container.scrollTop - (offset ?? 0)) : null
   return { ms: Math.round(performance.now() - t0), drift }
 }
@@ -1372,12 +1434,15 @@ async function showCached(record, setContext, note = () => {}) {
     // shown: its pages laid out and drawing; the anchors, which the highlight and the sync need, follow
     note('shown cached')
     if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true })
+    headings = record.units.map((u, i) => ({ id: i, src: u.src, depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
+    rightTexts = record.units.map((u, i) => ({ id: i, text: u.tr ?? u.src }))
     await Promise.all([
       anchorSide(left, record.units.map((u, i) => ({ id: i, text: u.src })), new Map(record.marks)).then(() => note('cached left anchored')),
       anchorSide(right, record.units.map((u, i) => ({ id: i, text: u.tr ?? u.src })), record.rightMarks?.length ? new Map(record.rightMarks) : undefined).then(() => note('cached right anchored')),
     ])
   } finally { URL.revokeObjectURL(url) }
   invalidate(); paint(left); paint(right)
+  reportOutline()
 }
 async function live() {
   // our TeX page and the TeX Live file server, as spikes/serve-live.mjs starts them on this machine
@@ -1480,6 +1545,7 @@ async function live() {
   const { files, pdf: noSource } = await unpackSource(srcBytes)
   if (noSource) return fail('no source', `arXiv has no LaTeX source for ${paper} (a PDF-only submission): nothing to translate this way`)
   const paperData = openPaper(files), units = paperData.units
+  headings = units.map((u, i) => ({ id: i, src: plainSource(u), depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
   total = units.length - paperData.kept.size
   const src = units.map((u, i) => ({ id: i, text: plainSource(u) }))
   const context = paperContext(units)
@@ -1494,6 +1560,8 @@ async function live() {
   if (leftCurrent) adoptUnits()
   if (!cached) await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
   note('anchored')
+  rightTexts ??= src
+  reportOutline()
   window.__reader.debug = Object.assign(harness(), { units: units.map((u, i) => ({ i, kind: u.kind, text: src[i].text })) })
   window.__reader.ready = true
   // the compiler: our site's TeX page
@@ -1581,6 +1649,11 @@ async function demo() {
   const lMarks = await fetch(`${base}original-marks.json`).then(r => (r.ok ? r.json() : {})).then(o => new Map(Object.entries(o))).catch(() => new Map())
   const [marksLeft, marksRight] = await Promise.all([anchorSide(left, units.map(u => ({ id: u.i, text: u.src })), lMarks), anchorSide(right, textsAt(stages ? stages[0].translated : Infinity))])
   Object.assign(timing, { marksLeft, marksRight })
+  // the contents: a demo's units carry no depth, so levels.json holds the source's (made with the demo); its first heading is the title
+  const levels = await fetch(`${base}levels.json`).then(r => (r.ok ? r.json() : {})).catch(() => ({}))
+  headings = units.filter(u => u.kind === 'heading' && (levels[u.i] || u.i === 0)).map(u => ({ id: u.i, src: u.src, depth: levels[u.i], title: u.i === 0 }))
+  rightTexts = textsAt(stages ? stages[0].translated : Infinity)
+  reportOutline()
   timing.anchors = performance.now() - t1
   const linked = () => units.filter(u => left.anchors.get(u.i) && right.anchors.get(u.i)).length
   Object.assign(window.__reader, { ready: true, units: units.length, linked: linked(), leftPages: left.doc.numPages, rightPages: right.doc.numPages })

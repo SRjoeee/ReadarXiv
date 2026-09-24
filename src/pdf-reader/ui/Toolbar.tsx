@@ -2,7 +2,7 @@
 // centre (the display switch), the trail (the side-by-side pair, zoom, the translation's menus and the reading options,
 // the download, the settings, the way back), a hairline divider between the trail's groups. Everything here goes
 // through the controller; nothing reads the viewers
-import { ArrowLeftRight, Link2, LogOut, Minus, Plus, Settings } from 'lucide'
+import { ArrowLeftRight, Link2, LogOut, Minus, PanelLeft, Plus, Settings } from 'lucide'
 import { browser } from 'wxt/browser'
 import { R, S } from '@/ui/strings'
 import type { ReaderController } from '../controller'
@@ -18,13 +18,16 @@ import { useReader } from './use-reader'
 const MOD = /Mac/.test(navigator.platform) ? '⌘' : 'Ctrl'
 const openSettings = () => void browser.tabs.create({ url: (browser.runtime.getURL as (p: string) => string)('/options.html#pdf-reader') })
 
-export function Toolbar({ controller, embedded }: { controller: ReaderController; embedded: boolean }) {
+export function Toolbar({ controller, embedded, contents, onContents }: { controller: ReaderController; embedded: boolean; contents: boolean; onContents: () => void }) {
   const state = useReader(controller)
   const reader = state.settings?.pdfReader
   const sideBySide = state.display === 'bilingual' && !state.narrow
   return (
     <header role="toolbar" aria-label={R.bar} className="chrome">
       <div data-zone="lead" className="flex min-w-0 items-center gap-1">
+        <ToolbarButton label={R.contents} pressed={contents} onClick={onContents}>
+          <Icon node={PanelLeft} />
+        </ToolbarButton>
         <PaperTitle id={state.paper.id} title={state.paper.title} />
       </div>
       <div data-zone="centre" className="flex items-center">

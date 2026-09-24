@@ -37,7 +37,8 @@ export async function seedFrom(record, units) {
  */
 export function unitsOf(units, kept, hashes, results) {
   return units.map((u, i) => {
-    const base = { kind: u.kind, src: plainSource(u), hash: hashes[i] }
+    // a heading's depth, and whether it is the title, for the contents a stored copy lists (outline.ts)
+    const base = { kind: u.kind, src: plainSource(u), hash: hashes[i], ...(u.title ? { title: true } : {}), ...(u.depth !== undefined ? { depth: u.depth } : {}) }
     if (kept.has(u)) return { ...base, state: 'kept' }
     const r = results.get(i)
     if (!r) return { ...base, state: 'none' }
