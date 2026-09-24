@@ -121,6 +121,18 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .tip:popover-open { display: flex; animation: tip-in 120ms ease-out; }
   .tip[data-side="right"] { margin: 0 0 0 8px; position-area: right; position-try-fallbacks: none; }
   .tip kbd { color: oklch(0.74 0.01 255); }
+  /* a segmented control: equal segments in a well, the chosen one on a lifted thumb that slides (§6.2, §7) */
+  .seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: 30px; padding: 2px; border-radius: 9px; background: var(--well); --i: 0; }
+  .seg .thumb { position: absolute; inset-block: 2px; inset-inline-start: 2px; width: calc((100% - 4px) / var(--n, 3)); border-radius: 7px; background: var(--lift);
+    box-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.06), 0 1px 2px oklch(0 0 0 / 0.08); translate: calc(var(--i) * 100%) 0; transition: translate 220ms var(--ease); pointer-events: none; }
+  .seg > button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; height: 100%; padding: 0 12px; border-radius: 7px; color: var(--ink-2); font: 500 12.5px/1 var(--font); white-space: nowrap; transition: color 150ms ease-out; }
+  .seg > button[aria-checked="true"], .seg > button[aria-pressed="true"] { color: var(--ink); }
+  .seg > button:not([aria-checked="true"]):not([aria-disabled="true"]):hover { color: var(--ink); }
+  .seg > button[aria-disabled="true"] { color: var(--ink-3); opacity: 0.55; }
+  .seg.display > button { width: 40px; padding: 0; }
+  .seg.small { height: 26px; }
+  .seg.small > button { padding: 0 10px; font-size: 12px; }
 }
 @keyframes tip-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .tbtn, .tbtn:active { transition: none; scale: 1; } }
+@media (prefers-reduced-motion: reduce) { .seg .thumb { transition: none; } }

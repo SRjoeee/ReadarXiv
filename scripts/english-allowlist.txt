@@ -43,6 +43,7 @@ src/providers/microsoft.ts 1
 src/ui/appearance/Preview.tsx 1
 src/ui/strings.ts 3
 tests/pdf-reader/ui/copy.test.ts 4  # 2026-09-25: the reader's words, zh-CN expectations and the technical terms checked in Chinese
+tests/pdf-reader/ui/display-switch.test.ts 3  # 2026-09-25: the display switch's choices found by their Chinese names
 tests/pdf-reader/ui/tip.test.ts 3  # 2026-09-25: the reader's controls found by their Chinese names, as the interface shows them
 tests/cache/key.test.ts 3
 tests/cache/store.test.ts 10
