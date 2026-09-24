@@ -42,6 +42,20 @@ function pdfReaderFiles(): { absoluteSrc: string; relativeDest: string }[] {
     .map(path => ({ absoluteSrc: join(PDF_READER, path), relativeDest: `pdf-reader/${path}` }))
 }
 
+/**
+ * The files PDF.js reads by address rather than by import (the reader's design, §11.2): its character maps, the standard
+ * fonts with their licences, and its WebAssembly decoders, copied from the pinned package as they are into
+ * `pdf-reader/pdfjs/`. The library and its worker are bundled (src/pdf-reader/pdfjs.ts)
+ */
+const PDFJS = fileURLToPath(new URL('./node_modules/pdfjs-dist', import.meta.url))
+function pdfjsFiles(): { absoluteSrc: string; relativeDest: string }[] {
+  return ['cmaps', 'standard_fonts', 'wasm'].flatMap(dir =>
+    readdirSync(join(PDFJS, dir))
+      .filter(name => statSync(join(PDFJS, dir, name)).isFile())
+      .map(name => ({ absoluteSrc: join(PDFJS, dir, name), relativeDest: `pdf-reader/pdfjs/${dir}/${name}` })),
+  )
+}
+
 // The WXT project configuration.
 export default defineConfig({
   srcDir: 'src',
@@ -60,7 +74,7 @@ export default defineConfig({
     // The licences that go with every copy (scripts/third-party-notices.mjs): WXT calls this once every entry point
     // is built, so the list of what was bundled is complete; the project's own licence goes in beside it
     'build:publicAssets': (_wxt, files) => {
-      files.push(...licenceFiles(), ...pdfReaderFiles())
+      files.push(...licenceFiles(), ...pdfReaderFiles(), ...pdfjsFiles())
     },
   },
   manifest: {

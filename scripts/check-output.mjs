@@ -71,8 +71,8 @@ const MODELS = {
   'ocr/PP-OCRv6_tiny_dict.txt': 'c5cbe34ef40c29c4df07ed012bf96569cb69a2d2a01a07027e9f13cb832bd9cd',
 }
 const filesUnder = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => (entry.isDirectory() ? filesUnder(join(dir, entry.name)) : [join(dir, entry.name)]))
-// On this experiment branch the PDF reader is copied in as it is (wxt.config.ts, `pdf-reader/`): research code with its
-// own pdf.js decoders and its own copy of the runtime, which this check of the extension's own package does not count
+// The PDF reader's data files (`pdf-reader/`, copied by wxt.config.ts: PDF.js's WebAssembly decoders among them) are the
+// reader's, not the recogniser's, and are not counted by the recogniser's rules below
 const built = filesUnder(OUT).filter(path => !path.startsWith(join(OUT, 'pdf-reader')))
 const wasm = built.filter(path => path.endsWith('.wasm'))
 const carriers = built.filter(path => path.endsWith('.js') && readFileSync(path, 'utf8').includes('ort-wasm-simd-threaded'))
@@ -80,6 +80,7 @@ for (const [what, ok, detail] of [
   ['the recogniser\'s page is built', existsSync(join(OUT, 'ocr.html')), 'ocr.html is missing'],
   ['one WebAssembly file, ONNX Runtime\'s', wasm.length === 1 && /ort-wasm-simd-threaded/.test(wasm[0]), wasm.join(', ') || 'none'],
   ['only the recogniser\'s worker carries the runtime', carriers.length === 1 && /assets[\\/]worker-/.test(carriers[0]), carriers.join(', ') || 'none'],
+  ['PDF.js\'s character maps, fonts and decoders are in the build', ['pdfjs/cmaps/78-EUC-H.bcmap', 'pdfjs/standard_fonts/FoxitSerif.pfb', 'pdfjs/standard_fonts/LICENSE_FOXIT', 'pdfjs/wasm/openjpeg.wasm'].every(file => existsSync(join(OUT, 'pdf-reader', file))), 'pdf-reader/pdfjs/ is incomplete'],
   ...Object.entries(MODELS).map(([file, sha256]) => {
     const path = join(OUT, file)
     const found = existsSync(path) ? createHash('sha256').update(readFileSync(path)).digest('hex') : 'missing'
