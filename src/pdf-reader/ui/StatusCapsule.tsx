@@ -1,8 +1,8 @@
 // The status capsule (the reader's design, §6.6): the document area's bottom centre, 58 px up, above the pills. A status
 // region present from the first paint, so that what it says later is announced; it rises in (240 ms) and leaves lighter
-// (160 ms); a new state of the same kind changes its words in place. Progress is its own background filling from the
-// left. A notice has a chip and a close, the close remembered for the visit; the narrow window's words leave by
-// themselves after 4 s. A failure never takes the focus; the card's reason is said in this region
+// (160 ms); a new state of the same kind changes its words in place. How far it has come is the progress line's, under
+// the toolbar (ProgressLine). A notice has a chip and a close, the close remembered for the visit; the narrow window's
+// words leave by themselves after 4 s. A failure never takes the focus; the card's reason is said in this region
 import { Info, X } from 'lucide'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { R, S } from '@/ui/strings'
@@ -20,7 +20,7 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
   // a capsule that goes is kept 160 ms, leaving (reader.css .capsule[data-out]); one that comes replaces it at once
   const [leaving, setLeaving] = useState<Capsule | null>(null)
   const last = useRef<Capsule | null>(null)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: run as the capsule's words change, not on every render (capsuleOf makes a new object each time; progress changes the fill alone)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: run as the capsule's words change, not on every render (capsuleOf makes a new object each time)
   useEffect(() => {
     if (!now && last.current) {
       setLeaving(last.current)
@@ -37,10 +37,10 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
     return () => clearTimeout(t)
   }, [now?.kind])
   // the same kind with other words: the words fade in and the capsule's width eases to theirs (200 ms); one read of its
-  // width when its words change, which is rare (progress changes the fill, not the words)
+  // width when its words change, which is rare
   const box = useRef<HTMLDivElement>(null)
   const width = useRef<{ kind: string; w: number } | null>(null)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: one read of the width as the words change, never as progress fills
+  // biome-ignore lint/correctness/useExhaustiveDependencies: one read of the width as the words change
   useLayoutEffect(() => {
     const el = box.current
     if (!el || !now) { width.current = null; return }
@@ -54,7 +54,6 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
       {card && <span className="sr-only">{card.reason}</span>}
       {capsule && (
         <div ref={box} key={capsule.kind} className="chrome capsule" data-kind={capsule.kind} data-out={now ? undefined : ''}>
-          {capsule.kind === 'progress' && <span className="fill" aria-hidden="true" style={{ scale: `${Math.max(0.04, capsule.progress)} 1` }} />}
           {capsule.kind !== 'progress' && <Icon node={Info} size={15} />}
           <span key={capsule.text} className="words">{capsule.text}</span>
           {capsule.kind === 'notice' && (

@@ -10,6 +10,7 @@ import { DisplaySwitch } from './DisplaySwitch'
 import { Icon } from './icons'
 import { DownloadMenu, LanguageMenu, ServiceMenu, ZoomMenu } from './Menus'
 import { PaperTitle } from './PaperTitle'
+import { ProgressLine } from './ProgressLine'
 import { ReadingOptions } from './ReadingOptions'
 import { ToolbarButton } from './ToolbarButton'
 import { useReader } from './use-reader'
@@ -65,6 +66,7 @@ export function Toolbar({ controller, embedded, contents, onContents }: { contro
           </ToolbarButton>
         )}
       </div>
+      <ProgressLine controller={controller} />
     </header>
   )
 }

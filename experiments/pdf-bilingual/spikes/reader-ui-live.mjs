@@ -1,5 +1,5 @@
 // The reader's states that only a live run reaches (the reader's design, §8), in a real browser, each with its screenshot
-// in out/reader-ui/: translating (the capsule filling), a target language the reader cannot typeset (the original, the
+// in out/reader-ui/: translating (the capsule's words, the progress line growing), a target language the reader cannot typeset (the original, the
 // translated displays greyed, the capsule naming the language with the way to choose another), and no service able to
 // answer (the card in the translation's pane). Local corpus and TeX page; the TeX Live file server on :8070. Build first.
 //   node experiments/pdf-bilingual/spikes/reader-ui-live.mjs [paper]
@@ -41,12 +41,21 @@ page.on('pageerror', e => check('no page error', false, e.message))
 const visit = async mode => { await page.goto(urlOf(mode)); await until(page, () => window.__reader?.controller?.getState().settings) }
 const patch = change => page.evaluate(p => window.__reader.controller.patchSettings(c => ({ ...c, ...p })), change)
 
-// 1. translating: no copy on this machine, the default service; the capsule fills as paragraphs come back
+// 1. translating: no copy on this machine, the default service; the capsule says so, and the progress line along the
+// toolbar's foot grows as paragraphs come back (the maintainer, 2026-09-25)
 await visit('bilingual')
 await page.evaluate(() => window.__reader.debug?.pdfCache?.clear())
 await visit('bilingual')
 const translating = await until(page, () => window.__reader.controller.getState().phase === 'translating')
-check('a first translation says so in the capsule, filling', translating && (await page.getByRole('status').textContent()).includes('正在翻译'))
+check('a first translation says so in the capsule', translating && (await page.getByRole('status').textContent()).includes('正在翻译'))
+// while the capsule is there: its words alone, the progress the line's
+check('…the capsule has no fill of its own', await page.evaluate(() => !!document.querySelector('.capsule[data-kind="progress"]') && !document.querySelector('.capsule .fill')))
+const lineAt = () => page.evaluate(() => { const l = document.querySelector('header[role="toolbar"] .progress-line'), r = l?.getBoundingClientRect(); return l && { on: l.hasAttribute('data-on'), p: Number(l.style.getPropertyValue('--p')), bottom: Math.round(r.bottom), height: Math.round(r.height) } })
+const first = await lineAt()
+check('…the progress line along the toolbar\'s foot, 2 px', !!first?.on && first.bottom === 44 && first.height === 2, JSON.stringify(first))
+const grew = await page.waitForFunction(p => Number(document.querySelector('.progress-line')?.style.getPropertyValue('--p')) > p + 0.01, first?.p ?? 0, { timeout: 120_000, polling: 200 }).then(() => true, () => false)
+check('…growing as paragraphs come back', grew, JSON.stringify({ first, now: await lineAt() }))
+check('the PDF\'s download followed to its end', await page.evaluate(() => window.__reader.controller.getState().loaded === 1))
 await page.waitForTimeout(1500)
 await page.screenshot({ path: join(out, '25-translating.png') })
 

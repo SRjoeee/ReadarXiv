@@ -203,6 +203,11 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .indicator i { position: absolute; top: 0; width: 4px; height: var(--thumb, 40px); border-radius: 999px; background: color-mix(in oklab, var(--ink) 30%, transparent); transition: width 150ms ease-out, background-color 150ms; animation: thumb linear both; animation-timeline: --pane-y; }
   .indicator:hover i, .indicator[data-drag] i { width: 7px; background: color-mix(in oklab, var(--ink) 45%, transparent); cursor: grab; }
   .indicator[data-drag] i { cursor: grabbing; }
+  /* the progress line (§6.6): along the toolbar's foot, 2 px of quiet ink, its length the share done, grown by a
+     transform; it fades in and out, at the length it reached (ProgressLine) */
+  .progress-line { position: absolute; inset: auto 0 0 0; height: 2px; background: color-mix(in oklab, var(--ink-3) 80%, transparent); transform-origin: 0 50%; scale: var(--p, 0) 1; opacity: 0; pointer-events: none; transition: scale 400ms var(--ease), opacity 240ms ease-out; }
+  .progress-line[data-on] { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .progress-line { transition: opacity 240ms ease-out; } }
   /* the status capsule (§6.6): fixed over the document area, above the pills, moved with it by the contents */
   .capsule-slot { position: fixed; z-index: 7; inset: auto 0 58px 0; display: flex; justify-content: center; pointer-events: none; transition: left 200ms var(--ease); }
   html[data-axt-contents] .capsule-slot { left: var(--side); }
@@ -211,7 +216,6 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .capsule[data-kind="progress"], .capsule[data-kind="narrow"] { padding-inline-end: 14px; }
   .capsule[data-out] { animation: capsule-out 160ms ease-out forwards; pointer-events: none; }
   .capsule svg { color: var(--ink-2); }
-  .capsule .fill { position: absolute; inset: 0; z-index: -1; background: color-mix(in oklab, var(--ink) 8%, transparent); transform-origin: 0 50%; transition: scale 600ms var(--ease); }
   .capsule .words { animation: words-in 180ms ease-out; }
   .capsule .chip { height: 24px; padding: 0 10px; border-radius: 999px; background: var(--fill); font-size: 12px; font-weight: 500; transition: scale 150ms; }
   .capsule .chip:active { scale: 0.96; }

@@ -232,6 +232,9 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
 // ---------------------------------------------------------------- Part 3's final review
 {
   const page = await open({ mode: 'bilingual' })
+  // the progress line (the maintainer, 2026-09-25): there, along the toolbar's foot, and out of sight while reading
+  const line = await page.evaluate(() => { const l = document.querySelector('header[role="toolbar"] .progress-line'); return l && { on: l.hasAttribute('data-on'), opacity: getComputedStyle(l).opacity } })
+  check('the progress line is out of sight while reading', !!line && !line.on && line.opacity === '0', JSON.stringify(line))
   // I5: the offline service's language pack is looked up after the settings land, and the service menu follows it
   const pack = await page.waitForFunction(() => window.__reader.controller.getState().pack, null, { timeout: 8000 }).then(h => h.jsonValue(), () => null)
   check('the service menu learns the offline pack\'s state', pack !== null, String(pack))

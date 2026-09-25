@@ -176,6 +176,8 @@ const other = side => (side === left ? right : left)
 
 async function open(side, url) {
   side.task = pdfjsLib.getDocument({ url, ...ASSETS })
+  // the paper's PDF coming in, for the progress line under the toolbar (the maintainer, 2026-09-25)
+  if (side === left) side.task.onProgress = ({ loaded, total }) => host.emit({ type: 'loading', loaded, total })
   const doc = await side.task.promise
   side.doc = doc
   side.viewer.setDocument(doc)

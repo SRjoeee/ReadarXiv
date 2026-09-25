@@ -269,8 +269,12 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
 - A 34 px capsule on the floating surface. It enters by rising 10 px and fading in with a slight scale (240 ms) and
   leaves lighter (160 ms); a new state of the same kind changes its words in place — the words fade in, the capsule's
   width eases to theirs (200 ms) — instead of leaving and coming again.
-- **Progress** is the capsule's own background filling from the left (ink at 8 %, eased), not a separate bar: a line on
-  its rounded lower edge read as hanging off it, and the header's progress line is gone with the header's status.
+- **Progress** is a line along the toolbar's foot, not the capsule's: 2 px of quiet ink (`--ink-3` at 80 %), its length
+  the share done — the PDF's download while the reader loads, the paragraphs translated while a translation runs. It
+  grows by a transform and fades out at the length it reached; each stage is a line of its own, so that the
+  translation's starts afresh rather than the download's shrinking back. The capsule carries the words alone. (The
+  harness's fifth round moved the progress into a fill of the capsule, ink at 8 %, with the status words; the maintainer
+  asked for the line back, 2026-09-25: the status words were what had to leave the header, not the line.)
 - **A notice** carries a chip action and a close button; closing it is remembered for this paper's visit.
 - **When the translation's pane has nothing to show**, the same anatomy is a card centred in that pane (300 px, 14 px
   radius, the popover shadow), with a filled action; the capsule is not shown as well.
@@ -310,9 +314,9 @@ No state that tells the reader nothing is shown (no "done").
 | State | When | Shown |
 |---|---|---|
 | Reading | 原文; a translation ready; a stored translation shown, offline included | nothing |
-| Loading | a large PDF is loading | capsule: 正在加载, filling |
-| Translating | the first translation | capsule: 正在翻译, filling by the share of paragraphs done |
-| Translating again | a stored translation, settings changed | capsule: 正在按当前设置重新翻译; the old translation stays readable and is replaced paragraph by paragraph |
+| Loading | a large PDF is loading | capsule: 正在加载; the progress line by the share downloaded |
+| Translating | the first translation | capsule: 正在翻译; the progress line by the share of paragraphs done |
+| Translating again | a stored translation, settings changed | capsule: 正在按当前设置重新翻译; the progress line likewise; the old translation stays readable and is replaced paragraph by paragraph |
 | Some paragraphs failed | a translation with gaps | capsule: {n} 处翻译失败 · 重试 · close |
 | Language not supported | the shared target language is not one of the nine | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the nine translates |
 | Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services) |

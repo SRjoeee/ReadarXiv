@@ -1416,3 +1416,85 @@ strategy is wrong.
 `deleted` at 278 % CPU for long stretches). BusyTeX gives up on a compile after 180 s (`texlyre-busytex`'s
 `compileWithWorker`). A final compile, which is CPU-bound, reached that limit several times, on old builds and new
 alike.
+
+## Twenty-fourth addendum, 2026-09-25: Part 3's final review — FIXED; the progress line back
+
+A fresh review of Part 3's whole diff found no critical issue, twelve important ones and sixteen minor ones. The twelve
+were fixed, with one minor raised to them. Each fix has a test that failed first; the browser's own were run on the
+build from before the fixes, where they failed.
+
+**The menus.**
+
+- A letter a menu jumps by is the menu's. Typing 1 in the zoom menu, to go to 100 %, also switched the reader to the
+  original and wrote it to the settings, so the next paper opened in the original too. The display keys now leave
+  menus, lists and dialogs alone, and anything that took the key first.
+- The search field is a combobox that controls its list and names the active option. Only the element with the focus
+  handles the keys; before, the field and the list both did, and the arrows skipped every other language.
+- A list holds its options alone: no menu inside a menu (the reader's popover carried the role too), no search field
+  or separator among the options. Home and End in a search field move its caret.
+- The popup's and the settings page's menus give the focus back to their row's button; they gave it to a `<div>`, and
+  the focus fell to the page.
+- The appearance's segments take their arrows, as the display switch's do (one `radioKeys` for both).
+- The card that fills the translation's pane is said in the status region, since it takes no focus.
+
+**The contents.**
+
+- A `\paragraph` heading is left out of the contents once the paper's sections have depths. At level 1, it took the
+  subsections after it as its own. The heading marked as the one being read comes from the same headings as the rows.
+- Opening or closing the contents moved the document area by a transition of `left`, and each frame refitted both
+  sides: 12 scale changes a toggle. The area now moves at once, each side is refitted once, and a transform draws it
+  sliding.
+- The sidebar itself never slid: it was `hidden`, and `display: none` leaves no transition to run. It is `inert` when
+  closed.
+
+**The state.**
+
+- A paper or a language that cannot be had holds the original for the visit. Before, another page's display pulled the
+  reader into an empty translation.
+- The offline service's language pack is looked up after the settings land; the session followed the settings once,
+  before the pack came, and the service menu showed that service greyed for good.
+- A component takes the part of the state it shows and renders again only when that part changes. The controller no
+  longer notifies for a page reported again or a pinch's zoom set again. Before, every change rendered the whole
+  interface, the contents' rows and every menu's items with it.
+
+**:has() in the reader's sheet — MEASURED.** The built sheet held 18. One came from Tailwind scanning the whole tree,
+the settings page's `has-disabled:`; the reader's utilities now come from its own sources (270 utilities → 84, none the
+reader writes lost). The other 17 are PDF.js's own viewer sheet's. They stay:
+
+| Six highlight bands lit, 10 334 elements | Style recalculation |
+|---|---|
+| With PDF.js's :has() rules | 0.3–0.9 ms |
+| Without them (deleted through the CSSOM) | 0.4–0.5 ms |
+
+Their arguments are PDF.js's own classes (the annotation and editor layers, the thumbnails), which no insertion of the
+reader's carries. The HTML page's rules were costly because theirs matched what was inserted. `tests/styles/no-has.test.ts`
+now gates the reader's sheets and its Tailwind sources.
+
+**A scroll through 16 pages** (the sync on, the demo paper, a loaded machine):
+
+| Build | Script | Controller notifications |
+|---|---|---|
+| Before the fixes | 272–275 ms | 47 |
+| After | 239–250 ms | 47 |
+
+**The progress line — BACK.** The fifth round of the harness moved the status words out of the toolbar into the capsule,
+at the maintainer's request, and took the progress line with them, into a fill of the capsule (ink at 8 %). The
+maintainer had asked for the words to move, not the line, and asked for it back. It runs along the toolbar's foot,
+2 px of quiet ink:
+
+- while the reader loads, the share of the PDF downloaded (PDF.js's `onProgress`, which nothing showed before);
+- while a translation runs, the share of paragraphs done.
+
+Each stage is a line of its own, so the translation's starts afresh rather than the download's shrinking back. It grows
+by a transform and fades out at the length it reached. The capsule carries the words alone.
+
+**MEASURED after the fixes.**
+
+| Check | Result |
+|---|---|
+| `spikes/reader-ui.mjs` | 40 checks, all passed. New: the pack's state reaches the service menu; one refit a side per contents toggle (12 before); the line out of sight while reading |
+| `spikes/reader-ui-live.mjs` | 9 checks, all passed. New: the line along the toolbar's foot, 2 px, growing (2 % → 7.6 % in the check); the capsule without a fill; the download followed to its end |
+| `spikes/reader-settings.mjs`, `spikes/viewer-faults.mjs` | all passed |
+| `pnpm test` | 2348 passed |
+
+**Deferred.** The fifteen minors are in the ledger and go to #299 with the stage.

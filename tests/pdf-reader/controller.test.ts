@@ -14,6 +14,14 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(state.sides).toEqual({ left: { page: 1, pages: 0 }, right: { page: 4, pages: 26 } })
   })
 
+  it('follows the PDF\'s download as a share, in hundredths, nothing for a download of unknown size (the maintainer, 2026-09-25)', () => {
+    const state = fold([{ type: 'loading', loaded: 250, total: 1000 }])
+    expect(state.loaded).toBe(0.25)
+    expect(reduce(state, { type: 'loading', loaded: 251, total: 1000 })).toBe(state)
+    expect(fold([{ type: 'loading', loaded: 250, total: 0 }]).loaded).toBe(0)
+    expect(fold([{ type: 'loading', loaded: 1200, total: 1000 }]).loaded).toBe(1)
+  })
+
   it('is ready once the original is open, when the original alone is shown', () => {
     expect(fold([{ type: 'display', mode: 'original' }, note('opened')]).phase).toBe('ready')
     expect(fold([{ type: 'display', mode: 'bilingual' }, note('opened')]).phase).toBe('loading')

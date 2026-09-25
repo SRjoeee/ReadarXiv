@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { INITIAL, type ReaderState } from '@/pdf-reader/controller'
-import { capsuleOf, cardOf } from '@/pdf-reader/ui/status'
+import { capsuleOf, cardOf, lineOf } from '@/pdf-reader/ui/status'
 import { setLocale } from '@/ui/strings'
 
 const at = (over: Partial<ReaderState>): ReaderState => ({ ...INITIAL, settings: DEFAULT_CONFIG, display: 'bilingual', ...over })
@@ -16,10 +16,18 @@ describe('the states (the reader\'s design, §8)', () => {
     expect(cardOf(at({ phase: 'ready', failure: 'network', shown: 'copy' }))).toBeNull()
   })
 
-  it('loading and translating fill the capsule by their progress', () => {
-    expect(capsuleOf(at({ phase: 'loading' }), none)).toEqual({ kind: 'progress', text: '正在加载', progress: 0 })
-    expect(capsuleOf(at({ phase: 'translating', progress: 0.4 }), none)).toEqual({ kind: 'progress', text: '正在翻译', progress: 0.4 })
+  it('loading and translating say so in the capsule, their progress on the line under the toolbar (the maintainer, 2026-09-25)', () => {
+    expect(capsuleOf(at({ phase: 'loading' }), none)).toEqual({ kind: 'progress', text: '正在加载' })
+    expect(capsuleOf(at({ phase: 'translating', progress: 0.4 }), none)).toEqual({ kind: 'progress', text: '正在翻译' })
     expect(capsuleOf(at({ phase: 'retranslating', progress: 0.1 }), none)).toMatchObject({ text: '正在按当前设置重新翻译' })
+  })
+
+  it('the line: the PDF\'s download while it loads, the paragraphs translated while a translation runs, nothing while reading', () => {
+    expect(lineOf(at({ phase: 'loading', loaded: 0.3, progress: 0.9 }))).toEqual({ on: true, stage: 'load', value: 0.3 })
+    expect(lineOf(at({ phase: 'translating', loaded: 1, progress: 0.4 }))).toEqual({ on: true, stage: 'run', value: 0.4 })
+    expect(lineOf(at({ phase: 'retranslating', progress: 0.1 }))).toEqual({ on: true, stage: 'run', value: 0.1 })
+    expect(lineOf(at({ phase: 'ready', progress: 1 })).on).toBe(false)
+    expect(lineOf(at({ phase: 'failed' })).on).toBe(false)
   })
 
   it('counts the paragraphs that failed, with 重试, until closed', () => {

@@ -22,6 +22,8 @@ export interface ReaderState {
   phase: Phase
   /** 0–1, the share of the paper's paragraphs translated */
   progress: number
+  /** 0–1, the share of the paper's PDF downloaded, in hundredths; 0 while its size is unknown */
+  loaded: number
   /** the paragraphs the service failed on: the notice's {n} */
   failedUnits: number
   /** why the last run could not translate, as the chain's error kind (the popup's REASON); null otherwise */
@@ -57,6 +59,7 @@ export const INITIAL: ReaderState = {
   available: true,
   phase: 'loading',
   progress: 0,
+  loaded: 0,
   failedUnits: 0,
   failure: null,
   languageSupported: true,
@@ -99,6 +102,10 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       return event.mode === state.display ? state : { ...state, display: event.mode }
     case 'scale':
       return event.scale === state.scale ? state : { ...state, scale: event.scale }
+    case 'loading': {
+      const loaded = event.total > 0 ? Math.round(Math.min(1, event.loaded / event.total) * 100) / 100 : 0
+      return loaded === state.loaded ? state : { ...state, loaded }
+    }
     case 'page': {
       const now = state.sides[event.side]
       return now.page === event.page && now.pages === event.pages ? state : { ...state, sides: { ...state.sides, [event.side]: { page: event.page, pages: event.pages } } }

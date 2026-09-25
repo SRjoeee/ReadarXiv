@@ -22,6 +22,8 @@ export type SessionEvent =
   | { type: 'settings'; config: Config; pack: PackState | null }
   | { type: 'display'; mode: EngineDisplay }
   | { type: 'scale'; scale: number }
+  /** the paper's PDF coming in, in bytes: the progress line while the reader loads */
+  | { type: 'loading'; loaded: number; total: number }
   | { type: 'page'; side: 'left' | 'right'; page: number; pages: number }
   /** one step of a run (live.mjs and session.mjs note), with the run's counts at that moment */
   | { type: 'note'; event: string; data: Record<string, unknown>; got: number; total: number; lost: number; again: boolean }
