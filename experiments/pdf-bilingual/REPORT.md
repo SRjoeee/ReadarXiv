@@ -1638,3 +1638,92 @@ button opens there, the popup on a PDF page with the reader off, and the popup w
 | `spikes/entries.mjs` (new) | 4 checks, all passed |
 | `spikes/service-faults.mjs` | cases 0–6, 19 checks, all passed |
 | `reader-ui.mjs` 45, `reader-ui-live.mjs` 8, `reader-settings.mjs` 20, `viewer-faults.mjs` 8, `cache-revisit.mjs` 26 | all passed on the fix pass's build, `cache-revisit`'s case 8 included |
+
+## Twenty-seventh addendum, 2026-09-25: Part 5's final review — FIXED; Part 6, verification — MEASURED
+
+**Part 5's final review.** It found no critical issue, three important ones and twelve minor ones. All three important
+ones were fixed, each shown failing first (`9adda89e`).
+
+- **The PDF entry on the PDF page itself** opened a second tab of the same paper by default. It is now that page's
+  own: its hash alone changes, and the reader opens over it. The hash is replaced rather than pushed. The floating
+  button stands aside while the reader is open, so nothing behind the reader takes its focus.
+- **The PDF page waited for its two HEADs** before opening the reader and answering the popup. With the source's HEAD
+  held 10 s, the reader opened after 10.5 s, and the popup gave up (at about 3 s) and said the page was not arXiv's.
+  The page now answers from the start with what the HEADs have said so far, offering an entry they have not ruled
+  out, as it does when a HEAD fails. The reader then opened after 322 ms.
+- **The popup's notes on the entry pages.** A service that cannot run now speaks first. Beside an offered PDF entry,
+  the no-HTML note no longer says there is nothing to translate (UI.md S-P-33a).
+
+**The maintainer's two findings** on 1706.03762, fixed before anything was measured:
+
+- **The author block's footnotes stayed in English.** The front end took `\author{...}` for one opaque command, and
+  its `\thanks` went with it. The blocks of names and places in the front matter now give each note as a footnote of
+  its own, in the preamble and in the body. The names stay as written. The paper went from 168 units to 171.
+  `PIPELINE_VERSION` is 2 (`dd1a9c6c`).
+- **The appendix's attention figures were not translated in the PDF**, though the HTML page translates them from its
+  PNGs. xdvipdfmx includes such figures as transparency-group forms, and for those PDF.js gives the form's box to the
+  group it begins just before it, not to the form. `figureRegions` read only the form's box, so the translation's pages
+  13–16 had no figure at all. It now takes the group's box: 5 figures found, their labels translated. `reader-ui.mjs`
+  pins the PDF.js behaviour with a one-page PDF made on the spot (`6c5f55f2`).
+
+**Accessibility** (`spikes/reader-a11y.mjs`, new; `c02857ce`).
+
+- **What was audited.** Axe ran on every state a static page never shows: each display, each menu open, the reading
+  options, the contents, dark, narrow, a tooltip shown in full, and, on a live run, the unsupported language's capsule
+  and the failure card. What PDF.js draws inside its viewers is counted apart.
+- **Keyboard.** Every menu opens from the keyboard, Escape closes it, and the focus returns to its trigger.
+- **Findings.**
+  - No serious or critical violation in the reader's own interface.
+  - With reduced motion, seven movements remained. The contents slid in, the capsule travelled with them, the arXiv
+    id's arrow nudged, the disclosure turned, the switch's knob and the indicator's thumb glided, and the card's button
+    pressed in. Each is now still, or a fade.
+  - A colour-contrast hit on a tooltip was the tooltip caught mid-fade. The same tooltip shown in full passes.
+
+**The design's remaining browser checks** (`be3d065a`). The 1 and 3 keys and the switch's arrows. A PDF-only
+submission's greyed PDF entry. The settings page's PDF reader section, and the data line, counted and cleared in two
+presses. Each check was made to fail once by breaking what it checks, then restored.
+
+**Performance, on a quiet machine** (`spikes/reader-perf.mjs`, new). The maintainer stopped the other workload, and
+the load stayed between 3.0 and 4.1. Runs used a headed 1440 × 900 window on the demo paper. A pane was scrolled
+4000 px at 800 px/s by CDP's scroll gesture. Frames were counted by the screencast.
+
+- **Backdrop blur on the pills and the capsule, against the opaque surface** (3 interleaved runs):
+  - p95 frame gap: 22.7–27.2 ms with blur, 22.9–29.2 ms opaque.
+  - Gaps over 25 ms: 21/25/22 with blur, 25/25/22 opaque.
+  - No difference, so the blur stays.
+- **Dark pages** drop no more frames than light ones, at the fit or at 400 %. At 400 % in one place, the GPU process
+  holds 206–208 MB in either scheme.
+- **Scroll listeners.** Ours are passive: scroll, wheel and scrollend on each container. PDF.js's own scroll listener
+  is its own.
+- **Animations while reading**: only the scroll-driven thumbs and the chrome's fades.
+- **The pinch** (`pinch-overlays.mjs`), A/B against the pre-transform build on the same machine:
+
+| | Layout, ms | Main thread, ms | Long frames | Drift mid-pinch | Bare after a redraw |
+|---|---|---|---|---|---|
+| Before, 1 figure | 20.5–30.7 | 211–234 | 0 | 387 px | 186–193 ms |
+| After, 1 figure | 28.5–28.9 | 220–228 | 0 | 0.5 px | 0 |
+| Before, 20 figures | 76.2–82.2 | 347–368 | 0 | 387 px | 182–188 ms |
+| After, 20 figures | 82.2–82.5 | 394–400 | 0–1 | 0.5 px | 0 |
+
+  With one figure, the transform is within the before's noise. Under the 20-figure stress it costs 30–50 ms more main
+  thread over a 36-step pinch, about 1 ms a step. That is outside §12's "within the before's noise". It is kept, for
+  overlays that stay in place and never go bare, and the maintainer is told.
+- **`cache-revisit.mjs`** passed 26 of 26, with no page errors. The twenty-third addendum's case-8 failures were the
+  machine's.
+
+**Interface review and break.**
+
+- **break**, run on the status area: the capsule and the card, in every state that reaches them, at 320, 360, 716 and
+  1100 px, in both packs. At 320 and 360 px the English capsules ran past both edges of the window, their action
+  with them. The capsule now wraps within the window. The rate-limit card promised "retrying shortly", which a stopped
+  run does not do; it now says "Too many requests" (S-R-16) (`888ce6e7`).
+- **better-interface** gave five HIGH findings. Four were defects, and are fixed with checks in `reader-ui.mjs`:
+  - The toolbar's controls were drawn over each other from 500 to 1210 px, and pushed past the window's edge at
+    960–1210 px. The trail now keeps its width and the lead gives way. Below 900 px, swap and sync give their room
+    (they are greyed there). Below 640 px, the arXiv id does too.
+  - A menu's active item, moved by the keyboard, had no focus ring.
+  - The service menu cut the Chrome translator's name short. Popovers are now as wide as their content, up to the window.
+  - The chosen highlight swatch lost its focus ring.
+
+  The fifth, chosen and pressed states barely visible in dark (1.06:1), would change the approved dark palette. It
+  goes to the maintainer as a proposal with screenshots. The medium and low findings join #299's list.
