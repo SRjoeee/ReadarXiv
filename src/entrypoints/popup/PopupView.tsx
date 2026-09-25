@@ -69,15 +69,23 @@ export function PopupView({ view, error, actions }: { view: View; error: string 
               <Button variant="solid" onClick={actions.retryFailed}>{S.failed.retry}</Button>
             </Bubble>
           )}
-          {/* aria-label keeps the accessible name at the label alone, badge or not (the e2e suites find the button by name) */}
-          <Button variant={view.primary.action === 'restore' ? 'secondary' : 'primary'} disabled={view.primary.disabled} aria-label={view.primary.label} onClick={actions[view.primary.action]}>
-            {view.primary.label}
-            {view.primary.shortcut && (
-              // `current`: the chip reads on the red “Translate this page” and on the plain “Show original” alike, where a
-              // white chip would disappear into the button
-              <kbd className="rounded-[6px] bg-current/15 px-1.5 py-0.5 font-ui text-[11px] font-semibold">{view.primary.shortcut}</kbd>
-            )}
-          </Button>
+          {view.entries ? (
+            // an abstract or PDF page: its two entries side by side, in the primary button's place (S-P-50b)
+            <div className="flex gap-2">
+              <Button variant="primary" className="flex-1" disabled={view.entries.html.disabled} onClick={actions.openHtml}>{view.entries.html.label}</Button>
+              <Button variant="primary" className="flex-1" disabled={view.entries.pdf.disabled} onClick={actions.openPdf}>{view.entries.pdf.label}</Button>
+            </div>
+          ) : (
+            // aria-label keeps the accessible name at the label alone, badge or not (the e2e suites find the button by name)
+            <Button variant={view.primary.action === 'restore' ? 'secondary' : 'primary'} disabled={view.primary.disabled} aria-label={view.primary.label} onClick={actions[view.primary.action]}>
+              {view.primary.label}
+              {view.primary.shortcut && (
+                // `current`: the chip reads on the red “Translate this page” and on the plain “Show original” alike, where a
+                // white chip would disappear into the button
+                <kbd className="rounded-[6px] bg-current/15 px-1.5 py-0.5 font-ui text-[11px] font-semibold">{view.primary.shortcut}</kbd>
+              )}
+            </Button>
+          )}
           {view.secondary && <Button variant="text" className="self-center" onClick={actions[view.secondary.action]}>{view.secondary.label}</Button>}
 
           <Segmented value={view.mode.value} options={modes()} onChange={actions.chooseMode} />

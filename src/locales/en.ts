@@ -62,10 +62,11 @@ const S: Locale['S'] = {
     imagesPaused: reason => `Image translation paused: ${reason}`,
     noHtml: 'arXiv has no HTML version of this paper, so there is nothing to translate',
   },
+  // an abstract or PDF page's two entries, the reader's to choose (S-P-50b; the reader's design, §2, §15)
+  entry: { html: 'Translate HTML', pdf: 'Translate PDF' },
   primary: {
     // The popup's button on an abstract or PDF page: it opens the paper's bilingual version, it does not
     // translate the page in front of the reader (UI.md S-P-50b). The same words as the entry on the page itself
-    bilingual: 'Bilingual version',
     translate: 'Translate this page',
     restore: 'Show original',
     retranslate: 'Translate again',

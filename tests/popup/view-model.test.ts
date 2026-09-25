@@ -34,28 +34,40 @@ describe('derivePopupView (UI.md §4)', () => {
     expect(v.empty).toBe(false)
     expect(v.service).toEqual({ value: 'Microsoft 翻译' })
     expect(v.language.value).toBe('简体中文')
-    expect(v.primary).toEqual({ label: '双语版本', action: 'openHtml', disabled: false })
+    // two entries, the reader's to choose (the reader's design, §2; the maintainer's words, 2026-09-25)
+    expect(v.entries).toEqual({ html: { label: 'HTML 翻译', disabled: false }, pdf: { label: 'PDF 翻译', disabled: false } })
     expect(v.note).toBeNull()
     expect(v.secondary).toBeNull()
     expect(v.failed).toBeNull()
   })
+  it('a paper that cannot be had as a bilingual PDF: its entry greyed, without words (the reader\'s design, §1, §2)', () => {
+    const base = input('P17')
+    const v = derivePopupView({ ...base, entry: { ...base.entry!, pdf: null } })
+    expect(v.entries).toEqual({ html: { label: 'HTML 翻译', disabled: false }, pdf: { label: 'PDF 翻译', disabled: true } })
+    expect(v.note).toBeNull()
+  })
+
+  it('the full text has no entries: its button is the page\'s own', () => {
+    expect(view('P7').entries).toBeNull()
+  })
+
   it('P17a no HTML version: the button is there and disabled, with the reason said once', () => {
     const v = view('P17a')
-    expect(v.primary).toEqual({ label: '双语版本', action: 'openHtml', disabled: true })
+    expect(v.entries).toEqual({ html: { label: 'HTML 翻译', disabled: true }, pdf: { label: 'PDF 翻译', disabled: false } })
     expect(v.note?.text).toBe('arXiv 没有这篇论文的 HTML 版本，无法翻译')
     // Nothing to open in the settings about a paper arXiv never converted
     expect(v.note?.settings).toBe(false)
   })
   it('P17b a service that cannot run, with nothing to take over, disables the button there too, as it does on the paper page', () => {
     const v = view('P17b')
-    expect(v.primary.disabled).toBe(true)
+    expect([v.entries?.html.disabled, v.entries?.pdf.disabled]).toEqual([true, true])
     expect(v.note?.text).toContain('API Key')
     expect(v.note?.settings).toBe(true)
   })
   it('P17c a free service takes over: the button is enabled and says which, exactly as the paper page\'s does (P7) — the page it opens starts by that rule (Devin on #247)', () => {
     const v = view('P17c')
     const paperPage = view('P7')
-    expect(v.primary).toEqual({ label: '双语版本', action: 'openHtml', disabled: false })
+    expect([v.entries?.html.disabled, v.entries?.pdf.disabled]).toEqual([false, false])
     expect(paperPage.primary.disabled).toBe(false)
     expect(v.note).toEqual(paperPage.note)
     expect(v.note?.text).toContain('Microsoft')

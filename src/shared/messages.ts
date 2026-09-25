@@ -85,6 +85,7 @@ export interface AxtMessages {
   'axt:entry-status': { request: Record<never, never>; response: EntryStatus }
   /** popup → content, on those pages: go to the HTML version and translate it. The page navigates itself, so no tabs permission is involved */
   'axt:open-html': { request: Record<never, never>; response: { opened: boolean } }
+  'axt:open-pdf': { request: Record<never, never>; response: { opened: boolean } }
   /**
    * content → background: the floating button's main button on the full text (§4.0c). The background decides as it
    * does for the keyboard command and the context menu — one toggle, four doors — and tells this tab what to do.

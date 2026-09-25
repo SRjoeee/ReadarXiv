@@ -59,6 +59,7 @@ export interface PopupInput {
 }
 
 export interface Row { value: string; replaced?: string }
+export interface Entry { label: string; disabled: boolean }
 /** A note under the card; `settings` adds the button that opens the options page */
 export interface Note { text: string; settings: boolean }
 
@@ -77,6 +78,11 @@ export interface PopupView {
   failed: string | null
   primary: { label: string; action: 'translate' | 'restore' | 'retranslate' | 'openHtml'; disabled: boolean; shortcut?: string }
   secondary: { label: string; action: 'restore' } | null
+  /**
+   * An abstract or PDF page's two entries, drawn in the primary button's place (the reader's design, §2): the HTML
+   * version or the bilingual PDF, the reader's to choose. Null elsewhere
+   */
+  entries: { html: Entry; pdf: Entry } | null
   mode: { value: Mode; note: string | null }
 }
 
@@ -97,6 +103,7 @@ const empty = (): PopupView => ({
   failed: null,
   primary: { label: S.primary.translate, action: 'translate', disabled: true },
   secondary: null,
+  entries: null,
   mode: { value: DEFAULT_CONFIG.mode, note: null },
 })
 
@@ -166,8 +173,12 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
     failed: null,
     // No shortcut badge: ⌥T toggles a translated page, and there is none here yet (UI.md S-P-50)
     // Not the paper page's label: this page is not what gets translated (UI.md S-P-50b, the owner 2026-09-18)
-    primary: { label: S.primary.bilingual, action: 'openHtml', disabled: noHtml || !canStart },
+    // not drawn: the entries below are (S-P-50b); kept as the HTML entry, the action a page's own button would take
+    primary: { label: S.entry.html, action: 'openHtml', disabled: noHtml || !canStart },
     secondary: null,
+    // a paper that cannot be had as a bilingual PDF greys its entry without words (§1's rule); either entry opens a page
+    // that translates by the same rule as the full text's button (Devin on #247)
+    entries: { html: { label: S.entry.html, disabled: noHtml || !canStart }, pdf: { label: S.entry.pdf, disabled: entry.pdf === null || !canStart } },
     mode: { value: config.mode, note: null },
   }
 }
@@ -234,6 +245,7 @@ export function derivePopupView(input: PopupInput): PopupView {
     failed,
     primary,
     secondary,
+    entries: null,
     mode: { value: page.preference, note: page.mode !== page.preference ? S.mode.narrow : null },
   }
 }

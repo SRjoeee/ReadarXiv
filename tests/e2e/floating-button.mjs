@@ -156,7 +156,7 @@ check('it folds and dims again after the pointer has left for the PDF viewer', f
 {
   const seen = await openPanel()
   check('on a PDF the control panel opens beside the button with the popup in it, and a press on the viewer closes it',
-    seen.ready === 'yes' && seen.loaded && /双语版本|Bilingual version/.test(seen.text ?? '') && seen.box.right <= seen.main.left && seen.closedByPress,
+    seen.ready === 'yes' && seen.loaded && /HTML 翻译|Translate HTML/.test(seen.text ?? '') && seen.box.right <= seen.main.left && seen.closedByPress,
     `ready ${seen.ready}, popup loaded ${seen.loaded} (“${seen.text?.slice(0, 40)}…”), panel ${seen.box.left}–${seen.box.right} beside the button at ${seen.main.left}, closed by a press elsewhere: ${seen.closedByPress}`)
 }
 

@@ -32,6 +32,8 @@ export interface PopupActions {
   translate(): void
   /** On an abstract or PDF page: open this paper's HTML version and translate it there */
   openHtml(): void
+  /** An abstract or PDF page: the paper's bilingual PDF, where `reading.openIn` says (the reader's design, §2) */
+  openPdf(): void
   /** A new session over the running one, or after a pause: the page follows the saved settings */
   retranslate(): void
   restore(): void
@@ -270,6 +272,14 @@ export function createPopupState(host: PopupHost): PopupState {
         const { opened } = await host.toTab({ type: 'axt:open-html' })
         if (!opened) throw new Error(S.note.noHtml)
       }
+      host.close()
+    }),
+    // The PDF entry: the paper's PDF asking for the reader, translating, opened as the HTML one is
+    openPdf: () => void guard(async () => {
+      const href = entry?.pdf
+      if (!href) return
+      if ((surface.state().config ?? DEFAULT_CONFIG).reading.openIn === 'new-tab') await host.openTab(href)
+      else await host.toTab({ type: 'axt:open-pdf' })
       host.close()
     }),
     // A translate delivered late must not translate a page the reader translated and restored meanwhile (local review)

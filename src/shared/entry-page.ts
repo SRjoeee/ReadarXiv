@@ -35,5 +35,11 @@ export function answerEntryMessages(page: EntryPage): void {
       if (href !== null) location.assign(href)
       return { opened: href !== null }
     },
+    // the PDF entry, on this page itself: the reader opens translating (on a PDF page, the hash alone changes)
+    'axt:open-pdf': async () => {
+      const href = page.pdf()
+      if (href !== null) location.assign(href)
+      return { opened: href !== null }
+    },
   })
 }

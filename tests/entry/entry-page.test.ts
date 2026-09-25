@@ -81,6 +81,15 @@ describe('answerEntryMessages', () => {
     expect((await ask('axt:entry-status')).reply).toMatchObject({ readerOpen: true })
   })
 
+  it('opens the PDF entry itself, on this page, and nothing when there is none (the reader\'s design, §2)', async () => {
+    answerEntryMessages(page({ pdf: () => 'https://arxiv.org/pdf/2501.07202#readarxiv' }))
+    expect((await ask('axt:open-pdf')).reply).toEqual({ opened: true })
+    expect(assign).toHaveBeenCalledWith('https://arxiv.org/pdf/2501.07202#readarxiv')
+    fakeBrowser.runtime.onMessage.removeAllListeners()
+    answerEntryMessages(page({ pdf: () => null }))
+    expect((await ask('axt:open-pdf')).reply).toEqual({ opened: false })
+  })
+
   it('leaves every other message to whoever it belongs to', async () => {
     answerEntryMessages(page({ html: () => 'https://arxiv.org/html/2501.07202' }))
     const { answered, keptChannelOpen } = await ask('axt:page-status')

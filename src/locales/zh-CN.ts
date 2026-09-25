@@ -67,8 +67,9 @@ const S = {
     noHtml: 'arXiv 没有这篇论文的 HTML 版本，无法翻译',
   },
   /** The guided install on the settings page (S-O-30…36). The popup keeps the one-line version above */
+  // an abstract or PDF page's two entries, the reader's to choose (S-P-50b; the reader's design, §2, §15)
+  entry: { html: 'HTML 翻译', pdf: 'PDF 翻译' },
   primary: {
-    bilingual: '双语版本',
     translate: '翻译本页', // S-P-50
     restore: '显示原文', // S-P-51 / S-P-53
     retranslate: '重新翻译', // S-P-52

@@ -29,7 +29,7 @@ async function popupOn(paperTab) {
   await sleep(2500)
   const seen = await popup.evaluate(() => {
     // S-P-50b: on an abstract or PDF page the button says what it opens, not “translate this page”
-    const button = [...document.querySelectorAll('button')].find(b => /双语版本|Bilingual version/.test(b.textContent ?? ''))
+    const button = [...document.querySelectorAll('button')].find(b => /HTML 翻译|Translate HTML/.test(b.textContent ?? ''))
     const text = (document.body.textContent ?? '').replace(/\s+/g, ' ')
     return {
       label: button?.textContent?.trim() ?? null,
@@ -141,7 +141,7 @@ await page.screenshot({ path: `${SHOTS}/pdf-entry.png` })
 
   // The button follows the same setting: a new tab, with the PDF still open behind it
   const fromPopup = context.waitForEvent('page', { timeout: 60_000 })
-  await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /双语版本|Bilingual version/.test(b.textContent ?? ''))?.click())
+  await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /HTML 翻译|Translate HTML/.test(b.textContent ?? ''))?.click())
   const viaPopup = await fromPopup.catch(() => null)
   await viaPopup?.waitForLoadState('load').catch(() => undefined)
   check('the popup\'s button opens the translation in a new tab as well, leaving the PDF open',
@@ -202,8 +202,11 @@ await sleep(3000)
   check('the popup works on an abstract page too: the ordinary rows, and the button enabled',
     !seen.notArxiv && seen.rows && seen.label !== null && seen.disabled === false,
     `label “${seen.label}”, disabled ${seen.disabled}, rows ${seen.rows}, S-P-03 shown ${seen.notArxiv}`)
+  // its second entry, the bilingual PDF, for a paper with a source (the reader's design, §2)
+  const pdfEntry = await popup.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /PDF 翻译|Translate PDF/.test(x.textContent ?? '')); return b ? { disabled: b.disabled } : null })
+  check('beside it, the PDF entry, enabled for a paper with a source', pdfEntry?.disabled === false, JSON.stringify(pdfEntry))
   const viaPopup = context.waitForEvent('page', { timeout: 60_000 })
-  await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /双语版本|Bilingual version/.test(b.textContent ?? ''))?.click())
+  await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /HTML 翻译|Translate HTML/.test(b.textContent ?? ''))?.click())
   const opened = await viaPopup.catch(() => null)
   await opened?.waitForLoadState('load').catch(() => undefined)
   check('its button opens the href arXiv gives, in a new tab, and the abstract page stays',
