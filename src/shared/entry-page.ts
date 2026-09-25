@@ -6,10 +6,15 @@
 import { onMessages } from '@/shared/messages'
 
 export interface EntryPage {
+  kind: 'abs' | 'pdf'
   /** This page's paper id, or null when the path is not a paper's */
   paper: () => string | null
   /** The HTML full text with `#readarxiv`, or null when this paper has no HTML version */
   html: () => string | null
+  /** The PDF address with `#readarxiv`, or null when the paper cannot be had as a bilingual PDF here */
+  pdf: () => string | null
+  /** The reader is laid over this page (a PDF page) */
+  readerOpen: () => boolean
 }
 
 /**
@@ -23,7 +28,7 @@ export function answerEntryMessages(page: EntryPage): void {
     // A path that is not a paper's has nothing to say, and says nothing
     'axt:entry-status': () => {
       const paper = page.paper()
-      return paper === null ? undefined : Promise.resolve({ paper, html: page.html() })
+      return paper === null ? undefined : Promise.resolve({ paper, html: page.html(), kind: page.kind, pdf: page.pdf(), readerOpen: page.readerOpen() })
     },
     'axt:open-html': async () => {
       const href = page.html()

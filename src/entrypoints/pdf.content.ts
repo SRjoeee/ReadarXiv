@@ -10,7 +10,7 @@
 // over the browser's viewer, which stays underneath: the address stays the paper's, and the reader's way back to the
 // browser's viewer takes the reader away and shows the floating button. A browser the reader's PDF.js cannot run on
 // (pdf-reader/support.ts) keeps the page as it was, with the floating button.
-import { htmlUrlOf, paperIdFromPdfPath, translatedHtmlUrlOf } from '@/core/pdf/entry'
+import { htmlUrlOf, paperIdFromPdfPath, pdfUrlOf, sourceKindOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
 import { readerRuns } from '@/pdf-reader/support'
 import { announceUsablePage } from '@/shared/action-icon'
 import { answerEntryMessages } from '@/shared/entry-page'
@@ -20,6 +20,8 @@ export default defineContentScript({
   matches: ['https://arxiv.org/pdf/*'],
   runAt: 'document_idle',
   async main() {
+    /** the reader laid over the page: the popup acts on it, by the settings (the reader's design, §9.2) */
+    let readerOn = false
     const id = paperIdFromPdfPath(location.pathname)
     if (id === null) return
     // Lit before the check below: the popup works here whether or not the paper has an HTML version, and says which
@@ -29,18 +31,29 @@ export default defineContentScript({
     // **Only arXiv saying so means there is none** (404, or 410): a request that failed, a 429 or a 5xx say nothing
     // about the paper, and "arXiv has no HTML version" would then be a false statement the reader is left with until
     // a reload (Devin on #247). Unknown, the link is offered: at worst it leads to arXiv's own answer
-    const status = await fetch(htmlUrlOf(id, location.origin), { method: 'HEAD', credentials: 'omit' })
+    const htmlStatus = fetch(htmlUrlOf(id, location.origin), { method: 'HEAD', credentials: 'omit' })
       .then(res => res.status)
       .catch(() => null)
+    // Whether the paper can be had as a bilingual PDF (the reader's design, §2): one HEAD on its source, same-origin as
+    // the HTML one and at the same time. A PDF-only submission answers application/pdf; anything else leaves the entry
+    // offered. A browser that cannot run the reader offers none
+    const sourceKind = readerRuns()
+      ? fetch(`${location.origin}/src/${id}`, { method: 'HEAD', credentials: 'omit' })
+          .then(res => (res.ok ? sourceKindOf(res.headers.get('content-type')) : 'unknown'))
+          .catch(() => 'unknown' as const)
+      : null
+    const [status, source] = await Promise.all([htmlStatus, sourceKind])
     const href = status === 404 || status === 410 ? null : translatedHtmlUrlOf(id, location.origin)
+    const pdf = source === null || source === 'pdf-only' ? null : pdfUrlOf(id, location.origin)
     // The popup asks this page what it is (UI.md S-P-03b): the same answer the floating button is built from
-    answerEntryMessages({ paper: () => id, html: () => href })
+    answerEntryMessages({ kind: 'pdf', paper: () => id, html: () => href, pdf: () => pdf, readerOpen: () => readerOn })
     const button = () => installFloatingButton(document, {
       main: href !== null ? { kind: 'link', href } : { kind: 'none' },
       // The abstract page's sentence (UI.md S-I-06): one offer, made wherever the paper is
       label: S => (href !== null ? S.page.abstractLink(S.brand) : S.note.noHtml),
     })
-    if (!(await openReader(id, () => void button()))) await button()
+    if (await openReader(id, () => { readerOn = false; void button() })) readerOn = true
+    else await button()
   },
 })
 

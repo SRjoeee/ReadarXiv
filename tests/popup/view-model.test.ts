@@ -26,7 +26,7 @@ describe('derivePopupView (UI.md §4)', () => {
     // `undefined` instead of rejecting, and the popup rendered nothing at all on every arXiv PDF
     const undefinedPage = { ...input('P0'), page: undefined as unknown as null }
     expect(derivePopupView(undefinedPage).empty).toBe(true)
-    expect(derivePopupView({ ...undefinedPage, entry: { paper: '2501.07202', html: 'https://arxiv.org/html/2501.07202#readarxiv' } }).primary.action).toBe('openHtml')
+    expect(derivePopupView({ ...undefinedPage, entry: { paper: '2501.07202', html: 'https://arxiv.org/html/2501.07202#readarxiv', kind: 'abs', pdf: null, readerOpen: false } }).primary.action).toBe('openHtml')
   })
   it('P17 an abstract or PDF page: the popup is a working popup, and the button opens the HTML version', () => {
     const v = view('P17')

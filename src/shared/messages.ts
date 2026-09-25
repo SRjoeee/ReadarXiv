@@ -15,6 +15,13 @@ export interface EntryStatus {
   paper: string
   /** Where its HTML full text is, already carrying `#readarxiv`; null when the paper has no HTML version */
   html: string | null
+  /** Which entry page: the abstract, or the PDF */
+  kind: 'abs' | 'pdf'
+  /** The PDF address asking for the reader (`#readarxiv`); null when the paper cannot be had as a bilingual PDF, or
+   *  the browser cannot run the reader (pdf-reader/support.ts) */
+  pdf: string | null
+  /** On a PDF page: the reader is laid over it */
+  readerOpen: boolean
 }
 
 export interface PageStatus {

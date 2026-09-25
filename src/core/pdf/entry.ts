@@ -23,3 +23,18 @@ export function htmlUrlOf(id: string, origin = 'https://arxiv.org'): string {
 export function translatedHtmlUrlOf(id: string, origin = 'https://arxiv.org'): string {
   return `${htmlUrlOf(id, origin)}${AUTO_TRANSLATE_HASH}`
 }
+
+/** The paper's PDF address asking for the reader, translating (the reader's design, §2): `#readarxiv`, as the HTML entry's */
+export function pdfUrlOf(id: string, origin = 'https://arxiv.org'): string {
+  return `${origin}/pdf/${id}${AUTO_TRANSLATE_HASH}`
+}
+
+/**
+ * What a HEAD on `/src/<id>` says (checked 2026-09-25): a source answers gzip (a `.tar.gz` or a gzipped file), a
+ * PDF-only submission `application/pdf`. **Anything else says nothing**: offline, a 429 or a 5xx leave the entry
+ * offered, as the HTML entry's HEAD does (Devin on #247)
+ */
+export function sourceKindOf(contentType: string | null): 'source' | 'pdf-only' | 'unknown' {
+  const type = (contentType ?? '').split(';')[0]!.trim().toLowerCase()
+  return type.includes('gzip') ? 'source' : type === 'application/pdf' ? 'pdf-only' : 'unknown'
+}
