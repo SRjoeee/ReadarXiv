@@ -118,6 +118,11 @@ let translating = false
 /** the original held for this visit: the paper or its language cannot be had as a bilingual PDF, and a display chosen
  *  on another page is not followed into a translation there is none of (the final review) */
 let held = false
+/** why the last translation stopped short, when a retry can mend it: { event, kind }; null otherwise (the reader's design, §8) */
+let stopped = null
+/** the translation under way, and the way to run it again in place, which live() sets once the paper is open; null
+ *  before that and after a crash, when a retry loads the page again */
+let running = null, runAgain = null
 /** the viewers exist: until then the settings are read as the viewers are made, and there is nothing to follow */
 let viewersMade = false
 /** settings that landed (shared/surface-config.ts Landing): shown, and what changed followed (settings.ts followOf),
@@ -129,8 +134,10 @@ function landed(next, from) {
   config = next
   showSettings()
   if (!viewersMade || from === 'refused') return
-  const follow = followOf(prev, next, from, { translating, held, addressDisplay: MODES.includes(params.get('mode')), addressSync: SYNC_MODES.includes(params.get('sync')), display: mode, syncMode })
+  const follow = followOf(prev, next, from, { translating, held, stopped: !!stopped, addressDisplay: MODES.includes(params.get('mode')), addressSync: SYNC_MODES.includes(params.get('sync')), display: mode, syncMode })
   if (follow.reload) { void writes.then(() => location.reload()); return }
+  // a translation that stopped short runs again once the services change (settings.ts followOf)
+  if (follow.retry) void writes.then(() => runAgain?.())
   if (follow.display) changeDisplay(follow.display, false)
   if (follow.sync) applySync(follow.sync)
   if (!config.reading.sentenceHighlight) light(null)
@@ -371,6 +378,8 @@ async function recognise(page, id) {
 const translated = new Map() // figureKeyOf(boxes' texts) → their translations, a Promise while they are out
 /** a run stopped for the service (the reader's design, §10.3): no figure's text is sent until it runs again */
 let serviceDown = false
+/** the figures' texts the service did not answer (translateBoxes), asked again when the translation runs again */
+const unanswered = new Set()
 /**
  * A figure's boxes → their translations, null for a box left as it is. A figure's boxes go as one text with a
  * placeholder between them, in the chain's wire format, so that each is translated in the figure's context (alone, a
@@ -394,12 +403,12 @@ async function translateBoxes(boxes) {
     if (known && (!engine || known.by === engine.identity)) return Promise.resolve(known.texts)
     if (!engine) return Promise.resolve(known?.texts ?? null)
     if (!translated.has(key)) translated.set(key, make().then(got => {
-      if (!got) return known?.texts ?? null
+      if (!got) { unanswered.add(key); return known?.texts ?? null }
       figureEntries.set(key, { key, texts: got.texts, by: got.by })
       saveFiguresSoon()
       if (known && JSON.stringify(known.texts) !== JSON.stringify(got.texts)) repaintFiguresSoon()
       return got.texts
-    }).catch(() => known?.texts ?? null))
+    }).catch(() => { unanswered.add(key); return known?.texts ?? null }))
     return known ? Promise.resolve(known.texts) : translated.get(key)
   }
   const one = wire => engine.translate([wire], context).then(r => r[0])
@@ -1364,9 +1373,10 @@ function reportOutline() {
   readingHeading = undefined
   reportHeading()
 }
-/** again (the reader's design, §8): the translations made come back from the cache and the missing are asked again. A
- *  reload in Part 3 of plans/2026-09-25-reader-interface.md; Part 4 retries in place, with stopping early (§10.3) */
-export function retry() { location.reload() }
+/** Retry (the reader's design, §8): the translation again, in place, from the step that failed, only the missing
+ *  paragraphs reaching the service; a page whose paper never opened, or whose session crashed, has nothing on screen
+ *  to keep, and is loaded again */
+export function retry() { if (runAgain) runAgain(); else location.reload() }
 /** a window too narrow for two sides (§5): side by side shows the translation alone, the sync idle while it does */
 export function setNarrow(on) {
   if (narrow === on) return
@@ -1534,6 +1544,8 @@ async function live() {
     status(`${again ? 'translating again · ' : ''}${total ? `${got} of ${total} translated${by}${missed}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
   }
   const fail = (event, text, kind) => {
+    // a failure a retry can mend, and why: the retry, the network's return and a change of the services go by it
+    stopped = ['fetch failed', 'no engine', 'no compiler', 'failed'].includes(event) ? { event, kind: kind ?? 'unknown' } : null
     host.emit({ type: 'fail', event, text, kind })
     setContext({}); note(event); status(text); L.done = true; L.failed = text
     // a failure stays in its display: with nothing translated, the card fills the translation's pane (the reader's design,
@@ -1578,124 +1590,177 @@ async function live() {
     window.__reader.debug = Object.assign(harness(), { units: cached.units.map((u, i) => ({ i, kind: u.kind, text: u.src })) })
     window.__reader.ready = true
   }
-  status('Asking the extension which service translates…')
-  try { engine = await theEngine() } catch (e) {
-    if (cached) { status(`${paper}, this machine's copy (${cached.engine}, ${new Date(cached.createdAt).toLocaleDateString()}) · not checked against the settings: ${e.message ?? e}`); L.done = true; return }
-    return fail('no engine', `Cannot translate: ${e.message ?? e}`, e?.kind ?? 'unknown')
+  // What the visit has had, kept from run to run (the reader's design, §8: a retry asks only for what is missing): the
+  // paper's source once read, the compiler once it answers, what the last run made — the next one's seed —, the left
+  // side's marks, and whether a final has been shown
+  let paperP = null, compilerP = null, made = null, leftMarks = null, finalShown = false
+  /** the paper's source, read and anchored: once, kept for a run again; a failure is thrown with the event it is */
+  const readPaper = async () => {
+    // the original on the right too, replaced as the translation comes in; opened where the original was being read, as
+    // a side coming into view does (relayout, which has no document there yet to go by: Codex on #297)
+    status(`Fetching ${paper}'s source from arXiv…`)
+    const rightLaid = new Promise(resolve => right.eventBus.on('pagesinit', resolve, { once: true }))
+    let srcBytes
+    try {
+      ;[srcBytes] = await Promise.all([
+        fetch(srcUrl).then(r => { if (!r.ok) throw new Error(`the source: HTTP ${r.status}`); return r.arrayBuffer() }).then(b => new Uint8Array(b)),
+        // the original on the right until a translation comes, unless this machine's copy (or a run before) put it there
+        cached || right.doc ? Promise.resolve() : open(right, pdfUrl).then(() => rightLaid).then(() => { if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true }) }),
+      ])
+    } catch (e) { throw Object.assign(new Error(`Could not fetch ${paper} from arXiv (${e.message ?? e})`), { event: 'fetch failed', kind: 'network' }) }
+    note('source fetched')
+    const { files, pdf: noSource } = await unpackSource(srcBytes)
+    if (noSource) throw Object.assign(new Error(`arXiv has no LaTeX source for ${paper} (a PDF-only submission): nothing to translate this way`), { event: 'no source' })
+    const paperData = openPaper(files), units = paperData.units
+    headings = units.map((u, i) => ({ id: i, src: plainSource(u), depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
+    total = units.length - paperData.kept.size
+    const src = units.map((u, i) => ({ id: i, text: plainSource(u) }))
+    const context = paperContext(units)
+    setContext(context)
+    note('source', { units: units.length, files: files.size })
+    // a copy on screen: the old translation is the run's base, matched by source; its units' indices are this run's
+    // only with the same pipeline, so until the first preview the copy keeps its own anchors and state
+    const sameUnits = cached?.pipeline === PIPELINE_VERSION
+    const { seed, hashes } = cached ? await seedFrom(cached, units) : { seed: null, hashes: await Promise.all(units.map(sourceHash)) }
+    const p = { files, paperData, units, src, context, sameUnits, seed, hashes, leftCurrent: !cached || sameUnits, adoptUnits: () => { prose = src.map(x => x.text).join('\n'); unitKind = new Map(units.map((u, i) => [i, u.kind])) } }
+    if (p.leftCurrent) p.adoptUnits()
+    if (!cached) await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
+    note('anchored')
+    rightTexts ??= src
+    reportOutline()
+    window.__reader.debug = Object.assign(harness(), { units: units.map((u, i) => ({ i, kind: u.kind, text: src[i].text })) })
+    window.__reader.ready = true
+    return p
   }
-  const lang = engine.lang
-  note('engine', { lang, format: engine.format, engine: engine.engine })
-  if (cached && isCurrent(cached, { identity: engine.identity, pipeline: PIPELINE_VERSION })) {
-    status(`${paper}, this machine's copy · translated into ${lang} by ${cached.engine}`)
-    note('cache current')
-    L.done = true
-    return
-  }
-  // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
-  if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
-  // the decision to translate, the step the controller's phase moves at: a copy on screen is translated again, and
-  // its progress counted from nothing (final review)
-  again = !!cached
-  if (again) got = 0
-  note('translating')
-  // the original on the right too, replaced as the translation comes in; opened where the original was being read, as a
-  // side coming into view does (relayout, which has no document there yet to go by: Codex on #297)
-  status(`Fetching ${paper}'s source from arXiv…`)
-  const rightLaid = new Promise(resolve => right.eventBus.on('pagesinit', resolve, { once: true }))
-  let srcBytes
-  try {
-    ;[srcBytes] = await Promise.all([
-      fetch(srcUrl).then(r => { if (!r.ok) throw new Error(`the source: HTTP ${r.status}`); return r.arrayBuffer() }).then(b => new Uint8Array(b)),
-      // the original on the right until a translation comes, unless this machine's copy is there already
-      cached ? Promise.resolve() : open(right, pdfUrl).then(() => rightLaid).then(() => { if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true }) }),
-    ])
-  } catch (e) { return fail('fetch failed', `Could not fetch ${paper} from arXiv (${e.message ?? e})`, 'network') }
-  note('source fetched')
-  const { files, pdf: noSource } = await unpackSource(srcBytes)
-  if (noSource) return fail('no source', `arXiv has no LaTeX source for ${paper} (a PDF-only submission): nothing to translate this way`)
-  const paperData = openPaper(files), units = paperData.units
-  headings = units.map((u, i) => ({ id: i, src: plainSource(u), depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
-  total = units.length - paperData.kept.size
-  const src = units.map((u, i) => ({ id: i, text: plainSource(u) }))
-  const context = paperContext(units)
-  setContext(context)
-  note('source', { units: units.length, files: files.size })
-  // a copy on screen: the old translation is the run's base, matched by source; its units' indices are this run's
-  // only with the same pipeline, so until the first preview the copy keeps its own anchors and state
-  const sameUnits = cached?.pipeline === PIPELINE_VERSION
-  const { seed, hashes } = cached ? await seedFrom(cached, units) : { seed: null, hashes: await Promise.all(units.map(sourceHash)) }
-  const adoptUnits = () => { prose = src.map(x => x.text).join('\n'); unitKind = new Map(units.map((u, i) => [i, u.kind])) }
-  let leftCurrent = !cached || sameUnits
-  if (leftCurrent) adoptUnits()
-  if (!cached) await Promise.all([anchorSide(left, src, new Map()), anchorSide(right, src, new Map())])
-  note('anchored')
-  rightTexts ??= src
-  reportOutline()
-  window.__reader.debug = Object.assign(harness(), { units: units.map((u, i) => ({ i, kind: u.kind, text: src[i].text })) })
-  window.__reader.ready = true
-  // the compiler: our site's TeX page
-  const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
-  const ready = waitFor(site, 'ready')
-  document.body.append(frame)
-  if (!(await Promise.race([ready.then(() => true), new Promise(r => setTimeout(r, 10000, false))]))) return fail('no compiler', `The TeX page is not running at ${site}: start it with node spikes/serve-live.mjs`)
-  const initDone = waitFor(site, 'init-done')
-  frame.contentWindow.postMessage({ type: 'init', endpoint }, site)
-  note('compiler', { ms: (await initDone).ms })
-  frame.contentWindow.postMessage({ type: 'project', key: paper, files: [...files].map(([path, content]) => ({ path, content })) }, site)
-  let seq = 0
-  const compile = req => new Promise(resolve => {
-    const id = ++seq
-    addEventListener('message', function h(e) {
-      if (e.origin !== site || e.data?.type !== 'compiled' || e.data.id !== id) return
-      removeEventListener('message', h)
-      resolve({ ...e.data, pdf: e.data.pdf ? new Uint8Array(e.data.pdf) : null })
-    })
-    frame.contentWindow.postMessage({ type: 'compile', id, key: paper, main: req.main, engine: req.engine, rerun: req.rerun, bibtex: req.bibtex, overrides: [...req.overrides].map(([path, content]) => ({ path, content })) }, site)
-  })
-  // one replacement at a time, in the order the compiles came in
-  let swaps = Promise.resolve()
-  // a language with no typesetting yet (scripts.mjs) fails at once, before anything is sent
-  // the final's bytes once compiled, and whether it is on screen: the right side's marks are read from what is shown
-  let finalPdf = null, finalShown = false, leftMarks = null
-  const result = await runLive(paperData, {
-    lang, compile, note,
-    seed, identity: engine.identity, pipelineCurrent: sameUnits,
-    marks: knownMarks(cached, sameUnits),
-    format: engine.format,
-    translate: texts => engine.translate(texts, context),
-    // nearest the reading line on the page first, what lies ahead before what lies behind; on the side in view, since
-    // the other one, out of the display, does not move with the reader (Codex on #297)
-    rank: i => {
-      const side = shown(left) ? left : right, top = unitDocTop(side, i), c = side.container
-      if (top == null) return 1e9 + i
-      const d = top - (c.scrollTop + c.clientHeight * readingLine)
-      return d >= -c.clientHeight * 0.3 ? Math.abs(d) : 2 * Math.abs(d)
-    },
-    onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!leftCurrent) { adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); if (final) finalShown = true; note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
-    onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorSide(left, src, marks); invalidate(); paint(left); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
-  }).catch(e => ({ error: e.message ?? String(e), kind: e?.kind }))
-  // the engine's kind kept (engine.mjs EngineError), so that a key refused midway is worded as the popup words it
-  if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`, result.kind)
-  // the paragraphs the service left in the source, not a sum over batches: a seeded one keeps its old translation
-  lost = result.missing ?? lost
-  // stopped with nothing on screen translated: the card, with the service's reason (the reader's design, §8)
-  if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
-  await swaps
-  // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
-  // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
-  if (cacheKey) {
-    const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, context, units: unitsOf(units, paperData.kept, hashes, result.results), marks: leftMarks ?? (sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
-    const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: finalShown })
-    const pdf = how === 'full' ? finalPdf : how === 'provenance' ? cached.pdf : null
-    // the right side's marks, as its PDF names them: the final's once it is on screen, else the copy's own
-    record.rightMarks = how === 'full' ? [...(right.marks ?? [])] : (cached?.rightMarks ?? [])
-    if (pdf) {
-      const now = { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION }
-      note('cache write', { how, written: await pdfCache.put({ ...record, pdf }, now) })
+  /** the compiler, our site's TeX page, given the paper's project: once, kept for a run again */
+  const openCompiler = async p => {
+    const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
+    const ready = waitFor(site, 'ready')
+    document.body.append(frame)
+    if (!(await Promise.race([ready.then(() => true), new Promise(r => setTimeout(r, 10000, false))]))) {
+      frame.remove()
+      throw Object.assign(new Error(`The TeX page is not running at ${site}: start it with node spikes/serve-live.mjs`), { event: 'no compiler' })
     }
+    const initDone = waitFor(site, 'init-done')
+    frame.contentWindow.postMessage({ type: 'init', endpoint }, site)
+    note('compiler', { ms: (await initDone).ms })
+    frame.contentWindow.postMessage({ type: 'project', key: paper, files: [...p.files].map(([path, content]) => ({ path, content })) }, site)
+    let seq = 0
+    return req => new Promise(resolve => {
+      const id = ++seq
+      addEventListener('message', function h(e) {
+        if (e.origin !== site || e.data?.type !== 'compiled' || e.data.id !== id) return
+        removeEventListener('message', h)
+        resolve({ ...e.data, pdf: e.data.pdf ? new Uint8Array(e.data.pdf) : null })
+      })
+      frame.contentWindow.postMessage({ type: 'compile', id, key: paper, main: req.main, engine: req.engine, rerun: req.rerun, bibtex: req.bibtex, overrides: [...req.overrides].map(([path, content]) => ({ path, content })) }, site)
+    })
   }
-  note('done', result)
-  L.done = true
+  /**
+   * The translation, from asking the extension's service to writing this machine's copy: once a translation is wanted,
+   * and again in place (`retrying`) by a retry, the network's return or a change of the services after it stopped short
+   */
+  async function translation(retrying) {
+    L.done = false
+    status('Asking the extension which service translates…')
+    try { engine = await theEngine() } catch (e) {
+      if (cached && !retrying) { status(`${paper}, this machine's copy (${cached.engine}, ${new Date(cached.createdAt).toLocaleDateString()}) · not checked against the settings: ${e.message ?? e}`); L.done = true; return }
+      return fail('no engine', `Cannot translate: ${e.message ?? e}`, e?.kind ?? 'unknown')
+    }
+    const lang = engine.lang
+    note('engine', { lang, format: engine.format, engine: engine.engine })
+    if (!retrying && cached && isCurrent(cached, { identity: engine.identity, pipeline: PIPELINE_VERSION })) {
+      status(`${paper}, this machine's copy · translated into ${lang} by ${cached.engine}`)
+      note('cache current')
+      L.done = true
+      return
+    }
+    // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
+    if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
+    // the decision to translate, the step the controller's phase moves at: a copy on screen is translated again, and
+    // its progress counted from nothing (final review); a run again goes on from what the last one left translated
+    again = !!cached && !retrying
+    if (again) got = 0
+    if (retrying) got = [...(made?.values() ?? [])].filter(r => r.pieces).length
+    lost = 0
+    note('translating')
+    let p, compile
+    try { p = await (paperP ??= readPaper().catch(e => { paperP = null; throw e })) } catch (e) { return fail(e.event ?? 'fetch failed', e.message ?? String(e), e.kind) }
+    try { compile = await (compilerP ??= openCompiler(p).catch(e => { compilerP = null; throw e })) } catch (e) { return fail(e.event ?? 'no compiler', e.message ?? String(e), e.kind) }
+    const { paperData, units, src, context, hashes } = p
+    // a run again: what the visit's last run made seeds it, over the copy's, so that only the missing are asked again —
+    // the rest, sent too, the background's cache answers
+    const seed = new Map(p.seed ?? [])
+    for (const [i, r] of made ?? []) if (r.pieces) seed.set(i, { pieces: r.pieces, by: r.by, tried: r.tried, state: r.state })
+    // one replacement at a time, in the order the compiles came in; the final's bytes once compiled
+    let swaps = Promise.resolve(), finalPdf = null
+    const result = await runLive(paperData, {
+      lang, compile, note,
+      seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: p.sameUnits || finalShown,
+      marks: leftMarks ? new Map(leftMarks) : knownMarks(cached, p.sameUnits),
+      format: engine.format,
+      translate: texts => engine.translate(texts, context),
+      // nearest the reading line on the page first, what lies ahead before what lies behind; on the side in view, since
+      // the other one, out of the display, does not move with the reader (Codex on #297)
+      rank: i => {
+        const side = shown(left) ? left : right, top = unitDocTop(side, i), c = side.container
+        if (top == null) return 1e9 + i
+        const d = top - (c.scrollTop + c.clientHeight * readingLine)
+        return d >= -c.clientHeight * 0.3 ? Math.abs(d) : 2 * Math.abs(d)
+      },
+      onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!p.leftCurrent) { p.adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); p.leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); if (final) finalShown = true; note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
+      onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorSide(left, src, marks); invalidate(); paint(left); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
+    }).catch(e => ({ error: e.message ?? String(e), kind: e?.kind }))
+    if (result.results) made = result.results
+    // the engine's kind kept (engine.mjs EngineError), so that a key refused midway is worded as the popup words it
+    if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`, result.kind)
+    // the paragraphs the service left in the source, not a sum over batches: a seeded one keeps its old translation
+    lost = result.missing ?? lost
+    // stopped with nothing on screen translated: the card, with the service's reason (the reader's design, §8)
+    if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
+    stopped = result.stopped ? { event: 'stopped', kind: result.stopped } : null
+    // stopped with a translation on screen: it stays readable, and the reason is kept (the controller: reading, the
+    // failure its kind; the card only if the pane has nothing after all)
+    if (result.stopped) host.emit({ type: 'fail', event: 'stopped', text: `Stopped: ${result.stopped}`, kind: result.stopped })
+    await swaps
+    // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
+    // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
+    if (cacheKey) {
+      const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, context, units: unitsOf(units, paperData.kept, hashes, result.results), marks: leftMarks ?? (p.sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
+      const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: finalShown })
+      const pdf = how === 'full' ? finalPdf : how === 'provenance' ? cached.pdf : null
+      // the right side's marks, as its PDF names them: the final's once it is on screen, else the copy's own
+      record.rightMarks = how === 'full' ? [...(right.marks ?? [])] : (cached?.rightMarks ?? [])
+      if (pdf) {
+        const now = { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION }
+        const written = await pdfCache.put({ ...record, pdf }, now)
+        note('cache write', { how, written })
+        // what this visit wrote is the copy a run again compares with
+        if (written) cached = { ...record, pdf, createdAt: Date.now() }
+      }
+    }
+    note('done', result)
+    L.done = true
+  }
+  // the translation run again in place (the reader's design, §8): the service asked again — a key may be set by then,
+  // or another service chosen —, the figures' text it did not answer asked again, only the missing paragraphs sent
+  runAgain = () => {
+    if (running || !stopped) return
+    stopped = null
+    serviceDown = false
+    const was = engineP
+    engineP = null
+    void was?.then(e => e.close(), () => {})
+    for (const key of unanswered) translated.delete(key)
+    unanswered.clear()
+    running = translation(true)
+      .catch(e => { runAgain = null; console.error('[reader]', e); host.emit({ type: 'fail', event: 'crashed', text: String(e?.message ?? e) }) })
+      .finally(() => { running = null; repaintFigures() })
+  }
+  // the network back, as the browser tells it: a translation it stopped goes on by itself (the reader's design, §8)
+  addEventListener('online', () => { if (stopped?.kind === 'network') runAgain?.() })
+  running = translation(false).finally(() => { running = null })
+  await running
 }
 
 // ---------------------------------------------------------------- the precompiled demo
@@ -1750,4 +1815,4 @@ async function demo() {
 
 /** the run: live, a demo, or nothing without a paper; a crash is a failure the controller hears of */
 export const run = (params.get('live') === '1' ? live() : DEMO ? demo() : Promise.resolve().then(() => { status('no paper'); window.__reader.ready = true }))
-  .catch(e => { console.error('[reader]', e); host.emit({ type: 'fail', event: 'crashed', text: String(e?.message ?? e) }) })
+  .catch(e => { runAgain = null; console.error('[reader]', e); host.emit({ type: 'fail', event: 'crashed', text: String(e?.message ?? e) }) })

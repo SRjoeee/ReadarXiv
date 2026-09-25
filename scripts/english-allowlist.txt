@@ -24,6 +24,7 @@ experiments/pdf-bilingual/spikes/eval-names3.mjs 1  # 2026-09-22: the CJK punctu
 experiments/pdf-bilingual/spikes/eval-names4.mjs 1  # 2026-09-22: the CJK punctuation the comparison ignores
 experiments/pdf-bilingual/spikes/typo-metrics.mjs 1  # 2026-09-22: the CJK range the character count reads
 experiments/pdf-bilingual/spikes/verify-figure-names.mjs 2  # 2026-09-22: the Chinese labels the script locates the settings controls by
+experiments/pdf-bilingual/spikes/service-faults.mjs 1  # 2026-09-25: the settings page's label the probe turns the fallback chain off by (the e2e locate controls by their Chinese names)
 experiments/pdf-bilingual/spikes/viewer-faults.mjs 1  # 2026-09-24: the settings page's label the probe turns the fallback chain off by (the e2e locate controls by their Chinese labels)
 README.md 1  # 2026-09-17: the link to the Chinese README
 src/config/languages.ts 188  # localisation data: the Chinese name table and the native names; four evidence quotes in comments
