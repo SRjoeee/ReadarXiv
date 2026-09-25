@@ -1,10 +1,10 @@
-// The PDF page (issue #169): the floating button, whose main button opens the paper's HTML full text already
-// translating. **This one thing only**: no part of the translation pipeline is loaded here, as on the abstract page.
+// The PDF page (issue #169): the floating button, whose main button opens the control panel with the paper's two
+// entries. **This one thing only**: no part of the translation pipeline is loaded here, as on the abstract page.
 //
 // The check is one `HEAD` on `arxiv.org/html/<id>`: this script runs at arXiv's own origin, so that request is
 // same-origin and needs no host permission (measured 2026-09-18: 200 for a paper with an HTML version, 404 for one
-// without). A paper arXiv says has no HTML version keeps the button, its main button disabled and saying why — the
-// same answer the popup gives there (UI.md S-P-33).
+// without). A paper arXiv says has no HTML version keeps the button; the panel's HTML entry is disabled there, saying
+// why (UI.md S-P-33).
 //
 // On this experiment branch the page opens in the bilingual PDF reader instead (experiments/pdf-bilingual, #290), laid
 // over the browser's viewer, which stays underneath, when the settings say so (`pdfReader.enabled`) or the address
@@ -52,9 +52,9 @@ export default defineContentScript({
     // the floating button, once: the reader may be opened and left more than once on one page
     let installed: ReturnType<typeof installFloatingButton> | null = null
     const button = () => (installed ??= installFloatingButton(document, {
-      main: href !== null ? { kind: 'link', href } : { kind: 'none' },
+      main: { kind: 'panel' },
       // The abstract page's sentence (UI.md S-I-06): one offer, made wherever the paper is
-      label: S => (href !== null ? S.page.abstractLink(S.brand) : S.note.noHtml),
+      label: S => (href !== null || pdf !== null ? S.page.abstractLink(S.brand) : S.note.noHtml),
     }))
     const open = async (translate: boolean) => {
       if (readerOn) return

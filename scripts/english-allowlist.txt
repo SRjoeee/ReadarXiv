@@ -68,8 +68,8 @@ tests/e2e/extension.mjs 77  # raised 2026-09-17: the whole-paper preload check c
 tests/e2e/image.mjs 17  # 2026-09-21: +4, the loose-graphic section (2609.20818v1's teaser) switches modes and ticks the image modes by the popup's and the settings page's Chinese labels, as the rest of the script does
 tests/e2e/layout.mjs 11  # 2026-09-20: +2, the reader's-place check finds the popup's mode, translate and restore buttons by their Chinese labels, as the rest of the suite does; 2026-09-21: +1, the figure viewer's restore-under-the-dialog check presses the popup's restore button by its label
 tests/e2e/local-endpoint.mjs 2
-tests/e2e/floating-button.mjs 5  # 2026-09-18: the settings switch, the main button's two labels, and the popup's button inside the control panel on a PDF and on the full text, located and checked by their Chinese copy, as the other suites locate controls (issue #169)
-tests/e2e/pdf-entry.mjs 6  # 2026-09-19: the popup's button (on the PDF and on the abstract page) and the no-HTML reason are located by their Chinese copy, as the other suites locate controls (issue #169); +1, the popup's PDF entry found by its name
+tests/e2e/floating-button.mjs 6  # 2026-09-18: the settings switch, the main button's two labels, and the popup's button inside the control panel on a PDF and on the full text, located and checked by their Chinese copy, as the other suites locate controls (issue #169); 2026-09-25: the panel's two entries on the abstract page too, which its main button now opens (the reader's design, §2)
+tests/e2e/pdf-entry.mjs 8  # 2026-09-19: the popup's button (on the PDF and on the abstract page) and the no-HTML reason are located by their Chinese copy, as the other suites locate controls (issue #169); +1, the popup's PDF entry found by its name; 2026-09-25: the two entries in the control panel the floating button's main button now opens on the PDF, found and pressed by their copy (the reader's design, §2)
 tests/e2e/options-page.mjs 13
 tests/e2e/placeholders.mjs 7
 tests/e2e/probes/chrome-floor.mjs 1  # 2026-09-17: the settings page's download button, located by its reader-visible label

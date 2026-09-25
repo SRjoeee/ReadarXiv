@@ -40,20 +40,16 @@ export default defineContentScript({
     // and its PDF entry, where the paper has a source to make the bilingual PDF from and this browser runs the reader
     // (the reader's design, §2): arXiv's own TeX Source link says so, with no request
     const paper = () => paperIdFrom(location.pathname, 'abs')
-    answerEntryMessages({
-      kind: 'abs',
-      paper,
-      html: () => htmlHrefOn(document),
-      pdf: () => { const id = paper(); return id !== null && readerRuns() && sourceOn(document) ? pdfUrlOf(id, location.origin) : null },
-      readerOpen: () => false,
-    })
+    const pdfEntry = () => { const id = paper(); return id !== null && readerRuns() && sourceOn(document) ? pdfUrlOf(id, location.origin) : null }
+    answerEntryMessages({ kind: 'abs', paper, html: () => htmlHrefOn(document), pdf: pdfEntry, readerOpen: () => false })
 
-    // The floating button (DESIGN §4.0c), as on the PDF and the full text: here its main button follows the href
-    // arXiv gives, read once — the abstract page does not change under the reader
-    const href = htmlHrefOn(document)
+    // The floating button (DESIGN §4.0c), as on the PDF and the full text: here its main button opens the control
+    // panel, the popup with the paper's two entries (the reader's design, §2). Its words are the entry's sentence while
+    // there is something to open, read once — the abstract page does not change under the reader
+    const offered = htmlHrefOn(document) !== null || pdfEntry() !== null
     void installFloatingButton(document, {
-      main: href !== null ? { kind: 'link', href } : { kind: 'none' },
-      label: S => (href !== null ? S.page.abstractLink(S.brand) : S.note.noHtml),
+      main: { kind: 'panel' },
+      label: S => (offered ? S.page.abstractLink(S.brand) : S.note.noHtml),
     })
   },
 })

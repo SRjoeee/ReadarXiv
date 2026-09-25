@@ -106,9 +106,8 @@ const readEntry = () => page.evaluate(() => {
   return {
     contentType: document.contentType,
     hosts: document.querySelectorAll('.axt-floating').length,
-    href: link?.getAttribute('href') ?? null,
     label: link?.getAttribute('aria-label') ?? null,
-    disabled: link?.getAttribute('aria-disabled') === 'true',
+    haspopup: link?.getAttribute('aria-haspopup') ?? null,
     tag: link?.tagName ?? null,
     drawn: box ? box.width > 0 && box.height > 0 && box.bottom <= window.innerHeight : false,
     // The viewer is Chrome's own extension frame; the entry must not have gone anywhere near it
@@ -123,9 +122,9 @@ const entry = await readEntry()
 check('a content script runs on Chrome\'s PDF page and the floating button is drawn there',
   entry.contentType === 'application/pdf' && entry.hosts === 1 && entry.drawn,
   `contentType ${entry.contentType}, ${entry.hosts} entry, drawn ${entry.drawn}`)
-check('its main button leads to the HTML full text of the version the reader opened, already translating',
-  entry.href === `https://arxiv.org/html/${WITH_HTML}#readarxiv`,
-  `href ${entry.href}`)
+check('its main button opens the control panel, where the paper\'s two entries are (the reader\'s design, §2)',
+  entry.tag === 'BUTTON' && entry.haspopup === 'dialog',
+  `main <${entry.tag?.toLowerCase()}> aria-haspopup ${entry.haspopup}`)
 check('it carries the same sentence as the abstract page\'s entry (S-I-06)', /Read arXiv/.test(entry.label ?? ''), `label “${entry.label}”`)
 
 check('Chrome\'s own viewer is left alone', entry.viewerUntouched, 'no embed or object of ours')
@@ -152,20 +151,27 @@ await page.screenshot({ path: `${SHOTS}/pdf-entry.png` })
   await page.bringToFront()
 }
 
-// Following it opens the HTML page **in a new tab** (config `reading.openIn`, UI.md S-O-49b), which starts
-// translating by itself (the hash, DESIGN §4.1), and the PDF the reader was on is still there
-// A real click, pressed and released with the mouse: the press puts up the drag shield, and the click must still reach the link
+// Through the panel the main button opens, the HTML entry opens the HTML page **in a new tab** (config
+// `reading.openIn`, UI.md S-O-49b), which starts translating by itself (the hash, DESIGN §4.1), and the PDF the reader
+// was on is still there. A real click, pressed and released with the mouse: the press puts up the drag shield, and the
+// click must still reach the button
 const target = await page.evaluate(() => {
   const r = document.querySelector('.axt-floating')?.shadowRoot?.querySelector('.axt-fb-main')?.getBoundingClientRect()
   return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null
 })
-const opened = context.waitForEvent('page', { timeout: 60_000 })
 await page.mouse.click(target.x, target.y)
+await sleep(2500)
+const panel = page.frames().find(f => f.url().includes('/popup.html'))
+const entries = panel ? await panel.evaluate(() => [...document.querySelectorAll('button')].filter(b => /HTML 翻译|Translate HTML|PDF 翻译|Translate PDF/.test(b.textContent ?? '')).map(b => ({ text: b.textContent?.trim(), disabled: b.disabled }))) : []
+check('a click on it opens the control panel with the two entries, both enabled for this paper',
+  entries.length === 2 && entries.every(e => !e.disabled), JSON.stringify(entries))
+const opened = context.waitForEvent('page', { timeout: 60_000 })
+await panel?.evaluate(() => [...document.querySelectorAll('button')].find(b => /HTML 翻译|Translate HTML/.test(b.textContent ?? ''))?.click())
 const translated = await opened.catch(() => null)
 await translated?.waitForLoadState('load').catch(() => undefined)
 await sleep(12_000)
 const landed = translated ? await translated.evaluate(() => ({ url: location.href, translations: document.querySelectorAll('.axt-t').length })) : { url: '', translations: 0 }
-check('the click opens the HTML paper with no dialog on the way, and the translation has started',
+check('the panel\'s HTML entry opens the HTML paper with no dialog on the way, and the translation has started',
   /\/html\//.test(landed.url) && landed.translations > 0,
   `${landed.url.slice(0, 60)}…, ${landed.translations} translation nodes`)
 check('it opens in a new tab: the PDF the reader was on is still open, on the same paper',
@@ -179,9 +185,9 @@ await page.goto(`https://arxiv.org/pdf/${WITHOUT_HTML}`, { waitUntil: 'load' })
 await throughReader(WITHOUT_HTML)
 await sleep(6000)
 const none = await readEntry()
-check('a paper with no HTML version keeps the button, its main button disabled and saying why, rather than a link that leads nowhere',
-  none.hosts === 1 && none.disabled && none.tag === 'BUTTON' && none.href === null && /HTML/.test(none.label ?? ''),
-  `${none.hosts} button on ${WITHOUT_HTML}, main <${none.tag?.toLowerCase()}> disabled ${none.disabled}, says “${none.label}”`)
+check('a paper with no HTML version keeps the button, its main button opening the panel all the same, where the reason is',
+  none.hosts === 1 && none.tag === 'BUTTON' && none.haspopup === 'dialog',
+  `${none.hosts} button on ${WITHOUT_HTML}, main <${none.tag?.toLowerCase()}> aria-haspopup ${none.haspopup}, says “${none.label}”`)
 await page.screenshot({ path: `${SHOTS}/pdf-entry-none.png` })
 
 {

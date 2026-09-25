@@ -44,7 +44,7 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
     return { main: page.label(S, active), settings: S.settings, ...S.page.floating }
   }
 
-  /** What the settings say, put on the page: the button there or not, its words, its link, its place, its size */
+  /** What the settings say, put on the page: the button there or not, its words, its place, its size */
   const apply = (next: EntrySettings) => {
     // Turned on again on the settings page: that is the reader asking for it, and "hide for now" is over
     // (Devin on #251: it used to take a reload)
@@ -57,7 +57,6 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
     }
     if (button === null) return mount(next)
     button.relabel(strings(next))
-    button.retarget(next.openIn === 'new-tab')
     // A drag saved in another tab, or the lock toggled there, moves this one too
     button.place(placementOf(next.floating))
     button.rescale(zoomed ? next.zoom : 1)
@@ -77,7 +76,6 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
     doc.body.append(host)
     button = mountFloatingButton(doc, host, {
       main: page.main,
-      newTab: from.openIn === 'new-tab',
       zoom: zoomed ? from.zoom : 1,
       placement: placementOf(from.floating),
       strings: strings(from),

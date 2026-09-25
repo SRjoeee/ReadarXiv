@@ -1,6 +1,8 @@
 // The floating button (issue #169, DESIGN §4.0c, UI.md S-I-06) in a real browser, on the three arXiv pages it lives
-// on: how it rests, lights and opens, the drag and where it lands, hiding it and bringing it back, and on the full
-// text the toggle, the tick of a translated page and the page's DOM staying its own.
+// on: how it rests, lights and opens, the drag and where it lands, hiding it and bringing it back; on the abstract and
+// the PDF the main button opening the control panel with the paper's two entries; on the full text the toggle, the
+// tick of a translated page and the page's DOM staying its own. The PDF is seen with the reader turned off, the
+// browser's viewer under the button (the reader's design, §2).
 //
 // Layout, hover and pointer capture are the browser's: happy-dom answers none of them, and on a PDF the page under
 // the button is another process's frame (the press shield in core/floating/button.ts exists because of what this
@@ -53,10 +55,11 @@ const dockState = (on = page) => on.evaluate(() => {
   return {
     side: dock.dataset.axtSide, lit: dock.dataset.axtLit, expanded: dock.dataset.axtExpanded, active: dock.dataset.axtActive, width: window.innerWidth,
     main: rect('.axt-fb-main'), disc: rect('.axt-fb-disc'), panel: rect('.axt-fb-panel'), settings: rect('.axt-fb-settings'), options: rect('.axt-fb-options'),
-    mainOpacity: Number(look('.axt-fb-main', 'opacity')), panelOpacity: Number(look('.axt-fb-panel', 'opacity')), panelVisibility: look('.axt-fb-panel', 'visibility'),
+    mainOpacity: Number(look('.axt-fb-main', 'opacity')), settingsOpacity: Number(look('.axt-fb-settings', 'opacity')), settingsVisibility: look('.axt-fb-settings', 'visibility'),
+    haspopup: main.getAttribute('aria-haspopup'), panelHidden: root.querySelector('.axt-fb-panel-box').hidden,
     // The tick is scaled to nothing until the page is translated
     tickShown: look('.axt-fb-tick', 'transform') !== 'matrix(0, 0, 0, 0, 0, 0)', discRadius: look('.axt-fb-disc', 'borderRadius'),
-    label: main.getAttribute('aria-label'), tag: main.tagName, href: main.getAttribute('href'),
+    label: main.getAttribute('aria-label'), tag: main.tagName,
     order: [...root.querySelectorAll('.axt-fb-column > *')].map(e => e.className),
     // In the screen's own pixels: what the reader's eye gets, whatever the page's zoom
     device: (() => { const r = main.getBoundingClientRect(); const k = window.devicePixelRatio; return { ratio: k, width: r.width * k, height: r.height * k, top: r.top * k, left: r.left * k } })(),
@@ -66,14 +69,15 @@ const dockState = (on = page) => on.evaluate(() => {
 
 /**
  * Open the control panel with the mouse and say what is there: the panel's box, whether the popup loaded in its frame
- * and what it shows, and whether a press elsewhere closed it again
+ * and what it shows, and whether a press elsewhere closed it again. `via`: the column's panel button (the full text),
+ * or the main button (the abstract and the PDF, where it is the way in)
  */
-async function openPanel() {
+async function openPanel(via = 'panel') {
   const resting = await dockState()
   await page.mouse.move(resting.main.x, resting.main.y, { steps: 3 })
   await sleep(900)
-  const panel = (await dockState()).panel
-  await page.mouse.click(panel.x, panel.y)
+  const target = (await dockState())[via]
+  await page.mouse.click(target.x, target.y)
   await sleep(2500)
   const frame = page.frames().find(f => f.url().includes('/popup.html'))
   const text = frame ? await frame.evaluate(() => document.body.innerText.replace(/\s+/g, ' ')).catch(() => null) : null
@@ -82,7 +86,7 @@ async function openPanel() {
     const box = root.querySelector('.axt-fb-panel-box')
     const r = box.getBoundingClientRect()
     const m = root.querySelector('.axt-fb-main').getBoundingClientRect()
-    return { ready: box.dataset.axtReady, box: { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), height: Math.round(r.height) }, main: { left: Math.round(m.left), y: Math.round(m.y + m.height / 2) }, innerHeight: window.innerHeight, expanded: root.querySelector('.axt-fb-panel').getAttribute('aria-expanded') }
+    return { ready: box.dataset.axtReady, box: { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), height: Math.round(r.height) }, main: { left: Math.round(m.left), y: Math.round(m.y + m.height / 2) }, innerHeight: window.innerHeight }
   })
   await page.screenshot({ path: `${SHOTS}/floating-panel.png` })
   // Between the two places the panel can be — the dock may be docked to either side by now — and on the paper's text
@@ -95,12 +99,21 @@ async function openPanel() {
 }
 
 // ————— The PDF page: rest, light, open, drag, hide —————
+// The reader off, as a reader who turned it off has it: the configuration is written once the extension is installed
+await worker.evaluate(async () => {
+  for (let i = 0; i < 100; i++) {
+    const { config } = await chrome.storage.local.get('config')
+    if (config) return chrome.storage.local.set({ config: { ...config, pdfReader: { ...config.pdfReader, enabled: false } } })
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  throw new Error('no configuration after 10 s')
+})
 await page.goto(`https://arxiv.org/pdf/${PAPER}`, { waitUntil: 'load' })
 await sleep(6000)
 const rest = await dockState()
-check('three buttons in a column: the control panel, the main button, the settings (no feedback button)',
-  JSON.stringify(rest?.order) === JSON.stringify(['axt-fb-hidden-button axt-fb-panel', 'axt-fb-anchor', 'axt-fb-hidden-button axt-fb-settings']),
-  `${rest?.order?.join(' · ')}`)
+check('on a PDF two buttons in a column: the main button, which opens the control panel, and the settings (no feedback button)',
+  JSON.stringify(rest?.order) === JSON.stringify(['axt-fb-anchor', 'axt-fb-hidden-button axt-fb-settings']) && rest.tag === 'BUTTON' && rest.haspopup === 'dialog',
+  `${rest?.order?.join(' · ')}; main <${rest?.tag?.toLowerCase()}> aria-haspopup ${rest?.haspopup}`)
 /** Every edge of the main button on a whole pixel of the screen: half a pixel is a soft edge */
 const onTheGrid = device => [device.width, device.height, device.top, device.left].every(v => Math.abs(v - Math.round(v)) < 0.01)
 check('the mark is inline vector, and the main button sits on whole pixels of the screen',
@@ -109,18 +122,18 @@ check('the mark is inline vector, and the main button sits on whole pixels of th
 const pdfSize = rest.device
 check('at rest the whole circle shows, dim, docked to the right edge, and the other buttons are out of sight',
   rest.side === 'right' && rest.main.right === rest.width && rest.disc.right <= rest.width && rest.disc.width === 32 && rest.discRadius === '50%'
-    && Math.abs(rest.mainOpacity - 0.7) < 0.01 && rest.panelVisibility === 'hidden',
-  `main ${rest.main.left}–${rest.main.right} of ${rest.width}px, circle ${rest.disc.left}–${rest.disc.right} (${rest.disc.width}px, radius ${rest.discRadius}), opacity ${rest.mainOpacity}, panel ${rest.panelVisibility}`)
+    && Math.abs(rest.mainOpacity - 0.7) < 0.01 && rest.settingsVisibility === 'hidden',
+  `main ${rest.main.left}–${rest.main.right} of ${rest.width}px, circle ${rest.disc.left}–${rest.disc.right} (${rest.disc.width}px, radius ${rest.discRadius}), opacity ${rest.mainOpacity}, settings ${rest.settingsVisibility}`)
 await page.screenshot({ path: `${SHOTS}/floating-rest.png`, clip: { x: 1100, y: 440, width: 180, height: 260 } })
 {
-  // Folded, the column is mostly empty: where the panel and the settings will be, the page still gets the pointer
-  const under = await page.evaluate(([panel, settings, main]) => {
+  // Folded, the column is mostly empty: where the settings will be, the page still gets the pointer
+  const under = await page.evaluate(([settings, main]) => {
     const ours = (x, y) => document.elementFromPoint(x, y)?.classList.contains('axt-floating') ?? false
-    return { panel: ours(panel.x, panel.y), settings: ours(settings.x, settings.y), main: ours(main.x, main.y) }
-  }, [rest.panel, rest.settings, rest.main])
-  check('folded, only the tab itself takes the pointer: the page keeps the space above and below it',
-    under.main && !under.panel && !under.settings,
-    `under the pointer is ours — on the tab: ${under.main}, where the panel folds: ${under.panel}, where the settings fold: ${under.settings}`)
+    return { settings: ours(settings.x, settings.y), main: ours(main.x, main.y) }
+  }, [rest.settings, rest.main])
+  check('folded, only the tab itself takes the pointer: the page keeps the space below it',
+    under.main && !under.settings,
+    `under the pointer is ours — on the tab: ${under.main}, where the settings fold: ${under.settings}`)
 }
 
 // The pointer arrives: lit at once, open only after it has stayed (Immersive Translate's two steps)
@@ -130,20 +143,20 @@ const lit = await dockState()
 await sleep(500)
 const open = await dockState()
 check('the pointer lights it at once, and the other buttons come out only once it has stayed',
-  lit.lit === 'yes' && lit.expanded === 'no' && lit.mainOpacity > 0.95 && lit.panelVisibility === 'hidden'
-    && open.expanded === 'yes' && open.panelOpacity === 1 && open.panel.bottom <= open.main.top && open.settings.top >= open.main.bottom && open.options.right <= open.main.left,
-  `at 280 ms: lit ${lit.lit}, open ${lit.expanded}, opacity ${lit.mainOpacity.toFixed(2)}; at 780 ms: open ${open.expanded}, panel above (${open.panel.bottom} ≤ ${open.main.top}), settings below (${open.settings.top} ≥ ${open.main.bottom}), close control beside (${open.options.right} ≤ ${open.main.left})`)
+  lit.lit === 'yes' && lit.expanded === 'no' && lit.mainOpacity > 0.95 && lit.settingsVisibility === 'hidden'
+    && open.expanded === 'yes' && open.settingsOpacity === 1 && open.settings.top >= open.main.bottom && open.options.right <= open.main.left,
+  `at 280 ms: lit ${lit.lit}, open ${lit.expanded}, opacity ${lit.mainOpacity.toFixed(2)}; at 780 ms: open ${open.expanded}, settings below (${open.settings.top} ≥ ${open.main.bottom}), close control beside (${open.options.right} ≤ ${open.main.left})`)
 await page.screenshot({ path: `${SHOTS}/floating-open.png`, clip: { x: 1100, y: 440, width: 180, height: 260 } })
 {
-  // From the main button up to the panel at a crawl — a second for 45 px, far longer than the 200 ms of grace: the gap
-  // between the two is bridged while the dock is open, so it must not fold on the way
+  // From the main button down to the settings at a crawl — a second for 45 px, far longer than the 200 ms of grace: the
+  // gap between the two is bridged while the dock is open, so it must not fold on the way
   for (let i = 1; i <= 25; i++) {
-    await page.mouse.move(open.main.x, open.main.y + (open.panel.y - open.main.y) * (i / 25))
+    await page.mouse.move(open.main.x, open.main.y + (open.settings.y - open.main.y) * (i / 25))
     await sleep(40)
   }
   const arrived = await dockState()
-  check('a slow pointer crossing from the main button to the panel does not fold it on the way',
-    arrived.expanded === 'yes', `open ${arrived.expanded} after a one-second crossing of ${open.main.y - open.panel.y}px`)
+  check('a slow pointer crossing from the main button to the settings does not fold it on the way',
+    arrived.expanded === 'yes', `open ${arrived.expanded} after a one-second crossing of ${open.settings.y - open.main.y}px`)
 }
 await page.mouse.move(600, 200)
 await sleep(700)
@@ -154,9 +167,9 @@ check('it folds and dims again after the pointer has left for the PDF viewer', f
 
 // The control panel on a PDF: the popup framed in a document whose body is Chrome's viewer, closed by a press on that viewer
 {
-  const seen = await openPanel()
-  check('on a PDF the control panel opens beside the button with the popup in it, and a press on the viewer closes it',
-    seen.ready === 'yes' && seen.loaded && /HTML 翻译|Translate HTML/.test(seen.text ?? '') && seen.box.right <= seen.main.left && seen.closedByPress,
+  const seen = await openPanel('main')
+  check('on a PDF a click on the main button opens the control panel beside it with the paper\'s two entries, and a press on the viewer closes it',
+    seen.ready === 'yes' && seen.loaded && /HTML 翻译|Translate HTML/.test(seen.text ?? '') && /PDF 翻译|Translate PDF/.test(seen.text ?? '') && seen.box.right <= seen.main.left && seen.closedByPress,
     `ready ${seen.ready}, popup loaded ${seen.loaded} (“${seen.text?.slice(0, 40)}…”), panel ${seen.box.left}–${seen.box.right} beside the button at ${seen.main.left}, closed by a press elsewhere: ${seen.closedByPress}`)
 }
 
@@ -176,7 +189,7 @@ check('it folds and dims again after the pointer has left for the PDF viewer', f
   check('dragged to the left half of a PDF, it docks to the left edge, and is still there after a reload',
     dropped.side === 'left' && dropped.main.left === 0 && reloaded.side === 'left' && Math.abs(reloaded.main.top - dropped.main.top) <= 2,
     `side ${dropped.side} → ${reloaded.side} after reload, main top ${dropped.main.top} → ${reloaded.main.top}px`)
-  check('the release of a drag does not open the link', context.pages().length === 1, `${context.pages().length} tab(s) open`)
+  check('the release of a drag does not open the panel', context.pages().length === 1 && dropped.panelHidden, `${context.pages().length} tab(s) open, panel hidden ${dropped.panelHidden}`)
 }
 
 // The close menu's second item turns the switch off; the settings page turns it back on, and the open PDF follows at once
@@ -215,10 +228,13 @@ await page.goto(`https://arxiv.org/abs/${PAPER}`, { waitUntil: 'load' })
 await sleep(3000)
 {
   const abs = await dockState()
-  const arxivHref = await page.evaluate(() => document.querySelector('a#latexml-download-link, a[href*="/html/"]')?.href ?? null)
-  check('the abstract page has the button too, its main button a link to the href arXiv gives, already translating',
-    abs !== null && abs.tag === 'A' && arxivHref !== null && abs.href === `${arxivHref}#readarxiv` && abs.side === 'left',
-    `main <${abs?.tag?.toLowerCase()}> → ${abs?.href}, arXiv's own ${arxivHref}, docked ${abs?.side} as saved on the PDF`)
+  check('the abstract page has the button too, as on the PDF: two in the column, the main button the way into the panel',
+    abs !== null && abs.tag === 'BUTTON' && abs.haspopup === 'dialog' && JSON.stringify(abs.order) === JSON.stringify(['axt-fb-anchor', 'axt-fb-hidden-button axt-fb-settings']) && abs.side === 'left',
+    `main <${abs?.tag?.toLowerCase()}> aria-haspopup ${abs?.haspopup}, ${abs?.order?.join(' · ')}, docked ${abs?.side} as saved on the PDF`)
+  const seen = await openPanel('main')
+  check('on the abstract page a click on the main button opens the control panel with the paper\'s two entries',
+    seen.ready === 'yes' && /HTML 翻译|Translate HTML/.test(seen.text ?? '') && /PDF 翻译|Translate PDF/.test(seen.text ?? '') && seen.closedByPress,
+    `ready ${seen.ready} (“${seen.text?.slice(0, 60)}…”), closed by a press elsewhere: ${seen.closedByPress}`)
 }
 
 // The opening motion, frame by frame (the maintainer, 2026-09-18: the parts came out on different curves, and flickered).
@@ -229,7 +245,7 @@ await sleep(3000)
   await sleep(700)
   await page.evaluate(() => {
     const root = document.querySelector('.axt-floating').shadowRoot
-    const parts = ['.axt-fb-panel', '.axt-fb-settings', '.axt-fb-options', '.axt-fb-lock', '.axt-fb-main .axt-fb-tip'].map(selector => root.querySelector(selector))
+    const parts = ['.axt-fb-settings', '.axt-fb-options', '.axt-fb-lock', '.axt-fb-main .axt-fb-tip'].map(selector => root.querySelector(selector))
     const dock = root.querySelector('.axt-fb-dock')
     const main = root.querySelector('.axt-fb-main')
     window.__frames = []
@@ -253,7 +269,7 @@ await sleep(3000)
   const rising = frames.every((f, i) => i === 0 || f.opacities.every((o, k) => o >= frames[i - 1].opacities[k] - 0.001))
   const still = frames.every(f => f.still === frames[0].still)
   const arrived = frames.at(-1)?.opacities.every(o => o > 0.99) ?? false
-  check('the panel, the settings, the two corner controls and the tooltip come out as one: same opacity every frame, never falling back, and nothing already on screen moves',
+  check('the settings, the two corner controls and the tooltip come out as one: same opacity every frame, never falling back, and nothing already on screen moves',
     frames.length > 10 && together && rising && still && arrived,
     `${frames.length} frames; together ${together}, only rising ${rising}, main button and dock still ${still}, all fully in at the end ${arrived}`)
   await page.mouse.move(640, 10)
@@ -276,7 +292,7 @@ await sleep(3000)
   const inward = docked === 'right' ? 1 : -1
   const watch = () => page.evaluate(() => {
     const root = document.querySelector('.axt-floating').shadowRoot
-    const parts = ['.axt-fb-main', '.axt-fb-main .axt-fb-tip', '.axt-fb-panel', '.axt-fb-options'].map(selector => root.querySelector(selector))
+    const parts = ['.axt-fb-main', '.axt-fb-main .axt-fb-tip', '.axt-fb-settings', '.axt-fb-options'].map(selector => root.querySelector(selector))
     window.__looks = []
     window.__watching = true
     const read = () => {
@@ -321,7 +337,7 @@ await sleep(3000)
   const turns = reversals(looks.slice(before))
   check('the hit area grows when the button lights: a pointer trembling on its edge still opens the dock, and nothing strobes while it trembles there',
     !foldedReach && litReach && opened === 'yes' && turns.every(n => n === 0),
-    `10 px outside the edge is ours — folded: ${foldedReach}, lit: ${litReach}; open after 1.5 s of trembling: ${opened}; opacity reversals over the next 1.5 s — main ${turns[0]}, its tooltip ${turns[1]}, panel button ${turns[2]}, close control ${turns[3]} (${looks.length - before} frames)`)
+    `10 px outside the edge is ours — folded: ${foldedReach}, lit: ${litReach}; open after 1.5 s of trembling: ${opened}; opacity reversals over the next 1.5 s — main ${turns[0]}, its tooltip ${turns[1]}, settings ${turns[2]}, close control ${turns[3]} (${looks.length - before} frames)`)
   await page.mouse.move(640, 10)
   await sleep(700)
 }
@@ -344,9 +360,10 @@ const idle = await dockState()
 /** The page's tools of ours, there from the load whether or not it is translated: this button, and the figure viewer's two boxes — its dialog's host and the spot its control stands in (DESIGN §15.7) */
 const TOOLS = JSON.stringify(['axt-floating', 'axt-viewer', 'axt-viewer-spot'])
 const onlyTools = ours => JSON.stringify([...ours].sort()) === TOOLS
-check('on the full text the button is there before any translation, and nothing of ours is on the page but it and the figure viewer',
-  idle !== null && idle.tag === 'BUTTON' && idle.active === 'no' && /翻译本页|Translate this page/.test(idle.label ?? '') && onlyTools(before.ours),
-  `main <${idle?.tag?.toLowerCase()}> “${idle?.label}”, active ${idle?.active}, our nodes and marks: ${before.ours.join(', ')}`)
+check('on the full text the button is there before any translation, three in its column, and nothing of ours is on the page but it and the figure viewer',
+  idle !== null && idle.tag === 'BUTTON' && idle.haspopup === null && idle.active === 'no' && /翻译本页|Translate this page/.test(idle.label ?? '') && onlyTools(before.ours)
+    && JSON.stringify(idle.order) === JSON.stringify(['axt-fb-hidden-button axt-fb-panel', 'axt-fb-anchor', 'axt-fb-hidden-button axt-fb-settings']),
+  `main <${idle?.tag?.toLowerCase()}> “${idle?.label}”, active ${idle?.active}, ${idle?.order?.join(' · ')}, our nodes and marks: ${before.ours.join(', ')}`)
 
 await page.mouse.click(idle.main.x, idle.main.y)
 await sleep(10_000)
