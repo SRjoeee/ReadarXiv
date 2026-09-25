@@ -1430,6 +1430,10 @@ async function replaceRight(url, texts, { draft = false } = {}) {
   if (driver === old) driver = next
   container.classList.remove('axt-incoming')
   old.container.remove()
+  // the old viewer lets go of its pages (the reader's design, §10.4): its document set to none cancels every page view
+  // and their text layers, which PDF.js otherwise keeps in the one map all its text layers share — a viewer per compile
+  old.viewer.setDocument(null)
+  old.linkService.setDocument(null)
   old.task.destroy() // the document and its worker-side state; PDF.js 6 destroys through the loading task
   invalidate(); paint(right)
   // the right is a new viewer: its page and page count, not the old one's
@@ -1448,7 +1452,13 @@ async function marksOfPdf(bytes) {
   try { return markWords(tokenizeDocument(await textPages(doc)), await pdfMarks(doc)) } finally { task.destroy() }
 }
 /** the test harness's hooks (spikes/*): the sides, the anchoring's and the sync's helpers, the cache's; getters stay live */
-const harness = () => ({ left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()) })
+const harness = () => ({ left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
+  // the right side replaced by a copy of what it shows, as a new compile replaces it (replaceRight)
+  swapRight: async () => {
+    const url = URL.createObjectURL(new Blob([await right.doc.getData()], { type: 'application/pdf' }))
+    try { return await replaceRight(url, rightTexts ?? []) } finally { URL.revokeObjectURL(url) }
+  },
+})
 /**
  * A copy from this machine shown (REPORT, eighteenth addendum): the paper's state from the record rather than the
  * source — the figures' context, the prose names are told by, the units' kinds, the figures' entries — then the

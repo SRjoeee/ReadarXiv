@@ -89,6 +89,33 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.close()
 }
 
+// ---------------------------------------------------------------- Task 28: a replaced viewer lets go of its pages
+// three swaps of the right side, then the text layers and pages still alive off the page (the heap, by CDP; the query's
+// own array released, or it would keep what it found) and the document's selection listeners (the reader's design, §10.4)
+{
+  const page = await open({ mode: 'bilingual' })
+  const cdp = await context.newCDPSession(page)
+  const offPage = async () => {
+    await cdp.send('HeapProfiler.collectGarbage')
+    const { result: proto } = await cdp.send('Runtime.evaluate', { expression: 'HTMLDivElement.prototype', objectGroup: 'axt-count' })
+    const { objects } = await cdp.send('Runtime.queryObjects', { prototypeObjectId: proto.objectId, objectGroup: 'axt-count' })
+    const { result } = await cdp.send('Runtime.callFunctionOn', { objectId: objects.objectId, returnByValue: true, functionDeclaration: 'function () { const off = this.filter(d => !d.isConnected); return off.filter(d => d.classList.contains("textLayer") || d.classList.contains("page")).length }' })
+    await cdp.send('Runtime.releaseObjectGroup', { objectGroup: 'axt-count' })
+    return result.value
+  }
+  const selection = async () => {
+    const { result } = await cdp.send('Runtime.evaluate', { expression: 'document' })
+    return (await cdp.send('DOMDebugger.getEventListeners', { objectId: result.objectId })).listeners.filter(l => l.type === 'selectionchange').length
+  }
+  const before = { layers: await offPage(), selection: await selection() }
+  for (let i = 0; i < 3; i++) await page.evaluate(() => window.__reader.debug.swapRight())
+  await page.waitForTimeout(500)
+  const after = { layers: await offPage(), selection: await selection() }
+  check('a replaced viewer lets go of its pages and text layers', after.layers === 0, JSON.stringify({ before, after }))
+  check('the document\'s selection listeners do not grow with the swaps, and are there', after.selection >= 1 && after.selection <= before.selection, JSON.stringify({ before, after }))
+  await page.close()
+}
+
 // ---------------------------------------------------------------- Task 17: the toolbar
 {
   const page = await open({ mode: 'bilingual' })

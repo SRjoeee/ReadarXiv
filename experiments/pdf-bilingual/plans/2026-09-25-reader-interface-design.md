@@ -441,7 +441,13 @@ was compiled.)
 - A figure's bitmap is read by the extension's recogniser through the background (`axt:ocr`), as the HTML page's
   are: the package carries one recogniser (its build check allows one runtime), and results are cached by the image's
   hash.
-- A replaced viewer's listeners are removed through PDF.js's `abortSignal`.
+- A replaced viewer lets go of its pages: `setDocument(null)` on it and on its link service cancels its page views, their
+  text layers and its annotation editor's manager. Before, each swap of the right side kept the whole old viewer alive
+  (measured on the demo paper, the heap by CDP: 26 pages and 2 text layers a swap, 234 pages after nine; one more
+  document `selectionchange` listener each time); after, none. PDF.js's `abortSignal` is not used: nothing is left
+  for it after the teardown, and the document-level selection listener all text layers share is bound to the signal
+  of whichever viewer's text layer came first, so aborting that viewer would take text selection from the viewers
+  still on screen.
 - A test pins the PDF.js internals the engine reads (`_pages`, the page views' `pdfPage.view`, `renderingState`), so an
   upgrade that changes them fails at once.
 
