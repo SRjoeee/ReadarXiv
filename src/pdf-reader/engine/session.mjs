@@ -27,6 +27,7 @@ import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFViewer, pdfjsLib } fro
 import { displayOf, figuresShown, followOf, withDisplay } from '../settings'
 import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
+import { pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
 import { decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { openEngine, paperContext } from './engine.mjs'
@@ -251,7 +252,8 @@ function paint(side) {
     if (!layer) { layer = document.createElement('div'); layer.className = 'axt-hl-layer'; pv.div.append(layer) }
     const box = toPageBox(side, r), el = document.createElement('div')
     el.className = 'axt-hl'
-    Object.assign(el.style, { left: `${box.left - 4}px`, top: `${box.top - 3}px`, width: `${box.width + 8}px`, height: `${box.height + 6}px` })
+    // scaled with the page while a pinch lasts (overlay.mjs pinned)
+    Object.assign(el.style, pinned({ left: box.left - 4, top: box.top - 3, width: box.width + 8, height: box.height + 6 }, pv.viewport.scale))
     layer.append(el)
   }
 }
@@ -526,7 +528,7 @@ async function paintFigures(side, n) {
       const [ax, ay] = vp.convertToViewportPoint(r.x0, r.y1), [bx, by] = vp.convertToViewportPoint(r.x1, r.y0)
       const width = Math.abs(bx - ax), height = Math.abs(by - ay)
       const holder = Object.assign(document.createElement('div'), { className: 'axt-fig' })
-      Object.assign(holder.style, { left: `${Math.min(ax, bx)}px`, top: `${Math.min(ay, by)}px`, width: `${width}px`, height: `${height}px` })
+      Object.assign(holder.style, pinned({ left: Math.min(ax, bx), top: Math.min(ay, by), width, height }, vp.scale))
       if (frames) {
         const copy = await copyOf(from, Math.max(1, Math.round(width * dpr)), Math.max(1, Math.round(height * dpr))).catch(e => { console.warn('[figure copy]', e); return null })
         if (!copy) return null
