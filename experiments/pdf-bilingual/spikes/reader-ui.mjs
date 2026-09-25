@@ -383,6 +383,73 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.close()
 }
 
+// ---------------------------------------------------------------- Part 6: the interface review's findings
+// (better-interface: controls drawn over each other, a menu's focus unseen, a name cut, the chosen swatch's ring)
+// A. no two of the toolbar's controls drawn over each other, from Chrome's narrowest window up, in the arXiv frame too
+for (const embedded of ['1', '0']) {
+  const page = await open({ mode: 'bilingual', embedded })
+  const hits = {}
+  for (const w of [500, 640, 800, 960, 1100, 1210, 1280]) {
+    await page.setViewportSize({ width: w, height: 900 })
+    await page.waitForTimeout(500)
+    const h = await page.evaluate(() => {
+      const els = [...document.querySelector('header').querySelectorAll('button, a, [role="radiogroup"]')].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && getComputedStyle(e).visibility !== 'hidden' })
+      const out = []
+      for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) {
+        if (els[i].contains(els[j]) || els[j].contains(els[i])) continue
+        const a = els[i].getBoundingClientRect(), b = els[j].getBoundingClientRect()
+        if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) out.push(`${els[i].getAttribute('aria-label') ?? els[i].textContent.trim().slice(0, 10)}×${els[j].getAttribute('aria-label') ?? els[j].textContent.trim().slice(0, 10)}`)
+      }
+      const bar = document.querySelector('header').getBoundingClientRect()
+      const out2 = els.filter(e => { const r = e.getBoundingClientRect(); return r.right > bar.right + 1 || r.left < bar.left - 1 }).map(e => e.getAttribute('aria-label'))
+      return [...out, ...out2.map(n => `${n} outside`)]
+    })
+    if (h.length) hits[w] = h
+  }
+  check(`the toolbar's controls never drawn over each other, 500–1280 px${embedded === '1' ? ', in the arXiv frame' : ''}`, Object.keys(hits).length === 0, JSON.stringify(hits))
+  await page.close()
+}
+
+// B. the menus' active item shows the focus ring when the keyboard moves it, light and dark
+{
+  const page = await open({ mode: 'bilingual' })
+  for (const dark of [false, true]) {
+    await patch(page, { pdfReader: { appearance: dark ? 'dark' : 'light' } })
+    await page.waitForTimeout(500)
+    const seen = {}
+    for (const name of ['缩放比例', '目标语言']) {
+      await page.getByRole('button', { name, exact: true }).focus()
+      await page.keyboard.press('Enter')
+      await page.waitForTimeout(350)
+      await page.keyboard.press('ArrowDown')
+      await page.waitForTimeout(150)
+      seen[name] = await page.evaluate(() => { const a = document.querySelector('.pop:popover-open .item[data-active]'); return a ? getComputedStyle(a).outlineStyle : 'no active item' })
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(250)
+    }
+    check(`${dark ? 'dark' : 'light'}: a menu's active item, moved by the keyboard, shows the focus ring`, Object.values(seen).every(s => s === 'solid'), JSON.stringify(seen))
+  }
+  await patch(page, { pdfReader: { appearance: 'system' } })
+  // C. every name in the service menu whole
+  await page.getByRole('button', { name: '翻译服务', exact: true }).click()
+  await page.waitForTimeout(400)
+  const cut = await page.evaluate(() => [...document.querySelectorAll('.pop:popover-open .item .truncate')].filter(s => s.scrollWidth > s.clientWidth + 1).map(s => s.textContent))
+  check('the service menu shows every name whole', cut.length === 0, JSON.stringify(cut))
+  await page.keyboard.press('Escape')
+  // D. the chosen highlight swatch, focused from the keyboard, carries the focus ring
+  await page.getByRole('button', { name: '阅读选项', exact: true }).focus()
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(400)
+  let ring = null
+  for (let i = 0; i < 12 && !ring; i++) {
+    await page.keyboard.press('Tab')
+    ring = await page.evaluate(() => { const a = document.activeElement; if (!a?.matches('.swatch[aria-pressed="true"]')) return null; const s = getComputedStyle(a); return { color: s.outlineColor, width: s.outlineWidth, focus: getComputedStyle(document.documentElement).getPropertyValue('--focus') } })
+  }
+  const probe = await page.evaluate(() => { const d = document.createElement('div'); d.style.color = 'var(--focus)'; document.body.append(d); const c = getComputedStyle(d).color; d.remove(); return c })
+  check('the chosen highlight swatch, focused from the keyboard, carries the focus ring', !!ring && ring.color === probe && ring.width === '2px', JSON.stringify({ ring, focus: probe }))
+  await page.close()
+}
+
 console.log(failed ? `${failed} failed` : 'all passed')
 await context.close()
 process.exit(failed ? 1 : 0)

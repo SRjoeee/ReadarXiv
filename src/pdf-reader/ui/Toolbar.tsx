@@ -34,14 +34,14 @@ export function Toolbar({ controller, embedded, contents, onContents }: { contro
         <DisplaySwitch value={state.display} translatable={state.available && state.languageSupported} onChange={controller.setDisplay} />
       </div>
       <div data-zone="trail" className="flex items-center gap-1 justify-self-end">
-        <ToolbarButton label={R.swap} pressed={state.swapped} disabled={!sideBySide} onClick={() => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, swapped: !c.pdfReader.swapped } }))}>
+        <ToolbarButton label={R.swap} pressed={state.swapped} disabled={!sideBySide} data-side-by-side onClick={() => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, swapped: !c.pdfReader.swapped } }))}>
           <Icon node={ArrowLeftRight} />
         </ToolbarButton>
         {/* the sync the reader applies, not the stored setting a refused write or an address may leave behind (Part 2's final review) */}
-        <ToolbarButton label={R.sync} pressed={state.sync} disabled={!sideBySide} onClick={() => controller.setSync(!state.sync)}>
+        <ToolbarButton label={R.sync} pressed={state.sync} disabled={!sideBySide} data-side-by-side onClick={() => controller.setSync(!state.sync)}>
           <Icon node={Link2} />
         </ToolbarButton>
-        <span className="divider" />
+        <span className="divider" data-side-by-side />
         <div className="flex items-center" data-zoom>
           <ToolbarButton label={R.zoom.out} hint={`${MOD} −`} onClick={() => controller.zoomBy(1 / 1.1)} className="!w-[26px] !min-w-[26px]">
             <Icon node={Minus} />
