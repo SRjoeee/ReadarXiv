@@ -7,13 +7,15 @@
 // same answer the popup gives there (UI.md S-P-33).
 //
 // On this experiment branch the page opens in the bilingual PDF reader instead (experiments/pdf-bilingual, #290), laid
-// over the browser's viewer, which stays underneath: the address stays the paper's, and the reader's way back to the
-// browser's viewer takes the reader away and shows the floating button. A browser the reader's PDF.js cannot run on
-// (pdf-reader/support.ts) keeps the page as it was, with the floating button.
-import { htmlUrlOf, paperIdFromPdfPath, pdfUrlOf, sourceKindOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
+// over the browser's viewer, which stays underneath, when the settings say so (`pdfReader.enabled`) or the address
+// asks for it (`#readarxiv`, which asks for a translation too): the address stays the paper's, and the reader's way
+// back to the browser's viewer takes the reader away and shows the floating button. A browser the reader's PDF.js
+// cannot run on (pdf-reader/support.ts) keeps the page as it was, with the floating button.
+import { htmlUrlOf, paperIdFromPdfPath, pdfUrlOf, readerWanted, sourceKindOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
 import { readerRuns } from '@/pdf-reader/support'
 import { announceUsablePage } from '@/shared/action-icon'
 import { answerEntryMessages } from '@/shared/entry-page'
+import { watchEntrySettings } from '@/shared/entry-settings'
 import { installFloatingButton } from '@/shared/floating'
 
 export default defineContentScript({
@@ -47,23 +49,40 @@ export default defineContentScript({
     const pdf = source === null || source === 'pdf-only' ? null : pdfUrlOf(id, location.origin)
     // The popup asks this page what it is (UI.md S-P-03b): the same answer the floating button is built from
     answerEntryMessages({ kind: 'pdf', paper: () => id, html: () => href, pdf: () => pdf, readerOpen: () => readerOn })
-    const button = () => installFloatingButton(document, {
+    // the floating button, once: the reader may be opened and left more than once on one page
+    let installed: ReturnType<typeof installFloatingButton> | null = null
+    const button = () => (installed ??= installFloatingButton(document, {
       main: href !== null ? { kind: 'link', href } : { kind: 'none' },
       // The abstract page's sentence (UI.md S-I-06): one offer, made wherever the paper is
       label: S => (href !== null ? S.page.abstractLink(S.brand) : S.note.noHtml),
-    })
-    if (await openReader(id, () => { readerOn = false; void button() })) readerOn = true
+    }))
+    const open = async (translate: boolean) => {
+      if (readerOn) return
+      if (await openReader(id, translate, () => { readerOn = false; void button() })) readerOn = true
+      else await button()
+    }
+    // The reader opens by the setting, or for an address that asks for it (the reader's design, §2). The hash is let go
+    // once read, so that the popup's PDF entry setting it again on this very page is a change the page hears
+    const wanted = readerWanted({ enabled: (await watchEntrySettings(() => undefined)).pdfReader, hash: location.hash })
+    if (wanted.translate) history.replaceState(history.state, '', location.pathname + location.search)
+    if (wanted.open) await open(wanted.translate)
     else await button()
+    addEventListener('hashchange', () => {
+      if (!readerWanted({ enabled: false, hash: location.hash }).open) return
+      history.replaceState(history.state, '', location.pathname + location.search)
+      void open(true)
+    })
   },
 })
 
 /**
  * The bilingual PDF reader over the page, the extension's page pdf-reader.html: true once it is shown, false on a
- * browser it cannot run on. `closed` runs when the reader asks for the browser's viewer
+ * browser it cannot run on. `translate`: the address asked for a translation (`ask=translate`, session.mjs). `closed`
+ * runs when the reader asks for the browser's viewer
  */
-async function openReader(id: string, closed: () => void): Promise<boolean> {
+async function openReader(id: string, translate: boolean, closed: () => void): Promise<boolean> {
   if (!readerRuns()) return false
-  const url = browser.runtime.getURL(`/pdf-reader.html?${new URLSearchParams({ live: '1', paper: id, embedded: '1' })}` as '/pdf-reader.html')
+  const url = browser.runtime.getURL(`/pdf-reader.html?${new URLSearchParams({ live: '1', paper: id, embedded: '1', ...(translate ? { ask: 'translate' } : {}) })}` as '/pdf-reader.html')
   const frame = document.createElement('iframe')
   frame.src = url
   frame.setAttribute('data-axt-pdf-reader', '')

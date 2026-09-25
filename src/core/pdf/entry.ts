@@ -38,3 +38,12 @@ export function sourceKindOf(contentType: string | null): 'source' | 'pdf-only' 
   const type = (contentType ?? '').split(';')[0]!.trim().toLowerCase()
   return type.includes('gzip') ? 'source' : type === 'application/pdf' ? 'pdf-only' : 'unknown'
 }
+
+/**
+ * Whether the PDF page opens the reader (the reader's design, §2): the setting on, or the address asking for it with
+ * `#readarxiv` — an explicit request, which also asks for a translation
+ */
+export function readerWanted({ enabled, hash }: { enabled: boolean; hash: string }): { open: boolean; translate: boolean } {
+  const asked = hash === AUTO_TRANSLATE_HASH
+  return { open: enabled || asked, translate: asked }
+}

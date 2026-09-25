@@ -226,6 +226,29 @@ if (READER && (await readerRunsHere())) {
   check('a page the reader\'s frame was sent to cannot take the reader away', !!frame && stays, frame ? (stays ? 'the reader stays' : 'the reader was taken away') : 'no reader')
 }
 
+// The reader by the setting and by the address (the reader's design, §2): off, the PDF stays in the browser's viewer;
+// `#readarxiv` opens it whatever the setting says, and asks for a translation — set on the open page, or on arrival
+if (READER && (await readerRunsHere())) {
+  const setEnabled = on => worker.evaluate(async on => {
+    const { config } = await chrome.storage.local.get('config')
+    await chrome.storage.local.set({ config: { ...config, pdfReader: { ...config.pdfReader, enabled: on } } })
+  }, on)
+  const framedSrc = () => page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).then(f => f.getAttribute('src'), () => null)
+  await setEnabled(false)
+  await page.goto(`https://arxiv.org/pdf/${WITH_HTML}`, { waitUntil: 'load' })
+  await sleep(4000)
+  const off = await page.evaluate(() => ({ framed: !!document.querySelector('iframe[data-axt-pdf-reader]'), buttons: document.querySelectorAll('.axt-floating').length }))
+  check('the reader off in the settings: the PDF stays in the browser\'s viewer, with the floating button', !off.framed && off.buttons === 1, JSON.stringify(off))
+  await page.evaluate(() => { location.hash = '#readarxiv' })
+  const onHash = await framedSrc()
+  check('#readarxiv set on the open page opens the reader, asking for a translation', !!onHash && /ask=translate/.test(onHash), onHash ?? 'no reader')
+  await page.goto('about:blank')
+  await page.goto(`https://arxiv.org/pdf/${WITH_HTML}#readarxiv`, { waitUntil: 'load' })
+  const onArrival = await framedSrc()
+  check('an address with #readarxiv opens the reader whatever the setting says, asking for a translation', !!onArrival && /ask=translate/.test(onArrival), onArrival ?? 'no reader')
+  await setEnabled(true)
+}
+
 await context.close()
 const pass = results.filter(r => r.ok).length
 console.log(`\n${pass}/${results.length} passed; screenshots in ${SHOTS}`)

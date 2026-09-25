@@ -20,7 +20,7 @@ vi.mock('@/shared/messages', async importOriginal => ({
   },
 }))
 
-const SETTINGS: EntrySettings = { uiLanguage: 'en', openIn: 'same-tab', zoom: 1.25, floating: { enabled: false, side: 'left', position: 0.3, locked: true } }
+const SETTINGS: EntrySettings = { uiLanguage: 'en', openIn: 'same-tab', zoom: 1.25, pdfReader: false, floating: { enabled: false, side: 'left', position: 0.3, locked: true } }
 const fresh = async () => {
   vi.resetModules()
   return import('@/shared/entry-settings')
@@ -63,6 +63,13 @@ describe('watchEntrySettings', () => {
       const { watchEntrySettings, DEFAULT_ENTRY_SETTINGS } = await fresh()
       expect(await watchEntrySettings(() => undefined)).toEqual(DEFAULT_ENTRY_SETTINGS)
     }
+  })
+
+  it('an answer without the PDF reader\'s switch, from a background of an earlier build, keeps the reader on (the reader\'s design, §2)', async () => {
+    const { pdfReader: _, ...earlier } = SETTINGS
+    wire.answers = [earlier]
+    const { watchEntrySettings } = await fresh()
+    expect(await watchEntrySettings(() => undefined)).toEqual({ ...SETTINGS, pdfReader: true })
   })
 
   it('a later answer that is not the settings changes nothing: the page keeps what it had', async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AUTO_TRANSLATE_HASH } from '@/core/abstract/link'
-import { htmlUrlOf, paperIdFromPdfPath, pdfUrlOf, sourceKindOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
+import { htmlUrlOf, paperIdFromPdfPath, pdfUrlOf, readerWanted, sourceKindOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
 
 // The bilingual entry on arXiv's PDF page (issue #169): where it leads. The floating button itself: floating-button.test.ts
 
@@ -49,5 +49,17 @@ describe('the PDF entry (the reader\'s design, §2)', () => {
     expect(sourceKindOf('application/x-gzip; charset=binary')).toBe('source')
     expect(sourceKindOf('application/pdf')).toBe('pdf-only')
     for (const other of [null, 'text/html', '']) expect(sourceKindOf(other)).toBe('unknown')
+  })
+})
+
+describe('readerWanted: the PDF page and its reader (the reader\'s design, §2)', () => {
+  it('opens the reader when the setting is on, translating only when asked', () => {
+    expect(readerWanted({ enabled: true, hash: '' })).toEqual({ open: true, translate: false })
+    expect(readerWanted({ enabled: true, hash: '#readarxiv' })).toEqual({ open: true, translate: true })
+  })
+
+  it('opens it off the setting only for #readarxiv, an explicit request', () => {
+    expect(readerWanted({ enabled: false, hash: '' })).toEqual({ open: false, translate: false })
+    expect(readerWanted({ enabled: false, hash: '#readarxiv' })).toEqual({ open: true, translate: true })
   })
 })

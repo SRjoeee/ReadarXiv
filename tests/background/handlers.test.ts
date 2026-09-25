@@ -107,8 +107,14 @@ describe('the background\'s handlers', () => {
 
     it('answers what a page needs of the configuration, the floating button\'s state and the tab\'s zoom', async () => {
       const { send, deps } = harness({ getConfig: async () => config, getFloatingEntry: async () => floating, zoomOf: vi.fn(async () => 1.25) })
-      await expect(send({ type: 'axt:entry-settings' })).resolves.toEqual({ uiLanguage: 'ja', openIn: 'new-tab', zoom: 1.25, floating })
+      await expect(send({ type: 'axt:entry-settings' })).resolves.toEqual({ uiLanguage: 'ja', openIn: 'new-tab', zoom: 1.25, pdfReader: true, floating })
       expect(deps.zoomOf).toHaveBeenCalledWith(7)
+    })
+
+    it('answers the PDF reader\'s switch, for the PDF page (the reader\'s design, §2)', async () => {
+      const off = { ...config, pdfReader: { ...config.pdfReader, enabled: false } }
+      const { send } = harness({ getConfig: async () => off, getFloatingEntry: async () => floating, zoomOf: vi.fn(async () => 1) })
+      await expect(send({ type: 'axt:entry-settings' })).resolves.toMatchObject({ pdfReader: false })
     })
 
     it('a zoom that cannot be read, or a sender without a tab, is a zoom of 1', async () => {

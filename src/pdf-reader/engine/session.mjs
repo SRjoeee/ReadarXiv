@@ -70,7 +70,10 @@ config = surface.state().config
 let pack = surface.state().pack ?? null
 surface.subscribe(() => { const now = surface.state().pack ?? null; if (now !== pack) { pack = now; host.emit({ type: 'settings', config, pack }) } })
 /** the display: the one the address names (a probe's page), else the one the settings ask for */
-let mode = MODES.includes(params.get('mode')) ? params.get('mode') : displayOf(config)
+// asked to translate (#readarxiv on the PDF address, the reader's design, §2): the translated display the settings
+// name, not an original left on — the reader asked for a translation, not for what it last read
+const askTranslate = params.get('ask') === 'translate'
+let mode = MODES.includes(params.get('mode')) ? params.get('mode') : askTranslate ? (config.mode === 'only' ? 'translation' : 'bilingual') : displayOf(config)
 let narrow = false // the window too narrow for two sides (setNarrow)
 function showMode() {
   document.documentElement.setAttribute('data-axt-pdf-mode', mode)
@@ -111,6 +114,8 @@ showSettings()
  *  refuses (its stored value cannot be read, config/storage.ts) is dropped: what the reader chose still holds on screen */
 let writes = Promise.resolve()
 const save = change => (writes = writes.then(() => surface.patch(change)).catch(e => console.warn('[settings]', e?.message ?? e)))
+// an original left on is let go when the reader was asked to translate: the next PDF opens as this one does
+if (askTranslate && config.pdfReader.original) void save(c => ({ ...c, pdfReader: { ...c.pdfReader, original: false } }))
 /** a change of the settings from the interface (the controller's patchSettings) */
 export function patchSettings(change) { void save(change) }
 /** true once the translation has started: a new language then means another document, and the page starts again */

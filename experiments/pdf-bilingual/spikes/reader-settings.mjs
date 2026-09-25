@@ -112,6 +112,16 @@ await b.evaluate(c => chrome.storage.local.set({ config: c }), stored0)
 await settle(b)
 check('repaired settings are known', (await state(b)).settingsUnreadable === false)
 
+// asked to translate (#readarxiv on the PDF address, passed as ask=translate; the reader's design, §2): the original
+// left on is let go, and the reader opens in the translated display the mode names
+await patch(b, { mode: 'only', pdfReader: { original: true } })
+await settle(b)
+const e = await open({ ask: 'translate' })
+await settle(e)
+const asked = await state(e)
+check('asked to translate: the translated display the mode names, the original let go', asked.display === 'translation' && asked.settings.pdfReader.original === false, `${asked.display}, original ${asked.settings.pdfReader.original}`)
+await e.close()
+
 console.log(failed ? `${failed} failed` : 'all passed')
 await context.close()
 process.exit(failed ? 1 : 0)
