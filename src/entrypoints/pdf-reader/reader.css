@@ -246,3 +246,16 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   @keyframes capsule-out { to { opacity: 0; } }
   @keyframes words-in { from { opacity: 0; } }
 }
+/* the rest of the chrome's movements, each a fade or nothing when the reader asks for less motion (§4.2; Part 6's
+   accessibility audit): the contents slide in at once, the capsule does not travel with them, the link's arrow does
+   not nudge, the disclosure does not turn, the switch's knob and the indicator's thumb do not glide or widen, the
+   card's button is not pressed in */
+@media (prefers-reduced-motion: reduce) {
+  .toc, html[data-axt-contents] .toc { transition: visibility 0s; }
+  .capsule-slot { transition: none; }
+  .arxiv-id svg { translate: none; transition: opacity 150ms; }
+  .fold svg { transition: none; }
+  .switch::after { transition: none; }
+  .indicator i { transition: background-color 150ms; }
+  .card button, .card button:active { transition: none; scale: 1; }
+}
