@@ -30,6 +30,7 @@ import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
 import { decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { hostReady } from './host.mjs'
@@ -1542,9 +1543,8 @@ async function showCached(record, setContext, note = () => {}) {
   reportOutline()
 }
 async function live() {
-  // our TeX page and the TeX Live file server, as spikes/serve-live.mjs starts them on this machine
-  const site = params.get('site') ?? 'http://127.0.0.1:8071', endpoint = params.get('endpoint') ?? 'http://localhost:8070'
-  const srcUrl = params.get('src') ?? `https://arxiv.org/src/${paper}`, pdfUrl = params.get('pdf') ?? `https://arxiv.org/pdf/${paper}`
+  // the TeX page, its file server and the paper's two files: the reader's own, or a server on this machine (addresses.mjs)
+  const { site, endpoint, src: srcUrl, pdf: pdfUrl } = readerAddresses(params, paper)
   const L = (window.__reader.live = { events: [], t0: performance.now() })
   let got = 0, total = 0, engine = null, setContext = null, lost = 0, lostWhy = null
   // this machine's copy on screen, being translated again with the current settings (REPORT, eighteenth addendum)

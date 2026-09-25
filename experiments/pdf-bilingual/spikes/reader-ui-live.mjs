@@ -41,6 +41,20 @@ page.on('pageerror', e => check('no page error', false, e.message))
 const visit = async mode => { await page.goto(urlOf(mode)); await until(page, () => window.__reader?.controller?.getState().settings) }
 const patch = change => page.evaluate(p => window.__reader.controller.patchSettings(c => ({ ...c, ...p })), change)
 
+// 0. addresses a framing page chose: the reader takes none but its own and this machine's (addresses.mjs; Devin on #301)
+{
+  const foreign = []
+  const onRequest = r => { try { if (new URL(r.url()).hostname.endsWith('evil.example')) foreign.push(r.url()) } catch {} }
+  context.on('request', onRequest)
+  const probe = await context.newPage()
+  await probe.goto(readerUrl({ paper, live: '1', mode: 'bilingual', site: 'https://evil.example', endpoint: 'https://evil.example', src: 'https://evil.example/src/x', pdf: 'https://evil.example/pdf/x' }))
+  await probe.waitForTimeout(6000)
+  const frames = await probe.evaluate(() => [...document.querySelectorAll('iframe')].map(f => f.src))
+  check('addresses from a framing page are not taken: nothing asked of another host', foreign.length === 0 && !frames.some(f => { try { return new URL(f).hostname.endsWith('evil.example') } catch { return false } }), JSON.stringify({ foreign, frames }))
+  context.off('request', onRequest)
+  await probe.close()
+}
+
 // 1. translating: no copy on this machine, the default service; the progress line along the toolbar's foot grows as
 // paragraphs come back, and no capsule shows it — its words are said to screen readers (the maintainer, 2026-09-25)
 await visit('bilingual')
