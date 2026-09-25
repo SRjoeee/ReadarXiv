@@ -7556,3 +7556,137 @@ if (askTranslate && config.pdfReader.original) void save(c => ({ ...c, pdfReader
   on the reader page; a `better-interface` review and `break`; `docs/UI.md`'s surface R and `docs/DESIGN.md`; the
   deferred minors (#299); then the pull request. Appended here, to be reviewed with the maintainer.
 - [ ] **Step 3:** Commit both, and a test package.
+
+---
+
+# Part 6: verification and words
+
+Written against the code as Part 5 left it (`72151f6e`). Its tasks continue the numbering. The spec's sections it
+closes: §12 (performance gates), §13 (accessibility), §14 (testing), §15 (copy), §16 (what stays open). Nothing in this
+part adds a feature. A gate that fails is fixed in this part, test first, and the fix is named in REPORT.
+
+**What changes from the overview, and why**
+
+1. **The measurements are taken on a quiet machine**: load under 5, the data volume under 90 %, in a headed window. The
+   costs in Parts 3 and 4 were measured with the load at 20–88 and the disk at 99 %, and the spec's §12 asks for them
+   again. Each probe prints the load it ran under, and a run above the limit does not count.
+2. **The copy gate and the reader's words in `docs/UI.md` already exist** (`tests/pdf-reader/ui/copy.test.ts`, UI.md
+   §3.5, both from Part 3). Part 6 checks them against what Parts 4 and 5 added rather than writing them.
+3. **The deferred minors are listed, not fixed.** The spec's §16 puts #299 in the next stage. Part 6 gathers every
+   `minor (deferred)` line of Parts 1–5 into one list for #299. It fixes one only if the maintainer picks it.
+4. **The pull request**: a branch `exp/pdf-reader-interface` at the local `exp/pdf-bilingual`, whose 58+ commits are not
+   pushed, into `origin/exp/pdf-bilingual`, merged with a merge commit. Devin reviews it (`/devin review`, a comment of
+   its own).
+
+## Part 6 Review Focus
+
+- **A gate measured under load passes by noise, or fails by noise.** Every probe records the load, and its result
+  counts only under the limit.
+- **Backdrop blur on the pills and the capsule while a pane scrolls.** The comparison is with the opaque floating
+  surface, on the same scroll, in the same window.
+- **The accessibility audit on states a static page never shows**: an open menu, the reading options dialog, the
+  failure card, the capsule, a greyed display.
+- **The deferred minors reach #299 whole.** The list is taken from the ledger, not from memory.
+
+### Task 43: §12's performance gates
+
+**Files:**
+- Create: `experiments/pdf-bilingual/spikes/reader-perf.mjs`
+- Modify: `experiments/pdf-bilingual/REPORT.md` (the next addendum)
+
+- [ ] **Step 1: The probe.** On the heaviest demo paper (`2608.02163`, the one the demo set holds), in a headed window at
+  1440 × 900:
+  - frame times while a pane scrolls, 5 s, with the pills and the capsule shown, then again with them on the opaque
+    floating surface (a class the probe sets on `<html>`);
+  - the same with dark pages on, and the JS heap and GPU memory at 400 %;
+  - the scroll listeners on each scroll container (CDP `DOMDebugger.getEventListeners`): the passive one that toggles
+    the indicators, and no other;
+  - the animations running while reading (`document.getAnimations()` sampled during the scroll): none but the
+    indicators' fade;
+  - the pinch: `spikes/pinch-overlays.mjs` again.
+
+  Each result is printed with the machine's load. Run: `node experiments/pdf-bilingual/spikes/reader-perf.mjs`.
+  Expected: the numbers, with the load under 5.
+- [ ] **Step 2: The rules.**
+  - If blur's p95 frame time exceeds the opaque surface's by more than their noise (the spread of three runs each),
+    the pills and the capsule take the opaque surface, and the spec's §4 says so.
+  - Dark pages must drop no frame the light ones do not.
+  - Any other scroll listener or running animation is a finding, fixed test first.
+- [ ] **Step 3: Commit** — `test(pdf-reader): the performance gates, on a quiet machine`, with REPORT's numbers.
+
+### Task 44: `cache-revisit.mjs` on the quiet machine
+
+- [ ] **Step 1:** Run `node experiments/pdf-bilingual/spikes/cache-revisit.mjs` on the final build. Expected: 26/26.
+- [ ] **Step 2:** If case 8 fails again, run Part 2's build (`26d8f62c`, a scratch worktree) and this one one after
+  the other on the same machine, as Part 3's final review asked, and rule on the difference. If it passes, the
+  twenty-third addendum's ruling that the failure was environmental stands, and REPORT says so.
+
+### Task 45: the accessibility audit (§13)
+
+**Files:**
+- Create: `experiments/pdf-bilingual/spikes/reader-a11y.mjs` (axe through `@axe-core/playwright`, already a dev
+  dependency)
+- Modify: whatever it finds, with a test for each
+
+- [ ] **Step 1: The audit.** Axe on the reader page:
+  - in each display;
+  - with each menu open, and with the reading options dialog open;
+  - with the failure card, the capsule and a greyed display;
+  - in light and dark.
+
+  Beside it, a keyboard walk: Tab through the toolbar, 1/2/3, the switch's arrows, Escape out of every menu. And with
+  `prefers-reduced-motion: reduce`, no transition or animation longer than 0.01 s. Run it. Expected: a list; the aim is
+  none serious or critical.
+- [ ] **Step 2: The fixes.** Each finding gets a unit test or a check in `reader-a11y.mjs` that fails first. Then the
+  audit again. Expected: no serious or critical violation.
+- [ ] **Step 3: Commit** — `fix(pdf-reader): the accessibility audit's findings`, or `test(pdf-reader): the
+  accessibility audit` if there were none.
+
+### Task 46: §14's browser checks that are not written yet
+
+- [ ] **Step 1: The audit of the list.** Set §14's "New browser checks" beside `reader-ui.mjs`, `reader-ui-live.mjs`,
+  `entries.mjs`, `e2e:floating` and `e2e:pdf`, and name each missing one. Known candidates:
+  - the page pills;
+  - the indicators, where a drag moves both sides;
+  - dark pages;
+  - the keyboard (1/2/3, the switch's arrows, Escape);
+  - the settings section and the PDF translations' line with its clear, in a browser.
+- [ ] **Step 2: The checks**, added to `reader-ui.mjs` (the reader) and `entries.mjs` (the settings page). Each check
+  is made to fail once by breaking what it checks, then restored.
+- [ ] **Step 3: Commit** — `test(pdf-reader): the rest of the design's browser checks`.
+
+### Task 47: `better-interface` and `break`
+
+- [ ] **Step 1:** Read `.agents/skills/better-interface/SKILL.md` and `.agents/skills/break/SKILL.md` in the main
+  checkout (the Skill tool cannot reach them), and follow them on the reader. Render every state of §8: loading,
+  translating, a copy being translated again, a notice, the card for each reason, an unsupported language, narrow, and
+  dark. Screenshots go to `out/break/`.
+- [ ] **Step 2:** Grade the findings by what a reader gets. Fix the important ones test first. The rest go to the
+  ledger as minors, and to the maintainer.
+- [ ] **Step 3: Commit** — `fix(pdf-reader): the interface review's findings`.
+
+### Task 48: the words and the documents
+
+- [ ] **Step 1:** `docs/UI.md` §3.5 against the build: every reader string Parts 4 and 5 added has its S-R id. The
+  popup's reader view (S-P-03c) and the settings (S-O-55, S-O-73) are there already. `tests/pdf-reader/ui/copy.test.ts`
+  covers the new strings. Run: `pnpm vitest run tests/pdf-reader/ui/copy.test.ts`. Expected: PASS.
+- [ ] **Step 2:** `docs/DESIGN.md` gains the reader's place in the extension. That is a short section: the page, how it
+  is reached (§4.0b), the settings group (§9), its store beside the translation cache, and pointers to the design and
+  to REPORT for the rest.
+- [ ] **Step 3: Commit** — `docs: the PDF reader in DESIGN and UI`.
+
+### Task 49: the deferred minors, for #299
+
+- [ ] **Step 1:** Gather every line with `minor (deferred)` in the ledger, Parts 1–5, into one list. Each entry gets
+  its file, and the reason it was deferred.
+- [ ] **Step 2:** Show the list to the maintainer. Post it to #299 as one comment once they agree.
+
+### Task 50: the pull request
+
+- [ ] **Step 1: The gate.** Run `pnpm typecheck && pnpm lint && pnpm test && pnpm build`, then `e2e:pdf`,
+  `e2e:floating`, and the reader's spikes. Expected: all pass.
+- [ ] **Step 2: A test package** for the maintainer: the build zipped, with the screenshots of Tasks 43–47.
+- [ ] **Step 3: The pull request.** Push `exp/pdf-reader-interface`, and open the pull request into
+  `exp/pdf-bilingual`. Its body lists Parts 1–6 with REPORT's addenda 20–27. Then post `/devin review` as a comment of
+  its own. Every comment is checked against the code or a probe before it is taken. The merge waits for Devin's
+  terminal signal and a green CI.

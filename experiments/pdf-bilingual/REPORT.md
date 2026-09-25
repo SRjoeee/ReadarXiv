@@ -1570,3 +1570,71 @@ preview now keeps the strategy; a timed-out final is tried once more with it, an
 **Checks.** `pnpm test` 2359 passed. `reader-ui.mjs` 44 and `reader-ui-live.mjs` 8 all passed; so did
 `reader-settings.mjs`, `viewer-faults.mjs`, `cache-revisit.mjs` (26) and `service-faults.mjs`. The case spikes
 (`cache-cases`, `mt-cases`, `lost-cases`, `anchors-cases`, `sync-cases` and `wire-cases`) are all ok.
+
+## Twenty-sixth addendum, 2026-09-25: Part 4's final review — FIXED; the extension around the reader (Part 5) — BUILT
+
+**Part 4's final review.** One critical and five important findings. All six were fixed, each shown failing first
+(`b969e0cb`); the minors go to #299.
+
+- **A compile that did not answer kept running.** BusyTeX gives up on waiting, not on the job. The abandoned job's
+  worker went on, and its output answered the next compile: a draft taken for the final, or the translation's PDF for
+  the marked original. `live.mjs` `compilerKeeper` now throws a compiler away after a compile that did not answer, and
+  the next compile gets a fresh TeX page. A compile's answer is believed only from its own frame.
+- **The stop's notice counted twice.** The count showed 2, then 328 (`service-faults` case 3). It is now told once the
+  run has ended, and shows 329, the run's own count.
+- **The network's return during the final compile was dropped** (case 5: nothing resumed, 329 left). A request to
+  run again that comes while a run is under way is now kept and answered when that run ends: the network's return, or
+  a change of the services. The rerun ends with none left.
+- **The figures' text went out without the paper's title** after a failure before the source was read (case 6: the
+  title was null). The context is now the paper's once its source is read.
+- **A change of the figures' text** left the overlays of pages PDF.js was not drawing at the time. They now go, and
+  come back in the new state when the page is drawn again (`reader-ui`).
+
+Two of the probe's own failures were found and fixed on the way:
+
+- `patchSettings` returns before its write. A case that changed the service and left the page at once lost the change,
+  and ran on the last case's service.
+- A run again begins in the same tick the stopped run ends, and sets `live.done` back at once. A poll of `live.done`
+  never sees the first run end. The probe now waits for two `done` events.
+
+**Part 5: the ways in, as built.**
+
+- **The popup on an abstract or PDF page** offers two entries side by side: HTML 翻译 and PDF 翻译 (the maintainer: as
+  few words as stay clear).
+  - The HTML entry is disabled, with the note, when the paper has no HTML version.
+  - The PDF entry is disabled without words when the paper cannot be had as a bilingual PDF, or when this browser cannot run
+    the reader.
+  - The page answers these questions itself: on the abstract page from arXiv's TeX Source link, with no request; on a
+    PDF page from one HEAD on `/src/<id>`, sent at the same time as the HTML one.
+- **A PDF opens in the reader** when `pdfReader.enabled` is on, or when its address carries `#readarxiv`. That hash
+  also asks for a translation, and the page lets it go once read. So the popup's PDF entry on that same page, which
+  sets it again, opens the reader again.
+- **With the reader open, the popup is the reader's.**
+  - Its primary shows the translation or the original.
+  - Its language menu lists the nine languages the reader typesets.
+  - The stacked display is greyed, with its reason as its title.
+  - The style row is gone, and the two switches left in that row sit together.
+  - It writes only the settings, which the reader follows.
+- **The floating button's main button opens the control panel** on the abstract page, and on a PDF page with the reader
+  closed. There the column has no panel button of its own. The full text keeps its three buttons. The main button's
+  link and disabled kinds are gone: no page used them any more.
+- **The settings page** gains a PDF reader section (`#pdf-reader`, where the reader's settings button leads) with the
+  reader's switch and its three reading options. The data section gains the PDF translations' line, papers and MB, cleared
+  as the HTML line is. A store that cannot be read is said to be unreadable: its `usage()` and `clear()` now reject.
+- **A display chosen on the HTML page** lets the reader's original go, as a choice in the popup does. The reader then
+  opens on whatever was chosen last, on either page.
+
+**Screenshots**, taken by `spikes/entries.mjs` on arXiv's own pages: the popup on the abstract page, the panel the main
+button opens there, the popup on a PDF page with the reader off, and the popup with the reader open. They are in
+`out/entries/` and with the maintainer's test package.
+
+**Checks.**
+
+| Check | Result |
+|---|---|
+| `pnpm test` | 2384 passed |
+| `e2e:floating` | 20/20: two buttons on the abstract and the PDF page, the panel from the main button with both entries, three on the full text |
+| `e2e:pdf` | 24/24: the panel's HTML entry opening the translation in a new tab, the setting and the hash |
+| `spikes/entries.mjs` (new) | 4 checks, all passed |
+| `spikes/service-faults.mjs` | cases 0–6, 19 checks, all passed |
+| `reader-ui.mjs` 45, `reader-ui-live.mjs` 8, `reader-settings.mjs` 20, `viewer-faults.mjs` 8, `cache-revisit.mjs` 26 | all passed on the fix pass's build, `cache-revisit`'s case 8 included |
