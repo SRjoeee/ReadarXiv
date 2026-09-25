@@ -68,7 +68,8 @@ async function audit(page, name) {
   await page.getByRole('radio', { name: '对照' }).click()
   // each menu, opened from the keyboard: audited open, closed by Escape with the focus back on its trigger
   for (const name of ['缩放比例', '目标语言', '翻译服务', '下载', '阅读选项']) {
-    const trigger = page.getByRole('button', { name, exact: true })
+    // the bar's own, named by its words and what it shows (WCAG 2.5.3); the reading options hold copies for a narrow window
+    const trigger = page.locator(`[data-zone="trail"] > :is(button, a)[aria-label^="${name}"], [data-zoom] > button[aria-label^="${name}"]`)
     await trigger.focus()
     await page.keyboard.press('Enter')
     await page.waitForTimeout(400)
@@ -76,7 +77,7 @@ async function audit(page, name) {
     await audit(page, `the ${name} menu open`)
     await page.keyboard.press('Escape')
     await page.waitForTimeout(300)
-    const back = await page.evaluate(n => document.activeElement?.getAttribute('aria-label') === n, name)
+    const back = await page.evaluate(n => !!document.activeElement?.getAttribute('aria-label')?.startsWith(n), name)
     check(`the ${name} menu: opened from the keyboard, Escape closes it and the focus is back on its trigger`, opened && !(await popOpen()) && back)
   }
   // a tooltip, shown in full: hovered, past its delay and its fade

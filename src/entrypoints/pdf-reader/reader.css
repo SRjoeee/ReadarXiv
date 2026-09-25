@@ -86,13 +86,16 @@
 }
 
 /* ----- §5: the toolbar fixed at the top, three zones; the document area under it, moved by the contents ----- */
-header[role="toolbar"] {
+header.bar {
   position: fixed; inset: 0 0 auto 0; z-index: 20; height: var(--bar);
   /* the trail keeps its width and the lead gives way: squeezed, the switch moves off the centre rather than being drawn
      over, and nothing is pushed past the window's edge (Part 6's interface review: overlaps from 500 to 1210 px) */
   display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr); align-items: center; gap: 16px;
   padding-inline: 8px; background: var(--chrome); box-shadow: 0 0.5px 0 var(--chrome-line); color: var(--ink);
 }
+/* the lead's width is the grid's, which the trail narrows: the title leaves when there is too little of it to read
+   (PaperTitle measures the id against it), whatever the window's width (the interface review) */
+[data-zone="lead"] { container: lead / inline-size; }
 /* the contents move the document area at once, so that each side is refitted once to its new width; it is drawn sliding
    there by a transform (App.tsx), on the compositor: a transition of `left` refitted both sides on every frame (the
    final review: 12 scale changes a toggle) */
@@ -121,7 +124,13 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
 @layer components {
   .tbtn { position: relative; height: 30px; min-width: 30px; flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 7px; color: var(--ink-2); transition: background-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out; }
   .tbtn::before { content: ""; position: absolute; inset: -7px -2px; }
+  /* the zoom's three sit side by side: grown across, each would take the edge of its neighbour */
+  [data-zoom] > .tbtn::before { inset-inline: 0; }
   .tbtn:hover, .tbtn[aria-expanded="true"], .tbtn[aria-pressed="true"] { background: var(--fill); color: var(--ink); }
+  /* pressed: a ring of its own, so that a press is seen with the pointer still on the button, ink-3 standing 3.64:1 and
+     3.39:1 against the bar (WCAG 1.4.11); the fill alone was the hover's, 1.2:1 (the interface review) */
+  .tbtn[aria-pressed="true"] { box-shadow: inset 0 0 0 1px var(--ink-3); }
+  .chrome a.tbtn { text-decoration: none; }
   .tbtn:active { scale: 0.96; }
   .tbtn[aria-disabled="true"] { background: none; color: var(--ink-3); opacity: 0.55; }
   .tbtn[aria-disabled="true"]:active { scale: 1; }
@@ -136,8 +145,10 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .tip kbd { color: oklch(0.74 0.01 255); }
   /* a segmented control: equal segments in a well, the chosen one on a lifted thumb that slides (§6.2, §7) */
   .seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: 30px; padding: 2px; border-radius: 9px; background: var(--well); --i: 0; }
+  /* the thumb's edge in ink-3, 3:1 against the well, light and dark, as the pressed button's ring (WCAG 1.4.11; the
+     interface review: the lifted fill alone stood 1.2:1) */
   .seg .thumb { position: absolute; inset-block: 2px; inset-inline-start: 2px; width: calc((100% - 4px) / var(--n, 3)); border-radius: 7px; background: var(--lift);
-    box-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.06), 0 1px 2px oklch(0 0 0 / 0.08); translate: calc(var(--i) * 100%) 0; transition: translate 220ms var(--ease); pointer-events: none; }
+    box-shadow: 0 0 0 1px var(--ink-3), 0 1px 2px oklch(0 0 0 / 0.08); translate: calc(var(--i) * 100%) 0; transition: translate 220ms var(--ease); pointer-events: none; }
   .seg > button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; height: 100%; padding: 0 12px; border-radius: 7px; color: var(--ink-2); font: 500 12.5px/1 var(--font); white-space: nowrap; transition: color 150ms ease-out; }
   .seg > button[aria-checked="true"], .seg > button[aria-pressed="true"] { color: var(--ink); }
   .seg > button:not([aria-checked="true"]):not([aria-disabled="true"]):hover { color: var(--ink); }
@@ -149,7 +160,8 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .arxiv-id svg { opacity: 0; translate: -2px 2px; transition: opacity 150ms, translate 150ms ease-out; }
   .arxiv-id:hover, .arxiv-id:focus-visible { color: var(--ink); background: var(--fill); }
   .arxiv-id:hover svg, .arxiv-id:focus-visible svg { opacity: 1; translate: 0 0; }
-  @media (width < 1100px) { .paper-title [data-title] { display: none; } }
+  @container lead (width < 320px) { .paper-title [data-title] { display: none; } }
+  .paper-title[data-cramped] [data-arxiv] { display: none; }
   /* popovers (§6.7): under their button, 6 px below, kept inside the window; they grow from it */
   .pop { position: fixed; inset: auto; margin: 6px 0 0; position-area: bottom span-right; position-try-fallbacks: bottom span-left, bottom;
     min-width: 220px; width: max-content; max-width: calc(100vw - 16px); max-height: calc(100vh - var(--bar) - 16px); overflow: auto; padding: 4px; border: 0; border-radius: 12px;
@@ -168,6 +180,8 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .pop .item .hint { margin-inline-start: auto; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
   .pop .item .check { color: var(--ink); }
   .menu-btn { padding-inline: 8px 6px; color: var(--ink); font-size: 12.5px; font-weight: 500; }
+  /* a name longer than the bar can give (a service's is up to 40 characters) is cut short; the tooltip holds it whole */
+  .menu-btn > span { min-width: 0; max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .zoom-value { min-width: 60px; padding-inline: 6px; color: var(--ink); font-size: 12.5px; }
   .switch { position: relative; width: 28px; height: 17px; flex: none; border-radius: 999px; background: var(--ink-3); transition: background-color 150ms; }
   .switch::after { content: ""; position: absolute; inset-block-start: 2px; inset-inline-start: 2px; width: 13px; height: 13px; border-radius: 999px; background: oklch(1 0 0); box-shadow: 0 1px 2px oklch(0 0 0 / 0.25); transition: translate 150ms ease-out; }
@@ -177,7 +191,7 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .swatch[aria-pressed="true"]:not(:focus-visible) { outline: 1.5px solid var(--ink); outline-offset: 2px; }
   /* below 900 px the language and service menus leave the toolbar for the reading options' first rows (§5); as specific
      as the rows and separators they are, and after them, so that they stay hidden above it */
-  .pop .narrow-only { display: none; }
+  .pop .narrow-only, .pop .narrowest-only { display: none; }
   /* the contents (§6.3): `toc`, since Tailwind's `contents` is display: contents */
   .toc { position: fixed; z-index: 15; inset: var(--bar) auto 0 0; width: var(--side); display: flex; flex-direction: column; background: var(--chrome); box-shadow: 0.5px 0 0 var(--chrome-line); translate: -100% 0; visibility: hidden; transition: translate 200ms var(--ease), visibility 0s linear 200ms; }
   html[data-axt-contents] .toc { translate: 0 0; visibility: visible; transition: translate 200ms var(--ease), visibility 0s; }
@@ -186,7 +200,8 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .toc-list li[hidden] { display: none; }
   .entry { display: flex; align-items: center; gap: 2px; height: 28px; padding-inline: 0 8px; border-radius: 6px; }
   .entry:hover, .entry[aria-current="true"] { background: var(--fill); }
-  .entry a { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 8px; color: inherit; text-decoration: none; }
+  /* the link is the row from top to bottom: the row is lit as a whole, and pressed as a whole (the interface review) */
+  .entry a { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 8px; padding-block: 5px; color: inherit; text-decoration: none; }
   .entry .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500; }
   .entry[aria-current="true"] .t { font-weight: 600; }
   .entry .p { flex: none; color: var(--ink-2); font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -249,10 +264,25 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
 @keyframes pop-in { from { opacity: 0; scale: 0.97; translate: 0 -4px; } }
 @media (prefers-reduced-motion: reduce) { @keyframes pop-in { from { opacity: 0; } } }
 @media (width < 900px) { .pop .row.narrow-only { display: flex; } .pop .sep.narrow-only { display: block; } [data-zone="trail"] > .menu-btn { display: none; } }
-/* a narrow window shows one side: swap and sync, greyed there, give their room; the narrowest keeps the arXiv id's too,
-   as the title goes below 1100 px */
+/* a narrow window shows one side: swap and sync, greyed there, give their room */
 @media (width < 900px) { [data-zone="trail"] > [data-side-by-side] { display: none; } }
-@media (width < 640px) { [data-zone="lead"] .paper-title { display: none; } }
+/* below 500 px the download, the settings and the way back are the reading options' first rows, and the zoom keeps its
+   value's menu, − and + giving way (⌘± and the pinch stay): the bar holds at 320 px, a window at 400 % (the maintainer,
+   2026-09-26; the interface review: past 413 px the trail ran out of the window) */
+@media (width < 500px) {
+  .pop .row.narrowest-only { display: flex; } .pop .sep.narrowest-only { display: block; }
+  [data-zone="trail"] > [data-wide], [data-zoom] > .tbtn:not(.zoom-value) { display: none; }
+}
+/* forced colours (Windows' contrast themes) drop the fills and the rings: the chosen display, a pressed button and a
+   switch that is on take the system's Highlight, as a selection does (the interface review) */
+@media (forced-colors: active) {
+  .seg .thumb, .tbtn[aria-pressed="true"], .switch[aria-checked="true"] { forced-color-adjust: none; background: Highlight; }
+  .seg > button[aria-checked="true"], .tbtn[aria-pressed="true"] { forced-color-adjust: none; color: HighlightText; }
+  .switch { border: 1px solid ButtonText; }
+  .switch::after { forced-color-adjust: none; background: ButtonText; }
+  .switch[aria-checked="true"]::after { background: HighlightText; }
+  .tbtn[aria-disabled="true"], .seg > button[aria-disabled="true"] { color: GrayText; }
+}
 @keyframes thumb { from { translate: 0 0; } to { translate: 0 calc(var(--track, 100px) - var(--thumb, 40px)); } }
 @media (prefers-reduced-motion: reduce) { .pill, .indicator { transition: none; } }
 @keyframes capsule-in { from { opacity: 0; translate: 0 10px; scale: 0.96; } }

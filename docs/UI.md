@@ -208,15 +208,14 @@ The bilingual PDF reader's own words (the reader's design, `experiments/pdf-bili
 
 | ID | Where | Copy | Notes |
 |---|---|---|---|
-| S-R-01 | The toolbar's name | 阅读器 | `aria-label`, for screen readers |
-| S-R-02 | Contents toggle, and the sidebar's header | 目录 | Pressed while the sidebar is open |
+| S-R-02 | Contents toggle, and the sidebar's header | 目录 | Expanded while the sidebar is open (`aria-expanded`, controlling it) |
 | S-R-03 | The arXiv id's tooltip | 在 arXiv 打开摘要页 | The id links to the abstract page, in a new tab |
-| S-R-04 | The display switch | 显示 · 原文 · 对照 · 译文 | The radio group's name and its three choices, in tooltips and to screen readers; keys 1 2 3 |
+| S-R-04 | The display switch | 显示 · 原文 · 对照 · 译文 | The radio group's name and its three choices, in tooltips and to screen readers; the arrows move the choice. No single key chooses one (WCAG 2.1.4; the maintainer removed 1 2 3, 2026-09-26) |
 | S-R-05 | Swap sides | 交换左右 | 对照 only; greyed in the single displays |
 | S-R-06 | Sync scrolling | 同步滚动 | 对照 only; greyed in the single displays |
-| S-R-07 | Zoom | 缩小 · 放大 · 缩放比例 · 适合宽度 · 适合页面 · 实际大小 | ⌘− and ⌘+ (Ctrl elsewhere) |
+| S-R-07 | Zoom | 缩小 · 放大 · 缩放比例 · 适合宽度 · 适合页面 · 实际大小 | ⌘− and ⌘+ (Ctrl elsewhere), in `aria-keyshortcuts` too. The value's button is named 缩放比例 and its value, as the language's and the service's are named by S-P-20 and S-P-10 and theirs (WCAG 2.5.3). Below 500 px − and + give way to the value's menu |
 | S-R-08 | Reading options | 阅读选项 · 高亮颜色 · 外观 · 浅色 · 深色 · 跟随系统 · 深色时调暗页面 | With S-P-80 and S-P-85 |
-| S-R-09 | Download | 下载 · 译文 PDF · 原文 PDF | 译文 PDF greyed until the final translation is on screen |
+| S-R-09 | Download | 下载 · 译文 PDF · 原文 PDF | 译文 PDF greyed until the final translation is on screen. Below 500 px a row of the reading options, with 设置 (S-P-02, a link) and S-R-10 |
 | S-R-10 | Leave | 在默认查看器中打开 | Back to the browser's own viewer |
 | S-R-11 | Page pills | 原文页码 · 译文页码 · 上一页 · 下一页 | |
 | S-R-12 | A load or a translation under way | 正在加载 · 正在翻译 · 正在按当前设置重新翻译 | Said to screen readers in the status region, not shown: the 2 px line along the toolbar's foot shows how far it has come (the maintainer, 2026-09-25) |

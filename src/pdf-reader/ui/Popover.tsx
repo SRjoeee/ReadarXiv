@@ -1,10 +1,17 @@
 // The reader's popovers (the reader's design, §6.7): anchored under their button, 6 px below it, kept within the window
 // (position-try); they grow from the button. The browser's own light-dismiss popover: its button opens and closes it
 // (popovertarget), Escape and a press outside close it; the focus comes back to the button when it closes with the
-// focus inside. Its contents are drawn from the start, so that it never shows empty for a frame and a key pressed as it
-// opens is not lost; opening puts the focus on its [data-autofocus] element, and a menu's contents start afresh after each
+// focus inside, and closes when the focus leaves it for another control, as a Tab out of a menu does (APG; the interface
+// review: a menu stayed open behind the focus, and no tooltip showed while it did). Its contents are drawn from the
+// start, so that it never shows empty for a frame and a key pressed as it opens is not lost; opening puts the focus on
+// its [data-autofocus] element, or a dialog's first control that shows, and a menu's contents start afresh after each
 // close (their key, `generation`)
 import { type ReactNode, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+
+/** a popover's own elements matching `selector`: not those of a popover it holds (the reading options hold menus) */
+const own = (el: HTMLElement, selector: string) => [...el.querySelectorAll<HTMLElement>(selector)].filter(e => e.parentElement?.closest('[popover]') === el)
+/** a dialog's first control that shows: its rows for a narrow window are there, hidden in a wide one (reader.css) */
+const firstShown = (el: HTMLElement) => own(el, 'button, a[href], input').find(e => !e.closest('[hidden]') && (e.checkVisibility?.() ?? true))
 
 /** `name`: a fixed id for a popover another part of the page opens (the capsule's choose-language action); one per page */
 export function usePopover(kind: 'menu' | 'listbox' | 'dialog', name?: string) {
@@ -41,7 +48,7 @@ export function Popover({ id, anchor, onOpenChange, role, label, onClosed, class
   // the element to focus carries the HTML autofocus attribute, which the browser's popover honours as it shows, in the
   // same step: a key pressed at once goes to it (React's autoFocus writes no attribute). Set again as contents start afresh
   useLayoutEffect(() => {
-    for (const el of ref.current?.querySelectorAll('[data-autofocus]:not([autofocus])') ?? []) el.setAttribute('autofocus', '')
+    if (ref.current) for (const el of own(ref.current, '[data-autofocus]:not([autofocus])')) el.setAttribute('autofocus', '')
   })
   useEffect(() => {
     const el = ref.current
@@ -51,16 +58,22 @@ export function Popover({ id, anchor, onOpenChange, role, label, onClosed, class
       onOpenChange(now)
       if (now) {
         // where the browser did not already (a popover shown by script in a test page)
-        const target = el.querySelector<HTMLElement>('[data-autofocus]')
+        const target = own(el, '[data-autofocus]')[0] ?? (role === 'dialog' ? firstShown(el) : undefined)
         if (target && document.activeElement !== target) target.focus()
         return
       }
       if (el.contains(document.activeElement) || document.activeElement === document.body) document.querySelector<HTMLElement>(`[popovertarget="${id}"]`)?.focus()
       onClosed?.()
     }
+    // the focus gone to a control outside: a press on nothing that takes the focus, or on its own words, leaves it open
+    const onFocusOut = (e: FocusEvent) => {
+      const to = e.relatedTarget as Node | null
+      if (to && !el.contains(to)) el.hidePopover()
+    }
     el.addEventListener('toggle', onToggle)
-    return () => el.removeEventListener('toggle', onToggle)
-  }, [id, onOpenChange, onClosed])
+    el.addEventListener('focusout', onFocusOut)
+    return () => { el.removeEventListener('toggle', onToggle); el.removeEventListener('focusout', onFocusOut) }
+  }, [id, role, onOpenChange, onClosed])
   // a dialog is the popover itself; a menu or a list is the element inside it, which carries the role and the name, so
   // that there is one menu and not a menu in a menu (the final review)
   const dialog = role === 'dialog'

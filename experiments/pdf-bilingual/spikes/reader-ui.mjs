@@ -35,7 +35,7 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
 // ---------------------------------------------------------------- Task 13: the frame
 {
   const page = await open({ mode: 'bilingual' })
-  const bar = await box(page, 'header[role="toolbar"]'), doc = await box(page, '.doc')
+  const bar = await box(page, 'header'), doc = await box(page, '.doc')
   check('the toolbar is 44 px, the document area under it', bar?.h === 44 && doc?.y === 44, JSON.stringify({ bar, doc }))
   const [l, r] = [await box(page, '.pane[data-side="left"]'), await box(page, '.pane[data-side="right"]')]
   check('side by side: two panes, an 8 px gutter', l && r && Math.round(r.x - (l.x + l.w)) === 8, JSON.stringify({ l, r }))
@@ -176,16 +176,10 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.waitForTimeout(500)
   check('the display switch changes the display', (await state(page)).display === 'translation')
   check('sync and swap grey out in a single display', await page.evaluate(() => ['同步滚动', '交换左右'].every(n => document.querySelector(`button[aria-label="${n}"]`)?.getAttribute('aria-disabled') === 'true')))
-  await page.keyboard.press('2')
-  await page.waitForTimeout(500)
-  check('the 2 key comes back to side by side', (await state(page)).display === 'bilingual')
-  // the other two keys, and the switch's arrows as a radio group's (the design, §6.2, §14)
-  await page.keyboard.press('1')
+  // no single key chooses a display (WCAG 2.1.4; the maintainer, 2026-09-26); the switch's arrows do, as a radio group's
+  for (const k of ['1', '2', '3']) await page.keyboard.press(k)
   await page.waitForTimeout(400)
-  const one = (await state(page)).display
-  await page.keyboard.press('3')
-  await page.waitForTimeout(400)
-  const three = (await state(page)).display
+  const digits = (await state(page)).display
   await page.getByRole('radio', { name: '译文' }).focus()
   await page.keyboard.press('ArrowLeft')
   await page.waitForTimeout(400)
@@ -193,8 +187,8 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.keyboard.press('ArrowRight')
   await page.waitForTimeout(400)
   const right = (await state(page)).display
-  check('the 1 and 3 keys choose the original and the translation; the switch\'s arrows move its choice and its focus', one === 'original' && three === 'translation' && left.display === 'bilingual' && left.focus === '对照' && right === 'translation', JSON.stringify({ one, three, left, right }))
-  await page.keyboard.press('2')
+  check('a digit chooses no display; the switch\'s arrows move its choice and its focus', digits === 'translation' && left.display === 'bilingual' && left.focus === '对照' && right === 'translation', JSON.stringify({ digits, left, right }))
+  await page.getByRole('radio', { name: '对照' }).click()
   await page.waitForTimeout(400)
   const before = (await state(page)).scale
   await page.getByRole('button', { name: '放大' }).click()
@@ -221,7 +215,7 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.keyboard.type('fra')
   check('the language menu searches as it is typed', (await page.getByRole('option').count()) === 1)
   await page.keyboard.press('Escape')
-  check('Escape closes it, the focus back on its button', await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === '目标语言'))
+  check('Escape closes it, the focus back on its button', await page.evaluate(() => document.activeElement?.getAttribute('aria-label')?.startsWith('目标语言')))
   const [download] = await Promise.all([page.waitForEvent('download'), (async () => { await page.getByRole('button', { name: '下载' }).click(); await page.getByRole('menuitem', { name: '原文 PDF' }).click() })()])
   check('the original downloads, named by the paper', download.suggestedFilename() === `${paper}.pdf`, download.suggestedFilename())
   await page.getByRole('button', { name: '翻译服务' }).click()
@@ -245,10 +239,10 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.keyboard.press('Escape')
   await page.setViewportSize({ width: 880, height: 900 })
   await page.waitForTimeout(400)
-  const inBar = await page.evaluate(() => getComputedStyle(document.querySelector('[data-zone="trail"] > button[aria-label="目标语言"]')).display)
+  const inBar = await page.evaluate(() => getComputedStyle(document.querySelector('[data-zone="trail"] > button[aria-label^="目标语言"]')).display)
   await page.getByRole('button', { name: '阅读选项' }).click()
   await page.waitForTimeout(300)
-  const inOptions = await page.evaluate(() => { const b = document.querySelector('.pop:popover-open .narrow-only button[aria-label="目标语言"]'); return !!b && b.getBoundingClientRect().width > 0 })
+  const inOptions = await page.evaluate(() => { const b = document.querySelector('.pop:popover-open .narrow-only button[aria-label^="目标语言"]'); return !!b && b.getBoundingClientRect().width > 0 })
   check('under 900 px the language menu leaves the bar for the options', inBar === 'none' && inOptions, JSON.stringify({ inBar, inOptions }))
   await shot(page, '20-options-narrow')
   await page.close()
@@ -366,7 +360,7 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
 {
   const page = await open({ mode: 'bilingual' })
   // the progress line (the maintainer, 2026-09-25): there, along the toolbar's foot, and out of sight while reading
-  const line = await page.evaluate(() => { const l = document.querySelector('header[role="toolbar"] .progress-line'); return l && { on: l.hasAttribute('data-on'), opacity: getComputedStyle(l).opacity } })
+  const line = await page.evaluate(() => { const l = document.querySelector('header .progress-line'); return l && { on: l.hasAttribute('data-on'), opacity: getComputedStyle(l).opacity } })
   check('the progress line is out of sight while reading', !!line && !line.on && line.opacity === '0', JSON.stringify(line))
   // I5: the offline service's language pack is looked up after the settings land, and the service menu follows it
   const pack = await page.waitForFunction(() => window.__reader.controller.getState().pack, null, { timeout: 8000 }).then(h => h.jsonValue(), () => null)
@@ -418,7 +412,8 @@ for (const embedded of ['1', '0']) {
     await page.waitForTimeout(500)
     const seen = {}
     for (const name of ['缩放比例', '目标语言']) {
-      await page.getByRole('button', { name, exact: true }).focus()
+      // the bar's own: named by its words and what it shows (WCAG 2.5.3)
+      await page.locator(`[data-zone="trail"] > :is(button, a)[aria-label^="${name}"], [data-zoom] > button[aria-label^="${name}"]`).focus()
       await page.keyboard.press('Enter')
       await page.waitForTimeout(350)
       await page.keyboard.press('ArrowDown')
@@ -431,7 +426,7 @@ for (const embedded of ['1', '0']) {
   }
   await patch(page, { pdfReader: { appearance: 'system' } })
   // C. every name in the service menu whole
-  await page.getByRole('button', { name: '翻译服务', exact: true }).click()
+  await page.locator('[data-zone="trail"] > [aria-label^="翻译服务"]').click()
   await page.waitForTimeout(400)
   const cut = await page.evaluate(() => [...document.querySelectorAll('.pop:popover-open .item .truncate')].filter(s => s.scrollWidth > s.clientWidth + 1).map(s => s.textContent))
   check('the service menu shows every name whole', cut.length === 0, JSON.stringify(cut))
@@ -465,6 +460,148 @@ for (const embedded of ['1', '0']) {
   })
   check('dark: the chosen segment\'s thumb and a pressed button stand out from what they sit on', ratios.thumb >= 1.5 && ratios.pressed >= 1.15, JSON.stringify(ratios))
   await patch(page, { pdfReader: { appearance: 'system' } })
+  await page.close()
+}
+
+// ---------------------------------------------------------------- the interface review's fixes (2026-09-26)
+{
+  const page = await open({ mode: 'bilingual' })
+  // the bar at every width, in both languages and with a service's longest name (40 characters): no control drawn over
+  // another or past the window's edges, and below 500 px what leaves the bar is in the reading options (§5)
+  const layout = () => {
+    const vw = innerWidth
+    const els = [...document.querySelectorAll('header button, header a, header [role="radiogroup"]')].filter(e => !e.closest('[role="radiogroup"]') && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden' || e.matches('[role="radiogroup"]'))
+    const rects = els.map(e => { const r = e.getBoundingClientRect(); return { name: e.getAttribute('aria-label') || e.textContent.trim().slice(0, 16), l: r.left, r: r.right } })
+    const overlaps = []
+    for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) if (rects[i].l < rects[j].r - 0.5 && rects[j].l < rects[i].r - 0.5) overlaps.push(`${rects[i].name} × ${rects[j].name}`)
+    return { overlaps, outside: rects.filter(r => r.r > vw + 0.5 || r.l < -0.5).map(r => r.name) }
+  }
+  const setLocale = async lang => {
+    await Promise.all([page.waitForEvent('load', { timeout: 30000 }).catch(() => null), page.evaluate(l => { window.__reader.controller.patchSettings(c => ({ ...c, uiLanguage: l })) }, lang).catch(() => null)])
+    await page.waitForFunction(() => window.__reader?.ready && window.__reader?.controller?.getState().settings, null, { timeout: 90000 })
+    await page.waitForTimeout(800)
+  }
+  const bad = []
+  const sweep = async tag => {
+    for (const w of [1440, 1100, 1024, 960, 900, 899, 640, 500, 499, 400, 320]) {
+      await page.setViewportSize({ width: w, height: 800 })
+      await page.waitForTimeout(300)
+      const l = await page.evaluate(layout)
+      if (l.overlaps.length || l.outside.length) bad.push(`${tag} ${w}: ${JSON.stringify(l)}`)
+      await page.screenshot({ path: join(out, `review-bar-${tag}-${w}.png`), clip: { x: 0, y: 0, width: w, height: 48 } })
+    }
+  }
+  await sweep('zh')
+  await setLocale('en')
+  await sweep('en')
+  await setLocale('zh-CN')
+  await page.evaluate(async () => {
+    window.__reader.controller.patchSettings(c => ({ ...c, provider: 'svc-review01', services: [...c.services, { id: 'svc-review01', kind: 'openai-compat', name: 'OpenRouter · Claude Sonnet 5 (work acct)', baseURL: 'http://127.0.0.1:9/v1', apiKey: '', model: 'm', thinking: 'disabled' }] }))
+    await new Promise(r => setTimeout(r, 800))
+  })
+  await sweep('long')
+  check('the bar at every width, in both languages and with the longest service name: nothing drawn over another or past the window (the interface review)', bad.length === 0, bad.join(' | '))
+  // below 500 px the download and the settings are the reading options' first rows
+  await page.setViewportSize({ width: 400, height: 800 })
+  await page.waitForTimeout(300)
+  await page.click('header [aria-label="阅读选项"]')
+  await page.waitForTimeout(400)
+  const rows = await page.evaluate(() => [...document.querySelectorAll('.pop:popover-open .narrowest-only.row')].filter(r => r.getBoundingClientRect().height > 0).map(r => r.firstChild?.textContent))
+  const firstFocus = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))
+  check('under 500 px: the download and the settings open from the reading options, which take the focus to the first of them', JSON.stringify(rows) === JSON.stringify(['下载', '设置']) && firstFocus === '下载', JSON.stringify({ rows, firstFocus }))
+  await page.keyboard.press('Escape')
+  await page.evaluate(async () => {
+    window.__reader.controller.patchSettings(c => ({ ...c, provider: 'microsoft', services: c.services.filter(s => s.id !== 'svc-review01') }))
+    await new Promise(r => setTimeout(r, 600))
+  })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.waitForTimeout(400)
+  check('the bar is the page\'s banner, not a toolbar it does not behave as', await page.evaluate(() => document.querySelector('header').getAttribute('role') === null))
+  // the reading options put the focus in, at a width where their first rows are the highlight's
+  await page.focus('header [aria-label="阅读选项"]')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(400)
+  const inside = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))
+  await page.keyboard.press('Escape')
+  check('the reading options take the focus to their first control that shows', inside === '对照高亮', String(inside))
+  // a Tab out of an open menu closes it, and the focus goes on
+  await page.focus('header [aria-label^="缩放比例"]')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(300)
+  await page.keyboard.press('Tab')
+  await page.waitForTimeout(300)
+  const after = await page.evaluate(() => ({ open: [...document.querySelectorAll('.pop')].some(p => p.matches(':popover-open')), focus: document.activeElement?.getAttribute('aria-label') }))
+  check('a Tab out of an open menu closes it, the focus going on to the next control', !after.open && after.focus === '放大', JSON.stringify(after))
+  // every point of a control's drawn box is that control's (the zoom's three sit side by side)
+  const stolen = await page.evaluate(() => {
+    const out = []
+    for (const b of document.querySelectorAll('header button, header a')) {
+      const r = b.getBoundingClientRect()
+      if (!r.width) continue
+      for (let x = Math.ceil(r.left); x < Math.floor(r.right); x++) { const hit = document.elementFromPoint(x, r.top + r.height / 2)?.closest('header button, header a'); if (hit && hit !== b) { out.push(`${b.getAttribute('aria-label')} @${x}`); break } }
+    }
+    return out
+  })
+  check('every point of a control\'s drawn box is that control\'s: grown hit areas never overlap', stolen.length === 0, stolen.join(', '))
+  // a pressed button is told from a hovered one, the pointer still on it; its mark stands 3:1 against the bar
+  const sync = page.locator('header button[aria-label="同步滚动"]')
+  const look = () => sync.evaluate(b => { const s = getComputedStyle(b); return [b.getAttribute('aria-pressed'), s.backgroundColor, s.boxShadow, s.color].join(' | ') })
+  if ((await sync.getAttribute('aria-pressed')) === 'true') { await sync.click(); await page.mouse.move(700, 500) }
+  await sync.hover(); await page.waitForTimeout(250)
+  const offHover = await look()
+  await sync.click(); await page.waitForTimeout(250)
+  const onHover = await look()
+  check('a pressed button is told from a hovered one, the pointer still on it (the interface review)', offHover.split(' | ').slice(1).join() !== onHover.split(' | ').slice(1).join(), JSON.stringify({ offHover, onHover }))
+  const ratios = async () => page.evaluate(() => {
+    const px = color => { const c = document.createElement('canvas'); c.width = c.height = 1; const g = c.getContext('2d'); g.fillStyle = color; g.fillRect(0, 0, 1, 1); return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3) }
+    const lum = ([r, g, b]) => [r, g, b].map(v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [x, y] = [lum(px(a)), lum(px(b))].sort((m, n) => n - m); return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100 }
+    const token = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim()
+    // the colour of each state's own mark, as its box-shadow draws it
+    const mark = sel => (getComputedStyle(document.querySelector(sel)).boxShadow.match(/(?:oklch|oklab|rgba?|color)\([^)]*\)/) ?? [null])[0]
+    const bar = getComputedStyle(document.querySelector('header')).backgroundColor, well = getComputedStyle(document.querySelector('.seg.display')).backgroundColor
+    const pressed = mark('header .tbtn[aria-pressed="true"]'), thumb = mark('.seg.display .thumb')
+    return { pressed: pressed && ratio(pressed, bar), thumb: thumb && ratio(thumb, well), ink3: token('--ink-3') }
+  })
+  await patch(page, { pdfReader: { appearance: 'light' } })
+  await page.waitForTimeout(700)
+  const light = await ratios()
+  await patch(page, { pdfReader: { appearance: 'dark' } })
+  await page.waitForTimeout(700)
+  const dark = await ratios()
+  await patch(page, { pdfReader: { appearance: 'light' } })
+  await page.waitForTimeout(700)
+  check('the pressed button\'s mark and the chosen segment\'s stand 3:1 against what they sit on, light and dark (WCAG 1.4.11)', [light.pressed, light.thumb, dark.pressed, dark.thumb].every(r => r >= 3), JSON.stringify({ light, dark }))
+  // forced colours: the chosen display, a pressed button and a switch that is on keep a mark of their own
+  await page.emulateMedia({ forcedColors: 'active' })
+  await page.waitForTimeout(300)
+  const forced = await page.evaluate(() => {
+    const s = e => { const c = getComputedStyle(e); return [c.backgroundColor, c.borderTopStyle, c.borderTopColor, c.outlineStyle, c.color].join(' ') }
+    const radios = [...document.querySelectorAll('.seg.display [role="radio"]')]
+    const chosen = radios.find(r => r.getAttribute('aria-checked') === 'true'), other = radios.find(r => r.getAttribute('aria-checked') === 'false')
+    return {
+      segment: s(chosen) + ' / thumb ' + getComputedStyle(document.querySelector('.seg.display .thumb')).backgroundColor, otherSegment: s(other) + ' / well ' + getComputedStyle(document.querySelector('.seg.display')).backgroundColor,
+      pressed: s(document.querySelector('header button[aria-label="同步滚动"]')), unpressed: s(document.querySelector('header button[aria-label="交换左右"]')),
+    }
+  })
+  await page.click('header [aria-label="阅读选项"]')
+  await page.waitForTimeout(400)
+  // one switch off, so that both looks are there to compare; turned on again after
+  const dim = page.locator('.pop:popover-open [role="switch"][aria-label="深色时调暗页面"]')
+  await dim.click(); await page.waitForTimeout(400)
+  const switches = await page.evaluate(() => [...document.querySelectorAll('.pop:popover-open [role="switch"]')].map(b => [b.getAttribute('aria-checked'), getComputedStyle(b).backgroundColor, getComputedStyle(b).borderTopStyle].join(' ')))
+  await dim.click(); await page.waitForTimeout(400)
+  await page.keyboard.press('Escape')
+  await page.screenshot({ path: join(out, 'review-forced-colors.png'), clip: { x: 0, y: 0, width: 1440, height: 48 } })
+  await page.emulateMedia({ forcedColors: 'none' })
+  const thumbDiffers = !forced.segment.endsWith(forced.otherSegment.split(' / well ')[1])
+  check('forced colours: the chosen display, a pressed button and a switch that is on keep a mark of their own (the interface review)', thumbDiffers && forced.pressed !== forced.unpressed && new Set(switches.filter(x => x.startsWith('true')).map(x => x.slice(5))).size === 1 && !switches.filter(x => x.startsWith('false')).some(x => switches.find(y => y.startsWith('true'))?.slice(5) === x.slice(6)), JSON.stringify({ forced, switches }))
+  // the contents: a row is its link, top to bottom
+  await page.click('header [aria-label="目录"]')
+  await page.waitForTimeout(500)
+  const entry = await page.evaluate(() => { const e = document.querySelector('.toc .entry'), a = e.querySelector('a'); return { row: Math.round(e.getBoundingClientRect().height), link: Math.round(a.getBoundingClientRect().height) } })
+  check('a contents row is its link from top to bottom: no dead band above and below', entry.link === entry.row, JSON.stringify(entry))
+  await page.click('header [aria-label="目录"]')
   await page.close()
 }
 

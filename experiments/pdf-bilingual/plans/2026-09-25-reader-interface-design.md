@@ -143,8 +143,13 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 - **Contents sidebar**, 236 px, slides in from the left over 200 ms and moves the document area with it.
 - **Floating over the document**: one page pill per pane at its bottom centre (16 px up); the status capsule at the
   document area's bottom centre, 58 px up, above the pills; the scroll indicator on each pane's right edge.
-- **Narrow windows**: the title yields first (it truncates; below 1100 px only the arXiv id is left, the title in its
-  tooltip); below 900 px the language and service menus move into the reading options, as their first two rows. When the
+- **Narrow windows**: the title yields first (it truncates, and leaves when the lead has too little room for it —
+  the lead's own width, which the trail's menus narrow; the title stays in the id's tooltip), then the id, when the
+  lead cannot hold it; the service's and the language's names are cut short at 11 em, whole in their tooltips; below
+  900 px the language and service menus move into the reading options, as their first two rows; below 500 px the
+  download, the settings and the way back move there too, before them, and the zoom keeps its value's menu (− and +
+  give way; ⌘± and the pinch stay), so that the bar holds at 320 px (the interface review; the maintainer,
+  2026-09-26). When the
   document area is narrower than 840 px, two pages side by side are too small to read: 对照 stays chosen, the translation
   is shown alone, and the capsule says so once, 窗口较窄，暂只显示译文 — the HTML page's rule and wording (S-P-74, 窗口较窄，
   暂按上下显示). The widths are to be checked by reading at them while building.
@@ -182,9 +187,15 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 6. 设置 (`settings`): opens the settings page at its PDF reader section.
 7. 在默认查看器中打开 (`log-out`): leaves the reader for the browser's own viewer (the maintainer's wording, 2026-09-25).
 
-Buttons are 30 × 30 with a 7 px radius and a hit area grown to the bar's height; hover and open take the fill. Every
-button has a tooltip: after 500 ms of hover, at once on keyboard focus; one line always (a tooltip wrapped when it was
-measured at its last place near the window's edge); the shortcut, when there is one, in a lighter `kbd` after the words.
+Buttons are 30 × 30 with a 7 px radius and a hit area grown to the bar's height; hover and open take the fill; pressed
+adds an inset 1 px ink-3 ring, so that a press is seen with the pointer still on the button (the fill alone, the
+hover's, stood 1.2:1 against the bar; ink-3 stands 3.64:1 and 3.39:1, WCAG 1.4.11). Every button has a tooltip: after
+500 ms of hover, at once on keyboard focus; one line always (a tooltip wrapped when it was measured at its last place
+near the window's edge); the shortcut, or the value the button shows, in a lighter `kbd` after the words. The zoom's
+value, the language and the service are named by their words and what they show (缩放比例 83%, 目标语言 简体中文:
+WCAG 2.5.3). 设置 is a link, opened in a new tab. The bar is the page's banner: each control a Tab stop of its own (an
+ARIA toolbar would have promised arrow keys between them). In forced colours the chosen display, a pressed button and
+a switch that is on take the system's Highlight (the interface review, 2026-09-26).
 
 ### 6.2 The display switch
 
@@ -215,9 +226,10 @@ which is a convention, 「解释有点牵强」); a translation badge on the pan
 then replaced by the maintainer's letters in the middle).
 
 It is a single choice, so it is a radio group to assistive technology: `role="radiogroup"` named 显示, three
-`role="radio"` with `aria-checked` and the words as their names, arrow keys moving the choice. Keys **1**, **2**, **3**
-choose 原文, 对照, 译文 anywhere on the page outside a text field; the tooltips show them. A display that cannot be had
-(§8) is `aria-disabled` and skipped by the arrows.
+`role="radio"` with `aria-checked` and the words as their names, arrow keys moving the choice. No single key chooses a
+display anywhere on the page: 1, 2 and 3 did, which a stray keystroke or a spoken word could set off (WCAG 2.1.4; the
+maintainer removed them, 2026-09-26). The chosen segment's thumb has a 1 px ink-3 edge, 3:1 against the well. A
+display that cannot be had (§8) is `aria-disabled` and skipped by the arrows.
 
 ### 6.3 The contents sidebar
 
@@ -308,7 +320,7 @@ overlays follow the pinch exactly (§10.1).
 - A press on a toolbar button scales it to 0.96; hover and open take the fill in 150 ms.
 - The display switch's thumb slides; the sidebar slides; the pills and indicators fade; the capsule rises; the appearance
   crossfades. Nothing jumps.
-- Escape closes the open popover; 1 / 2 / 3 choose the display; ⌘± zoom.
+- Escape closes the open popover, and a Tab out of it closes it too, the focus going on; ⌘± zoom.
 
 ## 8. States
 
@@ -562,11 +574,14 @@ Each before the stage's pull request, on the heaviest demo paper, in a real wind
 
 ## 13. Accessibility
 
-- Every control has a name; icon-only buttons by `aria-label` equal to their tooltip's words.
+- Every control has a name; icon-only buttons by `aria-label` equal to their tooltip's words; a button that shows a
+  value is named by its words and the value (WCAG 2.5.3); the zoom's shortcuts are in `aria-keyshortcuts`.
 - Tooltips on keyboard focus as on hover; everything a pointer does, a keyboard does; focus rings are 2 px `--focus`,
   2 px offset.
 - The display switch is a radio group (§6.2); the zoom, download and language/service menus are menus or listboxes with
-  the shared `Menu`'s fixed keyboard behaviour; the reading options are a dialog.
+  the shared `Menu`'s fixed keyboard behaviour; the reading options are a dialog, which takes the focus to its first
+  control that shows. A popover closes when the focus leaves it for another control.
+- Forced colours keep every state: the chosen, pressed and switched-on controls take `Highlight`.
 - The status capsule is a live region present from the start; failures never move focus.
 - Contrast as §4.1; meaning never rides on colour alone (the danger colour always has its icon and words).
 - `prefers-reduced-motion` honoured everywhere (§4.2).
@@ -574,16 +589,16 @@ Each before the stage's pull request, on the heaviest demo paper, in a real wind
 ## 14. Testing
 
 - **Unit** (Vitest): the display ↔ `mode` mapping both ways; the 18 → 19 migration; the popup view-model's reader
-  rules (§9.2); the engine's failure classes to `ProviderErrorKind`; `DisplaySwitch` as a radio group (arrows, 1/2/3, a
-  disabled choice skipped); the `Menu` fixes; the overlay transform and the redraw observer against a fake page.
+  rules (§9.2); the engine's failure classes to `ProviderErrorKind`; `DisplaySwitch` as a radio group (arrows, a
+  disabled choice skipped, no single key on the page); the `Menu` fixes; the overlay transform and the redraw observer against a fake page.
 - **Copy**: every reader string comes from the locale packs in both languages; a test fails on a reader-facing string
   naming LaTeX, TeX, compiling, typesetting, an engine or a provider (§1's rule).
 - **The engine moved intact**: the existing browser checks pass on the new page unchanged — the cache revisit, the
   viewer faults, the lost cases, the sync frame measurement, `e2e:pdf`.
 - **New browser checks**: the pinch (both sides scale; overlays within 1 px mid-pinch; no bare time after the redraw);
   the page pills; the indicators (a drag moves both sides); the abstract popup's two buttons and their disabled states;
-  the settings section and the PDF translations' line and 清除; dark pages; the keyboard (1/2/3, the switch's arrows,
-  Escape).
+  the settings section and the PDF translations' line and 清除; dark pages; the keyboard (the switch's arrows, Escape, a
+  Tab out of a menu); the bar at every width in both languages; forced colours.
 - **Probes** for §12, committed with the checks.
 - Before the pull request: a `better-interface` review, `break` (every state of §8 rendered), and the gate
   `pnpm typecheck && pnpm lint && pnpm test && pnpm build`.

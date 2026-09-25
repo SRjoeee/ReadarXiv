@@ -294,7 +294,6 @@ const O: Locale['O'] = {
 }
 
 const R: Locale['R'] = {
-  bar: 'Reader',
   contents: 'Contents',
   abstract: 'Open the abstract on arXiv',
   display: { name: 'Display', original: 'Original', bilingual: 'Side by side', translation: 'Translation' },

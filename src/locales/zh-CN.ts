@@ -316,7 +316,6 @@ const O = {
  * search, 对照高亮, 图片翻译, 设置, the failures' count and 重试, the reasons
  */
 const R = {
-  bar: '阅读器', // S-R-01: the toolbar's name, for screen readers
   contents: '目录', // S-R-02
   abstract: '在 arXiv 打开摘要页', // S-R-03
   display: { name: '显示', original: '原文', bilingual: '对照', translation: '译文' }, // S-R-04

@@ -1,11 +1,14 @@
 // The reading options (the reader's design, §6.1): the highlight and its colour, figure text, the appearance and the
-// dark pages — all settings, the same values the popup and the settings page change, each written at once
-import { SlidersHorizontal } from 'lucide'
+// dark pages — all settings, the same values the popup and the settings page change, each written at once. In a narrow
+// window they hold what leaves the bar too, first (§5): below 900 px the language and the service, below 500 px the
+// download, the settings and the way back
+import { LogOut, Settings, SlidersHorizontal } from 'lucide'
 import { useRef } from 'react'
 import { R, S, profileName } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { Icon } from './icons'
-import { LanguageMenu, ServiceMenu } from './Menus'
+import { leaveReader, settingsUrl } from './links'
+import { DownloadMenu, LanguageMenu, ServiceMenu } from './Menus'
 import { Popover, usePopover } from './Popover'
 import { radioKeys } from './radio'
 import { Switch } from './Switch'
@@ -14,7 +17,7 @@ import { useReader } from './use-reader'
 
 const APPEARANCES = ['light', 'dark', 'system'] as const
 
-export function ReadingOptions({ controller }: { controller: ReaderController }) {
+export function ReadingOptions({ controller, embedded = false }: { controller: ReaderController; embedded?: boolean }) {
   const config = useReader(controller, s => s.settings)
   const pop = usePopover('dialog', 'options')
   const radios = useRef<(HTMLButtonElement | null)[]>([])
@@ -28,6 +31,26 @@ export function ReadingOptions({ controller }: { controller: ReaderController })
         <Icon node={SlidersHorizontal} />
       </ToolbarButton>
       <Popover {...pop.popover} role="dialog" label={R.options.name}>
+        {/* below 500 px the bar's download, settings and way back live here, before all (§5; the maintainer, 2026-09-26) */}
+        <div className="row narrowest-only">
+          {R.download.name}
+          <DownloadMenu controller={controller} />
+        </div>
+        <div className="row narrowest-only">
+          {S.settings}
+          <ToolbarButton label={S.settings} href={settingsUrl()}>
+            <Icon node={Settings} />
+          </ToolbarButton>
+        </div>
+        {embedded && (
+          <div className="row narrowest-only">
+            {R.leave}
+            <ToolbarButton label={R.leave} onClick={leaveReader}>
+              <Icon node={LogOut} />
+            </ToolbarButton>
+          </div>
+        )}
+        <div className="sep narrowest-only" />
         {/* below 900 px the toolbar's language and service menus live here, first (the design, §5) */}
         <div className="row narrow-only">
           {S.rows.language}

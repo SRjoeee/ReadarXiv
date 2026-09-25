@@ -13,9 +13,9 @@ beforeAll(() => setLocale('zh-CN'))
 beforeEach(() => { restore = stubPopovers() })
 afterEach(() => { restore(); document.body.innerHTML = '' })
 
-async function open() {
+async function open(embedded = false) {
   const fake = fakeController()
-  const mounted = await mountElement(createElement(ReadingOptions, { controller: fake.controller }))
+  const mounted = await mountElement(createElement(ReadingOptions, { controller: fake.controller, embedded }))
   await act(async () => { mounted.container.querySelector<HTMLElement>('[popover="auto"]')!.showPopover() })
   /** what the last write would make of the defaults */
   const written = () => (fake.controller.patchSettings.mock.calls.at(-1)![0] as (c: Config) => Config)(DEFAULT_CONFIG)
@@ -46,7 +46,18 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
   it('holds the language and service menus as its first rows, for a window under 900 px (§5)', async () => {
     const { container } = await open()
     const rows = [...container.querySelectorAll('[popover="auto"] > .narrow-only.row')]
-    expect(rows.map(r => r.querySelector('button')?.getAttribute('aria-label'))).toEqual(['目标语言', '翻译服务'])
+    expect(rows.map(r => r.querySelector('button')?.getAttribute('aria-label'))).toEqual(['目标语言 简体中文', '翻译服务 Microsoft 翻译'])
+  })
+
+  it('holds the download, the settings and the way back before them, for a window under 500 px (§5; the maintainer, 2026-09-26)', async () => {
+    const rows = async (embedded: boolean) => {
+      const { container, unmount } = await open(embedded)
+      const found = [...container.querySelectorAll('[popover="auto"] > .narrowest-only.row')].map(r => [r.firstChild?.textContent, r.querySelector('button, a')?.getAttribute('aria-label')])
+      await unmount()
+      return found
+    }
+    expect(await rows(false)).toEqual([['下载', '下载'], ['设置', '设置']])
+    expect(await rows(true)).toEqual([['下载', '下载'], ['设置', '设置'], ['在默认查看器中打开', '在默认查看器中打开']])
   })
 
   it('writes each change at once', async () => {

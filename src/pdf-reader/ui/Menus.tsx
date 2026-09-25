@@ -29,7 +29,7 @@ export function ZoomMenu({ controller }: { controller: ReaderController }) {
   ]
   return (
     <>
-      <ToolbarButton label={R.zoom.value} anchor={pop.anchor} {...pop.trigger} className="zoom-value">
+      <ToolbarButton label={R.zoom.value} value={`${Math.round(state.scale * 100)}%`} anchor={pop.anchor} {...pop.trigger} className="zoom-value">
         <span data-zoom-value className="tabular-nums">{Math.round(state.scale * 100)}%</span>
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
@@ -46,7 +46,7 @@ export function LanguageMenu({ controller, name }: { controller: ReaderControlle
   const pop = usePopover('listbox', name)
   return (
     <>
-      <ToolbarButton label={S.rows.language} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
+      <ToolbarButton label={S.rows.language} value={current ? languageName(current) : undefined} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
         <span>{current ? languageName(current) : ''}</span>
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
@@ -66,7 +66,7 @@ export function ServiceMenu({ controller }: { controller: ReaderController }) {
   const items = serviceItems(config, state.pack).map(i => ({ id: i.id, name: i.name, hint: i.hint, checked: i.selected, disabled: i.disabled && !i.action }))
   return (
     <>
-      <ToolbarButton label={S.rows.service} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
+      <ToolbarButton label={S.rows.service} value={serviceName(config.provider, config.services)} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
         <span>{serviceName(config.provider, config.services)}</span>
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
@@ -86,14 +86,15 @@ export function ServiceMenu({ controller }: { controller: ReaderController }) {
   )
 }
 
-export function DownloadMenu({ controller }: { controller: ReaderController }) {
+/** `wide`: the bar's, which leaves it in a narrow window for the reading options' own (reader.css data-wide) */
+export function DownloadMenu({ controller, wide = false }: { controller: ReaderController; wide?: boolean }) {
   // the original only once its document is open: loading, or after a fetch that failed, there are no bytes to give (Codex on #301)
   const state = useReader(controller, s => ({ finalReady: s.finalReady, original: s.sides.left.pages > 0 }))
   const pop = usePopover('menu')
   const items = [{ id: 'translation', name: R.download.translation, disabled: !state.finalReady }, { id: 'original', name: R.download.original, disabled: !state.original }]
   return (
     <>
-      <ToolbarButton label={R.download.name} anchor={pop.anchor} {...pop.trigger}>
+      <ToolbarButton label={R.download.name} anchor={pop.anchor} {...pop.trigger} data-wide={wide || undefined}>
         <Icon node={Download} />
       </ToolbarButton>
       <Popover {...pop.popover} role="menu" label={R.download.name} className="!min-w-[160px]">
