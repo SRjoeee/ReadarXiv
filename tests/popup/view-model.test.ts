@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { setLocale } from '@/ui/strings'
+import { S, setLocale } from '@/ui/strings'
 import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
 import { MANAGE_STYLES, derivePopupView, runnable } from '@/entrypoints/popup/view-model'
 
@@ -54,9 +54,20 @@ describe('derivePopupView (UI.md §4)', () => {
   it('P17a no HTML version: the button is there and disabled, with the reason said once', () => {
     const v = view('P17a')
     expect(v.entries).toEqual({ html: { label: 'HTML 翻译', disabled: true }, pdf: { label: 'PDF 翻译', disabled: false } })
-    expect(v.note?.text).toBe('arXiv 没有这篇论文的 HTML 版本，无法翻译')
+    // not "so there is nothing to translate": the PDF entry beside it translates (Part 5's final review)
+    expect(v.note?.text).toBe('arXiv 没有这篇论文的 HTML 版本')
     // Nothing to open in the settings about a paper arXiv never converted
     expect(v.note?.settings).toBe(false)
+    // with no PDF entry either, the whole sentence: there is nothing to translate
+    expect(derivePopupView({ ...input('P17a'), entry: { ...input('P17a').entry!, pdf: null } }).note?.text).toBe(S.note.noHtml)
+  })
+  it('no HTML version and a service that cannot run, with nothing to take over: the service\'s note, which is why both entries are greyed — on an entry page and with the reader open (Part 5\'s final review)', () => {
+    const noHtml = { ...input('P17b'), entry: { ...input('P17b').entry!, html: null } }
+    const v = derivePopupView(noHtml)
+    expect([v.entries?.html.disabled, v.entries?.pdf.disabled, v.note?.settings]).toEqual([true, true, true])
+    expect(v.note?.text).toContain('API Key')
+    const r = derivePopupView({ ...noHtml, entry: { ...noHtml.entry, kind: 'pdf', readerOpen: true } })
+    expect([r.note?.text, r.note?.settings]).toEqual([v.note?.text, true])
   })
   it('P17b a service that cannot run, with nothing to take over, disables the button there too, as it does on the paper page', () => {
     const v = view('P17b')

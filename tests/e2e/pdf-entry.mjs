@@ -255,7 +255,41 @@ if (READER && (await readerRunsHere())) {
   await page.goto(`https://arxiv.org/pdf/${WITH_HTML}#readarxiv`, { waitUntil: 'load' })
   const onArrival = await framedSrc()
   check('an address with #readarxiv opens the reader whatever the setting says, asking for a translation', !!onArrival && /ask=translate/.test(onArrival), onArrival ?? 'no reader')
+
+  // The popup's PDF entry on the PDF page itself is this page's: the reader opens on it, translating, whatever
+  // reading.openIn says (a new tab by default), and no second tab of the paper opens (Part 5's final review)
+  await page.goto('about:blank')
+  await page.goto(`https://arxiv.org/pdf/${WITH_HTML}`, { waitUntil: 'load' })
+  await sleep(4000)
+  {
+    const { popup } = await popupOn(page)
+    await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /PDF 翻译|Translate PDF/.test(b.textContent ?? ''))?.click())
+    const framed = await framedSrc()
+    await sleep(1500)
+    const papers = context.pages().filter(p => /arxiv\.org\/pdf\//.test(p.url())).length
+    check('the popup\'s PDF entry on the PDF page opens the reader on this page, translating, and no second tab of it',
+      !!framed && /ask=translate/.test(framed) && papers === 1, `reader ${framed ? 'over the page' : 'none'}, ${papers} tab(s) of the paper`)
+    if (!popup.isClosed()) await popup.close()
+  }
   await setEnabled(true)
+
+  // Neither the reader nor the popup's answer waits for the page's two HEADs (Part 5's final review): the source's
+  // HEAD held back 10 s, the reader is over the page and the popup has answered long before it comes
+  const held = /^https:\/\/arxiv\.org\/src\//
+  await context.route(held, async route => { await sleep(10_000); await route.continue().catch(() => undefined) })
+  await page.goto('about:blank')
+  await page.goto(`https://arxiv.org/pdf/${WITH_HTML}`, { waitUntil: 'load' })
+  const loaded = Date.now()
+  const framedAfter = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).then(() => Date.now() - loaded, () => null)
+  {
+    const { popup, seen } = await popupOn(page)
+    const answeredAfter = Date.now() - loaded
+    check('with the source\'s HEAD held 10 s, the reader opens and the popup answers without waiting for it',
+      framedAfter !== null && framedAfter < 5000 && !seen.notArxiv && seen.rows && answeredAfter < 9000,
+      `reader after ${framedAfter} ms, popup answered at ${answeredAfter} ms (S-P-03 shown: ${seen.notArxiv})`)
+    await popup.close()
+  }
+  await context.unroute(held)
 }
 
 await context.close()

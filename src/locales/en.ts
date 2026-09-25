@@ -61,6 +61,7 @@ const S: Locale['S'] = {
     paused: reason => `${reason}. Check the settings, then translate again`,
     imagesPaused: reason => `Image translation paused: ${reason}`,
     noHtml: 'arXiv has no HTML version of this paper, so there is nothing to translate',
+    noHtmlVersion: 'arXiv has no HTML version of this paper',
   },
   // an abstract or PDF page's two entries, the reader's to choose (S-P-50b; the reader's design, §2, §15)
   entry: { html: 'Translate HTML', pdf: 'Translate PDF' },

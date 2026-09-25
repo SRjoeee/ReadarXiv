@@ -483,6 +483,16 @@ describe('the rows that lead elsewhere', () => {
     expect(p.sent('axt:open-pdf')).toHaveLength(1)
     p.stop()
   })
+
+  it('on a PDF page the PDF entry is this page\'s: its hash alone changes, whatever the setting, and no second tab of the paper opens (Part 5\'s final review)', async () => {
+    const pdf = 'https://arxiv.org/pdf/2501.07202#readarxiv'
+    const p = await opened(w => { w.page = undefined; w.entry = { paper: '2501.07202', html: null, kind: 'pdf', pdf, readerOpen: false } })
+    expect(p.input().config?.reading.openIn).toBe('new-tab')
+    p.popup.actions.openPdf()
+    await until(() => p.w.closed === 1)
+    expect([p.w.opened, p.sent('axt:open-pdf').length]).toEqual([[], 1])
+    p.stop()
+  })
 })
 
 describe('the offline service\'s pack and the broadcasts', () => {

@@ -80,6 +80,7 @@ states, verbs for buttons, no spoken phrases (去填 / 去修 are out), every no
 | S-P-32 | Note · cannot translate | {为何不能用} | Idle with nothing to take over, or the page left behind by a choice that cannot run (P13) |
 | S-P-32a | {为何不能用} · LLM | LLM 尚未配置 API Key | |
 | S-P-33 | Note · no HTML version | arXiv 没有这篇论文的 HTML 版本，无法翻译 | Only on S-P-03b; no settings button, since nothing in the settings changes what arXiv converted |
+| S-P-33a | Note · no HTML version, the PDF entry offered | arXiv 没有这篇论文的 HTML 版本 | S-P-33 without its last clause where PDF 翻译 is offered beside it, which does translate (Part 5's final review). A service that cannot run speaks first on these pages (S-P-30 / S-P-35): it is why both entries are greyed |
 | S-P-32b | {为何不能用} · Chrome | Chrome 翻译的语言包尚未下载 / Chrome 翻译的语言包下载中，约需 1 分钟 | Reachable from the options page only: the popup's item is greyed |
 | S-P-32c | {为何不能用} · Microsoft | Microsoft 翻译不支持当前目标语言 | |
 | S-P-33 | Note · paused | {原因}。请检查设置后重新翻译 | Reason per S-E |

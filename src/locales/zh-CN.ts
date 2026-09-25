@@ -65,6 +65,7 @@ const S = {
     paused: (reason: string) => `${reason}。请检查设置后重新翻译`, // S-P-33
     imagesPaused: (reason: string) => `图片翻译已暂停：${reason}`, // S-P-35
     noHtml: 'arXiv 没有这篇论文的 HTML 版本，无法翻译',
+    noHtmlVersion: 'arXiv 没有这篇论文的 HTML 版本', // S-P-33a: the PDF entry beside it translates
   },
   /** The guided install on the settings page (S-O-30…36). The popup keeps the one-line version above */
   // an abstract or PDF page's two entries, the reader's to choose (S-P-50b; the reader's design, §2, §15)

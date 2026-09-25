@@ -277,11 +277,13 @@ export function createPopupState(host: PopupHost): PopupState {
       }
       host.close()
     }),
-    // The PDF entry: the paper's PDF asking for the reader, translating, opened as the HTML one is
+    // The PDF entry: the paper's PDF asking for the reader, translating, opened as the HTML one is — except on the PDF
+    // page itself, where it is this page's: its hash alone changes and the reader opens over it. A second tab of the
+    // paper on screen answers nothing (Part 5's final review)
     openPdf: () => void guard(async () => {
       const href = entry?.pdf
       if (!href) return
-      if ((surface.state().config ?? DEFAULT_CONFIG).reading.openIn === 'new-tab') await host.openTab(href)
+      if (entry?.kind !== 'pdf' && (surface.state().config ?? DEFAULT_CONFIG).reading.openIn === 'new-tab') await host.openTab(href)
       else await host.toTab({ type: 'axt:open-pdf' })
       host.close()
     }),

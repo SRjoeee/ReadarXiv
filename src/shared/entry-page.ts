@@ -35,10 +35,12 @@ export function answerEntryMessages(page: EntryPage): void {
       if (href !== null) location.assign(href)
       return { opened: href !== null }
     },
-    // the PDF entry, on this page itself: the reader opens translating (on a PDF page, the hash alone changes)
+    // the PDF entry, on this page itself: the reader opens translating (on a PDF page, the hash alone changes).
+    // Replaced, not pushed: the PDF page lets the hash go once read, and a pushed entry would leave two alike in the
+    // history, the first Back doing nothing (Part 5's final review)
     'axt:open-pdf': async () => {
       const href = page.pdf()
-      if (href !== null) location.assign(href)
+      if (href !== null) location.replace(href)
       return { opened: href !== null }
     },
   })

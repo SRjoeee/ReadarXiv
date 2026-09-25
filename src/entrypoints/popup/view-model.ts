@@ -150,6 +150,13 @@ function cannotRunWhy(config: Config, pack: PackState | null): string {
  * button, which opens the HTML version and translates it there. **Disabled, not hidden, when that paper has no HTML
  * version**: a reader who came for the translation is told the answer instead of finding a control that does nothing.
  */
+/** Why the chosen service cannot run, and who takes over if one does; null when it can run (the entry pages' views) */
+function serviceNote(config: Config, { pack, saved }: PopupInput): PopupView['note'] {
+  if (runnable(config, pack)) return null
+  const why = cannotRunWhy(config, pack)
+  return { text: saved?.fallback ? S.note.willFallback(why, serviceName(saved.fallback.id, config.services)) : S.note.cannotRun(why), settings: true }
+}
+
 function entryView(entry: EntryStatus, config: Config, input: PopupInput): PopupView {
   const { pack, menu, saved } = input
   const canRun = runnable(config, pack)
@@ -159,7 +166,6 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
   const canStart = canRun || !!saved?.fallback
   const named = (id: string) => serviceName(id, config.services)
   const noHtml = entry.html === null
-  const why = () => cannotRunWhy(config, pack)
 
   return {
     empty: false,
@@ -170,9 +176,9 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
     highlight: config.reading.sentenceHighlight,
     images: config.image.enabled,
     menu: menu === null ? null : menuOf(menu, config, pack),
-    note: noHtml
-      ? { text: S.note.noHtml, settings: false }
-      : canRun ? null : { text: saved?.fallback ? S.note.willFallback(why(), named(saved.fallback.id)) : S.note.cannotRun(why()), settings: true },
+    // The service's note first: it is why both entries are greyed, or who takes over. Then the HTML version's, which
+    // says "nothing to translate" only when the PDF entry is not offered either (Part 5's final review)
+    note: serviceNote(config, input) ?? (noHtml ? { text: entry.pdf === null ? S.note.noHtml : S.note.noHtmlVersion, settings: false } : null),
     failed: null,
     // No shortcut badge: ⌥T toggles a translated page, and there is none here yet (UI.md S-P-50)
     // Not the paper page's label: this page is not what gets translated (UI.md S-P-50b, the owner 2026-09-18)
@@ -201,8 +207,8 @@ function readerView(entry: EntryStatus, config: Config, input: PopupInput): Popu
     menu: input.menu === 'language'
       ? { kind: 'language', label: S.rows.language, search: true, items: languageItems(config.targetLanguage) }
       : input.menu === 'style' ? null : base.menu,
-    // the note of a service that cannot run stays; the one about the HTML version is not this page's matter
-    note: entry.html === null && base.note?.text === S.note.noHtml ? null : base.note,
+    // the note of a service that cannot run; the HTML version's is not this page's matter
+    note: serviceNote(config, input),
     primary: original
       ? { label: S.primary.translate, action: 'readerTranslate', disabled: false }
       : { label: S.primary.restore, action: 'readerOriginal', disabled: false },
