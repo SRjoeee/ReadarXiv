@@ -189,6 +189,17 @@ cases.push(['a final that twice did not answer ends the run with what is shown, 
   assert.equal(events.filter(e => e === 'next strategy').length, 0)
   assert.equal(r.settled, false)
   assert.equal(c.calls.filter(q => q.rerun).length, 2)
+  // a slow machine says nothing of the paper: not remembered as one that cannot be typeset
+  assert.equal(r.exhausted, false)
+}])
+cases.push(['a paper no strategy sets is told apart: every strategy tried, nothing shown (the maintainer, 2026-09-26)', async () => {
+  const paper = openPaper(tex(PARAS)), events = []
+  // the fonts probe answers; every compile of the translation stops at a TeX error
+  let n = 0
+  const compile = async req => (++n === 1 ? { ok: true, pdf: new Uint8Array([1]), log: '', ms: 1 } : { ok: false, error: 'exit 1', log: `! LaTeX Error: ${req.engine} cannot set this.`, ms: 1 })
+  const r = await runLive(paper, { lang: 'zh', compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: e => events.push(e) })
+  assert.ok(events.includes('next strategy'), 'the chain was walked')
+  assert.deepEqual([r.previews, r.settled, r.exhausted], [0, false, true])
 }])
 
 /** a compiler as BusyTeX's worker is: a compile that timed out goes on, and its output answers the next compile */

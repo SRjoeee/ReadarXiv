@@ -38,10 +38,15 @@ class PdfDatabase extends Dexie {
   bodies!: Table<Body, [string, string]>
   pdfs!: Table<Pdf, [string, string]>
   keys!: Table<{ id: string; key: CryptoKey }, string>
+  /** the papers no typesetting strategy could set, by version and language, with the pipeline that tried */
+  untypeset!: Table<{ digest: string; lang: string; pipeline: string }, [string, string]>
 
   constructor(name = 'axt-pdf', options?: DexieOptions) {
     super(name, options)
     this.version(1).stores({ entries: '[digest+lang], openedAt', bodies: '[digest+lang]', pdfs: '[digest+lang]', keys: 'id' })
+    // 2: a paper that could not be typeset is remembered, so that a revisit asks the service for nothing (the
+    // maintainer, 2026-09-26); the records are untouched
+    this.version(2).stores({ untypeset: '[digest+lang]' })
   }
 }
 
@@ -60,7 +65,12 @@ export interface PdfStore {
   patchFigures(digest: string, lang: string, figures: FigureEntry[]): Promise<void>
   touch(digest: string, lang: string): Promise<void>
   delete(digest: string, lang: string): Promise<void>
-  /** These two reject on a failure: the settings page reports a store it cannot read or empty, rather than show it empty */
+  /** The pipeline under which no strategy could typeset this paper in this language, or undefined; a failure reads as
+   *  undefined (the paper is tried) */
+  untypeset(digest: string, lang: string): Promise<string | undefined>
+  markUntypeset(digest: string, lang: string, pipeline: string): Promise<void>
+  /** These two reject on a failure: the settings page reports a store it cannot read or empty, rather than show it empty.
+   *  Clearing forgets the untypeset papers too: a way to have them tried again */
   clear(): Promise<void>
   usage(): Promise<{ count: number; bytes: number }>
 }
@@ -205,11 +215,28 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
       }
     },
 
+    async untypeset(digest, lang) {
+      try {
+        return (await db.untypeset.get([digest, lang]))?.pipeline
+      } catch {
+        return undefined
+      }
+    },
+
+    async markUntypeset(digest, lang, pipeline) {
+      try {
+        await db.untypeset.put({ digest, lang, pipeline })
+      } catch (e) {
+        warn(`[axt-pdf] untypeset mark failed: ${(e as Error).message}`)
+      }
+    },
+
     async clear() {
-      await db.transaction('rw', db.entries, db.bodies, db.pdfs, async () => {
+      await db.transaction('rw', [db.entries, db.bodies, db.pdfs, db.untypeset], async () => {
         await db.entries.clear()
         await db.bodies.clear()
         await db.pdfs.clear()
+        await db.untypeset.clear()
       })
     },
 

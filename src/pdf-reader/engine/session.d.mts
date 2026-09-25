@@ -27,6 +27,9 @@ export type SessionEvent =
   | { type: 'page'; side: 'left' | 'right'; page: number; pages: number }
   /** one step of a run (live.mjs and session.mjs note), with the run's counts at that moment */
   | { type: 'note'; event: string; data: Record<string, unknown>; got: number; total: number; lost: number; again: boolean }
+  /** the paper's HTML version with its translating hash, once the paper cannot be had as a bilingual PDF; null when
+   *  arXiv has none */
+  | { type: 'html'; url: string | null }
   /** a run that ended without a translation: which step, the developer's words, and the chain's error kind when known */
   | { type: 'fail'; event: string; text: string; kind?: string }
 export interface SessionHost {

@@ -858,5 +858,10 @@ is only how it meets the rest of the extension.
   settings page counts them and clears them (UI.md S-O-73).
 - **Typesetting** runs in a TeX page outside the extension (BusyTeX, served locally during the experiment). No
   reader-facing word names it (UI.md §3.5).
+- **A paper that cannot be had** — no source, or none of the ways of setting it worked (every one tried, none for want
+  of time: a slow machine says nothing of the paper) — shows the original with 对照 and 译文 greyed and a capsule that
+  says so, without why, offering the HTML version where arXiv has one (UI.md S-R-17/18). The failure to set it is kept
+  in the store beside the records, by paper version, language and `PIPELINE_VERSION`: a visit again asks the service and
+  the TeX page for nothing, a new pipeline tries once more, and the settings page's clear forgets it.
 - **Browsers**: PDF.js's modern build needs built-ins newer than the extension's floor. Where they are missing
   (`src/pdf-reader/support.ts`) the reader is not offered, and the browser's viewer keeps the PDF.

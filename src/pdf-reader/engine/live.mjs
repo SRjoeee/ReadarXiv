@@ -145,7 +145,8 @@ export const PIPELINE_VERSION = '2'
  * `seed`, index → the old translation { pieces, by, tried, state }, fills the run at the start; `marks`, the left
  * side's marks when known, skips the marked original; `identity` is what each unit is tried under; `pipelineCurrent`,
  * whether the seed's pipeline is this one. Resolves when the final compile is in, with `results` (index → { pieces,
- * state, by, tried }), `changed` (anything typeset changed) and `settled` (a final that set every letter).
+ * state, by, tried }), `changed` (anything typeset changed), `settled` (a final that set every letter) and `exhausted`
+ * (every strategy failed to set the final, none for want of time: the paper cannot be had this way).
  */
 export async function runLive(paper, { lang, compile, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, identity = null, pipelineCurrent = false }) {
   const { units, kept, meta, project } = paper
@@ -266,16 +267,16 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
   }
   await mt
   // nothing to show: nothing compiled, not even the marked original; the reader says why (the reader's design, §10.3)
-  if (stopped && !translated.size) return { previews, translated: 0, units: units.length, results, changed: false, settled: false, stopped, missing: missing() }
+  if (stopped && !translated.size) return { previews, translated: 0, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing() }
   // a seeded run that changed nothing typeset, on the same pipeline: nothing to compile but the marked original, for a
   // copy that has no marks — else they would never come (Devin on #298)
   if (seed && !changed && pipelineCurrent) {
     if (!marks) await original()
     note('unchanged')
-    return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, stopped, missing: missing() }
+    return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing() }
   }
   const all = new Map(translated), t0 = Date.now()
-  let r, ok, retried = false
+  let r, ok, retried = false, exhausted = false
   for (;;) {
     r = await compile({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl }) })
     ok = await settled(r)
@@ -284,11 +285,11 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
     // not answered: once more with the same strategy, then what is shown stays — a slow machine is no reason to change
     // how the paper is set (Part 3's checks: a timed-out preview moved 2608.02163 to a strategy its class refuses)
     if (timedOut(r)) { if (retried) break; retried = true; note('final again', { strategy: strategy().name }); continue }
-    if (s + 1 >= strategies.length) break
+    if (s + 1 >= strategies.length) { exhausted = true; break }
     s++; aux = null
     note('next strategy', { strategy: strategy().name })
   }
   if (ok) onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
   if (!marks) await original()
-  return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, stopped, missing: missing() }
+  return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, stopped, missing: missing() }
 }

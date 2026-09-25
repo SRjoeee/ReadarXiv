@@ -24,7 +24,8 @@ The maintainer's standards, which every section below answers to:
   filter, animation) is measured on the heaviest paper before it ships (§12).
 - **No technical path is ever shown to a reader**: 「过去和将来都不应该出现这种纯技术性的、非用户可感知的纯开发者提示」.
   LaTeX, compiling, typesetting services, engines, providers never appear in the interface; when a technical reason makes
-  a function unavailable, its control is greyed out, without an explanation.
+  a function unavailable, its control is greyed out, without an explanation. (A paper that cannot be had says that much,
+  and never why: §8, the maintainer, 2026-09-26.)
 - **Its own visual language**: the reader does not inherit the extension's design system (「不用继承我们之前的系统」);
   the extension's interaction rules (one kind of control, one popover; settings apply at once) and copy rules still do.
 
@@ -323,7 +324,7 @@ No state that tells the reader nothing is shown (no "done").
 | Some paragraphs failed | a translation with gaps | capsule: {n} 处翻译失败 · 重试 · close |
 | Language not supported | the shared target language is not one of the nine | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the nine translates |
 | Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services) |
-| Cannot be had | the paper cannot be turned into a bilingual PDF, for any technical reason | 对照 and 译文 greyed in the switch, no words; the reader shows 原文 |
+| Cannot be had | the paper has no source, or none of the ways of typesetting it worked (every one tried, none for want of time) | 对照 and 译文 greyed in the switch; the reader shows 原文, with the capsule: 这篇论文暂不支持 PDF 翻译, and 改用 HTML 翻译 where arXiv has an HTML version (opened where `reading.openIn` says); no close. Remembered on this machine by paper version, language and pipeline: a visit again asks nothing of the service, a new pipeline tries once more (the maintainer, 2026-09-26; the words first had none) |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
 
 - Recovery is automatic where it can be: when the network comes back the translation goes on by itself; 重试 asks only

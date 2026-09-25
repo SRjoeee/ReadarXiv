@@ -16,6 +16,7 @@ import { createPdfStore } from '@/cache/pdf-store'
 import { isCurrent } from '@/cache/pdf-record'
 import { lookOf } from '@/config/appearance'
 import { toBcp47 } from '@/config/languages'
+import { htmlUrlOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
 import { isTranslatable, linesToBoxes } from '@/core/image/boxes'
 import { appearanceRule } from '@/core/renderer/style-preset'
 import { renderImage, setImageModes } from '@/core/renderer/image'
@@ -1496,6 +1497,17 @@ async function replaceRight(url, texts, { draft = false } = {}) {
 }
 
 // ---------------------------------------------------------------- live (#292)
+/** the failures that say the paper cannot be had as a bilingual PDF (controller.ts CANNOT_BE_HAD) */
+const CANNOT_BE_HAD = new Set(['no source', 'cannot typeset'])
+/**
+ * The paper's HTML version, translating, or null where arXiv says it has none (404, 410); a HEAD, as the PDF page's
+ * own (pdf.content.ts). Anything else, or no answer within 3 s, says nothing about the paper, and the link is offered:
+ * at worst it leads to arXiv's own answer
+ */
+const htmlVersion = () => Promise.race([
+  fetch(htmlUrlOf(paper), { method: 'HEAD', credentials: 'omit' }).then(r => (r.status === 404 || r.status === 410 ? null : translatedHtmlUrlOf(paper)), () => translatedHtmlUrlOf(paper)),
+  new Promise(resolve => setTimeout(resolve, 3000, translatedHtmlUrlOf(paper))),
+])
 const waitFor = (origin, type) => new Promise(r => addEventListener('message', function h(e) { if (e.origin === origin && e.data?.type === type) { removeEventListener('message', h); r(e.data) } }))
 /** our compile of the original, with unit marks → each mark with the word it stands by, to carry over to arXiv's PDF */
 async function marksOfPdf(bytes) {
@@ -1563,14 +1575,17 @@ async function live() {
     const missed = lost ? ` (${lost} not: ${lostWhy})` : ''
     status(`${again ? 'translating again · ' : ''}${total ? `${got} of ${total} translated${by}${missed}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
   }
-  const fail = (event, text, kind) => {
+  const fail = async (event, text, kind) => {
     // a failure a retry can mend, and why: the retry, the network's return and a change of the services go by it
     stopped = ['fetch failed', 'no engine', 'no compiler', 'failed'].includes(event) ? { event, kind: kind ?? 'unknown' } : null
+    // a paper that cannot be had — no source, or none of the ways of setting it worked —: its HTML version is where it
+    // can be read translated, told with the failure so that the capsule comes whole (the maintainer, 2026-09-26)
+    if (CANNOT_BE_HAD.has(event)) host.emit({ type: 'html', url: await htmlVersion() })
     host.emit({ type: 'fail', event, text, kind })
     setContext({}); note(event); status(text); L.done = true; L.failed = text
     // a failure stays in its display: with nothing translated, the card fills the translation's pane (the reader's design,
     // §8). A language the reader cannot typeset, or a paper that cannot be had, shows the original, for this visit
-    if (event === 'not verified' || event === 'no source') { held = true; changeDisplay('original', false) }
+    if (event === 'not verified' || CANNOT_BE_HAD.has(event)) { held = true; changeDisplay('original', false) }
   }
   // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
   // told at once
@@ -1605,6 +1620,9 @@ async function live() {
       figureEntries = new Map()
     }
   }
+  // a paper none of this pipeline's ways could set, on this machine before: said again, the service and the TeX page
+  // asked for nothing; a new pipeline tries once more (the maintainer, 2026-09-26)
+  if (!cached && cacheKey && (await pdfCache.untypeset(digest, lang0)) === PIPELINE_VERSION) return fail('cannot typeset', `${paper} could not be typeset into ${lang0} on this machine before: the right side shows the original`)
   if (cached) {
     total = cached.units.filter(u => u.state !== 'kept').length; got = total
     window.__reader.debug = Object.assign(harness(), { units: cached.units.map((u, i) => ({ i, kind: u.kind, text: u.src })) })
@@ -1748,6 +1766,13 @@ async function live() {
     if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
     stopped = result.stopped ? { event: 'stopped', kind: result.stopped } : null
     await swaps
+    // every way of setting it tried and failed, a whole translation in hand and nothing on screen: remembered, so that
+    // a visit again asks nothing of the service (the maintainer, 2026-09-26)
+    if (result.exhausted && !result.stopped && !compiledOnce && !cached) {
+      if (cacheKey) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, PIPELINE_VERSION)
+      note('done', result)
+      return fail('cannot typeset', `None of the ways of typesetting ${paper} into ${lang} worked: the right side shows the original`)
+    }
     // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
     // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
     if (cacheKey) {

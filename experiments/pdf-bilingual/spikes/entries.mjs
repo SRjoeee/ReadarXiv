@@ -1,8 +1,9 @@
 // The ways into the reader as a reader meets them (the reader's design, §2, §9), in a real browser on arXiv's own pages,
 // each with its screenshot in out/entries/: the popup on an abstract page and on a PDF page with the reader closed (the
 // two entries), the popup while the reader is open over the PDF (the reader's view), and the floating button's panel
-// on the abstract page (the main button is the way in); a PDF-only submission's greyed PDF entry; the settings page's
-// PDF reader section and its data line. Needs the network; the build at the repository root.
+// on the abstract page (the main button is the way in); a PDF-only submission's greyed PDF entry, and the reader over
+// its PDF saying it cannot be had, its HTML version a link; the settings page's PDF reader section and its data line.
+// Needs the network; the build at the repository root.
 //   node experiments/pdf-bilingual/spikes/entries.mjs [paper]
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -27,6 +28,7 @@ const setReader = on => worker.evaluate(async on => {
   }
   throw new Error('no configuration after 10 s')
 }, on)
+const setOpenIn = where => worker.evaluate(async where => { const { config } = await chrome.storage.local.get('config'); await chrome.storage.local.set({ config: { ...config, reading: { ...config.reading, openIn: where } } }) }, where)
 
 /** The popup as the toolbar opens it over `tab`: its own page, the paper's tab then in front, and what it shows */
 async function popupOver(tab, name) {
@@ -98,6 +100,34 @@ await sleep(3000)
   const seen = await popupOver(page, '5-pdf-only-popup')
   const pdf = seen.entries.find(e => /PDF/.test(e.text ?? ''))
   check('a PDF-only submission: the PDF entry greyed', pdf?.disabled === true, JSON.stringify(seen.entries))
+}
+
+// 4b. its PDF page, a translation asked for: no source, so the reader says it cannot be had as a bilingual PDF. arXiv has
+// no HTML version of it: no link. One answered here (a route, for the reader's HEAD and the page), this tab as the
+// settings say: the link takes the PDF page to it (the maintainer, 2026-09-26)
+{
+  const capsuleIn = async () => {
+    const frame = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).then(h => h.contentFrame()).catch(() => null)
+    const drawn = frame && (await frame.waitForSelector('.capsule[data-kind="unavailable"]', { timeout: 120_000 }).catch(() => null))
+    const capsule = drawn && (await frame.evaluate(() => { const c = document.querySelector('.capsule'), a = c.querySelector('a[data-action]'); return { words: c.querySelector('.words')?.textContent, href: a?.getAttribute('href') ?? null, target: a?.target ?? null } }))
+    return { frame, capsule }
+  }
+  await page.goto('about:blank')
+  await page.goto('https://arxiv.org/pdf/2608.07562#readarxiv', { waitUntil: 'load' })
+  const none = await capsuleIn()
+  await page.screenshot({ path: join(out, '5b-no-source-capsule.png') })
+  check('a PDF-only submission, a translation asked for: the capsule says it cannot be had; no HTML version, no link', none.capsule?.words === '这篇论文暂不支持 PDF 翻译' && none.capsule.href === null, JSON.stringify(none.capsule))
+  const html = 'https://arxiv.org/html/2608.07562#readarxiv'
+  await setOpenIn('same-tab')
+  await context.route('https://arxiv.org/html/2608.07562', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>html</title>' }))
+  await page.goto('about:blank')
+  await page.goto('https://arxiv.org/pdf/2608.07562#readarxiv', { waitUntil: 'load' })
+  const one = await capsuleIn()
+  check('…an HTML version, this tab: the link, to the page under the reader', one.capsule?.href === html && one.capsule.target === '_top', JSON.stringify(one.capsule))
+  if (one.capsule?.href) await Promise.all([page.waitForURL(html, { timeout: 15_000 }).catch(() => null), one.frame.click('.capsule a[data-action]')])
+  check('…pressed: the PDF page goes to the HTML version, translating', page.url() === html, page.url())
+  await context.unroute('https://arxiv.org/html/2608.07562')
+  await setOpenIn('new-tab')
 }
 
 // 5. the settings page: the PDF reader's section writes at once; the data section's PDF line counts what the reader

@@ -14,6 +14,9 @@
 //   5. the network back while the stopped run still compiles its final: the translation goes on once that run ends
 //   6. a service that cannot run at the start: the card; another chosen: the translation runs again, in place, with
 //      the paper's title and abstract for the figures' text (Part 4's final review)
+//   7. a TeX page on which every compile fails: the capsule that says the paper cannot be had as a bilingual PDF, with
+//      its HTML version, the translated displays greyed; a second visit asks the service and the TeX page for nothing.
+//      A paper with no source, served its PDF for a source: the same capsule (the maintainer, 2026-09-26)
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
@@ -25,7 +28,7 @@ import { addService, openOptions, setSwitch } from '../../../tests/e2e/options-p
 
 const root = new URL('..', import.meta.url).pathname
 const paper = process.argv[2] ?? '2608.02163'
-const CASES = new Set((process.env.AXT_CASES ?? '0,1,2,3,4,5,6').split(',').map(Number))
+const CASES = new Set((process.env.AXT_CASES ?? '0,1,2,3,4,5,6,7').split(',').map(Number))
 const serve = handler => new Promise(r => { const s = createServer(handler).listen(0, '127.0.0.1', () => r(s)) })
 const site = await serveSite()
 const corpus = await serve((req, res) => {
@@ -68,7 +71,7 @@ const page = await context.newPage()
 const errors = []
 page.on('pageerror', e => errors.push(e.message))
 const at = `http://127.0.0.1:${corpus.address().port}`
-const urlOf = mode => readerUrl({ paper, live: '1', mode, site: `http://127.0.0.1:${site.address().port}`, endpoint: 'http://localhost:8070', src: `${at}/src/${paper}`, pdf: `${at}/pdf/${paper}` })
+const urlOf = (mode, over = {}) => readerUrl({ paper, live: '1', mode, site: `http://127.0.0.1:${site.address().port}`, endpoint: 'http://localhost:8070', src: `${at}/src/${paper}`, pdf: `${at}/pdf/${paper}`, ...over })
 const failures = []
 const check = (name, ok, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ` — ${detail}` : ''}`); if (!ok) failures.push(name) }
 const events = () => page.evaluate(() => window.__reader.live?.events ?? [])
@@ -82,10 +85,10 @@ const patch = async change => {
 }
 /** a visit with no copy on this machine: the store of copies (src/cache/pdf-store.ts, 'axt-pdf') deleted first, from
  *  the extension's settings page, the reader closed so that nothing holds it open */
-async function freshVisit() {
+async function freshVisit(over) {
   await page.goto(`chrome-extension://${id}/options.html`)
   await page.evaluate(() => new Promise(resolve => { const r = indexedDB.deleteDatabase('axt-pdf'); r.onsuccess = r.onerror = r.onblocked = () => resolve(null) }))
-  await page.goto(urlOf('translation'))
+  await page.goto(urlOf('translation', over))
   await until(() => window.__reader?.controller?.getState().settings, null, 60_000)
 }
 /** the echo under another model name: the background's cache of translations keys by the model, so a case's texts are
@@ -251,6 +254,53 @@ if (CASES.has(6)) {
   const ctx = ran ? await page.waitForFunction(() => window.__reader.debug?.paperContext?.(), null, { timeout: 120_000 }).then(h => h.jsonValue(), () => null) : null
   check('…another service chosen: the translation runs again in place, the figures\' text with the paper\'s title', ran && !!ctx?.paperTitle, JSON.stringify({ ran, title: ctx?.paperTitle?.slice(0, 40) ?? null }))
   await until(() => window.__reader.live?.done)
+}
+
+if (CASES.has(7)) {
+  // 7. a TeX page that answers, and on which every compile stops at a TeX error; its loads counted
+  const refusing = { loads: 0 }
+  const tex = await serve((req, res) => {
+    refusing.loads++
+    res.writeHead(200, { 'content-type': 'text/html' }).end(`<!doctype html><script>
+addEventListener('message', e => {
+  const m = e.data, reply = d => e.source.postMessage(d, e.origin)
+  if (m?.type === 'init') reply({ type: 'init-done', ms: 0 })
+  if (m?.type === 'compile') reply({ type: 'compiled', id: m.id, ok: false, error: 'exit 1', log: '! LaTeX Error: this page sets nothing.', ms: 1 })
+})
+parent.postMessage({ type: 'ready' }, '*')
+</script>`)
+  })
+  const refusingSite = { site: `http://127.0.0.1:${tex.address().port}` }
+  const html = `https://arxiv.org/html/${paper}#readarxiv`
+  // arXiv's HTML version, answered here: the reader's HEAD, and the tab its link opens
+  await context.route('https://arxiv.org/html/**', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>html</title>' }))
+  endpoint.down = false
+  await useModel('echo-7')
+  const capsule = () => page.evaluate(() => { const c = document.querySelector('.capsule'), a = c?.querySelector('a[data-action]'); return c && { kind: c.getAttribute('data-kind'), words: c.querySelector('.words')?.textContent, href: a?.getAttribute('href') ?? null, target: a?.target ?? null, close: !!c.querySelector('.close'), greyed: [...document.querySelectorAll('.seg.display [role="radio"]')].map(b => b.getAttribute('aria-disabled') === 'true') } })
+  // the run ended, then the capsule drawn (React renders after the controller's state)
+  const settledHeld = async () => (await until(() => window.__reader?.live?.done)) && until(() => window.__reader.controller.getState().available === false && !!document.querySelector('.capsule[data-kind="unavailable"]'), null, 5000)
+  await freshVisit(refusingSite)
+  const held = await settledHeld()
+  const first = await capsule(), firstState = await state(), evs = (await events()).map(e => e.event)
+  check('every compile failing: the capsule says the paper cannot be had, its HTML version offered, no close', held && first?.words === '这篇论文暂不支持 PDF 翻译' && first.href === html && first.target === '_blank' && !first.close, JSON.stringify({ held, first, events: evs.filter(e => /strategy|final|cannot|done/.test(e)) }))
+  check('…the original shown, the two translated displays greyed', firstState.display === 'original' && JSON.stringify(first?.greyed) === JSON.stringify([false, true, true]), JSON.stringify({ display: firstState.display, greyed: first?.greyed }))
+  const opened = first?.href ? context.waitForEvent('page', { timeout: 10_000 }).catch(() => null) : null
+  if (first?.href) await page.click('.capsule a[data-action]')
+  const tab = await opened
+  check('…its link opens the HTML version, translating, in a new tab', tab?.url() === html, tab?.url() ?? 'no tab')
+  await tab?.close()
+  // the visit again, this machine's record kept: no service asked, no TeX page loaded
+  const [requests, loads] = [endpoint.requests, refusing.loads]
+  await page.goto(urlOf('translation', refusingSite))
+  const again = await settledHeld()
+  const evs2 = (await events()).map(e => e.event)
+  check('…a second visit: the same capsule, the service and the TeX page asked for nothing', again && endpoint.requests === requests && refusing.loads === loads && !evs2.includes('translated'), JSON.stringify({ again, requests: endpoint.requests - requests, loads: refusing.loads - loads, capsule: await capsule() }))
+  // a paper with no source: its PDF served for its source (arXiv's answer for a PDF-only submission)
+  await freshVisit({ src: `${at}/pdf/${paper}` })
+  const noSource = await settledHeld()
+  check('a paper with no source: the same capsule, with its HTML version', noSource && (await capsule())?.href === html, JSON.stringify(await capsule()))
+  await context.unroute('https://arxiv.org/html/**')
+  tex.close()
 }
 
 check('no page error', errors.length === 0, errors.join('; '))

@@ -314,6 +314,8 @@ const R: Locale['R'] = {
     chooseLanguage: 'Choose language',
     narrow: 'The window is narrow, so this shows the translation alone for now',
     rateLimited: 'Too many requests',
+    noPdf: "This paper can't be read as a bilingual PDF yet",
+    useHtml: 'Translate HTML instead',
   },
 }
 

@@ -125,6 +125,15 @@ describe('createPdfStore', () => {
     await expect(s.patchFigures('d', 'zh-CN', [])).resolves.toBeUndefined()
   })
 
+  it('remembers a paper that could not be typeset, by version and language and the pipeline that tried; clear forgets it (the maintainer, 2026-09-26)', async () => {
+    const s = createPdfStore({ db: dbOf() })
+    expect(await s.untypeset('d', 'zh-CN')).toBeUndefined()
+    await s.markUntypeset('d', 'zh-CN', '2')
+    expect([await s.untypeset('d', 'zh-CN'), await s.untypeset('d', 'ja')]).toEqual(['2', undefined])
+    await s.clear()
+    expect(await s.untypeset('d', 'zh-CN')).toBeUndefined()
+  })
+
   it('patchFigures changes the figures alone; usage and clear', async () => {
     const s = createPdfStore({ db: dbOf() })
     await s.put({ ...body('d'), pdf: pdfOf(100) }, now)

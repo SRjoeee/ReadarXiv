@@ -51,6 +51,13 @@ describe('the states (the reader\'s design, §8)', () => {
     expect(capsuleOf(at({ phase: 'ready', narrow: true, display: 'translation' }), none)).toBeNull()
   })
 
+  it('a paper that cannot be had as a bilingual PDF: said, with the HTML version offered where there is one; not closable, before any other capsule (the maintainer, 2026-09-26)', () => {
+    expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: 'https://arxiv.org/html/1706.03762#readarxiv' }), none)).toEqual({ kind: 'unavailable', text: R.status.noPdf, href: 'https://arxiv.org/html/1706.03762#readarxiv' })
+    expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: null }), none)).toEqual({ kind: 'unavailable', text: R.status.noPdf })
+    expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: null, failedUnits: 3, narrow: true }), { closed: true, narrowShown: false })).toMatchObject({ kind: 'unavailable' })
+    expect(capsuleOf(at({ phase: 'ready', available: false, languageSupported: false, htmlVersion: null }), none)).toMatchObject({ kind: 'unavailable' })
+  })
+
   it('nothing translated: the card, with the reason; 设置 for a key, 重试 otherwise; no capsule', () => {
     expect(cardOf(at({ phase: 'failed', failure: 'network' }))).toEqual({ reason: '网络连接失败', action: 'retry' })
     expect(cardOf(at({ phase: 'failed', failure: 'no-key' }))).toEqual({ reason: '尚未配置 API Key', action: 'settings' })
