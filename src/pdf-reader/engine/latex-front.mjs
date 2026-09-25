@@ -34,6 +34,10 @@ const HEADINGS = new Set(['part', 'chapter', 'section', 'subsection', 'subsubsec
 const DEPTH = { part: -1, chapter: 0, section: 1, subsection: 2, subsubsection: 3 }
 const OWN_UNIT_ARG = new Set(['caption', 'subcaption', 'subcaptionbox', 'footnote', 'thanks', 'abstract', 'keywords']) // the argument is a unit of its own
 const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox'])
+/** the front matter's blocks of names and places: nothing in them is prose but their notes (\\thanks, \\footnote), each
+ *  a footnote of its own; the names, marks and spacing stay as the author wrote them (1706.03762's author block: its
+ *  footnotes stayed in English, the whole block one opaque command) */
+const FRONT_MATTER = new Set(['author', 'affil', 'affiliation', 'institute', 'address'])
 const INLINE_TEXT = new Set(['textbf', 'textit', 'emph', 'textsl', 'textsc', 'underline', 'textup', 'textrm', 'textsf', 'textmd', 'uline'])
 // commands whose last required argument is typeset as it stands — a scaled table, a boxed or coloured phrase, a TikZ
 // picture fitted to the column — by how many required arguments they take, that one included. The others (a width,
@@ -187,6 +191,26 @@ function branchEnd(s, from, to, ifs) {
   return -1
 }
 
+/** whether s[at] is inside a comment: an unescaped % before it on its line */
+function inComment(s, at) {
+  for (let k = s.lastIndexOf('\n', at - 1) + 1; k < at; k++) {
+    if (s[k] === '\\') k++
+    else if (s[k] === '%') return true
+  }
+  return false
+}
+/** each \\thanks or \\footnote in s[from, to), walked alone: a footnote unit of its own, with no paragraph around it */
+function frontNotes(s, from, to, b, ctx) {
+  let past = from
+  for (const m of s.slice(from, to).matchAll(/\\(?:thanks|footnote)(?![A-Za-z@])/g)) {
+    const at = from + m.index
+    if (at < past || inComment(s, at)) continue
+    const { args, end } = argsAfter(s, at + m[0].length, 2)
+    if (!args.some(a => a.kind === 'req')) continue
+    walk(s, at, end, b, ctx); b.flush()
+    past = end
+  }
+}
 function walk(s, from, to, b, ctx) {
   let i = from, textStart = -1
   const endText = () => { if (textStart >= 0 && textStart < i) b.text(s.slice(textStart, i), textStart, i); textStart = -1 }
@@ -299,6 +323,12 @@ function walk(s, from, to, b, ctx) {
         i = content.end; continue
       }
     }
+    if (FRONT_MATTER.has(name)) {
+      const { args, end: e } = argsAfter(s, end, 3)
+      endText(); b.flush()
+      for (const a of args) frontNotes(s, a.start + 1, a.end - 1, b, ctx)
+      i = e; continue
+    }
     if (CONTENT_BOX.has(name)) {
       const { args } = argsAfter(s, end, 8)
       const content = args.filter(a => a.kind === 'req')[CONTENT_BOX.get(name) - 1]
@@ -365,10 +395,15 @@ export function loadProject(root, main, { tables = false } = {}) {
     let from = 0, to = f.text.length
     if (f.rel === mainFile.rel) {
       const m = f.text.match(/\\begin\s*\{document\}/)
-      // the preamble: only the title is prose
+      // the preamble: the title is prose, and the front matter's notes (FRONT_MATTER), in the order they are written
       const pre = m ? f.text.slice(0, m.index) : ''
       const t = pre.match(/\\title\s*(\[[^\]]*\])?\s*\{/)
-      if (t) { const s0 = t.index + t[0].length - 1, e0 = matchGroup(f.text, s0); if (e0 > 0) { b.kind = 'heading'; b.title = true; walk(f.text, s0 + 1, e0 - 1, b, ctx); b.flush(); b.title = false; b.kind = undefined } }
+      const front = [...pre.matchAll(/\\([A-Za-z@]+)(?![A-Za-z@])\*?/g)].filter(c => FRONT_MATTER.has(c[1]) && !inComment(pre, c.index))
+      for (const at of [t?.index, ...front.map(c => c.index)].filter(x => x !== undefined).sort((x, y) => x - y)) {
+        if (at === t?.index) { const s0 = t.index + t[0].length - 1, e0 = matchGroup(f.text, s0); if (e0 > 0) { b.kind = 'heading'; b.title = true; walk(f.text, s0 + 1, e0 - 1, b, ctx); b.flush(); b.title = false; b.kind = undefined } continue }
+        const c = front.find(x => x.index === at)
+        for (const a of argsAfter(f.text, at + c[0].length, 3).args) frontNotes(f.text, a.start + 1, a.end - 1, b, ctx)
+      }
       from = m ? m.index + m[0].length : 0
       const e = f.text.match(/\\end\s*\{document\}/); to = e ? e.index : to
     }

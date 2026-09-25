@@ -132,7 +132,8 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
  * (latex-front, mt, the fonts, the scripts' strategies, the TeX tree) or to what a cached record holds (the units'
  * cutting, kinds and texts, paperContext(), the marks). A record of another version is translated again
  */
-export const PIPELINE_VERSION = '1'
+// 2: the front matter's notes are units (latex-front.mjs FRONT_MATTER)
+export const PIPELINE_VERSION = '2'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
