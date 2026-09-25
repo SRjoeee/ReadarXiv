@@ -233,7 +233,8 @@ export function createController({ open, params }: { open: (host: SessionHost) =
     patchSettings: change => later(s => s.patchSettings(change)),
     goToHeading: id => later(s => s.goToUnit(id)),
     lead: side => later(s => s.lead(side)),
-    retry: () => later(s => s.retry()),
+    // a session that could not open is retried as the page first was: loaded again (Codex on #301)
+    retry: () => void session?.then(s => s.retry(), () => location.reload()),
     pinch: (side, factor, origin) => { set({ zoom: null }); later(s => s.pinch(side, factor, origin)) },
     setNarrow(on) {
       if (state.narrow === on) return

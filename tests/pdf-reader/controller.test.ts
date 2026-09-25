@@ -142,6 +142,17 @@ const fakeSession = (): Session => ({ setDisplay: vi.fn(), setSyncMode: vi.fn(),
 const panes = () => ({ left: document.createElement('div'), right: document.createElement('div') })
 
 describe('createController', () => {
+  it('a session that could not open: the failure card, and its retry loads the page again rather than doing nothing (Codex on #301)', async () => {
+    const reload = vi.spyOn(location, 'reload').mockImplementation(() => undefined)
+    const controller = createController({ open: async () => { throw new Error('the session module did not load') }, params: new URLSearchParams() })
+    await controller.attach(panes()).catch(() => undefined)
+    expect(controller.getState().phase).toBe('failed')
+    controller.retry()
+    await Promise.resolve(); await Promise.resolve()
+    expect(reload).toHaveBeenCalledOnce()
+    reload.mockRestore()
+  })
+
   it('opens the session once, whatever the number of attaches, and tells its listeners of each change', async () => {
     const session = fakeSession()
     const open = vi.fn(async (host: SessionHost) => {
