@@ -29,7 +29,10 @@ export function figureRegions({ fnArray, argsArray }, OPS, { min = 30 } = {}) {
     else if (fn === OPS.transform) ctm = mul(ctm, args)
     else if (fn === OPS.paintFormXObjectBegin) {
       stack.push(ctm)
-      const [matrix, bbox] = args
+      // a form that is a transparency group has its box given to the group PDF.js begins just before it, and none of
+      // its own (its canvas is the group's): a figure drawn with transparency, as xdvipdfmx includes one
+      const [matrix, own] = args
+      const bbox = own ?? (fnArray[k - 1] === OPS.beginGroup ? argsArray[k - 1]?.[0]?.bbox : null)
       if (matrix) ctm = mul(ctm, matrix)
       if (depth++ === 0 && bbox) out.push({ kind: 'vector', ...box(ctm, bbox[0], bbox[1], bbox[2], bbox[3]) })
     } else if (fn === OPS.paintFormXObjectEnd) { ctm = stack.pop() ?? ctm; depth-- }

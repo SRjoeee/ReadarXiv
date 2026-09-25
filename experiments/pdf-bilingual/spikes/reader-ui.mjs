@@ -86,6 +86,22 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
     }
   })
   check('the PDF.js internals the engine reads are there', Object.values(internals).every(Boolean), JSON.stringify(internals))
+  // a form that is a transparency group: PDF.js gives its box to the group it begins just before the form, and the
+  // form none (figures.mjs figureRegions reads it there; 1706.03762's attention figures as the translation sets them)
+  const group = await page.evaluate(async () => {
+    const pdf = ['%PDF-1.4', '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj', '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
+      '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /XObject << /F1 4 0 R >> >> /Contents 5 0 R >> endobj',
+      '4 0 obj << /Type /XObject /Subtype /Form /BBox [0 0 200 100] /Group << /S /Transparency >> /Length 24 >> stream', '0 0 1 rg 0 0 200 100 re f', 'endstream endobj',
+      '5 0 obj << /Length 27 >> stream', 'q 1 0 0 1 50 60 cm /F1 Do Q', 'endstream endobj', 'trailer << /Root 1 0 R >>', '%%EOF'].join('\n')
+    const lib = window.pdfjsLib ?? (await import('/pdf-reader/pdfjs/pdf.mjs'))
+    const task = lib.getDocument({ data: new TextEncoder().encode(pdf) }), doc = await task.promise
+    const { fnArray, argsArray } = await (await doc.getPage(1)).getOperatorList()
+    const k = fnArray.indexOf(lib.OPS.paintFormXObjectBegin)
+    const out = { form: k >= 0, own: argsArray[k]?.[1] ?? null, before: fnArray[k - 1] === lib.OPS.beginGroup, bbox: argsArray[k - 1]?.[0]?.bbox ? Array.from(argsArray[k - 1][0].bbox) : null }
+    await task.destroy()
+    return out
+  })
+  check('a transparency group form: its box on the group PDF.js begins before it, none on the form', group.form && group.own === null && group.before && JSON.stringify(group.bbox) === '[0,0,200,100]', JSON.stringify(group))
   await page.close()
 }
 
