@@ -494,7 +494,9 @@ export function createPageSession(deps: SessionDeps): PageSession {
       // be overwritten by the stored mode it carries
       await ready
       const config = await deps.config.get()
-      if (config.mode !== mode) await deps.config.set({ ...config, mode })
+      // A display chosen here is a translated one: the PDF reader's original, if it was left there, goes too — the reader
+      // opens on whatever was chosen last, on either page (the reader's design, §3)
+      if (config.mode !== mode || config.pdfReader.original) await deps.config.set({ ...config, mode, pdfReader: { ...config.pdfReader, original: false } })
       // Recorded once stored. A refused save (the stored settings cannot be read, config/storage.ts) rejects above
       // and leaves the preference as it was: on a translated page the switch holds for the page, on an untranslated
       // one nothing changed, and the caller tells the reader it was not saved
