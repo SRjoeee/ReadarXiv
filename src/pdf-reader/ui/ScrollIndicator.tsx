@@ -9,6 +9,8 @@ import { useReader } from './use-reader'
 /** the pane's scroller the engine shows now (it replaces the right one as translations come) */
 const scrollerOf = (track: HTMLElement | null) => track?.parentElement?.querySelector<HTMLElement>('.viewerContainer:not(.axt-incoming)') ?? null
 
+const DRAG_ENDS = ['pointerup', 'pointercancel', 'lostpointercapture'] as const
+
 /** the thumb: the pane's visible share of the track, 32 px at least */
 export const thumbSize = (track: number, client: number, scroll: number) => Math.min(track, Math.max(32, Math.round((track * client) / Math.max(scroll, 1))))
 
@@ -48,9 +50,15 @@ export const ScrollIndicator = forwardRef<HTMLDivElement, { controller: ReaderCo
     t.toggleAttribute('data-drag', true)
     const y0 = e.clientY, top0 = c.scrollTop, per = (c.scrollHeight - c.clientHeight) / Math.max(1, t.clientHeight - thumb.offsetHeight)
     const move = (ev: PointerEvent) => { c.scrollTop = top0 + (ev.clientY - y0) * per }
-    const up = () => { t.removeAttribute('data-drag'); t.removeEventListener('pointermove', move); t.removeEventListener('pointerup', up) }
+    // the drag ends however the pointer goes: released, cancelled by the system, or its capture lost (a tab switch,
+    // the pane hidden) — or the thumb would stay grabbed (Codex on #301)
+    const up = () => {
+      t.removeAttribute('data-drag')
+      t.removeEventListener('pointermove', move)
+      for (const type of DRAG_ENDS) t.removeEventListener(type, up)
+    }
     t.addEventListener('pointermove', move)
-    t.addEventListener('pointerup', up)
+    for (const type of DRAG_ENDS) t.addEventListener(type, up)
   }
   return (
     <div ref={track} className="chrome indicator" aria-hidden="true" onPointerDown={onDown}>

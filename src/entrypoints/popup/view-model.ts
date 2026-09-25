@@ -7,7 +7,7 @@
 // note at a time (paused > replaced > images paused > the chosen service cannot run); the menus
 // open at any time, a change while the page is on restarts it in place (data.ts), and only a
 // choice that cannot run leaves the page behind the settings.
-import { languageItems } from '@/pdf-reader/ui/languages'
+import { languageItems, READER_LANGUAGES } from '@/pdf-reader/ui/languages'
 import { activeStyle } from '@/config/appearance'
 import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
@@ -201,6 +201,7 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
 function readerView(entry: EntryStatus, config: Config, input: PopupInput): PopupView {
   const base = entryView(entry, config, input)
   const original = config.pdfReader.original
+  const held = entry.pdf === null || !READER_LANGUAGES.includes(config.targetLanguage)
   return {
     ...base,
     style: null,
@@ -209,9 +210,11 @@ function readerView(entry: EntryStatus, config: Config, input: PopupInput): Popu
       : input.menu === 'style' ? null : base.menu,
     // the note of a service that cannot run; the HTML version's is not this page's matter
     note: serviceNote(config, input),
+    // the reader holds the original for a paper with no source and a language it does not typeset: the switch would
+    // change nothing on screen, so it is greyed, without words, as the PDF entry is (Codex on #301)
     primary: original
-      ? { label: S.primary.translate, action: 'readerTranslate', disabled: false }
-      : { label: S.primary.restore, action: 'readerOriginal', disabled: false },
+      ? { label: S.primary.translate, action: 'readerTranslate', disabled: held }
+      : { label: S.primary.restore, action: 'readerOriginal', disabled: held },
     entries: null,
     mode: { value: config.mode === 'stack' ? 'side' : config.mode, note: null, disabled: ['stack'] },
   }

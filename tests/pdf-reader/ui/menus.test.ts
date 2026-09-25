@@ -7,6 +7,7 @@ import { setLocale } from '@/ui/strings'
 import { mountElement } from '../../ui/render-hook'
 import { fakeController } from './fake-controller'
 import { stubPopovers } from './popover-stub'
+import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
 
 let restore = () => {}
 // the interface's words as the maintainer reads them: the controls are found by them
@@ -62,6 +63,18 @@ describe('the reader\'s menus (the reader\'s design, §6.1, §6.7)', () => {
     expect([...list.children].every(c => c.getAttribute('role') === 'option')).toBe(true)
     // one list, not a listbox in a listbox: the popover itself takes no role
     expect(container.querySelectorAll('[role="listbox"], [role="menu"]').length).toBe(1)
+  })
+
+  it('service: a service another tab has deleted meanwhile is not written, as the popup\'s choice is not (Codex on #301)', async () => {
+    const mine = POPUP_FIXTURES.find(f => f.id === 'P15')!.input.config!.services[0]!
+    const settings: Config = { ...DEFAULT_CONFIG, services: [mine] }
+    const { container, controller } = await openMenu(ServiceMenu, { settings })
+    const option = [...container.querySelectorAll<HTMLElement>('[role="option"]')].find(o => o.textContent?.includes(mine.name))!
+    option.click()
+    const change = controller.patchSettings.mock.calls[0]![0] as (c: Config) => Config
+    expect(change(settings).provider).toBe(mine.id)
+    const deleted = { ...settings, services: [] }
+    expect(change(deleted)).toBe(deleted)
   })
 
   it('service and zoom: one list each, its separators not items of it (the final review)', async () => {

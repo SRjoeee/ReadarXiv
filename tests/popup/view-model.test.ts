@@ -61,6 +61,14 @@ describe('derivePopupView (UI.md §4)', () => {
     // with no PDF entry either, the whole sentence: there is nothing to translate
     expect(derivePopupView({ ...input('P17a'), entry: { ...input('P17a').entry!, pdf: null } }).note?.text).toBe(S.note.noHtml)
   })
+  it('the reader holding the original — a paper with no source, a language it does not typeset — greys the primary rather than offer a switch that does nothing (Codex on #301)', () => {
+    const base = input('P17')
+    const reader = { ...base, entry: { ...base.entry!, kind: 'pdf' as const, readerOpen: true } }
+    expect(derivePopupView(reader).primary.disabled).toBe(false)
+    expect(derivePopupView({ ...reader, entry: { ...reader.entry, pdf: null } }).primary.disabled).toBe(true)
+    expect(derivePopupView({ ...reader, config: { ...base.config!, targetLanguage: 'arb' } }).primary.disabled).toBe(true)
+  })
+
   it('no HTML version and a service that cannot run, with nothing to take over: the service\'s note, which is why both entries are greyed — on an entry page and with the reader open (Part 5\'s final review)', () => {
     const noHtml = { ...input('P17b'), entry: { ...input('P17b').entry!, html: null } }
     const v = derivePopupView(noHtml)

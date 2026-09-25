@@ -3,6 +3,7 @@
 import { ChevronDown, Download } from 'lucide'
 import { browser } from 'wxt/browser'
 import type { LangCode } from '@/config/languages'
+import { isBuiltInService } from '@/config/services'
 import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
 import { R, S, languageName, serviceName } from '@/ui/strings'
 import type { ReaderController } from '../controller'
@@ -76,7 +77,9 @@ export function ServiceMenu({ controller }: { controller: ReaderController }) {
             // managing the services, or a pack to download: the settings page's (the reader downloads no pack itself)
             const item = serviceItems(config, state.pack).find(i => i.id === id)
             if (id === MANAGE_SERVICES || item?.action) return openOptions('services')
-            controller.patchSettings(c => ({ ...c, provider: id }))
+            // a service another tab deleted meanwhile is not written: the chain would take an unknown id for Microsoft
+            // while the bar showed the raw id (the popup's rule; Codex on #301)
+            controller.patchSettings(c => (isBuiltInService(id) || c.services.some(s => s.id === id) ? { ...c, provider: id } : c))
           }} />
       </Popover>
     </>
