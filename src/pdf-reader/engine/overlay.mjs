@@ -10,3 +10,23 @@
 export function pinned({ left, top, width, height }, s0) {
   return { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px`, transformOrigin: `${-left}px ${-top}px`, scale: `calc(var(--total-scale-factor) / ${s0})` }
 }
+
+/**
+ * Overlays that outlive PDF.js drawing a page again (the reader's design, §10.2): a page view's reset() removes every
+ * node of its page it does not own, before a redraw after a zoom and when the page leaves PDF.js's buffer. An overlay
+ * removed so is put back in the same task, before the frame is painted: with its transform (pinned) it is right at the
+ * new scale, and nothing is recomputed. Those the reader removes itself go through drop()
+ */
+export function keepOverlays(selector) {
+  const dropped = new WeakSet()
+  const observer = new MutationObserver(records => {
+    for (const { target, removedNodes } of records) for (const node of removedNodes) {
+      if (node.nodeType === 1 && node.matches(selector) && !dropped.has(node) && !node.isConnected) target.append(node)
+    }
+  })
+  return {
+    observe: page => observer.observe(page, { childList: true }),
+    drop: el => { dropped.add(el); el.remove() },
+    disconnect: () => observer.disconnect(),
+  }
+}

@@ -116,6 +116,29 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.close()
 }
 
+// ---------------------------------------------------------------- Task 30: overlays kept across a redraw
+// a page PDF.js drops from its buffer when it is scrolled far away, and draws again on the way back: its overlays kept,
+// not laid again, not doubled (§10.2)
+{
+  const page = await open({ mode: 'bilingual' })
+  const at = () => page.evaluate(() => ({ bands: document.querySelectorAll('#right .page[data-page-number="1"] > .axt-hl-layer').length, paints: window.__reader.debug.paintsOf(1), drawn: window.__reader.debug.right.viewer.getPageView(0).renderingState }))
+  await page.evaluate(() => { const d = window.__reader.debug, id = [...d.right.anchors.keys()].find(k => d.right.anchors.get(k)?.rects?.[0]?.page === 1); d.light(id) })
+  const before = await at()
+  // every page in turn: PDF.js keeps ten page views drawn, so page 1 is dropped on the way (its renderingState back to 0)
+  const pages = await page.evaluate(() => window.__reader.debug.right.viewer.pagesCount)
+  let dropped = false
+  for (let n = 2; n <= pages; n++) {
+    await page.evaluate(n => { window.__reader.debug.right.viewer.currentPageNumber = n }, n)
+    await page.waitForTimeout(150)
+    dropped ||= (await at()).drawn === 0
+  }
+  await page.evaluate(() => { window.__reader.debug.right.viewer.currentPageNumber = 1 })
+  await page.waitForTimeout(1500)
+  const after = await at()
+  check('a page dropped by PDF.js and drawn again keeps one highlight layer, its figures not laid again', dropped && after.drawn === 3 && after.bands === 1 && after.paints === before.paints, JSON.stringify({ before, after, dropped }))
+  await page.close()
+}
+
 // ---------------------------------------------------------------- Task 17: the toolbar
 {
   const page = await open({ mode: 'bilingual' })

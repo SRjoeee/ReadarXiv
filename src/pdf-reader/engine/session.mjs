@@ -27,7 +27,7 @@ import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFViewer, pdfjsLib } fro
 import { displayOf, figuresShown, followOf, withDisplay } from '../settings'
 import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
-import { pinned } from './overlay.mjs'
+import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
 import { decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { openEngine, paperContext } from './engine.mjs'
@@ -168,7 +168,9 @@ function makeSide(container) {
   // figs: each page's figures being laid (paintFigures), and figGen the latest call's number, by page; frames: a draft
   // preview's frames (pdfFrames), a promise; anchored: the side's units located, a promise, where they come after its pages
   // fit: the fit the side was last given (page-width, page-fit, page-actual), kept as its pane's width changes; null at a scale
-  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), byPage: new Map(), figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width' }
+  // keeper: the overlays PDF.js removes from a page it draws again, put back (overlay.mjs); laid: each page's figures, by
+  // the viewport scale they were laid at
+  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), byPage: new Map(), figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
 }
 const left = makeSide(host.left)
 let right = makeSide(host.right)
@@ -240,6 +242,8 @@ function unitTop(side, id) {
 
 // ---------------------------------------------------------------- highlight
 let lit = null
+/** how many times each of the right side's pages had its figures laid (paintFigures), for the probes */
+const paints = new Map()
 function paint(side) {
   for (const layer of side.container.querySelectorAll('.axt-hl-layer')) layer.replaceChildren()
   if (lit == null) return
@@ -540,8 +544,10 @@ async function paintFigures(side, n) {
     }))
   }
   if (side.figGen.get(n) !== gen) return
-  pv.div.querySelectorAll(':scope > .axt-fig').forEach(el => el.remove())
+  pv.div.querySelectorAll(':scope > .axt-fig').forEach(el => side.keeper.drop(el))
   for (const f of laid) if (f) { pv.div.append(f.holder); if (f.labels.length) renderImage({ id: f.id, el: f.img, kind: f.kind }, f.labels, { ratio: f.ratio }) }
+  side.laid.set(n, pv.viewport.scale)
+  if (side === right) paints.set(n, (paints.get(n) ?? 0) + 1)
 }
 function repaintFigures() { for (const pv of right.viewer._pages ?? []) if (pv.renderingState === 3) right.figs.set(pv.id, paintFigures(right, pv.id).catch(e => console.warn('[figures]', e))) }
 
@@ -1243,7 +1249,16 @@ function attach(side) {
     void alignClick(side, e)
   })
   // PDF.js re-renders a page's div on zoom and as pages come into view: the highlight and the figures are laid again there
-  side.eventBus.on('pagerendered', ({ pageNumber }) => { if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start; paint(side); if (side !== left) side.figs.set(pageNumber, paintFigures(side, pageNumber).catch(e => console.warn('[figures]', e))) })
+  side.eventBus.on('pagerendered', ({ pageNumber }) => {
+    if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start
+    paint(side)
+    // figures laid once per page: kept through a redraw (keepOverlays), scaled with it (pinned); a draft preview's
+    // copies of the left's figures are bitmaps drawn for one scale, and are drawn again at another
+    const at = side.laid.get(pageNumber)
+    if (side !== left && (at === undefined || (side.frames && at !== pageView(side, pageNumber).viewport.scale))) side.figs.set(pageNumber, paintFigures(side, pageNumber).catch(e => console.warn('[figures]', e)))
+  })
+  // the overlays outlive a page drawn again (overlay.mjs keepOverlays): each page's div watched from the start
+  side.eventBus.on('pagesinit', () => { for (const pv of side.viewer._pages) side.keeper.observe(pv.div) })
   // a side opened out of the display (the original, while the translation alone is shown) waits at 1 for its width (relayout)
   side.eventBus.on('pagesinit', () => { const value = side.scale ?? fitWidth(side); side.viewer.currentScaleValue = shown(side) || typeof value === 'number' ? value : 1 })
   side.eventBus.on('scalechanging', ({ scale }) => { invalidate(); if (shown(side) && (side === left || !shown(left))) host.emit({ type: 'scale', scale }) })
@@ -1425,12 +1440,14 @@ async function replaceRight(url, texts, { draft = false } = {}) {
   })
   await Promise.race([Promise.all(next.viewer._getVisiblePages().views.map(v => next.figs.get(v.id))), new Promise(r => setTimeout(r, 1500))])
   if (!draft) copies.clear()
+  paints.clear()
   bake()
   const old = right
   right = next; sides[1] = next
   next.fit = old.fit; refit.unobserve(old.container); refit.observe(next.container)
   if (driver === old) driver = next
   container.classList.remove('axt-incoming')
+  old.keeper.disconnect()
   old.container.remove()
   // the old viewer lets go of its pages (the reader's design, §10.4): its document set to none cancels every page view
   // and their text layers, which PDF.js otherwise keeps in the one map all its text layers share — a viewer per compile
@@ -1456,6 +1473,7 @@ async function marksOfPdf(bytes) {
 /** the test harness's hooks (spikes/*): the sides, the anchoring's and the sync's helpers, the cache's; getters stay live */
 const harness = () => ({ left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
   // the right side replaced by a copy of what it shows, as a new compile replaces it (replaceRight)
+  paintsOf: n => paints.get(n) ?? 0,
   swapRight: async () => {
     const url = URL.createObjectURL(new Blob([await right.doc.getData()], { type: 'application/pdf' }))
     try { return await replaceRight(url, rightTexts ?? []) } finally { URL.revokeObjectURL(url) }
