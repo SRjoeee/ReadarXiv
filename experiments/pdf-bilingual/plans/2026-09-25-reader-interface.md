@@ -7149,8 +7149,8 @@ reader is open), §9.3 (the settings page), §15's popup and settings copy.
    - `readerOpen`, true on a PDF page while the reader is laid over it.
 
    The popup decides nothing about arXiv by itself: it asks the page, as it does for the HTML version.
-2. **The primary button's single `openHtml` face becomes two entries on the entry pages**, side by side (§2): HTML 对照翻译
-   and PDF 对照翻译. The view model's `primary` stays for the full text and for the reader, and entry pages get `entries`.
+2. **The primary button's single `openHtml` face becomes two entries on the entry pages**, side by side (§2): HTML 翻译
+   and PDF 翻译. The view model's `primary` stays for the full text and for the reader, and entry pages get `entries`.
    S-P-50b's 双语版本 goes: the two entries' words replace it.
 3. **`pdfReader.enabled` and `#readarxiv` are read on the PDF page through the entry settings** (the background's
    validated answer, `shared/entry-settings.ts`). A PDF page reads no stored value itself, as the abstract page does
@@ -7421,8 +7421,9 @@ if (askTranslate && config.pdfReader.original) void save(c => ({ ...c, pdfReader
 
   Run: FAIL.
 
-- [ ] **Step 2: The words** — `S.entry = { html: 'HTML 对照翻译', pdf: 'PDF 对照翻译' }` (§15; English `Bilingual
-  HTML`, `Bilingual PDF`). S-P-50b becomes the pair. `S.primary.bilingual` goes if nothing else uses it: grep first.
+- [ ] **Step 2: The words** — `S.entry = { html: 'HTML 翻译', pdf: 'PDF 翻译' }` (§15; the maintainer, 2026-09-25: as
+  few words as stay clear; English `Translate HTML`, `Translate PDF`). S-P-50b becomes the pair. `S.primary.bilingual`
+  goes if nothing else uses it: grep first.
 
 - [ ] **Step 3: The view** — `entryView` returns `entries` and no `primary` action on its own. `PopupView` draws the
   two as two primary buttons of equal width side by side, where the one button was. Each is disabled with the reasons
@@ -7432,7 +7433,7 @@ if (askTranslate && config.pdfReader.original) void save(c => ({ ...c, pdfReader
   `entry-page.ts` (`location.assign(pdf)`) as `axt:open-html` is.
 
 - [ ] **Step 5: In the browser** — `tests/e2e/pdf-entry.mjs`'s popup checks on the abstract and no-HTML pages find the
-  two buttons by name (HTML 对照翻译, PDF 对照翻译), and the PDF one opens `pdf/<id>#readarxiv`.
+  two buttons by name (HTML 翻译, PDF 翻译), and the PDF one opens `pdf/<id>#readarxiv`.
   Run: `pnpm build >/dev/null && pnpm e2e:pdf`. Expected: all passed.
 
 - [ ] **Step 6: Commit** — `feat(popup): the entry pages' two entries, HTML and PDF`.

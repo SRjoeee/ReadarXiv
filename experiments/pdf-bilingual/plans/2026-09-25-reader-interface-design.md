@@ -37,14 +37,14 @@ What changes on the extension's side is §9; here, the ways in.
   address stays arXiv's. Off, the browser's viewer shows the PDF with the floating button.
   - A PDF address carrying `#readarxiv` opens the reader whatever the setting says: it is an explicit request, and the
     abstract page's entry and the floating button use it (the HTML version's link carries the same hash today).
-- **The abstract page's popup**: the entry view's one button becomes two, side by side, **HTML 对照翻译** and **PDF 对照
-  翻译**, where `reading.openIn` says (a new tab by default). The reader chooses; we do not choose for them (the
-  maintainer: 「在PDF入口和HTML入口中自选——我们不替用户做决定」). PDF 对照翻译 opens the paper's PDF address with
+- **The abstract page's popup**: the entry view's one button becomes two, side by side, **HTML 翻译** and **PDF 翻译**
+  (the maintainer, 2026-09-25: as few words as stay clear), where `reading.openIn` says (a new tab by default). The
+  reader chooses; we do not choose for them (the maintainer: 「在PDF入口和HTML入口中自选——我们不替用户做决定」). PDF 翻译 opens the paper's PDF address with
   `#readarxiv`, which asks for a translation: the reader opens translating, in 对照 or 译文 as last chosen (§3), and
   leaves 原文 if it was last left there.
-  - HTML 对照翻译 is disabled with the existing note when the paper has no HTML version (a thing a reader can see on
+  - HTML 翻译 is disabled with the existing note when the paper has no HTML version (a thing a reader can see on
     arXiv).
-  - PDF 对照翻译 is disabled **without words** when the paper cannot be had as a bilingual PDF (§1's rule).
+  - PDF 翻译 is disabled **without words** when the paper cannot be had as a bilingual PDF (§1's rule).
   - How that is known (checked 2026-09-25 on 1706.03762, which has a source, and 2608.07562, one of the corpus's 11
     PDF-only submissions):
     - on the abstract page, arXiv's own source link in the Access Paper list, `a.download-eprint` (TeX Source, to
@@ -611,7 +611,7 @@ the same thing, its string is reused (marked).
 | | PDF 对照暂不支持{语言} · 选择语言 | A bilingual PDF isn't available in {language} yet · Choose language |
 | | 窗口较窄，暂只显示译文 (after S-P-74) | The window is narrow, so this shows the translation alone for now |
 | | the reasons (`REASON`, reused) | |
-| Popup | HTML 对照翻译 · PDF 对照翻译 | Bilingual HTML · Bilingual PDF |
+| Popup | HTML 翻译 · PDF 翻译 (the maintainer, 2026-09-25: as few words as stay clear) | Translate HTML · Translate PDF |
 | | PDF 对照不支持上下排列 | The bilingual PDF can't be stacked |
 | Settings | PDF 阅读器 · 在 arXiv 的 PDF 上使用对照阅读器 | PDF reader · Use the bilingual reader for arXiv PDFs |
 | | {n} 篇 · {size} · 清除 (as the HTML line) | {n} papers · {size} · Clear |
