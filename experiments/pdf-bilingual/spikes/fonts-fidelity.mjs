@@ -4,7 +4,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { latinFontsFor } from '../poc-reader/latex-front.mjs'
+import { latinFontsFor } from '../../../src/pdf-reader/engine/latex-front.mjs'
 const root = new URL('..', import.meta.url).pathname
 const fonts = JSON.parse(readFileSync(join(root, 'out/fonts.json'), 'utf8'))
 const pdfIn = d => (existsSync(d) ? readdirSync(d).find(f => f.endsWith('.pdf') && !f.startsWith('.')) : null)

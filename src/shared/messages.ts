@@ -15,6 +15,13 @@ export interface EntryStatus {
   paper: string
   /** Where its HTML full text is, already carrying `#readarxiv`; null when the paper has no HTML version */
   html: string | null
+  /** Which entry page: the abstract, or the PDF */
+  kind: 'abs' | 'pdf'
+  /** The PDF address asking for the reader (`#readarxiv`); null when the paper cannot be had as a bilingual PDF, or
+   *  the browser cannot run the reader (pdf-reader/support.ts) */
+  pdf: string | null
+  /** On a PDF page: the reader is laid over it */
+  readerOpen: boolean
 }
 
 export interface PageStatus {
@@ -78,6 +85,7 @@ export interface AxtMessages {
   'axt:entry-status': { request: Record<never, never>; response: EntryStatus }
   /** popup → content, on those pages: go to the HTML version and translate it. The page navigates itself, so no tabs permission is involved */
   'axt:open-html': { request: Record<never, never>; response: { opened: boolean } }
+  'axt:open-pdf': { request: Record<never, never>; response: { opened: boolean } }
   /**
    * content → background: the floating button's main button on the full text (§4.0c). The background decides as it
    * does for the keyboard command and the context menu — one toggle, four doors — and tells this tab what to do.

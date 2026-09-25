@@ -3,8 +3,10 @@
 // The locale pack is read directly, not through `@/ui/strings`: that module pulls in 179 language names and the
 // appearance module, and this script runs on every arXiv abstract page. All it needs is one sentence (Codex on #161: the sentence used to be hard-coded Chinese).
 import { LOCALES, pickLocale } from '@/locales'
-import { htmlHrefOn, injectBilingualLink, relabelBilingualLink, retargetBilingualLink } from '@/core/abstract/link'
+import { htmlHrefOn, injectBilingualLink, relabelBilingualLink, retargetBilingualLink, sourceOn } from '@/core/abstract/link'
+import { pdfUrlOf } from '@/core/pdf/entry'
 import { paperIdFrom } from '@/core/paper-id'
+import { readerRuns } from '@/pdf-reader/support'
 import { announceUsablePage } from '@/shared/action-icon'
 import { answerEntryMessages } from '@/shared/entry-page'
 import { watchEntrySettings } from '@/shared/entry-settings'
@@ -35,14 +37,19 @@ export default defineContentScript({
 
     // The popup asks this page what it is: on an abstract page the translate button works, and takes the reader to
     // the HTML version to translate it there (UI.md S-P-03b, the maintainer 2026-09-18)
-    answerEntryMessages({ paper: () => paperIdFrom(location.pathname, 'abs'), html: () => htmlHrefOn(document) })
+    // and its PDF entry, where the paper has a source to make the bilingual PDF from and this browser runs the reader
+    // (the reader's design, §2): arXiv's own TeX Source link says so, with no request
+    const paper = () => paperIdFrom(location.pathname, 'abs')
+    const pdfEntry = () => { const id = paper(); return id !== null && readerRuns() && sourceOn(document) ? pdfUrlOf(id, location.origin) : null }
+    answerEntryMessages({ kind: 'abs', paper, html: () => htmlHrefOn(document), pdf: pdfEntry, readerOpen: () => false })
 
-    // The floating button (DESIGN §4.0c), as on the PDF and the full text: here its main button follows the href
-    // arXiv gives, read once — the abstract page does not change under the reader
-    const href = htmlHrefOn(document)
+    // The floating button (DESIGN §4.0c), as on the PDF and the full text: here its main button opens the control
+    // panel, the popup with the paper's two entries (the reader's design, §2). Its words are the entry's sentence while
+    // there is something to open, read once — the abstract page does not change under the reader
+    const offered = htmlHrefOn(document) !== null || pdfEntry() !== null
     void installFloatingButton(document, {
-      main: href !== null ? { kind: 'link', href } : { kind: 'none' },
-      label: S => (href !== null ? S.page.abstractLink(S.brand) : S.note.noHtml),
+      main: { kind: 'panel' },
+      label: S => (offered ? S.page.abstractLink(S.brand) : S.note.noHtml),
     })
   },
 })

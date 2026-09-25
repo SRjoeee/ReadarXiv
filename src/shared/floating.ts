@@ -23,6 +23,12 @@ export interface InstalledFloatingButton {
   setActive: (active: boolean) => void
   /** Open the control panel: where a click that nothing could serve is explained */
   openPanel: () => void
+  /**
+   * The PDF reader is laid over the page, or has gone: the button stands aside meanwhile, through changes of the
+   * settings. The reader has no floating button (the reader's design, §2), and one left behind it would take the focus
+   * from it — a Shift+Tab out of the frame, or its panel handing the focus back as it closes (Part 5's final review)
+   */
+  standAside: (aside: boolean) => void
 }
 
 export async function installFloatingButton(doc: Document, page: FloatingPage): Promise<InstalledFloatingButton> {
@@ -35,6 +41,8 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
   const zoomed = doc.contentType !== 'application/pdf'
   /** Hidden from the close menu for this page: the switch stays on, and a reload brings the button back */
   let hiddenForNow = false
+  /** The PDF reader over the page (`standAside`) */
+  let aside = false
   let active = false
   let button: FloatingButton | null = null
   let settings: EntrySettings | null = null
@@ -44,20 +52,19 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
     return { main: page.label(S, active), settings: S.settings, ...S.page.floating }
   }
 
-  /** What the settings say, put on the page: the button there or not, its words, its link, its place, its size */
+  /** What the settings say, put on the page: the button there or not, its words, its place, its size */
   const apply = (next: EntrySettings) => {
     // Turned on again on the settings page: that is the reader asking for it, and "hide for now" is over
     // (Devin on #251: it used to take a reload)
     if (settings !== null && !settings.floating.enabled && next.floating.enabled) hiddenForNow = false
     settings = next
-    if (!next.floating.enabled || hiddenForNow) {
+    if (!next.floating.enabled || hiddenForNow || aside) {
       button?.remove()
       button = null
       return
     }
     if (button === null) return mount(next)
     button.relabel(strings(next))
-    button.retarget(next.openIn === 'new-tab')
     // A drag saved in another tab, or the lock toggled there, moves this one too
     button.place(placementOf(next.floating))
     button.rescale(zoomed ? next.zoom : 1)
@@ -77,7 +84,6 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
     doc.body.append(host)
     button = mountFloatingButton(doc, host, {
       main: page.main,
-      newTab: from.openIn === 'new-tab',
       zoom: zoomed ? from.zoom : 1,
       placement: placementOf(from.floating),
       strings: strings(from),
@@ -106,5 +112,9 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
       if (settings) button?.relabel(strings(settings))
     },
     openPanel: () => button?.openPanel(),
+    standAside: next => {
+      aside = next
+      if (settings) apply(settings)
+    },
   }
 }

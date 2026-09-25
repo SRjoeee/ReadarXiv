@@ -32,8 +32,8 @@ const both = () => page.evaluate(() => { const d = window.__reader.debug; return
 const together = new Set(['same', 'pointer', 'matched'])
 const runs = [['off'], ['current'], ...['same', 'pointer', 'matched'].flatMap(m => [[m, false], [m, true]])]
 for (const [m, compositor] of runs) {
-  await page.selectOption('#sync', m)
-  if (compositor != null) await page.evaluate(on => { const c = document.getElementById('compositor'); c.checked = on; c.onchange() }, compositor)
+  await page.evaluate(m => window.__reader.session.setSyncMode(m), m)
+  if (compositor != null) await page.evaluate(on => window.__reader.session.setCompositor(on), compositor)
   await page.evaluate(() => { const d = window.__reader.debug; d.left.container.scrollTop = 0; d.right.container.scrollTop = 0 })
   await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.4)
   const trace = []

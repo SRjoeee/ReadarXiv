@@ -19,6 +19,22 @@ vi.mock('@/shared/messages', async importOriginal => ({
   },
 }))
 vi.mock('@/shared/download', () => ({ downloadTextFile: (name: string, text: string, type: string) => { wire.downloads.push({ name, text, type }) } }))
+// The PDF reader's store, on the settings page's own origin (the reader's design, §9.3): stood in for, since what it
+// keeps is tests/cache/pdf-store.test.ts's business
+const pdfStore = vi.hoisted(() => ({ count: 0, bytes: 0, failing: false }))
+vi.mock('@/cache/pdf-store', () => ({
+  createPdfStore: () => ({
+    usage: async () => {
+      if (pdfStore.failing) throw new Error('the store cannot be read')
+      return { count: pdfStore.count, bytes: pdfStore.bytes }
+    },
+    clear: async () => {
+      if (pdfStore.failing) throw new Error('the store cannot be written')
+      pdfStore.count = 0
+      pdfStore.bytes = 0
+    },
+  }),
+}))
 
 import { DIAGNOSTICS_FILE_NAME, Data } from '@/entrypoints/options/sections/Data'
 import type { OptionsData } from '@/entrypoints/options/data'
@@ -58,6 +74,46 @@ describe('Data section: diagnostics export', () => {
     await mounted.flush()
     expect(wire.downloads).toHaveLength(0)
     expect(mounted.container.textContent).toContain(O.data.diagnosticsError)
+    await mounted.unmount()
+  })
+})
+
+describe('Data section: the PDF translations kept on this machine', () => {
+  beforeEach(() => {
+    setLocale('zh-CN')
+    Object.assign(pdfStore, { count: 2, bytes: 3.4 * 1024 * 1024, failing: false })
+  })
+  const clears = (container: HTMLElement) => Array.from(container.querySelectorAll('button')).filter(b => b.textContent === O.data.clear)
+
+  it('says how many papers and how much room, beside the HTML line', async () => {
+    const mounted = await mountElement(createElement(Data, { data: data() }))
+    await mounted.flush()
+    expect(mounted.container.textContent).toContain(O.data.pdf)
+    expect(mounted.container.textContent).toContain(O.data.pdfLine(2, '3.4'))
+    expect(clears(mounted.container)).toHaveLength(2)
+    await mounted.unmount()
+  })
+
+  it('clears in two presses, as the HTML line does, and then says so and counts again', async () => {
+    const mounted = await mountElement(createElement(Data, { data: data() }))
+    await mounted.flush()
+    clears(mounted.container)[1]!.click()
+    await mounted.flush()
+    expect(pdfStore.count).toBe(2)
+    Array.from(mounted.container.querySelectorAll('button')).find(b => b.textContent === O.data.clearConfirm)!.click()
+    await mounted.flush()
+    await mounted.flush()
+    expect(pdfStore.count).toBe(0)
+    expect(mounted.container.textContent).toContain(O.data.cleared)
+    await mounted.unmount()
+  })
+
+  it('a store that cannot be read says so, rather than showing an empty one', async () => {
+    pdfStore.failing = true
+    const mounted = await mountElement(createElement(Data, { data: data() }))
+    await mounted.flush()
+    expect(mounted.container.textContent).toContain(O.data.cacheError)
+    expect(mounted.container.textContent).not.toContain(O.data.pdfLine(0, '0.0'))
     await mounted.unmount()
   })
 })

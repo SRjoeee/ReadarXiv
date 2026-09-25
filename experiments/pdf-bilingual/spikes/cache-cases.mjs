@@ -1,11 +1,11 @@
 // The reader's side of its cache of compiled translations (REPORT, eighteenth addendum), without a browser: the seed a
 // translation made again starts from, the units a record keeps, when a run writes, and runLive over a fake compiler —
 // a preview held while a unit has no translation, and nothing compiled when nothing changed. Exits non-zero on a failure.
-// Build lib/axt first: node spikes/build-shared.mjs
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/cache-cases.mjs   (from the repository root: the engine imports the extension's source by @/)
 import assert from 'node:assert/strict'
-import { decideWrite, knownMarks, seedFrom, sourceHash, unitsOf } from '../poc-reader/cache.mjs'
-import { openPaper, runLive } from '../poc-reader/live.mjs'
-import { translateUnits } from '../poc-reader/mt.mjs'
+import { decideWrite, knownMarks, seedFrom, sourceHash, unitsOf } from '../../../src/pdf-reader/engine/cache.mjs'
+import { compilerKeeper, openPaper, runLive } from '../../../src/pdf-reader/engine/live.mjs'
+import { translateUnits } from '../../../src/pdf-reader/engine/mt.mjs'
 
 const tex = paras => new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\n\\begin{document}\n${paras.join('\n\n')}\n\\end{document}\n`)]])
 const PARAS = ['The first paragraph of the paper says something here.', 'The second paragraph of the paper says more.']
@@ -111,6 +111,113 @@ cases.push(['a seeded preview waits until every unit has a translation', async (
   const translate = async texts => texts.map(text => (text.includes('second') ? null : { text, by: 'B' }))
   await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', seed, marks: new Map(), identity: 'B', pipelineCurrent: true, onUpdate: u => shown.push(u.final) })
   assert.deepEqual(shown.filter(f => !f), [])
+}])
+
+cases.push(['a failure of the service stops the run: the batches after it are not sent (§10.3)', async () => {
+  const long = n => `Paragraph ${n} ${'words of the paper that go on. '.repeat(230)}`
+  const paper = openPaper(tex([long(1), long(2), long(3)])), c = compiler(), events = []
+  let calls = 0
+  // the first batch comes back; the second fails as a network down does (engine.mjs: partial, lost)
+  const translate = async texts => {
+    calls++
+    if (calls === 1) return texts.map(text => ({ text, by: 'B' }))
+    throw Object.assign(new Error('network'), { kind: 'network', partial: texts.map(() => null), lost: new Set(texts.keys()) })
+  }
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', marks: new Map(), identity: 'B', note: (e, d) => events.push([e, d]) })
+  assert.equal(calls, 2, 'the third batch is not sent')
+  assert.equal(r.stopped, 'network')
+  assert.equal(r.missing, 2)
+  assert.deepEqual(events.filter(([e]) => e === 'stopped').map(([, d]) => d), [{ kind: 'network', untried: 1 }])
+  assert.ok(c.calls.some(q => q.rerun), 'what there is is compiled')
+}])
+cases.push(['nothing translated when the service fails: nothing is compiled, and the run says why', async () => {
+  const paper = openPaper(tex(PARAS)), c = compiler()
+  const translate = async texts => { throw Object.assign(new Error('network'), { kind: 'network', partial: texts.map(() => null), lost: new Set(texts.keys()) }) }
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', marks: null, identity: 'B' })
+  assert.equal(r.stopped, 'network')
+  assert.equal(r.translated, 0)
+  assert.equal(r.missing, paper.units.length - paper.kept.size)
+  assert.equal(c.calls.filter(q => q.rerun).length, 0, 'no final, no marked original')
+}])
+cases.push(['a key refused midway stops the run as a failure of the service does, and the run resolves', async () => {
+  const long = n => `Paragraph ${n} ${'words of the paper that go on. '.repeat(230)}`
+  const paper = openPaper(tex([long(1), long(2), long(3)])), c = compiler()
+  let calls = 0
+  const translate = async texts => { if (++calls === 1) return texts.map(text => ({ text, by: 'B' })); throw Object.assign(new Error('invalid api key'), { kind: 'auth' }) }
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', marks: new Map(), identity: 'B' })
+  assert.equal(r.stopped, 'auth')
+  assert.equal(calls, 2)
+  assert.equal(r.missing, 2)
+}])
+cases.push(['a seeded paragraph whose new try failed keeps its old translation, and is not missing', async () => {
+  const paper = openPaper(tex(PARAS)), c = compiler()
+  const seed = await seedOf(paper, echo('A'), 'A')
+  const translate = async texts => { throw Object.assign(new Error('network'), { kind: 'network', partial: texts.map(() => null), lost: new Set(texts.keys()) }) }
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', seed, marks: new Map(), identity: 'B', pipelineCurrent: true })
+  assert.equal(r.stopped, 'network')
+  assert.equal(r.missing, 0)
+  assert.ok([...r.results.values()].every(x => x.pieces && x.state === 'lost'))
+}])
+
+/** a compiler whose calls answer as `answers` says, one by one (then as compiler() does): a timeout is the TeX page's reply to BusyTeX giving up */
+function slow(...answers) {
+  const c = compiler(), base = c.compile
+  return { calls: c.calls, compile: async req => { const a = answers.shift(); if (a === 'timeout') { c.calls.push(req); return { ok: false, error: 'Error: Compilation timeout', log: '', ms: 180000 } } return base(req) } }
+}
+cases.push(['a preview that did not answer keeps the strategy: the machine was slow, not the strategy wrong', async () => {
+  const paper = openPaper(tex(PARAS)), events = []
+  // the fonts probe answers, then the first preview times out
+  const c = slow('ok', 'timeout')
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: e => events.push(e) })
+  assert.ok(c.calls.filter(q => !q.rerun).length >= 2, `a preview was asked: ${c.calls.map(q => (q.rerun ? 'final' : 'draft')).join(' ')}`)
+  assert.equal(events.filter(e => e === 'next strategy').length, 0)
+  assert.equal(r.settled, true)
+}])
+cases.push(['a final that did not answer is tried again with the same strategy, once', async () => {
+  const paper = openPaper(tex(PARAS)), events = []
+  const c = slow('ok', 'ok', 'timeout')
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: (e, d) => events.push([e, d?.strategy]) })
+  assert.equal(events.filter(([e]) => e === 'next strategy').length, 0)
+  assert.equal(events.filter(([e]) => e === 'final again').length, 1)
+  assert.equal(new Set(events.filter(([e]) => e === 'final' || e === 'final again').map(([, s]) => s)).size, 1)
+  assert.equal(r.settled, true)
+}])
+cases.push(['a final that twice did not answer ends the run with what is shown, and writes nothing', async () => {
+  const paper = openPaper(tex(PARAS)), events = []
+  const c = slow('ok', 'ok', 'timeout', 'timeout')
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: e => events.push(e) })
+  assert.equal(events.filter(e => e === 'next strategy').length, 0)
+  assert.equal(r.settled, false)
+  assert.equal(c.calls.filter(q => q.rerun).length, 2)
+}])
+
+/** a compiler as BusyTeX's worker is: a compile that timed out goes on, and its output answers the next compile */
+function stuckAfterTimeout(opened) {
+  let owed = null, n = 0
+  const inst = { id: opened.length, closed: false, compile: async req => {
+    n++
+    if (owed) { const out = owed; owed = null; return out }
+    if (n === 1 && inst.id === 0) { owed = { ok: true, pdf: new TextEncoder().encode(`output of ${req.name}`), log: '', ms: 1 }; return { ok: false, error: 'Error: Compilation timeout', log: '', ms: 180000 } }
+    return { ok: true, pdf: new TextEncoder().encode(`output of ${req.name}`), log: '', ms: 1 }
+  }, close: () => { inst.closed = true } }
+  opened.push(inst)
+  return inst
+}
+cases.push(['a compile that timed out throws its compiler away: the next compile is its own, from a fresh one (Part 4\'s final review)', async () => {
+  const opened = []
+  const keeper = compilerKeeper(async () => stuckAfterTimeout(opened))
+  const first = await keeper.compile({ name: 'preview' })
+  assert.match(first.error, /Compilation timeout/)
+  const next = await keeper.compile({ name: 'final' })
+  assert.equal(new TextDecoder().decode(next.pdf), 'output of final')
+  assert.deepEqual(opened.map(c => c.closed), [true, false])
+}])
+cases.push(['a compiler that does not open is opened again at the next compile', async () => {
+  let tries = 0
+  const keeper = compilerKeeper(async () => { if (++tries === 1) throw Object.assign(new Error('no page'), { event: 'no compiler' }); return { compile: async () => ({ ok: true, pdf: new Uint8Array([1]), log: '', ms: 1 }), close: () => {} } })
+  await assert.rejects(keeper.ready(), /no page/)
+  await keeper.ready()
+  assert.equal((await keeper.compile({})).ok, true)
 }])
 
 let failed = 0

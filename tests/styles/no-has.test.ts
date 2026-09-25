@@ -77,3 +77,27 @@ describe('the style sheets built in TypeScript', () => {
   })
 })
 
+
+// The PDF reader's page holds to the same rule (its design, §12): a :has() makes Chrome restyle on DOM insertions,
+// and the reader inserts on every hover (the highlight's bands). PDF.js's own viewer sheet keeps its rules, all keyed
+// to PDF.js's classes (annotation and editor layers, the thumbnails): with them and without them a band's insertion
+// costs the same (0.3–0.9 ms against 0.4–0.5 ms for six at 10 000 elements, Part 3's final review). Tailwind's
+// utilities come from the reader's own sources alone: its automatic scan once reached the settings page's and brought
+// in `has-disabled:`
+describe('the PDF reader\'s style sheets', () => {
+  const READER = join(import.meta.dirname, '../../src/entrypoints/pdf-reader/reader.css')
+  const ENGINE = join(import.meta.dirname, '../../src/pdf-reader/engine/engine.css')
+  const sources = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? sources(join(dir, e.name)) : /\.(tsx?|mjs)$/.test(e.name) ? [join(dir, e.name)] : []))
+
+  it('carry no :has() outside comments', () => {
+    for (const file of [READER, ENGINE]) expect(readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''), `${file} uses :has()`).not.toContain(':has(')
+  })
+
+  it('take Tailwind\'s utilities from the reader\'s own sources, which use no has- variant', () => {
+    const css = readFileSync(READER, 'utf8')
+    expect(css).toMatch(/@import "tailwindcss\/utilities\.css" layer\(utilities\) source\(none\);/)
+    const dirs = [...css.matchAll(/^@source "([^"]+)";$/gm)].map(m => join(READER, '..', m[1]!))
+    expect(dirs.length).toBeGreaterThan(0)
+    for (const file of dirs.flatMap(sources)) expect(readFileSync(file, 'utf8'), `${file} uses a has- variant`).not.toMatch(/(?<![\w-])has-[\w[]/)
+  })
+})

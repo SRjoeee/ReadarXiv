@@ -61,11 +61,13 @@ const S: Locale['S'] = {
     paused: reason => `${reason}. Check the settings, then translate again`,
     imagesPaused: reason => `Image translation paused: ${reason}`,
     noHtml: 'arXiv has no HTML version of this paper, so there is nothing to translate',
+    noHtmlVersion: 'arXiv has no HTML version of this paper',
   },
+  // an abstract or PDF page's two entries, the reader's to choose (S-P-50b; the reader's design, §2, §15)
+  entry: { html: 'Translate HTML', pdf: 'Translate PDF' },
   primary: {
     // The popup's button on an abstract or PDF page: it opens the paper's bilingual version, it does not
     // translate the page in front of the reader (UI.md S-P-50b). The same words as the entry on the page itself
-    bilingual: 'Bilingual version',
     translate: 'Translate this page',
     restore: 'Show original',
     retranslate: 'Translate again',
@@ -82,6 +84,7 @@ const S: Locale['S'] = {
     sideTitle: 'Original and translation in two columns; a narrow window falls back to stacked',
     onlyTitle: 'Hides the original; references stay bilingual',
     narrow: 'The window is narrow, so this is stacked for now',
+    stackPdf: "The bilingual PDF can't be stacked", // S-P-75: the popup while the PDF reader is open
   },
   actionFailed: message => message,
   noActiveTab: 'No active tab',
@@ -111,7 +114,7 @@ const S: Locale['S'] = {
 
 const O: Locale['O'] = {
   title: 'Settings',
-  nav: { services: 'Services', reading: 'Reading', prompts: 'Prompts', data: 'Data' },
+  nav: { services: 'Services', reading: 'Reading', 'pdf-reader': 'PDF reader', prompts: 'Prompts', data: 'Data' },
   uiLanguage: 'Interface language',
   uiLanguageAuto: 'Follow the browser',
   fallbackWhy: {
@@ -272,11 +275,14 @@ const O: Locale['O'] = {
     glossaryPlaceholder: 'token, jeton\nembedding, plongement',
   },
   close: 'Close',
+  pdfReader: { enabled: 'Use the bilingual reader for arXiv PDFs' },
   data: {
     cache: 'Saved translations',
     cacheHint: 'A different service, model or prompt is kept apart on its own; there is usually no need to clear this',
     cacheLine: (entries, mb) => `${entries} · ${mb} MB`,
     cacheError: 'Could not read what is saved',
+    pdf: 'Saved PDF translations',
+    pdfLine: (papers, mb) => `${papers} ${papers === 1 ? 'paper' : 'papers'} · ${mb} MB`,
     clear: 'Clear',
     clearConfirm: 'Confirm clear',
     cleared: 'Cleared',
@@ -284,6 +290,30 @@ const O: Locale['O'] = {
     diagnosticsHint: 'The last few hundred events: failed requests, service hand-overs, page events. No API key and no paper text; attach it to an issue',
     diagnosticsExport: 'Export',
     diagnosticsError: 'Could not export',
+  },
+}
+
+const R: Locale['R'] = {
+  bar: 'Reader',
+  contents: 'Contents',
+  abstract: 'Open the abstract on arXiv',
+  display: { name: 'Display', original: 'Original', bilingual: 'Side by side', translation: 'Translation' },
+  swap: 'Swap sides',
+  sync: 'Sync scrolling',
+  zoom: { out: 'Zoom out', in: 'Zoom in', value: 'Zoom', width: 'Fit width', page: 'Fit page', actual: 'Actual size' },
+  options: { name: 'Reading options', color: 'Highlight colour', appearance: 'Appearance', light: 'Light', dark: 'Dark', system: 'System', dim: 'Dim pages in dark mode' },
+  download: { name: 'Download', translation: 'Translation PDF', original: 'Original PDF' },
+  leave: 'Open in the default viewer',
+  pill: { original: "Original's page", translation: "Translation's page", previous: 'Previous page', next: 'Next page' },
+  status: {
+    loading: 'Loading',
+    translating: 'Translating',
+    again: 'Translating again with the current settings',
+    close: 'Close',
+    unsupported: (language: string) => `A bilingual PDF isn't available in ${language} yet`,
+    chooseLanguage: 'Choose language',
+    narrow: 'The window is narrow, so this shows the translation alone for now',
+    rateLimited: 'Too many requests',
   },
 }
 
@@ -299,4 +329,4 @@ const REASON: Locale['REASON'] = {
   aborted: '',
 }
 
-export const en = { S, O, REASON }
+export const en = { S, O, R, REASON }

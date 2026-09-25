@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AUTO_TRANSLATE_HASH } from '@/core/abstract/link'
-import { htmlUrlOf, paperIdFromPdfPath, translatedHtmlUrlOf } from '@/core/pdf/entry'
+import { htmlUrlOf, paperIdFromPdfPath, pdfUrlOf, readerWanted, sourceKindOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
 
 // The bilingual entry on arXiv's PDF page (issue #169): where it leads. The floating button itself: floating-button.test.ts
 
@@ -35,5 +35,31 @@ describe('the URLs', () => {
     expect(translatedHtmlUrlOf('hep-th/9711200')).toBe(`https://arxiv.org/html/hep-th/9711200${AUTO_TRANSLATE_HASH}`)
     // The content script passes `location.origin`, so an arXiv that answers on another host keeps its own
     expect(htmlUrlOf('2501.07202', 'https://export.arxiv.org')).toBe('https://export.arxiv.org/html/2501.07202')
+  })
+})
+
+describe('the PDF entry (the reader\'s design, §2)', () => {
+  it('asks the PDF address for the reader, translating, an old-style id keeping its slash', () => {
+    expect(pdfUrlOf('1706.03762v7')).toBe('https://arxiv.org/pdf/1706.03762v7#readarxiv')
+    expect(pdfUrlOf('hep-th/9711200')).toBe('https://arxiv.org/pdf/hep-th/9711200#readarxiv')
+  })
+
+  it('reads what a HEAD on /src/ says: gzip is a source, a PDF is a PDF-only submission, anything else says nothing', () => {
+    expect(sourceKindOf('application/gzip')).toBe('source')
+    expect(sourceKindOf('application/x-gzip; charset=binary')).toBe('source')
+    expect(sourceKindOf('application/pdf')).toBe('pdf-only')
+    for (const other of [null, 'text/html', '']) expect(sourceKindOf(other)).toBe('unknown')
+  })
+})
+
+describe('readerWanted: the PDF page and its reader (the reader\'s design, §2)', () => {
+  it('opens the reader when the setting is on, translating only when asked', () => {
+    expect(readerWanted({ enabled: true, hash: '' })).toEqual({ open: true, translate: false })
+    expect(readerWanted({ enabled: true, hash: '#readarxiv' })).toEqual({ open: true, translate: true })
+  })
+
+  it('opens it off the setting only for #readarxiv, an explicit request', () => {
+    expect(readerWanted({ enabled: false, hash: '' })).toEqual({ open: false, translate: false })
+    expect(readerWanted({ enabled: false, hash: '#readarxiv' })).toEqual({ open: true, translate: true })
   })
 })

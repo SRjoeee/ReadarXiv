@@ -6,9 +6,9 @@
 //   node spikes/lang-ratio.mjs [lang ...]          → out/lang-ratio.json (the languages measured replace their entries)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { openPaper } from '../poc-reader/live.mjs'
-import { plainSource, translateTexts } from '../poc-reader/mt.mjs'
-import { unpackSource } from '../poc-reader/tar.mjs'
+import { openPaper } from '../../../src/pdf-reader/engine/live.mjs'
+import { plainSource, translateTexts } from '../../../src/pdf-reader/engine/mt.mjs'
+import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const LANGS = process.argv.length > 2 ? process.argv.slice(2) : ['zh', 'ja', 'ko', 'ar', 'ru', 'hi', 'de']

@@ -1100,3 +1100,630 @@ There is one record per paper version and target language.
 - **`unlimitedStorage`**, a manifest permission for the product to decide. Without it the extension's storage is best-effort: the browser may clear it when the disk is nearly full.
 - **The copy without figures**, from decision 2.
 
+
+## Nineteenth addendum, 2026-09-25: the reader's interface — DESIGNED
+
+The maintainer and I settled the reader's interface over nine rounds of a variants harness on 2026-09-24 and 09-25. The design is `plans/2026-09-25-reader-interface-design.md`; the harness stayed local and goes once the reader is built. Recorded here is the measurement one of its decisions rests on, since the design first proposed the opposite.
+
+### The overlays during a pinch — MEASURED
+
+While a pinch lasts, PDF.js scales a page by CSS alone and draws it again 400 ms after the pinch ends. The highlight bands and the figure overlays are positioned in pixels of the page as drawn, so they stayed behind: 54, 108, then 209 px off their figures between 83 % and 114 %. The question was how to make them follow without costing frames.
+
+**Method.**
+
+- **Setup.** 2608.02163, the right side's Figure 2 overlay (11 labels). For the heavy case, the same overlay cloned 20 times on its page, 220 labels.
+- **Variants.** A copy of the build per way, `reader.js` patched by text replacement:
+  - pixels, the code as it was;
+  - percent of the page box;
+  - pixels plus a transform tied to `--total-scale-factor`;
+  - the same with `will-change: transform` while pinching;
+  - the transform plus putting back what a redraw removes;
+  - hidden while pinching.
+- **The pinch.** The harness's pinch: Ctrl and the wheel, driving `updateScale` on both sides with `drawingDelay: 400`. It went 83 % → 245 % in 36 events.
+- **The recording.** Chrome's `Performance.getMetrics` before and after the pinch gave layout, style and main-thread time. `requestAnimationFrame` intervals gave the frames. A `MutationObserver` gave how long no overlay was on the right side after the redraw.
+- **Runs.** Three runs per way, in a headed Chromium on a 120 Hz display.
+- **Drift.** Each overlay's box against where the fractions of its page box, read at rest, put it; read at 8, 16 and 24 steps of a pinch.
+
+The first series was discarded: other rendering ran on the machine at the time, and the load varied between runs with the number of figures drawn. The figures below are the series with one fixed load per run.
+
+| Way | Layout per pinch (1 figure / 220 labels) | Main thread | Frames over 1.5× the median | Drift mid-pinch | No overlay after the redraw |
+|---|---|---|---|---|---|
+| Pixels (before) | 29 / 86 ms | 303 / 528 ms | 1–3 | 54 → 209 px | about 40 ms |
+| Percent of the page box | 357 / 787 ms (second series) | 833 / 1941 ms | 7–56 | 0 | — |
+| Transform | 30 / 84 ms | 335 / 476 ms | 1–2 | ≤ 0.7 px | about 40 ms |
+| Transform, `will-change` while pinching | 30 / 116 ms | 312 / 624 ms | 2–5 | ≤ 0.7 px | about 40 ms |
+| Transform, put back on redraw | 31 / 85 ms | 324 / 462 ms | 1–2 | ≤ 0.7 px | 0 |
+| Hidden while pinching | 29 / 91 ms | 295 / 431 ms | 0–2 | hidden | about 40 ms |
+
+**Findings.**
+
+- **Percent positioning is a trap.** One child of a page sized in percent makes every frame of a pinch lay out the whole page again. The cost is the same with 1 figure or 20 and still 2.5× with the labels removed. PDF.js hides its own text layer while a pinch lasts (`hideTextLayer: postponeDrawing`), for the same reason.
+- **The transform costs nothing measurable.** It sits within the pixels' noise, and a little under it with 220 labels. It keeps each overlay within 0.7 px of its place. The overlay keeps its pixel geometry and gains `transform-origin: <−left>px <−top>px` and `scale: calc(var(--total-scale-factor) / s0)`, `s0` being the viewport scale it was drawn at.
+- **`will-change` while pinching buys nothing**, and it costs more under load (the layers are made at the pinch's start).
+- **Hiding works but loses the overlays.** It is the cheapest on the main thread, but the overlays are gone for as long as the pinch lasts. With the transform free, there is no reason to hide them.
+- **PDF.js's `reset()` removes every node it does not own when it redraws a page.** The overlays came back only after the figure pipeline ran again: 40 ms here, up to 300 ms in the first series. Until then a figure showed its original labels. A `MutationObserver` that puts a removed overlay back in the same task, except the ones the reader removes itself, brings that to 0, at no cost.
+
+### Two facts for the entries — CHECKED
+
+Whether a paper can be had as a bilingual PDF is known before the reader opens, with no download:
+
+- **On the abstract page**, from arXiv's own source link in the Access Paper list, `a.download-eprint` (TeX Source, to `/src/<id>`). 1706.03762 has it. 2608.07562, one of the corpus's 11 PDF-only submissions (third addendum), has only View PDF.
+- **Elsewhere**, from a HEAD on `arxiv.org/src/<id>`. A source answers `application/gzip` (1706.03762: `arXiv-1706.03762v7.tar.gz`). A PDF-only submission answers `application/pdf` (`arXiv-2608.07562v1.pdf`), which is what `spikes/corpus.mjs` already read.
+
+## Twentieth addendum, 2026-09-25: the reader in the extension (Part 1) — BUILT
+
+Part 1 of `plans/2026-09-25-reader-interface.md`: the reader became the extension's own page, its engine unchanged. The interface proper comes with Part 3; until then the page is the two panes and the way back.
+
+**What moved where.**
+
+- **The engine's modules** went from `poc-reader/` to `src/pdf-reader/engine/`: `anchors`, `sync`, `figures`, `engine`, `mt`, `live`, `latex-front`, `paper-meta`, `scripts`, `tar`, `cache`, `names`. They import the extension's source directly (`@/…`), so the `lib/axt` build (`shared/`, `spikes/build-shared.mjs`) is gone. They are still JavaScript, linted as the experiment is, until the next stage ports them.
+- **PDF.js** is `pdfjs-dist` 6.3.289, exact, bundled from npm (`src/pdf-reader/pdfjs.ts`). Its character maps, standard fonts (with their licences) and WebAssembly decoders are copied into `pdf-reader/pdfjs/`. `scripts/check-output.mjs` fails a build without them, or without the page.
+- **The page** is `pdf-reader.html` (`src/entrypoints/pdf-reader/`, React). arXiv's PDF page frames it with the same parameters as before. `poc-reader/` keeps only the demo papers, which are local and never committed, and the local variants harness, which goes with Part 3.
+
+**The session.** The prototype's page script is `src/pdf-reader/engine/session.mjs`, not wrapped in a function, so that git follows the move.
+
+- It still runs once, at load. It first waits for its host (`host.mjs`): the page hands it the two panes, the address's parameters and an event sink, then loads the module.
+- What its header controls did, it exports as commands: `setDisplay`, `setSyncMode`, `setCompositor`, `setFigures`, `zoomBy`, `zoomTo`, `goToPage`.
+- What it wrote into the header, it emits as events (`session.d.mts`): the display, the scale, each side's page, every step of a run with its counts, a failure with its kind, and the settings notice.
+- A swap of the right side reports the new viewer's page and page count.
+- **Figure OCR goes through the extension.** A bitmap is encoded as PNG and sent as `axt:ocr`, as the HTML page's images are (`src/pdf-reader/ocr.ts`). The reader's own worker and runtime would have been a second copy of the recogniser in the package, which the build check forbids; results are now cached by the image's hash, as on the HTML page.
+
+**The controller** (`src/pdf-reader/controller.ts`) folds the events into `ReaderState`: the display, whether the paper or its language cannot be had, the phase and progress of a run, the paragraphs that failed, whether the final is on screen, the scale, each side's page, and whether the settings could not be read. Commands given while the session is still loading wait for it and go in order. 12 unit tests (`tests/pdf-reader/`).
+
+**MEASURED on the new page.**
+
+| Check | Result |
+|---|---|
+| The six case spikes, now run with tsx | pass as before the move |
+| `e2e:pdf` | 17/17 |
+| `spikes/viewer-faults.mjs` | all passed |
+| `spikes/cache-revisit.mjs` | all passed; a revisit shown from this machine's copy in 191 ms (opened → cache hit 118 ms), nothing compiled; the two-tab and offline cases as before |
+| `spikes/cache-faults.mjs` | all passed |
+| `spikes/sync-frames.mjs` | the follower on the compositor 0 frames off, p95 0 px, idle and busy; by script it lags as before (off in 78 and 74 frames) |
+| The demo paper (2608.02163) on the pre-move reader, rebuilt from history, and on the new page | identical: 350 units, 172 linked, left 209, right 236, pages 25 / 26, the first units' rectangles to the last digit |
+
+**What the move found.**
+
+- The probes reached the prototype's controls in more places than its markup names: the compositor's checkbox and the status line, besides the display buttons and the sync menu. They all go through `window.__reader` now: the controller, the session, and `status`.
+- The TeX Live container can be "Up" with its port unpublished: `curl` is refused while `docker ps` shows `8070/tcp` with no host side. `docker restart texlive-server` publishes it again.
+
+## Twenty-first addendum, 2026-09-25: Part 1's final review — FIXED
+
+A fresh review of Part 1's whole diff found no critical issue, six important ones and three defects in Part 2's plan. Each fix has a test that failed first. The browser checks ran on the build from before the fixes, where the six new checks of `cache-revisit.mjs` failed, and on the build after them.
+
+**The controller's phase follows what is on screen.** The state gains `shown`: none, this machine's copy, a draft being typeset, or the final. The phase now moves at named steps only:
+
+- loading until the cache has answered;
+- reading once a translation is on screen;
+- translating from the session's decision to translate, a new `translating` step that comes after the copy is shown and the language checked. It is "translating again" when a copy is being replaced, and its progress then counts from nothing.
+
+A failure while a translation is on screen leaves it readable: the phase is reading, and the failure is kept for the interface to mention. Before, a copy on screen passed through "translating" on every revisit. With no service able to check it, it stayed "translating" for good. When a key was refused while it was on screen, the state said "failed".
+
+`finalReady` follows `shown`: a copy or the final, not a draft.
+
+**Failures are the chain's error kinds.**
+
+- An engine that cannot run is reported by the reason the chain put it aside, if it put it aside. Otherwise a service of the reader's own is reported as "no key", since an LLM without one is the only reason it does not run, and a built-in engine as "unknown". Before, all three were reported as `unavailable`, which the popup's reasons do not word.
+- A run's failure keeps its kind. A key refused mid-run is now `auth`; before, it was `unknown`.
+- The controller turns any other kind into `unknown`.
+
+**A session that cannot load is a failure** the controller reports. Before, its state stayed "loading", and each queued command was another unhandled rejection.
+
+**Figure text recognition.**
+
+- The calls carry the reader's own scope, which the page withdraws when it goes: an extension page is no tab the background watches.
+- A PNG over the HTML page's 6 MB is not sent.
+- The PNG is base64-encoded with the browser's own `Uint8Array.prototype.toBase64`:
+
+| PNG | Script encoder (`image/run.ts`) | Native | Long task on the reader page, before → after |
+|---|---|---|---|
+| 0.7 MB | 14 ms | 0.2 ms | none → none |
+| 2.6 MB | 52 ms | 0.4 ms | 57 ms → none |
+| 5.9 MB | 133 ms | 1.0 ms | 144 ms → none |
+
+  After the change, the rest of the synchronous work is the message's serialisation, 1–10 ms. The HTML page's route uses the script encoder too, on a floor where the native one is not guaranteed; that is left to the HTML page.
+
+**Chrome 131, the extension's floor, cannot run the reader.** PDF.js 6.3.289's modern build calls these without a guard, and ships no polyfills:
+
+- `Map.prototype.getOrInsertComputed`, in its `EventBus` at every listener's registration;
+- `Math.sumPrecise`, `Uint8Array.fromBase64`, `toBase64` and `toHex`;
+- `RegExp.escape` and `Float16Array`.
+
+Chrome 131 has none of these; Chromium 153 has them all (measured in both). Now `readerRuns` (`src/pdf-reader/support.ts`) is checked before the reader is laid over a PDF. Where it is false, the PDF stays in the browser's viewer with the floating button. The modern build is kept for every browser that has them.
+
+`e2e:pdf` now also checks that the engine opened the paper, not only that the page was drawn:
+
+| Browser | Result |
+|---|---|
+| Chromium 153 | 19/19 |
+| Chrome 131 | 13/14. The reader stays away, as intended. The one failure is older than the reader: the check that Chrome's own viewer is left alone counts every `embed`, and Chrome 131's PDF page has its own `embed` with no extension installed (Chromium 153's has none). |
+
+**MEASURED after the fixes.**
+
+| Check | Result |
+|---|---|
+| `spikes/cache-revisit.mjs` | all passed, the controller's state now checked at every visit. The swap check (each side's page against its viewer's, after the right side was replaced) passed before the fixes too: the code was right, and now it is guarded. In the two-tab case one tab's final timed out while another browser check ran beside it; the record was still one and decrypted. |
+| `spikes/viewer-faults.mjs` | all passed |
+| `pnpm test` | 2241 passed (34 in `tests/pdf-reader/`) |
+
+**Seen, not fixed here.** A key refused mid-run leaves one unhandled rejection on the page (`invalid api key`), before the fixes and after. The run itself ends as it should. Part 4's stopping early (the design, §10.3) reworks that path.
+
+**Part 2's plan, revised.**
+
+- The session follows a landing of the settings through the surface's `onLanded`, and only what changed. It never follows on a refused write, and a display this visit holds (the original after a failure) outlives it. Before, the plan re-applied the display on every landing, including the defaults a refused write lands.
+- The browser check sends its changes as plain objects: the extension's policy has no `unsafe-eval`, and the plan's `new Function` would have thrown.
+- The browser check gains the unreadable-settings case and an unrelated change.
+
+## Twenty-second addendum, 2026-09-25: the reader on the extension's settings (Part 2) — BUILT
+
+Part 2 of `plans/2026-09-25-reader-interface.md`. The reader's own preferences key (`axtPdfReader`) is gone. The reader reads and writes the extension's settings, as the popup and the settings page do, through the same surface (`shared/surface-config.ts`). That surface is the page's only writer; the interface reaches it through the controller (`patchSettings`).
+
+**What it reads.**
+
+- **The display** is the HTML page's `mode`: side by side or stacked show both sides, the translation alone shows it alone. The exception is a reader last left on the original alone, which the new `pdfReader.original` records (`src/pdf-reader/settings.ts`).
+- **The sync** is `pdfReader.sync`.
+- **The highlight's band** is `reading.sentenceHighlight`.
+- **Figure text** follows the image switch and the modes ticked, as on the HTML page.
+- **The interface language**: a new one reloads the page, as it reloads the popup.
+- **The target language**: a new one, once a translation has started, reloads the page, as before.
+
+The settings group is `pdfReader`, configuration v19: `enabled`, `original`, `sync`, `swapped`, `appearance`, `dimPages`. Its migration writes the defaults, and none of it is part of the translation chain.
+
+**What it writes.**
+
+- A display chosen in the reader writes the mode. Stacked stays stacked, since it is already a side-by-side choice for the HTML page. The original alone writes `pdfReader.original`.
+- The sync switch writes `pdfReader.sync`; the figure switch writes `image.enabled`.
+- An address that names a display or a sync mode (the probes' pages) holds for its page and writes nothing.
+
+**What it follows.** A landing of the settings is followed only in what changed since the one before. A landing from the page's own write changes nothing already on screen.
+
+- **A refused write is never followed.** It lands the defaults, and the display the reader chose outlives them. Made to follow it, the browser check fails: the display snaps back to side by side.
+- **A display this visit holds** outlives a change of the settings. This is the original, once a failure left the translation's side with nothing to show. A display chosen in the reader lets it go.
+
+**Found on the way.** An unreadable value written elsewhere is not followed at all: `watchConfig` passes valid values alone. So the reader learns the settings are unreadable when its own write is refused, or when it opens on them. The plan's check had expected it to know at once; the check now tests both of these ways.
+
+**MEASURED.**
+
+| Check | Result |
+|---|---|
+| `spikes/reader-settings.mjs` (new) | 19 checks, all passed. Among them: another reader follows and writes nothing back; stacked kept; the sync and its switch; no band and no figure text with their switches off; an unrelated change leaves the display; unreadable settings, a refused write and a reader opened on them |
+| `e2e:pdf` | 19/19 |
+| `spikes/viewer-faults.mjs` | all passed |
+| `spikes/sync-frames.mjs` | the follower on the compositor 0 frames off, p95 0 px, idle and busy |
+| `spikes/cache-revisit.mjs` | 26 checks, all passed; a revisit shown from this machine's copy in 181 ms (opened → cache hit 115 ms), offline in 149 ms, both tabs' finals compiled |
+| `pnpm test` | 2251 passed |
+
+## Twenty-third addendum, 2026-09-25: the reader's interface (Part 3) — BUILT
+
+Part 3 of `plans/2026-09-25-reader-interface.md` gave the page the interface the design settled (the nineteenth
+addendum). The engine underneath is unchanged. The demo paper anchors as Part 1 measured it: 350 units, 172 linked,
+left 209, right 236, pages 25 / 26.
+
+**What was built.**
+
+- **The frame.**
+  - The token sheet (`src/entrypoints/pdf-reader/reader.css`) goes through Tailwind's `@theme`. Tailwind's theme and
+    utilities come in without Preflight: its resets would reach inside PDF.js's viewers, whose layout assumes the
+    browser's defaults. The chrome has its own small base.
+  - The appearance is light, dark or the system's, with a crossfade. Dark pages invert the canvas
+    (`invert(88.8%) hue-rotate(180deg)`), and the highlight band then blends by `screen`, since `multiply` vanishes
+    over a dark page.
+- **The toolbar.**
+  - The title is the PDF's metadata title; when the PDF has none, the abstract page's `citation_title`, one request
+    made only then. With neither, the id alone. The arXiv id links to the abstract page.
+  - Then the display switch, swap and sync, the zoom, the language and the service, the reading options, the download,
+    the settings and the way back.
+  - Every button has a tooltip: a `popover="hint"`, after 500 ms of hover or at once on keyboard focus, one line,
+    anchored by CSS.
+- **The display switch** is a radio group: arrows, and 1 / 2 / 3 anywhere but a text field. Its letters are outlines
+  of Noto Sans SC at weight 350, generated by `scripts/pdf-reader-glyphs.py`. Its OFL notice is in the build's
+  `third-party.txt`.
+- **Menus.**
+  - A menu's keyboard behaviour is a hook, `useMenuNav` (`src/ui/menu-nav.ts`): the active item announced, Home and End,
+    typing a letter, disabled items skipped, the focus back on the trigger.
+  - The popup's `Menu` is rebuilt on it, so every user gets the fixes of the design's §9.4.
+  - The service list is shared with the popup (`src/ui/service-items.ts`).
+  - The reader's menus are native popovers anchored by CSS: zoom, language (a search over the nine it typesets), service
+    and download.
+- **The reading options**: the highlight and its colour, figure text, the appearance and dark pages. Below 900 px the
+  language and service menus move into them from the bar.
+- **The contents.** Each heading keeps the level of its sectioning command: `latex-front.mjs` records it, and the
+  stored copy keeps it. The levels are ranked among the depths the paper uses.
+  - A row takes the side being read to its heading, and the sync brings the other.
+  - The section being read is marked. It is the session's, found by the reading line on PDF.js's `updateviewarea`.
+- **Per pane**:
+  - a page pill, with a field that goes to a page;
+  - a scroll indicator whose thumb is a scroll-driven animation; a drag on it moves its side, and the other follows.
+
+  Both show while their pane scrolls and fade after. One passive scroll listener per pane toggles them. A scroll
+  renders only what it changes: a pane's pill when its page turns, the contents when the section being read does
+  (after Part 3's final review; before it, every change of the state rendered the whole interface).
+- **The states** (the design's §8):
+  - the capsule, a live region present from the first paint: loading, translating, translating again, a notice with
+    its retry, an unsupported language with its choice of another, the narrow window;
+  - the card, in the translation's pane when it has nothing to show: the reason in the popup's words, with the
+    settings for a key and a retry otherwise.
+- **A window under 840 px** shows the translation alone in Side by side, and says so once.
+- **Pinch zoom** (a trackpad, or Ctrl or ⌘ with the wheel, over the pages) zooms both sides about the pointer through
+  PDF.js's `updateScale`; ⌘± steps a tenth.
+
+**Where it differs from the plan and the harness, and why.** Each difference was found by a browser check or a test,
+and is a ruling in the ledger.
+
+- **A popover's contents are drawn from the start**, and the browser's own `autofocus` puts the focus in them as it
+  shows. They start afresh after each close. With contents drawn only while open, as the plan had it, a key typed at
+  once into the language search was lost.
+- **Tooltips show on `:focus-visible` alone, and never throw.** A closing menu gave the focus back to its button, the
+  button's tip opened while the next menu was showing, and the browser threw "Invalid to show a popover during another
+  show operation".
+- **The section being read** comes from the reading line, not from "the last heading at or before the page shown".
+  That rule read a heading at a page's foot as the next page's.
+- **A heading chosen in the contents** scrolls the side being read, and the sync brings the other. The plan put both
+  sides there. But the original's numbered headings are often not located, so it stayed at page 1.
+- **The sidebar's class is `toc`.** Tailwind generates `.contents { display: contents }`, which took the sidebar's box
+  away.
+- **The narrow window's rows** showed in wide windows too: `.pop .row` outranked `.narrow-only`. A browser check pins
+  it now.
+- **A language the reader cannot typeset, and a paper with no source,** show the original for the visit, with Side by side and
+  Translation greyed. A failure of the service stays in its display, with the card in the translation's pane. Before, the
+  session left the display for the original, so as not to show a blank pane; Part 2's held display went with that.
+- **Retry reloads the page** in this part, as the plan said. The translations made come back from the cache. Part 4
+  retries in place.
+- **The live states have a script of their own**, `spikes/reader-ui-live.mjs`. They need the local corpus, the TeX page
+  and an extension copy with its grants. `reader-ui.mjs` stays on the demo paper.
+- **The variants harness is gone** from `poc-reader/`. Its screenshots stay with the maintainer's.
+
+**MEASURED.**
+
+| Check | Result |
+|---|---|
+| `spikes/reader-ui.mjs` (new) | 37 checks, all passed. Among them: the frame and its layers in one rectangle; dark pages; the title and the tab; the switch and its keys; a tooltip inside the window; the menus, the language search typed at once, Escape and the focus back; the download's name; the options applying at once; the narrow rows; the contents' levels, jump and mark; the pills and indicators; the narrow window; a pinch and ⌘+ |
+| `spikes/reader-ui-live.mjs` (new) | 5 checks, all passed: a first translation's capsule filling; an unsupported language (the original, the switch greyed, the capsule naming the language, its action opening the language menu); nothing translated (the card naming the missing key, with the settings) |
+| `spikes/reader-settings.mjs` | 19 checks, all passed |
+| `spikes/viewer-faults.mjs` | 8 checks, all passed; no service now shows the card in the translation's pane, and the display is kept |
+| `e2e:pdf` | 19/19 |
+| `spikes/sync-frames.mjs` | the follower on the compositor 0 frames off, p95 0 px, idle and busy; by script it lags as before (off in 81 and 85 frames) |
+| The six case spikes | all ok |
+| The demo paper | identical to Part 1: 350 units, 172 linked, left 209, right 236, pages 25 / 26 |
+| `spikes/cache-revisit.mjs` | 23 of 26, twice, each time in case 8, another service's translation (below); every other case passed, the revisit shown from this machine's copy as before |
+| `pnpm test` | 2327 passed |
+
+**The checkpoint.** After the toolbar, a test package with Tasks 12–18 went to the maintainer (`887e9159`), and the
+rest was built without waiting, as the plan allowed. Nothing had been said about it by the time the interface was
+complete. The package with the whole interface is `6fccf8cb`.
+
+**A compile that times out changes the strategy — FOUND.** `cache-revisit.mjs` failed its case 8 twice on this
+build:
+
+- once on a final that timed out;
+- once on a final that the paper's class refused (`Package aaai Error: Package CJK is forbidden`).
+
+Nothing in the compile path changed since Part 2: `live.mjs` and `scripts.mjs` are untouched, and `latex-front.mjs`
+gained the headings' levels alone. To settle it, Part 2's build (`26d8f62c`) and this one ran the same probe one after
+the other on the same machine.
+
+- Part 2's build passed all 26 checks.
+- This build failed the same three in case 8.
+- In the two-tab case, tab A's final timed out on both builds.
+
+The mechanism is in `runLive`, and is older than the interface. The TeX page reports BusyTeX giving up as a failed
+compile (`Error: Compilation timeout`), and a preview that failed moves the run to the next strategy. On a loaded
+machine a preview timed out, and the run moved to the CJK package strategy, which aaai's class forbids. Ruled
+environmental for Part 3. The flaw goes to Part 4 (Task 33): a timeout says the machine was slow, not that the
+strategy is wrong.
+
+**The machine.** Through most of these runs the data volume was 99 % full, and the load was between 20 and 86 (macOS's
+`deleted` at 278 % CPU for long stretches). BusyTeX gives up on a compile after 180 s (`texlyre-busytex`'s
+`compileWithWorker`). A final compile, which is CPU-bound, reached that limit several times, on old builds and new
+alike.
+
+## Twenty-fourth addendum, 2026-09-25: Part 3's final review — FIXED; the progress line back
+
+A fresh review of Part 3's whole diff found no critical issue, twelve important ones and sixteen minor ones. The twelve
+were fixed, with one minor raised to them. Each fix has a test that failed first; the browser's own were run on the
+build from before the fixes, where they failed.
+
+**The menus.**
+
+- A letter a menu jumps by is the menu's. Typing 1 in the zoom menu, to go to 100 %, also switched the reader to the
+  original and wrote it to the settings, so the next paper opened in the original too. The display keys now leave
+  menus, lists and dialogs alone, and anything that took the key first.
+- The search field is a combobox that controls its list and names the active option. Only the element with the focus
+  handles the keys; before, the field and the list both did, and the arrows skipped every other language.
+- A list holds its options alone: no menu inside a menu (the reader's popover carried the role too), no search field
+  or separator among the options. Home and End in a search field move its caret.
+- The popup's and the settings page's menus give the focus back to their row's button; they gave it to a `<div>`, and
+  the focus fell to the page.
+- The appearance's segments take their arrows, as the display switch's do (one `radioKeys` for both).
+- The card that fills the translation's pane is said in the status region, since it takes no focus.
+
+**The contents.**
+
+- A `\paragraph` heading is left out of the contents once the paper's sections have depths. At level 1, it took the
+  subsections after it as its own. The heading marked as the one being read comes from the same headings as the rows.
+- Opening or closing the contents moved the document area by a transition of `left`, and each frame refitted both
+  sides: 12 scale changes a toggle. The area now moves at once, each side is refitted once, and a transform draws it
+  sliding.
+- The sidebar itself never slid: it was `hidden`, and `display: none` leaves no transition to run. It is `inert` when
+  closed.
+
+**The state.**
+
+- A paper or a language that cannot be had holds the original for the visit. Before, another page's display pulled the
+  reader into an empty translation.
+- The offline service's language pack is looked up after the settings land; the session followed the settings once,
+  before the pack came, and the service menu showed that service greyed for good.
+- A component takes the part of the state it shows and renders again only when that part changes. The controller no
+  longer notifies for a page reported again or a pinch's zoom set again. Before, every change rendered the whole
+  interface, the contents' rows and every menu's items with it.
+
+**:has() in the reader's sheet — MEASURED.** The built sheet held 18. One came from Tailwind scanning the whole tree,
+the settings page's `has-disabled:`; the reader's utilities now come from its own sources (270 utilities → 84, none the
+reader writes lost). The other 17 are PDF.js's own viewer sheet's. They stay:
+
+| Six highlight bands lit, 10 334 elements | Style recalculation |
+|---|---|
+| With PDF.js's :has() rules | 0.3–0.9 ms |
+| Without them (deleted through the CSSOM) | 0.4–0.5 ms |
+
+Their arguments are PDF.js's own classes (the annotation and editor layers, the thumbnails), which no insertion of the
+reader's carries. The HTML page's rules were costly because theirs matched what was inserted. `tests/styles/no-has.test.ts`
+now gates the reader's sheets and its Tailwind sources.
+
+**A scroll through 16 pages** (the sync on, the demo paper, a loaded machine):
+
+| Build | Script | Controller notifications |
+|---|---|---|
+| Before the fixes | 272–275 ms | 47 |
+| After | 239–250 ms | 47 |
+
+**The progress line — BACK.** The fifth round of the harness moved the status words out of the toolbar into the capsule,
+at the maintainer's request, and took the progress line with them, into a fill of the capsule (ink at 8 %). The
+maintainer had asked for the words to move, not the line, and asked for it back. It runs along the toolbar's foot,
+2 px of quiet ink:
+
+- while the reader loads, the share of the PDF downloaded (PDF.js's `onProgress`, which nothing showed before);
+- while a translation runs, the share of paragraphs done.
+
+Each stage is a line of its own, so the translation's starts afresh rather than the download's shrinking back. It grows
+by a transform and fades out at the length it reached. With the line there, the maintainer asked for no capsule while a
+load or a translation runs: the line says it. Its words are said to screen readers in the status region, and a
+notice of paragraphs that failed waits for the run's end.
+
+**MEASURED after the fixes.**
+
+| Check | Result |
+|---|---|
+| `spikes/reader-ui.mjs` | 40 checks, all passed. New: the pack's state reaches the service menu; one refit a side per contents toggle (12 before); the line out of sight while reading |
+| `spikes/reader-ui-live.mjs` | 8 checks, all passed. New: the line along the toolbar's foot, 2 px, growing (2 % → 7.6 % in the check); no capsule while it runs, its words in the status region; the download followed to its end |
+| `spikes/reader-settings.mjs`, `spikes/viewer-faults.mjs` | all passed |
+| `pnpm test` | 2349 passed |
+
+**Deferred.** The fifteen minors are in the ledger and go to #299 with the stage.
+
+## Twenty-fifth addendum, 2026-09-25: the engine's measured changes (Part 4) — BUILT
+
+Part 4 of `plans/2026-09-25-reader-interface.md`: the design's §10, measured before and after.
+
+**PDF.js's internals, pinned.** The engine reads `_pages`, `_getVisiblePages()`, a page view's `renderingState`,
+`pdfPage.view`, `div`, `id` and `viewport`, and the `--total-scale-factor` property. PDF.js's modern build does not run
+in Node, so `reader-ui.mjs` checks them in the browser, and `tests/pdf-reader/pdfjs-pin.test.ts` fails on any other
+version of pdfjs-dist until that check has passed on it.
+
+**A replaced viewer lets go of its pages — MEASURED.** Each compile of a run replaces the right side's viewer. The old
+one was taken off the page with its document destroyed, and PDF.js kept it whole: its text layers in the map all its
+text layers share, and its annotation editor's document listener. Counted through the heap (CDP `queryObjects`, its own
+array released, which a first count did not do and read its own retention as a leak):
+
+| Swaps of the right side | Before: text layers / pages kept | After |
+|---|---|---|
+| 3 | 6 / 78 | 0 / 0 |
+| 6 | 12 / 156 | 0 / 0 |
+| 9 | 18 / 234 | 0 / 0 |
+
+`setDocument(null)` on the old viewer and its link service lets it go. The document's `selectionchange` listeners grew
+by one a swap before and stay constant after. PDF.js's `abortSignal`, which the design named, is not used: nothing is
+left for it, and the selection listener every text layer shares is bound to the first viewer's signal, so aborting one
+viewer would take text selection from the others. §10.4 says so.
+
+**The overlays through a pinch — MEASURED** (`spikes/pinch-overlays.mjs`, committed; the demo paper, a headed window, a
+pinch 83 % → 245 % in 36 steps; one figure's overlay with its 11 labels, then 20 clones of it, 220 labels):
+
+| | Drift mid-pinch | No overlay after the redraw | Figures laid again | Layout, 1 / 20 figures | Main thread, 1 / 20 |
+|---|---|---|---|---|---|
+| Before (one run) | 101 → 229 → 387 px | 175–183 ms | every one | 24 / 65 ms | 203 / 310 ms |
+| After (three runs) | ≤ 0.5 px; ≤ 0.7 px after | 0 ms | none | 19–26 / 65–78 ms | 203–209 / 339–380 ms |
+
+- **Each overlay keeps its pixel box** and scales with its page about the page's origin, by PDF.js's
+  `--total-scale-factor` (`overlay.mjs` `pinned`).
+- **A `MutationObserver` on each page puts back** what PDF.js's `reset()` removes, in the same task (`keepOverlays`).
+- **So a page's figures are laid once, not again on a redraw.** The exception is a draft preview's copies of the left's
+  figures, which are bitmaps drawn for one scale.
+- **A page PDF.js drops from its buffer** and draws again keeps one highlight layer and its figures (`reader-ui.mjs`).
+- **The costs were measured with the machine loaded** (load 53–88); the design's §12 gate measures them again on a
+  quiet one.
+
+**Stopping early, and retrying in place — MEASURED** (`spikes/service-faults.mjs`: a local OpenAI-compatible endpoint
+that echoes each segment and can be taken down):
+
+- **Down from the start**: the card with the network's reason 9 s after the first batch was sent, nothing compiled.
+  Before, every batch was retried for 24–48 s, and after 215 s an English "translation" was compiled.
+- **Retry, pressed twice**: one run, in place. The page is not loaded again, and one compiler serves both runs. On the
+  build before (Part 3's reload), the same check fails.
+- **Down midway**: the run stops, what there is is compiled, and the notice counts the 329 paragraphs left in English.
+  When the browser is online again, the translation goes on by itself and ends with none missing. The endpoint was sent
+  only the 322 texts it had not answered: the background's cache answered the rest.
+- **A key refused midway** stops the run as a failure of the service does, and the run resolves. The unhandled
+  rejection it used to leave on the page is gone (`cache-revisit.mjs`: page errors 0).
+- **The figures' text** is not sent while the service is down, and is asked again when the translation runs again.
+
+**A service chosen while a run is under way — MEASURED, and a finding.** The run keeps the service it opened with, both
+ways. With Microsoft → the echo, the echo was sent nothing after the switch. With the echo → Microsoft, the echo went on
+(294 texts). Every batch came back whole. So nothing unreadable arises, and no reload is needed. But the new service
+applies only from the next visit on: the reader shows the old service's translation until then. That is outside
+Part 4's plan and goes to the maintainer.
+
+**A compile that did not answer keeps its strategy.** BusyTeX gives up after 180 s, and the TeX page reported that as
+a failed compile, which moved the run to the next strategy (the twenty-third addendum's aaai failure). A timed-out
+preview now keeps the strategy; a timed-out final is tried once more with it, and then the run ends with what is shown.
+
+**Checks.** `pnpm test` 2359 passed. `reader-ui.mjs` 44 and `reader-ui-live.mjs` 8 all passed; so did
+`reader-settings.mjs`, `viewer-faults.mjs`, `cache-revisit.mjs` (26) and `service-faults.mjs`. The case spikes
+(`cache-cases`, `mt-cases`, `lost-cases`, `anchors-cases`, `sync-cases` and `wire-cases`) are all ok.
+
+## Twenty-sixth addendum, 2026-09-25: Part 4's final review — FIXED; the extension around the reader (Part 5) — BUILT
+
+**Part 4's final review.** One critical and five important findings. All six were fixed, each shown failing first
+(`b969e0cb`); the minors go to #299.
+
+- **A compile that did not answer kept running.** BusyTeX gives up on waiting, not on the job. The abandoned job's
+  worker went on, and its output answered the next compile: a draft taken for the final, or the translation's PDF for
+  the marked original. `live.mjs` `compilerKeeper` now throws a compiler away after a compile that did not answer, and
+  the next compile gets a fresh TeX page. A compile's answer is believed only from its own frame.
+- **The stop's notice counted twice.** The count showed 2, then 328 (`service-faults` case 3). It is now told once the
+  run has ended, and shows 329, the run's own count.
+- **The network's return during the final compile was dropped** (case 5: nothing resumed, 329 left). A request to
+  run again that comes while a run is under way is now kept and answered when that run ends: the network's return, or
+  a change of the services. The rerun ends with none left.
+- **The figures' text went out without the paper's title** after a failure before the source was read (case 6: the
+  title was null). The context is now the paper's once its source is read.
+- **A change of the figures' text** left the overlays of pages PDF.js was not drawing at the time. They now go, and
+  come back in the new state when the page is drawn again (`reader-ui`).
+
+Two of the probe's own failures were found and fixed on the way:
+
+- `patchSettings` returns before its write. A case that changed the service and left the page at once lost the change,
+  and ran on the last case's service.
+- A run again begins in the same tick the stopped run ends, and sets `live.done` back at once. A poll of `live.done`
+  never sees the first run end. The probe now waits for two `done` events.
+
+**Part 5: the ways in, as built.**
+
+- **The popup on an abstract or PDF page** offers two entries side by side: HTML 翻译 and PDF 翻译 (the maintainer: as
+  few words as stay clear).
+  - The HTML entry is disabled, with the note, when the paper has no HTML version.
+  - The PDF entry is disabled without words when the paper cannot be had as a bilingual PDF, or when this browser cannot run
+    the reader.
+  - The page answers these questions itself: on the abstract page from arXiv's TeX Source link, with no request; on a
+    PDF page from one HEAD on `/src/<id>`, sent at the same time as the HTML one.
+- **A PDF opens in the reader** when `pdfReader.enabled` is on, or when its address carries `#readarxiv`. That hash
+  also asks for a translation, and the page lets it go once read. So the popup's PDF entry on that same page, which
+  sets it again, opens the reader again.
+- **With the reader open, the popup is the reader's.**
+  - Its primary shows the translation or the original.
+  - Its language menu lists the nine languages the reader typesets.
+  - The stacked display is greyed, with its reason as its title.
+  - The style row is gone, and the two switches left in that row sit together.
+  - It writes only the settings, which the reader follows.
+- **The floating button's main button opens the control panel** on the abstract page, and on a PDF page with the reader
+  closed. There the column has no panel button of its own. The full text keeps its three buttons. The main button's
+  link and disabled kinds are gone: no page used them any more.
+- **The settings page** gains a PDF reader section (`#pdf-reader`, where the reader's settings button leads) with the
+  reader's switch and its three reading options. The data section gains the PDF translations' line, papers and MB, cleared
+  as the HTML line is. A store that cannot be read is said to be unreadable: its `usage()` and `clear()` now reject.
+- **A display chosen on the HTML page** lets the reader's original go, as a choice in the popup does. The reader then
+  opens on whatever was chosen last, on either page.
+
+**Screenshots**, taken by `spikes/entries.mjs` on arXiv's own pages: the popup on the abstract page, the panel the main
+button opens there, the popup on a PDF page with the reader off, and the popup with the reader open. They are in
+`out/entries/` and with the maintainer's test package.
+
+**Checks.**
+
+| Check | Result |
+|---|---|
+| `pnpm test` | 2384 passed |
+| `e2e:floating` | 20/20: two buttons on the abstract and the PDF page, the panel from the main button with both entries, three on the full text |
+| `e2e:pdf` | 24/24: the panel's HTML entry opening the translation in a new tab, the setting and the hash |
+| `spikes/entries.mjs` (new) | 4 checks, all passed |
+| `spikes/service-faults.mjs` | cases 0–6, 19 checks, all passed |
+| `reader-ui.mjs` 45, `reader-ui-live.mjs` 8, `reader-settings.mjs` 20, `viewer-faults.mjs` 8, `cache-revisit.mjs` 26 | all passed on the fix pass's build, `cache-revisit`'s case 8 included |
+
+## Twenty-seventh addendum, 2026-09-25: Part 5's final review — FIXED; Part 6, verification — MEASURED
+
+**Part 5's final review.** It found no critical issue, three important ones and twelve minor ones. All three important
+ones were fixed, each shown failing first (`9adda89e`).
+
+- **The PDF entry on the PDF page itself** opened a second tab of the same paper by default. It is now that page's
+  own: its hash alone changes, and the reader opens over it. The hash is replaced rather than pushed. The floating
+  button stands aside while the reader is open, so nothing behind the reader takes its focus.
+- **The PDF page waited for its two HEADs** before opening the reader and answering the popup. With the source's HEAD
+  held 10 s, the reader opened after 10.5 s, and the popup gave up (at about 3 s) and said the page was not arXiv's.
+  The page now answers from the start with what the HEADs have said so far, offering an entry they have not ruled
+  out, as it does when a HEAD fails. The reader then opened after 322 ms.
+- **The popup's notes on the entry pages.** A service that cannot run now speaks first. Beside an offered PDF entry,
+  the no-HTML note no longer says there is nothing to translate (UI.md S-P-33a).
+
+**The maintainer's two findings** on 1706.03762, fixed before anything was measured:
+
+- **The author block's footnotes stayed in English.** The front end took `\author{...}` for one opaque command, and
+  its `\thanks` went with it. The blocks of names and places in the front matter now give each note as a footnote of
+  its own, in the preamble and in the body. The names stay as written. The paper went from 168 units to 171.
+  `PIPELINE_VERSION` is 2 (`dd1a9c6c`).
+- **The appendix's attention figures were not translated in the PDF**, though the HTML page translates them from its
+  PNGs. xdvipdfmx includes such figures as transparency-group forms, and for those PDF.js gives the form's box to the
+  group it begins just before it, not to the form. `figureRegions` read only the form's box, so the translation's pages
+  13–16 had no figure at all. It now takes the group's box: 5 figures found, their labels translated. `reader-ui.mjs`
+  pins the PDF.js behaviour with a one-page PDF made on the spot (`6c5f55f2`).
+
+**Accessibility** (`spikes/reader-a11y.mjs`, new; `c02857ce`).
+
+- **What was audited.** Axe ran on every state a static page never shows: each display, each menu open, the reading
+  options, the contents, dark, narrow, a tooltip shown in full, and, on a live run, the unsupported language's capsule
+  and the failure card. What PDF.js draws inside its viewers is counted apart.
+- **Keyboard.** Every menu opens from the keyboard, Escape closes it, and the focus returns to its trigger.
+- **Findings.**
+  - No serious or critical violation in the reader's own interface.
+  - With reduced motion, seven movements remained. The contents slid in, the capsule travelled with them, the arXiv
+    id's arrow nudged, the disclosure turned, the switch's knob and the indicator's thumb glided, and the card's button
+    pressed in. Each is now still, or a fade.
+  - A colour-contrast hit on a tooltip was the tooltip caught mid-fade. The same tooltip shown in full passes.
+
+**The design's remaining browser checks** (`be3d065a`). The 1 and 3 keys and the switch's arrows. A PDF-only
+submission's greyed PDF entry. The settings page's PDF reader section, and the data line, counted and cleared in two
+presses. Each check was made to fail once by breaking what it checks, then restored.
+
+**Performance, on a quiet machine** (`spikes/reader-perf.mjs`, new). The maintainer stopped the other workload, and
+the load stayed between 3.0 and 4.1. Runs used a headed 1440 × 900 window on the demo paper. A pane was scrolled
+4000 px at 800 px/s by CDP's scroll gesture. Frames were counted by the screencast.
+
+- **Backdrop blur on the pills and the capsule, against the opaque surface** (3 interleaved runs):
+  - p95 frame gap: 22.7–27.2 ms with blur, 22.9–29.2 ms opaque.
+  - Gaps over 25 ms: 21/25/22 with blur, 25/25/22 opaque.
+  - No difference, so the blur stays.
+- **Dark pages** drop no more frames than light ones, at the fit or at 400 %. At 400 % in one place, the GPU process
+  holds 206–208 MB in either scheme.
+- **Scroll listeners.** Ours are passive: scroll, wheel and scrollend on each container. PDF.js's own scroll listener
+  is its own.
+- **Animations while reading**: only the scroll-driven thumbs and the chrome's fades.
+- **The pinch** (`pinch-overlays.mjs`), A/B against the pre-transform build on the same machine:
+
+| | Layout, ms | Main thread, ms | Long frames | Drift mid-pinch | Bare after a redraw |
+|---|---|---|---|---|---|
+| Before, 1 figure | 20.5–30.7 | 211–234 | 0 | 387 px | 186–193 ms |
+| After, 1 figure | 28.5–28.9 | 220–228 | 0 | 0.5 px | 0 |
+| Before, 20 figures | 76.2–82.2 | 347–368 | 0 | 387 px | 182–188 ms |
+| After, 20 figures | 82.2–82.5 | 394–400 | 0–1 | 0.5 px | 0 |
+
+  With one figure, the transform is within the before's noise. Under the 20-figure stress it costs 30–50 ms more main
+  thread over a 36-step pinch, about 1 ms a step. That is outside §12's "within the before's noise". It is kept, for
+  overlays that stay in place and never go bare, and the maintainer is told.
+- **`cache-revisit.mjs`** passed 26 of 26, with no page errors. The twenty-third addendum's case-8 failures were the
+  machine's.
+
+**Interface review and break.**
+
+- **break**, run on the status area: the capsule and the card, in every state that reaches them, at 320, 360, 716 and
+  1100 px, in both packs. At 320 and 360 px the English capsules ran past both edges of the window, their action
+  with them. The capsule now wraps within the window. The rate-limit card promised "retrying shortly", which a stopped
+  run does not do; it now says "Too many requests" (S-R-16) (`888ce6e7`).
+- **better-interface** gave five HIGH findings. Four were defects, and are fixed with checks in `reader-ui.mjs`:
+  - The toolbar's controls were drawn over each other from 500 to 1210 px, and pushed past the window's edge at
+    960–1210 px. The trail now keeps its width and the lead gives way. Below 900 px, swap and sync give their room
+    (they are greyed there). Below 640 px, the arXiv id does too.
+  - A menu's active item, moved by the keyboard, had no focus ring.
+  - The service menu cut the Chrome translator's name short. Popovers are now as wide as their content, up to the window.
+  - The chosen highlight swatch lost its focus ring.
+
+  The fifth, chosen and pressed states barely visible in dark (1.06:1), would change the approved dark palette. It
+  goes to the maintainer as a proposal with screenshots. The medium and low findings join #299's list.

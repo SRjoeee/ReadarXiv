@@ -96,6 +96,13 @@ export const BUNDLED_DATA = [{
     'packages of the two models, unchanged. ocr/PP-OCRv6_tiny_dict.txt is the recognition model\'s character list, written',
     'out one character a line from the `character_dict` of that package\'s `inference.yml`; nothing else of it is changed.',
   ].join('\n'),
+}, {
+  // the PDF reader's display switch draws two of the face's glyphs, A and U+6587, as outline path data made by
+  // scripts/pdf-reader-glyphs.py (src/pdf-reader/ui/display-glyphs.ts); no font file is bundled
+  name: 'Noto Sans SC — the outlines of two glyphs, in the PDF reader\'s display switch',
+  licence: 'OFL-1.1',
+  source: 'https://github.com/notofonts/noto-cjk',
+  text: read(join(KEPT_TEXTS, 'noto-sans-cjk-OFL-1.1.txt')),
 }]
 
 /** The file's text from the packages noted so far. Sorted, and with nothing of the machine it was built on, so two builds of one tree give one file */

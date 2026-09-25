@@ -9,7 +9,10 @@
 //   7. no service able to answer (a service with no key, no fallback): the copy opens, and says it could not be checked
 //      against the settings;
 //   8. with another service (an LLM endpoint on this machine): the copy shown at once, no paragraph it had translated
-//      shown in English by any preview, the record replaced with the new service's.
+//      shown in English by any preview, the record replaced with the new service's;
+//   9. a service that refuses its key while a copy is on screen: the copy stays readable, the failure the popup's auth.
+// At each visit the controller's state (src/pdf-reader/controller.ts) is checked too: reading once a translation is on
+// screen, translating only when the session decides to (final review).
 // Local corpus (served with the caching headers arXiv's own responses allow), the TeX Live file server on :8070.
 //   node spikes/cache-revisit.mjs [id]
 import { createHash } from 'node:crypto'
@@ -36,13 +39,15 @@ const corpus = await serve((req, res) => {
     res.end(body)
   } catch { res.statusCode = 404; res.end() }
 })
-// an LLM that gives every segment back marked, as spikes/reader-live.mjs's does
+// an LLM that gives every segment back marked, as spikes/reader-live.mjs's does; one that refuses every key once `refuse`
+let refuse = false
 const MARK = 'LLMECHO '
 const marked = text => { let done = false; return text.split(/(<[^>]*>)/).map(part => (done || part.startsWith('<') || !/\p{L}/u.test(part) ? part : ((done = true), part.replace(/\p{L}/u, l => MARK + l)))).join('') }
 const llm = await serve((req, res) => {
   let body = ''
   req.on('data', c => { body += c })
   req.on('end', () => {
+    if (refuse) { res.writeHead(401, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { message: 'invalid api key', type: 'invalid_request_error' } })); return }
     const user = [...(JSON.parse(body || '{}').messages ?? [])].reverse().find(m => m.role === 'user')?.content ?? ''
     const at = user.indexOf('[{"id":')
     let segments = null
@@ -103,12 +108,22 @@ const figures = async () => {
   return { page: at, entries: await page.evaluate(() => window.__reader.debug.figureEntries().size), labels: all.length, translated: all.filter(([shown, source]) => shown && source && shown !== source).length }
 }
 const store = fn => page.evaluate(fn)
+/** the controller's state as the interface would read it, and each side's page against its viewer's */
+const reading = () => page.evaluate(() => {
+  const s = window.__reader.controller.getState(), { left, right } = window.__reader.debug
+  const viewers = [left, right].map(side => ({ page: side.viewer.currentPageNumber, pages: side.viewer.pagesCount }))
+  return { phase: s.phase, shown: s.shown, failure: s.failure, sides: [s.sides.left, s.sides.right], viewers }
+})
+const sidesMatch = r => JSON.stringify(r.sides) === JSON.stringify(r.viewers)
 
 // 1. the first visit
 let evs = await visit()
 const firstPage1 = await page.evaluate(() => window.__reader.timing.leftFirstPage)
 check('first visit: the record is written', evs.some(e => e.event === 'cache write' && e.written), JSON.stringify(evs.find(e => e.event === 'cache write') ?? {}))
 check('first visit: one record', (await store(() => window.__reader.debug.pdfCache.usage())).count === 1)
+let r = await reading()
+check('first visit: translated, then reading the final', has(evs, 'translating') && r.phase === 'ready' && r.shown === 'final', JSON.stringify(r))
+check('first visit: each side\'s page is its viewer\'s, after the right side was replaced', sidesMatch(r), JSON.stringify(r))
 // the figures of a page with labels translated, and kept in the record (saved a few seconds after they come)
 const seen = await figures()
 await page.waitForTimeout(3000)
@@ -119,6 +134,8 @@ evs = await visit()
 const shownIn = tOf(evs, 'shown cached') - tOf(evs, 'opened')
 check('again: shown from the copy', has(evs, 'shown cached') && has(evs, 'cache current'))
 check('again: nothing compiled', !has(evs, 'compiler') && !has(evs, 'preview') && !has(evs, 'final'), evs.map(e => e.event).join(', '))
+r = await reading()
+check('again: reading the copy, never translating', !has(evs, 'translating') && r.phase === 'ready' && r.shown === 'copy', JSON.stringify(r))
 check('again: within 1 s of the left side', shownIn <= 1000, `${shownIn} ms (opened → cache hit ${tOf(evs, 'cache hit') - tOf(evs, 'opened')} ms)`)
 let f = await figures()
 check('again: its figures\' labels translated', f.entries > 0 && f.translated > 0, JSON.stringify(f))
@@ -132,7 +149,7 @@ await page.goto(urlOf('original'))
 await page.waitForTimeout(3000)
 evs = await events()
 check('Original: nothing looked up before a translation is asked for', !has(evs, 'cache hit') && !has(evs, 'engine'), evs.map(e => e.event).join(', '))
-await page.click('#modes button[data-mode="bilingual"]')
+await page.evaluate(() => window.__reader.controller.setDisplay('bilingual'))
 await page.waitForFunction(() => window.__reader.live?.events.some(e => e.event === 'shown cached'), null, { timeout: 30_000 })
 check('Original: the copy comes once Side by side is chosen', true)
 await page.waitForFunction(() => window.__reader.live?.done, null, { timeout: 60_000 })
@@ -154,7 +171,9 @@ const options = await openOptions(context, id)
 // 6. offline, on the default service's copy
 await context.setOffline(true)
 evs = await visit()
-check('offline: the copy opens', has(evs, 'shown cached') && tOf(evs, 'shown cached') - tOf(evs, 'opened') <= 1000, `${tOf(evs, 'shown cached') - tOf(evs, 'opened')} ms; ${await page.textContent('#status')}`)
+check('offline: the copy opens', has(evs, 'shown cached') && tOf(evs, 'shown cached') - tOf(evs, 'opened') <= 1000, `${tOf(evs, 'shown cached') - tOf(evs, 'opened')} ms; ${await page.evaluate(() => window.__reader?.status ?? '')}`)
+r = await reading()
+check('offline: reading the copy', !has(evs, 'translating') && r.phase === 'ready' && r.shown === 'copy' && r.failure === null, JSON.stringify(r))
 f = await figures()
 check('offline: its figures\' labels translated', f.entries > 0 && f.translated > 0, JSON.stringify(f))
 await context.setOffline(false)
@@ -163,8 +182,10 @@ await context.setOffline(false)
 console.log('keyless service:', await addService(options, { name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' }))
 await setSwitch(options, '出问题时自动改用免费服务', false)
 evs = await visit()
-const status = await page.textContent('#status')
+const status = await page.evaluate(() => window.__reader?.status ?? '')
 check('no service: the copy opens, and says it was not checked', has(evs, 'shown cached') && /not checked against the settings/.test(status ?? ''), status ?? '')
+r = await reading()
+check('no service: reading the copy, never translating', !has(evs, 'translating') && r.phase === 'ready' && r.shown === 'copy', JSON.stringify(r))
 f = await figures()
 check('no service: its figures\' labels translated', f.entries > 0 && f.translated > 0, JSON.stringify(f))
 
@@ -175,6 +196,10 @@ evs = await visit()
 const old = await store(() => window.__reader.debug.cached()?.units ?? [])
 const shown = await store(() => window.__reader.shownTexts ?? [])
 const regressed = shown.filter(s => !s.final).map(s => s.texts.filter(t => old[t.id]?.tr && t.text === old[t.id].src).length)
+r = await reading()
+console.log('another service\'s run ended:', ends(evs))
+check('another service: translated again, then reading the final', has(evs, 'translating') && r.phase === 'ready' && r.shown === 'final', JSON.stringify(r))
+check('another service: each side\'s page is its viewer\'s, after the right side was replaced', sidesMatch(r), JSON.stringify(r))
 check('another service: the copy shown before any preview', has(evs, 'shown cached') && (!has(evs, 'shown preview') || evs.findIndex(e => e.event === 'shown cached') < evs.findIndex(e => e.event === 'shown preview')))
 check('another service: no preview shows a translated paragraph in English', regressed.every(n => n === 0), `${regressed.length} previews, paragraphs in English: ${regressed.join(' ') || 'none'}`)
 check('another service: the record written again', evs.some(e => e.event === 'cache write' && e.written), JSON.stringify(evs.find(e => e.event === 'cache write') ?? {}))
@@ -184,6 +209,15 @@ const units = await store(async () => { const k = window.__reader.debug.cacheKey
 console.log('another service\'s figures:', JSON.stringify(await figures()))
 await page.waitForTimeout(3000)
 check('another service: the record is the new service\'s', units.length > 0 && units.every(u => u.state === 'kept' || u.by === echoId || u.tried === echoId), `${units.filter(u => u.state !== 'kept' && u.by !== echoId).length} units by another identity`)
+
+
+// 9. a service that refuses its key, while the echo service's copy is on screen (no fallback since 7)
+console.log('refused service:', await addService(options, { name: 'refused', baseURL: `http://127.0.0.1:${llm.address().port}/v1`, model: 'refused' }))
+refuse = true
+evs = await visit()
+r = await reading()
+check('a key refused: the copy stays readable, the failure the popup\'s auth', has(evs, 'shown cached') && r.phase === 'ready' && r.shown === 'copy' && r.failure === 'auth', `${JSON.stringify(r)}; ${await page.evaluate(() => window.__reader?.status ?? '')}`)
+refuse = false
 
 console.log('page errors:', errors.length, errors.slice(0, 3))
 await context.close(); site.close(); corpus.close(); llm.close()

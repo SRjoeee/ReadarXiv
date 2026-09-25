@@ -2,7 +2,7 @@
 // translation with their translated text. Prints shares located and the time; no paper text.
 import { readFileSync } from 'node:fs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { anchorUnits, tokenizeDocument } from '../poc-reader/anchors.mjs'
+import { anchorUnits, tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
 const [id, lang = 'zh'] = process.argv.slice(2)
 const root = new URL('..', import.meta.url).pathname
 const units = JSON.parse(readFileSync(`${root}data/runs/c1-mt/${lang}/${id}/units.json`, 'utf8'))

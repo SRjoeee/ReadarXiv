@@ -65,10 +65,12 @@ const S = {
     paused: (reason: string) => `${reason}。请检查设置后重新翻译`, // S-P-33
     imagesPaused: (reason: string) => `图片翻译已暂停：${reason}`, // S-P-35
     noHtml: 'arXiv 没有这篇论文的 HTML 版本，无法翻译',
+    noHtmlVersion: 'arXiv 没有这篇论文的 HTML 版本', // S-P-33a: the PDF entry beside it translates
   },
   /** The guided install on the settings page (S-O-30…36). The popup keeps the one-line version above */
+  // an abstract or PDF page's two entries, the reader's to choose (S-P-50b; the reader's design, §2, §15)
+  entry: { html: 'HTML 翻译', pdf: 'PDF 翻译' },
   primary: {
-    bilingual: '双语版本',
     translate: '翻译本页', // S-P-50
     restore: '显示原文', // S-P-51 / S-P-53
     retranslate: '重新翻译', // S-P-52
@@ -85,6 +87,7 @@ const S = {
     sideTitle: '原文与译文并排；窗口较窄时按上下显示', // S-P-72
     onlyTitle: '隐藏原文，参考文献仍保留双语', // S-P-73
     narrow: '窗口较窄，暂按上下显示', // S-P-74
+    stackPdf: 'PDF 对照不支持上下排列', // S-P-75: the popup while the PDF reader is open
   },
   actionFailed: (message: string) => message, // S-P-90
   /** The popup action found no active tab to talk to (shared/messages.ts throws NoActiveTabError) */
@@ -118,7 +121,7 @@ const S = {
 
 const O = {
   title: '设置',
-  nav: { services: '翻译服务', reading: '阅读', prompts: '提示词与术语', data: '数据' },
+  nav: { services: '翻译服务', reading: '阅读', 'pdf-reader': 'PDF 阅读器', prompts: '提示词与术语', data: '数据' },
   /** S-O-05: the interface language. Not the target language, so it sits under the navigation, away from it */
   uiLanguage: '界面语言',
   uiLanguageAuto: '跟随浏览器',
@@ -288,11 +291,15 @@ const O = {
     },
     glossaryPlaceholder: 'token, 词元\nembedding, 嵌入' },
   close: '关闭',
+  /** S-O-55: the PDF reader's section; its other rows are the reader's own words (R) */
+  pdfReader: { enabled: '在 arXiv 的 PDF 上使用对照阅读器' },
   data: {
     cache: '已缓存的译文',
     cacheHint: '换了服务、模型或提示词会自动分开存，通常不用清',
     cacheLine: (entries: number, mb: string) => `${entries} 条 · ${mb} MB`,
     cacheError: '没能读取缓存',
+    pdf: '已缓存的 PDF 译文', // S-O-73
+    pdfLine: (papers: number, mb: string) => `${papers} 篇 · ${mb} MB`,
     clear: '清空',
     clearConfirm: '确认清空',
     cleared: '已清空',
@@ -302,6 +309,35 @@ const O = {
     diagnosticsError: '没能导出',
   },
 } as const
+
+/**
+ * The PDF reader's words (the reader's design §15; docs/UI.md §3.5, S-R). Where the popup says the same thing the
+ * reader takes the popup's string (S), so the two never drift apart: the service and language rows, the language
+ * search, 对照高亮, 图片翻译, 设置, the failures' count and 重试, the reasons
+ */
+const R = {
+  bar: '阅读器', // S-R-01: the toolbar's name, for screen readers
+  contents: '目录', // S-R-02
+  abstract: '在 arXiv 打开摘要页', // S-R-03
+  display: { name: '显示', original: '原文', bilingual: '对照', translation: '译文' }, // S-R-04
+  swap: '交换左右', // S-R-05
+  sync: '同步滚动', // S-R-06
+  zoom: { out: '缩小', in: '放大', value: '缩放比例', width: '适合宽度', page: '适合页面', actual: '实际大小' }, // S-R-07
+  options: { name: '阅读选项', color: '高亮颜色', appearance: '外观', light: '浅色', dark: '深色', system: '跟随系统', dim: '深色时调暗页面' }, // S-R-08
+  download: { name: '下载', translation: '译文 PDF', original: '原文 PDF' }, // S-R-09
+  leave: '在默认查看器中打开', // S-R-10
+  pill: { original: '原文页码', translation: '译文页码', previous: '上一页', next: '下一页' }, // S-R-11
+  status: {
+    loading: '正在加载', // S-R-12
+    translating: '正在翻译',
+    again: '正在按当前设置重新翻译',
+    close: '关闭', // S-R-15: a notice's close button
+    unsupported: (language: string) => `PDF 对照暂不支持${language}`, // S-R-13
+    chooseLanguage: '选择语言',
+    narrow: '窗口较窄，暂只显示译文', // S-R-14, after S-P-74
+    rateLimited: '请求过于频繁', // S-R-16: a stopped run does not retry by itself, so the card promises no retry
+  },
+}
 
 const REASON: Record<ProviderErrorKind, string> = {
   'no-key': '尚未配置 API Key',
@@ -314,4 +350,4 @@ const REASON: Record<ProviderErrorKind, string> = {
   unknown: '翻译失败',
   aborted: '',
 }
-export const zh = { S, O, REASON } as const
+export const zh = { S, O, R, REASON } as const

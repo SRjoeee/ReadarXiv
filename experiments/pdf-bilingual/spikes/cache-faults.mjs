@@ -50,7 +50,7 @@ console.log('unanswering service:', await addService(options, { name: 'silent', 
 await setSwitch(options, '出问题时自动改用免费服务', false)
 await page.goto(urlOf(paper))
 await done()
-const status = await page.textContent('#status')
+const status = await page.evaluate(() => window.__reader?.status ?? '')
 check('a copy on screen is not called the original', !/still shows the original/.test(status ?? ''), status ?? '')
 
 // 3. a copy that cannot be shown: its PDF replaced by bytes that are none, then a visit, on a service that answers

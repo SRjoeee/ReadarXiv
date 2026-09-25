@@ -7,7 +7,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { anchorUnits, boundsFromMarks, lineRects, markWords, tokenizeDocument } from '../poc-reader/anchors.mjs'
+import { anchorUnits, boundsFromMarks, lineRects, markWords, tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
 const root = new URL('..', import.meta.url).pathname
 const [id, lang = 'zh'] = process.argv.slice(2)
 const trDir = join(root, 'data/runs/c1-mt-marks', lang, id), orDir = join(root, 'data/runs/gt-orig', id)

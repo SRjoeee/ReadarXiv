@@ -574,6 +574,20 @@ describe('provider selection', () => {
     expect(again).toEqual(config)
   })
 
+  it('v19 adds the PDF reader\'s settings with their defaults, and touches nothing else', async () => {
+    const v18: Record<string, unknown> = { ...DEFAULT_CONFIG, version: 18, mode: 'only', reading: { sentenceHighlight: false, openIn: 'same-tab' } }
+    delete v18.pdfReader
+    await fakeBrowser.storage.local.set({ config: v18, config$: { v: 18 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const config = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(config.version).toBe(CONFIG_VERSION)
+    expect(config.pdfReader).toEqual({ enabled: true, original: false, sync: true, swapped: false, appearance: 'system', dimPages: true })
+    expect(config.mode).toBe('only')
+    expect(config.reading).toEqual({ sentenceHighlight: false, openIn: 'same-tab' })
+  })
+
   it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a preload margin under one screen becoming one screen', async () => {
     const v12 = {
       ...DEFAULT_CONFIG, version: 12, provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-keep' }],

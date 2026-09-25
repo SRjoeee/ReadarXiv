@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { setLocale } from '@/ui/strings'
+import { S, setLocale } from '@/ui/strings'
 import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
 import { MANAGE_STYLES, derivePopupView, runnable } from '@/entrypoints/popup/view-model'
 
@@ -26,7 +26,7 @@ describe('derivePopupView (UI.md §4)', () => {
     // `undefined` instead of rejecting, and the popup rendered nothing at all on every arXiv PDF
     const undefinedPage = { ...input('P0'), page: undefined as unknown as null }
     expect(derivePopupView(undefinedPage).empty).toBe(true)
-    expect(derivePopupView({ ...undefinedPage, entry: { paper: '2501.07202', html: 'https://arxiv.org/html/2501.07202#readarxiv' } }).primary.action).toBe('openHtml')
+    expect(derivePopupView({ ...undefinedPage, entry: { paper: '2501.07202', html: 'https://arxiv.org/html/2501.07202#readarxiv', kind: 'abs', pdf: null, readerOpen: false } }).primary.action).toBe('openHtml')
   })
   it('P17 an abstract or PDF page: the popup is a working popup, and the button opens the HTML version', () => {
     const v = view('P17')
@@ -34,28 +34,59 @@ describe('derivePopupView (UI.md §4)', () => {
     expect(v.empty).toBe(false)
     expect(v.service).toEqual({ value: 'Microsoft 翻译' })
     expect(v.language.value).toBe('简体中文')
-    expect(v.primary).toEqual({ label: '双语版本', action: 'openHtml', disabled: false })
+    // two entries, the reader's to choose (the reader's design, §2; the maintainer's words, 2026-09-25)
+    expect(v.entries).toEqual({ html: { label: 'HTML 翻译', disabled: false }, pdf: { label: 'PDF 翻译', disabled: false } })
     expect(v.note).toBeNull()
     expect(v.secondary).toBeNull()
     expect(v.failed).toBeNull()
   })
+  it('a paper that cannot be had as a bilingual PDF: its entry greyed, without words (the reader\'s design, §1, §2)', () => {
+    const base = input('P17')
+    const v = derivePopupView({ ...base, entry: { ...base.entry!, pdf: null } })
+    expect(v.entries).toEqual({ html: { label: 'HTML 翻译', disabled: false }, pdf: { label: 'PDF 翻译', disabled: true } })
+    expect(v.note).toBeNull()
+  })
+
+  it('the full text has no entries: its button is the page\'s own', () => {
+    expect(view('P7').entries).toBeNull()
+  })
+
   it('P17a no HTML version: the button is there and disabled, with the reason said once', () => {
     const v = view('P17a')
-    expect(v.primary).toEqual({ label: '双语版本', action: 'openHtml', disabled: true })
-    expect(v.note?.text).toBe('arXiv 没有这篇论文的 HTML 版本，无法翻译')
+    expect(v.entries).toEqual({ html: { label: 'HTML 翻译', disabled: true }, pdf: { label: 'PDF 翻译', disabled: false } })
+    // not "so there is nothing to translate": the PDF entry beside it translates (Part 5's final review)
+    expect(v.note?.text).toBe('arXiv 没有这篇论文的 HTML 版本')
     // Nothing to open in the settings about a paper arXiv never converted
     expect(v.note?.settings).toBe(false)
+    // with no PDF entry either, the whole sentence: there is nothing to translate
+    expect(derivePopupView({ ...input('P17a'), entry: { ...input('P17a').entry!, pdf: null } }).note?.text).toBe(S.note.noHtml)
+  })
+  it('the reader holding the original — a paper with no source, a language it does not typeset — greys the primary rather than offer a switch that does nothing (Codex on #301)', () => {
+    const base = input('P17')
+    const reader = { ...base, entry: { ...base.entry!, kind: 'pdf' as const, readerOpen: true } }
+    expect(derivePopupView(reader).primary.disabled).toBe(false)
+    expect(derivePopupView({ ...reader, entry: { ...reader.entry, pdf: null } }).primary.disabled).toBe(true)
+    expect(derivePopupView({ ...reader, config: { ...base.config!, targetLanguage: 'arb' } }).primary.disabled).toBe(true)
+  })
+
+  it('no HTML version and a service that cannot run, with nothing to take over: the service\'s note, which is why both entries are greyed — on an entry page and with the reader open (Part 5\'s final review)', () => {
+    const noHtml = { ...input('P17b'), entry: { ...input('P17b').entry!, html: null } }
+    const v = derivePopupView(noHtml)
+    expect([v.entries?.html.disabled, v.entries?.pdf.disabled, v.note?.settings]).toEqual([true, true, true])
+    expect(v.note?.text).toContain('API Key')
+    const r = derivePopupView({ ...noHtml, entry: { ...noHtml.entry, kind: 'pdf', readerOpen: true } })
+    expect([r.note?.text, r.note?.settings]).toEqual([v.note?.text, true])
   })
   it('P17b a service that cannot run, with nothing to take over, disables the button there too, as it does on the paper page', () => {
     const v = view('P17b')
-    expect(v.primary.disabled).toBe(true)
+    expect([v.entries?.html.disabled, v.entries?.pdf.disabled]).toEqual([true, true])
     expect(v.note?.text).toContain('API Key')
     expect(v.note?.settings).toBe(true)
   })
   it('P17c a free service takes over: the button is enabled and says which, exactly as the paper page\'s does (P7) — the page it opens starts by that rule (Devin on #247)', () => {
     const v = view('P17c')
     const paperPage = view('P7')
-    expect(v.primary).toEqual({ label: '双语版本', action: 'openHtml', disabled: false })
+    expect([v.entries?.html.disabled, v.entries?.pdf.disabled]).toEqual([false, false])
     expect(paperPage.primary.disabled).toBe(false)
     expect(v.note).toEqual(paperPage.note)
     expect(v.note?.text).toContain('Microsoft')
@@ -191,7 +222,7 @@ describe('derivePopupView (UI.md §4)', () => {
   it('P16 the style menu is what the settings page holds, in its order, with the chosen one marked', () => {
     const v = view('P16')
     const c = input('P16').config!
-    expect(v.style.value).toBe('与原文相同')
+    expect(v.style?.value).toBe('与原文相同')
     expect(v.menu!.kind).toBe('style')
     expect(v.menu!.search).toBe(false)
     // The last row is not a style but the way in to managing them on the settings page (S-P-83), the same role as the service menu's “Manage services…”
@@ -278,4 +309,33 @@ describe('the core strings seam (DESIGN §4.2)', () => {
     expect(coreStrings().retry).toBe(strings.S.page.retry)
     expect(coreStrings().failureTitle('no-key')).toBe(strings.reasonText('no-key'))
   })
+
+  describe('the popup while the PDF reader is open (the reader\'s design, §9.2)', () => {
+    const reader = (config = input('P17').config!, over = {}) => derivePopupView({ ...input('P17'), config, entry: { ...input('P17').entry!, kind: 'pdf', readerOpen: true }, ...over })
+    const withConfig = (patch: Record<string, unknown>) => ({ ...input('P17').config!, ...patch }) as NonNullable<ReturnType<typeof input>['config']>
+
+    it('lists the nine languages the reader typesets, alone', () => {
+      const v = reader(undefined, { menu: 'language' })
+      expect(v.menu?.items.map(i => i.id)).toEqual(['jpn', 'cmn', 'cmn-Hant', 'kor', 'deu', 'spa', 'fra', 'por', 'rus'])
+    })
+
+    it('greys stacked with its reason, and shows a stored stacked as side by side, what the reader shows', () => {
+      const v = reader(withConfig({ mode: 'stack' }))
+      expect(v.mode).toMatchObject({ value: 'side', disabled: ['stack'] })
+    })
+
+    it('offers the translation while the original is shown, the original while a translation is', () => {
+      const cfg = input('P17').config!
+      expect(reader(withConfig({ pdfReader: { ...cfg.pdfReader, original: true } })).primary).toMatchObject({ label: '翻译本页', action: 'readerTranslate' })
+      expect(reader(withConfig({ pdfReader: { ...cfg.pdfReader, original: false } })).primary).toMatchObject({ label: '显示原文', action: 'readerOriginal' })
+    })
+
+    it('has no style row and no entries; the service, the highlight and the images are as elsewhere', () => {
+      const v = reader()
+      expect([v.style, v.entries]).toEqual([null, null])
+      expect(v.service.value).toBe(view('P17').service.value)
+      expect([v.highlight, v.images]).toEqual([view('P17').highlight, view('P17').images])
+    })
+  })
 })
+

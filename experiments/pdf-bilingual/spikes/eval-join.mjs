@@ -7,8 +7,8 @@
 // from its translation, a box repeating its neighbour. Writes out/eval-join-<lang>.json.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isName, translateTexts } from '../poc-reader/mt.mjs'
-import { linesToBoxes } from '../poc-reader/lib/axt/figures.mjs'
+import { isName, translateTexts } from '../../../src/pdf-reader/engine/mt.mjs'
+import { linesToBoxes } from '../../../src/core/image/boxes.ts'
 const root = new URL('..', import.meta.url).pathname
 const lang = process.argv[2] ?? 'zh'
 const CHUNK = Number(process.env.CHUNK ?? 40)

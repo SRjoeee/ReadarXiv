@@ -3,8 +3,8 @@
 // helps) or a word it translated (the rule harms). Writes the changed ones, unique, for review.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isName, translateTexts } from '../poc-reader/mt.mjs'
-import { isTranslatable } from '../poc-reader/lib/axt/figures.mjs'
+import { isName, translateTexts } from '../../../src/pdf-reader/engine/mt.mjs'
+import { isTranslatable } from '../../../src/core/image/boxes.ts'
 const root = new URL('..', import.meta.url).pathname
 const lang = process.argv[2] ?? 'zh'
 const papers = JSON.parse(readFileSync(join(root, 'out/eval-labels.json'), 'utf8'))

@@ -32,10 +32,12 @@ export interface EntrySettings {
   openIn: 'new-tab' | 'same-tab'
   /** This tab's zoom factor (`tabs.getZoom`); the floating button undoes it */
   zoom: number
+  /** The PDF page opens the bilingual reader (config `pdfReader.enabled`, the reader's design, §2) */
+  pdfReader: boolean
   floating: FloatingEntryState
 }
 /** What a page runs on when the background does not answer: the defaults, as everywhere */
-export const DEFAULT_ENTRY_SETTINGS: EntrySettings = { uiLanguage: 'auto', openIn: 'new-tab', zoom: 1, floating: DEFAULT_FLOATING_ENTRY }
+export const DEFAULT_ENTRY_SETTINGS: EntrySettings = { uiLanguage: 'auto', openIn: 'new-tab', zoom: 1, pdfReader: true, floating: DEFAULT_FLOATING_ENTRY }
 
 const isEntrySettings = (value: unknown): value is EntrySettings => {
   if (typeof value !== 'object' || value === null) return false
@@ -76,7 +78,11 @@ export function watchEntrySettings(onSettings: (settings: EntrySettings) => void
     const answer: unknown = await sendMessage({ type: 'axt:entry-settings' }).catch(() => null)
     // Overtaken by a later ask: that one's word stands
     if (mine !== asked) return current
-    if (isEntrySettings(answer)) current = pushed === pushedBefore ? answer : { ...answer, zoom: current.zoom }
+    if (isEntrySettings(answer)) {
+      // a background of an earlier build answers no PDF reader's switch: the reader stays on, its default
+      const full = { ...answer, pdfReader: typeof answer.pdfReader === 'boolean' ? answer.pdfReader : true }
+      current = pushed === pushedBefore ? full : { ...full, zoom: current.zoom }
+    }
     tell()
     return current
   }

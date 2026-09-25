@@ -1,5 +1,5 @@
-// Data: what the extension keeps on this machine — the translation cache, and the diagnostics log a reader can
-// download to attach to an issue (issue #156).
+// Data: what the extension keeps on this machine — the translation cache, the PDF reader's translated papers (the
+// reader's design, §9.3), and the diagnostics log a reader can download to attach to an issue (issue #156).
 import { useState } from 'react'
 import { sendMessage } from '@/shared/messages'
 import { Button } from '@/ui/Button'
@@ -7,11 +7,13 @@ import { Confirm } from '@/ui/Confirm'
 import { downloadTextFile } from '@/shared/download'
 import { O } from '@/ui/strings'
 import type { OptionsData } from '../data'
+import { usePdfTranslations } from '../pdf-translations'
 
 export const DIAGNOSTICS_FILE_NAME = 'read-arxiv-diagnostics.json'
 
 export function Data({ data }: { data: OptionsData }) {
   const { cache, cacheError, clearCache, cacheCleared } = data
+  const pdf = usePdfTranslations()
   const [exportFailed, setExportFailed] = useState(false)
   const exportDiagnostics = async () => {
     try {
@@ -37,6 +39,17 @@ export function Data({ data }: { data: OptionsData }) {
           : <Confirm label={O.data.clear} confirmLabel={O.data.clearConfirm} cancelLabel={O.services.cancel} onConfirm={() => void clearCache()} />}
       </div>
       <p className="mt-2 text-[11px] text-fg-2">{O.data.cacheHint}</p>
+      <div className="mt-4 flex items-center justify-between gap-4 border-t border-line pt-3">
+        <span className="flex min-w-0 flex-col">
+          <span className="text-[13px] font-semibold">{O.data.pdf}</span>
+          <span className="text-[11px] text-fg-2">
+            {pdf.failed ? O.data.cacheError : pdf.usage ? O.data.pdfLine(pdf.usage.count, (pdf.usage.bytes / 1024 / 1024).toFixed(1)) : '…'}
+          </span>
+        </span>
+        {pdf.cleared
+          ? <span className="text-[12px] font-semibold text-fg-2">{O.data.cleared}</span>
+          : <Confirm label={O.data.clear} confirmLabel={O.data.clearConfirm} cancelLabel={O.services.cancel} onConfirm={() => void pdf.clear()} />}
+      </div>
       <div className="mt-4 flex items-center justify-between gap-4 border-t border-line pt-3">
         <span className="flex min-w-0 flex-col">
           <span className="text-[13px] font-semibold">{O.data.diagnostics}</span>

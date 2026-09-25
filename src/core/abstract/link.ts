@@ -4,7 +4,7 @@
 // **The URL is the one arXiv gives**, plus `#readarxiv` — the content script starts translating of itself on seeing that hash.
 // Building `arxiv.org/html/<id>` ourselves would point at the wrong version of a paper with several (its href carries the `v7`).
 
-import { HTML_LINK } from '@/core/rules/abstract'
+import { HTML_LINK, SOURCE_LINK } from '@/core/rules/abstract'
 
 /** The line we insert; `restore` leaves the abstract page alone, but the mark is still needed, for recognition and idempotence */
 export const ABS_LINK_CLASS = 'axt-abs-link'
@@ -33,6 +33,9 @@ export function startsTranslation(hash: string): boolean {
  * Where arXiv says this paper's HTML full text is, plus the hash that starts the translation; null when the paper
  * has no HTML version. The popup asks the page for this rather than building a URL: the href carries the version.
  */
+/** Whether the abstract page offers the paper's source, which a bilingual PDF is made from (the reader's design, §2) */
+export const sourceOn = (doc: Document): boolean => doc.querySelector(SOURCE_LINK) !== null
+
 export function htmlHrefOn(doc: Document): string | null {
   const html = doc.querySelector<HTMLAnchorElement>(HTML_LINK)
   return html ? `${html.href}${AUTO_TRANSLATE_HASH}` : null

@@ -9,7 +9,7 @@ import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, rmSync, sta
 import { dirname, join, relative } from 'node:path'
 import { promisify } from 'node:util'
 import { latinFontsFor, loadProject, MARK_DEF, markUnits, patch, XETEX_SHIM } from './latex-front.mjs'
-import { decode, escape, nameCells, plainSource, plainTranslated, rehydrate, rehydrateTags, serialize, serializeTags, texEscape, translateMicrosoft, utf8 } from '../poc-reader/mt.mjs'
+import { decode, escape, nameCells, plainSource, plainTranslated, rehydrate, rehydrateTags, serialize, serializeTags, texEscape, translateMicrosoft, utf8 } from '../../../src/pdf-reader/engine/mt.mjs'
 import { analyze } from './paper-meta.mjs'
 
 const run = promisify(execFile)

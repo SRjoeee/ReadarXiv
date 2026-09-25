@@ -29,7 +29,7 @@ async function popupOn(paperTab) {
   await sleep(2500)
   const seen = await popup.evaluate(() => {
     // S-P-50b: on an abstract or PDF page the button says what it opens, not “translate this page”
-    const button = [...document.querySelectorAll('button')].find(b => /双语版本|Bilingual version/.test(b.textContent ?? ''))
+    const button = [...document.querySelectorAll('button')].find(b => /HTML 翻译|Translate HTML/.test(b.textContent ?? ''))
     const text = (document.body.textContent ?? '').replace(/\s+/g, ' ')
     return {
       label: button?.textContent?.trim() ?? null,
@@ -51,17 +51,33 @@ const check = (name, ok, detail) => {
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 /**
- * On the PDF experiment's branch a build may carry the bilingual PDF reader (experiments/pdf-bilingual, copied in by
- * wxt.config.ts once the experiment's setup has run): the page then opens in it, and the reader's way back to the
- * browser's viewer brings the floating button the rest of this suite checks. A build without it (CI's) goes straight on
+ * On the PDF experiment's branch every build carries the bilingual PDF reader (the extension's page pdf-reader.html): the
+ * PDF page opens in it, and the reader's way back to the browser's viewer brings the floating button the rest of this
+ * suite checks. A build without it (main's) goes straight on
  */
-const READER = existsSync(`${EXT}/pdf-reader/reader.html`)
+const READER = existsSync(`${EXT}/pdf-reader.html`)
+/**
+ * A browser the reader's PDF.js cannot run on (src/pdf-reader/support.ts; Chrome 131, the floor) keeps the browser's
+ * viewer: one of the built-ins it lacks stands for the rest
+ */
+const readerRunsHere = () => page.evaluate(() => typeof Map.prototype.getOrInsertComputed === 'function')
 async function throughReader(paper) {
   if (!READER) return
+  if (!(await readerRunsHere())) {
+    await sleep(3000)
+    const framed = await page.$('iframe[data-axt-pdf-reader]')
+    check(`on a browser the reader cannot run on, the PDF stays in the browser's viewer (${paper})`, !framed, framed ? 'the reader was laid over the page' : 'no reader')
+    return
+  }
   const frame = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null)
   const reader = await frame?.contentFrame()
-  const back = await reader?.waitForSelector('#close:not([hidden])', { timeout: 30_000 }).catch(() => null)
+  const back = await reader?.waitForSelector('button[data-leave]', { timeout: 30_000 }).catch(() => null)
   check(`the PDF page opens in the reader, with its way back to the browser's viewer (${paper})`, !!back, back ? 'the reader over the page' : `reader ${!!frame}, way back ${!!back}`)
+  // the interface is drawn before the engine loads: the session has opened only once the paper's pages are counted
+  // (final review: a browser the engine cannot run on would still show the way back)
+  const pages = await reader?.waitForFunction(() => window.__reader?.controller?.getState().sides.left.pages, null, { timeout: 60_000 }).then(h => h.jsonValue(), () => 0)
+  const state = pages ? null : await reader?.evaluate(() => window.__reader?.controller?.getState() ?? null).catch(() => null)
+  check(`the reader's engine opens the paper (${paper})`, pages > 0, pages ? `${pages} pages on the left` : `state ${JSON.stringify(state)}`)
   await back?.click()
   const gone = await page.waitForFunction(() => !document.querySelector('iframe[data-axt-pdf-reader]'), null, { timeout: 10_000 }).then(() => true, () => false)
   check(`the way back takes the reader away (${paper})`, gone, gone ? 'the browser\'s viewer underneath' : 'the reader is still there')
@@ -90,9 +106,8 @@ const readEntry = () => page.evaluate(() => {
   return {
     contentType: document.contentType,
     hosts: document.querySelectorAll('.axt-floating').length,
-    href: link?.getAttribute('href') ?? null,
     label: link?.getAttribute('aria-label') ?? null,
-    disabled: link?.getAttribute('aria-disabled') === 'true',
+    haspopup: link?.getAttribute('aria-haspopup') ?? null,
     tag: link?.tagName ?? null,
     drawn: box ? box.width > 0 && box.height > 0 && box.bottom <= window.innerHeight : false,
     // The viewer is Chrome's own extension frame; the entry must not have gone anywhere near it
@@ -107,9 +122,9 @@ const entry = await readEntry()
 check('a content script runs on Chrome\'s PDF page and the floating button is drawn there',
   entry.contentType === 'application/pdf' && entry.hosts === 1 && entry.drawn,
   `contentType ${entry.contentType}, ${entry.hosts} entry, drawn ${entry.drawn}`)
-check('its main button leads to the HTML full text of the version the reader opened, already translating',
-  entry.href === `https://arxiv.org/html/${WITH_HTML}#readarxiv`,
-  `href ${entry.href}`)
+check('its main button opens the control panel, where the paper\'s two entries are (the reader\'s design, §2)',
+  entry.tag === 'BUTTON' && entry.haspopup === 'dialog',
+  `main <${entry.tag?.toLowerCase()}> aria-haspopup ${entry.haspopup}`)
 check('it carries the same sentence as the abstract page\'s entry (S-I-06)', /Read arXiv/.test(entry.label ?? ''), `label “${entry.label}”`)
 
 check('Chrome\'s own viewer is left alone', entry.viewerUntouched, 'no embed or object of ours')
@@ -125,7 +140,7 @@ await page.screenshot({ path: `${SHOTS}/pdf-entry.png` })
 
   // The button follows the same setting: a new tab, with the PDF still open behind it
   const fromPopup = context.waitForEvent('page', { timeout: 60_000 })
-  await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /双语版本|Bilingual version/.test(b.textContent ?? ''))?.click())
+  await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /HTML 翻译|Translate HTML/.test(b.textContent ?? ''))?.click())
   const viaPopup = await fromPopup.catch(() => null)
   await viaPopup?.waitForLoadState('load').catch(() => undefined)
   check('the popup\'s button opens the translation in a new tab as well, leaving the PDF open',
@@ -136,20 +151,27 @@ await page.screenshot({ path: `${SHOTS}/pdf-entry.png` })
   await page.bringToFront()
 }
 
-// Following it opens the HTML page **in a new tab** (config `reading.openIn`, UI.md S-O-49b), which starts
-// translating by itself (the hash, DESIGN §4.1), and the PDF the reader was on is still there
-// A real click, pressed and released with the mouse: the press puts up the drag shield, and the click must still reach the link
+// Through the panel the main button opens, the HTML entry opens the HTML page **in a new tab** (config
+// `reading.openIn`, UI.md S-O-49b), which starts translating by itself (the hash, DESIGN §4.1), and the PDF the reader
+// was on is still there. A real click, pressed and released with the mouse: the press puts up the drag shield, and the
+// click must still reach the button
 const target = await page.evaluate(() => {
   const r = document.querySelector('.axt-floating')?.shadowRoot?.querySelector('.axt-fb-main')?.getBoundingClientRect()
   return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null
 })
-const opened = context.waitForEvent('page', { timeout: 60_000 })
 await page.mouse.click(target.x, target.y)
+await sleep(2500)
+const panel = page.frames().find(f => f.url().includes('/popup.html'))
+const entries = panel ? await panel.evaluate(() => [...document.querySelectorAll('button')].filter(b => /HTML 翻译|Translate HTML|PDF 翻译|Translate PDF/.test(b.textContent ?? '')).map(b => ({ text: b.textContent?.trim(), disabled: b.disabled }))) : []
+check('a click on it opens the control panel with the two entries, both enabled for this paper',
+  entries.length === 2 && entries.every(e => !e.disabled), JSON.stringify(entries))
+const opened = context.waitForEvent('page', { timeout: 60_000 })
+await panel?.evaluate(() => [...document.querySelectorAll('button')].find(b => /HTML 翻译|Translate HTML/.test(b.textContent ?? ''))?.click())
 const translated = await opened.catch(() => null)
 await translated?.waitForLoadState('load').catch(() => undefined)
 await sleep(12_000)
 const landed = translated ? await translated.evaluate(() => ({ url: location.href, translations: document.querySelectorAll('.axt-t').length })) : { url: '', translations: 0 }
-check('the click opens the HTML paper with no dialog on the way, and the translation has started',
+check('the panel\'s HTML entry opens the HTML paper with no dialog on the way, and the translation has started',
   /\/html\//.test(landed.url) && landed.translations > 0,
   `${landed.url.slice(0, 60)}…, ${landed.translations} translation nodes`)
 check('it opens in a new tab: the PDF the reader was on is still open, on the same paper',
@@ -163,9 +185,9 @@ await page.goto(`https://arxiv.org/pdf/${WITHOUT_HTML}`, { waitUntil: 'load' })
 await throughReader(WITHOUT_HTML)
 await sleep(6000)
 const none = await readEntry()
-check('a paper with no HTML version keeps the button, its main button disabled and saying why, rather than a link that leads nowhere',
-  none.hosts === 1 && none.disabled && none.tag === 'BUTTON' && none.href === null && /HTML/.test(none.label ?? ''),
-  `${none.hosts} button on ${WITHOUT_HTML}, main <${none.tag?.toLowerCase()}> disabled ${none.disabled}, says “${none.label}”`)
+check('a paper with no HTML version keeps the button, its main button opening the panel all the same, where the reason is',
+  none.hosts === 1 && none.tag === 'BUTTON' && none.haspopup === 'dialog',
+  `${none.hosts} button on ${WITHOUT_HTML}, main <${none.tag?.toLowerCase()}> aria-haspopup ${none.haspopup}, says “${none.label}”`)
 await page.screenshot({ path: `${SHOTS}/pdf-entry-none.png` })
 
 {
@@ -186,8 +208,11 @@ await sleep(3000)
   check('the popup works on an abstract page too: the ordinary rows, and the button enabled',
     !seen.notArxiv && seen.rows && seen.label !== null && seen.disabled === false,
     `label “${seen.label}”, disabled ${seen.disabled}, rows ${seen.rows}, S-P-03 shown ${seen.notArxiv}`)
+  // its second entry, the bilingual PDF, for a paper with a source (the reader's design, §2)
+  const pdfEntry = await popup.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /PDF 翻译|Translate PDF/.test(x.textContent ?? '')); return b ? { disabled: b.disabled } : null })
+  check('beside it, the PDF entry, enabled for a paper with a source', pdfEntry?.disabled === false, JSON.stringify(pdfEntry))
   const viaPopup = context.waitForEvent('page', { timeout: 60_000 })
-  await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /双语版本|Bilingual version/.test(b.textContent ?? ''))?.click())
+  await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /HTML 翻译|Translate HTML/.test(b.textContent ?? ''))?.click())
   const opened = await viaPopup.catch(() => null)
   await opened?.waitForLoadState('load').catch(() => undefined)
   check('its button opens the href arXiv gives, in a new tab, and the abstract page stays',
@@ -199,7 +224,7 @@ await sleep(3000)
 
 // Only the reader's own page can take the reader away: a page its frame has been sent to cannot (Devin on #297). The
 // frame goes to a data: page, whose origin is opaque, and asks from there
-if (READER) {
+if (READER && (await readerRunsHere())) {
   await page.goto(`https://arxiv.org/pdf/${WITH_HTML}`, { waitUntil: 'load' })
   const frame = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null)
   const reader = await frame?.contentFrame()
@@ -208,6 +233,63 @@ if (READER) {
   await sleep(1000)
   const stays = await page.evaluate(() => !!document.querySelector('iframe[data-axt-pdf-reader]'))
   check('a page the reader\'s frame was sent to cannot take the reader away', !!frame && stays, frame ? (stays ? 'the reader stays' : 'the reader was taken away') : 'no reader')
+}
+
+// The reader by the setting and by the address (the reader's design, §2): off, the PDF stays in the browser's viewer;
+// `#readarxiv` opens it whatever the setting says, and asks for a translation — set on the open page, or on arrival
+if (READER && (await readerRunsHere())) {
+  const setEnabled = on => worker.evaluate(async on => {
+    const { config } = await chrome.storage.local.get('config')
+    await chrome.storage.local.set({ config: { ...config, pdfReader: { ...config.pdfReader, enabled: on } } })
+  }, on)
+  const framedSrc = () => page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).then(f => f.getAttribute('src'), () => null)
+  await setEnabled(false)
+  await page.goto(`https://arxiv.org/pdf/${WITH_HTML}`, { waitUntil: 'load' })
+  await sleep(4000)
+  const off = await page.evaluate(() => ({ framed: !!document.querySelector('iframe[data-axt-pdf-reader]'), buttons: document.querySelectorAll('.axt-floating').length }))
+  check('the reader off in the settings: the PDF stays in the browser\'s viewer, with the floating button', !off.framed && off.buttons === 1, JSON.stringify(off))
+  await page.evaluate(() => { location.hash = '#readarxiv' })
+  const onHash = await framedSrc()
+  check('#readarxiv set on the open page opens the reader, asking for a translation', !!onHash && /ask=translate/.test(onHash), onHash ?? 'no reader')
+  await page.goto('about:blank')
+  await page.goto(`https://arxiv.org/pdf/${WITH_HTML}#readarxiv`, { waitUntil: 'load' })
+  const onArrival = await framedSrc()
+  check('an address with #readarxiv opens the reader whatever the setting says, asking for a translation', !!onArrival && /ask=translate/.test(onArrival), onArrival ?? 'no reader')
+
+  // The popup's PDF entry on the PDF page itself is this page's: the reader opens on it, translating, whatever
+  // reading.openIn says (a new tab by default), and no second tab of the paper opens (Part 5's final review)
+  await page.goto('about:blank')
+  await page.goto(`https://arxiv.org/pdf/${WITH_HTML}`, { waitUntil: 'load' })
+  await sleep(4000)
+  {
+    const { popup } = await popupOn(page)
+    await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /PDF 翻译|Translate PDF/.test(b.textContent ?? ''))?.click())
+    const framed = await framedSrc()
+    await sleep(1500)
+    const papers = context.pages().filter(p => /arxiv\.org\/pdf\//.test(p.url())).length
+    check('the popup\'s PDF entry on the PDF page opens the reader on this page, translating, and no second tab of it',
+      !!framed && /ask=translate/.test(framed) && papers === 1, `reader ${framed ? 'over the page' : 'none'}, ${papers} tab(s) of the paper`)
+    if (!popup.isClosed()) await popup.close()
+  }
+  await setEnabled(true)
+
+  // Neither the reader nor the popup's answer waits for the page's two HEADs (Part 5's final review): the source's
+  // HEAD held back 10 s, the reader is over the page and the popup has answered long before it comes
+  const held = /^https:\/\/arxiv\.org\/src\//
+  await context.route(held, async route => { await sleep(10_000); await route.continue().catch(() => undefined) })
+  await page.goto('about:blank')
+  await page.goto(`https://arxiv.org/pdf/${WITH_HTML}`, { waitUntil: 'load' })
+  const loaded = Date.now()
+  const framedAfter = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).then(() => Date.now() - loaded, () => null)
+  {
+    const { popup, seen } = await popupOn(page)
+    const answeredAfter = Date.now() - loaded
+    check('with the source\'s HEAD held 10 s, the reader opens and the popup answers without waiting for it',
+      framedAfter !== null && framedAfter < 5000 && !seen.notArxiv && seen.rows && answeredAfter < 9000,
+      `reader after ${framedAfter} ms, popup answered at ${answeredAfter} ms (S-P-03 shown: ${seen.notArxiv})`)
+    await popup.close()
+  }
+  await context.unroute(held)
 }
 
 await context.close()

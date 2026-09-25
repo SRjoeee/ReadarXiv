@@ -5,7 +5,7 @@ import { getConfig, setConfig } from '@/config/storage'
 import { type PopupHost, createPopupState } from '@/entrypoints/popup/state'
 import { MANAGE_SERVICES, MANAGE_STYLES } from '@/entrypoints/popup/view-model'
 import type { ProviderStatus } from '@/providers/transport'
-import { type AxtMessage, type PageStatus, answerMessages } from '@/shared/messages'
+import { type AxtMessage, type EntryStatus, type PageStatus, answerMessages } from '@/shared/messages'
 import type { PackState } from '@/shared/pack'
 import { applyLocaleFrom } from '@/ui/apply-locale'
 
@@ -28,7 +28,7 @@ function world() {
   const w = {
     /** What the tab's full text answers `axt:page-status`: a status, `undefined` (a listener that ignores it), or `null` for no listener at all */
     page: null as PageStatus | null | undefined,
-    entry: undefined as { paper: string; html: string | null } | undefined,
+    entry: undefined as ({ paper: string; html: string | null } & Partial<EntryStatus>) | undefined,
     /** The tab's answers to the other messages */
     answers: {} as Record<string, unknown>,
     toTab: [] as AxtMessage[],
@@ -50,8 +50,8 @@ function world() {
       w.toTab.push(message)
       if (message.type === 'axt:page-status') { if (w.page === null) throw new Error('Could not establish connection'); return w.page }
       if (message.type === 'axt:entry-status') return w.entry
-      // An entry page ignores every message but its own two
-      if (w.entry && message.type !== 'axt:open-html') return undefined
+      // An entry page ignores every message but its own
+      if (w.entry && message.type !== 'axt:open-html' && message.type !== 'axt:open-pdf') return undefined
       return w.answers[message.type] ?? (message.type === 'axt:restore-page' ? { removedNodes: 1 } : { started: true })
     }) as PopupHost['toTab'],
     toBackground: (async (message: AxtMessage) => {
@@ -451,6 +451,59 @@ describe('the rows that lead elsewhere', () => {
     expect(none.error()).toMatch(/no HTML version/)
     expect(none.w.closed).toBe(0)
     none.stop()
+  })
+
+  it('with the reader open, the primary shows the original or the translation, and a display writes the mode and lets the original go; stacked cannot be chosen (the reader\'s design, §9.2)', async () => {
+    const stored = async (test: (c: Awaited<ReturnType<typeof getConfig>>) => boolean) => { for (let i = 0; i < 100 && !test(await getConfig()); i++) await flush(); return test(await getConfig()) }
+    const p = await opened(w => { w.page = undefined; w.entry = { paper: '2501.07202', html: null, kind: 'pdf', pdf: null, readerOpen: true } })
+    p.popup.actions.readerOriginal()
+    expect(await stored(c => c.pdfReader.original)).toBe(true)
+    p.popup.actions.readerTranslate()
+    expect(await stored(c => !c.pdfReader.original)).toBe(true)
+    await setConfig({ ...(await getConfig()), pdfReader: { ...(await getConfig()).pdfReader, original: true } })
+    p.popup.actions.chooseMode('only')
+    expect(await stored(c => c.mode === 'only' && !c.pdfReader.original)).toBe(true)
+    p.popup.actions.chooseMode('stack')
+    await flush()
+    expect((await getConfig()).mode).toBe('only')
+    p.stop()
+  })
+
+  it('the PDF entry opens the paper\'s PDF asking for the reader, in a new tab by default or on the page itself, and the popup closes (the reader\'s design, §2)', async () => {
+    const pdf = 'https://arxiv.org/pdf/2501.07202#readarxiv'
+    const p = await opened(w => { w.page = undefined; w.entry = { paper: '2501.07202', html: null, kind: 'abs', pdf, readerOpen: false } })
+    p.popup.actions.openPdf()
+    await until(() => p.w.closed === 1)
+    expect(p.w.opened).toEqual([pdf])
+    await setConfig({ ...(await getConfig()), reading: { ...BASE.reading, openIn: 'same-tab' } })
+    await until(() => p.input().config?.reading.openIn === 'same-tab')
+    p.w.answers['axt:open-pdf'] = { opened: true }
+    p.popup.actions.openPdf()
+    await until(() => p.w.closed === 2)
+    expect(p.sent('axt:open-pdf')).toHaveLength(1)
+    p.stop()
+  })
+
+  it('a PDF entry the page can no longer open (its source turned out PDF-only after the popup asked): the popup stays, and asks again, the entry greyed (Codex on #301)', async () => {
+    const pdf = 'https://arxiv.org/pdf/2608.07562#readarxiv'
+    const p = await opened(w => { w.page = undefined; w.entry = { paper: '2608.07562', html: null, kind: 'pdf', pdf, readerOpen: false }; w.answers['axt:open-pdf'] = { opened: false } })
+    const asked = p.sent('axt:entry-status').length
+    p.w.entry = { paper: '2608.07562', html: null, kind: 'pdf', pdf: null, readerOpen: false }
+    p.popup.actions.openPdf()
+    await until(() => p.sent('axt:entry-status').length > asked)
+    await flush()
+    expect([p.w.closed, p.input().entry?.pdf]).toEqual([0, null])
+    p.stop()
+  })
+
+  it('on a PDF page the PDF entry is this page\'s: its hash alone changes, whatever the setting, and no second tab of the paper opens (Part 5\'s final review)', async () => {
+    const pdf = 'https://arxiv.org/pdf/2501.07202#readarxiv'
+    const p = await opened(w => { w.page = undefined; w.entry = { paper: '2501.07202', html: null, kind: 'pdf', pdf, readerOpen: false }; w.answers['axt:open-pdf'] = { opened: true } })
+    expect(p.input().config?.reading.openIn).toBe('new-tab')
+    p.popup.actions.openPdf()
+    await until(() => p.w.closed === 1)
+    expect([p.w.opened, p.sent('axt:open-pdf').length]).toEqual([[], 1])
+    p.stop()
   })
 })
 

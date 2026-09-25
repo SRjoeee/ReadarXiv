@@ -1,0 +1,278 @@
+/* The PDF reader's page (the reader's design, §4, §5, §11.5): its own tokens, not the extension's ui.css, with
+   Tailwind's theme and utilities and **without Preflight**, whose resets would reach inside PDF.js's viewers: their
+   layout assumes the browser's defaults (a box-sizing of ours once shifted the highlight, 2026-09-22). The chrome — every
+   control the page draws — takes its own small base under the class `chrome`; the viewers keep theirs */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+/* the utilities of the reader's own sources: Tailwind's scan of the whole tree brought the settings page's in, a :has()
+   among them (Part 3's final review; tests/styles/no-has.test.ts) */
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "./";
+@source "../../pdf-reader/";
+
+/* §4.1: one cool neutral ramp at hue 255 and one status hue; dark by the system, or chosen (data-theme) */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --n-0: oklch(1 0 0); --n-1: oklch(0.985 0.002 255); --n-2: oklch(0.962 0.004 255); --n-3: oklch(0.935 0.006 255);
+  --n-4: oklch(0.905 0.007 255); --n-5: oklch(0.86 0.008 255); --n-7: oklch(0.62 0.012 255); --n-8: oklch(0.505 0.014 255);
+  --n-10: oklch(0.235 0.012 255);
+  --danger: oklch(0.545 0.17 28);
+  --focus: oklch(0.55 0.15 255);
+  --page-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.05), 0 1px 2px oklch(0 0 0 / 0.04);
+  --float-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.08), 0 4px 16px oklch(0 0 0 / 0.08);
+  --pop-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.08), 0 12px 32px oklch(0 0 0 / 0.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --n-0: oklch(0.255 0.006 255); --n-1: oklch(0.215 0.006 255); --n-2: oklch(0.185 0.006 255); --n-3: oklch(0.275 0.007 255);
+    --n-4: oklch(0.31 0.008 255); --n-5: oklch(0.36 0.009 255); --n-7: oklch(0.56 0.01 255); --n-8: oklch(0.71 0.01 255);
+    --n-10: oklch(0.935 0.005 255);
+    --danger: oklch(0.69 0.15 28);
+    --focus: oklch(0.72 0.12 255);
+    --page-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.4), 0 4px 16px oklch(0 0 0 / 0.35);
+    --float-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.08), 0 6px 20px oklch(0 0 0 / 0.4);
+    --pop-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.1), 0 14px 36px oklch(0 0 0 / 0.5);
+  }
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --n-0: oklch(0.255 0.006 255); --n-1: oklch(0.215 0.006 255); --n-2: oklch(0.185 0.006 255); --n-3: oklch(0.275 0.007 255);
+  --n-4: oklch(0.31 0.008 255); --n-5: oklch(0.36 0.009 255); --n-7: oklch(0.56 0.01 255); --n-8: oklch(0.71 0.01 255);
+  --n-10: oklch(0.935 0.005 255);
+  --danger: oklch(0.69 0.15 28);
+  --focus: oklch(0.72 0.12 255);
+  --page-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.4), 0 4px 16px oklch(0 0 0 / 0.35);
+  --float-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.08), 0 6px 20px oklch(0 0 0 / 0.4);
+  --pop-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.1), 0 14px 36px oklch(0 0 0 / 0.5);
+}
+/* the roles (§4.1) */
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "PingFang SC", "Noto Sans SC", sans-serif;
+  --bar: 44px;
+  --side: 236px;
+  --canvas: var(--n-3); --chrome: var(--n-0); --chrome-line: var(--n-4); --ink: var(--n-10); --ink-2: var(--n-8); --ink-3: var(--n-7);
+  --fill: var(--n-3); --well: var(--n-3); --lift: var(--n-0);
+  --float-bg: color-mix(in oklab, var(--n-0) 90%, transparent);
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+/* dark: the well sunk below the chrome and the thumb raised above it, and a stronger fill, so that a chosen segment and
+   a pressed button show in dark as they do in light (Part 6's interface review: 1.06:1 before; the maintainer,
+   2026-09-26) */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --well: var(--n-2); --lift: var(--n-5); --fill: var(--n-4); } }
+:root[data-theme="dark"] { --well: var(--n-2); --lift: var(--n-5); --fill: var(--n-4); }
+@theme inline {
+  --color-canvas: var(--canvas); --color-chrome: var(--chrome); --color-line: var(--chrome-line);
+  --color-ink: var(--ink); --color-ink-2: var(--ink-2); --color-ink-3: var(--ink-3);
+  --color-fill: var(--fill); --color-well: var(--well); --color-lift: var(--lift); --color-float: var(--float-bg);
+  --color-danger: var(--danger); --color-focus: var(--focus);
+  --font-sans: var(--font);
+  --ease-reader: cubic-bezier(0.2, 0, 0, 1);
+  --shadow-float: var(--float-shadow); --shadow-pop: var(--pop-shadow);
+}
+
+@layer base {
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: var(--canvas); color: var(--ink); font: 13px/1.4 var(--font); -webkit-font-smoothing: antialiased; }
+  [hidden] { display: none !important; }
+  /* the chrome: border-box and bare controls; PDF.js's viewers keep the browser's defaults (the note at the top) */
+  .chrome, .chrome * { box-sizing: border-box; }
+  .chrome button, .chrome input { font: inherit; color: inherit; margin: 0; }
+  .chrome button { background: none; border: 0; padding: 0; cursor: pointer; }
+  .chrome button:disabled, .chrome [aria-disabled="true"] { cursor: default; }
+  .chrome :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  kbd { font: inherit; }
+}
+
+/* ----- §5: the toolbar fixed at the top, three zones; the document area under it, moved by the contents ----- */
+header[role="toolbar"] {
+  position: fixed; inset: 0 0 auto 0; z-index: 20; height: var(--bar);
+  /* the trail keeps its width and the lead gives way: squeezed, the switch moves off the centre rather than being drawn
+     over, and nothing is pushed past the window's edge (Part 6's interface review: overlaps from 500 to 1210 px) */
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr); align-items: center; gap: 16px;
+  padding-inline: 8px; background: var(--chrome); box-shadow: 0 0.5px 0 var(--chrome-line); color: var(--ink);
+}
+/* the contents move the document area at once, so that each side is refitted once to its new width; it is drawn sliding
+   there by a transform (App.tsx), on the compositor: a transition of `left` refitted both sides on every frame (the
+   final review: 12 scale changes a toggle) */
+.doc { position: fixed; inset: var(--bar) 0 0 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; }
+html[data-axt-contents] .doc { left: var(--side); }
+.pane { position: relative; min-width: 0; overflow: hidden; timeline-scope: --pane-y; }
+.pane .viewerContainer { scroll-timeline: --pane-y block; scrollbar-width: none; }
+/* one display alone, or side by side in a narrow window: the scroller spans the window, the page centred in it (§3) */
+html[data-axt-pdf-mode="original"] .doc, html[data-axt-pdf-mode="translation"] .doc, html[data-axt-narrow] .doc { grid-template-columns: minmax(0, 1fr); column-gap: 0; }
+html[data-axt-pdf-mode="original"] .pane[data-side="right"],
+html[data-axt-pdf-mode="translation"] .pane[data-side="left"],
+html[data-axt-pdf-mode="bilingual"][data-axt-narrow] .pane[data-side="left"] { display: none; }
+html[data-axt-pdf-mode="bilingual"][data-axt-swapped] .pane[data-side="left"] { order: 2; }
+
+/* ----- PDF.js's pages: a hairline and a soft shadow, 14 px apart (§4.1); PDF.js's own border and its margin, whose
+   foot is negative, give way (as in the harness the maintainer approved) ----- */
+.pdfViewer .page { border: 0 !important; margin-block: 14px !important; box-shadow: var(--page-shadow); }
+/* dark pages (§4.3): the canvas alone inverted, a page not drawn yet already its colour, so nothing flashes white; the
+   highlight and the figures keep their colours, the band screened over the dark page as it is multiplied over a white one */
+html[data-axt-dim] .pdfViewer .page { background-color: rgb(29 29 29) !important; }
+html[data-axt-dim] .pdfViewer .page canvas { filter: invert(88.8%) hue-rotate(180deg); }
+html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
+/* the appearance changes as one crossfade of the whole page (the View Transitions API) */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; animation-timing-function: var(--ease); }
+/* ----- the controls (§6, §7): component classes, the layout around them in utilities ----- */
+@layer components {
+  .tbtn { position: relative; height: 30px; min-width: 30px; flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 7px; color: var(--ink-2); transition: background-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out; }
+  .tbtn::before { content: ""; position: absolute; inset: -7px -2px; }
+  .tbtn:hover, .tbtn[aria-expanded="true"], .tbtn[aria-pressed="true"] { background: var(--fill); color: var(--ink); }
+  .tbtn:active { scale: 0.96; }
+  .tbtn[aria-disabled="true"] { background: none; color: var(--ink-3); opacity: 0.55; }
+  .tbtn[aria-disabled="true"]:active { scale: 1; }
+  .divider { width: 0.5px; height: 18px; margin-inline: 6px; flex: none; background: var(--chrome-line); }
+
+  /* tooltips: below their control, centred on it, kept inside the window; one line always */
+  .tip { position: fixed; inset: auto; margin: 8px 0 0; position-area: bottom; position-try-fallbacks: bottom span-right, bottom span-left;
+    padding: 5px 8px; border: 0; border-radius: 6px; background: oklch(0.22 0.01 255); color: oklch(0.96 0 0); font: 12px/1.2 var(--font);
+    white-space: nowrap; display: none; gap: 10px; box-shadow: 0 4px 12px oklch(0 0 0 / 0.2); pointer-events: none; overflow: visible; }
+  .tip:popover-open { display: flex; animation: tip-in 120ms ease-out; }
+  .tip[data-side="right"] { margin: 0 0 0 8px; position-area: right; position-try-fallbacks: none; }
+  .tip kbd { color: oklch(0.74 0.01 255); }
+  /* a segmented control: equal segments in a well, the chosen one on a lifted thumb that slides (§6.2, §7) */
+  .seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: 30px; padding: 2px; border-radius: 9px; background: var(--well); --i: 0; }
+  .seg .thumb { position: absolute; inset-block: 2px; inset-inline-start: 2px; width: calc((100% - 4px) / var(--n, 3)); border-radius: 7px; background: var(--lift);
+    box-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.06), 0 1px 2px oklch(0 0 0 / 0.08); translate: calc(var(--i) * 100%) 0; transition: translate 220ms var(--ease); pointer-events: none; }
+  .seg > button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; height: 100%; padding: 0 12px; border-radius: 7px; color: var(--ink-2); font: 500 12.5px/1 var(--font); white-space: nowrap; transition: color 150ms ease-out; }
+  .seg > button[aria-checked="true"], .seg > button[aria-pressed="true"] { color: var(--ink); }
+  .seg > button:not([aria-checked="true"]):not([aria-disabled="true"]):hover { color: var(--ink); }
+  .seg > button[aria-disabled="true"] { color: var(--ink-3); opacity: 0.55; }
+  .seg.display > button { width: 40px; padding: 0; }
+  .seg.small { height: 26px; }
+  .seg.small > button { padding: 0 10px; font-size: 12px; }
+  .arxiv-id { display: inline-flex; flex: none; align-items: center; gap: 2px; margin: -2px -4px; padding: 2px 4px; border-radius: 5px; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; text-decoration: none; transition: color 150ms, background-color 150ms; }
+  .arxiv-id svg { opacity: 0; translate: -2px 2px; transition: opacity 150ms, translate 150ms ease-out; }
+  .arxiv-id:hover, .arxiv-id:focus-visible { color: var(--ink); background: var(--fill); }
+  .arxiv-id:hover svg, .arxiv-id:focus-visible svg { opacity: 1; translate: 0 0; }
+  @media (width < 1100px) { .paper-title [data-title] { display: none; } }
+  /* popovers (§6.7): under their button, 6 px below, kept inside the window; they grow from it */
+  .pop { position: fixed; inset: auto; margin: 6px 0 0; position-area: bottom span-right; position-try-fallbacks: bottom span-left, bottom;
+    min-width: 220px; width: max-content; max-width: calc(100vw - 16px); max-height: calc(100vh - var(--bar) - 16px); overflow: auto; padding: 4px; border: 0; border-radius: 12px;
+    background: var(--chrome); color: var(--ink); box-shadow: var(--pop-shadow); font-size: 13px; transform-origin: top left; }
+  .pop:popover-open { animation: pop-in 150ms var(--ease); }
+  .pop .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 34px; padding: 0 10px; }
+  .pop .sep { height: 0.5px; margin: 4px 8px; border: 0; background: var(--chrome-line); }
+  .pop .search { display: block; width: 100%; height: 30px; margin: 0 0 4px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--fill); color: var(--ink); }
+  .pop .search::placeholder { color: var(--ink-2); }
+  .pop .item { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px 0 8px; border-radius: 8px; cursor: pointer; }
+  .pop .item[data-active] { background: var(--fill); }
+  /* the item the keyboard moves is the focus (aria-activedescendant), and carries §13's ring as a focused control does */
+  .pop :is([role="menu"], [role="listbox"]):focus-visible .item[data-active],
+  .pop .search:focus-visible ~ [role="listbox"] .item[data-active] { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .pop .item[aria-disabled="true"] { color: var(--ink-3); cursor: default; }
+  .pop .item .hint { margin-inline-start: auto; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .pop .item .check { color: var(--ink); }
+  .menu-btn { padding-inline: 8px 6px; color: var(--ink); font-size: 12.5px; font-weight: 500; }
+  .zoom-value { min-width: 60px; padding-inline: 6px; color: var(--ink); font-size: 12.5px; }
+  .switch { position: relative; width: 28px; height: 17px; flex: none; border-radius: 999px; background: var(--ink-3); transition: background-color 150ms; }
+  .switch::after { content: ""; position: absolute; inset-block-start: 2px; inset-inline-start: 2px; width: 13px; height: 13px; border-radius: 999px; background: oklch(1 0 0); box-shadow: 0 1px 2px oklch(0 0 0 / 0.25); transition: translate 150ms ease-out; }
+  .switch[aria-checked="true"] { background: var(--ink); }
+  .switch[aria-checked="true"]::after { translate: 11px 0; background: var(--chrome); }
+  .swatch { width: 16px; height: 16px; border-radius: 999px; box-shadow: inset 0 0 0 0.5px oklch(0 0 0 / 0.15); }
+  .swatch[aria-pressed="true"]:not(:focus-visible) { outline: 1.5px solid var(--ink); outline-offset: 2px; }
+  /* below 900 px the language and service menus leave the toolbar for the reading options' first rows (§5); as specific
+     as the rows and separators they are, and after them, so that they stay hidden above it */
+  .pop .narrow-only { display: none; }
+  /* the contents (§6.3): `toc`, since Tailwind's `contents` is display: contents */
+  .toc { position: fixed; z-index: 15; inset: var(--bar) auto 0 0; width: var(--side); display: flex; flex-direction: column; background: var(--chrome); box-shadow: 0.5px 0 0 var(--chrome-line); translate: -100% 0; visibility: hidden; transition: translate 200ms var(--ease), visibility 0s linear 200ms; }
+  html[data-axt-contents] .toc { translate: 0 0; visibility: visible; transition: translate 200ms var(--ease), visibility 0s; }
+  .toc-h { display: flex; align-items: center; height: 36px; padding: 0 12px 0 14px; flex: none; color: var(--ink-2); font-size: 11.5px; font-weight: 600; }
+  .toc-list { flex: 1; margin: 0; padding: 0 6px 16px; overflow: auto; list-style: none; overscroll-behavior: contain; scrollbar-width: thin; }
+  .toc-list li[hidden] { display: none; }
+  .entry { display: flex; align-items: center; gap: 2px; height: 28px; padding-inline: 0 8px; border-radius: 6px; }
+  .entry:hover, .entry[aria-current="true"] { background: var(--fill); }
+  .entry a { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 8px; color: inherit; text-decoration: none; }
+  .entry .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500; }
+  .entry[aria-current="true"] .t { font-weight: 600; }
+  .entry .p { flex: none; color: var(--ink-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+  [data-level="2"] > .entry { padding-inline-start: 14px; }
+  [data-level="3"] > .entry { padding-inline-start: 28px; }
+  :is([data-level="2"], [data-level="3"]) .t { font-size: 12px; font-weight: 400; color: var(--ink-2); }
+  .fold { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; color: var(--ink-3); }
+  .fold svg { transition: rotate 150ms ease-out; }
+  .fold[aria-expanded="true"] svg { rotate: 90deg; }
+  .fold.leaf { visibility: hidden; }
+  /* a pane's page pill (§6.4): its bottom centre, 16 px up; shown while the pane scrolls, hovered or focused */
+  .pill { position: absolute; z-index: 5; inset-block-end: 16px; inset-inline-start: 50%; translate: -50% 0; display: flex; align-items: center; height: 30px; padding: 0 3px; border-radius: 999px;
+    background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums;
+    opacity: 0; pointer-events: none; transition: opacity 200ms ease-out; }
+  .pill[data-live], .pill:hover, .pill:focus-within { opacity: 1; pointer-events: auto; }
+  .pill button { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; color: var(--ink-3); transition: background-color 150ms, color 150ms; }
+  .pill button:hover { background: var(--fill); color: var(--ink); }
+  .pill input { width: 3.2ch; height: 22px; border: 0; border-radius: 6px; background: none; color: var(--ink); font-weight: 500; text-align: end; }
+  .pill input:hover { background: var(--fill); }
+  .pill .of { padding-inline: 3px 5px; }
+  /* a pane's scroll indicator (§6.5): its right edge; the thumb's place a scroll-driven animation on the pane's timeline */
+  .indicator { position: absolute; z-index: 4; inset-block: 6px; inset-inline-end: 0; width: 14px; display: flex; justify-content: center; opacity: 0; transition: opacity 300ms ease-out; }
+  .indicator[data-live], .indicator:hover, .indicator[data-drag] { opacity: 1; transition-duration: 120ms; }
+  .indicator i { position: absolute; top: 0; width: 4px; height: var(--thumb, 40px); border-radius: 999px; background: color-mix(in oklab, var(--ink) 30%, transparent); transition: width 150ms ease-out, background-color 150ms; animation: thumb linear both; animation-timeline: --pane-y; }
+  .indicator:hover i, .indicator[data-drag] i { width: 7px; background: color-mix(in oklab, var(--ink) 45%, transparent); cursor: grab; }
+  .indicator[data-drag] i { cursor: grabbing; }
+  /* the progress line (§6.6): along the toolbar's foot, 2 px of quiet ink, its length the share done, grown by a
+     transform; it fades in and out, at the length it reached (ProgressLine) */
+  .progress-line { position: absolute; inset: auto 0 0 0; height: 2px; background: color-mix(in oklab, var(--ink-3) 80%, transparent); transform-origin: 0 50%; scale: var(--p, 0) 1; opacity: 0; pointer-events: none; transition: scale 400ms var(--ease), opacity 240ms ease-out; }
+  .progress-line[data-on] { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .progress-line { transition: opacity 240ms ease-out; } }
+  /* the status capsule (§6.6): fixed over the document area, above the pills, moved with it by the contents */
+  .capsule-slot { position: fixed; z-index: 7; inset: auto 0 58px 0; display: flex; justify-content: center; pointer-events: none; transition: left 200ms var(--ease); }
+  html[data-axt-contents] .capsule-slot { left: var(--side); }
+  .capsule { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 8px; min-height: 34px; max-width: calc(100% - 24px); padding: 0 6px 0 12px; overflow: hidden; border-radius: 999px; pointer-events: auto;
+    background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); color: var(--ink); font-size: 12.5px; animation: capsule-in 240ms var(--ease); }
+  .capsule[data-kind="narrow"] { padding-inline-end: 14px; }
+  .capsule[data-out] { animation: capsule-out 160ms ease-out forwards; pointer-events: none; }
+  .capsule svg { color: var(--ink-2); }
+  /* one line wherever it fits; in a window too narrow for it the words wrap, balanced, and the icon and the actions keep
+     their size (Part 6's interface review: at 320 px the English capsules ran past both edges, their action with them) */
+  .capsule .words { min-width: 0; padding-block: 8px; line-height: 1.35; text-wrap: balance; animation: words-in 180ms ease-out; }
+  .capsule > svg, .capsule .chip, .capsule .close { flex: none; }
+  .capsule .chip { height: 24px; padding: 0 10px; border-radius: 999px; background: var(--fill); font-size: 12px; font-weight: 500; transition: scale 150ms; }
+  .capsule .chip:active { scale: 0.96; }
+  .capsule .close { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; color: var(--ink-3); }
+  .capsule .close:hover { background: var(--fill); color: var(--ink); }
+  /* the card (§6.6): centred in the translation's pane, which it covers (the pane marks itself: no relational selector in the sheet, §12) */
+  .pane[data-card] .viewerContainer { visibility: hidden; }
+  .card { position: absolute; z-index: 6; inset-block-start: 42%; inset-inline-start: 50%; translate: -50% -50%; width: min(300px, calc(100% - 48px)); padding: 22px 20px 18px; border-radius: 14px;
+    display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; background: var(--chrome); color: var(--ink); box-shadow: var(--pop-shadow); }
+  .card svg { color: var(--danger); }
+  .card p { margin: 0; font-size: 13px; font-weight: 500; text-wrap: balance; }
+  .card button { height: 30px; padding: 0 16px; border-radius: 8px; background: var(--ink); color: var(--chrome); font-weight: 500; transition: scale 150ms ease-out; }
+  .card button:active { scale: 0.96; }
+}
+@keyframes tip-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tbtn, .tbtn:active { transition: none; scale: 1; } }
+@media (prefers-reduced-motion: reduce) { .seg .thumb { transition: none; } }
+@keyframes pop-in { from { opacity: 0; scale: 0.97; translate: 0 -4px; } }
+@media (prefers-reduced-motion: reduce) { @keyframes pop-in { from { opacity: 0; } } }
+@media (width < 900px) { .pop .row.narrow-only { display: flex; } .pop .sep.narrow-only { display: block; } [data-zone="trail"] > .menu-btn { display: none; } }
+/* a narrow window shows one side: swap and sync, greyed there, give their room; the narrowest keeps the arXiv id's too,
+   as the title goes below 1100 px */
+@media (width < 900px) { [data-zone="trail"] > [data-side-by-side] { display: none; } }
+@media (width < 640px) { [data-zone="lead"] .paper-title { display: none; } }
+@keyframes thumb { from { translate: 0 0; } to { translate: 0 calc(var(--track, 100px) - var(--thumb, 40px)); } }
+@media (prefers-reduced-motion: reduce) { .pill, .indicator { transition: none; } }
+@keyframes capsule-in { from { opacity: 0; translate: 0 10px; scale: 0.96; } }
+@keyframes capsule-out { to { opacity: 0; translate: 0 6px; } }
+@keyframes words-in { from { opacity: 0; translate: 0 3px; } }
+@media (prefers-reduced-motion: reduce) {
+  @keyframes capsule-in { from { opacity: 0; } }
+  @keyframes capsule-out { to { opacity: 0; } }
+  @keyframes words-in { from { opacity: 0; } }
+}
+/* the rest of the chrome's movements, each a fade or nothing when the reader asks for less motion (§4.2; Part 6's
+   accessibility audit): the contents slide in at once, the capsule does not travel with them, the link's arrow does
+   not nudge, the disclosure does not turn, the switch's knob and the indicator's thumb do not glide or widen, the
+   card's button is not pressed in */
+@media (prefers-reduced-motion: reduce) {
+  .toc, html[data-axt-contents] .toc { transition: visibility 0s; }
+  .capsule-slot { transition: none; }
+  .arxiv-id svg { translate: none; transition: opacity 150ms; }
+  .fold svg { transition: none; }
+  .switch::after { transition: none; }
+  .indicator i { transition: background-color 150ms; }
+  .card button, .card button:active { transition: none; scale: 1; }
+}

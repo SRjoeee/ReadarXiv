@@ -4,8 +4,8 @@
 // no placeholder's remains, no box over four times its source). Writes out/eval-join-google-<lang>.json.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isName, translateTexts } from '../poc-reader/mt.mjs'
-import { linesToBoxes } from '../poc-reader/lib/axt/figures.mjs'
+import { isName, translateTexts } from '../../../src/pdf-reader/engine/mt.mjs'
+import { linesToBoxes } from '../../../src/core/image/boxes.ts'
 const root = new URL('..', import.meta.url).pathname
 const lang = process.argv[2] ?? 'zh'
 const GOOGLE_LANG = { zh: 'zh', ja: 'ja', de: 'de' }

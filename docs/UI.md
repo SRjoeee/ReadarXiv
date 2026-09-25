@@ -68,6 +68,7 @@ states, verbs for buttons, no spoken phrases (去填 / 去修 are out), every no
 | S-P-02 | Gear in the brand row, `aria-label`; the button beside every note | 设置 | The one button of every note; opens the options page |
 | S-P-03 | Not an arXiv page / page loading (P0) | 打开 arXiv 论文的 HTML 页面后即可翻译 | Same sentence for both cases; never "后台未响应" |
 | S-P-03b | Abstract or PDF page (P17) | (the ordinary popup) | **The popup works on every arXiv page the reader may be on** (the maintainer, 2026-09-18): on `abs` and `pdf` the rows are the ordinary ones and the button is S-P-50's 翻译本页, which opens that paper's HTML version and translates it there — no dialog, no question. The paper has no HTML version: the button stays, **disabled**, with S-P-33 below it, so a reader is told the answer rather than left with a control that does nothing. A service that cannot run disables it here as it does on the paper page (S-P-32). No shortcut badge: ⌥T acts on a translated page, and this is not one. The translation opens where S-O-49b says, a new tab by default, and the popup closes with it |
+| S-P-03c | A PDF page with the reader open | (the ordinary popup, acting on the reader) | The PDF reader's design, §9.2: the popup acts on the reader through the settings alone, which the reader follows. The rows are the ordinary ones; the language menu holds the nine languages the reader typesets; the mode bar greys 上下 with S-P-75, and a stored 上下 shows as 左右 chosen, what the reader shows; the button is 翻译本页 while the reader shows the original and 显示原文 while it shows a translation (`pdfReader.original`); the style row is gone, styles doing nothing on a typeset PDF |
 | S-P-10 | Service row label | 翻译服务 | The row opens the service menu (S-P-40…46) under itself |
 | S-P-11 | Service row value | {模型名 / 服务名} | LLM shows the model (`deepseek-v4-flash`), others their name; while replaced (S-P-30) the service in use with the one put aside struck through |
 | S-P-20 | Language row label | 目标语言 | The row opens the language menu. What a new reader finds here follows the browser's languages, chosen once at install (DESIGN §9): the first preferred language that is not English, else the browser interface's language if that is not English, else Simplified Chinese; a language the table cannot give in the script asked for is passed over |
@@ -79,6 +80,7 @@ states, verbs for buttons, no spoken phrases (去填 / 去修 are out), every no
 | S-P-32 | Note · cannot translate | {为何不能用} | Idle with nothing to take over, or the page left behind by a choice that cannot run (P13) |
 | S-P-32a | {为何不能用} · LLM | LLM 尚未配置 API Key | |
 | S-P-33 | Note · no HTML version | arXiv 没有这篇论文的 HTML 版本，无法翻译 | Only on S-P-03b; no settings button, since nothing in the settings changes what arXiv converted |
+| S-P-33a | Note · no HTML version, the PDF entry offered | arXiv 没有这篇论文的 HTML 版本 | S-P-33 without its last clause where PDF 翻译 is offered beside it, which does translate (Part 5's final review). A service that cannot run speaks first on these pages (S-P-30 / S-P-35): it is why both entries are greyed |
 | S-P-32b | {为何不能用} · Chrome | Chrome 翻译的语言包尚未下载 / Chrome 翻译的语言包下载中，约需 1 分钟 | Reachable from the options page only: the popup's item is greyed |
 | S-P-32c | {为何不能用} · Microsoft | Microsoft 翻译不支持当前目标语言 | |
 | S-P-33 | Note · paused | {原因}。请检查设置后重新翻译 | Reason per S-E |
@@ -92,7 +94,7 @@ states, verbs for buttons, no spoken phrases (去填 / 去修 are out), every no
 | S-P-46 | Service menu · names and order | Microsoft 翻译 · Google 翻译 · LLM · Chrome 翻译 | [decided] 2026-09-10; Microsoft is the shipped default |
 | S-P-47 | Prompt row | 提示词 / {名称} | Only while the LLM is chosen; opens the prompt menu |
 | S-P-50 | Primary button · not translated | 翻译本页 | Shortcut badge: the key Chrome reports for `axt-toggle` (suggested Alt+T). **On every enabled face of the button** (2026-09-11): the key translates an untranslated page and restores a translated one, so 显示原文 carries it too; a paused session's 重新翻译 is what the key does there. Chrome reports nothing when another extension — or another copy of this one — already holds the combination, and then no badge is drawn |
-| S-P-50b | Primary button · abstract or PDF page (P17) | 双语版本 | **Not 翻译本页**: this page is not what gets translated, and a button that says so misleads (the owner, 2026-09-18). The same words as the entry on the page itself (S-I-06), four characters like every other face of this button, and shorter than the English 「Translate this page」 it replaces there (measured: 60 px and 120 px against the button's 288 px). Where it opens follows S-O-49b; the disabled face keeps the label and says why in S-P-33 |
+| S-P-50b | The two entries · abstract or PDF page (P17) | HTML 翻译 · PDF 翻译 | **In the primary button's place, side by side** (the PDF reader's design, §2): the HTML version or the bilingual PDF, the reader's to choose (the maintainer: 「在PDF入口和HTML入口中自选——我们不替用户做决定」), in as few words as stay clear (the maintainer, 2026-09-25). HTML 翻译 is disabled with S-P-33 when arXiv has no HTML version; PDF 翻译 is disabled **without words** when the paper cannot be had as a bilingual PDF (a PDF-only submission, or a browser the reader cannot run on). Both are disabled when no service can run and none takes over (S-P-32). Each opens where S-O-49b says; the PDF entry opens the paper's PDF with `#readarxiv`, the reader translating. Replaces 双语版本 |
 | S-P-51 | Primary button · translating | 显示原文 | The only sign that the page is on: no pill. Carries the same shortcut badge as S-P-50 |
 | S-P-52 | Primary button · paused / page behind the settings | 重新翻译 | Disabled while the saved service cannot run; S-P-53 alongside |
 | S-P-53 | Secondary button | 显示原文 | Text button under S-P-52 |
@@ -103,6 +105,7 @@ states, verbs for buttons, no spoken phrases (去填 / 去修 are out), every no
 | S-P-72 | Mode `title` · 左右 | 原文与译文并排；窗口较窄时按上下显示 | |
 | S-P-73 | Mode `title` · 仅译文 | 隐藏原文，参考文献仍保留双语 | |
 | S-P-74 | Remark under the mode bar · narrow window | 窗口较窄，暂按上下显示 | Only when 左右 is chosen and the page shows 上下 |
+| S-P-75 | Mode bar · 上下 greyed, the reader open | PDF 对照不支持上下排列 | The segment's title (S-P-03c): a layout the reader can see it does not offer, not a technical reason |
 | S-P-80 | Hover highlight row | 对照高亮 | Switch in the card (`reading.sentenceHighlight`); saved at once, live on the page |
 | S-P-81 | Hover highlight `title` | 悬停时高亮对应句子；仅译文模式下停留可查看原文 | |
 | S-P-82 | Translation style · same row as the two switches | 译文样式 | [decided, 2026-09-11, the reader's final word] The last row is 对照高亮 · 图片翻译 · 译文样式 side by side — all three are "how this reads". The entry is plain text plus a chevron; the **preview is inside the menu**, where each style draws the shared sample sentence (§5.1's `PREVIEW_TARGET`) in itself — 淡一档 and 模糊 mean nothing as names. The list is `appearance.styles`, in the settings page's order, under the same name it has there. **The menu opens upward**: this row sits at the foot of the popup and the window does not grow to fit a panel below it. The page's config watcher redraws in the new style, so nothing restarts |
@@ -115,13 +118,13 @@ Removed 2026-09-10: the state pills (S-P-12…18) and the config-fallback note (
 ### 3.2 Options page
 
 Rebuilt 2026-09-10 (spec `docs/superpowers/specs/2026-09-10-settings-services-appearance-design.md`).
-Four sections behind a left navigation; there is no save button — every control writes as it
+Five sections behind a left navigation; there is no save button — every control writes as it
 changes, and the two drawers commit with one button.
 
 | Id | Where | Copy | Notes |
 |---|---|---|---|
-| S-O-01 | Navigation | 翻译服务 · 阅读 · 提示词与术语 · 数据 | The hash keeps the place (`#services` …) |
-| S-O-02 | Settings could not be read | 设置读取失败，当前使用默认设置；已保存的 API Key 与服务选择均未生效。原设置保留未动，重置后可重新填写。 · 重置设置 → 确认重置 / 取消 · 重置没有成功，请再试一次 | Top of the page, with the reason under it and the reset (two clicks, the pattern of S-O-72's clear) at its right end. While it shows, “翻译服务”, “阅读”, “提示词与术语” and the interface language are not rendered: they would show the defaults as if they were the reader's, and nothing they save is accepted — what is stored is never written over except by this reset (DESIGN §9). “数据” stays. The popup carries no notice of its own; a change made there is answered by S-P-90 |
+| S-O-01 | Navigation | 翻译服务 · 阅读 · PDF 阅读器 · 提示词与术语 · 数据 | The hash keeps the place (`#services` …); the PDF reader's 设置 opens `#pdf-reader` |
+| S-O-02 | Settings could not be read | 设置读取失败，当前使用默认设置；已保存的 API Key 与服务选择均未生效。原设置保留未动，重置后可重新填写。 · 重置设置 → 确认重置 / 取消 · 重置没有成功，请再试一次 | Top of the page, with the reason under it and the reset (two clicks, the pattern of S-O-72's clear) at its right end. While it shows, “翻译服务”, “阅读”, “PDF 阅读器”, “提示词与术语” and the interface language are not rendered: they would show the defaults as if they were the reader's, and nothing they save is accepted — what is stored is never written over except by this reset (DESIGN §9). “数据” stays. The popup carries no notice of its own; a change made there is answered by S-P-90 |
 | S-O-05 | Sidebar · interface language | 界面语言 / 跟随浏览器 | [decided, 2026-09-11] Under the navigation, away from the target language: the two are two different things (§6). A change reloads the whole page |
 | S-O-10 | Built-in services | 内置服务 | Three cards with a radio each: Microsoft 翻译 · Google 翻译 · Chrome 翻译, the popup's names and hints (S-P-44…46) |
 | S-O-11 | Chrome card action | 下载 | While the pack is `downloadable`; the card cannot be chosen until it is there (S-P-40…43) |
@@ -149,10 +152,11 @@ changes, and the two drawers commit with one button.
 | S-O-47 | Advanced | 高级 / 只填声明，不写选择器和花括号；字体与字号仍随论文 | Folded; an invalid block says why on the spot |
 | S-O-48 | Drawer actions | 复制一份 · 删除 · 完成 | |
 | S-O-49 | Background highlight | 背景高亮 / 悬停时来标出对应句子的底色 | Same grid and editor, fields 底色 + 透明度; built-ins: 柔和绿 · 淡黄 · 淡蓝 |
-| S-O-49b | Where the translation opens | 译文在哪里打开 / 从论文的摘要页或 PDF 打开时，译文是这篇论文的 HTML 版本 | 新标签页 · 当前标签页, configuration `reading.openIn` (v16). **新标签页 is the default** (the owner, 2026-09-18): the first version navigated the tab from the abstract page or the PDF, and the page the reader was on was gone. It reaches the two in-page entries (S-I-06 and the abstract page's line, as `target`) and the popup's button on those pages (S-P-03b) alike; on the full text nothing navigates, so nothing here applies |
+| S-O-49b | Where the translation opens | 译文在哪里打开 / 从论文的摘要页或 PDF 打开时，译文是这篇论文的 HTML 版本 | 新标签页 · 当前标签页, configuration `reading.openIn` (v16). **新标签页 is the default** (the owner, 2026-09-18): the first version navigated the tab from the abstract page or the PDF, and the page the reader was on was gone. It reaches the abstract page's line (as `target`) and the popup's entries on those pages (S-P-50b), in the toolbar and in the floating button's panel alike; on the full text nothing navigates, so nothing here applies |
 | S-O-49c | Floating button | 显示悬浮按钮 / 在 arXiv 的摘要页、PDF 和论文全文页贴在窗口边缘：翻译、控制面板、设置 | Switch, storage key `floatingEntry` (`enabled`; not in the configuration, DESIGN §4.0c), on by default, written through the background like the button's own drags. The way back from S-I-06c's 不再显示; every open arXiv page follows it at once. The popup, the key and the menu work either way |
 | S-O-50 | Preload range | 提前翻译的范围 / 屏幕下方多远的段落先翻；越近越省费用，整篇则一开始就全部请求 | 一屏 · 两屏 · 三屏 · 整篇. 整篇 reaches an open paper at once (everything still waiting is requested); the other stops apply from the next session |
 | S-O-51 | When translation starts | 开始翻译的时机 / 段落露出多少才开始翻 | 刚露出 · 露出一半 · 完全露出 |
+| S-O-55 | PDF reader | 在 arXiv 的 PDF 上使用对照阅读器 · 同步滚动 · 外观（浅色 · 深色 · 跟随系统） · 深色时调暗页面 | The section `#pdf-reader` (the reader's design, §9.3): configuration `pdfReader.enabled`, `sync`, `appearance`, `dimPages` — the values the reader's own menus change (S-R-06, S-R-08), in their words, so the two never drift apart. The first on: arXiv's PDFs open in the reader; off, the browser's viewer keeps them and `#readarxiv` still opens the reader |
 | S-O-60 | Prompts and glossary · not an LLM | 只对 LLM 服务生效 | A line at the top; the section stays usable |
 | S-O-61 | Prompts | 提示词 | The existing prompt manager on the tokens |
 | S-O-62 | Glossary | 术语表 / 每行「原文, 译文」，让同一篇里的译法一致 | Top right {n} 条; saved as typed, but only when the whole table parses |
@@ -160,6 +164,7 @@ changes, and the two drawers commit with one button.
 | S-O-70 | Data · cache | 已缓存的译文 / {n} 条 · {size} MB | 换了服务、模型或提示词会自动分开存，通常不用清 |
 | S-O-71 | Read failed | 没能读取缓存 | Never shown as 「0 条」 |
 | S-O-72 | Clear | 清空 → 确认清空 · 取消 / 已清空 | Two clicks; the result clears after 2 s |
+| S-O-73 | Data · PDF translations | 已缓存的 PDF 译文 / {n} 篇 · {size} MB | The papers the PDF reader keeps on this machine (the reader's design, §9.3), read from its store on the page's own origin; cleared as S-O-72 and reported as S-O-71 when the store cannot be read |
 
 ### 3.3 In-page components
 
@@ -170,8 +175,8 @@ changes, and the two drawers commit with one button.
 | S-I-03 | Switched notice (bottom right of the viewport) | 已改用 Google 翻译 · 去查看 | Appears once, dismissable, fades after 8 seconds; “去查看” → Settings · 翻译服务 |
 | S-I-04 | Image overlay | (the translation itself) | A white translucent rounded box over the original text; hover shows the original; no node while waiting or failed (§15) |
 | S-I-05 | Split-view handle (#83, experimental) | (no text) | Appears on hovering the gutter; drag changes the column width, double-click resets |
-| S-I-06 | Floating button · main button (every arXiv page: abstract, PDF, full text) | 翻译本页 / 显示原文 · 双语版本（Read arXiv） · arXiv 没有这篇论文的 HTML 版本，无法翻译 | **Our book in a white disc** (the maintainer's drawing, inline vector), in a tab docked to the window's edge, right side and 66 % down until the reader drags it (DESIGN §4.0c). The same size on the screen on every page and at every zoom. Whole and dim at rest (70 %), lit by the pointer at once, the other buttons out after 400 ms — Immersive Translate's manner on Read Frog's frame (the maintainer, 2026-09-18). The words are its name and its tooltip, and say what a click does **on this page**: on the full text S-P-50 / S-P-51's, the same toggle as the popup's button, the key and the menu; on the abstract and the PDF the abstract entry's sentence (`page.abstractLink`), a real link that opens where S-O-49b says; with no HTML version the button stays, disabled, with S-P-33's sentence, so the reader is told why rather than shown nothing. A page showing its translation carries **a green tick** at the circle's lower right. A click nothing can serve (no service can run) opens the control panel, where the reason is |
-| S-I-06a | Floating button · control panel (above) | 控制面板 | Opens the extension's popup **in the page, beside the button** (Immersive Translate's manner; the maintainer, 2026-09-18) — every control the reader has, without a trip to the toolbar. It is the same popup, so S-P-* hold in it unchanged; a press elsewhere, Escape or a second click closes it. Lucide's `sliders-horizontal` |
+| S-I-06 | Floating button · main button (every arXiv page: abstract, PDF, full text) | 翻译本页 / 显示原文 · 双语版本（Read arXiv） · arXiv 没有这篇论文的 HTML 版本，无法翻译 | **Our book in a white disc** (the maintainer's drawing, inline vector), in a tab docked to the window's edge, right side and 66 % down until the reader drags it (DESIGN §4.0c). The same size on the screen on every page and at every zoom. Whole and dim at rest (70 %), lit by the pointer at once, the other buttons out after 400 ms — Immersive Translate's manner on Read Frog's frame (the maintainer, 2026-09-18). The words are its name and its tooltip, and say what a click does **on this page**: on the full text S-P-50 / S-P-51's, the same toggle as the popup's button, the key and the menu; on the abstract and the PDF (the reader closed) the abstract entry's sentence (`page.abstractLink`), and a click opens the control panel (S-I-06a), where the paper's two entries are (S-P-50b) — the column then has no panel button of its own, since this one does what it did (the maintainer, 2026-09-24); with neither entry to offer, S-P-33's sentence, and the panel says which is missing. A page showing its translation carries **a green tick** at the circle's lower right. A click nothing can serve (no service can run) opens the control panel, where the reason is |
+| S-I-06a | Floating button · control panel (above) | 控制面板 | Opens the extension's popup **in the page, beside the button** (Immersive Translate's manner; the maintainer, 2026-09-18) — every control the reader has, without a trip to the toolbar. It is the same popup, so S-P-* hold in it unchanged; a press elsewhere, Escape or a second click closes it. Lucide's `sliders-horizontal`. Drawn on the full text only: on the abstract and the PDF the main button opens the panel (S-I-06) |
 | S-I-06b | Floating button · settings (below) and the corner controls | 设置 · 悬浮按钮选项 · 锁定位置 / 解锁位置 | The settings page; beside the main button a close control and a lock, Read Frog's words for Read Frog's controls. The lock's name says what a click will do; locked, the button cannot be dragged. No feedback button (the maintainer, 2026-09-18) |
 | S-I-06c | Floating button · close menu | 本次隐藏 · 不再显示 | Read Frog's offers 当前网站禁用 · 全局禁用; on the one site this button lives on those are the same thing, so the two scopes here are this page and every page. 不再显示 turns off S-O-49c, which is where it comes back |
 | S-I-07 | Figure viewer (every figure on the full text) | 放大查看 · 放大 · 缩小 · 关闭 | DeepWiki's manner (DESIGN §15.7): nothing at rest; under the pointer a round-cornered button fades in at the figure's top right — Lucide-style `maximize-2` arrows, its name the tooltip — and belongs to the figure: it scrolls with it, goes under the site's header with it, and is out of the window when the figure's top is; a dialog of nine tenths of the window over the dimmed page, `+` `−` `×` at its top right; a press zooms by 1.2, the wheel about the pointer, a drag pans, the arrows pan and + / − zoom from the keyboard, Escape or the backdrop closes; the page behind does not move. The dialog takes the button's name (放大查看), and closes if the page is restored under it. Shows what the page showed: the translation from a translated figure, the paper's words from the original. On a page not translated as well |
@@ -193,6 +198,32 @@ changes, and the two drawers commit with one button.
 | `aborted` | (not shown) | The user cancelled it |
 
 ---
+
+### 3.5 PDF reader (S-R) [decided 2026-09-25, built in the reader's Part 3]
+
+The bilingual PDF reader's own words (the reader's design, `experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md`
+§15). Where the popup already says the same thing, the reader shows the popup's string: 翻译服务 (S-P-10), 目标语言
+(S-P-20), 搜索语言 and 没有匹配的语言 (S-P-22/23), 对照高亮 (S-P-80), 图片翻译 (S-P-85), 设置 (S-P-02), {n} 处翻译失败 and
+重试 (S-P-60/61), and the reasons (S-E). No reader-facing string names a technical path (a test checks both packs).
+
+| ID | Where | Copy | Notes |
+|---|---|---|---|
+| S-R-01 | The toolbar's name | 阅读器 | `aria-label`, for screen readers |
+| S-R-02 | Contents toggle, and the sidebar's header | 目录 | Pressed while the sidebar is open |
+| S-R-03 | The arXiv id's tooltip | 在 arXiv 打开摘要页 | The id links to the abstract page, in a new tab |
+| S-R-04 | The display switch | 显示 · 原文 · 对照 · 译文 | The radio group's name and its three choices, in tooltips and to screen readers; keys 1 2 3 |
+| S-R-05 | Swap sides | 交换左右 | 对照 only; greyed in the single displays |
+| S-R-06 | Sync scrolling | 同步滚动 | 对照 only; greyed in the single displays |
+| S-R-07 | Zoom | 缩小 · 放大 · 缩放比例 · 适合宽度 · 适合页面 · 实际大小 | ⌘− and ⌘+ (Ctrl elsewhere) |
+| S-R-08 | Reading options | 阅读选项 · 高亮颜色 · 外观 · 浅色 · 深色 · 跟随系统 · 深色时调暗页面 | With S-P-80 and S-P-85 |
+| S-R-09 | Download | 下载 · 译文 PDF · 原文 PDF | 译文 PDF greyed until the final translation is on screen |
+| S-R-10 | Leave | 在默认查看器中打开 | Back to the browser's own viewer |
+| S-R-11 | Page pills | 原文页码 · 译文页码 · 上一页 · 下一页 | |
+| S-R-12 | A load or a translation under way | 正在加载 · 正在翻译 · 正在按当前设置重新翻译 | Said to screen readers in the status region, not shown: the 2 px line along the toolbar's foot shows how far it has come (the maintainer, 2026-09-25) |
+| S-R-13 | Language not supported | PDF 对照暂不支持{语言} · 选择语言 | The action opens the language menu |
+| S-R-14 | Narrow window | 窗口较窄，暂只显示译文 | Once, when 对照 shows the translation alone (after S-P-74) |
+| S-R-15 | A notice's close button | 关闭 | |
+| S-R-16 | The card · too many requests | 请求过于频繁 | The reader's own words for S-E's rate limit: S-E's 稍后自动重试 is the HTML page's chain retrying by itself, and a stopped run here does not — the reader retries (Part 6's interface review) |
 
 ## 4. Popup state table [decided, 2026-09-10 revised on ui/phase-1]
 

@@ -7,6 +7,7 @@
 // note at a time (paused > replaced > images paused > the chosen service cannot run); the menus
 // open at any time, a change while the page is on restarts it in place (data.ts), and only a
 // choice that cannot run leaves the page behind the settings.
+import { languageItems, READER_LANGUAGES } from '@/pdf-reader/ui/languages'
 import { activeStyle } from '@/config/appearance'
 import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
@@ -21,13 +22,13 @@ import type { StartResult } from '@/core/session'
 import { pageDecision } from '@/shared/page-action'
 import type { PackState } from '@/shared/pack'
 import type { MenuItem } from '@/ui/Menu'
+import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
 import { styleTile } from '@/ui/appearance/tiles'
 import { NoActiveTabError } from '@/shared/messages'
 import { PREVIEW_TARGET, S, languageLabel, languageName, parseFatal, profileName, reasonText, serviceName } from '@/ui/strings'
 
 export type { PackState }
-/** The last row of the service menu: not a service, it opens the settings page */
-export const MANAGE_SERVICES = '__manage'
+export { MANAGE_SERVICES }
 /** The same for the style menu: not a profile, it opens the settings page at the section that holds them */
 export const MANAGE_STYLES = '__manage-styles'
 export type MenuKind = 'service' | 'language' | 'prompt' | 'style'
@@ -59,6 +60,7 @@ export interface PopupInput {
 }
 
 export interface Row { value: string; replaced?: string }
+export interface Entry { label: string; disabled: boolean }
 /** A note under the card; `settings` adds the button that opens the options page */
 export interface Note { text: string; settings: boolean }
 
@@ -68,16 +70,23 @@ export interface PopupView {
   language: Row
   /** Only while the LLM is the chosen service */
   prompt: Row | null
-  /** The chosen translation style (S-P-82); the menu lists what the settings page holds */
-  style: Row
+  /** The chosen translation style (S-P-82); the menu lists what the settings page holds. Null where styles do nothing:
+   *  the PDF reader (§9.2) */
+  style: Row | null
   highlight: boolean
   images: boolean
   menu: { kind: MenuKind; label: string; items: MenuItem[]; search: boolean } | null
   note: Note | null
   failed: string | null
-  primary: { label: string; action: 'translate' | 'restore' | 'retranslate' | 'openHtml'; disabled: boolean; shortcut?: string }
+  primary: { label: string; action: 'translate' | 'restore' | 'retranslate' | 'openHtml' | 'readerTranslate' | 'readerOriginal'; disabled: boolean; shortcut?: string }
   secondary: { label: string; action: 'restore' } | null
-  mode: { value: Mode; note: string | null }
+  /**
+   * An abstract or PDF page's two entries, drawn in the primary button's place (the reader's design, §2): the HTML
+   * version or the bilingual PDF, the reader's to choose. Null elsewhere
+   */
+  entries: { html: Entry; pdf: Entry } | null
+  /** `disabled`: the modes this page cannot show, greyed with S-P-75 (the PDF reader cannot stack) */
+  mode: { value: Mode; note: string | null; disabled?: readonly Mode[] }
 }
 
 /**
@@ -97,6 +106,7 @@ const empty = (): PopupView => ({
   failed: null,
   primary: { label: S.primary.translate, action: 'translate', disabled: true },
   secondary: null,
+  entries: null,
   mode: { value: DEFAULT_CONFIG.mode, note: null },
 })
 
@@ -140,6 +150,13 @@ function cannotRunWhy(config: Config, pack: PackState | null): string {
  * button, which opens the HTML version and translates it there. **Disabled, not hidden, when that paper has no HTML
  * version**: a reader who came for the translation is told the answer instead of finding a control that does nothing.
  */
+/** Why the chosen service cannot run, and who takes over if one does; null when it can run (the entry pages' views) */
+function serviceNote(config: Config, { pack, saved }: PopupInput): PopupView['note'] {
+  if (runnable(config, pack)) return null
+  const why = cannotRunWhy(config, pack)
+  return { text: saved?.fallback ? S.note.willFallback(why, serviceName(saved.fallback.id, config.services)) : S.note.cannotRun(why), settings: true }
+}
+
 function entryView(entry: EntryStatus, config: Config, input: PopupInput): PopupView {
   const { pack, menu, saved } = input
   const canRun = runnable(config, pack)
@@ -149,7 +166,6 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
   const canStart = canRun || !!saved?.fallback
   const named = (id: string) => serviceName(id, config.services)
   const noHtml = entry.html === null
-  const why = () => cannotRunWhy(config, pack)
 
   return {
     empty: false,
@@ -160,20 +176,53 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
     highlight: config.reading.sentenceHighlight,
     images: config.image.enabled,
     menu: menu === null ? null : menuOf(menu, config, pack),
-    note: noHtml
-      ? { text: S.note.noHtml, settings: false }
-      : canRun ? null : { text: saved?.fallback ? S.note.willFallback(why(), named(saved.fallback.id)) : S.note.cannotRun(why()), settings: true },
+    // The service's note first: it is why both entries are greyed, or who takes over. Then the HTML version's, which
+    // says "nothing to translate" only when the PDF entry is not offered either (Part 5's final review)
+    note: serviceNote(config, input) ?? (noHtml ? { text: entry.pdf === null ? S.note.noHtml : S.note.noHtmlVersion, settings: false } : null),
     failed: null,
     // No shortcut badge: ⌥T toggles a translated page, and there is none here yet (UI.md S-P-50)
     // Not the paper page's label: this page is not what gets translated (UI.md S-P-50b, the owner 2026-09-18)
-    primary: { label: S.primary.bilingual, action: 'openHtml', disabled: noHtml || !canStart },
+    // not drawn: the entries below are (S-P-50b); kept as the HTML entry, the action a page's own button would take
+    primary: { label: S.entry.html, action: 'openHtml', disabled: noHtml || !canStart },
     secondary: null,
+    // a paper that cannot be had as a bilingual PDF greys its entry without words (§1's rule); either entry opens a page
+    // that translates by the same rule as the full text's button (Devin on #247)
+    entries: { html: { label: S.entry.html, disabled: noHtml || !canStart }, pdf: { label: S.entry.pdf, disabled: entry.pdf === null || !canStart } },
     mode: { value: config.mode, note: null },
+  }
+}
+
+/**
+ * The popup while the PDF reader is laid over a PDF page (the reader's design, §9.2): it acts on the reader through the
+ * settings alone, which the reader follows. The rows are the ordinary ones, the language menu holds the nine the reader
+ * typesets, stacked is greyed (a stored stacked shows as side by side, what the reader shows), the primary shows the
+ * original or the translation, and the style row goes: styles do nothing on a typeset PDF
+ */
+function readerView(entry: EntryStatus, config: Config, input: PopupInput): PopupView {
+  const base = entryView(entry, config, input)
+  const original = config.pdfReader.original
+  const held = entry.pdf === null || !READER_LANGUAGES.includes(config.targetLanguage)
+  return {
+    ...base,
+    style: null,
+    menu: input.menu === 'language'
+      ? { kind: 'language', label: S.rows.language, search: true, items: languageItems(config.targetLanguage) }
+      : input.menu === 'style' ? null : base.menu,
+    // the note of a service that cannot run; the HTML version's is not this page's matter
+    note: serviceNote(config, input),
+    // the reader holds the original for a paper with no source and a language it does not typeset: the switch would
+    // change nothing on screen, so it is greyed, without words, as the PDF entry is (Codex on #301)
+    primary: original
+      ? { label: S.primary.translate, action: 'readerTranslate', disabled: held }
+      : { label: S.primary.restore, action: 'readerOriginal', disabled: held },
+    entries: null,
+    mode: { value: config.mode === 'stack' ? 'side' : config.mode, note: null, disabled: ['stack'] },
   }
 }
 
 export function derivePopupView(input: PopupInput): PopupView {
   const { page, saved, session, config, pack, menu, shortcut, savedRevision, entry } = input
+  if (page == null && entry?.readerOpen && config !== null) return readerView(entry, config, input)
   // An abstract or PDF page: the popup works there too, and its button takes the reader to the HTML version.
   // `== null` on purpose: a tab whose content script ignores `axt:page-status` resolves `undefined` rather than
   // rejecting, and an undefined page is no page (it once rendered an empty popup on every PDF page)
@@ -234,6 +283,7 @@ export function derivePopupView(input: PopupInput): PopupView {
     failed,
     primary,
     secondary,
+    entries: null,
     mode: { value: page.preference, note: page.mode !== page.preference ? S.mode.narrow : null },
   }
 }
@@ -290,35 +340,6 @@ function menuOf(kind: MenuKind, config: Config, pack: PackState | null): NonNull
   }
 }
 
-/** UI.md §2: Microsoft, Google, LLM, Chrome. Only Chrome and an unsupported language disable an item; the LLM without a key stays selectable and gets the settings note */
-function serviceItems(config: Config, pack: PackState | null): MenuItem[] {
-  const microsoftOk = supportsTarget(config.targetLanguage)
-  const chrome = (): MenuItem => {
-    const base = { id: 'chrome-builtin', name: S.service.chrome, selected: config.provider === 'chrome-builtin' }
-    switch (pack) {
-      case 'available':
-        return { ...base, hint: S.service.chrome_ready }
-      case 'downloadable':
-        return { ...base, hint: S.service.chrome_ready, disabled: true, action: { label: S.service.chrome_download } }
-      case 'downloading':
-        return { ...base, hint: S.service.chrome_downloading, disabled: true, action: { label: S.service.chrome_download, busy: true } }
-      case 'unsupported':
-      case 'unavailable':
-        return { ...base, hint: S.service.chrome_unavailable, disabled: true }
-      default:
-        return { ...base, hint: S.service.chrome_ready, disabled: true }
-    }
-  }
-  return [
-    { id: 'microsoft', name: S.service.microsoft, hint: microsoftOk ? S.service.free : S.service.microsoft_unsupported, selected: config.provider === 'microsoft', disabled: !microsoftOk },
-    { id: 'google-web', name: S.service.google, hint: S.service.free, selected: config.provider === 'google-web' },
-    // The reader's own sit where the contract puts the LLM: after the two free services and before
-    // Chrome (UI.md S-P-46). Then the way to the page where they are managed
-    ...config.services.map(s => ({ id: s.id, name: s.name, hint: serviceRuns(s) ? s.model : S.service.llm_noKey, selected: config.provider === s.id })),
-    chrome(),
-    { id: MANAGE_SERVICES, name: S.service.manage, selected: false },
-  ]
-}
 
 /** What a failed popup action says (S-P-90): a known failure in the interface language, anything else as it was thrown */
 export function actionErrorText(e: unknown): string {

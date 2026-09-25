@@ -19,8 +19,9 @@
 // - **No React, jotai, Tailwind or Base UI.** This runs on every arXiv page a reader opens, where those would be four
 //   dependencies and a React root for one button (the reason DESIGN §7.6 gives for the failure widget). Their utility
 //   classes are written out below as the CSS Tailwind v4 generates for them, their state as a few variables.
-// - **Three buttons, ours**: the control panel, the main button (translate this page, or open the paper's bilingual
-//   version), the settings. Their feedback button is gone. **The control panel opens beside the button, in the page**,
+// - **Three buttons, ours**: the control panel, the main button (translate this page), the settings. Their feedback
+//   button is gone. On the abstract and PDF pages the main button is itself the way into the panel, where the paper's
+//   two entries are, and the column is two (the reader's design, §2). **The control panel opens beside the button, in the page**,
 //   as Immersive Translate's does (measured: a 316 px panel fixed beside its button, a click elsewhere closes it): the
 //   extension's own popup page in a frame, so there is one popup and not two. The toolbar's popup
 //   (`action.openPopup`) was tried first and did not open in the maintainer's Chrome.
@@ -78,12 +79,11 @@ export interface DockPlacement {
 
 /** What the main button does on this page */
 export type MainAction =
-  /** Abstract and PDF pages: a real link to the HTML full text, so a middle click or "copy link" work as on any link */
-  | { kind: 'link'; href: string }
   /** The HTML full text: translate, or show the original again */
   | { kind: 'toggle'; run: () => void }
-  /** The paper has no HTML version: the button is there, disabled, and its tooltip says why */
-  | { kind: 'none' }
+  /** Abstract and PDF pages: open the control panel, where the paper's HTML and PDF entries are. The column has no
+   *  panel button of its own there, since this one does what it did (the maintainer, 2026-09-24) */
+  | { kind: 'panel' }
 
 /** Every word the button shows or announces, in the reader's interface language */
 export interface FloatingButtonStrings {
@@ -100,8 +100,6 @@ export interface FloatingButtonStrings {
 
 export interface FloatingButtonOptions {
   main: MainAction
-  /** A link opens in a new tab unless the reader chose otherwise; ignored by the other kinds */
-  newTab: boolean
   /** The page's zoom factor (1 when the page is not zoomed, as the document hosting a PDF never is); see `rescale` */
   zoom?: number
   placement: DockPlacement
@@ -122,7 +120,6 @@ export interface FloatingButtonOptions {
 
 export interface FloatingButton {
   relabel: (strings: FloatingButtonStrings) => void
-  retarget: (newTab: boolean) => void
   /** The page shows its translation (the tick), or does not */
   activate: (active: boolean) => void
   /** A placement saved elsewhere (another tab's drag): taken unless a drag is under way here */
@@ -296,9 +293,6 @@ svg { display: block }
 }
 .axt-fb-tick svg { width: 8px; height: 8px }
 .axt-fb-dock[data-axt-active="yes"] .axt-fb-tick { transform: none; transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1) }
-/* Nothing to open: the circle greys, and the tooltip says why */
-.axt-fb-main[aria-disabled="true"] { cursor: default }
-.axt-fb-main[aria-disabled="true"] .axt-fb-mark { filter: grayscale(1); opacity: 0.5 }
 .axt-fb-dock[data-axt-dragging="yes"] .axt-fb-main {
   width: 40px; justify-content: center; border: 1px solid var(--axt-border); border-radius: 9999px;
   opacity: 1; cursor: grabbing;
@@ -417,10 +411,11 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   panel.append(panelTip)
 
   const anchor = make('div', 'axt-fb-anchor')
-  // A link where there is somewhere to go, a button where there is something to do; one type for the listeners below
-  const main: HTMLElement = action.kind === 'link' ? make('a', 'axt-fb-main') : make('button', 'axt-fb-main')
-  if (main instanceof HTMLButtonElement) main.type = 'button'
-  if (action.kind === 'none') main.setAttribute('aria-disabled', 'true')
+  const main = make('button', 'axt-fb-main')
+  main.type = 'button'
+  if (action.kind === 'panel') main.setAttribute('aria-haspopup', 'dialog')
+  /** The control that opens the panel, says whether it is open, and takes the focus back when it closes */
+  const opener = action.kind === 'panel' ? main : panel
   main.draggable = false
   const disc = make('span', 'axt-fb-disc', MARK_DISC)
   disc.append(make('span', 'axt-fb-tick', svg(ICONS.tick, 3.2)))
@@ -460,7 +455,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   // The column is what the reader sees and what undoes the page's zoom; the dock around it only places it, in the
   // page's own pixels, and the two full-window layers stay out of the zoom so that they stay full-window
   const column = make('div', 'axt-fb-column')
-  column.append(panel, anchor, settings)
+  column.append(...(action.kind === 'panel' ? [anchor, settings] : [panel, anchor, settings]))
   dock.append(column, panelBox, shield, ...(catcher ? [catcher] : []))
   root.append(style, dock)
 
@@ -532,7 +527,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     }
     menu.hidden = !menuOpen
     optionsButton.setAttribute('aria-expanded', menuOpen ? 'true' : 'false')
-    panel.setAttribute('aria-expanded', panelOpen ? 'true' : 'false')
+    opener.setAttribute('aria-expanded', panelOpen ? 'true' : 'false')
   }
 
   const label = () => {
@@ -548,17 +543,6 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     hideAlways.textContent = strings.hideAlways
   }
 
-  const retarget = (newTab: boolean) => {
-    if (action.kind !== 'link' || !(main instanceof HTMLAnchorElement)) return
-    main.href = action.href
-    if (newTab) {
-      main.target = '_blank'
-      main.rel = 'noopener'
-    } else {
-      main.removeAttribute('target')
-      main.removeAttribute('rel')
-    }
-  }
 
   // Lighting and opening. The pointer lights the circle the moment it arrives; the other buttons come out once it
   // has stayed, so a pointer crossing the button on its way elsewhere opens nothing (Immersive Translate)
@@ -639,13 +623,13 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   const onOutside = (event: Event) => {
     const path = event.composedPath()
     if (menuOpen && !path.includes(menu) && !path.includes(optionsButton)) setMenu(false)
-    if (panelOpen && !path.includes(panelBox) && !path.includes(panel)) setPanel(false)
+    if (panelOpen && !path.includes(panelBox) && !path.includes(opener)) setPanel(false)
   }
   doc.addEventListener('pointerdown', onOutside, true)
   const onEscape = (event: KeyboardEvent) => {
     if (event.key !== 'Escape' || !panelOpen) return
     setPanel(false)
-    panel.focus()
+    opener.focus()
   }
   doc.addEventListener('keydown', onEscape, true)
   const hide = (scope: 'now' | 'always') => {
@@ -686,7 +670,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     const data = event.data as { type?: unknown; height?: unknown } | null
     if (data?.type === 'axt:panel-close') {
       setPanel(false)
-      panel.focus()
+      opener.focus()
     } else if (data?.type === 'axt:panel-size' && typeof data.height === 'number' && data.height > 0) {
       panelHeight = data.height
       placePanel()
@@ -821,6 +805,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
       return
     }
     if (action.kind === 'toggle') action.run()
+    else setPanel(!panelOpen)
   })
 
   // Fullscreen hides the button, and a drag it interrupts never sees its release: cancel it here, or the page keeps
@@ -848,7 +833,6 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   view.addEventListener('resize', onResize)
 
   label()
-  retarget(options.newTab)
   draw()
 
   const button: FloatingButton = {
@@ -857,7 +841,6 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
       label()
       draw()
     },
-    retarget,
     activate: next => {
       active = next
       draw()

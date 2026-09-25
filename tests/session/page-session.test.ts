@@ -564,6 +564,16 @@ describe('page session', () => {
     expect(h.config().mode).toBe('side')
   })
 
+  it('a display chosen on the HTML page lets the PDF reader\'s original go too, the stored mode the same or not (the reader\'s design, §3)', async () => {
+    const h = harness({ config: { mode: 'side', pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: true } } })
+    live = h.session
+    await h.session.setMode('side')
+    expect([h.config().mode, h.config().pdfReader.original]).toEqual(['side', false])
+    await h.deps.config.set({ ...h.config(), pdfReader: { ...h.config().pdfReader, original: true } })
+    await h.session.setMode('stack')
+    expect([h.config().mode, h.config().pdfReader.original]).toEqual(['stack', false])
+  })
+
   it('a save the store refuses on an untranslated page changes nothing: the preference reported, and the next start, stay the stored ones', async () => {
     const h = harness({ config: { mode: 'side' } })
     live = h.session

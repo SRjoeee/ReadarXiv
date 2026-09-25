@@ -89,6 +89,16 @@ describe('installFloatingButton', () => {
     expect(hosts()).toBe(0)
   })
 
+  it('stands aside while the PDF reader is over the page, through changes of the settings, and comes back when it goes: not in the reader, and nothing of it takes the focus from it (Part 5\'s final review)', async () => {
+    const entry = await install()
+    entry.standAside(true)
+    expect(hosts()).toBe(0)
+    wire.follow!(settings({ side: 'left' }))
+    expect(hosts()).toBe(0)
+    entry.standAside(false)
+    expect([hosts(), inside('.axt-fb-dock').dataset.axtSide]).toEqual([1, 'left'])
+  })
+
   it('the tick and the main button\'s words follow the page', async () => {
     const installed = await install()
     expect(inside('.axt-fb-main').getAttribute('aria-label')).toBe(LOCALES.en.S.primary.translate)

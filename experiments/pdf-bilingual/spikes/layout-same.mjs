@@ -5,7 +5,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { tokenizeDocument } from '../poc-reader/anchors.mjs'
+import { tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
 const root = new URL('..', import.meta.url).pathname
 const gate = process.argv[2] && process.argv[2] !== '--pair' ? process.argv[2] : join(root, 'data/runs/gate', readdirSync(join(root, 'data/runs/gate')).sort().at(-1))
 const meta = JSON.parse(readFileSync(join(root, 'out/corpus-meta.json'), 'utf8'))

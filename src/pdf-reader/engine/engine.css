@@ -1,0 +1,23 @@
+/* The engine's overlays and pane scrollers, for any page that hosts the session (session.mjs): the highlight's bands,
+   the figures' overlays and the scrollers PDF.js draws into. The page's own layout is its own sheet's.
+   --axt-green is the extension's default band colour (src/styles/presets.css); the active band's own colour and
+   strength come in as --axt-hl-color and --axt-hl-mix from the look sheet (session.mjs, the extension's appearanceRule) */
+:root { --axt-green: oklch(0.693 0.17 162.48); }
+/* PDF.js requires the container to be absolutely positioned */
+/* no scroll anchoring: the reader sets both sides' positions itself, and the browser nudging one after a page is drawn
+   in it (a highlight or figure layer inserted) put two paragraphs levelled by a click a few to tens of pixels apart */
+.viewerContainer { position: absolute; inset: 0; overflow: auto; overflow-anchor: none; }
+/* the highlight layer sits over the text layer, never catches the pointer. Its blocks are the HTML page's band: one wash
+   per run of a paragraph's lines, multiplied into the page, so the paper stays white under nothing and the letters
+   stay their own colour, as a band behind the text looks on an HTML page (session.mjs, blocksOf) */
+.axt-hl-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.axt-hl { position: absolute; border-radius: 3px; mix-blend-mode: multiply;
+  background: color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) var(--axt-hl-mix, 22%), transparent); }
+/* a newer compile being laid out and drawn under the one in view */
+.viewerContainer.axt-incoming { visibility: hidden; }
+/* a figure's place on a translation page, holding the empty <img> the extension's image overlay is anchored to and, over
+   a draft preview's frame, the left's figure drawn beneath it */
+.axt-fig { position: absolute; pointer-events: none; z-index: 2; }
+.axt-fig > div, .axt-fig > canvas, .axt-fig img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.axt-fig img { opacity: 0; }
+.axt-fig .axt-img > span { pointer-events: auto; }

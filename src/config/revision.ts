@@ -12,7 +12,7 @@ import { sha256Hex } from '@/shared/digest'
  */
 export const CHAIN_CONFIG_FIELDS = ['provider', 'services', 'prompts', 'targetLanguage', 'fallback'] as const
 /** The complement of CHAIN_CONFIG_FIELDS; the two together must cover every field of Config */
-export const VOLATILE_CONFIG_FIELDS = ['version', 'mode', 'glossary', 'appearance', 'preload', 'image', 'reading', 'uiLanguage'] as const
+export const VOLATILE_CONFIG_FIELDS = ['version', 'mode', 'glossary', 'appearance', 'preload', 'image', 'reading', 'uiLanguage', 'pdfReader'] as const
 
 export function chainConfigChanged(a: Config, b: Config): boolean {
   return CHAIN_CONFIG_FIELDS.some(field => !deepEqual(a[field], b[field]))

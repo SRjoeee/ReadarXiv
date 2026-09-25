@@ -179,6 +179,15 @@ describe('createPdfStore', () => {
     expect(await s.get('d', 'zh-CN')).toBeDefined()
   })
 
+  it('usage and clear report a failure: the settings page says so rather than show an empty store (the reader\'s design, §9.3)', async () => {
+    const db = dbOf()
+    const s = createPdfStore({ db, warn: () => {} })
+    db.entries.toArray = (() => Promise.reject(new Error('the entries cannot be read'))) as unknown as typeof db.entries.toArray
+    await expect(s.usage()).rejects.toThrow('the entries cannot be read')
+    db.transaction = (() => Promise.reject(new Error('the store cannot be written'))) as unknown as typeof db.transaction
+    await expect(s.clear()).rejects.toThrow('the store cannot be written')
+  })
+
   it('delete removes a record, whatever its state', async () => {
     const s = createPdfStore({ db: dbOf() })
     await s.put({ ...body('d'), pdf: pdfOf(100) }, now)

@@ -9,4 +9,4 @@ console.log(`The reader's TeX page: http://127.0.0.1:${PORT}/tex.html`)
 console.log(tex ? 'TeX Live file server: up (http://localhost:8070)' : 'TeX Live file server: NOT reachable at http://localhost:8070 — start it: docker start texlive-server')
 console.log(`\nIn Chrome: load the extension's build unpacked (pnpm build at the repository root, then .output/chrome-mv3 in
 chrome://extensions, developer mode), open an arXiv PDF and choose the bilingual version, or open the reader page
-(chrome-extension://<id>/pdf-reader/reader.html), paste an arXiv link or id, Translate.\nCtrl-C to stop.`)
+(chrome-extension://<id>/pdf-reader.html?live=1&paper=<an arXiv id>).\nCtrl-C to stop.`)

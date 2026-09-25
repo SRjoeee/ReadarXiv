@@ -1,4 +1,4 @@
-// The settings page: a left navigation and four sections, on the popup's tokens and dark mode.
+// The settings page: a left navigation and five sections, on the popup's tokens and dark mode.
 // There is no save button — every control writes the config as it changes, and the drawers commit
 // with one button (docs/UI.md §3.2, rebuilt 2026-09-10).
 import { useEffect, useState } from 'react'
@@ -9,11 +9,12 @@ import { MenuField } from '@/ui/MenuField'
 import { O, fallbackText } from '@/ui/strings'
 import { useOptionsData } from './data'
 import { Data } from './sections/Data'
+import { PdfReader } from './sections/PdfReader'
 import { Prompts } from './sections/Prompts'
 import { Reading } from './sections/Reading'
 import { Services } from './sections/Services'
 
-const SECTIONS = ['services', 'reading', 'prompts', 'data'] as const
+const SECTIONS = ['services', 'reading', 'pdf-reader', 'prompts', 'data'] as const
 type Section = (typeof SECTIONS)[number]
 const isSection = (v: string): v is Section => (SECTIONS as readonly string[]).includes(v)
 
@@ -84,10 +85,11 @@ export function App() {
               </div>
             </div>
           )}
-          {/* The three sections that write are not shown over a configuration that cannot be read: what they would show is
+          {/* The four sections that write are not shown over a configuration that cannot be read: what they would show is
               the defaults, not the reader's settings, and the store refuses their saves (S-O-02). “Data” writes none */}
           {!data.fallbackReason && section === 'services' && <Services data={data} />}
           {!data.fallbackReason && section === 'reading' && <Reading data={data} />}
+          {!data.fallbackReason && section === 'pdf-reader' && <PdfReader data={data} />}
           {!data.fallbackReason && section === 'prompts' && <Prompts data={data} />}
           {section === 'data' && <Data data={data} />}
         </main>

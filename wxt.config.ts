@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process'
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
@@ -21,25 +21,17 @@ function buildRef(): string {
 }
 
 /**
- * The bilingual PDF reader (experiments/pdf-bilingual, issue #290), on this experiment branch only. It is served as
- * `pdf-reader/reader.html`, a page of this extension, so that it translates through the background as the HTML page
- * does. Its files are copied as they are: research code, neither bundled nor type-checked. They are copied only once
- * the experiment's setup has filled its lib/ (experiments/pdf-bilingual/README.md); without it the build is the
- * extension alone.
- * - Only the reader's own files and lib/: poc-reader/papers holds demo papers made locally from arXiv's, which may not
- *   be redistributed (Devin and Codex on #296).
- * - lib/axt holds modules compiled from this extension's source; it is compiled again with every build, so that the page
- *   never runs a message transport older than the background it talks to (Devin on #296).
+ * The files PDF.js reads by address rather than by import (the reader's design, §11.2): its character maps, the standard
+ * fonts with their licences, and its WebAssembly decoders, copied from the pinned package as they are into
+ * `pdf-reader/pdfjs/`. The library and its worker are bundled (src/pdf-reader/pdfjs.ts)
  */
-const PDF_READER = fileURLToPath(new URL('./experiments/pdf-bilingual/poc-reader', import.meta.url))
-function pdfReaderFiles(): { absoluteSrc: string; relativeDest: string }[] {
-  if (!existsSync(join(PDF_READER, 'lib/pdf.min.mjs'))) return []
-  execSync('node spikes/build-shared.mjs', { cwd: join(PDF_READER, '..'), stdio: 'ignore' })
-  const own = readdirSync(PDF_READER).filter(name => /\.(?:html|m?js|css)$/.test(name))
-  const lib = readdirSync(join(PDF_READER, 'lib'), { recursive: true, encoding: 'utf8' }).map(path => join('lib', path))
-  return [...own, ...lib]
-    .filter(path => statSync(join(PDF_READER, path)).isFile())
-    .map(path => ({ absoluteSrc: join(PDF_READER, path), relativeDest: `pdf-reader/${path}` }))
+const PDFJS = fileURLToPath(new URL('./node_modules/pdfjs-dist', import.meta.url))
+function pdfjsFiles(): { absoluteSrc: string; relativeDest: string }[] {
+  return ['cmaps', 'standard_fonts', 'wasm'].flatMap(dir =>
+    readdirSync(join(PDFJS, dir))
+      .filter(name => statSync(join(PDFJS, dir, name)).isFile())
+      .map(name => ({ absoluteSrc: join(PDFJS, dir, name), relativeDest: `pdf-reader/pdfjs/${dir}/${name}` })),
+  )
 }
 
 // The WXT project configuration.
@@ -60,7 +52,7 @@ export default defineConfig({
     // The licences that go with every copy (scripts/third-party-notices.mjs): WXT calls this once every entry point
     // is built, so the list of what was bundled is complete; the project's own licence goes in beside it
     'build:publicAssets': (_wxt, files) => {
-      files.push(...licenceFiles(), ...pdfReaderFiles())
+      files.push(...licenceFiles(), ...pdfjsFiles())
     },
   },
   manifest: {
@@ -101,15 +93,16 @@ export default defineConfig({
     // Every network engine has to be here: an MV3 background fetch is still bound by CORS, and without a host permission it can only
     // hope for `Access-Control-Allow-Origin` from the other side. Microsoft does return `*` today (measured), but that is a dependency
     // beyond our control — the day it stops, the whole engine becomes a `network` failure (Codex on #115; the line was missed when the provider was added)
-    // arxiv.org, on this experiment branch: the PDF reader (above) fetches a paper's source and PDF from its extension page
+    // arxiv.org, on this experiment branch: the PDF reader's page (entrypoints/pdf-reader) fetches a paper's source and PDF
     host_permissions: ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*', 'https://arxiv.org/*'],
     // The floating button (DESIGN §4.0c) frames the popup as its control panel, and a page may only load an extension
     // file that is declared here. One file, and only to arXiv. What the popup loads for itself (its script, its
     // style sheet) is asked for by the extension's own origin and needs no entry; the button's mark is inline vector. A page that
     // may frame the popup could try to trick a click on it: the popup shows no key and no paper text, and what a
     // click can do there is what the reader does there anyway — start or undo a translation, pick a mode or a service
-    // On this experiment branch the PDF reader too (above): arXiv's PDF page opens in it (entrypoints/pdf.content.ts)
-    web_accessible_resources: [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }, { resources: ['pdf-reader/*'], matches: ['https://arxiv.org/*'] }],
+    // On this experiment branch the PDF reader's page too: arXiv's PDF page frames it (entrypoints/pdf.content.ts), and
+    // what that page loads for itself is asked for by the extension's own origin, as the popup's is, and needs no entry
+    web_accessible_resources: [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }, { resources: ['pdf-reader.html'], matches: ['https://arxiv.org/*'] }],
     // A custom endpoint may be http on 127.0.0.1 / the LAN (Ollama, LM Studio); with only the localhost literal the request fails outright (Codex on #6).
     // This is only the range that may be requested; the real grant is still asked for per origin on the settings page
     optional_host_permissions: ['https://*/*', 'http://*/*'],

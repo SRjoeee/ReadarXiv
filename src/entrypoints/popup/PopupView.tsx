@@ -20,11 +20,13 @@ import { LucideIcon } from '@/ui/LucideIcon'
  *  module is imported (see the note at the top of ui/strings.ts) */
 const MODE_ICONS: Record<Mode, ReactNode> = { side: <SideIcon />, stack: <StackIcon />, only: <OnlyIcon /> }
 // The bar follows MODE_ORDER, the one place the order is decided (UI.md S-P-70)
-const modes = () => MODE_ORDER.map(value => ({
+// A mode the page cannot show (the PDF reader cannot stack: its design, §9.2) stays in place, greyed, its title the reason
+const modes = (disabled: readonly Mode[] = []) => MODE_ORDER.map(value => ({
   value,
   label: S.mode[value],
-  title: S.mode[`${value}Title` as const],
+  title: disabled.includes(value) ? S.mode.stackPdf : S.mode[`${value}Title` as const],
   icon: MODE_ICONS[value],
+  disabled: disabled.includes(value),
 }))
 
 const CARD = 'rounded-card bg-card shadow-[0_1px_2px_rgba(30,30,36,0.06)]'
@@ -69,18 +71,26 @@ export function PopupView({ view, error, actions }: { view: View; error: string 
               <Button variant="solid" onClick={actions.retryFailed}>{S.failed.retry}</Button>
             </Bubble>
           )}
-          {/* aria-label keeps the accessible name at the label alone, badge or not (the e2e suites find the button by name) */}
-          <Button variant={view.primary.action === 'restore' ? 'secondary' : 'primary'} disabled={view.primary.disabled} aria-label={view.primary.label} onClick={actions[view.primary.action]}>
-            {view.primary.label}
-            {view.primary.shortcut && (
-              // `current`: the chip reads on the red “Translate this page” and on the plain “Show original” alike, where a
-              // white chip would disappear into the button
-              <kbd className="rounded-[6px] bg-current/15 px-1.5 py-0.5 font-ui text-[11px] font-semibold">{view.primary.shortcut}</kbd>
-            )}
-          </Button>
+          {view.entries ? (
+            // an abstract or PDF page: its two entries side by side, in the primary button's place (S-P-50b)
+            <div className="flex gap-2">
+              <Button variant="primary" className="flex-1" disabled={view.entries.html.disabled} onClick={actions.openHtml}>{view.entries.html.label}</Button>
+              <Button variant="primary" className="flex-1" disabled={view.entries.pdf.disabled} onClick={actions.openPdf}>{view.entries.pdf.label}</Button>
+            </div>
+          ) : (
+            // aria-label keeps the accessible name at the label alone, badge or not (the e2e suites find the button by name)
+            <Button variant={view.primary.action === 'restore' ? 'secondary' : 'primary'} disabled={view.primary.disabled} aria-label={view.primary.label} onClick={actions[view.primary.action]}>
+              {view.primary.label}
+              {view.primary.shortcut && (
+                // `current`: the chip reads on the red “Translate this page” and on the plain “Show original” alike, where a
+                // white chip would disappear into the button
+                <kbd className="rounded-[6px] bg-current/15 px-1.5 py-0.5 font-ui text-[11px] font-semibold">{view.primary.shortcut}</kbd>
+              )}
+            </Button>
+          )}
           {view.secondary && <Button variant="text" className="self-center" onClick={actions[view.secondary.action]}>{view.secondary.label}</Button>}
 
-          <Segmented value={view.mode.value} options={modes()} onChange={actions.chooseMode} />
+          <Segmented value={view.mode.value} options={modes(view.mode.disabled)} onChange={actions.chooseMode} />
           {view.mode.note && <p className="px-1 text-[11px] text-fg-2">{view.mode.note}</p>}
 
           {/* The three reading choices on one row: two switches and the way in to the styles. The
@@ -108,6 +118,7 @@ function Bubble({ tone = 'alert', children }: { tone?: 'alert' | 'neutral'; chil
 function MenuRow({ kind, label, row, view, actions, compact = false, last = false }: { kind: MenuKind; label: string; row: { value: string; replaced?: string }; view: View; actions: PopupActions; compact?: boolean; last?: boolean }) {
   const open = view.menu?.kind === kind
   const anchor = useRef<HTMLDivElement>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
   // The value is truncated when it is long — a language's full name runs to "Simplified Mandarin
   // Chinese (简体中文)" — so the whole of it is on the row for a reader who needs to check
   const value = (
@@ -119,6 +130,7 @@ function MenuRow({ kind, label, row, view, actions, compact = false, last = fals
   return (
     <div ref={anchor} className={last ? '' : 'border-b border-line'}>
       <button
+        ref={trigger}
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -143,6 +155,7 @@ function MenuRow({ kind, label, row, view, actions, compact = false, last = fals
       {open && view.menu && (
         <Menu
           anchor={anchor}
+          trigger={trigger}
           items={view.menu.items}
           label={view.menu.label}
           search={view.menu.search}
@@ -174,21 +187,25 @@ function ReadingRow({ view, actions }: { view: View; actions: PopupActions }) {
   const anchor = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   return (
-    <div ref={anchor} className="flex items-center justify-between gap-2 px-1 text-[12px] font-semibold text-fg-2">
+    // Without the style row (the reader open) the two switches sit together at the start, not pushed to the two ends
+    <div ref={anchor} className={`flex items-center px-1 text-[12px] font-semibold text-fg-2 ${view.style ? 'justify-between gap-2' : 'gap-5'}`}>
       <Switch small checked={view.highlight} onChange={actions.setHighlight} label={S.rows.highlight} text={S.rows.highlight} title={S.rows.highlightTitle} />
       <Switch small checked={view.images} onChange={actions.setImages} label={S.rows.images} text={S.rows.images} />
-      <button
-        ref={trigger}
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        title={view.style.value}
-        onClick={() => (open ? actions.closeMenu() : actions.openMenu('style'))}
-        className={`flex shrink-0 cursor-pointer items-center gap-1 ${open ? 'text-fg' : 'hover:text-fg'}`}
-      >
-        {S.rows.style}
-        <Chevron up={open} />
-      </button>
+      {/* no style row where the translation styles do nothing: a typeset PDF (the reader's design, §9.2) */}
+      {view.style && (
+        <button
+          ref={trigger}
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          title={view.style.value}
+          onClick={() => (open ? actions.closeMenu() : actions.openMenu('style'))}
+          className={`flex shrink-0 cursor-pointer items-center gap-1 ${open ? 'text-fg' : 'hover:text-fg'}`}
+        >
+          {S.rows.style}
+          <Chevron up={open} />
+        </button>
+      )}
       {open && view.menu && (
         <Menu
           anchor={anchor}

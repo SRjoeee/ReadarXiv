@@ -3,11 +3,11 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { loadProject } from '../poc-reader/latex-front.mjs'
-import { analyze } from '../poc-reader/paper-meta.mjs'
-import { plainSource } from '../poc-reader/mt.mjs'
+import { loadProject } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { analyze } from '../../../src/pdf-reader/engine/paper-meta.mjs'
+import { plainSource } from '../../../src/pdf-reader/engine/mt.mjs'
 const root = new URL('..', import.meta.url).pathname
-const mods = { base: await import('../out/anchors-base.mjs'), new: await import('../poc-reader/anchors.mjs') }
+const mods = { base: await import('../out/anchors-base.mjs'), new: await import('../../../src/pdf-reader/engine/anchors.mjs') }
 async function pages(file) {
   const task = getDocument({ data: new Uint8Array(readFileSync(file)), verbosity: 0, cMapUrl: `${root}node_modules/pdfjs-dist/cmaps/`, cMapPacked: true, standardFontDataUrl: `${root}node_modules/pdfjs-dist/standard_fonts/` })
   const pdf = await task.promise

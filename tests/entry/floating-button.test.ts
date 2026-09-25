@@ -16,7 +16,6 @@ const STRINGS: FloatingButtonStrings = {
   hideForNow: 'Hide for now',
   hideAlways: "Don't show again",
 }
-const HREF = 'https://arxiv.org/html/2501.07202v1#readarxiv'
 
 function mount(overrides: Partial<FloatingButtonOptions> = {}) {
   const host = document.createElement('div')
@@ -26,8 +25,7 @@ function mount(overrides: Partial<FloatingButtonOptions> = {}) {
   const onSettings = vi.fn<() => void>()
   const onHide = vi.fn<(scope: 'now' | 'always') => void>()
   const entry = mountFloatingButton(document, host, {
-    main: { kind: 'link', href: HREF },
-    newTab: true,
+    main: { kind: 'toggle', run: () => undefined },
     placement: { side: 'right', position: 0.66, locked: false },
     strings: STRINGS,
     // happy-dom would go and fetch a real address; what the frame shows is the browser's business (e2e)
@@ -87,14 +85,22 @@ describe('the floating button: what it is made of', () => {
     expect(q('.axt-fb-main .axt-fb-disc .axt-fb-tick')).not.toBeNull()
   })
 
-  it('on an abstract or PDF page the main button is a link to the bilingual version, in a new tab unless told otherwise', () => {
-    const { entry, q } = mount()
-    const link = q<HTMLAnchorElement>('a.axt-fb-main')
-    expect([link.getAttribute('href'), link.target, link.rel, link.getAttribute('aria-label')]).toEqual([HREF, '_blank', 'noopener', STRINGS.main])
-    entry.retarget(false)
-    expect([link.getAttribute('target'), link.getAttribute('rel')]).toEqual([null, null])
-    entry.retarget(true)
-    expect(link.target).toBe('_blank')
+  it('on an abstract or PDF page the logo opens the control panel, and the column is two: the logo and the settings (the reader\'s design, §2)', () => {
+    const { q, root } = mount({ main: { kind: 'panel' } })
+    expect([...q('.axt-fb-column').children].map(e => e.className)).toEqual(['axt-fb-anchor', 'axt-fb-hidden-button axt-fb-settings'])
+    expect(root.querySelector('.axt-fb-panel')).toBeNull()
+    const main = q<HTMLButtonElement>('button.axt-fb-main')
+    expect([main.type, main.getAttribute('aria-haspopup'), main.getAttribute('aria-expanded'), main.getAttribute('aria-label')]).toEqual(['button', 'dialog', 'false', STRINGS.main])
+    main.dispatchEvent(click())
+    expect([q('.axt-fb-panel-box').hidden, q('.axt-fb-panel-box iframe')?.getAttribute('src'), main.getAttribute('aria-expanded')]).toEqual([false, 'about:blank', 'true'])
+    // The press that makes the second click is on the logo, not elsewhere: it does not close the panel for the click to open it again
+    main.dispatchEvent(pointer('pointerdown', 1000, 569))
+    main.dispatchEvent(click())
+    expect([q('.axt-fb-panel-box').hidden, main.getAttribute('aria-expanded')]).toEqual([true, 'false'])
+    // Escape closes it and gives the focus back to the logo, the control that opened it
+    main.dispatchEvent(click())
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect([q('.axt-fb-panel-box').hidden, root.activeElement]).toEqual([true, main])
   })
 
   it('on the full text the main button is a button that runs the toggle, and the tick says the page is translated', () => {
@@ -109,18 +115,6 @@ describe('the floating button: what it is made of', () => {
     expect([dock.dataset.axtActive, main.getAttribute('aria-label'), q('.axt-fb-main .axt-fb-tip').textContent]).toEqual(['yes', 'Show the original', 'Show the original'])
     entry.activate(false)
     expect(dock.dataset.axtActive).toBe('no')
-    // A link has nothing to retarget here, and says nothing about it
-    entry.retarget(false)
-    expect(main.hasAttribute('target')).toBe(false)
-  })
-
-  it('a paper with no HTML version keeps the button, disabled, its tooltip saying why', () => {
-    const { q } = mount({ main: { kind: 'none' }, strings: { ...STRINGS, main: 'arXiv has no HTML version of this paper' } })
-    const main = q<HTMLButtonElement>('button.axt-fb-main')
-    expect([main.getAttribute('aria-disabled'), main.getAttribute('aria-label'), q('.axt-fb-main .axt-fb-tip').textContent])
-      .toEqual(['true', 'arXiv has no HTML version of this paper', 'arXiv has no HTML version of this paper'])
-    // A click does nothing, and the other two buttons still work
-    expect(() => main.dispatchEvent(click())).not.toThrow()
   })
 
   it('names every control; the tooltips are the same words for the eye only; the settings ask the host', () => {

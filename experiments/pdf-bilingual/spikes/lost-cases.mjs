@@ -1,8 +1,8 @@
 // The characters a compile could not set (live.mjs lostIn), counted in the last TeX pass's log: the browser's compiler
 // joins every step's log, and a paper and its translation can take different numbers of passes. Exits non-zero on a
-// failure.   node spikes/lost-cases.mjs
+// failure.   pnpm exec tsx experiments/pdf-bilingual/spikes/lost-cases.mjs (from the repository root)
 import assert from 'node:assert/strict'
-import { lostIn, unsettable } from '../poc-reader/live.mjs'
+import { lostIn, unsettable } from '../../../src/pdf-reader/engine/live.mjs'
 
 /** one step of the browser compiler's joined log (poc-site/tex.js), as BusyTeX's pipeline writes it */
 const step = (cmd, log) => [`$ ${cmd}`, 'EXITCODE: 0', '', 'TEXMFLOG:', '', '==', 'MISSFONTLOG:', '', '==', 'LOG:', log, '==', 'STDOUT:', log, '==', 'STDERR:', '', '======'].join('\n')
