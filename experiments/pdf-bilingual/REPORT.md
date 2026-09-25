@@ -1500,3 +1500,73 @@ notice of paragraphs that failed waits for the run's end.
 | `pnpm test` | 2349 passed |
 
 **Deferred.** The fifteen minors are in the ledger and go to #299 with the stage.
+
+## Twenty-fifth addendum, 2026-09-25: the engine's measured changes (Part 4) — BUILT
+
+Part 4 of `plans/2026-09-25-reader-interface.md`: the design's §10, measured before and after.
+
+**PDF.js's internals, pinned.** The engine reads `_pages`, `_getVisiblePages()`, a page view's `renderingState`,
+`pdfPage.view`, `div`, `id` and `viewport`, and the `--total-scale-factor` property. PDF.js's modern build does not run
+in Node, so `reader-ui.mjs` checks them in the browser, and `tests/pdf-reader/pdfjs-pin.test.ts` fails on any other
+version of pdfjs-dist until that check has passed on it.
+
+**A replaced viewer lets go of its pages — MEASURED.** Each compile of a run replaces the right side's viewer. The old
+one was taken off the page with its document destroyed, and PDF.js kept it whole: its text layers in the map all its
+text layers share, and its annotation editor's document listener. Counted through the heap (CDP `queryObjects`, its own
+array released, which a first count did not do and read its own retention as a leak):
+
+| Swaps of the right side | Before: text layers / pages kept | After |
+|---|---|---|
+| 3 | 6 / 78 | 0 / 0 |
+| 6 | 12 / 156 | 0 / 0 |
+| 9 | 18 / 234 | 0 / 0 |
+
+`setDocument(null)` on the old viewer and its link service lets it go. The document's `selectionchange` listeners grew
+by one a swap before and stay constant after. PDF.js's `abortSignal`, which the design named, is not used: nothing is
+left for it, and the selection listener every text layer shares is bound to the first viewer's signal, so aborting one
+viewer would take text selection from the others. §10.4 says so.
+
+**The overlays through a pinch — MEASURED** (`spikes/pinch-overlays.mjs`, committed; the demo paper, a headed window, a
+pinch 83 % → 245 % in 36 steps; one figure's overlay with its 11 labels, then 20 clones of it, 220 labels):
+
+| | Drift mid-pinch | No overlay after the redraw | Figures laid again | Layout, 1 / 20 figures | Main thread, 1 / 20 |
+|---|---|---|---|---|---|
+| Before (one run) | 101 → 229 → 387 px | 175–183 ms | every one | 24 / 65 ms | 203 / 310 ms |
+| After (three runs) | ≤ 0.5 px; ≤ 0.7 px after | 0 ms | none | 19–26 / 65–78 ms | 203–209 / 339–380 ms |
+
+- **Each overlay keeps its pixel box** and scales with its page about the page's origin, by PDF.js's
+  `--total-scale-factor` (`overlay.mjs` `pinned`).
+- **A `MutationObserver` on each page puts back** what PDF.js's `reset()` removes, in the same task (`keepOverlays`).
+- **So a page's figures are laid once, not again on a redraw.** The exception is a draft preview's copies of the left's
+  figures, which are bitmaps drawn for one scale.
+- **A page PDF.js drops from its buffer** and draws again keeps one highlight layer and its figures (`reader-ui.mjs`).
+- **The costs were measured with the machine loaded** (load 53–88); the design's §12 gate measures them again on a
+  quiet one.
+
+**Stopping early, and retrying in place — MEASURED** (`spikes/service-faults.mjs`: a local OpenAI-compatible endpoint
+that echoes each segment and can be taken down):
+
+- **Down from the start**: the card with the network's reason 9 s after the first batch was sent, nothing compiled.
+  Before, every batch was retried for 24–48 s, and after 215 s an English "translation" was compiled.
+- **Retry, pressed twice**: one run, in place. The page is not loaded again, and one compiler serves both runs. On the
+  build before (Part 3's reload), the same check fails.
+- **Down midway**: the run stops, what there is is compiled, and the notice counts the 329 paragraphs left in English.
+  When the browser is online again, the translation goes on by itself and ends with none missing. The endpoint was sent
+  only the 322 texts it had not answered: the background's cache answered the rest.
+- **A key refused midway** stops the run as a failure of the service does, and the run resolves. The unhandled
+  rejection it used to leave on the page is gone (`cache-revisit.mjs`: page errors 0).
+- **The figures' text** is not sent while the service is down, and is asked again when the translation runs again.
+
+**A service chosen while a run is under way — MEASURED, and a finding.** The run keeps the service it opened with, both
+ways. With Microsoft → the echo, the echo was sent nothing after the switch. With the echo → Microsoft, the echo went on
+(294 texts). Every batch came back whole. So nothing unreadable arises, and no reload is needed. But the new service
+applies only from the next visit on: the reader shows the old service's translation until then. That is outside
+Part 4's plan and goes to the maintainer.
+
+**A compile that did not answer keeps its strategy.** BusyTeX gives up after 180 s, and the TeX page reported that as
+a failed compile, which moved the run to the next strategy (the twenty-third addendum's aaai failure). A timed-out
+preview now keeps the strategy; a timed-out final is tried once more with it, and then the run ends with what is shown.
+
+**Checks.** `pnpm test` 2359 passed. `reader-ui.mjs` 44 and `reader-ui-live.mjs` 8 all passed; so did
+`reader-settings.mjs`, `viewer-faults.mjs`, `cache-revisit.mjs` (26) and `service-faults.mjs`. The case spikes
+(`cache-cases`, `mt-cases`, `lost-cases`, `anchors-cases`, `sync-cases` and `wire-cases`) are all ok.

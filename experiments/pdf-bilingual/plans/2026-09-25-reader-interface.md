@@ -7131,3 +7131,427 @@ pnpm typecheck && pnpm lint && pnpm test >/dev/null && git add src/pdf-reader/en
   item: the HTML page's mode switch does not clear `pdfReader.original`.
 - [ ] **Step 3:** Commit both, then a test package for the maintainer
   (`~/Downloads/readarxiv-test/readarxiv-0.4.1dev-pdf-reader-<sha>/` and its zip).
+
+---
+
+# Part 5: the extension around the reader
+
+Written against the code as Part 4 left it (`a1a47e66`). Its tasks continue the numbering. The spec's sections it
+builds: §2 (where the reader is reached), §3's "whatever was last chosen, on either page", §9.2 (the popup while the
+reader is open), §9.3 (the settings page), §15's popup and settings copy.
+
+**What changes from the overview, and why**
+
+1. **`EntryStatus` grows by three fields, answered by the page:**
+   - `kind: 'abs' | 'pdf'`;
+   - `pdf`, the paper's PDF address with `#readarxiv`, or null when the paper cannot be had as a bilingual PDF or the
+     browser cannot run the reader (`readerRuns`);
+   - `readerOpen`, true on a PDF page while the reader is laid over it.
+
+   The popup decides nothing about arXiv by itself: it asks the page, as it does for the HTML version.
+2. **The primary button's single `openHtml` face becomes two entries on the entry pages**, side by side (§2): HTML 对照翻译
+   and PDF 对照翻译. The view model's `primary` stays for the full text and for the reader, and entry pages get `entries`.
+   S-P-50b's 双语版本 goes: the two entries' words replace it.
+3. **`pdfReader.enabled` and `#readarxiv` are read on the PDF page through the entry settings** (the background's
+   validated answer, `shared/entry-settings.ts`). A PDF page reads no stored value itself, as the abstract page does
+   not.
+4. **The reader page takes `ask=translate`** from `pdf.content.ts` when the address carries `#readarxiv`. The display
+   is then the translated one the settings name, and a `pdfReader.original` left on is cleared (§2: "leaves 原文 if it
+   was last left there"). A `hashchange` to `#readarxiv` on a PDF page whose reader was closed opens it again: the
+   popup's PDF entry on that very page changes only the hash.
+5. **The floating button's main action gains `{ kind: 'panel' }`**: on the abstract page and on a PDF page with the
+   reader closed, the logo opens the control panel, and the column's own panel segment goes on those pages (§2, the
+   maintainer's ruling of 2026-09-24). The full text keeps all three.
+6. **The popup while the reader is open** (§9.2) is a view of its own in the view model, `readerView`, beside
+   `entryView`: the reader is not the full text's session, and the popup acts on it through the settings alone, which
+   the reader follows (Part 2).
+7. **A display chosen on the HTML page, or in the popup on any page, clears `pdfReader.original`** (§3: "whatever was
+   last chosen, on either page"; Part 2's declined item). Every such choice is a translated display.
+8. **The PDF translations' line on the settings page** reads the store directly (`createPdfStore().usage()`,
+   `clear()`): the settings page is on the extension's origin, as the reader is, and the store is its IndexedDB. No
+   message.
+
+**File structure after this part**
+
+| Path | Responsibility |
+|---|---|
+| `src/core/rules/abstract.ts` | `SOURCE_LINK`: arXiv's TeX Source link on the abstract page |
+| `src/core/abstract/link.ts` | `sourceOn(doc)`: whether the abstract page offers the paper's source |
+| `src/core/pdf/entry.ts` | `pdfUrlOf(id)` (`#readarxiv`), `sourceKindOf(contentType)`: what a HEAD on `/src/<id>` says |
+| `src/shared/messages.ts`, `src/shared/entry-page.ts` | `EntryStatus`'s `kind`, `pdf`, `readerOpen` |
+| `src/shared/entry-settings.ts`, `src/entrypoints/background/handlers.ts` | `pdfReader: boolean` in the entry settings |
+| `src/entrypoints/pdf.content.ts`, `src/entrypoints/abstract.content.ts` | The PDF entry, the setting and the hash; the panel as the logo's action |
+| `src/pdf-reader/engine/session.mjs` | `ask=translate` |
+| `src/core/floating/button.ts`, `src/shared/floating.ts` | `{ kind: 'panel' }`, and no panel segment with it |
+| `src/entrypoints/popup/view-model.ts`, `state.ts`, `PopupView.tsx`, `src/ui/Segmented.tsx` | `entries`; `readerView`; `openPdf`; a disabled segment with its title |
+| `src/core/session/index.ts` | `setMode` clears `pdfReader.original` |
+| `src/entrypoints/options/sections/PdfReader.tsx`, `Data.tsx`, `App.tsx`, `data.ts` | The section `#pdf-reader`; the PDF translations' line |
+| `src/locales/*`, `docs/UI.md` | The popup's and the settings page's new words (§15), by id |
+
+## Part 5 Review Focus
+
+- **An old-style id on the PDF page** (`/pdf/hep-th/9711200`): the HEAD goes to `/src/hep-th/9711200`, and the PDF
+  entry's address keeps the slash. Pinned in Task 35's tests.
+- **A HEAD that fails** (offline, 429, 5xx) says nothing about the paper. The PDF entry is offered, as the HTML entry
+  is when its HEAD fails. Only `application/pdf` from `/src/` means a PDF-only submission. Pinned in Task 35
+  (`sourceKindOf`).
+- **The popup's PDF entry on the PDF page it is already on, with the reader closed**: only the hash changes, and the
+  reader opens again, translating. Pinned in Task 36's browser check.
+- **`pdfReader.enabled` switched off on the settings page while a PDF page is open**: the page open keeps what it
+  shows; the next PDF opens in the browser's viewer. Pinned in Task 36's unit test of the decision.
+- **The popup on a PDF page while the reader is open, with `mode: 'stack'` stored**: it shows 左右 chosen, 上下 disabled
+  with its title, and choosing 仅译文 writes `only` and clears `pdfReader.original`. Pinned in Task 38.
+
+---
+
+### Task 35: whether a paper can be had as a bilingual PDF, and the entry pages' answer
+
+**Files:**
+- Modify: `src/core/rules/abstract.ts`, `src/core/abstract/link.ts`, `src/core/pdf/entry.ts`
+- Modify: `src/shared/messages.ts` (`EntryStatus`), `src/shared/entry-page.ts`
+- Modify: `src/entrypoints/abstract.content.ts`, `src/entrypoints/pdf.content.ts` (the answer only; the reader's
+  opening is Task 36's)
+- Test: `tests/entry/pdf-entry.test.ts`, `tests/entry/abstract-source.test.ts` (new), `tests/shared/entry-page.test.ts`
+  (new, or the existing file if there is one)
+
+**Interfaces:**
+- Produces: `SOURCE_LINK = 'a.download-eprint'`; `sourceOn(doc: Document): boolean`;
+  `pdfUrlOf(id: string, origin?: string): string` (`…/pdf/<id>#readarxiv`);
+  `sourceKindOf(contentType: string | null): 'source' | 'pdf-only' | 'unknown'`.
+- Produces: `EntryStatus` `{ paper; html; kind: 'abs' | 'pdf'; pdf: string | null; readerOpen: boolean }`, and
+  `EntryPage` gains `kind`, `pdf: () => string | null`, `readerOpen: () => boolean`.
+
+- [ ] **Step 1: The tests**
+
+```ts
+// tests/entry/abstract-source.test.ts
+import { readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+import { sourceOn } from '@/core/abstract/link'
+
+const page = (html: string) => new DOMParser().parseFromString(html, 'text/html')
+
+describe('sourceOn: the abstract page offers the paper\'s TeX source (the reader\'s design, §2)', () => {
+  it('finds arXiv\'s own source link', () => {
+    expect(sourceOn(page(readFileSync('tests/fixtures/abs/1706.03762.html', 'utf8')))).toBe(true)
+  })
+
+  it('finds none on a PDF-only submission, whose Access Paper list has View PDF alone', () => {
+    expect(sourceOn(page('<ul><li><a href="/pdf/2608.07562" class="abs-button download-pdf">View PDF</a></li></ul>'))).toBe(false)
+  })
+})
+```
+
+  Add to `tests/entry/pdf-entry.test.ts`:
+
+```ts
+import { pdfUrlOf, sourceKindOf } from '@/core/pdf/entry'
+
+describe('the PDF entry', () => {
+  it('asks the PDF address for the reader, translating, an old-style id keeping its slash', () => {
+    expect(pdfUrlOf('1706.03762v7')).toBe('https://arxiv.org/pdf/1706.03762v7#readarxiv')
+    expect(pdfUrlOf('hep-th/9711200')).toBe('https://arxiv.org/pdf/hep-th/9711200#readarxiv')
+  })
+
+  it('reads what a HEAD on /src/ says: gzip is a source, a PDF is a PDF-only submission, anything else says nothing', () => {
+    expect(sourceKindOf('application/gzip')).toBe('source')
+    expect(sourceKindOf('application/x-gzip; charset=binary')).toBe('source')
+    expect(sourceKindOf('application/pdf')).toBe('pdf-only')
+    for (const other of [null, 'text/html', '']) expect(sourceKindOf(other)).toBe('unknown')
+  })
+})
+```
+
+  And an `entry-page` test: `answerEntryMessages` answers `axt:entry-status` with `kind`, `pdf` and `readerOpen` read
+  at answer time. Stub `onMessages` as `tests/shared/` already does for the other handlers, if it does; if not, test
+  through `browser.runtime.onMessage` with the fake the popup's tests use.
+
+  Run: `pnpm vitest run tests/entry tests/shared/entry-page.test.ts`. Expected: FAIL (not exported).
+
+- [ ] **Step 2: The rules and helpers** — `rules/abstract.ts`:
+
+```ts
+/**
+ * arXiv's own link to the paper's source (TeX Source, to `/src/<id>`), in the abstract page's Access Paper list. A
+ * PDF-only submission has none (checked 2026-09-25 on 1706.03762 and 2608.07562): the paper cannot be had as a
+ * bilingual PDF (the reader's design, §2)
+ */
+export const SOURCE_LINK = 'a.download-eprint'
+```
+
+  `abstract/link.ts`: `export const sourceOn = (doc: Document): boolean => doc.querySelector(SOURCE_LINK) !== null`.
+
+  `pdf/entry.ts`:
+
+```ts
+/** The paper's PDF address asking for the reader, translating (the reader's design, §2): `#readarxiv`, as the HTML entry's */
+export function pdfUrlOf(id: string, origin = 'https://arxiv.org'): string {
+  return `${origin}/pdf/${id}${AUTO_TRANSLATE_HASH}`
+}
+
+/**
+ * What a HEAD on `/src/<id>` says (checked 2026-09-25): a source answers gzip (a `.tar.gz` or a gzipped file), a
+ * PDF-only submission `application/pdf`. **Anything else says nothing**: offline, a 429 or a 5xx leave the entry offered,
+ * as the HTML entry's HEAD does (Devin on #247)
+ */
+export function sourceKindOf(contentType: string | null): 'source' | 'pdf-only' | 'unknown' {
+  const type = (contentType ?? '').split(';')[0]!.trim().toLowerCase()
+  return /gzip/.test(type) ? 'source' : type === 'application/pdf' ? 'pdf-only' : 'unknown'
+}
+```
+
+- [ ] **Step 3: `EntryStatus` and the answer** — `messages.ts`:
+
+```ts
+export interface EntryStatus {
+  paper: string
+  html: string | null
+  /** Which entry page: the abstract, or the PDF */
+  kind: 'abs' | 'pdf'
+  /** The PDF address asking for the reader (`#readarxiv`); null when the paper cannot be had as a bilingual PDF, or
+   *  the browser cannot run the reader (pdf-reader/support.ts) */
+  pdf: string | null
+  /** On a PDF page: the reader is laid over it */
+  readerOpen: boolean
+}
+```
+
+  `entry-page.ts`: `EntryPage` gains `kind`, `pdf`, `readerOpen`, answered as `html` is, at answer time. The
+  abstract page answers `kind: 'abs'`, `pdf: () => (readerRuns() && sourceOn(document) ? pdfUrlOf(id) : null)` and
+  `readerOpen: () => false`. The PDF page answers `kind: 'pdf'`, its `pdf` from a HEAD on `/src/<id>` made once:
+  `sourceKindOf(res.headers.get('content-type'))`, 'pdf-only' giving null and a failed request 'unknown'. Its
+  `readerOpen` is whether the frame is there (Task 36 keeps a variable).
+
+  `readerRuns` imports from `@/pdf-reader/support` into the abstract content script: check the boundary gate (`pnpm
+  lint`) allows an entry point to import it (it is not core). The script's size must stay small: `support.ts` has no
+  imports beyond itself.
+
+  Run: `pnpm vitest run tests/entry tests/shared tests/popup`. Expected: PASS. The popup's tests type their fake
+  entries with the new fields: `{ paper, html, kind: 'abs', pdf: null, readerOpen: false }`.
+
+- [ ] **Step 4: Commit** — `feat(entry): whether a paper can be had as a bilingual PDF`.
+
+### Task 36: the PDF page opens the reader by the setting and by `#readarxiv`
+
+**Files:**
+- Modify: `src/shared/entry-settings.ts`, `src/entrypoints/background/handlers.ts` (`pdfReader: boolean`)
+- Modify: `src/entrypoints/pdf.content.ts`
+- Modify: `src/pdf-reader/engine/session.mjs` (`ask=translate`)
+- Test: `tests/shared/entry-settings.test.ts` (or where the entry settings are tested), `tests/entry/pdf-open.test.ts`
+  (new: the decision), `experiments/pdf-bilingual/spikes/reader-settings.mjs` (a case)
+
+**Interfaces:**
+- Produces: `EntrySettings.pdfReader: boolean` (`config.pdfReader.enabled`), default `true`.
+- Produces: `readerWanted({ enabled, hash }): { open: boolean; translate: boolean }` in `src/core/pdf/entry.ts`. The
+  reader opens when the setting is on or the hash is `#readarxiv`; the hash asks for a translation.
+
+- [ ] **Step 1: The decision's test**
+
+```ts
+describe('readerWanted: the PDF page and its reader (the reader\'s design, §2)', () => {
+  it('opens the reader when the setting is on, translating only when asked', () => {
+    expect(readerWanted({ enabled: true, hash: '' })).toEqual({ open: true, translate: false })
+    expect(readerWanted({ enabled: true, hash: '#readarxiv' })).toEqual({ open: true, translate: true })
+  })
+
+  it('opens it off the setting only for #readarxiv, an explicit request', () => {
+    expect(readerWanted({ enabled: false, hash: '' })).toEqual({ open: false, translate: false })
+    expect(readerWanted({ enabled: false, hash: '#readarxiv' })).toEqual({ open: true, translate: true })
+  })
+})
+```
+
+  And the entry settings: `pdfReader` follows `config.pdfReader.enabled`, `true` when the background does not answer.
+  Run: FAIL.
+
+- [ ] **Step 2: The decision, the setting, the page**
+  - `readerWanted` in `pdf/entry.ts`.
+  - `pdfReader: config.pdfReader.enabled` in `handlers.ts`'s entry settings; `pdfReader: true` in the defaults.
+  - `pdf.content.ts` reads the entry settings once (`watchEntrySettings`'s first answer) and the hash, and opens the
+    reader when `readerWanted(…).open`, passing `ask=translate` in the frame's address when asked.
+  - A later answer with `pdfReader` off does not close a reader on screen. A `hashchange` to `#readarxiv` with the
+    reader closed opens it again, translating. `readerOpen` for the entry answer is true while the frame is there.
+
+- [ ] **Step 3: The reader asked to translate** — in `session.mjs`, where `mode` is first decided:
+
+```js
+// asked to translate (#readarxiv on the PDF address, the reader's design, §2): the translated display the settings
+// name, and an original left on is let go — the reader asked for a translation, not for what it last read
+const askTranslate = params.get('ask') === 'translate'
+const translatedDisplay = c => (c.mode === 'only' ? 'translation' : 'bilingual')
+let mode = MODES.includes(params.get('mode')) ? params.get('mode') : askTranslate ? translatedDisplay(config) : displayOf(config)
+if (askTranslate && config.pdfReader.original) void save(c => ({ ...c, pdfReader: { ...c.pdfReader, original: false } }))
+```
+
+  `save` is defined after `mode` in the module today: move the write to just after `save`'s definition, keeping the
+  `mode` line where it is.
+
+- [ ] **Step 4: In the browser** — `reader-settings.mjs` gains a case: the settings with `pdfReader.original: true`, the
+  reader opened with `ask=translate`. It opens in 对照 (or 译文 when `mode` is `only`), and the stored `original` is
+  false after. `tests/e2e/pdf-entry.mjs` gains:
+  - a PDF page with `pdfReader.enabled` off: no reader, the floating button;
+  - the same page's address with `#readarxiv`: the reader, translating;
+  - the hash set on the open page: the reader again.
+
+  Run: `pnpm build >/dev/null && node experiments/pdf-bilingual/spikes/reader-settings.mjs && pnpm e2e:pdf`.
+  Expected: all passed.
+
+- [ ] **Step 5: Commit** — `feat(pdf-reader): the PDF page opens the reader by the setting and by #readarxiv`.
+
+### Task 37: the entry pages' two entries
+
+**Files:**
+- Modify: `src/entrypoints/popup/view-model.ts` (`entries`), `state.ts` (`openPdf`), `PopupView.tsx`
+- Modify: `src/locales/zh-CN.ts`, `en.ts` (`S.entry.html`, `S.entry.pdf`), `docs/UI.md` (S-P-50b rewritten, S-P-50c new)
+- Test: `tests/popup/view-model.test.ts`, `tests/popup/state.test.ts`, `tests/e2e/pdf-entry.mjs` (the popup's checks)
+
+**Interfaces:**
+- Produces: `PopupView.entries: { html: { disabled: boolean }; pdf: { disabled: boolean } } | null`; on an entry page
+  `primary` is not drawn.
+- Produces: `PopupActions.openPdf()`, where `reading.openIn` says, as `openHtml` does.
+
+- [ ] **Step 1: The view model's tests**:
+  - An abstract page with both: two entries, both enabled.
+  - No HTML version: HTML disabled with S-P-33's note, PDF enabled.
+  - `pdf: null`: PDF disabled, and no note of its own (§1's rule: greyed, no words).
+  - A service that cannot run: both disabled, as `openHtml` is now (the page opened translates by the same rule).
+
+  `state.test.ts`: `openPdf` opens `entry.pdf` in a new tab by default, and on the page itself with `same-tab`. That
+  page is a PDF page (its own navigation, as `axt:open-html` does, through a new `axt:open-pdf`), and the popup closes.
+
+  Run: FAIL.
+
+- [ ] **Step 2: The words** — `S.entry = { html: 'HTML 对照翻译', pdf: 'PDF 对照翻译' }` (§15; English `Bilingual
+  HTML`, `Bilingual PDF`). S-P-50b becomes the pair. `S.primary.bilingual` goes if nothing else uses it: grep first.
+
+- [ ] **Step 3: The view** — `entryView` returns `entries` and no `primary` action on its own. `PopupView` draws the
+  two as two primary buttons of equal width side by side, where the one button was. Each is disabled with the reasons
+  above; the HTML one's note stays S-P-33.
+
+- [ ] **Step 4: The action** — `openPdf` in `state.ts`, `axt:open-pdf` in `messages.ts`, answered by
+  `entry-page.ts` (`location.assign(pdf)`) as `axt:open-html` is.
+
+- [ ] **Step 5: In the browser** — `tests/e2e/pdf-entry.mjs`'s popup checks on the abstract and no-HTML pages find the
+  two buttons by name (HTML 对照翻译, PDF 对照翻译), and the PDF one opens `pdf/<id>#readarxiv`.
+  Run: `pnpm build >/dev/null && pnpm e2e:pdf`. Expected: all passed.
+
+- [ ] **Step 6: Commit** — `feat(popup): the entry pages' two entries, HTML and PDF`.
+
+### Task 38: the popup while the reader is open
+
+**Files:**
+- Modify: `src/entrypoints/popup/view-model.ts` (`readerView`), `state.ts` (the reader's primary action and mode),
+  `PopupView.tsx` (the style row hidden)
+- Modify: `src/ui/Segmented.tsx` (a disabled option with its title)
+- Modify: `src/locales/*` (`S.mode.stackPdf`), `docs/UI.md` (S-P-03c new)
+- Test: `tests/popup/view-model.test.ts`, `tests/popup/state.test.ts`, `tests/ui/segmented.test.ts` (new or existing)
+
+**Interfaces:**
+- Consumes: `EntryStatus.readerOpen`, `READER_LANGUAGES` (`src/pdf-reader/ui/languages.ts`).
+- Produces: `readerView(entry, config, input): PopupView`, and the options of `Segmented` gain
+  `disabled?: boolean`.
+
+- [ ] **Step 1: The tests**. With the reader open:
+  - The language menu lists the nine alone.
+  - The mode bar: 上下 disabled with 「PDF 对照不支持上下排列」 as its title. A stored `stack` shows 左右 chosen.
+  - The primary is 翻译本页 when `pdfReader.original` is on, 显示原文 when off.
+  - The style row is gone.
+  - The service, prompt, 对照高亮 and 图片翻译 rows are as elsewhere.
+
+  `state.test.ts`:
+  - The primary toggles `pdfReader.original`.
+  - Choosing 仅译文 writes `mode: 'only'` and `original: false`.
+  - Choosing 上下 is impossible: it is disabled; a call is ignored.
+
+  Run: FAIL.
+
+- [ ] **Step 2: `Segmented`'s disabled option** — `disabled` greys it (`aria-disabled`, no click), its title still
+  shown.
+
+- [ ] **Step 3: `readerView`** — `derivePopupView` sends an entry with `readerOpen` to it. The actions write through
+  `patchConfig`: the reader follows the settings (Part 2), and the popup sends it no message.
+
+- [ ] **Step 4: Commit** — `feat(popup): the popup while the reader is open`.
+
+### Task 39: the floating button's logo opens the panel on the entry pages
+
+**Files:**
+- Modify: `src/core/floating/button.ts` (`{ kind: 'panel' }`), `src/shared/floating.ts`
+- Modify: `src/entrypoints/abstract.content.ts`, `src/entrypoints/pdf.content.ts`
+- Test: `tests/entry/floating-button.test.ts`, `tests/e2e/floating-button.mjs` (the abstract and PDF pages)
+
+**Interfaces:**
+- Produces: `MainAction` gains `{ kind: 'panel' }`: a click on the logo opens the control panel; the column shows no
+  panel segment of its own; the settings segment stays.
+
+- [ ] **Step 1: The tests** — the logo with `{ kind: 'panel' }` opens the panel (its frame's address is the popup's),
+  and the column has two segments, the logo and the settings. The full text's three are unchanged. Run: FAIL.
+- [ ] **Step 2: The button** — the panel segment is not drawn when `main.kind === 'panel'`; the logo's click calls the
+  same `openPanel` the segment called; its label is the pages' existing one (S-I-06), which now opens the panel.
+- [ ] **Step 3: The pages** — the abstract page and the PDF page (reader closed) pass `{ kind: 'panel' }`. The label is
+  the page's sentence as now, or a new `S.page.floating.entries` if the maintainer's wording names the panel: use the
+  existing one and say so in the ledger.
+- [ ] **Step 4: In the browser** — `pnpm build >/dev/null && pnpm e2e:floating`: on the abstract and PDF pages a click
+  on the logo opens the panel with the two entries. Expected: all passed.
+- [ ] **Step 5: Commit** — `feat(floating): the logo opens the panel on the abstract and PDF pages`.
+
+### Task 40: the settings page's PDF reader section and the PDF translations' line
+
+**Files:**
+- Create: `src/entrypoints/options/sections/PdfReader.tsx`
+- Modify: `src/entrypoints/options/App.tsx` (`SECTIONS` gains `pdf-reader` after `reading`), `data.ts` (the PDF
+  store's usage and clear), `sections/Data.tsx` (the line)
+- Modify: `src/locales/*` (`O.nav.pdfReader`, `O.pdfReader.*`, `O.data.pdf*`), `docs/UI.md` (S-O ids)
+- Test: `tests/options/pdf-reader-section.test.ts` (new), `tests/options/data.test.ts` (or the existing Data test)
+
+**Interfaces:**
+- Consumes: `createPdfStore()` (`src/cache/pdf-store.ts`) `usage(): { count; bytes }`, `clear()`.
+
+- [ ] **Step 1: The tests**:
+  - The section has four rows: 在 arXiv 的 PDF 上使用对照阅读器 (a switch on `pdfReader.enabled`), 同步滚动 (on
+    `pdfReader.sync`), 外观 (a segmented of 浅色 深色 跟随系统, on `pdfReader.appearance`) and 深色时调暗页面 (on
+    `pdfReader.dimPages`). Each writes at once.
+  - The Data section shows `{n} 篇 · {size}` for the PDF translations, and 清除 empties the store (two presses, as the
+    HTML line's `Confirm`).
+
+  Run: FAIL.
+- [ ] **Step 2: The words** (§15): `O.nav.pdfReader: 'PDF 阅读器'`, `O.pdfReader.enabled: '在 arXiv 的 PDF 上使用对照阅读器'`,
+  the other three reusing the reader's `R.options.*` and `R.sync` where the words are the same.
+  `O.data.pdfLine(n, size)`: `${n} 篇 · ${size} MB`. English as §15. UI.md: S-O ids after the reading section's.
+- [ ] **Step 3: The section and the line.** The reader's 设置 button already opens `options.html#pdf-reader`; the
+  section's id is `pdf-reader`.
+- [ ] **Step 4: Commit** — `feat(options): the PDF reader's section and its translations' line`.
+
+### Task 41: a display chosen anywhere lets the original go
+
+**Files:**
+- Modify: `src/core/session/index.ts` (`setMode`), `src/entrypoints/popup/state.ts` (`chooseMode` on an entry page)
+- Test: `tests/session/*` (where `setMode` is tested), `tests/popup/state.test.ts`
+
+- [ ] **Step 1: The tests** — `setMode('side')` with `pdfReader.original: true` stored writes `original: false` with
+  the mode. With the same mode already stored but `original` on, it writes too. The popup's `chooseMode` on an entry
+  page writes both. Run: FAIL.
+- [ ] **Step 2: The writes** — in `setMode`'s save:
+
+```ts
+      const config = await deps.config.get()
+      // a display chosen on the HTML page is a translated one: the PDF reader's original, left on there, goes too
+      // (the reader's design, §3: whatever was last chosen, on either page)
+      if (config.mode !== mode || config.pdfReader.original) await deps.config.set({ ...config, mode, pdfReader: { ...config.pdfReader, original: false } })
+```
+
+  The popup: `patchConfig(latest => ({ ...latest, mode, pdfReader: { ...latest.pdfReader, original: false } }))`.
+  `src/core` may import the `Config` type (the boundary gate allows type imports from `@/config/schema`: check it).
+- [ ] **Step 3: Commit** — `fix(settings): a display chosen anywhere lets the PDF reader's original go`.
+
+### Task 42: Part 5's record, and Part 6's plan
+
+- [ ] **Step 1:** `REPORT.md`, the next addendum:
+  - the entries as built, with the popup's screenshots on the abstract and PDF pages and with the reader open (taken
+    by `reader-ui-live.mjs`, or a new `spikes/entries.mjs`, not by hand);
+  - the checks' output.
+- [ ] **Step 2:** Part 6's plan (verification and words, §12, §14): the performance gates on a quiet machine,
+  including the rerun of `cache-revisit.mjs` against Part 2's build (Part 3's final review); the accessibility audit
+  on the reader page; a `better-interface` review and `break`; `docs/UI.md`'s surface R and `docs/DESIGN.md`; the
+  deferred minors (#299); then the pull request. Appended here, to be reviewed with the maintainer.
+- [ ] **Step 3:** Commit both, and a test package.
