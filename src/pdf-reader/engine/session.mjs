@@ -33,7 +33,7 @@ import { decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, u
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { hostReady } from './host.mjs'
-import { openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
+import { compilerKeeper, openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
 import { isName, plainSource, WIRE } from './mt.mjs'
 import { verified, VERIFIED } from './scripts.mjs'
 import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
@@ -128,6 +128,8 @@ let stopped = null
 /** the translation under way, and the way to run it again in place, which live() sets once the paper is open; null
  *  before that and after a crash, when a retry loads the page again */
 let running = null, runAgain = null
+/** a request to run again that came while a run was under way: the network's return, or a change of the services */
+let pending = null
 /** the viewers exist: until then the settings are read as the viewers are made, and there is nothing to follow */
 let viewersMade = false
 /** settings that landed (shared/surface-config.ts Landing): shown, and what changed followed (settings.ts followOf),
@@ -139,10 +141,13 @@ function landed(next, from) {
   config = next
   showSettings()
   if (!viewersMade || from === 'refused') return
-  const follow = followOf(prev, next, from, { translating, held, stopped: !!stopped, addressDisplay: MODES.includes(params.get('mode')), addressSync: SYNC_MODES.includes(params.get('sync')), display: mode, syncMode })
+  const follow = followOf(prev, next, from, { translating, held, stopped: !!stopped || !!running, addressDisplay: MODES.includes(params.get('mode')), addressSync: SYNC_MODES.includes(params.get('sync')), display: mode, syncMode })
   if (follow.reload) { void writes.then(() => location.reload()); return }
   // a translation that stopped short runs again once the services change (settings.ts followOf)
-  if (follow.retry) void writes.then(() => runAgain?.())
+  if (follow.retry) {
+    if (running) pending = 'services'
+    else void writes.then(() => runAgain?.())
+  }
   if (follow.display) changeDisplay(follow.display, false)
   if (follow.sync) applySync(follow.sync)
   if (!config.reading.sentenceHighlight) light(null)
@@ -190,6 +195,8 @@ const sides = [left, right]
 const other = side => (side === left ? right : left)
 
 async function open(side, url) {
+  // a new document: no page of it laid yet
+  side.laid.clear()
   side.task = pdfjsLib.getDocument({ url, ...ASSETS })
   // the paper's PDF coming in, for the progress line under the toolbar (the maintainer, 2026-09-25)
   if (side === left) side.task.onProgress = ({ loaded, total }) => host.emit({ type: 'loading', loaded, total })
@@ -566,7 +573,14 @@ async function paintFigures(side, n) {
   side.laid.set(n, pv.viewport.scale)
   if (side === right) paints.set(n, (paints.get(n) ?? 0) + 1)
 }
-function repaintFigures() { for (const pv of right.viewer._pages ?? []) if (pv.renderingState === 3) right.figs.set(pv.id, paintFigures(right, pv.id).catch(e => console.warn('[figures]', e))) }
+/** every page's figures laid again: the drawn ones now; one not drawn now lets its overlays go (kept through PDF.js's
+ *  reset) and is laid when it is drawn again, in the state the change left (Part 4's final review) */
+function repaintFigures() {
+  for (const pv of right.viewer._pages ?? []) {
+    if (pv.renderingState === 3) right.figs.set(pv.id, paintFigures(right, pv.id).catch(e => console.warn('[figures]', e)))
+    else if (right.laid.delete(pv.id)) pv.div.querySelectorAll(':scope > .axt-fig').forEach(el => right.keeper.drop(el))
+  }
+}
 
 /** a pointer event's place on its page: the page and the point in PDF units, or null off the pages */
 function pointOf(side, event) {
@@ -1492,6 +1506,7 @@ async function marksOfPdf(bytes) {
 const harness = () => ({ left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
   // the right side replaced by a copy of what it shows, as a new compile replaces it (replaceRight)
   paintsOf: n => paints.get(n) ?? 0,
+  paperContext: () => paperCtx,
   swapRight: async () => {
     const url = URL.createObjectURL(new Blob([await right.doc.getData()], { type: 'application/pdf' }))
     try { return await replaceRight(url, rightTexts ?? []) } finally { URL.revokeObjectURL(url) }
@@ -1598,7 +1613,7 @@ async function live() {
   // What the visit has had, kept from run to run (the reader's design, §8: a retry asks only for what is missing): the
   // paper's source once read, the compiler once it answers, what the last run made — the next one's seed —, the left
   // side's marks, and whether a final has been shown
-  let paperP = null, compilerP = null, made = null, leftMarks = null, finalShown = false
+  let paperP = null, compiler = null, made = null, leftMarks = null, finalShown = false
   /** the paper's source, read and anchored: once, kept for a run again; a failure is thrown with the event it is */
   const readPaper = async () => {
     // the original on the right too, replaced as the translation comes in; opened where the original was being read, as
@@ -1622,6 +1637,9 @@ async function live() {
     const src = units.map((u, i) => ({ id: i, text: plainSource(u) }))
     const context = paperContext(units)
     setContext(context)
+    // a failure before this read resolved the figures' context with nothing; a run again has it now (Part 4's final
+    // review: the figures' text went out, and was kept, without the paper's title and abstract)
+    paperCtx = Promise.resolve(context)
     note('source', { units: units.length, files: files.size })
     // a copy on screen: the old translation is the run's base, matched by source; its units' indices are this run's
     // only with the same pipeline, so until the first preview the copy keeps its own anchors and state
@@ -1637,7 +1655,8 @@ async function live() {
     window.__reader.ready = true
     return p
   }
-  /** the compiler, our site's TeX page, given the paper's project: once, kept for a run again */
+  /** our site's TeX page, given the paper's project: { compile, close }, closing the page with its worker (live.mjs
+   *  compilerKeeper opens one when needed, and a fresh one after a compile that did not answer) */
   const openCompiler = async p => {
     const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
     const ready = waitFor(site, 'ready')
@@ -1651,15 +1670,17 @@ async function live() {
     note('compiler', { ms: (await initDone).ms })
     frame.contentWindow.postMessage({ type: 'project', key: paper, files: [...p.files].map(([path, content]) => ({ path, content })) }, site)
     let seq = 0
-    return req => new Promise(resolve => {
+    const compile = req => new Promise(resolve => {
       const id = ++seq
       addEventListener('message', function h(e) {
-        if (e.origin !== site || e.data?.type !== 'compiled' || e.data.id !== id) return
+        // this page's own answer: a fresh compiler numbers its compiles from 1 again
+        if (e.source !== frame.contentWindow || e.origin !== site || e.data?.type !== 'compiled' || e.data.id !== id) return
         removeEventListener('message', h)
         resolve({ ...e.data, pdf: e.data.pdf ? new Uint8Array(e.data.pdf) : null })
       })
       frame.contentWindow.postMessage({ type: 'compile', id, key: paper, main: req.main, engine: req.engine, rerun: req.rerun, bibtex: req.bibtex, overrides: [...req.overrides].map(([path, content]) => ({ path, content })) }, site)
     })
+    return { compile, close: () => frame.remove() }
   }
   /**
    * The translation, from asking the extension's service to writing this machine's copy: once a translation is wanted,
@@ -1691,7 +1712,9 @@ async function live() {
     note('translating')
     let p, compile
     try { p = await (paperP ??= readPaper().catch(e => { paperP = null; throw e })) } catch (e) { return fail(e.event ?? 'fetch failed', e.message ?? String(e), e.kind) }
-    try { compile = await (compilerP ??= openCompiler(p).catch(e => { compilerP = null; throw e })) } catch (e) { return fail(e.event ?? 'no compiler', e.message ?? String(e), e.kind) }
+    compiler ??= compilerKeeper(() => openCompiler(p))
+    try { await compiler.ready() } catch (e) { return fail(e.event ?? 'no compiler', e.message ?? String(e), e.kind) }
+    compile = compiler.compile
     const { paperData, units, src, context, hashes } = p
     // a run again: what the visit's last run made seeds it, over the copy's, so that only the missing are asked again —
     // the rest, sent too, the background's cache answers
@@ -1724,9 +1747,6 @@ async function live() {
     // stopped with nothing on screen translated: the card, with the service's reason (the reader's design, §8)
     if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
     stopped = result.stopped ? { event: 'stopped', kind: result.stopped } : null
-    // stopped with a translation on screen: it stays readable, and the reason is kept (the controller: reading, the
-    // failure its kind; the card only if the pane has nothing after all)
-    if (result.stopped) host.emit({ type: 'fail', event: 'stopped', text: `Stopped: ${result.stopped}`, kind: result.stopped })
     await swaps
     // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
     // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
@@ -1745,10 +1765,22 @@ async function live() {
       }
     }
     note('done', result)
+    // stopped with a translation on screen: it stays readable, and the reason is kept (the controller: reading, the
+    // failure its kind; the card only if the pane has nothing after all) — told once the run has ended, its final on
+    // screen and the count of what is missing the run's own (Part 4's final review)
+    if (result.stopped) host.emit({ type: 'fail', event: 'stopped', text: `Stopped: ${result.stopped}`, kind: result.stopped })
     L.done = true
   }
   // the translation run again in place (the reader's design, §8): the service asked again — a key may be set by then,
   // or another service chosen —, the figures' text it did not answer asked again, only the missing paragraphs sent
+  /** a run's end: a request to run again that came while it ran is answered now, if it stopped short (Part 4's final
+   *  review: the network's return during the final compile was dropped) */
+  const ended = () => {
+    running = null
+    const want = pending
+    pending = null
+    if (want === 'services' ? stopped : want === 'network' && stopped?.kind === 'network') runAgain()
+  }
   runAgain = () => {
     if (running || !stopped) return
     stopped = null
@@ -1760,11 +1792,12 @@ async function live() {
     unanswered.clear()
     running = translation(true)
       .catch(e => { runAgain = null; console.error('[reader]', e); host.emit({ type: 'fail', event: 'crashed', text: String(e?.message ?? e) }) })
-      .finally(() => { running = null; repaintFigures() })
+      .finally(() => { repaintFigures(); ended() })
   }
-  // the network back, as the browser tells it: a translation it stopped goes on by itself (the reader's design, §8)
-  addEventListener('online', () => { if (stopped?.kind === 'network') runAgain?.() })
-  running = translation(false).finally(() => { running = null })
+  // the network back, as the browser tells it: a translation it stopped goes on by itself (the reader's design, §8);
+  // one still running is asked again when it ends
+  addEventListener('online', () => { if (running) pending ??= 'network'; else if (stopped?.kind === 'network') runAgain() })
+  running = translation(false).finally(ended)
   await running
 }
 

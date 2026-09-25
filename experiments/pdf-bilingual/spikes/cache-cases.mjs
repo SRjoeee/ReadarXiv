@@ -4,7 +4,7 @@
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/cache-cases.mjs   (from the repository root: the engine imports the extension's source by @/)
 import assert from 'node:assert/strict'
 import { decideWrite, knownMarks, seedFrom, sourceHash, unitsOf } from '../../../src/pdf-reader/engine/cache.mjs'
-import { openPaper, runLive } from '../../../src/pdf-reader/engine/live.mjs'
+import { compilerKeeper, openPaper, runLive } from '../../../src/pdf-reader/engine/live.mjs'
 import { translateUnits } from '../../../src/pdf-reader/engine/mt.mjs'
 
 const tex = paras => new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\n\\begin{document}\n${paras.join('\n\n')}\n\\end{document}\n`)]])
@@ -189,6 +189,35 @@ cases.push(['a final that twice did not answer ends the run with what is shown, 
   assert.equal(events.filter(e => e === 'next strategy').length, 0)
   assert.equal(r.settled, false)
   assert.equal(c.calls.filter(q => q.rerun).length, 2)
+}])
+
+/** a compiler as BusyTeX's worker is: a compile that timed out goes on, and its output answers the next compile */
+function stuckAfterTimeout(opened) {
+  let owed = null, n = 0
+  const inst = { id: opened.length, closed: false, compile: async req => {
+    n++
+    if (owed) { const out = owed; owed = null; return out }
+    if (n === 1 && inst.id === 0) { owed = { ok: true, pdf: new TextEncoder().encode(`output of ${req.name}`), log: '', ms: 1 }; return { ok: false, error: 'Error: Compilation timeout', log: '', ms: 180000 } }
+    return { ok: true, pdf: new TextEncoder().encode(`output of ${req.name}`), log: '', ms: 1 }
+  }, close: () => { inst.closed = true } }
+  opened.push(inst)
+  return inst
+}
+cases.push(['a compile that timed out throws its compiler away: the next compile is its own, from a fresh one (Part 4\'s final review)', async () => {
+  const opened = []
+  const keeper = compilerKeeper(async () => stuckAfterTimeout(opened))
+  const first = await keeper.compile({ name: 'preview' })
+  assert.match(first.error, /Compilation timeout/)
+  const next = await keeper.compile({ name: 'final' })
+  assert.equal(new TextDecoder().decode(next.pdf), 'output of final')
+  assert.deepEqual(opened.map(c => c.closed), [true, false])
+}])
+cases.push(['a compiler that does not open is opened again at the next compile', async () => {
+  let tries = 0
+  const keeper = compilerKeeper(async () => { if (++tries === 1) throw Object.assign(new Error('no page'), { event: 'no compiler' }); return { compile: async () => ({ ok: true, pdf: new Uint8Array([1]), log: '', ms: 1 }), close: () => {} } })
+  await assert.rejects(keeper.ready(), /no page/)
+  await keeper.ready()
+  assert.equal((await keeper.compile({})).ok, true)
 }])
 
 let failed = 0

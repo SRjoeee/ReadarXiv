@@ -59,10 +59,30 @@ const DRAFT = [
 ].join('\n') + '\n'
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
 const stemOf = main => main.replace(/\.[^./]+$/, '')
-/** why a compile gave no PDF: the first TeX error, or what the compiler said */
 /** a compile the TeX page gave up on (BusyTeX's 180 s): the machine was slow, not the strategy wrong */
 const timedOut = r => !r.ok && /Compilation timeout/.test(r.error ?? '')
+/** why a compile gave no PDF: the first TeX error, or what the compiler said */
 const whyFailed = r => (r.ok ? undefined : ((r.log ?? '').match(/^(?:\S+:\d+: .*|! .*)$/m)?.[0] ?? r.error ?? (r.log ?? '').slice(-300)).slice(0, 300))
+
+/**
+ * The compiler a visit uses, opened when first needed (`open` → { compile, close }) and again after a failure to open.
+ * **A compile that did not answer throws it away**: BusyTeX gives up on waiting, not on the job, whose worker goes on
+ * and whose output would answer the next compile — a draft taken for the final, the translation's PDF for the marked
+ * original. Closing the TeX page's frame ends its worker; the next compile gets a fresh one (Part 4's final review)
+ */
+export function compilerKeeper(open) {
+  let current = null
+  const get = () => (current ??= open().catch(e => { current = null; throw e }))
+  return {
+    ready: () => get().then(() => undefined),
+    async compile(req) {
+      const mine = get()
+      const r = await (await mine).compile(req)
+      if (timedOut(r) && current === mine) { current = null; (await mine).close() }
+      return r
+    },
+  }
+}
 
 /** a paper's files (Map path → bytes) → what the pipeline works on */
 export function openPaper(files) {

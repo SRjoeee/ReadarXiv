@@ -136,6 +136,17 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.waitForTimeout(1500)
   const after = await at()
   check('a page dropped by PDF.js and drawn again keeps one highlight layer, its figures not laid again', dropped && after.drawn === 3 && after.bands === 1 && after.paints === before.paints, JSON.stringify({ before, after, dropped }))
+  // the figure-text switch changed while page 1 is dropped: it is laid again when drawn again, in the new state (Part 4's
+  // final review: a page already laid kept what it had)
+  for (let n = 2; n <= pages; n++) { await page.evaluate(n => { window.__reader.debug.right.viewer.currentPageNumber = n }, n); await page.waitForTimeout(100) }
+  const away = await at()
+  await page.evaluate(() => window.__reader.controller.setFigures(false))
+  await page.waitForTimeout(600)
+  await page.evaluate(() => { window.__reader.debug.right.viewer.currentPageNumber = 1 })
+  await page.waitForTimeout(1500)
+  const back = await at()
+  check('the figure-text switch reaches a page PDF.js had dropped, when it is drawn again', away.drawn === 0 && back.paints === away.paints + 1, JSON.stringify({ away, back }))
+  await page.evaluate(() => window.__reader.controller.setFigures(true))
   await page.close()
 }
 

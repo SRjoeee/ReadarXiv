@@ -7,8 +7,13 @@
 //      new service is sent and what comes back
 //   1. down from the start: the card with the network's reason once the first batch has failed, no compile, no page error
 //   2. back up, the card's retry pressed twice: one run, in place (the page not loaded again), a preview shown
-//   3. down after the first requests: the run stops, what there is is compiled, the notice counts the rest; back up and
-//      the browser online again: the translation goes on by itself, and only the missing paragraphs reach the endpoint
+//   3. down after the first requests: the run stops, what there is is compiled, the notice counts the rest — one count,
+//      the run's own, never a passing one; back up and the browser online again: the translation goes on by itself, a
+//      retry pressed meanwhile starting no second run, and only the missing paragraphs reach the endpoint
+//   4. retry while the service is still down: the same card again, no second compiler, nothing compiled
+//   5. the network back while the stopped run still compiles its final: the translation goes on once that run ends
+//   6. a service that cannot run at the start: the card; another chosen: the translation runs again, in place, with
+//      the paper's title and abstract for the figures' text (Part 4's final review)
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
@@ -20,7 +25,7 @@ import { addService, openOptions, setSwitch } from '../../../tests/e2e/options-p
 
 const root = new URL('..', import.meta.url).pathname
 const paper = process.argv[2] ?? '2608.02163'
-const CASES = new Set((process.env.AXT_CASES ?? '0,1,2,3').split(',').map(Number))
+const CASES = new Set((process.env.AXT_CASES ?? '0,1,2,3,4,5,6').split(',').map(Number))
 const serve = handler => new Promise(r => { const s = createServer(handler).listen(0, '127.0.0.1', () => r(s)) })
 const site = await serveSite()
 const corpus = await serve((req, res) => {
@@ -69,18 +74,26 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
 const events = () => page.evaluate(() => window.__reader.live?.events ?? [])
 const state = () => page.evaluate(() => window.__reader.controller.getState())
 const until = (test, arg, timeout = 900_000) => page.waitForFunction(test, arg, { timeout, polling: 250 }).then(() => true, () => false)
-const patch = change => page.evaluate(p => window.__reader.controller.patchSettings(c => ({ ...c, ...p })), change)
-/** a visit with no copy on this machine: the copy of the paper cleared first, once the page's store is reachable */
+/** a change of the settings, waited for until the reader shows it landed: patchSettings returns before the write, and a
+ *  visit that leaves the page at once would lose it (the next case then ran on the last case's service) */
+const patch = async change => {
+  await page.evaluate(p => window.__reader.controller.patchSettings(c => ({ ...c, ...p })), change)
+  await page.waitForFunction(p => Object.entries(p).every(([k, v]) => JSON.stringify(window.__reader.controller.getState().settings?.[k]) === JSON.stringify(v)), change, { timeout: 30_000, polling: 100 })
+}
+/** a visit with no copy on this machine: the store of copies (src/cache/pdf-store.ts, 'axt-pdf') deleted first, from
+ *  the extension's settings page, the reader closed so that nothing holds it open */
 async function freshVisit() {
-  await page.goto(urlOf('translation'))
-  await until(() => window.__reader?.debug?.pdfCache, null, 120_000)
-  await page.evaluate(() => window.__reader.debug.pdfCache.clear())
+  await page.goto(`chrome-extension://${id}/options.html`)
+  await page.evaluate(() => new Promise(resolve => { const r = indexedDB.deleteDatabase('axt-pdf'); r.onsuccess = r.onerror = r.onblocked = () => resolve(null) }))
   await page.goto(urlOf('translation'))
   await until(() => window.__reader?.controller?.getState().settings, null, 60_000)
 }
 /** the echo under another model name: the background's cache of translations keys by the model, so a case's texts are
  *  not answered from another case's */
-const useModel = model => page.evaluate(([id, m]) => window.__reader.controller.patchSettings(c => ({ ...c, provider: id, services: c.services.map(s => (s.id === id ? { ...s, model: m } : s)) })), [echoId, model])
+const useModel = async model => {
+  await page.evaluate(([id, m]) => window.__reader.controller.patchSettings(c => ({ ...c, provider: id, services: c.services.map(s => (s.id === id ? { ...s, model: m } : s)) })), [echoId, model])
+  await page.waitForFunction(([id, m]) => { const s = window.__reader.controller.getState().settings; return s?.provider === id && s.services.find(x => x.id === id)?.model === m }, [echoId, model], { timeout: 30_000, polling: 100 })
+}
 
 // the echo service, added while it answers (the drawer connects to it), and no hand-over to the free service on failure
 const options = await openOptions(context, id)
@@ -153,8 +166,12 @@ if (CASES.has(3)) {
   endpoint.answered.clear()
   await useModel('echo-3')
   await freshVisit()
+  // every count the notice could show while reading: one, the run's own (the stop's reason is told once the run ends)
+  await page.evaluate(() => { window.__counts = new Set(); window.__reader.controller.subscribe(() => { const st = window.__reader.controller.getState(); if (st.phase === 'ready' && st.failedUnits > 0) window.__counts.add(st.failedUnits) }) })
   await until(() => window.__reader.live?.done)
   const s = await state()
+  const counts = await page.evaluate(() => [...window.__counts])
+  check('…the notice shows one count, the run\'s own', counts.length === 1 && counts[0] === s.failedUnits, JSON.stringify(counts))
   check('down midway: the run ends, the notice counting the paragraphs left in English', s.phase === 'ready' && s.failedUnits > 0 && !!(await page.$('.capsule[data-kind="notice"]')), JSON.stringify({ phase: s.phase, failedUnits: s.failedUnits }))
   const answeredBefore = new Set(endpoint.answered)
   const sentBefore = endpoint.received.length
@@ -164,11 +181,76 @@ if (CASES.has(3)) {
   await context.setOffline(false)
   const ran = await until(() => window.__reader.controller.getState().phase === 'translating', null, 30_000)
   check('…the browser online again: the translation goes on by itself', ran)
+  // a retry pressed while that run is under way starts no second one
+  await page.evaluate(() => { window.__runs3 = 0; let was = window.__reader.controller.getState().phase; window.__reader.controller.subscribe(() => { const now = window.__reader.controller.getState().phase; if (now !== was && now === 'translating') window.__runs3++; was = now }); window.__reader.controller.retry() })
   await until(() => window.__reader.live?.done && window.__reader.controller.getState().phase === 'ready')
   const after = await state()
   check('…and ends with nothing missing', after.failedUnits === 0, JSON.stringify({ failedUnits: after.failedUnits }))
   const resent = endpoint.received.slice(sentBefore).filter(t => answeredBefore.has(t))
   check('…only the missing paragraphs reach the endpoint again', resent.length === 0, `${endpoint.received.length - sentBefore} sent, ${resent.length} already answered`)
+  check('…a retry pressed during that run starts no second one', (await page.evaluate(() => window.__runs3)) === 0)
+}
+
+if (CASES.has(4)) {
+  // 4. retry while the service is still down: the same card, one compiler, nothing compiled
+  endpoint.down = true
+  endpoint.upTo = Number.POSITIVE_INFINITY
+  await useModel('echo-4')
+  await freshVisit()
+  await until(() => window.__reader.controller.getState().phase === 'failed')
+  const before = (await events()).length
+  await page.locator('.card[data-card] button').click()
+  await until(() => window.__reader.controller.getState().phase === 'translating', null, 30_000)
+  const again = await until(() => window.__reader.controller.getState().phase === 'failed')
+  const after = (await events()).slice(before)
+  const frames = await page.evaluate(() => document.querySelectorAll('iframe[src$="/tex.html"]').length)
+  check('retry while still down: the same card again', again && (await state()).failure === 'network')
+  check('…nothing compiled, and one compiler', !after.some(e => e.event === 'preview' || e.event === 'final') && frames === 1, JSON.stringify({ events: after.map(e => e.event), frames }))
+  endpoint.down = false
+}
+
+if (CASES.has(5)) {
+  // 5. the network back while the stopped run compiles its final: the translation goes on once that run ends
+  endpoint.down = false
+  endpoint.requests = 0
+  endpoint.upTo = 3
+  await useModel('echo-5')
+  await freshVisit()
+  await until(() => (window.__reader.live?.events ?? []).some(e => e.event === 'stopped'))
+  const compiling = await page.evaluate(() => !window.__reader.live.done)
+  // every phase from here on, as the controller tells it: a poll can miss a run again's first moments
+  await page.evaluate(() => { window.__phases5 = []; window.__reader.controller.subscribe(() => { const p = window.__reader.controller.getState().phase; if (window.__phases5.at(-1) !== p) window.__phases5.push(p) }) })
+  endpoint.upTo = Number.POSITIVE_INFINITY
+  await context.setOffline(true)
+  await page.waitForTimeout(300)
+  await context.setOffline(false)
+  // the stopped run's end and the run again's, two 'done's: the run again begins in the tick the first ends, and sets
+  // live.done back at once, so a poll of live.done never sees the first
+  const twice = await until(() => (window.__reader.live?.events ?? []).filter(e => e.event === 'done').length >= 2 && window.__reader.controller.getState().phase === 'ready', null, 240_000)
+  const phases = await page.evaluate(() => window.__phases5)
+  const readyAt = phases.indexOf('ready')
+  const resumed = twice && readyAt >= 0 && phases.indexOf('translating', readyAt) > readyAt
+  check('the network back while the stopped run still ran: the translation goes on once it ends', compiling && resumed && (await state()).failedUnits === 0, JSON.stringify({ compiling, resumed, phases, failedUnits: (await state()).failedUnits }))
+}
+
+if (CASES.has(6)) {
+  // 6. a service that cannot run at the start (not on this machine, no key): the card; the echo chosen instead: the
+  // translation runs again in place, with the paper's title and abstract for the figures' text. A local endpoint needs
+  // no key, so the echo itself cannot stand for the first
+  endpoint.down = false
+  await page.evaluate(([id]) => window.__reader.controller.patchSettings(c => {
+    const echo = c.services.find(s => s.id === id)
+    return { ...c, provider: 'svc-keyless0', services: [...c.services.filter(s => s.id !== 'svc-keyless0'), { ...echo, id: 'svc-keyless0', name: 'Keyless', baseURL: 'https://example.invalid/v1', apiKey: '', model: 'echo-6' }] }
+  }), [echoId])
+  await page.waitForFunction(() => window.__reader.controller.getState().settings?.provider === 'svc-keyless0', null, { timeout: 30_000, polling: 100 })
+  await freshVisit()
+  const card = await until(() => window.__reader.controller.getState().phase === 'failed')
+  check('a service that cannot run at the start: the card', card, JSON.stringify({ failure: (await state()).failure }))
+  await useModel('echo-6')
+  const ran = await until(() => window.__reader.controller.getState().phase === 'translating', null, 30_000)
+  const ctx = ran ? await page.waitForFunction(() => window.__reader.debug?.paperContext?.(), null, { timeout: 120_000 }).then(h => h.jsonValue(), () => null) : null
+  check('…another service chosen: the translation runs again in place, the figures\' text with the paper\'s title', ran && !!ctx?.paperTitle, JSON.stringify({ ran, title: ctx?.paperTitle?.slice(0, 40) ?? null }))
+  await until(() => window.__reader.live?.done)
 }
 
 check('no page error', errors.length === 0, errors.join('; '))
