@@ -74,8 +74,16 @@ describe('the reader\'s menus (the reader\'s design, §6.1, §6.7)', () => {
     }
   })
 
+  it('download: the original greyed until its document is open — loading, or a fetch that failed (Codex on #301)', async () => {
+    const { container, controller } = await openMenu(DownloadMenu, { finalReady: true, sides: { left: { page: 0, pages: 0 }, right: { page: 0, pages: 0 } } })
+    const [, original] = [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    expect(original!.getAttribute('aria-disabled')).toBe('true')
+    original!.click()
+    expect(controller.download).not.toHaveBeenCalled()
+  })
+
   it('download: the translation greyed until the final is on screen', async () => {
-    const { container, controller } = await openMenu(DownloadMenu, { finalReady: false })
+    const { container, controller } = await openMenu(DownloadMenu, { finalReady: false, sides: { left: { page: 1, pages: 25 }, right: { page: 1, pages: 26 } } })
     const [translation, original] = [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')]
     expect([translation!.textContent, translation!.getAttribute('aria-disabled'), original!.textContent]).toEqual(['译文 PDF', 'true', '原文 PDF'])
     translation!.click()

@@ -157,7 +157,7 @@ function landed(next, from) {
 let wantTranslation = null
 const translationWanted = new Promise(resolve => { wantTranslation = resolve })
 // a reader in a tab in the background translates once it is shown: what is not seen takes no resources
-if (mode !== 'original') whenVisible(wantTranslation)
+if (mode !== 'original') whenVisible(wantTranslation, document, () => mode !== 'original')
 /** the display changed: where the reader is read first, on the side still shown (Codex on #297); written when the
  *  reader chose it here, not when it follows the settings */
 function changeDisplay(next, write) {
@@ -170,7 +170,7 @@ function changeDisplay(next, write) {
   if (write) void save(c => withDisplay(c, mode))
   relayout(from, place)
   followFigures()
-  if (mode !== 'original') whenVisible(wantTranslation)
+  if (mode !== 'original') whenVisible(wantTranslation, document, () => mode !== 'original')
 }
 /** the display chosen in the reader */
 export function setDisplay(next) { changeDisplay(next, true) }

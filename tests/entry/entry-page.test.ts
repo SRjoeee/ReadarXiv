@@ -83,8 +83,14 @@ describe('answerEntryMessages', () => {
     expect((await ask('axt:entry-status')).reply).toMatchObject({ readerOpen: true })
   })
 
+  it('from an abstract page the PDF entry is a navigation like the HTML one: Back returns to the abstract (Codex on #301)', async () => {
+    answerEntryMessages(page({ kind: 'abs', pdf: () => 'https://arxiv.org/pdf/2501.07202#readarxiv' }))
+    expect((await ask('axt:open-pdf')).reply).toEqual({ opened: true })
+    expect([assign.mock.calls, replace.mock.calls]).toEqual([[['https://arxiv.org/pdf/2501.07202#readarxiv']], []])
+  })
+
   it('opens the PDF entry itself, on this page, and nothing when there is none (the reader\'s design, §2)', async () => {
-    answerEntryMessages(page({ pdf: () => 'https://arxiv.org/pdf/2501.07202#readarxiv' }))
+    answerEntryMessages(page({ kind: 'pdf', pdf: () => 'https://arxiv.org/pdf/2501.07202#readarxiv' }))
     expect((await ask('axt:open-pdf')).reply).toEqual({ opened: true })
     // replaced, not pushed: on the PDF page itself the hash is let go once read, and a pushed entry would leave two
     // alike in the history, the first Back doing nothing (Part 5's final review)

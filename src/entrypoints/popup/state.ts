@@ -284,7 +284,13 @@ export function createPopupState(host: PopupHost): PopupState {
       const href = entry?.pdf
       if (!href) return
       if (entry?.kind !== 'pdf' && (surface.state().config ?? DEFAULT_CONFIG).reading.openIn === 'new-tab') await host.openTab(href)
-      else await host.toTab({ type: 'axt:open-pdf' })
+      else if (!(await host.toTab({ type: 'axt:open-pdf' }))?.opened) {
+        // the page could not open it after all — a source that turned out to be a PDF alone, answered after the popup
+        // asked: the popup stays, and asks again, so that the entry greys (Codex on #301)
+        entry = (await host.toTab({ type: 'axt:entry-status' }).catch(() => null)) ?? null
+        changed()
+        return
+      }
       host.close()
     }),
     // A translate delivered late must not translate a page the reader translated and restored meanwhile (local review)

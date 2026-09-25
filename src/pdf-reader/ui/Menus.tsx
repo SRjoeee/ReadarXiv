@@ -84,9 +84,10 @@ export function ServiceMenu({ controller }: { controller: ReaderController }) {
 }
 
 export function DownloadMenu({ controller }: { controller: ReaderController }) {
-  const state = useReader(controller, s => ({ finalReady: s.finalReady }))
+  // the original only once its document is open: loading, or after a fetch that failed, there are no bytes to give (Codex on #301)
+  const state = useReader(controller, s => ({ finalReady: s.finalReady, original: s.sides.left.pages > 0 }))
   const pop = usePopover('menu')
-  const items = [{ id: 'translation', name: R.download.translation, disabled: !state.finalReady }, { id: 'original', name: R.download.original }]
+  const items = [{ id: 'translation', name: R.download.translation, disabled: !state.finalReady }, { id: 'original', name: R.download.original, disabled: !state.original }]
   return (
     <>
       <ToolbarButton label={R.download.name} anchor={pop.anchor} {...pop.trigger}>

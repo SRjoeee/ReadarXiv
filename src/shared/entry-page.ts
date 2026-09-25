@@ -35,12 +35,13 @@ export function answerEntryMessages(page: EntryPage): void {
       if (href !== null) location.assign(href)
       return { opened: href !== null }
     },
-    // the PDF entry, on this page itself: the reader opens translating (on a PDF page, the hash alone changes).
-    // Replaced, not pushed: the PDF page lets the hash go once read, and a pushed entry would leave two alike in the
-    // history, the first Back doing nothing (Part 5's final review)
+    // the PDF entry: the paper's PDF asking for the reader, translating. On the PDF page itself the hash alone changes,
+    // replaced, not pushed: the page lets the hash go once read, and a pushed entry would leave two alike in the history,
+    // the first Back doing nothing (Part 5's final review). From the abstract page it is a navigation like the HTML
+    // entry's, and Back returns to the abstract (Codex on #301)
     'axt:open-pdf': async () => {
       const href = page.pdf()
-      if (href !== null) location.replace(href)
+      if (href !== null) (page.kind === 'pdf' ? location.replace(href) : location.assign(href))
       return { opened: href !== null }
     },
   })
