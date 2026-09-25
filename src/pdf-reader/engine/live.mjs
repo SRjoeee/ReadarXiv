@@ -60,6 +60,8 @@ const DRAFT = [
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
 const stemOf = main => main.replace(/\.[^./]+$/, '')
 /** why a compile gave no PDF: the first TeX error, or what the compiler said */
+/** a compile the TeX page gave up on (BusyTeX's 180 s): the machine was slow, not the strategy wrong */
+const timedOut = r => !r.ok && /Compilation timeout/.test(r.error ?? '')
 const whyFailed = r => (r.ok ? undefined : ((r.log ?? '').match(/^(?:\S+:\d+: .*|! .*)$/m)?.[0] ?? r.error ?? (r.log ?? '').slice(-300)).slice(0, 300))
 
 /** a paper's files (Map path → bytes) → what the pipeline works on */
@@ -233,7 +235,7 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
       const shown = await settled(r)
       note('preview', { ok: shown, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, error: shown ? undefined : whyFailed(r) ?? 'a letter it could not set' })
       if (shown) { previews++; onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false }) }
-      else if (s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
+      else if (!timedOut(r) && s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
       continue
     }
     if (mtDone) break
@@ -252,12 +254,16 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
     return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, stopped, missing: missing() }
   }
   const all = new Map(translated), t0 = Date.now()
-  let r, ok
+  let r, ok, retried = false
   for (;;) {
     r = await compile({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl }) })
     ok = await settled(r)
     note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, undefinedCitations: [...new Set([...(r.log ?? '').matchAll(/^(?:LaTeX|Package natbib) Warning: Citation [`']([^']+)' .*undefined/gm)].map(m => m[1]))].slice(0, 8), error: ok ? undefined : whyFailed(r) ?? 'a letter it could not set' })
-    if (ok || s + 1 >= strategies.length) break
+    if (ok) break
+    // not answered: once more with the same strategy, then what is shown stays — a slow machine is no reason to change
+    // how the paper is set (Part 3's checks: a timed-out preview moved 2608.02163 to a strategy its class refuses)
+    if (timedOut(r)) { if (retried) break; retried = true; note('final again', { strategy: strategy().name }); continue }
+    if (s + 1 >= strategies.length) break
     s++; aux = null
     note('next strategy', { strategy: strategy().name })
   }

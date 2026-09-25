@@ -159,6 +159,38 @@ cases.push(['a seeded paragraph whose new try failed keeps its old translation, 
   assert.ok([...r.results.values()].every(x => x.pieces && x.state === 'lost'))
 }])
 
+/** a compiler whose calls answer as `answers` says, one by one (then as compiler() does): a timeout is the TeX page's reply to BusyTeX giving up */
+function slow(...answers) {
+  const c = compiler(), base = c.compile
+  return { calls: c.calls, compile: async req => { const a = answers.shift(); if (a === 'timeout') { c.calls.push(req); return { ok: false, error: 'Error: Compilation timeout', log: '', ms: 180000 } } return base(req) } }
+}
+cases.push(['a preview that did not answer keeps the strategy: the machine was slow, not the strategy wrong', async () => {
+  const paper = openPaper(tex(PARAS)), events = []
+  // the fonts probe answers, then the first preview times out
+  const c = slow('ok', 'timeout')
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: e => events.push(e) })
+  assert.ok(c.calls.filter(q => !q.rerun).length >= 2, `a preview was asked: ${c.calls.map(q => (q.rerun ? 'final' : 'draft')).join(' ')}`)
+  assert.equal(events.filter(e => e === 'next strategy').length, 0)
+  assert.equal(r.settled, true)
+}])
+cases.push(['a final that did not answer is tried again with the same strategy, once', async () => {
+  const paper = openPaper(tex(PARAS)), events = []
+  const c = slow('ok', 'ok', 'timeout')
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: (e, d) => events.push([e, d?.strategy]) })
+  assert.equal(events.filter(([e]) => e === 'next strategy').length, 0)
+  assert.equal(events.filter(([e]) => e === 'final again').length, 1)
+  assert.equal(new Set(events.filter(([e]) => e === 'final' || e === 'final again').map(([, s]) => s)).size, 1)
+  assert.equal(r.settled, true)
+}])
+cases.push(['a final that twice did not answer ends the run with what is shown, and writes nothing', async () => {
+  const paper = openPaper(tex(PARAS)), events = []
+  const c = slow('ok', 'ok', 'timeout', 'timeout')
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: e => events.push(e) })
+  assert.equal(events.filter(e => e === 'next strategy').length, 0)
+  assert.equal(r.settled, false)
+  assert.equal(c.calls.filter(q => q.rerun).length, 2)
+}])
+
 let failed = 0
 for (const [name, run] of cases) {
   try { await run(); console.log('ok  ', name) } catch (e) { failed++; console.log('FAIL', name, '—', e.message.split('\n')[0]) }
