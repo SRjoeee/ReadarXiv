@@ -57,6 +57,11 @@
   --float-bg: color-mix(in oklab, var(--n-0) 90%, transparent);
   --ease: cubic-bezier(0.2, 0, 0, 1);
 }
+/* dark: the well sunk below the chrome and the thumb raised above it, and a stronger fill, so that a chosen segment and
+   a pressed button show in dark as they do in light (Part 6's interface review: 1.06:1 before; the maintainer,
+   2026-09-26) */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --well: var(--n-2); --lift: var(--n-5); --fill: var(--n-4); } }
+:root[data-theme="dark"] { --well: var(--n-2); --lift: var(--n-5); --fill: var(--n-4); }
 @theme inline {
   --color-canvas: var(--canvas); --color-chrome: var(--chrome); --color-line: var(--chrome-line);
   --color-ink: var(--ink); --color-ink-2: var(--ink-2); --color-ink-3: var(--ink-3);

@@ -450,6 +450,24 @@ for (const embedded of ['1', '0']) {
   await page.close()
 }
 
+// dark: a chosen segment and a pressed button stand out from what they sit on (Part 6's interface review: 1.06:1; the
+// maintainer adopted the raised thumb, 2026-09-26)
+{
+  const page = await open({ mode: 'bilingual' })
+  await patch(page, { pdfReader: { appearance: 'dark', sync: true } })
+  await page.waitForTimeout(700)
+  const ratios = await page.evaluate(() => {
+    const px = color => { const c = document.createElement('canvas'); c.width = c.height = 1; const g = c.getContext('2d'); g.fillStyle = color; g.fillRect(0, 0, 1, 1); return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3) }
+    const lum = ([r, g, b]) => [r, g, b].map(v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [x, y] = [lum(px(a)), lum(px(b))].sort((m, n) => n - m); return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100 }
+    const bg = sel => getComputedStyle(document.querySelector(sel)).backgroundColor
+    return { thumb: ratio(bg('.seg .thumb'), bg('.seg')), pressed: ratio(bg('header .tbtn[aria-pressed="true"]'), bg('header')) }
+  })
+  check('dark: the chosen segment\'s thumb and a pressed button stand out from what they sit on', ratios.thumb >= 1.5 && ratios.pressed >= 1.15, JSON.stringify(ratios))
+  await patch(page, { pdfReader: { appearance: 'system' } })
+  await page.close()
+}
+
 console.log(failed ? `${failed} failed` : 'all passed')
 await context.close()
 process.exit(failed ? 1 : 0)
