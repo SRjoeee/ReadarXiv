@@ -369,6 +369,8 @@ async function recognise(page, id) {
   return reply.result.lines
 }
 const translated = new Map() // figureKeyOf(boxes' texts) → their translations, a Promise while they are out
+/** a run stopped for the service (the reader's design, §10.3): no figure's text is sent until it runs again */
+let serviceDown = false
 /**
  * A figure's boxes → their translations, null for a box left as it is. A figure's boxes go as one text with a
  * placeholder between them, in the chain's wire format, so that each is translated in the figure's context (alone, a
@@ -379,7 +381,8 @@ async function translateBoxes(boxes) {
   const todo = boxes.map((b, i) => i).filter(i => isTranslatable(boxes[i].text))
   const out = boxes.map(() => null)
   // the engine when one answers; while none does, a copy's own entries are all there is
-  const engine = await theEngine().catch(() => null)
+  // while the service is down, a copy's entries are all there is, as with no service
+  const engine = serviceDown ? null : await theEngine().catch(() => null)
   const context = engine ? await paperCtx : null
   /**
    * Boxes' texts → their translations, one per box, null where one did not come back. From the entry kept for these
@@ -1520,6 +1523,7 @@ async function live() {
   paperCtx = new Promise(resolve => { setContext = resolve })
   const note = (event, data = {}) => {
     if (event === 'translated') { got = data.total; if (data.how?.lost) { lost += data.how.lost; lostWhy = data.how.error } }
+    if (event === 'stopped') serviceDown = true
     host.emit({ type: 'note', event, data, got, total, lost, again })
     L.events.push({ t: Math.round(performance.now() - L.t0), event, ...data })
     if ((event === 'preview' || event === 'final') && data.ok) compiledOnce = true
@@ -1672,6 +1676,10 @@ async function live() {
   }).catch(e => ({ error: e.message ?? String(e), kind: e?.kind }))
   // the engine's kind kept (engine.mjs EngineError), so that a key refused midway is worded as the popup words it
   if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`, result.kind)
+  // the paragraphs the service left in the source, not a sum over batches: a seeded one keeps its old translation
+  lost = result.missing ?? lost
+  // stopped with nothing on screen translated: the card, with the service's reason (the reader's design, §8)
+  if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
   await swaps
   // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
   // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")

@@ -135,6 +135,8 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
   const results = new Map()
   if (seed) for (const [i, s] of seed) translated.set(units[i], s.pieces)
   let changed = false
+  // why the run stopped short: the service's failure (engine.mjs's kinds), after which nothing more is sent (§10.3)
+  let stopped = null
   // every unit to translate has a translation, seeded or new: a seeded run shows no preview before, or a paragraph the
   // copy had translated would be shown in the source (REPORT, eighteenth addendum)
   const complete = () => units.every(u => kept.has(u) || translated.has(u))
@@ -156,11 +158,18 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
   }
   const mt = (async () => {
     try {
-    for (let first = true; todo.size; first = false) {
+    for (let first = true; todo.size && !stopped; first = false) {
       const batch = nextBatch(first ? 2500 : 12000)
       batch.forEach(i => todo.delete(i))
       const t0 = Date.now()
-      const { results: got, how } = await translateUnits(batch.map(i => units[i]), translate, format)
+      let got, how
+      try { ({ results: got, how } = await translateUnits(batch.map(i => units[i]), translate, format)) } catch (e) {
+        // a refusal for good (engine.mjs: a key missing or refused) stops the run, as a failure of the service does
+        if (!e?.kind) throw e
+        stopped = e.kind
+        for (const i of batch) todo.add(i)
+        break
+      }
       // whether this batch changed what is typeset: a batch that gives back its seeds asks for no preview (Devin on #298)
       let fresh = false
       for (const i of batch) {
@@ -174,10 +183,23 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
         } else results.set(i, { ...(old ? { pieces: old.pieces, by: old.by } : {}), state: r.state, tried: identity })
       }
       note('translated', { units: batch.length, how, ms: Date.now() - t0, total: translated.size })
+      // a failure of the service, not of these texts (engine.mjs EngineError's lost): the batches after it would fail
+      // the same way, each after the background's retries (the reader's design, §10.3)
+      if (how.error) stopped = how.error
       if (fresh) { dirty = true; signal() }
+    }
+    // stopped short: what was not sent is lost to the service, a seed's translation kept on screen
+    if (stopped) {
+      for (const i of todo) { const old = seed?.get(i); results.set(i, { ...(old ? { pieces: old.pieces, by: old.by } : {}), state: 'lost', tried: identity }) }
+      note('stopped', { kind: stopped, untried: todo.size })
+      todo.clear()
     }
     } finally { mtDone = true; signal() }
   })()
+  // awaited after the compiles: handled from now, so that an error inside is no unhandled rejection meanwhile
+  mt.catch(() => {})
+  /** the units left in the source language for the service's failure: lost, with no seed's translation to show */
+  const missing = () => [...results.values()].filter(r => r.state === 'lost' && !r.pieces).length
 
   // 3–5. compiles
   const fonts = await fontsP
@@ -220,12 +242,14 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
     await sleep()
   }
   await mt
+  // nothing to show: nothing compiled, not even the marked original; the reader says why (the reader's design, §10.3)
+  if (stopped && !translated.size) return { previews, translated: 0, units: units.length, results, changed: false, settled: false, stopped, missing: missing() }
   // a seeded run that changed nothing typeset, on the same pipeline: nothing to compile but the marked original, for a
   // copy that has no marks — else they would never come (Devin on #298)
   if (seed && !changed && pipelineCurrent) {
     if (!marks) await original()
     note('unchanged')
-    return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false }
+    return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, stopped, missing: missing() }
   }
   const all = new Map(translated), t0 = Date.now()
   let r, ok
@@ -239,5 +263,5 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
   }
   if (ok) onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
   if (!marks) await original()
-  return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok }
+  return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, stopped, missing: missing() }
 }

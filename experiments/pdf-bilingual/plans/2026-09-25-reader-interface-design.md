@@ -435,6 +435,13 @@ way. With no paragraph translated nothing is compiled and the card shows the rea
 compiled and the notice counts the rest. (Before: every batch retried for 24–48 s, and after 215 s an English "translation"
 was compiled.)
 
+Measured on the fake compiler (`spikes/cache-cases.mjs`): a failure in the second of three batches sends no third, and
+the final is compiled with the first; nothing translated compiles nothing, not even the marked original. A key refused
+midway stops the run the same way, and the run resolves (the unhandled rejection it left on the page is gone). The
+figures' text goes through the same service: once a run has stopped, none is sent until it runs again. The notice's
+{n} is the paragraphs left in the source language: a paragraph a stored copy had translated keeps it when its new try
+fails, and is not counted.
+
 ### 10.4 Small ones
 
 - A heading unit keeps the level of its sectioning command, for the contents (§6.3).

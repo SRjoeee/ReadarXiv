@@ -113,6 +113,52 @@ cases.push(['a seeded preview waits until every unit has a translation', async (
   assert.deepEqual(shown.filter(f => !f), [])
 }])
 
+cases.push(['a failure of the service stops the run: the batches after it are not sent (§10.3)', async () => {
+  const long = n => `Paragraph ${n} ${'words of the paper that go on. '.repeat(230)}`
+  const paper = openPaper(tex([long(1), long(2), long(3)])), c = compiler(), events = []
+  let calls = 0
+  // the first batch comes back; the second fails as a network down does (engine.mjs: partial, lost)
+  const translate = async texts => {
+    calls++
+    if (calls === 1) return texts.map(text => ({ text, by: 'B' }))
+    throw Object.assign(new Error('network'), { kind: 'network', partial: texts.map(() => null), lost: new Set(texts.keys()) })
+  }
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', marks: new Map(), identity: 'B', note: (e, d) => events.push([e, d]) })
+  assert.equal(calls, 2, 'the third batch is not sent')
+  assert.equal(r.stopped, 'network')
+  assert.equal(r.missing, 2)
+  assert.deepEqual(events.filter(([e]) => e === 'stopped').map(([, d]) => d), [{ kind: 'network', untried: 1 }])
+  assert.ok(c.calls.some(q => q.rerun), 'what there is is compiled')
+}])
+cases.push(['nothing translated when the service fails: nothing is compiled, and the run says why', async () => {
+  const paper = openPaper(tex(PARAS)), c = compiler()
+  const translate = async texts => { throw Object.assign(new Error('network'), { kind: 'network', partial: texts.map(() => null), lost: new Set(texts.keys()) }) }
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', marks: null, identity: 'B' })
+  assert.equal(r.stopped, 'network')
+  assert.equal(r.translated, 0)
+  assert.equal(r.missing, paper.units.length - paper.kept.size)
+  assert.equal(c.calls.filter(q => q.rerun).length, 0, 'no final, no marked original')
+}])
+cases.push(['a key refused midway stops the run as a failure of the service does, and the run resolves', async () => {
+  const long = n => `Paragraph ${n} ${'words of the paper that go on. '.repeat(230)}`
+  const paper = openPaper(tex([long(1), long(2), long(3)])), c = compiler()
+  let calls = 0
+  const translate = async texts => { if (++calls === 1) return texts.map(text => ({ text, by: 'B' })); throw Object.assign(new Error('invalid api key'), { kind: 'auth' }) }
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', marks: new Map(), identity: 'B' })
+  assert.equal(r.stopped, 'auth')
+  assert.equal(calls, 2)
+  assert.equal(r.missing, 2)
+}])
+cases.push(['a seeded paragraph whose new try failed keeps its old translation, and is not missing', async () => {
+  const paper = openPaper(tex(PARAS)), c = compiler()
+  const seed = await seedOf(paper, echo('A'), 'A')
+  const translate = async texts => { throw Object.assign(new Error('network'), { kind: 'network', partial: texts.map(() => null), lost: new Set(texts.keys()) }) }
+  const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', seed, marks: new Map(), identity: 'B', pipelineCurrent: true })
+  assert.equal(r.stopped, 'network')
+  assert.equal(r.missing, 0)
+  assert.ok([...r.results.values()].every(x => x.pieces && x.state === 'lost'))
+}])
+
 let failed = 0
 for (const [name, run] of cases) {
   try { await run(); console.log('ok  ', name) } catch (e) { failed++; console.log('FAIL', name, '—', e.message.split('\n')[0]) }
