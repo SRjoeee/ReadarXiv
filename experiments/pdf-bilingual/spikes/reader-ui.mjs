@@ -70,6 +70,25 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.close()
 }
 
+// ---------------------------------------------------------------- Task 27: the PDF.js internals the engine reads
+// session.mjs reads these; an upgrade of pdfjs-dist that changes them fails here (tests/pdf-reader/pdfjs-pin.test.ts)
+{
+  const page = await open({ mode: 'bilingual' })
+  const internals = await page.evaluate(() => {
+    const v = window.__reader.debug.left.viewer, pv = v.getPageView(0), visible = v._getVisiblePages()
+    return {
+      pages: Array.isArray(v._pages) && v._pages.length === v.pagesCount && v._pages[0] === pv,
+      visible: Array.isArray(visible?.views) && visible.views.length > 0 && visible.views.every(x => x.view && typeof x.id === 'number'),
+      drawn: !!visible?.views?.some(x => x.view.renderingState === 3),
+      page: Array.isArray(pv.pdfPage?.view) && pv.pdfPage.view.length === 4 && pv.div instanceof HTMLElement && pv.id === 1,
+      viewport: typeof pv.viewport?.convertToPdfPoint === 'function' && pv.viewport.scale > 0,
+      scale: getComputedStyle(pv.div).getPropertyValue('--total-scale-factor').trim() !== '',
+    }
+  })
+  check('the PDF.js internals the engine reads are there', Object.values(internals).every(Boolean), JSON.stringify(internals))
+  await page.close()
+}
+
 // ---------------------------------------------------------------- Task 17: the toolbar
 {
   const page = await open({ mode: 'bilingual' })
