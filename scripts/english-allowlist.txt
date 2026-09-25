@@ -6,7 +6,7 @@ experiments/pdf-bilingual/REPORT.md 11  # 2026-09-22: the experiment's record; e
 experiments/pdf-bilingual/plans/2026-09-25-reader-interface.md 140  # 2026-09-25: the reader's words the plan's code puts into the locale packs, and the design's copy it names (the controls a reader sees), quoted; +130 for Part 3: its zh-CN pack, docs/UI.md's S-R table, and the tests finding controls by their Chinese names, all verbatim; +4 for Part 4: the design's words it quotes and the controls its probe finds by their Chinese names
 experiments/pdf-bilingual/spikes/reader-ui.mjs 22  # 2026-09-25: the reader's controls found by their Chinese names in a real browser (grows task by task in the plan's Part 3); +2, the contents button the final review's refit check presses
 experiments/pdf-bilingual/spikes/reader-ui-live.mjs 6  # 2026-09-25: the reader's live states found by their Chinese words in a real browser
-experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md 120  # 2026-09-25: the reader's interface copy as the maintainer agreed it, and the maintainer's words each decision rests on, quoted (product copy the design fixes; the copy moves to docs/UI.md with the build)
+experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md 121  # 2026-09-25: the reader's interface copy as the maintainer agreed it, and the maintainer's words each decision rests on, quoted (product copy the design fixes; the copy moves to docs/UI.md with the build); +1, the three status words said to screen readers (§6.6)
 src/pdf-reader/engine/anchors.mjs 2  # 2026-09-22: the CJK ranges of the tokenizer's regexes
 src/pdf-reader/engine/latex-front.mjs 4  # 2026-09-22: the pseudo-translation's zh, zh-Hant and ja sample text (+1, zh-Hant, #32); a control word glued to a CJK character, quoted
 src/pdf-reader/engine/mt.mjs 3  # 2026-09-22: engine outputs quoted as evidence
@@ -53,7 +53,7 @@ tests/pdf-reader/controller.test.ts 1  # 2026-09-25: the contents' titles as a C
 tests/pdf-reader/ui/outline.test.ts 8  # 2026-09-25: the contents' titles as a Chinese reader sees them, the expectations
 tests/pdf-reader/ui/pane-floats.test.ts 1  # 2026-09-25: the pills' fields found by their Chinese names
 tests/pdf-reader/ui/status-views.test.ts 6  # 2026-09-25: the states' words as the reader shows them, the expectations; +1, the card's reason said in the status region
-tests/pdf-reader/ui/status.test.ts 10  # 2026-09-25: the states' words as the reader shows them, the expectations
+tests/pdf-reader/ui/status.test.ts 8  # 2026-09-25: the states' words as the reader shows them, the expectations
 tests/pdf-reader/ui/tip.test.ts 3  # 2026-09-25: the reader's controls found by their Chinese names, as the interface shows them
 tests/pdf-reader/ui/toolbar.test.ts 10  # 2026-09-25: the toolbar's controls found by their Chinese names
 tests/cache/key.test.ts 3

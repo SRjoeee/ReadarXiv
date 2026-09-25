@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { INITIAL, type ReaderState } from '@/pdf-reader/controller'
-import { capsuleOf, cardOf, lineOf } from '@/pdf-reader/ui/status'
+import { capsuleOf, cardOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
 import { setLocale } from '@/ui/strings'
 
 const at = (over: Partial<ReaderState>): ReaderState => ({ ...INITIAL, settings: DEFAULT_CONFIG, display: 'bilingual', ...over })
@@ -16,10 +16,14 @@ describe('the states (the reader\'s design, §8)', () => {
     expect(cardOf(at({ phase: 'ready', failure: 'network', shown: 'copy' }))).toBeNull()
   })
 
-  it('loading and translating say so in the capsule, their progress on the line under the toolbar (the maintainer, 2026-09-25)', () => {
-    expect(capsuleOf(at({ phase: 'loading' }), none)).toEqual({ kind: 'progress', text: '正在加载' })
-    expect(capsuleOf(at({ phase: 'translating', progress: 0.4 }), none)).toEqual({ kind: 'progress', text: '正在翻译' })
-    expect(capsuleOf(at({ phase: 'retranslating', progress: 0.1 }), none)).toMatchObject({ text: '正在按当前设置重新翻译' })
+  it('loading and translating show no capsule: the line under the toolbar is enough, and the words are said to screen readers (the maintainer, 2026-09-25)', () => {
+    for (const phase of ['loading', 'translating', 'retranslating'] as const) expect(capsuleOf(at({ phase }), none)).toBeNull()
+    expect([spokenOf(at({ phase: 'loading' })), spokenOf(at({ phase: 'translating' })), spokenOf(at({ phase: 'retranslating' })), spokenOf(at({ phase: 'ready' }))]).toEqual(['正在加载', '正在翻译', '正在按当前设置重新翻译', ''])
+  })
+
+  it('keeps a notice of paragraphs that failed for the run\'s end, and says a narrow window while a translation runs', () => {
+    expect(capsuleOf(at({ phase: 'translating', failedUnits: 3 }), none)).toBeNull()
+    expect(capsuleOf(at({ phase: 'translating', narrow: true }), none)).toMatchObject({ kind: 'narrow' })
   })
 
   it('the line: the PDF\'s download while it loads, the paragraphs translated while a translation runs, nothing while reading', () => {

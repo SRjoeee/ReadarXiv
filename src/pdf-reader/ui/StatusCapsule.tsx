@@ -1,14 +1,15 @@
 // The status capsule (the reader's design, §6.6): the document area's bottom centre, 58 px up, above the pills. A status
 // region present from the first paint, so that what it says later is announced; it rises in (240 ms) and leaves lighter
-// (160 ms); a new state of the same kind changes its words in place. How far it has come is the progress line's, under
-// the toolbar (ProgressLine). A notice has a chip and a close, the close remembered for the visit; the narrow window's
-// words leave by themselves after 4 s. A failure never takes the focus; the card's reason is said in this region
+// (160 ms); a new state of the same kind changes its words in place. A load or a translation under way has no capsule:
+// the progress line under the toolbar shows it (ProgressLine), and its words are said here. A notice has a chip and a
+// close, the close remembered for the visit; the narrow window's words leave by themselves after 4 s. A failure never
+// takes the focus; the card's reason is said in this region
 import { Info, X } from 'lucide'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { R, S } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { Icon } from './icons'
-import { type Capsule, capsuleOf, cardOf } from './status'
+import { type Capsule, capsuleOf, cardOf, spokenOf } from './status'
 import { useReader } from './use-reader'
 
 export function StatusCapsule({ controller, onChooseLanguage }: { controller: ReaderController; onChooseLanguage: () => void }) {
@@ -17,6 +18,8 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
   const now = useReader(controller, s => capsuleOf(s, { closed, narrowShown }))
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
   const card = useReader(controller, cardOf)
+  // a load or a translation under way: said here, shown by the progress line alone
+  const spoken = useReader(controller, spokenOf)
   // a capsule that goes is kept 160 ms, leaving (reader.css .capsule[data-out]); one that comes replaces it at once
   const [leaving, setLeaving] = useState<Capsule | null>(null)
   const last = useRef<Capsule | null>(null)
@@ -52,9 +55,10 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
   return (
     <div role="status" className="capsule-slot">
       {card && <span className="sr-only">{card.reason}</span>}
+      {spoken && <span className="sr-only">{spoken}</span>}
       {capsule && (
         <div ref={box} key={capsule.kind} className="chrome capsule" data-kind={capsule.kind} data-out={now ? undefined : ''}>
-          {capsule.kind !== 'progress' && <Icon node={Info} size={15} />}
+          <Icon node={Info} size={15} />
           <span key={capsule.text} className="words">{capsule.text}</span>
           {capsule.kind === 'notice' && (
             <>

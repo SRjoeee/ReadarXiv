@@ -6,7 +6,6 @@ import { R, S, languageName, reasonText } from '@/ui/strings'
 import type { ReaderState } from '../controller'
 
 export type Capsule =
-  | { kind: 'progress'; text: string }
   | { kind: 'notice'; text: string; action: 'retry' }
   | { kind: 'unsupported'; text: string; action: 'language' }
   | { kind: 'narrow'; text: string }
@@ -15,27 +14,32 @@ export interface Card { reason: string; action: 'retry' | 'settings' }
 /** the reasons a key settles: the settings are where it is fixed (the popup's rule) */
 const KEYS: ReadonlySet<ProviderErrorKind> = new Set(['no-key', 'auth'])
 
+/** a translation under way: the progress line shows it, and no capsule does (the maintainer, 2026-09-25) */
+const running = (state: ReaderState) => state.phase === 'translating' || state.phase === 'retranslating'
+
 export function capsuleOf(state: ReaderState, seen: { closed: boolean; narrowShown: boolean }): Capsule | null {
-  if (state.phase === 'failed') return null
-  if (state.phase === 'loading') return { kind: 'progress', text: R.status.loading }
-  if (state.phase === 'translating') return { kind: 'progress', text: R.status.translating }
-  if (state.phase === 'retranslating') return { kind: 'progress', text: R.status.again }
+  if (state.phase === 'failed' || state.phase === 'loading') return null
   if (!state.languageSupported && state.settings) return { kind: 'unsupported', text: R.status.unsupported(languageName(state.settings.targetLanguage)), action: 'language' }
-  if (state.failedUnits > 0 && !seen.closed) return { kind: 'notice', text: S.failed.text(state.failedUnits), action: 'retry' }
+  // the paragraphs that failed are told once the run has ended, with its retry
+  if (!running(state) && state.failedUnits > 0 && !seen.closed) return { kind: 'notice', text: S.failed.text(state.failedUnits), action: 'retry' }
   if (state.narrow && state.display === 'bilingual' && !seen.narrowShown) return { kind: 'narrow', text: R.status.narrow }
   return null
 }
 
+/** what is under way, said to screen readers in the status region: the progress line is decorative, and no capsule shows it */
+export function spokenOf(state: ReaderState): string {
+  return state.phase === 'loading' ? R.status.loading : state.phase === 'translating' ? R.status.translating : state.phase === 'retranslating' ? R.status.again : ''
+}
+
 /**
- * The progress line under the toolbar (the maintainer, 2026-09-25: the capsule says what is under way, the line how far
- * it has come): the PDF's download while the reader loads, the share of paragraphs translated while a translation runs.
- * A stage is a line of its own: the translation's starts afresh rather than the download's shrinking back
+ * The progress line under the toolbar, all that shows a load or a translation under way (the maintainer, 2026-09-25):
+ * the PDF's download while the reader loads, the share of paragraphs translated while a translation runs. A stage is a
+ * line of its own: the translation's starts afresh rather than the download's shrinking back
  */
 export interface Line { on: boolean; stage: 'load' | 'run'; value: number }
 export function lineOf(state: ReaderState): Line {
   if (state.phase === 'loading') return { on: true, stage: 'load', value: state.loaded }
-  const running = state.phase === 'translating' || state.phase === 'retranslating'
-  return { on: running, stage: 'run', value: state.progress }
+  return { on: running(state), stage: 'run', value: state.progress }
 }
 
 export function cardOf(state: ReaderState): Card | null {

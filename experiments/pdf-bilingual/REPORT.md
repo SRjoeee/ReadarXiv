@@ -1486,15 +1486,17 @@ maintainer had asked for the words to move, not the line, and asked for it back.
 - while a translation runs, the share of paragraphs done.
 
 Each stage is a line of its own, so the translation's starts afresh rather than the download's shrinking back. It grows
-by a transform and fades out at the length it reached. The capsule carries the words alone.
+by a transform and fades out at the length it reached. With the line there, the maintainer asked for no capsule while a
+load or a translation runs: the line says it. Its words are said to screen readers in the status region, and a
+notice of paragraphs that failed waits for the run's end.
 
 **MEASURED after the fixes.**
 
 | Check | Result |
 |---|---|
 | `spikes/reader-ui.mjs` | 40 checks, all passed. New: the pack's state reaches the service menu; one refit a side per contents toggle (12 before); the line out of sight while reading |
-| `spikes/reader-ui-live.mjs` | 9 checks, all passed. New: the line along the toolbar's foot, 2 px, growing (2 % → 7.6 % in the check); the capsule without a fill; the download followed to its end |
+| `spikes/reader-ui-live.mjs` | 8 checks, all passed. New: the line along the toolbar's foot, 2 px, growing (2 % → 7.6 % in the check); no capsule while it runs, its words in the status region; the download followed to its end |
 | `spikes/reader-settings.mjs`, `spikes/viewer-faults.mjs` | all passed |
-| `pnpm test` | 2348 passed |
+| `pnpm test` | 2349 passed |
 
 **Deferred.** The fifteen minors are in the ledger and go to #299 with the stage.

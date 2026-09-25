@@ -213,7 +213,7 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   html[data-axt-contents] .capsule-slot { left: var(--side); }
   .capsule { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 6px 0 12px; overflow: hidden; border-radius: 999px; white-space: nowrap; pointer-events: auto;
     background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); color: var(--ink); font-size: 12.5px; animation: capsule-in 240ms var(--ease); }
-  .capsule[data-kind="progress"], .capsule[data-kind="narrow"] { padding-inline-end: 14px; }
+  .capsule[data-kind="narrow"] { padding-inline-end: 14px; }
   .capsule[data-out] { animation: capsule-out 160ms ease-out forwards; pointer-events: none; }
   .capsule svg { color: var(--ink-2); }
   .capsule .words { animation: words-in 180ms ease-out; }

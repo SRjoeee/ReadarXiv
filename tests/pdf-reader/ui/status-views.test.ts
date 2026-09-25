@@ -20,7 +20,8 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     const region = container.querySelector('[role="status"]')!
     expect(region.textContent).toBe('')
     await act(async () => fake.set({ phase: 'translating', progress: 0.5 }))
-    expect(region.textContent).toContain('正在翻译')
+    // said, not shown: the line under the toolbar shows a translation under way (the maintainer, 2026-09-25)
+    expect([region.textContent, container.querySelector('.capsule')]).toEqual(['正在翻译', null])
   })
 
   it('the card\'s reason is said in the status region, as the card takes no focus (the final review)', async () => {

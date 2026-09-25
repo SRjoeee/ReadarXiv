@@ -214,7 +214,7 @@ The bilingual PDF reader's own words (the reader's design, `experiments/pdf-bili
 | S-R-09 | Download | 下载 · 译文 PDF · 原文 PDF | 译文 PDF greyed until the final translation is on screen |
 | S-R-10 | Leave | 在默认查看器中打开 | Back to the browser's own viewer |
 | S-R-11 | Page pills | 原文页码 · 译文页码 · 上一页 · 下一页 | |
-| S-R-12 | The status capsule | 正在加载 · 正在翻译 · 正在按当前设置重新翻译 | The words alone; how far it has come is the 2 px line along the toolbar's foot (the maintainer, 2026-09-25) |
+| S-R-12 | A load or a translation under way | 正在加载 · 正在翻译 · 正在按当前设置重新翻译 | Said to screen readers in the status region, not shown: the 2 px line along the toolbar's foot shows how far it has come (the maintainer, 2026-09-25) |
 | S-R-13 | Language not supported | PDF 对照暂不支持{语言} · 选择语言 | The action opens the language menu |
 | S-R-14 | Narrow window | 窗口较窄，暂只显示译文 | Once, when 对照 shows the translation alone (after S-P-74) |
 | S-R-15 | A notice's close button | 关闭 | |

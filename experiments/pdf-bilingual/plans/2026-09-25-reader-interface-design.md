@@ -272,9 +272,12 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
 - **Progress** is a line along the toolbar's foot, not the capsule's: 2 px of quiet ink (`--ink-3` at 80 %), its length
   the share done — the PDF's download while the reader loads, the paragraphs translated while a translation runs. It
   grows by a transform and fades out at the length it reached; each stage is a line of its own, so that the
-  translation's starts afresh rather than the download's shrinking back. The capsule carries the words alone. (The
-  harness's fifth round moved the progress into a fill of the capsule, ink at 8 %, with the status words; the maintainer
-  asked for the line back, 2026-09-25: the status words were what had to leave the header, not the line.)
+  translation's starts afresh rather than the download's shrinking back. It is all that shows a load or a translation
+  under way: no capsule does, and the words (正在加载, 正在翻译, 正在按当前设置重新翻译) are said to screen readers in
+  the status region. (The harness's fifth round moved the progress into a fill of the capsule, ink at 8 %, with the
+  status words; the maintainer asked for the line back, 2026-09-25 — the status words were what had to leave the
+  header, not the line — and then for no capsule while it runs: the line says it.)
+- The paragraphs that failed are told once the run has ended, not while it runs.
 - **A notice** carries a chip action and a close button; closing it is remembered for this paper's visit.
 - **When the translation's pane has nothing to show**, the same anatomy is a card centred in that pane (300 px, 14 px
   radius, the popover shadow), with a filled action; the capsule is not shown as well.
@@ -314,9 +317,9 @@ No state that tells the reader nothing is shown (no "done").
 | State | When | Shown |
 |---|---|---|
 | Reading | 原文; a translation ready; a stored translation shown, offline included | nothing |
-| Loading | a large PDF is loading | capsule: 正在加载; the progress line by the share downloaded |
-| Translating | the first translation | capsule: 正在翻译; the progress line by the share of paragraphs done |
-| Translating again | a stored translation, settings changed | capsule: 正在按当前设置重新翻译; the progress line likewise; the old translation stays readable and is replaced paragraph by paragraph |
+| Loading | a large PDF is loading | the progress line by the share downloaded; 正在加载 said to screen readers |
+| Translating | the first translation | the progress line by the share of paragraphs done; 正在翻译 said to screen readers |
+| Translating again | a stored translation, settings changed | the progress line likewise, 正在按当前设置重新翻译 said to screen readers; the old translation stays readable and is replaced paragraph by paragraph |
 | Some paragraphs failed | a translation with gaps | capsule: {n} 处翻译失败 · 重试 · close |
 | Language not supported | the shared target language is not one of the nine | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the nine translates |
 | Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services) |
