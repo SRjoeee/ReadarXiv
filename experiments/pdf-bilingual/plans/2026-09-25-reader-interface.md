@@ -7690,3 +7690,13 @@ part adds a feature. A gate that fails is fixed in this part, test first, and th
   `exp/pdf-bilingual`. Its body lists Parts 1–6 with REPORT's addenda 20–27. Then post `/devin review` as a comment of
   its own. Every comment is checked against the code or a probe before it is taken. The merge waits for Devin's
   terminal signal and a green CI.
+
+### Tasks 51 and 52: the maintainer's two findings (2026-09-25), done before Task 43
+
+From the maintainer's own test of 1706.03762, and fixed first so that the gates measure the final code:
+
+- **Task 51: an author block's footnotes stayed in English.** The front end took `\author{...}` for one opaque command,
+  its `\thanks` with it. The front matter's blocks of names and places now give each of their notes as a footnote of
+  its own, and the names stay as written. `PIPELINE_VERSION` 2.
+- **Task 52: figures drawn as transparency groups were not found on the translation's side.** PDF.js gives such a
+  form's box to the group it begins before it, and none to the form. `figureRegions` now takes it there.
