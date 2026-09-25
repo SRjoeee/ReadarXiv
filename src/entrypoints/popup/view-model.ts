@@ -7,6 +7,7 @@
 // note at a time (paused > replaced > images paused > the chosen service cannot run); the menus
 // open at any time, a change while the page is on restarts it in place (data.ts), and only a
 // choice that cannot run leaves the page behind the settings.
+import { languageItems } from '@/pdf-reader/ui/languages'
 import { activeStyle } from '@/config/appearance'
 import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
@@ -69,21 +70,23 @@ export interface PopupView {
   language: Row
   /** Only while the LLM is the chosen service */
   prompt: Row | null
-  /** The chosen translation style (S-P-82); the menu lists what the settings page holds */
-  style: Row
+  /** The chosen translation style (S-P-82); the menu lists what the settings page holds. Null where styles do nothing:
+   *  the PDF reader (§9.2) */
+  style: Row | null
   highlight: boolean
   images: boolean
   menu: { kind: MenuKind; label: string; items: MenuItem[]; search: boolean } | null
   note: Note | null
   failed: string | null
-  primary: { label: string; action: 'translate' | 'restore' | 'retranslate' | 'openHtml'; disabled: boolean; shortcut?: string }
+  primary: { label: string; action: 'translate' | 'restore' | 'retranslate' | 'openHtml' | 'readerTranslate' | 'readerOriginal'; disabled: boolean; shortcut?: string }
   secondary: { label: string; action: 'restore' } | null
   /**
    * An abstract or PDF page's two entries, drawn in the primary button's place (the reader's design, §2): the HTML
    * version or the bilingual PDF, the reader's to choose. Null elsewhere
    */
   entries: { html: Entry; pdf: Entry } | null
-  mode: { value: Mode; note: string | null }
+  /** `disabled`: the modes this page cannot show, greyed with S-P-75 (the PDF reader cannot stack) */
+  mode: { value: Mode; note: string | null; disabled?: readonly Mode[] }
 }
 
 /**
@@ -183,8 +186,34 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
   }
 }
 
+/**
+ * The popup while the PDF reader is laid over a PDF page (the reader's design, §9.2): it acts on the reader through the
+ * settings alone, which the reader follows. The rows are the ordinary ones, the language menu holds the nine the reader
+ * typesets, stacked is greyed (a stored stacked shows as side by side, what the reader shows), the primary shows the
+ * original or the translation, and the style row goes: styles do nothing on a typeset PDF
+ */
+function readerView(entry: EntryStatus, config: Config, input: PopupInput): PopupView {
+  const base = entryView(entry, config, input)
+  const original = config.pdfReader.original
+  return {
+    ...base,
+    style: null,
+    menu: input.menu === 'language'
+      ? { kind: 'language', label: S.rows.language, search: true, items: languageItems(config.targetLanguage) }
+      : input.menu === 'style' ? null : base.menu,
+    // the note of a service that cannot run stays; the one about the HTML version is not this page's matter
+    note: entry.html === null && base.note?.text === S.note.noHtml ? null : base.note,
+    primary: original
+      ? { label: S.primary.translate, action: 'readerTranslate', disabled: false }
+      : { label: S.primary.restore, action: 'readerOriginal', disabled: false },
+    entries: null,
+    mode: { value: config.mode === 'stack' ? 'side' : config.mode, note: null, disabled: ['stack'] },
+  }
+}
+
 export function derivePopupView(input: PopupInput): PopupView {
   const { page, saved, session, config, pack, menu, shortcut, savedRevision, entry } = input
+  if (page == null && entry?.readerOpen && config !== null) return readerView(entry, config, input)
   // An abstract or PDF page: the popup works there too, and its button takes the reader to the HTML version.
   // `== null` on purpose: a tab whose content script ignores `axt:page-status` resolves `undefined` rather than
   // rejecting, and an undefined page is no page (it once rendered an empty popup on every PDF page)

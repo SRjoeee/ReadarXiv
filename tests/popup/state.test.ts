@@ -453,6 +453,22 @@ describe('the rows that lead elsewhere', () => {
     none.stop()
   })
 
+  it('with the reader open, the primary shows the original or the translation, and a display writes the mode and lets the original go; stacked cannot be chosen (the reader\'s design, §9.2)', async () => {
+    const stored = async (test: (c: Awaited<ReturnType<typeof getConfig>>) => boolean) => { for (let i = 0; i < 100 && !test(await getConfig()); i++) await flush(); return test(await getConfig()) }
+    const p = await opened(w => { w.page = undefined; w.entry = { paper: '2501.07202', html: null, kind: 'pdf', pdf: null, readerOpen: true } })
+    p.popup.actions.readerOriginal()
+    expect(await stored(c => c.pdfReader.original)).toBe(true)
+    p.popup.actions.readerTranslate()
+    expect(await stored(c => !c.pdfReader.original)).toBe(true)
+    await setConfig({ ...(await getConfig()), pdfReader: { ...(await getConfig()).pdfReader, original: true } })
+    p.popup.actions.chooseMode('only')
+    expect(await stored(c => c.mode === 'only' && !c.pdfReader.original)).toBe(true)
+    p.popup.actions.chooseMode('stack')
+    await flush()
+    expect((await getConfig()).mode).toBe('only')
+    p.stop()
+  })
+
   it('the PDF entry opens the paper\'s PDF asking for the reader, in a new tab by default or on the page itself, and the popup closes (the reader\'s design, §2)', async () => {
     const pdf = 'https://arxiv.org/pdf/2501.07202#readarxiv'
     const p = await opened(w => { w.page = undefined; w.entry = { paper: '2501.07202', html: null, kind: 'abs', pdf, readerOpen: false } })

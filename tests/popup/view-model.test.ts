@@ -203,7 +203,7 @@ describe('derivePopupView (UI.md §4)', () => {
   it('P16 the style menu is what the settings page holds, in its order, with the chosen one marked', () => {
     const v = view('P16')
     const c = input('P16').config!
-    expect(v.style.value).toBe('与原文相同')
+    expect(v.style?.value).toBe('与原文相同')
     expect(v.menu!.kind).toBe('style')
     expect(v.menu!.search).toBe(false)
     // The last row is not a style but the way in to managing them on the settings page (S-P-83), the same role as the service menu's “Manage services…”
@@ -290,4 +290,33 @@ describe('the core strings seam (DESIGN §4.2)', () => {
     expect(coreStrings().retry).toBe(strings.S.page.retry)
     expect(coreStrings().failureTitle('no-key')).toBe(strings.reasonText('no-key'))
   })
+
+  describe('the popup while the PDF reader is open (the reader\'s design, §9.2)', () => {
+    const reader = (config = input('P17').config!, over = {}) => derivePopupView({ ...input('P17'), config, entry: { ...input('P17').entry!, kind: 'pdf', readerOpen: true }, ...over })
+    const withConfig = (patch: Record<string, unknown>) => ({ ...input('P17').config!, ...patch }) as NonNullable<ReturnType<typeof input>['config']>
+
+    it('lists the nine languages the reader typesets, alone', () => {
+      const v = reader(undefined, { menu: 'language' })
+      expect(v.menu?.items.map(i => i.id)).toEqual(['jpn', 'cmn', 'cmn-Hant', 'kor', 'deu', 'spa', 'fra', 'por', 'rus'])
+    })
+
+    it('greys stacked with its reason, and shows a stored stacked as side by side, what the reader shows', () => {
+      const v = reader(withConfig({ mode: 'stack' }))
+      expect(v.mode).toMatchObject({ value: 'side', disabled: ['stack'] })
+    })
+
+    it('offers the translation while the original is shown, the original while a translation is', () => {
+      const cfg = input('P17').config!
+      expect(reader(withConfig({ pdfReader: { ...cfg.pdfReader, original: true } })).primary).toMatchObject({ label: '翻译本页', action: 'readerTranslate' })
+      expect(reader(withConfig({ pdfReader: { ...cfg.pdfReader, original: false } })).primary).toMatchObject({ label: '显示原文', action: 'readerOriginal' })
+    })
+
+    it('has no style row and no entries; the service, the highlight and the images are as elsewhere', () => {
+      const v = reader()
+      expect([v.style, v.entries]).toEqual([null, null])
+      expect(v.service.value).toBe(view('P17').service.value)
+      expect([v.highlight, v.images]).toEqual([view('P17').highlight, view('P17').images])
+    })
+  })
 })
+

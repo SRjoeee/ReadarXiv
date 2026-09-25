@@ -34,6 +34,9 @@ export interface PopupActions {
   openHtml(): void
   /** An abstract or PDF page: the paper's bilingual PDF, where `reading.openIn` says (the reader's design, §2) */
   openPdf(): void
+  /** The PDF reader open: show the translation, or the original (`pdfReader.original`; the reader's design, §9.2) */
+  readerTranslate(): void
+  readerOriginal(): void
   /** A new session over the running one, or after a pause: the page follows the saved settings */
   retranslate(): void
   restore(): void
@@ -297,11 +300,17 @@ export function createPopupState(host: PopupHost): PopupState {
     }),
     // The full text switches its layout and saves the preference itself (`axt:set-mode`). An abstract or PDF page
     // has no layout to switch and no listener for that message: there the preference is saved here, and the paper
-    // opens in it (Devin on #247: the choice was lost, and the popup reported a failure)
+    // opens in it (Devin on #247: the choice was lost, and the popup reported a failure). A display chosen is a
+    // translated one: the PDF reader's original goes too (its design, §3), and the reader, open or next, follows. The
+    // reader cannot stack: stacked is greyed there, and a call for it does nothing (§9.2)
     chooseMode: (mode: Mode) => void guard(async () => {
-      if (entry) await patchConfig(latest => ({ ...latest, mode }))
+      if (entry?.readerOpen && mode === 'stack') return
+      if (entry) await patchConfig(latest => ({ ...latest, mode, pdfReader: { ...latest.pdfReader, original: false } }))
       else await host.toTab({ type: 'axt:set-mode', mode })
     }),
+    // the PDF reader open: what it shows, through the settings it follows (§9.2)
+    readerTranslate: () => void guard(async () => { await patchConfig(latest => ({ ...latest, pdfReader: { ...latest.pdfReader, original: false } })) }),
+    readerOriginal: () => void guard(async () => { await patchConfig(latest => ({ ...latest, pdfReader: { ...latest.pdfReader, original: true } })) }),
     retryFailed: () => void guard(async () => { await host.toTab({ type: 'axt:retry-failed' }) }),
     openMenu: kind => { menu = kind; changed() },
     closeMenu: () => { menu = null; changed() },

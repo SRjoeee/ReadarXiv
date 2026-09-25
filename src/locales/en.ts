@@ -83,6 +83,7 @@ const S: Locale['S'] = {
     sideTitle: 'Original and translation in two columns; a narrow window falls back to stacked',
     onlyTitle: 'Hides the original; references stay bilingual',
     narrow: 'The window is narrow, so this is stacked for now',
+    stackPdf: "The bilingual PDF can't be stacked", // S-P-75: the popup while the PDF reader is open
   },
   actionFailed: message => message,
   noActiveTab: 'No active tab',

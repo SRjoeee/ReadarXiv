@@ -86,6 +86,7 @@ const S = {
     sideTitle: '原文与译文并排；窗口较窄时按上下显示', // S-P-72
     onlyTitle: '隐藏原文，参考文献仍保留双语', // S-P-73
     narrow: '窗口较窄，暂按上下显示', // S-P-74
+    stackPdf: 'PDF 对照不支持上下排列', // S-P-75: the popup while the PDF reader is open
   },
   actionFailed: (message: string) => message, // S-P-90
   /** The popup action found no active tab to talk to (shared/messages.ts throws NoActiveTabError) */
