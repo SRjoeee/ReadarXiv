@@ -1,7 +1,8 @@
 // The PDF reader's cache of compiled translations (experiments/pdf-bilingual/REPORT.md, eighteenth addendum): one record
 // per paper version and target language. The PDF is encrypted under a key the page cannot export — not DRM: it keeps a
-// file from being copied out of the profile. Beyond a cap, the least recently opened go first. Every failure is a miss,
-// as in the translation cache (./store.ts). Its own database, so that neither's schema or migrations touch the other's.
+// file from being copied out of the profile. Beyond a cap, the least recently opened go first. Every failure of the
+// reader's reads and writes is a miss, as in the translation cache (./store.ts); the settings page's count and clear
+// report theirs. Its own database, so that neither's schema or migrations touch the other's.
 import Dexie, { type DexieOptions, type Table } from 'dexie'
 import { atLeastAsGood, mergeFigures, type FigureEntry, type Now, type PdfRecord, type PdfRecordBody } from './pdf-record'
 
@@ -59,6 +60,7 @@ export interface PdfStore {
   patchFigures(digest: string, lang: string, figures: FigureEntry[]): Promise<void>
   touch(digest: string, lang: string): Promise<void>
   delete(digest: string, lang: string): Promise<void>
+  /** These two reject on a failure: the settings page reports a store it cannot read or empty, rather than show it empty */
   clear(): Promise<void>
   usage(): Promise<{ count: number; bytes: number }>
 }
@@ -204,24 +206,16 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
     },
 
     async clear() {
-      try {
-        await db.transaction('rw', db.entries, db.bodies, db.pdfs, async () => {
-          await db.entries.clear()
-          await db.bodies.clear()
-          await db.pdfs.clear()
-        })
-      } catch (e) {
-        warn(`[axt-pdf] clear failed: ${(e as Error).message}`)
-      }
+      await db.transaction('rw', db.entries, db.bodies, db.pdfs, async () => {
+        await db.entries.clear()
+        await db.bodies.clear()
+        await db.pdfs.clear()
+      })
     },
 
     async usage() {
-      try {
-        const entries = await db.entries.toArray()
-        return { count: entries.length, bytes: entries.reduce((sum, e) => sum + e.bytes, 0) }
-      } catch {
-        return { count: 0, bytes: 0 }
-      }
+      const entries = await db.entries.toArray()
+      return { count: entries.length, bytes: entries.reduce((sum, e) => sum + e.bytes, 0) }
     },
   }
 }

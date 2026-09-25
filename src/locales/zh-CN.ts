@@ -120,7 +120,7 @@ const S = {
 
 const O = {
   title: '设置',
-  nav: { services: '翻译服务', reading: '阅读', prompts: '提示词与术语', data: '数据' },
+  nav: { services: '翻译服务', reading: '阅读', 'pdf-reader': 'PDF 阅读器', prompts: '提示词与术语', data: '数据' },
   /** S-O-05: the interface language. Not the target language, so it sits under the navigation, away from it */
   uiLanguage: '界面语言',
   uiLanguageAuto: '跟随浏览器',
@@ -290,11 +290,15 @@ const O = {
     },
     glossaryPlaceholder: 'token, 词元\nembedding, 嵌入' },
   close: '关闭',
+  /** S-O-55: the PDF reader's section; its other rows are the reader's own words (R) */
+  pdfReader: { enabled: '在 arXiv 的 PDF 上使用对照阅读器' },
   data: {
     cache: '已缓存的译文',
     cacheHint: '换了服务、模型或提示词会自动分开存，通常不用清',
     cacheLine: (entries: number, mb: string) => `${entries} 条 · ${mb} MB`,
     cacheError: '没能读取缓存',
+    pdf: '已缓存的 PDF 译文', // S-O-73
+    pdfLine: (papers: number, mb: string) => `${papers} 篇 · ${mb} MB`,
     clear: '清空',
     clearConfirm: '确认清空',
     cleared: '已清空',

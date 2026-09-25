@@ -117,13 +117,13 @@ Removed 2026-09-10: the state pills (S-P-12…18) and the config-fallback note (
 ### 3.2 Options page
 
 Rebuilt 2026-09-10 (spec `docs/superpowers/specs/2026-09-10-settings-services-appearance-design.md`).
-Four sections behind a left navigation; there is no save button — every control writes as it
+Five sections behind a left navigation; there is no save button — every control writes as it
 changes, and the two drawers commit with one button.
 
 | Id | Where | Copy | Notes |
 |---|---|---|---|
-| S-O-01 | Navigation | 翻译服务 · 阅读 · 提示词与术语 · 数据 | The hash keeps the place (`#services` …) |
-| S-O-02 | Settings could not be read | 设置读取失败，当前使用默认设置；已保存的 API Key 与服务选择均未生效。原设置保留未动，重置后可重新填写。 · 重置设置 → 确认重置 / 取消 · 重置没有成功，请再试一次 | Top of the page, with the reason under it and the reset (two clicks, the pattern of S-O-72's clear) at its right end. While it shows, “翻译服务”, “阅读”, “提示词与术语” and the interface language are not rendered: they would show the defaults as if they were the reader's, and nothing they save is accepted — what is stored is never written over except by this reset (DESIGN §9). “数据” stays. The popup carries no notice of its own; a change made there is answered by S-P-90 |
+| S-O-01 | Navigation | 翻译服务 · 阅读 · PDF 阅读器 · 提示词与术语 · 数据 | The hash keeps the place (`#services` …); the PDF reader's 设置 opens `#pdf-reader` |
+| S-O-02 | Settings could not be read | 设置读取失败，当前使用默认设置；已保存的 API Key 与服务选择均未生效。原设置保留未动，重置后可重新填写。 · 重置设置 → 确认重置 / 取消 · 重置没有成功，请再试一次 | Top of the page, with the reason under it and the reset (two clicks, the pattern of S-O-72's clear) at its right end. While it shows, “翻译服务”, “阅读”, “PDF 阅读器”, “提示词与术语” and the interface language are not rendered: they would show the defaults as if they were the reader's, and nothing they save is accepted — what is stored is never written over except by this reset (DESIGN §9). “数据” stays. The popup carries no notice of its own; a change made there is answered by S-P-90 |
 | S-O-05 | Sidebar · interface language | 界面语言 / 跟随浏览器 | [decided, 2026-09-11] Under the navigation, away from the target language: the two are two different things (§6). A change reloads the whole page |
 | S-O-10 | Built-in services | 内置服务 | Three cards with a radio each: Microsoft 翻译 · Google 翻译 · Chrome 翻译, the popup's names and hints (S-P-44…46) |
 | S-O-11 | Chrome card action | 下载 | While the pack is `downloadable`; the card cannot be chosen until it is there (S-P-40…43) |
@@ -155,6 +155,7 @@ changes, and the two drawers commit with one button.
 | S-O-49c | Floating button | 显示悬浮按钮 / 在 arXiv 的摘要页、PDF 和论文全文页贴在窗口边缘：翻译、控制面板、设置 | Switch, storage key `floatingEntry` (`enabled`; not in the configuration, DESIGN §4.0c), on by default, written through the background like the button's own drags. The way back from S-I-06c's 不再显示; every open arXiv page follows it at once. The popup, the key and the menu work either way |
 | S-O-50 | Preload range | 提前翻译的范围 / 屏幕下方多远的段落先翻；越近越省费用，整篇则一开始就全部请求 | 一屏 · 两屏 · 三屏 · 整篇. 整篇 reaches an open paper at once (everything still waiting is requested); the other stops apply from the next session |
 | S-O-51 | When translation starts | 开始翻译的时机 / 段落露出多少才开始翻 | 刚露出 · 露出一半 · 完全露出 |
+| S-O-55 | PDF reader | 在 arXiv 的 PDF 上使用对照阅读器 · 同步滚动 · 外观（浅色 · 深色 · 跟随系统） · 深色时调暗页面 | The section `#pdf-reader` (the reader's design, §9.3): configuration `pdfReader.enabled`, `sync`, `appearance`, `dimPages` — the values the reader's own menus change (S-R-06, S-R-08), in their words, so the two never drift apart. The first on: arXiv's PDFs open in the reader; off, the browser's viewer keeps them and `#readarxiv` still opens the reader |
 | S-O-60 | Prompts and glossary · not an LLM | 只对 LLM 服务生效 | A line at the top; the section stays usable |
 | S-O-61 | Prompts | 提示词 | The existing prompt manager on the tokens |
 | S-O-62 | Glossary | 术语表 / 每行「原文, 译文」，让同一篇里的译法一致 | Top right {n} 条; saved as typed, but only when the whole table parses |
@@ -162,6 +163,7 @@ changes, and the two drawers commit with one button.
 | S-O-70 | Data · cache | 已缓存的译文 / {n} 条 · {size} MB | 换了服务、模型或提示词会自动分开存，通常不用清 |
 | S-O-71 | Read failed | 没能读取缓存 | Never shown as 「0 条」 |
 | S-O-72 | Clear | 清空 → 确认清空 · 取消 / 已清空 | Two clicks; the result clears after 2 s |
+| S-O-73 | Data · PDF translations | 已缓存的 PDF 译文 / {n} 篇 · {size} MB | The papers the PDF reader keeps on this machine (the reader's design, §9.3), read from its store on the page's own origin; cleared as S-O-72 and reported as S-O-71 when the store cannot be read |
 
 ### 3.3 In-page components
 

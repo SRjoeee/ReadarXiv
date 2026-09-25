@@ -113,7 +113,7 @@ const S: Locale['S'] = {
 
 const O: Locale['O'] = {
   title: 'Settings',
-  nav: { services: 'Services', reading: 'Reading', prompts: 'Prompts', data: 'Data' },
+  nav: { services: 'Services', reading: 'Reading', 'pdf-reader': 'PDF reader', prompts: 'Prompts', data: 'Data' },
   uiLanguage: 'Interface language',
   uiLanguageAuto: 'Follow the browser',
   fallbackWhy: {
@@ -274,11 +274,14 @@ const O: Locale['O'] = {
     glossaryPlaceholder: 'token, jeton\nembedding, plongement',
   },
   close: 'Close',
+  pdfReader: { enabled: 'Use the bilingual reader for arXiv PDFs' },
   data: {
     cache: 'Saved translations',
     cacheHint: 'A different service, model or prompt is kept apart on its own; there is usually no need to clear this',
     cacheLine: (entries, mb) => `${entries} · ${mb} MB`,
     cacheError: 'Could not read what is saved',
+    pdf: 'Saved PDF translations',
+    pdfLine: (papers, mb) => `${papers} ${papers === 1 ? 'paper' : 'papers'} · ${mb} MB`,
     clear: 'Clear',
     clearConfirm: 'Confirm clear',
     cleared: 'Cleared',
