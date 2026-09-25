@@ -211,12 +211,15 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   /* the status capsule (§6.6): fixed over the document area, above the pills, moved with it by the contents */
   .capsule-slot { position: fixed; z-index: 7; inset: auto 0 58px 0; display: flex; justify-content: center; pointer-events: none; transition: left 200ms var(--ease); }
   html[data-axt-contents] .capsule-slot { left: var(--side); }
-  .capsule { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 6px 0 12px; overflow: hidden; border-radius: 999px; white-space: nowrap; pointer-events: auto;
+  .capsule { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 8px; min-height: 34px; max-width: calc(100% - 24px); padding: 0 6px 0 12px; overflow: hidden; border-radius: 999px; pointer-events: auto;
     background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); color: var(--ink); font-size: 12.5px; animation: capsule-in 240ms var(--ease); }
   .capsule[data-kind="narrow"] { padding-inline-end: 14px; }
   .capsule[data-out] { animation: capsule-out 160ms ease-out forwards; pointer-events: none; }
   .capsule svg { color: var(--ink-2); }
-  .capsule .words { animation: words-in 180ms ease-out; }
+  /* one line wherever it fits; in a window too narrow for it the words wrap, balanced, and the icon and the actions keep
+     their size (Part 6's interface review: at 320 px the English capsules ran past both edges, their action with them) */
+  .capsule .words { min-width: 0; padding-block: 8px; line-height: 1.35; text-wrap: balance; animation: words-in 180ms ease-out; }
+  .capsule > svg, .capsule .chip, .capsule .close { flex: none; }
   .capsule .chip { height: 24px; padding: 0 10px; border-radius: 999px; background: var(--fill); font-size: 12px; font-weight: 500; transition: scale 150ms; }
   .capsule .chip:active { scale: 0.96; }
   .capsule .close { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; color: var(--ink-3); }

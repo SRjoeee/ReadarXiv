@@ -321,6 +321,26 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   check('wide again: both sides', !(await state(page)).narrow && (await leftShown()))
   await page.close()
 }
+// the capsule in the narrowest window, in the longer pack: inside the window, its words whole, nothing of it cut (Part
+// 6's interface review: at 320 px the English capsules ran past both edges of the window, their action with them)
+{
+  const setup = await open({ mode: 'original' })
+  await patch(setup, { uiLanguage: 'en' })
+  await setup.waitForTimeout(800)
+  await setup.close()
+  const page = await open({ mode: 'bilingual' }, { width: 320, height: 800 })
+  const cap = await page.evaluate(() => {
+    const c = document.querySelector('.capsule'), w = c?.querySelector('.words')
+    if (!c || !w) return null
+    const r = c.getBoundingClientRect(), t = w.getBoundingClientRect()
+    return { text: w.textContent, capsule: [r.left, r.right].map(Math.round), words: [t.left, t.right].map(Math.round), vw: innerWidth }
+  })
+  check('the narrowest window, in English: the capsule inside the window and its words inside it', !!cap && cap.capsule[0] >= 0 && cap.capsule[1] <= cap.vw && cap.words[0] >= cap.capsule[0] && cap.words[1] <= cap.capsule[1], JSON.stringify(cap))
+  await shot(page, '23-narrow-320-en')
+  await patch(page, { uiLanguage: 'auto' })
+  await page.waitForTimeout(800)
+  await page.close()
+}
 
 // ---------------------------------------------------------------- Task 24: pinch zoom
 {

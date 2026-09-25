@@ -313,6 +313,7 @@ const R: Locale['R'] = {
     unsupported: (language: string) => `A bilingual PDF isn't available in ${language} yet`,
     chooseLanguage: 'Choose language',
     narrow: 'The window is narrow, so this shows the translation alone for now',
+    rateLimited: 'Too many requests',
   },
 }
 

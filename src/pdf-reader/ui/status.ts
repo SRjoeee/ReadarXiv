@@ -45,5 +45,6 @@ export function lineOf(state: ReaderState): Line {
 export function cardOf(state: ReaderState): Card | null {
   if (state.phase !== 'failed' || state.failure === 'aborted') return null
   const kind = state.failure ?? 'unknown'
-  return { reason: reasonText(kind), action: KEYS.has(kind) ? 'settings' : 'retry' }
+  // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's
+  return { reason: kind === 'rate-limit' ? R.status.rateLimited : reasonText(kind), action: KEYS.has(kind) ? 'settings' : 'retry' }
 }

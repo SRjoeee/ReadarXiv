@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { INITIAL, type ReaderState } from '@/pdf-reader/controller'
 import { capsuleOf, cardOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
-import { setLocale } from '@/ui/strings'
+import { R, setLocale } from '@/ui/strings'
 
 const at = (over: Partial<ReaderState>): ReaderState => ({ ...INITIAL, settings: DEFAULT_CONFIG, display: 'bilingual', ...over })
 const none = { closed: false, narrowShown: false }
@@ -56,5 +56,10 @@ describe('the states (the reader\'s design, §8)', () => {
     expect(cardOf(at({ phase: 'failed', failure: 'no-key' }))).toEqual({ reason: '尚未配置 API Key', action: 'settings' })
     expect(cardOf(at({ phase: 'failed', failure: 'auth' }))!.action).toBe('settings')
     expect(capsuleOf(at({ phase: 'failed', failure: 'network' }), none)).toBeNull()
+  })
+
+  it('too many requests: the card promises no retry of its own — a stopped run waits for the reader\'s (Part 6\'s interface review)', () => {
+    expect(cardOf(at({ phase: 'failed', failure: 'rate-limit' }))).toEqual({ reason: R.status.rateLimited, action: 'retry' })
+    expect(R.status.rateLimited).not.toMatch(/自动|shortly/)
   })
 })

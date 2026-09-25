@@ -335,6 +335,7 @@ const R = {
     unsupported: (language: string) => `PDF 对照暂不支持${language}`, // S-R-13
     chooseLanguage: '选择语言',
     narrow: '窗口较窄，暂只显示译文', // S-R-14, after S-P-74
+    rateLimited: '请求过于频繁', // S-R-16: a stopped run does not retry by itself, so the card promises no retry
   },
 }
 

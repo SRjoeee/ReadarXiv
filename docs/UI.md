@@ -223,6 +223,7 @@ The bilingual PDF reader's own words (the reader's design, `experiments/pdf-bili
 | S-R-13 | Language not supported | PDF 对照暂不支持{语言} · 选择语言 | The action opens the language menu |
 | S-R-14 | Narrow window | 窗口较窄，暂只显示译文 | Once, when 对照 shows the translation alone (after S-P-74) |
 | S-R-15 | A notice's close button | 关闭 | |
+| S-R-16 | The card · too many requests | 请求过于频繁 | The reader's own words for S-E's rate limit: S-E's 稍后自动重试 is the HTML page's chain retrying by itself, and a stopped run here does not — the reader retries (Part 6's interface review) |
 
 ## 4. Popup state table [decided, 2026-09-10 revised on ui/phase-1]
 
