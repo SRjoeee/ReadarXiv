@@ -14,9 +14,11 @@
 //   5. the network back while the stopped run still compiles its final: the translation goes on once that run ends
 //   6. a service that cannot run at the start: the card; another chosen: the translation runs again, in place, with
 //      the paper's title and abstract for the figures' text (Part 4's final review)
-//   7. a TeX page on which every compile fails: the capsule that says the paper cannot be had as a bilingual PDF, with
-//      its HTML version, the translated displays greyed; a second visit asks the service and the TeX page for nothing.
-//      A paper with no source, served its PDF for a source: the same capsule (the maintainer, 2026-09-26)
+//   7. a TeX page on which every compile of the translation fails, the paper's own source set: the capsule that says the
+//      paper cannot be had as a bilingual PDF, with its HTML version, the translated displays greyed; a second visit
+//      asks the service and the TeX page for nothing. One on which the paper's own source fails too: the same capsule,
+//      and a second visit tries again. A paper with no source, served its PDF for a source: the same capsule (the
+//      maintainer, 2026-09-26)
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
@@ -257,19 +259,21 @@ if (CASES.has(6)) {
 }
 
 if (CASES.has(7)) {
-  // 7. a TeX page that answers, and on which every compile stops at a TeX error; its loads counted
-  const refusing = { loads: 0 }
-  const tex = await serve((req, res) => {
-    refusing.loads++
+  // 7. a TeX page that answers, and on which every compile of the translation stops at a TeX error; the paper's own
+  // source (the marked original: a rerun of a draft) set, if `own`. Its loads counted
+  const texPage = own => serve((req, res) => {
+    texPage.loads = (texPage.loads ?? 0) + 1
     res.writeHead(200, { 'content-type': 'text/html' }).end(`<!doctype html><script>
+const original = m => m.rerun && new TextDecoder('latin1').decode(m.overrides.find(f => f.path === m.main)?.content ?? new Uint8Array()).includes('{draft}{graphicx}')
 addEventListener('message', e => {
   const m = e.data, reply = d => e.source.postMessage(d, e.origin)
   if (m?.type === 'init') reply({ type: 'init-done', ms: 0 })
-  if (m?.type === 'compile') reply({ type: 'compiled', id: m.id, ok: false, error: 'exit 1', log: '! LaTeX Error: this page sets nothing.', ms: 1 })
+  if (m?.type === 'compile') reply(${own} && original(m) ? { type: 'compiled', id: m.id, ok: true, pdf: new Uint8Array([37]), log: '', ms: 1 } : { type: 'compiled', id: m.id, ok: false, error: 'exit 1', log: '! LaTeX Error: this page sets nothing.', ms: 1 })
 })
 parent.postMessage({ type: 'ready' }, '*')
 </script>`)
   })
+  const tex = await texPage(true), refusing = { get loads() { return texPage.loads ?? 0 } }
   const refusingSite = { site: `http://127.0.0.1:${tex.address().port}` }
   const html = `https://arxiv.org/html/${paper}#readarxiv`
   // arXiv's HTML version, answered here: the reader's HEAD, and the tab its link opens
@@ -295,6 +299,15 @@ parent.postMessage({ type: 'ready' }, '*')
   const again = await settledHeld()
   const evs2 = (await events()).map(e => e.event)
   check('…a second visit: the same capsule, the service and the TeX page asked for nothing', again && endpoint.requests === requests && refusing.loads === loads && !evs2.includes('translated'), JSON.stringify({ again, requests: endpoint.requests - requests, loads: refusing.loads - loads, capsule: await capsule() }))
+  // the paper's own source not set either: the compiler, or its files, may have been down — said, and tried again
+  const down = await texPage(false), downSite = { site: `http://127.0.0.1:${down.address().port}` }
+  await freshVisit(downSite)
+  const once = await settledHeld()
+  const loads2 = refusing.loads
+  await page.goto(urlOf('translation', downSite))
+  const tried = await settledHeld()
+  check('every compile failing, the paper\'s own too: the same capsule, and a second visit tries again (Codex)', once && tried && refusing.loads > loads2, JSON.stringify({ once, tried, loads: refusing.loads - loads2 }))
+  down.close()
   // a paper with no source: its PDF served for its source (arXiv's answer for a PDF-only submission)
   await freshVisit({ src: `${at}/pdf/${paper}` })
   const noSource = await settledHeld()

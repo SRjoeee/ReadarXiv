@@ -1766,10 +1766,11 @@ async function live() {
     if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
     stopped = result.stopped ? { event: 'stopped', kind: result.stopped } : null
     await swaps
-    // every way of setting it tried and failed, a whole translation in hand and nothing on screen: remembered, so that
-    // a visit again asks nothing of the service (the maintainer, 2026-09-26)
+    // every way of setting it tried and failed, a whole translation in hand and nothing on screen (the maintainer,
+    // 2026-09-26). Remembered, so that a visit again asks nothing of the service, only when the paper's own source set
+    // here: a TeX error from a compiler whose files were not there says nothing of the paper, and is tried again (Codex)
     if (result.exhausted && !result.stopped && !compiledOnce && !cached) {
-      if (cacheKey) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, PIPELINE_VERSION)
+      if (cacheKey && result.originalOk) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, PIPELINE_VERSION)
       note('done', result)
       return fail('cannot typeset', `None of the ways of typesetting ${paper} into ${lang} worked: the right side shows the original`)
     }

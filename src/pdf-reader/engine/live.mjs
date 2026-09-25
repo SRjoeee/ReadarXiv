@@ -145,8 +145,10 @@ export const PIPELINE_VERSION = '2'
  * `seed`, index → the old translation { pieces, by, tried, state }, fills the run at the start; `marks`, the left
  * side's marks when known, skips the marked original; `identity` is what each unit is tried under; `pipelineCurrent`,
  * whether the seed's pipeline is this one. Resolves when the final compile is in, with `results` (index → { pieces,
- * state, by, tried }), `changed` (anything typeset changed), `settled` (a final that set every letter) and `exhausted`
- * (every strategy failed to set the final, none for want of time: the paper cannot be had this way).
+ * state, by, tried }), `changed` (anything typeset changed), `settled` (a final that set every letter), `exhausted`
+ * (every strategy failed to set the final, none for want of time: the paper cannot be had this way) and, with it,
+ * `originalOk` (the paper's own source set here, or before: only then is it the translation that cannot be set, rather
+ * than the compiler or its files that were down).
  */
 export async function runLive(paper, { lang, compile, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, identity = null, pipelineCurrent = false }) {
   const { units, kept, meta, project } = paper
@@ -290,6 +292,7 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
     note('next strategy', { strategy: strategy().name })
   }
   if (ok) onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
-  if (!marks) await original()
-  return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, stopped, missing: missing() }
+  // marks known come only from a compile of the paper's own source that set (onOriginal)
+  const own = marks ? null : await original()
+  return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing() }
 }

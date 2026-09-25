@@ -192,14 +192,23 @@ cases.push(['a final that twice did not answer ends the run with what is shown, 
   // a slow machine says nothing of the paper: not remembered as one that cannot be typeset
   assert.equal(r.exhausted, false)
 }])
-cases.push(['a paper no strategy sets is told apart: every strategy tried, nothing shown (the maintainer, 2026-09-26)', async () => {
-  const paper = openPaper(tex(PARAS)), events = []
-  // the fonts probe answers; every compile of the translation stops at a TeX error
+/** a compiler that sets the fonts probe and, if `own`, the paper's own source (the marked original: a rerun of a
+ *  draft); every compile of the translation stops at a TeX error */
+function refusing(own) {
   let n = 0
-  const compile = async req => (++n === 1 ? { ok: true, pdf: new Uint8Array([1]), log: '', ms: 1 } : { ok: false, error: 'exit 1', log: `! LaTeX Error: ${req.engine} cannot set this.`, ms: 1 })
-  const r = await runLive(paper, { lang: 'zh', compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: e => events.push(e) })
+  const isOriginal = req => req.rerun && new TextDecoder('latin1').decode(req.overrides.get(req.main)).includes('{draft}{graphicx}')
+  return async req => (++n === 1 || (own && isOriginal(req)) ? { ok: true, pdf: new Uint8Array([1]), log: '', ms: 1 } : { ok: false, error: 'exit 1', log: `! LaTeX Error: ${req.engine} cannot set this.`, ms: 1 })
+}
+cases.push(['a paper no strategy sets is told apart: every strategy tried, nothing shown, its own source set (the maintainer, 2026-09-26)', async () => {
+  const paper = openPaper(tex(PARAS)), events = []
+  const r = await runLive(paper, { lang: 'zh', compile: refusing(true), translate: echo('B'), format: 'markers', marks: null, identity: 'B', note: e => events.push(e) })
   assert.ok(events.includes('next strategy'), 'the chain was walked')
-  assert.deepEqual([r.previews, r.settled, r.exhausted], [0, false, true])
+  assert.deepEqual([r.previews, r.settled, r.exhausted, r.originalOk], [0, false, true, true])
+}])
+cases.push(['every compile failing, the paper\'s own included, says nothing of the paper: the compiler or its files may be down (Codex)', async () => {
+  const paper = openPaper(tex(PARAS))
+  const r = await runLive(paper, { lang: 'zh', compile: refusing(false), translate: echo('B'), format: 'markers', marks: null, identity: 'B' })
+  assert.deepEqual([r.exhausted, r.originalOk], [true, false])
 }])
 
 /** a compiler as BusyTeX's worker is: a compile that timed out goes on, and its output answers the next compile */
