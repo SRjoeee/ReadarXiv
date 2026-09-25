@@ -187,7 +187,8 @@ function ReadingRow({ view, actions }: { view: View; actions: PopupActions }) {
   const anchor = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   return (
-    <div ref={anchor} className="flex items-center justify-between gap-2 px-1 text-[12px] font-semibold text-fg-2">
+    // Without the style row (the reader open) the two switches sit together at the start, not pushed to the two ends
+    <div ref={anchor} className={`flex items-center px-1 text-[12px] font-semibold text-fg-2 ${view.style ? 'justify-between gap-2' : 'gap-5'}`}>
       <Switch small checked={view.highlight} onChange={actions.setHighlight} label={S.rows.highlight} text={S.rows.highlight} title={S.rows.highlightTitle} />
       <Switch small checked={view.images} onChange={actions.setImages} label={S.rows.images} text={S.rows.images} />
       {/* no style row where the translation styles do nothing: a typeset PDF (the reader's design, §9.2) */}
