@@ -179,6 +179,23 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.keyboard.press('2')
   await page.waitForTimeout(500)
   check('the 2 key comes back to side by side', (await state(page)).display === 'bilingual')
+  // the other two keys, and the switch's arrows as a radio group's (the design, §6.2, §14)
+  await page.keyboard.press('1')
+  await page.waitForTimeout(400)
+  const one = (await state(page)).display
+  await page.keyboard.press('3')
+  await page.waitForTimeout(400)
+  const three = (await state(page)).display
+  await page.getByRole('radio', { name: '译文' }).focus()
+  await page.keyboard.press('ArrowLeft')
+  await page.waitForTimeout(400)
+  const left = await page.evaluate(() => ({ display: window.__reader.controller.getState().display, focus: document.activeElement?.getAttribute('aria-label') }))
+  await page.keyboard.press('ArrowRight')
+  await page.waitForTimeout(400)
+  const right = (await state(page)).display
+  check('the 1 and 3 keys choose the original and the translation; the switch\'s arrows move its choice and its focus', one === 'original' && three === 'translation' && left.display === 'bilingual' && left.focus === '对照' && right === 'translation', JSON.stringify({ one, three, left, right }))
+  await page.keyboard.press('2')
+  await page.waitForTimeout(400)
   const before = (await state(page)).scale
   await page.getByRole('button', { name: '放大' }).click()
   await page.waitForTimeout(300)

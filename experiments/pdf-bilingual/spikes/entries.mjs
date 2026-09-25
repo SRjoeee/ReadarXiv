@@ -1,7 +1,8 @@
 // The ways into the reader as a reader meets them (the reader's design, §2, §9), in a real browser on arXiv's own pages,
 // each with its screenshot in out/entries/: the popup on an abstract page and on a PDF page with the reader closed (the
 // two entries), the popup while the reader is open over the PDF (the reader's view), and the floating button's panel
-// on the abstract page (the main button is the way in). Needs the network; the build at the repository root.
+// on the abstract page (the main button is the way in); a PDF-only submission's greyed PDF entry; the settings page's
+// PDF reader section and its data line. Needs the network; the build at the repository root.
 //   node experiments/pdf-bilingual/spikes/entries.mjs [paper]
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -88,6 +89,50 @@ await page.goto(`https://arxiv.org/pdf/${paper}`, { waitUntil: 'load' })
   check('the reader open: the popup\'s primary, the stacked display greyed with its reason, no style row',
     !!framed && seen.entries.length === 0 && seen.primary.length === 1 && seen.stack[0]?.disabled && !!seen.stack[0]?.title && !seen.style,
     JSON.stringify(seen))
+}
+
+// 4. a PDF-only submission (the corpus's 2608.07562): the PDF entry greyed, without words (the design, §2)
+await page.goto('https://arxiv.org/abs/2608.07562', { waitUntil: 'load' })
+await sleep(3000)
+{
+  const seen = await popupOver(page, '5-pdf-only-popup')
+  const pdf = seen.entries.find(e => /PDF/.test(e.text ?? ''))
+  check('a PDF-only submission: the PDF entry greyed', pdf?.disabled === true, JSON.stringify(seen.entries))
+}
+
+// 5. the settings page: the PDF reader's section writes at once; the data section's PDF line counts what the reader
+// keeps and clears it in two presses. The store is the reader's IndexedDB on the extension's origin: the page opens it
+// first (its schema), then one entry row is written the way the store's eviction reads them
+{
+  const options = await context.newPage()
+  await options.goto(`chrome-extension://${id}/options.html#pdf-reader`)
+  await sleep(1200)
+  const rows = await options.evaluate(() => [...document.querySelectorAll('main [role="switch"]')].map(b => b.getAttribute('aria-label')))
+  await options.getByRole('switch', { name: /同步滚动|Sync scrolling/ }).click()
+  await sleep(500)
+  const synced = await worker.evaluate(async () => (await chrome.storage.local.get('config')).config.pdfReader.sync)
+  await options.getByRole('switch', { name: /同步滚动|Sync scrolling/ }).click()
+  check('the settings page\'s PDF reader section: its switches, each written at once', rows.length === 3 && synced === false, JSON.stringify({ rows, synced }))
+  await options.goto('about:blank')
+  await options.goto(`chrome-extension://${id}/options.html#data`)
+  await sleep(1200)
+  await options.evaluate(() => new Promise((resolve, reject) => {
+    const req = indexedDB.open('axt-pdf')
+    req.onsuccess = () => { const tx = req.result.transaction('entries', 'readwrite'); tx.objectStore('entries').put({ digest: 'd', lang: 'zh-CN', paper: 'x', engine: 'e', bytes: 1024 * 1024, createdAt: 1, openedAt: 1 }); tx.oncomplete = () => { req.result.close(); resolve(null) }; tx.onerror = () => reject(tx.error) }
+    req.onerror = () => reject(req.error)
+  }))
+  await options.reload()
+  await sleep(1200)
+  const line = () => options.evaluate(() => [...document.querySelectorAll('main span')].map(e => e.textContent).find(t => /^\d+ (篇|papers?) · /.test(t ?? '')) ?? null)
+  const before = await line()
+  const clears = options.getByRole('button', { name: /^(清空|Clear)$/ })
+  await clears.nth(1).click()
+  await options.getByRole('button', { name: /确认清空|Confirm clear/ }).click()
+  await sleep(1500)
+  const after = await line()
+  await options.screenshot({ path: join(out, '6-settings-data.png') })
+  check('the data section: the PDF translations counted, and cleared in two presses', /^1 (篇|paper) · 1\.0 MB$/.test(before ?? '') && /^0 (篇|papers) · 0\.0 MB$/.test(after ?? ''), JSON.stringify({ before, after }))
+  await options.close()
 }
 
 await context.close()
