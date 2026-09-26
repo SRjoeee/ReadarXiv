@@ -164,9 +164,11 @@ configuration too, so no value the reader cannot see keeps changing behaviour.
   service stored without a key by an earlier version stays, and is shown as needing one.
 
 **The service health record** (new, not configuration): `local:serviceHealth`, a map from a service's id to
-`{ rejected: <time> }`. The background writes it when a request to that service ends in `auth` (the key refused); a
-successful connection, a key update or the service's deletion clears it. It carries no key and nothing of the
-request. The settings row reads it (API Key 已失效, §6.3), and so does the popup: a rejected service counts as one that
+`{ rejected: <time> }`. The background writes it when a request to that service is answered 401 (the key refused),
+and only if the key and the address that request used are still the service's; a 403 is not about the key (a
+moderation refusal, a disallowed origin) and is not recorded. A successful connection clears it, and so does any change
+of the service's key or address and the service's deletion, all in the background, which watches the configuration
+and owns every write. It carries no key and nothing of the request. The settings row reads it (API Key 已失效, §6.3), and so does the popup: a rejected service counts as one that
 cannot run (UI.md §4's `runnable`), its reason is the rejection's (§5.2), and the background's chain passes over it
 as the popup says it will, until a connection from the settings page clears the mark. It lives outside the configuration
 because it is a fact the extension observed, not a choice the reader made, and a configuration that fails to parse
@@ -618,4 +620,5 @@ The maintainer approved this document on 2026-09-26, with its two open points as
 - **Where injected controls take their light or dark from** (§3): the extension's own controls, the floating button
   among them, follow the extension's appearance; the controls that sit on the paper follow the paper.
 - **The rejected-key record's scope** (§4): only an `auth` answer marks a key; a spent quota or a network failure does
-  not, since those pass by themselves.
+  not, since those pass by themselves. Narrowed at the branch's final review (2026-09-26): only a 401, since a 403 is
+  not about the key; and a change of the key or the address clears the mark.
