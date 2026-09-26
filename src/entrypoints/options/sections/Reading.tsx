@@ -16,11 +16,6 @@ import { O, copyName, S } from '@/ui/strings'
 import type { OptionsData } from '../data'
 import { useFloatingEntry } from '../floating-entry'
 
-/** The preload margin as screens rather than pixels — a number of pixels means nothing to a reader — and the whole paper (`all`, v15) */
-const MARGINS: readonly (number | 'all')[] = [900, 1800, 2700, 'all']
-/** The stop a stored margin shows as: `all` is its own stop, a number snaps to the nearest screen count */
-const marginStop = (value: number | 'all'): string => (value === 'all' ? 'all' : String(nearest(MARGINS.filter((m): m is number => m !== 'all'), value)))
-
 /**
  * The list with the profile written into it — in place, or appended when the profile is no longer there: deleted in
  * another tab while its drawer was open here, and the list followed. The reader's change is their later
@@ -28,8 +23,6 @@ const marginStop = (value: number | 'all'): string => (value === 'all' ? 'all' :
  */
 const withProfile = <T extends { id: string }>(list: readonly T[], next: T): T[] =>
   list.some(p => p.id === next.id) ? list.map(p => (p.id === next.id ? next : p)) : [...list, next]
-const THRESHOLDS = [0, 0.5, 1]
-const nearest = (stops: readonly number[], value: number) => stops.reduce((best, s) => (Math.abs(s - value) < Math.abs(best - value) ? s : best), stops[0]!)
 
 export function Reading({ data }: { data: OptionsData }) {
   const { config, patch } = data
@@ -133,23 +126,15 @@ export function Reading({ data }: { data: OptionsData }) {
         </Row>
       </div>
 
-      <h3 className="mb-1 text-[14px] font-bold">{O.reading.preloadRange}</h3>
-      <p className="mb-2 text-[11px] text-fg-2">{O.reading.preloadRangeHint}</p>
+      <h3 className="mb-1 text-[14px] font-bold">{O.reading.translateWay}</h3>
+      <p className="mb-2 text-[11px] text-fg-2">{O.reading.translateWayHints[config.preload === 'whole' ? 1 : 0]}</p>
       <div className="mb-6">
         <Segmented
-          value={marginStop(config.preload.margin)}
-          options={MARGINS.map((m, i) => ({ value: String(m), label: O.reading.preloadStops[i]!, title: O.reading.preloadStops[i]! }))}
-          onChange={next => void patch(latest => ({ ...latest, preload: { ...latest.preload, margin: next === 'all' ? 'all' : Number(next) } }))}
+          value={config.preload}
+          options={(['on-demand', 'whole'] as const).map((value, i) => ({ value, label: O.reading.translateWays[i]!, title: O.reading.translateWays[i]! }))}
+          onChange={preload => void patch(latest => ({ ...latest, preload }))}
         />
       </div>
-
-      <h3 className="mb-1 text-[14px] font-bold">{O.reading.threshold}</h3>
-      <p className="mb-2 text-[11px] text-fg-2">{O.reading.thresholdHint}</p>
-      <Segmented
-        value={String(nearest(THRESHOLDS, config.preload.threshold))}
-        options={THRESHOLDS.map((t, i) => ({ value: String(t), label: O.reading.thresholdStops[i]!, title: O.reading.thresholdStops[i]! }))}
-        onChange={next => void patch(latest => ({ ...latest, preload: { ...latest.preload, threshold: Number(next) } }))}
-      />
 
       {editingStyle && (
         <StyleEditor

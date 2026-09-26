@@ -18,6 +18,7 @@ import {
   startSentenceHighlight,
 } from '@/core/renderer'
 import { translateCall } from '@/core/run/call'
+import { preloadOf } from '@/core/scheduler/lazy'
 import { createSerialQueue } from '@/core/scheduler/serial'
 import { newSessionId } from '@/core/scheduler/session'
 import { translateTitle, type TitleTranslator } from '@/core/scheduler/title'
@@ -334,7 +335,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       capabilities: { maxBatchChars: status.maxBatchChars, maxBatchItems: status.maxBatchItems, renderPath: status.renderPath },
       transport: request => backend.translate(request),
       scope: session,
-      preload: config.preload,
+      preload: preloadOf(config.preload),
       // A figure's text — the labels inside a picture, blocks like any other (§15.6) — is asked for where the reader
       // has figures translated, the images' gate: refused, a label waits unasked and the gate opening offers it again
       admit: block => !isFigureText(block.el) || (started.config.image.enabled && started.config.image.modes.includes(started.modes.effective())),
@@ -426,7 +427,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       // The target the session runs on — the chain's, recorded at start (see `running`), not the configuration's
       target: session.running.target,
       scope: session.id,
-      preload: config.preload,
+      preload: preloadOf(config.preload),
       context: session.context,
       ocr: call => deps.ocr(call),
       translate: request => backend.translate(request),
@@ -554,10 +555,10 @@ export function createPageSession(deps: SessionDeps): PageSession {
         live.highlight = null
       }
     }
-    // The preload range (UI.md S-O-50): the whole-paper stop reaches an open paper at once — everything still waiting
-    // for the viewport is handed to both runs now. Any other change applies from the next session: a running
+    // The way to translate (the redesign's design, §6.5): whole reaches an open paper at once — everything still
+    // waiting for the viewport is handed to both runs now. On demand applies from the next session: a running
     // observer's distance cannot be moved, and what was requested cannot be taken back (Devin on #222)
-    if (live?.run && config.preload.margin === 'all' && live.config.preload.margin !== 'all') {
+    if (live?.run && config.preload === 'whole' && live.config.preload !== 'whole') {
       live.run.release()
       live.images?.run.release()
     }

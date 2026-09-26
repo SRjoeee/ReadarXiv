@@ -121,11 +121,10 @@ export async function chooseLanguage(options, search, name) {
   await sleep(200)
 }
 
-/** The “how far ahead to translate” range and the “when to start translating” threshold are named stops, not numbers */
-export async function setPreload(options, { range, threshold }) {
+/** The way to translate is a named stop (as you read / whole paper), not a number */
+export async function setPreload(options, { range }) {
   await openSection(options, 'reading')
   if (range) await options.getByRole('button', { name: range, exact: true }).click()
-  if (threshold) await options.getByRole('button', { name: threshold, exact: true }).click()
   await sleep(150)
 }
 

@@ -144,31 +144,22 @@ describe('config storage', () => {
   })
 })
 
-describe('the v14 → v15 migration: the preload range', () => {
+describe('the preload, v15 to v20', () => {
   beforeEach(() => {
     fakeBrowser.reset()
   })
 
-  it('a margin below one screen — the retired half-screen stop — becomes one screen; the threshold and the rest stay', async () => {
-    const v14 = { ...DEFAULT_CONFIG, version: 14, preload: { margin: 450, threshold: 0.5 } }
-    await fakeBrowser.storage.local.set({ config: v14, config$: { v: 14 } })
-    vi.resetModules()
-    const fresh = await import('@/config/storage')
-    const c = await fresh.getConfig()
-    expect(c.version).toBe(CONFIG_VERSION)
-    expect(c.preload).toEqual({ margin: 900, threshold: 0.5 })
-    expect(c.mode).toBe(DEFAULT_CONFIG.mode)
-  })
-
-  it('a margin of one screen or more stays as it was, and the whole paper (`all`) is a value the schema accepts', async () => {
-    const v14 = { ...DEFAULT_CONFIG, version: 14, preload: { margin: 1800, threshold: 0 } }
-    await fakeBrowser.storage.local.set({ config: v14, config$: { v: 14 } })
-    vi.resetModules()
-    const fresh = await import('@/config/storage')
-    const c = await fresh.getConfig()
-    expect(c.preload).toEqual({ margin: 1800, threshold: 0 })
-    await fresh.setConfig({ ...c, preload: { margin: 'all', threshold: 0 } })
-    expect((await fresh.getConfig()).preload.margin).toBe('all')
+  it('a stored margin, whatever it was, reads as on demand; the whole paper as whole (the redesign\'s design, §4)', async () => {
+    for (const [margin, expected] of [[450, 'on-demand'], [1800, 'on-demand'], ['all', 'whole']] as const) {
+      const v14 = { ...DEFAULT_CONFIG, version: 14, preload: { margin, threshold: 0.5 } }
+      await fakeBrowser.storage.local.set({ config: v14, config$: { v: 14 } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      const c = await fresh.getConfig()
+      expect(fresh.configFallbackReason()).toBeNull()
+      expect(c.preload).toBe(expected)
+      expect(c.mode).toBe(DEFAULT_CONFIG.mode)
+    }
   })
 })
 
@@ -211,7 +202,7 @@ describe('provider selection', () => {
     expect(c.services[0]?.apiKey).toBe('sk-keep')
     expect(c.targetLanguage).toBe('jpn')
     expect(c.prompts).toEqual({ promptId: 'default', patterns: [] })
-    expect(c.preload).toEqual({ margin: 1000, threshold: 0 })
+    expect(c.preload).toBe('on-demand')
   })
 
   it('a v2 configuration upgrades to the latest: the preload range added (Read Frog\'s default 1000px / 0), zh-TW becomes cmn-Hant, the rest as it was', async () => {
@@ -226,7 +217,7 @@ describe('provider selection', () => {
     const c = await fresh.getConfig()
     expect(c.version).toBe(CONFIG_VERSION)
     expect(c.targetLanguage).toBe('cmn-Hant')
-    expect(c.preload).toEqual({ margin: 1000, threshold: 0 })
+    expect(c.preload).toBe('on-demand')
     expect(c.prompts.promptId).toBe('precision-rewrite')
     expect(c.mode).toBe('only')
     expect(c.services[0]?.thinking).toBe('enabled')
@@ -247,8 +238,8 @@ describe('provider selection', () => {
       expect(c.version).toBe(CONFIG_VERSION)
       expect(c.targetLanguage).toBe(expected)
       expect(c.services[0]?.apiKey).toBe('sk-keep')
-      // 300 px is below one screen: v15 lifts it to the one-screen stop (the half-screen stop retired); the threshold rides through
-      expect(c.preload).toEqual({ margin: 900, threshold: 0.5 })
+      // any stored margin (v15 to v19) reads as on demand from v20 (the redesign's design, §4)
+      expect(c.preload).toBe('on-demand')
     }
   })
 
@@ -584,7 +575,7 @@ describe('provider selection', () => {
     const config = await fresh.getConfig()
     expect(fresh.configFallbackReason()).toBeNull()
     expect(config.version).toBe(CONFIG_VERSION)
-    // v19's appearance went on to v20's theme
+    // a configuration from before v19 has no appearance, and reaches v20 following the system
     expect(config.pdfReader).toEqual({ enabled: true, original: false, sync: true, swapped: false, dimPages: true })
     expect(config.theme).toBe('system')
     expect(config.mode).toBe('only')
@@ -618,7 +609,7 @@ describe('provider selection', () => {
     expect(fresh.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'pdfReader' })
   })
 
-  it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a preload margin under one screen becoming one screen', async () => {
+  it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a stored preload margin becoming on demand', async () => {
     const v12 = {
       ...DEFAULT_CONFIG, version: 12, provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-keep' }],
       preload: { margin: 450, threshold: 0 },
@@ -635,7 +626,7 @@ describe('provider selection', () => {
     expect(c.services).toEqual([{ ...SVC, apiKey: 'sk-keep' }])
     expect(c.provider).toBe(SVC.id)
     expect(c.appearance.activeStyle).toBe('green')
-    expect(c.preload).toEqual({ margin: 900, threshold: 0 })
+    expect(c.preload).toBe('on-demand')
   })
 
   it('v10 to v11: the image switch is derived from the mode list, on when any mode was ticked, off when none', async () => {
@@ -708,9 +699,9 @@ describe('provider selection', () => {
     vi.unstubAllGlobals()
   })
 
-  it('an out-of-range preload range is refused by the schema', async () => {
-    await expect(setConfig({ ...DEFAULT_CONFIG, preload: { margin: -1, threshold: 0 } })).rejects.toThrow()
-    await expect(setConfig({ ...DEFAULT_CONFIG, preload: { margin: 1000, threshold: 1.5 } })).rejects.toThrow()
+  it('a preload that is neither of the two choices is refused by the schema', async () => {
+    await expect(setConfig({ ...DEFAULT_CONFIG, preload: 'some' as never })).rejects.toThrow()
+    await expect(setConfig({ ...DEFAULT_CONFIG, preload: { margin: 1000, threshold: 0 } as never })).rejects.toThrow()
   })
 })
 

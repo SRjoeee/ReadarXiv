@@ -1,7 +1,6 @@
 // The configuration's shape (DESIGN §9). A change of shape bumps `CONFIG_VERSION` and gets a migration in storage.ts — the
 // only way (DESIGN §9): no field carries a zod default, so the version alone says what is in storage.
 import { z } from 'zod'
-import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
 import { DEFAULT_PROMPTS_CONFIG } from '@/providers/prompt-library'
 import { DEFAULT_APPEARANCE, appearanceSchema } from './appearance'
 import { BUILT_IN_SERVICES, SERVICE_ID_RE, serviceSchema } from './services'
@@ -81,14 +80,12 @@ export const configSchema = z.object({
   /** The engine fallback chain (§8.5): a failing first choice switches to the free engines of itself, so the whole page does not stop */
   fallback: z.object({ enabled: z.boolean() }),
   /**
-   * The viewport translation range (§10, Read Frog's preload): how many pixels below the viewport count as near
-   * (0–10000), or `all` — the whole paper is requested as the session starts (v15); how much must show to count as
-   * entered (0–1). The settings page offers the margin as one, two or three screens, or the whole paper
+   * How a paper is translated (v20; the redesign's design, §4): `on-demand`, what is being read and what comes next (a
+   * screen below the window, a paragraph entered as it first shows), or `whole`, the whole paper requested as it opens.
+   * The observer's numbers are the core's (`preloadOf`); until v20 they were stored, one to three screens and three
+   * starting points
    */
-  preload: z.object({
-    margin: z.union([z.number().min(0).max(10_000), z.literal('all')]),
-    threshold: z.number().min(0).max(1),
-  }),
+  preload: z.enum(['on-demand', 'whole']),
   /**
    * Reading aid (§7.7, since v10): on hover the matching sentence in the original and in the translation is marked
    * with a band (issue #105). On by default — it shows anything only when the engine reported sentence boundaries and
@@ -146,7 +143,7 @@ export const DEFAULT_CONFIG: Config = {
   appearance: DEFAULT_APPEARANCE,
   fallback: { enabled: true },
   prompts: DEFAULT_PROMPTS_CONFIG,
-  preload: { ...DEFAULT_PRELOAD },
+  preload: 'on-demand',
   reading: { sentenceHighlight: true, openIn: 'new-tab' },
   image: { enabled: true, modes: [...MODE_VALUES] },
   uiLanguage: 'auto',

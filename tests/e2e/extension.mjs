@@ -256,11 +256,11 @@ if (!process.env.AXT_E2E_IMAGES) await setSwitch(options, '图片翻译', false)
 await options.screenshot({ path: `${SHOTS}/options.png` })
 
 // ── The settings page: changes apply at once and survive a reload (no save button since v12; the configuration is written as the control changes) ─────────────
-await setPreload(options, { range: '两屏' })
+await setPreload(options, { range: '整篇翻译' })
 await options.reload({ waitUntil: 'domcontentloaded' })
 await openSection(options, 'reading')
-const rangeBack = await options.getByRole('button', { name: '两屏', exact: true }).getAttribute('aria-pressed')
-check('the settings page: the preload range set to two screens is still two screens after a reload', rangeBack === 'true', `read back aria-pressed=${rangeBack}`)
+const rangeBack = await options.getByRole('button', { name: '整篇翻译', exact: true }).getAttribute('aria-pressed')
+check('the settings page: the whole paper chosen is still chosen after a reload', rangeBack === 'true', `read back aria-pressed=${rangeBack}`)
 
 // ── The settings page: the hover highlight switch really changes (#130: a configuration field was added without a UI, and the reader could not turn it off) ────────
 {
@@ -275,7 +275,7 @@ check('the settings page: the preload range set to two screens is still two scre
   // The checks after this need it on
   await setSwitch(options, '对照高亮', true)
 }
-await setPreload(options, { range: '一屏' })
+await setPreload(options, { range: '按需翻译' })
 
 // ── The settings page: the image translation mode gate (DESIGN §15) applies at once and survives a reload ──────
 {
@@ -532,13 +532,13 @@ check('the settings page: after deleting the custom prompt the default is chosen
 
   // ── The whole-paper stop (§10, v15): every block is requested as the session starts, without a scroll. The paper was scrolled through
   // above, so nearly everything is cached; a block the scroll never brought near the viewport (measured: one passage of 292) still goes to the endpoint ──
-  await setPreload(options, { range: '整篇' })
+  await setPreload(options, { range: '整篇翻译' })
   logs.length = 0
   requests.length = 0
   await page.reload({ waitUntil: 'domcontentloaded' })
   const whole = idleOf(await waitForLog(logs, IDLE, 60_000, m => Number(m[2]) === Number(m[3])))
   check('the whole-paper stop: every block is requested at the start, with no scrolling, and every one completes (§10)', !!whole && whole.requested === whole.total && whole.done === whole.requested && whole.failed === 0, `${whole?.text ?? '(no idle line with every block requested)'}; endpoint requests ${requests.length} (the blocks the scroll never reached)`)
-  await setPreload(options, { range: '一屏' })
+  await setPreload(options, { range: '按需翻译' })
   await page.close()
 }
 

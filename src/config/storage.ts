@@ -108,14 +108,23 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
     // under another key, never released, which is not carried over
     19: (v18: (Omit<Config, 'version' | 'pdfReader'> & { version: 18 }) | null) =>
       typeof v18 !== 'object' || v18 === null ? v18 : { ...v18, version: 19 as const, pdfReader: { ...DEFAULT_PDF_READER } },
-    // v19 -> v20: the redesign (its design, §3, §4). The reader's appearance becomes the extension's theme. A pdfReader
-    // that is not an object (a hand edit) is passed through for the schema to name, as every migration here does
-    20: (v19: (Omit<Config, 'version' | 'theme'> & { version: 19; pdfReader?: unknown }) | null) => {
+    // v19 -> v20: the redesign (its design, §3, §4). The reader's appearance becomes the extension's theme; the stored
+    // preload numbers become the two ways to translate — `all` is whole, any number on demand. A field that is not an
+    // object (a hand edit) is passed through for the schema to name, as every migration here does
+    20: (v19: (Omit<Config, 'version' | 'theme' | 'preload' | 'pdfReader'> & { version: 19; pdfReader?: unknown; preload?: unknown }) | null) => {
       if (typeof v19 !== 'object' || v19 === null) return v19
-      const reader = v19.pdfReader
-      if (reader === null || typeof reader !== 'object' || Array.isArray(reader)) return { ...v19, version: 20 as const, theme: 'system' as const }
-      const { appearance, ...rest } = reader as Record<string, unknown>
-      return { ...v19, version: 20 as const, theme: appearance ?? 'system', pdfReader: rest }
+      const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
+      const out: Record<string, unknown> = { ...v19, version: 20 as const, theme: 'system' }
+      if (isObject(v19.pdfReader)) {
+        const { appearance, ...rest } = v19.pdfReader
+        // load-bearing: every configuration from v18 or older reaches v20 with no `appearance` at all, because
+        // migration 19 spreads today's DEFAULT_PDF_READER, which no longer has one — `'system'` is what those
+        // readers had in effect
+        out.theme = appearance ?? 'system'
+        out.pdfReader = rest
+      }
+      if (isObject(v19.preload)) out.preload = v19.preload.margin === 'all' ? 'whole' : 'on-demand'
+      return out
     },
   },
 })
