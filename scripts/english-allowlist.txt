@@ -58,7 +58,7 @@ tests/pdf-reader/ui/pane-floats.test.ts 1  # 2026-09-25: the pills' fields found
 tests/pdf-reader/ui/status-views.test.ts 8  # 2026-09-25: the states' words as the reader shows them, the expectations; +1, the card's reason said in the status region; +2, 2026-09-26: a paper that cannot be had, its words and its link's
 tests/pdf-reader/ui/status.test.ts 9  # 2026-09-25: the states' words as the reader shows them, the expectations; +1: the rate-limit card's words hold no promise of a retry by itself, checked in both packs' terms
 tests/pdf-reader/ui/tip.test.ts 3  # 2026-09-25: the reader's controls found by their Chinese names, as the interface shows them
-tests/pdf-reader/ui/toolbar.test.ts 17  # 2026-09-25: the toolbar's controls found by their Chinese names; +7, 2026-09-26: the interface review's names, links and shortcuts, found by their Chinese names
+tests/pdf-reader/ui/toolbar.test.ts 19  # 2026-09-25: the toolbar's controls found by their Chinese names; +7, 2026-09-26: the interface review's names, links and shortcuts, found by their Chinese names; +2, 2026-09-26: the zoom value's width held, found by its Chinese name
 tests/cache/key.test.ts 3
 tests/cache/store.test.ts 10
 tests/config/appearance.test.ts 1

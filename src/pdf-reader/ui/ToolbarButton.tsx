@@ -8,12 +8,14 @@
 import { type AnchorHTMLAttributes, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, useId } from 'react'
 import { useTip } from './tip'
 
-export function ToolbarButton({ label, value, valueClassName = '', hint, keys, pressed, disabled, onClick, anchor, href, children, className = '', ...rest }: {
+export function ToolbarButton({ label, value, valueClassName = '', valueWidest, hint, keys, pressed, disabled, onClick, anchor, href, children, className = '', ...rest }: {
   label: string
   /** what the button shows before its children, and its name starts with: the zoom's scale, the language, the service */
   value?: string
   /** the value's own look (the zoom's tabular figures) */
   valueClassName?: string
+  /** the widest the value can be, whose width it keeps as its digits come and go (the zoom's 99 % → 100 %) */
+  valueWidest?: string
   /** the anchor name of a popover this button opens, beside its tooltip's: anchor-name takes a list */
   anchor?: string
   hint?: string
@@ -40,7 +42,10 @@ export function ToolbarButton({ label, value, valueClassName = '', hint, keys, p
         </a>
       ) : (
         <button type="button" {...named} aria-keyshortcuts={keys} aria-pressed={pressed} aria-disabled={disabled || undefined} onClick={disabled ? undefined : onClick} className={`tbtn ${className}`} {...props} {...rest} style={style}>
-          {value !== undefined && <span id={`${id}-value`} data-value className={valueClassName}>{value}</span>}
+          {value !== undefined && (valueWidest === undefined
+            ? <span id={`${id}-value`} data-value className={valueClassName}>{value}</span>
+            // the widest drawn hidden in the same cell holds the width; out of the name, which is the value's alone
+            : <span className={`fit ${valueClassName}`}><span data-widest aria-hidden="true">{valueWidest}</span><span id={`${id}-value`} data-value>{value}</span></span>)}
           {children}
           {value !== undefined && <span id={`${id}-words`} hidden>{label}</span>}
         </button>

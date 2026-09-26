@@ -29,7 +29,7 @@ export function ZoomMenu({ controller }: { controller: ReaderController }) {
   ]
   return (
     <>
-      <ToolbarButton label={R.zoom.value} value={`${Math.round(state.scale * 100)}%`} valueClassName="tabular-nums" anchor={pop.anchor} {...pop.trigger} className="zoom-value">
+      <ToolbarButton label={R.zoom.value} value={`${Math.round(state.scale * 100)}%`} valueClassName="tabular-nums" valueWidest="000%" anchor={pop.anchor} {...pop.trigger} className="zoom-value">
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
       <Popover {...pop.popover} role="menu" label={R.zoom.value}>

@@ -172,7 +172,9 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 
 1. 交换左右 (`arrow-left-right`, pressed when swapped) and 同步滚动 (`link-2`, pressed when on). Both act in 对照 only;
    in the single displays they stay in place, greyed, so the bar never reflows.
-2. Zoom: − · the value with a chevron · +. The value opens a menu: 适合宽度, 适合页面, 实际大小, then 50 %–200 %; the
+2. Zoom: − · the value with a chevron · +. The value keeps the width of its widest, 000 %, in tabular figures, its
+   figures at the trailing edge, so that nothing on the bar moves as it changes (at 99 % → 100 % the button grew 3 px and
+   shifted everything beside it: better-typography, 2026-09-26). The value opens a menu: 适合宽度, 适合页面, 实际大小, then 50 %–200 %; the
    current one checked. Shortcuts ⌘− and ⌘+ (Ctrl on other systems).
 3. The target language (its name and a chevron, **no icon**: the translation mark belongs to the display switch alone,
    and the name says what the menu is) and the service (its name and a chevron). Their menus are §6.7's.
@@ -205,18 +207,21 @@ interface's language** (the maintainer's reason for icons: 「不同语言界面
 The chosen one sits on a lifted thumb that slides between segments in 220 ms; chosen icons take ink, the others ink-2,
 a disabled one ink-3 at 55 %.
 
-The icons, each on a 24 × 18 canvas, 1 unit = 1 CSS px, stroke 1.2 with round caps and joins:
+The icons, each on a 24 × 18 canvas, 1 unit = 1 CSS px, stroke 1 with round caps and joins — as the toolbar's Lucide
+icons render beside them — the frame's edges on the pixel grid (the maintainer's round 11, 2026-09-25; stroke 1.2 and
+`x 2.25 w 19.5` before):
 
-- **原文**: a pane (`rect x 2.25 y 2.5 w 19.5 h 13 rx 3`) with an **A** in its middle.
-- **对照**: the same pane split by a vertical rule at x 12.
+- **原文**: a pane (`rect x 2.5 y 2.5 w 19 h 13 rx 3`) with an **A** in its middle.
+- **对照**: the same pane split by a vertical rule at x 12, drawn `crispEdges` so that a 1x screen keeps it one pixel.
 - **译文**: the same pane with **文** in its middle.
 
 The letters are Noto Sans SC (SIL OFL 1.1) at weight 350, the face's DemiLight — its Latin and CJK designed together —
 turned into outlines so that every system draws the same shapes (system faces were tried first: headless Chromium gave
 PingFang's heaviest weight at that size, and Windows and Linux would draw other faces). Each is centred on the pane by
-its ink, not its em box: A 8 px high, 文 9 px (a CJK glyph looks smaller than a Latin capital of its height). 文 is
-narrowed across to 0.8 of its width (9.1 → 7.3 px, beside A's 6.5; the maintainer asked for it to come near A's width),
-and the weight that takes from its verticals and diagonals is given back by a 0.16 px stroke round its outline. The
+its ink, not its em box: A 8 px high, 文 8.8 px (a CJK glyph looks smaller than a Latin capital of its height). 文 is
+narrowed across to 0.76 of its width (to 6.74 px, beside A's 6.47; the maintainer asked for it to come near A's width),
+and the weight that takes from its verticals and diagonals is given back by a 0.18 px stroke round its outline (round
+11: 9 px, 0.8 and 0.16 before; its measurements are with the round's files). The
 outlines are produced by a script from the font (kept with the reader's code) and committed as path data; the font's
 licence goes into `docs/THIRD_PARTY.md`. The maintainer may refine 文 by hand later (「这个之后有时间我们再改」); editable
 SVGs of the three icons and of 文's full-width source outline were handed over for that.

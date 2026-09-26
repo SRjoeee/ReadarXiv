@@ -58,6 +58,13 @@ describe('the toolbar (the reader\'s design, §6.1)', () => {
     expect(controller.zoomBy.mock.calls).toEqual([[1.1], [1 / 1.1]])
   })
 
+  it('holds the zoom\'s value in the width of its widest, so that 99 % → 100 % shifts nothing; the widest is hidden, and out of its name (better-typography)', async () => {
+    const { container } = await mount({ scale: 0.83 })
+    const zoom = named(container, '缩放比例')
+    const widest = zoom.querySelector('[data-widest]')!
+    expect([widest.textContent, widest.getAttribute('aria-hidden'), nameOf(zoom)]).toEqual(['000%', 'true', '83% 缩放比例'])
+  })
+
   it('opens the contents from its lead', async () => {
     let opened = 0
     onContents = () => { opened++ }

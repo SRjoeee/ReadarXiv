@@ -564,6 +564,16 @@ for (const embedded of ['1', '0']) {
   const optionsAfter = await shown('pop-options')
   await page.setViewportSize({ width: 1440, height: 900 }); await page.waitForTimeout(300)
   check('a press on an open popover\'s own button closes it, the reading options\' menus too', zoomOpened && !zoomAfter && innerOpened && !innerAfter.menu && innerAfter.options && !optionsAfter, JSON.stringify({ zoomOpened, zoomAfter, innerOpened, innerAfter, optionsAfter }))
+  // the zoom's value through its range: its button's width, and the − beside it, never move (better-typography: a
+  // changing value shifts nothing; measured before, 60 → 63 px and 3.1 px at 99 % → 100 %)
+  const across = []
+  for (const s of [0.25, 0.83, 0.99, 1, 1.25, 4]) {
+    await page.evaluate(v => window.__reader.controller.zoomTo(v), s)
+    await page.waitForTimeout(400)
+    across.push(await page.evaluate(() => { const v = document.querySelector('[data-zoom] .zoom-value'), m = document.querySelector('[data-zoom] > .tbtn:first-child'); return [v.querySelector('[data-value]').textContent, Math.round(v.getBoundingClientRect().width * 10) / 10, Math.round(m.getBoundingClientRect().left * 10) / 10] }))
+  }
+  await page.evaluate(() => window.__reader.controller.zoomTo('page-width'))
+  check('the zoom\'s value from 25 % to 400 %: its button\'s width and the − beside it do not move (better-typography)', new Set(across.map(a => a[1])).size === 1 && new Set(across.map(a => a[2])).size === 1, JSON.stringify(across))
   // a touch screen: no hover's look is left on a control once a tap has passed (the pointer 'hovers' there after it)
   const cdp = await page.context().newCDPSession(page)
   // touch emulation, which makes (hover: none) true; emulating the media feature alone did not reach the page

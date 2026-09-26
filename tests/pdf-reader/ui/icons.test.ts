@@ -26,4 +26,17 @@ describe("the reader's icons (the reader's design, §4.2, §6.2)", () => {
     expect(await paths('bilingual')).toMatchObject({ rect: true, d: ['M12 2.5v13'] })
     expect(await paths('translation')).toMatchObject({ rect: true, d: [GLYPH_WEN], gain: String(WEN_GAIN) })
   })
+
+  it('draw the pane as the maintainer\'s round 11 set: a 1 px frame on the pixel grid, radius 3, the split crisp; U+6587 given back 0.18 px (2026-09-25)', async () => {
+    const drawn = async (display: 'original' | 'bilingual' | 'translation') => {
+      const { container, unmount } = await mountElement(createElement(DisplayIcon, { display }))
+      const svg = container.querySelector('svg')!, rect = svg.querySelector('rect')!
+      const out = { stroke: svg.getAttribute('stroke-width'), rect: ['x', 'y', 'width', 'height', 'rx'].map(k => rect.getAttribute(k)), split: svg.querySelector('path:not([fill])')?.getAttribute('shape-rendering') ?? null }
+      await unmount()
+      return out
+    }
+    expect(await drawn('original')).toEqual({ stroke: '1', rect: ['2.5', '2.5', '19', '13', '3'], split: null })
+    expect((await drawn('bilingual')).split).toBe('crispEdges')
+    expect(WEN_GAIN).toBe(0.18)
+  })
 })
