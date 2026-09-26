@@ -796,6 +796,10 @@ describe('createLocalTransport: a refused key (the redesign\'s design, §4)', ()
     const status = await t.status()
     expect(status.available).toBe(false)
     expect(status.fallback).toEqual({ id: 'microsoft' })
+    // The seeded demotion names the refused service as the reason, from the first status — not only after a call
+    // has run and set it (Codex review, round 1)
+    expect(status.engine.id).toBe('microsoft')
+    expect(status.engine.demoted?.id).toBe(SVC.id)
   })
 
   it('still reaches it for a call that names it: the settings page asking whether the key works now', async () => {

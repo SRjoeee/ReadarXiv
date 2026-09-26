@@ -27,6 +27,12 @@ export async function clearRejected(id: string): Promise<boolean> {
   return true
 }
 
-export function watchRejected(callback: (ids: Set<string>) => void): () => void {
-  return item.watch(value => callback(new Set(Object.keys(value ?? {}))))
+/**
+ * Tells a watcher both the current ids and the ones just before, straight from WXT's own `(newValue, oldValue)` pair:
+ * the background rebuilds the chain in force on any difference between them, added or removed, and needs no copy of
+ * its own to compare against (Codex review, round 1). The popup (Task 12) subscribes the same way, to tell an
+ * addition from a clearing
+ */
+export function watchRejected(callback: (ids: Set<string>, previous: Set<string>) => void): () => void {
+  return item.watch((value, oldValue) => callback(new Set(Object.keys(value ?? {})), new Set(Object.keys(oldValue ?? {}))))
 }

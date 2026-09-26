@@ -53,22 +53,23 @@ export default defineBackground(() => {
         transport: await createLocalTransport(resolved, {
           cache, cancelled, warn: diag, rejected,
           // a refused key is remembered across sessions (the redesign's design, §4); a free engine's failure is not ours to record
-          onDemoted: info => { if (info.kind === 'auth' && SERVICE_ID_RE.test(info.id)) void markRejected(info.id) },
+          onFailure: info => { if (info.kind === 'auth' && SERVICE_ID_RE.test(info.id)) void markRejected(info.id) },
         }),
       }
     },
     // The router is created below; a superseded chain is only ever swept after a build, long after that
     owned: transport => router.sessionsOn(transport) > 0,
   })
-  // A mark cleared (a connection that succeeded) rebuilds the chain, so that the service comes back; a mark added
-  // needs nothing, the chain in force having demoted it already. `defineBackground`'s callback is synchronous: the
-  // first read lands before any connection a reader could make
-  let known = new Set<string>()
-  void rejectedServices().then(ids => { known = ids })
-  watchRejected(ids => {
-    const cleared = [...known].some(id => !ids.has(id))
-    known = ids
-    if (cleared) void chain.activate()
+  /**
+   * Either direction rebuilds the chain in force: a mark added must demote that engine right away — the record
+   * exists but a chain built before it would otherwise go on trying the refused key until some unrelated rebuild —
+   * and a mark cleared brings the engine back (the redesign's design, §4). WXT's own `(newValue, oldValue)` pair
+   * (service-health.ts's `watchRejected`) is compared directly here, so there is no `known` copy of this worker's own
+   * to race the first read of it (Codex review, round 1)
+   */
+  watchRejected((ids, previous) => {
+    const changed = ids.size !== previous.size || [...ids].some(id => !previous.has(id))
+    if (changed) void chain.activate()
   })
   const transportOf = () => chain.current()
   /** The interface language this worker uses, to recognise “the reader changed it” (the context menu's title has to be redrawn) */

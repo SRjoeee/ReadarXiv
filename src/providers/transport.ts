@@ -106,8 +106,8 @@ export interface LocalTransportDeps extends Pick<TranslateServiceDeps, 'queue' |
   warn?: (line: string) => void
   /** The reader's services whose key the endpoint refused (the service health record): demoted from the start */
   rejected?: ReadonlySet<string>
-  /** Told of every demotion: the background remembers a refused key */
-  onDemoted?: (info: DemotedInfo) => void
+  /** Told of every failed step, demoted or not — with fallback off the one step never demotes (Codex review, round 1) */
+  onFailure?: (info: DemotedInfo) => void
 }
 
 /**
@@ -148,7 +148,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
   const service = createFallbackService(steps, {
     ...(deps.warn ? { warn: deps.warn } : {}),
     ...(seeded.length ? { demoted: seeded } : {}),
-    ...(deps.onDemoted ? { onDemoted: deps.onDemoted } : {}),
+    ...(deps.onFailure ? { onFailure: deps.onFailure } : {}),
   })
 
   /**

@@ -30,4 +30,17 @@ describe('the service health record (the redesign\'s design, §4)', () => {
     expect(seen).toEqual([['svc-abcd1234'], []])
     stop()
   })
+
+  it('gives the ids just before alongside the current ones, so a watcher can tell an addition from a clearing without keeping a copy of its own (Codex review, round 1)', async () => {
+    const seen: [string[], string[]][] = []
+    const stop = watchRejected((ids, previous) => seen.push([[...ids], [...previous]]))
+    await markRejected('svc-abcd1234')
+    await clearRejected('svc-abcd1234')
+    await new Promise(r => setTimeout(r, 0))
+    expect(seen).toEqual([
+      [['svc-abcd1234'], []],
+      [[], ['svc-abcd1234']],
+    ])
+    stop()
+  })
 })

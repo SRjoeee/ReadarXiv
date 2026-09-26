@@ -70,7 +70,7 @@ interface Demotion {
 
 export function createFallbackService(
   steps: readonly FallbackStep[],
-  opts: { cooldownMs?: number; now?: () => number; warn?: (line: string) => void; demoted?: readonly DemotedInfo[]; onDemoted?: (info: DemotedInfo) => void } = {},
+  opts: { cooldownMs?: number; now?: () => number; warn?: (line: string) => void; demoted?: readonly DemotedInfo[]; onFailure?: (info: DemotedInfo) => void } = {},
 ): FallbackService {
   if (steps.length === 0) throw new Error('a fallback chain needs at least one engine')
   const cooldownMs = opts.cooldownMs ?? DEFAULT_COOLDOWN_MS
@@ -80,8 +80,11 @@ export function createFallbackService(
 
   // Demotions known before the first call (the redesign's design, §4): a service whose key the endpoint refused, which
   // the background remembers across sessions. For good, as any permanent kind is; a connection that succeeds clears
-  // the record and rebuilds the chain
-  for (const info of opts.demoted ?? []) demotions.set(info.id, { info })
+  // the record and rebuilds the chain. The first of them is also `lastDemoted`: with nothing translated yet, this is
+  // still the most recent reason the popup has for showing anything other than the configured engine (Codex review, round 1)
+  const seeded = opts.demoted ?? []
+  for (const info of seeded) demotions.set(info.id, { info })
+  if (seeded.length > 0) lastDemoted = seeded[0]
 
   const isDemoted = (id: string): boolean => {
     const demotion = demotions.get(id)
@@ -109,7 +112,6 @@ export function createFallbackService(
     lastDemoted = info
     console.warn(`[axt] ${step.provider.id} demoted (${error.kind}): ${error.message}`)
     opts.warn?.(`[axt] ${step.provider.id} demoted: ${failureLine(error.kind, error.message, getRequestErrorMeta(error).statusCode)}`)
-    opts.onDemoted?.(info)
   }
 
   const translate = async (call: TranslateCall): Promise<TranslateMessageResponse> => {
@@ -133,6 +135,10 @@ export function createFallbackService(
         demotions.delete(step.provider.id)
         return response
       }
+      // Every failed step is reported, whether or not it goes on to demote: with fallback off the chain is one
+      // step, and `demote` (which only runs when there is a next step to hand over to) is never reached — yet the
+      // background still has to learn this engine's key was refused (Codex review, round 1)
+      opts.onFailure?.({ id: step.provider.id, kind: response.error.kind, message: response.error.message })
       for (const segment of response.partial ?? []) gathered.set(segment.id, segment)
       last = response
       const isLast = index === chain.length - 1
