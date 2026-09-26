@@ -624,6 +624,19 @@ for (const embedded of ['1', '0']) {
   // the pointer away first: with the icon's tooltip up, Escape closes the tooltip, the topmost, and leaves the options open
   await page.mouse.move(700, 600); await page.waitForTimeout(200)
   await page.keyboard.press('Escape'); await page.waitForTimeout(300)
+  // the appearance's thumb slides as the display switch's does, while the theme it picks snaps (the maintainer,
+  // 2026-09-26: holding every transition for the flip had stopped the thumb too)
+  await page.locator('header button[aria-label="阅读选项"]').click(); await page.waitForTimeout(400)
+  const thumbAt = () => page.evaluate(() => { const t = document.querySelector('.pop:popover-open [aria-label="外观"] .thumb'), r = t.getBoundingClientRect(), p = t.parentElement.getBoundingClientRect(); return Math.round((r.x - p.x) * 10) / 10 })
+  await page.locator('.pop:popover-open [role="radio"][aria-label="浅色"]').click(); await page.waitForTimeout(500)
+  const from = await thumbAt()
+  await page.locator('.pop:popover-open [role="radio"][aria-label="深色"]').click()
+  const mid = await page.evaluate(() => new Promise(r => setTimeout(() => r(null), 60))).then(thumbAt)
+  await page.waitForTimeout(500)
+  const to = await thumbAt()
+  await page.mouse.move(700, 600); await page.waitForTimeout(200)
+  await page.keyboard.press('Escape'); await page.waitForTimeout(300)
+  check('the appearance\'s thumb slides to the one chosen, as the display switch\'s does, the theme snapping', to > from && mid > from && mid < to, JSON.stringify({ from, mid, to }))
   // the flip: the pressed sync button's fill is the new theme's at the next frame, not a fade toward it
   const bgNow = () => page.evaluate(() => getComputedStyle(document.querySelector('header button[aria-label="同步滚动"]')).backgroundColor)
   const flips = []
