@@ -43,4 +43,21 @@ describe('the service health record (the redesign\'s design, §4)', () => {
     ])
     stop()
   })
+
+  it('serialises concurrent mutations: none of them reads a value another\'s write has not landed yet (Codex review)', async () => {
+    // Two marks and a clear fired without awaiting between them: read-then-write with no queue would have one
+    // overwrite what another just wrote, losing a mark or letting a clear miss the id it was meant for
+    const a = markRejected('svc-aaaaaaaa')
+    const b = markRejected('svc-bbbbbbbb')
+    const c = clearRejected('svc-aaaaaaaa')
+    await Promise.all([a, b, c])
+    expect(await rejectedServices()).toEqual(new Set(['svc-bbbbbbbb']))
+  })
+
+  it('two marks fired at once both survive', async () => {
+    const a = markRejected('svc-aaaaaaaa')
+    const b = markRejected('svc-bbbbbbbb')
+    await Promise.all([a, b])
+    expect(await rejectedServices()).toEqual(new Set(['svc-aaaaaaaa', 'svc-bbbbbbbb']))
+  })
 })

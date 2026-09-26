@@ -19,6 +19,7 @@ import { BUILD_REF } from '@/shared/build'
 import { createDiagnostics } from './diagnostics'
 import { clearRejected, markRejected, rejectedServices, watchRejected } from '@/shared/service-health'
 import { SERVICE_ID_RE } from '@/config/services'
+import { shouldMarkRefusal } from './health-guard'
 
 // The background: the engine chain, the queues, the cache and the recogniser, wired together (DESIGN §8.0); what it
 // answers is the table in ./handlers.ts.
@@ -52,8 +53,14 @@ export default defineBackground(() => {
         config: resolved,
         transport: await createLocalTransport(resolved, {
           cache, cancelled, warn: diag, rejected,
-          // a refused key is remembered across sessions (the redesign's design, §4); a free engine's failure is not ours to record
-          onFailure: info => { if (info.kind === 'auth' && SERVICE_ID_RE.test(info.id)) void markRejected(info.id) },
+          // a refused key is remembered across sessions (the redesign's design, §4); a free engine's failure is not
+          // ours to record. Marked only if the key **this chain** used for the service is still its key stored now —
+          // this chain may have outlived a key rotation, and a request built with the old key failing after the new
+          // one already passed a connection test must not re-mark it (Codex review, round 2; health-guard.ts)
+          onFailure: info => {
+            if (info.kind !== 'auth' || !SERVICE_ID_RE.test(info.id)) return
+            void getConfig().then(stored => shouldMarkRefusal(resolved, stored, info.id) ? markRejected(info.id) : undefined)
+          },
         }),
       }
     },
