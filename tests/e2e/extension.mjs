@@ -1425,9 +1425,9 @@ check('the settings page: after deleting the custom prompt the default is chosen
 // ── The settings page: “Clear” on the API key must really clear it ────────────────────────────────────
 // The drawer opens with the stored key in its form, and a save that reads that prop back writes the old key back as it was (a measured defect).
 // With no key the endpoint reports “not configured”, which is distinct from “invalid or expired”.
-// Last on purpose: it writes the service configuration twice more and sends one more sample request, and need not sit between the two wrong-key parts.
+// Last on purpose: it writes the service configuration twice more and sends one more sample request, and need not sit among the four wrong-key parts.
 //
-// 7 requests (3 expected) once appeared between those two parts and were taken for interference with this guard; the real root cause was a **stale automatic restart**
+// 7 requests (3 expected) once appeared between the two first-encounter parts and were taken for interference with this guard; the real root cause was a **stale automatic restart**
 // (Codex on #157): the `start()` a permanent service change triggers no longer validated the session after two awaits, and with the page already
 // finished it opened one more round, the extra wave being exactly those 4 requests. Fixed, this is back at a stable 3
 {

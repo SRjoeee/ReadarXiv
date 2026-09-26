@@ -5,7 +5,7 @@
 // Environment: AXT_PAPER picks the paper (default 2507.00150v1: 6 plots); AXT_HEADED=1 watches it run.
 //
 // Guarded are §15.2's structural promises: the overlay is the image's next sibling and its rectangle coincides with the image (anchor positioning); under side the overlay is only inside the split copy and
-// coincides with the copy's image; visible under only; with the mode gate closed an image entering the viewport makes no request and translates once switched to an open mode; restoring the original leaves not one node or attribute.
+// coincides with the copy's image; visible under only — one switch, figure text in every display; restoring the original leaves not one node or attribute.
 // And two papers' own cases: a graphic that stands in no figure (2609.20818v1), and SVG figures whose <object> has other proportions than the drawing (1706.03762v7).
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -137,7 +137,7 @@ const coincide = (a, b) => near(a.x, b.x) && near(a.y, b.y) && near(a.w, b.w) &&
   await blank.close()
 }
 
-// ── The settings page: google-web, all three image translation modes ticked ────────────
+// ── The settings page: google-web, image translation on (one switch: figure text in every display) ────────────
 const options = await openOptions(context, extId)
 await chooseBuiltIn(options, 'Google 翻译')
 await setSwitch(options, '图片翻译', true)
@@ -286,7 +286,6 @@ await popup.close()
 // It had no root to be split by: its paragraph was mirrored as the session started, the overlay then lay on the original
 // and the mirror — inert as a whole, never made again — showed the figure untranslated, in side and in only alike
 {
-  await options.bringToFront()
   const loose = await context.newPage()
   await loose.goto('https://arxiv.org/html/2609.20818v1#readarxiv', { waitUntil: 'domcontentloaded' })
   const LOOSE = () => {

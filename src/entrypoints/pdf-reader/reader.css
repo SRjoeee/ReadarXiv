@@ -207,8 +207,7 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
 /* forced colours (Windows' contrast themes) drop the fills and the rings: a pressed button takes the system's
    Highlight, as a selection does (the interface review) */
 @media (forced-colors: active) {
-  .tbtn[aria-pressed="true"]:not([aria-disabled="true"]) { forced-color-adjust: none; background: Highlight; }
-  .tbtn[aria-pressed="true"]:not([aria-disabled="true"]) { forced-color-adjust: none; color: HighlightText; }
+  .tbtn[aria-pressed="true"]:not([aria-disabled="true"]) { forced-color-adjust: none; background: Highlight; color: HighlightText; }
   .tbtn[aria-disabled="true"] { color: GrayText; }
 }
 @keyframes thumb { from { translate: 0 0; } to { translate: 0 calc(var(--track, 100px) - var(--thumb, 40px)); } }

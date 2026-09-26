@@ -367,7 +367,7 @@ describe('page session', () => {
     expect(h.session.retryFailed()).toBe(0)
   })
 
-  it('the whole-paper range chosen mid-session releases everything still waiting in the run; any other range applies from the next session (Devin on #222)', async () => {
+  it('choosing to translate the whole paper mid-session releases everything still waiting in the run; choosing on demand applies from the next session (Devin on #222)', async () => {
     const h = harness()
     live = h.session
     await h.session.start()
