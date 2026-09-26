@@ -926,6 +926,23 @@ rest, or in this task's note below.
 Append to the end of this plan, under a heading `## Part 1: done`, one paragraph: the commits, what the probe
 measured, and any name that changed from this plan (Parts 3–5 are written against the names here).
 
+## Part 1: done
+
+2026-09-26, commits 350c416e..0b942175 on `exp/extension-ui-redesign` (Tasks 1–5), each with its own spec and quality
+review. What the parts after it should know:
+
+- **The pixel probe writes 24 files, not 14**: a review of Task 3 found that a 1 px inset round every popover left its
+  straight edges uncompared, so each popover and tooltip is now saved as two bands that leave out only its r × r
+  corners (the corners' anti-aliasing varies run to run, measured; `r` read from `border-radius`). Every later "14
+  lines of `ok`" in this plan means 24.
+- `reader.css` imports `tokens.css` and then `controls.css` after its `@source` lines; it keeps `--bar` and `--side`.
+- The names are as planned: `@/ui/controls/{Switch,Popover,tip,modality,radio,transitions,Icon}`,
+  `src/styles/controls.css`. `src/pdf-reader/ui/appearance.ts` re-exports `withoutTransitions`.
+- Left for the final review (minor): comments in the moved modules still point at `reader.css` or call themselves the
+  reader's; `reader.css` does not `@source` `src/ui/controls/` (no utilities there today); the old `src/ui/LucideIcon.tsx`
+  and `src/ui/Switch.tsx` stand beside the shared ones until Parts 3–4 retire them.
+- Task 6's local Codex review did not run: Codex's sign-in had lapsed.
+
 ---
 
 # Part 2: one appearance, configuration v20, the service health record
