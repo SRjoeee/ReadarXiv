@@ -40,6 +40,7 @@ const S = {
     free: '免费', // S-P-44
     chrome_ready: '浏览器内置，无需联网', // S-P-46
     llm_noKey: '尚未配置 API Key', // S-P-45: the LLM item's hint until a key is set
+    llm_rejected: 'API Key 已失效',
     microsoft_unsupported: '不支持当前目标语言',
     chrome_download: '下载', // S-P-40
     chrome_downloading: '语言包下载中', // S-P-41
@@ -58,6 +59,7 @@ const S = {
     // S-P-32: the chosen service cannot run and nothing takes over; the reason alone
     cannotRun: (why: string) => why,
     llmNoKey: 'LLM 尚未配置 API Key',
+    llmRejected: 'API Key 已失效', // the redesign's §5.2: a key the endpoint refused
     chromeNoPack: 'Chrome 翻译的语言包尚未下载',
     chromeDownloading: 'Chrome 翻译的语言包下载中，约需 1 分钟',
     microsoftUnsupported: 'Microsoft 翻译不支持当前目标语言',

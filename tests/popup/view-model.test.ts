@@ -162,6 +162,13 @@ describe('derivePopupView (UI.md §4)', () => {
     expect(v.primary.disabled).toBe(false)
     expect(v.prompt).toEqual({ value: 'Default' })
   })
+  it('P7b a chosen service whose key was refused cannot run: the note says so and who takes over (the redesign\'s design, §5.2)', () => {
+    const i = input('P7b')
+    expect(runnable(i.config!, null, i.rejected)).toBe(false)
+    expect(runnable(i.config!, null, [])).toBe(true)
+    expect(view('P7b').note?.text).toBe(S.note.willFallback(S.note.llmRejected, 'Microsoft 翻译'))
+    expect(view('P7b').primary.disabled).toBe(false)
+  })
   it('P8 LLM without a key and nothing to take over: note and a disabled button', () => {
     const v = view('P8')
     expect(v.note).toEqual({ text: 'LLM 尚未配置 API Key', settings: true })

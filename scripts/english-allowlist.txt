@@ -88,7 +88,7 @@ tests/image/svg-targets.test.ts 2
 tests/options/prompts-section.test.ts 13
 tests/pipeline/run.test.ts 3
 tests/pipeline/session-guard.test.ts 5
-tests/popup/view-model.test.ts 38  # 2026-09-19: +1 for P17c's expectation, the Chinese label of the entry pages' button (issue #169); 2026-09-18: +5 for the P17 cases' expectations, the Chinese copy of S-P-03b / S-P-33; +2, the reader-open popup's buttons by their words
+tests/popup/view-model.test.ts 39  # 2026-09-26: +1 for P7b's expectation, the Chinese fallback name in a refused key's note (Task 12); 2026-09-19: +1 for P17c's expectation, the Chinese label of the entry pages' button (issue #169); 2026-09-18: +5 for the P17 cases' expectations, the Chinese copy of S-P-03b / S-P-33; +2, the reader-open popup's buttons by their words
 tests/protector/clone.test.ts 5
 tests/protector/label.test.ts 50
 tests/protector/markers.test.ts 12  # 2026-09-19: +1, the translations the wire-space cases fill back, all on one line

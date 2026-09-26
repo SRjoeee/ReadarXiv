@@ -57,6 +57,8 @@ export interface PopupInput {
   entry: EntryStatus | null
   /** The translate shortcut as Chrome reports it; null when unbound or unknown */
   shortcut: string | null
+  /** The reader's services whose key the endpoint refused (the service health record, the redesign's design, §4) */
+  rejected: readonly string[]
 }
 
 export interface Row { value: string; replaced?: string }
@@ -111,9 +113,9 @@ const empty = (): PopupView => ({
 })
 
 /** Whether the chosen service can run on its own, decided from the settings (no round trip, no stale chain) */
-export function runnable(config: Config, pack: PackState | null): boolean {
+export function runnable(config: Config, pack: PackState | null, rejected: readonly string[] = []): boolean {
   const own = chosenService(config)
-  if (own) return serviceRuns(own)
+  if (own) return serviceRuns(own) && !rejected.includes(own.id)
   // A service id naming nothing: a popup left open while another tab deleted it. `getProvider`
   // falls back to a built-in, so saying "usable" here would have the reader believe their LLM is
   // translating while something else is (Codex on #157)
@@ -129,8 +131,9 @@ export function runnable(config: Config, pack: PackState | null): boolean {
 }
 
 /** Why it cannot (S-P-31 / S-P-32) */
-function cannotRunWhy(config: Config, pack: PackState | null): string {
-  if (chosenService(config)) return S.note.llmNoKey
+function cannotRunWhy(config: Config, pack: PackState | null, rejected: readonly string[]): string {
+  const own = chosenService(config)
+  if (own) return rejected.includes(own.id) ? S.note.llmRejected : S.note.llmNoKey
   if (!isBuiltInService(config.provider)) return S.note.serviceGone
   switch (config.provider) {
     case 'chrome-builtin':
@@ -151,15 +154,15 @@ function cannotRunWhy(config: Config, pack: PackState | null): string {
  * version**: a reader who came for the translation is told the answer instead of finding a control that does nothing.
  */
 /** Why the chosen service cannot run, and who takes over if one does; null when it can run (the entry pages' views) */
-function serviceNote(config: Config, { pack, saved }: PopupInput): PopupView['note'] {
-  if (runnable(config, pack)) return null
-  const why = cannotRunWhy(config, pack)
+function serviceNote(config: Config, { pack, saved, rejected }: PopupInput): PopupView['note'] {
+  if (runnable(config, pack, rejected)) return null
+  const why = cannotRunWhy(config, pack, rejected)
   return { text: saved?.fallback ? S.note.willFallback(why, serviceName(saved.fallback.id, config.services)) : S.note.cannotRun(why), settings: true }
 }
 
 function entryView(entry: EntryStatus, config: Config, input: PopupInput): PopupView {
-  const { pack, menu, saved } = input
-  const canRun = runnable(config, pack)
+  const { pack, menu, saved, rejected } = input
+  const canRun = runnable(config, pack, rejected)
   // The rule that starts a translation on the full text (`pageDecision`): the chosen service, or the free one that
   // takes over from it. The page this button opens starts by that rule, so the button must not refuse what the page
   // would do (Devin on #247: with a fallback the full text's button was enabled and this one was not)
@@ -175,7 +178,7 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
     style: { value: profileName(activeStyle(config.appearance)) },
     highlight: config.reading.sentenceHighlight,
     images: config.image.enabled,
-    menu: menu === null ? null : menuOf(menu, config, pack),
+    menu: menu === null ? null : menuOf(menu, config, pack, rejected),
     // The service's note first: it is why both entries are greyed, or who takes over. Then the HTML version's, which
     // says "nothing to translate" only when the PDF entry is not offered either (Part 5's final review)
     note: serviceNote(config, input) ?? (noHtml ? { text: entry.pdf === null ? S.note.noHtml : S.note.noHtmlVersion, settings: false } : null),
@@ -221,7 +224,7 @@ function readerView(entry: EntryStatus, config: Config, input: PopupInput): Popu
 }
 
 export function derivePopupView(input: PopupInput): PopupView {
-  const { page, saved, session, config, pack, menu, shortcut, savedRevision, entry } = input
+  const { page, saved, session, config, pack, menu, shortcut, savedRevision, entry, rejected } = input
   if (page == null && entry?.readerOpen && config !== null) return readerView(entry, config, input)
   // An abstract or PDF page: the popup works there too, and its button takes the reader to the HTML version.
   // `== null` on purpose: a tab whose content script ignores `axt:page-status` resolves `undefined` rather than
@@ -233,7 +236,7 @@ export function derivePopupView(input: PopupInput): PopupView {
   const progress = page.progress
   const on = progress.state === 'on'
   const paused = progress.state === 'stopped' && progress.fatal !== undefined
-  const canRun = runnable(config, pack)
+  const canRun = runnable(config, pack, rejected)
   const demoted = on ? session?.engine.demoted : undefined
   // The page runs on settings other than the saved ones. A change made here restarts the page at
   // once (data.ts), so this is what is left: a choice that cannot start, and a change made from
@@ -257,7 +260,7 @@ export function derivePopupView(input: PopupInput): PopupView {
     : demoted && session ? { text: S.note.replaced(named(demoted.id), reasonText(demoted.kind), named(session.engine.id)), settings: true }
     : page.images?.fatal ? { text: S.note.imagesPaused(reasonText(parseFatal(page.images.fatal).kind)), settings: true }
     : !canRun && (!on || behind)
-      ? { text: !on && saved?.fallback ? S.note.willFallback(cannotRunWhy(config, pack), named(saved.fallback.id)) : S.note.cannotRun(cannotRunWhy(config, pack)), settings: true }
+      ? { text: !on && saved?.fallback ? S.note.willFallback(cannotRunWhy(config, pack, rejected), named(saved.fallback.id)) : S.note.cannotRun(cannotRunWhy(config, pack, rejected)), settings: true }
       : null
 
   const failedCount = progress.failed + (page.images?.failed ?? 0)
@@ -278,7 +281,7 @@ export function derivePopupView(input: PopupInput): PopupView {
     style,
     highlight: config.reading.sentenceHighlight,
     images: config.image.enabled,
-    menu: menu === null ? null : menuOf(menu, config, pack),
+    menu: menu === null ? null : menuOf(menu, config, pack, rejected),
     note,
     failed,
     primary,
@@ -293,10 +296,10 @@ function promptName(config: Config): string {
   return BUILT_IN_PROMPTS[id]?.name ?? config.prompts.patterns.find(p => p.id === id)?.name ?? id
 }
 
-function menuOf(kind: MenuKind, config: Config, pack: PackState | null): NonNullable<PopupView['menu']> {
+function menuOf(kind: MenuKind, config: Config, pack: PackState | null, rejected: readonly string[]): NonNullable<PopupView['menu']> {
   switch (kind) {
     case 'service':
-      return { kind, label: S.rows.service, search: false, items: serviceItems(config, pack) }
+      return { kind, label: S.rows.service, search: false, items: serviceItems(config, pack, rejected) }
     case 'language':
       return {
         kind,

@@ -22,6 +22,7 @@ import { promptExists } from '@/providers/prompt-library'
 import type { ProviderStatus } from '@/providers/transport'
 import type { AxtMessage, EntryStatus, MessageHandlers, PageStatus, sendMessage, sendToActiveTab } from '@/shared/messages'
 import type { PackState } from '@/shared/pack'
+import { rejectedServices, watchRejected } from '@/shared/service-health'
 import { messageFor } from '@/shared/page-action'
 import { type SurfaceConfig, type SurfaceConfigDeps, createSurfaceConfig } from '@/shared/surface-config'
 import { S } from '@/ui/strings'
@@ -108,6 +109,8 @@ export function createPopupState(host: PopupHost): PopupState {
   let session: ProviderStatus | null = null
   let menu: MenuKind | null = null
   let shortcut: string | null = null
+  /** The reader's services whose key was refused (the service health record): read as the popup starts, then followed */
+  let rejected: readonly string[] = []
   let error: string | null = null
   let running = false
 
@@ -253,7 +256,7 @@ export function createPopupState(host: PopupHost): PopupState {
   const restartIfOn = async (next: Config, packState: PackState | null) => {
     const status = await host.toTab({ type: 'axt:page-status' }).catch(() => null)
     if (status?.progress.state !== 'on') return
-    if (!runnable(next, packState)) return // the view shows the page as behind the settings
+    if (!runnable(next, packState, rejected)) return // the view shows the page as behind the settings
     // The chain the restart will run on: one built from what was just saved (background/provider-status.ts)
     await asks.saved()
     await host.toTab(messageFor('retranslate', status.epoch) as AxtMessage<'axt:translate-page'>)
@@ -397,6 +400,8 @@ export function createPopupState(host: PopupHost): PopupState {
       // The page is not running until it says so: the saved settings' chain is what a start would run on
       void asks.saved()
       host.shortcut().then(found => { shortcut = found; changed() }).catch(() => { shortcut = null; changed() })
+      void rejectedServices().then(ids => { rejected = [...ids]; changed() })
+      const stopRejected = watchRejected(ids => { rejected = [...ids]; changed() })
       const stopBroadcasts = host.onBroadcast({
         // A pack downloaded on the settings page: this popup's Download button must not stay over an installed pack
         'axt:pack-changed': message => {
@@ -410,13 +415,14 @@ export function createPopupState(host: PopupHost): PopupState {
         stopBroadcasts()
         stopSilent()
         stopPoll()
+        stopRejected()
       }
     },
     state() {
       const { config, revision: savedRevision, pack } = surface.state()
       // The view gets both: the session's chain only while the page is on — unknown until it answers, never the saved
       // chain in its place (Codex on #185) — and the saved settings' chain for what a start would run on
-      snapshot ??= { input: { page, entry, saved, session: on() ? session : null, config, pack, menu, shortcut, savedRevision }, error }
+      snapshot ??= { input: { page, entry, saved, session: on() ? session : null, config, pack, menu, shortcut, savedRevision, rejected }, error }
       return snapshot
     },
     subscribe(listener) {
