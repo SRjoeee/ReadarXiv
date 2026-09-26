@@ -10,62 +10,15 @@
 @source "./";
 @source "../../pdf-reader/";
 
-/* §4.1: one cool neutral ramp at hue 255 and one status hue; dark by the system, or chosen (data-theme) */
-:root,
-[data-theme="light"] {
-  color-scheme: light;
-  --n-0: oklch(1 0 0); --n-1: oklch(0.985 0.002 255); --n-2: oklch(0.962 0.004 255); --n-3: oklch(0.935 0.006 255);
-  --n-4: oklch(0.905 0.007 255); --n-5: oklch(0.86 0.008 255); --n-7: oklch(0.62 0.012 255); --n-8: oklch(0.505 0.014 255);
-  --n-10: oklch(0.235 0.012 255);
-  --danger: oklch(0.545 0.17 28);
-  /* the focus ring in the ink: the reader's chrome has no hue but danger's (the maintainer, 2026-09-26; a blue before) */
-  --focus: var(--n-10);
-  --page-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.05), 0 1px 2px oklch(0 0 0 / 0.04);
-  --float-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.08), 0 4px 16px oklch(0 0 0 / 0.08);
-  --pop-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.08), 0 12px 32px oklch(0 0 0 / 0.14);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --n-0: oklch(0.255 0.006 255); --n-1: oklch(0.215 0.006 255); --n-2: oklch(0.185 0.006 255); --n-3: oklch(0.275 0.007 255);
-    --n-4: oklch(0.31 0.008 255); --n-5: oklch(0.36 0.009 255); --n-7: oklch(0.56 0.01 255); --n-8: oklch(0.71 0.01 255);
-    --n-10: oklch(0.935 0.005 255);
-    --danger: oklch(0.69 0.15 28);
-    --focus: var(--n-10);
-    --page-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.4), 0 4px 16px oklch(0 0 0 / 0.35);
-    --float-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.08), 0 6px 20px oklch(0 0 0 / 0.4);
-    --pop-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.1), 0 14px 36px oklch(0 0 0 / 0.5);
-  }
-}
-[data-theme="dark"] {
-  color-scheme: dark;
-  --n-0: oklch(0.255 0.006 255); --n-1: oklch(0.215 0.006 255); --n-2: oklch(0.185 0.006 255); --n-3: oklch(0.275 0.007 255);
-  --n-4: oklch(0.31 0.008 255); --n-5: oklch(0.36 0.009 255); --n-7: oklch(0.56 0.01 255); --n-8: oklch(0.71 0.01 255);
-  --n-10: oklch(0.935 0.005 255);
-  --danger: oklch(0.69 0.15 28);
-  --focus: var(--n-10);
-  --page-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.4), 0 4px 16px oklch(0 0 0 / 0.35);
-  --float-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.08), 0 6px 20px oklch(0 0 0 / 0.4);
-  --pop-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.1), 0 14px 36px oklch(0 0 0 / 0.5);
-}
-/* the roles (§4.1) */
+/* the extension's tokens (the redesign's design, §2.1): the ramp, the roles and their dark values, generated from
+   src/shared/tokens.ts; the reader's own layout values stay below */
+@import "../../styles/tokens.css";
+
+/* the reader's own layout (§5); every colour, shadow, the font and the ease come from tokens.css */
 :root {
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "PingFang SC", "Noto Sans SC", sans-serif;
   --bar: 44px;
   --side: 236px;
-  --canvas: var(--n-3); --chrome: var(--n-0); --chrome-line: var(--n-4); --ink: var(--n-10); --ink-2: var(--n-8); --ink-3: var(--n-7);
-  /* the strong line: an edge that marks a choice (a chosen swatch), a step lighter than the focus's ink so that the two
-     read apart, 3.64:1 and 3.39:1 against the chrome (WCAG 1.4.11; better-colors: a token only in its role) */
-  --line-strong: var(--n-7);
-  --fill: var(--n-3); --well: var(--n-3); --lift: var(--n-0);
-  --float-bg: color-mix(in oklab, var(--n-0) 90%, transparent);
-  --ease: cubic-bezier(0.2, 0, 0, 1);
 }
-/* dark: the well sunk below the chrome and the thumb raised above it, and a stronger fill, so that a chosen segment and
-   a pressed button show in dark as they do in light (Part 6's interface review: 1.06:1 before; the maintainer,
-   2026-09-26) */
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --well: var(--n-2); --lift: var(--n-5); --fill: var(--n-4); } }
-:root[data-theme="dark"] { --well: var(--n-2); --lift: var(--n-5); --fill: var(--n-4); }
 @theme inline {
   --color-canvas: var(--canvas); --color-chrome: var(--chrome); --color-line: var(--chrome-line); --color-line-strong: var(--line-strong);
   --color-ink: var(--ink); --color-ink-2: var(--ink-2); --color-ink-3: var(--ink-3);

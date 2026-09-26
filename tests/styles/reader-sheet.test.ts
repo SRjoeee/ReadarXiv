@@ -1,11 +1,17 @@
 // The PDF reader's own style sheet (src/entrypoints/pdf-reader/reader.css), held to a rule the interface review of
 // 2026-09-26 brought in: a hover's look only where a pointer can hover — on a touch screen :hover latches after a tap
 // and reads as a state stuck on (better-accessibility, hit areas)
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const SHEET = readFileSync(join(import.meta.dirname, '../../src/entrypoints/pdf-reader/reader.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+/** the reader's sheet and the shared sheets it imports: the tokens (the redesign's design, §2.2) and, from Task 5, the controls */
+const SHEET = ['../../src/entrypoints/pdf-reader/reader.css', '../../src/styles/tokens.css', '../../src/styles/controls.css']
+  .map(p => join(import.meta.dirname, p))
+  .filter(p => existsSync(p))
+  .map(p => readFileSync(p, 'utf8'))
+  .join('\n')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
 
 /** every style rule: its selector, its declarations, and the at-rules it sits in (a statement ends at `;`) */
 function rules(css: string) {
