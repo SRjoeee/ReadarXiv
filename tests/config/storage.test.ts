@@ -9,6 +9,22 @@ import { chooseFirstTarget, configItem, getConfig, setConfig } from '@/config/st
 /** A reader-added service, the shape v12 stores */
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
 
+/**
+ * What v19 stored, literally: today's DEFAULT_CONFIG carries v20's shapes (`preload` a word, `image` without its list,
+ * `pdfReader` without its appearance, a `theme`), and a fixture spreading it would test a migration from a shape no
+ * v19 ever held. v18 stored the same `preload` and `image`, and no `pdfReader`
+ */
+function v19Stored(over: Record<string, unknown> = {}): Record<string, unknown> {
+  const { theme: _v20, ...rest } = DEFAULT_CONFIG
+  return {
+    ...rest, version: 19,
+    preload: { margin: 1000, threshold: 0 },
+    image: { enabled: true, modes: ['stack', 'side', 'only'] },
+    pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance: 'system' },
+    ...over,
+  }
+}
+
 describe('config storage', () => {
   beforeEach(() => {
     fakeBrowser.reset()
@@ -163,7 +179,7 @@ describe('the preload, v15 to v20', () => {
   })
 
   it('a hand-edited margin — neither a number nor `all` — is not repaired: passed on, it fails the schema and the fallback names the field', async () => {
-    const v19 = { ...DEFAULT_CONFIG, version: 19, preload: { margin: 'bogus', threshold: 0 } }
+    const v19 = v19Stored({ preload: { margin: 'bogus', threshold: 0 } })
     await fakeBrowser.storage.local.set({ config: v19, config$: { v: 19 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
@@ -491,8 +507,7 @@ describe('provider selection', () => {
   })
 
   it('image translation is one switch: v20 drops the per-display list (the redesign\'s design, §4)', async () => {
-    const v19 = { ...DEFAULT_CONFIG, version: 19, image: { enabled: true, modes: ['only'] }, pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance: 'system' } } as Record<string, unknown>
-    delete v19.theme
+    const v19 = v19Stored({ image: { enabled: true, modes: ['only'] } })
     await fakeBrowser.storage.local.set({ config: v19, config$: { v: 19 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
@@ -500,9 +515,24 @@ describe('provider selection', () => {
     expect(fresh.configFallbackReason()).toBeNull()
   })
 
+  it('a reader who had unticked every display keeps figure translation off: before v20 an empty list meant off (migration 11 read it so)', async () => {
+    for (const [image, expected] of [
+      [{ enabled: true, modes: [] }, { enabled: false }],
+      [{ enabled: false, modes: ['side'] }, { enabled: false }],
+      [{ enabled: false, modes: [] }, { enabled: false }],
+    ] as const) {
+      fakeBrowser.reset()
+      await fakeBrowser.storage.local.set({ config: v19Stored({ image }), config$: { v: 19 } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      expect((await fresh.getConfig()).image).toEqual(expected)
+      expect(fresh.configFallbackReason()).toBeNull()
+    }
+    fakeBrowser.reset()
+  })
+
   it('a hand-edited image that is not an object is left for the schema to name, as any migration here does', async () => {
-    const v19 = { ...DEFAULT_CONFIG, version: 19, image: 'broken', pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance: 'system' } } as Record<string, unknown>
-    delete v19.theme
+    const v19 = v19Stored({ image: 'broken' })
     await fakeBrowser.storage.local.set({ config: v19, config$: { v: 19 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
@@ -594,9 +624,8 @@ describe('provider selection', () => {
   })
 
   it('v19 adds the PDF reader\'s settings with their defaults, and touches nothing else', async () => {
-    const v18: Record<string, unknown> = { ...DEFAULT_CONFIG, version: 18, mode: 'only', reading: { sentenceHighlight: false, openIn: 'same-tab' } }
+    const v18 = v19Stored({ version: 18, mode: 'only', reading: { sentenceHighlight: false, openIn: 'same-tab' } })
     delete v18.pdfReader
-    delete v18.theme
     await fakeBrowser.storage.local.set({ config: v18, config$: { v: 18 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
@@ -611,11 +640,7 @@ describe('provider selection', () => {
   })
 
   it('v20 makes the reader\'s appearance the extension\'s theme (the redesign\'s design, §3), and touches nothing else', async () => {
-    const v19: Record<string, unknown> = {
-      ...DEFAULT_CONFIG, version: 19, mode: 'only',
-      pdfReader: { enabled: false, original: true, sync: false, swapped: true, appearance: 'dark', dimPages: false },
-    }
-    delete v19.theme
+    const v19 = v19Stored({ mode: 'only', pdfReader: { enabled: false, original: true, sync: false, swapped: true, appearance: 'dark', dimPages: false } })
     await fakeBrowser.storage.local.set({ config: v19, config$: { v: 19 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
@@ -627,8 +652,7 @@ describe('provider selection', () => {
   })
 
   it('v20 leaves a hand-edited pdfReader that is not an object to the schema, which names it', async () => {
-    const v19: Record<string, unknown> = { ...DEFAULT_CONFIG, version: 19, pdfReader: 'broken' }
-    delete v19.theme
+    const v19 = v19Stored({ pdfReader: 'broken' })
     await fakeBrowser.storage.local.set({ config: v19, config$: { v: 19 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')

@@ -130,8 +130,13 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
         else if (typeof margin === 'number') out.preload = 'on-demand'
         // else: left as the initial spread has it (the malformed object itself), for the schema to name
       }
-      // figure text shows in every display: the per-display list goes, the switch stays
-      if (isObject(v19.image)) out.image = { enabled: v19.image.enabled }
+      // figure text shows in every display: the per-display list goes, the switch stays. A switch left on over an
+      // empty list was off in effect — the session translated no figure for an empty list, as migration 11 read it —
+      // and stays off. A non-boolean `enabled` passes through for the schema to name
+      if (isObject(v19.image)) {
+        const { enabled, modes } = v19.image
+        out.image = { enabled: enabled === true && Array.isArray(modes) && modes.length === 0 ? false : enabled }
+      }
       return out
     },
   },
