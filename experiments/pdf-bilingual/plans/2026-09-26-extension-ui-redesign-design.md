@@ -609,10 +609,11 @@ gates pass (the maintainer's rule: a pull request is a whole stage).
 5. The floating button and the viewer, with the screenshots of §7 shown to the maintainer.
 6. The documents of §13.
 
-## 15. Open points
+## 15. Decided at review
 
-- **Where injected controls take their light or dark from** (§3): the extension's own controls follow the extension's
-  appearance, and the controls that sit on the paper follow the paper. Recommended as written; the maintainer may
-  prefer the floating button to follow the paper too.
+The maintainer approved this document on 2026-09-26, with its two open points as recommended:
+
+- **Where injected controls take their light or dark from** (§3): the extension's own controls, the floating button
+  among them, follow the extension's appearance; the controls that sit on the paper follow the paper.
 - **The rejected-key record's scope** (§4): only an `auth` answer marks a key; a spent quota or a network failure does
   not, since those pass by themselves.
