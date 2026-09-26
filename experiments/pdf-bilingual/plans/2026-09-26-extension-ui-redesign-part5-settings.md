@@ -57,6 +57,8 @@ this part's questions), Part 3's revised plan's section "What Parts 4 and 5 use"
 | — `Segmented` with a value none of its options holds | draws no step and keeps its first enabled segment in the tab order (Part 3's plan): 浓淡 at 0.85 shows none chosen | 56 |
 | — `Radio` in `radio.ts`, the radio's direct child | a radio row renders `<Radio />` as the first child of its `role="radio"` element | 50 |
 | — the `.spin` class | the busy status's loader turns with Part 3's `.spin` (still under reduced motion) | 50 |
+| — `useRejected` in `src/ui/use-rejected.ts` (ruled on Part 6's draft) | the page imports Part 3's hook and writes none of its own; its tests are Part 3's, and Task 60's test mocks it to drive the rows | 60 |
+| — the `tip-shadow` role (Part 3) | the page draws no tooltip, so it names no tooltip shadow | — |
 | 15 the worktree | `.worktrees/redesign-settings` on `exp/ui-settings`, created by the controller from Part 3's last commit | — |
 | 16 connect first, save on success | adds and edits (and a new key) test the definition as a `candidate`; the page saves on success. The background clears a mark on a candidate's success only when it carries the stored key and address (`testsStoredKey`, beside the guard); another key's success and any failure touch nothing (the controller's ruling on this plan's first open point) | 58–60 |
 | 17 every write to the record is the background's | the page never calls `markRejected` / `clearRejected` and sends no clearing message: a key or an address saved after its connection succeeds, and a deletion, are cleared by the background's configuration watcher | 58, 60 |
@@ -215,7 +217,8 @@ Part 5's own:
   shared control in the page's context without redrawing it: a muted row's `.radio` greyed (Task 50), and `.pop.o-up`
   / `.pop.o-end`, where a popover opens (Task 53).
 - **The refused-key record is the background's** (ruling 17): nothing on this page calls `markRejected` or
-  `clearRejected` or sends a message that would; it reads the record (`useRejected`) and nothing else. The background
+  `clearRejected` or sends a message that would; it reads the record through Part 3's `useRejected`
+  (`src/ui/use-rejected.ts`) and nothing else. The background
   answers a candidate's test itself (Task 58).
 - **The page's sheet**: `src/entrypoints/options/ui/settings.css`, imported after `ui.css`, its component rules in
   `@layer components` so that a rule here wins a tie with a shared control's; its classes start `o-` (the page is the
@@ -304,7 +307,7 @@ settings-2's values as this plan writes them (each is in the task's CSS; this is
 | `src/entrypoints/options/sections/Data.tsx` | 54 | 数据 |
 | `src/entrypoints/options/sections/Appearance.tsx`, `StyleEditor.tsx` (new) | 55, 56 | 外观 |
 | `src/entrypoints/options/sections/Reading.tsx` | 57 | 阅读 (replaces the old one) |
-| `src/entrypoints/options/connect.ts`, `models.ts`, `rejected.ts` (new) | 58, 60 | The connection test, the model list, the refused-key record followed |
+| `src/entrypoints/options/connect.ts`, `models.ts` (new) | 58 | The connection test, the model list |
 | `src/entrypoints/options/permissions.ts` | 58 | `hasHostPermission` |
 | `src/providers/translate-service.ts`, `src/providers/transport.ts`, `src/entrypoints/background/handlers.ts`, `src/entrypoints/background/health-guard.ts` | 58 | A call's `candidate`; the record's answer to it (`testsStoredKey`) |
 | `src/entrypoints/options/sections/ServiceForm.tsx` (new) | 59 | `ServiceForm`, `KeyForm` |
@@ -396,6 +399,7 @@ Run:
 ls src/ui/controls
 grep -n "^export function\|^export const\|^export type\|^export interface" src/ui/controls/*.tsx src/ui/controls/*.ts
 grep -n "busy\|lang" src/ui/controls/Button.tsx src/ui/controls/MenuList.tsx
+grep -n "^export" src/ui/use-rejected.ts
 grep -n "trackModality" src/entrypoints/options/main.tsx src/entrypoints/popup/main.tsx src/ui/first-paint.ts
 grep -n "@keyframes words-in\|@keyframes turn\|^ *\.spin\|\.btn\.text" src/styles/controls.css
 ```
@@ -404,6 +408,7 @@ Expected, as Part 3's plan's "What Parts 4 and 5 use" names them: `Button.tsx` (
 `radioKeys`), `Reveal.tsx`, `Segmented.tsx` (`Segmented`, `SegmentOption` with a `ReactNode` icon and `size`),
 `MenuList.tsx` (`MenuList`, `MenuListItem` with `checked`, `lang`, `action`, `manage`; `onPick`, `onAction`,
 `onClose`) beside Part 1's `Icon.tsx`, `Popover.tsx`, `Switch.tsx`, `modality.ts`, `tip.tsx`, `transitions.ts`;
+`src/ui/use-rejected.ts` exporting `useRejected(): readonly string[]`;
 `trackModality()` called before both pages' first paint (in their `main.tsx` or in `src/ui/first-paint.ts`); `controls.css` holding `@keyframes words-in`, `@keyframes turn` with `.spin`, and
 `.btn.text` at 10 px of padding and a radius of 7. If a file, a name or a prop differs, stop and report it: every import
 in this plan is written against those names.
@@ -4723,7 +4728,7 @@ reads it (`useRejected`), and the background clears it when a saved key or addre
 deleted (ruling 17). The old services section and its drawer go.
 
 **Files:**
-- Create: `src/entrypoints/options/sections/Translate.tsx`, `src/entrypoints/options/rejected.ts`
+- Create: `src/entrypoints/options/sections/Translate.tsx`
 - Delete: `src/entrypoints/options/sections/Services.tsx`, `src/entrypoints/options/sections/ServiceDrawer.tsx`,
   `tests/options/service-drawer.test.ts`
 - Modify: `src/entrypoints/options/App.tsx` (`CONTENT.translate`)
@@ -4734,10 +4739,10 @@ deleted (ruling 17). The old services section and its drawer go.
 
 **Interfaces:**
 - Consumes: `ServiceForm`, `KeyForm` (Task 59); `Row`, `Status`, `Value`, `IconButton`, `Card`, `GroupHeading`
-  (Task 50); `UndoRow`, `withUndo`, `insertAt`, `useLinger`, `shut` (Task 51); `rejectedServices`, `watchRejected`
-  (`@/shared/service-health`; read only — nothing here marks or clears); `releaseHostPermission` (`../permissions`);
+  (Task 50); `UndoRow`, `withUndo`, `insertAt`, `useLinger`, `shut` (Task 51); Part 3's `useRejected` (`@/ui/use-rejected`:
+  the record's ids, followed — read only, nothing here marks or clears); `releaseHostPermission` (`../permissions`);
   Part 3's `MenuList`, `Reveal`, `Button`; Part 1's `Popover`, `usePopover`, `radioKeys`, `Switch`.
-- Produces: `Translate({ data })`; `useRejected(): readonly string[]` in `@/entrypoints/options/rejected`; the words
+- Produces: `Translate({ data })`; the words
   `O.services.{title, packNeeded, moreFor(name), rejected}` and the new values of `add`, `edit`.
 
 - [ ] **Step 1: The words**
@@ -4801,7 +4806,7 @@ vi.mock('@/entrypoints/options/permissions', () => ({
 }))
 vi.mock('@/entrypoints/options/connect', () => ({ connectService: vi.fn(async (c: Service) => { wire.log.push(`connect ${c.id}`); return wire.connect }) }))
 vi.mock('@/entrypoints/options/models', () => ({ listModels: async () => [] }))
-vi.mock('@/entrypoints/options/rejected', () => ({ useRejected: () => wire.rejected }))
+vi.mock('@/ui/use-rejected', () => ({ useRejected: () => wire.rejected }))
 
 import { Translate } from '@/entrypoints/options/sections/Translate'
 import { UNDO_MS } from '@/entrypoints/options/ui/UndoRow'
@@ -4997,31 +5002,7 @@ describe('翻译服务 (§6.3)', () => {
 Run: `pnpm vitest run tests/options/translate-section.test.ts`
 Expected: FAIL — `Failed to resolve import "@/entrypoints/options/sections/Translate"`.
 
-- [ ] **Step 4: The refused-key record, followed**
-
-`src/entrypoints/options/rejected.ts`:
-
-```ts
-// The reader's services whose key the endpoint refused (the service health record, the redesign's design, §4), followed
-// as it changes. Subscribed first, and the first read dropped when a change arrived before it (the popup's way, Part 2's
-// review): an older read landing late must not undo a newer change
-import { useEffect, useState } from 'react'
-import { rejectedServices, watchRejected } from '@/shared/service-health'
-
-export function useRejected(): readonly string[] {
-  const [ids, setIds] = useState<readonly string[]>([])
-  useEffect(() => {
-    let changed = false
-    let gone = false
-    const stop = watchRejected(next => { changed = true; setIds([...next]) })
-    void rejectedServices().then(first => { if (!changed && !gone) setIds([...first]) }).catch(() => undefined)
-    return () => { gone = true; stop() }
-  }, [])
-  return ids
-}
-```
-
-- [ ] **Step 5: Write 翻译's first half**
+- [ ] **Step 4: Write 翻译's first half**
 
 `src/entrypoints/options/sections/Translate.tsx`:
 
@@ -5048,9 +5029,9 @@ import { radioKeys } from '@/ui/controls/radio'
 import { Reveal } from '@/ui/controls/Reveal'
 import { Switch } from '@/ui/controls/Switch'
 import { O, S, languageLabel, languageName } from '@/ui/strings'
+import { useRejected } from '@/ui/use-rejected'
 import type { OptionsData } from '../data'
 import { releaseHostPermission } from '../permissions'
-import { useRejected } from '../rejected'
 import { Card, GroupHeading } from '../ui/Card'
 import { insertAt, shut, useLinger, withUndo } from '../ui/lists'
 import { IconButton, Row, Status, Value } from '../ui/Row'
@@ -5302,14 +5283,14 @@ and `translate: data => <><Services data={data} /><Prompts data={data} /></>,` w
 `src/entrypoints/options/sections/Services.tsx`, `src/entrypoints/options/sections/ServiceDrawer.tsx` and
 `tests/options/service-drawer.test.ts`.
 
-- [ ] **Step 6: Run the tests, the gate, and commit**
+- [ ] **Step 5: Run the tests, the gate, and commit**
 
 Run: `pnpm vitest run tests/options tests/ui && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
 Expected: exit 0. A type error names a reader of a deleted `O.services` key: it can only be in the two deleted files.
 
 ```bash
 git rm src/entrypoints/options/sections/Services.tsx src/entrypoints/options/sections/ServiceDrawer.tsx tests/options/service-drawer.test.ts
-git add src/entrypoints/options/sections/Translate.tsx src/entrypoints/options/rejected.ts src/entrypoints/options/App.tsx src/locales/zh-CN.ts src/locales/en.ts tests/ui/strings.test.ts tests/options/translate-section.test.ts scripts/english-allowlist.txt
+git add src/entrypoints/options/sections/Translate.tsx src/entrypoints/options/App.tsx src/locales/zh-CN.ts src/locales/en.ts tests/ui/strings.test.ts tests/options/translate-section.test.ts scripts/english-allowlist.txt
 git commit -m "feat(options): 翻译服务 as one list, added and re-keyed only once connected
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
