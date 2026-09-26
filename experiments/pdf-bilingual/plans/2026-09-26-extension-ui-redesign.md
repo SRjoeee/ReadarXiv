@@ -2220,7 +2220,7 @@ maintainer reviews the plans of Parts 4 and 5 together before either is built.
 | 3 | The controls both pages add | this worktree, `exp/extension-ui-redesign` | `2026-09-26-extension-ui-redesign-part3-controls.md` |
 | 4 | The popup (§5) | `.worktrees/redesign-popup`, branch `exp/ui-popup` from Part 3's end | `2026-09-26-extension-ui-redesign-part4-popup.md` |
 | 5 | The settings page (§6) | `.worktrees/redesign-settings`, branch `exp/ui-settings` from Part 3's end | `2026-09-26-extension-ui-redesign-part5-settings.md` |
-| 6 | The floating button and the controls on arXiv's pages (§7) | this worktree, after 4 and 5 are merged | written when 4 and 5 are merged |
+| 6 | The floating button and the controls on arXiv's pages (§7), and the reader's service menu reading the record | `.worktrees/redesign-floating`, branch `exp/ui-floating` from Part 3's end, in parallel with 4 and 5; merged after them, once the maintainer has seen its before-and-after shots | `2026-09-26-extension-ui-redesign-part6-floating.md` |
 | 7 | Verification and documents (§12, §13), the pull request | this worktree | written when 6 is done |
 
 **How the parallel parts stay apart.** Parts 4 and 5 are merged back into `exp/extension-ui-redesign` with a merge commit
@@ -2273,8 +2273,11 @@ In `src/ui/controls/` and `src/styles/controls.css`, every value a role of `src/
   the keyboard's focus ring (`:focus-visible` 2 px `focus`, offset 2), text fields ringed only for the keyboard; both
   pages call `trackModality()` before their first paint. The class paints no ground: each page paints its own. The old
   pages, which lack the class, are untouched until they are replaced.
-- **Tokens and motions Part 3 adds for both pages**: the roles `group-hover` (`$n-3`) and `on-brand-2` (white 85 % in
-  light, white in dark), with their contrast pairs; the reader's `words-in` moved into `controls.css`. The parallel
+- **Tokens and motions Part 3 adds for both pages**: the roles `group-hover` (`$n-3`), `on-brand-2` (white 85 % in
+  light, white in dark) and `tip-shadow` (the tooltip's shadow, its value unchanged), with their contrast pairs; the
+  reader's `words-in` moved into `controls.css`.
+- **`useRejected`** (`src/ui/use-rejected.ts`): the refused-key record as a React hook (`rejectedServices` then
+  `watchRejected`, subscribed first), for the settings page and the reader. The parallel
   parts add no tokens: a role either needs later is raised with the controller.
 - **The worktrees**: `.worktrees/redesign-popup` (branch `exp/ui-popup`) and `.worktrees/redesign-settings` (branch
   `exp/ui-settings`), created by the controller from Part 3's last commit.
