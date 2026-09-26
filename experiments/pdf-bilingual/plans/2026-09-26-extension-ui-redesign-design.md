@@ -148,7 +148,7 @@ configuration too, so no value the reader cannot see keeps changing behaviour.
 |---|---|---|
 | `theme: 'system' \| 'light' \| 'dark'` added | from `pdfReader.appearance`, which goes | §3 |
 | `preload` becomes `'on-demand' \| 'whole'` | `margin: 'all'` → `'whole'`; any number → `'on-demand'`; `threshold` goes | §6.5: two choices, the timing fixed |
-| `image.modes` goes | dropped | §6.5: figure text shows in every display |
+| `image.modes` goes | dropped; a switch left on with every display unticked (`{ enabled: true, modes: [] }`, which was off) becomes `enabled: false` | §6.5: figure text shows in every display |
 
 - **On demand** is today's default: a margin of 1000 px below the window and a threshold of 0 (a paragraph counts as
   entered as it first shows). The scheduler keeps its numbers as constants (`ON_DEMAND_MARGIN = 1000`,
