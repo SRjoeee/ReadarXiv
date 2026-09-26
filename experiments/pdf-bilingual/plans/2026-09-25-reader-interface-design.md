@@ -647,4 +647,4 @@ the same thing, its string is reused (marked).
 ## 16. Open and deferred
 
 - Jump back (#300), the engine's TypeScript port and #299: the next stage.
-- A service changed while a paper is translating takes effect on the next visit. Decided (maintainer, 2026-09-26), not built: the capsule says so and offers to translate again now or to leave it for the next visit.
+- A service changed while a paper is translating takes effect on the next visit. Decided (maintainer, 2026-09-26), not built: the capsule says so and offers two actions, 「重新加载翻译」 (translate again now) and 「下次生效」 (leave it for the next visit); its sentence is written with the build.
