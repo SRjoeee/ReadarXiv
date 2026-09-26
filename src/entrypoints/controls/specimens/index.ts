@@ -3,8 +3,10 @@
 import type { FC } from 'react'
 import { Base } from './base'
 import { Buttons } from './buttons'
+import { Forms } from './forms'
 
 export const SPECIMENS: { name: string; Specimen: FC }[] = [
   { name: 'base', Specimen: Base },
   { name: 'buttons', Specimen: Buttons },
+  { name: 'forms', Specimen: Forms },
 ]

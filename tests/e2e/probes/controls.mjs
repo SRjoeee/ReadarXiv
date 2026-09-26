@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
-import { offCentre, shootEach } from './align.mjs'
+import { edges, offCentre, shootEach } from './align.mjs'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = fileURLToPath(new URL('../../../.output/chrome-mv3-dev', import.meta.url))
@@ -144,8 +144,80 @@ async function buttons(page, lang) {
   }
 }
 
+/** Task 17: fields, radios and a reveal — the settings page's form pieces (settings-2) */
+async function forms(page, lang) {
+  for (const theme of THEMES) {
+    const at = `[data-theme="${theme}"] [data-specimen="forms"]`, tag = `${lang} ${theme}`
+    const first = `${at} .field:first-child .input`
+    const field = await look(page, first), label = await look(page, `${at} .field:first-child > label`), placeholder = await look(page, first, '::placeholder')
+    const want = { ground: await token(page, theme, 'background-color', 'var(--field)'), edge: await token(page, theme, 'box-shadow', 'inset 0 0 0 0.5px var(--field-edge)'), ink2: await token(page, theme, 'color', 'var(--ink-2)') }
+    check(`${tag}: a field 34 px, radius 8, on its ground with its 0.5 px edge; placeholder and label in ink-2, the label 12 px and 6 px above`,
+      near(field?.height, 34) && field.radius === '8px' && field.bg === want.ground && field.shadow === want.edge && placeholder?.color === want.ink2 && label?.color === want.ink2 && label.size === '12px' && near(field.top - label.bottom, 6),
+      JSON.stringify({ field, label, placeholder, want }))
+    // the pointer's focus shows the field's edge, the keyboard's the ring hugging it (the edge moves in 150 ms: read it after)
+    await page.click(first)
+    await page.waitForTimeout(200)
+    const pressed = await look(page, first)
+    await page.click(`${at} > h2`)
+    await page.keyboard.press('Tab')
+    await page.waitForTimeout(200)
+    const keyed = await look(page, first)
+    const edge = await token(page, theme, 'box-shadow', 'inset 0 0 0 1px var(--ink-3)'), focus = await token(page, theme, 'outline-color', 'var(--focus)')
+    check(`${tag}: a field pressed shows its 1 px ink-3 edge and no ring; reached by Tab, the 2 px ring hugging it`, pressed?.shadow === edge && pressed.ring.startsWith('none') && keyed?.ring === 'solid 2px 0px' && keyed.ringColor === focus, JSON.stringify({ pressed, keyed }))
+    // a field at fault
+    const fault = await page.evaluate(at => {
+      const input = document.querySelector(`${at} .input[aria-invalid="true"]`)
+      const reason = document.getElementById(input.getAttribute('aria-describedby').split(' ')[0])
+      const icon = reason.querySelector('svg'), p = reason.getBoundingClientRect(), i = icon.getBoundingClientRect()
+      const line = Number.parseFloat(getComputedStyle(reason).lineHeight)
+      return { edge: getComputedStyle(input).boxShadow, ink: getComputedStyle(reason).color, size: getComputedStyle(reason).fontSize, icon: getComputedStyle(icon).color, off: i.top + i.height / 2 - (p.top + line / 2) }
+    }, at)
+    const danger = { edge: await token(page, theme, 'box-shadow', 'inset 0 0 0 1px var(--danger)'), icon: await token(page, theme, 'color', 'var(--danger)'), ink: await token(page, theme, 'color', 'var(--ink)') }
+    check(`${tag}: a field at fault: the danger's edge, its reason under it in ink, 12 px, after a danger icon centred on the first line`, fault.edge === danger.edge && fault.ink === danger.ink && fault.size === '12px' && fault.icon === danger.icon && near(fault.off, 0), JSON.stringify({ fault, danger }))
+    // radios
+    const marks = () => page.evaluate(at => [...document.querySelectorAll(`${at} [role="radio"]`)].map(r => {
+      const m = r.querySelector('.radio'), b = m.getBoundingClientRect()
+      return { checked: r.getAttribute('aria-checked'), focused: document.activeElement === r, width: b.width, height: b.height, ring: getComputedStyle(m).boxShadow, dot: getComputedStyle(m, '::after').scale }
+    }), at)
+    const rings = { on: await token(page, theme, 'box-shadow', 'inset 0 0 0 1.5px var(--ink)'), off: await token(page, theme, 'box-shadow', 'inset 0 0 0 1.5px var(--ink-3)') }
+    const rest = await marks()
+    check(`${tag}: radios 16 px, the chosen one's ring ink and its dot grown, the others' ink-3`, rest.every(m => near(m.width, 16) && near(m.height, 16) && (m.checked === 'true' ? m.ring === rings.on && m.dot === '1' : m.ring === rings.off && m.dot === '0')), JSON.stringify(rest))
+    await page.click(`${at} [role="radio"][aria-checked="true"]`)
+    await page.keyboard.press('ArrowDown')
+    const once = await marks()
+    await page.keyboard.press('ArrowDown')
+    await page.waitForTimeout(200)
+    const twice = await marks()
+    check(`${tag}: the arrows move the choice, past the service that cannot be had, the focus going with it`, once[1].checked === 'true' && once[1].focused && twice[0].checked === 'true' && twice[0].focused && twice[0].dot === '1', JSON.stringify({ once, twice }))
+    const lead = await edges(page, { items: `${at} .card-demo .radio, ${at} .card-demo .words`, frame: '.card-demo' })
+    check(`${tag}: the radios on the controls' edge, 14 px from the card, their words on the words' edge, 42`, JSON.stringify(lead) === '[14,42]', JSON.stringify(lead))
+    // the reveal: from nothing to its height in its time, and back; inert while closed; a fade alone under reduced motion
+    const toggle = `${at} [aria-controls]`
+    const state = () => page.evaluate(sel => { const r = document.querySelector(sel); return { height: r.getBoundingClientRect().height, inert: r.firstElementChild.inert, opacity: getComputedStyle(r).opacity } }, `${at} .reveal`)
+    const closed = await state()
+    await page.click(toggle)
+    await page.waitForTimeout(60)
+    const opening = await state()
+    await page.waitForTimeout(300)
+    const open = await state()
+    await page.locator(at).screenshot({ path: join(OUT, `${lang}-${theme}-forms-open.png`), animations: 'disabled', caret: 'hide' })
+    await page.click(toggle)
+    await page.waitForTimeout(300)
+    const shut = await state()
+    check(`${tag}: a reveal grows from nothing to its height and back, inert while closed (§8, §9)`, near(closed.height, 0) && closed.inert && opening.height > 0.5 && opening.height < open.height - 0.5 && !open.inert && open.opacity === '1' && near(shut.height, 0) && shut.inert, JSON.stringify({ closed, opening, open, shut }))
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.click(toggle)
+    await page.waitForTimeout(30)
+    const quick = await state()
+    await page.click(toggle)
+    await page.waitForTimeout(250)
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
+    check(`${tag}: under reduced motion a reveal takes its height at once, and only fades`, near(quick.height, open.height) && Number(quick.opacity) < 1, JSON.stringify(quick))
+  }
+}
+
 // ---- each task of Part 3 adds its control's checks above this line, and its function to CHECKS ----
-const CHECKS = [base, buttons]
+const CHECKS = [base, buttons, forms]
 
 const context = await chromium.launchPersistentContext(PROFILE, {
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),

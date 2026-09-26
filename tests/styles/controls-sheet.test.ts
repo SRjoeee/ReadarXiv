@@ -71,3 +71,42 @@ describe('controls.css: buttons and the shortcut label', () => {
     expect(of('.btn[aria-disabled="true"]', FC)).toEqual({ color: 'GrayText' })
   })
 })
+
+describe('controls.css: fields, radios and reveals', () => {
+  it('draws a field\'s label and hint 12 px in ink-2, 6 px from it; its reason in ink after a danger icon on the first line', () => {
+    expect(of('.field')).toEqual({ display: 'flex', 'flex-direction': 'column', gap: '6px' })
+    expect(of('.field > label')).toEqual({ color: 'var(--ink-2)', 'font-size': '12px', 'line-height': '1.4' })
+    expect(of('.field-hint')).toEqual({ margin: '0', color: 'var(--ink-2)', 'font-size': '12px', 'line-height': '1.4' })
+    expect(of('.field-error')).toEqual({ display: 'flex', 'align-items': 'flex-start', gap: '6px', margin: '0', color: 'var(--ink)', 'font-size': '12px', 'line-height': '1.45' })
+    expect(of('.field-error > svg')).toEqual({ flex: 'none', 'margin-block-start': 'calc((1.45em - 14px) / 2)', color: 'var(--danger)' })
+  })
+
+  it('draws a text field 34 px, radius 8, on its ground with a 0.5 px edge; 1 px of ink-3 focused, the danger\'s at fault', () => {
+    expect(of('.input')).toMatchObject({ height: '34px', padding: '0 10px', 'border-radius': '8px', background: 'var(--field)', 'box-shadow': 'inset 0 0 0 0.5px var(--field-edge)', font: '13px var(--font)' })
+    expect(of('.input::placeholder')).toEqual({ color: 'var(--ink-2)' })
+    expect(of('.input:focus')).toEqual({ 'box-shadow': 'inset 0 0 0 1px var(--ink-3)' })
+    expect(of('.input[aria-invalid="true"]')).toEqual({ 'box-shadow': 'inset 0 0 0 1px var(--danger)' })
+  })
+
+  it('draws a radio 16 px, a 1.5 px ring of ink-3, ink when chosen, its dot growing from the centre in 150 ms', () => {
+    expect(of('.radio')).toMatchObject({ width: '16px', height: '16px', 'border-radius': '999px', 'box-shadow': 'inset 0 0 0 1.5px var(--ink-3)' })
+    expect(of('.radio::after')).toMatchObject({ inset: '4px', background: 'var(--ink)', scale: '0', transition: 'scale 150ms var(--ease)' })
+    expect(of('[aria-checked="true"] > .radio')).toEqual({ 'box-shadow': 'inset 0 0 0 1.5px var(--ink)' })
+    expect(of('[aria-checked="true"] > .radio::after')).toEqual({ scale: '1' })
+  })
+
+  it('reveals in 220 ms on the ease, its opacity 180 ms after 40; closes in 180 and 120; only fades under reduced motion', () => {
+    expect(of('.reveal')).toEqual({ display: 'grid', 'grid-template-rows': '0fr', opacity: '0', transition: 'grid-template-rows 180ms ease-out, opacity 120ms ease-out' })
+    expect(of('.reveal[data-open]')).toEqual({ 'grid-template-rows': '1fr', opacity: '1', transition: 'grid-template-rows 220ms var(--ease), opacity 180ms ease-out 40ms' })
+    expect(of('.reveal > div')).toEqual({ 'min-height': '0', overflow: 'hidden' })
+    expect(of('.reveal, .reveal[data-open]', RM)).toEqual({ transition: 'opacity 150ms ease-out' })
+    expect(of('.radio::after', RM)).toEqual({ transition: 'none' })
+  })
+
+  it('redraws the radio\'s ring and the field\'s edge in the system\'s colours, where box-shadows are dropped (Review Focus)', () => {
+    expect(of('.radio', FC)).toEqual({ 'forced-color-adjust': 'none', 'box-shadow': 'inset 0 0 0 1.5px CanvasText' })
+    expect(of('[aria-checked="true"] > .radio', FC)).toEqual({ 'box-shadow': 'inset 0 0 0 1.5px Highlight' })
+    expect(of('[aria-checked="true"] > .radio::after', FC)).toEqual({ background: 'Highlight' })
+    expect(of('.input', FC)).toEqual({ border: '1px solid CanvasText' })
+  })
+})

@@ -12,3 +12,11 @@ body { margin: 0; background: var(--page); }
 /* the popup's group, for what sits on it (a note's buttons) */
 .on-group { padding: 10px; border-radius: 10px; background: var(--group); }
 .bare { height: 30px; padding: 0 8px; border-radius: 6px; background: var(--field); }
+/* the settings page's grammar, as far as the form pieces need it (§6.2): a card 4 px in, its rows 8 by 10 px in, a
+   radio 12 px before its words — the controls' edge at 14 from the card, the words' at 42 */
+.form-demo { display: flex; flex-direction: column; gap: 14px; width: 360px; }
+.card-demo { display: flex; flex-direction: column; width: 360px; padding: 4px; border-radius: 10px; background: var(--chrome); box-shadow: var(--card-shadow); }
+.radio-row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 10px; border-radius: 6px; text-align: start; }
+.radio-row .words { display: flex; flex-direction: column; gap: 2px; }
+.radio-row small { color: var(--ink-2); font-size: 12px; line-height: 1.4; }
+.reveal-body { width: 360px; padding-top: 12px; }

@@ -79,6 +79,31 @@
      (5.41:1 light, 4.59:1 dark; the maintainer, 2026-09-26) */
   .kbd { padding: 3px 5px; border-radius: 5px; background: color-mix(in oklab, var(--ink) 9%, transparent); color: var(--ink-2); font: 500 11px/1 var(--font); }
   .btn.brand .kbd { background: var(--brand-chip); color: var(--on-brand); }
+  /* a field (settings-2): its label 12 px in ink-2 above it, 6 px apart; a hint under it in ink-2; an error under it in
+     ink after a danger icon centred on its first line (round 4's failure line: never red words, §5.2) */
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field > label { color: var(--ink-2); font-size: 12px; line-height: 1.4; }
+  .field-hint { margin: 0; color: var(--ink-2); font-size: 12px; line-height: 1.4; }
+  .field-error { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--ink); font-size: 12px; line-height: 1.45; }
+  .field-error > svg { flex: none; margin-block-start: calc((1.45em - 14px) / 2); color: var(--danger); }
+  /* a text field (settings-2): 34 px, its ground with a 0.5 px edge, a 1 px ink-3 edge while focused, the danger's at
+     fault; placeholders in ink-2 (ink-3 read 3.49:1). The keyboard's ring is the base's, hugging it (ui.css) */
+  .input { width: 100%; min-width: 0; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--field); box-shadow: inset 0 0 0 0.5px var(--field-edge); color: var(--ink); font: 13px var(--font); transition: box-shadow 150ms ease-out; }
+  .input::placeholder { color: var(--ink-2); }
+  .input:focus { box-shadow: inset 0 0 0 1px var(--ink-3); }
+  .input[aria-invalid="true"] { box-shadow: inset 0 0 0 1px var(--danger); }
+  .input:disabled { opacity: 0.55; }
+  /* a radio's mark (settings-2): a 16 px ring of ink-3, ink when chosen, its dot growing from the centre (§8) */
+  .radio { position: relative; width: 16px; height: 16px; flex: none; border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--ink-3); transition: box-shadow 150ms ease-out; }
+  .radio::after { content: ""; position: absolute; inset: 4px; border-radius: 999px; background: var(--ink); scale: 0; transition: scale 150ms var(--ease); }
+  [aria-checked="true"] > .radio { box-shadow: inset 0 0 0 1.5px var(--ink); }
+  [aria-checked="true"] > .radio::after { scale: 1; }
+  [aria-disabled="true"] > .radio { opacity: 0.45; }
+  /* what appears only when it applies (§8): its rows 0fr to 1fr in 220 ms on the ease, its opacity 180 ms after 40;
+     closing softer and quicker, 180 ms and 120 ms. The inside clips while it moves; closed, it is inert (Reveal) */
+  .reveal { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 180ms ease-out, opacity 120ms ease-out; }
+  .reveal[data-open] { grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 220ms var(--ease), opacity 180ms ease-out 40ms; }
+  .reveal > div { min-height: 0; overflow: hidden; }
   /* a wait with one subject (a busy button; the pack's download in a menu): a loader turning */
   .spin { animation: turn 900ms linear infinite; }
 }
@@ -106,10 +131,17 @@
    rules above are, so that they win over the component rules */
 @media (prefers-reduced-motion: reduce) {
   .btn:active { scale: none; }
+  .radio::after { transition: none; }
+  .reveal, .reveal[data-open] { transition: opacity 150ms ease-out; }
   .spin { animation: none; }
 }
 @media (forced-colors: active) {
   /* a grounded button keeps an edge the system draws, its ground being dropped; not while focused, whose ring it is */
   .btn:not(.text):not(:focus-visible) { outline: 1px solid ButtonText; outline-offset: -1px; }
   .btn[aria-disabled="true"] { color: GrayText; }
+  /* rings and edges drawn by box-shadows are dropped: the system's colours draw them instead */
+  .radio { forced-color-adjust: none; box-shadow: inset 0 0 0 1.5px CanvasText; }
+  [aria-checked="true"] > .radio { box-shadow: inset 0 0 0 1.5px Highlight; }
+  [aria-checked="true"] > .radio::after { background: Highlight; }
+  .input { border: 1px solid CanvasText; }
 }
