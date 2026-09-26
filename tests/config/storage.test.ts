@@ -161,6 +161,18 @@ describe('the preload, v15 to v20', () => {
       expect(c.mode).toBe(DEFAULT_CONFIG.mode)
     }
   })
+
+  it('a hand-edited margin — neither a number nor `all` — is not repaired: passed on, it fails the schema and the fallback names the field', async () => {
+    const v19 = { ...DEFAULT_CONFIG, version: 19, preload: { margin: 'bogus', threshold: 0 } }
+    await fakeBrowser.storage.local.set({ config: v19, config$: { v: 19 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(fresh.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'preload' })
+    // WXT's migration still lands the unrepaired value at v20 in storage: left as it is, that would corrupt every
+    // test after this one that reads through the file's top-level, statically-imported storage module
+    fakeBrowser.reset()
+  })
 })
 
 describe('provider selection', () => {
@@ -404,7 +416,7 @@ describe('provider selection', () => {
   })
 
   it('v13 to v14: `reading` missing (added by a schema default alone) is filled, the rest as it was; a hand-edited service without `thinking` is not repaired (DESIGN §9)', async () => {
-    const { reading: _reading, ...v13 } = { ...DEFAULT_CONFIG, version: 13, provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-keep' }], targetLanguage: 'jpn' as const }
+    const { reading: _reading, ...v13 } = { ...DEFAULT_CONFIG, version: 13, provider: SVC.id, services: [{ ...SVC, apiKey: 'sk-keep' }], targetLanguage: 'jpn' as const, preload: { margin: 1000, threshold: 0 } }
     await fakeBrowser.storage.local.set({ config: v13, config$: { v: 13 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
@@ -441,11 +453,11 @@ describe('provider selection', () => {
     expect(await stripped.getConfig()).toEqual(DEFAULT_CONFIG)
     expect(stripped.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'services.0.thinking' })
     // A v13 value with both present migrates unchanged, apart from what later versions add: v16's `reading.openIn`
-    const full = { ...DEFAULT_CONFIG, version: 13, reading: { sentenceHighlight: false }, provider: SVC.id, services: [{ ...SVC, thinking: 'enabled' as const }] }
+    const full = { ...DEFAULT_CONFIG, version: 13, reading: { sentenceHighlight: false }, provider: SVC.id, services: [{ ...SVC, thinking: 'enabled' as const }], preload: { margin: 1000, threshold: 0 } }
     await fakeBrowser.storage.local.set({ config: full, config$: { v: 13 } })
     vi.resetModules()
     const again = await (await import('@/config/storage')).getConfig()
-    expect(again).toEqual({ ...full, version: CONFIG_VERSION, reading: { sentenceHighlight: false, openIn: 'new-tab' } })
+    expect(again).toEqual({ ...full, version: CONFIG_VERSION, reading: { sentenceHighlight: false, openIn: 'new-tab' }, preload: 'on-demand' })
   })
 
   it('no field of the stored shape, at any depth, carries a zod default: the version alone says what is in storage (DESIGN §9)', () => {

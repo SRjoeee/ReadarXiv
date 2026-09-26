@@ -109,8 +109,9 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
     19: (v18: (Omit<Config, 'version' | 'pdfReader'> & { version: 18 }) | null) =>
       typeof v18 !== 'object' || v18 === null ? v18 : { ...v18, version: 19 as const, pdfReader: { ...DEFAULT_PDF_READER } },
     // v19 -> v20: the redesign (its design, §3, §4). The reader's appearance becomes the extension's theme; the stored
-    // preload numbers become the two ways to translate — `all` is whole, any number on demand. A field that is not an
-    // object (a hand edit) is passed through for the schema to name, as every migration here does
+    // preload numbers become the two ways to translate — `all` is whole, a number on demand. A field that is not an
+    // object, or a margin that is neither (a hand edit), is passed through for the schema to name, as every migration
+    // here does — repairing it would hide the very thing the fallback exists to report (§9, S-O-02)
     20: (v19: (Omit<Config, 'version' | 'theme' | 'preload' | 'pdfReader'> & { version: 19; pdfReader?: unknown; preload?: unknown }) | null) => {
       if (typeof v19 !== 'object' || v19 === null) return v19
       const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -123,7 +124,12 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
         out.theme = appearance ?? 'system'
         out.pdfReader = rest
       }
-      if (isObject(v19.preload)) out.preload = v19.preload.margin === 'all' ? 'whole' : 'on-demand'
+      if (isObject(v19.preload)) {
+        const { margin } = v19.preload
+        if (margin === 'all') out.preload = 'whole'
+        else if (typeof margin === 'number') out.preload = 'on-demand'
+        // else: left as the initial spread has it (the malformed object itself), for the schema to name
+      }
       return out
     },
   },
