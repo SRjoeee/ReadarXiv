@@ -1091,13 +1091,19 @@ check('the settings page: after deleting the custom prompt the default is chosen
   check('cache management: shows the entry count, zero after clearing', /^[1-9]/.test(before ?? '') && /^0 条/.test(after ?? ''), `before clearing “${before}”, after “${after}”`)
 }
 
-// ── A wrong key + the fallback chain on (§8.5): after the LLM reports auth it switches to google-web of itself, and the whole page translates as usual ──
+// ── A wrong key met for the first time, with the fallback chain on (§8.5): after the LLM reports auth it switches to google-web of itself, and the whole page translates as usual ──
 {
   await options.bringToFront()
   // “Connect” asks whether this service's endpoint works and must report auth truthfully: going through the fallback service, the free service would show it as a success,
   // the reader would think the key fine while the whole page is translated by Google (the same kind of inconsistency as issue #42, the other way round)
   const bogusTest = await addService(options, { name: 'bogus key', baseURL: 'https://openrouter.ai/api/v1', model: 'deepseek/deepseek-v4-flash', apiKey: 'sk-or-v1-bogus-key-for-auth-test' })
   check('with a wrong key the settings page\'s connection reports the failure truthfully, not masked by the fallback service', /API Key/.test(bogusTest ?? '') && !/已连接/.test(bogusTest ?? ''), bogusTest)
+  const svcId = (await options.evaluate(() => chrome.storage.local.get('config'))).config.provider
+
+  // The connection test just now already marked this service refused (handlers.ts, on its own named call, unaffected
+  // by what follows): cleared here so the page below meets the wrong key for the first time, the service health
+  // record (the redesign's design §4) not yet in its way
+  await options.evaluate(() => chrome.storage.local.remove('serviceHealth'))
 
   const { page, logs, requests } = await openPaper(PAPER, 'openrouter.ai')
   const done = await waitForLog(logs, IDLE, 90_000)
@@ -1105,9 +1111,14 @@ check('the settings page: after deleting the custom prompt the default is chosen
   const idle = idleOf(done)
   // The fallback's console.warn now prints in the background's console, invisible on the page (§8.0);
   // “the preferred engine was really tried” is attested by OpenRouter's request count instead, “the reader can see it” by the popup check below
-  check('a wrong key + the fallback on: switched to the free engine, the whole page translated as usual, no fatal error',
+  check('a wrong key met for the first time + the fallback on: switched to the free engine, the whole page translated as usual, no fatal error',
     !!idle && idle.failed === 0 && idle.done > 0 && !/fatal:/.test(done?.text ?? '') && requests.length > 0,
     `${done?.text ?? '(no idle line)'}; ${requests.length} OpenRouter requests`)
+
+  // The refusal just met is remembered across chains, so a later page does not dial this key again (design §4)
+  const healthAfterOn = (await options.evaluate(() => chrome.storage.local.get('serviceHealth'))).serviceHealth ?? {}
+  check('the refusal is remembered: the service health record now holds this service\'s id',
+    Object.keys(healthAfterOn).includes(svcId), JSON.stringify(Object.keys(healthAfterOn)))
 
   const popup = await context.newPage()
   await popup.goto(`chrome-extension://${extId}/popup.html`)
@@ -1122,10 +1133,12 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await page.close()
 }
 
-// ── A wrong key + the fallback chain off: the “401 → auth → the whole queue drains” behaviour is back ──
+// ── The same wrong key met for the first time, with the fallback chain off: the “401 → auth → the whole queue drains” behaviour is back ──
 {
   await options.bringToFront()
   await setSwitch(options, '出问题时自动改用免费服务', false)
+  // First encounter again: the record the block above left behind must not pre-empt this session's own 401
+  await options.evaluate(() => chrome.storage.local.remove('serviceHealth'))
 
   // The moment the 401 came back has to be recorded: the assertion is “no new request after this”, not how many the first wave had —
   // the first wave's count depends on the token bucket's burst rhythm, and a little faster or slower breaks the ≤ 20 (issue #82)
@@ -1194,7 +1207,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   const afterAuth = sent - beforeAuth
   const afterIdle = requests.filter(r => r.t > (done?.t ?? 0) + EVENT_JITTER_MS)
   const offsets = requests.map(r => Math.round(r.t - firstAuthFailure)).sort((a, b) => a - b)
-  check('a wrong key + the fallback off: after the 401 the whole session stops, and scrolling to the bottom sends no more requests',
+  check('a wrong key met for the first time + the fallback off: after the 401 the whole session stops, and scrolling to the bottom sends no more requests',
     Number.isFinite(firstAuthFailure) && sentAtAuth >= 0 && /fatal: auth/.test(done?.text ?? '')
       && (idle?.requested ?? 0) < (idle?.total ?? 0) // blocks not yet requested remain; only a scroll can falsify it
       && afterAuth === 0 // not one request more after the 401 (#96)
@@ -1204,6 +1217,48 @@ check('the settings page: after deleting the custom prompt the default is chosen
   // the right column's copy since #213 (issue #170), which is that block's again, not another block's
   const widgets = await page.evaluate(() => Array.from(document.querySelectorAll('.axt-error')).filter(w => w.closest('.axt-split') === null).length)
   check('failed blocks have a retry / reason widget beside them (§7.6)', !!idle && widgets > 0 && widgets === idle.failed, `${widgets} widgets, ${idle?.failed ?? '?'} failed blocks`)
+  await page.close()
+}
+
+// ── The same wrong key, remembered (design §4): with the fallback chain on the page never dials it again ──
+{
+  await options.bringToFront()
+  await setSwitch(options, '出问题时自动改用免费服务', true)
+  // No clear here: the record still holds what the fallback-off block just put there (its own real 401), and this
+  // is the point of the two blocks below — a later page meets the same refusal already remembered
+  const { page, logs, requests } = await openPaper(PAPER, 'openrouter.ai')
+  const done = await waitForLog(logs, IDLE, 90_000)
+  await sleep(2_000)
+  const idle = idleOf(done)
+  check('a wrong key remembered + the fallback on: no request to the refused key, the whole page still translates through the free engine',
+    !!idle && idle.failed === 0 && idle.done > 0 && !/fatal:/.test(done?.text ?? '') && requests.length === 0,
+    `${done?.text ?? '(no idle line)'}; ${requests.length} OpenRouter requests`)
+  await page.close()
+}
+
+// ── The same wrong key, remembered, with the fallback chain off: the page never starts a translation it must fail (UI.md §4's runnable) ──
+{
+  await options.bringToFront()
+  await setSwitch(options, '出问题时自动改用免费服务', false)
+  const { page, logs, requests } = await openPaper(PAPER, 'openrouter.ai')
+  // No idle line is the point here: `runnable()` (view-model.ts) refuses to start at all with no fallback to fall
+  // back to, so a short wait is enough — nothing arrives no matter how much longer this waits
+  const done = await waitForLog(logs, IDLE, 6_000)
+  await sleep(1_000)
+  const dom = await countDom(page)
+  const popup = await context.newPage()
+  await popup.goto(`chrome-extension://${extId}/popup.html`)
+  await page.bringToFront()
+  await popup.getByText('API Key 已失效').waitFor({ timeout: 10_000 }).catch(() => undefined)
+  const rejectedNote = await popup.getByText('API Key 已失效').count()
+  const primaryDisabled = await popup.evaluate(() => {
+    const button = [...document.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === '翻译本页')
+    return button ? button.disabled : null
+  })
+  check('a wrong key remembered + the fallback off: the page never starts, and the popup says the key no longer works, its primary disabled',
+    !done && !dom.on && dom.translations === 0 && requests.length === 0 && rejectedNote > 0 && primaryDisabled === true,
+    `${done ? done.text : '(no idle line, as expected)'}; DOM ${JSON.stringify(dom)}; ${requests.length} OpenRouter requests; note ${rejectedNote}; primary disabled ${primaryDisabled}`)
+  await popup.close()
   await page.close()
 }
 
