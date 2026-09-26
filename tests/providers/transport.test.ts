@@ -784,3 +784,24 @@ describe('createLocalTransport: the status identity', () => {
     expect(res.ok && res.result.segments[0]!.identity).toBe((await t.status()).identity)
   })
 })
+
+describe('createLocalTransport: a refused key (the redesign\'s design, §4)', () => {
+  const engine = (id: string, calls: string[]) => mockProvider(async r => { calls.push(id); return { segments: r.segments, provider: id } }, { id })
+
+  it('passes a refused service over from the first call, and reports it unable to run, the free one taking over', async () => {
+    const calls: string[] = []
+    const t = await withChain([engine(SVC.id, calls), engine('microsoft', calls)], { rejected: new Set([SVC.id]) })
+    expect((await t.translate({ request: req })).ok).toBe(true)
+    expect(calls).toEqual(['microsoft'])
+    const status = await t.status()
+    expect(status.available).toBe(false)
+    expect(status.fallback).toEqual({ id: 'microsoft' })
+  })
+
+  it('still reaches it for a call that names it: the settings page asking whether the key works now', async () => {
+    const calls: string[] = []
+    const t = await withChain([engine(SVC.id, calls), engine('microsoft', calls)], { rejected: new Set([SVC.id]) })
+    expect((await t.translate({ request: req, providerId: SVC.id })).ok).toBe(true)
+    expect(calls).toEqual([SVC.id])
+  })
+})

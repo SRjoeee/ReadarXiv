@@ -158,6 +158,23 @@ describe('createFallbackService', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('demoted'))
     warn.mockRestore()
   })
+
+  it('starts with the demotions it is given, for good: a service whose key was refused is passed over from the first call (the redesign\'s design, §4)', async () => {
+    const first = step('svc-abcd1234', [ok('svc-abcd1234')])
+    const second = step('microsoft', [ok('microsoft')])
+    const service = createFallbackService([first, second], { demoted: [{ id: 'svc-abcd1234', kind: 'auth', message: 'refused before' }] })
+    const res = await service.translate(call)
+    expect(res.ok && res.result.provider).toBe('microsoft')
+    expect(first.calls).toBe(0)
+    expect(service.status().demotions.map(d => d.id)).toEqual(['svc-abcd1234'])
+  })
+
+  it('tells whoever asked of every demotion, with its kind', async () => {
+    const seen: string[] = []
+    const service = createFallbackService([step('svc-abcd1234', [fail('auth', 'bad key')]), step('microsoft', [ok('microsoft')])], { onDemoted: info => seen.push(`${info.id}:${info.kind}`) })
+    await service.translate(call)
+    expect(seen).toEqual(['svc-abcd1234:auth'])
+  })
 })
 
 // Codex on #163: every step of the chain resends the whole call, and the cache key carries the provider,

@@ -7,6 +7,7 @@
 // two cache messages answer `{ ok: false, … }` themselves, because their callers show the reason; the others reject,
 // and the listener answers with the failure reply that `sendMessage` turns back into a rejection.
 import type { Config } from '@/config/schema'
+import { SERVICE_ID_RE } from '@/config/services'
 import { toErrorInfo } from '@/providers/translate-service'
 import { type DiagnosticsExport, failureLine } from '@/shared/diagnostics'
 import type { FloatingEntryState } from '@/shared/entry-settings'
@@ -37,6 +38,8 @@ export interface HandlerDeps {
   lightAction(tabId: number): Promise<void>
   /** The environment a reader cannot be expected to report: the build, the browser, the platform */
   environment(): Promise<Omit<DiagnosticsExport, 'entries' | 'exportedAt'>>
+  /** The service health record (the redesign's design, §4) */
+  health: { reject(id: string): Promise<void>; clear(id: string): Promise<boolean> }
 }
 
 const messageOf = (e: unknown): string => e instanceof Error ? e.message : String(e)
@@ -47,6 +50,15 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
     // A failed chain build (a provider constructor throwing) is answered honestly too: unanswered, the caller waits for “message channel closed”
     'axt:translate': (message, sender) => deps.router.forCall(message.scope, sender.tabId)
       .then(transport => transport.translate(message))
+      .then(async response => {
+        // A call naming one of the reader's services is the settings page asking whether it answers: its answer is the
+        // record's (the redesign's design, §4). A refused key marks it; any success clears it
+        if (message.providerId && SERVICE_ID_RE.test(message.providerId)) {
+          if (response.ok) await deps.health.clear(message.providerId)
+          else if (response.error.kind === 'auth') await deps.health.reject(message.providerId)
+        }
+        return response
+      })
       .catch((e: unknown) => {
         const error = toErrorInfo(e)
         diag(`[axt] translate call failed before any request: ${failureLine(error.kind, error.message)}`)

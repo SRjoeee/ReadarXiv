@@ -9,7 +9,7 @@ import { chosenService, serviceOf } from '@/config/services'
 import { translationIdentity, type RenderPath } from '@/cache/key'
 import { buildChain } from '.'
 import { createOpenAICompatProvider } from './openai-compat'
-import { createFallbackService } from './fallback'
+import { createFallbackService, type DemotedInfo } from './fallback'
 import type { CancelledScopeRegistry } from './request/cancellation'
 import { createTranslateService, type CachePort, type TranslateCall, type TranslateMessageResponse, type TranslateService, type TranslateServiceDeps } from './translate-service'
 import type { ProviderErrorKind, TranslationProvider } from './types'
@@ -104,6 +104,10 @@ export interface LocalTransportDeps extends Pick<TranslateServiceDeps, 'queue' |
   buildChain?: (config: Config) => Promise<{ chain: TranslationProvider[]; renderPath: RenderPath }>
   /** Where the services' warnings go besides the console: the diagnostics log (issue #156) */
   warn?: (line: string) => void
+  /** The reader's services whose key the endpoint refused (the service health record): demoted from the start */
+  rejected?: ReadonlySet<string>
+  /** Told of every demotion: the background remembers a refused key */
+  onDemoted?: (info: DemotedInfo) => void
 }
 
 /**
@@ -140,7 +144,12 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       ...(deps.cacheReadBudgetMs !== undefined ? { cacheReadBudgetMs: deps.cacheReadBudgetMs } : {}),
     }),
   }))
-  const service = createFallbackService(steps, deps.warn ? { warn: deps.warn } : {})
+  const seeded = chain.filter(engine => deps.rejected?.has(engine.id)).map(engine => ({ id: engine.id, kind: 'auth' as const, message: 'the endpoint refused this key before' }))
+  const service = createFallbackService(steps, {
+    ...(deps.warn ? { warn: deps.warn } : {}),
+    ...(seeded.length ? { demoted: seeded } : {}),
+    ...(deps.onDemoted ? { onDemoted: deps.onDemoted } : {}),
+  })
 
   /**
    * A service of the reader's that this chain is not built around: the connection test has to answer for the
@@ -189,7 +198,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
   }
 
   const status = async (): Promise<ProviderStatus> => {
-    const available = await primary.isAvailable()
+    const available = !deps.rejected?.has(primary.id) && await primary.isAvailable()
     // The first choice unavailable, look for a usable one on the chain: with one the translation runs as usual, on the fallback engine
     let fallback: ProviderStatus['fallback']
     if (!available) {

@@ -17,6 +17,8 @@ import { setLocale } from '@/ui/strings'
 import { savedFromStatus } from '@/shared/page-action'
 import { BUILD_REF } from '@/shared/build'
 import { createDiagnostics } from './diagnostics'
+import { clearRejected, markRejected, rejectedServices, watchRejected } from '@/shared/service-health'
+import { SERVICE_ID_RE } from '@/config/services'
 
 // The background: the engine chain, the queues, the cache and the recogniser, wired together (DESIGN §8.0); what it
 // answers is the table in ./handlers.ts.
@@ -45,10 +47,28 @@ export default defineBackground(() => {
   const chain = createChainHolder({
     load: async config => {
       const resolved = config ?? await getConfig()
-      return { config: resolved, transport: await createLocalTransport(resolved, { cache, cancelled, warn: diag }) }
+      const rejected = await rejectedServices()
+      return {
+        config: resolved,
+        transport: await createLocalTransport(resolved, {
+          cache, cancelled, warn: diag, rejected,
+          // a refused key is remembered across sessions (the redesign's design, §4); a free engine's failure is not ours to record
+          onDemoted: info => { if (info.kind === 'auth' && SERVICE_ID_RE.test(info.id)) void markRejected(info.id) },
+        }),
+      }
     },
     // The router is created below; a superseded chain is only ever swept after a build, long after that
     owned: transport => router.sessionsOn(transport) > 0,
+  })
+  // A mark cleared (a connection that succeeded) rebuilds the chain, so that the service comes back; a mark added
+  // needs nothing, the chain in force having demoted it already. `defineBackground`'s callback is synchronous: the
+  // first read lands before any connection a reader could make
+  let known = new Set<string>()
+  void rejectedServices().then(ids => { known = ids })
+  watchRejected(ids => {
+    const cleared = [...known].some(id => !ids.has(id))
+    known = ids
+    if (cleared) void chain.activate()
   })
   const transportOf = () => chain.current()
   /** The interface language this worker uses, to recognise “the reader changed it” (the context menu's title has to be redrawn) */
@@ -222,5 +242,6 @@ export default defineBackground(() => {
       browser: navigator.userAgent,
       platform: (await browser.runtime.getPlatformInfo().catch(() => ({ os: 'unknown' }))).os,
     }),
+    health: { reject: markRejected, clear: clearRejected },
   })))
 })

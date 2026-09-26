@@ -26,6 +26,7 @@ function harness(over: Partial<HandlerDeps> = {}) {
     openSettings: vi.fn(async () => undefined),
     lightAction: vi.fn(async () => undefined),
     environment: vi.fn(),
+    health: { reject: vi.fn(async () => undefined), clear: vi.fn(async () => false) },
     ...over,
   } as unknown as HandlerDeps
   const handlers = createHandlers(deps)
@@ -58,6 +59,28 @@ describe('the background\'s handlers', () => {
       expect(lines[0]?.[0]).toBe('background')
       expect(lines[0]?.[1]).toContain('auth')
       expect(lines[0]?.[1]).not.toContain('sk-secret')
+    })
+
+    it('a call naming one of the reader\'s services writes the health record: success clears it, a refused key marks it; a call naming none, or a free engine, writes nothing (the redesign\'s design, §4)', async () => {
+      const answering = (answer: unknown) => ({ router: { forCall: vi.fn(async () => ({ translate: vi.fn(async () => answer) })) } as unknown as HandlerDeps['router'] })
+      const health = () => ({ reject: vi.fn(async () => undefined), clear: vi.fn(async () => true) })
+      const named = { ...CALL, type: 'axt:translate' as const, providerId: 'svc-abcd1234' }
+      const good = { ok: true, result: { segments: [], provider: 'svc-abcd1234' }, cached: 0 }
+
+      const cleared = health()
+      await harness({ ...answering(good), health: cleared }).send(named)
+      expect(cleared.clear).toHaveBeenCalledWith('svc-abcd1234')
+      expect(cleared.reject).not.toHaveBeenCalled()
+
+      const refused = health()
+      await harness({ ...answering({ ok: false, error: { kind: 'auth', message: 'bad key', isolatable: false } }), health: refused }).send(named)
+      expect(refused.reject).toHaveBeenCalledWith('svc-abcd1234')
+
+      const plain = health()
+      await harness({ ...answering(good), health: plain }).send({ ...CALL, type: 'axt:translate' })
+      await harness({ ...answering(good), health: plain }).send({ ...named, providerId: 'google-web' })
+      expect(plain.clear).not.toHaveBeenCalled()
+      expect(plain.reject).not.toHaveBeenCalled()
     })
   })
 

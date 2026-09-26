@@ -70,13 +70,18 @@ interface Demotion {
 
 export function createFallbackService(
   steps: readonly FallbackStep[],
-  opts: { cooldownMs?: number; now?: () => number; warn?: (line: string) => void } = {},
+  opts: { cooldownMs?: number; now?: () => number; warn?: (line: string) => void; demoted?: readonly DemotedInfo[]; onDemoted?: (info: DemotedInfo) => void } = {},
 ): FallbackService {
   if (steps.length === 0) throw new Error('a fallback chain needs at least one engine')
   const cooldownMs = opts.cooldownMs ?? DEFAULT_COOLDOWN_MS
   const now = opts.now ?? Date.now
   const demotions = new Map<string, Demotion>()
   let lastDemoted: DemotedInfo | undefined
+
+  // Demotions known before the first call (the redesign's design, §4): a service whose key the endpoint refused, which
+  // the background remembers across sessions. For good, as any permanent kind is; a connection that succeeds clears
+  // the record and rebuilds the chain
+  for (const info of opts.demoted ?? []) demotions.set(info.id, { info })
 
   const isDemoted = (id: string): boolean => {
     const demotion = demotions.get(id)
@@ -104,6 +109,7 @@ export function createFallbackService(
     lastDemoted = info
     console.warn(`[axt] ${step.provider.id} demoted (${error.kind}): ${error.message}`)
     opts.warn?.(`[axt] ${step.provider.id} demoted: ${failureLine(error.kind, error.message, getRequestErrorMeta(error).statusCode)}`)
+    opts.onDemoted?.(info)
   }
 
   const translate = async (call: TranslateCall): Promise<TranslateMessageResponse> => {

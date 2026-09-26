@@ -7,6 +7,7 @@ import type { Config } from '@/config/schema'
 import { type Service, defaultServiceName, isLoopback, newServiceId, serviceSchema } from '@/config/services'
 import { wireFormatOfProvider } from '@/providers/wire-formats'
 import { sendMessage } from '@/shared/messages'
+import { clearRejected } from '@/shared/service-health'
 import { Button } from '@/ui/Button'
 import { Confirm } from '@/ui/Confirm'
 import { Drawer } from '@/ui/Drawer'
@@ -118,6 +119,9 @@ export function ServiceDrawer({ service, patch, onClose }: {
       // A deleted service cannot stay chosen; the shipped free one takes over
       provider: latest.provider === gone ? 'microsoft' : latest.provider,
     }))
+    // A deleted service leaves no mark behind: the record is keyed by the id, and a later service could be given
+    // the same id back only in theory, but there is nothing left for a stale mark to protect anyone from either way
+    await clearRejected(gone)
     // A page translating in another tab is pinned to the chain it started on, so a deleted service
     // would go on spending its key whenever the reader scrolls (Codex on #157). This is the one
     // action that moves every session: the service has to stop serving everywhere, which outweighs
