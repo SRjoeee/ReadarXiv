@@ -10,7 +10,7 @@ import type { ReaderController } from '../controller'
 import { Icon } from '@/ui/controls/Icon'
 import { languageItems } from './languages'
 import { Popover, usePopover } from '@/ui/controls/Popover'
-import { ReaderMenu } from '@/ui/controls/MenuList'
+import { MenuList } from '@/ui/controls/MenuList'
 import { ToolbarButton } from './ToolbarButton'
 import { useReader } from './use-reader'
 
@@ -33,7 +33,7 @@ export function ZoomMenu({ controller }: { controller: ReaderController }) {
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
       <Popover {...pop.popover} role="menu" label={R.zoom.value}>
-        <ReaderMenu key={pop.generation} kind="radios" label={R.zoom.value} items={items} onClose={() => shut(pop.popover.id)} onPick={id => { controller.zoomTo(FITS.some(([f]) => f === id) ? (id as 'page-width') : Number(id)); shut(pop.popover.id) }} />
+        <MenuList key={pop.generation} kind="radios" label={R.zoom.value} items={items} onClose={() => shut(pop.popover.id)} onPick={id => { controller.zoomTo(FITS.some(([f]) => f === id) ? (id as 'page-width') : Number(id)); shut(pop.popover.id) }} />
       </Popover>
     </>
   )
@@ -50,7 +50,7 @@ export function LanguageMenu({ controller, name }: { controller: ReaderControlle
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
       <Popover {...pop.popover} role="listbox" label={S.rows.language}>
-        <ReaderMenu key={pop.generation} kind="listbox" label={S.rows.language} search={S.menu.searchLanguages} noMatch={S.menu.noMatch} items={languageItems(current).map(i => ({ ...i, checked: i.selected }))} onClose={() => shut(pop.popover.id)}
+        <MenuList key={pop.generation} kind="listbox" label={S.rows.language} search={S.menu.searchLanguages} noMatch={S.menu.noMatch} items={languageItems(current).map(i => ({ ...i, checked: i.selected }))} onClose={() => shut(pop.popover.id)}
           onPick={code => { controller.patchSettings(c => ({ ...c, targetLanguage: code as LangCode })); shut(pop.popover.id) }} />
       </Popover>
     </>
@@ -69,7 +69,7 @@ export function ServiceMenu({ controller }: { controller: ReaderController }) {
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
       <Popover {...pop.popover} role="listbox" label={S.rows.service}>
-        <ReaderMenu key={pop.generation} kind="listbox" label={S.rows.service} items={items} onClose={() => shut(pop.popover.id)}
+        <MenuList key={pop.generation} kind="listbox" label={S.rows.service} items={items} onClose={() => shut(pop.popover.id)}
           onPick={id => {
             shut(pop.popover.id)
             // managing the services, or a pack to download: the settings page's (the reader downloads no pack itself)
@@ -96,7 +96,7 @@ export function DownloadMenu({ controller, wide = false }: { controller: ReaderC
         <Icon node={Download} />
       </ToolbarButton>
       <Popover {...pop.popover} role="menu" label={R.download.name} className="!min-w-[160px]">
-        <ReaderMenu key={pop.generation} kind="items" label={R.download.name} items={items} onClose={() => shut(pop.popover.id)} onPick={which => { shut(pop.popover.id); void controller.download(which as 'translation' | 'original') }} />
+        <MenuList key={pop.generation} kind="items" label={R.download.name} items={items} onClose={() => shut(pop.popover.id)} onPick={which => { shut(pop.popover.id); void controller.download(which as 'translation' | 'original') }} />
       </Popover>
     </>
   )

@@ -4,6 +4,7 @@ import type { FC } from 'react'
 import { Base } from './base'
 import { Buttons } from './buttons'
 import { Forms } from './forms'
+import { Menus } from './menus'
 import { Segments } from './segmented'
 
 export const SPECIMENS: { name: string; Specimen: FC }[] = [
@@ -11,4 +12,5 @@ export const SPECIMENS: { name: string; Specimen: FC }[] = [
   { name: 'buttons', Specimen: Buttons },
   { name: 'forms', Specimen: Forms },
   { name: 'segmented', Specimen: Segments },
+  { name: 'menus', Specimen: Menus },
 ]

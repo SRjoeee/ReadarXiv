@@ -114,6 +114,20 @@
   .seg.fit { display: flex; anchor-scope: --seg-on; }
   .seg.fit > button { flex: 1 1 auto; padding: 0 8px; }
   .seg.fit .thumb { position-anchor: --seg-on; inset-inline-start: anchor(start); width: anchor-size(width); translate: none; transition: inset-inline-start 220ms var(--ease), width 220ms var(--ease); }
+  /* a menu's rows for the pages (§5.3): a name over its hint, the row at least 40 px (the service menu, round 4); a
+     neutral button in a row (the pack's download: 24 px, 9 in, radius 6, 12 px), on the active row the lift's ground,
+     since in dark the neutral's equals the row's fill (ruling 5); a sample drawn in a style at a row's end (the style
+     menu); the last row, which leads to managing the list, in ink-2. The reader's rows are untouched */
+  .pop .item.two { height: auto; min-height: 40px; padding-block: 5px; }
+  .pop .item .t { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
+  .pop .item .t > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pop .item .sub { color: var(--ink-2); font-size: 11.5px; }
+  .pop .item .act { display: inline-flex; flex: none; align-items: center; height: 24px; padding: 0 9px; border-radius: 6px; background: var(--button); color: var(--ink); font-size: 12px; font-weight: 500; }
+  .pop .item[data-active] .act { background: var(--lift); }
+  .pop .item .spin { flex: none; color: var(--ink-2); }
+  .pop .item .nm { flex: none; }
+  .pop .item .preview { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: clip; text-align: end; font-size: 12.5px; }
+  .pop .item.manage { color: var(--ink-2); }
   /* a wait with one subject (a busy button; the pack's download in a menu): a loader turning */
   .spin { animation: turn 900ms linear infinite; }
 }

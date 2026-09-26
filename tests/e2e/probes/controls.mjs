@@ -275,8 +275,75 @@ async function segmented(page, lang) {
   }
 }
 
+/** Task 19: the menus' rows — two lines, a button in a row, a sample in a style, the way to manage the list (round 4) */
+async function menus(page, lang) {
+  for (const theme of THEMES) {
+    const at = `[data-theme="${theme}"] [data-specimen="menus"]`, tag = `${lang} ${theme}`, pop = `${at} .pop:popover-open`
+    const ink2 = await token(page, theme, 'color', 'var(--ink-2)'), button = await token(page, theme, 'background-color', 'var(--button)')
+    // the services, on two lines
+    await page.click(`${at} [data-menu="services"]`)
+    await page.waitForSelector(pop)
+    // the menu grows in over 150 ms (pop-in): measured and shot at rest
+    await page.waitForTimeout(250)
+    const rows = await page.evaluate(pop => [...document.querySelectorAll(`${pop} .item`)].map(i => {
+      const style = s => i.querySelector(s) && getComputedStyle(i.querySelector(s))
+      const act = i.querySelector('.act')
+      return {
+        cls: i.className, height: i.getBoundingClientRect().height, color: getComputedStyle(i).color, selected: i.getAttribute('aria-selected'),
+        sub: style('.sub') && [style('.sub').fontSize, style('.sub').color], check: style('.check')?.visibility, spin: style('svg.spin')?.animationName ?? null,
+        act: act && [act.getBoundingClientRect().height, style('.act').paddingInlineStart, style('.act').borderTopLeftRadius, style('.act').fontSize, style('.act').fontWeight, style('.act').backgroundColor],
+        separated: !!i.previousElementSibling?.matches('hr.sep'),
+      }
+    }), pop)
+    const two = rows.filter(r => r.cls === 'item two')
+    check(`${tag}: the services on two lines, each at least 40 px, the hint 11.5 px in ink-2`, two.length === 4 && two.every(r => r.height >= 39.5 && r.sub?.[0] === '11.5px' && r.sub?.[1] === ink2), JSON.stringify(two))
+    const act = rows.find(r => r.act)?.act
+    check(`${tag}: the pack's download, a neutral button in its row: 24 px, 9 in, radius 6, 12 px / 500`, !!act && near(act[0], 24) && act[1] === '9px' && act[2] === '6px' && act[3] === '12px' && act[4] === '500' && act[5] === button, JSON.stringify(act))
+    check(`${tag}: a download under way turns a loader instead`, rows.some(r => r.spin === 'turn'), JSON.stringify(rows.map(r => r.spin)))
+    const manage = rows.at(-1)
+    check(`${tag}: the last row manages the list: after a separator, in ink-2, never chosen`, manage?.cls === 'item manage' && manage.separated && manage.color === ink2 && manage.selected === 'false' && manage.check === 'hidden', JSON.stringify(manage))
+    const off = await offCentre(page, { rows: `${pop} .item` })
+    check(`${tag}: each menu row's parts on its centre line`, off.length === 0, JSON.stringify(off))
+    await page.locator(pop).screenshot({ path: join(OUT, `${lang}-${theme}-menu-services.png`), animations: 'disabled', caret: 'hide' })
+    // the keys reach the pack's row though it cannot be chosen, its button on the lift there; Enter runs its action,
+    // and on the busy one nothing
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ArrowDown')
+    await page.waitForTimeout(200)
+    const lifted = await look(page, `${pop} .item[data-active] .act`)
+    check(`${tag}: the active row's button on the lift's ground (ruling 5)`, lifted?.bg === await token(page, theme, 'background-color', 'var(--lift)'), JSON.stringify(lifted))
+    await page.keyboard.press('Enter')
+    const ran = await page.textContent(`${at} output`)
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Enter')
+    const again = await page.textContent(`${at} output`)
+    check(`${tag}: Enter on the pack's row runs its action, and on the busy one does nothing`, ran === 'action:chrome' && again === 'action:chrome', JSON.stringify({ ran, again }))
+    await page.keyboard.press('Escape')
+    // the styles, each sample at its row's end in its style
+    await page.click(`${at} [data-menu="styles"]`)
+    await page.waitForSelector(pop)
+    // the menu grows in over 150 ms (pop-in): measured and shot at rest
+    await page.waitForTimeout(250)
+    const samples = await page.evaluate(pop => [...document.querySelectorAll(`${pop} .preview`)].map(p => ({ align: getComputedStyle(p).textAlign, size: getComputedStyle(p).fontSize, hidden: p.getAttribute('aria-hidden'), styled: !!p.getAttribute('style'), lang: p.getAttribute('lang'), end: Math.round(p.closest('.item').getBoundingClientRect().right - p.getBoundingClientRect().right) })), pop)
+    check(`${tag}: each style's sample at its row's end, 12.5 px, drawn in its style and its language, hidden from a screen reader`, samples.length > 0 && samples.every(s => s.align === 'end' && s.size === '12.5px' && s.hidden === 'true' && s.styled && s.lang === 'zh-CN' && s.end === 10), JSON.stringify(samples))
+    await page.locator(pop).screenshot({ path: join(OUT, `${lang}-${theme}-menu-styles.png`), animations: 'disabled', caret: 'hide' })
+    await page.keyboard.press('Escape')
+    // the languages: the reader's rows, and the search
+    await page.click(`${at} [data-menu="languages"]`)
+    await page.waitForSelector(pop)
+    // the menu grows in over 150 ms (pop-in): measured and shot at rest
+    await page.waitForTimeout(250)
+    const heights = await page.evaluate(pop => [...document.querySelectorAll(`${pop} .item`)].map(i => i.getBoundingClientRect().height), pop)
+    const langs = await page.evaluate(pop => [...document.querySelectorAll(`${pop} .item`)].map(i => i.querySelector('[lang]')?.getAttribute('lang') ?? null), pop)
+    await page.keyboard.type('deu')
+    const found = await page.evaluate(pop => document.querySelectorAll(`${pop} .item`).length, pop)
+    check(`${tag}: the language menu keeps the reader's 30 px rows, each name marked as its language, and its search narrows them`, heights.length === 9 && heights.every(h => near(h, 30)) && langs.every(l => !!l) && found === 1, JSON.stringify({ heights, langs, found }))
+    await page.keyboard.press('Escape')
+  }
+}
+
 // ---- each task of Part 3 adds its control's checks above this line, and its function to CHECKS ----
-const CHECKS = [base, buttons, forms, segmented]
+const CHECKS = [base, buttons, forms, segmented, menus]
 
 const context = await chromium.launchPersistentContext(PROFILE, {
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),

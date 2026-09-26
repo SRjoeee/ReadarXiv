@@ -126,3 +126,24 @@ describe('controls.css: segmented controls', () => {
     expect(of('.seg .thumb', RM)).toEqual({ transition: 'none' })
   })
 })
+
+describe('controls.css: the menus\' rows for the pages', () => {
+  it('draws two lines in at least 40 px, 5 px above and below, the hint 11.5 px in ink-2 under the name', () => {
+    expect(of('.pop .item.two')).toEqual({ height: 'auto', 'min-height': '40px', 'padding-block': '5px' })
+    expect(of('.pop .item .t')).toEqual({ display: 'flex', flex: '1', 'flex-direction': 'column', gap: '1px', 'min-width': '0' })
+    expect(of('.pop .item .sub')).toEqual({ color: 'var(--ink-2)', 'font-size': '11.5px' })
+  })
+
+  it('puts a neutral button in a row: 24 px, 9 in, radius 6, 12 px / 500, on the neutral ground (§2.1)', () => {
+    expect(of('.pop .item .act')).toEqual({ display: 'inline-flex', flex: 'none', 'align-items': 'center', height: '24px', padding: '0 9px', 'border-radius': '6px', background: 'var(--button)', color: 'var(--ink)', 'font-size': '12px', 'font-weight': '500' })
+  })
+
+  it('draws a style\'s sample at its row\'s end, 12.5 px, cut off rather than wrapped; the manage row in ink-2', () => {
+    expect(of('.pop .item .preview')).toEqual({ flex: '1', 'min-width': '0', overflow: 'hidden', 'white-space': 'nowrap', 'text-overflow': 'clip', 'text-align': 'end', 'font-size': '12.5px' })
+    expect(of('.pop .item.manage')).toEqual({ color: 'var(--ink-2)' })
+  })
+
+  it('grounds the button of the active row in the lift: in dark the neutral\'s equals the row\'s fill (ruling 5)', () => {
+    expect(of('.pop .item[data-active] .act')).toEqual({ background: 'var(--lift)' })
+  })
+})

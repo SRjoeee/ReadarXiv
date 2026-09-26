@@ -1,27 +1,62 @@
-// The reader's menu rows (the reader's design, §6.7): 30 px, an 8 px radius, the chosen one checked at its start, a hint
-// at its end; the list's behaviour is the shared one (ui/menu-nav.ts). A listbox of options (a choice among values), or a
-// menu of radios (the zoom) or of plain items (the download)
-import { Check } from 'lucide'
-import { Fragment, useId, useState } from 'react'
+// A menu's rows (the reader's design, §6.7; the redesign's design, §5.3): 30 px, an 8 px radius, the chosen one checked
+// at its start, a hint at its end; the list's behaviour is the shared one (ui/menu-nav.ts). A listbox of options (a
+// choice among values), or a menu of radios (the zoom) or of plain items (the download). Moved from the reader
+// (pdf-reader/ui/ReaderMenu.tsx) for the extension's pages, which add these and change no row the reader draws: two
+// lines, each hint under its name (the service menu); a neutral button in a row, which picking the row presses (the
+// Chrome pack's download), a loader turning while it runs; a sample drawn in a style at a row's end (the style menu);
+// the last row, which leads to managing the list, never chosen, a separator before it; and the language of a row's
+// own words, so that a language's own name or a sample in another script is read and drawn as that language
+import { Check, Loader } from 'lucide'
+import { type CSSProperties, Fragment, useId, useState } from 'react'
 import { useMenuNav } from '@/ui/menu-nav'
-import { Icon } from '@/ui/controls/Icon'
+import { Icon } from './Icon'
 
-export interface ReaderItem { id: string; name: string; hint?: string; checked?: boolean; disabled?: boolean; keywords?: string; separatorBefore?: boolean }
+export interface MenuListItem {
+  id: string
+  name: string
+  hint?: string
+  checked?: boolean
+  disabled?: boolean
+  keywords?: string
+  separatorBefore?: boolean
+  /** the language of the row's own words: its name, or the sample in a row with a `preview` (whose name is the interface's) */
+  lang?: string
+  /** a button in the row (the Chrome pack's download): picking the row presses it, disabled or not; `busy`, a loader instead, and nothing to press */
+  action?: { label: string; busy?: boolean }
+  /** the hint drawn as a sample in this style at the row's end (the style menu): a picture of the style, hidden from assistive technology */
+  preview?: CSSProperties
+  /** the last row, which leads to managing the list: never chosen, a separator before it */
+  manage?: true
+}
 
-export function ReaderMenu({ items, kind, label, search, noMatch, onPick, onClose }: {
-  items: ReaderItem[]
+export function MenuList({ items, kind, label, layout = 'inline', search, noMatch, onPick, onAction, onClose }: {
+  items: MenuListItem[]
   kind: 'listbox' | 'radios' | 'items'
   label: string
+  /** `two-line`: each hint under its name, the row at least 40 px; a row with no hint keeps one line */
+  layout?: 'inline' | 'two-line'
   /** a search field's placeholder, when the list has one */
   search?: string
   noMatch?: string
   onPick: (id: string) => void
+  /** a row with an action picked: its button's press (never a choice); needed wherever an item has an `action` */
+  onAction?: (id: string) => void
   onClose: () => void
 }) {
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
   const shown = q ? items.filter(i => `${i.name} ${i.keywords ?? ''}`.toLowerCase().includes(q)) : items
-  const nav = useMenuNav({ count: shown.length, initial: shown.findIndex(i => i.checked), isDisabled: i => !!shown[i]?.disabled, labelOf: i => shown[i]?.name ?? '', onPick: i => { const it = shown[i]; if (it && !it.disabled) onPick(it.id) }, onClose, typeahead: !search })
+  /** a row with an action is picked for its action, disabled or not, unless the action is already running; any other
+   *  row is chosen, if it can be */
+  const pick = (item: MenuListItem | undefined) => {
+    if (!item) return
+    if (item.action) {
+      if (!item.action.busy) onAction?.(item.id)
+      return
+    }
+    if (!item.disabled) onPick(item.id)
+  }
+  const nav = useMenuNav({ count: shown.length, initial: shown.findIndex(i => i.checked), isDisabled: i => !!shown[i]?.disabled && !shown[i]?.action, labelOf: i => shown[i]?.name ?? '', onPick: i => pick(shown[i]), onClose, typeahead: !search })
   const role = kind === 'listbox' ? 'option' : kind === 'radios' ? 'menuitemradio' : 'menuitem'
   const listId = `${useId()}-list`
   // the element with the focus takes the keys and names the active item (aria-activedescendant): the search field, a
@@ -38,20 +73,32 @@ export function ReaderMenu({ items, kind, label, search, noMatch, onPick, onClos
       {/* a listbox of options or a menu of items, named, holding its items alone: a separator is drawn, not an item */}
       {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: a listbox or a menu, named by its label */}
       <div id={listId} role={kind === 'listbox' ? 'listbox' : 'menu'} aria-label={label} tabIndex={search ? undefined : 0} {...(search ? {} : keys)} className="outline-none" data-autofocus={search ? undefined : ''}>
-        {shown.map((item, index) => (
-          <Fragment key={item.id}>
-            {item.separatorBefore && <hr role="none" className="sep" />}
-            {/* biome-ignore lint/a11y/useKeyWithClickEvents: the list's keys choose it (ui/menu-nav.ts) */}
-            {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: an option, a menu radio or a menu item, by the list's kind */}
-            {/* biome-ignore lint/a11y/noStaticElementInteractions: an option or a menu item, by the list's kind */}
-            <div id={nav.idOf(index)} tabIndex={-1} role={role} aria-selected={kind === 'listbox' ? !!item.checked : undefined} aria-checked={kind === 'radios' ? !!item.checked : undefined} aria-disabled={item.disabled || undefined}
-              data-active={index === nav.active || undefined} onMouseEnter={() => nav.setActive(index)} onClick={() => { if (!item.disabled) onPick(item.id) }} className="item">
-              {kind !== 'items' && <Icon node={Check} size={14} className={item.checked ? 'check' : 'check invisible'} />}
-              <span className="min-w-0 flex-1 truncate">{item.name}</span>
-              {item.hint && <span className="hint">{item.hint}</span>}
-            </div>
-          </Fragment>
-        ))}
+        {shown.map((item, index) => {
+          const checked = !!item.checked && !item.manage
+          const two = layout === 'two-line' && !!item.hint && !item.preview
+          return (
+            <Fragment key={item.id}>
+              {(item.separatorBefore || item.manage) && <hr role="none" className="sep" />}
+              {/* biome-ignore lint/a11y/useKeyWithClickEvents: the list's keys choose it (ui/menu-nav.ts) */}
+              {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: an option, a menu radio or a menu item, by the list's kind */}
+              {/* biome-ignore lint/a11y/noStaticElementInteractions: an option or a menu item, by the list's kind */}
+              <div id={nav.idOf(index)} tabIndex={-1} role={role} aria-selected={kind === 'listbox' ? checked : undefined} aria-checked={kind === 'radios' ? checked : undefined} aria-disabled={item.disabled || undefined}
+                data-active={index === nav.active || undefined} onMouseEnter={() => nav.setActive(index)} onClick={() => pick(item)} className={`item${two ? ' two' : ''}${item.manage ? ' manage' : ''}`}>
+                {kind !== 'items' && <Icon node={Check} size={14} className={checked ? 'check' : 'check invisible'} />}
+                {two ? (
+                  <span className="t">
+                    <span lang={item.lang}>{item.name}</span>
+                    <span className="sub">{item.hint}</span>
+                  </span>
+                ) : (
+                  <span className={item.preview ? 'nm' : 'min-w-0 flex-1 truncate'} lang={item.preview ? undefined : item.lang}>{item.name}</span>
+                )}
+                {item.preview ? <span className="preview" aria-hidden="true" lang={item.lang} style={item.preview}>{item.hint}</span> : !two && item.hint && <span className="hint">{item.hint}</span>}
+                {item.action && (item.action.busy ? <Icon node={Loader} size={14} className="spin" /> : <span className="act">{item.action.label}</span>)}
+              </div>
+            </Fragment>
+          )
+        })}
       </div>
     </div>
   )
