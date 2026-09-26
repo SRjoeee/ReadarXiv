@@ -2207,26 +2207,67 @@ maintainer before building it.
 
 ---
 
-# Parts 3–6
+# Parts 3–7, as re-cut on 2026-09-26
 
-Written when the part before each is done (see "The parts" above). What each covers, from the design:
+The maintainer asked for the work to go faster with its quality unchanged (2026-09-26): the plan of the next part is
+written while the checks of the last one run; the controls both pages add are built once, first; then the popup and
+the settings page are built **in parallel**, each in its own worktree with its own task-by-task reviews, and merged
+back; small same-shape edits go out as one task. Each part below has its own plan file beside this one, and the
+maintainer reviews the plans of Parts 4 and 5 together before either is built.
 
-- **Part 3, the popup**: §5.1's structure and measures on the shared controls (`group`, the brand primary with `Kbd`,
-  `.seg.fit` for the display, the foot row); §5.2's notes (alert and information icons, ink words, a raised button),
-  P9 / P13's two buttons, the reader open; §5.3's menus and their 管理… rows with deep links (§6.1's hashes); §5.4's
-  search and open (link parsing with its tests: PDF / HTML / abstract addresses of every version, bare and old-style
-  ids, `arXiv:` ids, arXiv DOIs, other links, words), the two checks per id after 300 ms, every opening in a new tab,
-  the loading state apart from P0; §5.5's two entries with icons; §10.1's words; the retired `src/ui` components the
-  popup no longer uses.
-- **Part 4, the settings page**: §6's frame (sidebar, the interface language at its foot, search with `mark` and a polite
-  count, deep links and the old hashes' aliases), the row grammar as components, each section (§6.3–§6.7) with its
-  forms in place, the model combobox and the origin permission on a gesture, the refused key's form, undo rows, the
-  confirm in place; §10.2's words; the old sections, drawers and `src/ui/appearance/*` removed; the old `--axt-*` tokens
-  of `ui.css` removed with the last page that used them.
-- **Part 5, the floating button and the controls on arXiv's pages**: §7 — the shadow sheets take `tokenSheet('host')`,
-  the button's host carries `data-theme` from `theme`, its menu and tooltips the shared classes (prefixed where they
-  are injected), the tick `success`, the panel frame; the figure viewer's button and bar; the failed block's retry;
-  before-and-after screenshots to the maintainer.
-- **Part 6, verification and documents**: §12's alignment probe on the built pages (both themes, both languages, rest,
-  hover, open, editing), 200 % and 320 px, `pnpm e2e:a11y`, the popup's first paint before and after, §13's documents
-  (UI.md, DESIGN.md, the reader's design §4.1, CHANGELOG), `better-interface` on each surface, the pull request.
+| Part | What | Where | Plan |
+|---|---|---|---|
+| 3 | The controls both pages add | this worktree, `exp/extension-ui-redesign` | `2026-09-26-extension-ui-redesign-part3-controls.md` |
+| 4 | The popup (§5) | `.worktrees/ui-popup`, branch `exp/ui-popup` from Part 3's end | `2026-09-26-extension-ui-redesign-part4-popup.md` |
+| 5 | The settings page (§6) | `.worktrees/ui-settings`, branch `exp/ui-settings` from Part 3's end | `2026-09-26-extension-ui-redesign-part5-settings.md` |
+| 6 | The floating button and the controls on arXiv's pages (§7) | this worktree, after 4 and 5 are merged | written when 4 and 5 are merged |
+| 7 | Verification and documents (§12, §13), the pull request | this worktree | written when 6 is done |
+
+**How the parallel parts stay apart.** Parts 4 and 5 are merged back into `exp/extension-ui-redesign` with a merge commit
+each, the popup first. They share only the locale packs, where each adds its keys in its own section (`S` the popup's,
+`O` the settings page's): the second merge keeps both sides. Neither part deletes a file the other still reads: the old
+components of `src/ui` (`Menu`, `MenuField`, `Segmented`, `Switch`, `Button`, `Field`, `Confirm`, `Drawer`,
+`appearance/*`) and `ui.css`'s `--axt-*` tokens go in Part 7, once both pages have left them. A control one page needs and
+the other does not stays with that page (`src/entrypoints/popup/ui/`, `src/entrypoints/options/ui/`).
+
+## Part 3's interfaces (what Parts 4 and 5 build on)
+
+In `src/ui/controls/` and `src/styles/controls.css`, every value a role of `src/shared/tokens.ts`:
+
+- **`Button`** — `Button({ kind = 'neutral', size = 'md', icon, shortcut, className, ...buttonProps })`.
+  - `kind`: `'brand'` (the one primary: `brand`, words `on-brand`), `'neutral'` (`button`; at `size="lg"`, `fill`),
+    `'text'` (no ground, `ink-2`, `fill` and `ink` on hover), `'raised'` (`button-raised` with `raised-shadow`: a note's
+    button).
+  - `size`: `'lg'` 36 px, radius 9, 13 px / 500 (the popup's primary and its twin entries); `'md'` 32 px, radius 8,
+    padding 0 16 (a form's bar); `'sm'` 28 px, radius 7, padding 0 12, 12.5 px / 500 (a row's button).
+  - `icon`: a Lucide node drawn 16 px before the words. `shortcut`: a `Kbd` after them, shown on `brand` only.
+  - A disabled button is `aria-disabled="true"` (it stays focusable), neutral grey (`fill`, `ink-3`), not pressed, no
+    shortcut. Every enabled button scales to 0.96 on press, 150 ms (§8).
+- **`Kbd`** — `Kbd({ children })`: 11 px / 500, padding 3 × 5, radius 5; on a brand button `brand-chip` behind
+  `on-brand`, elsewhere `ink` at 9 % behind `ink-2`.
+- **`Field`** — `Field({ label, hint, error, children })` wraps one control and wires `aria-describedby` / `aria-invalid`;
+  **`TextInput`** — the input itself (`.input`): 34 px, radius 8, `field` ground with a 0.5 px `field-edge`, a 1 px `ink-3`
+  edge on focus, the keyboard's 2 px `focus` ring at offset 0 (none under the pointer: `data-axt-pointer`), placeholder
+  `ink-2`. An error is a 12 px line in `ink` after a 14 px `danger` alert icon, the field's edge `danger`.
+- **`Reveal`** — `Reveal({ open, children })`: §8's reveal (`grid-template-rows` 0fr → 1fr 220 ms on `--ease`, opacity 180 ms
+  after 40 ms; closing 180 ms and 120 ms), `inert` while closed; under reduced motion a 150 ms fade.
+- **`Radio`** — the 16 px mark (`.radio`: a 1.5 px `ink-3` ring, `ink` when chosen, its dot growing from the centre in
+  150 ms) inside any element that carries `role="radio"` and `aria-checked`; the group's arrows are `radioKeys`.
+- **`Segmented`** — `Segmented({ label, value, options, onChange, fit = false, size = 'md', iconsOnly = false })`, options
+  `{ value, label, icon?, title?, disabled? }`. Equal segments slide their thumb by `translate` (`--i` / `--n`, the
+  reader's `.seg`); `fit` segments take their words' widths and the thumb follows the chosen one by anchor positioning
+  (`anchor-name` on it, `anchor-scope` on the control), its left edge and width moving 220 ms on `--ease`. A radio group:
+  the arrows move the choice (`radioKeys`); a disabled segment is passed over and greyed with its `title`.
+- **`MenuList`** — the reader's `ReaderMenu` moved to `src/ui/controls/MenuList.tsx`, the reader's rows unchanged pixel
+  for pixel (its probe), extended for the pages without changing its defaults:
+  - `layout: 'inline' | 'two-line'` (the hint under the name, 11.5 px `ink-2`, the item at least 40 px);
+  - `item.action?: { label, busy? }` — a neutral `sm` button inside the row (the Chrome pack's 下载), a spinner while busy;
+  - `item.preview?: CSSProperties` — a sample drawn in that style at the row's trailing end (the style menu);
+  - `item.manage?: true` — the 管理… last row: `ink-2`, no check, a separator before it, never chosen.
+- **The pages' base** — the class `ui` on the popup's and the settings page's root: the font, `ink` on the page's ground,
+  the keyboard's focus ring (`:focus-visible` 2 px `focus`, offset 2), text fields ringed only for the keyboard; both
+  pages call `trackModality()` before their first paint. The old pages, which lack the class, are untouched until they
+  are replaced.
+
+Each part's plan cites these names exactly; a need the interfaces do not meet is raised with the controller, not
+worked around in a page.
