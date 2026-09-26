@@ -400,8 +400,11 @@ export function createPopupState(host: PopupHost): PopupState {
       // The page is not running until it says so: the saved settings' chain is what a start would run on
       void asks.saved()
       host.shortcut().then(found => { shortcut = found; changed() }).catch(() => { shortcut = null; changed() })
-      void rejectedServices().then(ids => { rejected = [...ids]; changed() })
-      const stopRejected = watchRejected(ids => { rejected = [...ids]; changed() })
+      // Subscribed first, read after: an event heard while the read is still out means the read answers a moment
+      // already superseded, and applying it would overwrite what the event just gave (Codex review, round 3)
+      let heardRejected = false
+      const stopRejected = watchRejected(ids => { heardRejected = true; rejected = [...ids]; changed() })
+      void rejectedServices().then(ids => { if (!heardRejected) { rejected = [...ids]; changed() } })
       const stopBroadcasts = host.onBroadcast({
         // A pack downloaded on the settings page: this popup's Download button must not stay over an installed pack
         'axt:pack-changed': message => {

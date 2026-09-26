@@ -7,6 +7,8 @@ import { MANAGE_SERVICES, MANAGE_STYLES } from '@/entrypoints/popup/view-model'
 import type { ProviderStatus } from '@/providers/transport'
 import { type AxtMessage, type EntryStatus, type PageStatus, answerMessages } from '@/shared/messages'
 import type { PackState } from '@/shared/pack'
+import * as serviceHealth from '@/shared/service-health'
+import { markRejected } from '@/shared/service-health'
 import { applyLocaleFrom } from '@/ui/apply-locale'
 
 // What the popup knows and can do (popup/state.ts), through its interface: a page and a background that answer by
@@ -535,5 +537,28 @@ describe('the offline service\'s pack and the broadcasts', () => {
     expect(p.asked().at(-1)).toEqual({ type: 'axt:provider-status', fresh: true })
     expect(p.w.reloads).toBe(0)
     p.stop()
+  })
+})
+
+describe('the service health record: subscribed first, read after (finding 3, Task 13)', () => {
+  it('a refusal heard before the first read settles is not overwritten by that read\'s older answer', async () => {
+    // The initial `rejectedServices()` is held open past the point where a real watch event lands, so the fix's
+    // "drop a read that answers late" has something to drop
+    let settle: ((ids: Set<string>) => void) | null = null
+    const held = new Promise<Set<string>>(resolve => { settle = resolve })
+    const spy = vi.spyOn(serviceHealth, 'rejectedServices').mockReturnValue(held)
+    const made = world()
+    made.w.page = page('stopped', null)
+    const stop = made.popup.start()
+    await flush()
+    await markRejected('svc-abcd1234')
+    await flush()
+    expect(made.input().rejected).toEqual(['svc-abcd1234'])
+    // The stale read answers now, with what was true before the mark; it must lose to the event already heard
+    settle!(new Set())
+    await flush()
+    expect(made.input().rejected).toEqual(['svc-abcd1234'])
+    spy.mockRestore()
+    stop()
   })
 })
