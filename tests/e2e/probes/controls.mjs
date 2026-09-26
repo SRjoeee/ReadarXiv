@@ -216,8 +216,67 @@ async function forms(page, lang) {
   }
 }
 
+/** Task 18: segmented controls — equal ones slide by translate, fit ones follow their chosen segment by anchoring (§8) */
+async function segmented(page, lang) {
+  for (const theme of THEMES) {
+    const at = `[data-theme="${theme}"] [data-specimen="segmented"]`, tag = `${lang} ${theme}`
+    const seg = kind => `${at} [data-seg="${kind}"] .seg`
+    /** a control's thumb against its chosen segment: the offsets of its start and its width, and where it is */
+    const onChosen = kind => page.evaluate(sel => {
+      const s = document.querySelector(sel), t = s.querySelector('.thumb').getBoundingClientRect(), c = s.querySelector('[aria-checked="true"]').getBoundingClientRect()
+      return { start: t.left - c.left, width: t.width - c.width, left: t.left }
+    }, seg(kind))
+    const heights = [(await look(page, seg('equal')))?.height, (await look(page, seg('small')))?.height, (await look(page, seg('fit')))?.height]
+    check(`${tag}: 30 px, 26 small, 30 fit`, near(heights[0], 30) && near(heights[1], 26) && near(heights[2], 30), JSON.stringify(heights))
+    const icons = await page.evaluate(sel => [...document.querySelectorAll(`${sel} > button`)].map(b => b.getBoundingClientRect().width), seg('icons'))
+    check(`${tag}: segments of icons 36 px each`, icons.every(w => near(w, 36)), JSON.stringify(icons))
+    for (const kind of ['equal', 'small', 'icons', 'fit', 'fit-disabled']) {
+      const o = await onChosen(kind)
+      check(`${tag}: ${kind}: the thumb on the chosen segment`, near(o.start, 0) && near(o.width, 0), JSON.stringify(o))
+    }
+    const inside = await offCentre(page, { rows: `${at} .seg > button` })
+    check(`${tag}: a segment's icon and words on its centre line`, inside.length === 0, JSON.stringify(inside))
+    // fit: the segments as wide as their words, and the words fit at the popup's width, in English too (Review Focus)
+    const fit = await page.evaluate(sel => {
+      const s = document.querySelector(sel), buttons = [...s.querySelectorAll(':scope > button')]
+      return { widths: buttons.map(b => Math.round(b.getBoundingClientRect().width)), over: [s, ...buttons].map(e => e.scrollWidth - e.clientWidth) }
+    }, seg('fit'))
+    check(`${tag}: fit segments as wide as their words, none running over at the popup's width`, new Set(fit.widths).size > 1 && fit.over.every(d => d <= 0), JSON.stringify(fit))
+    // the slide: 60 ms after a choice the thumb is on its way, 300 ms after on the new segment
+    const from = (await onChosen('fit')).left
+    await page.click(`${seg('fit')} > button:last-of-type`)
+    await page.waitForTimeout(60)
+    const mid = await page.evaluate(sel => document.querySelector(`${sel} .thumb`).getBoundingClientRect().left, seg('fit'))
+    await page.waitForTimeout(300)
+    const to = await onChosen('fit')
+    check(`${tag}: fit: the thumb slides to the chosen segment`, mid > from + 1 && mid < to.left - 1 && near(to.start, 0) && near(to.width, 0), JSON.stringify({ from, mid, to }))
+    // the arrows move the choice past the segment that cannot be had, the focus going with it
+    await page.focus(`${seg('fit-disabled')} > button[aria-checked="true"]`)
+    await page.keyboard.press('ArrowLeft')
+    const moved = await page.evaluate(sel => { const b = [...document.querySelectorAll(`${sel} > button`)]; return { checked: b.findIndex(x => x.getAttribute('aria-checked') === 'true'), focused: b.indexOf(document.activeElement) } }, seg('fit-disabled'))
+    check(`${tag}: the arrows pass over the disabled segment, the focus going with the choice`, moved.checked === 0 && moved.focused === 0, JSON.stringify(moved))
+    // a disabled segment: greyed, never chosen, and its reason in its tooltip and to a screen reader
+    const disabled = `${seg('fit-disabled')} > button[aria-disabled="true"]`
+    await page.click(disabled, { force: true })
+    // the pointer leaves and comes back: a tooltip waits for the pointer's arrival, which the press did not make
+    await page.mouse.move(0, 0)
+    await page.hover(disabled)
+    await page.waitForTimeout(650)
+    const why = await page.evaluate(sel => { const b = document.querySelector(sel); return { checked: b.getAttribute('aria-checked'), opacity: getComputedStyle(b).opacity, reason: document.getElementById(b.getAttribute('aria-describedby'))?.textContent, tip: document.querySelector('.tip:popover-open')?.textContent } }, disabled)
+    check(`${tag}: a disabled segment greyed and not chosen, its reason in its tooltip and its description`, why.checked === 'false' && why.opacity === '0.55' && !!why.reason && why.tip === why.reason, JSON.stringify(why))
+    await page.mouse.move(0, 0)
+    // under reduced motion the thumb goes at once
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.click(`${seg('fit')} > button:first-of-type`)
+    await page.waitForTimeout(40)
+    const quick = await onChosen('fit')
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
+    check(`${tag}: fit, under reduced motion: the thumb goes at once`, near(quick.start, 0) && near(quick.width, 0), JSON.stringify(quick))
+  }
+}
+
 // ---- each task of Part 3 adds its control's checks above this line, and its function to CHECKS ----
-const CHECKS = [base, buttons, forms]
+const CHECKS = [base, buttons, forms, segmented]
 
 const context = await chromium.launchPersistentContext(PROFILE, {
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),

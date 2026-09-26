@@ -104,6 +104,16 @@
   .reveal { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 180ms ease-out, opacity 120ms ease-out; }
   .reveal[data-open] { grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 220ms var(--ease), opacity 180ms ease-out 40ms; }
   .reveal > div { min-height: 0; overflow: hidden; }
+  /* a segment's icon and its words, 6 px apart (round 1; the settings page's appearance, the popup's display); the
+     reader's segments hold one child each, and nothing of theirs moves */
+  .seg > button > span:not(:first-child) { margin-inline-start: 6px; }
+  /* segments that take their words' widths (§5.1, the popup's display; round 3): the thumb follows the chosen one by
+     anchor positioning, its start and width moving 220 ms on the ease (§8); the control scopes the chosen one's name to
+     itself, so that two on a page never share one (anchor-scope, Chrome 131). The reader's unlayered reduced-motion rule
+     for `.seg .thumb` holds this one still too */
+  .seg.fit { display: flex; anchor-scope: --seg-on; }
+  .seg.fit > button { flex: 1 1 auto; padding: 0 8px; }
+  .seg.fit .thumb { position-anchor: --seg-on; inset-inline-start: anchor(start); width: anchor-size(width); translate: none; transition: inset-inline-start 220ms var(--ease), width 220ms var(--ease); }
   /* a wait with one subject (a busy button; the pack's download in a menu): a loader turning */
   .spin { animation: turn 900ms linear infinite; }
 }

@@ -110,3 +110,19 @@ describe('controls.css: fields, radios and reveals', () => {
     expect(of('.input', FC)).toEqual({ border: '1px solid CanvasText' })
   })
 })
+
+describe('controls.css: segmented controls', () => {
+  it('spaces a segment\'s icon and its words 6 px, leaving the reader\'s one-child segments as they were', () => {
+    expect(of('.seg > button > span:not(:first-child)')).toEqual({ 'margin-inline-start': '6px' })
+  })
+
+  it('fits segments to their words, the thumb anchored to the chosen one, its start and width moving 220 ms on the ease', () => {
+    expect(of('.seg.fit')).toEqual({ display: 'flex', 'anchor-scope': '--seg-on' })
+    expect(of('.seg.fit > button')).toEqual({ flex: '1 1 auto', padding: '0 8px' })
+    expect(of('.seg.fit .thumb')).toEqual({ 'position-anchor': '--seg-on', 'inset-inline-start': 'anchor(start)', width: 'anchor-size(width)', translate: 'none', transition: 'inset-inline-start 220ms var(--ease), width 220ms var(--ease)' })
+  })
+
+  it('holds every thumb still under reduced motion, the fit one too: the reader\'s rule is unlayered, over every component rule', () => {
+    expect(of('.seg .thumb', RM)).toEqual({ transition: 'none' })
+  })
+})
