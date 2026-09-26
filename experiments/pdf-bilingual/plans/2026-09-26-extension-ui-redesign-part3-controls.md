@@ -58,7 +58,11 @@ Every control is in `src/ui/controls/`, every look in `src/styles/controls.css`,
   string; busy?: boolean }; preview?: CSSProperties; manage?: true }`. **The action API:** a row with an `action` is
   picked for its action — a click, Enter or Space on it calls `onAction(id)`, never `onPick`, whether the row is
   `disabled` (the Chrome pack's download: disabled, still run) or not; the keys reach such a row though it is disabled;
-  while `busy` a loader stands in the button's place and a pick does nothing. On the active row the button takes the
+  while `busy` a loader stands in the button's place, the row carries `aria-busy="true"` and a pick does nothing (the
+  caller's `hint` carries the words, as the pack's "downloading" hint does). A disabled row with an action is operable, so it carries no
+  `aria-disabled`: it is greyed by the class `unavailable` (as built in Task 19's fix round; a disabled row without an
+  action keeps `aria-disabled="true"`). `onAction` is needed wherever an item has an action — a missing one is a silent
+  no-op, so each page tests its action row through the DOM. On the active row the button takes the
   `lift` ground. `lang` marks the row's own words: its name, or, in a row with a `preview`, the sample (the name there is
   the interface's). `checked` is the choice (the old `MenuItem` said `selected`); `manage` is the last row, which leads
   to managing the list: a separator before it, `ink-2`, never checked, picked with `onPick`.
