@@ -190,6 +190,18 @@ describe('createFallbackService', () => {
     // No next step to hand over to: demote() never runs, and the record carries no demotion
     expect(service.status().demotions).toEqual([])
   })
+
+  it('carries the failure\'s HTTP status to whoever asked: only a 401 means the key was refused (the redesign\'s design, §4)', async () => {
+    const seen: DemotedInfo[] = []
+    const withStatus = (status: number): TranslateMessageResponse => ({ ok: false, error: { kind: 'auth', message: 'refused', isolatable: false, status } })
+    const service = createFallbackService([step('svc-abcd1234', [withStatus(401), withStatus(403)])], { onFailure: info => seen.push(info) })
+    await service.translate(call)
+    await service.translate(call)
+    expect(seen).toEqual([
+      { id: 'svc-abcd1234', kind: 'auth', message: 'refused', status: 401 },
+      { id: 'svc-abcd1234', kind: 'auth', message: 'refused', status: 403 },
+    ])
+  })
 })
 
 // Codex on #163: every step of the chain resends the whole call, and the cache key carries the provider,

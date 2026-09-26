@@ -19,6 +19,8 @@ export interface DemotedInfo {
   id: string
   kind: ProviderErrorKind
   message: string
+  /** The HTTP status, when the failure had one; `onFailure` carries it (only a 401 is a refused key, the redesign's design, §4) */
+  status?: number
 }
 
 export interface FallbackStatus {
@@ -138,7 +140,8 @@ export function createFallbackService(
       // Every failed step is reported, whether or not it goes on to demote: with fallback off the chain is one
       // step, and `demote` (which only runs when there is a next step to hand over to) is never reached — yet the
       // background still has to learn this engine's key was refused (Codex review, round 1)
-      opts.onFailure?.({ id: step.provider.id, kind: response.error.kind, message: response.error.message })
+      const { kind, message, status } = response.error
+      opts.onFailure?.({ id: step.provider.id, kind, message, ...(status !== undefined ? { status } : {}) })
       for (const segment of response.partial ?? []) gathered.set(segment.id, segment)
       last = response
       const isLast = index === chain.length - 1

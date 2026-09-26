@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
-import { clearRejected, markRejected, rejectedServices, watchRejected } from '@/shared/service-health'
+import { clearRejected, clearRejectedAmong, markRejected, rejectedServices, watchRejected } from '@/shared/service-health'
 
 describe('the service health record (the redesign\'s design, §4)', () => {
   beforeEach(() => { fakeBrowser.reset() })
@@ -59,5 +59,45 @@ describe('the service health record (the redesign\'s design, §4)', () => {
     const b = markRejected('svc-bbbbbbbb')
     await Promise.all([a, b])
     expect(await rejectedServices()).toEqual(new Set(['svc-aaaaaaaa', 'svc-bbbbbbbb']))
+  })
+
+  it('a mark asks its condition in its own turn, after every write queued before it, and a condition that says no marks nothing', async () => {
+    await markRejected('svc-aaaaaaaa')
+    const clear = clearRejected('svc-aaaaaaaa')
+    // what the condition sees is the record as the clear queued ahead of it left it
+    let sawCleared: boolean | null = null
+    const mark = markRejected('svc-bbbbbbbb', async () => { sawCleared = !(await rejectedServices()).has('svc-aaaaaaaa'); return false })
+    await Promise.all([clear, mark])
+    expect(sawCleared).toBe(true)
+    expect(await rejectedServices()).toEqual(new Set())
+    await markRejected('svc-bbbbbbbb', async () => true)
+    expect(await rejectedServices()).toEqual(new Set(['svc-bbbbbbbb']))
+  })
+
+  it('a condition that fails rejects that mark only; the next mutation still runs', async () => {
+    const failed = markRejected('svc-aaaaaaaa', async () => { throw new Error('storage gone') })
+    const next = markRejected('svc-bbbbbbbb')
+    await expect(failed).rejects.toThrow('storage gone')
+    await next
+    expect(await rejectedServices()).toEqual(new Set(['svc-bbbbbbbb']))
+  })
+
+  it('clears, in one turn, the marks chosen from those present at that turn: a mark queued before the clear is among them', async () => {
+    await markRejected('svc-cccccccc')
+    const mark = markRejected('svc-aaaaaaaa')
+    const seen: string[][] = []
+    const clear = clearRejectedAmong(marked => { seen.push([...marked].sort()); return ['svc-aaaaaaaa', 'svc-bbbbbbbb'] })
+    await mark
+    // only what was there is cleared, and said so
+    expect(await clear).toEqual(['svc-aaaaaaaa'])
+    expect(seen).toEqual([['svc-aaaaaaaa', 'svc-cccccccc']])
+    expect(await rejectedServices()).toEqual(new Set(['svc-cccccccc']))
+    // choosing none writes nothing
+    const watched: string[][] = []
+    const stop = watchRejected(ids => watched.push([...ids]))
+    expect(await clearRejectedAmong(() => [])).toEqual([])
+    await new Promise(r => setTimeout(r, 0))
+    expect(watched).toEqual([])
+    stop()
   })
 })

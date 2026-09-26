@@ -312,3 +312,17 @@ export function watchConfig(callback: (config: Config) => void) {
     if (parsed.success) callback(parsed.data)
   })
 }
+
+/**
+ * As `watchConfig`, with the value just before the change as well: parsed, or `null` when it did not parse (a
+ * migration's own write, a hand edit). For a watcher that compares the two — the background's, which clears a refused
+ * key's mark when its key or address changes (background/health-guard.ts); the others are spared the second parse
+ */
+export function watchConfigChange(callback: (config: Config, previous: Config | null) => void) {
+  return configItem.watch((value, oldValue) => {
+    const parsed = configSchema.safeParse(value)
+    if (!parsed.success) return
+    const before = configSchema.safeParse(oldValue)
+    callback(parsed.data, before.success ? before.data : null)
+  })
+}

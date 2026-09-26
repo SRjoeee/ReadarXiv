@@ -15,6 +15,7 @@ import type { MessageHandlers } from '@/shared/messages'
 import type { ChainHolder } from './chain'
 import type { Diagnostics } from './diagnostics'
 import { engineReady } from './engine-ready'
+import { isRefusal, shouldMarkRefusal } from './health-guard'
 import type { OcrService } from './ocr'
 import { type ConfigOffers, providerStatus } from './provider-status'
 import type { SessionRouter } from './sessions'
@@ -52,10 +53,16 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
       .then(transport => transport.translate(message))
       .then(async response => {
         // A call naming one of the reader's services is the settings page asking whether it answers: its answer is the
-        // record's (the redesign's design, §4). A refused key marks it; any success clears it
-        if (message.providerId && SERVICE_ID_RE.test(message.providerId)) {
-          if (response.ok) await deps.health.clear(message.providerId)
-          else if (response.error.kind === 'auth') await deps.health.reject(message.providerId)
+        // record's (the redesign's design, §4). Any success clears it; a refused key — a 401, for a service still
+        // stored — marks it (./health-guard.ts). The call was built from the stored configuration, so that is both the
+        // configuration it used and the one in force; one that cannot be read marks nothing and leaves the answer be
+        const id = message.providerId
+        if (id && SERVICE_ID_RE.test(id)) {
+          if (response.ok) await deps.health.clear(id)
+          else if (isRefusal({ id, ...response.error })) {
+            const stored = await deps.getConfig().catch(() => null)
+            if (stored && shouldMarkRefusal({ id, ...response.error }, stored, stored)) await deps.health.reject(id)
+          }
         }
         return response
       })

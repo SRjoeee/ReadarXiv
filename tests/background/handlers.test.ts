@@ -39,6 +39,8 @@ function harness(over: Partial<HandlerDeps> = {}) {
 }
 
 const CALL = { scope: 's1', paper: '2401.00001v1', segments: [] } as unknown as AxtMessage<'axt:translate'>
+/** One of the reader's services, as the settings page stores it before its connection test */
+const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
 
 describe('the background\'s handlers', () => {
   describe('axt:translate', () => {
@@ -73,7 +75,8 @@ describe('the background\'s handlers', () => {
       expect(cleared.reject).not.toHaveBeenCalled()
 
       const refused = health()
-      await harness({ ...answering({ ok: false, error: { kind: 'auth', message: 'bad key', isolatable: false } }), health: refused }).send(named)
+      const stored = vi.fn(async () => ({ ...DEFAULT_CONFIG, services: [SVC] }))
+      await harness({ ...answering({ ok: false, error: { kind: 'auth', message: 'bad key', isolatable: false, status: 401 } }), health: refused, getConfig: stored }).send(named)
       expect(refused.reject).toHaveBeenCalledWith('svc-abcd1234')
 
       const plain = health()
@@ -81,6 +84,27 @@ describe('the background\'s handlers', () => {
       await harness({ ...answering(good), health: plain }).send({ ...named, providerId: 'google-web' })
       expect(plain.clear).not.toHaveBeenCalled()
       expect(plain.reject).not.toHaveBeenCalled()
+    })
+
+    it('a named call marks only a 401 (the redesign\'s design, §4): a 403 is not about the key, and a service no longer stored is not marked', async () => {
+      const answering = (error: unknown) => ({ router: { forCall: vi.fn(async () => ({ translate: vi.fn(async () => ({ ok: false, error })) })) } as unknown as HandlerDeps['router'] })
+      const named = { ...CALL, type: 'axt:translate' as const, providerId: SVC.id }
+      const withService = vi.fn(async () => ({ ...DEFAULT_CONFIG, services: [SVC] }))
+      for (const error of [
+        { kind: 'auth', message: 'forbidden', isolatable: false, status: 403 },
+        { kind: 'auth', message: 'no status', isolatable: false },
+        { kind: 'rate-limit', message: 'slow down', isolatable: false, status: 429 },
+        { kind: 'network', message: 'offline', isolatable: false },
+      ]) {
+        const health = { reject: vi.fn(async () => undefined), clear: vi.fn(async () => true) }
+        const answer = await harness({ ...answering(error), health, getConfig: withService }).send(named)
+        expect([error.message, health.reject.mock.calls.length]).toEqual([error.message, 0])
+        // the answer itself is untouched: the settings page shows the failure as it came
+        expect(answer).toEqual({ ok: false, error })
+      }
+      const gone = { reject: vi.fn(async () => undefined), clear: vi.fn(async () => true) }
+      await harness({ ...answering({ kind: 'auth', message: 'bad key', isolatable: false, status: 401 }), health: gone, getConfig: vi.fn(async () => DEFAULT_CONFIG) }).send(named)
+      expect(gone.reject).not.toHaveBeenCalled()
     })
   })
 

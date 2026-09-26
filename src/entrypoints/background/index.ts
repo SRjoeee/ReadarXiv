@@ -1,6 +1,6 @@
 import { cachePortOf, translationCache } from '@/cache'
 import { pickTargetLanguage } from '@/config/first-target'
-import { chooseFirstTarget, getConfig, watchConfig } from '@/config/storage'
+import { chooseFirstTarget, getConfig, watchConfigChange } from '@/config/storage'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport } from '@/providers/transport'
 import { type AxtMessage, answerMessages, sendMessage, sendToTab } from '@/shared/messages'
@@ -17,9 +17,8 @@ import { setLocale } from '@/ui/strings'
 import { savedFromStatus } from '@/shared/page-action'
 import { BUILD_REF } from '@/shared/build'
 import { createDiagnostics } from './diagnostics'
-import { clearRejected, markRejected, rejectedServices, watchRejected } from '@/shared/service-health'
-import { SERVICE_ID_RE } from '@/config/services'
-import { shouldMarkRefusal } from './health-guard'
+import { clearRejected, clearRejectedAmong, markRejected, rejectedServices, watchRejected } from '@/shared/service-health'
+import { createHealthKeeper } from './health-guard'
 
 // The background: the engine chain, the queues, the cache and the recogniser, wired together (DESIGN §8.0); what it
 // answers is the table in ./handlers.ts.
@@ -43,6 +42,8 @@ export default defineBackground(() => {
     save: async entries => { await browser.storage.session.set({ [DIAG_KEY]: entries }).catch(() => undefined) },
   })
   const diag = (line: string) => diagnostics.record('background', line)
+  /** The service health record's writers besides the named call (./health-guard.ts): a chain's refusal, a configuration change */
+  const health = createHealthKeeper({ getConfig, mark: markRejected, clearAmong: clearRejectedAmong, warn: diag })
 
   /** The chain in force, one per worker (./chain.ts): built lazily, rebuilt when the configuration that shapes it changes */
   const chain = createChainHolder({
@@ -53,14 +54,10 @@ export default defineBackground(() => {
         config: resolved,
         transport: await createLocalTransport(resolved, {
           cache, cancelled, warn: diag, rejected,
-          // a refused key is remembered across sessions (the redesign's design, §4); a free engine's failure is not
-          // ours to record. Marked only if the key **this chain** used for the service is still its key stored now —
-          // this chain may have outlived a key rotation, and a request built with the old key failing after the new
-          // one already passed a connection test must not re-mark it (Codex review, round 2; health-guard.ts)
-          onFailure: info => {
-            if (info.kind !== 'auth' || !SERVICE_ID_RE.test(info.id)) return
-            void getConfig().then(stored => shouldMarkRefusal(resolved, stored, info.id) ? markRejected(info.id) : undefined)
-          },
+          // a refused key is remembered across sessions (the redesign's design, §4): a 401 to one of the reader's
+          // services, marked only if the key and the address **this chain** used are still the service's — this chain
+          // may have outlived a key rotation (Codex review, round 2; health-guard.ts)
+          onFailure: info => health.failed(resolved, info),
         }),
       }
     },
@@ -85,13 +82,16 @@ export default defineBackground(() => {
   // The chain learns of a change by reading the store, in order with the popup's `fresh` asks — never from the
   // event's own value, which carries no order (provider-status.ts says why)
   const offers = createConfigOffers({ load: getConfig, chain })
-  watchConfig(next => {
+  watchConfigChange((next, previous) => {
     // A changed interface language redraws the menu: the worker does not restart for it, and unredrawn the title would stay in the old language (Codex on #161)
     if (next.uiLanguage !== uiLanguage) {
       uiLanguage = next.uiLanguage
       applyLocaleFrom(next.uiLanguage)
       refreshContextMenu(menuDeps)
     }
+    // A key or an address changed, or a service deleted: its mark was about a key no longer sent (the redesign's
+    // design, §4). A clear that lands brings the engine back through the record's own watcher above
+    health.configChanged(next, previous)
     void offers.offer()
   })
 

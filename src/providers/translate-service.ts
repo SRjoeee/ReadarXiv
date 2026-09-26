@@ -75,7 +75,14 @@ export type TranslateMessageResponse =
    * (Codex on #163): those translations are already in the cache, but without them here the caller
    * marks every segment failed and the reader is told nothing arrived. Absent when none did.
    */
-  | { ok: false; error: { kind: ProviderErrorKind; message: string; isolatable: boolean }; partial?: TranslatedSegment[] }
+  | { ok: false; error: ErrorInfo; partial?: TranslatedSegment[] }
+
+/**
+ * A failure as it crosses the message boundary. `status` is the HTTP status when the failure had one: `auth` covers
+ * both 401 and 403 (http-errors.ts), and only a 401 says the key was refused — the background marks the service health
+ * record by it (the redesign's design, §4)
+ */
+export interface ErrorInfo { kind: ProviderErrorKind; message: string; isolatable: boolean; status?: number }
 
 export interface TranslateServiceDeps {
   getProvider: (providerId?: string) => Promise<TranslationProvider>
@@ -647,8 +654,11 @@ function pickError(errors: unknown[]): unknown {
  * had long ruled on the same matter (`asBatchError` does not turn a systemic failure into a batch error, Codex on
  * #61). A non-`ProviderError` takes the default by kind, the criterion being `ISOLATABLE_BY_KIND` of types.ts
  */
-export function toErrorInfo(e: unknown): { kind: ProviderErrorKind; message: string; isolatable: boolean } {
-  if (e instanceof ProviderError) return { kind: e.kind, message: e.message, isolatable: e.isolatable }
+export function toErrorInfo(e: unknown): ErrorInfo {
+  if (e instanceof ProviderError) {
+    const status = getRequestErrorMeta(e).statusCode
+    return { kind: e.kind, message: e.message, isolatable: e.isolatable, ...(status !== undefined ? { status } : {}) }
+  }
   if (isTranslationCancelledError(e)) return { kind: 'aborted', message: (e as Error).message, isolatable: false }
   // Recovering from a timeout is the queue's job (a budget by character count, a deadline per batch); splitting again at the content layer multiplies the two — 8 segments measured 15 calls
   if (e instanceof Error && e.name === REQUEST_TIMEOUT_ERROR_NAME) return { kind: 'timeout', message: e.message, isolatable: false }

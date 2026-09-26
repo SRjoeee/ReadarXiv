@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { appearanceSchema } from '@/config/appearance'
 import { CONFIG_VERSION, DEFAULT_CONFIG, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
 import { serviceSchema } from '@/config/services'
-import { chooseFirstTarget, configItem, getConfig, setConfig } from '@/config/storage'
+import { chooseFirstTarget, configItem, getConfig, resetConfig, setConfig, watchConfigChange } from '@/config/storage'
 
 /** A reader-added service, the shape v12 stores */
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
@@ -157,6 +157,26 @@ describe('config storage', () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, services: [{ ...SVC, model: '' }] })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, services: [{ ...SVC, baseURL: 'not a url' }] })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, provider: 'svc-nope' })).rejects.toThrow()
+  })
+})
+
+describe('watchConfigChange', () => {
+  beforeEach(() => {
+    fakeBrowser.reset()
+  })
+
+  it('gives the value just before the change beside the new one, and null for one before that did not parse', async () => {
+    const seen: [string, string | null][] = []
+    const stop = watchConfigChange((next, previous) => seen.push([next.theme, previous ? previous.theme : null]))
+    await setConfig({ ...DEFAULT_CONFIG, theme: 'dark' })
+    await setConfig({ ...DEFAULT_CONFIG, theme: 'light' })
+    // a hand edit: not a configuration, so no event of its own, and no previous for the save after it
+    await fakeBrowser.storage.local.set({ config: { ...DEFAULT_CONFIG, image: 'broken' } })
+    await resetConfig()
+    await new Promise(r => setTimeout(r, 0))
+    // nothing stored before the first save: WXT hands over the fallback, the defaults
+    expect(seen).toEqual([['dark', 'system'], ['light', 'dark'], ['system', null]])
+    stop()
   })
 })
 
