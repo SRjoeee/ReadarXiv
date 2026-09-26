@@ -9,7 +9,9 @@
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 @source "./";
 @source "../../pdf-reader/";
-/* the menu rows moved there (src/ui/controls/MenuList.tsx) draw the utilities they drew here (the redesign's Part 3) */
+/* the menu rows moved there (src/ui/controls/MenuList.tsx) draw the utilities they drew here (the redesign's Part 3).
+   That one file, not the directory: Tailwind reads comments as well as class lists, and the directory brought in `.grow`
+   from two comments; a word such as hidden or table in another control's comment would restyle PDF.js's own classes */
 @source "../../ui/controls/MenuList.tsx";
 
 /* the extension's tokens (the redesign's design, §2.1): the ramp, the roles and their dark values, generated from
