@@ -33,6 +33,12 @@ describe('Field and TextInput', () => {
     expect([input.id, input.className, input.hasAttribute('aria-describedby'), input.hasAttribute('aria-invalid')]).toEqual(['own', 'input wide', false, false])
   })
 
+  it('a text field inside a field keeps its own id, aria-describedby and aria-invalid, given: its own props win (Task 17, parked)', async () => {
+    const { container } = await mountElement(createElement(Field, { label: 'Key', hint: 'Local addresses need none', error: 'Enter the API key' }, createElement(TextInput, { id: 'own', 'aria-describedby': 'own-hint', 'aria-invalid': 'false' })))
+    const input = container.querySelector('input')!
+    expect([input.id, input.getAttribute('aria-describedby'), input.getAttribute('aria-invalid')]).toEqual(['own', 'own-hint', 'false'])
+  })
+
   it('hands its wiring to a control of another kind through useField (Part 5\'s combobox)', async () => {
     function Combobox() {
       const field = useField()

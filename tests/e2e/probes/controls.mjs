@@ -200,6 +200,8 @@ async function forms(page, lang) {
     const opening = await state()
     await page.waitForTimeout(300)
     const open = await state()
+    // the click that opened it leaves the pointer on the toggle, showing its hover fill in the shot (Task 17, parked): move away first
+    await page.mouse.move(0, 0)
     await page.locator(at).screenshot({ path: join(OUT, `${lang}-${theme}-forms-open.png`), animations: 'disabled', caret: 'hide' })
     await page.click(toggle)
     await page.waitForTimeout(300)
