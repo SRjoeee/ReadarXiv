@@ -5,6 +5,10 @@
    (Tailwind v4 docs), so the utilities reference the variables through @theme inline and only the
    variables change when the theme does. */
 @import "tailwindcss";
+/* the extension's tokens (the redesign's design, §2.2): the popup and the settings page draw the shared controls
+   (controls.css) from Part 3 on; the --axt- tokens below serve the old pages until then */
+@import "./tokens.css";
+@import "./controls.css";
 
 :root,
 [data-theme="light"] {
@@ -20,7 +24,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
     --axt-bg: #1c1c1e;
     --axt-card: #2c2c2e;
