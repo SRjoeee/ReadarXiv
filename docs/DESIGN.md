@@ -92,7 +92,7 @@ pages: popup · options · gallery (dev)     abstract-page script     │   cont
 | `src/providers` | The engines, the queues (`request/`), the translate service, the fallback chain, prompts, glossary, alignment (§8) |
 | `src/cache` | The Dexie store and the cache key (§9) |
 | `src/config` | The schema, versions and migrations, languages, appearance, services (§9) |
-| `src/entrypoints` | `background/`, `content/`, `popup/`, `options/`, `gallery/` (a dev page of UI states), the abstract-page script |
+| `src/entrypoints` | `background/`, `content/`, `popup/`, `options/`, `gallery/` and `controls/` (dev pages, never in a release: the popup's states, the shared controls), the abstract-page script |
 | `src/shared` | The message table, the two transports' shared shapes, OCR shapes, diagnostics shape, hashing |
 | `src/ui`, `src/locales`, `src/styles` | React components, the locale packs, the injected style sheets |
 | `src/core/ocr` | The recogniser of bitmap figures: detection reduced, lines cut from the original, tall lines read both ways (§15.3) |

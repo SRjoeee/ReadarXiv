@@ -1,0 +1,14 @@
+/* The controls sheet's own frame (a dev page): two halves, light and dark, each a column of specimens on the chrome.
+   Nothing here is a control's look — those are src/styles/controls.css's — only the room the specimens sit in */
+body { margin: 0; background: var(--page); }
+.halves { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.half { display: flex; flex-direction: column; gap: 28px; min-width: 0; padding: 24px; background: var(--chrome); }
+.specimen { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.specimen > h2 { margin: 0; color: var(--ink-3); font-size: 11.5px; font-weight: 500; }
+[data-row] { display: flex; align-items: center; gap: 12px; }
+/* the popup's width less its two 12 px edges, for what fills it: the primary, its pair, the two entries, the display */
+.popup-width { width: 296px; gap: 8px; }
+.popup-width > * { flex: 1; }
+/* the popup's group, for what sits on it (a note's buttons) */
+.on-group { padding: 10px; border-radius: 10px; background: var(--group); }
+.bare { height: 30px; padding: 0 8px; border-radius: 6px; background: var(--field); }

@@ -34,6 +34,13 @@ function pdfjsFiles(): { absoluteSrc: string; relativeDest: string }[] {
   )
 }
 
+/**
+ * The pages for development alone — the popup's states (gallery) and the shared controls (controls): a release must not
+ * ship a debug page anyone can open, so a production build leaves them out; `wxt` and `wxt build --mode development`
+ * (tests/e2e/probes/controls.mjs) keep them. scripts/check-output.mjs checks the release
+ */
+const DEV_PAGES = ['gallery', 'controls']
+
 // The WXT project configuration.
 export default defineConfig({
   srcDir: 'src',
@@ -41,11 +48,11 @@ export default defineConfig({
   // In extension pages <link rel="modulepreload" crossorigin> triggers Chrome's "cross-world extension resource mismatch" warning (harmless but noisy); preloading is off
   // The recogniser's worker (entrypoints/ocr) is a build of its own, and what it bundles goes into the same notices
   vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()) } }),
-  // The gallery is for `wxt` (serve) only: a release must not ship a debug page anyone can open
   hooks: {
     'entrypoints:found': (wxt, infos) => {
-      if (wxt.config.command !== 'serve') {
-        const at = infos.findIndex(info => info.name === 'gallery')
+      if (wxt.config.mode !== 'production') return
+      for (const name of DEV_PAGES) {
+        const at = infos.findIndex(info => info.name === name)
         if (at >= 0) infos.splice(at, 1)
       }
     },
