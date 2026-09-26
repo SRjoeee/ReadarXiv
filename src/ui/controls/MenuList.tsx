@@ -56,7 +56,7 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
     }
     if (!item.disabled) onPick(item.id)
   }
-  const nav = useMenuNav({ count: shown.length, initial: shown.findIndex(i => i.checked), isDisabled: i => !!shown[i]?.disabled && !shown[i]?.action, labelOf: i => shown[i]?.name ?? '', onPick: i => pick(shown[i]), onClose, typeahead: !search })
+  const nav = useMenuNav({ count: shown.length, initial: shown.findIndex(i => i.checked && !i.manage), isDisabled: i => !!shown[i]?.disabled && !shown[i]?.action, labelOf: i => shown[i]?.name ?? '', onPick: i => pick(shown[i]), onClose, typeahead: !search })
   const role = kind === 'listbox' ? 'option' : kind === 'radios' ? 'menuitemradio' : 'menuitem'
   const listId = `${useId()}-list`
   // the element with the focus takes the keys and names the active item (aria-activedescendant): the search field, a
@@ -79,11 +79,14 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
           return (
             <Fragment key={item.id}>
               {(item.separatorBefore || item.manage) && <hr role="none" className="sep" />}
+              {/* a row that is disabled but has an action can still be operated (its action runs): aria-disabled would
+                  tell assistive technology it is not, so only a row disabled with no action carries it; the other
+                  gets `unavailable` instead, greyed the same way but clicked and keyed like any row (ruling 11) */}
               {/* biome-ignore lint/a11y/useKeyWithClickEvents: the list's keys choose it (ui/menu-nav.ts) */}
               {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: an option, a menu radio or a menu item, by the list's kind */}
               {/* biome-ignore lint/a11y/noStaticElementInteractions: an option or a menu item, by the list's kind */}
-              <div id={nav.idOf(index)} tabIndex={-1} role={role} aria-selected={kind === 'listbox' ? checked : undefined} aria-checked={kind === 'radios' ? checked : undefined} aria-disabled={item.disabled || undefined}
-                data-active={index === nav.active || undefined} onMouseEnter={() => nav.setActive(index)} onClick={() => pick(item)} className={`item${two ? ' two' : ''}${item.manage ? ' manage' : ''}`}>
+              <div id={nav.idOf(index)} tabIndex={-1} role={role} aria-selected={kind === 'listbox' ? checked : undefined} aria-checked={kind === 'radios' ? checked : undefined} aria-disabled={(item.disabled && !item.action) || undefined} aria-busy={item.action?.busy || undefined}
+                data-active={index === nav.active || undefined} onMouseEnter={() => nav.setActive(index)} onClick={() => pick(item)} className={`item${two ? ' two' : ''}${item.manage ? ' manage' : ''}${item.disabled && item.action ? ' unavailable' : ''}`}>
                 {kind !== 'items' && <Icon node={Check} size={14} className={checked ? 'check' : 'check invisible'} />}
                 {two ? (
                   <span className="t">

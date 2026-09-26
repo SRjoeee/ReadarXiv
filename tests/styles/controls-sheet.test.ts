@@ -131,11 +131,18 @@ describe('controls.css: the menus\' rows for the pages', () => {
   it('draws two lines in at least 40 px, 5 px above and below, the hint 11.5 px in ink-2 under the name', () => {
     expect(of('.pop .item.two')).toEqual({ height: 'auto', 'min-height': '40px', 'padding-block': '5px' })
     expect(of('.pop .item .t')).toEqual({ display: 'flex', flex: '1', 'flex-direction': 'column', gap: '1px', 'min-width': '0' })
+    expect(of('.pop .item .t > :first-child')).toEqual({ overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' })
     expect(of('.pop .item .sub')).toEqual({ color: 'var(--ink-2)', 'font-size': '11.5px' })
   })
 
-  it('puts a neutral button in a row: 24 px, 9 in, radius 6, 12 px / 500, on the neutral ground (§2.1)', () => {
+  it('puts a neutral button in a row: 24 px, 9 in, radius 6, 12 px / 500, on the neutral ground (§2.1); a loader in its place while busy, ink-2, flex none', () => {
     expect(of('.pop .item .act')).toEqual({ display: 'inline-flex', flex: 'none', 'align-items': 'center', height: '24px', padding: '0 9px', 'border-radius': '6px', background: 'var(--button)', color: 'var(--ink)', 'font-size': '12px', 'font-weight': '500' })
+    expect(of('.pop .item .spin')).toEqual({ flex: 'none', color: 'var(--ink-2)' })
+    expect(of('.pop .item .nm')).toEqual({ flex: 'none' })
+  })
+
+  it('greys a row disabled but with an action the disabled row\'s colour, its cursor left the row\'s normal pointer (finding 2)', () => {
+    expect(of('.pop .item.unavailable')).toEqual({ color: 'var(--ink-3)' })
   })
 
   it('draws a style\'s sample at its row\'s end, 12.5 px, cut off rather than wrapped; the manage row in ink-2', () => {

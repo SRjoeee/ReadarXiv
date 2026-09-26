@@ -30,25 +30,27 @@ describe('MenuList', () => {
 
   it('two lines: each hint under its name; a row without one keeps one line', async () => {
     const { rows } = await mount(SERVICES, { layout: 'two-line' })
-    expect(rows.map(r => r.className)).toEqual(['item two', 'item two', 'item two', 'item two', 'item manage'])
+    expect(rows.map(r => r.className)).toEqual(['item two', 'item two', 'item two unavailable', 'item two unavailable', 'item manage'])
     expect([...rows[0]!.querySelector('.t')!.children].map(c => [c.getAttribute('class'), c.textContent])).toEqual([[null, 'Microsoft'], ['sub', 'Free']])
     expect(rows[0]!.querySelector('.hint')).toBeNull()
   })
 
-  it('reaches a disabled row with an action by the arrows; picked by Enter or a click, it runs the action, never a choice (ruling 11)', async () => {
+  it('reaches a disabled row with an action by the arrows; picked by Enter, Space or a click, it runs the action, never a choice (ruling 11); it carries no aria-disabled, greyed instead by `unavailable` (finding 2)', async () => {
     const { list, rows, onPick, onAction } = await mount(SERVICES, { layout: 'two-line' })
     await key(list, 'ArrowDown')
     await key(list, 'ArrowDown')
     expect(list.getAttribute('aria-activedescendant')).toBe(rows[2]!.id)
+    expect([rows[2]!.getAttribute('aria-disabled'), rows[2]!.className]).toEqual([null, 'item two unavailable'])
     await key(list, 'Enter')
+    await key(list, ' ')
     rows[2]!.click()
-    expect([onAction.mock.calls, onPick.mock.calls]).toEqual([[['chrome'], ['chrome']], []])
+    expect([onAction.mock.calls, onPick.mock.calls]).toEqual([[['chrome'], ['chrome'], ['chrome']], []])
     expect(rows[2]!.querySelector('.act')!.textContent).toBe('Download')
   })
 
-  it('does nothing on a row whose action is running, which turns a loader instead of its button (Review Focus)', async () => {
+  it('does nothing on a row whose action is running, which turns a loader instead of its button and carries aria-busy (Review Focus; finding 3)', async () => {
     const { list, rows, onPick, onAction } = await mount(SERVICES, { layout: 'two-line' })
-    expect([rows[3]!.querySelector('svg.spin') !== null, rows[3]!.querySelector('.act')]).toEqual([true, null])
+    expect([rows[3]!.querySelector('svg.spin') !== null, rows[3]!.querySelector('.act'), rows[3]!.getAttribute('aria-busy')]).toEqual([true, null, 'true'])
     rows[3]!.click()
     for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'Enter']) await key(list, k)
     expect([onAction.mock.calls.length, onPick.mock.calls.length]).toEqual([0, 0])
@@ -85,5 +87,30 @@ describe('MenuList', () => {
     expect([rows[1]!.getAttribute('aria-selected'), rows[1]!.querySelector('.check')!.getAttribute('class')]).toEqual(['false', 'check invisible'])
     rows[1]!.click()
     expect(onPick).toHaveBeenCalledWith('manage')
+  })
+
+  it('starts active on the first row when the only `checked` item is the manage row (finding 5)', async () => {
+    const { list, rows } = await mount([{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'manage', name: 'Manage', manage: true, checked: true }])
+    expect(list.getAttribute('aria-activedescendant')).toBe(rows[0]!.id)
+  })
+
+  it('picks a row with an action by Space too, when the list has no search field (finding 6)', async () => {
+    const { list, onPick, onAction } = await mount([{ id: 'pack', name: 'Chrome', action: { label: 'Download' } }])
+    await key(list, ' ')
+    expect([onAction.mock.calls, onPick.mock.calls]).toEqual([[['pack']], []])
+  })
+
+  it('the typeahead reaches a disabled row with an action; Enter there calls onAction (finding 6)', async () => {
+    const { list, rows, onPick, onAction } = await mount(SERVICES, { layout: 'two-line' })
+    await key(list, 'c')
+    expect(list.getAttribute('aria-activedescendant')).toBe(rows[2]!.id)
+    await key(list, 'Enter')
+    expect([onAction.mock.calls, onPick.mock.calls]).toEqual([[['chrome']], []])
+  })
+
+  it('in the two-line layout, `lang` lands on the name (finding 6)', async () => {
+    const { rows } = await mount([{ id: 'deu', name: 'Deutsch', hint: 'Free', lang: 'de' }], { layout: 'two-line' })
+    const name = rows[0]!.querySelector('.t > span[lang]')
+    expect([name?.getAttribute('lang'), name?.textContent]).toEqual(['de', 'Deutsch'])
   })
 })

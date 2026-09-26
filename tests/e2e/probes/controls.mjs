@@ -295,7 +295,9 @@ async function menus(page, lang) {
         separated: !!i.previousElementSibling?.matches('hr.sep'),
       }
     }), pop)
-    const two = rows.filter(r => r.cls === 'item two')
+    // a row disabled but with an action (the pack's download) carries `unavailable` beside `two` (finding 2): still
+    // a two-line row, just greyed differently
+    const two = rows.filter(r => r.cls === 'item two' || r.cls === 'item two unavailable')
     check(`${tag}: the services on two lines, each at least 40 px, the hint 11.5 px in ink-2`, two.length === 4 && two.every(r => r.height >= 39.5 && r.sub?.[0] === '11.5px' && r.sub?.[1] === ink2), JSON.stringify(two))
     const act = rows.find(r => r.act)?.act
     check(`${tag}: the pack's download, a neutral button in its row: 24 px, 9 in, radius 6, 12 px / 500`, !!act && near(act[0], 24) && act[1] === '9px' && act[2] === '6px' && act[3] === '12px' && act[4] === '500' && act[5] === button, JSON.stringify(act))
