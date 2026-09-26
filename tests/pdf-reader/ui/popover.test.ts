@@ -1,6 +1,6 @@
 import { act, createElement, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Popover, usePopover } from '@/pdf-reader/ui/Popover'
+import { Popover, usePopover } from '@/ui/controls/Popover'
 import { mountElement } from '../../ui/render-hook'
 import { isOpen, stubPopovers } from './popover-stub'
 

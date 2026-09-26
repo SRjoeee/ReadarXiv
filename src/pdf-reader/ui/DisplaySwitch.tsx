@@ -7,8 +7,8 @@ import { useRef } from 'react'
 import { R } from '@/ui/strings'
 import type { Display } from '../controller'
 import { DisplayIcon } from './icons'
-import { radioKeys } from './radio'
-import { useTip } from './tip'
+import { radioKeys } from '@/ui/controls/radio'
+import { useTip } from '@/ui/controls/tip'
 
 const ORDER: readonly Display[] = ['original', 'bilingual', 'translation']
 

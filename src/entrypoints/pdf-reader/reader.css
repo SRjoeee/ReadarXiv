@@ -13,6 +13,7 @@
 /* the extension's tokens (the redesign's design, §2.1): the ramp, the roles and their dark values, generated from
    src/shared/tokens.ts; the reader's own layout values stay below */
 @import "../../styles/tokens.css";
+@import "../../styles/controls.css";
 
 /* the reader's own layout (§5); every colour, shadow, the font and the ease come from tokens.css */
 :root {
@@ -98,26 +99,7 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .tbtn[aria-disabled="true"]:active { scale: 1; }
   .divider { width: 0.5px; height: 18px; margin-inline: 6px; flex: none; background: var(--chrome-line); }
 
-  /* tooltips: below their control, centred on it, kept inside the window; one line always */
-  .tip { position: fixed; inset: auto; margin: 8px 0 0; position-area: bottom; position-try-fallbacks: bottom span-right, bottom span-left;
-    padding: 5px 8px; border: 0; border-radius: 6px; background: oklch(0.22 0.01 255); color: oklch(0.96 0 0); font: 12px/1.2 var(--font);
-    white-space: nowrap; display: none; gap: 10px; box-shadow: 0 4px 12px oklch(0 0 0 / 0.2); pointer-events: none; overflow: visible; }
-  .tip:popover-open { display: flex; animation: tip-in 120ms ease-out; }
-  .tip[data-side="right"] { margin: 0 0 0 8px; position-area: right; position-try-fallbacks: none; }
-  .tip kbd { color: oklch(0.74 0.01 255); }
-  /* a segmented control: equal segments in a well, the chosen one on a lifted thumb that slides (§6.2, §7) */
-  .seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: 30px; padding: 2px; border-radius: 9px; background: var(--well); --i: 0; }
-  .seg .thumb { position: absolute; inset-block: 2px; inset-inline-start: 2px; width: calc((100% - 4px) / var(--n, 3)); border-radius: 7px; background: var(--lift);
-    box-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.06), 0 1px 2px oklch(0 0 0 / 0.08); translate: calc(var(--i) * 100%) 0; transition: translate 220ms var(--ease); pointer-events: none; }
-  .seg > button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; height: 100%; padding: 0 12px; border-radius: 7px; color: var(--ink-2); font: 500 12.5px/1 var(--font); white-space: nowrap; transition: color 150ms ease-out; }
-  .seg > button[aria-checked="true"], .seg > button[aria-pressed="true"] { color: var(--ink); }
-  @media (hover: hover) { .seg > button:not([aria-checked="true"]):not([aria-disabled="true"]):hover { color: var(--ink); } }
-  .seg > button[aria-disabled="true"] { color: var(--ink-3); opacity: 0.55; }
   .seg.display > button { width: 40px; padding: 0; }
-  .seg.small { height: 26px; }
-  .seg.small > button { padding: 0 10px; font-size: 12px; }
-  /* a segment of icons: equal whatever the language, its icon at the centre of its thumb */
-  .seg.icons > button { width: 36px; padding: 0; }
   .arxiv-id { display: inline-flex; flex: none; align-items: center; gap: 2px; margin: -2px -4px; padding: 2px 4px; border-radius: 5px; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; text-decoration: none; transition: color 150ms, background-color 150ms; }
   .arxiv-id svg { opacity: 0; translate: -2px 2px; transition: opacity 150ms, translate 150ms ease-out; }
   .arxiv-id:focus-visible { color: var(--ink); background: var(--fill); }
@@ -125,23 +107,6 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   @media (hover: hover) { .arxiv-id:hover { color: var(--ink); background: var(--fill); } .arxiv-id:hover svg { opacity: 1; translate: 0 0; } }
   @container lead (width < 320px) { .paper-title [data-title] { display: none; } }
   .paper-title[data-cramped] [data-arxiv] { display: none; }
-  /* popovers (§6.7): under their button, 6 px below, kept inside the window; they grow from it */
-  .pop { position: fixed; inset: auto; margin: 6px 0 0; position-area: bottom span-right; position-try-fallbacks: bottom span-left, bottom;
-    min-width: 220px; width: max-content; max-width: calc(100vw - 16px); max-height: calc(100vh - var(--bar) - 16px); overflow: auto; padding: 4px; border: 0; border-radius: 12px;
-    background: var(--chrome); color: var(--ink); box-shadow: var(--pop-shadow); font-size: 13px; transform-origin: top left; }
-  .pop:popover-open { animation: pop-in 150ms var(--ease); }
-  .pop .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 34px; padding: 0 10px; }
-  .pop .sep { height: 0.5px; margin: 4px 8px; border: 0; background: var(--chrome-line); }
-  .pop .search { display: block; width: 100%; height: 30px; margin: 0 0 4px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--fill); color: var(--ink); }
-  .pop .search::placeholder { color: var(--ink-2); }
-  .pop .item { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px 0 8px; border-radius: 8px; cursor: pointer; }
-  .pop .item[data-active] { background: var(--fill); }
-  /* the item the keyboard moves is the focus (aria-activedescendant), and carries §13's ring as a focused control does */
-  .pop :is([role="menu"], [role="listbox"]):focus-visible .item[data-active],
-  html:not([data-axt-pointer]) .pop .search:focus-visible ~ [role="listbox"] .item[data-active] { outline: 2px solid var(--focus); outline-offset: -2px; }
-  .pop .item[aria-disabled="true"] { color: var(--ink-3); cursor: default; }
-  .pop .item .hint { margin-inline-start: auto; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
-  .pop .item .check { color: var(--ink); }
   .menu-btn { padding-inline: 8px 6px; color: var(--ink); font-size: 12.5px; font-weight: 500; }
   /* a name longer than the bar can give (a service's is up to 40 characters) is cut short; the tooltip holds it whole */
   .menu-btn > span { min-width: 0; max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -153,12 +118,6 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .tbtn .fit { display: inline-grid; justify-items: end; }
   .tbtn .fit > * { grid-area: 1 / 1; }
   .tbtn .fit > [data-widest] { visibility: hidden; }
-  .switch { position: relative; width: 28px; height: 17px; flex: none; border-radius: 999px; background: var(--ink-3); transition: background-color 150ms; }
-  .switch::after { content: ""; position: absolute; inset-block-start: 2px; inset-inline-start: 2px; width: 13px; height: 13px; border-radius: 999px; background: oklch(1 0 0); box-shadow: 0 1px 2px oklch(0 0 0 / 0.25); transition: translate 150ms ease-out; }
-  .switch[aria-checked="true"] { background: var(--ink); }
-  .switch[aria-checked="true"]::after { translate: 11px 0; background: var(--chrome); }
-  .swatch { width: 16px; height: 16px; border-radius: 999px; box-shadow: inset 0 0 0 0.5px oklch(0 0 0 / 0.15); }
-  .swatch[aria-pressed="true"]:not(:focus-visible) { outline: 1.5px solid var(--line-strong); outline-offset: 2px; }
   /* below 900 px the language and service menus leave the toolbar for the reading options' first rows (§5); as specific
      as the rows and separators they are, and after them, so that they stay hidden above it */
   .pop .narrow-only, .pop .narrowest-only { display: none; }
@@ -234,11 +193,7 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .card button { height: 30px; padding: 0 16px; border-radius: 8px; background: var(--ink); color: var(--chrome); font-weight: 500; transition: scale 150ms ease-out; }
   .card button:active { scale: 0.96; }
 }
-@keyframes tip-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .tbtn, .tbtn:active { transition: none; scale: 1; } }
-@media (prefers-reduced-motion: reduce) { .seg .thumb { transition: none; } }
-@keyframes pop-in { from { opacity: 0; scale: 0.97; translate: 0 -4px; } }
-@media (prefers-reduced-motion: reduce) { @keyframes pop-in { from { opacity: 0; } } }
 @media (width < 900px) { .pop .row.narrow-only { display: flex; } .pop .sep.narrow-only { display: block; } [data-zone="trail"] > .menu-btn { display: none; } }
 /* a narrow window shows one side: swap and sync, greyed there, give their room */
 @media (width < 900px) { [data-zone="trail"] > [data-side-by-side] { display: none; } }
@@ -249,16 +204,12 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .pop .row.narrowest-only { display: flex; } .pop .sep.narrowest-only { display: block; }
   [data-zone="trail"] > [data-wide], [data-zoom] > .tbtn:not(.zoom-value) { display: none; }
 }
-/* forced colours (Windows' contrast themes) drop the fills and the rings: the chosen display, a pressed button and a
-   switch that is on take the system's Highlight, as a selection does (the interface review) */
+/* forced colours (Windows' contrast themes) drop the fills and the rings: a pressed button takes the system's
+   Highlight, as a selection does (the interface review) */
 @media (forced-colors: active) {
-  .seg .thumb, .tbtn[aria-pressed="true"]:not([aria-disabled="true"]), .switch[aria-checked="true"] { forced-color-adjust: none; background: Highlight; }
-  .seg > button[aria-checked="true"], .tbtn[aria-pressed="true"]:not([aria-disabled="true"]) { forced-color-adjust: none; color: HighlightText; }
-  /* an outline, which takes no room: a border would push the knob to the track's edge */
-  .switch { outline: 1px solid ButtonText; outline-offset: -1px; }
-  .switch::after { forced-color-adjust: none; background: ButtonText; }
-  .switch[aria-checked="true"]::after { background: HighlightText; }
-  .tbtn[aria-disabled="true"], .seg > button[aria-disabled="true"] { color: GrayText; }
+  .tbtn[aria-pressed="true"]:not([aria-disabled="true"]) { forced-color-adjust: none; background: Highlight; }
+  .tbtn[aria-pressed="true"]:not([aria-disabled="true"]) { forced-color-adjust: none; color: HighlightText; }
+  .tbtn[aria-disabled="true"] { color: GrayText; }
 }
 @keyframes thumb { from { translate: 0 0; } to { translate: 0 calc(var(--track, 100px) - var(--thumb, 40px)); } }
 @media (prefers-reduced-motion: reduce) { .pill, .indicator { transition: none; } }
@@ -279,7 +230,6 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .capsule-slot { transition: none; }
   .arxiv-id svg { translate: none; transition: opacity 150ms; }
   .fold svg { transition: none; }
-  .switch::after { transition: none; }
   .indicator i { transition: background-color 150ms; }
   .card button, .card button:active { transition: none; scale: 1; }
 }

@@ -10,7 +10,7 @@ import { Info, X } from 'lucide'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { R, S } from '@/ui/strings'
 import type { ReaderController } from '../controller'
-import { Icon } from './icons'
+import { Icon } from '@/ui/controls/Icon'
 import { type Capsule, capsuleOf, cardOf, spokenOf } from './status'
 import { useReader } from './use-reader'
 

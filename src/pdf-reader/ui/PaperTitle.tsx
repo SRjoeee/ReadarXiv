@@ -6,8 +6,8 @@
 import { ArrowUpRight } from 'lucide'
 import { useEffect, useRef, useState } from 'react'
 import { R } from '@/ui/strings'
-import { Icon } from './icons'
-import { useTip } from './tip'
+import { Icon } from '@/ui/controls/Icon'
+import { useTip } from '@/ui/controls/tip'
 
 export function PaperTitle({ id, title }: { id: string; title: string }) {
   const whole = useTip(title)

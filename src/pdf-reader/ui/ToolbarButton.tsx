@@ -6,7 +6,7 @@
 // words and the value. A disabled one stays in place, greyed, so the bar never reflows. With `href` it is a link, opened
 // in a new tab: a control that goes to a page is one, for a middle click and ⌘-click
 import { type AnchorHTMLAttributes, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, useId } from 'react'
-import { useTip } from './tip'
+import { useTip } from '@/ui/controls/tip'
 
 export function ToolbarButton({ label, value, valueClassName = '', valueWidest, hint, keys, pressed, disabled, onClick, anchor, href, children, className = '', ...rest }: {
   label: string

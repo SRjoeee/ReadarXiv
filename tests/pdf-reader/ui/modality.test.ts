@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { trackModality } from '@/pdf-reader/ui/modality'
+import { trackModality } from '@/ui/controls/modality'
 
 let stop = () => {}
 afterEach(() => { stop(); document.documentElement.removeAttribute('data-axt-pointer') })

@@ -1,0 +1,62 @@
+/* The controls the extension's pages share (the redesign's design, §2.3): the reader's segmented control, popover,
+   tooltip, switch and swatch, moved here unchanged so that the popup and the settings page draw the same ones. The
+   component rules join the page's `components` layer; the tokens they name are tokens.css's */
+@layer components {
+  /* tooltips: below their control, centred on it, kept inside the window; one line always */
+  .tip { position: fixed; inset: auto; margin: 8px 0 0; position-area: bottom; position-try-fallbacks: bottom span-right, bottom span-left;
+    padding: 5px 8px; border: 0; border-radius: 6px; background: var(--tip-bg); color: var(--tip-ink); font: 12px/1.2 var(--font);
+    white-space: nowrap; display: none; gap: 10px; box-shadow: 0 4px 12px oklch(0 0 0 / 0.2); pointer-events: none; overflow: visible; }
+  .tip:popover-open { display: flex; animation: tip-in 120ms ease-out; }
+  .tip[data-side="right"] { margin: 0 0 0 8px; position-area: right; position-try-fallbacks: none; }
+  .tip kbd { color: var(--tip-ink-2); }
+  /* a segmented control: equal segments in a well, the chosen one on a lifted thumb that slides */
+  .seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: 30px; padding: 2px; border-radius: 9px; background: var(--well); --i: 0; }
+  .seg .thumb { position: absolute; inset-block: 2px; inset-inline-start: 2px; width: calc((100% - 4px) / var(--n, 3)); border-radius: 7px; background: var(--lift);
+    box-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.06), 0 1px 2px oklch(0 0 0 / 0.08); translate: calc(var(--i) * 100%) 0; transition: translate 220ms var(--ease); pointer-events: none; }
+  .seg > button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; height: 100%; padding: 0 12px; border-radius: 7px; color: var(--ink-2); font: 500 12.5px/1 var(--font); white-space: nowrap; transition: color 150ms ease-out; }
+  .seg > button[aria-checked="true"], .seg > button[aria-pressed="true"] { color: var(--ink); }
+  @media (hover: hover) { .seg > button:not([aria-checked="true"]):not([aria-disabled="true"]):hover { color: var(--ink); } }
+  .seg > button[aria-disabled="true"] { color: var(--ink-3); opacity: 0.55; }
+  .seg.small { height: 26px; }
+  .seg.small > button { padding: 0 10px; font-size: 12px; }
+  /* a segment of icons: equal whatever the language, its icon at the centre of its thumb */
+  .seg.icons > button { width: 36px; padding: 0; }
+  /* popovers: under their button, 6 px below, kept inside the window; they grow from it */
+  .pop { position: fixed; inset: auto; margin: 6px 0 0; position-area: bottom span-right; position-try-fallbacks: bottom span-left, bottom;
+    min-width: 220px; width: max-content; max-width: calc(100vw - 16px); max-height: calc(100vh - var(--bar, 0px) - 16px); overflow: auto; padding: 4px; border: 0; border-radius: 12px;
+    background: var(--chrome); color: var(--ink); box-shadow: var(--pop-shadow); font-size: 13px; transform-origin: top left; }
+  .pop:popover-open { animation: pop-in 150ms var(--ease); }
+  .pop .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 34px; padding: 0 10px; }
+  .pop .sep { height: 0.5px; margin: 4px 8px; border: 0; background: var(--chrome-line); }
+  .pop .search { display: block; width: 100%; height: 30px; margin: 0 0 4px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--fill); color: var(--ink); }
+  .pop .search::placeholder { color: var(--ink-2); }
+  .pop .item { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px 0 8px; border-radius: 8px; cursor: pointer; }
+  .pop .item[data-active] { background: var(--fill); }
+  /* the item the keyboard moves is the focus (aria-activedescendant), and carries the ring a focused control does */
+  .pop :is([role="menu"], [role="listbox"]):focus-visible .item[data-active],
+  html:not([data-axt-pointer]) .pop .search:focus-visible ~ [role="listbox"] .item[data-active] { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .pop .item[aria-disabled="true"] { color: var(--ink-3); cursor: default; }
+  .pop .item .hint { margin-inline-start: auto; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .pop .item .check { color: var(--ink); }
+  .switch { position: relative; width: 28px; height: 17px; flex: none; border-radius: 999px; background: var(--ink-3); transition: background-color 150ms; }
+  .switch::after { content: ""; position: absolute; inset-block-start: 2px; inset-inline-start: 2px; width: 13px; height: 13px; border-radius: 999px; background: oklch(1 0 0); box-shadow: 0 1px 2px oklch(0 0 0 / 0.25); transition: translate 150ms ease-out; }
+  .switch[aria-checked="true"] { background: var(--ink); }
+  .switch[aria-checked="true"]::after { translate: 11px 0; background: var(--chrome); }
+  .swatch { width: 16px; height: 16px; border-radius: 999px; box-shadow: inset 0 0 0 0.5px oklch(0 0 0 / 0.15); }
+  .swatch[aria-pressed="true"]:not(:focus-visible) { outline: 1.5px solid var(--line-strong); outline-offset: 2px; }
+}
+@keyframes tip-in { from { opacity: 0; } }
+@keyframes pop-in { from { opacity: 0; scale: 0.97; translate: 0 -4px; } }
+@media (prefers-reduced-motion: reduce) { @keyframes pop-in { from { opacity: 0; } } }
+@media (prefers-reduced-motion: reduce) { .seg .thumb { transition: none; } .switch::after { transition: none; } }
+/* forced colours (Windows' contrast themes) drop the fills and the rings: the chosen segment and a switch that is on
+   take the system's Highlight, as a selection does */
+@media (forced-colors: active) {
+  .seg .thumb, .switch[aria-checked="true"] { forced-color-adjust: none; background: Highlight; }
+  .seg > button[aria-checked="true"] { forced-color-adjust: none; color: HighlightText; }
+  /* an outline, which takes no room: a border would push the knob to the track's edge */
+  .switch { outline: 1px solid ButtonText; outline-offset: -1px; }
+  .switch::after { forced-color-adjust: none; background: ButtonText; }
+  .switch[aria-checked="true"]::after { background: HighlightText; }
+  .seg > button[aria-disabled="true"] { color: GrayText; }
+}

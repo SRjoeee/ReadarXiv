@@ -6,7 +6,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createController, type Session } from '@/pdf-reader/controller'
 import { setHost } from '@/pdf-reader/engine/host.mjs'
-import { trackModality } from '@/pdf-reader/ui/modality'
+import { trackModality } from '@/ui/controls/modality'
 import { applyLocale } from '@/ui/apply-locale'
 import { App } from './App'
 

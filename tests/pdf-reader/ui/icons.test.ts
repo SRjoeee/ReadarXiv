@@ -2,7 +2,8 @@ import { createElement } from 'react'
 import { Settings } from 'lucide'
 import { afterEach, describe, expect, it } from 'vitest'
 import { GLYPH_A, GLYPH_WEN } from '@/pdf-reader/ui/display-glyphs'
-import { DisplayIcon, Icon, WEN_GAIN } from '@/pdf-reader/ui/icons'
+import { DisplayIcon, WEN_GAIN } from '@/pdf-reader/ui/icons'
+import { Icon } from '@/ui/controls/Icon'
 import { mountElement } from '../../ui/render-hook'
 
 afterEach(() => { document.body.innerHTML = '' })

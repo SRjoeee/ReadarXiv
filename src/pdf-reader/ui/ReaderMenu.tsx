@@ -4,7 +4,7 @@
 import { Check } from 'lucide'
 import { Fragment, useId, useState } from 'react'
 import { useMenuNav } from '@/ui/menu-nav'
-import { Icon } from './icons'
+import { Icon } from '@/ui/controls/Icon'
 
 export interface ReaderItem { id: string; name: string; hint?: string; checked?: boolean; disabled?: boolean; keywords?: string; separatorBefore?: boolean }
 

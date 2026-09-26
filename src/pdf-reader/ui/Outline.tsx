@@ -7,8 +7,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { R } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import type { OutlineEntry } from '../outline'
-import { Icon } from './icons'
-import { useTip } from './tip'
+import { Icon } from '@/ui/controls/Icon'
+import { useTip } from '@/ui/controls/tip'
 import { useReader } from './use-reader'
 
 export function Outline({ controller, open }: { controller: ReaderController; open: boolean }) {

@@ -4,7 +4,7 @@ import { CircleAlert } from 'lucide'
 import { browser } from 'wxt/browser'
 import { S } from '@/ui/strings'
 import type { ReaderController } from '../controller'
-import { Icon } from './icons'
+import { Icon } from '@/ui/controls/Icon'
 import { cardOf } from './status'
 import { useReader } from './use-reader'
 
