@@ -2,7 +2,9 @@
 // added by the task that builds the control
 import type { FC } from 'react'
 import { Base } from './base'
+import { Buttons } from './buttons'
 
 export const SPECIMENS: { name: string; Specimen: FC }[] = [
   { name: 'base', Specimen: Base },
+  { name: 'buttons', Specimen: Buttons },
 ]

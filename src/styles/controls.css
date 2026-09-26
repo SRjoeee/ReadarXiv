@@ -45,6 +45,43 @@
   .swatch { width: 16px; height: 16px; border-radius: 999px; box-shadow: inset 0 0 0 0.5px oklch(0 0 0 / 0.15); }
   .swatch[aria-pressed="true"]:not(:focus-visible) { outline: 1.5px solid var(--line-strong); outline-offset: 2px; }
 }
+/* The controls the pages add (the redesign's design, §2.1, §5, §6, §8; Part 3's interfaces), every measure the
+   prototypes' (the popup's round 6, the settings page's settings-2). Each class compounds with its control's own, so
+   that nothing here reaches an element that is not one of these controls */
+@layer components {
+  /* buttons: the brand for the one primary action, a neutral one (its grey small, the fill large), a text one with no
+     ground but its hover's, a raised one on a group; pressed to 0.96 (§8). lg fills its width and has no padding of
+     its own (round 6's primary); a disabled one takes the neutral grey of its size, a busy one keeps its look */
+  .btn { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 8px; padding: 0; font: 500 13px/1 var(--font); white-space: nowrap;
+    transition: scale 150ms ease-out, background-color 150ms ease-out, color 150ms ease-out; }
+  /* the words 7 px after an icon (round 6's entries), a shortcut 8 px after the words (round 1) */
+  .btn > svg + span { margin-inline-start: -1px; }
+  .btn.lg { height: 36px; border-radius: 9px; }
+  .btn.md { height: 32px; padding: 0 16px; border-radius: 8px; }
+  .btn.sm { height: 28px; padding: 0 12px; border-radius: 7px; font-size: 12.5px; }
+  .btn.brand { background: var(--brand); color: var(--on-brand); }
+  .btn.neutral { background: var(--button); color: var(--ink); }
+  .btn.neutral.lg { background: var(--fill); }
+  /* a text button, as both prototypes draw it: 10 px in, radius 7, in the page's weight */
+  .btn.text { padding-inline: 10px; border-radius: 7px; color: var(--ink-2); font-weight: 400; }
+  @media (hover: hover) { .btn.text:not([aria-disabled="true"]):hover { background: var(--fill); color: var(--ink); } }
+  /* a note's button (round 4), one measure whatever the size: on the group, raised by a hairline in light */
+  .btn.raised { height: 26px; padding: 0 10px; border-radius: 7px; font-size: 12.5px; background: var(--button-raised); color: var(--ink); box-shadow: var(--raised-shadow); }
+  /* a disabled one takes the neutral grey of its size — the small one's, the large one's fill — its words ink-3: on
+     the small neutral's own fill it would read heavier than an enabled one */
+  .btn[aria-disabled="true"] { background: var(--button); color: var(--ink-3); box-shadow: none; }
+  .btn.lg[aria-disabled="true"] { background: var(--fill); }
+  .btn.text[aria-disabled="true"] { background: none; }
+  /* a busy one keeps its look: its loader says the wait, and it takes no second press */
+  .btn[aria-busy="true"] { cursor: progress; }
+  .btn:not([aria-disabled="true"]):not([aria-busy="true"]):active { scale: 0.96; }
+  /* a shortcut label: 11 px, 3 by 5 in, radius 5, the ink's 9 % behind ink-2; on the brand its chip behind white
+     (5.41:1 light, 4.59:1 dark; the maintainer, 2026-09-26) */
+  .kbd { padding: 3px 5px; border-radius: 5px; background: color-mix(in oklab, var(--ink) 9%, transparent); color: var(--ink-2); font: 500 11px/1 var(--font); }
+  .btn.brand .kbd { background: var(--brand-chip); color: var(--on-brand); }
+  /* a wait with one subject (a busy button; the pack's download in a menu): a loader turning */
+  .spin { animation: turn 900ms linear infinite; }
+}
 @keyframes tip-in { from { opacity: 0; } }
 @keyframes pop-in { from { opacity: 0; scale: 0.97; translate: 0 -4px; } }
 @media (prefers-reduced-motion: reduce) { @keyframes pop-in { from { opacity: 0; } } }
@@ -63,4 +100,16 @@
   .switch::after { forced-color-adjust: none; background: ButtonText; }
   .switch[aria-checked="true"]::after { background: HighlightText; }
   .seg > button[aria-disabled="true"] { color: GrayText; }
+}
+@keyframes turn { to { rotate: 1turn; } }
+/* the pages' controls under reduced motion (§8: each motion a fade or nothing) and in forced colours; unlayered, as the
+   rules above are, so that they win over the component rules */
+@media (prefers-reduced-motion: reduce) {
+  .btn:active { scale: none; }
+  .spin { animation: none; }
+}
+@media (forced-colors: active) {
+  /* a grounded button keeps an edge the system draws, its ground being dropped; not while focused, whose ring it is */
+  .btn:not(.text):not(:focus-visible) { outline: 1px solid ButtonText; outline-offset: -1px; }
+  .btn[aria-disabled="true"] { color: GrayText; }
 }

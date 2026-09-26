@@ -74,8 +74,78 @@ async function base(page, lang) {
   }
 }
 
+/** Task 16: buttons and shortcut labels (Part 3's interfaces; round 6, round 4, settings-2) */
+async function buttons(page, lang) {
+  for (const theme of THEMES) {
+    const at = `[data-theme="${theme}"] [data-specimen="buttons"]`, tag = `${lang} ${theme}`
+    for (const [selector, height, radius, pad, size, weight] of [
+      ['.btn.brand.lg', 36, '9px', '0px', '13px', '500'],
+      ['.btn.brand.md', 32, '8px', '16px', '13px', '500'],
+      ['.btn.text.md', 32, '7px', '10px', '13px', '400'],
+      ['.btn.neutral.sm', 28, '7px', '12px', '12.5px', '500'],
+      ['.btn.text.sm', 28, '7px', '10px', '12.5px', '400'],
+      ['.btn.raised', 26, '7px', '10px', '12.5px', '500'],
+    ]) {
+      const m = await look(page, `${at} ${selector}:not([aria-disabled])`)
+      check(`${tag}: ${selector} ${height} px, radius ${radius}, ${pad} in, ${size} / ${weight}`, near(m?.height, height) && m.radius === radius && m.pad === pad && m.size === size && m.weight === weight, JSON.stringify(m))
+    }
+    for (const [selector, ground, words] of [
+      ['.btn.brand.lg:not([aria-disabled])', 'var(--brand)', 'var(--on-brand)'],
+      ['.btn.neutral.lg', 'var(--fill)', 'var(--ink)'],
+      ['.btn.neutral.sm:not([aria-disabled])', 'var(--button)', 'var(--ink)'],
+      ['.btn.raised', 'var(--button-raised)', 'var(--ink)'],
+      ['.btn.brand[aria-disabled="true"]', 'var(--fill)', 'var(--ink-3)'],
+      ['.btn.neutral.sm[aria-disabled="true"]', 'var(--button)', 'var(--ink-3)'],
+      ['.btn.brand .kbd', 'var(--brand-chip)', 'var(--on-brand)'],
+      ['.btn.neutral .kbd', 'color-mix(in oklab, var(--ink) 9%, transparent)', 'var(--ink-2)'],
+      ['[data-row] > .kbd', 'color-mix(in oklab, var(--ink) 9%, transparent)', 'var(--ink-2)'],
+      ['.btn[aria-busy="true"]', 'var(--brand)', 'var(--on-brand)'],
+    ]) {
+      const m = await look(page, `${at} ${selector}`)
+      const want = { bg: await token(page, theme, 'background-color', ground), color: await token(page, theme, 'color', words) }
+      check(`${tag}: ${selector} on ${ground}, in ${words}`, m?.bg === want.bg && m.color === want.color, JSON.stringify({ m, want }))
+    }
+    const raised = await look(page, `${at} .btn.raised`)
+    check(`${tag}: a note's button raised by the raised shadow`, raised?.shadow === await token(page, theme, 'box-shadow', 'var(--raised-shadow)'), raised?.shadow)
+    const kbd = await look(page, `${at} .btn.brand .kbd`)
+    check(`${tag}: the shortcut label 11 px / 500, 3 by 5 in, radius 5`, kbd?.size === '11px' && kbd.weight === '500' && kbd.padBlock === '3px' && kbd.pad === '5px' && kbd.radius === '5px', JSON.stringify(kbd))
+    const gaps = await page.evaluate(at => {
+      const icon = document.querySelector(`${at} .btn.lg svg`), words = icon.nextElementSibling
+      const label = document.querySelector(`${at} .btn.brand.lg .kbd`), before = label.previousElementSibling
+      return { icon: words.getBoundingClientRect().left - icon.getBoundingClientRect().right, kbd: label.getBoundingClientRect().left - before.getBoundingClientRect().right, disabledKbd: document.querySelectorAll(`${at} .btn[aria-disabled="true"] .kbd`).length, neutralKbd: document.querySelectorAll(`${at} .btn.neutral .kbd`).length }
+    }, at)
+    check(`${tag}: an icon 7 px before its words, the shortcut 8 px after them, on a neutral one where it is given, none on a disabled one`, near(gaps.icon, 7) && near(gaps.kbd, 8) && gaps.disabledKbd === 0 && gaps.neutralKbd === 1, JSON.stringify(gaps))
+    const busy = await page.evaluate(at => { const b = document.querySelector(`${at} .btn[aria-busy="true"]`), first = b.firstElementChild; return { spin: first.getAttribute('class'), turning: getComputedStyle(first).animationName, words: !!b.querySelector('span')?.textContent, kbd: b.querySelectorAll('.kbd').length } }, at)
+    check(`${tag}: a busy button keeps its look and words, a loader turning in its icon's place`, busy.spin === 'spin' && busy.turning === 'turn' && busy.words && busy.kbd === 0, JSON.stringify(busy))
+    const inside = await offCentre(page, { rows: `${at} .btn` })
+    check(`${tag}: a button's icon, words and shortcut on its centre line`, inside.length === 0, JSON.stringify(inside))
+    // the English words at the popup's width: nothing runs over its button (Review Focus)
+    const over = await page.evaluate(at => [...document.querySelectorAll(`${at} .popup-width .btn`)].map(b => b.scrollWidth - b.clientWidth), at)
+    check(`${tag}: the primary, the pair and the entries hold their words at the popup's width`, over.every(d => d <= 0), JSON.stringify(over))
+    // the press: 0.96 while held, a disabled one not at all (§8); a text button lit on hover
+    const press = async selector => {
+      await page.hover(`${at} ${selector}`)
+      await page.mouse.down()
+      await page.waitForTimeout(200)
+      const scale = (await look(page, `${at} ${selector}`))?.scale
+      await page.mouse.up()
+      return scale
+    }
+    const pressed = [await press('.btn.brand.md'), await press('.btn.brand[aria-disabled="true"]'), await press('.btn[aria-busy="true"]')]
+    check(`${tag}: a press scales a button to 0.96, and not a disabled or a busy one`, pressed[0] === '0.96' && pressed[1] === 'none' && pressed[2] === 'none', JSON.stringify(pressed))
+    await page.hover(`${at} .btn.text.md`)
+    await page.waitForTimeout(200)
+    const lit = await look(page, `${at} .btn.text.md`)
+    check(`${tag}: a text button lit on hover, the fill behind ink`, lit?.bg === await token(page, theme, 'background-color', 'var(--fill)') && lit.color === await token(page, theme, 'color', 'var(--ink)'), JSON.stringify(lit))
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const still = await press('.btn.brand.md')
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
+    check(`${tag}: no press under reduced motion`, still === 'none', still)
+  }
+}
+
 // ---- each task of Part 3 adds its control's checks above this line, and its function to CHECKS ----
-const CHECKS = [base]
+const CHECKS = [base, buttons]
 
 const context = await chromium.launchPersistentContext(PROFILE, {
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
