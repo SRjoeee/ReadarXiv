@@ -15,4 +15,11 @@ describe('ui.css', () => {
   it('imports the generated tokens, so that the controls the pages share find them', () => {
     expect(SHEET).toContain('@import "./tokens.css";')
   })
+
+  it('places the top-level dark block after the light one, since the two tie on specificity and only source order decides which wins for an explicit dark on an otherwise-light page', () => {
+    const light = SHEET.indexOf(':root,\n[data-theme="light"]')
+    const dark = SHEET.indexOf('[data-theme="dark"]')
+    expect(light).toBeGreaterThan(-1)
+    expect(dark).toBeGreaterThan(light)
+  })
 })

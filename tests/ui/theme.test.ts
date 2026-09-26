@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { DEFAULT_CONFIG } from '@/config/schema'
+import * as configStorage from '@/config/storage'
 import { setConfig } from '@/config/storage'
 import { applyTheme, followTheme } from '@/ui/theme'
 
@@ -27,6 +28,17 @@ describe('the extension\'s pages follow the theme (the redesign\'s design, §3)'
     await setConfig({ ...DEFAULT_CONFIG, theme: 'light' })
     await new Promise(r => setTimeout(r, 0))
     expect(document.documentElement.dataset.theme).toBe('light')
+    stop()
+  })
+
+  it('paints the system\'s theme and still returns the watcher when the settings cannot be read', async () => {
+    // An invalidated extension context, same failure resolveLocale (apply-locale.ts) already guards against: the two
+    // main.tsx entries await this right before their first render, so a rejection here must not leave the page blank
+    vi.spyOn(configStorage, 'getConfig').mockRejectedValueOnce(new Error('the extension context was invalidated'))
+    const root = document.documentElement
+    const stop = await followTheme(root)
+    expect(root.dataset.theme).toBeUndefined()
+    expect(stop).toBeTypeOf('function')
     stop()
   })
 })

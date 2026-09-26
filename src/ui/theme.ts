@@ -13,8 +13,18 @@ export function applyTheme(root: HTMLElement, theme: Config['theme']): void {
   })
 }
 
-/** The stored theme applied now, then followed; the returned function stops following */
+/**
+ * The stored theme applied now, then followed; the returned function stops following. Both `main.tsx` entries
+ * await this right before their first render, so a rejected read (an invalidated extension context, same as
+ * `resolveLocale` in apply-locale.ts) must not leave the page blank: it paints 'system' and still returns the watcher
+ */
 export async function followTheme(root: HTMLElement): Promise<() => void> {
-  applyTheme(root, (await getConfig()).theme)
+  let theme: Config['theme'] = 'system'
+  try {
+    theme = (await getConfig()).theme
+  } catch {
+    // Unreadable settings must not leave the page blank: fall back to the system's, as resolveLocale does
+  }
+  applyTheme(root, theme)
   return watchConfig(config => applyTheme(root, config.theme))
 }
