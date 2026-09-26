@@ -2218,8 +2218,8 @@ maintainer reviews the plans of Parts 4 and 5 together before either is built.
 | Part | What | Where | Plan |
 |---|---|---|---|
 | 3 | The controls both pages add | this worktree, `exp/extension-ui-redesign` | `2026-09-26-extension-ui-redesign-part3-controls.md` |
-| 4 | The popup (§5) | `.worktrees/ui-popup`, branch `exp/ui-popup` from Part 3's end | `2026-09-26-extension-ui-redesign-part4-popup.md` |
-| 5 | The settings page (§6) | `.worktrees/ui-settings`, branch `exp/ui-settings` from Part 3's end | `2026-09-26-extension-ui-redesign-part5-settings.md` |
+| 4 | The popup (§5) | `.worktrees/redesign-popup`, branch `exp/ui-popup` from Part 3's end | `2026-09-26-extension-ui-redesign-part4-popup.md` |
+| 5 | The settings page (§6) | `.worktrees/redesign-settings`, branch `exp/ui-settings` from Part 3's end | `2026-09-26-extension-ui-redesign-part5-settings.md` |
 | 6 | The floating button and the controls on arXiv's pages (§7) | this worktree, after 4 and 5 are merged | written when 4 and 5 are merged |
 | 7 | Verification and documents (§12, §13), the pull request | this worktree | written when 6 is done |
 
@@ -2240,9 +2240,12 @@ In `src/ui/controls/` and `src/styles/controls.css`, every value a role of `src/
     button).
   - `size`: `'lg'` 36 px, radius 9, 13 px / 500 (the popup's primary and its twin entries); `'md'` 32 px, radius 8,
     padding 0 16 (a form's bar); `'sm'` 28 px, radius 7, padding 0 12, 12.5 px / 500 (a row's button).
-  - `icon`: a Lucide node drawn 16 px before the words. `shortcut`: a `Kbd` after them, shown on `brand` only.
-  - A disabled button is `aria-disabled="true"` (it stays focusable), neutral grey (`fill`, `ink-3`), not pressed, no
-    shortcut. Every enabled button scales to 0.96 on press, 150 ms (§8).
+  - `icon`: a Lucide node drawn 16 px before the words. `shortcut`: a `Kbd` after them, shown on `brand` and `neutral`
+    while enabled; `raised` keeps its own measure (26 px, padding 0 10) whatever `size` says.
+  - A disabled button is `aria-disabled="true"` (it stays focusable) and keeps its size's neutral ground (`button` at
+    `sm` / `md`, `fill` at `lg`) with `ink-3` words, not pressed, no shortcut. `busy` puts a spinner in place of the
+    leading icon (before the words when there is none) with `aria-busy`, not pressed. Every enabled button scales to
+    0.96 on press, 150 ms (§8).
 - **`Kbd`** — `Kbd({ children })`: 11 px / 500, padding 3 × 5, radius 5; on a brand button `brand-chip` behind
   `on-brand`, elsewhere `ink` at 9 % behind `ink-2`.
 - **`Field`** — `Field({ label, hint, error, children })` wraps one control and wires `aria-describedby` / `aria-invalid`;
@@ -2254,7 +2257,7 @@ In `src/ui/controls/` and `src/styles/controls.css`, every value a role of `src/
 - **`Radio`** — the 16 px mark (`.radio`: a 1.5 px `ink-3` ring, `ink` when chosen, its dot growing from the centre in
   150 ms) inside any element that carries `role="radio"` and `aria-checked`; the group's arrows are `radioKeys`.
 - **`Segmented`** — `Segmented({ label, value, options, onChange, fit = false, size = 'md', iconsOnly = false })`, options
-  `{ value, label, icon?, title?, disabled? }`. Equal segments slide their thumb by `translate` (`--i` / `--n`, the
+  `{ value, label, icon?: ReactNode, title?, disabled? }`. Equal segments slide their thumb by `translate` (`--i` / `--n`, the
   reader's `.seg`); `fit` segments take their words' widths and the thumb follows the chosen one by anchor positioning
   (`anchor-name` on it, `anchor-scope` on the control), its left edge and width moving 220 ms on `--ease`. A radio group:
   the arrows move the choice (`radioKeys`); a disabled segment is passed over and greyed with its `title`.
@@ -2263,11 +2266,18 @@ In `src/ui/controls/` and `src/styles/controls.css`, every value a role of `src/
   - `layout: 'inline' | 'two-line'` (the hint under the name, 11.5 px `ink-2`, the item at least 40 px);
   - `item.action?: { label, busy? }` — a neutral `sm` button inside the row (the Chrome pack's 下载), a spinner while busy;
   - `item.preview?: CSSProperties` — a sample drawn in that style at the row's trailing end (the style menu);
-  - `item.manage?: true` — the 管理… last row: `ink-2`, no check, a separator before it, never chosen.
+  - `item.manage?: true` — the 管理… last row: `ink-2`, no check, a separator before it, never chosen;
+  - `item.lang?: string` — set on the item's name (a language's own name, a sample in another script);
+  - an action button on the active row takes the `lift` ground; the prop that answers it is Part 3's plan's.
 - **The pages' base** — the class `ui` on the popup's and the settings page's root: the font, `ink` on the page's ground,
   the keyboard's focus ring (`:focus-visible` 2 px `focus`, offset 2), text fields ringed only for the keyboard; both
-  pages call `trackModality()` before their first paint. The old pages, which lack the class, are untouched until they
-  are replaced.
+  pages call `trackModality()` before their first paint. The class paints no ground: each page paints its own. The old
+  pages, which lack the class, are untouched until they are replaced.
+- **Tokens and motions Part 3 adds for both pages**: the roles `group-hover` (`$n-3`) and `on-brand-2` (white 85 % in
+  light, white in dark), with their contrast pairs; the reader's `words-in` moved into `controls.css`. The parallel
+  parts add no tokens: a role either needs later is raised with the controller.
+- **The worktrees**: `.worktrees/redesign-popup` (branch `exp/ui-popup`) and `.worktrees/redesign-settings` (branch
+  `exp/ui-settings`), created by the controller from Part 3's last commit.
 
 Each part's plan cites these names exactly; a need the interfaces do not meet is raised with the controller, not
 worked around in a page.
