@@ -15,7 +15,7 @@
 //   polls would make the poll's stale and the command refused (local review).
 // - A settings change while the page is on restarts it in place, once the background's chain reflects the save; a
 //   choice that cannot run only saves, and the view shows the page as behind the settings.
-import { type Config, DEFAULT_CONFIG, MODE_VALUES } from '@/config/schema'
+import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { isBuiltInService, isLlmChosen } from '@/config/services'
 import type { Mode } from '@/core/renderer'
 import { promptExists } from '@/providers/prompt-library'
@@ -372,9 +372,7 @@ export function createPopupState(host: PopupHost): PopupState {
       await patchConfig(latest => ({ ...latest, reading: { ...latest.reading, sentenceHighlight: enabled } }))
     }),
     setImages: enabled => void guard(async () => {
-      // A reader who had unticked every mode migrates with an empty list; switching image
-      // translation back on then shows as enabled while no mode can run it (Codex on #157)
-      await patchConfig(latest => ({ ...latest, image: { enabled, modes: enabled && latest.image.modes.length === 0 ? [...MODE_VALUES] : latest.image.modes } }))
+      await patchConfig(latest => ({ ...latest, image: { enabled } }))
     }),
     // From the click itself (shared/pack.ts says why); the menu shows a spinner meanwhile
     downloadPack: () => void guard(async () => {

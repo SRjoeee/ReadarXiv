@@ -154,8 +154,10 @@ configuration too, so no value the reader cannot see keeps changing behaviour.
   entered as it first shows). The scheduler keeps its numbers as constants (`ON_DEMAND_MARGIN = 1000`,
   `ENTER_THRESHOLD = 0`); **whole** is today's `all`. What two and three screens did, and a later start, is gone
   (§11).
-- **Figure text in every display**: the overlays' display gate goes with the field — `setImageModes`, its style rule
-  and the session's and the reader's `modes.includes(...)` checks. `image.enabled` stays the one switch.
+- **Figure text in every display**: while `image.enabled`, the session gives the overlays' display gate every display
+  (`setImageModes(doc, MODE_VALUES)`), and the session's and the reader's `modes.includes(...)` checks become
+  `image.enabled`. The gate's attribute and its style rules stay: their specificity is measured and argued in
+  `image.css` and `modes.css`, and rewriting them buys nothing (the plan's Task 9). `image.enabled` stays the one switch.
 - **Highlights** keep their data (`appearance.highlights`, `activeHighlight`): the settings page shows them as
   swatches, as the reader already does (§6.4).
 - **Services** keep their data. A service can no longer be added without a successful connection (§6.3), but a

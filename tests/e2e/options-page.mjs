@@ -93,18 +93,6 @@ export async function setSwitch(options, name, on) {
   throw new Error(`switch ${name} never became ${on}`)
 }
 
-/** The image modes are ordinary checkboxes in the services section */
-export async function setImageMode(options, name, on) {
-  await openSection(options, 'services')
-  const box = options.getByRole('checkbox', { name, exact: true })
-  for (let i = 0; i < 20; i++) {
-    if (await box.isChecked() === on) return
-    await box.click()
-    await sleep(150)
-  }
-  throw new Error(`image mode ${name} never became ${on}`)
-}
-
 /** Choose an appearance profile by the name on its tile */
 export async function chooseStyle(options, name) {
   await openSection(options, 'reading')

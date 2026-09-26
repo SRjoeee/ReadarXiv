@@ -137,8 +137,6 @@ const O: Locale['O'] = {
     add: 'Add a service',
     edit: 'Edit',
     imagesHint: 'The translation sits over the figure; hover to see the original',
-    imageModes: 'Show image translations in these modes',
-    imageModesHint: 'Display only: switching to a mode that is unticked hides the overlays and switching back shows them again, with nothing read a second time',
     autoFallback: 'Fall back to a free service on trouble',
     autoFallbackHint: 'An expired key, a spent quota or a dropped connection will not stop the translation',
     name: 'Name',

@@ -7,7 +7,7 @@
 // `alive()`; after `restore()` or a restart, results that arrive late are dropped there.
 import { type RenderPath, wireFormatOf } from '@/cache/key'
 import { type Look, lookOf } from '@/config/appearance'
-import { DEFAULT_CONFIG, type Config } from '@/config/schema'
+import { DEFAULT_CONFIG, MODE_VALUES, type Config } from '@/config/schema'
 import type { Block } from '@/core/extractor'
 import type { PaperContext } from '@/core/extractor/context'
 import { collectImageTargets, startImageTranslation, type ImageBytes, type ImageRun, type ImageTarget } from '@/core/image'
@@ -338,7 +338,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       preload: preloadOf(config.preload),
       // A figure's text — the labels inside a picture, blocks like any other (§15.6) — is asked for where the reader
       // has figures translated, the images' gate: refused, a label waits unasked and the gate opening offers it again
-      admit: block => !isFigureText(block.el) || (started.config.image.enabled && started.config.image.modes.includes(started.modes.effective())),
+      admit: block => !isFigureText(block.el) || started.config.image.enabled,
       // The blocks this batch just touched go to the tidy layer: only their containers are touched, no whole-paper re-scan per pass (issue #46)
       onRendered: rendered => {
         if (!alive()) return
@@ -400,9 +400,10 @@ export function createPageSession(deps: SessionDeps): PageSession {
     // off first: with image translation off or the target language changed, the old ones must not
     // show; the new round replaces them when it reaches the image (Codex on #89)
     setImageModes(doc, [])
-    if (!config.image.enabled || config.image.modes.length === 0) return null
-    // The display gate is a figure's text's too (§15.6), and that needs no round: a paper may hold pictures and not one image
-    setImageModes(doc, config.image.modes)
+    if (!config.image.enabled) return null
+    // The display gate is on while figures are translated, in every display (the redesign's design, §4), and a figure's
+    // text needs it too (§15.6): a paper may hold pictures and not one image
+    setImageModes(doc, MODE_VALUES)
     if (!paper) return null
     const targets = collectImageTargets(doc)
     if (targets.length === 0) return null
@@ -434,7 +435,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
       onTrace: line => trace(line),
       ...(deps.fetchImage ? { fetchBytes: deps.fetchImage } : {}),
       // The mode gate, the same for both kinds of image
-      isEnabled: () => config.image.enabled && config.image.modes.includes(session.modes.effective()),
+      isEnabled: () => config.image.enabled,
       isCurrent: alive,
       onProgress: p => {
         if (!alive()) return
@@ -447,7 +448,7 @@ export function createPageSession(deps: SessionDeps): PageSession {
         prep.touch(rendered)
       },
     })
-    trace(`images: ${targets.filter(t => t.kind === 'svg').length} SVG + ${targets.filter(t => t.kind === 'raster').length} bitmaps, modes ${config.image.modes.join('/')}`)
+    trace(`images: ${targets.filter(t => t.kind === 'svg').length} SVG + ${targets.filter(t => t.kind === 'raster').length} bitmaps`)
 
     const round: ImageRound = { run, targets, progress: () => progress }
     return round
@@ -563,12 +564,9 @@ export function createPageSession(deps: SessionDeps): PageSession {
       live.images?.run.release()
     }
     if (live) live.config = { ...live.config, preload: config.preload }
-    // Image translation, both the switch (popup) and the per-mode list (settings): on starts the
-    // image run for this session, off stops it and hides every overlay through the display gate,
-    // and a change to the modes has to reach both the gate and the run that reads it — otherwise
-    // unticking the current mode leaves the overlays up and keeps requesting (Codex on #157).
-    // The text run is not touched either way
-    if (live?.run && (config.image.enabled !== live.config.image.enabled || config.image.modes.join(' ') !== live.config.image.modes.join(' '))) {
+    // Image translation, the switch (popup): on starts the image run for this session, off stops it
+    // and hides every overlay through the display gate. The text run is not touched either way
+    if (live?.run && config.image.enabled !== live.config.image.enabled) {
       live.config = config
       // The round is replaced whole: stopped, out of the record, its display gate closed — and a new one only when
       // image translation is still on

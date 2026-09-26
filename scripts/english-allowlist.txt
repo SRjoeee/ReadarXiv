@@ -69,8 +69,8 @@ tests/config/languages.test.ts 3
 tests/config/storage.test.ts 20  # raised 2026-09-17: the migration test starting from v8 carries a glossary entry with a Chinese translation in and out — the non-Latin value a migration must not mangle
 tests/core/marks.test.ts 8
 tests/e2e/a11y.mjs 2
-tests/e2e/extension.mjs 77  # raised 2026-09-17: the whole-paper preload check clicks two more stop labels and the cache check waits for the zero-count line; the unreadable-settings check locates the notice, its reset and the section that must be absent by their labels
-tests/e2e/image.mjs 17  # 2026-09-21: +4, the loose-graphic section (2609.20818v1's teaser) switches modes and ticks the image modes by the popup's and the settings page's Chinese labels, as the rest of the script does
+tests/e2e/extension.mjs 69  # lowered 2026-09-26: image translation is one switch, the per-display mode gate check is gone (the redesign's design, §4)
+tests/e2e/image.mjs 11  # lowered 2026-09-26: image translation is one switch, the mode-gate section and the per-mode loops are gone (the redesign's design, §4)
 tests/e2e/layout.mjs 11  # 2026-09-20: +2, the reader's-place check finds the popup's mode, translate and restore buttons by their Chinese labels, as the rest of the suite does; 2026-09-21: +1, the figure viewer's restore-under-the-dialog check presses the popup's restore button by its label
 tests/e2e/local-endpoint.mjs 2
 tests/e2e/floating-button.mjs 6  # 2026-09-18: the settings switch, the main button's two labels, and the popup's button inside the control panel on a PDF and on the full text, located and checked by their Chinese copy, as the other suites locate controls (issue #169); 2026-09-25: the panel's two entries on the abstract page too, which its main button now opens (the reader's design, §2)

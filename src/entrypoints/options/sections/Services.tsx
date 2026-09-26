@@ -2,19 +2,16 @@
 // language and image translation. Choosing is one click and takes effect at once.
 import { useState } from 'react'
 import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, type LangCode } from '@/config/languages'
-import { MODE_VALUES } from '@/config/schema'
 import type { Service } from '@/config/services'
 import { supportsTarget } from '@/providers/microsoft'
 import { Button } from '@/ui/Button'
 import { MenuField } from '@/ui/MenuField'
 import { Row } from '@/ui/Field'
 import { Switch } from '@/ui/Switch'
-import { MODE_ORDER, O, S, languageLabel, languageName } from '@/ui/strings'
+import { O, S, languageLabel, languageName } from '@/ui/strings'
 import type { OptionsData } from '../data'
 import { ServiceDrawer } from './ServiceDrawer'
 
-/** Read at render, not at import: the pack is chosen after this module loads (ui/strings.ts) */
-const modeName = (mode: (typeof MODE_VALUES)[number]): string => S.mode[mode]
 /** The radio's own look, so the control the reader clicks is the control itself */
 const RADIO = 'size-3.5 shrink-0 appearance-none rounded-full border-[1.5px] border-line checked:border-[5px] checked:border-accent disabled:opacity-40'
 
@@ -107,30 +104,8 @@ export function Services({ data }: { data: OptionsData }) {
       <h3 className="mb-2 mt-8 text-[14px] font-bold">{S.rows.images}</h3>
       <div className="rounded-card border border-line bg-card px-3.5">
         <Row label={S.rows.images} hint={O.services.imagesHint}>
-          {/* A reader who had unticked every mode migrates with an empty list; switching image
-              translation back on would show as enabled while no mode can run it (Codex on #157) */}
-          <Switch checked={config.image.enabled} onChange={on => void patch(latest => ({ ...latest, image: { enabled: on, modes: on && latest.image.modes.length === 0 ? [...MODE_VALUES] : latest.image.modes } }))} label={S.rows.images} />
+          <Switch checked={config.image.enabled} onChange={on => void patch(latest => ({ ...latest, image: { enabled: on } }))} label={S.rows.images} />
         </Row>
-        <fieldset className="border-0 border-t border-line p-0 py-3">
-          <legend className="p-0 text-[12px] font-semibold text-fg-2">{O.services.imageModes}</legend>
-          <span className="mt-2 flex gap-4">
-            {MODE_ORDER.map(mode => (
-              <label key={mode} className="flex cursor-pointer items-center gap-1.5 text-[12px]">
-                <input
-                  type="checkbox"
-                  className="accent-accent"
-                  checked={config.image.modes.includes(mode)}
-                  // The value has to be read here, not inside `patch`: that callback runs after a
-                  // round trip through storage, by which time React has repainted the box from the
-                  // config it still holds and `e.target.checked` is the old value again
-                  onChange={e => { const on = e.target.checked; void patch(latest => ({ ...latest, image: { ...latest.image, modes: MODE_VALUES.filter(m => (m === mode ? on : latest.image.modes.includes(m))) } })) }}
-                />
-                {modeName(mode)}
-              </label>
-            ))}
-          </span>
-          <span className="mt-2 block text-[11px] text-fg-2">{O.services.imageModesHint}</span>
-        </fieldset>
       </div>
 
       {editing && <ServiceDrawer service={editingService} patch={patch} onClose={() => setEditing(null)} />}

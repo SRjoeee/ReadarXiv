@@ -7,7 +7,7 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
-import { addService, chooseBuiltIn, chooseLanguage, chooseStyle, chooseUiLanguage, clearKeyAndReconnect, openOptions, openSection, pick, setImageMode, setPreload, setSwitch } from './options-page.mjs'
+import { addService, chooseBuiltIn, chooseLanguage, chooseStyle, chooseUiLanguage, clearKeyAndReconnect, openOptions, openSection, pick, setPreload, setSwitch } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -276,28 +276,6 @@ check('the settings page: the whole paper chosen is still chosen after a reload'
   await setSwitch(options, '对照高亮', true)
 }
 await setPreload(options, { range: '按需翻译' })
-
-// ── The settings page: the image translation mode gate (DESIGN §15) applies at once and survives a reload ──────
-{
-  const names = ['上下', '左右', '仅译文']
-  const boxOf = name => options.getByRole('checkbox', { name, exact: true })
-  await openSection(options, 'services')
-  // Nothing has to be set up for figures to be translated (§15.3), so the checkboxes are usable from the first moment
-  const enabled = await boxOf('上下').isEnabled()
-  check('the settings page: the image translation modes can be ticked from the first moment', enabled === true, `enabled ${enabled}`)
-
-  if (!process.env.AXT_E2E_IMAGES) {
-    await setImageMode(options, '上下', true)
-    await setImageMode(options, '左右', false)
-    await setImageMode(options, '仅译文', false)
-    await options.reload({ waitUntil: 'domcontentloaded' })
-    await openSection(options, 'services')
-    await boxOf('上下').waitFor({ timeout: 5_000 })
-    const states = await Promise.all(names.map(n => boxOf(n).isChecked()))
-    check('the settings page: image translation with only “Stacked” ticked is still that one after a reload', JSON.stringify(states) === JSON.stringify([true, false, false]), `read back ${states.join(',')}`)
-    await setImageMode(options, '上下', false)
-  }
-}
 
 // ── The target language changed on the settings page follows into an open popup without reopening it ──────────────────────
 // The popup and the settings page each hold a copy of the configuration and used to echo only their own writes. The paper tab stays in front (the popup looks at the active tab),
@@ -719,7 +697,6 @@ check('the settings page: after deleting the custom prompt the default is chosen
 {
   await options.bringToFront()
   await setSwitch(options, '图片翻译', true)
-  await setImageMode(options, '上下', true)
 
   const { page, logs } = await openPaper(SVG_PAPER, GOOGLE)
   await waitForLog(logs, IDLE, 120_000)

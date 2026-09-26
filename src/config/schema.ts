@@ -100,11 +100,10 @@ export const configSchema = z.object({
    */
   reading: z.object({ sentenceHighlight: z.boolean(), openIn: z.enum(['new-tab', 'same-tab']) }),
   /**
-   * Image translation (§15). `enabled` is the reader's switch (popup, v11); `modes` says in which
-   * display modes the overlays show, a detail kept on the options page. Both are display gates:
-   * switching to a mode that is off only hides the overlays, nothing is re-requested
+   * Image translation (§15): one switch, the popup's and the settings page's. Figure text shows in every display
+   * (v20; the redesign's design, §4): until v20 a list of displays gated it, a choice nobody needed
    */
-  image: z.object({ enabled: z.boolean(), modes: z.array(modeSchema).max(3) }),
+  image: z.object({ enabled: z.boolean() }),
   /**
    * The **interface's** language (v13), not the paper's: a reader may translate into Japanese and
    * still want the buttons in Japanese, or in English, and neither choice implies the other.
@@ -145,7 +144,7 @@ export const DEFAULT_CONFIG: Config = {
   prompts: DEFAULT_PROMPTS_CONFIG,
   preload: 'on-demand',
   reading: { sentenceHighlight: true, openIn: 'new-tab' },
-  image: { enabled: true, modes: [...MODE_VALUES] },
+  image: { enabled: true },
   uiLanguage: 'auto',
   pdfReader: { ...DEFAULT_PDF_READER },
   theme: 'system',

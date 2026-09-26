@@ -694,8 +694,8 @@ describe('chainConfigChanged: which configuration changes rebuild the chain', ()
     expect(chainConfigChanged(base, { ...base, appearance: { ...base.appearance, activeStyle: 'green' } })).toBe(false)
     expect(chainConfigChanged(base, { ...base, preload: 'whole' })).toBe(false)
     expect(chainConfigChanged(base, { ...base, glossary: [{ term: 'token', translation: '词元' }] })).toBe(false)
-    // The image translation's mode gate (§15) is only a display gate; a reader unticking a mode mid-translation must not clear the queue
-    expect(chainConfigChanged(base, { ...base, image: { enabled: true, modes: ['side'] } })).toBe(false)
+    // The image translation switch (§15) only opens or closes a display gate; flipping it mid-translation must not clear the queue
+    expect(chainConfigChanged(base, { ...base, image: { enabled: false } })).toBe(false)
   })
 
   it('a changed engine, endpoint, model, key, target language, prompt or fallback switch rebuilds', () => {

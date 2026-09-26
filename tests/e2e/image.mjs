@@ -10,7 +10,7 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
-import { chooseBuiltIn, openOptions, setImageMode, setSwitch } from './options-page.mjs'
+import { chooseBuiltIn, openOptions, setSwitch } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -37,7 +37,6 @@ let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')
 const extId = worker.url().split('/')[2]
 
-const IDLE = /session idle: (\d+)\/(\d+) requested of (\d+)/
 const IMAGES_IDLE = /images idle: (\d+)\/(\d+) of (\d+), (\d+) failed/
 /** The image count content reports, SVG and bitmaps counted apart; both enter the same pipeline, and idle's denominator is their sum */
 const IMAGE_COUNTS = /\[axt\] images: (\d+) SVG \+ (\d+) bitmaps/
@@ -142,7 +141,6 @@ const coincide = (a, b) => near(a.x, b.x) && near(a.y, b.y) && near(a.w, b.w) &&
 const options = await openOptions(context, extId)
 await chooseBuiltIn(options, 'Google 翻译')
 await setSwitch(options, '图片翻译', true)
-for (const name of ['上下', '左右', '仅译文']) await setImageMode(options, name, true)
 
 // ── An SVG figure in a box of other proportions: the Transformer paper's attention figures ─────────────────────────────
 // arXiv sizes the <object> 476 × 254 and the drawing's viewBox is 319 × 217: the browser fits the drawing whole and
@@ -284,39 +282,11 @@ const after = await page.evaluate(() => ({
 check('restoring the original: zero overlays, zero injected nodes, zero data-axt-* attributes', after.overlays === 0 && after.injected === 0 && after.attrs === 0, JSON.stringify(after))
 await popup.close()
 
-// ── The mode gate: only side ticked; under stack an image entering the viewport waits and makes no request; it translates once switched to side ───────────
-await options.bringToFront()
-await setImageMode(options, '上下', false)
-await setImageMode(options, '仅译文', false)
-const page2 = await context.newPage()
-const logs2 = []
-page2.on('console', m => { const text = m.text(); if (text.includes('[axt]')) logs2.push({ t: Date.now(), text }) })
-await page2.goto(`https://arxiv.org/html/${PAPER}#readarxiv`, { waitUntil: 'domcontentloaded' })
-await waitForLog(logs2, IMAGE_COUNTS, 20_000)
-await scrollThrough(page2)
-await waitForLog(logs2, IDLE, 90_000)
-await sleep(1000)
-const parked = await page2.evaluate(() => document.querySelectorAll('.axt-img').length)
-const noImagesIdle = !logs2.some(l => IMAGES_IDLE.test(l.text))
-check('the mode gate: with stack unticked an image entering the viewport makes no request and gets no overlay', parked === 0 && noImagesIdle, `overlays ${parked}, images idle log ${noImagesIdle ? 'none' : 'present'}`)
-const popup2 = await context.newPage()
-await popup2.goto(`chrome-extension://${extId}/popup.html`)
-await page2.bringToFront()
-await popup2.getByRole('button', { name: '左右', exact: true }).waitFor({ timeout: 10_000 })
-await popup2.getByRole('button', { name: '左右', exact: true }).click()
-const resumed = await waitForLog(logs2, IMAGES_IDLE, 90_000, m => +m[1] + +m[4] >= 1)
-await sleep(1500)
-const afterResume = await page2.evaluate(PROBE)
-const resumedClones = afterResume.filter(p => p.inClone && p.overlay?.visible)
-check('the mode gate: after switching to side the waiting images are released and translated, and overlays appear in the copy', !!resumed && resumedClones.length >= 1, `${resumed?.text ?? 'no images idle'}; copy overlays ${resumedClones.length}`)
-await popup2.close()
-
 // ── A graphic loose in the text: the teaser of 2609.20818v1 is `div.ltx_para > img`, in no <figure> ─────────────────────
 // It had no root to be split by: its paragraph was mirrored as the session started, the overlay then lay on the original
 // and the mirror — inert as a whole, never made again — showed the figure untranslated, in side and in only alike
 {
   await options.bringToFront()
-  for (const name of ['上下', '左右', '仅译文']) await setImageMode(options, name, true)
   const loose = await context.newPage()
   await loose.goto('https://arxiv.org/html/2609.20818v1#readarxiv', { waitUntil: 'domcontentloaded' })
   const LOOSE = () => {

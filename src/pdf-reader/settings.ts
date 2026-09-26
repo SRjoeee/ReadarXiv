@@ -23,10 +23,9 @@ export function withDisplay(config: Config, display: EngineDisplay): Config {
   return { ...config, mode: modeOf(config, display), pdfReader: { ...config.pdfReader, original: false } }
 }
 
-/** figure text in a display: the switch on, and the display's mode among the modes ticked (as on the HTML page) */
+/** figure text in a display: every translated display, while the switch is on (the redesign's design, §4) */
 export function figuresShown(config: Config, display: EngineDisplay): boolean {
-  if (display === 'original' || !config.image.enabled) return false
-  return config.image.modes.includes(modeOf(config, display))
+  return display !== 'original' && config.image.enabled
 }
 
 export interface Follow {

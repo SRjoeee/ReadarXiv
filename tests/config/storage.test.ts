@@ -353,7 +353,7 @@ describe('provider selection', () => {
     const fresh = await import('@/config/storage')
     const c = await fresh.getConfig()
     expect(c.version).toBe(CONFIG_VERSION)
-    expect(c.image).toEqual({ enabled: true, modes: ['stack', 'side', 'only'] })
+    expect(c.image).toEqual({ enabled: true })
     // `quote` is one of the effects v12 dropped: the colour and opacity survive on “Same as the original”
     expect(c.appearance.activeStyle).toBe('follow')
     expect(c.services[0]?.apiKey).toBe('sk-keep')
@@ -490,10 +490,26 @@ describe('provider selection', () => {
     expect(configSchema.safeParse(missing).success).toBe(false)
   })
 
-  it('the image translation modes accept the three only, an empty array is valid (= off)', async () => {
-    await expect(setConfig({ ...DEFAULT_CONFIG, image: { enabled: true, modes: ['split' as never] } })).rejects.toThrow()
-    await setConfig({ ...DEFAULT_CONFIG, image: { enabled: true, modes: [] } })
-    expect((await getConfig()).image.modes).toEqual([])
+  it('image translation is one switch: v20 drops the per-display list (the redesign\'s design, §4)', async () => {
+    const v19 = { ...DEFAULT_CONFIG, version: 19, image: { enabled: true, modes: ['only'] }, pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance: 'system' } } as Record<string, unknown>
+    delete v19.theme
+    await fakeBrowser.storage.local.set({ config: v19, config$: { v: 19 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    expect((await fresh.getConfig()).image).toEqual({ enabled: true })
+    expect(fresh.configFallbackReason()).toBeNull()
+  })
+
+  it('a hand-edited image that is not an object is left for the schema to name, as any migration here does', async () => {
+    const v19 = { ...DEFAULT_CONFIG, version: 19, image: 'broken', pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance: 'system' } } as Record<string, unknown>
+    delete v19.theme
+    await fakeBrowser.storage.local.set({ config: v19, config$: { v: 19 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(fresh.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'image' })
+    // the next describe block reads storage through this file's static import: reset so it does not see this hand edit
+    fakeBrowser.reset()
   })
 
   // DESIGN §9 asks for a test from every previous version's stored shape. v8, v9 and v12 were only ever passed through
@@ -517,7 +533,7 @@ describe('provider selection', () => {
     expect(c.provider).toBe(c.services[0]?.id)
     expect([c.targetLanguage, c.mode, c.fallback.enabled]).toEqual(['jpn', 'stack', false])
     expect(c.glossary).toEqual([{ term: 'weights', translation: '权重' }])
-    expect(c.image).toEqual({ enabled: true, modes: ['side'] })
+    expect(c.image).toEqual({ enabled: true })
     // `none` was “as the original”: the profile of that name, untouched
     expect(c.appearance.activeStyle).toBe('follow')
     expect(c.appearance.styles.find(p => p.id === 'follow')).toEqual(DEFAULT_CONFIG.appearance.styles.find(p => p.id === 'follow'))
@@ -541,7 +557,7 @@ describe('provider selection', () => {
     expect(c.provider).toBe('google-web')
     expect(c.services).toEqual([])
     // Every mode unticked was “off”: the switch says so, the list stays what the reader left
-    expect(c.image).toEqual({ enabled: false, modes: [] })
+    expect(c.image).toEqual({ enabled: false })
   })
 
   it('a v15 configuration climbs to v16: the translation opens in a new tab, which is nobody\'s old choice to lose', async () => {
@@ -655,7 +671,7 @@ describe('provider selection', () => {
       const fresh = await import('@/config/storage')
       const c = await fresh.getConfig()
       expect(c.version).toBe(CONFIG_VERSION)
-      expect(c.image).toEqual({ enabled, modes })
+      expect(c.image).toEqual({ enabled })
       expect(c.services[0]?.apiKey).toBe('sk-keep')
     }
   })

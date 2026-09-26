@@ -148,8 +148,6 @@ const O = {
     add: '添加服务',
     edit: '编辑',
     imagesHint: '译文叠在图上，鼠标悬停查看原文',
-    imageModes: '在这些模式下显示图片译文',
-    imageModesHint: '只影响显示：切到没勾的模式时叠加层隐藏，切回来再显示，不重新识别',
     autoFallback: '出问题时自动改用免费服务',
     autoFallbackHint: 'API Key 失效、额度用尽或断网时，翻译不会停下',
     name: '名称',

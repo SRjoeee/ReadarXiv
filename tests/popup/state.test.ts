@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
-import { CONFIG_VERSION, type Config, DEFAULT_CONFIG, MODE_VALUES } from '@/config/schema'
+import { CONFIG_VERSION, type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { getConfig, setConfig } from '@/config/storage'
 import { type PopupHost, createPopupState } from '@/entrypoints/popup/state'
 import { MANAGE_SERVICES, MANAGE_STYLES } from '@/entrypoints/popup/view-model'
@@ -374,15 +374,12 @@ describe('the choices the page applies by itself are saved and nothing is sent',
     p.stop()
   })
 
-  it('switching images back on with every mode unticked ticks them all: enabled with no mode to run in shows as on and does nothing (Codex on #157)', async () => {
-    await setConfig({ ...BASE, image: { enabled: false, modes: [] } })
+  it('the image switch writes the switch alone', async () => {
+    await setConfig({ ...BASE, image: { enabled: false } })
     const p = await opened(w => { w.page = page('stopped', null) })
     p.popup.actions.setImages(true)
     await until(() => p.input().config?.image.enabled === true)
-    expect(p.input().config?.image.modes).toEqual([...MODE_VALUES])
-    p.popup.actions.setImages(false)
-    await until(() => p.input().config?.image.enabled === false)
-    expect(p.input().config?.image.modes).toEqual([...MODE_VALUES])
+    expect(p.input().config?.image).toEqual({ enabled: true })
     p.stop()
   })
 

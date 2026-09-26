@@ -48,7 +48,7 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
     10: (v9: Omit<Config, 'version'> & { version: 9 }) => ({ ...v9, version: 10 as const }),
     // v10 -> v11: the image switch the popup shows (`image.enabled`). Derived from what the reader
     // had: any mode ticked means it was on, an empty list means it was off
-    11: (v10: Omit<Config, 'version' | 'image'> & { version: 10; image: { modes: Config['image']['modes'] } }) =>
+    11: (v10: Omit<Config, 'version' | 'image'> & { version: 10; image: { modes: (typeof MODE_VALUES)[number][] } }) =>
       ({ ...v10, version: 11 as const, image: { enabled: v10.image.modes.length > 0, modes: v10.image.modes } }),
     // v11 -> v12: user-added services replace the single endpoint; appearance profiles replace the
     // preset. Total: every v11 value maps somewhere, so nothing falls back to defaults
@@ -112,7 +112,7 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
     // preload numbers become the two ways to translate — `all` is whole, a number on demand. A field that is not an
     // object, or a margin that is neither (a hand edit), is passed through for the schema to name, as every migration
     // here does — repairing it would hide the very thing the fallback exists to report (§9, S-O-02)
-    20: (v19: (Omit<Config, 'version' | 'theme' | 'preload' | 'pdfReader'> & { version: 19; pdfReader?: unknown; preload?: unknown }) | null) => {
+    20: (v19: (Omit<Config, 'version' | 'theme' | 'preload' | 'pdfReader' | 'image'> & { version: 19; pdfReader?: unknown; preload?: unknown; image?: unknown }) | null) => {
       if (typeof v19 !== 'object' || v19 === null) return v19
       const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
       const out: Record<string, unknown> = { ...v19, version: 20 as const, theme: 'system' }
@@ -130,6 +130,8 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
         else if (typeof margin === 'number') out.preload = 'on-demand'
         // else: left as the initial spread has it (the malformed object itself), for the schema to name
       }
+      // figure text shows in every display: the per-display list goes, the switch stays
+      if (isObject(v19.image)) out.image = { enabled: v19.image.enabled }
       return out
     },
   },
