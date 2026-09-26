@@ -69,7 +69,7 @@ tests/config/languages.test.ts 3
 tests/config/storage.test.ts 20  # raised 2026-09-17: the migration test starting from v8 carries a glossary entry with a Chinese translation in and out — the non-Latin value a migration must not mangle
 tests/core/marks.test.ts 8
 tests/e2e/a11y.mjs 2
-tests/e2e/extension.mjs 69  # lowered 2026-09-26: image translation is one switch, the per-display mode gate check is gone (the redesign's design, §4)
+tests/e2e/extension.mjs 71  # raised 2026-09-26: the cache-clearing locator now names the translation cache's own row and the PDF row it is told apart from (finding 4, Task 13)
 tests/e2e/image.mjs 11  # lowered 2026-09-26: image translation is one switch, the mode-gate section and the per-mode loops are gone (the redesign's design, §4)
 tests/e2e/layout.mjs 11  # 2026-09-20: +2, the reader's-place check finds the popup's mode, translate and restore buttons by their Chinese labels, as the rest of the suite does; 2026-09-21: +1, the figure viewer's restore-under-the-dialog check presses the popup's restore button by its label
 tests/e2e/local-endpoint.mjs 2
