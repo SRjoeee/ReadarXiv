@@ -630,7 +630,7 @@ the same thing, its string is reused (marked).
 | | 目标语言 · 搜索语言 · 翻译服务 | Target language · Search languages · Translation service |
 | | 阅读选项 | Reading options |
 | | 对照高亮 (S-P-80, reused) · 高亮颜色 · 图片翻译 (S-P-85, reused) | Hover highlight · Highlight colour · Images |
-| | 外观 · 浅色 · 深色 · 跟随系统 · 深色时调暗页面 | Appearance · Light · Dark · System · Dim pages in dark mode |
+| | 外观 · 跟随系统 · 浅色 · 深色 · 深色时调暗页面 | Appearance · System · Light · Dark · Dim pages in dark mode |
 | | 下载 · 译文 PDF · 原文 PDF | Download · Translation PDF · Original PDF |
 | | 设置 (S-P-02, reused) · 在默认查看器中打开 | Settings · Open in the default viewer |
 | Page pills | 原文页码 · 译文页码 · 上一页 · 下一页 | Original's page · Translation's page · Previous page · Next page |

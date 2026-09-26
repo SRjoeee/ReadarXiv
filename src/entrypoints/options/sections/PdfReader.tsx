@@ -8,7 +8,8 @@ import { Switch } from '@/ui/Switch'
 import { O, R } from '@/ui/strings'
 import type { OptionsData } from '../data'
 
-const APPEARANCES = ['light', 'dark', 'system'] as const
+/** the system's first, as in the reader's own options (ReadingOptions.tsx; the maintainer, 2026-09-26) */
+const APPEARANCES = ['system', 'light', 'dark'] as const
 
 export function PdfReader({ data }: { data: OptionsData }) {
   const { config, patch } = data
