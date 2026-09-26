@@ -226,8 +226,8 @@ narrowed across to 0.76 of its width (to 6.74 px, beside A's 6.47; the maintaine
 and the weight that takes from its verticals and diagonals is given back by a 0.18 px stroke round its outline (round
 11: 9 px, 0.8 and 0.16 before; its measurements are with the round's files). The
 outlines are produced by a script from the font (kept with the reader's code) and committed as path data; the font's
-licence goes into `docs/THIRD_PARTY.md`. The maintainer may refine 文 by hand later (「这个之后有时间我们再改」); editable
-SVGs of the three icons and of 文's full-width source outline were handed over for that.
+licence goes into `docs/THIRD_PARTY.md`. These are the final glyphs: the hand refinement once left for later was dropped
+by the maintainer (2026-09-26).
 
 Rejected on the way, so that nobody tries them again: words (their width changes with the language); letter pairs and
 panes marked by drawn letters (「文字的都设计太差了」); left half / right half for the single displays (which side is
@@ -646,5 +646,5 @@ the same thing, its string is reused (marked).
 
 ## 16. Open and deferred
 
-- 文 may be refined by hand (§6.2); the committed path data is replaced when it is.
 - Jump back (#300), the engine's TypeScript port and #299: the next stage.
+- A service changed while a paper is translating takes effect on the next visit. Decided (maintainer, 2026-09-26), not built: the capsule says so and offers to translate again now or to leave it for the next visit.
