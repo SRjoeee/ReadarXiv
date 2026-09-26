@@ -57,6 +57,8 @@ export const ROLES = {
   page: '$n-1',
   /** the popup's grouped rows and its notes */
   group: '$n-2',
+  /** a hovered or open row in the popup's group (§5.1; the controller's ruling 9): a step under the group, both themes */
+  'group-hover': '$n-3',
   button: { light: '$n-2', dark: '$n-4' },
   /** the small button asking to confirm a destructive action: its words in danger read 4.83:1 and 5.01:1 on it */
   'button-danger': { light: '$n-2', dark: '$n-3' },
@@ -68,6 +70,9 @@ export const ROLES = {
   /** the logo's red, #AA142D; the one primary action's fill */
   brand: { light: 'oklch(0.474 0.18 20.5)', dark: 'oklch(0.56 0.19 20.5)' },
   'on-brand': 'oklch(1 0 0)',
+  /** words on the brand told apart from its words by a lighter white and their weight (P0's paper id, §5.4): 85 % white
+   *  in light (5.65:1), white in dark, where 85 % read 4.10:1 */
+  'on-brand-2': { light: 'oklch(1 0 0 / 0.85)', dark: 'oklch(1 0 0)' },
   /** a shortcut label on the brand (the maintainer, 2026-09-26: round 2's light label) */
   'brand-chip': { light: 'oklch(1 0 0 / 0.18)', dark: 'oklch(1 0 0 / 0.08)' },
   success: { light: 'oklch(0.62 0.14 150)', dark: 'oklch(0.72 0.14 150)' },

@@ -48,6 +48,10 @@
 @keyframes tip-in { from { opacity: 0; } }
 @keyframes pop-in { from { opacity: 0; scale: 0.97; translate: 0 -4px; } }
 @media (prefers-reduced-motion: reduce) { @keyframes pop-in { from { opacity: 0; } } }
+/* a line of words that takes another's place (the reader's capsule; the settings page's description, §8): 3 px up and
+   in, 180 ms where it is named; a fade alone under reduced motion. Moved from reader.css unchanged (Part 3) */
+@keyframes words-in { from { opacity: 0; translate: 0 3px; } }
+@media (prefers-reduced-motion: reduce) { @keyframes words-in { from { opacity: 0; } } }
 @media (prefers-reduced-motion: reduce) { .seg .thumb { transition: none; } .switch::after { transition: none; } }
 /* forced colours (Windows' contrast themes) drop the fills and the rings: the chosen segment and a switch that is on
    take the system's Highlight, as a selection does */

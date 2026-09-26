@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { rules } from './css-rules'
 
 /** the reader's sheet and the shared sheets it imports: the tokens (the redesign's design, §2.2) and the controls. A sheet renamed or gone fails here */
 const SHEET = ['../../src/entrypoints/pdf-reader/reader.css', '../../src/styles/tokens.css', '../../src/styles/controls.css']
@@ -12,26 +13,6 @@ const SHEET = ['../../src/entrypoints/pdf-reader/reader.css', '../../src/styles/
   .join('\n')
   .replace(/\/\*[\s\S]*?\*\//g, '')
 
-/** every style rule: its selector, its declarations, and the at-rules it sits in (a statement ends at `;`) */
-function rules(css: string) {
-  const out: { selector: string; body: string; within: string[] }[] = []
-  const stack: string[] = []
-  let start = 0
-  for (let i = 0; i < css.length; i++) {
-    const c = css[i]
-    if (c === ';') start = i + 1
-    else if (c === '}') { stack.pop(); start = i + 1 }
-    else if (c === '{') {
-      const prelude = css.slice(start, i).trim()
-      if (prelude.startsWith('@')) { stack.push(prelude); start = i + 1; continue }
-      const end = css.indexOf('}', i)
-      out.push({ selector: prelude, body: css.slice(i + 1, end), within: [...stack] })
-      i = end
-      start = end + 1
-    }
-  }
-  return out
-}
 const all = rules(SHEET)
 
 describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {

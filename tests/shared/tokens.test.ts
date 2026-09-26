@@ -37,6 +37,12 @@ describe('the token source', () => {
     ])
   })
 
+  it('holds the two roles the pages add (Part 3; ruling 9): a hovered or open row in the popup\'s group, and P0\'s paper id', () => {
+    const both = (name: string) => [resolve(name, 'light'), resolve(name, 'dark')]
+    expect(both('group-hover')).toEqual(both('n-3'))
+    expect(both('on-brand-2')).toEqual(['oklch(1 0 0 / 0.85)', 'oklch(1 0 0)'])
+  })
+
   it('writes the pages\' sheet with the reader\'s selectors: light, the system\'s dark unless light is chosen, dark chosen', () => {
     const css = tokenSheet('page')
     expect(css).toContain(':root,\n[data-theme="light"] {\n  color-scheme: light;')

@@ -13,9 +13,12 @@ const stack = (layers: string[], mode: Mode): Rgba =>
 const PAIRS: { what: string; fg: string; bg: string[]; floor: number; modes?: Mode[] }[] = [
   { what: 'words on the brand', fg: 'on-brand', bg: ['brand'], floor: 4.5 },
   { what: 'a shortcut label on the brand', fg: 'on-brand', bg: ['brand-chip', 'brand'], floor: 4.5 },
-  { what: 'P0\'s paper id at 85 % white, light only (§5.4)', fg: 'oklch(1 0 0 / 0.85)', bg: ['brand'], floor: 4.5, modes: ['light'] },
+  { what: 'P0\'s paper id: on-brand-2, 85 % white in light and white in dark (§5.4)', fg: 'on-brand-2', bg: ['brand'], floor: 4.5 },
   { what: 'a value in the popup\'s group', fg: 'ink-2', bg: ['group'], floor: 4.5 },
   { what: 'a chevron in the popup\'s group', fg: 'ink-3', bg: ['group'], floor: 3 },
+  { what: 'a hovered or open row\'s label in the popup\'s group', fg: 'ink', bg: ['group-hover'], floor: 4.5 },
+  { what: 'a hovered or open row\'s value', fg: 'ink-2', bg: ['group-hover'], floor: 4.5 },
+  { what: 'a hovered or open row\'s chevron', fg: 'ink-3', bg: ['group-hover'], floor: 3 },
   { what: 'a placeholder on a field', fg: 'ink-2', bg: ['field'], floor: 4.5 },
   { what: 'a destructive confirm\'s words', fg: 'danger', bg: ['button-danger'], floor: 4.5 },
   { what: 'an alert\'s icon in a note', fg: 'danger', bg: ['group'], floor: 3 },

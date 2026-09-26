@@ -65,4 +65,31 @@
   --font-ui: system-ui, "PingFang SC", "Noto Sans SC", sans-serif;
 }
 
+/* the roles as Tailwind's colours and shadows, for the pages' own layouts (the redesign's design, §2.2), under the
+   reader's names (reader.css) — but the hairline is `chrome-line`: `line` is the old pages' until Part 7 retires them */
+@theme inline {
+  --color-canvas: var(--canvas); --color-chrome: var(--chrome); --color-chrome-line: var(--chrome-line); --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink); --color-ink-2: var(--ink-2); --color-ink-3: var(--ink-3);
+  --color-fill: var(--fill); --color-well: var(--well); --color-lift: var(--lift); --color-float: var(--float-bg);
+  --color-focus: var(--focus); --color-danger: var(--danger); --color-success: var(--success); --color-mark: var(--mark);
+  --color-page: var(--page); --color-group: var(--group); --color-group-hover: var(--group-hover); --color-field: var(--field); --color-field-edge: var(--field-edge);
+  --color-button: var(--button); --color-button-danger: var(--button-danger); --color-button-raised: var(--button-raised);
+  --color-brand: var(--brand); --color-on-brand: var(--on-brand); --color-on-brand-2: var(--on-brand-2); --color-brand-chip: var(--brand-chip);
+  --shadow-page: var(--page-shadow); --shadow-float: var(--float-shadow); --shadow-pop: var(--pop-shadow); --shadow-card: var(--card-shadow); --shadow-raised: var(--raised-shadow);
+}
+
+/* the pages' base (Part 3's interfaces): a root marked `ui` — the new popup's, the new settings page's — draws in the
+   extension's font and ink, its buttons take the pointer, and its focus is ringed for the keyboard alone: 2 px of the
+   focus ink, 2 px off; a text field's ring hugs it, and there is none under the pointer, whose caret and edge say where
+   the focus is (controls/modality.ts; the reader's `.chrome` does the same). It paints no ground: each page paints its
+   own (the popup `chrome`, the settings page `page`). The old pages have no such root, and nothing here reaches them */
+@layer base {
+  .ui { color: var(--ink); font: 13px/1.4 var(--font); -webkit-font-smoothing: antialiased; }
+  .ui button { cursor: pointer; }
+  .ui [aria-disabled="true"] { cursor: default; }
+  .ui :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .ui :is(input, textarea):focus-visible { outline-offset: 0; }
+  html[data-axt-pointer] .ui :is(input, textarea):focus-visible { outline: none; }
+}
+
 @keyframes axt-spin { to { transform: rotate(360deg); } }

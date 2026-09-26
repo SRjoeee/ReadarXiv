@@ -214,11 +214,9 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
 @media (prefers-reduced-motion: reduce) { .pill, .indicator { transition: none; } }
 @keyframes capsule-in { from { opacity: 0; translate: 0 10px; scale: 0.96; } }
 @keyframes capsule-out { to { opacity: 0; translate: 0 6px; } }
-@keyframes words-in { from { opacity: 0; translate: 0 3px; } }
 @media (prefers-reduced-motion: reduce) {
   @keyframes capsule-in { from { opacity: 0; } }
   @keyframes capsule-out { to { opacity: 0; } }
-  @keyframes words-in { from { opacity: 0; } }
 }
 /* the rest of the chrome's movements, each a fade or nothing when the reader asks for less motion (§4.2; Part 6's
    accessibility audit): the contents slide in at once, the capsule does not travel with them, the link's arrow does
