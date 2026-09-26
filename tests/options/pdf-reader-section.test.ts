@@ -48,9 +48,10 @@ describe('the PDF reader section', () => {
       { ...DEFAULT_CONFIG.pdfReader, enabled: false },
       { ...DEFAULT_CONFIG.pdfReader, sync: false },
       { ...DEFAULT_CONFIG.pdfReader, dimPages: false },
-      { ...DEFAULT_CONFIG.pdfReader, appearance: 'dark' },
+      DEFAULT_CONFIG.pdfReader,
     ])
-    expect(patches.every(p => JSON.stringify({ ...p, pdfReader: null }) === JSON.stringify({ ...DEFAULT_CONFIG, pdfReader: null }))).toBe(true)
+    expect(patches.at(-1)?.theme).toBe('dark')
+    expect(patches.every(p => JSON.stringify({ ...p, pdfReader: null, theme: null }) === JSON.stringify({ ...DEFAULT_CONFIG, pdfReader: null, theme: null }))).toBe(true)
     await mounted.unmount()
   })
 })

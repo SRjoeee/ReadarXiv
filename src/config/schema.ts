@@ -7,7 +7,7 @@ import { DEFAULT_APPEARANCE, appearanceSchema } from './appearance'
 import { BUILT_IN_SERVICES, SERVICE_ID_RE, serviceSchema } from './services'
 import { DEFAULT_LANG_CODE, langCodeSchema } from './languages'
 
-export const CONFIG_VERSION = 19
+export const CONFIG_VERSION = 20
 
 /** The three reading modes (DESIGN §7); `mode` is shared with the image translation's mode gate */
 export const MODE_VALUES = ['stack', 'side', 'only'] as const
@@ -43,10 +43,10 @@ export function normalizeGlossary(value: unknown): { term: string; translation: 
 /**
  * The PDF reader's own settings (the reader's design, §9.1; v19): whether arXiv's PDFs open in it; whether it was last
  * left on the original alone (the HTML page's translation-on is its tab's session, not a setting); whether its sides
- * scroll together and are swapped; and its appearance — the extension's pages follow the system, the reader lets its
- * reader choose, and dim the pages in the dark
+ * scroll together and are swapped; and whether the pages dim in the dark. Its appearance moved to `theme` at v20 —
+ * one setting for every surface the extension draws, not the reader's alone
  */
-export const DEFAULT_PDF_READER = { enabled: true, original: false, sync: true, swapped: false, appearance: 'system', dimPages: true } as const
+export const DEFAULT_PDF_READER = { enabled: true, original: false, sync: true, swapped: false, dimPages: true } as const
 
 export const configSchema = z.object({
   version: z.literal(CONFIG_VERSION),
@@ -121,9 +121,14 @@ export const configSchema = z.object({
     original: z.boolean(),
     sync: z.boolean(),
     swapped: z.boolean(),
-    appearance: z.enum(['light', 'dark', 'system']),
     dimPages: z.boolean(),
   }),
+  /**
+   * The appearance of every surface the extension draws (v20; the redesign's design, §3): the popup, the settings page,
+   * the reader and the floating button. `system` follows the browser's colour scheme. Until v20 the reader alone had one
+   * (`pdfReader.appearance`), which the migration carries here
+   */
+  theme: z.enum(['system', 'light', 'dark']),
 })
 
 export type Config = z.infer<typeof configSchema>
@@ -146,4 +151,5 @@ export const DEFAULT_CONFIG: Config = {
   image: { enabled: true, modes: [...MODE_VALUES] },
   uiLanguage: 'auto',
   pdfReader: { ...DEFAULT_PDF_READER },
+  theme: 'system',
 }

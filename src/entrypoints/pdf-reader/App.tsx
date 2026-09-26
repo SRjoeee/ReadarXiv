@@ -20,7 +20,7 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   const left = useRef<HTMLDivElement>(null)
   const right = useRef<HTMLDivElement>(null)
   // what the page itself shows; each part below takes its own (use-reader.ts)
-  const state = useReader(controller, s => ({ appearance: s.settings?.pdfReader.appearance, dimPages: s.settings?.pdfReader.dimPages, swapped: s.settings?.pdfReader.swapped ?? false, title: s.paper.title, card: cardOf(s) !== null }))
+  const state = useReader(controller, s => ({ appearance: s.settings?.theme, dimPages: s.settings?.pdfReader.dimPages, swapped: s.settings?.pdfReader.swapped ?? false, title: s.paper.title, card: cardOf(s) !== null }))
   const doc = useRef<HTMLDivElement>(null)
   usePinch(controller, doc)
   // a document area under 840 px shows the translation alone in side by side (the design, §5); the session applies it

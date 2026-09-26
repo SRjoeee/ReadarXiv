@@ -577,15 +577,45 @@ describe('provider selection', () => {
   it('v19 adds the PDF reader\'s settings with their defaults, and touches nothing else', async () => {
     const v18: Record<string, unknown> = { ...DEFAULT_CONFIG, version: 18, mode: 'only', reading: { sentenceHighlight: false, openIn: 'same-tab' } }
     delete v18.pdfReader
+    delete v18.theme
     await fakeBrowser.storage.local.set({ config: v18, config$: { v: 18 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
     const config = await fresh.getConfig()
     expect(fresh.configFallbackReason()).toBeNull()
     expect(config.version).toBe(CONFIG_VERSION)
-    expect(config.pdfReader).toEqual({ enabled: true, original: false, sync: true, swapped: false, appearance: 'system', dimPages: true })
+    // v19's appearance went on to v20's theme
+    expect(config.pdfReader).toEqual({ enabled: true, original: false, sync: true, swapped: false, dimPages: true })
+    expect(config.theme).toBe('system')
     expect(config.mode).toBe('only')
     expect(config.reading).toEqual({ sentenceHighlight: false, openIn: 'same-tab' })
+  })
+
+  it('v20 makes the reader\'s appearance the extension\'s theme (the redesign\'s design, §3), and touches nothing else', async () => {
+    const v19: Record<string, unknown> = {
+      ...DEFAULT_CONFIG, version: 19, mode: 'only',
+      pdfReader: { enabled: false, original: true, sync: false, swapped: true, appearance: 'dark', dimPages: false },
+    }
+    delete v19.theme
+    await fakeBrowser.storage.local.set({ config: v19, config$: { v: 19 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    const config = await fresh.getConfig()
+    expect(fresh.configFallbackReason()).toBeNull()
+    expect(config.theme).toBe('dark')
+    expect(config.pdfReader).toEqual({ enabled: false, original: true, sync: false, swapped: true, dimPages: false })
+    expect(config.mode).toBe('only')
+  })
+
+  it('v20 leaves a hand-edited pdfReader that is not an object to the schema, which names it', async () => {
+    const v19: Record<string, unknown> = { ...DEFAULT_CONFIG, version: 19, pdfReader: 'broken' }
+    delete v19.theme
+    await fakeBrowser.storage.local.set({ config: v19, config$: { v: 19 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    // no throw: the defaults in use, and the reason names the field (S-O-02 shows it)
+    expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(fresh.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'pdfReader' })
   })
 
   it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a preload margin under one screen becoming one screen', async () => {

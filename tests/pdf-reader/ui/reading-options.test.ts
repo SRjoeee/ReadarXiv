@@ -39,9 +39,9 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
     const arrow = (key: string) => act(async () => { group.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })) })
     // the defaults follow the system, the first choice: the right arrow goes to light; the left one wraps to dark
     await arrow('ArrowRight')
-    expect([written().pdfReader.appearance, document.activeElement?.getAttribute('aria-label')]).toEqual(['light', '浅色'])
+    expect([written().theme, document.activeElement?.getAttribute('aria-label')]).toEqual(['light', '浅色'])
     await arrow('ArrowLeft')
-    expect(written().pdfReader.appearance).toBe('dark')
+    expect(written().theme).toBe('dark')
   })
 
   it('holds the language and service menus as its first rows, for a window under 900 px (§5)', async () => {
@@ -72,7 +72,7 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
     swatches[1]!.click()
     expect(written().appearance.activeHighlight).toBe(DEFAULT_CONFIG.appearance.highlights[1]!.id)
     ;[...container.querySelectorAll<HTMLElement>('[role="radio"]')][2]!.click()
-    expect(written().pdfReader.appearance).toBe('dark')
+    expect(written().theme).toBe('dark')
     container.querySelector<HTMLElement>('[role="switch"][aria-label="深色时调暗页面"]')!.click()
     expect(written().pdfReader.dimPages).toBe(false)
   })

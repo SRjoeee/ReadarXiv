@@ -28,9 +28,9 @@ export function PdfReader({ data }: { data: OptionsData }) {
         {/* the bar's own width: in a row, a segmented bar shrinks to its words and breaks the longest */}
         <div className="w-[240px] shrink-0">
           <Segmented
-            value={reader.appearance}
+            value={config.theme}
             options={APPEARANCES.map(value => ({ value, label: R.options[value], title: R.options[value] }))}
-            onChange={appearance => set({ appearance })}
+            onChange={theme => void patch(latest => ({ ...latest, theme }))}
           />
         </div>
       </Row>

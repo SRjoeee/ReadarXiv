@@ -27,8 +27,9 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
   const radios = useRef<(HTMLButtonElement | null)[]>([])
   if (!config) return null
   const names = { light: R.options.light, dark: R.options.dark, system: R.options.system }
-  const appearance = config.pdfReader.appearance
-  const setAppearance = (a: (typeof APPEARANCES)[number]) => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, appearance: a } }))
+  // the extension's appearance (the redesign's design, §3): chosen here, the popup and the settings page follow
+  const appearance = config.theme
+  const setAppearance = (a: (typeof APPEARANCES)[number]) => controller.patchSettings(c => ({ ...c, theme: a }))
   return (
     <>
       <ToolbarButton label={R.options.name} anchor={pop.anchor} {...pop.trigger}>

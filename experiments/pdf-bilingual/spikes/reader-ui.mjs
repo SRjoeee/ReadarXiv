@@ -53,12 +53,12 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.waitForTimeout(400)
   const [l2, r2] = [await box(page, '.pane[data-side="left"]'), await box(page, '.pane[data-side="right"]')]
   check('swapped: the translation on the left', !!(l2 && r2) && r2.x < l2.x, JSON.stringify({ l2, r2 }))
-  await patch(page, { pdfReader: { swapped: false, appearance: 'dark', dimPages: true } })
+  await patch(page, { theme: 'dark', pdfReader: { swapped: false, dimPages: true } })
   await page.waitForTimeout(600)
   const dark = await page.evaluate(() => ({ theme: document.documentElement.dataset.theme, dim: document.documentElement.hasAttribute('data-axt-dim'), filter: getComputedStyle(document.querySelector('#left .page canvas')).filter, blend: (() => { window.__reader.debug.light(3); const b = document.querySelector('.axt-hl'); return b && getComputedStyle(b).mixBlendMode })() }))
   check('dark: the theme, the canvas inverted, the band screened', dark.theme === 'dark' && dark.dim && /invert/.test(dark.filter) && dark.blend === 'screen', JSON.stringify(dark))
   await shot(page, '13-dark-bilingual')
-  await patch(page, { pdfReader: { appearance: 'system', dimPages: true } })
+  await patch(page, { theme: 'system', pdfReader: { dimPages: true } })
   await page.close()
 }
 {
@@ -408,7 +408,7 @@ for (const embedded of ['1', '0']) {
 {
   const page = await open({ mode: 'bilingual' })
   for (const dark of [false, true]) {
-    await patch(page, { pdfReader: { appearance: dark ? 'dark' : 'light' } })
+    await patch(page, { theme: dark ? 'dark' : 'light' })
     await page.waitForTimeout(500)
     const seen = {}
     for (const name of ['缩放比例', '目标语言']) {
@@ -424,7 +424,7 @@ for (const embedded of ['1', '0']) {
     }
     check(`${dark ? 'dark' : 'light'}: a menu's active item, moved by the keyboard, shows the focus ring`, Object.values(seen).every(s => s === 'solid'), JSON.stringify(seen))
   }
-  await patch(page, { pdfReader: { appearance: 'system' } })
+  await patch(page, { theme: 'system' })
   // C. every name in the service menu whole
   await page.locator('header').getByRole('button', { name: '翻译服务' }).click()
   await page.waitForTimeout(400)
@@ -449,7 +449,7 @@ for (const embedded of ['1', '0']) {
 // maintainer adopted the raised thumb, 2026-09-26)
 {
   const page = await open({ mode: 'bilingual' })
-  await patch(page, { pdfReader: { appearance: 'dark', sync: true } })
+  await patch(page, { theme: 'dark', pdfReader: { sync: true } })
   await page.waitForTimeout(700)
   const ratios = await page.evaluate(() => {
     const px = color => { const c = document.createElement('canvas'); c.width = c.height = 1; const g = c.getContext('2d'); g.fillStyle = color; g.fillRect(0, 0, 1, 1); return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3) }
@@ -459,7 +459,7 @@ for (const embedded of ['1', '0']) {
     return { thumb: ratio(bg('.seg .thumb'), bg('.seg')), pressed: ratio(bg('header .tbtn[aria-pressed="true"]'), bg('header')) }
   })
   check('dark: the chosen segment\'s thumb and a pressed button stand out from what they sit on', ratios.thumb >= 1.5 && ratios.pressed >= 1.15, JSON.stringify(ratios))
-  await patch(page, { pdfReader: { appearance: 'system' } })
+  await patch(page, { theme: 'system' })
   await page.close()
 }
 
@@ -597,7 +597,7 @@ for (const embedded of ['1', '0']) {
   // the reading options' appearance: system, light, dark, as icons in equal thirds, the thumb on the chosen one; a
   // chosen swatch's line a step lighter than the focus's ring; a tooltip on an icon inside the popover; a theme's flip
   // with no element fading on its own (the maintainer, 2026-09-26: the words ran off the thumb, the pressed buttons flashed)
-  await patch(page, { pdfReader: { appearance: 'system', sync: true } })
+  await patch(page, { theme: 'system', pdfReader: { sync: true } })
   await page.waitForTimeout(500)
   await page.locator('header button[aria-label="阅读选项"]').click(); await page.waitForTimeout(400)
   const seg = await page.evaluate(() => {
@@ -641,14 +641,14 @@ for (const embedded of ['1', '0']) {
   const bgNow = () => page.evaluate(() => getComputedStyle(document.querySelector('header button[aria-label="同步滚动"]')).backgroundColor)
   const flips = []
   for (const theme of ['dark', 'light']) {
-    await page.evaluate(t => window.__reader.controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, appearance: t } })), theme)
+    await page.evaluate(t => window.__reader.controller.patchSettings(c => ({ ...c, theme: t })), theme)
     await page.waitForFunction(t => document.documentElement.dataset.theme === t, theme, { timeout: 5000 })
     const early = await page.evaluate(() => new Promise(r => requestAnimationFrame(() => r(getComputedStyle(document.querySelector('header button[aria-label="同步滚动"]')).backgroundColor))))
     await page.waitForTimeout(600)
     flips.push({ theme, early, settled: await bgNow() })
   }
   check('a theme\'s flip: a pressed button\'s fill is the new one at the next frame, no fade of its own (better-ui)', flips.every(f => f.early === f.settled), JSON.stringify(flips))
-  await patch(page, { pdfReader: { appearance: 'system' } })
+  await patch(page, { theme: 'system' })
   // a touch screen: no hover's look is left on a control once a tap has passed (the pointer 'hovers' there after it)
   const cdp = await page.context().newCDPSession(page)
   // touch emulation, which makes (hover: none) true; emulating the media feature alone did not reach the page

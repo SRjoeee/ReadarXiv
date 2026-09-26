@@ -84,7 +84,7 @@ await surface(false)
 console.log('animations while scrolling:', JSON.stringify([...new Set(Object.values(blur).flat().flatMap(r => r.anims))]))
 
 // 2. dark pages, at the page's fit and at 400 %
-const scheme = dark => patch({ pdfReader: { appearance: dark ? 'dark' : 'light', dimPages: true } }).then(() => page.waitForTimeout(800))
+const scheme = dark => patch({ theme: dark ? 'dark' : 'light', pdfReader: { dimPages: true } }).then(() => page.waitForTimeout(800))
 await compare([{ name: 'light', set: () => scheme(false) }, { name: 'dark', set: () => scheme(true) }])
 await page.evaluate(() => window.__reader.controller.zoomTo(4))
 await page.waitForTimeout(3000)
@@ -102,7 +102,7 @@ await compare([{ name: '400 % light', set: () => scheme(false) }, { name: '400 %
 console.log(`400 %, dark: ${await memory()}`)
 await page.evaluate(() => window.__reader.controller.zoomTo('page-width'))
 await scheme(false)
-await patch({ pdfReader: { appearance: 'system' } })
+await patch({ theme: 'system' })
 
 // 3. the scroll listeners on each pane's scroll container, by the script that added them
 {

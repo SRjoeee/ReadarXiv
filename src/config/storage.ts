@@ -108,6 +108,15 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
     // under another key, never released, which is not carried over
     19: (v18: (Omit<Config, 'version' | 'pdfReader'> & { version: 18 }) | null) =>
       typeof v18 !== 'object' || v18 === null ? v18 : { ...v18, version: 19 as const, pdfReader: { ...DEFAULT_PDF_READER } },
+    // v19 -> v20: the redesign (its design, §3, §4). The reader's appearance becomes the extension's theme. A pdfReader
+    // that is not an object (a hand edit) is passed through for the schema to name, as every migration here does
+    20: (v19: (Omit<Config, 'version' | 'theme'> & { version: 19; pdfReader?: unknown }) | null) => {
+      if (typeof v19 !== 'object' || v19 === null) return v19
+      const reader = v19.pdfReader
+      if (reader === null || typeof reader !== 'object' || Array.isArray(reader)) return { ...v19, version: 20 as const, theme: 'system' as const }
+      const { appearance, ...rest } = reader as Record<string, unknown>
+      return { ...v19, version: 20 as const, theme: appearance ?? 'system', pdfReader: rest }
+    },
   },
 })
 
