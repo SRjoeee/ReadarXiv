@@ -38,4 +38,18 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
     const loose = all.filter(r => r.selector.includes(':hover') && !r.within.some(a => /^@media\s*\(hover:\s*hover\)/.test(a)))
     expect(loose.map(r => r.selector)).toEqual([])
   })
+
+  it('rings the focus in the ink, in every theme: the reader\'s chrome has no hue but danger (the maintainer, 2026-09-26)', () => {
+    const focus = [...SHEET.matchAll(/--focus:\s*([^;]+);/g)].map(m => m[1]!.trim())
+    expect(focus.length).toBeGreaterThan(0)
+    expect([...new Set(focus)]).toEqual(['var(--n-10)'])
+  })
+
+  it('leaves a text field\'s ring, and the active option\'s beside it, to the keyboard: a click shows the caret', () => {
+    const pointerOff = all.filter(r => r.selector.includes('[data-axt-pointer]') && /outline:\s*none/.test(r.body))
+    expect(pointerOff.some(r => r.selector.includes('input:focus-visible'))).toBe(true)
+    const itemRing = all.filter(r => r.selector.includes('.search:focus-visible') && r.selector.includes('.item[data-active]'))
+    expect(itemRing.length).toBeGreaterThan(0)
+    expect(itemRing.every(r => r.selector.includes(':not([data-axt-pointer])'))).toBe(true)
+  })
 })

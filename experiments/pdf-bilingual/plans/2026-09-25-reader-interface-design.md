@@ -102,7 +102,7 @@ appearance is dark, or is the system's and the system is dark.
 | `--n-8` | `oklch(0.505 0.014 255)` | `oklch(0.71 0.01 255)` |
 | `--n-10` | `oklch(0.235 0.012 255)` | `oklch(0.935 0.005 255)` |
 | `--danger` | `oklch(0.545 0.17 28)` | `oklch(0.69 0.15 28)` |
-| `--focus` | `oklch(0.55 0.15 255)` | `oklch(0.72 0.12 255)` |
+| `--focus` | `--n-10`, the ink (a blue until 2026-09-26) | `--n-10` |
 
 Roles: `--canvas` n-3 (behind the pages), `--chrome` n-0 (toolbar, sidebar, popovers), `--chrome-line` n-4 (0.5 px
 hairlines), `--ink` n-10, `--ink-2` n-8, `--ink-3` n-7, `--fill` n-3 (hover and pressed), `--well` n-3 (the display
@@ -582,7 +582,9 @@ Each before the stage's pull request, on the heaviest demo paper, in a real wind
 - Every control has a name; icon-only buttons by `aria-label` equal to their tooltip's words; a button that shows a
   value is labelled by it, then by its words (WCAG 2.5.3); the zoom's shortcuts are in `aria-keyshortcuts`.
 - Tooltips on keyboard focus as on hover; everything a pointer does, a keyboard does; focus rings are 2 px `--focus`,
-  2 px offset.
+  2 px offset, in the ink, and the keyboard's alone: a text field rings on a click too (the browser's rule), so under
+  the pointer a field shows its caret and its fill, and its ring, a Tab away, hugs it (offset 0) so that it crosses no
+  word beside it (`modality.ts`; the maintainer, 2026-09-26).
 - The display switch is a radio group (§6.2); the zoom, download and language/service menus are menus or listboxes with
   the shared `Menu`'s fixed keyboard behaviour; the reading options are a dialog, which takes the focus to its first
   control that shows. A popover closes when the focus leaves it for another control, a press on its own button left to

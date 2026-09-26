@@ -574,6 +574,26 @@ for (const embedded of ['1', '0']) {
   }
   await page.evaluate(() => window.__reader.controller.zoomTo('page-width'))
   check('the zoom\'s value from 25 % to 400 %: its button\'s width and the − beside it do not move (better-typography)', new Set(across.map(a => a[1])).size === 1 && new Set(across.map(a => a[2])).size === 1, JSON.stringify(across))
+  // the focus rings are the keyboard's, in the ink, hugging a field (better-accessibility; the maintainer, 2026-09-26):
+  // a click into the page's field or on the language menu shows the caret and the field's fill, no ring; Tab and the
+  // arrows bring the rings back. Before, a click ringed the field and, in the menu, the search and its first option
+  const look = sel => page.evaluate(s => { const e = document.querySelector(s), c = getComputedStyle(e); return { ring: c.outlineStyle === 'none' ? null : `${c.outlineWidth} +${c.outlineOffset} ${c.outlineColor}`, bg: c.backgroundColor } }, sel)
+  const ink = await page.evaluate(() => { const i = document.createElement('i'); i.style.color = 'var(--ink)'; document.body.append(i); const c = getComputedStyle(i).color; i.remove(); return c })
+  await page.mouse.move(320, 400); await page.mouse.wheel(0, 300); await page.waitForTimeout(300)
+  await page.click('.pane[data-side="left"] .pill input'); await page.waitForTimeout(150)
+  const pillClicked = await look('.pane[data-side="left"] .pill input')
+  await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab'); await page.waitForTimeout(150)
+  const pillKeyed = await look('.pane[data-side="left"] .pill input')
+  await page.keyboard.press('Escape'); await page.mouse.click(640, 400)
+  await page.locator('header').getByRole('button', { name: '目标语言' }).click(); await page.waitForTimeout(400)
+  const menuClicked = { search: await look('.pop:popover-open .search'), item: await look('.pop:popover-open .item[data-active]') }
+  await page.keyboard.press('ArrowDown'); await page.waitForTimeout(150)
+  const menuKeyed = { search: await look('.pop:popover-open .search'), item: await look('.pop:popover-open .item[data-active]') }
+  await page.keyboard.press('Escape'); await page.waitForTimeout(300)
+  const rings = { ink, pillClicked, pillKeyed, menuClicked, menuKeyed }
+  check('a click shows no ring, the keyboard does: in the ink, hugging a field (the maintainer, 2026-09-26)',
+    !pillClicked.ring && pillClicked.bg !== 'rgba(0, 0, 0, 0)' && pillKeyed.ring === `2px +0px ${ink}` && !menuClicked.search.ring && !menuClicked.item.ring && menuKeyed.search.ring === `2px +0px ${ink}` && menuKeyed.item.ring?.endsWith(ink),
+    JSON.stringify(rings))
   // a touch screen: no hover's look is left on a control once a tap has passed (the pointer 'hovers' there after it)
   const cdp = await page.context().newCDPSession(page)
   // touch emulation, which makes (hover: none) true; emulating the media feature alone did not reach the page

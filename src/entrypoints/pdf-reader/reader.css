@@ -18,7 +18,8 @@
   --n-4: oklch(0.905 0.007 255); --n-5: oklch(0.86 0.008 255); --n-7: oklch(0.62 0.012 255); --n-8: oklch(0.505 0.014 255);
   --n-10: oklch(0.235 0.012 255);
   --danger: oklch(0.545 0.17 28);
-  --focus: oklch(0.55 0.15 255);
+  /* the focus ring in the ink: the reader's chrome has no hue but danger's (the maintainer, 2026-09-26; a blue before) */
+  --focus: var(--n-10);
   --page-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.05), 0 1px 2px oklch(0 0 0 / 0.04);
   --float-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.08), 0 4px 16px oklch(0 0 0 / 0.08);
   --pop-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.08), 0 12px 32px oklch(0 0 0 / 0.14);
@@ -30,7 +31,7 @@
     --n-4: oklch(0.31 0.008 255); --n-5: oklch(0.36 0.009 255); --n-7: oklch(0.56 0.01 255); --n-8: oklch(0.71 0.01 255);
     --n-10: oklch(0.935 0.005 255);
     --danger: oklch(0.69 0.15 28);
-    --focus: oklch(0.72 0.12 255);
+    --focus: var(--n-10);
     --page-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.4), 0 4px 16px oklch(0 0 0 / 0.35);
     --float-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.08), 0 6px 20px oklch(0 0 0 / 0.4);
     --pop-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.1), 0 14px 36px oklch(0 0 0 / 0.5);
@@ -42,7 +43,7 @@
   --n-4: oklch(0.31 0.008 255); --n-5: oklch(0.36 0.009 255); --n-7: oklch(0.56 0.01 255); --n-8: oklch(0.71 0.01 255);
   --n-10: oklch(0.935 0.005 255);
   --danger: oklch(0.69 0.15 28);
-  --focus: oklch(0.72 0.12 255);
+  --focus: var(--n-10);
   --page-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.4), 0 4px 16px oklch(0 0 0 / 0.35);
   --float-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.08), 0 6px 20px oklch(0 0 0 / 0.4);
   --pop-shadow: 0 0 0 0.5px oklch(1 0 0 / 0.1), 0 14px 36px oklch(0 0 0 / 0.5);
@@ -82,6 +83,11 @@
   .chrome button { background: none; border: 0; padding: 0; cursor: pointer; }
   .chrome button:disabled, .chrome [aria-disabled="true"] { cursor: default; }
   .chrome :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  /* a field's ring hugs it, so that it crosses no word beside it (the page's "/ 15") nor its popover's edge */
+  .chrome input:focus-visible { outline-offset: 0; }
+  /* the ring is the keyboard's: a text field matches :focus-visible after a press too (the browser's rule, since typing
+     follows), and with the pointer its caret and its fill say where the focus is (modality.ts; better-accessibility) */
+  html[data-axt-pointer] .chrome input:focus-visible { outline: none; }
   kbd { font: inherit; }
 }
 
@@ -174,7 +180,7 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .pop .item[data-active] { background: var(--fill); }
   /* the item the keyboard moves is the focus (aria-activedescendant), and carries §13's ring as a focused control does */
   .pop :is([role="menu"], [role="listbox"]):focus-visible .item[data-active],
-  .pop .search:focus-visible ~ [role="listbox"] .item[data-active] { outline: 2px solid var(--focus); outline-offset: -2px; }
+  html:not([data-axt-pointer]) .pop .search:focus-visible ~ [role="listbox"] .item[data-active] { outline: 2px solid var(--focus); outline-offset: -2px; }
   .pop .item[aria-disabled="true"] { color: var(--ink-3); cursor: default; }
   .pop .item .hint { margin-inline-start: auto; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
   .pop .item .check { color: var(--ink); }
@@ -229,6 +235,8 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   @media (hover: hover) { .pill button:hover { background: var(--fill); color: var(--ink); } }
   .pill input { width: 3.2ch; height: 22px; border: 0; border-radius: 6px; background: none; color: var(--ink); font-weight: 500; text-align: end; }
   @media (hover: hover) { .pill input:hover { background: var(--fill); } }
+  /* being edited: the fill stays, the field's own sign of the focus under the pointer, where it has no ring */
+  .pill input:focus { background: var(--fill); }
   .pill .of { padding-inline: 3px 5px; }
   /* a pane's scroll indicator (§6.5): its right edge; the thumb's place a scroll-driven animation on the pane's timeline */
   .indicator { position: absolute; z-index: 4; inset-block: 6px; inset-inline-end: 0; width: 14px; display: flex; justify-content: center; opacity: 0; transition: opacity 300ms ease-out; }
