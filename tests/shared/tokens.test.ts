@@ -43,6 +43,10 @@ describe('the token source', () => {
     expect(both('on-brand-2')).toEqual(['oklch(1 0 0 / 0.85)', 'oklch(1 0 0)'])
   })
 
+  it('holds the tooltip\'s shadow as a role, its value the one the tooltip drew, the same in both themes (Task 21)', () => {
+    expect([resolve('tip-shadow', 'light'), resolve('tip-shadow', 'dark')]).toEqual(['0 4px 12px oklch(0 0 0 / 0.2)', '0 4px 12px oklch(0 0 0 / 0.2)'])
+  })
+
   it('writes the pages\' sheet with the reader\'s selectors: light, the system\'s dark unless light is chosen, dark chosen', () => {
     const css = tokenSheet('page')
     expect(css).toContain(':root,\n[data-theme="light"] {\n  color-scheme: light;')

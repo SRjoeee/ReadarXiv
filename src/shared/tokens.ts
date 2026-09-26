@@ -82,6 +82,9 @@ export const ROLES = {
   'tip-bg': 'oklch(0.22 0.01 255)',
   'tip-ink': 'oklch(0.96 0 0)',
   'tip-ink-2': 'oklch(0.74 0.01 255)',
+  /** the tooltip's shadow, one in both themes as its ground is (Part 3, Task 21; the floating button's tooltips take it
+   *  from the shadow root's sheet in Part 6) */
+  'tip-shadow': '0 4px 12px oklch(0 0 0 / 0.2)',
 } as const satisfies Record<string, Value>
 
 /** What does not change with the theme */

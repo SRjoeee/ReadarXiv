@@ -5,7 +5,7 @@
   /* tooltips: below their control, centred on it, kept inside the window; one line always */
   .tip { position: fixed; inset: auto; margin: 8px 0 0; position-area: bottom; position-try-fallbacks: bottom span-right, bottom span-left;
     padding: 5px 8px; border: 0; border-radius: 6px; background: var(--tip-bg); color: var(--tip-ink); font: 12px/1.2 var(--font);
-    white-space: nowrap; display: none; gap: 10px; box-shadow: 0 4px 12px oklch(0 0 0 / 0.2); pointer-events: none; overflow: visible; }
+    white-space: nowrap; display: none; gap: 10px; box-shadow: var(--tip-shadow); pointer-events: none; overflow: visible; }
   .tip:popover-open { display: flex; animation: tip-in 120ms ease-out; }
   .tip[data-side="right"] { margin: 0 0 0 8px; position-area: right; position-try-fallbacks: none; }
   .tip kbd { color: var(--tip-ink-2); }

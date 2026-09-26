@@ -154,3 +154,9 @@ describe('controls.css: the menus\' rows for the pages', () => {
     expect(of('.pop .item[data-active] .act')).toEqual({ background: 'var(--lift)' })
   })
 })
+
+describe('controls.css: the tooltip\'s shadow, a role now (Task 21)', () => {
+  it('draws the tooltip\'s shadow from its role', () => {
+    expect(of('.tip')['box-shadow']).toBe('var(--tip-shadow)')
+  })
+})

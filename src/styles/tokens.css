@@ -46,6 +46,7 @@
   --tip-bg: oklch(0.22 0.01 255);
   --tip-ink: oklch(0.96 0 0);
   --tip-ink-2: oklch(0.74 0.01 255);
+  --tip-shadow: 0 4px 12px oklch(0 0 0 / 0.2);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -94,6 +95,7 @@
     --tip-bg: oklch(0.22 0.01 255);
     --tip-ink: oklch(0.96 0 0);
     --tip-ink-2: oklch(0.74 0.01 255);
+    --tip-shadow: 0 4px 12px oklch(0 0 0 / 0.2);
   }
 }
 [data-theme="dark"] {
@@ -142,6 +144,7 @@
   --tip-bg: oklch(0.22 0.01 255);
   --tip-ink: oklch(0.96 0 0);
   --tip-ink-2: oklch(0.74 0.01 255);
+  --tip-shadow: 0 4px 12px oklch(0 0 0 / 0.2);
 }
 :root {
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "PingFang SC", "Noto Sans SC", sans-serif;
