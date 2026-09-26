@@ -17,8 +17,9 @@ export function useTip(label: string, hint?: string, { side = 'bottom' }: { side
   const pressed = useRef(false)
   const open = useRef(false)
   const show = () => {
-    // no tip over an open menu or popover
-    if (open.current || document.querySelector('.pop[data-open], .pop:popover-open')) return
+    // no tip over an open menu or popover — but one inside it, as the appearance's icons in the reading options, shows
+    const over = [...document.querySelectorAll('.pop[data-open], .pop:popover-open')].some(p => !p.contains(ref.current))
+    if (open.current || over) return
     // a tip never breaks the page: shown while another popover is being shown, the browser refuses it, and it is not shown
     try {
       ref.current?.showPopover()

@@ -45,6 +45,12 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
     expect([...new Set(focus)]).toEqual(['var(--n-10)'])
   })
 
+  it('marks a chosen swatch with the strong line, a step lighter than the focus\'s ink, so that the two read apart', () => {
+    expect(all.some(r => r.body.includes('--line-strong:'))).toBe(true)
+    const chosen = all.find(r => r.selector.startsWith('.swatch[aria-pressed="true"]'))
+    expect(chosen?.body).toMatch(/outline:[^;]*var\(--line-strong\)/)
+  })
+
   it('leaves a text field\'s ring, and the active option\'s beside it, to the keyboard: a click shows the caret', () => {
     const pointerOff = all.filter(r => r.selector.includes('[data-axt-pointer]') && /outline:\s*none/.test(r.body))
     expect(pointerOff.some(r => r.selector.includes('input:focus-visible'))).toBe(true)

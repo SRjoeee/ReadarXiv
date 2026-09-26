@@ -594,6 +594,48 @@ for (const embedded of ['1', '0']) {
   check('a click shows no ring, the keyboard does: in the ink, hugging a field (the maintainer, 2026-09-26)',
     !pillClicked.ring && pillClicked.bg !== 'rgba(0, 0, 0, 0)' && pillKeyed.ring === `2px +0px ${ink}` && !menuClicked.search.ring && !menuClicked.item.ring && menuKeyed.search.ring === `2px +0px ${ink}` && menuKeyed.item.ring?.endsWith(ink),
     JSON.stringify(rings))
+  // the reading options' appearance: system, light, dark, as icons in equal thirds, the thumb on the chosen one; a
+  // chosen swatch's line a step lighter than the focus's ring; a tooltip on an icon inside the popover; a theme's flip
+  // with no element fading on its own (the maintainer, 2026-09-26: the words ran off the thumb, the pressed buttons flashed)
+  await patch(page, { pdfReader: { appearance: 'system', sync: true } })
+  await page.waitForTimeout(500)
+  await page.locator('header button[aria-label="阅读选项"]').click(); await page.waitForTimeout(400)
+  const seg = await page.evaluate(() => {
+    const radios = [...document.querySelectorAll('.pop:popover-open [aria-label="外观"] [role="radio"]')]
+    const thumb = document.querySelector('.pop:popover-open [aria-label="外观"] .thumb').getBoundingClientRect()
+    const chosen = radios.find(r => r.getAttribute('aria-checked') === 'true').getBoundingClientRect()
+    const icon = radios.map(r => { const b = r.getBoundingClientRect(), i = r.querySelector('svg').getBoundingClientRect(); return Math.round((i.x + i.width / 2 - (b.x + b.width / 2)) * 10) / 10 })
+    return { names: radios.map(r => r.getAttribute('aria-label')), widths: radios.map(r => Math.round(r.getBoundingClientRect().width * 10) / 10), thumbOff: Math.round(Math.abs(thumb.x - chosen.x) * 10) / 10, thumbWidth: Math.round(Math.abs(thumb.width - chosen.width) * 10) / 10, iconOff: icon }
+  })
+  check('the appearance: system, light, dark, in equal thirds, each icon centred, the thumb on the chosen one', JSON.stringify(seg.names) === JSON.stringify(['跟随系统', '浅色', '深色']) && new Set(seg.widths).size === 1 && seg.thumbOff <= 0.5 && seg.thumbWidth <= 0.5 && seg.iconOff.every(o => Math.abs(o) <= 0.5), JSON.stringify(seg))
+  await page.locator('.pop:popover-open [role="radio"][aria-label="浅色"]').hover(); await page.waitForTimeout(700)
+  const iconTip = await page.evaluate(() => [...document.querySelectorAll('.tip')].find(t => t.matches(':popover-open'))?.textContent ?? null)
+  check('…its icons named in a tooltip, inside the popover', iconTip === '浅色', String(iconTip))
+  const swatchRings = await page.evaluate(() => {
+    const px = color => { const c = document.createElement('canvas'); c.width = c.height = 1; const g = c.getContext('2d'); g.fillStyle = color; g.fillRect(0, 0, 1, 1); return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3) }
+    const lum = ([r, g, b]) => [r, g, b].map(v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [x, y] = [lum(px(a)), lum(px(b))].sort((m, n) => n - m); return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100 }
+    const chosen = getComputedStyle(document.querySelector('.pop:popover-open .swatch[aria-pressed="true"]')).outlineColor
+    const focus = getComputedStyle(document.documentElement).getPropertyValue('--focus').trim(), chrome = getComputedStyle(document.querySelector('.pop:popover-open')).backgroundColor
+    const token = n => { const i = document.createElement('i'); i.style.color = `var(${n})`; document.body.append(i); const c = getComputedStyle(i).color; i.remove(); return c }
+    return { chosen, focus: token('--focus'), chosenOnChrome: ratio(chosen, chrome), focusOnChrome: ratio(token('--focus'), chrome) }
+  })
+  check('…a chosen swatch\'s line apart from the focus\'s ring, and 3:1 on the popover', swatchRings.chosen !== swatchRings.focus && swatchRings.chosenOnChrome >= 3, JSON.stringify(swatchRings))
+  // the pointer away first: with the icon's tooltip up, Escape closes the tooltip, the topmost, and leaves the options open
+  await page.mouse.move(700, 600); await page.waitForTimeout(200)
+  await page.keyboard.press('Escape'); await page.waitForTimeout(300)
+  // the flip: the pressed sync button's fill is the new theme's at the next frame, not a fade toward it
+  const bgNow = () => page.evaluate(() => getComputedStyle(document.querySelector('header button[aria-label="同步滚动"]')).backgroundColor)
+  const flips = []
+  for (const theme of ['dark', 'light']) {
+    await page.evaluate(t => window.__reader.controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, appearance: t } })), theme)
+    await page.waitForFunction(t => document.documentElement.dataset.theme === t, theme, { timeout: 5000 })
+    const early = await page.evaluate(() => new Promise(r => requestAnimationFrame(() => r(getComputedStyle(document.querySelector('header button[aria-label="同步滚动"]')).backgroundColor))))
+    await page.waitForTimeout(600)
+    flips.push({ theme, early, settled: await bgNow() })
+  }
+  check('a theme\'s flip: a pressed button\'s fill is the new one at the next frame, no fade of its own (better-ui)', flips.every(f => f.early === f.settled), JSON.stringify(flips))
+  await patch(page, { pdfReader: { appearance: 'system' } })
   // a touch screen: no hover's look is left on a control once a tap has passed (the pointer 'hovers' there after it)
   const cdp = await page.context().newCDPSession(page)
   // touch emulation, which makes (hover: none) true; emulating the media feature alone did not reach the page

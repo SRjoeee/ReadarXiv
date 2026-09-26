@@ -54,6 +54,9 @@
   --bar: 44px;
   --side: 236px;
   --canvas: var(--n-3); --chrome: var(--n-0); --chrome-line: var(--n-4); --ink: var(--n-10); --ink-2: var(--n-8); --ink-3: var(--n-7);
+  /* the strong line: an edge that marks a choice (a chosen swatch), a step lighter than the focus's ink so that the two
+     read apart, 3.64:1 and 3.39:1 against the chrome (WCAG 1.4.11; better-colors: a token only in its role) */
+  --line-strong: var(--n-7);
   --fill: var(--n-3); --well: var(--n-3); --lift: var(--n-0);
   --float-bg: color-mix(in oklab, var(--n-0) 90%, transparent);
   --ease: cubic-bezier(0.2, 0, 0, 1);
@@ -64,7 +67,7 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --well: var(--n-2); --lift: var(--n-5); --fill: var(--n-4); } }
 :root[data-theme="dark"] { --well: var(--n-2); --lift: var(--n-5); --fill: var(--n-4); }
 @theme inline {
-  --color-canvas: var(--canvas); --color-chrome: var(--chrome); --color-line: var(--chrome-line);
+  --color-canvas: var(--canvas); --color-chrome: var(--chrome); --color-line: var(--chrome-line); --color-line-strong: var(--line-strong);
   --color-ink: var(--ink); --color-ink-2: var(--ink-2); --color-ink-3: var(--ink-3);
   --color-fill: var(--fill); --color-well: var(--well); --color-lift: var(--lift); --color-float: var(--float-bg);
   --color-danger: var(--danger); --color-focus: var(--focus);
@@ -160,6 +163,8 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .seg.display > button { width: 40px; padding: 0; }
   .seg.small { height: 26px; }
   .seg.small > button { padding: 0 10px; font-size: 12px; }
+  /* a segment of icons: equal whatever the language, its icon at the centre of its thumb */
+  .seg.icons > button { width: 36px; padding: 0; }
   .arxiv-id { display: inline-flex; flex: none; align-items: center; gap: 2px; margin: -2px -4px; padding: 2px 4px; border-radius: 5px; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; text-decoration: none; transition: color 150ms, background-color 150ms; }
   .arxiv-id svg { opacity: 0; translate: -2px 2px; transition: opacity 150ms, translate 150ms ease-out; }
   .arxiv-id:focus-visible { color: var(--ink); background: var(--fill); }
@@ -200,7 +205,7 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .switch[aria-checked="true"] { background: var(--ink); }
   .switch[aria-checked="true"]::after { translate: 11px 0; background: var(--chrome); }
   .swatch { width: 16px; height: 16px; border-radius: 999px; box-shadow: inset 0 0 0 0.5px oklch(0 0 0 / 0.15); }
-  .swatch[aria-pressed="true"]:not(:focus-visible) { outline: 1.5px solid var(--ink); outline-offset: 2px; }
+  .swatch[aria-pressed="true"]:not(:focus-visible) { outline: 1.5px solid var(--line-strong); outline-offset: 2px; }
   /* below 900 px the language and service menus leave the toolbar for the reading options' first rows (§5); as specific
      as the rows and separators they are, and after them, so that they stay hidden above it */
   .pop .narrow-only, .pop .narrowest-only { display: none; }

@@ -2,7 +2,7 @@
 // dark pages — all settings, the same values the popup and the settings page change, each written at once. In a narrow
 // window they hold what leaves the bar too, first (§5): below 900 px the language and the service, below 500 px the
 // download, the settings and the way back
-import { LogOut, Settings, SlidersHorizontal } from 'lucide'
+import { type IconNode, LogOut, Monitor, Moon, Settings, SlidersHorizontal, Sun } from 'lucide'
 import { useRef } from 'react'
 import { R, S, profileName } from '@/ui/strings'
 import type { ReaderController } from '../controller'
@@ -14,8 +14,12 @@ import { radioKeys } from './radio'
 import { Switch } from './Switch'
 import { ToolbarButton } from './ToolbarButton'
 import { useReader } from './use-reader'
+import { useTip } from './tip'
 
-const APPEARANCES = ['light', 'dark', 'system'] as const
+/** the system's first (the maintainer, 2026-09-26); as icons, equal whatever the interface's language, as the display
+ *  switch's are, their words in tooltips and to screen readers: a word per third ran off its thumb in English */
+const APPEARANCES = ['system', 'light', 'dark'] as const
+const GLYPHS: Record<(typeof APPEARANCES)[number], IconNode> = { system: Monitor, light: Sun, dark: Moon }
 
 export function ReadingOptions({ controller, embedded = false }: { controller: ReaderController; embedded?: boolean }) {
   const config = useReader(controller, s => s.settings)
@@ -82,14 +86,11 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
         <div className="sep" />
         <div className="row">
           {R.options.appearance}
-          <div role="radiogroup" aria-label={R.options.appearance} className="seg small w-[180px]" style={{ '--i': APPEARANCES.indexOf(appearance) } as React.CSSProperties}
+          <div role="radiogroup" aria-label={R.options.appearance} className="seg small icons" style={{ '--i': APPEARANCES.indexOf(appearance) } as React.CSSProperties}
             onKeyDown={radioKeys(APPEARANCES, appearance, () => true, setAppearance, i => radios.current[i]?.focus())}>
             <span className="thumb" aria-hidden="true" />
             {APPEARANCES.map((a, i) => (
-              // biome-ignore lint/a11y/useSemanticElements: an ARIA radio drawn as a segment (the design, §6.1), as the display switch's; its keys are the group's
-              <button key={a} ref={el => { radios.current[i] = el }} type="button" role="radio" aria-checked={a === appearance} tabIndex={a === appearance ? 0 : -1} onClick={() => setAppearance(a)}>
-                {names[a]}
-              </button>
+              <AppearanceSegment key={a} name={names[a]} glyph={GLYPHS[a]} checked={a === appearance} onPick={() => setAppearance(a)} buttonRef={el => { radios.current[i] = el }} />
             ))}
           </div>
         </div>
@@ -98,6 +99,19 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
           <Switch label={R.options.dim} checked={config.pdfReader.dimPages} onChange={on => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, dimPages: on } }))} />
         </div>
       </Popover>
+    </>
+  )
+}
+
+function AppearanceSegment({ name, glyph, checked, onPick, buttonRef }: { name: string; glyph: IconNode; checked: boolean; onPick: () => void; buttonRef: (el: HTMLButtonElement | null) => void }) {
+  const { props, tip } = useTip(name)
+  return (
+    <>
+      {/* biome-ignore lint/a11y/useSemanticElements: an ARIA radio drawn as a segment (the design, §6.1), as the display switch's; its keys are the group's */}
+      <button ref={buttonRef} type="button" role="radio" aria-checked={checked} aria-label={name} tabIndex={checked ? 0 : -1} onClick={onPick} {...props}>
+        <Icon node={glyph} />
+      </button>
+      {tip}
     </>
   )
 }

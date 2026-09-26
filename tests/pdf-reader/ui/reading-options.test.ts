@@ -29,16 +29,17 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
     const switches = [...container.querySelectorAll('[role="switch"]')].map(s => [s.getAttribute('aria-label'), s.getAttribute('aria-checked')])
     expect(switches).toEqual([['对照高亮', 'true'], ['图片翻译', 'true'], ['深色时调暗页面', 'true']])
     expect(container.querySelectorAll('[data-swatch]').length).toBe(DEFAULT_CONFIG.appearance.highlights.length)
-    expect([...container.querySelectorAll('[role="radio"]')].map(r => [r.textContent, r.getAttribute('aria-checked')])).toEqual([['浅色', 'false'], ['深色', 'false'], ['跟随系统', 'true']])
+    // the appearance: the system's first, as icons named by their words, as the display switch is (the maintainer, 2026-09-26)
+    expect([...container.querySelectorAll('[role="radio"]')].map(r => [r.getAttribute('aria-label'), r.getAttribute('aria-checked'), !!r.querySelector('svg'), r.textContent])).toEqual([['跟随系统', 'true', true, ''], ['浅色', 'false', true, ''], ['深色', 'false', true, '']])
   })
 
   it('moves the appearance with the arrows, the focus going with it, as a radio group does (the final review)', async () => {
     const { container, written } = await open()
     const group = container.querySelector<HTMLElement>('[role="radiogroup"]')!
     const arrow = (key: string) => act(async () => { group.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })) })
-    // the defaults follow the system, the last choice: the right arrow wraps to the first, light; the left one goes to dark
+    // the defaults follow the system, the first choice: the right arrow goes to light; the left one wraps to dark
     await arrow('ArrowRight')
-    expect([written().pdfReader.appearance, document.activeElement?.textContent]).toEqual(['light', '浅色'])
+    expect([written().pdfReader.appearance, document.activeElement?.getAttribute('aria-label')]).toEqual(['light', '浅色'])
     await arrow('ArrowLeft')
     expect(written().pdfReader.appearance).toBe('dark')
   })
@@ -70,7 +71,7 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
     const swatches = [...container.querySelectorAll<HTMLElement>('[data-swatch]')]
     swatches[1]!.click()
     expect(written().appearance.activeHighlight).toBe(DEFAULT_CONFIG.appearance.highlights[1]!.id)
-    ;[...container.querySelectorAll<HTMLElement>('[role="radio"]')][1]!.click()
+    ;[...container.querySelectorAll<HTMLElement>('[role="radio"]')][2]!.click()
     expect(written().pdfReader.appearance).toBe('dark')
     container.querySelector<HTMLElement>('[role="switch"][aria-label="深色时调暗页面"]')!.click()
     expect(written().pdfReader.dimPages).toBe(false)

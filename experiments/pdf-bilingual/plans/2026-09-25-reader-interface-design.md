@@ -105,8 +105,9 @@ appearance is dark, or is the system's and the system is dark.
 | `--focus` | `--n-10`, the ink (a blue until 2026-09-26) | `--n-10` |
 
 Roles: `--canvas` n-3 (behind the pages), `--chrome` n-0 (toolbar, sidebar, popovers), `--chrome-line` n-4 (0.5 px
-hairlines), `--ink` n-10, `--ink-2` n-8, `--ink-3` n-7, `--fill` n-3 (hover and pressed), `--well` n-3 (the display
-switch's track), `--lift` n-0 (its thumb). Floating surfaces: `--float-bg` n-0 at 90 %, with a hairline and a soft
+hairlines), `--line-strong` n-7 (an edge that marks a choice, a chosen swatch's: a step lighter than the focus's ink,
+3.64:1 and 3.39:1 on the chrome; 2026-09-26), `--ink` n-10, `--ink-2` n-8, `--ink-3` n-7, `--fill` n-3 (hover and
+pressed), `--well` n-3 (the display switch's track), `--lift` n-0 (its thumb). Floating surfaces: `--float-bg` n-0 at 90 %, with a hairline and a soft
 shadow. Pages carry a hairline and a 1–2 px shadow; 14 px between pages.
 
 Contrast, measured (WCAG 2.2, OKLCH → sRGB): ink on chrome 16.7:1 (dark 13.0:1); ink-2 on chrome 5.9:1 (6.1:1), on the
@@ -180,7 +181,9 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
    and the name says what the menu is) and the service (its name and a chevron). Their menus are §6.7's.
 4. 阅读选项 (`sliders-horizontal`), a popover: 对照高亮 (switch), 高亮颜色 (a swatch for each highlight profile: the
    three built-in, 柔和绿, 淡黄, 淡蓝, and any added in the settings), a separator, 图片翻译 (switch; the popup's word,
-   the maintainer's ruling of 2026-09-25), a separator, 外观 (a small segmented control: 浅色, 深色, 跟随系统),
+   the maintainer's ruling of 2026-09-25), a separator, 外观 (a small segmented control of three icons, equal whatever
+   the language — 跟随系统 a monitor, 浅色 a sun, 深色 a moon, in that order — their words in tooltips and to screen
+   readers; the maintainer, 2026-09-26: words ran off the thumb in English),
    深色时调暗页面 (switch). All are settings (§9.1), the same values the popup and the settings page change; a change
    applies at once.
 5. 下载 (`download`), a menu of two items, text only: 译文 PDF, 原文 PDF (the maintainer: 「只要译文 PDF / 原文 PDF」).

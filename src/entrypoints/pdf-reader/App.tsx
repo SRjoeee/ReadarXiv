@@ -1,6 +1,6 @@
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReaderController, Side } from '@/pdf-reader/controller'
-import { type Appearance, applyAppearance, dimmed, themeOf } from '@/pdf-reader/ui/appearance'
+import { type Appearance, applyAppearance, dimmed, themeOf, withoutTransitions } from '@/pdf-reader/ui/appearance'
 import { FailureCard } from '@/pdf-reader/ui/FailureCard'
 import { Outline } from '@/pdf-reader/ui/Outline'
 import { PagePill } from '@/pdf-reader/ui/PagePill'
@@ -110,7 +110,8 @@ function useAppearance(appearance: Appearance | undefined, dimPages: boolean | u
   const [systemDark, setSystemDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches)
   useEffect(() => {
     const query = matchMedia('(prefers-color-scheme: dark)')
-    const on = () => setSystemDark(query.matches)
+    // the system's own flip changes the colours at once: the transitions are held there too (better-ui)
+    const on = () => withoutTransitions(document, () => setSystemDark(query.matches))
     query.addEventListener('change', on)
     return () => query.removeEventListener('change', on)
   }, [])

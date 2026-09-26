@@ -214,7 +214,7 @@ The bilingual PDF reader's own words (the reader's design, `experiments/pdf-bili
 | S-R-05 | Swap sides | 交换左右 | 对照 only; greyed in the single displays |
 | S-R-06 | Sync scrolling | 同步滚动 | 对照 only; greyed in the single displays |
 | S-R-07 | Zoom | 缩小 · 放大 · 缩放比例 · 适合宽度 · 适合页面 · 实际大小 | ⌘− and ⌘+ (Ctrl elsewhere), in `aria-keyshortcuts` too. The value's button is labelled by its value, then 缩放比例, as the language's and the service's are by theirs, then S-P-20 and S-P-10 (WCAG 2.5.3, `aria-labelledby`). Below 500 px − and + give way to the value's menu |
-| S-R-08 | Reading options | 阅读选项 · 高亮颜色 · 外观 · 浅色 · 深色 · 跟随系统 · 深色时调暗页面 | With S-P-80 and S-P-85 |
+| S-R-08 | Reading options | 阅读选项 · 高亮颜色 · 外观 · 跟随系统 · 浅色 · 深色 · 深色时调暗页面 | With S-P-80 and S-P-85. The appearance's three are icons (a monitor, a sun, a moon), their words in tooltips and to screen readers, the system's first (the maintainer, 2026-09-26) |
 | S-R-09 | Download | 下载 · 译文 PDF · 原文 PDF | 译文 PDF greyed until the final translation is on screen. Below 500 px a row of the reading options, with 设置 (S-P-02, a link) and S-R-10 |
 | S-R-10 | Leave | 在默认查看器中打开 | Back to the browser's own viewer |
 | S-R-11 | Page pills | 原文页码 · 译文页码 · 上一页 · 下一页 | |
