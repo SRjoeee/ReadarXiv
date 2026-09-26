@@ -3214,3 +3214,82 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
 
 (Add by name any file the review's fixes touched, in their own commit before this one.)
+
+## Part 3: done
+
+Executed task by task (subagent-driven: an implementer and a reviewer per task, the controller's look at every shot),
+2026-09-27. The order ran 14–19, 21, 20.
+
+**Commits** (`14b97082..`, in order): ade09446 the pages' base, two roles and `words-in` (Task 14) · ce960723 plan: Part 6 in
+parallel, `tip-shadow` and `useRejected` in Part 3 · 83cfb018 the controls sheet and its probe (15) · a928e171 plans: Task
+21, Part 5's shared `useRejected`, the Part 6 plan · fcf0470b `Button`, `Kbd` (16) · 20e2d45f `Field`, `Radio`, `Reveal`
+(17) · 2abecc06 `Segmented` (18) · 498e4480 the reader's menu rows move to `src/ui/controls/MenuList.tsx`, a pure move
+(git records it as a rename, R100) · 61fddd98 `MenuList` extended (19) · dac067a1 menu rows that act and are busy, the
+reader's single-file source (19's review) · 620cf134 Task 17's two parked minors · 716aa2c0 the reader's `@source` says
+why · cb1bf42e "What Parts 4 and 5 use" as built · b076406d `tip-shadow`, `useRejected` (21) · and this record.
+
+**Checks at b076406d**, each exit 0: the gate (typecheck, lint, 2 588 tests, build); `reader-pixels.mjs` 24 × ok;
+`reader-ui.mjs` 71 × ok; `pages-pixels.mjs` 12 × ok; `pnpm e2e` 71/71; `pnpm e2e:floating` 20/20; the development build
+and `tests/e2e/probes/controls.mjs` 232 × ok (both languages, both themes).
+
+**The probe's measured values** (zh-CN light; the other three runs read the same):
+
+- Buttons: `lg` 36 px, radius 9 · `md` 32 px, radius 8, 16 px in (brand) / 10 px (text) · `sm` 28 px, radius 7, 12 px in,
+  12.5 px / 500 · `raised` 26 px, radius 7, 10 px in; an icon 7 px before the words, the shortcut 8 px after them; the
+  shortcut label 11 px / 500, 3 by 5 in, radius 5, on `brand-chip` in `on-brand` (measured on the shot: 5.42:1 light,
+  4.61:1 dark, the agreed light-white label's 5.41 / 4.59).
+- Field: 34 px, radius 8, its ground with a 0.5 px edge; label 12 px in `ink-2`, 6 px above; pressed, a 1 px `ink-3` edge
+  and no ring; by Tab, the 2 px ring hugging it; at fault, the `danger` edge and its reason in `ink` after a danger icon.
+- Radio: 16 px; chosen, an `ink` ring and its dot; the others `ink-3`; on the controls' edge 14 px from the card, the
+  words at 42.
+- Reveal: grows from nothing to its height and back, `inert` while closed; under reduced motion it takes its height at
+  once and only fades.
+- Segmented: 30 px (26 small, 30 fit), icon segments 36 px; the fit thumb slides to the chosen segment (not a jump), and
+  goes at once under reduced motion.
+- Menus: the services on two lines, each at least 40 px (45 in the shots), the hint 11.5 px in `ink-2`; the pack's
+  download 24 px, 9 in, radius 6, 12 px / 500, on `lift` on the active row; each row's parts on its centre line; the
+  language menu keeps the reader's 30 px rows.
+
+**The look** (every shot beside the prototypes, at twice the pixels): buttons against round 6's P9 / P17, the chip against
+`kbd-chip/png/compare.png`, forms against settings-2 20 / 01 / 03, segmented against P13 and settings-2 08, the small
+neutral button against `zoom-services-hover.png` and 12, menus against round 4's P2 — all match. Two differences settled
+by the design, not by the prototype: the menus' download is neutral (round 4 drew it raised white; popup-decisions and the
+design's §5.3 say neutral), and a menu name starts 31 px from its row's edge (round 4: 33 with a 16 px check; the design's
+§2.3 moves the reader's rows as they are, with its 14 px check). One value is derived rather than drawn: the 1 px
+`danger` edge on a field at fault (the design's §9 names `aria-invalid` only; the words stay `ink`) — for the maintainer's
+look in Part 7.
+
+**The local review** (Codex, `--base 14b97082 --scope branch`): one comment, declined — it read the working tree's
+uncommitted gallery harness (`gallery/main.tsx` importing the untracked `reader-break.tsx`), which no commit of the branch
+touches.
+
+**Otherwise than planned** (already written into "What Parts 4 and 5 use" at cb1bf42e):
+
+- `MenuList`: a disabled row with an `action` is operable, so it carries no `aria-disabled`; it is greyed by the class
+  `unavailable` (the disabled row's `ink-3`, the row's own cursor). A busy action's row carries `aria-busy="true"`; its
+  hint carries the words. The active row at the start never falls on the manage row. A missing `onAction` is a silent
+  no-op: each page tests its action row through the DOM.
+- The reader's sheet `@source`s only `src/ui/controls/MenuList.tsx` of the shared controls (Tailwind reads comments; the
+  directory had brought in `.grow`); a shared control the reader uses that brings utilities needs its own line.
+  `tests/styles/no-has.test.ts` walks a file source as well as a directory.
+- The test counts the tasks predicted grew with the review rounds' tests (the sheet test holds 23, not 22).
+
+**Parked minors** (none blocks Parts 4 and 5; for the final review or Part 7): `Button` draws an empty `<span>` for the
+children `''` (no caller passes it); no rule for a disabled `raised` button (no caller); `iconsOnly` with a disabled
+segment's `title` untested (no plan uses `iconsOnly`); the reader's own `@source "../../pdf-reader/"` reads the engine's
+`.mjs` comments, which put `.table { display: table }` in the reader's sheet — inert today (neither PDF.js nor the
+reader uses a class `table`), to be closed with the other sources in Part 7.
+
+**What the parts after it need:**
+
+- Parts 4 and 5: "What Parts 4 and 5 use", as built; the controls sheet (`src/entrypoints/controls/`, development builds
+  only) to add a specimen to when a page's own control is worth seeing alone. Their worktrees are created from this
+  record's commit.
+- Part 6: `useRejected` (`@/ui/use-rejected`), the role `tip-shadow` (`--axt-tip-shadow` in a shadow root), `MenuList`'s
+  contract above for the reader's service menu.
+- Part 7: `docs/DESIGN.md`'s entry-point row names the controls sheet; the sheet imports `styleTile` from
+  `src/ui/appearance/tiles.ts`, which Part 7 moves rather than deletes (ruling 23), this import with it; the pages'
+  hairline utility becomes `line` once the old pages' `--axt-line` goes; `tests/e2e/probes/pages-pixels.mjs` holds only
+  until Parts 4 and 5 replace the pages it records (it does not apply in their worktrees) and retires here; the old
+  `src/ui/{Button,Field,Segmented,Menu,MenuField,Spinner,Switch,LucideIcon}.tsx` and
+  `tests/ui/{menu,segmented,lucide-icon}.test.ts` go once both pages have left them; the parked minors above.
