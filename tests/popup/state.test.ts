@@ -561,4 +561,26 @@ describe('the service health record: subscribed first, read after (finding 3, Ta
     spy.mockRestore()
     stop()
   })
+
+  it('a first read that fails is no unhandled rejection: the popup goes on with no mark, and a later event still lands', async () => {
+    const spy = vi.spyOn(serviceHealth, 'rejectedServices').mockRejectedValue(new Error('storage gone'))
+    const unhandled: unknown[] = []
+    const listen = (reason: unknown) => { unhandled.push(reason) }
+    process.on('unhandledRejection', listen)
+    try {
+      const made = world()
+      made.w.page = page('stopped', null)
+      const stop = made.popup.start()
+      await flush()
+      expect(unhandled).toEqual([])
+      expect(made.input().rejected).toEqual([])
+      await markRejected('svc-abcd1234')
+      await flush()
+      expect(made.input().rejected).toEqual(['svc-abcd1234'])
+      stop()
+    } finally {
+      process.off('unhandledRejection', listen)
+      spy.mockRestore()
+    }
+  })
 })

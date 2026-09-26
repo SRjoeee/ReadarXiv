@@ -404,7 +404,8 @@ export function createPopupState(host: PopupHost): PopupState {
       // already superseded, and applying it would overwrite what the event just gave (Codex review, round 3)
       let heardRejected = false
       const stopRejected = watchRejected(ids => { heardRejected = true; rejected = [...ids]; changed() })
-      void rejectedServices().then(ids => { if (!heardRejected) { rejected = [...ids]; changed() } })
+      // A read that fails leaves no mark shown, and the watcher still brings the next change
+      void rejectedServices().then(ids => { if (!heardRejected) { rejected = [...ids]; changed() } }).catch(() => undefined)
       const stopBroadcasts = host.onBroadcast({
         // A pack downloaded on the settings page: this popup's Download button must not stay over an installed pack
         'axt:pack-changed': message => {
