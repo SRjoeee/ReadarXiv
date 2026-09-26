@@ -92,9 +92,9 @@ await page.goto(`https://arxiv.org/pdf/${paper}`, { waitUntil: 'load' })
     !!framed && seen.entries.length === 0 && seen.primary.length === 1 && seen.stack[0]?.disabled && !!seen.stack[0]?.title && !seen.style,
     JSON.stringify(seen))
   // the settings are a link (the interface review): from the reader's frame over arXiv's page it opens the settings page
-  // at the reader's section, in a new tab. On a tab of its own: in this one, which showed the browser's viewer before
-  // (step 2), the reader's right side hears no pointer at all, on this build and on 8d45de5a alike — a matter of its
-  // own, found here (2026-09-26), which this check is not about
+  // at the reader's section, in a new tab. On a tab of its own: popupOver sizes the popup's page (setViewportSize, a
+  // device-metrics emulation), after which the reader's frame in this tab hears the pointer over its left part only —
+  // the harness's doing, which no browser a reader uses does (#302)
   const own = await context.newPage()
   await own.goto(`https://arxiv.org/pdf/${paper}`, { waitUntil: 'load' })
   const frame = await (await own.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null))?.contentFrame()
