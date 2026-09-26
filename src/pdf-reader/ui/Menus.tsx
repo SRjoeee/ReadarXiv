@@ -29,8 +29,7 @@ export function ZoomMenu({ controller }: { controller: ReaderController }) {
   ]
   return (
     <>
-      <ToolbarButton label={R.zoom.value} value={`${Math.round(state.scale * 100)}%`} anchor={pop.anchor} {...pop.trigger} className="zoom-value">
-        <span data-zoom-value className="tabular-nums">{Math.round(state.scale * 100)}%</span>
+      <ToolbarButton label={R.zoom.value} value={`${Math.round(state.scale * 100)}%`} valueClassName="tabular-nums" anchor={pop.anchor} {...pop.trigger} className="zoom-value">
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
       <Popover {...pop.popover} role="menu" label={R.zoom.value}>
@@ -40,14 +39,14 @@ export function ZoomMenu({ controller }: { controller: ReaderController }) {
   )
 }
 
-/** `name`: the toolbar's menu has one, so that the capsule's choose-language action can open it (usePopover) */
+/** `name`: the toolbar's menu and the reading options' each have one, so that the capsule's choose-language action can
+ *  open either (usePopover, App.tsx) */
 export function LanguageMenu({ controller, name }: { controller: ReaderController; name?: string }) {
   const current = useReader(controller, s => s.settings?.targetLanguage ?? '')
   const pop = usePopover('listbox', name)
   return (
     <>
-      <ToolbarButton label={S.rows.language} value={current ? languageName(current) : undefined} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
-        <span>{current ? languageName(current) : ''}</span>
+      <ToolbarButton label={S.rows.language} value={current ? languageName(current) : ''} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
       <Popover {...pop.popover} role="listbox" label={S.rows.language}>
@@ -67,7 +66,6 @@ export function ServiceMenu({ controller }: { controller: ReaderController }) {
   return (
     <>
       <ToolbarButton label={S.rows.service} value={serviceName(config.provider, config.services)} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
-        <span>{serviceName(config.provider, config.services)}</span>
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
       <Popover {...pop.popover} role="listbox" label={S.rows.service}>

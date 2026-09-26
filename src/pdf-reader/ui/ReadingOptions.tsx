@@ -54,7 +54,7 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
         {/* below 900 px the toolbar's language and service menus live here, first (the design, §5) */}
         <div className="row narrow-only">
           {S.rows.language}
-          <LanguageMenu controller={controller} />
+          <LanguageMenu controller={controller} name="options-language" />
         </div>
         <div className="row narrow-only">
           {S.rows.service}

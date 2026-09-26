@@ -215,7 +215,7 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.keyboard.type('fra')
   check('the language menu searches as it is typed', (await page.getByRole('option').count()) === 1)
   await page.keyboard.press('Escape')
-  check('Escape closes it, the focus back on its button', await page.evaluate(() => document.activeElement?.getAttribute('aria-label')?.startsWith('目标语言')))
+  check('Escape closes it, the focus back on its button', await page.evaluate(() => !!(a => a && (a.getAttribute('aria-labelledby')?.split(' ').map(i => document.getElementById(i)?.textContent).join(' ') ?? a.getAttribute('aria-label')))(document.activeElement)?.includes('目标语言')))
   const [download] = await Promise.all([page.waitForEvent('download'), (async () => { await page.getByRole('button', { name: '下载' }).click(); await page.getByRole('menuitem', { name: '原文 PDF' }).click() })()])
   check('the original downloads, named by the paper', download.suggestedFilename() === `${paper}.pdf`, download.suggestedFilename())
   await page.getByRole('button', { name: '翻译服务' }).click()
@@ -239,10 +239,10 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.keyboard.press('Escape')
   await page.setViewportSize({ width: 880, height: 900 })
   await page.waitForTimeout(400)
-  const inBar = await page.evaluate(() => getComputedStyle(document.querySelector('[data-zone="trail"] > button[aria-label^="目标语言"]')).display)
+  const inBar = await page.evaluate(() => getComputedStyle([...document.querySelectorAll('[data-zone="trail"] > button')].find(b => b.textContent.includes('目标语言'))).display)
   await page.getByRole('button', { name: '阅读选项' }).click()
   await page.waitForTimeout(300)
-  const inOptions = await page.evaluate(() => { const b = document.querySelector('.pop:popover-open .narrow-only button[aria-label^="目标语言"]'); return !!b && b.getBoundingClientRect().width > 0 })
+  const inOptions = await page.evaluate(() => { const b = [...document.querySelectorAll('.pop:popover-open .narrow-only button')].find(x => x.textContent.includes('目标语言')); return !!b && b.getBoundingClientRect().width > 0 })
   check('under 900 px the language menu leaves the bar for the options', inBar === 'none' && inOptions, JSON.stringify({ inBar, inOptions }))
   await shot(page, '20-options-narrow')
   await page.close()
@@ -413,7 +413,7 @@ for (const embedded of ['1', '0']) {
     const seen = {}
     for (const name of ['缩放比例', '目标语言']) {
       // the bar's own: named by its words and what it shows (WCAG 2.5.3)
-      await page.locator(`[data-zone="trail"] > :is(button, a)[aria-label^="${name}"], [data-zoom] > button[aria-label^="${name}"]`).focus()
+      await page.locator('header').getByRole('button', { name }).focus()
       await page.keyboard.press('Enter')
       await page.waitForTimeout(350)
       await page.keyboard.press('ArrowDown')
@@ -426,7 +426,7 @@ for (const embedded of ['1', '0']) {
   }
   await patch(page, { pdfReader: { appearance: 'system' } })
   // C. every name in the service menu whole
-  await page.locator('[data-zone="trail"] > [aria-label^="翻译服务"]').click()
+  await page.locator('header').getByRole('button', { name: '翻译服务' }).click()
   await page.waitForTimeout(400)
   const cut = await page.evaluate(() => [...document.querySelectorAll('.pop:popover-open .item .truncate')].filter(s => s.scrollWidth > s.clientWidth + 1).map(s => s.textContent))
   check('the service menu shows every name whole', cut.length === 0, JSON.stringify(cut))
@@ -525,7 +525,7 @@ for (const embedded of ['1', '0']) {
   await page.keyboard.press('Escape')
   check('the reading options take the focus to their first control that shows', inside === '对照高亮', String(inside))
   // a Tab out of an open menu closes it, and the focus goes on
-  await page.focus('header [aria-label^="缩放比例"]')
+  await page.locator('header').getByRole('button', { name: '缩放比例' }).focus()
   await page.keyboard.press('Enter')
   await page.waitForTimeout(300)
   await page.keyboard.press('Tab')
@@ -543,36 +543,40 @@ for (const embedded of ['1', '0']) {
     return out
   })
   check('every point of a control\'s drawn box is that control\'s: grown hit areas never overlap', stolen.length === 0, stolen.join(', '))
-  // a pressed button is told from a hovered one, the pointer still on it; its mark stands 3:1 against the bar
-  const sync = page.locator('header button[aria-label="同步滚动"]')
-  const look = () => sync.evaluate(b => { const s = getComputedStyle(b); return [b.getAttribute('aria-pressed'), s.backgroundColor, s.boxShadow, s.color].join(' | ') })
-  if ((await sync.getAttribute('aria-pressed')) === 'true') { await sync.click(); await page.mouse.move(700, 500) }
-  await sync.hover(); await page.waitForTimeout(250)
-  const offHover = await look()
-  await sync.click(); await page.waitForTimeout(250)
-  const onHover = await look()
-  check('a pressed button is told from a hovered one, the pointer still on it (the interface review)', offHover.split(' | ').slice(1).join() !== onHover.split(' | ').slice(1).join(), JSON.stringify({ offHover, onHover }))
-  const ratios = async () => page.evaluate(() => {
-    const px = color => { const c = document.createElement('canvas'); c.width = c.height = 1; const g = c.getContext('2d'); g.fillStyle = color; g.fillRect(0, 0, 1, 1); return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3) }
-    const lum = ([r, g, b]) => [r, g, b].map(v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0)
-    const ratio = (a, b) => { const [x, y] = [lum(px(a)), lum(px(b))].sort((m, n) => n - m); return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100 }
-    const token = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim()
-    // the colour of each state's own mark, as its box-shadow draws it
-    const mark = sel => (getComputedStyle(document.querySelector(sel)).boxShadow.match(/(?:oklch|oklab|rgba?|color)\([^)]*\)/) ?? [null])[0]
-    const bar = getComputedStyle(document.querySelector('header')).backgroundColor, well = getComputedStyle(document.querySelector('.seg.display')).backgroundColor
-    const pressed = mark('header .tbtn[aria-pressed="true"]'), thumb = mark('.seg.display .thumb')
-    return { pressed: pressed && ratio(pressed, bar), thumb: thumb && ratio(thumb, well), ink3: token('--ink-3') }
-  })
-  await patch(page, { pdfReader: { appearance: 'light' } })
-  await page.waitForTimeout(700)
-  const light = await ratios()
-  await patch(page, { pdfReader: { appearance: 'dark' } })
-  await page.waitForTimeout(700)
-  const dark = await ratios()
-  await patch(page, { pdfReader: { appearance: 'light' } })
-  await page.waitForTimeout(700)
-  check('the pressed button\'s mark and the chosen segment\'s stand 3:1 against what they sit on, light and dark (WCAG 1.4.11)', [light.pressed, light.thumb, dark.pressed, dark.thumb].every(r => r >= 3), JSON.stringify({ light, dark }))
+  // a press on an open popover's own button closes it: the button's click, not the focus it takes on mousedown (the
+  // branch review: the press closed it and the click opened it again); a menu the reading options hold, likewise
+  const shown = id => page.evaluate(i => !!document.getElementById(i)?.matches(':popover-open'), id)
+  const zoomButton = page.locator('header').getByRole('button', { name: '缩放比例' })
+  const zoomMenu = await zoomButton.getAttribute('popovertarget')
+  await zoomButton.click(); await page.waitForTimeout(300)
+  const zoomOpened = await shown(zoomMenu)
+  await zoomButton.click(); await page.waitForTimeout(400)
+  const zoomAfter = await shown(zoomMenu)
+  await page.setViewportSize({ width: 800, height: 800 }); await page.waitForTimeout(300)
+  const optionsButton = page.locator('header button[aria-label="阅读选项"]')
+  await optionsButton.click(); await page.waitForTimeout(400)
+  const inner = page.locator('#pop-options').getByRole('button', { name: '目标语言' })
+  await inner.click(); await page.waitForTimeout(400)
+  const innerOpened = await shown('pop-options-language')
+  await inner.click(); await page.waitForTimeout(400)
+  const innerAfter = { menu: await shown('pop-options-language'), options: await shown('pop-options') }
+  await optionsButton.click(); await page.waitForTimeout(400)
+  const optionsAfter = await shown('pop-options')
+  await page.setViewportSize({ width: 1440, height: 900 }); await page.waitForTimeout(300)
+  check('a press on an open popover\'s own button closes it, the reading options\' menus too', zoomOpened && !zoomAfter && innerOpened && !innerAfter.menu && innerAfter.options && !optionsAfter, JSON.stringify({ zoomOpened, zoomAfter, innerOpened, innerAfter, optionsAfter }))
+  // a touch screen: no hover's look is left on a control once a tap has passed (the pointer 'hovers' there after it)
+  const cdp = await page.context().newCDPSession(page)
+  // touch emulation, which makes (hover: none) true; emulating the media feature alone did not reach the page
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 })
+  const swap = page.locator('header button[aria-label="交换左右"]')
+  await swap.hover(); await page.waitForTimeout(250)
+  const touched = await swap.evaluate(b => ({ pressed: b.getAttribute('aria-pressed'), bg: getComputedStyle(b).backgroundColor }))
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false })
+  await page.mouse.move(700, 500)
+  check('a touch screen: a control keeps no hover\'s look once the pointer is on it (the interface review)', touched.pressed === 'false' && /rgba\(0, 0, 0, 0\)|transparent/.test(touched.bg), JSON.stringify(touched))
   // forced colours: the chosen display, a pressed button and a switch that is on keep a mark of their own
+  await patch(page, { pdfReader: { sync: true } })
+  await page.waitForTimeout(400)
   await page.emulateMedia({ forcedColors: 'active' })
   await page.waitForTimeout(300)
   const forced = await page.evaluate(() => {

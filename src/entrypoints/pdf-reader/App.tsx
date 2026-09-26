@@ -72,10 +72,14 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   )
 }
 
-/** the capsule's choose-language action: the toolbar's language menu, or the reading options where it lives below 900 px (§5) */
+/** the capsule's choose-language action: the language menu itself, the toolbar's, or below 900 px the one the reading
+ *  options hold (§5), opened in them — its search takes the focus, whatever rows come before it (the branch review:
+ *  below 500 px the focus went to the download) */
 function chooseLanguage() {
   const inBar = document.querySelector<HTMLElement>('[popovertarget="pop-language"]')
-  document.getElementById(inBar?.offsetParent ? 'pop-language' : 'pop-options')?.showPopover()
+  if (inBar?.offsetParent) { document.getElementById('pop-language')?.showPopover(); return }
+  document.getElementById('pop-options')?.showPopover()
+  document.getElementById('pop-options-language')?.showPopover()
 }
 
 /**

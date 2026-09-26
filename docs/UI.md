@@ -213,13 +213,13 @@ The bilingual PDF reader's own words (the reader's design, `experiments/pdf-bili
 | S-R-04 | The display switch | 显示 · 原文 · 对照 · 译文 | The radio group's name and its three choices, in tooltips and to screen readers; the arrows move the choice. No single key chooses one (WCAG 2.1.4; the maintainer removed 1 2 3, 2026-09-26) |
 | S-R-05 | Swap sides | 交换左右 | 对照 only; greyed in the single displays |
 | S-R-06 | Sync scrolling | 同步滚动 | 对照 only; greyed in the single displays |
-| S-R-07 | Zoom | 缩小 · 放大 · 缩放比例 · 适合宽度 · 适合页面 · 实际大小 | ⌘− and ⌘+ (Ctrl elsewhere), in `aria-keyshortcuts` too. The value's button is named 缩放比例 and its value, as the language's and the service's are named by S-P-20 and S-P-10 and theirs (WCAG 2.5.3). Below 500 px − and + give way to the value's menu |
+| S-R-07 | Zoom | 缩小 · 放大 · 缩放比例 · 适合宽度 · 适合页面 · 实际大小 | ⌘− and ⌘+ (Ctrl elsewhere), in `aria-keyshortcuts` too. The value's button is labelled by its value, then 缩放比例, as the language's and the service's are by theirs, then S-P-20 and S-P-10 (WCAG 2.5.3, `aria-labelledby`). Below 500 px − and + give way to the value's menu |
 | S-R-08 | Reading options | 阅读选项 · 高亮颜色 · 外观 · 浅色 · 深色 · 跟随系统 · 深色时调暗页面 | With S-P-80 and S-P-85 |
 | S-R-09 | Download | 下载 · 译文 PDF · 原文 PDF | 译文 PDF greyed until the final translation is on screen. Below 500 px a row of the reading options, with 设置 (S-P-02, a link) and S-R-10 |
 | S-R-10 | Leave | 在默认查看器中打开 | Back to the browser's own viewer |
 | S-R-11 | Page pills | 原文页码 · 译文页码 · 上一页 · 下一页 | |
 | S-R-12 | A load or a translation under way | 正在加载 · 正在翻译 · 正在按当前设置重新翻译 | Said to screen readers in the status region, not shown: the 2 px line along the toolbar's foot shows how far it has come (the maintainer, 2026-09-25) |
-| S-R-13 | Language not supported | PDF 对照暂不支持{语言} · 选择语言 | The action opens the language menu |
+| S-R-13 | Language not supported | PDF 对照暂不支持{语言} · 选择语言 | The action opens the language menu: the toolbar's, or below 900 px the one the reading options hold, opened in them |
 | S-R-14 | Narrow window | 窗口较窄，暂只显示译文 | Once, when 对照 shows the translation alone (after S-P-74) |
 | S-R-15 | A notice's close button | 关闭 | |
 | S-R-16 | The card · too many requests | 请求过于频繁 | The reader's own words for S-E's rate limit: S-E's 稍后自动重试 is the HTML page's chain retrying by itself, and a stopped run here does not — the reader retries (Part 6's interface review) |

@@ -91,6 +91,21 @@ await page.goto(`https://arxiv.org/pdf/${paper}`, { waitUntil: 'load' })
   check('the reader open: the popup\'s primary, the stacked display greyed with its reason, no style row',
     !!framed && seen.entries.length === 0 && seen.primary.length === 1 && seen.stack[0]?.disabled && !!seen.stack[0]?.title && !seen.style,
     JSON.stringify(seen))
+  // the settings are a link (the interface review): from the reader's frame over arXiv's page it opens the settings page
+  // at the reader's section, in a new tab. On a tab of its own: in this one, which showed the browser's viewer before
+  // (step 2), the reader's right side hears no pointer at all, on this build and on 8d45de5a alike — a matter of its
+  // own, found here (2026-09-26), which this check is not about
+  const own = await context.newPage()
+  await own.goto(`https://arxiv.org/pdf/${paper}`, { waitUntil: 'load' })
+  const frame = await (await own.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null))?.contentFrame()
+  await frame?.waitForSelector('[data-zone="trail"] > a[aria-label="设置"]', { timeout: 30_000 }).catch(() => null)
+  const settingsTab = () => context.pages().find(p => p.url().endsWith('/options.html#pdf-reader'))
+  // the bar's own: the reading options hold a copy for a narrow window, hidden here
+  await frame?.click('[data-zone="trail"] > a[aria-label="设置"]')
+  for (let i = 0; i < 50 && !settingsTab(); i++) await sleep(200)
+  check('the reader over the PDF: its settings link opens the settings page at the reader\'s section, in a new tab', !!settingsTab(), context.pages().map(p => p.url()).join(' '))
+  await settingsTab()?.close()
+  await own.close()
 }
 
 // 4. a PDF-only submission (the corpus's 2608.07562): the PDF entry greyed, without words (the design, §2)

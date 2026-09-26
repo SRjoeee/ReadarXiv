@@ -126,10 +126,10 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .tbtn::before { content: ""; position: absolute; inset: -7px -2px; }
   /* the zoom's three sit side by side: grown across, each would take the edge of its neighbour */
   [data-zoom] > .tbtn::before { inset-inline: 0; }
-  .tbtn:hover, .tbtn[aria-expanded="true"], .tbtn[aria-pressed="true"] { background: var(--fill); color: var(--ink); }
-  /* pressed: a ring of its own, so that a press is seen with the pointer still on the button, ink-3 standing 3.64:1 and
-     3.39:1 against the bar (WCAG 1.4.11); the fill alone was the hover's, 1.2:1 (the interface review) */
-  .tbtn[aria-pressed="true"] { box-shadow: inset 0 0 0 1px var(--ink-3); }
+  .tbtn[aria-expanded="true"], .tbtn[aria-pressed="true"] { background: var(--fill); color: var(--ink); }
+  /* a hover's look only where a pointer hovers: on a touch screen :hover latches after a tap and reads as a state stuck
+     on (the interface review); every :hover below is held the same way (tests/styles/reader-sheet.test.ts) */
+  @media (hover: hover) { .tbtn:hover { background: var(--fill); color: var(--ink); } }
   .chrome a.tbtn { text-decoration: none; }
   .tbtn:active { scale: 0.96; }
   .tbtn[aria-disabled="true"] { background: none; color: var(--ink-3); opacity: 0.55; }
@@ -145,21 +145,20 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .tip kbd { color: oklch(0.74 0.01 255); }
   /* a segmented control: equal segments in a well, the chosen one on a lifted thumb that slides (§6.2, §7) */
   .seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: 30px; padding: 2px; border-radius: 9px; background: var(--well); --i: 0; }
-  /* the thumb's edge in ink-3, 3:1 against the well, light and dark, as the pressed button's ring (WCAG 1.4.11; the
-     interface review: the lifted fill alone stood 1.2:1) */
   .seg .thumb { position: absolute; inset-block: 2px; inset-inline-start: 2px; width: calc((100% - 4px) / var(--n, 3)); border-radius: 7px; background: var(--lift);
-    box-shadow: 0 0 0 1px var(--ink-3), 0 1px 2px oklch(0 0 0 / 0.08); translate: calc(var(--i) * 100%) 0; transition: translate 220ms var(--ease); pointer-events: none; }
+    box-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.06), 0 1px 2px oklch(0 0 0 / 0.08); translate: calc(var(--i) * 100%) 0; transition: translate 220ms var(--ease); pointer-events: none; }
   .seg > button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; height: 100%; padding: 0 12px; border-radius: 7px; color: var(--ink-2); font: 500 12.5px/1 var(--font); white-space: nowrap; transition: color 150ms ease-out; }
   .seg > button[aria-checked="true"], .seg > button[aria-pressed="true"] { color: var(--ink); }
-  .seg > button:not([aria-checked="true"]):not([aria-disabled="true"]):hover { color: var(--ink); }
+  @media (hover: hover) { .seg > button:not([aria-checked="true"]):not([aria-disabled="true"]):hover { color: var(--ink); } }
   .seg > button[aria-disabled="true"] { color: var(--ink-3); opacity: 0.55; }
   .seg.display > button { width: 40px; padding: 0; }
   .seg.small { height: 26px; }
   .seg.small > button { padding: 0 10px; font-size: 12px; }
   .arxiv-id { display: inline-flex; flex: none; align-items: center; gap: 2px; margin: -2px -4px; padding: 2px 4px; border-radius: 5px; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; text-decoration: none; transition: color 150ms, background-color 150ms; }
   .arxiv-id svg { opacity: 0; translate: -2px 2px; transition: opacity 150ms, translate 150ms ease-out; }
-  .arxiv-id:hover, .arxiv-id:focus-visible { color: var(--ink); background: var(--fill); }
-  .arxiv-id:hover svg, .arxiv-id:focus-visible svg { opacity: 1; translate: 0 0; }
+  .arxiv-id:focus-visible { color: var(--ink); background: var(--fill); }
+  .arxiv-id:focus-visible svg { opacity: 1; translate: 0 0; }
+  @media (hover: hover) { .arxiv-id:hover { color: var(--ink); background: var(--fill); } .arxiv-id:hover svg { opacity: 1; translate: 0 0; } }
   @container lead (width < 320px) { .paper-title [data-title] { display: none; } }
   .paper-title[data-cramped] [data-arxiv] { display: none; }
   /* popovers (§6.7): under their button, 6 px below, kept inside the window; they grow from it */
@@ -199,7 +198,8 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .toc-list { flex: 1; margin: 0; padding: 0 6px 16px; overflow: auto; list-style: none; overscroll-behavior: contain; scrollbar-width: thin; }
   .toc-list li[hidden] { display: none; }
   .entry { display: flex; align-items: center; gap: 2px; height: 28px; padding-inline: 0 8px; border-radius: 6px; }
-  .entry:hover, .entry[aria-current="true"] { background: var(--fill); }
+  .entry[aria-current="true"] { background: var(--fill); }
+  @media (hover: hover) { .entry:hover { background: var(--fill); } }
   /* the link is the row from top to bottom: the row is lit as a whole, and pressed as a whole (the interface review) */
   .entry a { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 8px; padding-block: 5px; color: inherit; text-decoration: none; }
   .entry .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500; }
@@ -216,17 +216,20 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .pill { position: absolute; z-index: 5; inset-block-end: 16px; inset-inline-start: 50%; translate: -50% 0; display: flex; align-items: center; height: 30px; padding: 0 3px; border-radius: 999px;
     background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums;
     opacity: 0; pointer-events: none; transition: opacity 200ms ease-out; }
-  .pill[data-live], .pill:hover, .pill:focus-within { opacity: 1; pointer-events: auto; }
+  .pill[data-live], .pill:focus-within { opacity: 1; pointer-events: auto; }
+  @media (hover: hover) { .pill:hover { opacity: 1; pointer-events: auto; } }
   .pill button { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; color: var(--ink-3); transition: background-color 150ms, color 150ms; }
-  .pill button:hover { background: var(--fill); color: var(--ink); }
+  @media (hover: hover) { .pill button:hover { background: var(--fill); color: var(--ink); } }
   .pill input { width: 3.2ch; height: 22px; border: 0; border-radius: 6px; background: none; color: var(--ink); font-weight: 500; text-align: end; }
-  .pill input:hover { background: var(--fill); }
+  @media (hover: hover) { .pill input:hover { background: var(--fill); } }
   .pill .of { padding-inline: 3px 5px; }
   /* a pane's scroll indicator (§6.5): its right edge; the thumb's place a scroll-driven animation on the pane's timeline */
   .indicator { position: absolute; z-index: 4; inset-block: 6px; inset-inline-end: 0; width: 14px; display: flex; justify-content: center; opacity: 0; transition: opacity 300ms ease-out; }
-  .indicator[data-live], .indicator:hover, .indicator[data-drag] { opacity: 1; transition-duration: 120ms; }
+  .indicator[data-live], .indicator[data-drag] { opacity: 1; transition-duration: 120ms; }
+  @media (hover: hover) { .indicator:hover { opacity: 1; transition-duration: 120ms; } }
   .indicator i { position: absolute; top: 0; width: 4px; height: var(--thumb, 40px); border-radius: 999px; background: color-mix(in oklab, var(--ink) 30%, transparent); transition: width 150ms ease-out, background-color 150ms; animation: thumb linear both; animation-timeline: --pane-y; }
-  .indicator:hover i, .indicator[data-drag] i { width: 7px; background: color-mix(in oklab, var(--ink) 45%, transparent); cursor: grab; }
+  .indicator[data-drag] i { width: 7px; background: color-mix(in oklab, var(--ink) 45%, transparent); cursor: grab; }
+  @media (hover: hover) { .indicator:hover i { width: 7px; background: color-mix(in oklab, var(--ink) 45%, transparent); cursor: grab; } }
   .indicator[data-drag] i { cursor: grabbing; }
   /* the progress line (§6.6): along the toolbar's foot, 2 px of quiet ink, its length the share done, grown by a
      transform; it fades in and out, at the length it reached (ProgressLine) */
@@ -248,7 +251,7 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .capsule .chip { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; color: inherit; text-decoration: none; border-radius: 999px; background: var(--fill); font-size: 12px; font-weight: 500; transition: scale 150ms; }
   .capsule .chip:active { scale: 0.96; }
   .capsule .close { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; color: var(--ink-3); }
-  .capsule .close:hover { background: var(--fill); color: var(--ink); }
+  @media (hover: hover) { .capsule .close:hover { background: var(--fill); color: var(--ink); } }
   /* the card (§6.6): centred in the translation's pane, which it covers (the pane marks itself: no relational selector in the sheet, §12) */
   .pane[data-card] .viewerContainer { visibility: hidden; }
   .card { position: absolute; z-index: 6; inset-block-start: 42%; inset-inline-start: 50%; translate: -50% -50%; width: min(300px, calc(100% - 48px)); padding: 22px 20px 18px; border-radius: 14px;
@@ -276,9 +279,10 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
 /* forced colours (Windows' contrast themes) drop the fills and the rings: the chosen display, a pressed button and a
    switch that is on take the system's Highlight, as a selection does (the interface review) */
 @media (forced-colors: active) {
-  .seg .thumb, .tbtn[aria-pressed="true"], .switch[aria-checked="true"] { forced-color-adjust: none; background: Highlight; }
-  .seg > button[aria-checked="true"], .tbtn[aria-pressed="true"] { forced-color-adjust: none; color: HighlightText; }
-  .switch { border: 1px solid ButtonText; }
+  .seg .thumb, .tbtn[aria-pressed="true"]:not([aria-disabled="true"]), .switch[aria-checked="true"] { forced-color-adjust: none; background: Highlight; }
+  .seg > button[aria-checked="true"], .tbtn[aria-pressed="true"]:not([aria-disabled="true"]) { forced-color-adjust: none; color: HighlightText; }
+  /* an outline, which takes no room: a border would push the knob to the track's edge */
+  .switch { outline: 1px solid ButtonText; outline-offset: -1px; }
   .switch::after { forced-color-adjust: none; background: ButtonText; }
   .switch[aria-checked="true"]::after { background: HighlightText; }
   .tbtn[aria-disabled="true"], .seg > button[aria-disabled="true"] { color: GrayText; }

@@ -17,7 +17,8 @@ function Harness() {
     createElement('output', null, String(closedCount)))
 }
 
-/** the focus moving from inside the popover to `to`, as a Tab does: the browser's focusout, with where it goes */
+/** the focus moving from inside the popover to `to`, as a Tab does: the browser's focusout, with where it goes. The
+ *  focus is put there first: the stub's toggle runs at once, where the browser's is queued and finds the focus moved */
 const leave = (pop: HTMLElement, to: HTMLElement | null) => act(async () => {
   to?.focus()
   pop.querySelector('[data-inside]')!.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: to }))
@@ -55,6 +56,37 @@ describe('the reader\'s popover (the reader\'s design, §6.7)', () => {
     await act(async () => { pop.showPopover() })
     await leave(pop, next)
     expect([isOpen(pop), document.activeElement]).toEqual([false, next])
+  })
+
+  it('leaves a press on its own button to the button, whose click closes it: closed on the press, the click opened it again (the branch review)', async () => {
+    const { container } = await mountElement(createElement(Harness))
+    const trigger = container.querySelector<HTMLElement>('[data-trigger]')!, pop = container.querySelector<HTMLElement>('[popover]')!
+    await act(async () => { pop.showPopover() })
+    // the press lands on the button's icon; the focus goes to the button on mousedown, before the click
+    const icon = trigger.appendChild(document.createElement('span'))
+    icon.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await leave(pop, trigger)
+    expect(isOpen(pop)).toBe(true)
+  })
+
+  it('closes when Shift+Tab goes back to its button, no pointer pressing (APG)', async () => {
+    const { container } = await mountElement(createElement(Harness))
+    const trigger = container.querySelector<HTMLElement>('[data-trigger]')!, pop = container.querySelector<HTMLElement>('[popover]')!
+    await act(async () => { pop.showPopover() })
+    trigger.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    trigger.dispatchEvent(new Event('pointerup', { bubbles: true }))
+    await leave(pop, trigger)
+    expect(isOpen(pop)).toBe(false)
+  })
+
+  it('keeps a focus already inside it as it opens: the choose-language action puts it in the menu it holds', async () => {
+    const dialog = await mountElement(createElement(Popover, { id: 'pop-d', anchor: '--pop-d', onOpenChange: () => {}, role: 'dialog', label: 'Options' },
+      createElement('button', { type: 'button', 'data-first': '' }, 'download'), createElement('button', { type: 'button', 'data-language': '' }, 'language')))
+    const pop = dialog.container.querySelector<HTMLElement>('[popover]')!
+    const language = pop.querySelector<HTMLElement>('[data-language]')!
+    language.focus()
+    await act(async () => { pop.showPopover() })
+    expect(document.activeElement).toBe(language)
   })
 
   it('stays open when the focus goes nowhere, a press on its own words (the interface review)', async () => {

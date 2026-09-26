@@ -187,13 +187,14 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 6. 设置 (`settings`): opens the settings page at its PDF reader section.
 7. 在默认查看器中打开 (`log-out`): leaves the reader for the browser's own viewer (the maintainer's wording, 2026-09-25).
 
-Buttons are 30 × 30 with a 7 px radius and a hit area grown to the bar's height; hover and open take the fill; pressed
-adds an inset 1 px ink-3 ring, so that a press is seen with the pointer still on the button (the fill alone, the
-hover's, stood 1.2:1 against the bar; ink-3 stands 3.64:1 and 3.39:1, WCAG 1.4.11). Every button has a tooltip: after
-500 ms of hover, at once on keyboard focus; one line always (a tooltip wrapped when it was measured at its last place
-near the window's edge); the shortcut, or the value the button shows, in a lighter `kbd` after the words. The zoom's
-value, the language and the service are named by their words and what they show (缩放比例 83%, 目标语言 简体中文:
-WCAG 2.5.3). 设置 is a link, opened in a new tab. The bar is the page's banner: each control a Tab stop of its own (an
+Buttons are 30 × 30 with a 7 px radius and a hit area grown to the bar's height; hover, open and pressed take the fill,
+and a hover's look only where a pointer hovers (`@media (hover: hover)`: on a touch screen it latched after a tap).
+The interface review proposed a 1 px ring for pressed, since the fill is the hover's too and stands 1.2:1 against the
+bar; the maintainer kept the design without it (「这个不要 我们保留之前的设计」, 2026-09-26). Every button has a tooltip:
+after 500 ms of hover, at once on keyboard focus; one line always (a tooltip wrapped when it was measured at its last
+place near the window's edge); the shortcut, or the value the button shows, in a lighter `kbd` after the words. The
+zoom's value, the language and the service are labelled by what is on them — the value first, then their words, hidden
+(83% 缩放比例, 简体中文 目标语言: WCAG 2.5.3, by `aria-labelledby`). 设置 is a link, opened in a new tab. The bar is the page's banner: each control a Tab stop of its own (an
 ARIA toolbar would have promised arrow keys between them). In forced colours the chosen display, a pressed button and
 a switch that is on take the system's Highlight (the interface review, 2026-09-26).
 
@@ -228,8 +229,7 @@ then replaced by the maintainer's letters in the middle).
 It is a single choice, so it is a radio group to assistive technology: `role="radiogroup"` named 显示, three
 `role="radio"` with `aria-checked` and the words as their names, arrow keys moving the choice. No single key chooses a
 display anywhere on the page: 1, 2 and 3 did, which a stray keystroke or a spoken word could set off (WCAG 2.1.4; the
-maintainer removed them, 2026-09-26). The chosen segment's thumb has a 1 px ink-3 edge, 3:1 against the well. A
-display that cannot be had (§8) is `aria-disabled` and skipped by the arrows.
+maintainer removed them, 2026-09-26). A display that cannot be had (§8) is `aria-disabled` and skipped by the arrows.
 
 ### 6.3 The contents sidebar
 
@@ -575,12 +575,14 @@ Each before the stage's pull request, on the heaviest demo paper, in a real wind
 ## 13. Accessibility
 
 - Every control has a name; icon-only buttons by `aria-label` equal to their tooltip's words; a button that shows a
-  value is named by its words and the value (WCAG 2.5.3); the zoom's shortcuts are in `aria-keyshortcuts`.
+  value is labelled by it, then by its words (WCAG 2.5.3); the zoom's shortcuts are in `aria-keyshortcuts`.
 - Tooltips on keyboard focus as on hover; everything a pointer does, a keyboard does; focus rings are 2 px `--focus`,
   2 px offset.
 - The display switch is a radio group (§6.2); the zoom, download and language/service menus are menus or listboxes with
   the shared `Menu`'s fixed keyboard behaviour; the reading options are a dialog, which takes the focus to its first
-  control that shows. A popover closes when the focus leaves it for another control.
+  control that shows. A popover closes when the focus leaves it for another control, a press on its own button left to
+  that button's click. The capsule's 选择语言 opens the language menu itself, the one the reading options hold in a
+  narrow window.
 - Forced colours keep every state: the chosen, pressed and switched-on controls take `Highlight`.
 - The status capsule is a live region present from the start; failures never move focus.
 - Contrast as §4.1; meaning never rides on colour alone (the danger colour always has its icon and words).

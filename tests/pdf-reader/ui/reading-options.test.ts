@@ -46,7 +46,8 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
   it('holds the language and service menus as its first rows, for a window under 900 px (§5)', async () => {
     const { container } = await open()
     const rows = [...container.querySelectorAll('[popover="auto"] > .narrow-only.row')]
-    expect(rows.map(r => r.querySelector('button')?.getAttribute('aria-label'))).toEqual(['目标语言 简体中文', '翻译服务 Microsoft 翻译'])
+    const nameOf = (b: Element | null) => b?.getAttribute('aria-labelledby')?.split(' ').map(id => document.getElementById(id)?.textContent).join(' ')
+    expect(rows.map(r => nameOf(r.querySelector('button')))).toEqual(['简体中文 目标语言', 'Microsoft 翻译 翻译服务'])
   })
 
   it('holds the download, the settings and the way back before them, for a window under 500 px (§5; the maintainer, 2026-09-26)', async () => {
