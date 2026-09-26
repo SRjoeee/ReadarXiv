@@ -80,7 +80,8 @@ describe('the floating button: what it is made of', () => {
     expect([...q('.axt-fb-anchor').children].map(e => e.className)).toEqual(['axt-fb-main', 'axt-fb-control axt-fb-options', 'axt-fb-control axt-fb-lock', 'axt-fb-menu'])
     // Our mark in its disc, inline vector and decorative: the button carries the name, and no image file is fetched
     const mark = q<SVGElement>('.axt-fb-main .axt-fb-disc svg.axt-fb-mark')
-    expect([mark.getAttribute('aria-hidden'), mark.getAttribute('viewBox'), mark.querySelector('circle')?.getAttribute('fill')]).toEqual(['true', '10.6 6.6 47 47', '#fff'])
+    // the view box drawn tight round the circle, 47 across (logo round 7 puts the circle at the origin)
+    expect([mark.getAttribute('aria-hidden'), mark.getAttribute('viewBox'), mark.querySelector('circle')?.getAttribute('fill')]).toEqual(['true', '0 0 47 47', '#fff'])
     expect(root.querySelector('img')).toBeNull()
     expect(q('.axt-fb-main .axt-fb-disc .axt-fb-tick')).not.toBeNull()
   })
