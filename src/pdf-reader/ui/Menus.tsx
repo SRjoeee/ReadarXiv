@@ -10,7 +10,7 @@ import type { ReaderController } from '../controller'
 import { Icon } from '@/ui/controls/Icon'
 import { languageItems } from './languages'
 import { Popover, usePopover } from '@/ui/controls/Popover'
-import { ReaderMenu } from './ReaderMenu'
+import { ReaderMenu } from '@/ui/controls/MenuList'
 import { ToolbarButton } from './ToolbarButton'
 import { useReader } from './use-reader'
 
