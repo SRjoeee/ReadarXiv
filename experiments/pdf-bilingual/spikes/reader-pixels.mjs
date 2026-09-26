@@ -33,9 +33,15 @@ const appear = value => page.evaluate(v => window.__reader.controller.patchSetti
 const save = (name, bytes) => writeFileSync(join(dir, name), bytes)
 const shot = async (name, locator) => {
   await page.waitForTimeout(400)
-  // a popover's rounded corner anti-aliases with a 1-px jitter run to run (GPU rasterisation, not the reader): clip it off
   const box = await locator.boundingBox()
-  save(`${name}.png`, await page.screenshot({ clip: { x: box.x + 1, y: box.y + 1, width: box.width - 2, height: box.height - 2 }, animations: 'disabled', caret: 'hide' }))
+  const r = await locator.evaluate(el => Number.parseFloat(getComputedStyle(el).borderRadius))
+  // a popover's/tooltip's rounded corner anti-aliases with a run-to-run pixel jitter (GPU rasterisation, measured, not
+  // the reader); its straight edges don't. Leave out only the r×r corner squares, in two bands whose union is
+  // everything else, and compare each byte for byte: one spanning the full height with the corner columns cut,
+  // one spanning the full width with the corner rows cut.
+  const opts = { animations: 'disabled', caret: 'hide' }
+  save(`${name}-x.png`, await page.screenshot({ clip: { x: box.x + r, y: box.y, width: box.width - 2 * r, height: box.height }, ...opts }))
+  save(`${name}-y.png`, await page.screenshot({ clip: { x: box.x, y: box.y + r, width: box.width, height: box.height - 2 * r }, ...opts }))
 }
 
 for (const theme of ['light', 'dark']) {
