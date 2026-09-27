@@ -13,6 +13,7 @@ import { Popover, usePopover } from '@/ui/controls/Popover'
 import { MenuList } from '@/ui/controls/MenuList'
 import { ToolbarButton } from './ToolbarButton'
 import { useReader } from './use-reader'
+import { useRejected } from '@/ui/use-rejected'
 
 const FITS = [['page-width', () => R.zoom.width], ['page-fit', () => R.zoom.page], ['page-actual', () => R.zoom.actual]] as const
 const SCALES = [0.5, 0.75, 1, 1.25, 1.5, 2]
@@ -59,10 +60,12 @@ export function LanguageMenu({ controller, name }: { controller: ReaderControlle
 
 export function ServiceMenu({ controller }: { controller: ReaderController }) {
   const state = useReader(controller, s => ({ settings: s.settings, pack: s.pack }))
+  // a refused key says so in the list, as in the popup (the redesign's design, §5.2; the controller's ruling 22)
+  const rejected = useRejected()
   const pop = usePopover('listbox')
   const config = state.settings
   if (!config) return null
-  const items = serviceItems(config, state.pack).map(i => ({ id: i.id, name: i.name, hint: i.hint, checked: i.selected, disabled: i.disabled && !i.action }))
+  const items = serviceItems(config, state.pack, rejected).map(i => ({ id: i.id, name: i.name, hint: i.hint, checked: i.selected, disabled: i.disabled && !i.action }))
   return (
     <>
       <ToolbarButton label={S.rows.service} value={serviceName(config.provider, config.services)} anchor={pop.anchor} {...pop.trigger} className="menu-btn">

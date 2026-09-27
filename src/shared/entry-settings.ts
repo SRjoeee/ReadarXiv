@@ -34,10 +34,14 @@ export interface EntrySettings {
   zoom: number
   /** The PDF page opens the bilingual reader (config `pdfReader.enabled`, the reader's design, §2) */
   pdfReader: boolean
+  /** The extension's appearance (config `theme`, the redesign's design, §3): the floating button draws in it */
+  theme: 'system' | 'light' | 'dark'
   floating: FloatingEntryState
 }
 /** What a page runs on when the background does not answer: the defaults, as everywhere */
-export const DEFAULT_ENTRY_SETTINGS: EntrySettings = { uiLanguage: 'auto', openIn: 'new-tab', zoom: 1, pdfReader: true, floating: DEFAULT_FLOATING_ENTRY }
+export const DEFAULT_ENTRY_SETTINGS: EntrySettings = { uiLanguage: 'auto', openIn: 'new-tab', zoom: 1, pdfReader: true, theme: 'system', floating: DEFAULT_FLOATING_ENTRY }
+/** The appearances this build knows: any other answer is the system's */
+const THEMES: readonly unknown[] = ['system', 'light', 'dark']
 
 const isEntrySettings = (value: unknown): value is EntrySettings => {
   if (typeof value !== 'object' || value === null) return false
@@ -79,8 +83,9 @@ export function watchEntrySettings(onSettings: (settings: EntrySettings) => void
     // Overtaken by a later ask: that one's word stands
     if (mine !== asked) return current
     if (isEntrySettings(answer)) {
-      // a background of an earlier build answers no PDF reader's switch: the reader stays on, its default
-      const full = { ...answer, pdfReader: typeof answer.pdfReader === 'boolean' ? answer.pdfReader : true }
+      // a background of an earlier build answers no PDF reader's switch and no appearance: the reader stays on, and
+      // the button follows the system's, their defaults
+      const full = { ...answer, pdfReader: typeof answer.pdfReader === 'boolean' ? answer.pdfReader : true, theme: THEMES.includes(answer.theme) ? answer.theme : 'system' as const }
       current = pushed === pushedBefore ? full : { ...full, zoom: current.zoom }
     }
     tell()

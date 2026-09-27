@@ -112,11 +112,16 @@ function declarations(mode: Mode, prefix: string, indent: string): string {
   return lines.map(line => `${indent}${line}`).join('\n')
 }
 
-/** Where each block goes: the extension's pages on their root, a shadow root on its host. Roles sit in each theme's
- *  block, beside the ramp, so that an element that sets `data-theme` (the gallery's dark half) resolves them anew */
+/** Where each block goes: an extension page on its root, marked light or dark there (`data-theme`); a shadow root on
+ *  arXiv's pages on its host, marked on an element inside it (`data-axt-theme`). Not on the host: the prefix is ours on
+ *  arXiv's pages (hard rule 2), arXiv's own sheet styles any `[data-theme=dark]` it meets, and restoring a translated
+ *  page strips every `data-axt-*` of the document's own elements, a host's among them, while a shadow root's are out of
+ *  its reach. The system's dark reaches the host alone, so that an element marked light inside it stays light. Roles
+ *  sit in each theme's block, beside the ramp, so that the element carrying the mark (the gallery's dark half, a shadow
+ *  root's marked element) resolves them anew */
 const SELECTORS = {
   page: { light: ':root,\n[data-theme="light"]', system: ':root:not([data-theme="light"])', dark: '[data-theme="dark"]', constants: ':root' },
-  host: { light: ':host,\n:host([data-theme="light"])', system: ':host(:not([data-theme="light"]))', dark: ':host([data-theme="dark"])', constants: ':host' },
+  host: { light: ':host,\n[data-axt-theme="light"]', system: ':host', dark: '[data-axt-theme="dark"]', constants: ':host' },
 } as const
 
 /** The sheet: `page` unprefixed for the extension's own documents, `host` prefixed `--axt-` for a shadow root on arXiv's pages */

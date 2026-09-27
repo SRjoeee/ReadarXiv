@@ -14,6 +14,7 @@ import { BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, type Look } from '@/config/appear
 import { STYLE_ATTR } from '@/core/renderer'
 import { failureWidget } from '@/core/renderer/failed'
 import { appearanceSheet } from '@/core/renderer/page'
+import { installFigureViewer, SPOT_CLASS, VIEWER_CLASS } from '@/core/viewer'
 import { enableDebug } from '@/entrypoints/content/debug'
 
 const STYLES = join(import.meta.dirname, '../../src/styles')
@@ -67,6 +68,16 @@ describe('the style sheets built in TypeScript', () => {
     const sheet = widget.shadowRoot?.querySelector('style')?.textContent ?? ''
     expect(sheet.length).toBeGreaterThan(0)
     expect(withoutComments(sheet)).not.toContain(':has(')
+  })
+
+  it('the figure viewer\'s sheet, inside its two shadow roots', () => {
+    const viewer = installFigureViewer(document, { figures: 'img', overlay: '.axt-img', around: 'figure', ours: '.axt-t', strings: () => ({ open: 'Open', zoomIn: 'In', zoomOut: 'Out', close: 'Close' }) })
+    for (const name of [VIEWER_CLASS, SPOT_CLASS]) {
+      const sheet = document.querySelector(`.${name}`)?.shadowRoot?.querySelector('style')?.textContent ?? ''
+      expect(sheet.length).toBeGreaterThan(1000)
+      expect(withoutComments(sheet), `${name} uses :has()`).not.toContain(':has(')
+    }
+    viewer.remove()
   })
 
   it('the debug outlines\' sheet (#axt-debug)', () => {

@@ -90,7 +90,8 @@ The reader's `--danger`, `--focus`, `--well`, `--lift`, `--fill` and shadows kee
   committed file differs; `pnpm tokens` rewrites it.
 - **Shadow roots on arXiv's pages** (the floating button, its panel frame and menus, the figure viewer): the same
   roles as `--axt-` variables (hard rule 2), written into each shadow sheet by one function of the source at run time
-  (a few hundred bytes), scoped to `:host`. No generated file: the content script already builds these sheets as strings.
+  (5.9 KB, 5 905 bytes: the ramp and the roles in three blocks), scoped to `:host` and marked light or dark on an element inside the
+  shadow root (`data-axt-theme`, §3). No generated file: the content script already builds these sheets as strings.
 - **Tailwind**: `ui.css` and `reader.css` map the roles into `@theme inline` as the reader does; the old `--axt-bg`,
   `--axt-card`, `--axt-fg` … tokens of `ui.css` and UI.md §5 go.
 
@@ -134,7 +135,9 @@ alone (`pdfReader.appearance`), becomes the extension's (`theme`, §4).
   The reader keeps its crossfade of the whole page (its design, §4.3).
 - **Which surfaces follow it, and which follow the page**:
   - the extension's own controls follow `theme`: the popup (in the toolbar and in the floating panel's frame), the
-    settings page, the reader, and the floating button with its menus (its shadow host carries `data-theme`);
+    settings page, the reader, and the floating button with its menus (its dock, inside the shadow root, carries
+    `data-axt-theme`: not the host, which arXiv's own sheet would style as any `[data-theme=dark]`, and whose every
+    `data-axt-*` a restore of the page strips; Part 6's plan);
   - controls that sit **on the paper** follow the paper's own colours, as they do today: the figure viewer's button
     and bar, and the failed block's retry. They take the token values (§7) but light or dark by the page.
 - `pdfReader.dimPages` stays the reader's own setting; on the settings page it is a sub-row of the appearance (§6.4).

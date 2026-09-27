@@ -1752,3 +1752,58 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
 
 (Add by name any file the review's fixes touched, in their own commit before this one.)
+
+## Part 6: done
+
+Executed task by task (an implementer and a reviewer per task, the controller's look at the shots), 2026-09-27, in
+`.worktrees/redesign-floating` on `exp/ui-floating`, branched from 56d02f2d.
+
+**Commits** (`56d02f2d..`): 0321bc78 the shots script, the "before" set (70) · cfb34e50 the figure placed below arXiv's
+pinned header, so the viewer's control is not under it (70's fix: a centred tall figure had put it there, and the click
+reached the header's link) · b2465587 the host sheet marked inside its shadow root, `EntrySettings.theme` (71) ·
+0c9ca0d5 the floating button in the family's material, following the extension's appearance (72) · 10199000 the viewer's
+control and bar, the failed block's retry and hint line, by the page's colour scheme (73) · b7107dfa the light
+appearance checked under a dark system again (73's fix: its rewrite of 72's browser block had dropped the check) ·
+de7af2ec the reader's service menu says a refused key (74) · and this record.
+
+**Checks at de7af2ec**, each exit 0: the gate; `reader-pixels.mjs` 24 × ok (against the baseline Parts 1–3 were judged
+against, copied in, never re-recorded); `reader-ui.mjs` 71 × ok; `e2e:floating` 22/22; `e2e:pdf` 26/26; `e2e:layout`
+31/31; `e2e:image` 18/18; `e2e` 71/71; `e2e:a11y` 5/5 on its second run (the first stopped at "the whole paper
+translated": the free translator had not settled under the machine's load; no finding either time — the extension adds
+no accessibility problem in side, stack or only mode, and no contrast pair).
+
+**The probe's comparison** (`floating-shots.mjs after`, 18 shots, no `MISSING`): 116 parts `same` — `state`,
+`.axt-fb-main`, `.axt-fb-disc`, `.axt-fb-panel`, `.axt-fb-settings`, `.axt-fb-options`, `.axt-fb-lock`,
+`.axt-fb-panel-box` in every shot: the button's shape, place and states unchanged (§7). `differs` only where the plan
+allows: the tooltip `.axt-fb-main .axt-fb-tip` 69.1 × 26.9 → 61.4 × 23.4 (72 × 28 → 64 × 24.4 while opening; the
+shared `.tip`'s measures), in all 12 shots that hold it; the close menu `.axt-fb-menu` 76 × 64 → 78 × 68 and its rows
+68 × 28 → 70 × 30 (the reader's `.pop` rows), in the two menu shots.
+
+**The look** (every pair at twice the pixels, both themes): the surfaces in the family's greys with their hairline;
+the small discs gain a hairline ring; the menu reads as the reader's menus; the tick's green and the panel's frame as
+before. The viewer's control is now lifted by the float shadow instead of an outline, and its bar a floating pill with
+a shadow instead of a slab against the dialog's edge — light on arXiv's light paper, dark on its dark one. One change
+for the maintainer to judge: the tooltip is dark in both themes (the shared `.tip`, as in the reader), so on arXiv's
+dark theme it stands out less against the page than the white pill it replaces.
+
+**The local review** (Codex, `--base 56d02f2d --scope branch`): no actionable finding.
+
+**Otherwise than planned:** the reader's pixel baseline was not re-recorded in this worktree (the controller's ruling:
+the copy Parts 1–3 were judged against, verified 24 × ok); the shots script places the figure below arXiv's pinned
+header; the browser block checks the light appearance under an emulated dark system (both amended in the plan on the
+main branch too).
+
+**For the controller:** the shots are at `experiments/pdf-bilingual/out/floating/index.html` (18 pairs, git-ignored),
+and the branch waits for the maintainer's look before it merges (§7). The merge meets Part 5 in three files, each in
+another hunk: `src/entrypoints/background/handlers.ts` and `tests/background/handlers.test.ts` (Part 5's
+`axt:translate`, this part's `axt:entry-settings`) and `src/pdf-reader/ui/Menus.tsx` (Part 5's settings link near the old
+line 77, this part's first lines of `ServiceMenu`), and the design document (Part 5's §6.2, this part's §2.2 and §3). The
+panel in both shot sets frames the old popup; after the merge, `pnpm build && node tests/e2e/probes/floating-shots.mjs
+after` shoots it again with Part 4's popup in the frame, against the same `before` (the panel box then differs by the
+new popup's height, and nothing else should), and `pnpm e2e:floating` checks the panel with it.
+
+**For Part 7:** DESIGN §4.0c (the button's material, the mark inside the shadow root, the retry and the hint line by
+the page's colour scheme, `modes.css`'s two values held to the tokens by a test); `tests/e2e/probes/floating-shots.mjs`
+stays as the button's probe. Two faults seen on the way, outside this part, proposed to the maintainer as issues: a tall
+figure whose top is scrolled under arXiv's header hides its viewer control (anchored to the figure's top corner since
+#285); `lastDemoted` is never cleared when an engine recovers (the status can read an engine replaced by itself).

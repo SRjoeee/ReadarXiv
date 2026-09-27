@@ -59,6 +59,19 @@ describe('installFloatingButton', () => {
     expect([hosts(), inside('.axt-fb-dock').dataset.axtSide]).toEqual([1, 'left'])
   })
 
+  it('draws in the extension\'s appearance, from the first paint and through a change of it while the page stays open (the redesign\'s design, §3)', async () => {
+    await install()
+    expect(inside('.axt-fb-dock').dataset.axtTheme).toBeUndefined()
+    wire.follow!({ ...DEFAULT_ENTRY_SETTINGS, theme: 'dark' })
+    expect(inside('.axt-fb-dock').dataset.axtTheme).toBe('dark')
+    // taken off and put back: mounted afresh in the appearance in force
+    wire.follow!({ ...settings({ enabled: false }), theme: 'dark' })
+    wire.follow!({ ...DEFAULT_ENTRY_SETTINGS, theme: 'light' })
+    expect([hosts(), inside('.axt-fb-dock').dataset.axtTheme]).toEqual([1, 'light'])
+    wire.follow!({ ...DEFAULT_ENTRY_SETTINGS, theme: 'system' })
+    expect(inside('.axt-fb-dock').dataset.axtTheme).toBeUndefined()
+  })
+
   it('"hide for now" lasts through other changes of the settings, and ends when the reader turns the switch on again (Devin on #251)', async () => {
     await install()
     click('.axt-fb-options')

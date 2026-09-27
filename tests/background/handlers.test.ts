@@ -181,7 +181,7 @@ describe('the background\'s handlers', () => {
 
     it('answers what a page needs of the configuration, the floating button\'s state and the tab\'s zoom', async () => {
       const { send, deps } = harness({ getConfig: async () => config, getFloatingEntry: async () => floating, zoomOf: vi.fn(async () => 1.25) })
-      await expect(send({ type: 'axt:entry-settings' })).resolves.toEqual({ uiLanguage: 'ja', openIn: 'new-tab', zoom: 1.25, pdfReader: true, floating })
+      await expect(send({ type: 'axt:entry-settings' })).resolves.toEqual({ uiLanguage: 'ja', openIn: 'new-tab', zoom: 1.25, pdfReader: true, theme: 'system', floating })
       expect(deps.zoomOf).toHaveBeenCalledWith(7)
     })
 
@@ -189,6 +189,12 @@ describe('the background\'s handlers', () => {
       const off = { ...config, pdfReader: { ...config.pdfReader, enabled: false } }
       const { send } = harness({ getConfig: async () => off, getFloatingEntry: async () => floating, zoomOf: vi.fn(async () => 1) })
       await expect(send({ type: 'axt:entry-settings' })).resolves.toMatchObject({ pdfReader: false })
+    })
+
+    it('answers the extension\'s appearance, for the floating button (the redesign\'s design, §3)', async () => {
+      const dark = { ...config, theme: 'dark' as const }
+      const { send } = harness({ getConfig: async () => dark, getFloatingEntry: async () => floating, zoomOf: vi.fn(async () => 1) })
+      await expect(send({ type: 'axt:entry-settings' })).resolves.toMatchObject({ theme: 'dark' })
     })
 
     it('a zoom that cannot be read, or a sender without a tab, is a zoom of 1', async () => {
