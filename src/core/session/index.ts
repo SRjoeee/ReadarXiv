@@ -392,8 +392,8 @@ export function createPageSession(deps: SessionDeps): PageSession {
 
   /**
    * Image translation (§15): images are taken by viewport like text blocks, and the page's translation does not wait
-   * for them; with the current mode outside the reader's ticked set, an image entering the viewport parks and is
-   * translated on switching back
+   * for them. A round exists only while image translation is on, and every display shows its overlays (the redesign's
+   * design, §4: configuration v20)
    */
   function startImages(session: LiveSession, config: Config): ImageRound | null {
     // The overlays and the mode gate of the previous round (restarted after a fatal error without a restore) are taken
@@ -413,11 +413,11 @@ export function createPageSession(deps: SessionDeps): PageSession {
     // Read by callbacks that may fire while the run starts
     let run: ImageRun | null = null
     const traceIdle = createIdleTrace<ImageProgress>({ now, trace }, p => p.requested - p.done - p.failed > 0, (p, ms) => `images idle: ${p.done}/${p.requested} of ${p.total}, ${p.failed} failed, ${ms} ms${waitingNote()}`)
-    /** Names the targets never requested when idle arrives with some left over — the e2e's one nondeterministic check, `5/5 of 6`, needs to say which image and whether it was parked */
+    /** Names the targets never requested when idle arrives with some left over — the e2e's one nondeterministic check, `5/5 of 6`, needs to say which image */
     const waitingNote = () => {
       const left = run?.waiting() ?? []
       if (left.length === 0) return ''
-      const shown = left.slice(0, 8).map(w => `${w.target.id || w.target.kind}${w.parked ? ' (parked)' : ''}`)
+      const shown = left.slice(0, 8).map(t => t.id || t.kind)
       return `; waiting: ${shown.join(', ')}${left.length > 8 ? `, +${left.length - 8}` : ''}; observer holds ${run?.observing() ?? 0}`
     }
     run = startImageTranslation({
@@ -434,8 +434,6 @@ export function createPageSession(deps: SessionDeps): PageSession {
       translate: request => backend.translate(request),
       onTrace: line => trace(line),
       ...(deps.fetchImage ? { fetchBytes: deps.fetchImage } : {}),
-      // The mode gate, the same for both kinds of image
-      isEnabled: () => config.image.enabled,
       isCurrent: alive,
       onProgress: p => {
         if (!alive()) return
@@ -472,13 +470,10 @@ export function createPageSession(deps: SessionDeps): PageSession {
   })
 
   /**
-   * The mode in effect moved, or a session started in it: what waited for the mode may go, and the tidy layer enters
-   * or leaves side — what that takes is its own to know (renderer/prep.ts `side`)
+   * The mode in effect moved, or a session started in it: the tidy layer enters or leaves side — what that takes is
+   * its own to know (renderer/prep.ts `side`)
    */
   function enterSide(effective: Mode): void {
-    // The mode gate may have just opened: parked images are released (§15), and the figures' text held with them (§15.6)
-    live?.images?.run.resume()
-    live?.run?.resume()
     prep.side(effective === 'side')
   }
 
