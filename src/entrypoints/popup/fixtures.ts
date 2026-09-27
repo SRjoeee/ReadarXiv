@@ -66,7 +66,9 @@ const p0: PopupInput = { ...base, page: null, tab: { url: null, asking: false } 
 const abs = (paper: string, over: Partial<NonNullable<PopupInput['entry']>> = {}) => ({ paper, html: `https://arxiv.org/html/${paper}#readarxiv`, kind: 'abs' as const, pdf: `https://arxiv.org/pdf/${paper}#readarxiv`, readerOpen: false, ...over })
 /** The reader's service put aside for a refused key, and a page running on the free service since (P6, P6b) */
 const REFUSED = { id: SVC.id, kind: 'auth' as const, message: 'User not found.' }
-const p6: PopupInput = { ...base, config: llm, page: page({ state: 'on', requested: 20, done: 11 }, { running: { provider: SVC.id, target: 'cmn', engine: 'google-web', revision: 'r1' } }), saved: llmProvider(), session: llmProvider({ engine: { id: 'google-web', demoted: REFUSED } }) }
+// The hand-over still in force, by engine (transport.ts `demotions`): the key's refusal, alongside `engine.demoted`
+// (the most recent hand-over — the same one here, until a later test adds a second)
+const p6: PopupInput = { ...base, config: llm, page: page({ state: 'on', requested: 20, done: 11 }, { running: { provider: SVC.id, target: 'cmn', engine: 'google-web', revision: 'r1' } }), saved: llmProvider(), session: llmProvider({ engine: { id: 'google-web', demoted: REFUSED }, demotions: [{ id: SVC.id, kind: 'auth' }] }) }
 
 export const POPUP_FIXTURES: PopupFixture[] = [
   { id: 'PW', name: 'Before the first answer', when: 'tab === null', input: { ...base, page: null, tab: null } },

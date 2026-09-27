@@ -335,7 +335,8 @@ function readerView(entry: EntryStatus, config: Config, input: PopupInput): Popu
 }
 
 /** P0's field and what it recognises (§5.4): the words of the row under it, and a paper's entries once both checks are back */
-function findView({ query, entries }: PopupInput['find']): NonNullable<PopupView['find']> {
+function findView(input: PopupInput): NonNullable<PopupView['find']> {
+  const { query, entries } = input.find
   const read = readQuery(query)
   switch (read.kind) {
     case 'empty':
@@ -348,12 +349,20 @@ function findView({ query, entries }: PopupInput['find']): NonNullable<PopupView
       return { query, found: { kind: 'elsewhere', text: S.find.elsewhere } }
     case 'paper': {
       const answer = entries?.id === read.id ? entries : null
+      // The same two entries as P17's (the design's §5.4): greyed by the two checks arXiv answers AND by whether the
+      // chosen service can even start — nothing here would then open a translation bound to fail (the config unread
+      // yet, at P0, is no reason to grey what the checks already cleared)
+      const { config, pack, saved, rejected } = input
+      const canStart = config === null || runnable(config, pack, rejected) || !!saved?.fallback
       return {
         query,
         found: {
           kind: 'paper',
           paper: S.find.paper(read.id),
-          entries: answer && { html: { label: S.entry.html, href: answer.html }, pdf: { label: S.entry.pdf, href: answer.pdf } },
+          entries: answer && {
+            html: { label: S.entry.html, href: canStart ? answer.html : null },
+            pdf: { label: S.entry.pdf, href: canStart ? answer.pdf : null },
+          },
           // a greyed entry says why as P17's does (S-P-50b): the HTML version's absence, in full when there is no PDF either
           note: answer?.html === null ? noHtmlNote(answer.pdf).text : null,
         },
@@ -367,16 +376,18 @@ function noPaper(input: PopupInput): PopupView {
   const { tab } = input
   if (tab === null) return blank('pending')
   if (tab.asking && tab.url !== null && isPaperAddress(tab.url)) return blank('loading')
-  return { ...blank('find'), find: findView(input.find) }
+  return { ...blank('find'), find: findView(input) }
 }
 
 export function derivePopupView(input: PopupInput): PopupView {
   const { page, saved, session, config, pack, shortcut, savedRevision, entry, rejected } = input
-  if (page == null && entry?.readerOpen && config !== null) return readerView(entry, config, input)
-  // An abstract or PDF page: the popup works there too, and its entries take the reader to the paper's versions.
+  // An abstract or PDF page, or the reader open, that has already answered (`entry != null`) is never P0's search —
+  // whatever the tab poll still says (Opus's review of Task 33) — but with the settings not read yet there is
+  // nothing to build either view from: loading, not the paper's own screen and not P0's (item 4)
+  if (page == null && entry?.readerOpen) return config === null ? blank('loading') : readerView(entry, config, input)
   // `== null` on purpose: a tab whose content script ignores `axt:page-status` resolves `undefined` rather than
   // rejecting, and an undefined page is no page (it once rendered an empty popup on every PDF page)
-  if (page == null && entry != null && config !== null) return entryView(entry, config, input)
+  if (page == null && entry != null) return config === null ? blank('loading') : entryView(entry, config, input)
   if (page == null) return noPaper(input)
   if (config === null) return { ...blank('paper'), mode: { value: page.preference, note: null } }
 
@@ -399,8 +410,13 @@ export function derivePopupView(input: PopupInput): PopupView {
   // a 401 alone), and while the chain in force
   // still passes the service over, a start would meet the same refusal. The page is offered its way back as P13 offers
   // it (the design gives the cue no words of its own: P13's pair, as it is), and P6's note, whose reason no longer
-  // holds, goes. The key still restores (shared/page-action.ts decides for every door), so its chip goes on Show original
-  const madeGood = !!demoted && !!session && demoted.kind === 'auth' && !rejected.includes(demoted.id) && saved?.engine.id === demoted.id && !saved.engine.demoted
+  // holds, goes. The key still restores (shared/page-action.ts decides for every door), so its chip goes on Show original.
+  // `session.engine.demoted` is only the most recent hand-over (transport.ts): a transient failure of the free engine
+  // that took over — one more hand-over, on top of the key's — would hide the key's refusal here, and the cue would
+  // never show even once the key is good again (Opus's review of Task 33). `demotions` holds every hand-over still in
+  // force, by engine; the chosen engine's own is the one the cue reads, whichever position it is in
+  const refused = on ? session?.demotions.find(d => d.kind === 'auth' && d.id === session.providerId) : undefined
+  const madeGood = !!refused && !!session && !rejected.includes(refused.id) && saved?.engine.id === refused.id && !saved.engine.demoted
 
   const service: Row = demoted && session
     ? { value: named(session.engine.id), replaced: named(demoted.id) }

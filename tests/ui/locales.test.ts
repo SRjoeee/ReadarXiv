@@ -83,7 +83,10 @@ describe('locale packs', () => {
       for (const [path, text] of leaves(derivePopupView(f.input))) {
         // A language's own name is meant to be in its own script — 「Japanese (日本語)」 — and the
         // sample sentence is a sample of a translation
-        if (path.includes('previewTarget') || path.includes('hint') || path.startsWith('language') || path.startsWith('menus.')) continue
+        // Only the language menu's own rows are in their own scripts (their name, their keywords); every other
+        // menu's words are the interface's own and must translate like anything else (narrower per Opus's review of
+        // Task 33 — the broad `menus.` used to let a leaked Chinese label in the service or style menu through unseen)
+        if (path.includes('previewTarget') || path.includes('hint') || path.startsWith('language') || path.startsWith('menus.language.items')) continue
         expect(HAN.test(text), `${f.id} ${path}: ${text}`).toBe(false)
       }
     }

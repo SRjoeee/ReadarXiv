@@ -91,7 +91,7 @@ tests/options/prompts-section.test.ts 13
 tests/pipeline/run.test.ts 3
 tests/pipeline/session-guard.test.ts 5
 tests/popup/find.test.ts 1  # 2026-09-26: a search typed in Chinese goes to arXiv's search as it is (the redesign's P0, §5.4)
-tests/popup/view-model.test.ts 50  # 2026-09-26: the redesign's popup (Part 4): P0's words, the prompt menu's Manage row and a refused key's note, expected as UI.md's copy; 2026-09-26: +1 for P7b's expectation, the Chinese fallback name in a refused key's note (Task 12); 2026-09-19: +1 for P17c's expectation, the Chinese label of the entry pages' button (issue #169); 2026-09-18: +5 for the P17 cases' expectations, the Chinese copy of S-P-03b / S-P-33; +2, the reader-open popup's buttons by their words
+tests/popup/view-model.test.ts 52  # 2026-09-27: Task 33 fix round 1: +2, the retranslate cue's two-hand-over test and P0's unrunnable-service test, the LLM's Chinese fallback name each expects (Opus's review); 2026-09-26: the redesign's popup (Part 4): P0's words, the prompt menu's Manage row and a refused key's note, expected as UI.md's copy; 2026-09-26: +1 for P7b's expectation, the Chinese fallback name in a refused key's note (Task 12); 2026-09-19: +1 for P17c's expectation, the Chinese label of the entry pages' button (issue #169); 2026-09-18: +5 for the P17 cases' expectations, the Chinese copy of S-P-03b / S-P-33; +2, the reader-open popup's buttons by their words
 tests/protector/clone.test.ts 5
 tests/protector/label.test.ts 50
 tests/protector/markers.test.ts 12  # 2026-09-19: +1, the translations the wire-space cases fill back, all on one line

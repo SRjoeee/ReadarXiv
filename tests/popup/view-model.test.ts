@@ -384,9 +384,25 @@ describe('the redesign\'s popup (its design, §5)', () => {
     // never recorded): P6 as it was
     expect(derivePopupView({ ...input('P6b'), rejected: [id] }).primary.action).toBe('restore')
     expect(derivePopupView({ ...input('P6b'), saved: input('P6').saved }).primary.action).toBe('restore')
-    // a demotion that was not the key's (a limit, the network) is no cue
-    const limited = { ...input('P6b').session!, engine: { id: 'google-web', demoted: { id, kind: 'rate-limit' as const, message: '429' } } }
+    // a demotion that was not the key's (a limit, the network) is no cue: no `auth` entry in `demotions` either,
+    // or the key would read as made good from a refusal that was never recorded (the fix below)
+    const limited = { ...input('P6b').session!, engine: { id: 'google-web', demoted: { id, kind: 'rate-limit' as const, message: '429' } }, demotions: [{ id, kind: 'rate-limit' as const }] }
     expect(derivePopupView({ ...input('P6b'), session: limited }).primary.action).toBe('restore')
+  })
+
+  it('two hand-overs — the key refused, then a transient failure of the free engine that took over — still cue once the key is good: `engine.demoted` names only the second hand-over, but `demotions` still holds the key\'s (Opus\'s review of Task 33)', () => {
+    const id = input('P6b').config!.services[0]!.id
+    const twoHandovers = {
+      ...input('P6b').session!,
+      // Microsoft, tried next on the chain, failed transiently and handed over to Google — the most recent
+      // hand-over, and the one `engine.demoted` alone would show
+      engine: { id: 'google-web', demoted: { id: 'microsoft', kind: 'rate-limit' as const, message: '429' } },
+      // both hand-overs still in force: the key's refusal is no longer the latest, but it never healed on its own
+      demotions: [{ id, kind: 'auth' as const }, { id: 'microsoft', kind: 'rate-limit' as const }],
+    }
+    const v = derivePopupView({ ...input('P6b'), session: twoHandovers })
+    expect(v.primary).toEqual({ label: '重新翻译', action: 'retranslate', disabled: false })
+    expect(v.secondary).toEqual({ label: '显示原文', action: 'restore', shortcut: '⌥T' })
   })
 
   it('lang: the reader\'s languages in their own, and the style rows\' sample in its; the full list names each in the interface\'s language first', () => {
@@ -411,11 +427,21 @@ describe('P0 and the moments before it (the redesign\'s design, §5.4)', () => {
     expect(derivePopupView({ ...input('PL'), tab: { url: 'https://arxiv.org/list/cs.CL/recent', asking: true } }).kind).toBe('find')
   })
 
+  it('an entry page (or the reader) that has already answered shows its entries, not loading, however the tab poll still reads: `entry` answers the question `tab.asking` is still asking (Opus\'s review of Task 33)', () => {
+    expect(derivePopupView({ ...input('P17'), tab: { url: 'https://arxiv.org/abs/2501.07202v1', asking: true } }).kind).toBe('entry')
+    expect(derivePopupView({ ...input('PR'), tab: { url: 'https://arxiv.org/pdf/2501.07202v1', asking: true } }).kind).toBe('reader')
+  })
+
+  it('an entry page or the reader that has answered before the settings have loaded is loading, not P0\'s search (a paper\'s page must not show P0)', () => {
+    expect(derivePopupView({ ...input('P17'), config: null }).kind).toBe('loading')
+    expect(derivePopupView({ ...input('PR'), config: null }).kind).toBe('loading')
+  })
+
   it('an empty field has nothing under it but the help line; what is typed says what Enter will do', () => {
     expect(view('P0').find).toEqual({ query: '', found: null })
     expect(view('P0a').find?.found).toEqual({ kind: 'search', label: '在 arXiv 搜索「attention is all you need」', href: searchUrl('attention is all you need') })
     expect(view('P0b').find?.found).toEqual({ kind: 'open', format: 'pdf', label: 'PDF 翻译', paper: 'arXiv 2501.07202v1', href: 'https://arxiv.org/pdf/2501.07202v1#readarxiv' })
-    expect(view('P0c').find?.found).toMatchObject({ kind: 'open', format: 'html', label: 'HTML 翻译', href: 'https://arxiv.org/html/2501.07202v1#readarxiv' })
+    expect(view('P0c').find?.found).toMatchObject({ kind: 'open', format: 'html', label: 'HTML 翻译', paper: 'arXiv 2501.07202v1', href: 'https://arxiv.org/html/2501.07202v1#readarxiv' })
     expect(view('P0g').find?.found).toEqual({ kind: 'elsewhere', text: '只能打开 arXiv 的论文链接。也可以输入标题或作者搜索。' })
   })
 
@@ -425,6 +451,14 @@ describe('P0 and the moments before it (the redesign\'s design, §5.4)', () => {
     expect(view('P0f').find?.found).toMatchObject({ entries: { html: { href: null } }, note: 'arXiv 没有这篇论文的 HTML 版本' })
     // an answer about another paper is not this one's
     expect(derivePopupView({ ...input('P0e'), find: { ...input('P0e').find, query: 'hep-th/9711200' } }).find?.found).toMatchObject({ entries: null })
+  })
+
+  it('P0\'s two entries are P17\'s (the design\'s §5.4): greyed too when the chosen service cannot run, not only when arXiv has no HTML version — otherwise P0 opens a translation bound to fail', () => {
+    // An id naming nothing (the reader's own service deleted from another tab) and no fallback to take over
+    const unrunnable = { ...input('P0e'), config: { ...input('P0e').config!, provider: 'svc-gone0000' } }
+    expect(derivePopupView(unrunnable).find?.found).toMatchObject({ entries: { html: { href: null }, pdf: { href: null } } })
+    // the settings not read yet is not a reason to grey what the checks already cleared
+    expect(derivePopupView({ ...input('P0e'), config: null }).find?.found).toMatchObject({ entries: { html: { href: 'https://arxiv.org/html/2501.07202v1#readarxiv' } } })
   })
 })
 
