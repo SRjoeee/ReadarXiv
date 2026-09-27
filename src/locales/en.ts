@@ -183,6 +183,17 @@ const O: Locale['O'] = {
       delete: 'Delete style',
     },
   },
+  glossary: {
+    title: 'Glossary',
+    hint: 'Keeps a term\'s translation the same throughout',
+    count: n => (n === 1 ? '1 term' : `${n} terms`),
+    source: 'Source',
+    target: 'Translation',
+    remove: n => `Remove row ${n}`,
+    paste: 'Paste lines of “source, translation” to add several at once',
+    issue: { emptySource: 'The source is empty', emptyTarget: 'The translation is empty' },
+    tooBig: 'The glossary is too long and was not saved. Remove some entries or shorten them',
+  },
   services: {
     /** §6.3: the group and its rows */
     title: 'Translation service',

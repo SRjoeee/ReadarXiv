@@ -220,3 +220,25 @@
   .o-form input:disabled { opacity: 0.55; }
 }
 @media (prefers-reduced-motion: reduce) { .o-chip { transition: none; } .o-chip:active { scale: 1; } }
+
+/* ---- Task 62: the glossary's table (§6.3) ---- */
+@layer components {
+  /* from the words' edge (42) to the trailing edge (14), in the card: its 4 px and 38 / 10 of its own */
+  .o-gloss { margin: 2px 10px 12px 38px; border-radius: 8px; box-shadow: inset 0 0 0 0.5px var(--field-edge); overflow: hidden; }
+  .o-gloss-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px; align-items: center; }
+  .o-gloss-line + .o-gloss-line, .o-gloss-head + .o-gloss-line { box-shadow: inset 0 0.5px 0 var(--chrome-line); }
+  .o-gloss-head { height: 28px; background: var(--field); color: var(--ink-2); font-size: 11.5px; }
+  .o-gloss-head span { padding: 0 10px; }
+  .o-gloss input { box-sizing: border-box; height: 32px; min-width: 0; padding: 0 10px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; }
+  .o-gloss input:focus { outline: none; background: color-mix(in oklab, var(--ink) 4%, transparent); }
+  html:not([data-axt-pointer]) .o-gloss input:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .o-gloss input::placeholder { color: var(--ink-2); }
+  /* a row's remove button, on its hover or its focus, always on a touch screen */
+  .o-gloss-remove { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--ink-3); cursor: pointer; opacity: 0; transition: opacity 150ms ease-out; }
+  .o-gloss-line:hover .o-gloss-remove, .o-gloss-line:focus-within .o-gloss-remove { opacity: 1; }
+  @media (hover: none) { .o-gloss-remove { opacity: 1; } }
+  .o-gloss-issue { padding: 0 10px 8px; }
+  .o-gloss-note { margin: 0; padding: 8px 10px; box-shadow: inset 0 0.5px 0 var(--chrome-line); }
+  .o-gloss-hint { margin: -4px 10px 12px 38px; color: var(--ink-2); font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .o-gloss-remove { transition: none; } }

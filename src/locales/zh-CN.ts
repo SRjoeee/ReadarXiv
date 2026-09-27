@@ -200,6 +200,19 @@ const O = {
       delete: '删除样式',
     },
   },
+  /** §6.3: the glossary, a table (T8) */
+  glossary: {
+    title: '术语表',
+    hint: '让同一篇里的译法一致',
+    count: (n: number) => `${n} 条`,
+    source: '原文',
+    target: '译文',
+    remove: (n: number) => `删除第 ${n} 行`,
+    paste: '可以直接粘贴多行「原文, 译文」，会自动拆成多行',
+    /** today's reasons without their line numbers: the row itself says it */
+    issue: { emptySource: '原文为空', emptyTarget: '译文为空' },
+    tooBig: '术语表太长，超出上限后没有保存；请减少条目或缩短内容',
+  },
   services: {
     /** §6.3: the group and its rows */
     title: '翻译服务',

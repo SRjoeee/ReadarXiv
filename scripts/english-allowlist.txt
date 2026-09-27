@@ -87,6 +87,7 @@ tests/extractor/context.test.ts 1
 tests/extractor/extract.test.ts 2  # raised 2026-09-17: “any Unicode letter makes a block” moved here from the rules tests with its Chinese input, the rule being the extractor's
 tests/image/run.test.ts 11
 tests/image/svg-targets.test.ts 2
+tests/options/glossary.test.ts 5  # 2026-09-27: the glossary's pairs, typed and pasted in the reader's language (Part 5, Task 62)
 tests/options/prompts-section.test.ts 13
 tests/options/styles.test.ts 1  # 2026-09-27: fix round 1, item 7's own expectation — the sample sentence's Chinese character that must not leak into a style row's search words
 tests/pipeline/run.test.ts 3
