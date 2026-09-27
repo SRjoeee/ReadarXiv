@@ -71,7 +71,9 @@ this part's questions), Part 3's revised plan's section "What Parts 4 and 5 use"
 **Kept for Part 7**: the `O` keys the old components of `src/ui/appearance/*` still read (`O.reading.add`, `reset`,
 `resetHint`, `editTitle`, `editAria`, `duplicate`, `bandColor`, `custom`, `opacity`, `advanced`, `advancedHint`,
 `preview`, `color`, `followText`, …, `O.services.cancel`, `deleteConfirm`, `O.close`) stay until Part 7 removes their
-readers.
+readers. So do `O.services.baseURLHint` and `O.services.more`, which Part 3's controls sheet reads
+(`src/entrypoints/controls/specimens/forms.tsx:25`, `:49`): Part 7 repoints the controls sheet's `specimens/forms.tsx`
+at words the pages use, then deletes the two keys.
 
 ## Settled after the rulings
 
@@ -198,8 +200,11 @@ The main plan's, verbatim:
   exit code.
 - Commits are local on `exp/extension-ui-redesign`; the stage goes out as one pull request when the last part is done
   (never `main`; merge commits). Files are added by name, never `git add -A`. Never commit
-  `src/entrypoints/gallery/main.tsx`, `src/entrypoints/gallery/reader-break.tsx` or the untracked
-  `experiments/pdf-bilingual/spikes/geometry-lock*.mjs` / `prompt-ablation.mjs` (another session's work).
+  the untracked `experiments/pdf-bilingual/spikes/geometry-lock*.mjs` / `prompt-ablation.mjs` (another session's
+  work). The gallery's break harness that stood beside them was removed on 2026-09-27: a task that changes
+  `src/entrypoints/gallery/main.tsx` commits it with its own files. Never run `git reset --hard`,
+  `git checkout -- <path>`, `git restore`, `git clean` or `git stash`: rewind with `--mixed` / `--soft`, and put back
+  only files named, by their content.
 - Every commit message is `type(scope): summary` and ends with `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
 
 Part 5's own:
@@ -231,6 +236,12 @@ Part 5's own:
 - **Unit tests** run in English (`setLocale('en')` or `applyLocaleFrom('en')`) and find words through `O`, `S`, `R`, so
   no Chinese enters them; the e2e suites find controls by their Chinese names, as they do today.
 - **Motion** (§8): every motion named in the task that owns it, with its reduced-motion form in the same sheet block.
+- **Comments, CSS comments and test names are English** (CLAUDE.md § Language): a control is named by its role or
+  its key (`O.data.clear`), never by its Chinese words. Chinese stays only in the packs, in the labels e2e scripts and
+  probes find controls by, and in multilingual test data or expectations of product copy. Before committing, `git add`
+  the task's files and run `node scripts/check-english.mjs` (it reads the index, and its counts are exact: a file
+  over or under its entry fails); a file that must hold Chinese gets its exact entry in
+  `scripts/english-allowlist.txt`, with a one-line English reason, added in the same commit.
 
 ## Review Focus
 
@@ -298,7 +309,7 @@ settings-2's values as this plan writes them (each is in the task's CSS; this is
 | `src/entrypoints/options/ui/Card.tsx` (new) | 50 | `Card` (and its separators' stepping aside), `GroupHeading` |
 | `src/entrypoints/options/ui/search.tsx` (new) | 50, 52 | `SearchQuery`, `Marked`; `applySearch` |
 | `src/entrypoints/options/ui/UndoRow.tsx`, `ConfirmButton.tsx`, `Combobox.tsx` (new) | 51 | The undo row, the confirm in place, the model field |
-| `src/entrypoints/options/ui/lists.ts` (new) | 51 | `withUndo`, `insertAt`, `useLinger`, `shut` |
+| `src/entrypoints/options/ui/lists.ts` (new) | 51 | `withUndo`, `insertAt`, `useLinger`, `shut`, `withItem`, `segmentWidth` |
 | `src/entrypoints/options/ui/ColourPick.tsx` (new) | 55 | A colour of one's own |
 | `src/entrypoints/options/hash.ts` (new) | 52 | Sections, deep links, the old hashes' aliases; `reach` |
 | `src/entrypoints/options/App.tsx` | 52–63 | The frame |
@@ -336,7 +347,7 @@ the first group is in Part 4's plan; Part 4 names `src/pdf-reader/ui/Menus.tsx` 
 | `tests/ui/strings.test.ts` | 60 | the drawer's issue sentence's case goes with its key |
 | `tests/e2e/options-page.mjs` | 52–61 | the settings helpers (`openSection`, `addService`, `clearKeyAndReconnect`, `seedService`, `chooseStyle`, `setPreload`, `setSwitch`) |
 | `tests/e2e/local-endpoint.mjs` | 61 | the endpoint answers `GET /v1/models`; the list's check |
-| `experiments/pdf-bilingual/spikes/cache-faults.mjs`, `experiments/pdf-bilingual/spikes/cache-revisit.mjs` | 61 | their settings steps |
+| `experiments/pdf-bilingual/spikes/cache-faults.mjs`, `experiments/pdf-bilingual/spikes/cache-revisit.mjs`, `experiments/pdf-bilingual/spikes/viewer-faults.mjs` | 61 | their settings steps |
 | `tests/e2e/probes/settings-align.mjs` (new) | 64 | the alignment probe and the screenshots |
 
 Shared with Part 4, each part in its own place; the controller re-joins them at the second merge (ruling 20):
@@ -347,7 +358,7 @@ Shared with Part 4, each part in its own place; the controller re-joins them at 
 | `tests/e2e/extension.mjs` | the settings blocks (the interface language, the cache, the highlight, the styles, the preload, the wrong key, the cleared key, S-O-02's waits, the prompt) | the popup's blocks and its mode buttons |
 | `experiments/pdf-bilingual/spikes/entries.mjs` | its settings sections (3 and 5) | `popupOver` |
 | `tests/ui/locales.test.ts` | the ASCII pattern gains `\|O\.reading\.pdf$` (57); the per-line glossary sentence's case goes (63) | its own literals and cases |
-| `scripts/english-allowlist.txt` | the counts of the files above (recounted with `pnpm check:english`) | its own files' counts |
+| `scripts/english-allowlist.txt` | the counts of the files above and of the tests and the probe this part adds (recounted with `node scripts/check-english.mjs`; each task names its numbers) | its own files' counts |
 
 Not touched by this part: `src/shared/tokens.ts`, `src/styles/tokens.css`, `src/styles/controls.css`, `src/ui/controls/**`
 (Part 3's, ruling 9), `src/ui/**` otherwise (Part 7 deletes), `package.json`, `wxt.config.ts`.
@@ -369,6 +380,7 @@ the sheet that measures them. Nothing mounts them yet.
 - Modify: `src/entrypoints/options/main.tsx` (imports the sheet)
 - Modify: `experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-design.md` (§6.2: the aside's colour, ruling 19)
 - Test: `tests/options/rows.test.ts`, `tests/options/sheet.test.ts`
+- Check: `scripts/english-allowlist.txt` (the English gate: nothing new in it; the design keeps its 175)
 
 **Interfaces:**
 - Consumes: Part 1's `Icon` (`@/ui/controls/Icon`), `Switch` (`@/ui/controls/Switch`); Part 3's `Radio` (`@/ui/controls/radio`).
@@ -573,6 +585,7 @@ describe('the settings page\'s sheet', () => {
     const reduced = SHEET.slice(SHEET.indexOf('@media (prefers-reduced-motion: reduce)'))
     for (const name of new Set(motions)) expect(SHEET.includes(`@keyframes ${name}`), name).toBe(true)
     expect(reduced).toContain('.o-arrive')
+    expect(reduced).toContain('.o-swap')
     // the reader's words-in is Part 3's (controls.css): used here, never defined again
     expect(SHEET).toContain('animation: words-in 180ms ease-out')
     expect(SHEET).not.toContain('@keyframes words-in')
@@ -637,10 +650,10 @@ interface RowBase {
   /** words a search finds the row by besides its own (O.search.keywords) */
   words?: string
   label: string
-  /** a small label after the name: 「我的」 on a prompt of one's own */
+  /** a small label after the name: a prompt of one's own carries O.prompts.mine */
   tag?: string
   description?: string
-  /** the description is swapped as a choice changes (翻译方式): it comes in with the reader's words-in (§8; Part 3 moved it into controls.css) */
+  /** the description is swapped as a choice changes (the way to translate): it comes in with the reader's words-in (§8; Part 3 moved it into controls.css) */
   swap?: boolean
   /** the description written in a translation style: the styles list's sample */
   sample?: CSSProperties
@@ -913,7 +926,7 @@ export function GroupHeading({ title, aside, action }: { title: string; aside?: 
   .o-icon-button[data-on-hover] { opacity: 0; }
   .o-row:hover .o-icon-button[data-on-hover], .o-icon-button[data-on-hover]:focus-visible, .o-icon-button[data-on-hover][aria-expanded="true"] { opacity: 1; }
   @media (hover: none) { .o-icon-button[data-on-hover] { opacity: 1; } }
-  /* a small label in the words: 「我的」 (and, in Task 63, a prompt's variables) */
+  /* a small label in the words: a prompt of one's own, O.prompts.mine (and, in Task 63, a prompt's variables) */
   .o-var { display: inline-flex; align-items: center; height: 19px; padding: 0 6px; border-radius: 5px; background: var(--fill); color: var(--ink-2); font-size: 11.5px; vertical-align: 1px; }
   .o-tag { margin-inline-start: 6px; }
   /* a search hit, behind the words */
@@ -974,10 +987,13 @@ Expected: PASS, 11 tests.
 - [ ] **Step 10: Run the gate and commit**
 
 Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
-Expected: exit 0.
+Expected: exit 0. Then `git add` the files and run `node scripts/check-english.mjs` again — it reads the index, so only
+now does it see the new files: it passes with the allowlist as it is (the new files hold no CJK line; the design's
+entry stays at 175, its §6.2 line holding none before or after).
 
 ```bash
-git add src/entrypoints/options/ui/settings.css src/entrypoints/options/ui/search.tsx src/entrypoints/options/ui/Row.tsx src/entrypoints/options/ui/Card.tsx src/entrypoints/options/main.tsx experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-design.md tests/options/rows.test.ts tests/options/sheet.test.ts
+git add src/entrypoints/options/ui/settings.css src/entrypoints/options/ui/search.tsx src/entrypoints/options/ui/Row.tsx src/entrypoints/options/ui/Card.tsx src/entrypoints/options/main.tsx experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-design.md tests/options/rows.test.ts tests/options/sheet.test.ts scripts/english-allowlist.txt
+node scripts/check-english.mjs
 git commit -m "feat(options): the settings page's row grammar
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -992,6 +1008,7 @@ The page's three other controls (§6.2, §6.3, §6.6) and the small list helpers
   `src/entrypoints/options/ui/Combobox.tsx`, `src/entrypoints/options/ui/lists.ts`
 - Modify: `src/entrypoints/options/ui/settings.css` (append)
 - Modify: `src/locales/zh-CN.ts`, `src/locales/en.ts` (`O.undo`)
+- Modify: `tests/options/sheet.test.ts` (the row motion's reduced form)
 - Test: `tests/options/controls.test.ts`
 
 **Interfaces:**
@@ -1004,7 +1021,8 @@ The page's three other controls (§6.2, §6.3, §6.6) and the small list helpers
     `Combobox({ value, onValue, options, busy, noMatch, onOpen, ref, ...input }: { value: string; onValue: (text: string, option?: ComboOption) => void; options: readonly ComboOption[] | null; busy?: boolean; noMatch: string; onOpen?: () => void; ref?: Ref<HTMLInputElement> } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>)`.
   - In `lists.ts`: `withUndo<T, G extends { index: number }>(items: readonly T[], gone: readonly G[]): ({ item: T } | { gone: G })[]`,
     `insertAt<T>(list: readonly T[], index: number, item: T): T[]`, `useLinger<T>(value: T | null, ms?: number): T | null`,
-    `shut(id: string): void`.
+    `shut(id: string): void`, `withItem<T extends { id: string }>(list: readonly T[], next: T): T[]`,
+    `segmentWidth(px: number): CSSProperties`.
   - `O.undo: { deleted: (name: string) => string; undo: string }`.
 
 - [ ] **Step 1: The words**
@@ -1034,7 +1052,7 @@ import { createElement as h, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Combobox, type ComboOption } from '@/entrypoints/options/ui/Combobox'
 import { ConfirmButton, DISARM_MS } from '@/entrypoints/options/ui/ConfirmButton'
-import { insertAt, withUndo } from '@/entrypoints/options/ui/lists'
+import { insertAt, withItem, withUndo } from '@/entrypoints/options/ui/lists'
 import { UNDO_MS, UndoRow } from '@/entrypoints/options/ui/UndoRow'
 import { O, setLocale } from '@/ui/strings'
 import { mountElement } from '../ui/render-hook'
@@ -1053,9 +1071,10 @@ describe('UndoRow (§6.2)', () => {
     expect(row.getAttribute('role')).toBe('status')
     expect(row.textContent).toContain(O.undo.deleted('Mine'))
     byText(m.container, O.undo.undo)!.click()
-    vi.advanceTimersByTime(UNDO_MS - 1)
+    // a flush moves the fake clock on by itself (shouldAdvanceTime: 20 ms a tick), so the boundary is read with a margin
+    vi.advanceTimersByTime(UNDO_MS - 1000)
     expect(seen).toEqual(['undo'])
-    vi.advanceTimersByTime(1)
+    vi.advanceTimersByTime(1000)
     expect(seen).toEqual(['undo', 'expire'])
     await m.unmount()
   })
@@ -1187,6 +1206,8 @@ describe('the list helpers', () => {
     expect(withUndo(['a', 'b', 'c'], [{ index: 1, name: 'x' }])).toEqual([{ item: 'a' }, { gone: { index: 1, name: 'x' } }, { item: 'b' }, { item: 'c' }])
     expect(withUndo(['a'], [{ index: 5, name: 'x' }])).toEqual([{ item: 'a' }, { gone: { index: 5, name: 'x' } }])
     expect(insertAt(['a', 'c'], 1, 'b')).toEqual(['a', 'b', 'c'])
+    expect(withItem([{ id: 'a', n: 1 }, { id: 'b', n: 2 }], { id: 'a', n: 3 })).toEqual([{ id: 'a', n: 3 }, { id: 'b', n: 2 }])
+    expect(withItem([{ id: 'a', n: 1 }], { id: 'c', n: 3 })).toEqual([{ id: 'a', n: 1 }, { id: 'c', n: 3 }])
   })
 })
 ```
@@ -1201,9 +1222,9 @@ Expected: FAIL — `Failed to resolve import "@/entrypoints/options/ui/Combobox"
 `src/entrypoints/options/ui/lists.ts`:
 
 ```ts
-// What the settings page's lists share: an undo row back in its row's place, a reveal's content kept while it folds
-// away, and a popover shut from a pick
-import { useEffect, useState } from 'react'
+// What the settings page's sections share: an undo row back in its row's place, a reveal's content kept while it
+// folds away, a popover shut from a pick, an edited item written back into its list, a small segmented control's width
+import { type CSSProperties, useEffect, useState } from 'react'
 
 /** A list with the rows its deletions left, each at the place its row had (§6.2: the undo row stands where the row was) */
 export function withUndo<T, G extends { index: number }>(items: readonly T[], gone: readonly G[]): ({ item: T } | { gone: G })[] {
@@ -1230,6 +1251,16 @@ export function useLinger<T>(value: T | null, ms = 180): T | null {
 
 /** A popover shut, as a pick does */
 export const shut = (id: string) => document.getElementById(id)?.hidePopover()
+
+/**
+ * A list with an edited item written into it — in place, or appended when it is no longer there (another tab deleted
+ * it while its editor was open here): the reader's change is their later word on it (the old drawer's `withProfile`)
+ */
+export const withItem = <T extends { id: string }>(list: readonly T[], next: T): T[] =>
+  list.some(x => x.id === next.id) ? list.map(x => (x.id === next.id ? next : x)) : [...list, next]
+
+/** A small segmented control's agreed width (settings-2), read by `.o-seg` */
+export const segmentWidth = (px: number) => ({ '--w': `${px}px` }) as CSSProperties
 ```
 
 - [ ] **Step 5: Write the undo row**
@@ -1237,7 +1268,7 @@ export const shut = (id: string) => document.getElementById(id)?.hidePopover()
 `src/entrypoints/options/ui/UndoRow.tsx`:
 
 ```tsx
-// Deleting is undone, not confirmed (the redesign's design, §6.2): the row gives way to 「已删除「{名称}」 · 撤销」 for 5 s,
+// Deleting is undone, not confirmed (the redesign's design, §6.2): the row gives way to O.undo's line and button for 5 s,
 // coming in with §8's row motion. It takes the focus when the deletion was the keyboard's, so that Enter undoes it; the
 // owner decides where the focus goes when it expires
 import { useEffect, useRef } from 'react'
@@ -1272,8 +1303,8 @@ export function UndoRow({ name, onUndo, onExpire, level = 0, focus = false }: { 
 `src/entrypoints/options/ui/ConfirmButton.tsx`:
 
 ```tsx
-// Clearing what cannot be undone is confirmed in place (the redesign's design, §6.6): a neutral 「清空…」 turns into
-// 「确认清空」 with a trash icon, its words in danger on the destructive button's ground (4.83:1 light, 5.01:1 dark);
+// Clearing what cannot be undone is confirmed in place (the redesign's design, §6.6): a neutral button (O.data.clear)
+// turns into its confirmation (O.data.clearConfirm) with a trash icon, its words in danger on the destructive button's ground (4.83:1 light, 5.01:1 dark);
 // untouched for 3 s it turns back — not while the pointer rests on it or the keyboard is on it. Done, the owner's words
 // stand in its place with the success icon arriving
 import { CircleCheck, Trash2 } from 'lucide'
@@ -1417,6 +1448,9 @@ Append to `src/entrypoints/options/ui/settings.css`:
 
 (`pop-in` is the shared menus' keyframes, in `controls.css`.)
 
+In `tests/options/sheet.test.ts`, in `'gives every motion its reduced form'`, after
+`expect(reduced).toContain('.o-swap')` add `expect(reduced).toContain('[data-arriving]')`.
+
 - [ ] **Step 9: Run the tests**
 
 Run: `pnpm vitest run tests/options/controls.test.ts tests/options/sheet.test.ts`
@@ -1428,7 +1462,8 @@ Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
 Expected: exit 0.
 
 ```bash
-git add src/entrypoints/options/ui/UndoRow.tsx src/entrypoints/options/ui/ConfirmButton.tsx src/entrypoints/options/ui/Combobox.tsx src/entrypoints/options/ui/lists.ts src/entrypoints/options/ui/settings.css src/locales/zh-CN.ts src/locales/en.ts tests/options/controls.test.ts
+git add src/entrypoints/options/ui/UndoRow.tsx src/entrypoints/options/ui/ConfirmButton.tsx src/entrypoints/options/ui/Combobox.tsx src/entrypoints/options/ui/lists.ts src/entrypoints/options/ui/settings.css src/locales/zh-CN.ts src/locales/en.ts tests/options/controls.test.ts tests/options/sheet.test.ts
+node scripts/check-english.mjs
 git commit -m "feat(options): the undo row, the confirm in place and the model field
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -1451,6 +1486,7 @@ Task 55 (its two rows are still under 阅读, in the old PDF reader section).
 - Modify: `src/pdf-reader/ui/links.ts`, `src/pdf-reader/ui/Menus.tsx`, `src/pdf-reader/ui/FailureCard.tsx`,
   `tests/pdf-reader/ui/toolbar.test.ts`
 - Modify: `tests/e2e/options-page.mjs`, `experiments/pdf-bilingual/spikes/entries.mjs`
+- Check: `scripts/english-allowlist.txt` (the English gate: `options-page.mjs` stays at 13, `entries.mjs` at 14)
 - Test: `tests/options/frame.test.ts`
 
 **Interfaces:**
@@ -1535,7 +1571,7 @@ In `src/locales/en.ts`, replace `nav: { services: 'Services', … },` with:
 ```ts
 // The settings page's frame (the redesign's design, §6.1, §6.7): the four sections and the current one, the search over
 // every section (only what is drawn is found; its count said politely), deep links with the old hashes' aliases, and
-// the settings that cannot be read drawing 数据 alone. The sections are the test's own (App's `content`)
+// the settings that cannot be read drawing the data section alone. The sections are the test's own (App's `content`)
 import { createElement as h } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
@@ -1578,7 +1614,7 @@ const type = (input: HTMLInputElement, value: string) => {
 const drawn = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('section[data-section]')].filter(s => !s.hasAttribute('data-miss')).map(s => s.dataset.section)
 
 describe('parseHash (§6.1)', () => {
-  it('reads a section and a row, leads the old hashes to their new places, and falls back to 翻译', () => {
+  it('reads a section and a row, leads the old hashes to their new places, and falls back to the translation section', () => {
     expect(parseHash('#translate/prompts')).toEqual({ section: 'translate', row: 'prompts' })
     expect(parseHash('#reading')).toEqual({ section: 'reading' })
     expect(parseHash('#services')).toEqual({ section: 'translate', row: 'services' })
@@ -1658,9 +1694,9 @@ describe('the frame (§6.1)', () => {
     await again.unmount()
   })
 
-  it('settings that cannot be read (S-O-02): the notice with its reason and reset, and 数据 alone', async () => {
+  it('settings that cannot be read (S-O-02): the notice with its reason and reset, and the data section alone', async () => {
     let reset = 0
-    state.data = data({ fallbackReason: { kind: 'unknown' } as OptionsData['fallbackReason'], reset: async () => { reset++; return DEFAULT_CONFIG } })
+    state.data = data({ fallbackReason: { kind: 'tooNew', stored: 99, supported: 1 }, reset: async () => { reset++; return DEFAULT_CONFIG } })
     history.replaceState(null, '', '#translate')
     const m = await mountElement(h(App, { content: CONTENT }))
     expect(nav(m.container).map(b => b.textContent)).toEqual([O.sections.data])
@@ -1688,7 +1724,7 @@ Expected: FAIL — `Failed to resolve import "@/entrypoints/options/hash"`.
 
 ```ts
 // Where the settings page is (the redesign's design, §6.1): `#<section>` keeps the place across a reload;
-// `#<section>/<row>` opens a section at a row and lights it once — the popup's 管理… rows (#translate/services,
+// `#<section>/<row>` opens a section at a row and lights it once — the popup's manage rows (#translate/services,
 // #translate/prompts, #appearance/styles) and the reader's settings (#reading/pdf). The section hashes before the
 // redesign lead to their new places, so that a link a reader kept still works
 export const SECTIONS = ['translate', 'appearance', 'reading', 'data'] as const
@@ -1764,7 +1800,7 @@ export function applySearch(root: HTMLElement, q: string): number {
 // The settings page (the redesign's design, §6.1): a sidebar — the mark, the search, the four sections, the interface
 // language at its foot (Task 53) — and a column of up to 680 px holding one section, or every section's matches while a
 // search runs. There is no save button: every control writes as it changes. `#<section>/<row>` opens a section at a
-// row and lights it. Settings that cannot be read (S-O-02, §6.7) draw a card at the top and 数据 alone: the other
+// row and lights it. Settings that cannot be read (S-O-02, §6.7) draw a card at the top and the data section alone: the other
 // sections would show the defaults as if they were the reader's, and nothing they save is accepted
 import { BookOpen, CircleAlert, Database, type IconNode, Languages, Palette, Search, X } from 'lucide'
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -1809,7 +1845,7 @@ export function App({ content = CONTENT }: { content?: Content }) {
   const current: Section = sections.includes(place.section) ? place.section : sections[0]!
   const ready = data.config !== null
 
-  // a link followed while the page is open (the reader's settings, a note's 设置)
+  // a link followed while the page is open (the reader's settings, a note's settings button)
   useEffect(() => {
     const follow = () => { setQuery(''); setPlace(parseHash(location.hash)) }
     addEventListener('hashchange', follow)
@@ -1960,7 +1996,7 @@ In `tests/e2e/options-page.mjs`, replace the `SECTIONS` constant and `openOption
 ```js
 /**
  * The sidebar's sections (the redesign's design, §6.1), and the names the suites used before it: the services and the
- * prompts are 翻译's now
+ * prompts are the translation section's now
  */
 export const SECTIONS = { translate: '翻译', appearance: '外观', reading: '阅读', data: '数据', services: '翻译', prompts: '翻译' }
 
@@ -1983,10 +2019,13 @@ Expected: PASS. The old sections' tests (`tests/options/{service-drawer,reading-
 - [ ] **Step 11: Check the reader is unchanged, run the gate, commit**
 
 Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build && node experiments/pdf-bilingual/spikes/reader-pixels.mjs`
-Expected: exit 0, 24 lines of `ok`.
+Expected: exit 0, 24 lines of `ok`. Then `git add` the files and run `node scripts/check-english.mjs`: it passes with
+the allowlist as it is — `tests/e2e/options-page.mjs` keeps its 13 lines (the new `SECTIONS` line takes the old one's
+place), `experiments/pdf-bilingual/spikes/entries.mjs` its 14 (line 102 holds none); the new files hold none.
 
 ```bash
-git add src/entrypoints/options/hash.ts src/entrypoints/options/ui/search.tsx src/entrypoints/options/App.tsx src/entrypoints/options/ui/settings.css src/locales/zh-CN.ts src/locales/en.ts src/pdf-reader/ui/links.ts src/pdf-reader/ui/Menus.tsx src/pdf-reader/ui/FailureCard.tsx tests/pdf-reader/ui/toolbar.test.ts tests/e2e/options-page.mjs experiments/pdf-bilingual/spikes/entries.mjs tests/options/frame.test.ts
+git add src/entrypoints/options/hash.ts src/entrypoints/options/ui/search.tsx src/entrypoints/options/App.tsx src/entrypoints/options/ui/settings.css src/locales/zh-CN.ts src/locales/en.ts src/pdf-reader/ui/links.ts src/pdf-reader/ui/Menus.tsx src/pdf-reader/ui/FailureCard.tsx tests/pdf-reader/ui/toolbar.test.ts tests/e2e/options-page.mjs experiments/pdf-bilingual/spikes/entries.mjs tests/options/frame.test.ts scripts/english-allowlist.txt
+node scripts/check-english.mjs
 git commit -m "feat(options): the settings page's frame, its search and deep links
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -2004,6 +2043,7 @@ is not English. A search shows it as a row too, 「也在左下角」. Not drawn
 - Modify: `src/entrypoints/options/ui/settings.css` (append)
 - Modify: `src/locales/zh-CN.ts`, `src/locales/en.ts` (`O.uiLanguageName`, `O.uiLanguageElsewhere`, en `O.uiLanguageAuto`)
 - Modify: `tests/e2e/extension.mjs` (the interface language's checks)
+- Check: `scripts/english-allowlist.txt` (the English gate: `extension.mjs` stays at 76)
 - Test: `tests/options/language.test.ts`
 
 **Interfaces:**
@@ -2038,11 +2078,13 @@ after it add:
 ```ts
 // The interface language (the redesign's design, §6.1): at the sidebar's foot, its name carrying the English words, its
 // languages in their own names with `lang`; a pick writes it (the data layer reloads the page once it lands); a search
-// shows it as a row of its own
+// shows it as a row of its own. happy-dom has no popover API: a pick shuts its popover, so the reader's stub stands in
 import { createElement as h } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { OptionsData } from '@/entrypoints/options/data'
+import { LOCALE_NAMES } from '@/locales'
+import { stubPopovers } from '../pdf-reader/ui/popover-stub'
 import { mountElement } from '../ui/render-hook'
 
 vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getURL: (path: string) => path } } }))
@@ -2064,14 +2106,16 @@ function data(config: Config, patches: Config[]): OptionsData {
 const options = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('[role="option"]')]
 
 describe('the interface language (§6.1)', () => {
-  beforeEach(() => { setLocale('en') })
+  let restore = () => {}
+  beforeEach(() => { setLocale('en'); restore = stubPopovers() })
+  afterEach(() => restore())
 
   it('the foot row names itself with the value; the menu lists the browser\'s choice and each language in its own name, with lang', async () => {
     const m = await mountElement(h(LanguageFoot, { data: data({ ...DEFAULT_CONFIG, uiLanguage: 'auto' }, []) }))
     const button = m.container.querySelector<HTMLButtonElement>('button.o-lang')!
     expect(button.getAttribute('aria-label')).toBe(`${O.uiLanguageName}: ${O.uiLanguageAuto}`)
-    expect(options(m.container).map(o => o.textContent)).toEqual([O.uiLanguageAuto, '简体中文', 'English'])
-    expect(m.container.querySelector('[lang="zh-CN"]')?.textContent).toBe('简体中文')
+    expect(options(m.container).map(o => o.textContent)).toEqual([O.uiLanguageAuto, LOCALE_NAMES['zh-CN'], LOCALE_NAMES.en])
+    expect(m.container.querySelector('[lang="zh-CN"]')?.textContent).toBe(LOCALE_NAMES['zh-CN'])
     expect(m.container.querySelector('[lang="en"]')).not.toBeNull()
     await m.unmount()
   })
@@ -2184,7 +2228,7 @@ In `src/entrypoints/options/App.tsx`:
 - replace `const shown = q ? sections : [current]` with:
 
 ```tsx
-  // while searching, every section — and, after 外观, the interface language's own row (settings-2's order)
+  // while searching, every section — and, after the appearance section, the interface language's own row (settings-2's order)
   const shown: (Section | 'language')[] = !q ? [current] : unreadable ? ['data'] : ['translate', 'appearance', 'language', 'reading', 'data']
 ```
 
@@ -2233,10 +2277,12 @@ Expected: exit 0.
 - [ ] **Step 8: Run the tests, the gate, and commit**
 
 Run: `pnpm vitest run tests/options && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
-Expected: exit 0.
+Expected: exit 0. Then `git add` the files and run `node scripts/check-english.mjs`: it passes with the allowlist as it
+is — the two checks of `tests/e2e/extension.mjs` each take an old line's place (76 stays); the new files hold none.
 
 ```bash
-git add src/entrypoints/options/sections/Language.tsx src/entrypoints/options/App.tsx src/entrypoints/options/ui/settings.css src/locales/zh-CN.ts src/locales/en.ts tests/e2e/extension.mjs tests/options/language.test.ts
+git add src/entrypoints/options/sections/Language.tsx src/entrypoints/options/App.tsx src/entrypoints/options/ui/settings.css src/locales/zh-CN.ts src/locales/en.ts tests/e2e/extension.mjs tests/options/language.test.ts scripts/english-allowlist.txt
+node scripts/check-english.mjs
 git commit -m "feat(options): the interface language at the sidebar's foot
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -2284,7 +2330,7 @@ delete `cacheHint`.
 `describe` with:
 
 ```ts
-describe('数据 (the redesign\'s design, §6.6)', () => {
+describe('the data section (the redesign\'s design, §6.6)', () => {
   beforeEach(() => {
     setLocale('en')
     wire.exported = null
@@ -2304,7 +2350,7 @@ describe('数据 (the redesign\'s design, §6.6)', () => {
     await m.unmount()
   })
 
-  it('a cache cleared in two presses in place, then 「已清空」 in the button\'s place', async () => {
+  it('a cache cleared in two presses in place, then O.data.cleared in the button\'s place', async () => {
     let cleared = 0
     const view = (done: boolean) => createElement(Data, { data: { ...data(), cache: { entries: 3, bytes: 0 }, cacheCleared: done, clearCache: async () => { cleared++ } } })
     const m = await mountElement(view(false))
@@ -2371,7 +2417,7 @@ Expected: FAIL — no `[data-srow]` rows; `O.data.cacheLine(1284, '12.4')` not f
 `src/entrypoints/options/sections/Data.tsx` (the whole file):
 
 ```tsx
-// 数据 (the redesign's design, §6.6): what the extension keeps on this machine — the translation cache, the PDF reader's
+// The data section (the redesign's design, §6.6): what the extension keeps on this machine — the translation cache, the PDF reader's
 // translated papers (the reader's design, §9.3) — each cleared with a confirm in place, and the diagnostics log a
 // reader can download to attach to an issue (issue #156). A store that cannot be read says so (S-O-71): shown as an
 // empty one, a failure would make the reader think there is nothing there (Codex on #52)
@@ -2425,8 +2471,8 @@ In `tests/e2e/extension.mjs`, in the block `// ── The settings page: the sty
 - the `waitFor` on `/^[1-9]\d* 条 · /` becomes `/^[1-9][\d,]* 段 · /`; both `textContent` reads of `/^\d+ 条 · /`
   (`before` and `after`) become `/^[\d,]+ 段 · /`; the `waitFor` on `/^0 条 · /` becomes `/^0 段 · /`; the check's
   `/^0 条/` becomes `/^0 段/`;
-- `options.getByRole('button', { name: '清空', exact: true }).click()` becomes
-  `options.getByRole('button', { name: '清空…', exact: true }).first().click()`.
+- `cacheRow.getByRole('button', { name: '清空', exact: true }).click()` (extension.mjs:1084) becomes
+  `cacheRow.getByRole('button', { name: '清空…', exact: true }).click()`.
 
 In `experiments/pdf-bilingual/spikes/entries.mjs`, section 5's data part: `const clears = options.getByRole('button', { name: /^(清空|Clear)$/ })`
 becomes `/^(清空…|Clear…)$/`, and `{ name: /确认清空|Confirm clear/ }` becomes `{ name: /确认清空|Clear now/ }`.
@@ -2438,12 +2484,15 @@ Expected: exit 0.
 - [ ] **Step 6: Run the tests, the gate, and commit**
 
 Run: `pnpm vitest run tests/options && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
-Expected: exit 0. Where the English gate says `tests/e2e/extension.mjs` or `entries.mjs` holds another count of Chinese
-lines, set its entry in `scripts/english-allowlist.txt` to the count it names.
+Expected: exit 0. Then `git add` the files and run `node scripts/check-english.mjs`: every changed line of
+`tests/e2e/extension.mjs` and `entries.mjs` takes an old line's place, so their entries stay at 76 and 14; the
+rewritten `tests/options/data-section.test.ts` holds none. Where the gate names another count, set that entry to it,
+with a one-line reason, in this commit.
 
 ```bash
 git add src/entrypoints/options/sections/Data.tsx src/locales/zh-CN.ts src/locales/en.ts tests/options/data-section.test.ts tests/e2e/extension.mjs experiments/pdf-bilingual/spikes/entries.mjs scripts/english-allowlist.txt
-git commit -m "feat(options): 数据, each cache cleared with a confirm in place
+node scripts/check-english.mjs
+git commit -m "feat(options): the data section, each cache cleared with a confirm in place
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
@@ -2461,6 +2510,7 @@ styles between them are Task 56's. The old PDF reader section still draws its tw
 - Modify: `src/entrypoints/options/ui/settings.css` (append)
 - Modify: `src/locales/zh-CN.ts`, `src/locales/en.ts` (`O.appearance`)
 - Modify: `tests/e2e/extension.mjs` (the highlight's check opens 外观)
+- Check: `scripts/english-allowlist.txt` (the English gate: `extension.mjs` stays at 76)
 - Test: `tests/options/appearance-section.test.ts`
 
 **Interfaces:**
@@ -2505,7 +2555,7 @@ In `src/locales/en.ts`:
 `tests/options/appearance-section.test.ts`:
 
 ```ts
-// 外观 (the redesign's design, §6.4): the appearance for the whole extension, the dimming only where it can apply, the
+// The appearance section (the redesign's design, §6.4): the appearance for the whole extension, the dimming only where it can apply, the
 // highlight's switch and its colours — the profiles as swatches, and one colour of the reader's own that is added once
 // and changed after
 import { createElement as h, useState } from 'react'
@@ -2538,7 +2588,7 @@ const pick = (input: HTMLInputElement, value: string) => {
   input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-describe('外观 (§6.4)', () => {
+describe('the appearance section (§6.4)', () => {
   beforeEach(() => { setLocale('en') })
 
   it('the appearance for the whole extension; dimming the PDF pages shows for System and Dark only', async () => {
@@ -2633,7 +2683,7 @@ export function ColourPick({ label, value, pressed, onPick }: { label: string; v
 `src/entrypoints/options/sections/Appearance.tsx`:
 
 ```tsx
-// 外观 (the redesign's design, §6.4): the extension's appearance (§3) with the dark pages' dimming under it, the
+// The appearance section (the redesign's design, §6.4): the extension's appearance (§3) with the dark pages' dimming under it, the
 // translation styles (Task 56), and the hover highlight with its colour. Every control writes at once
 import { Monitor, Moon, Sun } from 'lucide'
 import { BUILT_IN_HIGHLIGHTS, type HighlightProfile } from '@/config/appearance'
@@ -2654,7 +2704,7 @@ const GLYPHS = { system: Monitor, light: Sun, dark: Moon }
 
 /** The reader's colour of their own for the highlight (§6.4): one profile, added the first time and changed after */
 export const OWN_HIGHLIGHT_ID = 'hl-own'
-/** its band's strength: the built-ins' middle (柔和绿 0.22, 淡蓝 0.25, 淡黄 0.3) */
+/** its band's strength: the built-ins' middle (soft-green 0.22, sky 0.25, sand 0.3) */
 const OWN_STRENGTH = 0.25
 
 /** a band's swatch as the band reads on a page: its colour at its strength over the ground */
@@ -2744,11 +2794,13 @@ Expected: exit 0.
 - [ ] **Step 8: Run the tests, the gate, and commit**
 
 Run: `pnpm vitest run tests/options && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
-Expected: exit 0.
+Expected: exit 0. Then `git add` the files and run `node scripts/check-english.mjs`: it passes with the allowlist as it
+is (`extension.mjs` stays at 76: the two changed lines hold none; the new files hold none).
 
 ```bash
-git add src/entrypoints/options/sections/Appearance.tsx src/entrypoints/options/ui/ColourPick.tsx src/entrypoints/options/App.tsx src/entrypoints/options/ui/settings.css src/locales/zh-CN.ts src/locales/en.ts tests/e2e/extension.mjs tests/options/appearance-section.test.ts
-git commit -m "feat(options): 外观 — the appearance, the dimming and the highlight's colours
+git add src/entrypoints/options/sections/Appearance.tsx src/entrypoints/options/ui/ColourPick.tsx src/entrypoints/options/App.tsx src/entrypoints/options/ui/settings.css src/locales/zh-CN.ts src/locales/en.ts tests/e2e/extension.mjs tests/options/appearance-section.test.ts scripts/english-allowlist.txt
+node scripts/check-english.mjs
+git commit -m "feat(options): the appearance section — the theme, the dimming and the highlight's colours
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
@@ -2766,13 +2818,14 @@ is chosen; 更多, folded: 悬停前模糊 and the custom declarations; then 完
 - Modify: `src/entrypoints/options/ui/settings.css` (append)
 - Modify: `src/locales/zh-CN.ts`, `src/locales/en.ts` (`O.appearance` styles words, `O.more`, `O.reading.blurHint`)
 - Modify: `tests/e2e/options-page.mjs` (`chooseStyle`), `tests/e2e/extension.mjs` (the dashed style's flow)
+- Check: `scripts/english-allowlist.txt` (the English gate: `options-page.mjs` stays at 13, `extension.mjs` at 76)
 - Test: `tests/options/styles.test.ts`
 
 **Interfaces:**
 - Consumes: `styleTile` (`@/ui/appearance/tiles`; Part 7 moves it, ruling 23), `resetBuiltIns`, `duplicateStyle`, `newProfileId`,
   `BUILT_IN_STYLES`, `UNDERLINES`, `NAME_MAX` (`@/config/appearance`), `copyName` (`@/ui/strings`),
   `sanitizeCustomCss` (`@/core/renderer`); Part 3's `Segmented`, `Field`, `TextInput`, `Button`, `Reveal`;
-  `UndoRow`, `withUndo`, `insertAt`, `useLinger` (Task 51); `ColourPick` (Task 55).
+  `UndoRow`, `withUndo`, `insertAt`, `useLinger`, `withItem`, `segmentWidth` (Task 51); `ColourPick` (Task 55).
 - Produces: `StyleEditor({ value, onChange, onDone, onDuplicate, onDelete })`, `STRENGTHS = [1, 0.7, 0.5]`; the words
   `O.appearance.{styles, restore, edit(name), create, newStyle, editor: { name, colour, follow, pick, strength, strengths, css, done, delete }}`, `O.more`.
 
@@ -2830,8 +2883,8 @@ and `reading.blurHint` becomes `'The translation stays blurred until the pointer
 
 ```ts
 // The translation styles (the redesign's design, §6.4): a radio row a style, its sample written in it, a pencil that
-// opens the editor under its row for a built-in as for one's own; every control of the editor writes at once; 浓淡's
-// three steps and a value between them; new, duplicate, delete with its undo, and the built-ins restored
+// opens the editor under its row for a built-in as for one's own; every control of the editor writes at once; the
+// strength's three steps and a value between them; new, duplicate, delete with its undo, and the built-ins restored
 import { createElement as h, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BUILT_IN_STYLES } from '@/config/appearance'
@@ -2866,7 +2919,7 @@ const type = (input: HTMLInputElement, value: string) => {
   input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-describe('译文样式 (§6.4)', () => {
+describe('the translation styles (§6.4)', () => {
   beforeEach(() => { setLocale('en'); vi.useFakeTimers({ shouldAdvanceTime: true }) })
   afterEach(() => { vi.useRealTimers() })
 
@@ -2876,7 +2929,8 @@ describe('译文样式 (§6.4)', () => {
     expect(names(m.container)).toEqual(['Same as the original', 'Green', 'Blue', 'Amber', 'Muted', 'Blurred'])
     const sample = card(m.container).querySelectorAll<HTMLElement>('.o-desc[data-sample]')[1]!
     expect(sample.textContent).toBe(O.reading.previewTarget)
-    expect(sample.style.color).toBe(BUILT_IN_STYLES[1]!.color)
+    // the muted style's sample, drawn at its strength (happy-dom keeps a number and drops an oklch() colour)
+    expect(card(m.container).querySelectorAll<HTMLElement>('.o-desc[data-sample]')[4]!.style.opacity).toBe('0.7')
     styleRadios(m.container)[2]!.click()
     await m.flush()
     expect(patches.at(-1)?.appearance.activeStyle).toBe('blue')
@@ -2922,7 +2976,7 @@ describe('译文样式 (§6.4)', () => {
     await m.unmount()
   })
 
-  it('更多 holds the blur and the declarations, the declarations checked in place and written only when they hold', async () => {
+  it('More (O.more) holds the blur and the declarations, the declarations checked in place and written only when they hold', async () => {
     const patches: Config[] = []
     const m = await mountElement(h(Harness, { start: DEFAULT_CONFIG, patches }))
     button(m.container, O.appearance.edit('Blue')).click()
@@ -3008,12 +3062,12 @@ Expected: FAIL — no `[data-row="appearance/styles"]`.
 
 ```tsx
 // A translation style's editor (the redesign's design, §6.4), opened under its row for a built-in as for one of the
-// reader's own: 名称, the preview (the original over the translation, in the style), 颜色, 浓淡, 下划线 with 线宽 once a
-// line is chosen, and folded under 更多 the blur and the custom declarations; then 完成, 复制一份 (S-O-48, kept: §11 does
-// not list it) and 删除样式. Every control writes at once; the name only when it is not empty (the schema's), and the
+// reader's own: the name, the preview (the original over the translation, in the style), the colour, the strength, the
+// underline with the line's thickness once a line is chosen, and folded under More the blur and the custom
+// declarations; then Done, Duplicate (S-O-48, kept: §11 does not list it) and Delete style. Every control writes at once; the name only when it is not empty (the schema's), and the
 // declarations only when they will survive the sanitiser, the rest staying in the field with its reason
 import { ChevronRight } from 'lucide'
-import { type CSSProperties, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NAME_MAX, PALETTE, type StyleProfile, UNDERLINES } from '@/config/appearance'
 import { sanitizeCustomCss } from '@/core/renderer'
 import { styleTile } from '@/ui/appearance/tiles'
@@ -3025,12 +3079,10 @@ import { Segmented } from '@/ui/controls/Segmented'
 import { Switch } from '@/ui/controls/Switch'
 import { O, profileName } from '@/ui/strings'
 import { ColourPick } from '../ui/ColourPick'
+import { segmentWidth } from '../ui/lists'
 
-/** 浓淡's steps (§6.4): as it is, a step lighter (the built-in 淡一档's 0.7), lighter still */
+/** The strength's steps (§6.4): as it is, a step lighter (the built-in muted style's 0.7), lighter still */
 export const STRENGTHS = [1, 0.7, 0.5] as const
-
-/** a segmented control's agreed width (settings-2) */
-const width = (px: number) => ({ '--w': `${px}px` }) as CSSProperties
 
 export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: {
   value: StyleProfile
@@ -3069,7 +3121,7 @@ export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: 
       </div>
       <div className="o-line">
         <span>{e.strength}</span>
-        <div className="o-seg" style={width(210)}>
+        <div className="o-seg" style={segmentWidth(210)}>
           {/* a value between the steps matches none: no step is chosen until one is (§6.4; Part 3's Segmented) */}
           <Segmented size="sm" label={e.strength} value={String(value.opacity)} options={STRENGTHS.map((v, i) => ({ value: String(v), label: e.strengths[i]! }))}
             onChange={v => set({ opacity: Number(v) })} />
@@ -3077,7 +3129,7 @@ export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: 
       </div>
       <div className="o-line">
         <span>{O.reading.underline}</span>
-        <div className="o-seg" style={width(300)}>
+        <div className="o-seg" style={segmentWidth(300)}>
           <Segmented size="sm" label={O.reading.underline} value={value.underline} options={UNDERLINES.map(u => ({ value: u, label: O.reading.underlines[u] }))}
             onChange={underline => set({ underline })} />
         </div>
@@ -3085,7 +3137,7 @@ export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: 
       <Reveal open={value.underline !== 'none'}>
         <div className="o-line" data-sub="">
           <span>{O.reading.thickness}</span>
-          <div className="o-seg" style={width(120)}>
+          <div className="o-seg" style={segmentWidth(120)}>
             <Segmented size="sm" label={O.reading.thickness} value={String(value.thickness)} options={[{ value: '1', label: '1px' }, { value: '2', label: '2px' }]}
               onChange={t => set({ thickness: t === '2' ? 2 : 1 })} />
           </div>
@@ -3157,7 +3209,7 @@ import { Button } from '@/ui/controls/Button'
 import { radioKeys } from '@/ui/controls/radio'
 import { copyName } from '@/ui/strings'
 import { GroupHeading } from '../ui/Card'
-import { insertAt, useLinger, withUndo } from '../ui/lists'
+import { insertAt, useLinger, withItem, withUndo } from '../ui/lists'
 import { IconButton } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { StyleEditor } from './StyleEditor'
@@ -3174,16 +3226,9 @@ import { StyleEditor } from './StyleEditor'
 (the highlight's card keeps its `gap`: it follows the styles' card now). Append to the file:
 
 ```tsx
-/**
- * A list with its profile written into it — in place, or appended when it is no longer there (another tab deleted it
- * while its editor was open here): the reader's change is their later word on it (the drawer's `withProfile`)
- */
-const withProfile = (list: readonly StyleProfile[], next: StyleProfile): StyleProfile[] =>
-  list.some(p => p.id === next.id) ? list.map(p => (p.id === next.id ? next : p)) : [...list, next]
-
 interface GoneStyle { profile: StyleProfile; index: number; active: boolean; focus: boolean }
 
-/** 译文样式 (§6.4): one card, one radio group; a row a style, its editor under it; 「＋ 新建样式…」 last */
+/** The translation styles (§6.4): one card, one radio group; a row a style, its editor under it; the new-style row last */
 function Styles({ data }: { data: OptionsData }) {
   const { patch } = data
   const a = data.config!.appearance
@@ -3237,7 +3282,7 @@ function Styles({ data }: { data: OptionsData }) {
               trailing={<IconButton icon={Pencil} label={O.appearance.edit(name)} hover aria-expanded={editing === s.id} onClick={() => open(s.id)} />} />
             <Reveal open={editing === s.id}>
               {drawn === s.id && (
-                <StyleEditor value={s} onChange={next => setLooks(c => ({ ...c, styles: withProfile(c.styles, next) }))} onDone={() => close(s.id)}
+                <StyleEditor value={s} onChange={next => setLooks(c => ({ ...c, styles: withItem(c.styles, next) }))} onDone={() => close(s.id)}
                   onDuplicate={() => add(duplicateStyle(s, copyName(s, 'styles')))} onDelete={() => remove(s)} />
               )}
             </Reveal>
@@ -3265,17 +3310,19 @@ Append to `src/entrypoints/options/ui/settings.css`:
   /* the blur until hovered, as on the page: the sample's blur is inline (styleTile), so the hover's must outrank it */
   .o-preview-target[data-blur]:hover { filter: none !important; }
   .o-line { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 26px; }
-  /* 线宽, a sub-line of 下划线: one step in */
+  /* the line's thickness, a sub-line of the underline: one step in */
   .o-line[data-sub] { padding-inline-start: 28px; }
   .o-line-words { display: flex; flex-direction: column; gap: 2px; }
   .o-line-words small { color: var(--ink-2); font-size: 12px; line-height: 1.4; }
-  /* a segmented control at its agreed width, never wider than its line */
-  .o-seg > [role="radiogroup"] { width: min(var(--w), 100%); }
+  /* a segmented control at its agreed width (segmentWidth), never wider than its line: the width is the wrapper's, so
+     that it holds inside a trail that takes its content's width */
+  .o-seg { width: var(--w); max-width: 100%; }
+  .o-seg > [role="radiogroup"] { width: 100%; }
   .o-disclose { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 12.5px; cursor: pointer; }
   .o-disclose svg { transition: rotate 150ms ease-out; }
   .o-disclose[aria-expanded="true"] svg { rotate: 90deg; }
   .o-more { display: flex; flex-direction: column; gap: 12px; padding-top: 2px; }
-  /* 跟随原文: half the ink, half the ground */
+  /* the swatch that follows the original's colour: half the ink, half the ground */
   .o-follow { background: conic-gradient(var(--ink) 0 50%, var(--chrome) 0); }
   /* a form's bar: its primary, its text buttons, a note beside them */
   .o-formbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
@@ -3289,7 +3336,7 @@ Append to `src/entrypoints/options/ui/settings.css`:
 In `tests/e2e/options-page.mjs`, `chooseStyle` becomes:
 
 ```js
-/** Choose a translation style by its name: a radio row of 外观's styles (the redesign's design, §6.4) */
+/** Choose a translation style by its name: a radio row of the appearance section's styles (the redesign's design, §6.4) */
 export async function chooseStyle(options, name) {
   await openSection(options, 'appearance')
   await pick(options.getByRole('radio', { name, exact: true }))
@@ -3316,10 +3363,14 @@ Expected: exit 0.
 
 Run: `pnpm vitest run tests/options && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
 Expected: exit 0. (Part 3's `Segmented` draws a value that matches no option as nothing chosen; if the in-between test
-fails on its `aria-checked` line, report it rather than working around it here.)
+fails on its `aria-checked` line, report it rather than working around it here.) Then `git add` the files and run
+`node scripts/check-english.mjs`: it passes with the allowlist as it is — `chooseStyle` holds no CJK line
+(`options-page.mjs` stays at 13), the dashed style's seven lines replace seven holding as many (`extension.mjs` stays
+at 76), and the new files hold none.
 
 ```bash
-git add src/entrypoints/options/sections/StyleEditor.tsx src/entrypoints/options/sections/Appearance.tsx src/entrypoints/options/ui/settings.css src/locales/zh-CN.ts src/locales/en.ts tests/e2e/options-page.mjs tests/e2e/extension.mjs tests/options/styles.test.ts
+git add src/entrypoints/options/sections/StyleEditor.tsx src/entrypoints/options/sections/Appearance.tsx src/entrypoints/options/ui/settings.css src/locales/zh-CN.ts src/locales/en.ts tests/e2e/options-page.mjs tests/e2e/extension.mjs tests/options/styles.test.ts scripts/english-allowlist.txt
+node scripts/check-english.mjs
 git commit -m "feat(options): the translation styles as rows, edited in place
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -3343,7 +3394,7 @@ The old reading and PDF reader sections go: their styles and highlights are 外�
 
 **Interfaces:**
 - Consumes: `useFloatingEntry` (`../floating-entry`, unchanged); Part 3's `Segmented`, `Reveal`; `Row`, `Card`,
-  `GroupHeading` (Task 50); `R.sync`, `S.rows.images`.
+  `GroupHeading` (Task 50); `segmentWidth` (Task 51); `R.sync`, `S.rows.images`.
 - Produces: `Reading({ data })` (the new one); `O.reading.{imagesHint, pdf, pdfEnabled, pdfEnabledHint, syncHint}` and the
   new words of `openInHint`, `floatingEntryHint`.
 
@@ -3385,7 +3436,7 @@ gains the group heading: in the `allowed` regular expression, after `O\.reading\
 `tests/options/reading-section.test.ts` (the whole file):
 
 ```ts
-// 阅读 (the redesign's design, §6.5): the way to translate with its description following the choice, figure text, where
+// The reading section (the redesign's design, §6.5): the way to translate with its description following the choice, figure text, where
 // translations open, the floating button (asked of the background, its state's only writer), and the PDF group with
 // its sub-row while the reader is on. Every control writes at once
 import { createElement as h, useState } from 'react'
@@ -3417,7 +3468,7 @@ const rowOf = (c: HTMLElement, id: string) => c.querySelector<HTMLElement>(`[dat
 const segments = (c: HTMLElement, label: string) => [...c.querySelectorAll<HTMLElement>(`[role="radiogroup"][aria-label="${label}"] [role="radio"]`)]
 const switchOf = (c: HTMLElement, label: string) => c.querySelector<HTMLElement>(`[role="switch"][aria-label="${label}"]`)!
 
-describe('阅读 (§6.5)', () => {
+describe('the reading section (§6.5)', () => {
   beforeEach(() => { setLocale('en'); floating.asked.length = 0 })
 
   it('the way to translate: two choices, the description following the choice and coming in anew as it changes', async () => {
@@ -3481,11 +3532,11 @@ Expected: FAIL — no `[data-row="reading/way"]`.
 `src/entrypoints/options/sections/Reading.tsx` (the whole file):
 
 ```tsx
-// 阅读 (the redesign's design, §6.5): how a paper is translated, figure text, where a translation opens from an abstract
-// or a PDF page, the floating button, and the PDF group. Every control writes at once; 整篇翻译 reaches an open paper at
+// The reading section (the redesign's design, §6.5): how a paper is translated, figure text, where a translation opens
+// from an abstract or a PDF page, the floating button, and the PDF group. Every control writes at once; the whole-paper
+// way reaches an open paper at
 // once (the session releases what waits, Part 2). The floating button's state is not in the configuration: the
 // background, its only writer, is asked (floating-entry.ts)
-import type { CSSProperties } from 'react'
 import { Reveal } from '@/ui/controls/Reveal'
 import { Segmented } from '@/ui/controls/Segmented'
 import { Switch } from '@/ui/controls/Switch'
@@ -3493,12 +3544,11 @@ import { O, R, S } from '@/ui/strings'
 import type { OptionsData } from '../data'
 import { useFloatingEntry } from '../floating-entry'
 import { Card, GroupHeading } from '../ui/Card'
+import { segmentWidth } from '../ui/lists'
 import { Row } from '../ui/Row'
 
 const WAYS = ['on-demand', 'whole'] as const
 const OPEN_IN = ['new-tab', 'same-tab'] as const
-/** a small segmented control's agreed width (settings-2) */
-const width = (px: number) => ({ '--w': `${px}px` }) as CSSProperties
 
 export function Reading({ data }: { data: OptionsData }) {
   const { config, patch } = data
@@ -3510,12 +3560,12 @@ export function Reading({ data }: { data: OptionsData }) {
     <>
       <Card>
         <Row row="reading/way" words={k['reading/way']} label={O.reading.translateWay} description={O.reading.translateWayHints[config.preload === 'whole' ? 1 : 0]} swap
-          trailing={<div className="o-seg" style={width(220)}><Segmented size="sm" label={O.reading.translateWay} value={config.preload}
+          trailing={<div className="o-seg" style={segmentWidth(220)}><Segmented size="sm" label={O.reading.translateWay} value={config.preload}
             options={WAYS.map((value, i) => ({ value, label: O.reading.translateWays[i]! }))} onChange={preload => void patch(latest => ({ ...latest, preload }))} /></div>} />
         <Row toggles row="reading/images" words={k['reading/images']} label={S.rows.images} description={O.reading.imagesHint}
           trailing={<Switch label={S.rows.images} checked={config.image.enabled} onChange={on => void patch(latest => ({ ...latest, image: { enabled: on } }))} />} />
         <Row row="reading/open-in" words={k['reading/open-in']} label={O.reading.openIn} description={O.reading.openInHint}
-          trailing={<div className="o-seg" style={width(200)}><Segmented size="sm" label={O.reading.openIn} value={config.reading.openIn}
+          trailing={<div className="o-seg" style={segmentWidth(200)}><Segmented size="sm" label={O.reading.openIn} value={config.reading.openIn}
             options={OPEN_IN.map((value, i) => ({ value, label: O.reading.openInStops[i]! }))} onChange={openIn => void patch(latest => ({ ...latest, reading: { ...latest.reading, openIn } }))} /></div>} />
         <Row toggles row="reading/floating" words={k['reading/floating']} label={O.reading.floatingEntry} description={O.reading.floatingEntryHint}
           trailing={<Switch label={O.reading.floatingEntry} checked={floating.enabled ?? true} onChange={floating.setEnabled} />} />
@@ -3600,12 +3650,17 @@ committing; a failure elsewhere is reported with its line.
 
 - [ ] **Step 8: Commit**
 
-Where the English gate asks, set `scripts/english-allowlist.txt`'s entries for the e2e files to the counts it names.
+`git add` the files (after the `git rm`) and run `node scripts/check-english.mjs`. `SWITCH_SECTIONS` adds two lines that
+find switches by their Chinese names, so in `scripts/english-allowlist.txt` the entry `tests/e2e/options-page.mjs 13`
+becomes `tests/e2e/options-page.mjs 15  # +2, 2026-09-27: the switches the suites set, each found by its Chinese name in
+its section (Part 5, Task 57)`; `extension.mjs` stays at 76, `entries.mjs` at 14, `tests/ui/locales.test.ts` at 3, and
+the rewritten `reading-section.test.ts` holds none. The gate must then pass; where it names another count, set that one.
 
 ```bash
 git rm src/entrypoints/options/sections/PdfReader.tsx tests/options/pdf-reader-section.test.ts
 git add src/entrypoints/options/sections/Reading.tsx src/entrypoints/options/App.tsx src/locales/zh-CN.ts src/locales/en.ts tests/options/reading-section.test.ts tests/ui/locales.test.ts tests/e2e/options-page.mjs tests/e2e/extension.mjs experiments/pdf-bilingual/spikes/entries.mjs scripts/english-allowlist.txt
-git commit -m "feat(options): 阅读, with the PDF group
+node scripts/check-english.mjs
+git commit -m "feat(options): the reading section, with the PDF group
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
@@ -3631,6 +3686,7 @@ origin already granted.
 - Modify: `src/locales/zh-CN.ts`, `src/locales/en.ts` (`O.services.failed`)
 - Test: `tests/providers/transport.test.ts`, `tests/background/health-guard.test.ts`, `tests/background/handlers.test.ts`,
   `tests/options/connect.test.ts`
+- Check: `scripts/english-allowlist.txt` (the English gate: `transport.test.ts` stays at 5)
 
 **Interfaces:**
 - Consumes: `Service`, `serviceOf` (`@/config/services`); `isRefusal`, `shouldMarkRefusal`, `idsToClear`
@@ -3956,7 +4012,7 @@ export async function hasHostPermission(baseURL: string): Promise<boolean> {
 
 ```ts
 // The connection test of a service the settings page would save (the redesign's design, §6.3): the endpoint's origin
-// asked for — from the gesture that pressed 连接 —, then one sample sentence translated through that endpoint alone:
+// asked for — from the gesture that pressed Connect —, then one sample sentence translated through that endpoint alone:
 // named, so that the chain's free fallback cannot answer for it (Codex on #59), and carried whole (`candidate`), so that
 // a service not stored yet, or stored with another key, is the one asked. Nothing is stored here: the caller saves on
 // success. An origin this attempt granted is given back when it fails — nothing was stored that uses it
@@ -4032,10 +4088,12 @@ Expected: PASS.
 - [ ] **Step 6: Run the gate and commit**
 
 Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
-Expected: exit 0.
+Expected: exit 0. Then `git add` the files and run `node scripts/check-english.mjs`: it passes with the allowlist as it
+is (`tests/providers/transport.test.ts` keeps its 5 lines, the new cases holding none; the new files hold none).
 
 ```bash
-git add src/providers/translate-service.ts src/providers/transport.ts src/entrypoints/background/health-guard.ts src/entrypoints/background/handlers.ts src/entrypoints/options/permissions.ts src/entrypoints/options/connect.ts src/entrypoints/options/models.ts src/locales/zh-CN.ts src/locales/en.ts tests/providers/transport.test.ts tests/background/health-guard.test.ts tests/background/handlers.test.ts tests/options/connect.test.ts
+git add src/providers/translate-service.ts src/providers/transport.ts src/entrypoints/background/health-guard.ts src/entrypoints/background/handlers.ts src/entrypoints/options/permissions.ts src/entrypoints/options/connect.ts src/entrypoints/options/models.ts src/locales/zh-CN.ts src/locales/en.ts tests/providers/transport.test.ts tests/background/health-guard.test.ts tests/background/handlers.test.ts tests/options/connect.test.ts scripts/english-allowlist.txt
+node scripts/check-english.mjs
 git commit -m "feat(options): test a service as it would be saved, before saving it
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -4283,7 +4341,7 @@ describe('ServiceForm (§6.3)', () => {
     await m.unmount()
   })
 
-  it('while it connects, 连接 waits busy (Part 3\'s busy): 连接中…, aria-busy, and a second submission asks nothing more', async () => {
+  it('while it connects, Connect waits busy (Part 3\'s busy): O.services.connecting, aria-busy, and a second submission asks nothing more', async () => {
     const { element, done } = form()
     const m = await mountElement(element)
     const [address, key, model] = inputs(m.container)
@@ -4309,7 +4367,7 @@ describe('ServiceForm (§6.3)', () => {
     await m.unmount()
   })
 
-  it('深度思考 lives under 更多, folded, and goes with the service', async () => {
+  it('extended thinking lives under More, folded, and goes with the service', async () => {
     const { element, done } = form()
     const m = await mountElement(element)
     const [address, key, model] = inputs(m.container)
@@ -4328,7 +4386,7 @@ describe('ServiceForm (§6.3)', () => {
     await m.unmount()
   })
 
-  it('editing: filled in, the key field empty saying it is saved; left empty the saved key goes with it, 清除 lets it go', async () => {
+  it('editing: filled in, the key field empty saying it is saved; left empty the saved key goes with it, Clear lets it go', async () => {
     const { element, done } = form({ service: SVC })
     const m = await mountElement(element)
     const [address, key, model, name] = inputs(m.container)
@@ -4364,7 +4422,7 @@ describe('KeyForm (§6.3)', () => {
     Object.assign(wire, { candidates: [], connect: { ok: true, ms: 7 } })
   })
 
-  it('a refused key: the sentence, a new key, 更新并连接; checked when submitted; connected, the service handed back with the key', async () => {
+  it('a refused key: the sentence, a new key, Update and connect; checked when submitted; connected, the service handed back with the key', async () => {
     const done: Service[] = []
     const m = await mountElement(h(KeyForm, { service: SVC, refused: true, target: 'cmn', onConnected: async s => { done.push(s) } }))
     expect(m.container.textContent).toContain(O.services.keyForm.refused)
@@ -4406,9 +4464,9 @@ Expected: FAIL — `Failed to resolve import "@/entrypoints/options/sections/Ser
 ```tsx
 // Adding a service, editing one, giving one a new key — in place (the redesign's design, §6.3). The address first,
 // three suggestions filling it (an address, nothing else: no vendor template, T4); the key; the model from the endpoint's
-// own list; a name, the model's by default; 深度思考 folded under 更多; then 连接 · 取消. Nothing is stored here: a
+// own list; a name, the model's by default; extended thinking folded under More; then Connect · Cancel. Nothing is stored here: a
 // successful connection hands the service to the caller, which saves it (§11: no service without a connection). The
-// endpoint's origin is asked for on a gesture — a suggestion's press, a press on the model field, 连接 — and the list
+// endpoint's origin is asked for on a gesture — a suggestion's press, a press on the model field, Connect — and the list
 // loads by itself only for an origin already granted. Checked when submitted: the fields at fault say why, the first
 // takes the focus (§9). Open, the form is a draft the page does not reload under (ui/drafts.ts)
 import { ChevronRight } from 'lucide'
@@ -4484,11 +4542,11 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
   onConnected: (saved: Service, ms: number) => Promise<void>
   onCancel: () => void
 }) {
-  /** one id per form: a second 连接 after a failure is the same service, never another (Codex on #157) */
+  /** one id per form: a second Connect after a failure is the same service, never another (Codex on #157) */
   const [id] = useState(() => service?.id ?? newServiceId())
   const [url, setUrl] = useState(service?.baseURL ?? '')
   const [key, setKey] = useState('')
-  /** editing: the saved key goes with the service while the field is empty; 清除 lets it go */
+  /** editing: the saved key goes with the service while the field is empty; Clear lets it go */
   const [keepKey, setKeepKey] = useState(Boolean(service?.apiKey))
   const [model, setModel] = useState(service?.model ?? '')
   /** the endpoint's own name for the model chosen from its list: the service's name by default */
@@ -4627,7 +4685,7 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
 
 /**
  * A key the endpoint refused (§4's record), or a service an earlier version stored without one (without the first
- * sentence): a new key, 更新并连接; saved only once it connects. Nothing here writes the record: once the caller has
+ * sentence): a new key, Update and connect; saved only once it connects. Nothing here writes the record: once the caller has
  * stored the new key, the background clears the mark (ruling 17)
  */
 export function KeyForm({ service, refused, target, focus = false, onConnected }: {
@@ -4697,7 +4755,7 @@ Append to `src/entrypoints/options/ui/settings.css`:
   .o-chip { height: 24px; padding: 0 9px; border: 0; border-radius: 999px; background: var(--button); color: var(--ink-2); font: inherit; font-size: 12px; cursor: pointer; transition: background-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out; }
   @media (hover: hover) { .o-chip:hover { background: var(--fill); color: var(--ink); } }
   .o-chip:active { scale: 0.96; }
-  /* 清除, under the key field it clears */
+  /* Clear (O.services.apiKeyClear), under the key field it clears */
   .o-clear-key { align-self: flex-start; margin-top: -8px; }
   .o-muted { margin: 0; color: var(--ink-2); font-size: 12px; line-height: 1.4; }
   .o-form input:disabled { opacity: 0.55; }
@@ -4712,6 +4770,7 @@ Expected: exit 0.
 
 ```bash
 git add src/entrypoints/options/sections/ServiceForm.tsx src/entrypoints/options/ui/settings.css src/locales/zh-CN.ts src/locales/en.ts tests/options/service-form.test.ts
+node scripts/check-english.mjs
 git commit -m "feat(options): the service form and the key form, connected before saved
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -4747,8 +4806,9 @@ deleted (ruling 17). The old services section and its drawer go.
 
 - [ ] **Step 1: The words**
 
-In `src/locales/zh-CN.ts`, in `O.services`: delete `issue`, `issueSeparator`, `builtIn`, `mine`, `empty`, `baseURLHint`,
-`imagesHint`, `more`, `newTitle`, `editTitle` (the drawer's and the old section's; §10 lists their words as going);
+In `src/locales/zh-CN.ts`, in `O.services`: delete `issue`, `issueSeparator`, `builtIn`, `mine`, `empty`, `imagesHint`,
+`newTitle`, `editTitle` (the drawer's and the old section's; §10 lists their words as going; `baseURLHint` and `more`
+stay: the controls sheet's `specimens/forms.tsx` reads them, "Kept for Part 7");
 `add: '添加服务',` becomes `add: '添加服务…',`; `edit: '编辑',` becomes `edit: '编辑…',`; and add at the top of
 `services`:
 
@@ -4770,15 +4830,15 @@ In `src/locales/en.ts`, the same deletions; `add: 'Add a service…',`, `edit: '
 ```
 
 In `tests/ui/strings.test.ts`, delete the whole `describe('the settings drawer issue sentence', …)` block: the key goes
-with the drawer. (Its one Chinese line leaves the file; lower the file's entry in `scripts/english-allowlist.txt` if the
-English gate asks.)
+with the drawer. (Its two CJK lines, 80 and 81 — the full-width colon counts — leave the file: its entry in
+`scripts/english-allowlist.txt` goes from 13 to 11, Step 5.)
 
 - [ ] **Step 2: Write the failing tests**
 
 `tests/options/translate-section.test.ts`:
 
 ```ts
-// 翻译's services (the redesign's design, §6.3): one radio group in the agreed order; Chrome's pack; the reader's own with
+// The translation section's services (the redesign's design, §6.3): one radio group in the agreed order; Chrome's pack; the reader's own with
 // their status — a refused key, none stored, connected —; a refused key's form, saved once it connects; a service added
 // only once it connects, chosen, no session moved; an edit saved in place; a deletion undone within 5 s with nothing
 // irreversible done, and its clean-up after in today's order; the fallback while an LLM is chosen; the target
@@ -4791,6 +4851,7 @@ import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { Service } from '@/config/services'
 import type { PackState } from '@/shared/pack'
 import type { OptionsData } from '@/entrypoints/options/data'
+import { stubPopovers } from '../pdf-reader/ui/popover-stub'
 import { mountElement } from '../ui/render-hook'
 
 vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getURL: (path: string) => path } } }))
@@ -4839,15 +4900,18 @@ const submit = (form: HTMLFormElement) => form.dispatchEvent(new Event('submit',
 const menuItem = (row: HTMLElement, name: string) => [...row.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(i => i.textContent === name)!
 const OPTIONS = join(import.meta.dirname, '../../src/entrypoints/options')
 
-describe('翻译服务 (§6.3)', () => {
+describe('the translation services (§6.3)', () => {
+  // happy-dom has no popover API: a menu's pick shuts its popover, so the reader's stub stands in
+  let restore = () => {}
   beforeEach(() => {
     setLocale('en')
     vi.useFakeTimers({ shouldAdvanceTime: true })
     Object.assign(wire, { log: [], rejected: [], connect: { ok: true, ms: 42 } })
+    restore = stubPopovers()
   })
-  afterEach(() => { vi.useRealTimers() })
+  afterEach(() => { vi.useRealTimers(); restore() })
 
-  it('one radio group: the two free services, Chrome, the reader\'s own, 添加服务… last; the arrows move the choice past what cannot be chosen', async () => {
+  it('one radio group: the two free services, Chrome, the reader\'s own, the add row last; the arrows move the choice past what cannot be chosen', async () => {
     const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE], provider: 'microsoft' } }))
     expect(radios(m.container).map(nameOf)).toEqual([S.service.microsoft, S.service.google, S.service.chrome, 'Mine'])
     expect(rowNamed(m.container, 'Mine').textContent).toContain('m-1 · api.example.com')
@@ -4861,7 +4925,7 @@ describe('翻译服务 (§6.3)', () => {
     await m.unmount()
   })
 
-  it('Chrome with a pack to fetch: its words say so, 下载 fetches it; while it comes, the row says so', async () => {
+  it('Chrome with a pack to fetch: its words say so, Download fetches it; while it comes, the row says so', async () => {
     const m = await mountElement(h(Harness, { start: DEFAULT_CONFIG, pack: 'downloadable' }))
     const chrome = rowNamed(m.container, S.service.chrome)
     expect(chrome.textContent).toContain(`${S.service.chrome_ready}${O.services.packNeeded}`)
@@ -4926,7 +4990,7 @@ describe('翻译服务 (§6.3)', () => {
     await m.unmount()
   })
 
-  it('编辑… opens the same form under its row; connected, the service is saved in place, not chosen', async () => {
+  it('Edit… opens the same form under its row; connected, the service is saved in place, not chosen', async () => {
     const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: MINE.id } }))
     menuItem(rowNamed(m.container, 'Other'), O.services.edit).click()
     await m.flush()
@@ -5007,9 +5071,9 @@ Expected: FAIL — `Failed to resolve import "@/entrypoints/options/sections/Tra
 `src/entrypoints/options/sections/Translate.tsx`:
 
 ```tsx
-// 翻译 (the redesign's design, §6.3): 翻译服务 — one card, one radio group: the free services, Chrome's, the reader's own,
-// 添加服务… last —; under it 出问题时自动改用免费服务 while an LLM service is chosen, then 目标语言, then the LLM group
-// (Task 63). A service is added, edited or given a new key only once it connects (§11): the forms test first, and this
+// The translation section (the redesign's design, §6.3): the translation services — one card, one radio group: the
+// free services, Chrome's, the reader's own, the add row last —; under it the fallback switch while an LLM service is
+// chosen, then the target language, then the LLM group (Task 63). A service is added, edited or given a new key only once it connects (§11): the forms test first, and this
 // section saves on their success. No page translating is moved by any of it — each keeps the chain it started on, the
 // configuration's watcher rebuilding the chain for the sessions after — but a deletion, once its undo is past, moves
 // every session off the service: it has to stop serving everywhere (Codex on #157)
@@ -5085,7 +5149,7 @@ function Services({ data }: { data: OptionsData }) {
   const rejected = useRejected()
   const [form, setForm] = useState<Form | null>(null)
   const drawnForm = useLinger(form)
-  /** 「已连接 · {ms} ms」 for as long as the page stays open (§6.3) */
+  /** the connected status (O.services.connected) for as long as the page stays open (§6.3) */
   const [connected, setConnected] = useState<Record<string, number>>({})
   /** the service the pointer chose: its key form takes the focus (the arrows' choice leaves it on the radios) */
   const [pointed, setPointed] = useState<string | null>(null)
@@ -5187,7 +5251,7 @@ function Services({ data }: { data: OptionsData }) {
   )
 }
 
-/** A service of one's own carries its actions behind 「…」 (§6.2): 编辑… · 删除 */
+/** A service of one's own carries its actions behind its more button (§6.2): Edit… · Delete */
 function ServiceMenu({ service, onEdit, onDelete }: { service: Service; onEdit: () => void; onDelete: (keyboard: boolean) => void }) {
   const pop = usePopover('menu')
   const label = O.services.moreFor(service.name)
@@ -5209,9 +5273,9 @@ function ServiceMenu({ service, onEdit, onDelete }: { service: Service; onEdit: 
 }
 
 /**
- * Deleting is undone, not confirmed (§6.2): the service leaves the list — and the choice, which falls back to Microsoft
- * 翻译 (S-O-21) — at once, and what cannot be taken back waits for the undo to pass: every session moved off the
- * service, and only then its origin given back (a request still in flight would break) — ServiceDrawer's order. Its
+ * Deleting is undone, not confirmed (§6.2): the service leaves the list — and the choice, which falls back to the Microsoft
+ * service (S-O-21) — at once, and what cannot be taken back waits for the undo to pass: every session moved off the
+ * service, and only then its origin given back (a request still in flight would break) — the old drawer's order. Its
  * mark in the refused-key record is the background's to clear, on the deletion being stored (ruling 17). Undone, it
  * comes back at its place, chosen again if it was and nothing else was chosen since. Leaving the page ends every undo
  * (best effort: the tab may close before the clean-up lands, as it could before)
@@ -5252,7 +5316,7 @@ function useDeletions(data: OptionsData) {
   return { gone, remove, undo, expire }
 }
 
-/** 目标语言 (S-O-23): a row and the popup's searchable menu; a choice re-checks Chrome's pack for the new language */
+/** The target language (S-O-23): a row and the popup's searchable menu; a choice re-checks Chrome's pack for the new language */
 function TargetLanguage({ data }: { data: OptionsData }) {
   const { patch, checkPack } = data
   const config = data.config!
@@ -5286,12 +5350,17 @@ and `translate: data => <><Services data={data} /><Prompts data={data} /></>,` w
 - [ ] **Step 5: Run the tests, the gate, and commit**
 
 Run: `pnpm vitest run tests/options tests/ui && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
-Expected: exit 0. A type error names a reader of a deleted `O.services` key: it can only be in the two deleted files.
+Expected: exit 0. A type error names a reader of a deleted `O.services` key: it can only be in the two deleted files
+(the controls sheet's two keys are kept). Then `git rm` the three files, `git add` the rest and run
+`node scripts/check-english.mjs`: in `scripts/english-allowlist.txt` the entry for `tests/ui/strings.test.ts` goes from
+13 to 11 (its reason gains `; −2, 2026-09-27: the drawer's issue sentence left with its key (Part 5, Task 60)`); the
+new files hold none.
 
 ```bash
 git rm src/entrypoints/options/sections/Services.tsx src/entrypoints/options/sections/ServiceDrawer.tsx tests/options/service-drawer.test.ts
 git add src/entrypoints/options/sections/Translate.tsx src/entrypoints/options/App.tsx src/locales/zh-CN.ts src/locales/en.ts tests/ui/strings.test.ts tests/options/translate-section.test.ts scripts/english-allowlist.txt
-git commit -m "feat(options): 翻译服务 as one list, added and re-keyed only once connected
+node scripts/check-english.mjs
+git commit -m "feat(options): the services as one list, added and re-keyed only once connected
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
@@ -5306,7 +5375,8 @@ the configuration directly where a suite tests what the chain does with one; the
 - Modify: `tests/e2e/options-page.mjs` (`addService`, `clearKeyAndReconnect`, `seedService`)
 - Modify: `tests/e2e/extension.mjs` (the wrong key's blocks, the cleared key's check, the S-O-02 block's waits)
 - Modify: `tests/e2e/local-endpoint.mjs` (`GET /v1/models`, the list's check)
-- Modify: `experiments/pdf-bilingual/spikes/cache-faults.mjs`, `experiments/pdf-bilingual/spikes/cache-revisit.mjs`
+- Modify: `experiments/pdf-bilingual/spikes/cache-faults.mjs`, `experiments/pdf-bilingual/spikes/cache-revisit.mjs`,
+  `experiments/pdf-bilingual/spikes/viewer-faults.mjs`
 - Modify: `scripts/english-allowlist.txt` (the counts the gate names)
 
 **Interfaces:**
@@ -5321,7 +5391,7 @@ In `tests/e2e/options-page.mjs`, replace `addService` and `clearKeyAndReconnect`
 ```js
 /**
  * Add one of the reader's services in place (the redesign's design, §6.3). It is added only once it connects, so this
- * returns what the page said: the new row's 「已连接 · N ms」, or the form's 「连接失败：…」, the form then cancelled
+ * returns what the page said: the new row's connected status, or the form's failure line, the form then cancelled
  */
 export async function addService(options, { name, baseURL, model, apiKey = '' }) {
   await openSection(options, 'translate')
@@ -5339,6 +5409,8 @@ export async function addService(options, { name, baseURL, model, apiKey = '' })
   for (let i = 0; i < 90; i++) {
     if (await form.count() === 0) break
     if (/连接失败/.test((await form.locator('.o-note').textContent().catch(() => '')) ?? '')) break
+    // the form's own check refused it (a remote address without a key): it says so at the field, not beside the button
+    if (await form.locator('[aria-invalid="true"]').count()) break
     await sleep(500)
   }
   if (await form.count() > 0) {
@@ -5351,7 +5423,7 @@ export async function addService(options, { name, baseURL, model, apiKey = '' })
 }
 
 /**
- * Edit one of the reader's services, let its saved key go (清除), connect again. A remote endpoint cannot be asked
+ * Edit one of the reader's services, let its saved key go (the Clear button under the key field), connect again. A remote endpoint cannot be asked
  * without a key, so the form says one is needed and nothing is saved: the stored key is neither written back nor lost
  * (the defect this guards: a form that reads the key it opened with writes it back). Returns the form's words
  */
@@ -5422,7 +5494,7 @@ In `tests/e2e/extension.mjs`:
 
 - in the block `// ── The settings page: “Clear” on the API key must really clear it`, replace the two comment lines under its
   header (`// The drawer opens with the stored key in its form, …` and `// With no key the endpoint reports …`) with
-  `// The edit form opens with the stored key kept; a form that read that key back would write it again after 清除.
+  `// The edit form opens with the stored key kept; a form that read that key back would write it again after the key is cleared.
   // With the key cleared a remote endpoint cannot be asked: the form says a key is needed and saves nothing.` and the
   `check(…)` with:
 
@@ -5483,8 +5555,15 @@ and before `// ── The settings page: add a service pointing at the local end
   `seedService(context.serviceWorkers()[0], { id: 'svc-spkkeyls', name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' })`.
   The `echo` and `refused` services (lines 194, 215) connect when they are added (the endpoint refuses only after
   `refuse = true`) and keep `addService`.
+- `experiments/pdf-bilingual/spikes/viewer-faults.mjs`: its import from `'../../../tests/e2e/options-page.mjs'` becomes
+  `import { openOptions, seedService, setSwitch } from '../../../tests/e2e/options-page.mjs'` (`addService` has no other
+  use there); line 100's
+  `console.log('keyless service:', await addService(options, { name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' }))`
+  becomes
+  `console.log('keyless service:', await seedService(context.serviceWorkers()[0], { id: 'svc-spkkeyl2', name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' }))`
+  (a keyless remote service is one the form will not add).
 
-Run: `for f in tests/e2e/options-page.mjs tests/e2e/extension.mjs tests/e2e/local-endpoint.mjs experiments/pdf-bilingual/spikes/cache-faults.mjs experiments/pdf-bilingual/spikes/cache-revisit.mjs; do node --check $f || exit 1; done`
+Run: `for f in tests/e2e/options-page.mjs tests/e2e/extension.mjs tests/e2e/local-endpoint.mjs experiments/pdf-bilingual/spikes/cache-faults.mjs experiments/pdf-bilingual/spikes/cache-revisit.mjs experiments/pdf-bilingual/spikes/viewer-faults.mjs; do node --check $f || exit 1; done`
 Expected: exit 0.
 
 - [ ] **Step 5: Run the suites**
@@ -5499,10 +5578,21 @@ Expected: each exits 0. (`e2e:a11y`, `e2e:image` and `e2e:layout` reach the page
 - [ ] **Step 6: The gate and the commit**
 
 Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
-Expected: exit 0; set the English gate's counts for the edited files to what it names.
+Expected: exit 0. Then `git add` the files and run `node scripts/check-english.mjs`, and set, in
+`scripts/english-allowlist.txt`:
+- `tests/e2e/options-page.mjs 15` → `tests/e2e/options-page.mjs 16  # …; +1, 2026-09-27: the new services list's controls
+  found by their Chinese names — 11 lines in place of the drawer's 10 (Part 5, Task 61)`;
+- `tests/e2e/local-endpoint.mjs 2` → `tests/e2e/local-endpoint.mjs 7  # +5, 2026-09-27: the model list's check finds the
+  form's controls and its placeholder by their Chinese words (Part 5, Task 61)`.
+
+`extension.mjs` stays at 76 (each replaced block holds as many CJK lines as the one it replaces), `cache-faults.mjs` at 3,
+`cache-revisit.mjs` at 1, `viewer-faults.mjs` at 1 (the swapped pair in `cache-faults.mjs` only moves; the other
+changed lines hold none). The gate must then pass; where it
+names another count, set that one.
 
 ```bash
-git add tests/e2e/options-page.mjs tests/e2e/extension.mjs tests/e2e/local-endpoint.mjs experiments/pdf-bilingual/spikes/cache-faults.mjs experiments/pdf-bilingual/spikes/cache-revisit.mjs scripts/english-allowlist.txt
+git add tests/e2e/options-page.mjs tests/e2e/extension.mjs tests/e2e/local-endpoint.mjs experiments/pdf-bilingual/spikes/cache-faults.mjs experiments/pdf-bilingual/spikes/cache-revisit.mjs experiments/pdf-bilingual/spikes/viewer-faults.mjs scripts/english-allowlist.txt
+node scripts/check-english.mjs
 git commit -m "test(e2e): the services list in the browser checks, added only once connected
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -5660,7 +5750,7 @@ describe('the glossary\'s table (§6.3)', () => {
     await m.unmount()
   })
 
-  it('pasting lines of 「原文, 译文」 splits them into rows; a line without its other side says so at once', async () => {
+  it('pasting lines of "source, translation" pairs splits them into rows; a line without its other side says so at once', async () => {
     const patches: Config[] = []
     const m = await mountElement(h(GlossaryTable, { data: data(WITH([]), patches) }))
     paste(cells(m.container)[0]!, 'token, 词元\n# a comment\nembedding，嵌入\nattention\n')
@@ -5699,9 +5789,10 @@ describe('the glossary\'s table (§6.3)', () => {
 })
 ```
 
-(The test file's Chinese is data typed into the table, as the old glossary tests' was: give the file its entry in
-`scripts/english-allowlist.txt` with the count the English gate names and the reason "the glossary's pairs, typed and
-pasted in the reader's language".)
+(The test file's Chinese is data typed into the table, as the old glossary tests' was — five lines, the two stored pairs
+and their read-back, the pasted batch and its two read-backs: give the file its entry in `scripts/english-allowlist.txt`,
+`tests/options/glossary.test.ts 5  # 2026-09-27: the glossary's pairs, typed and pasted in the reader's language (Part 5,
+Task 62)`.)
 
 - [ ] **Step 3: Run them to verify they fail**
 
@@ -5713,9 +5804,9 @@ Expected: FAIL — `Failed to resolve import "@/entrypoints/options/sections/Glo
 `src/entrypoints/options/sections/Glossary.tsx`:
 
 ```tsx
-// The glossary (the redesign's design, §6.3; T8): a table in place, 原文 · 译文, one pair a row, and one empty row at the
-// end to add to — typing in it makes it a row and draws a new empty one; Enter goes on to it. Pasting lines of
-// 「原文, 译文」 splits them into rows. A row missing a side says so at the row once the focus has left it (today's
+// The glossary (the redesign's design, §6.3; T8): a table in place, source · translation, one pair a row, and one empty
+// row at the end to add to — typing in it makes it a row and draws a new empty one; Enter goes on to it. Pasting lines
+// of source-and-translation pairs splits them into rows. A row missing a side says so at the row once the focus has left it (today's
 // reasons, without their line numbers). The table saves the rows that are whole, and only when they fit GLOSSARY_LIMITS
 // (the schema refuses the rest, and a refused write would leave the reader looking at a glossary that is not stored,
 // Codex on #157); over the limits it says so. It follows a glossary saved elsewhere unless a row of the reader's is
@@ -5912,10 +6003,13 @@ Append to `src/entrypoints/options/ui/settings.css`:
 - [ ] **Step 6: Run the tests, the gate, and commit**
 
 Run: `pnpm vitest run tests/options/glossary.test.ts tests/providers && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
-Expected: exit 0.
+Expected: exit 0. Then `git add` the files and run `node scripts/check-english.mjs`: with the new entry
+`tests/options/glossary.test.ts 5` (Step 2) it passes; `src/providers/glossary.ts` keeps its 3 (the separator's line
+holds its full-width comma before and after).
 
 ```bash
 git add src/entrypoints/options/sections/Glossary.tsx src/providers/glossary.ts src/entrypoints/options/ui/settings.css src/locales/zh-CN.ts src/locales/en.ts tests/options/glossary.test.ts scripts/english-allowlist.txt
+node scripts/check-english.mjs
 git commit -m "feat(options): the glossary as a table, pasting splits lines
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -5946,7 +6040,7 @@ prompts section and its manager go.
 **Interfaces:**
 - Consumes: `BUILT_IN_PROMPTS`, `DEFAULT_PROMPT_ID`, `PROMPT_TOKENS`, `getTokenCellText`, `promptExists`, `selectPrompt`
   (`@/providers/prompt-library`), `readPromptFile`, `downloadPromptFile`, `PromptFileFormatError` (`@/providers/prompt-file`),
-  `GlossaryTable` (Task 62), `UndoRow`, `withUndo`, `insertAt` (Task 51), `Row`, `Value`, `Status`, `Card`,
+  `GlossaryTable` (Task 62), `UndoRow`, `withUndo`, `insertAt`, `withItem` (Task 51), `Row`, `Value`, `Status`, `Card`,
   `GroupHeading` (Task 50); Part 3's `Reveal`, `Field`, `TextInput`, `Button`.
 - Produces: `Llm({ data })`; `PromptsRow({ data })`; `PromptText({ text, editable, label, onText, onFocus, ref })`,
   `promptParts(text)`, `readPrompt(el)`, `insertToken(el, token)`, `plainWords(text)`; the words `O.prompts` (below),
@@ -6089,7 +6183,7 @@ describe('the LLM group (§6.3)', () => {
     await m.unmount()
   })
 
-  it('the prompts row says the prompt in use; opened, a radio list — the built-ins, then one\'s own with 「我的」', async () => {
+  it('the prompts row says the prompt in use; opened, a radio list — the built-ins, then one\'s own with O.prompts.mine', async () => {
     const start = { ...LLM, prompts: { promptId: 'default', patterns: [MINE] } }
     const m = await mountElement(h(Harness, { start, patches: [] }))
     expect(m.container.querySelector('.o-aside')!.textContent).toBe(O.llm.aside)
@@ -6103,7 +6197,7 @@ describe('the LLM group (§6.3)', () => {
     await m.unmount()
   })
 
-  it('the chosen built-in reads as words: variables as labels in 指令 and 消息, never {{…}}; it is copied to be changed', async () => {
+  it('the chosen built-in reads as words: variables as labels in the instructions and the message, never {{…}}; it is copied to be changed', async () => {
     const patches: Config[] = []
     const m = await mountElement(h(Harness, { start: LLM, patches }))
     promptsRow(m.container).click()
@@ -6122,7 +6216,7 @@ describe('the LLM group (§6.3)', () => {
     await m.unmount()
   })
 
-  it('one\'s own is written in place when whole; an empty message is not written, holds a draft, and 完成 says why', async () => {
+  it('one\'s own is written in place when whole; an empty message is not written, holds a draft, and Done says why', async () => {
     const patches: Config[] = []
     const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches }))
     promptsRow(m.container).click()
@@ -6164,7 +6258,7 @@ describe('the LLM group (§6.3)', () => {
     await m.unmount()
   })
 
-  it('新建提示词… makes 新提示词, chosen and open; deleting one\'s own is undone within 5 s, and it comes back chosen', async () => {
+  it('New prompt… makes a new prompt (O.prompts.newName), chosen and open; deleting one\'s own is undone within 5 s, and it comes back chosen', async () => {
     const patches: Config[] = []
     const m = await mountElement(h(Harness, { start: LLM, patches }))
     promptsRow(m.container).click()
@@ -6237,7 +6331,8 @@ describe('a prompt read as words (§6.3)', () => {
 })
 ```
 
-Delete `tests/options/prompt-manager.test.ts` (its `withSaved` cases are this file's "written in place").
+Delete `tests/options/prompt-manager.test.ts` (its `withSaved` cases are this file's "written in place" and Task 51's
+`withItem`).
 
 - [ ] **Step 3: Run them to verify they fail**
 
@@ -6342,13 +6437,14 @@ export function PromptText({ text, editable = false, label, onText, onFocus, ref
 `src/entrypoints/options/sections/Prompts.tsx` (the whole file):
 
 ```tsx
-// 提示词 (the redesign's design, §6.3): the row's value is the prompt in use, its description the prompt's. Opened, a
-// radio list in place: each prompt with its description, one's own carrying 「我的」 and the start of its instructions.
-// The chosen prompt shows its text under it, read as words, in two parts named for what they do — 指令 and 消息 —;
-// nothing names the protocol the extension appends. A built-in cannot be changed: 复制后修改 makes one's own copy and
-// opens it. One's own is written in place — its name, its two parts, the variables inserted from a row of labels —
-// each change stored at once when it holds a name and a message; 完成 closes the list; 删除 is undone. The list ends
-// with 「＋ 新建提示词…」 and, at the same row's end, 导入… and 导出… (the maintainer: in the list, not in a menu)
+// The prompts (the redesign's design, §6.3): the row's value is the prompt in use, its description the prompt's.
+// Opened, a radio list in place: each prompt with its description, one's own carrying its tag (O.prompts.mine) and the
+// start of its instructions. The chosen prompt shows its text under it, read as words, in two parts named for what
+// they do — the instructions and the message —; nothing names the protocol the extension appends. A built-in cannot be
+// changed: Copy to edit makes one's own copy and opens it. One's own is written in place — its name, its two parts, the
+// variables inserted from a row of labels — each change stored at once when it holds a name and a message; Done closes
+// the list; Delete is undone. The list ends with the new-prompt row and, at the same row's end, Import… and Export…
+// (the maintainer: in the list, not in a menu)
 import { Plus } from 'lucide'
 import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react'
 import { PromptFileFormatError, downloadPromptFile, readPromptFile } from '@/providers/prompt-file'
@@ -6365,7 +6461,7 @@ import { Reveal } from '@/ui/controls/Reveal'
 import { drafts } from '@/ui/drafts'
 import { O } from '@/ui/strings'
 import type { OptionsData } from '../data'
-import { insertAt, withUndo } from '../ui/lists'
+import { insertAt, withItem, withUndo } from '../ui/lists'
 import { Row, Status, Value } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { PromptText, insertToken, plainWords, readPrompt } from './PromptText'
@@ -6376,8 +6472,6 @@ const NEW_USER_PROMPT = `Translate the following into ${getTokenCellText('target
 
 const isBuiltIn = (p: PromptTemplate) => Object.hasOwn(BUILT_IN_PROMPTS, p.id)
 const describe = (p: PromptTemplate) => (isBuiltIn(p) ? (O.prompts.builtIn as Record<string, string>)[p.id] ?? '' : plainWords(p.systemPrompt).slice(0, 120))
-/** The list with a prompt written into it — in place, or appended when another tab deleted it meanwhile (PromptManager's withSaved) */
-const withSaved = (list: readonly PromptTemplate[], next: PromptTemplate) => (list.some(p => p.id === next.id) ? list.map(p => (p.id === next.id ? next : p)) : [...list, next])
 
 export function PromptsRow({ data }: { data: OptionsData }) {
   const [open, setOpen] = useState(false)
@@ -6449,7 +6543,7 @@ function PromptList({ data, onDone }: { data: OptionsData; onDone: () => void })
       <Row kind="radio" level={1} checked={p.id === chosenId} onChoose={() => choose(p.id)} label={p.name} tag={mine ? O.prompts.mine : undefined} description={describe(p)} arriving={fresh === p.id}
         radioRef={el => { if (el) radios.current.set(p.id, el); else radios.current.delete(p.id) }} />
       {p.id === chosenId && (mine
-        ? <OwnPrompt key={p.id} prompt={p} focus={fresh === p.id} onChange={next => setPrompts(c => ({ ...c, patterns: withSaved(c.patterns, next) }))} onDone={onDone} onDelete={() => remove(p)} />
+        ? <OwnPrompt key={p.id} prompt={p} focus={fresh === p.id} onChange={next => setPrompts(c => ({ ...c, patterns: withItem(c.patterns, next) }))} onDone={onDone} onDelete={() => remove(p)} />
         : <BuiltInPrompt prompt={p} onCopy={() => add({ ...p, id: uuid(), name: O.prompts.copyOf(p.name) })} />)}
     </Fragment>
   )
@@ -6568,7 +6662,7 @@ function OwnPrompt({ prompt, focus, onChange, onDone, onDelete }: { prompt: Prom
 `src/entrypoints/options/sections/Llm.tsx`:
 
 ```tsx
-// The LLM group (the redesign's design, §6.3): headed 「LLM」 with the aside that says what it reaches, holding the
+// The LLM group (the redesign's design, §6.3): headed LLM (S.service.llm) with the aside that says what it reaches, holding the
 // prompts and the glossary; with no LLM service, one line that says how to have them. The prompts and the glossary
 // stay the reader's while a free service is chosen: only an LLM reads them
 import { useState } from 'react'
@@ -6644,7 +6738,7 @@ Append to `src/entrypoints/options/ui/settings.css`:
   .o-var-button { border: 0; font: inherit; font-size: 11.5px; cursor: pointer; transition: color 150ms ease-out, scale 150ms ease-out; }
   @media (hover: hover) { .o-var-button:hover { color: var(--ink); } }
   .o-var-button:active { scale: 0.96; }
-  /* 「＋ 新建提示词…」: a button inside the row, which also holds 导入… and 导出… */
+  /* the new-prompt row (O.prompts.create): a button inside the row, which also holds Import… and Export… */
   .o-add { display: flex; flex: 1; align-items: center; gap: 12px; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; text-align: start; cursor: pointer; }
   .o-prompt-note { margin: -4px 10px 10px 66px; color: var(--ink-2); font-size: 12px; }
 }
@@ -6670,7 +6764,8 @@ await options.reload({ waitUntil: 'domcontentloaded' })
 await openSection(options, 'translate')
 const langBack = await options.getByRole('button', { name: '目标语言' }).textContent()
 await promptsRow().click()
-const promptRadio = options.getByRole('radio', { name: 'e2e 提示词', exact: true })
+// the radio is named by its label, its tag (O.prompts.mine) included: the name starts with the prompt's
+const promptRadio = options.getByRole('radio', { name: /^e2e 提示词/ })
 await promptRadio.waitFor({ timeout: 5_000 }).catch(() => undefined)
 const promptBack = (await promptRadio.count()) === 1 && (await promptRadio.isChecked())
 check('the settings page: the target language and the custom prompt survive a reload and stay selected', /日语/.test(langBack ?? '') && promptBack, `language ${langBack}, prompt ${promptBack}`)
@@ -6680,7 +6775,7 @@ await options.getByRole('button', { name: '删除', exact: true }).click()
 await options.getByText('已删除「e2e 提示词」').waitFor({ timeout: 5_000 }).catch(() => undefined)
 await chooseLanguage(options, '简体中文', '简体中文')
 await openSection(options, 'translate')
-const promptGone = (await options.getByRole('radio', { name: 'e2e 提示词', exact: true }).count()) === 0
+const promptGone = (await options.getByRole('radio', { name: /^e2e 提示词/ }).count()) === 0
 check('the settings page: after deleting the custom prompt the default is chosen again', promptGone, `left over ${promptGone ? 0 : 1}`)
 ```
 
@@ -6690,11 +6785,18 @@ Expected: exit 0.
 - [ ] **Step 9: Run the tests, the gate, and commit**
 
 Run: `pnpm vitest run tests/options && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
-Expected: exit 0. A type error names a reader of a deleted `O.prompts` key: only the deleted files read them.
+Expected: exit 0. A type error names a reader of a deleted `O.prompts` key: only the deleted files read them. Then
+`git rm` the two files, `git add` the rest and run `node scripts/check-english.mjs`, and set, in
+`scripts/english-allowlist.txt`: `tests/e2e/extension.mjs` from 76 to 75 (the prompt's block: 10 lines finding controls
+by their Chinese names in place of the old block's 11; its reason gains `; −1, 2026-09-27: the prompt's check in the
+LLM group (Part 5, Task 63)`); `tests/ui/locales.test.ts 3` → `tests/ui/locales.test.ts 2` (the glossary sentence's
+case, and its quoted Chinese, left); and drop the line `tests/options/prompts-section.test.ts 13` — the rewritten file
+holds no CJK line. The gate must then pass; where it names another count, set that one.
 
 ```bash
 git rm src/entrypoints/options/PromptManager.tsx tests/options/prompt-manager.test.ts
 git add src/entrypoints/options/sections/PromptText.tsx src/entrypoints/options/sections/Prompts.tsx src/entrypoints/options/sections/Llm.tsx src/entrypoints/options/sections/Translate.tsx src/entrypoints/options/App.tsx src/entrypoints/options/ui/settings.css src/locales/zh-CN.ts src/locales/en.ts tests/options/prompts-section.test.ts tests/ui/locales.test.ts tests/e2e/extension.mjs scripts/english-allowlist.txt
+node scripts/check-english.mjs
 git commit -m "feat(options): the LLM group — prompts read as words, the glossary's table
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -6709,11 +6811,13 @@ looked at at 200 % zoom and 320 px, in both themes and both languages. settings-
 
 **Files:**
 - Create: `tests/e2e/probes/settings-align.mjs`
+- Modify: `scripts/english-allowlist.txt` (the probe's entry: its one line of glossary pairs)
 
 **Interfaces:**
 - Consumes: the build (`.output/chrome-mv3`), `copyWithGrants` (`tests/e2e/ext-copy.mjs`); the page's attributes
-  (`[data-card]`, `[data-srow]`, `[data-part]`, `[data-icon-button]`, `[data-heading]`, `[data-row]`).
-- Produces: `node tests/e2e/probes/settings-align.mjs` → the items off their lines, exit 1 when any;
+  (`[data-card]`, `[data-srow]`, `[data-part]`, `[data-icon-button]`, `[data-heading]`, `[data-row]`, `.o-seg` with its `--w`).
+- Produces: `node tests/e2e/probes/settings-align.mjs` → the items off their lines and the segmented controls off their
+  agreed widths, exit 1 when any;
   `experiments/pdf-bilingual/out/settings/<lang>-<theme>-<state>.png` (not committed: `out/` is ignored).
 
 - [ ] **Step 1: Write the probe**
@@ -6726,7 +6830,8 @@ looked at at 200 % zoom and 320 px, in both themes and both languages. settings-
 // state of each section — at rest, a row hovered, a form open, a list open, an editor open, a confirm armed, a search, a
 // deep link — is measured: every item's centre within 0.5 px of its row's; the words' leading edge at 14, 42 or 70 px
 // from the card, a leading control at 14 or 42; the trailing edge at 14 (an icon button's glyph box); a group heading at
-// 14; a hovered row's fill on the card's inner edge, the separators on either side stepped aside. Each state is shot at
+// 14; a hovered row's fill on the card's inner edge, the separators on either side stepped aside; each small segmented
+// control at its agreed width (220, 200, 210, 300, 120 px, settings-2). Each state is shot at
 // 2x into experiments/pdf-bilingual/out/settings/, and the page at 320 px and at 200 % zoom: no horizontal scroll, and
 // the sidebar above the column below 640 px. Prints what is off; exits 1 when anything is.
 //   pnpm build && node tests/e2e/probes/settings-align.mjs
@@ -6798,9 +6903,13 @@ const SERVICES = [
 ]
 const PROMPTS = { promptId: 'default', patterns: [{ id: 'p-probe', name: 'Mine', systemPrompt: 'Translate into {{targetLanguage}}, briefly.', prompt: '{{input}}' }] }
 const GLOSSARY = [{ term: 'token', translation: '词元' }, { term: 'embedding', translation: '嵌入' }, { term: 'attention', translation: '注意力' }]
+// the configuration first, then the record: written in one set, the background's watcher would clear the mark of a
+// service it had not seen before (health-guard.ts, idsToClear)
 const seed = over => worker.evaluate(async over => {
   const { config } = await chrome.storage.local.get('config')
-  await chrome.storage.local.set({ config: { ...config, ...over }, serviceHealth: { 'svc-proberef': { rejected: Date.now() } } })
+  await chrome.storage.local.set({ config: { ...config, ...over } })
+  await new Promise(resolve => setTimeout(resolve, 300))
+  await chrome.storage.local.set({ serviceHealth: { 'svc-proberef': { rejected: Date.now() } } })
 }, over)
 
 /** every row of every card shown: centres, the three leading edges and the trailing one; the headings */
@@ -6844,6 +6953,13 @@ const measure = page => page.evaluate(() => {
     if (!shown(heading)) continue
     const x = Math.round(r(heading.querySelector('h2')).left - column.left)
     if (x !== 14) out.push(`heading ${heading.querySelector('h2').textContent} at ${x} px`)
+  }
+  // a small segmented control at its agreed width, the `--w` its wrapper carries (segmentWidth)
+  for (const seg of document.querySelectorAll('main .o-seg')) {
+    if (!shown(seg)) continue
+    const want = Number.parseFloat(seg.style.getPropertyValue('--w'))
+    const got = r(seg.querySelector('[role="radiogroup"]')).width
+    if (Math.abs(got - want) > 0.5) out.push(`a segmented control ${got.toFixed(1)} px wide, agreed ${want}`)
   }
   return out
 })
@@ -6931,7 +7047,7 @@ for (const lang of ['zh-CN', 'en']) {
     await state('deeplink')
     await state('language-menu', () => page.locator('.o-lang').click())
     await page.keyboard.press('Escape')
-    // S-O-02 (§6.7): settings this build cannot read — the card at the top, 数据 alone; then the settings put back
+    // S-O-02 (§6.7): settings this build cannot read — the card at the top, the data section alone; then the settings put back
     const kept = await worker.evaluate(() => chrome.storage.local.get(['config', 'config$']))
     await worker.evaluate(s => chrome.storage.local.set({ config: { ...s.config, version: s.config.version + 1 }, config$: { ...s.config$, v: s.config.version + 1 } }), kept)
     await open('data')
@@ -6967,7 +7083,8 @@ process.exit(off.length ? 1 : 0)
 Run: `pnpm build && node tests/e2e/probes/settings-align.mjs`
 Expected: `every row on its lines, in both themes and both languages`, exit 0. An item off its line is fixed in the
 sheet (never in the probe's numbers): a centre off by the Row's own padding is `align-items` or a line-height; a leading
-edge off 14 / 42 / 70 is a level or a lead; a trailing edge at 8 is an icon button whose glyph is not 16 px.
+edge off 14 / 42 / 70 is a level or a lead; a trailing edge at 8 is an icon button whose glyph is not 16 px; a
+segmented control off its agreed width is `.o-seg`'s rule (Task 56).
 
 - [ ] **Step 3: Look at the shots**
 
@@ -6983,10 +7100,13 @@ the prototype disagree") is expected; any other is a defect to fix before the co
 - [ ] **Step 4: The gate and the commit**
 
 Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
-Expected: exit 0.
+Expected: exit 0. Then `git add` the probe and run `node scripts/check-english.mjs`: it names the probe's one CJK line
+(the glossary pairs it seeds); add `tests/e2e/probes/settings-align.mjs 1  # 2026-09-27: the glossary pairs the probe
+seeds, in the reader's language (Part 5, Task 64)` to `scripts/english-allowlist.txt`, and the gate passes.
 
 ```bash
-git add tests/e2e/probes/settings-align.mjs
+git add tests/e2e/probes/settings-align.mjs scripts/english-allowlist.txt
+node scripts/check-english.mjs
 git commit -m "test(options): the settings page's alignment probe and screenshots
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -7039,3 +7159,23 @@ is left to remove once both pages have left them — `src/ui/appearance/*` (the 
 `styleTile`, to be moved), the `O.reading` and `O.services` keys only those components read ("Kept for Part 7"), and
 `O.close` — and for Part 7's documents, UI.md §3.2's ids that §10.2 renames or retires.
 
+- [ ] **Step 5: Commit the record**
+
+The record appended to this plan (and any plan-side fix the review brought) is Part 5's last commit. The plan holds
+Chinese quoted as copy, so its entry in `scripts/english-allowlist.txt` follows the lines the record adds or removes:
+
+```bash
+git add experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part5-settings.md
+node scripts/check-english.mjs
+```
+
+Where the gate names another count for the plan, set its entry to that count (the reason gains `; 2026-09-27: Part 5's
+record`), then:
+
+```bash
+git add scripts/english-allowlist.txt
+node scripts/check-english.mjs
+git commit -m "docs(ui): Part 5's record
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
+```

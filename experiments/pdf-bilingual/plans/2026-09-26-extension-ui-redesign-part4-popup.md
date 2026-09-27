@@ -78,10 +78,13 @@ The main plan's, verbatim:
 - API keys never enter the service health record, a log line, a cache key, a fixture or git (hard rule 5).
 - The gate before each commit that ends a task: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`, judged by the
   exit code.
-- Commits are local on `exp/extension-ui-redesign`; the stage goes out as one pull request when the last part is done
+- Commits are local (Part 4: on `exp/ui-popup`, merged into `exp/extension-ui-redesign` by the controller); the stage goes out as one pull request when the last part is done
   (never `main`; merge commits). Files are added by name, never `git add -A`. Never commit
-  `src/entrypoints/gallery/main.tsx`, `src/entrypoints/gallery/reader-break.tsx` or the untracked
-  `experiments/pdf-bilingual/spikes/geometry-lock*.mjs` / `prompt-ablation.mjs` (another session's work).
+  the untracked `experiments/pdf-bilingual/spikes/geometry-lock*.mjs` / `prompt-ablation.mjs` (another session's
+  work). The gallery's break harness that stood beside them was removed on 2026-09-27: a task that changes
+  `src/entrypoints/gallery/main.tsx` commits it with its own files. Never run `git reset --hard`,
+  `git checkout -- <path>`, `git restore`, `git clean` or `git stash`: rewind with `--mixed` / `--soft`, and put back
+  only files named, by their content.
 - Every commit message is `type(scope): summary` and ends with `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
 
 Part 4's own:
@@ -103,8 +106,8 @@ Part 4's own:
 - **New files are `git add`ed before `pnpm lint`:** the English and the boundary gates read git's index. The English
   gate's counts are exact: a task that changes a file's lines holding Chinese sets that file's entry to the count
   `pnpm check:english` reports, with the reason the task gives.
-- **`src/entrypoints/gallery/main.tsx`:** a task that changes it says so and edits only the lines it names; its commit
-  leaves the file out and the controller commits those lines (this worktree's copy has no local edit).
+- **`src/entrypoints/gallery/main.tsx`:** a task that changes it says so, edits only the lines it names, and commits it
+  with its own files (the break harness that once sat in this file is gone).
 - **Documents:** UI.md and DESIGN.md are Part 7's (§13). This part changes no document but this plan's "Part 4: done".
 
 ## Review Focus
@@ -147,7 +150,7 @@ Part 4's own:
 | `src/entrypoints/popup/ui/{Note,ModeIcon,Entries,Find}.tsx` (new) | 35, 36 | A note, the display's icons, the two entries, P0 |
 | `tests/e2e/{extension,image,layout,a11y,pdf-entry}.mjs`, `tests/e2e/probes/{highlight-lag,reading-position}.mjs`, `experiments/pdf-bilingual/spikes/entries.mjs` | 37 | The display found as radios, greyed buttons by `aria-disabled`, P0's words |
 | `tests/e2e/popup.mjs` (new), `tests/e2e/probes/popup-align.mjs` (new), `package.json` | 38 | The popup in a real browser; the alignment probe on the development build's gallery |
-| `src/entrypoints/gallery/main.tsx` | 32, 33 | Two new actions; a fixture's error (the controller commits) |
+| `src/entrypoints/gallery/main.tsx` | 32, 33 | Two new actions; a fixture's error |
 | tests: `tests/popup/{find,state,view-model,menu-fit,menu,sheet,view,find-view}.test.ts`, `tests/popup/draw.ts`, `tests/entry/pdf-entry.test.ts`, `tests/ui/locales.test.ts` | 31–36 | |
 
 ---
@@ -594,11 +597,11 @@ tests/popup/find.test.ts 1  # 2026-09-26: a search typed in Chinese goes to arXi
 
 - [ ] **Step 7: Run the gate and commit**
 
-Run: `git add src/entrypoints/popup/find.ts tests/popup/find.test.ts && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
-Expected: exit 0.
+Run: `git add src/entrypoints/popup/find.ts tests/popup/find.test.ts src/core/pdf/entry.ts src/entrypoints/pdf.content.ts scripts/english-allowlist.txt tests/entry/pdf-entry.test.ts && node scripts/check-english.mjs && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
+Expected: exit 0; the English gate names no file (`tests/popup/find.test.ts 1`, Step 6: its one line holding Chinese
+is a search typed in Chinese, test data; the other files hold none).
 
 ```bash
-git add src/core/pdf/entry.ts src/entrypoints/pdf.content.ts scripts/english-allowlist.txt tests/entry/pdf-entry.test.ts
 git commit -m "feat(popup): read P0's field, and share the entry pages' two checks
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -611,7 +614,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 - Modify: `src/entrypoints/popup/view-model.ts` (`PopupInput`, `MANAGE_PROMPTS`, the prompt menu's last row)
 - Modify: `src/entrypoints/popup/fixtures.ts` (`base`)
 - Modify: `src/locales/zh-CN.ts`, `src/locales/en.ts` (`S.rows.managePrompts`)
-- Modify: `src/entrypoints/gallery/main.tsx` (its `actions` constant only; the controller commits it)
+- Modify: `src/entrypoints/gallery/main.tsx` (its `actions` constant only)
 - Test: `tests/popup/state.test.ts`, `tests/ui/locales.test.ts` (two literals)
 
 **Interfaces:**
@@ -659,8 +662,8 @@ In `tests/popup/state.test.ts`:
 ```
 
 - `function world() {` becomes `function world(seed: Parameters<typeof createPopupState>[1] = {}) {`, and in it
-  `const popup = createPopupState(host)` becomes `const popup = createPopupState(host, seed)`; add
-  `import { markRejected } from '@/shared/service-health'` to the imports;
+  `const popup = createPopupState(host)` becomes `const popup = createPopupState(host, seed)` (`markRejected`, which
+  the new tests call, is already imported, line 11: a second import is a redeclaration);
 - replace the test `'“Manage services” brings the settings page to the front; “Manage styles” opens its Reading section; framed beside the floating button the popup asks to go'` with:
 
 ```ts
@@ -1036,7 +1039,8 @@ export const STILL_MS = 300
   `changed()` add `if (id === MANAGE_PROMPTS) return void openOptions('translate/prompts')`; in `chooseStyle`,
   `if (id === MANAGE_STYLES) return void openOptions('reading')` becomes
   `if (id === MANAGE_STYLES) return void openOptions('appearance/styles')` (and its comment "Styles live in the
-  “Reading” section" becomes "styles are in the 外观 section, their own row"); and after `openOptions,` add:
+  “Reading” section" becomes "styles are in the Appearance section, their own row": the comment stays English, and
+  `state.ts` holds no CJK line, as the English gate needs); and after `openOptions,` add:
 
 ```ts
     setQuery: text => {
@@ -1215,17 +1219,17 @@ gets `tab: null, find: { query: '', entries: null }` or the two host members abo
 
 - [ ] **Step 9: Run the gate and commit**
 
-Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
-Expected: exit 0.
+Run: `git add src/entrypoints/popup/state.ts src/entrypoints/popup/data.ts src/entrypoints/popup/App.tsx src/entrypoints/popup/main.tsx src/entrypoints/popup/view-model.ts src/entrypoints/popup/fixtures.ts src/entrypoints/gallery/main.tsx src/locales/zh-CN.ts src/locales/en.ts tests/popup/state.test.ts tests/ui/locales.test.ts && node scripts/check-english.mjs && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
+Expected: exit 0; the English gate names no file: `tests/ui/locales.test.ts` keeps its 3 (the literals edited hold no
+Chinese), `state.ts` and the other code hold none, and the packs are outside the gate. So the allow-list is not part of
+this commit.
 
 ```bash
-git add src/entrypoints/popup/state.ts src/entrypoints/popup/data.ts src/entrypoints/popup/App.tsx src/entrypoints/popup/main.tsx src/entrypoints/popup/view-model.ts src/entrypoints/popup/fixtures.ts src/locales/zh-CN.ts src/locales/en.ts tests/popup/state.test.ts tests/ui/locales.test.ts
 git commit -m "feat(popup): the tab, P0's field and its checks, the record from the first render, the settings' deep links
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
 
-(Leave `src/entrypoints/gallery/main.tsx` unstaged: the controller commits its one line.)
 
 ### Task 33: the view model — a kind for every state, every menu drawn, notes with their tone, P0's findings, the retranslate cue
 
@@ -1234,7 +1238,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 - Modify: `src/entrypoints/popup/fixtures.ts` (replaced whole)
 - Modify: `src/locales/zh-CN.ts`, `src/locales/en.ts` (`S.find`, `S.loading`; `S.notArxiv` goes)
 - Modify: `src/entrypoints/popup/PopupView.tsx` (adapted to the new view; redrawn in Task 35)
-- Modify: `src/entrypoints/gallery/main.tsx` (a fixture's `error`; the controller commits it)
+- Modify: `src/entrypoints/gallery/main.tsx` (a fixture's `error`)
 - Modify: `scripts/english-allowlist.txt`
 - Test: `tests/popup/view-model.test.ts`, `tests/ui/locales.test.ts`
 
@@ -1306,7 +1310,7 @@ In `tests/popup/view-model.test.ts`:
   })
 ```
 
-- in `"a reader's services sit where the contract puts the LLM — …"`, the three `derivePopupView(…).menu!` become
+- in `"a reader's services sit where the contract puts the LLM — …"`, the two `derivePopupView(…).menu!` become
   `derivePopupView(…).menus!.service`, and `selected: true` becomes `checked: true`;
 - replace `'P3 language menu: …'` with:
 
@@ -1693,7 +1697,7 @@ function serviceNote(config: Config, { pack, saved, rejected }: PopupInput): Not
  * Every menu of a view, built from the settings (§5.3): the reader open lists the nine languages it typesets and has no
  * styles; an entry page shows no styles either
  */
-function menusOf(config: Config, { pack, rejected }: PopupInput, { reader = false, style = !reader } = {}): NonNullable<PopupView['menus']> {
+function menusOf(config: Config, { pack, rejected }: PopupInput, { reader = false, style = !reader }: { reader?: boolean; style?: boolean } = {}): NonNullable<PopupView['menus']> {
   return {
     service: {
       label: S.rows.service,
@@ -1747,6 +1751,13 @@ function menusOf(config: Config, { pack, rejected }: PopupInput, { reader = fals
 const openOf = (menu: MenuKind | null, menus: NonNullable<PopupView['menus']>): MenuKind | null => (menu !== null && menus[menu] !== null ? menu : null)
 
 /**
+ * Why a paper's HTML entry is greyed (S-P-33, S-P-33a), one rule for an entry page and for the paper P0 names: arXiv has
+ * no HTML version of it; with no PDF entry either there is nothing to translate, which blocks, else the PDF entry beside
+ * it goes on
+ */
+const noHtmlNote = (pdf: string | null): Pick<Note, 'text' | 'tone'> => (pdf === null ? { text: S.note.noHtml, tone: 'alert' } : { text: S.note.noHtmlVersion, tone: 'info' })
+
+/**
  * The popup on the two pages that are not the full text (UI.md S-P-03b, the maintainer 2026-09-18: “whatever the
  * reader opened — abs, PDF or HTML — the popup is something they can click”): the group, a note, and the two entries
  * (§5.5). **The entries are disabled, not hidden, when they cannot act**: a reader who came for the translation is told
@@ -1775,7 +1786,7 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
     menu: openOf(input.menu, menus),
     // The service's note first: it is why both entries are greyed, or who takes over. Then the HTML version's, which
     // says "nothing to translate" only when the PDF entry is not offered either (Part 5's final review)
-    note: serviceNote(config, input) ?? (noHtml ? (entry.pdf === null ? { text: S.note.noHtml, tone: 'alert', settings: false } : { text: S.note.noHtmlVersion, tone: 'info', settings: false }) : null),
+    note: serviceNote(config, input) ?? (noHtml ? { ...noHtmlNote(entry.pdf), settings: false } : null),
     failed: null,
     // not drawn: the entries below are (S-P-50b); kept as the HTML entry, the action a page's own button would take
     primary: { label: S.entry.html, action: 'openHtml', disabled: noHtml || !canStart },
@@ -1837,7 +1848,7 @@ function findView({ query, entries }: PopupInput['find']): NonNullable<PopupView
           paper: S.find.paper(read.id),
           entries: answer && { html: { label: S.entry.html, href: answer.html }, pdf: { label: S.entry.pdf, href: answer.pdf } },
           // a greyed entry says why as P17's does (S-P-50b): the HTML version's absence, in full when there is no PDF either
-          note: answer?.html === null ? (answer.pdf === null ? S.note.noHtml : S.note.noHtmlVersion) : null,
+          note: answer?.html === null ? noHtmlNote(answer.pdf).text : null,
         },
       }
     }
@@ -2140,24 +2151,24 @@ In `src/entrypoints/gallery/main.tsx`, the two `<PopupView view={view} error={nu
 - [ ] **Step 8: Run the tests**
 
 Run: `pnpm vitest run tests/popup tests/ui`
-Expected: PASS. Then `pnpm check:english`: it names `tests/popup/view-model.test.ts`, whose lines holding Chinese
-changed; set its entry in `scripts/english-allowlist.txt` to the count reported, prefixing the reason with
+Expected: PASS. Then `node scripts/check-english.mjs`: it names `tests/popup/view-model.test.ts` alone, with 50 lines
+holding Chinese (39 before: the tests replaced and added expect the pack's copy), whose entry grants 39. Set its entry
+in `scripts/english-allowlist.txt` to 50 (the count the gate reported, should it differ), prefixing the reason with
 `2026-09-26: the redesign's popup (Part 4): P0's words, the prompt menu's Manage row and a refused key's note, expected as UI.md's copy; `
-(the allow-list itself is checked: its reasons stay English).
+(the allow-list itself is checked: its reasons stay English). `tests/ui/locales.test.ts` keeps 3 and
+`src/entrypoints/popup/PopupView.tsx` keeps 1 (Task 35, which redraws it without Chinese, removes its entry).
 
 - [ ] **Step 9: Run the gate and commit**
 
-Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
+Run: `git add src/entrypoints/popup/view-model.ts src/entrypoints/popup/fixtures.ts src/entrypoints/popup/PopupView.tsx src/entrypoints/gallery/main.tsx src/locales/zh-CN.ts src/locales/en.ts scripts/english-allowlist.txt tests/popup/view-model.test.ts tests/ui/locales.test.ts && node scripts/check-english.mjs && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
 Expected: exit 0.
 
 ```bash
-git add src/entrypoints/popup/view-model.ts src/entrypoints/popup/fixtures.ts src/entrypoints/popup/PopupView.tsx src/locales/zh-CN.ts src/locales/en.ts scripts/english-allowlist.txt tests/popup/view-model.test.ts tests/ui/locales.test.ts
 git commit -m "feat(popup): a view of every kind, every menu drawn, notes with their tone
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
 
-(Leave `src/entrypoints/gallery/main.tsx` unstaged: the controller commits its lines.)
 
 ### Task 34: the menus — under their rows, the popup growing to hold them
 
@@ -2214,6 +2225,8 @@ describe('fitMenu (the redesign\'s design, §5.3)', () => {
 
   it('a menu taller than its cap asks for the cap alone', () => {
     const { root, button, menu } = parts(0, { top: 84, bottom: 120 }, 900)
+    // in the document: happy-dom computes no style for a detached element, and the cap would go unread
+    document.body.append(menu)
     menu.style.maxHeight = '400px'
     fitMenu(root, button, menu, false)
     expect(root.style.minHeight).toBe('532px')
@@ -2324,8 +2337,13 @@ describe('a row of the group and its menu (the redesign\'s design, §5.3)', () =
     expect(tip!.textContent).toBe(view.service.value)
   })
 
-  it('a row carries its menu\'s anchor and its tooltip\'s in one declaration: a second would replace the first', () => {
+  it('a row carries its menu\'s anchor and its tooltip\'s in one declaration: a second would replace the first', async () => {
     expect(anchors('--pop-a', '--tip-b')).toEqual({ anchorName: '--pop-a, --tip-b' })
+    // and the row drawn carries both names
+    const { row } = service()
+    const { container } = await mountElement(row(false))
+    const style = container.querySelector<HTMLElement>('button.group-row')!.style as CSSStyleDeclaration & { anchorName?: string }
+    expect((style.anchorName ?? '').split(', ').map(name => name.slice(0, 6))).toEqual(['--pop-', '--tip-'])
   })
 })
 
@@ -2656,7 +2674,8 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
   the classes `.brand-row`, `.wordmark` (the mark and the name: not `.brand`, which is `Button`'s kind), `.tbtn`,
   `.stack`, `.note`, `.pair`, `.twin`, `.reading`, `.foot` (`.short`), `.toggle`, `.style-btn`, `.line` (`.solo`,
   `.mark`, `.alert`); `tests/popup/draw.ts`:
-  `draw(id): Promise<{ container, main, actions, rerender, unmount, flush }>`, `fixture(id)`, `nameOf(button)`.
+  `draw(id): Promise<{ container, main, actions, rerender, unmount, flush }>`, `fixture(id)`, `nameOf(button)`,
+  `wordsOf(segment)` (a segment's visible words: Part 3's `Segmented` keeps its title in a hidden span inside the button).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2685,6 +2704,9 @@ export async function draw(id: string) {
 
 /** A button's name as assistive technology reads it here: its label, or its words */
 export const nameOf = (button: Element) => button.getAttribute('aria-label') ?? button.textContent?.trim() ?? ''
+
+/** A segment's words: its visible span, not the hidden one that holds its title (Part 3's Segmented) */
+export const wordsOf = (segment: Element) => segment.querySelector('span:not([hidden])')?.textContent ?? ''
 ```
 
 `tests/popup/view.test.ts`:
@@ -2696,7 +2718,7 @@ import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
 import { derivePopupView } from '@/entrypoints/popup/view-model'
 import { S, setLocale } from '@/ui/strings'
 import { stubPopovers } from '../pdf-reader/ui/popover-stub'
-import { draw, fixture, nameOf } from './draw'
+import { draw, fixture, nameOf, wordsOf } from './draw'
 
 // The popup as it draws each state (the redesign's design, §5; round 6): found by role and by the pack's words, from the
 // fixtures the gallery draws. Where things stand is the browser's to measure (tests/e2e/probes/popup-align.mjs)
@@ -2706,10 +2728,12 @@ beforeEach(() => { restore = stubPopovers() })
 afterEach(() => { restore(); document.body.innerHTML = '' })
 
 describe('the popup drawn (the redesign\'s design, §5)', () => {
-  it('draws every state, in the kind its view model says', async () => {
+  it('draws every state in the kind its view model says, each kind with its parts: the group where there are controls, the finder on P0 alone', async () => {
+    const parts: Record<string, [group: boolean, finder: boolean]> = { pending: [false, false], loading: [false, false], find: [false, true], paper: [true, false], entry: [true, false], reader: [true, false] }
     for (const f of POPUP_FIXTURES) {
       const { main, unmount } = await draw(f.id)
-      expect([f.id, main.dataset.kind]).toEqual([f.id, derivePopupView(f.input).kind])
+      const kind = derivePopupView(f.input).kind
+      expect([f.id, main.dataset.kind, !!main.querySelector('.group'), !!main.querySelector('.find')]).toEqual([f.id, kind, ...parts[kind]!])
       await unmount()
     }
   })
@@ -2725,8 +2749,9 @@ describe('the popup drawn (the redesign\'s design, §5)', () => {
     expect([...main.querySelectorAll('.group .group-row .k')].map(k => k.textContent)).toEqual([S.rows.service, S.rows.language])
     expect(main.querySelector(`button[aria-label="${S.primary.translate}"] kbd`)?.textContent).toBe('⌥T')
     const radios = [...main.querySelectorAll('[role="radiogroup"] [role="radio"]')]
-    // the stored preference is stacked
-    expect(radios.map(r => [r.textContent, r.getAttribute('aria-checked'), !!r.querySelector('svg')])).toEqual([[S.mode.side, 'false', true], [S.mode.stack, 'true', true], [S.mode.only, 'false', true]])
+    // the stored preference is stacked. A segment's words are its visible span: its title rides in a hidden one
+    // (Part 3's Segmented, its description), which textContent would read too
+    expect(radios.map(r => [wordsOf(r), r.getAttribute('aria-checked'), !!r.querySelector('svg')])).toEqual([[S.mode.side, 'false', true], [S.mode.stack, 'true', true], [S.mode.only, 'false', true]])
     expect([...main.querySelectorAll('.foot [role="switch"]')].map(s => s.getAttribute('aria-label'))).toEqual([S.rows.highlight, S.rows.images])
     expect(main.querySelector('.foot .style-btn')!.textContent).toBe(S.rows.style)
   })
@@ -2802,9 +2827,26 @@ describe('the popup drawn (the redesign\'s design, §5)', () => {
     expect([note.getAttribute('data-tone'), note.querySelector('button')]).toEqual(['info', null])
   })
 
+  it('P2: the Chrome row with its download runs it through onAction, never as a choice (Part 3\'s action API: a missing onAction is a silent no-op)', async () => {
+    const { main, actions, flush } = await draw('P2')
+    // the menus' rows are drawn from the frame after the first
+    await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())) })
+    await flush()
+    const row = [...main.querySelectorAll<HTMLElement>('[role="option"]')].find(o => o.textContent?.includes(S.service.chrome))!
+    // greyed, yet operable: no aria-disabled, the class `unavailable` (Part 3)
+    expect([row.getAttribute('aria-disabled'), row.classList.contains('unavailable')]).toEqual([null, true])
+    await act(async () => { row.click() })
+    expect([actions.downloadPack.mock.calls.length, actions.chooseService.mock.calls.length]).toEqual([1, 0])
+    // Enter on the row, as the keyboard picks it, does the same
+    const list = row.closest<HTMLElement>('[role="listbox"]')!
+    await act(async () => { row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, relatedTarget: null })) })
+    await act(async () => { list.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })) })
+    expect([actions.downloadPack.mock.calls.length, actions.chooseService.mock.calls.length]).toEqual([2, 0])
+  })
+
   it('PR: stacked greyed, the switches kept, no style button (§5.2)', async () => {
     const { main } = await draw('PR')
-    const stack = [...main.querySelectorAll('[role="radio"]')].find(r => r.textContent === S.mode.stack)!
+    const stack = [...main.querySelectorAll('[role="radio"]')].find(r => wordsOf(r) === S.mode.stack)!
     expect(stack.getAttribute('aria-disabled')).toBe('true')
     expect(main.querySelectorAll('.foot [role="switch"]').length).toBe(2)
     expect(main.querySelector('.foot .style-btn')).toBeNull()
@@ -3107,9 +3149,10 @@ Append to `src/entrypoints/popup/popup.css`:
 - [ ] **Step 6: Run the tests**
 
 Run: `pnpm vitest run tests/popup tests/ui`
-Expected: PASS. Then `pnpm check:english`: `src/entrypoints/popup/PopupView.tsx` now holds no Chinese; delete its line
-from `scripts/english-allowlist.txt`, and add the entry the check names for `tests/popup/view.test.ts` if any (it reads
-the words from the pack: none expected).
+Expected: PASS. Then `git add tests/popup/draw.ts tests/popup/view.test.ts && node scripts/check-english.mjs`: it names
+`src/entrypoints/popup/PopupView.tsx` alone, which now holds no Chinese (0 lines, its entry granting 1): delete its line
+from `scripts/english-allowlist.txt`. The new files hold none (`view.test.ts` reads every word from the pack; its test
+names are English), so they get no entry.
 
 - [ ] **Step 7: Check it in a real browser**
 
@@ -3123,11 +3166,10 @@ screenshot; the automated check of all this is Task 38's.
 
 - [ ] **Step 8: Run the gate and commit**
 
-Run: `git add src/entrypoints/popup/ui/Note.tsx src/entrypoints/popup/ui/ModeIcon.tsx src/entrypoints/popup/ui/Entries.tsx tests/popup/draw.ts tests/popup/view.test.ts && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
+Run: `git add src/entrypoints/popup/ui/Note.tsx src/entrypoints/popup/ui/ModeIcon.tsx src/entrypoints/popup/ui/Entries.tsx tests/popup/draw.ts tests/popup/view.test.ts src/entrypoints/popup/PopupView.tsx src/entrypoints/popup/popup.css scripts/english-allowlist.txt && node scripts/check-english.mjs && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
 Expected: exit 0.
 
 ```bash
-git add src/entrypoints/popup/PopupView.tsx src/entrypoints/popup/popup.css scripts/english-allowlist.txt
 git commit -m "feat(popup): draw the popup from round 6
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -3377,7 +3419,7 @@ html:not([data-axt-pointer]) .popup .find-field:focus-within { outline: 2px soli
 - [ ] **Step 5: Run the tests**
 
 Run: `pnpm vitest run tests/popup`
-Expected: PASS (the test `'draws every state, in the kind its view model says'` of Task 35 draws P0's states through
+Expected: PASS (the test `'draws every state in the kind its view model says, …'` of Task 35 draws P0's states through
 `Find` now).
 
 - [ ] **Step 6: Check it in a real browser**
@@ -3407,7 +3449,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 - Modify: `tests/e2e/extension.mjs`, `tests/e2e/image.mjs`, `tests/e2e/layout.mjs`, `tests/e2e/a11y.mjs`, `tests/e2e/pdf-entry.mjs`
 - Modify: `tests/e2e/probes/highlight-lag.mjs`, `tests/e2e/probes/reading-position.mjs`
 - Modify: `experiments/pdf-bilingual/spikes/entries.mjs`
-- Modify: `scripts/english-allowlist.txt` (if a count moved)
+- (`scripts/english-allowlist.txt` is not changed: every count stays, Step 4)
 
 **Interfaces:**
 - Consumes: the popup of Tasks 35–36: the display is a radio group (`Segmented`), a disabled button is
@@ -3432,8 +3474,7 @@ Then by hand, where the name is a variable:
   `grep -n "setMode(" tests/e2e/probes/highlight-lag.mjs`);
 - `tests/e2e/probes/reading-position.mjs`: `const mode = name => async () => { await popup.getByRole('button', { name, exact: true }).click() }`
   becomes `const mode = name => async () => { await popup.getByRole('radio', { name, exact: true }).click() }`;
-- `tests/e2e/layout.mjs`: `const sideButton = popup.getByRole('button', { name: '左右', exact: true })` becomes
-  `const sideButton = popup.getByRole('radio', { name: '左右', exact: true })`, and the reader's-place check's
+- `tests/e2e/layout.mjs` (its `sideButton` line is the sed's already): the reader's-place check's
 
 ```js
   const press = name => () => popup.getByRole('button', { name, exact: true }).click()
@@ -3458,6 +3499,10 @@ Expected: no output.
   `.map(b => ({ text: b.textContent?.trim(), disabled: b.disabled }))` becomes
   `.map(b => ({ text: b.textContent?.trim(), disabled: b.getAttribute('aria-disabled') === 'true' }))`; on the abstract
   page, `return b ? { disabled: b.disabled } : null` becomes `return b ? { disabled: b.getAttribute('aria-disabled') === 'true' } : null`;
+- `tests/e2e/extension.mjs`, in the block of a wrong key remembered with the fallback off (the `primaryDisabled`
+  check): `    return button ? button.disabled : null` becomes
+  `    return button ? button.getAttribute('aria-disabled') === 'true' : null` (the greyed primary is aria-disabled, its
+  `disabled` property false; Part 5 leaves this block alone);
 - `experiments/pdf-bilingual/spikes/entries.mjs`, in `popupOver`:
   `const named = re => buttons.filter(b => re.test(b.textContent ?? '')).map(b => ({ text: b.textContent?.trim(), disabled: b.disabled }))`
   becomes `const named = re => buttons.filter(b => re.test(b.textContent ?? '')).map(b => ({ text: b.textContent?.trim(), disabled: b.getAttribute('aria-disabled') === 'true' }))`.
@@ -3465,6 +3510,11 @@ Expected: no output.
   tooltip and its description (`aria-describedby`), so
   `.map(b => ({ disabled: b.getAttribute('aria-disabled') === 'true', title: b.title }))` becomes
   `.map(b => ({ disabled: b.getAttribute('aria-disabled') === 'true', title: document.getElementById(b.getAttribute('aria-describedby') ?? '')?.textContent ?? '' }))`.
+  The same line's filter reads a segment's words, not its `textContent`: the hidden title rides inside the button, and
+  side by side's (「…窗口较窄时按上下显示」) matches 上下 before the stacked segment does (MODE_ORDER), so the check of the
+  reader's popup would read an enabled segment.
+  `stack: buttons.filter(b => /上下|Stacked/.test(b.textContent ?? ''))` becomes
+  `stack: buttons.filter(b => b.getAttribute('role') === 'radio' && /^(上下|Stacked)$/.test(b.querySelector('span:not([hidden])')?.textContent ?? ''))`.
 
 - [ ] **Step 3: P0's sentence, and a style's option by its name**
 
@@ -3477,9 +3527,11 @@ In `tests/e2e/extension.mjs`:
 
 - [ ] **Step 4: The English gate**
 
-Run: `pnpm check:english`
-Expected: exit 0 (the edited lines kept their Chinese names on the same lines). If a count moved, set the entry to the
-reported count with the reason `2026-09-26: the popup's display found as radios, its greyed buttons by aria-disabled (the redesign's Part 4)`.
+Run: `node scripts/check-english.mjs`
+Expected: exit 0, naming no file: every edited line keeps its Chinese labels on the same line, and the one line added
+(layout.mjs's comment) is English, so the entries stand as they are — `tests/e2e/extension.mjs 76`, `image.mjs 11`,
+`layout.mjs 11`, `a11y.mjs 2`, `pdf-entry.mjs 9`, `probes/highlight-lag.mjs 8`, `probes/reading-position.mjs 5`,
+`experiments/pdf-bilingual/spikes/entries.mjs 14`. A file named is a step that went wrong: fix the step, not the count.
 
 - [ ] **Step 5: Run the suites**
 
@@ -3489,17 +3541,14 @@ page, not the popup, so a new finding there is a regression of this part's to fi
 
 - [ ] **Step 6: Run the gate and commit**
 
-Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
-Expected: exit 0.
+Run: `git add tests/e2e/extension.mjs tests/e2e/image.mjs tests/e2e/layout.mjs tests/e2e/a11y.mjs tests/e2e/pdf-entry.mjs tests/e2e/probes/highlight-lag.mjs tests/e2e/probes/reading-position.mjs experiments/pdf-bilingual/spikes/entries.mjs && node scripts/check-english.mjs && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
+Expected: exit 0; the English gate names no file (Step 4's counts), so the allow-list is not part of this commit.
 
 ```bash
-git add tests/e2e/extension.mjs tests/e2e/image.mjs tests/e2e/layout.mjs tests/e2e/a11y.mjs tests/e2e/pdf-entry.mjs tests/e2e/probes/highlight-lag.mjs tests/e2e/probes/reading-position.mjs experiments/pdf-bilingual/spikes/entries.mjs
 git commit -m "test(e2e): find the popup's display as radios, its greyed buttons by aria-disabled
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
-
-(Add `scripts/english-allowlist.txt` by name if Step 4 changed it.)
 
 ### Task 38: the popup in a real browser, and the probe of its alignment
 
@@ -3585,16 +3634,21 @@ async function popupOver(tab, settle = 2000) {
 /** The next tab the popup opens, and its address as it commits */
 async function nextTab(act) {
   const opened = context.waitForEvent('page', { timeout: 10_000 }).catch(() => null)
-  await act()
+  // the popup closes itself once it has opened the tab (openLink): a press still resolving then meets a closed page,
+  // which is the popup doing its job (measured in the pre-flight: one run in three)
+  await act().catch(e => { if (!/has been closed/.test(String(e))) throw e })
   const tab = await opened
   await tab?.waitForURL(url => url.protocol !== 'about:', { timeout: 30_000 }).catch(() => undefined)
   const url = tab?.url() ?? null
   await tab?.close()
   return url
 }
-/** The open menu of a popup page against its row (or button) and the popup */
+/**
+ * The open menu of a popup page against its row (or button) and the popup. The trigger is a button: the language menu's
+ * search field is a combobox with aria-expanded too, in the page whether its menu is open or not (Part 3's MenuList)
+ */
 const menuPlace = popup => popup.evaluate(() => {
-  const main = document.querySelector('main'), pop = document.querySelector('.pop.menu:popover-open'), row = document.querySelector('main [aria-expanded="true"]')
+  const main = document.querySelector('main'), pop = document.querySelector('.pop.menu:popover-open'), row = document.querySelector('main button[aria-expanded="true"]')
   if (!pop || !row) return null
   const m = main.getBoundingClientRect(), p = pop.getBoundingClientRect(), r = row.getBoundingClientRect()
   return { left: p.left - m.left, right: m.right - p.right, below: p.top - r.bottom, above: r.top - p.bottom, top: p.top - m.top, room: m.bottom - p.bottom, up: pop.classList.contains('up'), minHeight: main.style.minHeight }
@@ -3725,6 +3779,9 @@ await sleep(1500)
   await sleep(400)
   const after = await switchOf().getAttribute('aria-checked')
   await popup.mouse.click(words.x + words.width - 8, words.y + words.height / 2)
+  // this popup's own write of the switch lands before the configuration is patched below: a write still out would
+  // replace the patch with the configuration this popup holds
+  await sleep(400)
   check('a click on a switch\'s words flips it', before !== after, `${before} → ${after}`)
 }
 await patchConfig({ services: [SVC], provider: SVC.id })
@@ -3753,23 +3810,28 @@ await sleep(2000)
   await popup.close()
 }
 {
-  await abs.bringToFront()
-  const at = await abs.evaluate(() => { const r = document.querySelector('.axt-floating')?.shadowRoot?.querySelector('.axt-fb-main')?.getBoundingClientRect(); return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null })
-  await abs.mouse.click(at.x, at.y)
+  // A tab of its own: once popupOver has sized a popup's page (setViewportSize, a device-metrics emulation), the frames
+  // of the tab under it hear no pointer in Playwright's Chromium (measured in the pre-flight: no pointerdown reached the
+  // panel's popup; entries.mjs meets the same with the reader's frame)
+  const tab = await context.newPage()
+  await tab.goto(`https://arxiv.org/abs/${PAPER}`, { waitUntil: 'load' })
+  await sleep(2000)
+  const at = await tab.evaluate(() => { const r = document.querySelector('.axt-floating')?.shadowRoot?.querySelector('.axt-fb-main')?.getBoundingClientRect(); return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null })
+  await tab.mouse.click(at.x, at.y)
   await sleep(2500)
-  const panelHeight = () => abs.evaluate(() => Math.round(document.querySelector('.axt-floating').shadowRoot.querySelector('.axt-fb-panel-box').getBoundingClientRect().height))
-  const frame = abs.frames().find(f => f.url().includes('/popup.html'))
+  const panelHeight = () => tab.evaluate(() => Math.round(document.querySelector('.axt-floating').shadowRoot.querySelector('.axt-fb-panel-box').getBoundingClientRect().height))
+  const frame = tab.frames().find(f => f.url().includes('/popup.html'))
   const before = await panelHeight()
   await frame.locator('button.group-row').first().click()
   await sleep(800)
   const grown = await panelHeight()
   const inside = await frame.evaluate(() => { const p = document.querySelector('.pop.menu:popover-open')?.getBoundingClientRect(); return p ? p.bottom <= innerHeight : false })
-  await abs.screenshot({ path: `${SHOTS}/panel-menu.png` })
+  await tab.screenshot({ path: `${SHOTS}/panel-menu.png` })
   // Escape where the focus is, the menu's list: the menu takes it, and the panel stays (embedded.ts hands over only an
   // Escape nothing took)
-  await abs.keyboard.press('Escape')
+  await tab.keyboard.press('Escape')
   await sleep(500)
-  const stillOpen = await abs.evaluate(() => !document.querySelector('.axt-floating').shadowRoot.querySelector('.axt-fb-panel-box').hidden)
+  const stillOpen = await tab.evaluate(() => !document.querySelector('.axt-floating').shadowRoot.querySelector('.axt-fb-panel-box').hidden)
   check('in the floating button\'s panel a menu grows the frame to hold it, and Escape shuts the menu, not the panel', grown > before && inside && stillOpen, `panel ${before} → ${grown} px, menu inside ${inside}, panel open after Escape ${stillOpen}`)
 }
 
@@ -3876,7 +3938,8 @@ const menuPlace = () => page.evaluate(() => {
   if (!pop) return ['no menu open']
   const off = []
   const popup = pop.closest('.popup'), p = popup.getBoundingClientRect(), m = pop.getBoundingClientRect()
-  const trigger = popup.querySelector('[aria-expanded="true"]').getBoundingClientRect()
+  // the trigger is a button: the language menu's search field carries aria-expanded too (Part 3's MenuList)
+  const trigger = popup.querySelector('button[aria-expanded="true"]').getBoundingClientRect()
   const near = (what, got, want) => { if (Math.abs(got - want) > 0.5) off.push(`${what} ${got.toFixed(1)} px, not ${want}`) }
   near('the menu from the popup\'s leading edge', m.left - p.left, 8)
   near('the menu from the popup\'s trailing edge', p.right - m.right, 8)
@@ -3908,7 +3971,8 @@ for (const lang of ['zh-CN', 'en']) {
   await page.goto(`chrome-extension://${id}/gallery.html`)
   await page.waitForSelector('.popup')
   await sleep(800)
-  // the fixtures that hold a menu open show it in their pictures; the measures are taken with none open
+  // one menu can be open at a time (popover="auto": P2, P3, P15 and P16 each shut the one before), so the menus are shot
+  // below, one by one; the measures are taken with none open
   await page.evaluate(() => { for (const [i, section] of document.querySelectorAll('section').entries()) section.dataset.shot = section.querySelector('h2 span')?.textContent ?? String(i) })
   await shootEach(page, 'section', OUT, state => `${lang}-${state}`, 'shot')
   await page.keyboard.press('Escape')
@@ -3917,7 +3981,8 @@ for (const lang of ['zh-CN', 'en']) {
   for (const row of (await page.locator('.popup button.group-row').all()).slice(0, 4)) { await row.hover(); await sleep(150) }
   await measureAll(`${lang}, the rows hovered`)
   const frameOf = state => page.locator('section', { has: page.locator('h2 span', { hasText: new RegExp(`^${state}$`) }) }).locator('[data-theme="light"] .popup')
-  for (const [state, trigger, name] of [['P1', 'button.group-row >> nth=0', 'services'], ['P1', 'button.group-row >> nth=1', 'languages'], ['P15', 'button.group-row >> nth=2', 'prompts'], ['P1', '.style-btn', 'styles']]) {
+  // P2's services too: its Chrome row carries the pack's download, the one row of the popup with an action in it
+  for (const [state, trigger, name] of [['P1', 'button.group-row >> nth=0', 'services'], ['P2', 'button.group-row >> nth=0', 'services-download'], ['P1', 'button.group-row >> nth=1', 'languages'], ['P15', 'button.group-row >> nth=2', 'prompts'], ['P1', '.style-btn', 'styles']]) {
     await page.keyboard.press('Escape')
     await sleep(200)
     const frame = frameOf(state)
@@ -3936,9 +4001,12 @@ process.exit(failed || errors.length ? 1 : 0)
 
 - [ ] **Step 4: Allow the suite's Chinese**
 
-Run: `git add tests/e2e/popup.mjs tests/e2e/probes/popup-align.mjs && pnpm check:english`
-Expected: it names `tests/e2e/popup.mjs` with a count. In `scripts/english-allowlist.txt`, after the line of
-`tests/e2e/pdf-entry.mjs`, add `tests/e2e/popup.mjs <that count>  # 2026-09-26: the popup's controls and words found by their Chinese names, as the other suites find them (the redesign's Part 4)`.
+Run: `git add tests/e2e/popup.mjs tests/e2e/probes/popup-align.mjs && node scripts/check-english.mjs`
+Expected: it names `tests/e2e/popup.mjs` with 20 lines holding Chinese (the controls and the copy it finds by their
+Chinese words; every comment and check name is English), and nothing else (`popup-align.mjs` holds none). In
+`scripts/english-allowlist.txt`, after the line of `tests/e2e/pdf-entry.mjs`, add
+`tests/e2e/popup.mjs 20  # 2026-09-26: the popup's controls and words found by their Chinese names, as the other suites find them (the redesign's Part 4)`
+(the count the gate reported, should it differ). Run `git add scripts/english-allowlist.txt && node scripts/check-english.mjs`: exit 0.
 
 - [ ] **Step 5: Run the two**
 
@@ -3967,10 +4035,21 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 
 ### Task 39: Part 4's record
 
+**Files:**
+- Modify: `experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part4-popup.md` (`## Part 4: done`)
+- Modify: `scripts/english-allowlist.txt` (this plan's entry: the count the English gate names, Step 6)
+
 - [ ] **Step 1: The probes**
 
 Run: `pnpm exec wxt build --mode development && node tests/e2e/probes/popup-align.mjs && pnpm build && node tests/e2e/probes/popup-first-paint.mjs && node experiments/pdf-bilingual/spikes/reader-pixels.mjs`
 Expected: the alignment all `ok`; both first paints `ok` against Task 30's baseline; the reader's 24 files `ok`.
+
+The first paint's margin is narrow. The pre-flight measured it in headless Chromium, ten runs a median: the toolbar's
+median at 36, 36 and 40 ms for the popup as Part 3 left it, and at 44, 42 and 40 ms for this plan's, against a threshold
+of 43.6 ms on a 36 ms baseline; the panel's at 48–54 ms either way. A `FAIL` is run twice more with nothing else
+running, and the three medians go into Step 5's note for the controller, who decides; the threshold stays as Task 30
+set it. Should the regression hold, the suspect is the view model drawing every menu's data before the first frame
+(the language list's 179 rows among them).
 
 - [ ] **Step 2: Look at every picture**
 
@@ -4007,12 +4086,13 @@ comment no longer holds (the menus are in the top layer).
 
 - [ ] **Step 6: Commit the note**
 
-Run: `pnpm check:english`. If it names this plan's file (it quotes the popup's Chinese words), set or add its entry in
-`scripts/english-allowlist.txt` to the count reported, with the reason `2026-09-26: the popup's words the plan's code puts into the locale packs and the controls its checks find, quoted (the redesign's Part 4)`,
-and add the allow-list to the commit below.
+Run: `git add experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part4-popup.md && node scripts/check-english.mjs`
+Expected: it names this plan's file, since the record quotes the words the parts after it carry (重新翻译, 显示原文,
+管理提示词…), with the count of its lines holding Chinese. In `scripts/english-allowlist.txt`, set this plan's entry to
+that count, keeping its reason and adding `; +<the lines the record added>, Part 4's record quotes the popup's words the
+parts after it carry`. Run `git add scripts/english-allowlist.txt && node scripts/check-english.mjs` again: exit 0.
 
 ```bash
-git add experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part4-popup.md
 git commit -m "docs(plan): Part 4's record
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"

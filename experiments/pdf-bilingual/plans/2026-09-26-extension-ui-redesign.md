@@ -34,8 +34,11 @@ below (§n) are the design's.
   exit code.
 - Commits are local on `exp/extension-ui-redesign`; the stage goes out as one pull request when the last part is done
   (never `main`; merge commits). Files are added by name, never `git add -A`. Never commit
-  `src/entrypoints/gallery/main.tsx`, `src/entrypoints/gallery/reader-break.tsx` or the untracked
-  `experiments/pdf-bilingual/spikes/geometry-lock*.mjs` / `prompt-ablation.mjs` (another session's work).
+  the untracked `experiments/pdf-bilingual/spikes/geometry-lock*.mjs` / `prompt-ablation.mjs` (another session's
+  work). The gallery's break harness that stood beside them was removed on 2026-09-27: a task that changes
+  `src/entrypoints/gallery/main.tsx` commits it with its own files. Never run `git reset --hard`,
+  `git checkout -- <path>`, `git restore`, `git clean` or `git stash`: rewind with `--mixed` / `--soft`, and put back
+  only files named, by their content.
 - Every commit message is `type(scope): summary` and ends with `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
 
 ## Review Focus

@@ -53,7 +53,8 @@ The five questions of the draft, ruled (the main plan, ce960723):
 | `tests/shared/entry-settings.test.ts`, `tests/shared/floating.test.ts`, `tests/entry/floating-button.test.ts` | 71, 72 | — |
 | `src/styles/modes.css` (the failed block's hint line), `tests/viewer/viewer.test.ts`, `tests/renderer/failed.test.ts`, `tests/styles/no-has.test.ts` | 73 | — |
 | `tests/pdf-reader/ui/menus.test.ts` | 74 | — |
-| `tests/e2e/floating-button.mjs` (a new block before its end), `tests/e2e/probes/floating-shots.mjs` (new) | 70, 72, 73 | — |
+| `tests/e2e/probes/floating-shots.mjs` (new) | 70 | — |
+| `tests/e2e/floating-button.mjs` (a new block before its end) | 72, 73 | — |
 | `experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-design.md` (§2.2, §3 wording) | 71 | Part 5 amends §6.2 |
 | `src/pdf-reader/ui/Menus.tsx` (`ServiceMenu`'s first lines, an import) | 74 | Part 5: line 77, `openOptions('services')` — ten lines below this part's hunk |
 | this plan (the record) | 75 | — |
@@ -80,8 +81,11 @@ The main plan's, verbatim:
   exit code.
 - Commits are local on `exp/extension-ui-redesign`; the stage goes out as one pull request when the last part is done
   (never `main`; merge commits). Files are added by name, never `git add -A`. Never commit
-  `src/entrypoints/gallery/main.tsx`, `src/entrypoints/gallery/reader-break.tsx` or the untracked
-  `experiments/pdf-bilingual/spikes/geometry-lock*.mjs` / `prompt-ablation.mjs` (another session's work).
+  the untracked `experiments/pdf-bilingual/spikes/geometry-lock*.mjs` / `prompt-ablation.mjs` (another session's
+  work). The gallery's break harness that stood beside them was removed on 2026-09-27: a task that changes
+  `src/entrypoints/gallery/main.tsx` commits it with its own files. Never run `git reset --hard`,
+  `git checkout -- <path>`, `git restore`, `git clean` or `git stash`: rewind with `--mixed` / `--soft`, and put back
+  only files named, by their content.
 - Every commit message is `type(scope): summary` and ends with `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
 
 Part 6's own:
@@ -101,7 +105,10 @@ Part 6's own:
   pages with no token sheet beside it, writes `danger`'s two values for the hint line, held to `tokens.ts` by a test.
 - **No token is added.** A role this part needs is raised with the controller.
 - **No CJK in any line this part writes:** controls are found by class, role and data attribute; words come from the
-  packs (`S.service.llm_rejected`). No entry of `scripts/english-allowlist.txt` changes.
+  packs (`S.service.llm_rejected`). No entry of `scripts/english-allowlist.txt` changes. Each commit whose files hold
+  lines with CJK (the design, `floating-button.mjs`, `failed.ts`, `failed.test.ts`, `menus.test.ts`) runs
+  `node scripts/check-english.mjs` after its `git add`; an entry the gate names goes into the same commit, with a
+  one-line English reason.
 - **New files are `git add`ed before `pnpm lint`:** the English and the boundary gates read git's index.
 - **Documents:** UI.md and DESIGN.md are Part 7's (§13; DESIGN §4.0c, the button's material). This part amends the
   design's §2.2 and §3 (Task 71) and appends its record to this plan.
@@ -133,8 +140,8 @@ Part 6's own:
 1. **The mark and its place** (§3's wording): ruling 1. The host sheet's blocks become `:host, [data-axt-theme="light"]`
    (light), `@media (prefers-color-scheme: dark) { :host }` (the system's dark reaches the host alone, so an element
    marked light inside stays light) and `[data-axt-theme="dark"]`. The pages' sheet (`tokens.css`) does not change.
-2. **The host sheet's size** (§2.2: "a few hundred bytes"): `tokenSheet('host')` is 5.6 KB (the ramp and the roles in
-   three blocks). Three shadow roots carry it (the button's, and the viewer's dialog's and control's, which share one
+2. **The host sheet's size** (§2.2: "a few hundred bytes"): `tokenSheet('host')` is 5.9 KB (5 905 bytes: the ramp and the roles
+   in three blocks). Three shadow roots carry it (the button's, and the viewer's dialog's and control's, which share one
    text). **The retry does not**: there is a shadow root per failed block, and it needs one role. **Nor does the hint
    line** (ruling 2): `modes.css` is a static sheet on arXiv's page, where no token sheet stands; it writes `danger`'s
    two values, and a test holds them to `tokens.ts`.
@@ -213,9 +220,10 @@ no changes. Otherwise stop and report.
 The reader's pixel probe opens a demo paper made on this machine and not in the repository; the main worktree has it.
 
 ```bash
+cd /Users/cheongzhiyan/Developer/ArxivTranslate/.worktrees/redesign-floating
 pnpm install
 mkdir -p experiments/pdf-bilingual/poc-reader
-cp -R ../exp-pdf/experiments/pdf-bilingual/poc-reader/papers experiments/pdf-bilingual/poc-reader/
+cp -R /Users/cheongzhiyan/Developer/ArxivTranslate/.worktrees/exp-pdf/experiments/pdf-bilingual/poc-reader/papers experiments/pdf-bilingual/poc-reader/
 ```
 
 Expected: `pnpm install` exits 0; `experiments/pdf-bilingual/poc-reader/papers/2608.02163` exists.
@@ -308,8 +316,9 @@ for (const theme of ['light', 'dark']) {
   const side = { x: WIDTH - 460, y: 0, width: 460, height: HEIGHT }
   const shot = async (name, clip, settle = 300, measured = true) => {
     await sleep(settle)
-    await page.screenshot({ path: join(dir, `${theme}-${name}.png`), ...(clip ? { clip } : {}), ...STILL })
+    // Measured before the capture: in `lit` the 400 ms dwell may end while the screenshot is taken
     if (measured) measures[`${theme}-${name}`] = await measure()
+    await page.screenshot({ path: join(dir, `${theme}-${name}.png`), ...(clip ? { clip } : {}), ...STILL })
     shots++
   }
   /** The tick of a translated page, set on the dock for a shot: a translation is the network's, the tick is what is looked at */
@@ -430,6 +439,7 @@ Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
 Expected: exit 0.
 
 ```bash
+git add tests/e2e/probes/floating-shots.mjs
 git commit -m "test(e2e): shoot the floating button and the figure viewer, light and dark, before and after
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
@@ -623,8 +633,8 @@ with
     ]).then(([config, floating, zoom]) => ({ uiLanguage: config.uiLanguage, openIn: config.reading.openIn, zoom, pdfReader: config.pdfReader.enabled, theme: config.theme, floating })),
 ```
 
-(The background already asks again on every change of `config`: `WATCHED_KEYS` holds it, so a change of the appearance
-reaches every open arXiv page.)
+(The pages already ask again on every change of `config` (`WATCHED_KEYS` in `src/shared/entry-settings.ts` holds it),
+and the background answers with the new `theme`, so a change of the appearance reaches every open arXiv page.)
 
 - [ ] **Step 5: The design as built**
 
@@ -639,7 +649,7 @@ with
 
 ```
   roles as `--axt-` variables (hard rule 2), written into each shadow sheet by one function of the source at run time
-  (5.6 KB: the ramp and the roles in three blocks), scoped to `:host` and marked light or dark on an element inside the
+  (5.9 KB, 5 905 bytes: the ramp and the roles in three blocks), scoped to `:host` and marked light or dark on an element inside the
   shadow root (`data-axt-theme`, §3). No generated file: the content script already builds these sheets as strings.
 ```
 
@@ -670,10 +680,16 @@ Expected: exit 0.
 
 ```bash
 git add src/shared/tokens.ts src/shared/entry-settings.ts src/shared/messages.ts src/entrypoints/background/handlers.ts experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-design.md tests/shared/tokens.test.ts tests/shared/entry-settings.test.ts tests/background/handlers.test.ts
+node scripts/check-english.mjs
 git commit -m "feat(ui): a shadow root's theme marked inside it, and the extension's appearance on arXiv's pages
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
+
+`node scripts/check-english.mjs` exits 0 with the allowlist as it is: the design holds 175 lines with CJK, as its entry
+grants, and no line this task writes holds any. If it names a file, add the exact entry it names to
+`scripts/english-allowlist.txt` with a one-line English reason beside it, `git add scripts/english-allowlist.txt`, run
+it again, and commit it with this task.
 
 ### Task 72: the floating button in the family's material, in the extension's appearance
 
@@ -730,6 +746,7 @@ describe('the floating button: its material (the redesign\'s design, §7)', () =
 
   it('keeps its appearance through a restore of the page, which strips every data-axt-* of the document\'s own elements (Review Focus)', () => {
     const { dock } = mount({ theme: 'dark' })
+    // restore walks the document's own tree, never a shadow root's: this holds that, should restore ever reach into ours
     restore(document)
     expect(dock.dataset.axtTheme).toBe('dark')
   })
@@ -739,7 +756,8 @@ describe('the floating button: its material (the redesign\'s design, §7)', () =
     const tokens = tokenSheet('host')
     expect(css.trimStart().startsWith(`:host { all: initial }\n${tokens}`)).toBe(true)
     const rest = css.slice(css.indexOf(tokens) + tokens.length)
-    expect([...rest.matchAll(/oklch\([^)]*\)|rgba?\([^)]*\)|#[0-9a-f]{3,8}\b/gi)].map(m => m[0]).sort()).toEqual([
+    // a named colour counts too, but not a property's name (`white-space`)
+    expect([...rest.matchAll(/oklch\([^)]*\)|rgba?\([^)]*\)|hsla?\([^)]*\)|#[0-9a-f]{3,8}\b|(?<![\w-])(?:white|black)(?![\w-])/gi)].map(m => m[0]).sort()).toEqual([
       // the tick's ring and glyph: the disc's white (mark.ts)
       '#fff', '#fff',
       // the disc's shadow at rest and lit: the logo's export
@@ -1130,10 +1148,16 @@ Expected: exit 0.
 
 ```bash
 git add src/core/floating/button.ts src/shared/floating.ts tests/entry/floating-button.test.ts tests/shared/floating.test.ts tests/e2e/floating-button.mjs
+node scripts/check-english.mjs
 git commit -m "feat(floating): the floating button in the family's material, following the extension's appearance
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
+
+`node scripts/check-english.mjs` exits 0 with the allowlist as it is: `tests/e2e/floating-button.mjs` holds 6 lines with
+CJK, as its entry grants, and no line this task writes holds any. If it names a file, add the exact entry it names to
+`scripts/english-allowlist.txt` with a one-line English reason beside it, `git add scripts/english-allowlist.txt`, run
+it again, and commit it with this task.
 
 ### Task 73: the figure viewer's control and bar, and the failed block's retry, by the page
 
@@ -1180,6 +1204,7 @@ describe('the control and the dialog\'s bar: the family\'s floating material, li
     document.body.style.backgroundColor = 'rgb(40, 38, 35)'
     over(a!)
     expect([control.dataset.axtTheme, dialog.dataset.axtTheme]).toEqual(['dark', 'dark'])
+    // restore walks the document's own tree, never a shadow root's: this holds that, should restore ever reach into ours
     restore(document)
     expect([control.dataset.axtTheme, dialog.dataset.axtTheme]).toEqual(['dark', 'dark'])
     document.body.style.backgroundColor = 'rgb(255, 255, 255)'
@@ -1187,7 +1212,7 @@ describe('the control and the dialog\'s bar: the family\'s floating material, li
     expect([control.dataset.axtTheme, dialog.dataset.axtTheme]).toEqual(['light', 'light'])
   })
 
-  it('draws the control and the bar on the floating ground under the floating shadow, the control at a radius of 8, the keyboard\'s ring in the focus ink, every colour from the host token sheet', () => {
+  it('draws the control and the bar on the floating ground under the floating shadow, the control at a radius of 8, the keyboard\'s ring in the focus ink, every colour of the control and the bar from the host token sheet', () => {
     const { root, spot } = page(PICTURE)
     for (const shadow of [root, spot.shadowRoot!]) {
       const css = shadow.querySelector('style')!.textContent!
@@ -1210,6 +1235,14 @@ import { resolve } from '@/shared/tokens'
 import { ruleOf, rules, sheet } from '../styles/css-rules'
 ```
 
+after the line `const page = '<p class="ltx_p" id="p1">Text.</p>'` add:
+
+```ts
+/** The family's danger in each theme, and the 60 % of it the retry's edge and the block's hint line draw (§3, §7) */
+const [light, dark] = [resolve('danger', 'light'), resolve('danger', 'dark')]
+const edge = (colour: string) => `color-mix(in oklab, ${colour} 60%, transparent)`
+```
+
 and inside `describe('renderFailed', …)`, after the test that starts
 `it('removes pending, marks failed, inserts the widget with a shadow root: button + reason'`, add:
 
@@ -1217,19 +1250,15 @@ and inside `describe('renderFailed', …)`, after the test that starts
   it('draws the retry\'s edge and its mark in the family\'s danger, light or dark by the colour scheme of the page it stands in (the redesign\'s design, §3, §7)', () => {
     const doc = docOf(page)
     const host = renderFailed(extract(doc)[0] as TextBlock, 'network: offline', () => undefined)
-    const sheet = host.shadowRoot!.querySelector('style')!.textContent!
-    const [light, dark] = [resolve('danger', 'light'), resolve('danger', 'dark')]
-    const edge = (colour: string) => `color-mix(in oklab, ${colour} 60%, transparent)`
-    expect(sheet).toContain(`--axt-danger: light-dark(${light}, ${dark});`)
-    expect(sheet).toContain(`--axt-danger-edge: light-dark(${edge(light)}, ${edge(dark)});`)
-    expect(sheet).toContain('border: 1px solid var(--axt-danger-edge);')
-    expect(sheet).toMatch(/\.mark \{[^}]*color: var\(--axt-danger\);/)
-    expect(sheet).not.toMatch(/rgba?\(|--axt-failed-color/)
+    const css = host.shadowRoot!.querySelector('style')!.textContent!
+    expect(css).toContain(`--axt-danger: light-dark(${light}, ${dark});`)
+    expect(css).toContain(`--axt-danger-edge: light-dark(${edge(light)}, ${edge(dark)});`)
+    expect(css).toContain('border: 1px solid var(--axt-danger-edge);')
+    expect(css).toMatch(/\.mark \{[^}]*color: var\(--axt-danger\);/)
+    expect(css).not.toMatch(/rgba?\(|--axt-failed-color/)
   })
 
   it('draws the failed block\'s hint line in the same danger at 60 %, by the page: modes.css writes the two values, held here to the tokens (the controller\'s ruling 2)', () => {
-    const [light, dark] = [resolve('danger', 'light'), resolve('danger', 'dark')]
-    const edge = (colour: string) => `color-mix(in oklab, ${colour} 60%, transparent)`
     const line = ruleOf(rules(sheet('../../src/styles/modes.css')), '[data-axt-state="failed"],\n[data-axt-partial],\n[data-axt-partial] + .axt-t', [])
     expect(line).toEqual({ 'box-shadow': `inset 3px 0 0 light-dark(${edge(light)}, ${edge(dark)})` })
   })
@@ -1399,7 +1428,8 @@ Expected: PASS — the new tests and every earlier one of the three directories.
 - [ ] **Step 6: Check the platform's answer to the retry's sheet once**
 
 The sheet's text is pinned above; what the browser makes of it is checked here, in Chromium, with the two values the
-tokens hold:
+tokens hold. This checks the construct, not the build: the sheet below is typed from Step 4's `STYLE`, and the tests of
+Step 1 hold `failed.ts` to the same text.
 
 ```bash
 node --input-type=module -e "
@@ -1453,12 +1483,14 @@ In `tests/e2e/floating-button.mjs`, replace the whole block Task 72 added — fr
     await sleep(4000)
     const figure = await page.evaluate(() => {
       const image = [...document.querySelectorAll('.ltx_figure img')].find(i => i.getBoundingClientRect().width >= 160)
+      // A paper with no such figure (AXT_PAPER): the control is never shown, and the check below says so
+      if (!image) return null
       image.scrollIntoView({ block: 'center' })
       const r = image.getBoundingClientRect()
       return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
     })
     await page.mouse.move(3, 3)
-    await page.mouse.move(figure.x, figure.y, { steps: 4 })
+    if (figure) await page.mouse.move(figure.x, figure.y, { steps: 4 })
     await sleep(500)
   }
   /** The dock's mark, the main button's ground, and the chrome as the dock resolves it (a probe given it as its colour) */
@@ -1513,10 +1545,17 @@ Expected: exit 0.
 
 ```bash
 git add src/core/viewer/index.ts src/core/renderer/failed.ts src/styles/modes.css tests/viewer/viewer.test.ts tests/renderer/failed.test.ts tests/styles/no-has.test.ts tests/e2e/floating-button.mjs
+node scripts/check-english.mjs
 git commit -m "feat(viewer): the figure viewer's control and bar, and the failed block's retry and line, in the family's colours by the page
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
+
+`node scripts/check-english.mjs` exits 0 with the allowlist as it is: `tests/e2e/floating-button.mjs` (6),
+`src/core/renderer/failed.ts` (1) and `tests/renderer/failed.test.ts` (3) hold the lines with CJK their entries grant,
+and no line this task writes holds any. If it names a file, add the exact entry it names to
+`scripts/english-allowlist.txt` with a one-line English reason beside it, `git add scripts/english-allowlist.txt`, run
+it again, and commit it with this task.
 
 ### Task 74: the reader's service menu says a refused key
 
@@ -1556,7 +1595,8 @@ and after the test that starts `it('service: a service another tab has deleted m
     const settled = async (ready: () => boolean) => { for (let i = 0; i < 20 && !ready(); i++) await flush() }
     await settled(() => row().textContent!.includes(S.service.llm_rejected))
     expect(row().textContent).toContain(S.service.llm_rejected)
-    await clearRejected(mine.id)
+    // the record's change reaches the menu through a state update: inside act, as a test's updates are
+    await act(async () => { await clearRejected(mine.id) })
     await settled(() => row().textContent!.includes(mine.model))
     expect([row().textContent!.includes(mine.model), row().textContent!.includes(S.service.llm_rejected)]).toEqual([true, false])
   })
@@ -1623,10 +1663,16 @@ Expected: exit 0.
 
 ```bash
 git add src/pdf-reader/ui/Menus.tsx tests/pdf-reader/ui/menus.test.ts
+node scripts/check-english.mjs
 git commit -m "feat(pdf-reader): the service menu says a refused key, as the popup does
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
+
+`node scripts/check-english.mjs` exits 0 with the allowlist as it is: `tests/pdf-reader/ui/menus.test.ts` holds 2 lines
+with CJK, as its entry grants, and no line this task writes holds any (the refusal is found by `S.service.llm_rejected`).
+If it names a file, add the exact entry it names to `scripts/english-allowlist.txt` with a one-line English reason
+beside it, `git add scripts/english-allowlist.txt`, run it again, and commit it with this task.
 
 ### Task 75: Part 6's record, and the shots for the maintainer
 
