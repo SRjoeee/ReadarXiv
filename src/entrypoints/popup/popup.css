@@ -1,0 +1,28 @@
+/* The popup (the redesign's design, §5; round 6 of its prototypes, and the rounds it builds on): 320 px on the chrome.
+   Every measure is the prototype's, every colour a role of src/shared/tokens.ts. Two leading edges, the controls at 12
+   px and the group's words at 24; two trailing, the controls at 12 and the group's values at 24 (§12's probe measures
+   them: tests/e2e/probes/popup-align.mjs). No :has() (tests/popup/sheet.test.ts) */
+.ui.popup { display: flex; flex-direction: column; width: 320px; background: var(--chrome); color: var(--ink); font: 13px/1.4 var(--font); -webkit-font-smoothing: antialiased; anchor-name: --popup; anchor-scope: --popup; }
+
+/* the group (§5.1): 12 px from the edges, 4 px in, radius 10; rows of 36 inset 4 with a radius of 6 (concentric),
+   separated by a hairline on the words' edge */
+.popup .group { margin: 0 12px; padding: 4px; border-radius: 10px; background: var(--group); }
+.popup .group-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 36px; padding: 0 8px; border-radius: 6px; text-align: start; font-size: 13px; transition: background-color 150ms ease-out; }
+@media (hover: hover) { .popup button.group-row:hover { background: var(--group-hover); } }
+.popup .group-row[aria-expanded="true"] { background: var(--group-hover); }
+/* the label never shrinks; the value gives way, whole in its tooltip */
+.popup .group-row > .k { flex: none; white-space: nowrap; color: var(--ink); }
+.popup .group-row > .v { display: inline-flex; align-items: center; gap: 4px; min-width: 0; color: var(--ink-2); }
+.popup .group-row > .v > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.popup .group-row > .v s { color: var(--ink-3); }
+.popup .group-row > .v > svg { flex: none; color: var(--ink-3); }
+.popup .group > .rule { height: 0.5px; margin: 0 8px; border: 0; background: var(--chrome-line); }
+
+/* the menus (§5.3, round 4): under their row, 4 px below it and 8 px from the popup's edges; the style menu above its
+   button, 6 px from it. One below makes the popup tall enough to hold it, one above is held to the room there
+   (ui/menu-fit.ts); past 400 px a menu scrolls */
+.popup .pop.menu { position-area: none; position-try-fallbacks: none; inset: auto; margin: 0; top: calc(anchor(bottom) + 4px); left: calc(anchor(--popup left) + 8px); right: calc(anchor(--popup right) + 8px); width: auto; min-width: 0; max-width: none; max-height: 400px; }
+.popup .pop.menu.up { top: auto; bottom: calc(anchor(top) + 6px); transform-origin: bottom left; }
+/* the language list: five rows and a half, the half saying there is more (round 1) */
+.popup .pop.menu.searching [role="listbox"] { max-height: 165px; overflow: auto; scrollbar-width: none; }
+@media (prefers-reduced-motion: reduce) { .popup .group-row { transition: none; } }
