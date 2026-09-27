@@ -315,7 +315,9 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
   /** P0's two checks of a paper, once per id (§5.4): the answer kept, the view told — but not once its start has stopped */
   const check = (id: string) => {
     checking.add(id)
-    void host.entriesOf(id).then(found => { if (isLive()) checked.set(id, found) }, () => undefined).finally(() => {
+    // A late answer is still that paper's answer, kept for a later start (so it is not asked again); only the
+    // notification is withheld once stopped
+    void host.entriesOf(id).then(found => { checked.set(id, found) }, () => undefined).finally(() => {
       checking.delete(id)
       if (isLive()) changed()
     })
@@ -497,7 +499,8 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
       askWhileSilent()
       // The page is not running until it says so: the saved settings' chain is what a start would run on
       void asks.saved()
-      host.shortcut().then(found => { shortcut = found; changed() }).catch(() => { shortcut = null; changed() })
+      // Guarded like tabUrl below: an answer that lands once this start has stopped must not write or notify
+      host.shortcut().then(found => { if (!live) return; shortcut = found; changed() }).catch(() => { if (!live) return; shortcut = null; changed() })
       // the tab's address, where the extension may read it: an arXiv paper's page not answering yet is loading (§5.4)
       host.tabUrl().then(url => { if (!live) return; tabUrl = url; changed() }, () => { if (!live) return; tabUrl = null; changed() })
       // Subscribed first, read after: an event heard while the read is still out means the read answers a moment

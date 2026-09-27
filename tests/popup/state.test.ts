@@ -57,6 +57,9 @@ function world(seed: Parameters<typeof createPopupState>[1] = {}) {
     /** Held while the test wants to decide when the tab's address answers (writes after stop) */
     holdTabUrl: false,
     releaseTabUrl: undefined as ((url: string | null) => void) | undefined,
+    /** Held while the test wants to decide when the shortcut answers (writes after stop) */
+    holdShortcut: false,
+    releaseShortcut: undefined as ((s: string | null) => void) | undefined,
   }
   const host: PopupHost = {
     toTab: (async (message: AxtMessage) => {
@@ -84,7 +87,7 @@ function world(seed: Parameters<typeof createPopupState>[1] = {}) {
     openTab: async url => { w.opened.push(url) },
     openOptionsPage: () => { w.optionsPages++ },
     url: path => `ext://${path}`,
-    shortcut: async () => '⌥T',
+    shortcut: () => (w.holdShortcut ? new Promise<string | null>(resolve => { w.releaseShortcut = resolve }) : Promise.resolve('⌥T')),
     get embedded() { return w.embedded },
     close: () => { w.closed++ },
     downloadPack: async target => { w.downloads.push(target) },
@@ -780,13 +783,14 @@ describe('writes after the popup stops', () => {
   beforeEach(() => { vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] }) })
   const settle = async () => { for (let i = 0; i < 25; i++) await vi.advanceTimersByTimeAsync(0) }
 
-  it('a late tab address, a late paper check and a late refused-key read all find nothing to write once stopped', async () => {
+  it('a late shortcut, tab address, paper check and refused-key read all find nothing to write once stopped', async () => {
     let releaseRejected!: (ids: Set<string>) => void
     const spy = vi.spyOn(serviceHealth, 'rejectedServices').mockReturnValue(new Promise(resolve => { releaseRejected = resolve }))
     const made = world()
     made.w.page = null
     made.w.holdTabUrl = true
     made.w.holdEntries.add('2501.07202')
+    made.w.holdShortcut = true
     const stop = made.popup.start()
     made.popup.actions.setQuery('2501.07202')
     await vi.advanceTimersByTimeAsync(STILL_MS)
@@ -798,7 +802,8 @@ describe('writes after the popup stops', () => {
     const after = made.popup.state()
     const seen: unknown[] = []
     const unsubscribe = made.popup.subscribe(() => seen.push(made.popup.state()))
-    // three answers that land only once the popup has stopped
+    // four answers that land only once the popup has stopped
+    made.w.releaseShortcut?.('⌥T')
     made.w.releaseTabUrl?.('https://arxiv.org/abs/2501.07202')
     made.w.releaseEntry['2501.07202']!()
     releaseRejected(new Set(['svc-late']))
