@@ -199,5 +199,7 @@
   /* a form's bar: its primary, its text buttons, a note beside them */
   .o-formbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
   .o-note { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-2); font-size: 12px; }
+  /* the declarations' field is a three-row textarea, not the one-line input .input is sized for (fix round 1, item 5) */
+  .o-css { height: auto; min-height: 74px; padding: 8px 10px; resize: vertical; font: 13px var(--font); }
 }
 @media (prefers-reduced-motion: reduce) { .o-disclose svg { transition: none; } }

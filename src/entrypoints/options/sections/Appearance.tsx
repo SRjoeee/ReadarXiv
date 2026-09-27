@@ -15,7 +15,7 @@ import { O, S, copyName, profileName } from '@/ui/strings'
 import type { OptionsData } from '../data'
 import { Card, GroupHeading } from '../ui/Card'
 import { ColourPick } from '../ui/ColourPick'
-import { insertAt, useLinger, withItem, withUndo } from '../ui/lists'
+import { insertAt, useLinger, withUndo } from '../ui/lists'
 import { IconButton, Row } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { StyleEditor } from './StyleEditor'
@@ -84,7 +84,9 @@ function HighlightSwatches({ config, patch }: { config: Config; patch: OptionsDa
   )
 }
 
-interface GoneStyle { profile: StyleProfile; index: number; active: boolean; focus: boolean }
+/** `fallback` is the id the deletion handed the choice to: undo returns the choice to the deleted style only if
+ *  nothing else was picked in the meantime (fix round 1, item 3) */
+interface GoneStyle { profile: StyleProfile; index: number; active: boolean; fallback: string; focus: boolean }
 
 /** The translation styles (§6.4): one card, one radio group; a row a style, its editor under it; the new-style row last */
 function Styles({ data }: { data: OptionsData }) {
@@ -96,6 +98,7 @@ function Styles({ data }: { data: OptionsData }) {
   /** a style just made or duplicated: its row comes in with §8's row motion */
   const [fresh, setFresh] = useState<string | null>(null)
   const radios = useRef(new Map<string, HTMLElement>())
+  const newStyleButton = useRef<HTMLButtonElement>(null)
   const k = O.search.keywords
   const setLooks = (fn: (c: Looks) => Looks) => patch(latest => ({ ...latest, appearance: fn(latest.appearance) }))
   const choose = (id: string) => void setLooks(c => ({ ...c, activeStyle: id }))
@@ -108,7 +111,9 @@ function Styles({ data }: { data: OptionsData }) {
   }
   const remove = (p: StyleProfile) => {
     const index = a.styles.findIndex(s => s.id === p.id)
-    setGone(g => [...g, { profile: p, index, active: a.activeStyle === p.id, focus: !document.documentElement.hasAttribute('data-axt-pointer') }])
+    const remaining = a.styles.filter(s => s.id !== p.id)
+    const fallback = remaining[0]?.id ?? BUILT_IN_STYLES[0]!.id
+    setGone(g => [...g, { profile: p, index, active: a.activeStyle === p.id, fallback, focus: !document.documentElement.hasAttribute('data-axt-pointer') }])
     setEditing(null)
     // the chosen one deleted: the first of the list takes over, never nothing
     void setLooks(c => {
@@ -118,17 +123,31 @@ function Styles({ data }: { data: OptionsData }) {
   }
   const undo = (g: GoneStyle) => {
     setGone(x => x.filter(y => y !== g))
-    void setLooks(c => (c.styles.some(s => s.id === g.profile.id) ? c : { ...c, styles: insertAt(c.styles, g.index, g.profile), activeStyle: g.active ? g.profile.id : c.activeStyle }))
-    requestAnimationFrame(() => radios.current.get(g.profile.id)?.focus())
+    // the write is a real round trip (patch()): the row the focus is meant to land on may not exist until it resolves
+    // (fix round 1, item 2); the choice returns only if nothing else was picked while the window was open (item 3)
+    setLooks(c => (c.styles.some(s => s.id === g.profile.id)
+      ? c
+      : { ...c, styles: insertAt(c.styles, g.index, g.profile), activeStyle: g.active && c.activeStyle === g.fallback ? g.profile.id : c.activeStyle }))
+      .then(() => requestAnimationFrame(() => radios.current.get(g.profile.id)?.focus()))
   }
   const ids = a.styles.map(s => s.id)
   const keys = radioKeys(ids, a.activeStyle, () => true, choose, i => radios.current.get(ids[i]!)?.focus())
   return (
-    <Card role="radiogroup" label={O.appearance.styles} row="appearance/styles" onKeyDown={keys}>
+    <Card role="radiogroup" label={O.appearance.styles} row="appearance/styles"
+      // the arrows are the radios' own: a key from the editor's name field, its CSS field or one of its segmented
+      // controls must not also choose the neighbouring style (fix round 1, item 1)
+      onKeyDown={e => { if ([...radios.current.values()].includes(e.target as HTMLElement)) keys(e) }}>
       {withUndo(a.styles, gone).map(entry => {
         if ('gone' in entry) {
           const g = entry.gone
-          return <UndoRow key={`gone-${g.profile.id}`} name={profileName(g.profile, 'styles')} focus={g.focus} onUndo={() => undo(g)} onExpire={() => setGone(x => x.filter(y => y !== g))} />
+          return (
+            <UndoRow key={`gone-${g.profile.id}`} name={profileName(g.profile, 'styles')} focus={g.focus} onUndo={() => undo(g)}
+              onExpire={hadFocus => {
+                setGone(x => x.filter(y => y !== g))
+                // the undo row it stood in is gone: land the focus on the row still there (fix round 1, item 2)
+                if (hadFocus) requestAnimationFrame(() => newStyleButton.current?.focus())
+              }} />
+          )
         }
         const s = entry.item
         const name = profileName(s, 'styles')
@@ -137,17 +156,23 @@ function Styles({ data }: { data: OptionsData }) {
             <Row kind="radio" checked={s.id === a.activeStyle} onChoose={() => choose(s.id)} label={name} words={k['appearance/styles']} arriving={fresh === s.id}
               description={O.reading.previewTarget} sample={styleTile(s)}
               radioRef={el => { if (el) radios.current.set(s.id, el); else radios.current.delete(s.id) }}
-              trailing={<IconButton icon={Pencil} label={O.appearance.edit(name)} hover aria-expanded={editing === s.id} onClick={() => open(s.id)} />} />
+              trailing={
+                <IconButton icon={Pencil} label={O.appearance.edit(name)} hover aria-expanded={editing === s.id}
+                  // the pencil toggles: pressed again on its own open editor, it closes it (fix round 1, item 6)
+                  onClick={() => (editing === s.id ? close(s.id) : open(s.id))} />
+              } />
             <Reveal open={editing === s.id}>
               {drawn === s.id && (
-                <StyleEditor value={s} onChange={next => setLooks(c => ({ ...c, styles: withItem(c.styles, next) }))} onDone={() => close(s.id)}
-                  onDuplicate={() => add(duplicateStyle(s, copyName(s, 'styles')))} onDelete={() => remove(s)} />
+                <StyleEditor value={s}
+                  // a partial change merged onto the *latest* stored profile, not onto this render's `s` (item 4)
+                  onChange={over => setLooks(c => ({ ...c, styles: c.styles.map(x => (x.id === s.id ? { ...x, ...over } : x)) }))}
+                  onDone={() => close(s.id)} onDuplicate={() => add(duplicateStyle(s, copyName(s, 'styles')))} onDelete={() => remove(s)} />
               )}
             </Reveal>
           </Fragment>
         )
       })}
-      <Row kind="button" quiet lead={<Icon node={Plus} size={14} />} label={O.appearance.create}
+      <Row kind="button" quiet lead={<Icon node={Plus} size={14} />} label={O.appearance.create} buttonProps={{ ref: newStyleButton }}
         onPress={() => add({ ...BUILT_IN_STYLES[0]!, id: newProfileId('style'), name: O.appearance.newStyle })} />
     </Card>
   )

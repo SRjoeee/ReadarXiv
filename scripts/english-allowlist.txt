@@ -88,6 +88,7 @@ tests/extractor/extract.test.ts 2  # raised 2026-09-17: “any Unicode letter ma
 tests/image/run.test.ts 11
 tests/image/svg-targets.test.ts 2
 tests/options/prompts-section.test.ts 13
+tests/options/styles.test.ts 1  # 2026-09-27: fix round 1, item 7's own expectation — the sample sentence's Chinese character that must not leak into a style row's search words
 tests/pipeline/run.test.ts 3
 tests/pipeline/session-guard.test.ts 5
 tests/popup/view-model.test.ts 39  # 2026-09-26: +1 for P7b's expectation, the Chinese fallback name in a refused key's note (Task 12); 2026-09-19: +1 for P17c's expectation, the Chinese label of the entry pages' button (issue #169); 2026-09-18: +5 for the P17 cases' expectations, the Chinese copy of S-P-03b / S-P-33; +2, the reader-open popup's buttons by their words

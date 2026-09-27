@@ -4,17 +4,17 @@
 // declarations; then Done, Duplicate (S-O-48, kept: §11 does not list it) and Delete style. Every control writes at once; the name only when it is not empty (the schema's), and the
 // declarations only when they will survive the sanitiser, the rest staying in the field with its reason
 import { ChevronRight } from 'lucide'
-import { useEffect, useRef, useState } from 'react'
+import { type ComponentProps, useEffect, useRef, useState } from 'react'
 import { NAME_MAX, PALETTE, type StyleProfile, UNDERLINES } from '@/config/appearance'
 import { sanitizeCustomCss } from '@/core/renderer'
 import { styleTile } from '@/ui/appearance/tiles'
 import { Button } from '@/ui/controls/Button'
-import { Field, TextInput } from '@/ui/controls/Field'
+import { Field, TextInput, useField } from '@/ui/controls/Field'
 import { Icon } from '@/ui/controls/Icon'
 import { Reveal } from '@/ui/controls/Reveal'
 import { Segmented } from '@/ui/controls/Segmented'
 import { Switch } from '@/ui/controls/Switch'
-import { O, profileName } from '@/ui/strings'
+import { O, PREVIEW_LANG, profileName } from '@/ui/strings'
 import { ColourPick } from '../ui/ColourPick'
 import { segmentWidth } from '../ui/lists'
 
@@ -23,8 +23,13 @@ export const STRENGTHS = [1, 0.7, 0.5] as const
 
 export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: {
   value: StyleProfile
-  /** answers with the write: the declarations' field waits for its own (CustomCss) */
-  onChange: (next: StyleProfile) => Promise<unknown>
+  /**
+   * A partial change, merged onto the *latest* stored profile by the owner (`Styles`'s `patch(latest => …)`), not
+   * onto this render's `value`: two quick edits both read from `value` before either write lands would otherwise
+   * merge a stale copy back and lose the first (fix round 1, item 4 — `src/shared/surface-config.ts`'s note).
+   * Answers with the write: the declarations' field waits for its own (CustomCss)
+   */
+  onChange: (over: Partial<StyleProfile>) => Promise<unknown>
   onDone: () => void
   onDuplicate: () => void
   onDelete: () => void
@@ -35,7 +40,7 @@ export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: 
   const nameField = useRef<HTMLInputElement>(null)
   // an opened editor puts the focus on its first field (§9)
   useEffect(() => { nameField.current?.focus({ preventScroll: true }) }, [])
-  const set = (over: Partial<StyleProfile>) => void onChange({ ...value, ...over })
+  const set = (over: Partial<StyleProfile>) => void onChange(over)
   return (
     <div className="o-editor">
       <Field label={e.name}>
@@ -44,7 +49,7 @@ export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: 
       </Field>
       <div className="o-preview">
         <div className="o-preview-source">{O.reading.previewSource}</div>
-        <div className="o-preview-target" data-blur={value.blur || undefined} style={styleTile(value)}>{O.reading.previewTarget}</div>
+        <div className="o-preview-target" lang={PREVIEW_LANG} data-blur={value.blur || undefined} style={styleTile(value)}>{O.reading.previewTarget}</div>
       </div>
       <div className="o-line">
         <span>{e.colour}</span>
@@ -91,7 +96,7 @@ export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: 
             <span className="o-line-words"><span>{O.reading.blur}</span><small>{O.reading.blurHint}</small></span>
             <Switch label={O.reading.blur} checked={value.blur} onChange={blur => set({ blur })} />
           </div>
-          <CustomCss value={value.css} onChange={css => onChange({ ...value, css })} />
+          <CustomCss value={value.css} onChange={css => onChange({ css })} />
         </div>
       </Reveal>
       <div className="o-formbar">
@@ -121,7 +126,7 @@ function CustomCss({ value, onChange }: { value: string; onChange: (css: string)
   const check = sanitizeCustomCss(draft)
   return (
     <Field label={O.appearance.editor.css} error={check.ok ? undefined : O.reading.advancedRejected[check.reason]}>
-      <TextInput value={draft} spellCheck={false} autoComplete="off" onChange={e => {
+      <CssTextarea value={draft} spellCheck={false} autoComplete="off" className="o-css" onChange={e => {
         const next = e.target.value
         setDraft(next)
         if (!sanitizeCustomCss(next).ok) return
@@ -130,4 +135,15 @@ function CustomCss({ value, onChange }: { value: string; onChange: (css: string)
       }} />
     </Field>
   )
+}
+
+/**
+ * The declaration block's own field (fix round 1, item 5): a single-line `<input>` cannot hold what it is meant
+ * to show — typing Enter adds no line break, and a stored multi-line block reads as one broken line — so this is
+ * a plain three-row `<textarea>` on the same field wiring `TextInput` uses (`@/ui/controls/Field`'s `useField`),
+ * carrying the same `.input` styling
+ */
+function CssTextarea({ className, ...rest }: ComponentProps<'textarea'>) {
+  const field = useField()
+  return <textarea id={field?.id} aria-describedby={field?.describedBy} aria-invalid={field?.invalid || undefined} {...rest} rows={3} className={className ? `input ${className}` : 'input'} />
 }

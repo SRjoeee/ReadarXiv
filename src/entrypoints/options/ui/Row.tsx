@@ -9,6 +9,7 @@ import { ChevronDown, CircleAlert, CircleCheck, type IconNode, LoaderCircle } fr
 import { type ButtonHTMLAttributes, type CSSProperties, type MouseEvent, type ReactNode, type Ref, useId, useRef } from 'react'
 import { Icon } from '@/ui/controls/Icon'
 import { Radio } from '@/ui/controls/radio'
+import { PREVIEW_LANG } from '@/ui/strings'
 import { Marked } from './search'
 
 interface RowBase {
@@ -67,7 +68,8 @@ export function Row(props: RowProps) {
     className: 'o-row',
     'data-srow': '',
     'data-row': row,
-    'data-search': `${label} ${description ?? ''} ${words ?? ''}`.trim().toLowerCase(),
+    // a sample is drawn, not read: a style's sample sentence is not the row's own words (fix round 1, item 7)
+    'data-search': `${label} ${sample ? '' : description ?? ''} ${words ?? ''}`.trim().toLowerCase(),
     'data-level': level || undefined,
     'data-lead': lead || props.kind === 'radio' ? '' : undefined,
     'data-press': press ? '' : undefined,
@@ -80,7 +82,10 @@ export function Row(props: RowProps) {
     <span data-part="words" className="o-words">
       <span id={labelId} className="o-label"><Marked text={label} />{tag && <span className="o-var o-tag">{tag}</span>}</span>
       {description && (
-        <span key={swapping ? description : 'description'} id={descId} className={swapping ? 'o-desc o-swap' : 'o-desc'} data-sample={sample ? '' : undefined} style={sample}>
+        // a sample sentence is a picture of the style, not a second sentence to read: hidden from the radio's own
+        // description and out of it, in its own language, not the interface's (fix round 1, item 7)
+        <span key={swapping ? description : 'description'} id={descId} className={swapping ? 'o-desc o-swap' : 'o-desc'} data-sample={sample ? '' : undefined} style={sample}
+          aria-hidden={sample ? true : undefined} lang={sample ? PREVIEW_LANG : undefined}>
           <Marked text={description} />
         </span>
       )}
@@ -104,7 +109,7 @@ export function Row(props: RowProps) {
       <div {...attrs} onClick={e => { if (!disabled && !inControl(e, e.currentTarget)) onChoose('pointer') }}>
         {/* biome-ignore lint/a11y/useSemanticElements: an ARIA radio drawn as a row (§6.2), its group's keys are its card's */}
         <span ref={radioRef} role="radio" aria-checked={checked} aria-disabled={disabled || undefined} tabIndex={checked ? 0 : -1}
-          aria-labelledby={labelId} aria-describedby={description ? descId : undefined} className="o-choice"
+          aria-labelledby={labelId} aria-describedby={description && !sample ? descId : undefined} className="o-choice"
           onKeyDown={e => { if (!disabled && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); onChoose('key') } }}>
           {/* the mark reads its state from the radio it is the direct child of (Part 3's Radio): on the controls' edge */}
           <Radio />
