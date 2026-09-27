@@ -3,7 +3,8 @@
 // strength's three steps and a value between them; new, duplicate, delete with its undo, and the built-ins restored.
 // Fix round 1 (Opus's review of Task 56): the styles card's own arrows, the undo's focus and its choice, an edit
 // merged onto the latest profile rather than a stale one, the declarations' own multi-line field, the pencil's
-// toggle, and the sample sentence drawn rather than read. Task 65: a deletion storage refused leaves its row and says so
+// toggle, and the sample sentence drawn rather than read. Task 65: a deletion storage refused leaves its row, which
+// takes back the focus, and says so
 import { createElement as h, useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BUILT_IN_STYLES } from '@/config/appearance'
@@ -41,12 +42,18 @@ const type = (input: HTMLInputElement | HTMLTextAreaElement, value: string) => {
 const key = (el: Element, keyName: string) => el.dispatchEvent(new KeyboardEvent('keydown', { key: keyName, bubbles: true }))
 
 /** A `patch` held open until the test releases it, so a focus scheduled too early finds no row yet (fix round 1, item
- *  2): a gate open by default (`Promise.resolve()`), swapped for a pending one right before the write to hold */
-function GatedHarness({ start, patches, gate }: { start: Config; patches: Config[]; gate: { promise: Promise<unknown> } }) {
+ *  2): a gate open by default (`Promise.resolve()`), swapped for a pending one right before the write to hold. Rejected,
+ *  storage refused the write; `unreadable`, the stored value cannot be read, and the data layer answers with the
+ *  defaults the change ran on (surface-config.ts, data.ts; Task 65, round 2) */
+function GatedHarness({ start, patches, gate }: { start: Config; patches: Config[]; gate: { promise: Promise<unknown>; unreadable?: boolean } }) {
   const [config, setConfig] = useState(start)
   const data: OptionsData = {
     config, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
-    patch: async fn => { await gate.promise; const next = fn(config); patches.push(next); setConfig(next); return next },
+    patch: async fn => {
+      await gate.promise
+      if (gate.unreadable) { fn(DEFAULT_CONFIG); return DEFAULT_CONFIG }
+      const next = fn(config); patches.push(next); setConfig(next); return next
+    },
     pack: null, checkPack: async () => 'unsupported', fetchPack: async () => undefined,
     cache: null, cacheError: '', clearCache: async () => undefined, cacheCleared: false,
   }
@@ -293,22 +300,30 @@ describe('the translation styles (§6.4)', () => {
     await m.unmount()
   })
 
-  it('a deletion storage refused leaves the row, no undo row, and the line at the list\'s foot; the list\'s next write that lands, its heading\'s Restore among them, takes the line away (Task 65)', async () => {
+  it.each(['rejects', 'is refused as unreadable'] as const)('a deletion whose write %s leaves the row, with the focus its undo row held, no undo row, and the line at the list\'s foot; the list\'s next write that lands, its heading\'s Restore among them, takes the line away (Task 65; round 2, items 1 and 2)', async how => {
     const patches: Config[] = []
-    const start = { ...DEFAULT_CONFIG, appearance: { ...DEFAULT_CONFIG.appearance, activeStyle: 'green' } }
-    const gate = { promise: Promise.resolve() as Promise<unknown> }
+    // one's own: the defaults the unreadable refusal answers with hold no such style
+    const mine = { ...BUILT_IN_STYLES[0]!, id: 'style-mine0000', name: 'Mine' }
+    const start = { ...DEFAULT_CONFIG, appearance: { ...DEFAULT_CONFIG.appearance, styles: [...DEFAULT_CONFIG.appearance.styles, mine], activeStyle: mine.id } }
+    const gate: { promise: Promise<unknown>; unreadable?: boolean } = { promise: Promise.resolve() }
     const m = await mountElement(h(GatedHarness, { start, patches, gate }))
-    button(m.container, O.appearance.edit('Green')).click()
+    button(m.container, O.appearance.edit('Mine')).click()
     await m.flush()
     const write = deferred<void>()
     gate.promise = write.promise
+    gate.unreadable = how !== 'rejects'
     button(editor(m.container)!, O.appearance.editor.delete).click()
     await m.flush()
-    write.reject(new Error('refused'))
+    // the keyboard's deletion: the undo row's button holds the focus
+    expect(document.activeElement?.closest('[data-undo]')).not.toBeNull()
+    if (how === 'rejects') write.reject(new Error('refused'))
+    else write.resolve()
     await m.flush()
     gate.promise = Promise.resolve()
-    expect(names(m.container)).toContain('Green')
+    gate.unreadable = false
+    expect(names(m.container)).toContain('Mine')
     expect(card(m.container).querySelector('[data-undo]')).toBeNull()
+    expect(document.activeElement).toBe(styleRadios(m.container)[names(m.container).indexOf('Mine')])
     const note = card(m.container).querySelector<HTMLElement>('.o-list-note')!
     expect(note.getAttribute('role')).toBe('status')
     expect(note.textContent).toBe(O.saveFailed)

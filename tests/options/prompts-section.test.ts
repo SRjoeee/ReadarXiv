@@ -5,7 +5,7 @@
 // on undo, on expiry and on a prompt chosen again; the list drawn only while open and an edit written as the fields it
 // changed; the message's error wired and cleared; a line read as the browser draws it; import's names, shapes and ids.
 // Fix round 2: the list stays drawn while closed, so that a deletion's undo keeps its 5 s; only the editor goes.
-// Task 65: a deletion storage refused leaves its row and says so
+// Task 65: a deletion storage refused leaves its row, which takes back the focus, and says so
 import { createElement as h, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
@@ -29,14 +29,19 @@ const LLM: Config = { ...DEFAULT_CONFIG, services: [SVC], provider: SVC.id }
 
 /**
  * `tab.set`: the configuration changed from elsewhere (another tab), as the page's store would hand it over. `gate`:
- * the writes wait for it; rejected, storage refused them (Task 65)
+ * the writes wait for it; rejected, storage refused them (Task 65); `unreadable`, the stored value cannot be read, and
+ * the data layer answers with the defaults the change ran on (surface-config.ts, data.ts; round 2)
  */
-function Harness({ start, patches, tab, gate }: { start: Config; patches: Config[]; tab?: { set?: (c: Config) => void }; gate?: { promise: Promise<unknown> } }) {
+function Harness({ start, patches, tab, gate }: { start: Config; patches: Config[]; tab?: { set?: (c: Config) => void }; gate?: { promise: Promise<unknown>; unreadable?: boolean } }) {
   const [config, setConfig] = useState(start)
   if (tab) tab.set = setConfig
   const data: OptionsData = {
     config, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
-    patch: async fn => { if (gate) await gate.promise; const next = fn(config); patches.push(next); setConfig(next); return next },
+    patch: async fn => {
+      if (gate) await gate.promise
+      if (gate?.unreadable) { fn(DEFAULT_CONFIG); return DEFAULT_CONFIG }
+      const next = fn(config); patches.push(next); setConfig(next); return next
+    },
     pack: null, checkPack: async () => 'unsupported', fetchPack: async () => undefined,
     cache: null, cacheError: '', clearCache: async () => undefined, cacheCleared: false,
   }
@@ -428,21 +433,28 @@ describe('the LLM group, fix round 2 (the re-review of Task 63)', () => {
     await m.unmount()
   })
 
-  it('a deletion storage refused leaves the prompt\'s row, no undo row, and the line at the list\'s foot; the next write that lands takes the line away (Task 65)', async () => {
+  it.each(['rejects', 'is refused as unreadable'] as const)('a deletion whose write %s leaves the prompt\'s row, with the focus its undo row held, no undo row, and the line at the list\'s foot; the next write that lands takes the line away (Task 65; round 2, items 1 and 2)', async how => {
     const patches: Config[] = []
-    const gate = { promise: Promise.resolve() as Promise<unknown> }
+    const gate: { promise: Promise<unknown>; unreadable?: boolean } = { promise: Promise.resolve() }
     const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches, gate }))
     promptsRow(m.container).click()
     await m.flush()
     const write = deferred<void>()
     gate.promise = write.promise
+    gate.unreadable = how !== 'rejects'
     button(m.container, O.prompts.delete).click()
     await m.flush()
-    write.reject(new Error('refused'))
+    // the keyboard's deletion: the undo row's button holds the focus
+    expect(document.activeElement?.closest('[data-undo]')).not.toBeNull()
+    if (how === 'rejects') write.reject(new Error('refused'))
+    else write.resolve()
     await m.flush()
     gate.promise = Promise.resolve()
-    expect(radios(m.container).map(nameOf)).toContain(`My prompt${O.prompts.mine}`)
+    gate.unreadable = false
+    const mine = radios(m.container).find(r => nameOf(r) === `My prompt${O.prompts.mine}`)
+    expect(mine).toBeDefined()
     expect(m.container.querySelector('[data-undo]')).toBeNull()
+    expect(document.activeElement).toBe(mine)
     const list = m.container.querySelector<HTMLElement>(`[role="radiogroup"][aria-label="${O.prompts.title}"]`)!
     const note = list.querySelector<HTMLElement>('.o-list-note')!
     expect(note.getAttribute('role')).toBe('status')

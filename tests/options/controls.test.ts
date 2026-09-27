@@ -19,7 +19,7 @@ describe('UndoRow (§6.2)', () => {
 
   it('says what went, undoes it on a press, and expires after 5 s untouched', async () => {
     const seen: string[] = []
-    const m = await mountElement(h(UndoRow, { name: 'Mine', onUndo: () => seen.push('undo'), onExpire: () => seen.push('expire') }))
+    const m = await mountElement(h(UndoRow, { item: 'mine', name: 'Mine', onUndo: () => seen.push('undo'), onExpire: () => seen.push('expire') }))
     const row = m.container.querySelector<HTMLElement>('[data-undo]')!
     expect(row.getAttribute('role')).toBe('status')
     expect(row.textContent).toContain(O.undo.deleted('Mine'))
@@ -34,7 +34,7 @@ describe('UndoRow (§6.2)', () => {
 
   it('takes the focus when the deletion was the keyboard\'s, and expires nothing once gone', async () => {
     const seen: string[] = []
-    const m = await mountElement(h(UndoRow, { name: 'Mine', focus: true, onUndo: () => {}, onExpire: () => seen.push('expire') }))
+    const m = await mountElement(h(UndoRow, { item: 'mine', name: 'Mine', focus: true, onUndo: () => {}, onExpire: () => seen.push('expire') }))
     expect(document.activeElement).toBe(byText(m.container, O.undo.undo))
     await m.unmount()
     vi.advanceTimersByTime(UNDO_MS)

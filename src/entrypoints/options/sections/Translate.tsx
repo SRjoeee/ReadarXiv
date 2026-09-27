@@ -25,7 +25,7 @@ import { useRejected } from '@/ui/use-rejected'
 import type { OptionsData } from '../data'
 import { releaseHostPermission } from '../permissions'
 import { Card, GroupHeading } from '../ui/Card'
-import { type ListWrites, insertAt, shut, useLinger, useListWrites, withUndo } from '../ui/lists'
+import { type ListWrites, insertAt, shut, undoHasFocus, useLinger, useListWrites, withUndo } from '../ui/lists'
 import { IconButton, Row, Status, Value } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { Llm } from './Llm'
@@ -89,9 +89,9 @@ function Services({ data }: { data: OptionsData }) {
   const [pointed, setPointed] = useState<string | null>(null)
   /** the service just added: its row comes in with §8's row motion */
   const [fresh, setFresh] = useState<string | null>(null)
-  const deletions = useDeletions(config, writes)
   const radios = useRef(new Map<string, HTMLElement>())
   const addRow = useRef<HTMLButtonElement>(null)
+  const deletions = useDeletions(config, writes, id => radios.current.get(id)?.focus())
   const words = O.search.keywords['translate/services']
   const chrome = chromeRow(pack)
   const microsoftOk = supportsTarget(config.targetLanguage)
@@ -174,7 +174,7 @@ function Services({ data }: { data: OptionsData }) {
         if (!('gone' in entry)) return own(entry.item)
         const g = entry.gone
         return (
-          <UndoRow key={`gone-${g.service.id}`} name={g.service.name} focus={g.focus}
+          <UndoRow key={`gone-${g.service.id}`} item={g.service.id} name={g.service.name} focus={g.focus}
             onUndo={() => { deletions.undo(g); focusRow(g.service.id) }}
             onExpire={hadFocus => {
               deletions.expire(g)
@@ -224,16 +224,23 @@ function ServiceMenu({ service, onEdit, onDelete }: { service: Service; onEdit: 
  * (best effort: the tab may close before the clean-up lands, as it could before). The clean-up waits for the
  * deletion's own write, as the old drawer's did: a rebind sent before storage holds the deletion has the background
  * rebuild from the old configuration and bind every session back to the service, and the configuration's later change
- * moves no one (Task 65). A deletion storage refused commits nothing: its row stays, as stored
+ * moves no one (Task 65). A deletion storage refused commits nothing: its row stays, as stored, and takes back the
+ * focus its undo row held (round 2, item 2). An origin is given back only when no service may still use it: none
+ * stored, none whose deletion may still be undone, none undone and not yet stored again (round 2, item 4)
  */
-function useDeletions(config: Config, writes: ListWrites<Config>) {
+function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id: string) => void) {
   const [gone, setGone] = useState<Gone[]>([])
   const pending = useRef(new Set<Gone>())
+  /** undone, their write not yet landed */
+  const undoing = useRef(new Set<Gone>())
   const commit = useRef(async (g: Gone) => {
     if (!pending.current.delete(g)) return
     if (!(await g.stored)) return
     await sendMessage({ type: 'axt:engine-ready', id: g.service.id, rebindAll: true }).catch(() => undefined)
-    await releaseHostPermission(g.service.baseURL, (await getConfig()).services.map(s => s.baseURL)).catch(() => undefined)
+    // taken before the stored list is read: an undo that lands in between is then in one or the other
+    const waiting = [...pending.current, ...undoing.current].map(x => x.service.baseURL)
+    const inUse = [...(await getConfig()).services.map(s => s.baseURL), ...waiting]
+    await releaseHostPermission(g.service.baseURL, inUse).catch(() => undefined)
   }).current
   useEffect(() => {
     const flush = () => { for (const g of [...pending.current]) void commit(g) }
@@ -244,24 +251,26 @@ function useDeletions(config: Config, writes: ListWrites<Config>) {
     }
   }, [commit])
   const remove = (service: Service, focus: boolean) => {
-    const stored = writes.remove(
-      latest => ({ ...latest, services: latest.services.filter(s => s.id !== service.id), provider: latest.provider === service.id ? 'microsoft' : latest.provider }),
-      c => c.services.some(s => s.id === service.id),
-    )
+    const stored = writes.remove(latest => ({ ...latest, services: latest.services.filter(s => s.id !== service.id), provider: latest.provider === service.id ? 'microsoft' : latest.provider }))
     const g: Gone = { service, index: config.services.findIndex(s => s.id === service.id), chosen: config.provider === service.id, focus, stored }
     pending.current.add(g)
     setGone(x => [...x, g])
     void stored.then(done => {
       if (done) return
       pending.current.delete(g)
+      // the row is drawn beside its undo row while the write is on its way: the focus goes there before the undo row does
+      if (undoHasFocus(service.id)) focusRow(service.id)
       setGone(x => x.filter(y => y !== g))
     })
   }
   const undo = (g: Gone) => {
     pending.current.delete(g)
+    undoing.current.add(g)
     setGone(x => x.filter(y => y !== g))
+    const settled = () => { undoing.current.delete(g) }
     void writes.write(latest => (latest.services.some(s => s.id === g.service.id) ? latest
       : { ...latest, services: insertAt(latest.services, g.index, g.service), provider: g.chosen && latest.provider === 'microsoft' ? g.service.id : latest.provider }))
+      .then(settled, settled)
   }
   const expire = (g: Gone) => {
     setGone(x => x.filter(y => y !== g))

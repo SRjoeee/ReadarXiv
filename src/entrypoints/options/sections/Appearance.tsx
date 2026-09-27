@@ -15,7 +15,7 @@ import { O, S, copyName, profileName } from '@/ui/strings'
 import type { OptionsData } from '../data'
 import { Card, GroupHeading } from '../ui/Card'
 import { ColourPick } from '../ui/ColourPick'
-import { type ListWrites, insertAt, useLinger, useListWrites, withUndo } from '../ui/lists'
+import { type ListWrites, insertAt, undoHasFocus, useLinger, useListWrites, withUndo } from '../ui/lists'
 import { IconButton, Row, Status } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { StyleEditor } from './StyleEditor'
@@ -118,12 +118,16 @@ function Styles({ data, writes }: { data: OptionsData; writes: ListWrites<Config
     setGone(x => [...x, g])
     setEditing(null)
     // the chosen one deleted: the first of the list takes over, never nothing. Refused, the style is still stored:
-    // its row stays, and its undo row goes (Task 65)
+    // its row stays, and takes back the focus its undo row held as that row goes (Task 65)
     void writes.remove(latest => {
       const c = latest.appearance
       const styles = c.styles.filter(s => s.id !== p.id)
       return { ...latest, appearance: { ...c, styles, activeStyle: c.activeStyle === p.id ? styles[0]?.id ?? BUILT_IN_STYLES[0]!.id : c.activeStyle } }
-    }, stored => stored.appearance.styles.some(s => s.id === p.id)).then(done => { if (!done) setGone(x => x.filter(y => y !== g)) })
+    }).then(done => {
+      if (done) return
+      if (undoHasFocus(p.id)) radios.current.get(p.id)?.focus()
+      setGone(x => x.filter(y => y !== g))
+    })
   }
   const undo = (g: GoneStyle) => {
     setGone(x => x.filter(y => y !== g))
@@ -145,7 +149,7 @@ function Styles({ data, writes }: { data: OptionsData; writes: ListWrites<Config
         if ('gone' in entry) {
           const g = entry.gone
           return (
-            <UndoRow key={`gone-${g.profile.id}`} name={profileName(g.profile, 'styles')} focus={g.focus} onUndo={() => undo(g)}
+            <UndoRow key={`gone-${g.profile.id}`} item={g.profile.id} name={profileName(g.profile, 'styles')} focus={g.focus} onUndo={() => undo(g)}
               onExpire={hadFocus => {
                 setGone(x => x.filter(y => y !== g))
                 // the undo row it stood in is gone: land the focus on the row still there (fix round 1, item 2)

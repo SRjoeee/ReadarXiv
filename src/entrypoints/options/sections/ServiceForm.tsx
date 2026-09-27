@@ -162,7 +162,8 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
         }
         granted.current.add(to)
       }
-      return true
+      // an origin already granted answers at once, and a form gone by then has nothing to load (round 2, item 3)
+      return !cancelled.current
     } catch (e) {
       setErrors(x => ({ ...x, baseURL: deniedWords(e) }))
       return false

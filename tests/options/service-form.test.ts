@@ -2,7 +2,7 @@
 // the model list loads by itself only for an origin already granted, and a press on the field asks for one that is
 // not; checked when submitted, the first field at fault taking the focus; connected before anything is handed over,
 // with a stable id; editing keeps the saved key unless one is typed or it is cleared; the refused key's form. Task 65:
-// a permission the browser grants only after the form is gone is given back
+// a permission the browser grants only after the form is gone is given back, and a form gone loads no list
 import { createElement as h } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Service } from '@/config/services'
@@ -267,6 +267,29 @@ describe('ServiceForm (§6.3)', () => {
     await m.flush()
     expect(wire.released).toEqual(['https://api.deepseek.com/v1'])
     expect(vi.mocked(releaseHostPermission)).toHaveBeenLastCalledWith('https://api.deepseek.com/v1', ['https://other.example.com/v1'])
+  })
+
+  it('a press on the model field whose permission answers only after the form is gone loads no list (Task 65, round 2, item 3)', async () => {
+    let answer: (granted: boolean) => void = () => {}
+    vi.mocked(ensureHostPermission).mockImplementationOnce((url: string) => {
+      wire.asked.push(url)
+      return new Promise<boolean>(resolve => { answer = resolve })
+    })
+    const { element } = form()
+    const m = await mountElement(element)
+    const [address, key, model] = inputs(m.container)
+    type(address!, 'https://api.deepseek.com/v1')
+    type(key!, 'sk-1')
+    await m.flush()
+    model!.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await m.flush()
+    expect(wire.asked).toEqual(['https://api.deepseek.com/v1'])
+    await m.unmount()
+    // granted already, not by this ask: the answer comes at once, and there is no form left to fill
+    answer(false)
+    await m.flush()
+    expect(wire.listed).toEqual([])
+    expect(wire.released).toEqual([])
   })
 
   // Fix round 1 (Opus review), item 1: Cancel means "stop, save nothing" even once a connection is already in flight

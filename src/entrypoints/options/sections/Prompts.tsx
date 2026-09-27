@@ -24,7 +24,7 @@ import { Reveal } from '@/ui/controls/Reveal'
 import { drafts } from '@/ui/drafts'
 import { O } from '@/ui/strings'
 import type { OptionsData } from '../data'
-import { insertAt, useLinger, useListWrites, withUndo } from '../ui/lists'
+import { insertAt, undoHasFocus, useLinger, useListWrites, withUndo } from '../ui/lists'
 import { Row, Status, Value } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { PromptText, insertToken, plainWords, readPrompt } from './PromptText'
@@ -91,11 +91,16 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
   const remove = (p: PromptTemplate) => {
     const g: GonePrompt = { prompt: p, index: prompts.patterns.findIndex(x => x.id === p.id), chosen: prompts.promptId === p.id, focus: !document.documentElement.hasAttribute('data-axt-pointer') }
     setGone(x => [...x, g])
-    // refused, the prompt is still stored: its row stays, and its undo row goes (Task 65)
+    // refused, the prompt is still stored: its row stays, and takes back the focus its undo row held as that row goes
+    // (Task 65)
     void writes.remove(latest => {
       const c = latest.prompts
       return { ...latest, prompts: { patterns: c.patterns.filter(x => x.id !== p.id), promptId: c.promptId === p.id ? DEFAULT_PROMPT_ID : c.promptId } }
-    }, stored => stored.prompts.patterns.some(x => x.id === p.id)).then(done => { if (!done) setGone(x => x.filter(y => y !== g)) })
+    }).then(done => {
+      if (done) return
+      if (undoHasFocus(p.id)) radios.current.get(p.id)?.focus()
+      setGone(x => x.filter(y => y !== g))
+    })
   }
   /**
    * An edit: the fields the reader changed, merged onto the prompt as stored now, so that another tab's change to the
@@ -150,7 +155,7 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
     <div role="radiogroup" aria-label={O.prompts.title} onKeyDown={e => { if ([...radios.current.values()].includes(e.target as HTMLElement)) keys(e) }}>
       {builtIns.map(p => rowOf(p, false))}
       {withUndo(prompts.patterns, gone).map(entry => ('gone' in entry
-        ? <UndoRow key={`gone-${entry.gone.prompt.id}`} level={1} name={entry.gone.prompt.name} focus={entry.gone.focus} onUndo={() => undo(entry.gone)}
+        ? <UndoRow key={`gone-${entry.gone.prompt.id}`} item={entry.gone.prompt.id} level={1} name={entry.gone.prompt.name} focus={entry.gone.focus} onUndo={() => undo(entry.gone)}
             onExpire={hadFocus => {
               setGone(x => x.filter(y => y !== entry.gone))
               // the undo row it stood in is gone: land the focus on the row still there (the services and styles lists'

@@ -7,7 +7,9 @@ import { O } from '@/ui/strings'
 
 export const UNDO_MS = 5000
 
-export function UndoRow({ name, onUndo, onExpire, level = 0, focus = false }: {
+export function UndoRow({ item, name, onUndo, onExpire, level = 0, focus = false }: {
+  /** the deleted item's id, on `data-undo`: its owner can tell whether this row holds the focus (lists.ts undoHasFocus) */
+  item: string
   name: string
   onUndo: () => void
   /** whether the row held the focus the moment it expired, so the owner can move it on somewhere still there (fix round 1, item 2) */
@@ -26,7 +28,7 @@ export function UndoRow({ name, onUndo, onExpire, level = 0, focus = false }: {
     return () => clearTimeout(timer)
   }, [focus])
   return (
-    <div ref={row} className="o-row" data-srow="" data-undo="" data-arriving="" data-level={level || undefined} role="status">
+    <div ref={row} className="o-row" data-srow="" data-undo={item} data-arriving="" data-level={level || undefined} role="status">
       <span data-part="words" className="o-words"><span className="o-label">{O.undo.deleted(name)}</span></span>
       <span data-part="trail" className="o-trail">
         <Button type="button" kind="neutral" size="sm" ref={button} onClick={onUndo}>{O.undo.undo}</Button>

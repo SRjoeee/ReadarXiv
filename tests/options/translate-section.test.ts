@@ -3,7 +3,8 @@
 // only once it connects, chosen, no session moved; an edit saved in place; a deletion undone within 5 s with nothing
 // irreversible done, and its clean-up after in today's order; the fallback while an LLM is chosen; the target
 // language's menu. The page writes no refused-key record (ruling 17): the background's configuration watcher does.
-// Task 65: a deletion is committed only once its write is stored, and one storage refused leaves its row and says so
+// Task 65: a deletion is committed only once its own write lands, and one storage refused leaves its row, takes back
+// the focus and says so; an origin is given back only when no service may still use it
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createElement as h, useState } from 'react'
@@ -21,14 +22,21 @@ const wire = vi.hoisted(() => ({
   connect: { ok: true, ms: 42 } as { ok: true; ms: number } | { ok: false; field: null; reason: string },
   /** the writes wait for it; rejected, storage refused them (Task 65) */
   gate: null as Promise<unknown> | null,
-  /** the stored value unreadable: the data layer resolves a refused write with the configuration in effect (data.ts) */
+  /**
+   * the stored value unreadable: the change runs on the defaults (storage.ts getConfig), storage refuses it, and the
+   * data layer resolves with the configuration in effect, the defaults (surface-config.ts, data.ts; round 2, item 1)
+   */
   unreadable: false,
 }))
 vi.mock('@/shared/messages', () => ({ sendMessage: vi.fn(async (m: { type: string; id?: string; rebindAll?: boolean }) => { wire.log.push(`send ${m.type} ${m.id}${m.rebindAll ? ' all' : ''}`); return { reset: true } }) }))
 vi.mock('@/config/storage', () => ({ getConfig: async () => wire.stored }))
 vi.mock('@/entrypoints/options/permissions', () => ({
   PermissionError: class extends Error {}, ensureHostPermission: async () => false, hasHostPermission: async () => false,
-  releaseHostPermission: vi.fn(async (url: string) => { wire.log.push(`release ${url}`) }),
+  // as permissions.ts decides: an origin a still-used address shares is kept
+  releaseHostPermission: vi.fn(async (url: string, stillUsed: readonly string[]) => {
+    const origin = new URL(url).origin
+    wire.log.push(`${stillUsed.some(u => new URL(u).origin === origin) ? 'keep' : 'release'} ${url}`)
+  }),
 }))
 vi.mock('@/entrypoints/options/connect', () => ({ connectService: vi.fn(async (c: Service) => { wire.log.push(`connect ${c.id}`); return wire.connect }) }))
 vi.mock('@/entrypoints/options/models', () => ({ listModels: async () => [] }))
@@ -48,7 +56,7 @@ function Harness({ start, pack = null, checks = [] }: { start: Config; pack?: Pa
     config, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
     patch: async fn => {
       if (wire.gate) await wire.gate
-      if (wire.unreadable) return wire.stored as Config
+      if (wire.unreadable) { fn(DEFAULT_CONFIG); return DEFAULT_CONFIG }
       const next = fn(wire.stored as Config); wire.stored = next; wire.log.push('patch'); setConfig(next); return next
     },
     pack, checkPack: async target => { checks.push(target); return 'unsupported' }, fetchPack: async () => { wire.log.push('fetch pack') },
@@ -67,7 +75,9 @@ const type = (input: HTMLInputElement, value: string) => {
 }
 const submit = (form: HTMLFormElement) => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
 const menuItem = (row: HTMLElement, name: string) => [...row.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(i => i.textContent === name)!
-const committed = () => wire.log.filter(l => l.startsWith('send') || l.startsWith('release'))
+const committed = () => wire.log.filter(l => /^(send|release|keep) /.test(l))
+const radioNamed = (c: HTMLElement, name: string) => radios(c).find(r => nameOf(r) === name)!
+const undoHolds = () => document.activeElement?.closest('[data-undo]') != null
 const OPTIONS = join(import.meta.dirname, '../../src/entrypoints/options')
 
 describe('the translation services (§6.3)', () => {
@@ -293,18 +303,21 @@ describe('the translation services (§6.3)', () => {
     expect(wire.log).toEqual(['patch', `send axt:engine-ready ${MINE.id} all`, `release ${MINE.baseURL}`])
   })
 
-  it('a deletion storage refused: the row stays, its undo row goes, the list\'s foot says so; nothing is committed, and the next write that lands takes the line away (Task 65, items 1 and 2)', async () => {
+  it('a deletion whose write rejects: the row stays and takes back the focus its undo row held, the list\'s foot says so; nothing is committed, and the next write that lands takes the line away (Task 65; round 2, item 2)', async () => {
     const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: MINE.id } }))
     const write = deferred<void>()
     wire.gate = write.promise
     menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
     await m.flush()
+    // the keyboard's deletion: the undo row's button holds the focus
+    expect(undoHolds()).toBe(true)
     write.reject(new Error('refused'))
     await m.flush()
     await m.flush()
     wire.gate = null
     expect(radios(m.container).map(nameOf)).toContain('Mine')
     expect(card(m.container).querySelector('[data-undo]')).toBeNull()
+    expect(document.activeElement).toBe(radioNamed(m.container, 'Mine'))
     const note = card(m.container).querySelector<HTMLElement>('.o-list-note')!
     expect(note.getAttribute('role')).toBe('status')
     expect(note.textContent).toBe(O.saveFailed)
@@ -320,20 +333,69 @@ describe('the translation services (§6.3)', () => {
     expect(committed()).toEqual([])
   })
 
-  it('a refusal the data layer answers with the configuration in effect (the stored value unreadable) is a refusal too: the service is still there (Task 65)', async () => {
+  it('a deletion refused because the stored value cannot be read — answered with the defaults, which hold no service — is a refusal: nothing is committed, the row takes back the focus (round 2, items 1 and 2)', async () => {
     const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: MINE.id } }))
     wire.unreadable = true
     menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
     await m.flush()
     await m.flush()
     wire.unreadable = false
+    // the page stops drawing its sections in this state (App.tsx); the harness keeps them to show nothing else moved
     expect(radios(m.container).map(nameOf)).toContain('Mine')
     expect(card(m.container).querySelector('[data-undo]')).toBeNull()
+    expect(document.activeElement).toBe(radioNamed(m.container, 'Mine'))
     expect(card(m.container).querySelector('.o-list-note')!.textContent).toBe(O.saveFailed)
     await vi.advanceTimersByTimeAsync(UNDO_MS)
     await m.unmount()
     await m.flush()
     expect(committed()).toEqual([])
+  })
+
+  it('two services on one origin, both deleted: the first one\'s clean-up keeps the origin while the second\'s undo is open, and undone, the second still has it (round 2, item 4)', async () => {
+    const same: Service = { ...MINE, id: 'svc-same0000', name: 'Same', baseURL: 'https://api.example.com/v2' }
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, same, OTHER], provider: OTHER.id } }))
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(1000)
+    menuItem(rowNamed(m.container, 'Same'), O.services.delete).click()
+    await m.flush()
+    // Mine's undo is past; Same's is still open
+    await vi.advanceTimersByTimeAsync(UNDO_MS - 1000)
+    await m.flush()
+    await m.flush()
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`, `keep ${MINE.baseURL}`])
+    const undoRow = [...card(m.container).querySelectorAll<HTMLElement>('[data-undo]')].find(r => r.textContent?.includes('Same'))!
+    ;[...undoRow.querySelectorAll('button')].find(b => b.textContent === O.undo.undo)!.click()
+    await m.flush()
+    expect(stored().services.map(s => s.id)).toEqual([same.id, OTHER.id])
+    await m.unmount()
+    await m.flush()
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`, `keep ${MINE.baseURL}`])
+  })
+
+  it('an origin is kept for a service undone while another on it is committed, until the undo\'s own write lands (round 2, item 4)', async () => {
+    const same: Service = { ...MINE, id: 'svc-same0000', name: 'Same', baseURL: 'https://api.example.com/v2' }
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, same, OTHER], provider: OTHER.id } }))
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(1000)
+    menuItem(rowNamed(m.container, 'Same'), O.services.delete).click()
+    await m.flush()
+    // Same undone, its write held: it is neither waiting on its undo nor stored yet as Mine's clean-up runs
+    const write = deferred<void>()
+    wire.gate = write.promise
+    const undoRow = [...card(m.container).querySelectorAll<HTMLElement>('[data-undo]')].find(r => r.textContent?.includes('Same'))!
+    ;[...undoRow.querySelectorAll('button')].find(b => b.textContent === O.undo.undo)!.click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(UNDO_MS - 1000)
+    await m.flush()
+    await m.flush()
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`, `keep ${MINE.baseURL}`])
+    write.resolve()
+    await m.flush()
+    wire.gate = null
+    expect(stored().services.map(s => s.id)).toEqual([same.id, OTHER.id])
+    await m.unmount()
   })
 
   it('nothing on the page writes the refused-key record: it is read here, written by the background alone (ruling 17)', () => {
