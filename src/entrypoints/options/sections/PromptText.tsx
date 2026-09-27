@@ -28,16 +28,27 @@ export function plainWords(text: string): string {
   return text.replace(TOKEN, (_, token: PromptToken) => O.prompts.tokens[token]).replace(/\s+/g, ' ').trim()
 }
 
-/** The text a field holds, its labels back in their {{token}} form; a line the browser broke with an element counts once */
+/** the elements that start a line of their own: what a browser wraps a line in as it is edited */
+const BLOCK = new Set(['DIV', 'P'])
+
+/**
+ * The text a field holds, its labels back in their {{token}} form. A line break is a `<br>` or a block: a block starts
+ * on a line of its own and what follows it starts the next, as the browser draws them; any other element is read inline
+ * (fix round 1, item 7)
+ */
 export function readPrompt(el: Node): string {
   let out = ''
+  let afterBlock = false
   for (const node of el.childNodes) {
-    if (node.nodeType === Node.TEXT_NODE) out += node.textContent ?? ''
-    else if (node instanceof HTMLElement) {
-      if (node.dataset.token) out += getTokenCellText(node.dataset.token as PromptToken)
-      else if (node.tagName === 'BR') out += '\n'
-      else out += (out && !out.endsWith('\n') ? '\n' : '') + readPrompt(node)
-    }
+    const element = node instanceof HTMLElement ? node : null
+    const text = node.nodeType === Node.TEXT_NODE ? node.textContent ?? '' : ''
+    if (!element && !text) continue
+    const block = element !== null && BLOCK.has(element.tagName) && !element.dataset.token
+    if ((block || afterBlock) && out && !out.endsWith('\n')) out += '\n'
+    out += !element ? text
+      : element.tagName === 'BR' ? '\n'
+        : element.dataset.token ? getTokenCellText(element.dataset.token as PromptToken) : readPrompt(element)
+    afterBlock = block
   }
   return out
 }
@@ -68,10 +79,13 @@ export function insertToken(el: HTMLElement, token: PromptToken): void {
   selection?.addRange(after)
 }
 
-export function PromptText({ text, editable = false, label, onText, onFocus, ref }: {
+export function PromptText({ text, editable = false, label, invalid = false, describedBy, onText, onFocus, ref }: {
   text: string
   editable?: boolean
   label: string
+  /** the field holds an error, which `describedBy` names (as Field wires a text field; fix round 1, item 5) */
+  invalid?: boolean
+  describedBy?: string
   onText?: (text: string) => void
   onFocus?: () => void
   ref?: Ref<HTMLDivElement>
@@ -81,6 +95,7 @@ export function PromptText({ text, editable = false, label, onText, onFocus, ref
   return (
     // biome-ignore lint/a11y/useSemanticElements: a field that draws its variables as labels, which an input or a textarea cannot hold
     <div ref={ref} className="o-prompt-text" data-editable="" role="textbox" aria-multiline="true" aria-label={label} tabIndex={0}
+      aria-invalid={invalid || undefined} aria-describedby={describedBy}
       contentEditable="plaintext-only" suppressContentEditableWarning onFocus={onFocus} onInput={e => onText?.(readPrompt(e.currentTarget))}>
       {drawn}
     </div>

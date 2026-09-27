@@ -1,7 +1,9 @@
 // The LLM group (the redesign's design, §6.3): one line with no LLM service; the prompts row and its list in place; a
 // prompt read as words — variables as labels, in two named parts — and its {{token}} form kept through reading and
 // writing; a built-in copied to be changed; one's own written in place when whole, a draft held when not; a variable
-// inserted at the caret; new, delete with its undo; import and export
+// inserted at the caret; new, delete with its undo; import and export. Fix round 1 (the review of Task 63): the focus
+// on undo, on expiry and on a prompt chosen again; the list drawn only while open and an edit written as the fields it
+// changed; the message's error wired and cleared; a line read as the browser draws it; import's names, shapes and ids
 import { createElement as h, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
@@ -23,8 +25,10 @@ const SVC = { id: 'svc-mine0000', kind: 'openai-compat' as const, name: 'Mine', 
 const MINE = { id: 'p-mine', name: 'My prompt', systemPrompt: `Translate into ${getTokenCellText('targetLanguage')} carefully.`, prompt: getTokenCellText('input') }
 const LLM: Config = { ...DEFAULT_CONFIG, services: [SVC], provider: SVC.id }
 
-function Harness({ start, patches }: { start: Config; patches: Config[] }) {
+/** `tab.set`: the configuration changed from elsewhere (another tab), as the page's store would hand it over */
+function Harness({ start, patches, tab }: { start: Config; patches: Config[]; tab?: { set?: (c: Config) => void } }) {
   const [config, setConfig] = useState(start)
+  if (tab) tab.set = setConfig
   const data: OptionsData = {
     config, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
     patch: async fn => { const next = fn(config); patches.push(next); setConfig(next); return next },
@@ -44,6 +48,20 @@ const type = (input: HTMLInputElement, value: string) => {
 const write = (el: HTMLElement, text: string) => {
   el.textContent = text
   el.dispatchEvent(new Event('input', { bubbles: true }))
+}
+const arrow = (el: HTMLElement, key: string) => el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+const editable = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('.o-prompt-text[data-editable]')]
+const nameField = (c: HTMLElement) => c.querySelector<HTMLInputElement>('.o-prompt input')!
+/** a file handed to the import's input, the input's reset recorded */
+const give = async (m: { container: HTMLElement; flush: () => Promise<void> }, text: string) => {
+  const input = m.container.querySelector<HTMLInputElement>('input[type="file"]')!
+  const reset = { done: false }
+  Object.defineProperty(input, 'files', { configurable: true, value: [new File([text], 'p.json', { type: 'application/json' })] })
+  Object.defineProperty(input, 'value', { configurable: true, get: () => '', set: (v: string) => { if (v === '') reset.done = true } })
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+  await m.flush()
+  await m.flush()
+  return reset
 }
 
 describe('the LLM group (§6.3)', () => {
@@ -212,6 +230,173 @@ describe('the LLM group (§6.3)', () => {
   })
 })
 
+describe('the LLM group, fix round 1 (the review of Task 63)', () => {
+  beforeEach(() => { setLocale('en'); vi.useFakeTimers({ shouldAdvanceTime: true }); wire.downloads.length = 0 })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('undo sends the focus to the restored prompt\'s radio; an undo row that expires holding the focus sends it to the new-prompt row (item 2)', async () => {
+    const patches: Config[] = []
+    const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches }))
+    promptsRow(m.container).click()
+    await m.flush()
+    button(m.container, O.prompts.delete).click()
+    await m.flush()
+    button(m.container.querySelector<HTMLElement>('[data-undo]')!, O.undo.undo).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(50)
+    await m.flush()
+    expect(patches.at(-1)!.prompts.promptId).toBe(MINE.id)
+    expect(document.activeElement).toBe(radios(m.container)[2])
+    button(m.container, O.prompts.delete).click()
+    await m.flush()
+    // the keyboard's deletion: the undo row's button holds the focus
+    expect(document.activeElement).toBe(button(m.container.querySelector<HTMLElement>('[data-undo]')!, O.undo.undo))
+    await vi.advanceTimersByTimeAsync(UNDO_MS)
+    await m.flush()
+    expect(m.container.querySelector('[data-undo]')).toBeNull()
+    expect(document.activeElement).toBe(button(m.container, O.prompts.create))
+    await m.unmount()
+  })
+
+  it('a prompt just made takes the focus into its name field once: arrowed off it and back, the focus stays on its radio (item 3)', async () => {
+    const patches: Config[] = []
+    const m = await mountElement(h(Harness, { start: LLM, patches }))
+    promptsRow(m.container).click()
+    await m.flush()
+    button(m.container, O.prompts.create).click()
+    await m.flush()
+    expect(document.activeElement).toBe(nameField(m.container))
+    const made = patches.at(-1)!.prompts.promptId
+    radios(m.container)[2]!.focus()
+    arrow(radios(m.container)[2]!, 'ArrowUp')
+    await m.flush()
+    expect(patches.at(-1)!.prompts.promptId).toBe('precision-rewrite')
+    arrow(radios(m.container)[1]!, 'ArrowDown')
+    await m.flush()
+    expect(patches.at(-1)!.prompts.promptId).toBe(made)
+    expect(document.activeElement).toBe(radios(m.container)[2])
+    await m.unmount()
+  })
+
+  it('the list is drawn only while open: a draft is held only while it is, and a prompt renamed elsewhere meanwhile opens with its new name (item 4)', async () => {
+    const patches: Config[] = []
+    const tab: { set?: (c: Config) => void } = {}
+    const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches, tab }))
+    promptsRow(m.container).click()
+    await m.flush()
+    write(editable(m.container)[1]!, ' ')
+    await m.flush()
+    expect(drafts.any()).toBe(true)
+    promptsRow(m.container).click()
+    await m.flush()
+    // the fold (§8), then the list is gone, and its draft with it
+    await vi.advanceTimersByTimeAsync(200)
+    await m.flush()
+    expect(editable(m.container)).toHaveLength(0)
+    expect(drafts.any()).toBe(false)
+    tab.set!({ ...LLM, prompts: { promptId: MINE.id, patterns: [{ ...MINE, name: 'Other tab' }] } })
+    await m.flush()
+    promptsRow(m.container).click()
+    await m.flush()
+    expect(nameField(m.container).value).toBe('Other tab')
+    await m.unmount()
+  })
+
+  it('an edit writes the fields changed here onto the prompt as stored now: another tab\'s name and message stand (item 4)', async () => {
+    const patches: Config[] = []
+    const tab: { set?: (c: Config) => void } = {}
+    const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches, tab }))
+    promptsRow(m.container).click()
+    await m.flush()
+    const elsewhere = { ...MINE, name: 'Other tab', prompt: `Other ${getTokenCellText('input')}` }
+    tab.set!({ ...LLM, prompts: { promptId: MINE.id, patterns: [elsewhere] } })
+    await m.flush()
+    write(editable(m.container)[0]!, 'Be brief.')
+    await m.flush()
+    expect(patches.at(-1)!.prompts.patterns).toEqual([{ ...elsewhere, systemPrompt: 'Be brief.' }])
+    await m.unmount()
+  })
+
+  it('a name changed while the message was empty is written with the message that makes the prompt whole (item 4)', async () => {
+    const patches: Config[] = []
+    const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches }))
+    promptsRow(m.container).click()
+    await m.flush()
+    const message = editable(m.container)[1]!
+    write(message, ' ')
+    await m.flush()
+    type(nameField(m.container), 'Renamed')
+    await m.flush()
+    expect(patches).toHaveLength(0)
+    write(message, `Say ${getTokenCellText('input')}`)
+    await m.flush()
+    expect(patches.at(-1)!.prompts.patterns).toEqual([{ ...MINE, name: 'Renamed', prompt: `Say ${getTokenCellText('input')}` }])
+    await m.unmount()
+  })
+
+  it('the message\'s error is wired to its field, and an error goes once its field is whole again (items 5 and 6)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches: [] }))
+    promptsRow(m.container).click()
+    await m.flush()
+    const message = editable(m.container)[1]!
+    write(message, ' ')
+    await m.flush()
+    button(m.container, O.prompts.done).click()
+    await m.flush()
+    expect(message.getAttribute('aria-invalid')).toBe('true')
+    expect(document.getElementById(message.getAttribute('aria-describedby')!)!.textContent).toBe(O.prompts.messageEmpty)
+    write(message, getTokenCellText('input'))
+    await m.flush()
+    expect(m.container.textContent).not.toContain(O.prompts.messageEmpty)
+    expect(message.hasAttribute('aria-invalid')).toBe(false)
+    expect(message.hasAttribute('aria-describedby')).toBe(false)
+    type(nameField(m.container), ' ')
+    await m.flush()
+    button(m.container, O.prompts.done).click()
+    await m.flush()
+    expect(m.container.textContent).toContain(O.prompts.nameEmpty)
+    type(nameField(m.container), 'Named')
+    await m.flush()
+    expect(m.container.textContent).not.toContain(O.prompts.nameEmpty)
+    await m.unmount()
+  })
+
+  it('import: names trimmed and never empty; a file of another shape holds no prompts; each prompt a fresh id; the input reset (items 8 and 10)', async () => {
+    const patches: Config[] = []
+    const m = await mountElement(h(Harness, { start: LLM, patches }))
+    promptsRow(m.container).click()
+    await m.flush()
+    const shape = await give(m, JSON.stringify({ name: 'Not a list', prompt: '{{input}}' }))
+    expect(m.container.textContent).toContain(O.prompts.importFailed.noPrompts)
+    expect(shape.done).toBe(true)
+    expect(patches).toHaveLength(0)
+    const file = [{ id: 'from-file', name: '  Spaced  ', prompt: '{{input}}' }, { id: 'from-file', name: '   ', prompt: '{{input}}' }]
+    const reset = await give(m, JSON.stringify(file))
+    expect(reset.done).toBe(true)
+    const patterns = patches.at(-1)!.prompts.patterns
+    expect(patterns.map(p => p.name)).toEqual(['Spaced', O.prompts.newName])
+    const ids = patterns.map(p => p.id)
+    expect(ids).not.toContain('from-file')
+    expect(new Set(ids).size).toBe(2)
+    await m.unmount()
+  })
+
+  it('undo puts a prompt back at its place among two of one\'s own (item 10)', async () => {
+    const patches: Config[] = []
+    const other = { ...MINE, id: 'p-other', name: 'Other' }
+    const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE, other] } }, patches }))
+    promptsRow(m.container).click()
+    await m.flush()
+    button(m.container, O.prompts.delete).click()
+    await m.flush()
+    expect(patches.at(-1)!.prompts.patterns.map(p => p.id)).toEqual(['p-other'])
+    button(m.container.querySelector<HTMLElement>('[data-undo]')!, O.undo.undo).click()
+    await m.flush()
+    expect(patches.at(-1)!.prompts).toEqual({ promptId: MINE.id, patterns: [MINE, other] })
+    await m.unmount()
+  })
+})
+
 describe('a prompt read as words (§6.3)', () => {
   beforeEach(() => { setLocale('en') })
 
@@ -226,9 +411,11 @@ describe('a prompt read as words (§6.3)', () => {
     expect(promptParts(`a ${getTokenCellText('input')} b`)).toEqual([{ text: 'a ' }, { token: 'input' }, { text: ' b' }])
   })
 
-  it('reads a line the browser broke with an element as one line', () => {
+  it('reads a line the browser broke with an element as one line; a block starts a line and so does what follows it, an inline element does not (fix round 1, item 7)', () => {
     const el = document.createElement('div')
-    el.innerHTML = 'one<br>two<div>three</div><span data-token="input">Source text</span>'
-    expect(readPrompt(el)).toBe(`one\ntwo\nthree${getTokenCellText('input')}`)
+    const read = (html: string) => { el.innerHTML = html; return readPrompt(el) }
+    expect(read('one<br>two<div>three</div><span data-token="input">Source text</span>')).toBe(`one\ntwo\nthree\n${getTokenCellText('input')}`)
+    expect(read('a<span>b</span>c')).toBe('abc')
+    expect(read('<div>one</div>two')).toBe('one\ntwo')
   })
 })

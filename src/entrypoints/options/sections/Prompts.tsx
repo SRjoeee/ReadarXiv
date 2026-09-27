@@ -5,9 +5,10 @@
 // changed: Copy to edit makes one's own copy and opens it. One's own is written in place — its name, its two parts, the
 // variables inserted from a row of labels — each change stored at once when it holds a name and a message; Done closes
 // the list; Delete is undone. The list ends with the new-prompt row and, at the same row's end, Import… and Export…
-// (the maintainer: in the list, not in a menu)
+// (the maintainer: in the list, not in a menu). The list is drawn only while open (fix round 1, item 4): an editor that
+// outlived it would hold the prompt as it was when first drawn
 import { Plus } from 'lucide'
-import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react'
+import { Fragment, type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { PromptFileFormatError, downloadPromptFile, readPromptFile } from '@/providers/prompt-file'
 import {
   BUILT_IN_PROMPTS, DEFAULT_PROMPT_ID, PROMPT_TOKENS, type PromptToken, type PromptTemplate, type PromptsConfig,
@@ -22,7 +23,7 @@ import { Reveal } from '@/ui/controls/Reveal'
 import { drafts } from '@/ui/drafts'
 import { O } from '@/ui/strings'
 import type { OptionsData } from '../data'
-import { insertAt, withItem, withUndo } from '../ui/lists'
+import { insertAt, useLinger, withUndo } from '../ui/lists'
 import { Row, Status, Value } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { PromptText, insertToken, plainWords, readPrompt } from './PromptText'
@@ -31,11 +32,16 @@ import { PromptText, insertToken, plainWords, readPrompt } from './PromptText'
 const NEW_SYSTEM_PROMPT = `You are a professional ${getTokenCellText('targetLanguage')} translator of academic papers.`
 const NEW_USER_PROMPT = `Translate the following into ${getTokenCellText('targetLanguage')}:\n\n${getTokenCellText('input')}`
 
+/** what one's own editor writes: the fields changed there, never the whole record (fix round 1, item 4) */
+type PromptWords = Partial<Pick<PromptTemplate, 'name' | 'systemPrompt' | 'prompt'>>
+
 const isBuiltIn = (p: PromptTemplate) => Object.hasOwn(BUILT_IN_PROMPTS, p.id)
 const describe = (p: PromptTemplate) => (isBuiltIn(p) ? (O.prompts.builtIn as Record<string, string>)[p.id] ?? '' : plainWords(p.systemPrompt).slice(0, 120))
 
 export function PromptsRow({ data }: { data: OptionsData }) {
   const [open, setOpen] = useState(false)
+  /** the list, kept for its fold as it closes (§8) */
+  const drawn = useLinger(open || null)
   const row = useRef<HTMLButtonElement>(null)
   const chosen = selectPrompt(data.config!.prompts)
   return (
@@ -45,7 +51,7 @@ export function PromptsRow({ data }: { data: OptionsData }) {
         description={open ? undefined : describe(chosen)} trailing={<Value>{chosen.name}</Value>} expanded={open} buttonProps={{ ref: row }}
         onPress={() => setOpen(o => !o)} />
       <Reveal open={open}>
-        <PromptList data={data} onDone={() => { setOpen(false); row.current?.focus() }} />
+        {drawn && <PromptList data={data} onDone={() => { setOpen(false); row.current?.focus() }} />}
       </Reveal>
     </>
   )
@@ -57,25 +63,41 @@ function PromptList({ data, onDone }: { data: OptionsData; onDone: () => void })
   const { patch } = data
   const prompts = data.config!.prompts
   const [gone, setGone] = useState<GonePrompt[]>([])
-  /** a prompt just made or copied: its name field takes the focus (§9) */
+  /** a prompt just made or copied: its row comes in with §8's row motion */
   const [fresh, setFresh] = useState<string | null>(null)
+  /**
+   * ...and its name field takes the focus (§9), once: cleared as the editor takes it, so that the prompt chosen again
+   * later leaves the focus on its radio (fix round 1, item 3)
+   */
+  const [naming, setNaming] = useState<string | null>(null)
   const [note, setNote] = useState<{ alert: boolean; words: string } | null>(null)
   const file = useRef<HTMLInputElement>(null)
   const radios = useRef(new Map<string, HTMLElement>())
+  const addButton = useRef<HTMLButtonElement>(null)
   const setPrompts = (fn: (c: PromptsConfig) => PromptsConfig) => patch(latest => ({ ...latest, prompts: fn(latest.prompts) }))
   // a choice from a list another tab has since changed must not store an id that names nothing (promptExists)
   const choose = (id: string) => void setPrompts(c => (promptExists(c, id) ? { ...c, promptId: id } : c))
   const add = (p: PromptTemplate) => {
     setFresh(p.id)
+    setNaming(p.id)
     void setPrompts(c => ({ patterns: [...c.patterns, p], promptId: p.id }))
   }
   const remove = (p: PromptTemplate) => {
     setGone(g => [...g, { prompt: p, index: prompts.patterns.findIndex(x => x.id === p.id), chosen: prompts.promptId === p.id, focus: !document.documentElement.hasAttribute('data-axt-pointer') }])
     void setPrompts(c => ({ patterns: c.patterns.filter(x => x.id !== p.id), promptId: c.promptId === p.id ? DEFAULT_PROMPT_ID : c.promptId }))
   }
+  /**
+   * An edit: the fields the reader changed, merged onto the prompt as stored now, so that another tab's change to the
+   * rest stands; a prompt deleted elsewhere is not written back (fix round 1, item 4)
+   */
+  const edit = (id: string, words: PromptWords) =>
+    setPrompts(c => (c.patterns.some(x => x.id === id) ? { ...c, patterns: c.patterns.map(x => (x.id === id ? { ...x, ...words } : x)) } : c))
   const undo = (g: GonePrompt) => {
     setGone(x => x.filter(y => y !== g))
+    // the focus goes to the prompt's radio once the write has landed and the row is there (the styles list's fix
+    // round 1, item 2)
     void setPrompts(c => (c.patterns.some(x => x.id === g.prompt.id) ? c : { patterns: insertAt(c.patterns, g.index, g.prompt), promptId: g.chosen && c.promptId === DEFAULT_PROMPT_ID ? g.prompt.id : c.promptId }))
+      .then(() => requestAnimationFrame(() => radios.current.get(g.prompt.id)?.focus()))
   }
   const importFile = async (f: File | undefined) => {
     if (!f) return
@@ -85,7 +107,8 @@ function PromptList({ data, onDone }: { data: OptionsData; onDone: () => void })
         setNote({ alert: true, words: O.prompts.importFailed.noPrompts })
         return
       }
-      const added = entries.map(entry => ({ ...entry, id: uuid() }))
+      // a name as the other prompts' are: trimmed, and never empty (fix round 1, item 8)
+      const added = entries.map(entry => ({ ...entry, name: entry.name.trim() || O.prompts.newName, id: uuid() }))
       void setPrompts(c => ({ ...c, patterns: [...c.patterns, ...added] }))
       setNote({ alert: false, words: O.prompts.imported(entries.length) })
     } catch (e) {
@@ -104,7 +127,7 @@ function PromptList({ data, onDone }: { data: OptionsData; onDone: () => void })
       <Row kind="radio" level={1} checked={p.id === chosenId} onChoose={() => choose(p.id)} label={p.name} tag={mine ? O.prompts.mine : undefined} description={describe(p)} arriving={fresh === p.id}
         radioRef={el => { if (el) radios.current.set(p.id, el); else radios.current.delete(p.id) }} />
       {p.id === chosenId && (mine
-        ? <OwnPrompt key={p.id} prompt={p} focus={fresh === p.id} onChange={next => setPrompts(c => ({ ...c, patterns: withItem(c.patterns, next) }))} onDone={onDone} onDelete={() => remove(p)} />
+        ? <OwnPrompt key={p.id} prompt={p} focus={naming === p.id} onFocused={() => setNaming(null)} onChange={words => edit(p.id, words)} onDone={onDone} onDelete={() => remove(p)} />
         : <BuiltInPrompt prompt={p} onCopy={() => add({ ...p, id: uuid(), name: O.prompts.copyOf(p.name) })} />)}
     </Fragment>
   )
@@ -114,10 +137,16 @@ function PromptList({ data, onDone }: { data: OptionsData; onDone: () => void })
     <div role="radiogroup" aria-label={O.prompts.title} onKeyDown={e => { if ([...radios.current.values()].includes(e.target as HTMLElement)) keys(e) }}>
       {builtIns.map(p => rowOf(p, false))}
       {withUndo(prompts.patterns, gone).map(entry => ('gone' in entry
-        ? <UndoRow key={`gone-${entry.gone.prompt.id}`} level={1} name={entry.gone.prompt.name} focus={entry.gone.focus} onUndo={() => undo(entry.gone)} onExpire={() => setGone(x => x.filter(y => y !== entry.gone))} />
+        ? <UndoRow key={`gone-${entry.gone.prompt.id}`} level={1} name={entry.gone.prompt.name} focus={entry.gone.focus} onUndo={() => undo(entry.gone)}
+            onExpire={hadFocus => {
+              setGone(x => x.filter(y => y !== entry.gone))
+              // the undo row it stood in is gone: land the focus on the row still there (the services and styles lists'
+              // fix round 1, item 2)
+              if (hadFocus) requestAnimationFrame(() => addButton.current?.focus())
+            }} />
         : rowOf(entry.item, true)))}
       <div className="o-row" data-srow="" data-level="1" data-lead="" data-search={O.prompts.create.toLowerCase()}>
-        <button type="button" className="o-add" onClick={() => add({ id: uuid(), name: O.prompts.newName, systemPrompt: NEW_SYSTEM_PROMPT, prompt: NEW_USER_PROMPT })}>
+        <button ref={addButton} type="button" className="o-add" onClick={() => add({ id: uuid(), name: O.prompts.newName, systemPrompt: NEW_SYSTEM_PROMPT, prompt: NEW_USER_PROMPT })}>
           <span data-part="lead" className="o-lead"><Icon node={Plus} size={14} /></span>
           <span data-part="words" className="o-words"><span className="o-label">{O.prompts.create}</span></span>
         </button>
@@ -132,13 +161,13 @@ function PromptList({ data, onDone }: { data: OptionsData; onDone: () => void })
   )
 }
 
-/** A part of a prompt, named for what it does */
-function Part({ name, error, children }: { name: readonly [string, string]; error?: string; children: ReactNode }) {
+/** A part of a prompt, named for what it does; its error carries the id its field is described by */
+function Part({ name, error, errorId, children }: { name: readonly [string, string]; error?: string; errorId?: string; children: ReactNode }) {
   return (
     <div className="o-part">
       <div className="o-part-title"><b>{name[0]}</b><span>{name[1]}</span></div>
       {children}
-      {error && <Status tone="alert">{error}</Status>}
+      {error && <div id={errorId}><Status tone="alert">{error}</Status></div>}
     </div>
   )
 }
@@ -156,35 +185,64 @@ function BuiltInPrompt({ prompt, onCopy }: { prompt: PromptTemplate; onCopy: () 
   )
 }
 
-/** One's own, written in place: stored at each change while it holds a name and a message; a draft while it does not */
-function OwnPrompt({ prompt, focus, onChange, onDone, onDelete }: { prompt: PromptTemplate; focus: boolean; onChange: (next: PromptTemplate) => unknown; onDone: () => void; onDelete: () => void }) {
+/**
+ * One's own, written in place: each change stored at once while it holds a name and a message; a draft while it does
+ * not. A write carries only the fields changed here — the one just changed, and any changed while the prompt was not
+ * whole — never the whole record (fix round 1, item 4)
+ */
+function OwnPrompt({ prompt, focus, onFocused, onChange, onDone, onDelete }: {
+  prompt: PromptTemplate
+  focus: boolean
+  /** the name field has taken the focus it was given */
+  onFocused: () => void
+  onChange: (words: PromptWords) => unknown
+  onDone: () => void
+  onDelete: () => void
+}) {
   const [name, setName] = useState(prompt.name)
-  const [system, setSystem] = useState(prompt.systemPrompt)
   const [message, setMessage] = useState(prompt.prompt)
   const [errors, setErrors] = useState<{ name?: string; message?: string }>({})
+  const messageError = useId()
   const nameField = useRef<HTMLInputElement>(null)
   const systemText = useRef<HTMLDivElement>(null)
   const messageText = useRef<HTMLDivElement>(null)
   /** the part the caret was last in: a variable goes there */
   const last = useRef<'system' | 'message'>('message')
+  /** the fields changed here and not written yet */
+  const unwritten = useRef<PromptWords>({})
   const whole = name.trim() !== '' && message.trim() !== ''
   useEffect(() => (whole ? undefined : drafts.hold()), [whole])
-  useEffect(() => { if (focus) nameField.current?.focus({ preventScroll: true }) }, [focus])
-  const write = (next: { name: string; systemPrompt: string; prompt: string }) => {
-    if (next.name.trim() && next.prompt.trim()) onChange({ id: prompt.id, ...next, name: next.name.trim() })
+  useEffect(() => {
+    if (!focus) return
+    nameField.current?.focus({ preventScroll: true })
+    onFocused()
+  }, [focus, onFocused])
+  /** `words` changed; `now` the name and the message as they read after it */
+  const write = (words: PromptWords, now: { name: string; message: string }) => {
+    unwritten.current = { ...unwritten.current, ...words }
+    if (!now.name.trim() || !now.message.trim()) return
+    const next = unwritten.current
+    unwritten.current = {}
+    onChange(next.name === undefined ? next : { ...next, name: next.name.trim() })
+  }
+  // an error goes as its field is whole again, not only at the next Done (fix round 1, item 6)
+  const changeName = (value: string) => {
+    setName(value)
+    if (value.trim()) setErrors(e => (e.name ? { ...e, name: undefined } : e))
+    write({ name: value }, { name: value, message })
+  }
+  const changeSystem = (value: string) => write({ systemPrompt: value }, { name, message })
+  const changeMessage = (value: string) => {
+    setMessage(value)
+    if (value.trim()) setErrors(e => (e.message ? { ...e, message: undefined } : e))
+    write({ prompt: value }, { name, message: value })
   }
   const insert = (token: PromptToken) => {
     const el = (last.current === 'system' ? systemText : messageText).current
     if (!el) return
     insertToken(el, token)
-    const text = readPrompt(el)
-    if (last.current === 'system') {
-      setSystem(text)
-      write({ name, systemPrompt: text, prompt: message })
-    } else {
-      setMessage(text)
-      write({ name, systemPrompt: system, prompt: text })
-    }
+    if (last.current === 'system') changeSystem(readPrompt(el))
+    else changeMessage(readPrompt(el))
   }
   const done = () => {
     const found = { name: name.trim() ? undefined : O.prompts.nameEmpty, message: message.trim() ? undefined : O.prompts.messageEmpty }
@@ -196,15 +254,14 @@ function OwnPrompt({ prompt, focus, onChange, onDone, onDelete }: { prompt: Prom
   return (
     <div className="o-prompt">
       <Field label={O.prompts.name} error={errors.name}>
-        <TextInput ref={nameField} value={name} autoComplete="off" onChange={e => { setName(e.target.value); write({ name: e.target.value, systemPrompt: system, prompt: message }) }} />
+        <TextInput ref={nameField} value={name} autoComplete="off" onChange={e => changeName(e.target.value)} />
       </Field>
       <Part name={O.prompts.parts.system}>
-        <PromptText ref={systemText} editable text={prompt.systemPrompt} label={O.prompts.parts.system[0]} onFocus={() => { last.current = 'system' }}
-          onText={t => { setSystem(t); write({ name, systemPrompt: t, prompt: message }) }} />
+        <PromptText ref={systemText} editable text={prompt.systemPrompt} label={O.prompts.parts.system[0]} onFocus={() => { last.current = 'system' }} onText={changeSystem} />
       </Part>
-      <Part name={O.prompts.parts.user} error={errors.message}>
-        <PromptText ref={messageText} editable text={prompt.prompt} label={O.prompts.parts.user[0]} onFocus={() => { last.current = 'message' }}
-          onText={t => { setMessage(t); write({ name, systemPrompt: system, prompt: t }) }} />
+      <Part name={O.prompts.parts.user} error={errors.message} errorId={messageError}>
+        <PromptText ref={messageText} editable text={prompt.prompt} label={O.prompts.parts.user[0]} onFocus={() => { last.current = 'message' }} onText={changeMessage}
+          invalid={!!errors.message} describedBy={errors.message ? messageError : undefined} />
       </Part>
       <div className="o-vars">
         {/* a press keeps the caret where it was: the variable goes there */}

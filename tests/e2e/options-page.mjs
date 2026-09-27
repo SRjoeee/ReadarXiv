@@ -141,7 +141,8 @@ export async function chooseStyle(options, name) {
 /** The target language lives behind the searchable menu of the services section */
 export async function chooseLanguage(options, search, name) {
   await openSection(options, 'services')
-  await options.getByRole('button', { name: '目标语言' }).click()
+  // by its place: its label is also a variable's, which the prompts row's description reads (O.prompts.tokens)
+  await options.locator('[data-row="translate/language"]').click()
   await options.getByPlaceholder('搜索语言').fill(search)
   await options.getByRole('option', { name: new RegExp(name) }).first().click()
   await sleep(200)

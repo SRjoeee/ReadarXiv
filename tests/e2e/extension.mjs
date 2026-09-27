@@ -308,7 +308,8 @@ await options.getByLabel('名称', { exact: true }).fill('e2e 提示词')
 await options.getByRole('button', { name: '完成', exact: true }).click()
 await options.reload({ waitUntil: 'domcontentloaded' })
 await openSection(options, 'translate')
-const langBack = await options.getByRole('button', { name: '目标语言' }).textContent()
+// the language row by its place: its label is also a variable's, which the prompts row's description reads (O.prompts.tokens)
+const langBack = await options.locator('[data-row="translate/language"]').textContent()
 await promptsRow().click()
 // the radio is named by its label, its tag (O.prompts.mine) included: the name starts with the prompt's
 const promptRadio = options.getByRole('radio', { name: /^e2e 提示词/ })
@@ -321,8 +322,14 @@ await options.getByRole('button', { name: '删除', exact: true }).click()
 await options.getByText('已删除「e2e 提示词」').waitFor({ timeout: 5_000 }).catch(() => undefined)
 await chooseLanguage(options, '简体中文', '简体中文')
 await openSection(options, 'translate')
+// the list is drawn only while open: opened unless it still is
+if ((await promptsRow().getAttribute('aria-expanded')) !== 'true') await promptsRow().click()
 const promptGone = (await options.getByRole('radio', { name: /^e2e 提示词/ }).count()) === 0
-check('the settings page: after deleting the custom prompt the default is chosen again', promptGone, `left over ${promptGone ? 0 : 1}`)
+// the built-in prompt's radio is named by the prompt's own name (BUILT_IN_PROMPTS), in every interface language
+const defaultRadio = options.getByRole('radio', { name: 'Default', exact: true })
+await defaultRadio.waitFor({ timeout: 5_000 }).catch(() => undefined)
+const defaultChosen = (await defaultRadio.count()) === 1 && (await defaultRadio.isChecked())
+check('the settings page: after deleting the custom prompt the default is chosen again', promptGone && defaultChosen, `left over ${promptGone ? 0 : 1}, default chosen ${defaultChosen}`)
 
 // ── The settings page: translation appearance and cache management (§7.5 / §9) ──────────────────────────
 {
