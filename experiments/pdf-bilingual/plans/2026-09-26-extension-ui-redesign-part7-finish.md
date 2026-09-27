@@ -725,6 +725,9 @@ Expected only these, by file:
   scheduler's own count, which stays);
 - `tests/e2e/extension.mjs`: the comment `… this paper's bitmaps parked for good in a profile without the macOS helper …`
   (history, which stays).
+- `tests/e2e/probes/settings-align.mjs` (`… the pointer parked, before the shot`) and `tests/e2e/probes/controls.mjs`
+  (`… (Task 17, parked): move away first`): the mouse pointer parked, another sense of the word — they stay (the
+  pre-flight scan on the merged tree, 2026-09-28).
 
 Anything else: stop and report.
 
@@ -1106,8 +1109,9 @@ grep -rnE "(^|[^a-z-])(bg|text|border|divide)-line([^a-z0-9-]|$)" src --include=
 
 Expected: the first prints only `src/styles/ui.css`'s own `@theme` lines; the second only
 `src/entrypoints/gallery/main.tsx` (its root `bg-bg`, `font-ui`, `text-fg`; its heading's `text-fg-2`, `bg-control`,
-`text-fg`) and `src/styles/ui.css`'s definitions; the third nothing, or a new page's `*-line` that meant the old token
-(report it: it changes colour below). Anything else in the first two: stop and report.
+`text-fg`) and `src/styles/ui.css`'s definitions; the third nothing but `src/core/ocr/recognise.ts:9`'s comment ("a text-line
+orientation model": the words, not a class), or a new page's `*-line` that meant the old token (report it: it changes
+colour below). Anything else in the first two: stop and report.
 
 - [ ] **Step 2: The gallery on the roles**
 
@@ -1172,11 +1176,13 @@ Expected: PASS.
 - [ ] **Step 5: `pages-pixels.mjs` retired**
 
 ```bash
-grep -rn "pages-pixels" src tests scripts docs experiments/pdf-bilingual/spikes CLAUDE.md
+git grep -n "pages-pixels" -- src tests scripts docs experiments/pdf-bilingual/spikes CLAUDE.md
 git rm tests/e2e/probes/pages-pixels.mjs
 ```
 
-Expected: the `grep` prints only the probe's own lines (after Step 4, the sheet test names it no more).
+Expected: the `git grep` prints only the probe's own lines (after Step 4, the sheet test names it no more). It reads
+tracked files only: a plain `grep -rn` also finds the ignored Chromium profile `tests/e2e/.profile-pages-pixels/`,
+whose logs hold the probe's name — not a reader of it.
 
 - [ ] **Step 6: The built sheets**
 
@@ -2083,8 +2089,9 @@ await context.close()
 '
 ```
 
-Expected: `language ->` names the interface language's row; `图中译文 ->` names the dimming sub-row of 外观. A `(none)`
-is a defect of the search's words: fixed in Step 7.
+Expected: `language ->` names the interface language's row **and** the target language's row (`translate/language`'s
+words hold `language` too, and a search shows every section's matches: two rows is right, not a defect); `图中译文 ->`
+names the dimming sub-row of 外观. A `(none)` is a defect of the search's words: fixed in Step 7.
 
 - [ ] **Step 6: Read every shot at full size**
 
