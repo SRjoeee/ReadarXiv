@@ -26,3 +26,51 @@
 /* the language list: five rows and a half, the half saying there is more (round 1) */
 .popup .pop.menu.searching [role="listbox"] { max-height: 165px; overflow: auto; scrollbar-width: none; }
 @media (prefers-reduced-motion: reduce) { .popup .group-row { transition: none; } }
+
+/* the brand row (§5.1): 44 px; the mark and the name at 12, the gear's glyph ending 12 from the trailing edge */
+.popup .brand-row { display: flex; flex: none; align-items: center; justify-content: space-between; height: 44px; padding: 0 5px 0 12px; }
+/* the mark and the name: not `.brand`, which is Part 3's `Button` kind */
+.popup .wordmark { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+.popup .wordmark > img { display: block; width: 20px; height: 17px; }
+/* a small button of the chrome, as the reader's toolbar draws one: 30 px, radius 7, a hit area 44 px tall */
+.popup .tbtn { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 4px; height: 30px; min-width: 30px; border-radius: 7px; color: var(--ink-2); transition: background-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out; }
+.popup .tbtn::before { content: ""; position: absolute; inset: -7px -2px; }
+.popup .tbtn[aria-expanded="true"] { background: var(--fill); color: var(--ink); }
+@media (hover: hover) { .popup .tbtn:hover { background: var(--fill); color: var(--ink); } }
+.popup .tbtn:active { scale: 0.96; }
+
+/* under the group: a note, the primary or the entries, the display — 16 px apart, twice the 8 within a group (§5.1) */
+.popup .stack { display: flex; flex-direction: column; gap: 16px; padding: 16px 12px 0; }
+.popup[data-kind="entry"] .stack { padding-bottom: 14px; }
+
+/* a note (§5.2): a row on the group; its icon on its first line, its words in ink, a raised button trailing */
+.popup .note { display: flex; align-items: center; gap: 8px; padding: 9px 8px 9px 10px; border-radius: 10px; background: var(--group); }
+.popup .note > p { position: relative; flex: 1; min-width: 0; margin: 0; padding-inline-start: 24px; font-size: 12.5px; line-height: 1.45; text-wrap: pretty; }
+.popup .note > p > svg { position: absolute; inset-inline-start: 0; top: calc((1lh - 16px) / 2); color: var(--ink-2); }
+.popup .note[data-tone="alert"] > p > svg { color: var(--danger); }
+
+/* two buttons side by side, equal widths: the primary's two faces (P9 / P13), a paper's two entries (icon 7 px from its words) */
+.popup .pair, .popup .twin { display: flex; gap: 8px; }
+.popup .pair > *, .popup .twin > * { flex: 1 1 0; min-width: 0; }
+.popup .twin > * { gap: 7px; }
+
+/* the display and the line under it (S-P-74): 8 px within */
+.popup .reading { display: flex; flex-direction: column; gap: 8px; }
+
+/* the foot (§5.1): the two switches with their words, the style button trailing; the reader's, without it, together */
+.popup .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 14px; }
+.popup .foot.short { justify-content: flex-start; gap: 20px; }
+.popup .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.popup .style-btn { padding-inline: 8px 6px; font-size: 12.5px; }
+.popup .style-btn > svg { color: var(--ink-3); }
+
+/* a line of words: 12 px, ink-2, on the controls' edge; one with a mark carries its icon on its first line */
+.popup .line { margin: 0; color: var(--ink-2); font-size: 12px; line-height: 1.45; }
+.popup .line.solo { padding: 0 12px 14px; }
+.popup .line.mark { display: flex; align-items: flex-start; gap: 6px; }
+.popup .line.mark > svg { flex: none; margin-top: calc((1lh - 14px) / 2); }
+/* an action that failed (S-P-90): ink words after the alert, never red words; 8 px under the button it follows */
+.popup .line.alert { color: var(--ink); }
+.popup .line.alert > svg { color: var(--danger); }
+.popup .stack > .line.alert { margin-top: -8px; }
+@media (prefers-reduced-motion: reduce) { .popup .tbtn { transition: none; } }

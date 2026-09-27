@@ -45,7 +45,6 @@ src/core/renderer/highlight.ts 1
 src/core/renderer/image.ts 1
 src/core/rules/latexml.ts 8
 src/entrypoints/options/index.html 1
-src/entrypoints/popup/PopupView.tsx 1
 src/providers/alignment.ts 4
 src/providers/chrome-builtin.ts 2
 src/providers/glossary.ts 3
