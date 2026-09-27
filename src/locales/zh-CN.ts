@@ -201,15 +201,13 @@ const O = {
     },
   },
   services: {
-    /** One validation failure of the drawer's form, and what joins several, in this language's punctuation */
-    issue: (field: string, message: string) => `${field}：${FIELD[String(field).split('.').pop() ?? ''] ?? `不合法（${message}）`}`,
-    issueSeparator: '；',
-    builtIn: '内置服务',
-    mine: '我的服务',
-    empty: '还没有添加服务。添加后即可使用 LLM 翻译。',
-    add: '添加服务',
-    edit: '编辑',
-    imagesHint: '译文叠在图上，鼠标悬停查看原文',
+    /** §6.3: the group and its rows */
+    title: '翻译服务',
+    packNeeded: ' · 需要先下载语言包',
+    moreFor: (name: string) => `「${name}」的更多操作`,
+    rejected: 'API Key 已失效',
+    add: '添加服务…',
+    edit: '编辑…',
     autoFallback: '出问题时自动改用免费服务',
     autoFallbackHint: 'API Key 失效、额度用尽或断网时，翻译不会停下',
     name: '名称（选填）',

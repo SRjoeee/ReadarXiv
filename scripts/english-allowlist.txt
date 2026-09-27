@@ -145,4 +145,4 @@ tests/shared/digest.test.ts 1
 tests/shared/transport.test.ts 1
 tests/ui/language-names.test.ts 9
 tests/ui/locales.test.ts 3
-tests/ui/strings.test.ts 13  # raised 2026-09-13: expectations for the locale-pack sentences (fallback text, drawer issue, popup action error)
+tests/ui/strings.test.ts 11  # raised 2026-09-13: expectations for the locale-pack sentences (fallback text, drawer issue, popup action error); −2, 2026-09-27: the drawer's issue sentence left with its key (Part 5, Task 60)

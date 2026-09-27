@@ -47,8 +47,12 @@ export type RowProps = RowBase & (
   | { kind: 'radio'; checked: boolean; disabled?: boolean; onChoose: (how: 'pointer' | 'key') => void; radioRef?: Ref<HTMLSpanElement> }
 )
 
-/** a press on one of these inside a row is theirs, not the row's */
-const OWN_CONTROL = 'button, a, input, [role="switch"]'
+/**
+ * a press on one of these inside a row is theirs, not the row's. `[popover]` covers a menu opened from a trailing
+ * button (§6.2's "…"): its items are `role="menuitem"` divs, not buttons, but a pick inside it must never also read
+ * as a click on the row underneath it (first hit by Task 60's own service menu, on a radio row)
+ */
+const OWN_CONTROL = 'button, a, input, [role="switch"], [popover]'
 const inControl = (e: MouseEvent, row: Element) => {
   const hit = (e.target as Element).closest(OWN_CONTROL)
   return hit !== null && hit !== row && row.contains(hit)
