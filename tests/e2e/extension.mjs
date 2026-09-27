@@ -7,7 +7,7 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
-import { addService, chooseBuiltIn, chooseLanguage, chooseStyle, chooseUiLanguage, clearKeyAndReconnect, openOptions, openSection, pick, setPreload, setSwitch } from './options-page.mjs'
+import { addService, chooseBuiltIn, chooseLanguage, chooseStyle, chooseUiLanguage, clearKeyAndReconnect, openOptions, openSection, pick, seedService, setPreload, setSwitch } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -1096,14 +1096,21 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await options.bringToFront()
   // “Connect” asks whether this service's endpoint works and must report auth truthfully: going through the fallback service, the free service would show it as a success,
   // the reader would think the key fine while the whole page is translated by Google (the same kind of inconsistency as issue #42, the other way round)
+  // A service is added only once it connects (§6.3, §11): with a wrong key the form says so truthfully — not masked by
+  // the free service on the chain (issue #42) — and nothing is added
+  const marks = async () => Object.keys((await options.evaluate(() => chrome.storage.local.get('serviceHealth'))).serviceHealth ?? {}).sort()
+  const marksBefore = await marks()
   const bogusTest = await addService(options, { name: 'bogus key', baseURL: 'https://openrouter.ai/api/v1', model: 'deepseek/deepseek-v4-flash', apiKey: 'sk-or-v1-bogus-key-for-auth-test' })
-  check('with a wrong key the settings page\'s connection reports the failure truthfully, not masked by the fallback service', /API Key/.test(bogusTest ?? '') && !/已连接/.test(bogusTest ?? ''), bogusTest)
+  const kept = await extensionWorker().evaluate(async () => (await chrome.storage.local.get('config')).config.services.map(s => s.name))
+  check('with a wrong key the settings page\'s connection reports the failure truthfully and adds nothing', /连接失败/.test(bogusTest) && /API Key/.test(bogusTest) && !kept.includes('bogus key'), `${bogusTest}; stored ${JSON.stringify(kept)}`)
+  // What the chain does with a key refused later: a service stored before its key went bad, as an earlier version left it
+  await seedService(extensionWorker(), { id: 'svc-e2ebogus', name: 'bogus key', baseURL: 'https://openrouter.ai/api/v1', model: 'deepseek/deepseek-v4-flash', apiKey: 'sk-or-v1-bogus-key-for-auth-test' })
   const svcId = (await options.evaluate(() => chrome.storage.local.get('config'))).config.provider
 
-  // The connection test just now already marked this service refused (handlers.ts, on its own named call, unaffected
-  // by what follows): cleared here so the page below meets the wrong key for the first time, the service health
-  // record (the redesign's design §4) not yet in its way
-  await options.evaluate(() => chrome.storage.local.remove('serviceHealth'))
+  // The connection test of a service not stored writes no record (the redesign's design §4; ruling 16), so the page
+  // below meets the wrong key for the first time
+  const marksAfter = await marks()
+  check('a refused connection test of a service not added marks nothing', JSON.stringify(marksAfter) === JSON.stringify(marksBefore), `${JSON.stringify(marksBefore)} → ${JSON.stringify(marksAfter)}`)
 
   const { page, logs, requests } = await openPaper(PAPER, 'openrouter.ai')
   const done = await waitForLog(logs, IDLE, 90_000)
@@ -1423,8 +1430,8 @@ check('the settings page: after deleting the custom prompt the default is chosen
 }
 
 // ── The settings page: “Clear” on the API key must really clear it ────────────────────────────────────
-// The drawer opens with the stored key in its form, and a save that reads that prop back writes the old key back as it was (a measured defect).
-// With no key the endpoint reports “not configured”, which is distinct from “invalid or expired”.
+// The edit form opens with the stored key kept; a form that read that key back would write it again after the key is cleared.
+// With the key cleared a remote endpoint cannot be asked: the form says a key is needed and saves nothing.
 // Last on purpose: it writes the service configuration twice more and sends one more sample request, and need not sit among the four wrong-key parts.
 //
 // 7 requests (3 expected) once appeared between the two first-encounter parts and were taken for interference with this guard; the real root cause was a **stale automatic restart**
@@ -1433,7 +1440,9 @@ check('the settings page: after deleting the custom prompt the default is chosen
 {
   await options.bringToFront()
   const cleared = await clearKeyAndReconnect(options)
-  check('the settings page: after clearing the API key the connection reports “not configured” rather than writing the old key back', /尚未配置/.test(cleared ?? ''), cleared)
+  const key = await extensionWorker().evaluate(async () => (await chrome.storage.local.get('config')).config.services.find(s => s.id === 'svc-e2ebogus')?.apiKey)
+  check('the settings page: with the saved key cleared the form asks for a key and saves nothing — the old key neither written back nor lost',
+    /填写 API Key/.test(cleared) && key === 'sk-or-v1-bogus-key-for-auth-test', `${cleared.slice(0, 80)}; the stored key ${key === 'sk-or-v1-bogus-key-for-auth-test' ? 'kept' : 'changed'}`)
 }
 
 // ── Saved settings this build cannot read are never written over (DESIGN §9) ──────────────────────
@@ -1476,7 +1485,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
     /设置读取失败/.test(shown) && /v\d+/.test(shown) && !/添加服务/.test(shown) && JSON.stringify(await stored()) === JSON.stringify(newer), shown.slice(0, 160))
   await reset.click()
   await options.getByRole('button', { name: '确认重置', exact: true }).click()
-  await options.getByRole('button', { name: '添加服务', exact: true }).waitFor({ timeout: 10_000 })
+  await options.getByRole('button', { name: '添加服务…', exact: true }).waitFor({ timeout: 10_000 })
   const after = await stored()
   check('the reset is the way out: the defaults under this build’s version and marker, and the sections are back',
     after.config.version === before.config.version && after.config$.v === before.config$.v && after.config.services.length === 0,
@@ -1484,7 +1493,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
 
   await gateWorker.evaluate(saved => chrome.storage.local.set(saved), before)
   await options.reload({ waitUntil: 'domcontentloaded' })
-  await options.getByRole('button', { name: '添加服务', exact: true }).waitFor({ timeout: 10_000 })
+  await options.getByRole('button', { name: '添加服务…', exact: true }).waitFor({ timeout: 10_000 })
 }
 
 // ── The interface language (UI.md §6) ─────────────────────────────────────────────

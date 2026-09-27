@@ -74,10 +74,10 @@ tests/e2e/a11y.mjs 2
 tests/e2e/extension.mjs 76  # raised 2026-09-26: the cache-clearing locator now names the translation cache's own row and the PDF row it is told apart from (finding 4, Task 13); +5, 2026-09-26: the wrong-key section tests the remembered refusal
 tests/e2e/image.mjs 11  # lowered 2026-09-26: image translation is one switch, the mode-gate section and the per-mode loops are gone (the redesign's design, §4)
 tests/e2e/layout.mjs 11  # 2026-09-20: +2, the reader's-place check finds the popup's mode, translate and restore buttons by their Chinese labels, as the rest of the suite does; 2026-09-21: +1, the figure viewer's restore-under-the-dialog check presses the popup's restore button by its label
-tests/e2e/local-endpoint.mjs 2
+tests/e2e/local-endpoint.mjs 7  # +5, 2026-09-27: the model list's check finds the form's controls and its placeholder by their Chinese words (Part 5, Task 61)
 tests/e2e/floating-button.mjs 6  # 2026-09-18: the settings switch, the main button's two labels, and the popup's button inside the control panel on a PDF and on the full text, located and checked by their Chinese copy, as the other suites locate controls (issue #169); 2026-09-25: the panel's two entries on the abstract page too, which its main button now opens (the reader's design, §2)
 tests/e2e/pdf-entry.mjs 9  # 2026-09-19: the popup's button (on the PDF and on the abstract page) and the no-HTML reason are located by their Chinese copy, as the other suites locate controls (issue #169); +1, the popup's PDF entry found by its name; 2026-09-25: the two entries in the control panel the floating button's main button now opens on the PDF, found and pressed by their copy (the reader's design, §2); +1: the popup's PDF entry pressed on the PDF page itself (Part 5's final review)
-tests/e2e/options-page.mjs 15  # +2, 2026-09-27: the switches the suites set, each found by its Chinese name in its section (Part 5, Task 57)
+tests/e2e/options-page.mjs 16  # +2, 2026-09-27: the switches the suites set, each found by its Chinese name in its section (Part 5, Task 57); +1, 2026-09-27: the new services list's controls found by their Chinese names — 11 lines in place of the drawer's 10 (Part 5, Task 61)
 tests/e2e/placeholders.mjs 7
 tests/e2e/probes/chrome-floor.mjs 1  # 2026-09-17: the settings page's download button, located by its reader-visible label
 tests/e2e/probes/highlight-lag.mjs 8  # 2026-09-17: the settings switches and the popup's mode buttons, located by their reader-visible labels

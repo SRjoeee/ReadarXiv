@@ -15,7 +15,7 @@ import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { copyWithGrants } from './ext-copy.mjs'
-import { addService, openOptions } from './options-page.mjs'
+import { addService, openOptions, openSection } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const SRC = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -59,6 +59,11 @@ const server = createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     seen.options++
     res.writeHead(405).end()
+    return
+  }
+  // the model list (the redesign's design, §6.3): the settings page's form lists this endpoint's one model
+  if (req.method === 'GET' && req.url === '/v1/models') {
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ object: 'list', data: [{ id: 'local-echo', object: 'model' }] }))
     return
   }
   let body = ''
@@ -112,6 +117,20 @@ console.log(`extension ${extId} loaded from ${EXT}`)
 
 // ── The settings page: add a service pointing at the local endpoint, verified by “Connect” ──────────────────────────
 const options = await openOptions(context, extId)
+// ── The model list (§6.3): for an origin already granted, the form lists the endpoint's models once its address is in ──
+{
+  await openSection(options, 'translate')
+  await options.getByRole('button', { name: '添加服务…', exact: true }).click()
+  const form = options.locator('form[data-form="service"]')
+  // getByLabel also matches the address chips' fieldset, labelled the same; the textbox role is the field alone
+  await form.getByRole('textbox', { name: '接口地址', exact: true }).fill(BASE_URL)
+  const field = form.getByRole('combobox')
+  await options.waitForFunction(() => document.querySelector('form[data-form="service"] [role="combobox"]')?.getAttribute('placeholder') === '搜索 1 个模型', null, { timeout: 5_000 }).catch(() => undefined)
+  const placeholder = await field.getAttribute('placeholder')
+  check('the settings page lists an endpoint\'s models once its address is in, its origin granted', placeholder === '搜索 1 个模型', placeholder)
+  await form.getByRole('button', { name: '取消', exact: true }).click()
+  await sleep(300)
+}
 // “Connect” itself is save + verify: it names this service, does not go through the fallback service, and shows no success on a broken endpoint
 const testText = await addService(options, { name: 'local echo', baseURL: BASE_URL, model: 'local-echo' })
 check('the settings page connects to an http localhost endpoint that returns no CORS headers', /已连接/.test(testText), testText)
