@@ -158,3 +158,17 @@
   .pop.o-end { position-area: bottom span-left; position-try-fallbacks: top span-left; transform-origin: top right; }
   @media (width < 640px) { .o-lang { margin-top: 8px; } }
 }
+
+/* ---- Task 55: swatches (§6.4) ---- */
+@layer components {
+  .o-swatches { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+  /* 20 px, the shared swatch's edge and chosen ring (1.5 px line-strong, 2 px out) */
+  .o-swatch { flex: none; width: 20px; height: 20px; padding: 0; border: 0; cursor: pointer; transition: scale 150ms ease-out; }
+  .o-swatch:active { scale: 0.96; }
+  /* a colour of one's own: the browser's picker drawn as the last swatch, the palette's hues round it */
+  .o-pick { appearance: none; border-radius: 999px; }
+  .o-pick::-webkit-color-swatch-wrapper { padding: 0; }
+  .o-pick::-webkit-color-swatch { border: 0; opacity: 0; }
+  .o-pick[data-pressed]:not(:focus-visible) { outline: 1.5px solid var(--line-strong); outline-offset: 2px; }
+}
+@media (prefers-reduced-motion: reduce) { .o-swatch { transition: none; } .o-swatch:active { scale: 1; } }

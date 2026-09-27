@@ -172,6 +172,16 @@ const O = {
   fallbackResetFailed: '重置没有成功，请再试一次',
   /** §6.2: deleting is undone, not confirmed — the row gives way to this for 5 s */
   undo: { deleted: (name: string) => `已删除「${name}」`, undo: '撤销' },
+  /** §6.4: 外观 */
+  appearance: {
+    theme: '外观',
+    themes: { system: '跟随系统', light: '浅色', dark: '深色' },
+    dim: '深色时调暗 PDF 页面',
+    dimHint: '深色外观下把 PDF 页面调暗；高亮与图中译文保持原色',
+    highlightHint: '悬停时高亮对应的句子；仅译文时停留可查看原文',
+    colour: '颜色',
+    pickColour: '自选颜色',
+  },
   services: {
     /** One validation failure of the drawer's form, and what joins several, in this language's punctuation */
     issue: (field: string, message: string) => `${field}：${FIELD[String(field).split('.').pop() ?? ''] ?? `不合法（${message}）`}`,

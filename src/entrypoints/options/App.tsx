@@ -11,6 +11,7 @@ import { Icon } from '@/ui/controls/Icon'
 import { O, fallbackText } from '@/ui/strings'
 import { type OptionsData, useOptionsData } from './data'
 import { type Place, SECTIONS, type Section, parseHash, reach } from './hash'
+import { Appearance } from './sections/Appearance'
 import { Data } from './sections/Data'
 import { LanguageFoot, LanguageRow } from './sections/Language'
 import { PdfReader } from './sections/PdfReader'
@@ -29,7 +30,7 @@ export type Content = Record<Section, (data: OptionsData) => ReactNode>
 /** What each section draws. Until its own task replaces it, a section draws the page's parts from before the redesign */
 const CONTENT: Content = {
   translate: data => <><Services data={data} /><Prompts data={data} /></>,
-  appearance: () => null,
+  appearance: data => <Appearance data={data} />,
   reading: data => <><Reading data={data} /><PdfReader data={data} /></>,
   data: data => <Data data={data} />,
 }

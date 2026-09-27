@@ -157,6 +157,15 @@ const O: Locale['O'] = {
   fallbackResetConfirm: 'Confirm reset',
   fallbackResetFailed: 'The reset did not go through. Try again',
   undo: { deleted: name => `Deleted “${name}”`, undo: 'Undo' },
+  appearance: {
+    theme: 'Appearance',
+    themes: { system: 'System', light: 'Light', dark: 'Dark' },
+    dim: 'Dim PDF pages in dark mode',
+    dimHint: 'Highlights and figure text keep their colours',
+    highlightHint: 'Highlights the matching sentence on hover; in translation only, rest on one to see the original',
+    colour: 'Colour',
+    pickColour: 'Pick a colour',
+  },
   services: {
     issue: (field, message) => `${field}: ${FIELD[String(field).split('.').pop() ?? ''] ?? message}`,
     issueSeparator: '; ',

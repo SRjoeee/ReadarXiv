@@ -265,11 +265,11 @@ check('the settings page: the whole paper chosen is still chosen after a reload'
 // ── The settings page: the hover highlight switch really changes (#130: a configuration field was added without a UI, and the reader could not turn it off) ────────
 {
   const stateOf = async () => options.getByRole('switch', { name: '对照高亮', exact: true }).getAttribute('aria-checked')
-  await openSection(options, 'reading')
+  await openSection(options, 'appearance')
   const wasOn = await stateOf()
   await setSwitch(options, '对照高亮', false)
   await options.reload({ waitUntil: 'domcontentloaded' })
-  await openSection(options, 'reading')
+  await openSection(options, 'appearance')
   const back = await stateOf()
   check('the settings page: the hover highlight switch is on by default, and switched off it stays off after a reload (§7.7)', wasOn === 'true' && back === 'false', `default ${wasOn}, switched off and reloaded reads back ${back}`)
   // The checks after this need it on
