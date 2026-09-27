@@ -152,7 +152,10 @@ function Services({ data }: { data: OptionsData }) {
   }
 
   return (
-    <Card role="radiogroup" label={O.services.title} row="translate/services" onKeyDown={keys}>
+    <Card role="radiogroup" label={O.services.title} row="translate/services"
+      // the arrows are the radios' own: a key from a service's form field, its model combobox, the refused-key
+      // form's field or the "…" menu's list must not also move the choice off the row it opened under (fix round 1, item 1)
+      onKeyDown={e => { if ([...radios.current.values()].includes(e.target as HTMLElement)) keys(e) }}>
       {builtIns.map(b => (
         <Row key={b.id} kind="radio" checked={config.provider === b.id} disabled={b.disabled} muted={b.disabled} onChoose={how => choose(b.id, how)} radioRef={radioRef(b.id)}
           label={b.name} description={b.hint} words={words}
@@ -166,7 +169,12 @@ function Services({ data }: { data: OptionsData }) {
         return (
           <UndoRow key={`gone-${g.service.id}`} name={g.service.name} focus={g.focus}
             onUndo={() => { deletions.undo(g); focusRow(g.service.id) }}
-            onExpire={() => { if (document.activeElement?.closest('[data-undo]')) addRow.current?.focus(); deletions.expire(g) }} />
+            onExpire={hadFocus => {
+              deletions.expire(g)
+              // the undo row it stood in is gone: land the focus on the row still there, but only when it was this
+              // row's own — a second pending deletion's undo row must keep the focus it has (fix round 1, item 2)
+              if (hadFocus) requestAnimationFrame(() => addRow.current?.focus())
+            }} />
         )
       })}
       <Row kind="button" quiet lead={<Icon node={Plus} size={14} />} label={O.services.add} expanded={form?.kind === 'add'} buttonProps={{ ref: addRow }}

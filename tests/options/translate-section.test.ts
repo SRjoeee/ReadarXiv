@@ -213,6 +213,43 @@ describe('the translation services (§6.3)', () => {
     await m.unmount()
   })
 
+  it('the radios take their own arrows only: a key from the refused-key form or the "…" menu leaves the choice (and the open form) as it is; a radio\'s own arrow still moves it (fix round 1, item 1)', async () => {
+    wire.rejected = [MINE.id]
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: MINE.id } }))
+    const form = m.container.querySelector<HTMLFormElement>('form[data-form="key"]')!
+    form.querySelector('input')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+    await m.flush()
+    expect(stored().provider).toBe(MINE.id)
+    expect(m.container.querySelector('form[data-form="key"]')).not.toBeNull()
+    menuItem(rowNamed(m.container, 'Other'), O.services.edit).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    await m.flush()
+    expect(stored().provider).toBe(MINE.id)
+    radios(m.container)[3]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    await m.flush()
+    expect(stored().provider).toBe(OTHER.id)
+    await m.unmount()
+  })
+
+  it('two pending deletions: the first expiring does not pull the focus off the second\'s Undo (fix round 1, item 2)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: 'microsoft' } }))
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    // Mine's undo is not yet due; Other's, started now, is due 4 s after it
+    await vi.advanceTimersByTimeAsync(4000)
+    menuItem(rowNamed(m.container, 'Other'), O.services.delete).click()
+    await m.flush()
+    const undoRow = (name: string) => [...card(m.container).querySelectorAll<HTMLElement>('[data-undo]')].find(r => r.textContent?.includes(name))!
+    const othersButton = undoRow('Other').querySelector('button')!
+    othersButton.focus()
+    expect(document.activeElement).toBe(othersButton)
+    // only Mine's timer is due now; Other's undo row, and its focus, must stand
+    await vi.advanceTimersByTimeAsync(1000)
+    await m.flush()
+    expect(card(m.container).querySelectorAll('[data-undo]')).toHaveLength(1)
+    expect(document.activeElement).toBe(othersButton)
+    await m.unmount()
+  })
+
   it('nothing on the page writes the refused-key record: it is read here, written by the background alone (ruling 17)', () => {
     const files = (readdirSync(OPTIONS, { recursive: true }) as string[]).filter(f => /\.tsx?$/.test(f))
     expect(files.length).toBeGreaterThan(0)
