@@ -5,7 +5,7 @@
 // measured against that record, and a median more than 10 % and 4 ms slower fails. Build first; the panel needs the
 // network (arXiv).
 //   node tests/e2e/probes/popup-first-paint.mjs [--baseline]
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -23,6 +23,7 @@ if (!recording && !existsSync(BASELINE)) throw new Error('no baseline: run with 
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const median = values => {
+  if (values.length < RUNS) console.warn(`only ${values.length} of ${RUNS} runs painted`)
   if (values.length < RUNS / 2) throw new Error(`only ${values.length} of ${RUNS} runs painted`)
   const s = [...values].sort((a, b) => a - b)
   return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2
@@ -34,7 +35,10 @@ const firstPaint = target => target.evaluate(() => new Promise(resolve => {
   wait()
 }))
 
-const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'popup-first-paint-')), {
+const profile = mkdtempSync(join(tmpdir(), 'popup-first-paint-'))
+// the profile goes when the process ends, a failure's throw included (a profile a run once filled the disk)
+process.on('exit', () => rmSync(profile, { recursive: true, force: true }))
+const context = await chromium.launchPersistentContext(profile, {
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: true,
   viewport: { width: 1280, height: 800 },
