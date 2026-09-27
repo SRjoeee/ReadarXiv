@@ -6549,7 +6549,9 @@ function PromptList({ data, onDone }: { data: OptionsData; onDone: () => void })
   )
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: a radio group's arrows (§9)
-    <div role="radiogroup" aria-label={O.prompts.title} onKeyDown={keys}>
+    // the arrows only from a prompt's own radio: the editor of the chosen prompt sits inside the group, and its fields
+    // keep their arrows (the styles and services cards' lesson, Tasks 56 and 60)
+    <div role="radiogroup" aria-label={O.prompts.title} onKeyDown={e => { if ([...radios.current.values()].includes(e.target as HTMLElement)) keys(e) }}>
       {builtIns.map(p => rowOf(p, false))}
       {withUndo(prompts.patterns, gone).map(entry => ('gone' in entry
         ? <UndoRow key={`gone-${entry.gone.prompt.id}`} level={1} name={entry.gone.prompt.name} focus={entry.gone.focus} onUndo={() => undo(entry.gone)} onExpire={() => setGone(x => x.filter(y => y !== entry.gone))} />
@@ -6656,6 +6658,10 @@ function OwnPrompt({ prompt, focus, onChange, onDone, onDelete }: { prompt: Prom
   )
 }
 ```
+
+The prompts' test file gains one more case with this step (it fails without the guard): with a prompt of one's own
+chosen and its editor open, an ArrowRight dispatched from the editor's field leaves the chosen prompt and the focus
+where they were, and an ArrowRight dispatched from a prompt's radio still moves the choice.
 
 - [ ] **Step 6: The group, and 翻译 drawing it**
 
