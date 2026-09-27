@@ -1,162 +1,82 @@
-import { createElement } from 'react'
+// The reading section (the redesign's design, §6.5): the way to translate with its description following the choice, figure text, where
+// translations open, the floating button (asked of the background, its state's only writer), and the PDF group with
+// its sub-row while the reader is on. Every control writes at once
+import { createElement as h, useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BUILT_IN_STYLES, type StyleProfile } from '@/config/appearance'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
+import type { OptionsData } from '@/entrypoints/options/data'
 import { mountElement } from '../ui/render-hook'
 
-// The reading section's profile drawer (options/sections/Reading.tsx): a profile deleted in another tab while its
-// drawer is open here keeps the drawer, and the reader's next change writes the profile back
-
 vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getURL: (path: string) => path } } }))
-// The floating button's switch asks the background, its state's only writer (options/floating-entry.ts): stood in for here
 const floating = vi.hoisted(() => ({ enabled: true as boolean | null, asked: [] as boolean[] }))
 vi.mock('@/entrypoints/options/floating-entry', () => ({
   useFloatingEntry: () => ({ enabled: floating.enabled, setEnabled: (next: boolean) => { floating.asked.push(next) } }),
 }))
 
 import { Reading } from '@/entrypoints/options/sections/Reading'
-import type { OptionsData } from '@/entrypoints/options/data'
-import { O, setLocale } from '@/ui/strings'
+import { O, R, S, setLocale } from '@/ui/strings'
 
-const mine: StyleProfile = { ...BUILT_IN_STYLES[0]!, id: 'style-mine', name: 'Mine' }
-/** Mine is the chosen style: only the chosen tile carries the edit control */
-const withMine: Config = { ...DEFAULT_CONFIG, appearance: { ...DEFAULT_CONFIG.appearance, styles: [...DEFAULT_CONFIG.appearance.styles, mine], activeStyle: mine.id } }
-
-function data(config: Config, patches: Config[] = []): OptionsData {
-  return {
-    config,
-    fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
-    patch: async fn => { const next = fn(config); patches.push(next); return next },
-    pack: null,
-    checkPack: async () => 'unsupported',
-    fetchPack: async () => undefined,
-    cache: null,
-    cacheError: '',
-    clearCache: async () => undefined,
-    cacheCleared: false,
+function Harness({ start, patches }: { start: Config; patches: Config[] }) {
+  const [config, setConfig] = useState(start)
+  const data: OptionsData = {
+    config, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
+    patch: async fn => { const next = fn(config); patches.push(next); setConfig(next); return next },
+    pack: null, checkPack: async () => 'unsupported', fetchPack: async () => undefined,
+    cache: null, cacheError: '', clearCache: async () => undefined, cacheCleared: false,
   }
+  return h(Reading, { data })
 }
+const rowOf = (c: HTMLElement, id: string) => c.querySelector<HTMLElement>(`[data-row="${id}"]`)!
+const segments = (c: HTMLElement, label: string) => [...c.querySelectorAll<HTMLElement>(`[role="radiogroup"][aria-label="${label}"] [role="radio"]`)]
+const switchOf = (c: HTMLElement, label: string) => c.querySelector<HTMLElement>(`[role="switch"][aria-label="${label}"]`)!
 
-const dialog = (container: HTMLElement) => container.querySelector('[role="dialog"]')
-/** The tile's edit control, not the tile itself (whose label is the bare name) */
-const editButton = (container: HTMLElement) => Array.from(container.querySelectorAll('button')).find(b => b.getAttribute('aria-label') === O.reading.editAria('Mine'))
-const typeInto = (input: HTMLInputElement, value: string) => {
-  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, value)
-  input.dispatchEvent(new Event('input', { bubbles: true }))
-}
+describe('the reading section (§6.5)', () => {
+  beforeEach(() => { setLocale('en'); floating.asked.length = 0 })
 
-describe('Reading: the profile drawer', () => {
-  beforeEach(() => { setLocale('en') })
-
-  it('outlives a deletion made elsewhere, and the next change writes the profile back', async () => {
-    // The eighth local pass of S1: the list followed the deletion, the drawer unmounted with the reader's draft
+  it('the way to translate: two choices, the description following the choice and coming in anew as it changes', async () => {
     const patches: Config[] = []
-    const mounted = await mountElement(createElement(Reading, { data: data(withMine, patches) }))
-    const edit = editButton(mounted.container)
-    expect(edit).toBeDefined()
-    edit?.click()
-    await mounted.flush()
-    expect(dialog(mounted.container)).not.toBeNull()
-    // Another tab deletes the profile; this page follows the store
-    await mounted.rerender(createElement(Reading, { data: data(DEFAULT_CONFIG, patches) }))
-    expect(dialog(mounted.container)).not.toBeNull()
-    const name = dialog(mounted.container)?.querySelector('input') as HTMLInputElement
-    expect(name.value).toBe('Mine')
-    typeInto(name, 'Mine, kept')
-    await mounted.flush()
-    const written = patches.at(-1)?.appearance.styles.find(s => s.id === 'style-mine')
-    expect(written?.name).toBe('Mine, kept')
-    await mounted.unmount()
-  })
-
-  it('a duplicate whose write is still out opens on the copy, not on its original', async () => {
-    // The ninth local pass of S1: the copy's id was absent from the list while its write was out, the drawer fell
-    // back to the last profile seen — the original — and the first keystroke renamed that
-    const patches: Config[] = []
-    const mounted = await mountElement(createElement(Reading, { data: data(withMine, patches) }))
-    editButton(mounted.container)?.click()
-    await mounted.flush()
-    const duplicate = Array.from(dialog(mounted.container)?.querySelectorAll('button') ?? []).find(b => b.textContent === O.reading.duplicate)
-    expect(duplicate).toBeDefined()
-    duplicate?.click()
-    await mounted.flush()
-    // The store has not moved: the list still lacks the copy
-    const name = dialog(mounted.container)?.querySelector('input') as HTMLInputElement
-    expect(name.value).not.toBe('Mine')
-    typeInto(name, 'My duplicate')
-    await mounted.flush()
-    const styles = patches.at(-1)?.appearance.styles ?? []
-    expect(styles.find(s => s.id === 'style-mine')?.name).toBe('Mine')
-    expect(styles.some(s => s.id !== 'style-mine' && s.name === 'My duplicate')).toBe(true)
-    await mounted.unmount()
-  })
-
-  it('a duplicate opens its own editor: the original CSS box, with its draft and the write it has out, does not carry over', async () => {
-    // The twelfth local pass of S1: the editor was not keyed by profile, so the copy inherited the original's textarea
-    // state and showed CSS the copy never stored
-    const patches: Config[] = []
-    const mounted = await mountElement(createElement(Reading, { data: data(withMine, patches) }))
-    editButton(mounted.container)?.click()
-    await mounted.flush()
-    const advanced = Array.from(dialog(mounted.container)?.querySelectorAll('button') ?? []).find(b => b.getAttribute('aria-expanded') !== null)
-    advanced?.click()
-    await mounted.flush()
-    const css = dialog(mounted.container)?.querySelector('textarea') as HTMLTextAreaElement
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(css, 'color: red;')
-    css.dispatchEvent(new Event('input', { bubbles: true }))
-    await mounted.flush()
-    expect(css.value).toBe('color: red;')
-    Array.from(dialog(mounted.container)?.querySelectorAll('button') ?? []).find(b => b.textContent === O.reading.duplicate)?.click()
-    await mounted.flush()
-    // The copy was made from the profile as stored — without the block still out — and its box says so
-    const copyBox = dialog(mounted.container)?.querySelector('textarea')
-    expect(copyBox?.value ?? '').toBe('')
-    await mounted.unmount()
-  })
-
-  it('a drawer closed here forgets the profile', async () => {
-    const mounted = await mountElement(createElement(Reading, { data: data(withMine) }))
-    editButton(mounted.container)?.click()
-    await mounted.flush()
-    expect(dialog(mounted.container)).not.toBeNull()
-    const close = Array.from(dialog(mounted.container)?.querySelectorAll('button') ?? []).find(b => b.getAttribute('aria-label') === 'Close')
-    close?.click()
-    await mounted.flush()
-    expect(dialog(mounted.container)).toBeNull()
-    await mounted.unmount()
-  })
-})
-
-describe('Reading: the way to translate', () => {
-  beforeEach(() => { setLocale('en') })
-  const stops = (root: HTMLElement) => Array.from(root.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')).filter(b => (O.reading.translateWays as readonly string[]).includes(b.textContent?.trim() ?? ''))
-
-  it('offers as you read and the whole paper (the redesign\'s design, §6.5), and writes the choice', async () => {
-    const patches: Config[] = []
-    const mounted = await mountElement(createElement(Reading, { data: data({ ...DEFAULT_CONFIG, preload: 'on-demand' }, patches) }))
-    const before = stops(mounted.container)
-    expect(before.map(b => b.textContent?.trim())).toEqual(['As you read', 'Whole paper'])
-    expect(before.map(b => b.getAttribute('aria-pressed'))).toEqual(['true', 'false'])
-    before[1]!.click()
-    await mounted.flush()
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, preload: 'on-demand' }, patches }))
+    expect(segments(m.container, O.reading.translateWay).map(s => s.textContent)).toEqual(['As you read', 'Whole paper'])
+    const description = () => rowOf(m.container, 'reading/way').querySelector('.o-desc')!
+    expect(description().textContent).toBe(O.reading.translateWayHints[0])
+    expect(description().classList.contains('o-swap')).toBe(false)
+    segments(m.container, O.reading.translateWay)[1]!.click()
+    await m.flush()
     expect(patches.at(-1)?.preload).toBe('whole')
-    await mounted.unmount()
+    expect(description().textContent).toBe(O.reading.translateWayHints[1])
+    expect(description().classList.contains('o-swap')).toBe(true)
+    await m.unmount()
   })
-})
 
-describe('Reading: the floating button\'s switch (S-O-49c)', () => {
-  beforeEach(() => { setLocale('en'); floating.enabled = true; floating.asked = [] })
-
-  it('shows what the background says and asks it to change: the configuration is not written', async () => {
+  it('figure text, where translations open and the floating button, each written at once', async () => {
     const patches: Config[] = []
-    floating.enabled = false
-    const mounted = await mountElement(createElement(Reading, { data: data(DEFAULT_CONFIG, patches) }))
-    const toggle = Array.from(mounted.container.querySelectorAll('[role="switch"]')).find(el => el.getAttribute('aria-label') === O.reading.floatingEntry) as HTMLElement
-    expect(toggle.getAttribute('aria-checked')).toBe('false')
-    toggle.click()
-    await mounted.flush()
-    expect(floating.asked).toEqual([true])
-    expect(patches).toEqual([])
-    await mounted.unmount()
+    const m = await mountElement(h(Harness, { start: DEFAULT_CONFIG, patches }))
+    rowOf(m.container, 'reading/images').querySelector<HTMLElement>('.o-label')!.click()
+    await m.flush()
+    expect(patches.at(-1)?.image.enabled).toBe(false)
+    segments(m.container, O.reading.openIn)[1]!.click()
+    await m.flush()
+    expect(patches.at(-1)?.reading.openIn).toBe('same-tab')
+    switchOf(m.container, O.reading.floatingEntry).click()
+    expect(floating.asked).toEqual([false])
+    expect(rowOf(m.container, 'reading/images').textContent).toContain(O.reading.imagesHint)
+    expect(switchOf(m.container, S.rows.images)).not.toBeNull()
+    await m.unmount()
+  })
+
+  it('the PDF group: the reader\'s switch, and syncing only while the reader is on', async () => {
+    const patches: Config[] = []
+    const m = await mountElement(h(Harness, { start: DEFAULT_CONFIG, patches }))
+    const sync = () => switchOf(m.container, R.sync)
+    expect(sync().closest('[inert]')).toBeNull()
+    sync().click()
+    await m.flush()
+    expect(patches.at(-1)?.pdfReader.sync).toBe(false)
+    switchOf(m.container, O.reading.pdfEnabled).click()
+    await m.flush()
+    expect(patches.at(-1)?.pdfReader.enabled).toBe(false)
+    expect(sync().closest('[inert]')).not.toBeNull()
+    expect(rowOf(m.container, 'reading/pdf').querySelectorAll('[role="switch"]')).toHaveLength(2)
+    await m.unmount()
   })
 })

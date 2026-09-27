@@ -238,11 +238,6 @@ const O = {
     editTitle: '编辑服务',
   },
   reading: {
-    newProfile: '新配置',
-    styles: '译文样式',
-    stylesHint: '选中的样式立即生效',
-    highlights: '背景高亮',
-    highlightsHint: '悬停时用来标出对应句子的底色',
     add: '添加配置',
     reset: '重置',
     resetHint: '把内置配置恢复原样，自己添加的保留',
@@ -277,10 +272,16 @@ const O = {
     translateWays: ['按需翻译', '整篇翻译'],
     translateWayHints: ['只翻译正在阅读和即将读到的段落，用量最少', '打开论文时就请求整篇译文，滚到哪里都已翻好，用量较多'],
     openIn: '译文在哪里打开',
-    openInHint: '从论文的摘要页或 PDF 打开时，译文是这篇论文的 HTML 版本',
+    openInHint: '从摘要页或 PDF 页打开译文时',
     openInStops: ['新标签页', '当前标签页'],
     floatingEntry: '显示悬浮按钮',
-    floatingEntryHint: '在 arXiv 的摘要页、PDF 和论文全文页贴在窗口边缘：翻译、控制面板、设置',
+    floatingEntryHint: '在 arXiv 的摘要页、PDF 和全文页贴在窗口边缘',
+    imagesHint: '图里的文字也翻，译文叠在图上，悬停查看原文',
+    /** §6.5: the PDF group */
+    pdf: 'PDF',
+    pdfEnabled: '在 arXiv 的 PDF 上使用对照阅读器',
+    pdfEnabledHint: '关掉后，PDF 用浏览器自带的查看器打开',
+    syncHint: '原文和译文一起滚',
     /** The names of the profiles shipped with the extension (`BUILT_IN_STYLES` / `BUILT_IN_HIGHLIGHTS`): they are ours,
      *  not the reader's writing, so they follow the interface language; once the reader renames one, the reader's name shows */
     builtInStyles: { follow: '与原文相同', green: '绿色', blue: '蓝色', amber: '琥珀', muted: '淡一档', blur: '模糊' },
@@ -348,8 +349,6 @@ const O = {
     },
     glossaryPlaceholder: 'token, 词元\nembedding, 嵌入' },
   close: '关闭',
-  /** S-O-55: the PDF reader's section; its other rows are the reader's own words (R) */
-  pdfReader: { enabled: '在 arXiv 的 PDF 上使用对照阅读器' },
   data: {
     cache: '已缓存的译文',
     cacheLine: (entries: number, mb: string) => `${entries.toLocaleString('zh-CN')} 段 · ${mb} MB · 换了服务、模型或提示词会自动分开存，通常不用清`,

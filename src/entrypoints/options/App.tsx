@@ -14,7 +14,6 @@ import { type Place, SECTIONS, type Section, parseHash, reach } from './hash'
 import { Appearance } from './sections/Appearance'
 import { Data } from './sections/Data'
 import { LanguageFoot, LanguageRow } from './sections/Language'
-import { PdfReader } from './sections/PdfReader'
 import { Prompts } from './sections/Prompts'
 import { Reading } from './sections/Reading'
 import { Services } from './sections/Services'
@@ -31,7 +30,7 @@ export type Content = Record<Section, (data: OptionsData) => ReactNode>
 const CONTENT: Content = {
   translate: data => <><Services data={data} /><Prompts data={data} /></>,
   appearance: data => <Appearance data={data} />,
-  reading: data => <><Reading data={data} /><PdfReader data={data} /></>,
+  reading: data => <Reading data={data} />,
   data: data => <Data data={data} />,
 }
 

@@ -85,9 +85,16 @@ export async function clearKeyAndReconnect(options) {
   return result ?? ''
 }
 
-/** A switch anywhere on the page, by its accessible name */
+/** Where each switch lives since the redesign (its design, §6): a switch not in the section on screen is looked for there */
+const SWITCH_SECTIONS = {
+  '图片翻译': 'reading', '显示悬浮按钮': 'reading', '在 arXiv 的 PDF 上使用对照阅读器': 'reading', '同步滚动': 'reading',
+  '对照高亮': 'appearance', '深色时调暗 PDF 页面': 'appearance', '出问题时自动改用免费服务': 'translate',
+}
+
+/** A switch by its accessible name, in its section */
 export async function setSwitch(options, name, on) {
   const control = options.getByRole('switch', { name, exact: true })
+  if (!(await control.isVisible().catch(() => false)) && SWITCH_SECTIONS[name]) await openSection(options, SWITCH_SECTIONS[name])
   for (let i = 0; i < 20; i++) {
     if (await control.getAttribute('aria-checked') === String(on)) return
     await control.click()
@@ -112,10 +119,10 @@ export async function chooseLanguage(options, search, name) {
   await sleep(200)
 }
 
-/** The way to translate is a named stop (as you read / whole paper), not a number */
+/** The way to translate is a named choice of a segmented control (as you read / whole paper), not a number */
 export async function setPreload(options, { range }) {
   await openSection(options, 'reading')
-  if (range) await options.getByRole('button', { name: range, exact: true }).click()
+  if (range) await options.getByRole('radio', { name: range, exact: true }).click()
   await sleep(150)
 }
 

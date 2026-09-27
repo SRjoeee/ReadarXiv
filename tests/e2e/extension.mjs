@@ -259,7 +259,7 @@ await options.screenshot({ path: `${SHOTS}/options.png` })
 await setPreload(options, { range: '整篇翻译' })
 await options.reload({ waitUntil: 'domcontentloaded' })
 await openSection(options, 'reading')
-const rangeBack = await options.getByRole('button', { name: '整篇翻译', exact: true }).getAttribute('aria-pressed')
+const rangeBack = await options.getByRole('radio', { name: '整篇翻译', exact: true }).getAttribute('aria-checked')
 check('the settings page: the whole paper chosen is still chosen after a reload', rangeBack === 'true', `read back aria-pressed=${rangeBack}`)
 
 // ── The settings page: the hover highlight switch really changes (#130: a configuration field was added without a UI, and the reader could not turn it off) ────────
