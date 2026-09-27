@@ -212,6 +212,7 @@ const O: Locale['O'] = {
     connect: 'Connect',
     connecting: 'Connecting…',
     connected: ms => `Connected · ${ms} ms`,
+    failed: reason => `Couldn't connect: ${reason}`,
     delete: 'Delete',
     deleteConfirm: 'Confirm delete',
     cancel: 'Cancel',

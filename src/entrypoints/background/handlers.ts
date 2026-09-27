@@ -15,7 +15,7 @@ import type { MessageHandlers } from '@/shared/messages'
 import type { ChainHolder } from './chain'
 import type { Diagnostics } from './diagnostics'
 import { engineReady } from './engine-ready'
-import { isRefusal, shouldMarkRefusal } from './health-guard'
+import { isRefusal, shouldMarkRefusal, testsStoredKey } from './health-guard'
 import type { OcrService } from './ocr'
 import { type ConfigOffers, providerStatus } from './provider-status'
 import type { SessionRouter } from './sessions'
@@ -58,7 +58,16 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
         // configuration it used and the one in force; one that cannot be read marks nothing and leaves the answer be
         const id = message.providerId
         if (id && SERVICE_ID_RE.test(id)) {
-          if (response.ok) await deps.health.clear(id)
+          if (message.candidate) {
+            // A candidate: a service as the settings page would save it, tested before it is (ruling 16). Its success
+            // clears the mark only when it tested the stored key and address; another key is cleared by the watcher once
+            // the save lands (idsToClear). Its failure touches nothing: it says nothing of the key stored. The page itself
+            // never writes the record (ruling 17)
+            if (response.ok) {
+              const stored = await deps.getConfig().catch(() => null)
+              if (stored && testsStoredKey(message.candidate, stored)) await deps.health.clear(id)
+            }
+          } else if (response.ok) await deps.health.clear(id)
           else if (isRefusal({ id, ...response.error })) {
             const stored = await deps.getConfig().catch(() => null)
             if (stored && shouldMarkRefusal({ id, ...response.error }, stored, stored)) await deps.health.reject(id)

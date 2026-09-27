@@ -231,6 +231,7 @@ const O = {
     connect: '连接',
     connecting: '连接中…',
     connected: (ms: number) => `已连接 · ${ms} ms`,
+    failed: (reason: string) => `连接失败：${reason}`,
     delete: '删除',
     deleteConfirm: '确认删除',
     cancel: '取消',
