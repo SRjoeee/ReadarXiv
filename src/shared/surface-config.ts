@@ -23,7 +23,7 @@
 import { chainRevision } from '@/config/revision'
 import type { Config } from '@/config/schema'
 import { createSerialQueue } from '@/core/scheduler/serial'
-import { ConfigUnreadableError, type FallbackReason, configFallbackReason, getConfig, resetConfig, setConfig, watchConfig } from '@/config/storage'
+import { ConfigUnreadableError, type FallbackReason, getConfig, readConfig, resetConfig, setConfig, watchConfig } from '@/config/storage'
 import { sendMessage } from './messages'
 import { type PackState, createPackLookup } from './pack'
 
@@ -127,9 +127,14 @@ export function createSurfaceConfig(deps: SurfaceConfigDeps): SurfaceConfig {
     settle()
   }
 
-  /** One reading of the store, on the chain: the first, or the one a change saved elsewhere asks for */
+  /**
+   * One reading of the store, on the chain: the first, or the one a change saved elsewhere asks for. Its verdict is
+   * the one returned with it (storage.ts `readConfig`), not the module's latest: the chain orders this surface's own
+   * reads, not the page's others (the settings page's pack download reads the store too), and one of those finishing
+   * in between would have its verdict published beside this read's value
+   */
   const read = (from: 'first' | 'elsewhere') => queue(async () => {
-    const stored = await getConfig()
+    const { config: stored, fallbackReason: reason } = await readConfig()
     if (deps.localeStale(stored)) {
       // Compared with the locale in use, not with a value recorded here: a change landing between the locale's read
       // and this surface's first one would otherwise pass unnoticed (Codex on #185)
@@ -141,7 +146,6 @@ export function createSurfaceConfig(deps: SurfaceConfigDeps): SurfaceConfig {
     }
     // A valid write elsewhere is the repair of a configuration this surface had to fall back from (Codex on #185); the
     // line about a refused reset goes with it, or it would come back with the next fallback nobody reset
-    const reason = configFallbackReason()
     await land(stored, reason, from, reason === null ? { resetFailed: false } : {})
     void packs.check(stored.targetLanguage)
     return stored
@@ -180,8 +184,8 @@ export function createSurfaceConfig(deps: SurfaceConfigDeps): SurfaceConfig {
         publish({ resetFailed: true })
         return getConfig()
       }
-      const next = await getConfig()
-      await land(next, configFallbackReason(), 'own', { resetFailed: false })
+      const { config: next, fallbackReason } = await readConfig()
+      await land(next, fallbackReason, 'own', { resetFailed: false })
       return next
     }),
     checkPack: packs.check,

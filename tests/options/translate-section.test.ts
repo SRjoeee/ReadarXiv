@@ -6,7 +6,7 @@
 // Task 65: a deletion is committed only once its own write lands, and one storage refused leaves its row, takes back
 // the focus and says so; an origin is given back only when no service may still use it; an undo storage refused
 // brings its undo row back, or, answered after the section went, commits the deletion itself; while the stored value
-// cannot be read, a commit gives no origin back (round 4)
+// cannot be read, a commit gives no origin back (round 4), by its own read's verdict (round 5)
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Fragment, createElement as h, useEffect, useState } from 'react'
@@ -31,14 +31,25 @@ const wire = vi.hoisted(() => ({
    * data layer resolves with the configuration in effect, the defaults (surface-config.ts, data.ts; round 2, item 1)
    */
   unreadable: false,
+  /** another read of the page, run once, finishing after the next read has its verdict and before that read answers (round 5) */
+  during: null as (() => Promise<unknown>) | null,
 }))
 vi.mock('@/shared/messages', () => ({ sendMessage: vi.fn(async (m: { type: string; id?: string; rebindAll?: boolean }) => { wire.log.push(`send ${m.type} ${m.id}${m.rebindAll ? ' all' : ''}`); return { reset: true } }) }))
-// as storage.ts: a value it cannot read is answered with the defaults, and the read's verdict is kept until the next read
+// as storage.ts: a value it cannot read is answered with the defaults; `readConfig` answers with its read's verdict,
+// `getConfig` keeps it for `configFallbackReason()` until the next read finishes
 vi.mock('@/config/storage', async () => {
   const { DEFAULT_CONFIG: defaults } = await import('@/config/schema')
   let reason: FallbackReason | null = null
+  const take = (): { config: Config; fallbackReason: FallbackReason | null } =>
+    wire.unreadable ? { config: defaults, fallbackReason: { kind: 'unknown' } } : { config: wire.stored as Config, fallbackReason: null }
+  const between = async () => {
+    const other = wire.during
+    wire.during = null
+    await other?.()
+  }
   return {
-    getConfig: async () => { reason = wire.unreadable ? { kind: 'unknown' } : null; return wire.unreadable ? defaults : wire.stored },
+    readConfig: async () => { const reading = take(); await between(); return reading },
+    getConfig: async () => { const reading = take(); reason = reading.fallbackReason; await between(); return reading.config },
     configFallbackReason: () => reason,
   }
 })
@@ -54,6 +65,7 @@ vi.mock('@/entrypoints/options/connect', () => ({ connectService: vi.fn(async (c
 vi.mock('@/entrypoints/options/models', () => ({ listModels: async () => [] }))
 vi.mock('@/ui/use-rejected', () => ({ useRejected: () => wire.rejected }))
 
+import { configFallbackReason, getConfig } from '@/config/storage'
 import { Translate } from '@/entrypoints/options/sections/Translate'
 import { UNDO_MS } from '@/entrypoints/options/ui/UndoRow'
 import { O, S, setLocale } from '@/ui/strings'
@@ -121,7 +133,7 @@ describe('the translation services (§6.3)', () => {
   beforeEach(() => {
     setLocale('en')
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    Object.assign(wire, { log: [], rejected: [], connect: { ok: true, ms: 42 }, gate: null, unreadable: false })
+    Object.assign(wire, { log: [], rejected: [], connect: { ok: true, ms: 42 }, gate: null, unreadable: false, during: null })
     restore = stubPopovers()
   })
   afterEach(() => { vi.useRealTimers(); restore() })
@@ -444,6 +456,27 @@ describe('the translation services (§6.3)', () => {
     await m.flush()
     await m.flush()
     expect(card(m.container).querySelector('[data-undo]')).toBeNull()
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
+    await m.unmount()
+    await m.flush()
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
+  })
+
+  it('a commit whose own read finds the stored value unreadable gives no origin back, even when a read that finds it readable finishes before the commit looks: the verdict is its read\'s, not the latest (round 5)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id } }))
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    expect(stored().services.map(s => s.id)).toEqual([OTHER.id])
+    wire.unreadable = true
+    // the value repaired elsewhere while the commit's read answers, and another read of the page (another list's
+    // write) finding it readable in that gap
+    wire.during = async () => { wire.unreadable = false; await getConfig() }
+    await vi.advanceTimersByTimeAsync(UNDO_MS)
+    await m.flush()
+    await m.flush()
+    // the premise: the other read ran inside the commit's, and the latest verdict is its own, readable
+    expect(wire.during).toBeNull()
+    expect(configFallbackReason()).toBeNull()
     expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
     await m.unmount()
     await m.flush()

@@ -30,6 +30,8 @@ vi.mock('wxt/browser', () => ({
 }))
 vi.mock('@/config/storage', () => ({
   getConfig: async () => { if (!store.config) throw new Error('no config'); return store.config },
+  // as storage.ts: the read's own verdict, returned with its value
+  readConfig: async () => { if (!store.config) throw new Error('no config'); return { config: store.config, fallbackReason: store.unreadable } },
   setConfig: async (config: Config) => {
     if (store.unreadable) { store.log.push('refused'); throw new store.ConfigUnreadableError(store.unreadable) }
     store.config = config
@@ -41,7 +43,6 @@ vi.mock('@/config/storage', () => ({
   },
   ConfigUnreadableError: store.ConfigUnreadableError,
   watchConfig: (callback: (config: Config) => void) => { store.watchers.push(callback); return () => { store.watchers = store.watchers.filter(w => w !== callback) } },
-  configFallbackReason: () => store.unreadable,
 }))
 vi.mock('@/shared/messages', async importOriginal => ({
   ...(await importOriginal<typeof import('@/shared/messages')>()),
