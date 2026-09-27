@@ -7,7 +7,7 @@ import { ChevronRight } from 'lucide'
 import { type ComponentProps, useEffect, useRef, useState } from 'react'
 import { NAME_MAX, PALETTE, type StyleProfile, UNDERLINES } from '@/config/appearance'
 import { sanitizeCustomCss } from '@/core/renderer'
-import { styleTile } from '@/ui/appearance/tiles'
+import { styleSample } from '@/ui/style-sample'
 import { Button } from '@/ui/controls/Button'
 import { Field, TextInput, useField } from '@/ui/controls/Field'
 import { Icon } from '@/ui/controls/Icon'
@@ -49,7 +49,7 @@ export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: 
       </Field>
       <div className="o-preview">
         <div className="o-preview-source">{O.reading.previewSource}</div>
-        <div className="o-preview-target" lang={PREVIEW_LANG} data-blur={value.blur || undefined} style={styleTile(value)}>{O.reading.previewTarget}</div>
+        <div className="o-preview-target" lang={PREVIEW_LANG} data-blur={value.blur || undefined} style={styleSample(value)}>{O.reading.previewTarget}</div>
       </div>
       <div className="o-line">
         <span>{e.colour}</span>

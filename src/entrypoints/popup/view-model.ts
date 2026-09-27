@@ -23,7 +23,7 @@ import type { StartResult } from '@/core/session'
 import { pageDecision } from '@/shared/page-action'
 import type { PackState } from '@/shared/pack'
 import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
-import { styleTile } from '@/ui/appearance/tiles'
+import { styleSample } from '@/ui/style-sample'
 import { NoActiveTabError } from '@/shared/messages'
 import type { MenuListItem } from '@/ui/controls/MenuList'
 import { PREVIEW_TARGET, S, languageLabel, languageName, parseFatal, profileName, reasonText, serviceName } from '@/ui/strings'
@@ -250,7 +250,7 @@ function menusOf(config: Config, { pack, rejected }: PopupInput, { reader = fals
           label: S.rows.style,
           search: false,
           items: [
-            ...config.appearance.styles.map(p => ({ id: p.id, name: profileName(p), hint: PREVIEW_TARGET, preview: styleTile(p), lang: 'zh-CN', checked: p.id === config.appearance.activeStyle })),
+            ...config.appearance.styles.map(p => ({ id: p.id, name: profileName(p), hint: PREVIEW_TARGET, preview: styleSample(p), lang: 'zh-CN', checked: p.id === config.appearance.activeStyle })),
             // The same position and role as in the service menu: the way in to managing them (S-P-83)
             { id: MANAGE_STYLES, name: S.rows.manageStyles, checked: false, manage: true as const },
           ],

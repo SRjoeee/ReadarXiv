@@ -30,7 +30,7 @@ export function Buttons() {
       </div>
       <div data-row>
         <Button size="sm">{S.service.chrome_download}</Button>
-        <Button kind="text" size="sm">{O.reading.reset}</Button>
+        <Button kind="text" size="sm">{O.appearance.restore}</Button>
         <Button size="sm" disabled>{S.service.chrome_download}</Button>
       </div>
       <div data-row className="on-group">

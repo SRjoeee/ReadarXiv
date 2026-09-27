@@ -1,9 +1,10 @@
-// What a profile looks like on its grid tile: the same values the page uses, as inline style, so
-// a tile needs no iframe of its own (there are up to fifty of them on the page).
+// What a translation style looks like on its sample sentence — the popup's style menu, the settings page's style rows
+// and editor, the controls sheet (the redesign's design, §5.3, §6.4): the values the page uses, as inline style, so a
+// sample needs no frame of its own. Moved from src/ui/appearance/tiles.ts, whose grid of tiles is gone (ruling 23)
 import type { CSSProperties } from 'react'
-import type { HighlightProfile, StyleProfile } from '@/config/appearance'
+import type { StyleProfile } from '@/config/appearance'
 
-export function styleTile(profile: StyleProfile): CSSProperties {
+export function styleSample(profile: StyleProfile): CSSProperties {
   const color = profile.color || 'inherit'
   return {
     color,
@@ -56,8 +57,4 @@ function declarations(css: string): CSSProperties {
     out[name.startsWith('--') ? name : name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())] = value
   }
   return out as CSSProperties
-}
-
-export function bandTile(profile: HighlightProfile): CSSProperties {
-  return { backgroundColor: `color-mix(in oklab, ${profile.color || 'oklch(0.693 0.17 162.48)'} ${Math.round(profile.opacity * 100)}%, transparent)`, borderRadius: 2 }
 }

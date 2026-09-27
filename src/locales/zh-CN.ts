@@ -247,12 +247,10 @@ const O = {
     namePlaceholder: '默认使用模型名',
     baseURL: '接口地址',
     baseURLSuggestions: '常用地址',
-    baseURLHint: 'OpenRouter、DeepSeek、Ollama 等 OpenAI 兼容接口',
     apiKey: 'API Key',
     apiKeyClear: '清除',
     apiKeyLocalHint: '本机地址可以不填',
     model: '模型',
-    more: '更多选项',
     thinking: '深度思考',
     thinkingHint: '翻译不需要推理，开启会明显变慢',
     /** Asking for access to the endpoint's address failed (entrypoints/options/permissions.ts reports which way) */

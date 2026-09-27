@@ -22,13 +22,13 @@ export function Forms() {
   return (
     <>
       <div className="form-demo">
-        <Field label={O.services.baseURL} hint={O.services.baseURLHint}>
+        <Field label={O.services.baseURL}>
           <TextInput placeholder="https://…/v1" />
         </Field>
         <Field label={O.services.apiKey} error={O.services.permission.badURL}>
           <TextInput defaultValue="sk-or-0000" />
         </Field>
-        <Field label={O.services.model}>
+        <Field label={O.services.model} hint={O.services.modelNoList}>
           <TextInput disabled placeholder={O.services.model} />
         </Field>
       </div>
@@ -46,7 +46,7 @@ export function Forms() {
         ))}
       </div>
       <div>
-        <Button kind="text" aria-expanded={open} aria-controls={revealId} onClick={() => setOpen(o => !o)}>{O.services.more}</Button>
+        <Button kind="text" aria-expanded={open} aria-controls={revealId} onClick={() => setOpen(o => !o)}>{O.more}</Button>
         <Reveal id={revealId} open={open}>
           <div className="reveal-body">
             <Field label={O.services.apiKey} hint={O.services.apiKeyLocalHint}>

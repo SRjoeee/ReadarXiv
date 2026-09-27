@@ -4,7 +4,7 @@ import { Monitor, Moon, Pencil, Plus, Sun } from 'lucide'
 import { Fragment, useRef, useState } from 'react'
 import { type Appearance as Looks, BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, type HighlightProfile, type StyleProfile, duplicateStyle, newProfileId, resetBuiltIns } from '@/config/appearance'
 import type { Config } from '@/config/schema'
-import { styleTile } from '@/ui/appearance/tiles'
+import { styleSample } from '@/ui/style-sample'
 import { Button } from '@/ui/controls/Button'
 import { Icon } from '@/ui/controls/Icon'
 import { radioKeys } from '@/ui/controls/radio'
@@ -167,7 +167,7 @@ function Styles({ data, writes }: { data: OptionsData; writes: ListWrites<Config
         return (
           <Fragment key={s.id}>
             <Row kind="radio" checked={s.id === a.activeStyle} onChoose={() => choose(s.id)} label={name} words={k['appearance/styles']} arriving={fresh === s.id}
-              description={O.reading.previewTarget} sample={styleTile(s)}
+              description={O.reading.previewTarget} sample={styleSample(s)}
               radioRef={el => { if (el) radios.current.set(s.id, el); else radios.current.delete(s.id) }}
               trailing={
                 <IconButton icon={Pencil} label={O.appearance.edit(name)} hover aria-expanded={editing === s.id}

@@ -182,7 +182,7 @@
   .o-editor { display: flex; flex-direction: column; gap: 14px; padding: 8px 10px 14px 38px; }
   .o-preview { padding: 12px 14px; border-radius: 8px; background: var(--field); line-height: 1.7; }
   .o-preview-source { color: var(--ink-2); font-size: 12.5px; }
-  /* the blur until hovered, as on the page: the sample's blur is inline (styleTile), so the hover's must outrank it */
+  /* the blur until hovered, as on the page: the sample's blur is inline (styleSample), so the hover's must outrank it */
   .o-preview-target[data-blur]:hover { filter: none !important; }
   .o-line { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 26px; }
   /* the line's thickness, a sub-line of the underline: one step in */

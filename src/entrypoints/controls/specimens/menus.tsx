@@ -6,7 +6,7 @@ import { type CSSProperties, useState } from 'react'
 import { BUILT_IN_STYLES } from '@/config/appearance'
 import { toBcp47 } from '@/config/languages'
 import { languageItems } from '@/pdf-reader/ui/languages'
-import { styleTile } from '@/ui/appearance/tiles'
+import { styleSample } from '@/ui/style-sample'
 import { Button } from '@/ui/controls/Button'
 import { MenuList, type MenuListItem } from '@/ui/controls/MenuList'
 import { Popover, usePopover } from '@/ui/controls/Popover'
@@ -37,7 +37,7 @@ export function Menus() {
   ]
   const styles: MenuListItem[] = [
     // the sample is the Chinese preview sentence whatever the interface (locales/preview.ts): marked as such
-    ...BUILT_IN_STYLES.map((style, i) => ({ id: style.id, name: profileName(style), hint: PREVIEW_TARGET, preview: styleTile(style), lang: 'zh-CN', checked: i === 0 })),
+    ...BUILT_IN_STYLES.map((style, i) => ({ id: style.id, name: profileName(style), hint: PREVIEW_TARGET, preview: styleSample(style), lang: 'zh-CN', checked: i === 0 })),
     { id: 'manage', name: S.rows.manageStyles, manage: true },
   ]
   // each language written in its own name, and marked as that language

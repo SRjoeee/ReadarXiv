@@ -225,12 +225,10 @@ const O: Locale['O'] = {
     namePlaceholder: 'The model\'s name by default',
     baseURL: 'API address',
     baseURLSuggestions: 'Common addresses',
-    baseURLHint: 'An OpenAI-compatible API: OpenRouter, DeepSeek, Ollama and the like',
     apiKey: 'API key',
     apiKeyClear: 'Clear',
     apiKeyLocalHint: 'A local address may need none',
     model: 'Model',
-    more: 'More',
     thinking: 'Extended thinking',
     thinkingHint: 'Translation does not need reasoning, and it makes this markedly slower',
     permission: {
