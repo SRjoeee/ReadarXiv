@@ -15,7 +15,7 @@ import { O, S, copyName, profileName } from '@/ui/strings'
 import type { OptionsData } from '../data'
 import { Card, GroupHeading } from '../ui/Card'
 import { ColourPick } from '../ui/ColourPick'
-import { type ListWrites, insertAt, undoHasFocus, useLinger, useListWrites, withUndo } from '../ui/lists'
+import { type ListWrites, focusLost, insertAt, undoHasFocus, useLinger, useListWrites, withUndo } from '../ui/lists'
 import { IconButton, Row, Status } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { StyleEditor } from './StyleEditor'
@@ -119,7 +119,7 @@ function Styles({ data, writes }: { data: OptionsData; writes: ListWrites<Config
     setEditing(null)
     // the chosen one deleted: the first of the list takes over, never nothing. Refused, the style is still stored:
     // its row stays, and takes back the focus its undo row held as that row goes (Task 65)
-    void writes.remove(latest => {
+    void writes.attempt(latest => {
       const c = latest.appearance
       const styles = c.styles.filter(s => s.id !== p.id)
       return { ...latest, appearance: { ...c, styles, activeStyle: c.activeStyle === p.id ? styles[0]?.id ?? BUILT_IN_STYLES[0]!.id : c.activeStyle } }
@@ -132,11 +132,16 @@ function Styles({ data, writes }: { data: OptionsData; writes: ListWrites<Config
   const undo = (g: GoneStyle) => {
     setGone(x => x.filter(y => y !== g))
     // the write is a real round trip (patch()): the row the focus is meant to land on may not exist until it resolves
-    // (fix round 1, item 2); the choice returns only if nothing else was picked while the window was open (item 3)
-    setLooks(c => (c.styles.some(s => s.id === g.profile.id)
-      ? c
-      : { ...c, styles: insertAt(c.styles, g.index, g.profile), activeStyle: g.active && c.activeStyle === g.fallback ? g.profile.id : c.activeStyle }))
-      .then(() => requestAnimationFrame(() => radios.current.get(g.profile.id)?.focus()))
+    // (fix round 1, item 2); the choice returns only if nothing else was picked while the window was open (item 3).
+    // Refused, the style stays deleted: its undo row comes back with a fresh 5 s (round 3, item 3)
+    void writes.attempt(latest => {
+      const c = latest.appearance
+      return c.styles.some(s => s.id === g.profile.id) ? latest
+        : { ...latest, appearance: { ...c, styles: insertAt(c.styles, g.index, g.profile), activeStyle: g.active && c.activeStyle === g.fallback ? g.profile.id : c.activeStyle } }
+    }).then(done => {
+      if (done) requestAnimationFrame(() => radios.current.get(g.profile.id)?.focus())
+      else setGone(x => [...x, { ...g, focus: focusLost() }])
+    })
   }
   const ids = a.styles.map(s => s.id)
   const keys = radioKeys(ids, a.activeStyle, () => true, choose, i => radios.current.get(ids[i]!)?.focus())

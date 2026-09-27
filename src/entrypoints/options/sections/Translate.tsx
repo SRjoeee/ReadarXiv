@@ -25,7 +25,7 @@ import { useRejected } from '@/ui/use-rejected'
 import type { OptionsData } from '../data'
 import { releaseHostPermission } from '../permissions'
 import { Card, GroupHeading } from '../ui/Card'
-import { type ListWrites, insertAt, shut, undoHasFocus, useLinger, useListWrites, withUndo } from '../ui/lists'
+import { type ListWrites, focusLost, insertAt, shut, undoHasFocus, useLinger, useListWrites, withUndo } from '../ui/lists'
 import { IconButton, Row, Status, Value } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { Llm } from './Llm'
@@ -226,7 +226,9 @@ function ServiceMenu({ service, onEdit, onDelete }: { service: Service; onEdit: 
  * rebuild from the old configuration and bind every session back to the service, and the configuration's later change
  * moves no one (Task 65). A deletion storage refused commits nothing: its row stays, as stored, and takes back the
  * focus its undo row held (round 2, item 2). An origin is given back only when no service may still use it: none
- * stored, none whose deletion may still be undone, none undone and not yet stored again (round 2, item 4)
+ * stored, none whose deletion may still be undone, none undone and not yet stored again (round 2, item 4). An undo
+ * storage refused leaves the service deleted: its undo row comes back at its place with a fresh 5 s, and the
+ * clean-up waits on it again (round 3, item 3)
  */
 function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id: string) => void) {
   const [gone, setGone] = useState<Gone[]>([])
@@ -251,7 +253,7 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id:
     }
   }, [commit])
   const remove = (service: Service, focus: boolean) => {
-    const stored = writes.remove(latest => ({ ...latest, services: latest.services.filter(s => s.id !== service.id), provider: latest.provider === service.id ? 'microsoft' : latest.provider }))
+    const stored = writes.attempt(latest => ({ ...latest, services: latest.services.filter(s => s.id !== service.id), provider: latest.provider === service.id ? 'microsoft' : latest.provider }))
     const g: Gone = { service, index: config.services.findIndex(s => s.id === service.id), chosen: config.provider === service.id, focus, stored }
     pending.current.add(g)
     setGone(x => [...x, g])
@@ -267,10 +269,15 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id:
     pending.current.delete(g)
     undoing.current.add(g)
     setGone(x => x.filter(y => y !== g))
-    const settled = () => { undoing.current.delete(g) }
-    void writes.write(latest => (latest.services.some(s => s.id === g.service.id) ? latest
+    void writes.attempt(latest => (latest.services.some(s => s.id === g.service.id) ? latest
       : { ...latest, services: insertAt(latest.services, g.index, g.service), provider: g.chosen && latest.provider === 'microsoft' ? g.service.id : latest.provider }))
-      .then(settled, settled)
+      .then(done => {
+        undoing.current.delete(g)
+        if (done) return
+        const back: Gone = { ...g, focus: focusLost() }
+        pending.current.add(back)
+        setGone(x => [...x, back])
+      })
   }
   const expire = (g: Gone) => {
     setGone(x => x.filter(y => y !== g))

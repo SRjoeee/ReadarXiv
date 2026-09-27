@@ -8,7 +8,7 @@ import { mountHook } from '../ui/render-hook'
 // The settings page's data layer, mounted in a real React root — what is the page's own. The chain, the re-read of a
 // change saved elsewhere and the reload's waits are the surface configuration's and are tested at its interface
 // (tests/shared/surface-config.test.ts); here: a refused save is no error on this page, the page's drafts are what
-// holds the reload, and the popup's pack broadcast reaches the lookup
+// holds the reload, the popup's pack broadcast reaches the lookup, and a save resolves with the change's own value
 
 const store = vi.hoisted(() => ({
   /** Set: the stored value cannot be read — reads give the defaults, the store refuses writes (config/storage.ts) */
@@ -90,6 +90,21 @@ describe('useOptionsData', () => {
     await hook.run(async () => { await hook.current().patch(latest => ({ ...latest, targetLanguage: 'jpn' })) })
     expect(hook.current().config?.targetLanguage).toBe('jpn')
     expect(store.log).toEqual(['refused', 'reset', 'set:jpn'])
+    await hook.unmount()
+  })
+
+  it('a save that lands resolves with the value its change returned, the same object; a refused one never does — the lists count a write as landed by that identity (ui/lists.ts; Task 65, round 3, item 2)', async () => {
+    const hook = await mountHook(useOptionsData)
+    await hook.until(() => hook.current().config !== null)
+    const made: Config = { ...store.config!, targetLanguage: 'jpn' }
+    let answer: Config | null = null
+    await hook.run(async () => { answer = await hook.current().patch(() => made) })
+    expect(answer).toBe(made)
+    store.unreadable = { kind: 'tooNew', stored: 99, supported: DEFAULT_CONFIG.version }
+    const refused: Config = { ...made, targetLanguage: 'kor' }
+    await hook.run(async () => { answer = await hook.current().patch(() => refused) })
+    expect(answer).not.toBe(refused)
+    expect(store.log).toEqual(['set:jpn', 'refused'])
     await hook.unmount()
   })
 

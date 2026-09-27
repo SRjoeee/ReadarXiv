@@ -24,7 +24,7 @@ import { Reveal } from '@/ui/controls/Reveal'
 import { drafts } from '@/ui/drafts'
 import { O } from '@/ui/strings'
 import type { OptionsData } from '../data'
-import { insertAt, undoHasFocus, useLinger, useListWrites, withUndo } from '../ui/lists'
+import { focusLost, insertAt, undoHasFocus, useLinger, useListWrites, withUndo } from '../ui/lists'
 import { Row, Status, Value } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { PromptText, insertToken, plainWords, readPrompt } from './PromptText'
@@ -93,7 +93,7 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
     setGone(x => [...x, g])
     // refused, the prompt is still stored: its row stays, and takes back the focus its undo row held as that row goes
     // (Task 65)
-    void writes.remove(latest => {
+    void writes.attempt(latest => {
       const c = latest.prompts
       return { ...latest, prompts: { patterns: c.patterns.filter(x => x.id !== p.id), promptId: c.promptId === p.id ? DEFAULT_PROMPT_ID : c.promptId } }
     }).then(done => {
@@ -111,9 +111,15 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
   const undo = (g: GonePrompt) => {
     setGone(x => x.filter(y => y !== g))
     // the focus goes to the prompt's radio once the write has landed and the row is there (the styles list's fix
-    // round 1, item 2)
-    void setPrompts(c => (c.patterns.some(x => x.id === g.prompt.id) ? c : { patterns: insertAt(c.patterns, g.index, g.prompt), promptId: g.chosen && c.promptId === DEFAULT_PROMPT_ID ? g.prompt.id : c.promptId }))
-      .then(() => requestAnimationFrame(() => radios.current.get(g.prompt.id)?.focus()))
+    // round 1, item 2). Refused, the prompt stays deleted: its undo row comes back with a fresh 5 s (round 3, item 3)
+    void writes.attempt(latest => {
+      const c = latest.prompts
+      return c.patterns.some(x => x.id === g.prompt.id) ? latest
+        : { ...latest, prompts: { patterns: insertAt(c.patterns, g.index, g.prompt), promptId: g.chosen && c.promptId === DEFAULT_PROMPT_ID ? g.prompt.id : c.promptId } }
+    }).then(done => {
+      if (done) requestAnimationFrame(() => radios.current.get(g.prompt.id)?.focus())
+      else setGone(x => [...x, { ...g, focus: focusLost() }])
+    })
   }
   const importFile = async (f: File | undefined) => {
     if (!f) return

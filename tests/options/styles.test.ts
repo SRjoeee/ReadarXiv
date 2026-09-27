@@ -4,7 +4,7 @@
 // Fix round 1 (Opus's review of Task 56): the styles card's own arrows, the undo's focus and its choice, an edit
 // merged onto the latest profile rather than a stale one, the declarations' own multi-line field, the pencil's
 // toggle, and the sample sentence drawn rather than read. Task 65: a deletion storage refused leaves its row, which
-// takes back the focus, and says so
+// takes back the focus, and says so; an undo storage refused brings its undo row back
 import { createElement as h, useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BUILT_IN_STYLES } from '@/config/appearance'
@@ -331,6 +331,37 @@ describe('the translation styles (§6.4)', () => {
     button(m.container, O.appearance.restore).click()
     await m.flush()
     expect(card(m.container).querySelector('.o-list-note')).toBeNull()
+    await m.unmount()
+  })
+
+  it('an undo storage refused: the style stays deleted, its undo row comes back with a fresh 5 s and the focus, and the list\'s foot says so (round 3, item 3)', async () => {
+    const patches: Config[] = []
+    const start = { ...DEFAULT_CONFIG, appearance: { ...DEFAULT_CONFIG.appearance, activeStyle: 'green' } }
+    const gate: { promise: Promise<unknown>; unreadable?: boolean } = { promise: Promise.resolve() }
+    const m = await mountElement(h(GatedHarness, { start, patches, gate }))
+    button(m.container, O.appearance.edit('Green')).click()
+    await m.flush()
+    button(editor(m.container)!, O.appearance.editor.delete).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(4000)
+    const write = deferred<void>()
+    gate.promise = write.promise
+    button(card(m.container).querySelector<HTMLElement>('[data-undo]')!, O.undo.undo).click()
+    await m.flush()
+    write.reject(new Error('refused'))
+    await m.flush()
+    gate.promise = Promise.resolve()
+    expect(names(m.container)).not.toContain('Green')
+    const back = card(m.container).querySelector<HTMLElement>('[data-undo]')!
+    expect(back.textContent).toContain(O.undo.deleted('Green'))
+    expect(document.activeElement).toBe(button(back, O.undo.undo))
+    expect(card(m.container).querySelector('.o-list-note')!.textContent).toBe(O.saveFailed)
+    await vi.advanceTimersByTimeAsync(2000)
+    await m.flush()
+    expect(card(m.container).querySelector('[data-undo]')).not.toBeNull()
+    await vi.advanceTimersByTimeAsync(UNDO_MS - 2000)
+    await m.flush()
+    expect(card(m.container).querySelector('[data-undo]')).toBeNull()
     await m.unmount()
   })
 

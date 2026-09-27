@@ -142,9 +142,18 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
     el.focus({ preventScroll: true })
     setFocusAfter(null)
   }, [focusAfter])
-  useEffect(() => () => {
-    cancelled.current = true
-    if (!handedOver.current) for (const u of granted.current) void releaseHostPermission(u, storedNow.current).catch(() => undefined)
+  // Live from here, gone at the clean-up. The setup says so again: StrictMode's dev double run cleans up once and sets
+  // up again, and a mark left by that clean-up counted a live form as cancelled — no Connect handed over, every grant
+  // given back at once (round 3, item 1). What the clean-up gave back leaves `granted`, so a second clean-up has
+  // nothing of it to give back again; `handedOver` is the connection's, set by nothing here
+  useEffect(() => {
+    cancelled.current = false
+    return () => {
+      cancelled.current = true
+      if (handedOver.current) return
+      for (const u of granted.current) void releaseHostPermission(u, storedNow.current).catch(() => undefined)
+      granted.current.clear()
+    }
   }, [])
 
   const clearError = (field: ServiceField) => setErrors(x => ({ ...x, [field]: undefined }))
@@ -332,7 +341,11 @@ export function KeyForm({ service, refused, target, focus = false, onConnected }
   const typed = key !== ''
   useEffect(() => (typed ? drafts.hold() : undefined), [typed])
   useEffect(() => { if (focus) field.current?.focus({ preventScroll: true }) }, [focus])
-  useEffect(() => () => { cancelled.current = true }, [])
+  // live from here, gone at the clean-up, and live again after StrictMode's double run (round 3, item 1)
+  useEffect(() => {
+    cancelled.current = false
+    return () => { cancelled.current = true }
+  }, [])
   const submit = async () => {
     setResult('')
     if (!key.trim()) {

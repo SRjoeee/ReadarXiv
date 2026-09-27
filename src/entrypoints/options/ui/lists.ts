@@ -15,32 +15,39 @@ export function withUndo<T, G extends { index: number }>(items: readonly T[], go
  * (the caller drops it), and `failed` holds — the line at the list's foot, O.saveFailed — until a write of the list's
  * lands. A write has landed only when `patch` resolves with the very value its own change produced, which is what
  * surface-config.ts returns and data.ts passes on: a refused write rejects, or, the stored value unreadable, resolves
- * with the configuration in effect — the defaults, whose lists may well lack the item (round 2, item 1). `remove`
- * resolves whether the deletion landed, and never rejects
+ * with the configuration in effect — the defaults, whose lists may well lack the item (round 2, item 1). `attempt`
+ * is a write the list answers itself when refused — a deletion, an undo —: it resolves whether the write landed, never
+ * rejects, and a refusal puts the line up (round 3, item 3)
  */
 export function useListWrites<C>(patch: (fn: (latest: C) => C) => Promise<C>): ListWrites<C> {
   const [failed, setFailed] = useState(false)
-  const attempt = (fn: (latest: C) => C) => {
+  const send = (fn: (latest: C) => C) => {
     let next: C | undefined
-    const write = patch(latest => (next = fn(latest)))
+    // a change that changes nothing (an undo of what another tab put back) is written as a copy: `latest` itself is
+    // what a refusal answers with, and the answer could not tell the two apart
+    const write = patch(latest => {
+      const made = fn(latest)
+      next = made === latest ? { ...made } : made
+      return next
+    })
     return { write, landed: write.then(stored => next !== undefined && stored === next, () => false) }
   }
   const write = (fn: (latest: C) => C): Promise<C> => {
-    const made = attempt(fn)
-    void made.landed.then(done => { if (done) setFailed(false) })
-    return made.write
+    const sent = send(fn)
+    void sent.landed.then(done => { if (done) setFailed(false) })
+    return sent.write
   }
-  const remove = (fn: (latest: C) => C): Promise<boolean> => attempt(fn).landed.then(done => { setFailed(!done); return done })
-  return { failed, write, remove }
+  const attempt = (fn: (latest: C) => C): Promise<boolean> => send(fn).landed.then(done => { setFailed(!done); return done })
+  return { failed, write, attempt }
 }
 
 export interface ListWrites<C> {
-  /** a deletion of the list's was refused, and no write of its has landed since */
+  /** a deletion or an undo of the list's was refused, and no write of its has landed since */
   failed: boolean
   /** resolves or rejects as `patch` does */
   write(fn: (latest: C) => C): Promise<C>
-  /** whether the deletion landed; never rejects */
-  remove(fn: (latest: C) => C): Promise<boolean>
+  /** whether the write landed; never rejects */
+  attempt(fn: (latest: C) => C): Promise<boolean>
 }
 
 /**
@@ -49,6 +56,12 @@ export interface ListWrites<C> {
  * (round 2, item 2)
  */
 export const undoHasFocus = (id: string): boolean => document.activeElement?.closest('[data-undo]')?.getAttribute('data-undo') === id
+
+/**
+ * Whether the focus is nowhere, on the body: an undo storage refused brings its undo row back, and the row takes the
+ * focus then — the pressed one had it, and nothing took it since (round 3, item 3)
+ */
+export const focusLost = (): boolean => document.activeElement === null || document.activeElement === document.body
 
 export const insertAt = <T,>(list: readonly T[], index: number, item: T): T[] => [...list.slice(0, index), item, ...list.slice(index)]
 

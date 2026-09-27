@@ -4,7 +4,8 @@
 // irreversible done, and its clean-up after in today's order; the fallback while an LLM is chosen; the target
 // language's menu. The page writes no refused-key record (ruling 17): the background's configuration watcher does.
 // Task 65: a deletion is committed only once its own write lands, and one storage refused leaves its row, takes back
-// the focus and says so; an origin is given back only when no service may still use it
+// the focus and says so; an origin is given back only when no service may still use it; an undo storage refused
+// brings its undo row back
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createElement as h, useState } from 'react'
@@ -349,6 +350,58 @@ describe('the translation services (§6.3)', () => {
     await m.unmount()
     await m.flush()
     expect(committed()).toEqual([])
+  })
+
+  it('an undo storage refused: the service stays deleted, its undo row comes back with a fresh 5 s and the focus, the list\'s foot says so; its clean-up runs once that undo is past (round 3, item 3)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id } }))
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(4000)
+    const write = deferred<void>()
+    wire.gate = write.promise
+    ;[...card(m.container).querySelector<HTMLElement>('[data-undo]')!.querySelectorAll('button')].find(b => b.textContent === O.undo.undo)!.click()
+    await m.flush()
+    expect(card(m.container).querySelector('[data-undo]')).toBeNull()
+    write.reject(new Error('refused'))
+    await m.flush()
+    await m.flush()
+    wire.gate = null
+    expect(stored().services.map(s => s.id)).toEqual([OTHER.id])
+    const back = card(m.container).querySelector<HTMLElement>('[data-undo]')!
+    expect(back.textContent).toContain(O.undo.deleted('Mine'))
+    expect(document.activeElement).toBe(back.querySelector('button'))
+    expect(card(m.container).querySelector('.o-list-note')!.textContent).toBe(O.saveFailed)
+    // a fresh 5 s: past where the first would have ended, it stands, and nothing is committed yet
+    await vi.advanceTimersByTimeAsync(2000)
+    await m.flush()
+    expect(card(m.container).querySelector('[data-undo]')).not.toBeNull()
+    expect(committed()).toEqual([])
+    await vi.advanceTimersByTimeAsync(UNDO_MS - 2000)
+    await m.flush()
+    await m.flush()
+    expect(card(m.container).querySelector('[data-undo]')).toBeNull()
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`, `release ${MINE.baseURL}`])
+    await m.unmount()
+  })
+
+  it('a later write refused as unreadable leaves the failed-save line up; one that lands takes it away (round 3, item 4)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: MINE.id } }))
+    wire.unreadable = true
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    await m.flush()
+    expect(card(m.container).querySelector('.o-list-note')!.textContent).toBe(O.saveFailed)
+    // still unreadable: answered with the defaults, not with the change's own value
+    radios(m.container)[1]!.click()
+    await m.flush()
+    expect(stored().provider).toBe(MINE.id)
+    expect(card(m.container).querySelector('.o-list-note')!.textContent).toBe(O.saveFailed)
+    wire.unreadable = false
+    radios(m.container)[1]!.click()
+    await m.flush()
+    expect(stored().provider).toBe('google-web')
+    expect(card(m.container).querySelector('.o-list-note')).toBeNull()
+    await m.unmount()
   })
 
   it('two services on one origin, both deleted: the first one\'s clean-up keeps the origin while the second\'s undo is open, and undone, the second still has it (round 2, item 4)', async () => {

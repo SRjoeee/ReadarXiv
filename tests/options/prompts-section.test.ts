@@ -5,7 +5,8 @@
 // on undo, on expiry and on a prompt chosen again; the list drawn only while open and an edit written as the fields it
 // changed; the message's error wired and cleared; a line read as the browser draws it; import's names, shapes and ids.
 // Fix round 2: the list stays drawn while closed, so that a deletion's undo keeps its 5 s; only the editor goes.
-// Task 65: a deletion storage refused leaves its row, which takes back the focus, and says so
+// Task 65: a deletion storage refused leaves its row, which takes back the focus, and says so; an undo storage refused
+// brings its undo row back
 import { createElement as h, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
@@ -464,6 +465,36 @@ describe('the LLM group, fix round 2 (the re-review of Task 63)', () => {
     await m.flush()
     expect(patches.at(-1)!.prompts.promptId).toBe('default')
     expect(list.querySelector('.o-list-note')).toBeNull()
+    await m.unmount()
+  })
+
+  it('an undo storage refused: the prompt stays deleted, its undo row comes back with a fresh 5 s and the focus, and the list\'s foot says so (round 3, item 3)', async () => {
+    const patches: Config[] = []
+    const gate: { promise: Promise<unknown>; unreadable?: boolean } = { promise: Promise.resolve() }
+    const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches, gate }))
+    promptsRow(m.container).click()
+    await m.flush()
+    button(m.container, O.prompts.delete).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(4000)
+    const write = deferred<void>()
+    gate.promise = write.promise
+    button(m.container.querySelector<HTMLElement>('[data-undo]')!, O.undo.undo).click()
+    await m.flush()
+    write.reject(new Error('refused'))
+    await m.flush()
+    gate.promise = Promise.resolve()
+    expect(radios(m.container).map(nameOf)).not.toContain(`My prompt${O.prompts.mine}`)
+    const back = m.container.querySelector<HTMLElement>('[data-undo]')!
+    expect(back.textContent).toContain(O.undo.deleted(MINE.name))
+    expect(document.activeElement).toBe(button(back, O.undo.undo))
+    expect(m.container.querySelector('.o-list-note')!.textContent).toBe(O.saveFailed)
+    await vi.advanceTimersByTimeAsync(2000)
+    await m.flush()
+    expect(m.container.querySelector('[data-undo]')).not.toBeNull()
+    await vi.advanceTimersByTimeAsync(UNDO_MS - 2000)
+    await m.flush()
+    expect(m.container.querySelector('[data-undo]')).toBeNull()
     await m.unmount()
   })
 

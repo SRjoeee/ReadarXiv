@@ -64,9 +64,10 @@ export interface SurfaceConfig {
   subscribe(listener: () => void): () => void
   /**
    * Change the stored configuration, on top of what storage holds when this write's turn comes. Resolves with what
-   * was stored. While the stored value cannot be read the store refuses (config/storage.ts): the state then shows
-   * what is in effect and why, and this rejects with the `ConfigUnreadableError` — a surface that has a notice for it
-   * catches it, one that reports errors lets it through
+   * was stored: the value `change` returned, the same object — the settings page's lists count a write as landed by
+   * that identity (options/ui/lists.ts). While the stored value cannot be read the store refuses (config/storage.ts):
+   * the state then shows what is in effect and why, and this rejects with the `ConfigUnreadableError` — a surface that
+   * has a notice for it catches it, one that reports errors lets it through
    */
   patch(change: (latest: Config) => Config): Promise<Config>
   /** Replace a stored configuration that cannot be read with the defaults, on the same chain (S-O-02). Resolves with what is in effect after; a refusal by storage shows as `resetFailed` */

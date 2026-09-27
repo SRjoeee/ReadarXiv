@@ -2,8 +2,9 @@
 // the model list loads by itself only for an origin already granted, and a press on the field asks for one that is
 // not; checked when submitted, the first field at fault taking the focus; connected before anything is handed over,
 // with a stable id; editing keeps the saved key unless one is typed or it is cleared; the refused key's form. Task 65:
-// a permission the browser grants only after the form is gone is given back, and a form gone loads no list
-import { createElement as h } from 'react'
+// a permission the browser grants only after the form is gone is given back, and a form gone loads no list; both
+// forms are live after StrictMode's double run of their effects, as the settings page renders them
+import { StrictMode, createElement as h, useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Service } from '@/config/services'
 import { mountElement } from '../ui/render-hook'
@@ -556,6 +557,67 @@ describe('KeyForm (§6.3)', () => {
     const describedBy = (field.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean)
     const hint = describedBy.map(id => document.getElementById(id)).find(el => el?.textContent === O.services.keyForm.refused)
     expect(hint).toBeTruthy()
+    await m.unmount()
+  })
+})
+
+describe('the forms under StrictMode, as the settings page renders them (main.tsx; Task 65, round 3, item 1)', () => {
+  beforeEach(() => {
+    setLocale('en')
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    Object.assign(wire, { granted: new Set(['https://openrouter.ai']), asked: [], released: [], listed: [], candidates: [], connect: { ok: true, ms: 42 } })
+  })
+  afterEach(() => { vi.useRealTimers() })
+  const strict = (child: ReturnType<typeof h>) => h(StrictMode, null, child)
+
+  it('this environment runs a mount\'s effects twice under StrictMode, set up, cleaned up and set up again (else the cases below would prove nothing)', async () => {
+    const runs: string[] = []
+    function Probe() {
+      useEffect(() => { runs.push('setup'); return () => { runs.push('cleanup') } }, [])
+      return null
+    }
+    const m = await mountElement(strict(h(Probe)))
+    expect(runs).toEqual(['setup', 'cleanup', 'setup'])
+    await m.unmount()
+  })
+
+  it('ServiceForm: a suggestion\'s grant is kept for the form, not given back at once; Connect hands the service over', async () => {
+    const done: [Service, number][] = []
+    const m = await mountElement(strict(h(ServiceForm, { target: 'cmn', stored: [], onConnected: async (s: Service, ms: number) => { done.push([s, ms]) }, onCancel: () => {} })))
+    button(m.container, 'DeepSeek').click()
+    await m.flush()
+    expect(wire.asked).toEqual(['https://api.deepseek.com/v1'])
+    expect(wire.released).toEqual([])
+    const [, key, model] = inputs(m.container)
+    type(key!, 'sk-1')
+    type(model!, 'm-2')
+    submit(m.container)
+    await m.flush()
+    await m.flush()
+    expect(done.map(([s]) => s.baseURL)).toEqual(['https://api.deepseek.com/v1'])
+    // the origin the saved service uses stays granted
+    expect(wire.released).toEqual([])
+    await m.unmount()
+  })
+
+  it('ServiceForm closed with nothing saved still gives back what it asked for', async () => {
+    const m = await mountElement(strict(h(ServiceForm, { target: 'cmn', stored: [], onConnected: async () => {}, onCancel: () => {} })))
+    button(m.container, 'DeepSeek').click()
+    await m.flush()
+    expect(wire.released).toEqual([])
+    await m.unmount()
+    await m.flush()
+    expect(wire.released).toEqual(['https://api.deepseek.com/v1'])
+  })
+
+  it('KeyForm: a new key that connects is handed over', async () => {
+    const done: Service[] = []
+    const m = await mountElement(strict(h(KeyForm, { service: SVC, refused: true, target: 'cmn', onConnected: async s => { done.push(s) } })))
+    type(inputs(m.container)[0]!, 'sk-new')
+    submit(m.container)
+    await m.flush()
+    await m.flush()
+    expect(done).toEqual([{ ...SVC, apiKey: 'sk-new' }])
     await m.unmount()
   })
 })
