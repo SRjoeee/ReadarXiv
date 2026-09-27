@@ -322,64 +322,37 @@ const O = {
     previewSource: PREVIEW_SOURCE,
     previewTarget: PREVIEW_TARGET,
   },
+  /** §6.3: the prompts, read as words */
   prompts: {
-    /** Prompt management (S-O-6x): the built-in one, the reader's own, and variable buttons that insert at the caret */
-    manager: {
-      view: '查看',
-      viewTitle: '查看内置提示词',
-      copy: '复制并自定义',
-      /** What a copy of the built-in prompt is called (the same thing as the appearance profiles' copySuffix; each language keeps its own punctuation) */
-      copyOf: (name: string) => `${name}（副本）`,
-      copyTitle: '复制并自定义',
-      custom: '自定义',
-      edit: '编辑',
-      editTitle: '编辑提示词',
-      remove: '删除',
-      removeConfirm: '确认删除',
-      create: '新建',
-      createTitle: '新建提示词',
-      /** The two ways importing a prompt file fails (providers/prompt-file.ts reports which) */
-      importFailed: {
-        notJson: '这个文件不是合法的 JSON',
-        badShape: '文件格式不对：应是 [{ "name", "systemPrompt", "prompt" }] 这样的数组，name 与 prompt 必填',
-      },
-      importFile: '导入 JSON',
-      exportMine: '导出自定义',
-      imported: (n: number) => `已导入 ${n} 条`,
-      saved: '已保存',
-      added: '已加入列表',
-      addToList: '加入列表',
-      close: '关闭',
-      cancel: '取消',
-      nameEmpty: '名称不能为空',
-      promptEmpty: '用户提示词不能为空',
-      systemPrompt: 'System prompt（收发协议会自动追加在它后面，改不掉）',
-      userPrompt: '用户提示词',
-      name: '名称',
-      insert: '插入变量：',
-      /** The descriptions of the two prompts shipped with the extension, by id */
-      builtIn: {
-        default: '通用学术翻译：术语用既定译法，人名、期刊名、代码与链接保留原文',
-        'precision-rewrite': '"翻译即改写"：摆脱原文句法、消除翻译腔，按目标语言的表达习惯重写，术语与格式照旧',
-      },
-      tokens: {
-        targetLanguage: '目标语言的英文名',
-        input: '待翻译的 JSON 段落（用户消息里必须有）',
-        paperTitle: '论文标题',
-        abstract: '论文摘要',
-        sectionTitle: '当前章节标题',
-        glossary: '术语表',
-      },
+    title: '提示词',
+    mine: '我的',
+    copy: '复制后修改',
+    locked: '内置提示词不能直接改',
+    done: '完成',
+    delete: '删除',
+    create: '新建提示词…',
+    import: '导入…',
+    export: '导出…',
+    newName: '新提示词',
+    name: '名称',
+    /** a prompt's two parts, named for what they do; nothing names the protocol the extension appends after them */
+    parts: { system: ['指令', '翻译时始终遵守的要求'], user: ['消息', '每次随原文一起发送'] },
+    /** its variables, drawn as labels, never {{…}} */
+    tokens: { targetLanguage: '目标语言', input: '原文', paperTitle: '论文标题', abstract: '摘要', sectionTitle: '章节标题', glossary: '术语表' },
+    /** What a copy of a built-in prompt is called */
+    copyOf: (name: string) => `${name}（副本）`,
+    /** The descriptions of the two prompts shipped with the extension, by id */
+    builtIn: {
+      default: '通用学术翻译：术语用既定译法，人名、期刊名、代码与链接保留原文',
+      'precision-rewrite': '"翻译即改写"：摆脱原文句法、消除翻译腔，按目标语言的表达习惯重写，术语与格式照旧',
     },
-    title: '提示词', glossaryTooBig: '术语表太长，超出上限后没有保存；请减少条目或缩短内容', glossary: '术语表', glossaryHint: '每行「原文, 译文」，让同一篇里的译法一致', glossaryCount: (n: number) => `${n} 条`, onlyLlm: '只对 LLM 服务生效',
-    /** The glossary's line-by-line problems (providers/glossary.ts reports which) */
-    glossaryIssue: {
-      /** The whole sentence is the pack's to assemble: punctuation is part of a language, and the Chinese sentence is not built the way "Line 1: ..." is */
-      noSeparator: (n: number) => `第 ${n} 行缺少分隔符，应写成「原文, 译文」`,
-      emptySource: (n: number) => `第 ${n} 行原文为空`,
-      emptyTarget: (n: number) => `第 ${n} 行译文为空`,
-    },
-    glossaryPlaceholder: 'token, 词元\nembedding, 嵌入' },
+    imported: (n: number) => `已导入 ${n} 条`,
+    importFailed: { cantRead: '无法读取这个文件', noPrompts: '这个文件里没有可用的提示词' },
+    nameEmpty: '名称不能为空',
+    messageEmpty: '消息不能为空',
+  },
+  /** §6.3: the LLM group */
+  llm: { aside: '提示词与术语表只对 LLM 服务生效', empty: '添加 LLM 服务后可设置提示词与术语表' },
   close: '关闭',
   data: {
     cache: '已缓存的译文',

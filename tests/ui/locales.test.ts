@@ -118,15 +118,6 @@ describe('copy names', () => {
     expect(en.endsWith(LOCALES.en.O.reading.copySuffix)).toBe(true)
     setLocale('zh-CN')
   })
-
-  it('the per-line glossary problem sentence is assembled by the pack, Chinese and English punctuation each their own', () => {
-    for (const code of LOCALE_CODES) {
-      const text = LOCALES[code].O.prompts.glossaryIssue.noSeparator(2)
-      expect(text, code).toContain('2')
-      // 「第 2 行缺少…」 / "Line 2 has no separator…": the two parts must not be glued together directly
-      expect(text, code).not.toMatch(/2[A-Za-z]/)
-    }
-  })
 })
 
 describe('style previews', () => {

@@ -7,7 +7,7 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
-import { addService, chooseBuiltIn, chooseLanguage, chooseStyle, chooseUiLanguage, clearKeyAndReconnect, openOptions, openSection, pick, seedService, setPreload, setSwitch } from './options-page.mjs'
+import { addService, chooseBuiltIn, chooseLanguage, chooseStyle, chooseUiLanguage, clearKeyAndReconnect, openOptions, openSection, seedService, setPreload, setSwitch } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -297,28 +297,31 @@ await setPreload(options, { range: '按需翻译' })
   await paperTab.close()
 }
 
-// ── The settings page: the target language (the ISO 639-3 code of configuration v4) and a custom prompt apply at once and survive a reload ──────
-await openSection(options, 'prompts')
-await options.getByRole('button', { name: '新建', exact: true }).click()
-await options.getByLabel('名称').fill('e2e 提示词')
-await options.getByRole('button', { name: '加入列表', exact: true }).click()
-await pick(options.getByRole('radio').last())
+// ── The settings page: the target language (the ISO 639-3 code of configuration v4) and a prompt of one's own apply at once and survive a reload ──────
+// The LLM group shows once there is an LLM service (§6.3: with none it is one line): one is put in the configuration, not chosen
+await seedService(extensionWorker(), { id: 'svc-e2eprmpt', name: 'e2e prompts', baseURL: 'https://openrouter.ai/api/v1', model: 'x', apiKey: 'sk-unused' }, { choose: false })
+await openSection(options, 'translate')
+const promptsRow = () => options.locator('[data-row="translate/prompts"]')
+await promptsRow().click()
+await options.getByRole('button', { name: '新建提示词…', exact: true }).click()
+await options.getByLabel('名称', { exact: true }).fill('e2e 提示词')
+await options.getByRole('button', { name: '完成', exact: true }).click()
 await options.reload({ waitUntil: 'domcontentloaded' })
-await openSection(options, 'prompts')
-await options.getByText('e2e 提示词').waitFor({ timeout: 5_000 }).catch(() => undefined)
-await openSection(options, 'services')
+await openSection(options, 'translate')
 const langBack = await options.getByRole('button', { name: '目标语言' }).textContent()
-await openSection(options, 'prompts')
-const promptRow = options.getByRole('radio').last()
-const promptBack = (await options.getByText('e2e 提示词').count()) === 1 && (await promptRow.isChecked())
+await promptsRow().click()
+// the radio is named by its label, its tag (O.prompts.mine) included: the name starts with the prompt's
+const promptRadio = options.getByRole('radio', { name: /^e2e 提示词/ })
+await promptRadio.waitFor({ timeout: 5_000 }).catch(() => undefined)
+const promptBack = (await promptRadio.count()) === 1 && (await promptRadio.isChecked())
 check('the settings page: the target language and the custom prompt survive a reload and stay selected', /日语/.test(langBack ?? '') && promptBack, `language ${langBack}, prompt ${promptBack}`)
-// Delete it and choose the default again: the wrong-key part later must go through the default prompt.
-// Two clicks, as every destructive action on this page: the first arms the confirmation, the second deletes (ui/Confirm.tsx)
+// Delete it, and the default is chosen again: the wrong-key part later goes through the default prompt. Deleting is
+// undone, not confirmed (§6.2): the undo row stands for 5 s, and is left alone here
 await options.getByRole('button', { name: '删除', exact: true }).click()
-await options.getByRole('button', { name: '确认删除', exact: true }).click()
+await options.getByText('已删除「e2e 提示词」').waitFor({ timeout: 5_000 }).catch(() => undefined)
 await chooseLanguage(options, '简体中文', '简体中文')
-await openSection(options, 'prompts')
-const promptGone = (await options.getByText('e2e 提示词').count()) === 0
+await openSection(options, 'translate')
+const promptGone = (await options.getByRole('radio', { name: /^e2e 提示词/ }).count()) === 0
 check('the settings page: after deleting the custom prompt the default is chosen again', promptGone, `left over ${promptGone ? 0 : 1}`)
 
 // ── The settings page: translation appearance and cache management (§7.5 / §9) ──────────────────────────

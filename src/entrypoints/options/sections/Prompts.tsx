@@ -1,114 +1,219 @@
-// Prompts: how an LLM service translates. The free services read neither, so the section says
-// so rather than hiding itself — a reader looking for the glossary should find it either way.
-import { useEffect, useRef, useState } from 'react'
-import { configSchema } from '@/config/schema'
-import { isLlmChosen } from '@/config/services'
-import { type GlossaryEntry, formatGlossaryText, parseGlossary } from '@/providers/glossary'
-import { codeAreaClass } from '@/ui/Field'
-import { O } from '@/ui/strings'
+// The prompts (the redesign's design, §6.3): the row's value is the prompt in use, its description the prompt's.
+// Opened, a radio list in place: each prompt with its description, one's own carrying its tag (O.prompts.mine) and the
+// start of its instructions. The chosen prompt shows its text under it, read as words, in two parts named for what
+// they do — the instructions and the message —; nothing names the protocol the extension appends. A built-in cannot be
+// changed: Copy to edit makes one's own copy and opens it. One's own is written in place — its name, its two parts, the
+// variables inserted from a row of labels — each change stored at once when it holds a name and a message; Done closes
+// the list; Delete is undone. The list ends with the new-prompt row and, at the same row's end, Import… and Export…
+// (the maintainer: in the list, not in a menu)
+import { Plus } from 'lucide'
+import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react'
+import { PromptFileFormatError, downloadPromptFile, readPromptFile } from '@/providers/prompt-file'
+import {
+  BUILT_IN_PROMPTS, DEFAULT_PROMPT_ID, PROMPT_TOKENS, type PromptToken, type PromptTemplate, type PromptsConfig,
+  getTokenCellText, promptExists, selectPrompt,
+} from '@/providers/prompt-library'
+import { getRandomUUID as uuid } from '@/shared/uuid'
+import { Button } from '@/ui/controls/Button'
+import { Field, TextInput } from '@/ui/controls/Field'
+import { Icon } from '@/ui/controls/Icon'
+import { radioKeys } from '@/ui/controls/radio'
+import { Reveal } from '@/ui/controls/Reveal'
 import { drafts } from '@/ui/drafts'
+import { O } from '@/ui/strings'
 import type { OptionsData } from '../data'
-import { PromptManager } from '../PromptManager'
+import { insertAt, withItem, withUndo } from '../ui/lists'
+import { Row, Status, Value } from '../ui/Row'
+import { UndoRow } from '../ui/UndoRow'
+import { PromptText, insertToken, plainWords, readPrompt } from './PromptText'
 
-export function Prompts({ data }: { data: OptionsData }) {
-  const { config, patch } = data
-  // The glossary is text on the page and entries in storage: pasting a batch beats editing rows
-  const [text, setText] = useState<string | null>(null)
-  /** The glossary this text last came from or last wrote, in the text's own form: a stored value equal to it is not news */
-  const own = useRef<string | null>(null)
-  /** Writes of this box not seen landing yet. While one is out the store is behind the reader, not ahead of them */
-  const pending = useRef(0)
-  /**
-   * The last write was refused: the text is a draft the store does not have, and stays until a later write lands.
-   * State, not a ref: the refusal arrives after the render that read it (Codex on #185)
-   */
-  const [failed, setFailed] = useState(false)
-  /**
-   * The draft hold of the writes themselves (ui/drafts.ts), taken the moment a write starts and kept until the latest
-   * text has landed: a refused write leaves the text unsaved, and a reload asked for elsewhere in the gap before
-   * React renders the refusal would otherwise find no draft (local review)
-   */
-  const writing = useRef<(() => void) | null>(null)
-  /** The entries of the newest write issued: the hold ends when that one has landed, not when an older one has */
-  const latest = useRef<readonly GlossaryEntry[] | null>(null)
-  useEffect(() => () => { writing.current?.(); writing.current = null }, [])
-  // The text follows the stored glossary: the first read, and a change saved elsewhere (Codex on #185) — never the
-  // reader's own typing coming back to them. What this box wrote is not news when it lands; while a write is still
-  // out, whatever the store says is older than the text (local review: the earlier version
-  // took every difference for a change made elsewhere and put back, mid-word, the letter the reader had just typed).
-  // A draft that does not parse or fit yet is the reader's to finish; the entries it saves later are their later word
-  useEffect(() => {
-    if (!config) return
-    const stored = formatGlossaryText(config.glossary)
-    if (text === null) {
-      own.current = stored
-      setText(stored)
-      return
-    }
-    if (stored === own.current || pending.current > 0 || failed) return
-    const local = parseGlossary(text)
-    if (local.issues.length > 0 || !configSchema.shape.glossary.safeParse(local.entries).success) return
-    own.current = stored
-    setText(stored)
-  }, [config, text, failed])
-  const parsed = text === null ? null : parseGlossary(text)
-  // A table can parse line by line and still break the schema's limits (200 entries, per-field
-  // length, 6000 characters in all). Writing it would reject silently and leave the reader looking
-  // at a glossary that is not in storage (Codex on #157)
-  const overLimit = parsed !== null && parsed.issues.length === 0 && !configSchema.shape.glossary.safeParse(parsed.entries).success
-  // A table that is not written yet is a draft: the page must not reload under it (ui/drafts.ts); a refused write leaves one too
-  const unsaved = parsed !== null && (parsed.issues.length > 0 || overLimit || failed)
-  useEffect(() => (unsaved ? drafts.hold() : undefined), [unsaved])
-  if (!config || parsed === null || text === null) return null
+/** A new prompt's start: it names the target language and carries the source text, so a name alone makes it work (Codex on #39) */
+const NEW_SYSTEM_PROMPT = `You are a professional ${getTokenCellText('targetLanguage')} translator of academic papers.`
+const NEW_USER_PROMPT = `Translate the following into ${getTokenCellText('targetLanguage')}:\n\n${getTokenCellText('input')}`
 
+const isBuiltIn = (p: PromptTemplate) => Object.hasOwn(BUILT_IN_PROMPTS, p.id)
+const describe = (p: PromptTemplate) => (isBuiltIn(p) ? (O.prompts.builtIn as Record<string, string>)[p.id] ?? '' : plainWords(p.systemPrompt).slice(0, 120))
+
+export function PromptsRow({ data }: { data: OptionsData }) {
+  const [open, setOpen] = useState(false)
+  const row = useRef<HTMLButtonElement>(null)
+  const chosen = selectPrompt(data.config!.prompts)
   return (
     <>
-      {!isLlmChosen(config) && <p className="mb-4 rounded-card bg-card px-3.5 py-2.5 text-[12px] text-fg-2">{O.prompts.onlyLlm}</p>}
-
-      <h3 className="mb-2 text-[14px] font-bold">{O.prompts.title}</h3>
-      <div className="mb-8 rounded-card border border-line bg-card p-3.5">
-        <PromptManager value={config.prompts} onChange={update => patch(latest => ({ ...latest, prompts: update(latest.prompts) }))} />
-      </div>
-
-      <div className="mb-2 flex items-end justify-between">
-        <span className="flex flex-col">
-          <h3 className="text-[14px] font-bold">{O.prompts.glossary}</h3>
-          <span className="text-[11px] text-fg-2">{O.prompts.glossaryHint}</span>
-        </span>
-        <span className="text-[12px] text-fg-2">{O.prompts.glossaryCount(parsed.entries.length)}</span>
-      </div>
-      <textarea
-        aria-label={O.prompts.glossary}
-        value={text}
-        rows={6}
-        placeholder={O.prompts.glossaryPlaceholder}
-        onChange={e => {
-          setText(e.target.value)
-          // Only a table that parses **and** fits the schema is written; the rest stays on screen
-          // with its reason
-          const next = parseGlossary(e.target.value)
-          if (next.issues.length === 0 && configSchema.shape.glossary.safeParse(next.entries).success) {
-            own.current = formatGlossaryText(next.entries)
-            pending.current++
-            latest.current = next.entries
-            writing.current ??= drafts.hold()
-            patch(stored => ({ ...stored, glossary: next.entries }))
-              .then(
-                () => {
-                  setFailed(false)
-                  if (latest.current === next.entries) { writing.current?.(); writing.current = null }
-                },
-                () => setFailed(true),
-              )
-              .finally(() => { pending.current-- })
-          }
-        }}
-        className={codeAreaClass}
-      />
-      {parsed.issues.map(issue => (
-        <p key={issue.line} className="mt-1 text-[11px] text-accent">{O.prompts.glossaryIssue[issue.reason](issue.line)}</p>
-      ))}
-      {overLimit && <p className="mt-1 text-[11px] text-accent">{O.prompts.glossaryTooBig}</p>}
+      <Row kind="button" row="translate/prompts" words={O.search.keywords['translate/prompts']} label={O.prompts.title}
+        // the row's own description steps aside while the list under it says the same (settings-2)
+        description={open ? undefined : describe(chosen)} trailing={<Value>{chosen.name}</Value>} expanded={open} buttonProps={{ ref: row }}
+        onPress={() => setOpen(o => !o)} />
+      <Reveal open={open}>
+        <PromptList data={data} onDone={() => { setOpen(false); row.current?.focus() }} />
+      </Reveal>
     </>
+  )
+}
+
+interface GonePrompt { prompt: PromptTemplate; index: number; chosen: boolean; focus: boolean }
+
+function PromptList({ data, onDone }: { data: OptionsData; onDone: () => void }) {
+  const { patch } = data
+  const prompts = data.config!.prompts
+  const [gone, setGone] = useState<GonePrompt[]>([])
+  /** a prompt just made or copied: its name field takes the focus (§9) */
+  const [fresh, setFresh] = useState<string | null>(null)
+  const [note, setNote] = useState<{ alert: boolean; words: string } | null>(null)
+  const file = useRef<HTMLInputElement>(null)
+  const radios = useRef(new Map<string, HTMLElement>())
+  const setPrompts = (fn: (c: PromptsConfig) => PromptsConfig) => patch(latest => ({ ...latest, prompts: fn(latest.prompts) }))
+  // a choice from a list another tab has since changed must not store an id that names nothing (promptExists)
+  const choose = (id: string) => void setPrompts(c => (promptExists(c, id) ? { ...c, promptId: id } : c))
+  const add = (p: PromptTemplate) => {
+    setFresh(p.id)
+    void setPrompts(c => ({ patterns: [...c.patterns, p], promptId: p.id }))
+  }
+  const remove = (p: PromptTemplate) => {
+    setGone(g => [...g, { prompt: p, index: prompts.patterns.findIndex(x => x.id === p.id), chosen: prompts.promptId === p.id, focus: !document.documentElement.hasAttribute('data-axt-pointer') }])
+    void setPrompts(c => ({ patterns: c.patterns.filter(x => x.id !== p.id), promptId: c.promptId === p.id ? DEFAULT_PROMPT_ID : c.promptId }))
+  }
+  const undo = (g: GonePrompt) => {
+    setGone(x => x.filter(y => y !== g))
+    void setPrompts(c => (c.patterns.some(x => x.id === g.prompt.id) ? c : { patterns: insertAt(c.patterns, g.index, g.prompt), promptId: g.chosen && c.promptId === DEFAULT_PROMPT_ID ? g.prompt.id : c.promptId }))
+  }
+  const importFile = async (f: File | undefined) => {
+    if (!f) return
+    try {
+      const entries = await readPromptFile(f)
+      if (entries.length === 0) {
+        setNote({ alert: true, words: O.prompts.importFailed.noPrompts })
+        return
+      }
+      const added = entries.map(entry => ({ ...entry, id: uuid() }))
+      void setPrompts(c => ({ ...c, patterns: [...c.patterns, ...added] }))
+      setNote({ alert: false, words: O.prompts.imported(entries.length) })
+    } catch (e) {
+      // the parser says which kind; the sentence is the pack's (Codex on #161)
+      setNote({ alert: true, words: e instanceof PromptFileFormatError && e.kind === 'badShape' ? O.prompts.importFailed.noPrompts : O.prompts.importFailed.cantRead })
+    } finally {
+      if (file.current) file.current.value = ''
+    }
+  }
+  const builtIns = Object.values(BUILT_IN_PROMPTS)
+  const chosenId = selectPrompt(prompts).id
+  const ids = [...builtIns, ...prompts.patterns].map(p => p.id)
+  const keys = radioKeys(ids, chosenId, () => true, choose, i => radios.current.get(ids[i]!)?.focus())
+  const rowOf = (p: PromptTemplate, mine: boolean) => (
+    <Fragment key={p.id}>
+      <Row kind="radio" level={1} checked={p.id === chosenId} onChoose={() => choose(p.id)} label={p.name} tag={mine ? O.prompts.mine : undefined} description={describe(p)} arriving={fresh === p.id}
+        radioRef={el => { if (el) radios.current.set(p.id, el); else radios.current.delete(p.id) }} />
+      {p.id === chosenId && (mine
+        ? <OwnPrompt key={p.id} prompt={p} focus={fresh === p.id} onChange={next => setPrompts(c => ({ ...c, patterns: withItem(c.patterns, next) }))} onDone={onDone} onDelete={() => remove(p)} />
+        : <BuiltInPrompt prompt={p} onCopy={() => add({ ...p, id: uuid(), name: O.prompts.copyOf(p.name) })} />)}
+    </Fragment>
+  )
+  return (
+    // a radio group's arrows (§9), only from a prompt's own radio: the editor of the chosen prompt sits inside the
+    // group, and its fields keep their arrows (the styles and services cards' lesson, Tasks 56 and 60)
+    <div role="radiogroup" aria-label={O.prompts.title} onKeyDown={e => { if ([...radios.current.values()].includes(e.target as HTMLElement)) keys(e) }}>
+      {builtIns.map(p => rowOf(p, false))}
+      {withUndo(prompts.patterns, gone).map(entry => ('gone' in entry
+        ? <UndoRow key={`gone-${entry.gone.prompt.id}`} level={1} name={entry.gone.prompt.name} focus={entry.gone.focus} onUndo={() => undo(entry.gone)} onExpire={() => setGone(x => x.filter(y => y !== entry.gone))} />
+        : rowOf(entry.item, true)))}
+      <div className="o-row" data-srow="" data-level="1" data-lead="" data-search={O.prompts.create.toLowerCase()}>
+        <button type="button" className="o-add" onClick={() => add({ id: uuid(), name: O.prompts.newName, systemPrompt: NEW_SYSTEM_PROMPT, prompt: NEW_USER_PROMPT })}>
+          <span data-part="lead" className="o-lead"><Icon node={Plus} size={14} /></span>
+          <span data-part="words" className="o-words"><span className="o-label">{O.prompts.create}</span></span>
+        </button>
+        <span data-part="trail" className="o-trail">
+          <Button type="button" kind="text" size="md" onClick={() => file.current?.click()}>{O.prompts.import}</Button>
+          {prompts.patterns.length > 0 && <Button type="button" kind="text" size="md" onClick={() => downloadPromptFile(prompts.patterns)}>{O.prompts.export}</Button>}
+        </span>
+        <input ref={file} type="file" accept=".json,application/json" hidden onChange={e => void importFile(e.target.files?.[0])} />
+      </div>
+      {note && <p className="o-prompt-note" role="status">{note.alert ? <Status tone="alert">{note.words}</Status> : note.words}</p>}
+    </div>
+  )
+}
+
+/** A part of a prompt, named for what it does */
+function Part({ name, error, children }: { name: readonly [string, string]; error?: string; children: ReactNode }) {
+  return (
+    <div className="o-part">
+      <div className="o-part-title"><b>{name[0]}</b><span>{name[1]}</span></div>
+      {children}
+      {error && <Status tone="alert">{error}</Status>}
+    </div>
+  )
+}
+
+function BuiltInPrompt({ prompt, onCopy }: { prompt: PromptTemplate; onCopy: () => void }) {
+  return (
+    <div className="o-prompt">
+      <Part name={O.prompts.parts.system}><PromptText text={prompt.systemPrompt} label={O.prompts.parts.system[0]} /></Part>
+      <Part name={O.prompts.parts.user}><PromptText text={prompt.prompt} label={O.prompts.parts.user[0]} /></Part>
+      <div className="o-formbar">
+        <Button type="button" kind="neutral" size="sm" onClick={onCopy}>{O.prompts.copy}</Button>
+        <span className="o-note">{O.prompts.locked}</span>
+      </div>
+    </div>
+  )
+}
+
+/** One's own, written in place: stored at each change while it holds a name and a message; a draft while it does not */
+function OwnPrompt({ prompt, focus, onChange, onDone, onDelete }: { prompt: PromptTemplate; focus: boolean; onChange: (next: PromptTemplate) => unknown; onDone: () => void; onDelete: () => void }) {
+  const [name, setName] = useState(prompt.name)
+  const [system, setSystem] = useState(prompt.systemPrompt)
+  const [message, setMessage] = useState(prompt.prompt)
+  const [errors, setErrors] = useState<{ name?: string; message?: string }>({})
+  const nameField = useRef<HTMLInputElement>(null)
+  const systemText = useRef<HTMLDivElement>(null)
+  const messageText = useRef<HTMLDivElement>(null)
+  /** the part the caret was last in: a variable goes there */
+  const last = useRef<'system' | 'message'>('message')
+  const whole = name.trim() !== '' && message.trim() !== ''
+  useEffect(() => (whole ? undefined : drafts.hold()), [whole])
+  useEffect(() => { if (focus) nameField.current?.focus({ preventScroll: true }) }, [focus])
+  const write = (next: { name: string; systemPrompt: string; prompt: string }) => {
+    if (next.name.trim() && next.prompt.trim()) onChange({ id: prompt.id, ...next, name: next.name.trim() })
+  }
+  const insert = (token: PromptToken) => {
+    const el = (last.current === 'system' ? systemText : messageText).current
+    if (!el) return
+    insertToken(el, token)
+    const text = readPrompt(el)
+    if (last.current === 'system') {
+      setSystem(text)
+      write({ name, systemPrompt: text, prompt: message })
+    } else {
+      setMessage(text)
+      write({ name, systemPrompt: system, prompt: text })
+    }
+  }
+  const done = () => {
+    const found = { name: name.trim() ? undefined : O.prompts.nameEmpty, message: message.trim() ? undefined : O.prompts.messageEmpty }
+    setErrors(found)
+    if (found.name) nameField.current?.focus()
+    else if (found.message) messageText.current?.focus()
+    else onDone()
+  }
+  return (
+    <div className="o-prompt">
+      <Field label={O.prompts.name} error={errors.name}>
+        <TextInput ref={nameField} value={name} autoComplete="off" onChange={e => { setName(e.target.value); write({ name: e.target.value, systemPrompt: system, prompt: message }) }} />
+      </Field>
+      <Part name={O.prompts.parts.system}>
+        <PromptText ref={systemText} editable text={prompt.systemPrompt} label={O.prompts.parts.system[0]} onFocus={() => { last.current = 'system' }}
+          onText={t => { setSystem(t); write({ name, systemPrompt: t, prompt: message }) }} />
+      </Part>
+      <Part name={O.prompts.parts.user} error={errors.message}>
+        <PromptText ref={messageText} editable text={prompt.prompt} label={O.prompts.parts.user[0]} onFocus={() => { last.current = 'message' }}
+          onText={t => { setMessage(t); write({ name, systemPrompt: system, prompt: t }) }} />
+      </Part>
+      <div className="o-vars">
+        {/* a press keeps the caret where it was: the variable goes there */}
+        {PROMPT_TOKENS.map(t => <button key={t} type="button" className="o-var o-var-button" onPointerDown={e => e.preventDefault()} onClick={() => insert(t)}>{O.prompts.tokens[t]}</button>)}
+      </div>
+      <div className="o-formbar">
+        <Button type="button" kind="brand" size="md" onClick={done}>{O.prompts.done}</Button>
+        <Button type="button" kind="text" size="md" onClick={onDelete}>{O.prompts.delete}</Button>
+      </div>
+    </div>
   )
 }

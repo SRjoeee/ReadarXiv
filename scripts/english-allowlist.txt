@@ -71,7 +71,7 @@ tests/config/languages.test.ts 3
 tests/config/storage.test.ts 20  # raised 2026-09-17: the migration test starting from v8 carries a glossary entry with a Chinese translation in and out — the non-Latin value a migration must not mangle
 tests/core/marks.test.ts 8
 tests/e2e/a11y.mjs 2
-tests/e2e/extension.mjs 76  # raised 2026-09-26: the cache-clearing locator now names the translation cache's own row and the PDF row it is told apart from (finding 4, Task 13); +5, 2026-09-26: the wrong-key section tests the remembered refusal
+tests/e2e/extension.mjs 75  # raised 2026-09-26: the cache-clearing locator now names the translation cache's own row and the PDF row it is told apart from (finding 4, Task 13); +5, 2026-09-26: the wrong-key section tests the remembered refusal; −1, 2026-09-27: the prompt's check in the LLM group (Part 5, Task 63)
 tests/e2e/image.mjs 11  # lowered 2026-09-26: image translation is one switch, the mode-gate section and the per-mode loops are gone (the redesign's design, §4)
 tests/e2e/layout.mjs 11  # 2026-09-20: +2, the reader's-place check finds the popup's mode, translate and restore buttons by their Chinese labels, as the rest of the suite does; 2026-09-21: +1, the figure viewer's restore-under-the-dialog check presses the popup's restore button by its label
 tests/e2e/local-endpoint.mjs 7  # +5, 2026-09-27: the model list's check finds the form's controls and its placeholder by their Chinese words (Part 5, Task 61)
@@ -88,7 +88,6 @@ tests/extractor/extract.test.ts 2  # raised 2026-09-17: “any Unicode letter ma
 tests/image/run.test.ts 11
 tests/image/svg-targets.test.ts 2
 tests/options/glossary.test.ts 5  # 2026-09-27: the glossary's pairs, typed and pasted in the reader's language (Part 5, Task 62)
-tests/options/prompts-section.test.ts 13
 tests/options/styles.test.ts 1  # 2026-09-27: fix round 1, item 7's own expectation — the sample sentence's Chinese character that must not leak into a style row's search words
 tests/pipeline/run.test.ts 3
 tests/pipeline/session-guard.test.ts 5
@@ -145,5 +144,5 @@ tests/scheduler/title.test.ts 6
 tests/shared/digest.test.ts 1
 tests/shared/transport.test.ts 1
 tests/ui/language-names.test.ts 9
-tests/ui/locales.test.ts 3
+tests/ui/locales.test.ts 2
 tests/ui/strings.test.ts 11  # raised 2026-09-13: expectations for the locale-pack sentences (fallback text, drawer issue, popup action error); −2, 2026-09-27: the drawer's issue sentence left with its key (Part 5, Task 60)

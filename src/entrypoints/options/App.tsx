@@ -14,7 +14,6 @@ import { type Place, SECTIONS, type Section, parseHash, reach } from './hash'
 import { Appearance } from './sections/Appearance'
 import { Data } from './sections/Data'
 import { LanguageFoot, LanguageRow } from './sections/Language'
-import { Prompts } from './sections/Prompts'
 import { Reading } from './sections/Reading'
 import { Translate } from './sections/Translate'
 import { Card } from './ui/Card'
@@ -28,7 +27,7 @@ export type Content = Record<Section, (data: OptionsData) => ReactNode>
 
 /** What each section draws. Until its own task replaces it, a section draws the page's parts from before the redesign */
 const CONTENT: Content = {
-  translate: data => <><Translate data={data} /><Prompts data={data} /></>,
+  translate: data => <Translate data={data} />,
   appearance: data => <Appearance data={data} />,
   reading: data => <Reading data={data} />,
   data: data => <Data data={data} />,

@@ -27,6 +27,7 @@ import { Card, GroupHeading } from '../ui/Card'
 import { insertAt, shut, useLinger, withUndo } from '../ui/lists'
 import { IconButton, Row, Status, Value } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
+import { Llm } from './Llm'
 import { KeyForm, ServiceForm } from './ServiceForm'
 
 const hostOf = (url: string): string => {
@@ -63,6 +64,7 @@ export function Translate({ data }: { data: OptionsData }) {
         </Card>
       </Reveal>
       <TargetLanguage data={data} />
+      <Llm data={data} />
     </>
   )
 }
