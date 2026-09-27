@@ -14,18 +14,21 @@ import { FORBIDDEN_TO_WARNING, latin1, latin1Bytes, MARK_DEF, markUnits, patch, 
  * whose float page would overshoot) and then \vspace*s up to the same \pagetotal (a \vspace* is kept at a column's
  * top). Skipped while a run-in head, a list label or a heading's no-break is pending: \newpage there sets the head
  * alone. \axtsyncpoints{envs} puts a point before every sectioning command, the given environments, \item and float.
- * AXT-BREAK and AXT-GAP lines record what the lock did, for the evaluation's suspicious pages.
+ * AXT-BREAK and AXT-GAP lines record what the lock did, for the evaluation's suspicious pages. Both macros read the
+ * page after \axt@settle: a line past the column's foot moves on only at the next breakpoint, so after a box a zero
+ * skip (the breakpoint \parskip would have given) and \par let the page builder place it first.
  */
 export const SYNC_TEX = String.raw`\makeatletter
 \newcount\axt@pages \newcount\axt@rel \newcount\axt@h
 \AddToHook{shipout/after}{\global\advance\axt@pages\@ne}
 \def\axt@col{\if@twocolumn\if@firstcolumn1\else2\fi\else1\fi}
-\protected\def\axtat#1{\ifvmode\ifinner\else\par\message{^^JAXT-AT #1 \the\axt@pages\space\axt@col\space\the\pagetotal^^J}\fi\fi}
+\def\axt@settle{\ifnum\lastnodetype>0 \ifnum\lastnodetype<11 \vskip\z@\par\fi\fi}
+\protected\def\axtat#1{\ifvmode\ifinner\else\par\axt@settle\message{^^JAXT-AT #1 \the\axt@pages\space\axt@col\space\the\pagetotal^^J}\fi\fi}
 \def\axt@cmp#1#2{\axt@rel=0 \ifnum\axt@pages<#1 \axt@rel=-1 \else\ifnum\axt@pages>#1 \axt@rel=1 \else\ifnum\axt@col<#2 \axt@rel=-1 \else\ifnum\axt@col>#2 \axt@rel=1 \fi\fi\fi\fi}
 \def\axt@step#1#2{\ifnum\axt@rel<0 \ifx\@deferlist\@empty\message{^^JAXT-BREAK \the\axt@pages^^J}\newpage\axt@cmp{#1}{#2}\else\axt@rel=2 \fi\fi}
 \def\axt@sync#1#2#3{\axt@cmp{#1}{#2}\axt@step{#1}{#2}\axt@step{#1}{#2}\axt@step{#1}{#2}%
 \ifnum\axt@rel=0 \ifdim\pagetotal<\dimexpr#3-0.5pt\relax\message{^^JAXT-GAP \the\axt@pages\space\the\dimexpr#3-\pagetotal\relax^^J}\vspace*{\dimexpr#3-\pagetotal\relax}\fi\fi}
-\protected\def\axtsync#1{\ifvmode\ifinner\else\if@noskipsec\else\if@inlabel\else\if@nobreak\else\ifcsname axt@t@#1\endcsname\par\expandafter\expandafter\expandafter\axt@sync\csname axt@t@#1\endcsname\fi\fi\fi\fi\fi\fi}
+\protected\def\axtsync#1{\ifvmode\ifinner\else\if@noskipsec\else\if@inlabel\else\if@nobreak\else\ifcsname axt@t@#1\endcsname\par\axt@settle\expandafter\expandafter\expandafter\axt@sync\csname axt@t@#1\endcsname\fi\fi\fi\fi\fi\fi}
 \def\axt@hook{\ifhmode\if@noskipsec\else\par\fi\fi\global\advance\axt@h\@ne\axtat{h\the\axt@h}\axtsync{h\the\axt@h}}
 \protected\def\axtsyncpoints#1{\AtBeginDocument{\AddToHook{cmd/section/before}{\axt@hook}\AddToHook{cmd/subsection/before}{\axt@hook}\AddToHook{cmd/subsubsection/before}{\axt@hook}\AddToHook{cmd/paragraph/before}{\axt@hook}\AddToHook{cmd/subparagraph/before}{\axt@hook}\@for\axt@e:=#1\do{\AddToHook{env/\axt@e/before}{\axt@hook}}\AddToHook{cmd/item/before}{\ifvmode\axt@hook\fi}\AddToHook{cmd/@float/before}{\ifvmode\axt@hook\fi}\AddToHook{cmd/@dblfloat/before}{\ifvmode\axt@hook\fi}}}
 \makeatother

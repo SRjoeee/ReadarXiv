@@ -66,5 +66,17 @@ check('targets recorded for units and headings', targets.size >= 15 && [...targe
 check('every unit starts where the original did', off.length === 0, off.map(([k]) => k).join(' '))
 check('same page count', lm.pages === om.pages, `${lm.pages} vs ${om.pages}`)
 check('the lock inserted space', readLockEvents(lockedLog).gaps.length > 0)
+
+// a unit whose last line falls just past the column's foot: TeX moves that line to the next column only at the next
+// breakpoint, so a sync point that reads the page before it would end the next column as well (2608.24839, page 1)
+const footBody = tr => `\\noindent\\rule{0pt}{\\dimexpr\\textheight-15pt\\relax}\n\n${unit(0, tr ? 'One.\\newline Two.' : 'One.\\newline Two.\\newline Three.\\newline Four.\\newline Five.\\newline Six.', tr)}${unit(1, 'The end.', tr)}`
+const footDoc = (tr, tbl = '') => `${MARK_DEF}${LINES_TEX}${SYNC_TEX}${tr ? unitLeadTex(1.3) : ''}\n${tbl}\n\\documentclass[twocolumn]{article}\n\\begin{document}\n${footBody(tr)}\\end{document}\n`
+const footTargets = readTargets(tex('foot-original', footDoc(false)))
+const footTable = '\\makeatletter\n' + [...footTargets].map(([i, x]) => `\\expandafter\\def\\csname axt@t@${i}\\endcsname{{${x.page}}{${x.col}}{${x.total}pt}}`).join('\n') + '\n\\makeatother'
+tex('foot-locked', footDoc(true, footTable))
+const [fo, fl] = [await marksOf(join(dir, 'foot-original.pdf')), await marksOf(join(dir, 'foot-locked.pdf'))]
+const at = (mm, k) => { const x = mm.marks.get(k); return x && `${x.page} ${mm.width && x.x >= mm.width / 2 ? 1 : 0}` }
+check('a line past the foot: the next unit starts where the original did', at(fl, '1s') === at(fo, '1s'), `${at(fl, '1s')} vs ${at(fo, '1s')}`)
+check('a line past the foot: same page count', fl.pages === fo.pages, `${fl.pages} vs ${fo.pages}`)
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)
