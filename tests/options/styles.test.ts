@@ -4,7 +4,8 @@
 // Fix round 1 (Opus's review of Task 56): the styles card's own arrows, the undo's focus and its choice, an edit
 // merged onto the latest profile rather than a stale one, the declarations' own multi-line field, the pencil's
 // toggle, and the sample sentence drawn rather than read. Task 65: a deletion storage refused leaves its row, which
-// takes back the focus, and says so; an undo storage refused brings its undo row back
+// takes back the focus, and says so; an undo storage refused brings its undo row back, one refused as unreadable too,
+// though the defaults make its change a no-op (round 4)
 import { createElement as h, useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BUILT_IN_STYLES } from '@/config/appearance'
@@ -362,6 +363,30 @@ describe('the translation styles (§6.4)', () => {
     await vi.advanceTimersByTimeAsync(UNDO_MS - 2000)
     await m.flush()
     expect(card(m.container).querySelector('[data-undo]')).toBeNull()
+    await m.unmount()
+  })
+
+  it('an undo of a built-in refused because the stored value cannot be read is a refusal: the defaults hold the style, so the change returns `latest` itself, the very value the refusal answers with; written as a copy, it is not taken for landed (round 4, item 2)', async () => {
+    const patches: Config[] = []
+    const start = { ...DEFAULT_CONFIG, appearance: { ...DEFAULT_CONFIG.appearance, activeStyle: 'green' } }
+    const gate: { promise: Promise<unknown>; unreadable?: boolean } = { promise: Promise.resolve() }
+    const m = await mountElement(h(GatedHarness, { start, patches, gate }))
+    button(m.container, O.appearance.edit('Green')).click()
+    await m.flush()
+    button(editor(m.container)!, O.appearance.editor.delete).click()
+    await m.flush()
+    expect(patches.at(-1)!.appearance.styles.map(s => s.id)).not.toContain('green')
+    expect(DEFAULT_CONFIG.appearance.styles.map(s => s.id)).toContain('green')
+    const written = patches.length
+    gate.unreadable = true
+    button(card(m.container).querySelector<HTMLElement>('[data-undo]')!, O.undo.undo).click()
+    await m.flush()
+    await m.flush()
+    gate.unreadable = false
+    expect(patches).toHaveLength(written)
+    expect(names(m.container)).not.toContain('Green')
+    expect(card(m.container).querySelector<HTMLElement>('[data-undo]')?.textContent).toContain(O.undo.deleted('Green'))
+    expect(card(m.container).querySelector('.o-list-note')?.textContent).toBe(O.saveFailed)
     await m.unmount()
   })
 

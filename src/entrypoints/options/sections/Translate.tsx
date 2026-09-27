@@ -228,13 +228,17 @@ function ServiceMenu({ service, onEdit, onDelete }: { service: Service; onEdit: 
  * focus its undo row held (round 2, item 2). An origin is given back only when no service may still use it: none
  * stored, none whose deletion may still be undone, none undone and not yet stored again (round 2, item 4). An undo
  * storage refused leaves the service deleted: its undo row comes back at its place with a fresh 5 s, and the
- * clean-up waits on it again (round 3, item 3)
+ * clean-up waits on it again (round 3, item 3) — unless the section is gone by then: the page draws its data section
+ * alone once the stored value cannot be read (App.tsx), so the refusal's own answer finds the section's flush already
+ * run, and the deletion is committed at once (round 4, item 1)
  */
 function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id: string) => void) {
   const [gone, setGone] = useState<Gone[]>([])
   const pending = useRef(new Set<Gone>())
   /** undone, their write not yet landed */
   const undoing = useRef(new Set<Gone>())
+  /** mounted, its flush still to come: set by the flush effect's setup (StrictMode's second run sets it again), cleared by its clean-up */
+  const live = useRef(false)
   const commit = useRef(async (g: Gone) => {
     if (!pending.current.delete(g)) return
     if (!(await g.stored)) return
@@ -245,9 +249,11 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id:
     await releaseHostPermission(g.service.baseURL, inUse).catch(() => undefined)
   }).current
   useEffect(() => {
+    live.current = true
     const flush = () => { for (const g of [...pending.current]) void commit(g) }
     addEventListener('pagehide', flush)
     return () => {
+      live.current = false
       removeEventListener('pagehide', flush)
       flush()
     }
@@ -276,6 +282,11 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id:
         if (done) return
         const back: Gone = { ...g, focus: focusLost() }
         pending.current.add(back)
+        // the section went before this answer came, and its flush with it: no undo row, no flush to wait for
+        if (!live.current) {
+          void commit(back)
+          return
+        }
         setGone(x => [...x, back])
       })
   }

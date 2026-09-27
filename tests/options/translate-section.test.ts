@@ -5,10 +5,11 @@
 // language's menu. The page writes no refused-key record (ruling 17): the background's configuration watcher does.
 // Task 65: a deletion is committed only once its own write lands, and one storage refused leaves its row, takes back
 // the focus and says so; an origin is given back only when no service may still use it; an undo storage refused
-// brings its undo row back
+// brings its undo row back, or, answered after the section went, commits the deletion itself (round 4)
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createElement as h, useState } from 'react'
+import { Fragment, createElement as h, useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { Service } from '@/config/services'
@@ -50,20 +51,43 @@ import { O, S, setLocale } from '@/ui/strings'
 const MINE: Service = { id: 'svc-mine0000', kind: 'openai-compat', name: 'Mine', baseURL: 'https://api.example.com/v1', apiKey: 'sk-old', model: 'm-1', thinking: 'disabled' }
 const OTHER: Service = { ...MINE, id: 'svc-othr0000', name: 'Other', baseURL: 'https://other.example.com/v1' }
 
-function Harness({ start, pack = null, checks = [] }: { start: Config; pack?: PackState | null; checks?: string[] }) {
+/**
+ * `app`: the page as App.tsx draws it, which shows its data section alone once the stored value cannot be read, so a
+ * refusal as unreadable takes this section away. It goes before the refused write's caller hears back: surface-config.ts
+ * publishes the fallback, then rejects, and data.ts answers with what is in effect; the published state renders at
+ * once, before that answer settles (the reviewer's probe on the real data layer, round 4). flushSync stands for that
+ * render. The log marks the section's going and the answer
+ */
+function Harness({ start, pack = null, checks = [], app = false }: { start: Config; pack?: PackState | null; checks?: string[]; app?: boolean }) {
   const [config, setConfig] = useState(start)
+  const [fallback, setFallback] = useState(false)
   wire.stored = config
   const data: OptionsData = {
     config, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
     patch: async fn => {
       if (wire.gate) await wire.gate
-      if (wire.unreadable) { fn(DEFAULT_CONFIG); return DEFAULT_CONFIG }
+      if (wire.unreadable) {
+        fn(DEFAULT_CONFIG)
+        if (app) {
+          // storage's refusal comes back after the press is over
+          await Promise.resolve()
+          flushSync(() => setFallback(true))
+          wire.log.push('answered')
+        }
+        return DEFAULT_CONFIG
+      }
       const next = fn(wire.stored as Config); wire.stored = next; wire.log.push('patch'); setConfig(next); return next
     },
     pack, checkPack: async target => { checks.push(target); return 'unsupported' }, fetchPack: async () => { wire.log.push('fetch pack') },
     cache: null, cacheError: '', clearCache: async () => undefined, cacheCleared: false,
   }
-  return h(Translate, { data })
+  if (!app) return h(Translate, { data })
+  return fallback ? null : h(Fragment, null, h(Translate, { data }), h(Going))
+}
+/** Logs the section's going: its clean-ups, the deletions' flush among them, run in the same pass */
+function Going() {
+  useEffect(() => () => { wire.log.push('section gone') }, [])
+  return null
 }
 const card = (c: HTMLElement) => c.querySelector<HTMLElement>('[data-row="translate/services"]')!
 const radios = (c: HTMLElement) => [...card(c).querySelectorAll<HTMLElement>('[role="radio"]')]
@@ -381,6 +405,21 @@ describe('the translation services (§6.3)', () => {
     await m.flush()
     expect(card(m.container).querySelector('[data-undo]')).toBeNull()
     expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`, `release ${MINE.baseURL}`])
+    await m.unmount()
+  })
+
+  it('an undo refused because the stored value cannot be read takes the section away before its answer, the flush run with nothing pending: the deletion is still committed, every session moved off, then the origin given back (round 4, item 1)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id }, app: true }))
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    expect(stored().services.map(s => s.id)).toEqual([OTHER.id])
+    wire.unreadable = true
+    ;[...card(m.container).querySelector<HTMLElement>('[data-undo]')!.querySelectorAll('button')].find(b => b.textContent === O.undo.undo)!.click()
+    await m.flush()
+    await m.flush()
+    expect(m.container.querySelector('[data-row="translate/services"]')).toBeNull()
+    // the section went, and its flush ran, before the refusal's answer; the commit follows the answer
+    expect(wire.log).toEqual(['patch', 'section gone', 'answered', `send axt:engine-ready ${MINE.id} all`, `release ${MINE.baseURL}`])
     await m.unmount()
   })
 
