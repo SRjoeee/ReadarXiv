@@ -400,7 +400,10 @@ describe('ServiceForm (§6.3)', () => {
     const m = await mountElement(element)
     const group = m.container.querySelector('.o-chips')!
     expect(group.tagName).toBe('FIELDSET')
-    expect(group.getAttribute('aria-label')).toBe(O.services.baseURL)
+    // its own name, distinct from the address field's, so the two controls do not read as one (Task 64b, item 5)
+    expect(group.getAttribute('aria-label')).toBe(O.services.baseURLSuggestions)
+    const namedBaseURL = [...m.container.querySelectorAll('label')].filter(el => el.textContent === O.services.baseURL)
+    expect(namedBaseURL).toHaveLength(1)
     await m.unmount()
   })
 
@@ -450,6 +453,8 @@ describe('KeyForm (§6.3)', () => {
     const m = await mountElement(h(KeyForm, { service: SVC, refused: true, target: 'cmn', onConnected: async s => { done.push(s) } }))
     expect(m.container.textContent).toContain(O.services.keyForm.refused)
     expect(m.container.textContent).toContain(O.services.savedOnConnect)
+    // the added form's key field shows one; this one had none (added at the controller's look, Task 64b item 11)
+    expect(inputs(m.container)[0]!.getAttribute('placeholder')).toBe('sk-…')
     submit(m.container)
     await m.flush()
     expect(inputs(m.container)[0]!.getAttribute('aria-invalid')).toBe('true')

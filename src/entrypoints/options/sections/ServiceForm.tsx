@@ -243,8 +243,9 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
           <TextInput ref={address} value={url} inputMode="url" autoComplete="off" spellCheck={false} placeholder="https://…/v1"
             onChange={e => { setUrl(e.target.value); clearError('baseURL') }} />
         </Field>
-        {/* named for a screen reader, since nothing else here says what these buttons fill (Opus review round 1, item 7) */}
-        <fieldset className="o-chips" aria-label={O.services.baseURL}>
+        {/* named for a screen reader, since nothing else here says what these buttons fill (Opus review round 1, item 7);
+            its own name, distinct from the address field's, so the two controls do not read as one (Task 64b, item 5) */}
+        <fieldset className="o-chips" aria-label={O.services.baseURLSuggestions}>
           {SUGGESTIONS.map(s => <button key={s.url} type="button" className="o-chip" onClick={() => suggest(s.url)}>{s.name()}</button>)}
         </fieldset>
       </div>
@@ -353,7 +354,7 @@ export function KeyForm({ service, refused, target, focus = false, onConnected }
     <form className="o-form" data-form="key" noValidate onSubmit={e => { e.preventDefault(); if (!busy) void submit() }}>
       {/* the hint, not a bare paragraph, so the field's aria-describedby carries it (Opus review round 1, item 7) */}
       <Field label={O.services.keyForm.label} hint={refused ? O.services.keyForm.refused : undefined} error={error}>
-        <TextInput ref={field} type="password" value={key} autoComplete="off" spellCheck={false} onChange={e => { setKey(e.target.value); setError(undefined) }} />
+        <TextInput ref={field} type="password" value={key} autoComplete="off" spellCheck={false} placeholder="sk-…" onChange={e => { setKey(e.target.value); setError(undefined) }} />
       </Field>
       <div className="o-formbar">
         <Button type="submit" kind="brand" size="md" busy={busy}>{busy ? O.services.connecting : O.services.keyForm.submit}</Button>

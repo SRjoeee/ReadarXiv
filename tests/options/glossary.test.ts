@@ -50,6 +50,17 @@ describe('the glossary\'s table (§6.3)', () => {
     await m.unmount()
   })
 
+  // The empty row's placeholders read as the head's own words otherwise, as a second head or a filled row (Task 64b, item 12)
+  it('the empty row\'s source cell invites the addition; its accessible names stay Source and Translation', async () => {
+    const m = await mountElement(h(GlossaryTable, { data: data(WITH([])) }))
+    const empty = cells(m.container)
+    expect(empty[0]!.getAttribute('placeholder')).toBe(O.glossary.addSource)
+    expect(empty[1]!.getAttribute('placeholder')).toBe(O.glossary.target)
+    expect(empty[0]!.getAttribute('aria-label')).toBe(O.glossary.source)
+    expect(empty[1]!.getAttribute('aria-label')).toBe(O.glossary.target)
+    await m.unmount()
+  })
+
   it('typing in the empty row makes a row, keeps the caret there, and draws a new empty row; whole, it is saved', async () => {
     const patches: Config[] = []
     const m = await mountElement(h(GlossaryTable, { data: data(WITH([]), patches) }))

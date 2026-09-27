@@ -43,7 +43,7 @@ export function Appearance({ data }: { data: OptionsData }) {
           trailing={<Segmented label={O.appearance.theme} value={config.theme} options={THEMES.map(t => ({ value: t, label: O.appearance.themes[t], icon: <Icon node={GLYPHS[t]} size={14} /> }))}
             onChange={theme => void patch(latest => ({ ...latest, theme }))} />} />
         <Reveal open={config.theme !== 'light'}>
-          <Row level={1} toggles row="appearance/dim" label={O.appearance.dim} description={O.appearance.dimHint}
+          <Row level={1} toggles row="appearance/dim" words={k['appearance/dim']} label={O.appearance.dim} description={O.appearance.dimHint}
             trailing={<Switch label={O.appearance.dim} checked={config.pdfReader.dimPages} onChange={on => void patch(latest => ({ ...latest, pdfReader: { ...latest.pdfReader, dimPages: on } }))} />} />
         </Reveal>
       </Card>

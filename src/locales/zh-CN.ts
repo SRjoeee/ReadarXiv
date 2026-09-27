@@ -139,6 +139,7 @@ const O = {
       'translate/prompts': 'prompt 指令 消息',
       'translate/glossary': '术语 词汇 glossary',
       'appearance/theme': '主题 深色 浅色 夜间 theme dark',
+      'appearance/dim': '夜间 亮度 阅读器',
       'appearance/styles': '颜色 下划线 模糊 字体',
       'appearance/highlight': '悬停 句子 背景',
       'reading/way': '提前 用量 按需 整篇',
@@ -210,6 +211,7 @@ const O = {
     count: (n: number) => `${n} 条`,
     source: '原文',
     target: '译文',
+    addSource: '添加原文',
     remove: (n: number) => `删除第 ${n} 行`,
     paste: '可以直接粘贴多行「原文, 译文」，会自动拆成多行',
     /** today's reasons without their line numbers: the row itself says it */
@@ -231,6 +233,7 @@ const O = {
     name: '名称（选填）',
     namePlaceholder: '默认使用模型名',
     baseURL: '接口地址',
+    baseURLSuggestions: '常用地址',
     baseURLHint: 'OpenRouter、DeepSeek、Ollama 等 OpenAI 兼容接口',
     apiKey: 'API Key',
     apiKeyClear: '清除',
@@ -344,7 +347,7 @@ const O = {
     /** The descriptions of the two prompts shipped with the extension, by id */
     builtIn: {
       default: '通用学术翻译：术语用既定译法，人名、期刊名、代码与链接保留原文',
-      'precision-rewrite': '"翻译即改写"：摆脱原文句法、消除翻译腔，按目标语言的表达习惯重写，术语与格式照旧',
+      'precision-rewrite': '翻译即改写：摆脱原文句法、消除翻译腔，按目标语言的表达习惯重写，术语与格式照旧',
     },
     imported: (n: number) => `已导入 ${n} 条`,
     importFailed: { cantRead: '无法读取这个文件', noPrompts: '这个文件里没有可用的提示词' },
@@ -364,7 +367,7 @@ const O = {
     clearConfirm: '确认清空',
     cleared: '已清空',
     diagnostics: '诊断日志',
-    diagnosticsHint: '最近几百条运行记录：请求失败、服务切换、页面事件。不含 API 密钥与论文正文，可随问题反馈一并附上',
+    diagnosticsHint: '最近几百条运行记录：请求失败、服务切换、页面事件。不含 API Key 与论文正文，可随问题反馈一并附上',
     diagnosticsExport: '导出',
     diagnosticsError: '没能导出',
   },

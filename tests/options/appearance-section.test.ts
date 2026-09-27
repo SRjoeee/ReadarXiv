@@ -52,6 +52,13 @@ describe('the appearance section (§6.4)', () => {
     await m.unmount()
   })
 
+  // Task 64b, item 6: the dimming row had no words of its own, so a search for them missed it
+  it('the dimming row answers to its own search words', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, theme: 'system' }, patches: [] }))
+    expect(rowOf(m.container, 'appearance/dim').dataset.search).toContain('brightness')
+    await m.unmount()
+  })
+
   it('the highlight\'s switch, and while it is on its colours: the profiles as swatches, the one in use pressed', async () => {
     const patches: Config[] = []
     const m = await mountElement(h(Harness, { start: DEFAULT_CONFIG, patches }))

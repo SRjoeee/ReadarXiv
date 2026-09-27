@@ -354,7 +354,7 @@ describe('the translation styles (§6.4)', () => {
     expect(document.getElementById(greenRadio.getAttribute('aria-labelledby')!)!.textContent).toBe('Green')
     const sample = card(m.container).querySelectorAll<HTMLElement>('.o-desc[data-sample]')[1]!
     expect(sample.getAttribute('aria-hidden')).toBe('true')
-    expect(sample.getAttribute('lang')).toBe('zh')
+    expect(sample.getAttribute('lang')).toBe('zh-CN')
     // a word from the sample must not turn every style row into a match
     const row = greenRadio.closest<HTMLElement>('[data-srow]')!
     expect(row.dataset.search).not.toContain('傅')

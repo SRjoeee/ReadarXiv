@@ -38,6 +38,6 @@ export async function connectService(candidate: Service, target: LangCode): Prom
     request: { segments: [{ id: 'sample', text: wireFormatOfProvider(candidate.id) === 'markers' ? SAMPLE_MARKERS : SAMPLE_TAGS }], source: 'en', target, context: { sectionTitle: O.services.connect } },
   }).catch((e: unknown) => ({ ok: false as const, error: { kind: 'unknown' as const, message: e instanceof Error ? e.message : String(e), isolatable: false } }))
   if (res.ok) return { ok: true, ms: Math.round(performance.now() - t0) }
-  if (granted) await releaseHostPermission(candidate.baseURL, (await getConfig()).services.map(s => s.baseURL)).catch(() => undefined)
+  if (granted) await getConfig().then(c => releaseHostPermission(candidate.baseURL, c.services.map(s => s.baseURL))).catch(() => undefined)
   return { ok: false, field: FIELD_OF[res.error.kind] ?? null, reason: O.services.failed(reasonText(res.error.kind) || res.error.message) }
 }

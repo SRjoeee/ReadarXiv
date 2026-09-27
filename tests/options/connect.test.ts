@@ -9,10 +9,10 @@ const wire = vi.hoisted(() => {
   class PermissionError extends Error {
     constructor(readonly kind: 'badURL' | 'denied', readonly origin?: string) { super(kind) }
   }
-  return { sent: [] as unknown[], answer: null as unknown, granted: false, denied: false, released: [] as string[], PermissionError }
+  return { sent: [] as unknown[], answer: null as unknown, granted: false, denied: false, released: [] as string[], configRejects: false, PermissionError }
 })
 vi.mock('@/shared/messages', () => ({ sendMessage: vi.fn(async (message: unknown) => { wire.sent.push(message); return wire.answer }) }))
-vi.mock('@/config/storage', () => ({ getConfig: async () => ({ services: [] }) }))
+vi.mock('@/config/storage', () => ({ getConfig: async () => (wire.configRejects ? Promise.reject(new Error('storage unavailable')) : { services: [] }) }))
 vi.mock('@/entrypoints/options/permissions', () => ({
   PermissionError: wire.PermissionError,
   ensureHostPermission: vi.fn(async () => {
@@ -31,7 +31,7 @@ const SVC: Service = { id: 'svc-abcd1234', kind: 'openai-compat', name: 'Mine', 
 describe('connectService (§6.3)', () => {
   beforeEach(() => {
     setLocale('en')
-    Object.assign(wire, { sent: [], answer: null, granted: false, denied: false, released: [] })
+    Object.assign(wire, { sent: [], answer: null, granted: false, denied: false, released: [], configRejects: false })
   })
 
   it('carries the service whole, named, and answers with the time it took', async () => {
@@ -54,6 +54,13 @@ describe('connectService (§6.3)', () => {
     expect(await connectService(SVC, 'cmn')).toEqual({ ok: false, field: 'baseURL', reason: O.services.permission.denied('https://api.example.com/*') })
     expect(wire.sent).toEqual([])
   })
+
+  it('the attempt fails and the release\'s own read rejects: connectService still resolves with the failure', async () => {
+    wire.granted = true
+    wire.configRejects = true
+    wire.answer = { ok: false, error: { kind: 'auth', message: '401', isolatable: false } }
+    await expect(connectService(SVC, 'cmn')).resolves.toEqual({ ok: false, field: 'apiKey', reason: O.services.failed(reasonText('auth')) })
+  })
 })
 
 describe('listModels (§6.3)', () => {
@@ -71,7 +78,12 @@ describe('listModels (§6.3)', () => {
   })
 
   it('asks a local endpoint without a key, and fails on an answer that is not a list', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{"error":"no"}', { status: 404 })))
+    const seen: [string, RequestInit | undefined][] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      seen.push([url, init])
+      return new Response('{"error":"no"}', { status: 404 })
+    }))
     await expect(listModels('http://localhost:11434/v1', '', new AbortController().signal)).rejects.toThrow()
+    expect((seen[0]![1]!.headers as Record<string, string>).Authorization).toBeUndefined()
   })
 })

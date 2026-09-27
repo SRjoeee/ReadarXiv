@@ -180,11 +180,11 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
    * paths” committed the other way round — the reader would think the endpoint fine while the whole page translated through Google
    */
   const route = async (call: TranslateCall): Promise<TranslateMessageResponse> => {
-    if (call.providerId === undefined) return service.translate(call)
     if (call.candidate) {
       if (call.candidate.id !== call.providerId) return { ok: false, error: { kind: 'unknown', message: 'the candidate is not the service named', isolatable: false } }
       return askOffChain(call.candidate, call)
     }
+    if (call.providerId === undefined) return service.translate(call)
     const step = steps.find(s => s.provider.id === call.providerId)
     if (step) return step.service.translate(call)
     const own = serviceOf(config, call.providerId)

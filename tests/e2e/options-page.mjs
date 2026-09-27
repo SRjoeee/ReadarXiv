@@ -50,7 +50,7 @@ export async function addService(options, { name, baseURL, model, apiKey = '' })
   await options.getByRole('button', { name: '添加服务…', exact: true }).click()
   const form = options.locator('form[data-form="service"]')
   await form.waitFor({ timeout: 5_000 })
-  // getByLabel also matches the address chips' fieldset, labelled the same; the textbox role is the field alone
+  // the role locator names the field alone; the address chips' fieldset now has its own name, distinct from it (Task 64b item 5)
   await form.getByRole('textbox', { name: '接口地址', exact: true }).fill(baseURL)
   if (apiKey) await form.getByLabel('API Key').fill(apiKey)
   const field = form.getByRole('combobox')
@@ -67,7 +67,18 @@ export async function addService(options, { name, baseURL, model, apiKey = '' })
     await sleep(500)
   }
   if (await form.count() > 0) {
-    const failed = (await form.locator('.o-note').textContent()) ?? ''
+    // the form's own check refuses at the field: its error is what `aria-describedby` names, not `.o-note`'s hint
+    // (Task 64b, item 8)
+    const refused = form.locator('[aria-invalid="true"]')
+    let failed
+    if (await refused.count()) {
+      const ids = ((await refused.first().getAttribute('aria-describedby')) ?? '').trim().split(/\s+/).filter(Boolean)
+      // an attribute selector, not `#id`: React's useId ids carry colons, invalid in a bare CSS id selector
+      const texts = await Promise.all(ids.map(id => form.locator(`[id="${id}"]`).textContent()))
+      failed = texts.filter(Boolean).join(' ')
+    } else {
+      failed = (await form.locator('.o-note').textContent()) ?? ''
+    }
     await form.getByRole('button', { name: '取消', exact: true }).click()
     await sleep(300)
     return failed

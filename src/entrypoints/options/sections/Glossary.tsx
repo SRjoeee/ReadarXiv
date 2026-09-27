@@ -174,7 +174,8 @@ export function GlossaryTable({ data }: { data: OptionsData }) {
         <div className="o-gloss-row">
           {(['term', 'translation'] as const).map(side => (
             <input key={side} ref={cellRef(EMPTY, side)} value="" maxLength={max[side]} autoComplete="off" spellCheck={false}
-              placeholder={side === 'term' ? O.glossary.source : O.glossary.target} aria-label={side === 'term' ? O.glossary.source : O.glossary.target}
+              // the source cell invites the addition, so the empty row does not read as a second head or a filled one (Task 64b, item 12)
+              placeholder={side === 'term' ? O.glossary.addSource : O.glossary.target} aria-label={side === 'term' ? O.glossary.source : O.glossary.target}
               onChange={e => begin(side, e.target.value)} onPaste={paste} />
           ))}
           <span />
@@ -185,7 +186,7 @@ export function GlossaryTable({ data }: { data: OptionsData }) {
       ) : failed ? (
         <p className="o-gloss-note">
           <Status tone="alert">{O.saveFailed}</Status>
-          <Button kind="text" size="sm" className="o-gloss-retry" onClick={retry}>{O.glossary.retry}</Button>
+          <Button kind="text" size="sm" onClick={retry}>{O.glossary.retry}</Button>
         </p>
       ) : null}
     </div>

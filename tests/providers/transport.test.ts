@@ -138,6 +138,13 @@ describe('createLocalTransport: translation', () => {
       const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: 'mock' }))])
       expect(await t.translate({ request: req, providerId: 'svc-other000', candidate: SVC })).toEqual({ ok: false, error: { kind: 'unknown', message: 'the candidate is not the service named', isolatable: false } })
     })
+
+    it('a candidate with no providerId is refused, never taking the fallback chain', async () => {
+      const chainAsked = vi.fn(async (r: TranslateRequest) => ({ segments: r.segments, provider: 'mock' }))
+      const t = await withChain([mockProvider(chainAsked)])
+      expect(await t.translate({ request: req, candidate: SVC })).toEqual({ ok: false, error: { kind: 'unknown', message: 'the candidate is not the service named', isolatable: false } })
+      expect(chainAsked).not.toHaveBeenCalled()
+    })
   })
 
   it('cancel withdraws the in-flight requests and reports the count withdrawn as it is', async () => {
