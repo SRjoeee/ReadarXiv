@@ -112,7 +112,7 @@ export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: 
  * The custom declarations (S-O-47), a draft of their own: a refused block never reaches the stored profile, so a value
  * fed straight back would snap the text away before its reason could be read (Codex on #157). The draft follows the
  * profile when it changes elsewhere, never while a write of its own is out; a refused write leaves it the reader's to
- * finish (the reasoning of the drawer's AdvancedCss, which this replaces)
+ * finish (as the old style drawer's box did, retired with the redesign)
  */
 function CustomCss({ value, onChange }: { value: string; onChange: (css: string) => Promise<unknown> }) {
   const [draft, setDraft] = useState(value)

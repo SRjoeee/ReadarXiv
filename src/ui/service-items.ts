@@ -4,7 +4,7 @@ import type { Config } from '@/config/schema'
 import { serviceRuns } from '@/config/services'
 import { supportsTarget } from '@/providers/microsoft'
 import type { PackState } from '@/shared/pack'
-import type { MenuItem } from './Menu'
+import type { MenuItem } from './menu-item'
 import { S } from './strings'
 
 /** The last row of the service menu: not a service, it opens the settings page */

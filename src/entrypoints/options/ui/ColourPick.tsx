@@ -3,7 +3,7 @@
 import { PALETTE } from '@/config/appearance'
 
 const WHEEL = `conic-gradient(${[...PALETTE, PALETTE[0]].join(', ')})`
-/** the picker's starting value while nothing of the reader's is held: today's ColorField's; a value, not a colour drawn */
+/** the picker's starting value while nothing of the reader's is held — the one the old style drawer's colour field started from; a value, not a colour drawn */
 const START = '#1565c0'
 
 export function ColourPick({ label, value, pressed, onPick }: { label: string; value?: string; pressed: boolean; onPick: (hex: string) => void }) {

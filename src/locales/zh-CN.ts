@@ -263,7 +263,6 @@ const O = {
     connected: (ms: number) => `已连接 · ${ms} ms`,
     failed: (reason: string) => `连接失败：${reason}`,
     delete: '删除',
-    deleteConfirm: '确认删除',
     cancel: '取消',
     newTitle: '添加服务',
     editTitle: '编辑服务',
@@ -284,24 +283,12 @@ const O = {
     keyForm: { refused: '服务拒绝了这个 API Key，它可能无效或已过期。换一个新的，其他设置不变。', label: '新的 API Key', submit: '更新并连接' },
   },
   reading: {
-    add: '添加配置',
-    reset: '重置',
-    resetHint: '把内置配置恢复原样，自己添加的保留',
-    editTitle: '编辑配置',
-    editAria: (name: string) => `编辑配置：${name}`,
-    name: '名称',
-    color: '文字颜色',
-    bandColor: '底色',
-    followText: '跟随原文',
-    custom: '自定义',
-    opacity: '透明度',
     underline: '下划线',
     underlines: { none: '无', solid: '实线', dotted: '点线', dashed: '虚线', wavy: '波浪' },
     thickness: '线宽',
     blur: '悬停前模糊',
     blurHint: '译文先糊着，鼠标停上去才清晰',
     advanced: '高级',
-    advancedHint: '只填声明，不写选择器和花括号；字体与字号仍随论文',
     /** The four ways advanced CSS is refused (core/renderer/style-values.ts reports which) */
     advancedRejected: {
       closeBrace: '不要写右花括号：这里只填声明，选择器由扩展补上',
@@ -312,8 +299,6 @@ const O = {
     duplicate: '复制一份',
     /** What a copy is called: the shown name + this suffix (duplicateStyle in config/appearance.ts) */
     copySuffix: '副本',
-    delete: '删除',
-    done: '完成',
     translateWay: '翻译方式',
     translateWays: ['按需翻译', '整篇翻译'],
     translateWayHints: ['只翻译正在阅读和即将读到的段落，用量最少', '打开论文时就请求整篇译文，滚到哪里都已翻好，用量较多'],
@@ -367,7 +352,6 @@ const O = {
   },
   /** §6.3: the LLM group */
   llm: { aside: '提示词与术语表只对 LLM 服务生效', empty: '添加 LLM 服务后可设置提示词与术语表' },
-  close: '关闭',
   data: {
     cache: '已缓存的译文',
     cacheLine: (entries: number, mb: string) => `${entries.toLocaleString('zh-CN')} 段 · ${mb} MB · 换了服务、模型或提示词会自动分开存，通常不用清`,

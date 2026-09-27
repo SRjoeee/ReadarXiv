@@ -50,7 +50,6 @@ src/providers/alignment.ts 4
 src/providers/chrome-builtin.ts 2
 src/providers/glossary.ts 3
 src/providers/microsoft.ts 1
-src/ui/appearance/Preview.tsx 1
 src/ui/strings.ts 3
 tests/pdf-reader/ui/copy.test.ts 4  # 2026-09-25: the reader's words, zh-CN expectations and the technical terms checked in Chinese
 tests/pdf-reader/ui/display-switch.test.ts 3  # 2026-09-25: the display switch's choices found by their Chinese names
