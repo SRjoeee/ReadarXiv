@@ -27,7 +27,7 @@ export function Card({ children, gap = false, row, role, label, onKeyDown }: {
       if (row === current) return
       current = row
       clear()
-      if (!row || !row.hasAttribute('data-press') || row.closest('[data-card]') !== card) return
+      if (!row?.hasAttribute('data-press') || row.closest('[data-card]') !== card) return
       const rows = shownRows(card)
       row.setAttribute('data-sep-off', '')
       rows[rows.indexOf(row) + 1]?.setAttribute('data-sep-off', '')
