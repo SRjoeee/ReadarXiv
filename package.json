@@ -25,6 +25,7 @@
     "e2e:local-endpoint": "node tests/e2e/local-endpoint.mjs",
     "e2e:pdf": "node tests/e2e/pdf-entry.mjs",
     "e2e:floating": "node tests/e2e/floating-button.mjs",
+    "e2e:popup": "node tests/e2e/popup.mjs",
     "e2e:image": "node tests/e2e/image.mjs",
     "e2e:placeholders": "node tests/e2e/placeholders.mjs",
     "lint": "biome lint . && node scripts/check-english.mjs && node scripts/check-boundary.mjs",
