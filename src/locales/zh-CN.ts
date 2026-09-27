@@ -324,12 +324,11 @@ const O = {
   pdfReader: { enabled: '在 arXiv 的 PDF 上使用对照阅读器' },
   data: {
     cache: '已缓存的译文',
-    cacheHint: '换了服务、模型或提示词会自动分开存，通常不用清',
-    cacheLine: (entries: number, mb: string) => `${entries} 条 · ${mb} MB`,
+    cacheLine: (entries: number, mb: string) => `${entries.toLocaleString('zh-CN')} 段 · ${mb} MB · 换了服务、模型或提示词会自动分开存，通常不用清`,
     cacheError: '没能读取缓存',
     pdf: '已缓存的 PDF 译文', // S-O-73
     pdfLine: (papers: number, mb: string) => `${papers} 篇 · ${mb} MB`,
-    clear: '清空',
+    clear: '清空…',
     clearConfirm: '确认清空',
     cleared: '已清空',
     diagnostics: '诊断日志',

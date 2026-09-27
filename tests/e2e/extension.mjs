@@ -1074,21 +1074,21 @@ check('the settings page: after deleting the custom prompt the default is chosen
 
   // The two papers before translated, so the cache should hold entries; the reload guarantees the latest statistics are read
   await openSection(options, 'data')
-  await options.getByText(/^[1-9]\d* 条 · /).waitFor({ timeout: 15_000 }).catch(() => undefined)
-  const before = await options.getByText(/^\d+ 条 · /).textContent()
+  await options.getByText(/^[1-9][\d,]* 段 · /).waitFor({ timeout: 15_000 }).catch(() => undefined)
+  const before = await options.getByText(/^[\d,]+ 段 · /).textContent()
   // The translation cache's own row, not the PDF translations' below it (added since this locator was written): both
   // rows carry the same 清空 / 确认清空 / 已清空 words, and unscoped this matches two buttons in strict mode. The
   // row is found by its own title, excluding any container the PDF row's title (and the settings page's other “PDF”
   // words) would also put a match in
   const cacheRow = options.locator('div').filter({ hasText: '已缓存的译文' }).filter({ hasNotText: 'PDF' })
-  await cacheRow.getByRole('button', { name: '清空', exact: true }).click()
+  await cacheRow.getByRole('button', { name: '清空…', exact: true }).click()
   await cacheRow.getByRole('button', { name: '确认清空', exact: true }).click()
   await cacheRow.getByText('已清空', { exact: true }).waitFor({ timeout: 10_000 })
   // The statistics line refreshes after the confirmation, not with it: read once it says zero, or the last count is read back (seen once, 2026-09-17,
   // right after the whole-paper check above had just hit the cache 351 times and the access-time writes were still landing)
-  await options.getByText(/^0 条 · /).waitFor({ timeout: 15_000 }).catch(() => undefined)
-  const after = await options.getByText(/^\d+ 条 · /).textContent()
-  check('cache management: shows the entry count, zero after clearing', /^[1-9]/.test(before ?? '') && /^0 条/.test(after ?? ''), `before clearing “${before}”, after “${after}”`)
+  await options.getByText(/^0 段 · /).waitFor({ timeout: 15_000 }).catch(() => undefined)
+  const after = await options.getByText(/^[\d,]+ 段 · /).textContent()
+  check('cache management: shows the entry count, zero after clearing', /^[1-9]/.test(before ?? '') && /^0 段/.test(after ?? ''), `before clearing “${before}”, after “${after}”`)
 }
 
 // ── A wrong key met for the first time, with the fallback chain on (§8.5): after the LLM reports auth it switches to google-web of itself, and the whole page translates as usual ──
