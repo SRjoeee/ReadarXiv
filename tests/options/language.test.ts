@@ -42,6 +42,16 @@ describe('the interface language (§6.1)', () => {
     await m.unmount()
   })
 
+  it('drawn before the settings arrive, the menu opens on the language chosen, not on the browser\'s', async () => {
+    const loaded = data({ ...DEFAULT_CONFIG, uiLanguage: 'en' }, [])
+    const m = await mountElement(h(LanguageFoot, { data: { ...loaded, config: null } }))
+    await m.rerender(h(LanguageFoot, { data: loaded }))
+    const active = m.container.querySelector<HTMLElement>('[role="option"][data-active]')
+    expect(active?.textContent).toBe(LOCALE_NAMES.en)
+    expect(active?.getAttribute('aria-selected')).toBe('true')
+    await m.unmount()
+  })
+
   it('a pick writes the interface language; the current one writes nothing', async () => {
     const patches: Config[] = []
     const m = await mountElement(h(LanguageFoot, { data: data({ ...DEFAULT_CONFIG, uiLanguage: 'en' }, patches) }))

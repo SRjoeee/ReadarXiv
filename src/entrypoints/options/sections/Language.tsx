@@ -25,12 +25,19 @@ function useLanguage(data: OptionsData) {
     ...LOCALE_CODES.map(code => ({ id: code, name: LOCALE_NAMES[code], checked: chosen === code, lang: code })),
   ]
   const choose = (code: string) => { if (code !== chosen) void data.patch(latest => ({ ...latest, uiLanguage: code })) }
-  return { value, items, choose }
+  return { chosen, value, items, choose }
 }
+
+/**
+ * The menu starts afresh after each close (Popover's generation) and when the choice changes: its active option is taken
+ * once, as it is drawn, and the foot is drawn before the settings arrive, so it would open on the browser's language
+ * rather than the one chosen
+ */
+const menuKey = (generation: number, chosen: string) => `${generation}:${chosen}`
 
 export function LanguageFoot({ data }: { data: OptionsData }) {
   const pop = usePopover('listbox')
-  const { value, items, choose } = useLanguage(data)
+  const { chosen, value, items, choose } = useLanguage(data)
   return (
     <>
       <button type="button" className="o-nav-item o-lang" aria-label={`${O.uiLanguageName}: ${value}`} {...pop.trigger} style={{ anchorName: pop.anchor } as CSSProperties}>
@@ -39,7 +46,7 @@ export function LanguageFoot({ data }: { data: OptionsData }) {
         <Icon node={ChevronDown} size={14} />
       </button>
       <Popover {...pop.popover} role="listbox" label={O.uiLanguageName} className="o-up">
-        <MenuList key={pop.generation} kind="listbox" label={O.uiLanguageName} items={items} onClose={() => shut(pop.popover.id)} onPick={id => { shut(pop.popover.id); choose(id) }} />
+        <MenuList key={menuKey(pop.generation, chosen)} kind="listbox" label={O.uiLanguageName} items={items} onClose={() => shut(pop.popover.id)} onPick={id => { shut(pop.popover.id); choose(id) }} />
       </Popover>
     </>
   )
@@ -48,13 +55,13 @@ export function LanguageFoot({ data }: { data: OptionsData }) {
 /** The row only a search shows (§6.1): the interface language lives in the sidebar */
 export function LanguageRow({ data }: { data: OptionsData }) {
   const pop = usePopover('listbox')
-  const { value, items, choose } = useLanguage(data)
+  const { chosen, value, items, choose } = useLanguage(data)
   return (
     <Card>
       <Row kind="button" row="language/ui" words={O.search.keywords['language/ui']} label={O.uiLanguage} description={O.uiLanguageElsewhere}
         trailing={<Value>{value}</Value>} buttonProps={{ ...pop.trigger, style: { anchorName: pop.anchor } as CSSProperties }} />
       <Popover {...pop.popover} role="listbox" label={O.uiLanguageName} className="o-end">
-        <MenuList key={pop.generation} kind="listbox" label={O.uiLanguageName} items={items} onClose={() => shut(pop.popover.id)} onPick={id => { shut(pop.popover.id); choose(id) }} />
+        <MenuList key={menuKey(pop.generation, chosen)} kind="listbox" label={O.uiLanguageName} items={items} onClose={() => shut(pop.popover.id)} onPick={id => { shut(pop.popover.id); choose(id) }} />
       </Popover>
     </Card>
   )

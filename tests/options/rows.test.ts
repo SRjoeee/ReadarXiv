@@ -101,6 +101,34 @@ describe('the row grammar (the redesign\'s design, §6.2)', () => {
     await m.unmount()
   })
 
+  it('a list opening or closing under the resting pointer moves the stepped-aside separator to the row now next', async () => {
+    const press = () => {}
+    const m = await mountElement(h(Card, null,
+      h(Row, { kind: 'button', label: 'Prompts', onPress: press }),
+      h('div', { inert: true }, h(Row, { kind: 'button', label: 'Default', onPress: press })),
+      h(Row, { kind: 'button', label: 'Glossary', onPress: press })))
+    const all = rows(m.container)
+    const list = all[1]!.parentElement!
+    all[0]!.dispatchEvent(new Event('pointerover', { bubbles: true }))
+    expect(all.map(r => r.hasAttribute('data-sep-off'))).toEqual([true, false, true])
+    // the press opened the list: no pointer moved, the reveal's inert went
+    list.removeAttribute('inert')
+    await m.flush()
+    expect(all.map(r => r.hasAttribute('data-sep-off'))).toEqual([true, true, false])
+    list.setAttribute('inert', '')
+    await m.flush()
+    expect(all.map(r => r.hasAttribute('data-sep-off'))).toEqual([true, false, true])
+    // the hovered row hidden with the list closing under it: nothing steps aside for it, not the first row either
+    list.removeAttribute('inert')
+    all[1]!.dispatchEvent(new Event('pointerover', { bubbles: true }))
+    await m.flush()
+    expect(all.map(r => r.hasAttribute('data-sep-off'))).toEqual([false, true, true])
+    list.setAttribute('inert', '')
+    await m.flush()
+    expect(all.some(r => r.hasAttribute('data-sep-off'))).toBe(false)
+    await m.unmount()
+  })
+
   it('marks what a search found, in the label and the description, whatever the case', async () => {
     const m = await mountElement(h(SearchQuery.Provider, { value: 'high' }, h(Card, null, h(Row, { label: 'Highlight', description: 'Highlights on hover' }))))
     expect([...m.container.querySelectorAll('mark.o-hit')].map(e => e.textContent)).toEqual(['High', 'High'])

@@ -22,20 +22,33 @@ export function Card({ children, gap = false, row, role, label, onKeyDown }: {
     if (!card) return
     let current: HTMLElement | null = null
     const clear = () => { for (const r of card.querySelectorAll('[data-sep-off]')) r.removeAttribute('data-sep-off') }
+    /** the hovered row's separator and the next shown row's, stepped aside, from the rows shown now */
+    const mark = () => {
+      clear()
+      const row = current
+      if (!row?.hasAttribute('data-press') || row.closest('[data-card]') !== card) return
+      // a row gone from the card, or hidden with its list, has no neighbour to step aside
+      const rows = shownRows(card)
+      const at = rows.indexOf(row)
+      if (at < 0) return
+      row.setAttribute('data-sep-off', '')
+      rows[at + 1]?.setAttribute('data-sep-off', '')
+    }
     const over = (e: Event) => {
       const row = (e.target as Element).closest<HTMLElement>('[data-srow]')
       if (row === current) return
       current = row
-      clear()
-      if (!row?.hasAttribute('data-press') || row.closest('[data-card]') !== card) return
-      const rows = shownRows(card)
-      row.setAttribute('data-sep-off', '')
-      rows[rows.indexOf(row) + 1]?.setAttribute('data-sep-off', '')
+      mark()
     }
     const leave = () => { current = null; clear() }
+    // a press on the hovered row opens or closes a list under it while the pointer rests, and no pointerover says so:
+    // the next shown row is another one now (a reveal's inert, a row added or gone, a search's miss)
+    const changed = new MutationObserver(() => { if (current) mark() })
+    changed.observe(card, { subtree: true, childList: true, attributeFilter: ['inert', 'data-miss'] })
     card.addEventListener('pointerover', over)
     card.addEventListener('pointerleave', leave)
     return () => {
+      changed.disconnect()
       card.removeEventListener('pointerover', over)
       card.removeEventListener('pointerleave', leave)
     }
