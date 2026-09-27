@@ -12,8 +12,10 @@
   .o-aside { color: var(--ink-2); font-size: 12px; }
   .o-title + .o-heading { margin-top: 0; }
   /* a row: at least 48 px, 8 × 10 in, radius 6. The edges, from the card's: controls 14 (its 4 + the row's 10), words 42
-     after a leading control (16 + 12), one step of 28 per level; the trailing edge 14 */
-  .o-row { position: relative; display: flex; align-items: center; gap: 12px; box-sizing: border-box; width: 100%; min-height: 48px; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font: inherit; text-align: start; }
+     after a leading control (16 + 12), one step of 28 per level; the trailing edge 14. Its end moves under its words
+     whenever they would have less than 12em beside it — in a narrow window (§9: 320 px), and in a narrow column beside
+     the sidebar (200 % zoom), which a query on the window cannot tell apart from a wide one */
+  .o-row { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; box-sizing: border-box; width: 100%; min-height: 48px; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font: inherit; text-align: start; }
   button.o-row { cursor: pointer; transition: background-color 150ms ease-out; }
   button.o-row:focus-visible { outline-offset: -2px; }
   .o-row[data-level="1"] { padding-inline-start: 38px; }
@@ -30,7 +32,8 @@
   }
   .o-lead { display: inline-flex; flex: none; justify-content: center; width: 16px; color: var(--ink-2); }
   .o-lead .o-danger { color: var(--danger); }
-  .o-words { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+  /* at least 12em before the row's end moves under them; a model's id with no break in it breaks rather than paint past its box */
+  .o-words { display: flex; flex: 1 1 12em; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
   .o-label { font-size: 13px; line-height: 1.4; }
   .o-desc { color: var(--ink-2); font-size: 12px; line-height: 1.4; }
   /* a style's sample: the translation's sentence written in the style itself */
@@ -38,11 +41,13 @@
   .o-row[data-quiet] .o-label, .o-row[data-muted] .o-label { color: var(--ink-2); }
   .o-row[data-muted] .radio { opacity: 0.45; }
   /* a radio row: the radio and the words are the control; its keyboard ring runs to the row's leading edge */
-  .o-choice { display: flex; flex: 1; align-items: center; gap: 12px; min-width: 0; margin-block: -8px; margin-inline-start: -10px; padding-block: 8px; padding-inline-start: 10px; border-radius: 6px; outline: none; }
-  .o-row[data-level="1"] > .o-choice { margin-inline-start: -38px; padding-inline-start: 38px; }
-  .o-row[data-level="2"] > .o-choice { margin-inline-start: -66px; padding-inline-start: 66px; }
+  .o-choice { display: flex; flex: 1 1 calc(12em + 38px); align-items: center; gap: 12px; min-width: 0; margin-block: -8px; margin-inline-start: -10px; padding-block: 8px; padding-inline-start: 10px; border-radius: 6px; outline: none; }
+  /* its basis holds its words' 12em past the radio and its own start (10, 38 or 66 in, 16 + 12 for the radio) */
+  .o-row[data-level="1"] > .o-choice { flex-basis: calc(12em + 66px); margin-inline-start: -38px; padding-inline-start: 38px; }
+  .o-row[data-level="2"] > .o-choice { flex-basis: calc(12em + 94px); margin-inline-start: -66px; padding-inline-start: 66px; }
   .o-choice:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-  .o-trail { display: inline-flex; flex: none; align-items: center; gap: 12px; }
+  /* on the row's line it ends on the trailing edge; moved under the words, it keeps to that edge */
+  .o-trail { display: inline-flex; flex: none; align-items: center; gap: 12px; margin-inline-start: auto; }
   .o-value { display: inline-flex; align-items: center; gap: 4px; min-width: 0; color: var(--ink-2); }
   .o-value svg { flex: none; color: var(--ink-3); }
   .o-status { display: inline-flex; flex: none; align-items: center; gap: 5px; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -62,12 +67,6 @@
   /* a search hit, behind the words */
   .o-hit { padding: 0 1px; border-radius: 2px; background: var(--mark); color: inherit; }
   .o-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  /* a narrow window: a row's end moves under its words when they need the room (§9: 320 px) */
-  @media (width < 640px) {
-    .o-row { flex-wrap: wrap; }
-    .o-words { flex: 1 1 12em; }
-    .o-trail { margin-inline-start: auto; }
-  }
 }
 /* §8: an icon arriving (connected, cleared) — scale, opacity and blur; a description swapped, with the reader's words-in
    (Part 3's, in controls.css). A wait turns with Part 3's .spin */
@@ -133,6 +132,8 @@
   /* while searching: every section's matches under its name, its headings and what was not found hidden */
   [data-searching] .o-title { margin: 18px 0 8px; color: var(--ink-2); font-size: 13px; font-weight: 500; letter-spacing: 0; }
   [data-searching] [data-heading], [data-searching] [data-miss] { display: none; }
+  /* a card that followed a group heading keeps the card gap from the card before it while the heading is hidden */
+  [data-searching] [data-heading] + .o-card { margin-top: 8px; }
   .o-empty { display: flex; align-items: center; gap: 8px; padding: 40px 0; color: var(--ink-2); }
   /* a row reached by a deep link lights once (§8): ink at 9 %, held a moment, gone at 1.4 s */
   [data-flash]::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: color-mix(in oklab, var(--ink) 9%, transparent); opacity: 0; pointer-events: none; animation: o-flash 1400ms ease-out; }
@@ -262,7 +263,7 @@
   @media (hover: hover) { .o-var-button:hover { color: var(--ink); } }
   .o-var-button:active { scale: 0.96; }
   /* the new-prompt row (O.prompts.create): a button inside the row, which also holds Import… and Export… */
-  .o-add { display: flex; flex: 1; align-items: center; gap: 12px; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; text-align: start; cursor: pointer; }
+  .o-add { display: flex; flex: 1 1 calc(12em + 28px); align-items: center; gap: 12px; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; text-align: start; cursor: pointer; }
   .o-prompt-note { margin: -4px 10px 10px 66px; color: var(--ink-2); font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .o-prompt-text[data-editable], .o-var-button { transition: none; } .o-var-button:active { scale: 1; } }
