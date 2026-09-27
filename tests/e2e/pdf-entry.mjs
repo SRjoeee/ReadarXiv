@@ -33,7 +33,7 @@ async function popupOn(paperTab) {
     const text = (document.body.textContent ?? '').replace(/\s+/g, ' ')
     return {
       label: button?.textContent?.trim() ?? null,
-      disabled: button?.disabled ?? null,
+      disabled: button ? button.getAttribute('aria-disabled') === 'true' : null,
       // S-P-03: the one-sentence screen the popup used to show on any page but the full text
       notArxiv: /打开 arXiv|Open an arXiv/.test(text),
       noHtmlNote: /没有这篇论文的 HTML|no HTML version/.test(text),
@@ -162,7 +162,7 @@ const target = await page.evaluate(() => {
 await page.mouse.click(target.x, target.y)
 await sleep(2500)
 const panel = page.frames().find(f => f.url().includes('/popup.html'))
-const entries = panel ? await panel.evaluate(() => [...document.querySelectorAll('button')].filter(b => /HTML 翻译|Translate HTML|PDF 翻译|Translate PDF/.test(b.textContent ?? '')).map(b => ({ text: b.textContent?.trim(), disabled: b.disabled }))) : []
+const entries = panel ? await panel.evaluate(() => [...document.querySelectorAll('button')].filter(b => /HTML 翻译|Translate HTML|PDF 翻译|Translate PDF/.test(b.textContent ?? '')).map(b => ({ text: b.textContent?.trim(), disabled: b.getAttribute('aria-disabled') === 'true' }))) : []
 check('a click on it opens the control panel with the two entries, both enabled for this paper',
   entries.length === 2 && entries.every(e => !e.disabled), JSON.stringify(entries))
 const opened = context.waitForEvent('page', { timeout: 60_000 })
@@ -209,7 +209,7 @@ await sleep(3000)
     !seen.notArxiv && seen.rows && seen.label !== null && seen.disabled === false,
     `label “${seen.label}”, disabled ${seen.disabled}, rows ${seen.rows}, S-P-03 shown ${seen.notArxiv}`)
   // its second entry, the bilingual PDF, for a paper with a source (the reader's design, §2)
-  const pdfEntry = await popup.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /PDF 翻译|Translate PDF/.test(x.textContent ?? '')); return b ? { disabled: b.disabled } : null })
+  const pdfEntry = await popup.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /PDF 翻译|Translate PDF/.test(x.textContent ?? '')); return b ? { disabled: b.getAttribute('aria-disabled') === 'true' } : null })
   check('beside it, the PDF entry, enabled for a paper with a source', pdfEntry?.disabled === false, JSON.stringify(pdfEntry))
   const viaPopup = context.waitForEvent('page', { timeout: 60_000 })
   await popup.evaluate(() => [...document.querySelectorAll('button')].find(b => /HTML 翻译|Translate HTML/.test(b.textContent ?? ''))?.click())
