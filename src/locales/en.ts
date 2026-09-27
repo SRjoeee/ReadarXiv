@@ -212,8 +212,10 @@ const O: Locale['O'] = {
     connecting: 'Connecting…',
     connected: ms => `Connected · ${ms} ms`,
     failed: reason => `Couldn't connect: ${reason}`,
-    /** The connection itself worked; saving it afterwards did not (the schema's own limits, or storage) */
-    saveFailed: reason => `Couldn't save: ${reason}`,
+    /** The connection itself worked; saving it afterwards did not (the schema's own limits, or storage). One fixed
+     * sentence, no argument: a schema error's JSON or anything else thrown by the caller's save must never reach the
+     * reader (fix round 2, item 2) */
+    saveFailed: "Couldn't save. Try again.",
     delete: 'Delete',
     deleteConfirm: 'Confirm delete',
     cancel: 'Cancel',

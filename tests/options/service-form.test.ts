@@ -31,6 +31,7 @@ vi.mock('@/entrypoints/options/connect', () => ({ connectService: vi.fn(async (c
 
 import { type ConnectResult, connectService } from '@/entrypoints/options/connect'
 import { listModels } from '@/entrypoints/options/models'
+import { releaseHostPermission } from '@/entrypoints/options/permissions'
 import { KeyForm, STILL_MS, ServiceForm } from '@/entrypoints/options/sections/ServiceForm'
 import { O, setLocale } from '@/ui/strings'
 
@@ -266,6 +267,55 @@ describe('ServiceForm (§6.3)', () => {
     await m.flush()
     await m.flush()
     expect(done).toEqual([])
+    // Fix round 2, item 1: a cancelled success still gives back the permission it used
+    expect(wire.released).toEqual(['https://api.example.com/v1'])
+    await m.unmount()
+  })
+
+  // Fix round 2, item 1: a stored service using the same origin keeps it granted
+  it('a cancelled connect that goes on to succeed asks the helper to keep an origin a stored service still uses', async () => {
+    const { element } = form({ stored: ['https://api.example.com/v1'] })
+    const m = await mountElement(element)
+    const [address, key, model] = inputs(m.container)
+    type(address!, 'https://api.example.com/v1')
+    type(key!, 'sk-1')
+    type(model!, 'm-2')
+    let answer: (r: ConnectResult) => void = () => {}
+    vi.mocked(connectService).mockImplementationOnce((candidate: Service) => {
+      wire.candidates.push(candidate)
+      return new Promise<ConnectResult>(resolve => { answer = resolve })
+    })
+    submit(m.container)
+    await m.flush()
+    button(m.container, O.services.cancel).click()
+    answer({ ok: true, ms: 5 })
+    await m.flush()
+    await m.flush()
+    expect(vi.mocked(releaseHostPermission)).toHaveBeenCalledWith('https://api.example.com/v1', ['https://api.example.com/v1'])
+    await m.unmount()
+  })
+
+  // Fix round 2, item 3: the cancelled early return must not leave Connect stuck busy for a caller that keeps the
+  // form mounted
+  it('busy resets once a cancelled attempt resolves, so Connect is pressable again', async () => {
+    const { element } = form()
+    const m = await mountElement(element)
+    const [address, key, model] = inputs(m.container)
+    type(address!, 'https://api.example.com/v1')
+    type(key!, 'sk-1')
+    type(model!, 'm-2')
+    let answer: (r: ConnectResult) => void = () => {}
+    vi.mocked(connectService).mockImplementationOnce((candidate: Service) => {
+      wire.candidates.push(candidate)
+      return new Promise<ConnectResult>(resolve => { answer = resolve })
+    })
+    submit(m.container)
+    await m.flush()
+    button(m.container, O.services.cancel).click()
+    answer({ ok: true, ms: 5 })
+    await m.flush()
+    await m.flush()
+    expect(button(m.container, O.services.connect).getAttribute('aria-busy')).not.toBe('true')
     await m.unmount()
   })
 
@@ -300,7 +350,7 @@ describe('ServiceForm (§6.3)', () => {
     submit(m.container)
     await m.flush()
     await m.flush()
-    expect(m.container.querySelector('.o-note')!.textContent).toBe(O.services.saveFailed('too many services'))
+    expect(m.container.querySelector('.o-note')!.textContent).toBe(O.services.saveFailed)
     expect(wire.released).toEqual(['https://api.newhost.example/v1'])
     await m.unmount()
   })
@@ -445,7 +495,7 @@ describe('KeyForm (§6.3)', () => {
     submit(m.container)
     await m.flush()
     await m.flush()
-    expect(m.container.querySelector('.o-note')!.textContent).toBe(O.services.saveFailed('config rejected'))
+    expect(m.container.querySelector('.o-note')!.textContent).toBe(O.services.saveFailed)
     await m.unmount()
   })
 

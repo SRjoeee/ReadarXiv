@@ -48,9 +48,6 @@ const originOf = (s: string): string | null => {
   }
 }
 const deniedWords = (e: unknown) => (e instanceof PermissionError && e.kind === 'denied' ? O.services.permission.denied(e.origin ?? '') : O.services.permission.badURL)
-/** A failure once the connection itself worked: the schema's own limits, or storage — never the endpoint's fault, so
- * it is worded as a save failing, not a connection (Opus review round 1, item 3) */
-const saveFailedWords = (e: unknown) => O.services.saveFailed(e instanceof Error ? e.message : String(e))
 
 type ListState = { kind: 'idle' } | { kind: 'loading' } | { kind: 'ready'; models: ModelOption[] } | { kind: 'failed' }
 
@@ -203,7 +200,15 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
     }
     setBusy(true)
     const res = await connectService(candidate, target)
-    if (cancelled.current) return
+    if (cancelled.current) {
+      // Cancel was pressed while this attempt was in flight: nothing is handed over, and a success still granted the
+      // candidate's origin, which is not this form's `granted` (connectService asks for it itself) — give it back
+      // (fix round 2, item 1). A caller that keeps the form mounted past Cancel must find Connect pressable again,
+      // not stuck busy (fix round 2, item 3)
+      if (res.ok) await releaseHostPermission(candidate.baseURL, storedNow.current).catch(() => undefined)
+      setBusy(false)
+      return
+    }
     if (!res.ok) {
       setBusy(false)
       setResult(res.reason)
@@ -214,11 +219,11 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
     try {
       await onConnected(candidate, res.ms)
       await releaseUnused(candidate.baseURL)
-    } catch (e) {
+    } catch {
       // the save itself refused (the schema's limit of services, storage): nothing stored, the form stays, and the
       // origin this attempt tested goes back — it was never put to use (Opus review round 1, item 3)
       handedOver.current = false
-      setResult(saveFailedWords(e))
+      setResult(O.services.saveFailed)
       await releaseHostPermission(candidate.baseURL, storedNow.current).catch(() => undefined)
     } finally {
       setBusy(false)
@@ -331,10 +336,10 @@ export function KeyForm({ service, refused, target, focus = false, onConnected }
     if (res.ok) {
       try {
         await onConnected(candidate, res.ms)
-      } catch (e) {
+      } catch {
         // the connection worked; the save afterwards did not (Opus review round 1, item 3 — today an unhandled
         // rejection, since nothing here caught it)
-        setResult(saveFailedWords(e))
+        setResult(O.services.saveFailed)
       } finally {
         setBusy(false)
       }
