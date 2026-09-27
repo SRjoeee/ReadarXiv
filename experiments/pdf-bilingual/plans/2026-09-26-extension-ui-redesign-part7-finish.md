@@ -31,8 +31,11 @@ done" (`…-part6-floating.md` on `exp/ui-floating`). **Ledgers:** `.superpowers
 **Branch facts (read 2026-09-27 with `git merge-base`):** `exp/extension-ui-redesign` was cut from `exp/pdf-bilingual` at
 `cc781213` (the merge of #301), which is also `origin/exp/pdf-bilingual`'s tip: the pull request's base is
 `exp/pdf-bilingual` and its merge base `cc781213`. The three part branches start at `56d02f2d`; since then
-`exp/extension-ui-redesign` holds only three plan commits (`73cd18a1`, `623da6a2`, `6a4c9758`) plus whatever this plan's
-Task 90 adds.
+`exp/extension-ui-redesign` holds plan commits (`73cd18a1`, `623da6a2`, `6a4c9758`, this plan's `7e336511`, Part 5's
+plan amended at `b907ce43`), Part 4's merge `93763c58` (Task 91, run early: no conflict, the gate green, 2704 tests)
+and Task 90's amendment of this plan. A trial of the next two merges, read with `git merge-tree --write-tree` on
+2026-09-27 (objects only, no branch moved): `exp/ui-settings` meets this branch in `scripts/english-allowlist.txt` and
+`tests/ui/locales.test.ts` alone, and `exp/ui-floating` merges on that result without a conflict.
 
 ## Global Constraints
 
@@ -103,19 +106,29 @@ Part 7's own:
 - **The documents say what was built.** UI.md's ids and copy against the packs, DESIGN §9's version and shape against
   `src/config/schema.ts`, the changelog naming every capability §11 removed — each held by a command in Tasks 104–106,
   not by reading.
+- **The key's cue decides once, for every door.** Task 99 Step 11 moves the retranslate cue (P6b) into
+  `shared/page-action.ts`: the popup, the keyboard command, the context menu and the floating button must reach the
+  same answer from the same three facts (the session's own hand-overs, the refused-key record, the chain in force), and
+  a page not running, or running on a service nobody refused, must decide exactly as before. Pinned by the decision's
+  own tests and the toggle's.
+- **A retired export takes nothing still read.** `configFallbackReason()` and `withItem` (Task 99 Steps 9, 10) go
+  after a `grep` with its expected output; the tests that read `getConfig`'s verdict through the first read
+  `readConfig()`'s instead, and a case whose stored value changes between its read and its look reads the verdict where
+  the value was read.
 
 ## Files, Part 7
 
 | File | Task | What happens to it |
 |---|---|---|
 | this plan, `scripts/english-allowlist.txt` | 90 | Committed with its allowlist entry, amended from the Part 4 and Part 5 records |
-| (the three merges) | 91–93 | Merge commits; the shared files of Parts 4 and 5 re-joined by hand |
+| (the three merges) | 91–93 | Merge commits; the shared files of Parts 4 and 5 re-joined by hand; every mock of `@/config/storage` holding `readConfig` |
 | `tests/protector/fixtures.test.ts`, `tests/config/storage.test.ts` | 94 | A timeout sized to the heaviest fixture; the migration's missing cases |
 | `src/core/image/run.ts`, `src/core/session/index.ts`, `src/core/run/ledger.ts`, `tests/image/run.test.ts`, `tests/image/svg-targets.test.ts` | 95 | The image run's dead gate and its comments go |
-| `src/ui/style-sample.ts` (new), `src/ui/appearance/tiles.ts` (deleted), its callers, `src/entrypoints/controls/specimens/forms.tsx`, `src/locales/{zh-CN,en}.ts`, `tests/ui/locales.test.ts` | 96 | `styleTile` moved as `styleSample`; the controls sheet on the pages' words; two keys go |
-| `src/ui/{Button,Confirm,Drawer,Field,LucideIcon,Menu,MenuField,Segmented,Spinner,Switch}.tsx`, `src/ui/appearance/*` (deleted), `src/ui/menu-item.ts` (new), `src/ui/service-items.ts`, `src/pdf-reader/ui/languages.ts`, `tests/ui/{menu,segmented,lucide-icon,advanced-css,profile-editor}.test.ts` (deleted), `tests/scripts/boundary.test.ts`, `src/locales/{zh-CN,en}.ts`, `src/ui/strings.ts` | 97 | The old components, their tests and their words retired |
+| `src/ui/style-sample.ts` (new), `src/ui/appearance/tiles.ts` (deleted), its callers, `src/entrypoints/controls/specimens/{forms,buttons}.tsx`, `src/locales/{zh-CN,en}.ts`, `tests/ui/locales.test.ts` | 96 | `styleTile` moved as `styleSample`; the controls sheet on the pages' words; two keys go |
+| `src/ui/{Button,Confirm,Drawer,Field,LucideIcon,Menu,MenuField,Segmented,Spinner,Switch}.tsx`, `src/ui/appearance/*` (deleted), `src/ui/menu-item.ts` (new), `src/ui/service-items.ts`, `src/pdf-reader/ui/languages.ts`, `tests/ui/{menu,segmented,lucide-icon,advanced-css,profile-editor}.test.ts` (deleted), `tests/scripts/boundary.test.ts`, `src/entrypoints/options/ui/ColourPick.tsx`, `src/entrypoints/options/sections/StyleEditor.tsx` (comments), `src/locales/{zh-CN,en}.ts`, `src/ui/strings.ts` | 97 | The old components, their tests and their words retired |
 | `src/styles/ui.css`, `tests/styles/ui-sheet.test.ts`, `src/entrypoints/gallery/main.tsx`, `tests/e2e/probes/pages-pixels.mjs` (deleted) | 98 | The old page tokens go; the gallery on the roles; the hairline named `line` |
 | `src/ui/controls/{tip.tsx,modality.ts,Popover.tsx,radio.ts,Switch.tsx,Button.tsx}`, `tests/ui/controls/button.test.ts`, `src/entrypoints/pdf-reader/reader.css`, `src/shared/service-health.ts`, `src/ui/service-items.ts` and its callers | 99 | The parked minors fixed |
+| `tests/e2e/probes/align.mjs`; `src/config/storage.ts`, `src/shared/surface-config.ts`, `src/entrypoints/options/sections/Translate.tsx`, `tests/config/storage.test.ts`, `tests/options/translate-section.test.ts`, `docs/DESIGN.md` (§9's one line); `src/entrypoints/options/ui/lists.ts`, `tests/options/controls.test.ts`; `src/shared/page-action.ts`, `src/entrypoints/popup/view-model.ts`, `src/entrypoints/background/{context-menu,index}.ts`, `tests/shared/page-action.test.ts`, `tests/entry/context-menu.test.ts`, `tests/popup/{view-model,view}.test.ts` | 99 | What Parts 4 and 5 left: the vacuous alignment pass, `configFallbackReason()`, `withItem`, the key's cue |
 | `tests/e2e/probes/reflow-shots.mjs`, `tests/e2e/probes/pages-a11y.mjs` (new) | 100 | What the parts' probes leave: zoom on arXiv's pages; axe on the extension's pages |
 | — (outputs under `experiments/pdf-bilingual/out/`, the ledger) | 101–103 | Verification, the first paint, the maintainer's look |
 | `docs/UI.md`, `src/locales/zh-CN.ts` (id comments only) | 104 | §2, §3.1–3.3, §4, §5, §6, §8 |
@@ -129,7 +142,11 @@ Every line of the five ledgers and the four records that says "parked", "Minor",
 names a stale comment, a stale document, an unused key, a retired component or a timeout. **Fixed** = in the task
 named; **carried** = to issue #299 (the technical-debt pass before the next version, the maintainer's rule of
 2026-09-24) or to the issue named, by Task 110's comment on #299, with the reason given here; **closed** = settled
-before Part 7, with the evidence. Task 90 adds the rows the Part 4 and Part 5 records bring.
+before Part 7, with the evidence. Task 90 (2026-09-27) settled rows 11, 73, 74 and 84 and added rows 96–130: what the
+Part 4 and Part 5 records, their ledgers to their last line, and the main ledger's tail (its lines 186–195) bring.
+Beside the three outcomes, a row may go to **the maintainer's look** (Task 103, where an approval closes it and a
+change asked for becomes a task of its own), to **Task 101's checks** (a watch: run on the merged tree, a recurrence
+not rerun away), or to **the final review's focus** (Task 108).
 
 ### From the main ledger (Parts 1–2, the pre-flight scans, the final review of Parts 1–2)
 
@@ -145,7 +162,7 @@ before Part 7, with the evidence. Task 90 adds the rows the Part 4 and Part 5 re
 | 8 | `reader.css` does not `@source` `src/ui/controls/` | Task 5 minor | Closed: `716aa2c0`, a single-file `@source` of `MenuList.tsx` |
 | 9 | The old `src/ui/LucideIcon.tsx` and `src/ui/Switch.tsx` beside the shared ones | Task 5 minor; Part 1's record | **Fixed, Task 97** |
 | 10 | Rules moved verbatim keep literal colours (the switch knob's white, the segmented thumb's shadow; the tooltip's became `tip-shadow` in Part 3) | Pre-flight ruling, line 30 | Carried: a role of the same value changes no pixel; the design adds no role for them |
-| 11 | The old PDF reader section's test nulls `theme` in every patch | Task 7 minor | Closed by Part 5 if `tests/options/pdf-reader-section.test.ts` went with its section: Task 90 Step 2's last command checks it |
+| 11 | The old PDF reader section's test nulls `theme` in every patch | Task 7 minor | Closed: the test went with its section in `83046e07` (Part 5, Task 57; Task 90 Step 2's last command printed nothing) |
 | 12 | No v20 case for a light appearance, nor for a value no theme can hold | Task 7 minor | **Fixed, Task 94** |
 | 13 | Migration 20's parameter type is inert (a cast is needed) | Task 7 minor | Carried: a migration takes an unknown shape by nature; type only |
 | 14 | DESIGN §9 (v19, its list, the volatile list) and UI.md S-O-55 stale | Task 7 | **Fixed, Tasks 104, 105** |
@@ -217,11 +234,11 @@ before Part 7, with the evidence. Task 90 adds the rows the Part 4 and Part 5 re
 |---|---|---|---|
 | 71 | The first-paint probe's profiles leaked | Task 30 | Closed: `545427bb` |
 | 72 | `ENTRY_CHECK_MS` unused | Task 31 | Closed: Task 32 applies it |
-| 73 | Task 32's batched minors: the "never in between" test, a check held open while the field moves, the `ENTRY_CHECK_MS` race untested, `tabUrl`'s comments, writes after dispose, stale comments | Task 32 | Part 4's batch before its Task 39; **Task 90** writes whatever its record leaves into Task 99 (fixed) or this table (carried) |
-| 74 | `tests/e2e/pdf-entry.mjs` names the retired S-P-03 in comments | Task 33 | As row 73 |
+| 73 | Task 32's batched minors: the "never in between" test, a check held open while the field moves, the `ENTRY_CHECK_MS` race untested, `tabUrl`'s comments, writes after dispose, stale comments | Task 32 | Closed: `80e8df56` (all five, each with its test where it changes behaviour), `047d3129` (a late entry answer kept, the shortcut's write guarded after stop) |
+| 74 | `tests/e2e/pdf-entry.mjs` names the retired S-P-03 in comments | Task 33 | Closed: `80e8df56` (the comments and the check's label say P0; the regex unchanged) |
 | 75 | A false retranslate cue after a 403 once the chain is rebuilt | Task 33 (parked 3) | Carried: recoverable, the cue's button does what it says |
 | 76 | No re-fit of an open menu across a resize or a theme change | Task 34 | Closed: the popup is 320 px fixed and the panel's frame follows its body by `ResizeObserver` |
-| 77 | UI.md's rows (S-P-03 → P0, the new states, S-P-48 / S-P-83 and 管理提示词…, S-P-53, S-P-90) | Plan, Task 39 | **Fixed, Task 104** |
+| 77 | UI.md's rows (S-P-03 → P0, the new states, S-P-48 / S-P-83 and 管理提示词…, S-P-53, S-P-90, P0's focus and its polite status) | Plan, Task 39; record | **Fixed, Task 104** |
 | 78 | The popup off the old `src/ui` while its view model reads `styleTile` | Plan, Task 39 | **Fixed, Tasks 96, 97** |
 | 79 | The gallery's `transform-gpu` comment no longer holds (the menus are in the top layer) | Plan, Task 39 | **Fixed, Task 98** |
 
@@ -233,7 +250,7 @@ before Part 7, with the evidence. Task 90 adds the rows the Part 4 and Part 5 re
 | 81 | `useLinger`, `shut`, `segmentWidth` untested | Task 51 | Carried: `shut` cannot run in happy-dom; the others are held by the browser checks |
 | 82 | No Escape on an armed confirm | Task 51 | Carried, as a question for the maintainer: §6.6 names only the 3 s return |
 | 83 | Several `<h1>` while a search runs | Task 52 ("for Part 7's a11y pass") | **Task 100's axe probe decides** (Task 101 runs it): fixed in Task 101's fix step if axe calls it serious or critical, else carried |
-| 84 | `O.search.keywords` inert until the sections pass `words`; the dimming sub-row has none | Tasks 52, 55 | Part 5's Task 65 record; **Task 90** checks it, Task 101 searches one keyword |
+| 84 | `O.search.keywords` inert until the sections pass `words`; the dimming sub-row has none | Tasks 52, 55 | Closed: Part 5's record — `settings-align.mjs` finds the glossary's row by a word only `O.search.keywords` holds, in both languages; the dimming row's keywords `9a4bf905`. Task 101 Step 5 searches two words once more on the merged tree |
 | 85 | `src/ui/Menu.tsx`'s comment quotes the old words | Task 53 | **Fixed, Task 97** (the file goes) |
 | 86 | UI.md S-O-71 / 72 / 73 describe the old cancel and "0" | Task 54 | **Fixed, Task 104** |
 | 87 | The PDF cache row shares the cache's keywords | Task 54 | Closed: the plan's reuse; a search for either finds both rows |
@@ -250,6 +267,46 @@ before Part 7, with the evidence. Task 90 adds the rows the Part 4 and Part 5 re
 | 93 | The tooltip dark in both themes stands out less on arXiv's dark page | Record | **The maintainer's look, Task 103** |
 | 94 | DESIGN §4.0c: the button's material, the mark inside the shadow root, the retry and hint line by the page | Record, "For Part 7" | **Fixed, Task 105** |
 | 95 | `floating-shots.mjs` stays as the button's probe | Record | Closed: kept; Task 93 runs it |
+
+### Added by Task 90: the Part 4 and Part 5 records, their ledgers, and the main ledger's tail
+
+| # | Item | Source | Part 7 |
+|---|---|---|---|
+| 96 | `Entries.tsx`'s `press()` guard unreachable (`Button` refuses a disabled press itself) | Part 4, Task 35 minor | Closed: `80e8df56` |
+| 97 | The style option's locator rested on a premise the brief got wrong (its name leaves out the `aria-hidden` sample) | Part 4, Task 37 minor | Closed: the locator is still strict (the review's own check) |
+| 98 | P16's style menu is not among the menus `popup-align.mjs` opens | Part 4, Task 38 minor | Closed: the same menu is opened from P1 and measured (`['P1', '.style-btn', 'styles']`); a fixture that starts with a menu open is closed by StrictMode's double effect, so the probe opens every menu by clicking (Part 4's record) |
+| 99 | `align.mjs`'s `offCentre` / `edges` pass when a selector draws nothing, so a probe passes over a missing state | Part 4, Task 38 minor; main ledger, line 187 | **Fixed, Task 99** (Step 8) |
+| 100 | The popup awaits the refused-key record before its first render, an unbounded read | Part 4's local Codex review; record | Carried: declined for the part — `prepareFirstPaint`'s `getConfig()` is the same unbounded storage read, so the record's adds no failure mode; bounding the pages' first-paint reads is a question for the pages' design |
+| 101 | ⌥T — and the context menu and the floating button, which decide with it — still restores where the popup offers P6b's retranslate cue, so its chip sits on 显示原文 | Part 4's plan and record ("Part 7 takes it") | **Fixed, Task 99** (Step 11) |
+| 102 | P0's field takes the focus as P0 opens; P0 draws its no-entry sentence as P17 does (a note in the alert tone) — two decisions of Part 4's controller | Part 4's record | **The maintainer's look, Task 103** |
+| 103 | The first paint: a FAIL by 0.4 ms against a baseline recorded under load; the interleaved A/B within the noise | Part 4, Task 39; record | **Fixed, Task 102** (the definitive measurement; Part 4's medians in its Step 1) |
+| 104 | Part 5's 13 batched minors: a candidate checked before the chain, `connect.ts`'s read guarded, the no-Authorization assertion, `PREVIEW_LANG` as `zh-CN`, the address chips' own name, the dimming row's keywords, `reader-a11y.mjs` / `reader-ui-live.mjs` on `seedService`, `addService`'s refused reason, `o-gloss-retry` without a rule, the precision prompt's quotes, `KeyForm`'s placeholder, the glossary's empty row, the diagnostics line's term | Part 5, Tasks 56–64 | Closed: `9a4bf905` |
+| 105 | The model field's placeholder while it waits for a press kept (no pack words fit) | Part 5, Task 59, fix round 1, item 6 | Closed: accepted at the re-review |
+| 106 | `settings-align.mjs`'s `service(name)` times out rather than printing an off line | Part 5, Task 64 minor | Closed: accepted — it fails loudly, it never passes |
+| 107 | The minors batch's review: the `aria-describedby` join assumes no hint beside an error on the add form; the keyless ids not compared across spikes | Part 5, the minors batch | Closed: accepted — true today; each spike runs its own profile |
+| 108 | `withItem` (`src/entrypoints/options/ui/lists.ts`) without a production caller | Part 5, Tasks 56, 63; record | **Fixed, Task 99** (Step 10) |
+| 109 | `configFallbackReason()` without a caller in `src` since `a9e97a3f`: a module-wide verdict of whichever read finished last — the hazard round 5 took away from its callers | Part 5, Task 65; record; main ledger, line 194 | **Fixed, Task 99** (Step 9) |
+| 110 | `src/ui/appearance/*` but `tiles.ts`, with `tests/ui/{advanced-css,profile-editor}.test.ts`, and the two comments that name them (`ColourPick.tsx:6`, today's ColorField's; `StyleEditor.tsx:115`, the drawer's AdvancedCss) | Part 5's record | **Fixed, Task 97** (the files as rows 70 and 88; the two comments in Step 4) |
+| 111 | `O.reading.reset` (重置, a word §10.2 retires) still read by the controls sheet's `specimens/buttons.tsx` alone | Task 90's reading of the merged tree | **Fixed, Task 96** (Step 3) |
+| 112 | UI.md S-O-49b, S-O-49c, S-O-55 stale | Part 5, Task 57 | **Fixed, Task 104** (Step 3's rows) |
+| 113 | UI.md §3.2's ids that §10.2 renames or retires, §10.2's list the authority: the retired sentence lacked S-O-10's and S-O-12's list names, the prompt manager's words (S-O-61) and the glossary's text-box hint (S-O-62) | Part 5's record | **Fixed, Task 104** (Step 3's retired sentence) |
+| 114 | The new words in UI.md: 常用地址, 添加原文, 保存失败，请再试一次 with 重试, a refused deletion's line, the narrow theme control, the floating switch held until its state is known | Part 5's record | **Fixed, Task 104** (Step 3's rows) |
+| 115 | DESIGN §9 does not say that an undone deletion brings the service back without its refused mark | Part 5, Task 60 minor 2; main ledger, line 153; record | **Fixed, Task 105** (Step 3) |
+| 116 | A page closed while a deletion's undo is open may keep an origin granted | Part 5, Task 60 minor 3 | Carried: best effort — a permission kept, never one taken from a service that needs it |
+| 117 | Several undo rows keep the shared helper's order, not the deletions' | Part 5, Task 60 minor 4 | Carried: cosmetic |
+| 118 | A variable inserted into a prompt is outside the browser's undo stack | Part 5, Task 63; main ledger, line 190 | Carried: only the deprecated `execCommand` would put it there |
+| 119 | A tab closed between a service's deletion and its write leaves open pages on that service until they reload | Part 5, Task 65; main ledger, line 191 | Carried: the background could move sessions off a service that left the configuration by itself — a change of its own |
+| 120 | A service deleted while the stored settings cannot be read keeps its origin granted for good | Part 5, Task 65, round 4; main ledger, line 193 | Carried: given back never rather than wrongly — the page cannot know which stored services share the origin |
+| 121 | The deep link's focus ring beside its flash (a programmatic focus on a load with no pointer yet) | Part 5, Task 64; record | **The maintainer's look, Task 103** |
+| 122 | The pencil chooses the style it opens (looking restyles open pages); a deletion falls back to `styles[0]`, not the choice before the editor opened | Part 5, Task 56; record | **The maintainer's look, Task 103** |
+| 123 | The new words as a reader meets them: 常用地址 (heard, not drawn), 添加原文, 重试, the precision prompt's description unquoted | Part 5's record | **The maintainer's look, Task 103** |
+| 124 | The reader spikes Part 5 edited but could not run without the TeX server: `cache-faults.mjs`, `cache-revisit.mjs`, `viewer-faults.mjs`, `reader-a11y.mjs`, `reader-ui-live.mjs` | Part 5, Task 61 and the minors batch; record | **Fixed, Task 101** (Step 3 runs them) |
+| 125 | `e2e:pdf` failed 4 checks once — the popup's page state on hep-th/9711200's PDF and on the abstract page — and passed 26/26 on the rerun | Part 5, Task 65; record | **Task 101's checks** (Step 4) |
+| 126 | `reader-pixels.mjs` mismatched once on `dark-toolbar.png` under the parallel load, not reproduced | Part 5, Task 56's fix round; main ledger, line 186 | **Task 101's checks** (Step 3) |
+| 127 | A ref an effect's cleanup sets that its setup does not reset: `<StrictMode>`'s development double run leaves it set (the service forms, Task 65, round 3) | Main ledger, line 192 | **The final review's focus, Task 108** |
+| 128 | The merge notes: every mock of `@/config/storage` provides `readConfig`; `tests/popup/data.test.ts` changed on both sides; DESIGN §9's line from `a9e97a3f`; `Segmented.tsx` changed on the settings branch alone | Part 5's ledger, line 53; main ledger, lines 194–195; record | **Fixed, Task 92** (Step 5) |
+| 129 | An orphan comment in `zh-CN.ts` claims S-O-30…36 for a guided install whose keys are gone — ids §3.2 gives to deep thinking, the appearance and the dimming | Task 90's reading of the merged pack | **Fixed, Task 104** (Step 2) |
+| 130 | `tests/ui/locales.test.ts`'s `allowed` names `S.setup.step1` and `S.setup.step1Hint`, keys neither pack holds | Task 90's reading of the merged tree | **Fixed, Task 96** (Step 4) |
 
 ---
 
@@ -334,6 +391,9 @@ Expected: the gate exits 0 before the commit.
 
 ### Task 91: merge `exp/ui-popup` (controller)
 
+Run early, on 2026-09-27, before Task 90's amendment: `93763c58`, no conflict, the gate on the merged tree exit 0 (2704
+tests; the main ledger, line 189). The steps stay as the record of how it ran.
+
 - [ ] **Step 1: A clean start**
 
 Run: `git status --short`
@@ -372,20 +432,25 @@ Expected: a merge commit with two parents.
 
 **Files meeting Part 4's** (the plans' "Files outside the settings page", ruling 20): `src/locales/zh-CN.ts`,
 `src/locales/en.ts`, `tests/ui/locales.test.ts`, `tests/ui/strings.test.ts`, `scripts/english-allowlist.txt`,
-`tests/e2e/extension.mjs`, `experiments/pdf-bilingual/spikes/entries.mjs`, and whatever Task 90 added from the records.
+`tests/e2e/extension.mjs`, `experiments/pdf-bilingual/spikes/entries.mjs`; and, from the records (Task 90),
+`tests/popup/data.test.ts` (Part 4 added the `ENTRY_CHECK_MS` case, Part 5 its mock's `readConfig`), every test that
+mocks `@/config/storage` (Part 5's `surface-config.ts` reads through the new `readConfig()`, `a9e97a3f`),
+`docs/DESIGN.md` (§9's one line, changed on the settings branch alone) and `src/ui/controls/Segmented.tsx` with
+`tests/ui/controls/segmented.test.ts` (Part 5's optional `describedBy`, changed on the settings branch alone).
 
 - [ ] **Step 1: Count what each side holds**
 
 Before merging, so that nothing a side added can go missing without a number saying so:
 
 ```bash
-for f in tests/ui/locales.test.ts tests/ui/strings.test.ts; do
-  for r in 56d02f2d HEAD exp/ui-settings; do echo "$f $r $(git show $r:$f | grep -c "^\s*it(")"; done
+for f in tests/ui/locales.test.ts tests/ui/strings.test.ts tests/popup/data.test.ts; do
+  for r in 56d02f2d HEAD exp/ui-settings; do echo "$f $r $(git show "${r}:$f" | grep -c "^\s*it(")"; done
 done
 ```
 
-Expected: six lines. The merged file must hold `HEAD`'s count plus `exp/ui-settings`'s minus `56d02f2d`'s (each side's
-cases added and removed), per file; write the two expected numbers down.
+Expected: nine lines (`"${r}:$f"` braced: zsh reads `$r:t` as a modifier). The merged file must hold `HEAD`'s count
+plus `exp/ui-settings`'s minus `56d02f2d`'s (each side's cases added and removed), per file; write the three expected
+numbers down (`tests/popup/data.test.ts`: 1, 2, 1 → 2 on 2026-09-27).
 
 - [ ] **Step 2: Merge without committing**
 
@@ -394,7 +459,9 @@ git merge --no-ff --no-commit exp/ui-settings
 git status --short | grep -E '^(UU|AA|DU|UD|AU|UA) '
 ```
 
-Expected: the conflicting files, if any, among those named above.
+Expected: exactly `UU scripts/english-allowlist.txt` and `UU tests/ui/locales.test.ts` (Task 90's trial with
+`git merge-tree`); every other shared file, `tests/popup/data.test.ts` and the packs among them, merges by itself and is
+checked in Steps 4 and 5. Another conflict: re-join it as Step 3 says for its kind, and name it in the ledger.
 
 - [ ] **Step 3: Re-join each conflicting file**
 
@@ -413,7 +480,10 @@ Expected: the conflicting files, if any, among those named above.
 - **`tests/e2e/extension.mjs`** and **`experiments/pdf-bilingual/spikes/entries.mjs`**: Part 4's blocks (the popup's,
   its mode buttons, `popupOver`) and Part 5's (the settings sections' helpers and waits), each as its side wrote it.
 - **`scripts/english-allowlist.txt`**: every entry of both sides; an entry both sides changed gets the count the gate
-  reports in Step 4 and both reasons joined with `; `.
+  reports in Step 4 and both reasons joined with `; `. The trial met two hunks, each entry changed on one side only:
+  the plans' lines — `…-part4-popup.md` from `HEAD` (81), `…-part5-settings.md` from `exp/ui-settings` (311),
+  `…-part7-finish.md` from `HEAD` (this plan's count as Task 90 set it) — and the suites' lines —
+  `tests/e2e/popup.mjs` from `HEAD` (20), `tests/e2e/options-page.mjs` from `exp/ui-settings` (15, with its reason).
 - **A plan file**: as in Task 91 Step 2.
 
 `git add` each file by name.
@@ -422,16 +492,36 @@ Expected: the conflicting files, if any, among those named above.
 
 ```bash
 node scripts/check-english.mjs
-for f in tests/ui/locales.test.ts tests/ui/strings.test.ts; do echo "$f $(grep -c "^\s*it(" $f)"; done
+for f in tests/ui/locales.test.ts tests/ui/strings.test.ts tests/popup/data.test.ts; do echo "$f $(grep -c "^\s*it(" $f)"; done
 grep -cF 'S\.find\.paper|O\.services\.(apiKey|namePlaceholder|baseURLHint)|O\.reading\.previewSource|O\.reading\.pdf$' tests/ui/locales.test.ts
-pnpm vitest run tests/ui/locales.test.ts tests/ui/strings.test.ts
+pnpm vitest run tests/ui/locales.test.ts tests/ui/strings.test.ts tests/popup/data.test.ts
 ```
 
 Expected: the English gate names nothing, or only entries whose count moved: set each to the count named, reason
-joined, `git add scripts/english-allowlist.txt`, and run it again to exit 0; the two `it(` counts equal Step 1's
-expected numbers; the `allowed` line found once; both test files pass.
+joined, `git add scripts/english-allowlist.txt`, and run it again to exit 0; the three `it(` counts equal Step 1's
+expected numbers; the `allowed` line found once; the three test files pass.
 
-- [ ] **Step 5: The gate, and the suites both parts changed**
+- [ ] **Step 5: What Part 5 changed under Part 4's code (the merge notes)**
+
+Part 5's `a9e97a3f` made `src/shared/surface-config.ts` read the store through `readConfig()`, which returns a read's
+verdict with its value; a test that mocks `@/config/storage` without it fails once its subject reaches that module:
+
+```bash
+for f in $(grep -rln "vi.mock('@/config/storage'" tests); do echo "$f $(grep -c 'readConfig' $f)"; done
+grep -c "configFallbackReason:" tests/popup/data.test.ts tests/options/data.test.ts
+git diff MERGE_HEAD -- src/ui/controls/Segmented.tsx tests/ui/controls/segmented.test.ts
+grep -c "a read returns why beside the value it read" docs/DESIGN.md
+```
+
+Expected: four files — `tests/options/connect.test.ts 0` (its subject, `connect.ts`, reads `getConfig` alone),
+`tests/options/data.test.ts`, `tests/options/translate-section.test.ts` and `tests/popup/data.test.ts` each at least 1;
+`0` for both data tests (the settings side replaced that mock line with `readConfig`); the `git diff` prints nothing
+(the merged files are the settings side's: Parts 4 and 6 do not edit them); `1` (§9's line from `a9e97a3f`). A file
+at 0 other than `connect.test.ts`, or a new one whose subject reaches `surface-config.ts` or `readConfig`: add
+`readConfig` to its mock beside its `getConfig`, answering `{ config, fallbackReason: null }` from the same store, as
+`tests/popup/data.test.ts`'s does, in the merge, and `git add` it by name.
+
+- [ ] **Step 6: The gate, and the suites both parts changed**
 
 ```bash
 pnpm typecheck && pnpm lint && pnpm test && pnpm build
@@ -441,7 +531,7 @@ node experiments/pdf-bilingual/spikes/entries.mjs
 
 Expected: exit 0 each (`pnpm e2e` and `entries.mjs` need the network; a failure is re-run once before it counts).
 
-- [ ] **Step 6: Commit the merge**
+- [ ] **Step 7: Commit the merge**
 
 ```bash
 git commit -m "Merge exp/ui-settings: the settings page rebuilt (the redesign's Part 5)
@@ -464,8 +554,9 @@ Expected: `no conflict`. Part 6 meets Part 5 in `src/entrypoints/background/hand
 `tests/background/handlers.test.ts` (Part 5's `axt:translate` candidate, Part 6's `axt:entry-settings` theme),
 `src/pdf-reader/ui/Menus.tsx` (Part 5's settings link, Part 6's first lines of `ServiceMenu`) and the design document
 (Part 5's §6.2, Part 6's §2.2 and §3), each in other hunks; and its plan file meets this branch's two amendments
-(`623da6a2`, `6a4c9758`) in other lines than its record. A conflict: keep both hunks; stop and report if the same line
-was changed on both sides.
+(`623da6a2`, `6a4c9758`) in other lines than its record. Task 90's trial (`git merge-tree` of `exp/ui-floating` on a
+trial of the settings merge) met no conflict. A conflict: keep both hunks; stop and report if the same line was changed
+on both sides.
 
 - [ ] **Step 2: Both sides are in the merged files**
 
@@ -559,15 +650,17 @@ is held), image modes present and absent (held), and a configuration the migrati
       await fakeBrowser.storage.local.set({ config: v19Stored({ pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance } }), config$: { v: 19 } })
       vi.resetModules()
       const fresh = await import('@/config/storage')
-      expect((await fresh.getConfig()).theme).toBe(appearance)
-      expect(fresh.configFallbackReason()).toBeNull()
+      const reading = await fresh.readConfig()
+      expect(reading.config.theme).toBe(appearance)
+      expect(reading.fallbackReason).toBeNull()
     }
     await fakeBrowser.storage.local.set({ config: v19Stored({ pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance: 'sepia' } }), config$: { v: 19 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
     // no throw: the defaults in use, and the reason names the field (S-O-02 shows it)
-    expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
-    expect(fresh.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'theme' })
+    const reading = await fresh.readConfig()
+    expect(reading.config).toEqual(DEFAULT_CONFIG)
+    expect(reading.fallbackReason).toMatchObject({ kind: 'invalid', where: 'theme' })
   })
 ```
 
@@ -579,9 +672,12 @@ and inside `describe('the preload, v15 to v20', …)`, after its first case, add
     const fresh = await import('@/config/storage')
     await fresh.setConfig({ ...DEFAULT_CONFIG, preload: 'whole' })
     expect((await fresh.getConfig()).preload).toBe('whole')
-    expect(fresh.configFallbackReason()).toBeNull()
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
   })
 ```
+
+(Each reads the verdict from `readConfig()`, the read's own, not from `configFallbackReason()`, which Task 99 Step 9
+retires; `readConfig` is in the tree since the settings merge, Task 92.)
 
 Run: `pnpm vitest run tests/config/storage.test.ts`
 Expected: PASS, two cases more than before. A failure of the appearance case is a finding about migration 20 (report
@@ -767,7 +863,7 @@ sheet draw their samples with it. It moves to `src/ui/style-sample.ts` as `style
 - Create: `src/ui/style-sample.ts`
 - Delete: `src/ui/appearance/tiles.ts`
 - Modify: every file that imports `@/ui/appearance/tiles` (Step 1 lists them)
-- Modify: `src/entrypoints/controls/specimens/forms.tsx`, `src/locales/zh-CN.ts`, `src/locales/en.ts`, `tests/ui/locales.test.ts`
+- Modify: `src/entrypoints/controls/specimens/forms.tsx`, `src/entrypoints/controls/specimens/buttons.tsx`, `src/locales/zh-CN.ts`, `src/locales/en.ts`, `tests/ui/locales.test.ts`
 
 **Interfaces:**
 - Produces: `styleSample(profile: StyleProfile): CSSProperties` (`@/ui/style-sample`), `styleTile`'s body unchanged.
@@ -810,6 +906,11 @@ In `src/entrypoints/controls/specimens/forms.tsx`:
   hint the page's service form draws under a field);
 - `{O.services.more}` becomes `{O.more}` (the page's fold, Part 5's Task 56).
 
+In `src/entrypoints/controls/specimens/buttons.tsx`, the small text button's `{O.reading.reset}` becomes
+`{O.appearance.restore}` — the settings page's text button on the styles' heading (S-O-41); 重置 is one of the words
+§10.2 retires, and after the settings merge this specimen is its only reader (row 111). Task 97 Step 5 then finds
+`O.reading.reset` unread and deletes it.
+
 - [ ] **Step 4: The two keys go**
 
 ```bash
@@ -820,12 +921,14 @@ grep -rn "services\.more" src tests | grep -v "services\.moreFor" | grep -v "^sr
 Expected: the first prints only `tests/ui/locales.test.ts`'s `allowed` line; the second nothing. Delete `baseURLHint`
 and `more` from `O.services` in `src/locales/zh-CN.ts` and `src/locales/en.ts` (with any comment that belongs to them
 alone), and in `tests/ui/locales.test.ts`'s `allowed` expression `O\.services\.(apiKey|namePlaceholder|baseURLHint)`
-becomes `O\.services\.(apiKey|namePlaceholder)`.
+becomes `O\.services\.(apiKey|namePlaceholder)` and `|S\.setup\.step1|S\.setup\.step1Hint` goes (neither pack has held
+an `S.setup` since before the redesign: `grep -n "setup" src/locales/*.ts` prints nothing; row 130).
 
 - [ ] **Step 5: The controls sheet still measures right**
 
 Run: `pnpm exec wxt build --mode development && node tests/e2e/probes/controls.mjs`
-Expected: every line `ok`, exit 0 (the forms' checks measure the first field, which keeps its label and placeholder).
+Expected: every line `ok`, exit 0 (the forms' checks measure the first field, which keeps its label and placeholder;
+the buttons' checks measure a button's parts on its centre line, whatever its words).
 
 - [ ] **Step 6: The gate and the commit**
 
@@ -833,7 +936,7 @@ Run: `git add src/ui/style-sample.ts && pnpm typecheck && pnpm lint && pnpm test
 Expected: exit 0.
 
 ```bash
-git add src/ui/style-sample.ts src/entrypoints/controls/specimens/forms.tsx src/locales/zh-CN.ts src/locales/en.ts tests/ui/locales.test.ts $(grep -rl "@/ui/style-sample" src tests)
+git add src/ui/style-sample.ts src/entrypoints/controls/specimens/forms.tsx src/entrypoints/controls/specimens/buttons.tsx src/locales/zh-CN.ts src/locales/en.ts tests/ui/locales.test.ts $(grep -rl "@/ui/style-sample" src tests)
 git status --short
 git commit -m "refactor(ui): a style's sample moves out of the tiles, and the controls sheet reads the pages' words
 
@@ -855,6 +958,7 @@ and the reader's language list are built in before a menu draws them.
   in `src/ui/appearance/`, `tests/ui/{menu,segmented,lucide-icon,advanced-css,profile-editor}.test.ts`
 - Create: `src/ui/menu-item.ts`
 - Modify: `src/ui/service-items.ts`, `src/pdf-reader/ui/languages.ts`, `tests/scripts/boundary.test.ts`,
+  `src/entrypoints/options/ui/ColourPick.tsx`, `src/entrypoints/options/sections/StyleEditor.tsx` (a comment each),
   `src/locales/zh-CN.ts`, `src/locales/en.ts`, `src/ui/strings.ts`, `scripts/english-allowlist.txt`
 
 **Interfaces:**
@@ -915,18 +1019,28 @@ In `tests/scripts/boundary.test.ts`, `expect(resolveSpecifier(FROM, '@/ui/appear
 becomes `expect(resolveSpecifier(FROM, '@/ui/controls/Button.tsx')).toBe('src/ui/controls/Button')` (the case reads a
 file extension; its example file is gone).
 
+The two comments on the settings page that name what goes (Part 5's record, row 110):
+- `src/entrypoints/options/ui/ColourPick.tsx`, the one-line comment on `START`: `is held: today's ColorField's;`
+  becomes `is held — the one the old style drawer's colour field started from;`;
+- `src/entrypoints/options/sections/StyleEditor.tsx`, `CustomCss`'s comment, its last line: `(the reasoning of the
+  drawer's AdvancedCss, which this replaces)` becomes `(as the old style drawer's box did, retired with the redesign)`.
+
 - [ ] **Step 5: The keys nobody reads now go**
 
 ```bash
 while read k; do grep -rqF "$k" src tests experiments/pdf-bilingual/spikes --exclude-dir=locales || echo "$k"; done < "$TMPDIR/axt-old-keys.txt"
 ```
 
-Expected: the keys that only the deleted files named — among them `O.close`, `O.services.cancel`,
-`O.services.deleteConfirm` and the `O.reading` keys Part 5's "Kept for Part 7" lists (`add`, `reset`, `resetHint`,
-`editTitle`, `editAria`, `duplicate`, `bandColor`, `custom`, `opacity`, `advanced`, `advancedHint`, `preview`,
-`color`, `followText`, …). A prefix that is still read (`O.reading`) prints nothing and stays. Delete each printed key
-from `src/locales/zh-CN.ts` and `src/locales/en.ts` (a key both packs hold; an object left empty goes with its last
-key). Then:
+Expected: the keys that only the deleted files named. Task 90 ran the loop on a trial of the merged tree (the settings
+merge, with Task 96's move of `tiles.ts` and its `buttons.tsx` change assumed): `O.close`, `O.services.deleteConfirm`,
+and `O.reading.{add, advancedHint, bandColor, color, custom, delete, done, editAria, editTitle, followText, name,
+opacity, reset, resetHint}` — and two lines that are no key: `O.reading.previewSource.replace` and
+`O.reading.previewTarget.replace`, a string method the old `Preview.tsx` called on two keys the settings page's style
+rows and editor still read; skip them. Part 5's "Kept for Part 7" named more — `O.services.cancel`, `O.reading.duplicate`, `advanced`,
+`preview` — which the new page reads (the service form's 取消, the style editor's 复制一份, 更多's content and
+preview): they print nothing and stay. A prefix that is still read (`O.reading`) prints nothing and stays. Delete each
+printed key from `src/locales/zh-CN.ts` and `src/locales/en.ts` (a key both packs hold; an object left empty goes with
+its last key). Then:
 
 Run: `pnpm typecheck`
 Expected: exit 0. An error naming a deleted key is a reader the `grep` missed (a destructured object): put that key
@@ -951,9 +1065,10 @@ again: exit 0.
 grep -rnE "from '(@/ui|(\.\./)+ui)/($OLD)'|@/ui/appearance/" src tests experiments/pdf-bilingual/spikes
 grep -nE "from '\./($OLD)'" src/ui/*.ts src/ui/*.tsx
 test -d src/ui/appearance && echo "appearance still there"
+grep -rnE "ColorField|AdvancedCss|ProfileEditor|ProfileGrid" src tests
 ```
 
-Expected: nothing from any of the three.
+Expected: nothing from any of the four.
 
 - [ ] **Step 9: The pages and the reader unchanged**
 
@@ -966,7 +1081,7 @@ Run: `git add src/ui/menu-item.ts && pnpm typecheck && pnpm lint && pnpm test &&
 Expected: exit 0.
 
 ```bash
-git add src/ui/menu-item.ts src/ui/service-items.ts src/pdf-reader/ui/languages.ts tests/scripts/boundary.test.ts src/locales/zh-CN.ts src/locales/en.ts src/ui/strings.ts scripts/english-allowlist.txt
+git add src/ui/menu-item.ts src/ui/service-items.ts src/pdf-reader/ui/languages.ts tests/scripts/boundary.test.ts src/entrypoints/options/ui/ColourPick.tsx src/entrypoints/options/sections/StyleEditor.tsx src/locales/zh-CN.ts src/locales/en.ts src/ui/strings.ts scripts/english-allowlist.txt
 git status --short
 git commit -m "refactor(ui): the old pages' components, their tests and their words retired
 
@@ -1096,14 +1211,27 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 
 ### Task 99: the small fixes the ledgers parked (subagent)
 
-Rows 5, 45, 46, 50, 57, 63 of the parked table, and what Task 90 wrote in from Parts 4 and 5 (Step 8). One commit a
-step, each with the gate.
+Rows 5, 45, 46, 50, 57, 63 of the parked table, and what Task 90 wrote in from Parts 4 and 5 (Steps 8–11: rows 99,
+109, 108, 101). One commit a step, each with the gate. Steps 8–11 run after Step 7, in their order; Step 8 comes before
+any probe of Task 101 reads `align.mjs`.
 
 **Files:**
 - Modify: `src/ui/controls/{tip.tsx,modality.ts,Popover.tsx,radio.ts,Switch.tsx}`, `src/entrypoints/pdf-reader/reader.css`
 - Modify: `src/ui/controls/Button.tsx`, `tests/ui/controls/button.test.ts`
 - Modify: `src/shared/service-health.ts`
 - Modify: `src/ui/service-items.ts` and the callers the compiler names
+- Modify: `tests/e2e/probes/align.mjs` (Step 8)
+- Modify: `src/config/storage.ts`, `src/shared/surface-config.ts`, `src/entrypoints/options/sections/Translate.tsx`,
+  `tests/config/storage.test.ts`, `tests/options/translate-section.test.ts`, `docs/DESIGN.md` (Step 9)
+- Modify: `src/entrypoints/options/ui/lists.ts`, `tests/options/controls.test.ts` (Step 10)
+- Modify: `src/shared/page-action.ts`, `src/entrypoints/popup/view-model.ts`, `src/entrypoints/background/context-menu.ts`,
+  `src/entrypoints/background/index.ts`, `tests/shared/page-action.test.ts`, `tests/entry/context-menu.test.ts`,
+  `tests/popup/view-model.test.ts`, `tests/popup/view.test.ts` (Step 11)
+
+**Interfaces** (Step 11):
+- Produces: `keyMadeGood(session, rejected, saved): boolean` in `@/shared/page-action`; `pageAction(page,
+  savedRevision, madeGood = false)` and `pageDecision(page, saved, madeGood = false)` (a third, optional parameter);
+  `ToggleDeps.madeGood?(scope: string): Promise<boolean>` in `src/entrypoints/background/context-menu.ts`.
 
 - [ ] **Step 1: The moved controls' comments (row 5)**
 
@@ -1203,10 +1331,297 @@ Run: `grep -nE "(^|[ ,{}>])\.chrome([ .:,{\[]|$)" src/styles/ui.css src/styles/c
 Expected: nothing — the class the reader's popovers need names no rule on the pages. Write the result into the task's
 report (it is row 45's evidence); no commit.
 
-- [ ] **Step 8: What Parts 4 and 5 left**
+- [ ] **Step 8: An alignment check over nothing drawn fails (row 99)**
 
-The steps Task 90 wrote here from the two records, each with its files, change, check and commit. When Task 90 wrote
-none, this step is done.
+`offCentre` and `edges` (`tests/e2e/probes/align.mjs`) return nothing to report when their selector matches nothing
+drawn, so `popup-align.mjs` and `controls.mjs` pass over a state that never drew (Part 4, Task 38's review; the main
+ledger, line 187). Before Task 101's verification reads them:
+- `offCentre` becomes `async`; its `page.evaluate` counts the rows it measures (`let measured = 0`, and `measured++`
+  after the `if (!r.height || row.closest('[inert]')) continue` line) and returns `{ out, measured }`; after it:
+  `if (!measured) throw new Error(\`offCentre: nothing drawn matches ${rows}\`)`, then `return out`;
+- `edges` becomes `async`; its `page.evaluate` returns `{ found: [...found].sort((a, b) => a - b), measured: found.size }`;
+  after it: `if (!measured) throw new Error(\`edges: nothing drawn matches ${items}\`)`, then `return found`;
+- each doc comment gains a last sentence: `Throws when nothing drawn matches: a state that drew nothing is not aligned`.
+
+The callers already `await` both. Run:
+
+```bash
+node --input-type=module -e "
+import { edges, offCentre } from './tests/e2e/probes/align.mjs'
+const page = { evaluate: async () => ({ out: [], found: [], measured: 0 }) }
+for (const [name, run] of [['offCentre', () => offCentre(page, { rows: '.none' })], ['edges', () => edges(page, { items: '.none', frame: 'body' })]])
+  await run().then(() => console.log(name, 'passed over nothing'), e => console.log(name, 'refused:', e.message))
+"
+pnpm exec wxt build --mode development && node tests/e2e/probes/controls.mjs && node tests/e2e/probes/popup-align.mjs
+```
+
+Expected: `offCentre refused: offCentre: nothing drawn matches .none` and `edges refused: edges: nothing drawn matches
+.none`; then every line of both probes `ok`, exit 0. A throw from a probe names a state or a menu that drew nothing: a
+finding, reported with its line — the selector is not loosened. Gate; commit
+`test(e2e): an alignment check over nothing drawn fails instead of passing`.
+
+- [ ] **Step 9: `configFallbackReason()` retired (row 109)**
+
+Since Part 5's `a9e97a3f` nothing in `src` calls it: a caller that acts on the verdict takes `readConfig()`, which
+returns its own read's verdict with its value; the module-wide one — the latest read's to finish, whoever made it — is
+the hazard round 5 took away (Part 5's ledger, lines 149–152).
+
+```bash
+grep -rn "configFallbackReason" src tests docs | grep -vE "^tests/config/storage\.test\.ts:|^tests/options/translate-section\.test\.ts:"
+```
+
+Expected exactly: `src/config/storage.ts` (the function, and `getConfig`'s comment), a comment in
+`src/entrypoints/options/sections/Translate.tsx`, and §9's line in `docs/DESIGN.md`. A caller anywhere else: stop and
+report.
+
+In `src/config/storage.ts`:
+- delete the comment `/** Why the latest \`getConfig()\` fell back; … */` with `let fallbackReason: FallbackReason | null = null`,
+  and the comment `/** For the UI: did the configuration fall back to the defaults. … */` with
+  `export function configFallbackReason(): FallbackReason | null { … }`;
+- in `readConfig`'s comment, `in one answer, and the module's \`fallbackReason\` is left` / `as it was: a caller that
+  acts on the verdict — the settings page gives an origin back only on a list it could read —` / `must not be handed
+  another read's` become `in one answer: a caller that acts on the verdict — the settings page gives an origin back only
+  on a list it could read — is never handed another read's (a module-wide verdict, the latest read's to finish, once
+  was: the redesign's Part 5)`, wrapped at 120 columns;
+- `getConfig` becomes:
+
+  ```ts
+  /** `readConfig()`'s value, for a caller that does not act on the verdict */
+  export async function getConfig(): Promise<Config> {
+    return (await readConfig()).config
+  }
+  ```
+- in `setConfig`, the block `if (!readable.success) { fallbackReason = describeFallback(stored, readable.error.issues);
+  throw new ConfigUnreadableError(fallbackReason) }` becomes the one line
+  `if (!readable.success) throw new ConfigUnreadableError(describeFallback(stored, readable.error.issues))`;
+- in `resetConfig`, the line `fallbackReason = null` goes.
+
+In `src/shared/surface-config.ts`, `(storage.ts \`readConfig\`), not the module's latest:` becomes
+`(storage.ts \`readConfig\`), never another read's:`. In `src/entrypoints/options/sections/Translate.tsx`,
+`and not the module's latest (storage.ts \`configFallbackReason\`)` becomes `and never another read's`, the rest of the
+comment as it is. In `docs/DESIGN.md` §9, `a read returns why beside the value it read (\`readConfig()\`; \`getConfig()\`
+keeps its latest for \`configFallbackReason()\`)` becomes `a read returns why beside the value it read (\`readConfig()\`)`.
+
+The tests read the verdict of the read itself:
+
+```bash
+perl -pi -e 's/\b(\w+)\.configFallbackReason\(\)/(await $1.readConfig()).fallbackReason/g' tests/config/storage.test.ts
+```
+
+then, by hand, in `tests/config/storage.test.ts`: the import drops `configFallbackReason, `; in
+`describe('a read and its verdict (readConfig)', …)`, delete `pair` with its comment, and in each of the two round-5
+cases the premise that used it (its comment where it has one, `const [paired] = await interleaved(…, pair)`,
+`expect(paired)…` and the `vi.restoreAllMocks()` after it: the cases keep their `readConfig` interleaving); the third
+case becomes:
+
+```ts
+  it('getConfig is readConfig\'s value', async () => {
+    await fakeBrowser.storage.local.set({ config: BROKEN, config$: { v: CONFIG_VERSION } })
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    expect(await getConfig()).toEqual(DEFAULT_CONFIG)
+    await fakeBrowser.storage.local.set({ config: SOUND })
+    expect(await getConfig()).toEqual(SOUND)
+  })
+```
+
+In `tests/options/translate-section.test.ts`: the mock's comment becomes `// as storage.ts: a value it cannot read is
+answered with the defaults, and \`readConfig\` with its read's verdict`; the mock loses `let reason …`, `reason =
+reading.fallbackReason; ` in its `getConfig` and the member `configFallbackReason: () => reason,`; the import
+`{ configFallbackReason, getConfig }` becomes `{ getConfig }`; in the round-5 case, `// the premise: the other read ran
+inside the commit's, and the latest verdict is its own, readable` becomes `// the premise: the other read ran inside the
+commit's, finding the value readable`, and `expect(configFallbackReason()).toBeNull()` goes.
+
+```bash
+grep -rn "configFallbackReason" src tests docs
+pnpm vitest run tests/config tests/options tests/popup tests/shared
+```
+
+Expected: the `grep` prints nothing; PASS, with as many cases as before in both test files (none deleted, one
+retitled). A case that fails after the `perl` is one whose stored value changed between its `getConfig()` and its look:
+read the verdict where the value was read (`const { config, fallbackReason } = await fresh.readConfig()`); never
+loosen an expectation. Gate (the English gate's counts unchanged); commit
+`refactor(config): the module-wide fallback verdict retired; a read's own is readConfig's`.
+
+- [ ] **Step 10: `withItem` retired (row 108)**
+
+```bash
+grep -rn "withItem\|withProfile" src tests
+```
+
+Expected: `src/entrypoints/options/ui/lists.ts` (the export, and its comment naming the old drawer's `withProfile`) and
+`tests/options/controls.test.ts` (its import and two `expect` lines). Anything else: stop and report.
+
+In `src/entrypoints/options/ui/lists.ts`, delete the comment `/** A list with an edited item written into it — … */`
+and `export const withItem = …` (two lines). In `tests/options/controls.test.ts`, `import { insertAt, withItem, withUndo }`
+becomes `import { insertAt, withUndo }`, and the two `expect(withItem(…))` lines go.
+
+Run: `grep -rn "withItem" src tests && echo left; pnpm vitest run tests/options`
+Expected: no `left`; PASS. Gate; commit `refactor(options): withItem retired, without a caller since the prompts' fix round`.
+
+- [ ] **Step 11: The key does the retranslate cue too (row 101)**
+
+Part 4's popup offers P6b's way back — a page on the free service since its service's key was refused, the key made
+good since — as P13's pair, 重新翻译 first; but ⌥T, the context menu and the floating button's main button, which decide
+with the popup in `shared/page-action.ts` ("the key does what the button shows", the maintainer, 2026-09-11), still
+restore there, so the popup put the key's chip on 显示原文. Part 4's plan left "the key doing the cue too" to
+`shared/page-action.ts`, for every door; Part 6 did not take it; Part 4's record gives it to Part 7. After this step
+P6b's faces are P13's: the key retranslates, its chip on 重新翻译.
+
+Tests first. In `tests/shared/page-action.test.ts`, `keyMadeGood` joins the import, and inside `describe('pageDecision', …)`
+after its last case:
+
+```ts
+  it('the retranslate cue: a running page whose refused key was made good re-translates, only on settings that run on their own; any other page decides as before', () => {
+    const on = { progress: progress('on'), running: running('r1') }
+    expect(pageDecision(on, saved(), true)).toEqual({ action: 'retranslate', behind: false, enabled: true })
+    expect(pageDecision(on, saved({ canRun: false, fallback: true }), true)).toEqual({ action: 'retranslate', behind: false, enabled: false })
+    expect(pageDecision(on, saved())).toEqual({ action: 'restore', behind: false, enabled: true })
+    expect(pageDecision({ progress: progress('idle') }, saved({ canRun: false, fallback: true }), true)).toEqual({ action: 'translate', behind: false, enabled: true })
+  })
+```
+
+and after that `describe`:
+
+```ts
+describe('keyMadeGood', () => {
+  const session = { providerId: 'svc-a', demotions: [{ id: 'svc-a', kind: 'auth' as const }] }
+  const back = { engine: { id: 'svc-a' } }
+
+  it('the session left its own service for a refused key, the record no longer holds it, and the chain a start would run on runs it again', () => {
+    expect(keyMadeGood(session, [], back)).toBe(true)
+    expect(keyMadeGood({ ...session, demotions: [{ id: 'svc-a', kind: 'auth' as const }, { id: 'microsoft', kind: 'rate-limit' as const }] }, new Set<string>(), back)).toBe(true)
+  })
+
+  it('no cue while the record holds the service, while the chain in force still passes it over, for a hand-over that was not the key\'s, or without a session', () => {
+    expect(keyMadeGood(session, ['svc-a'], back)).toBe(false)
+    expect(keyMadeGood(session, [], { engine: { id: 'google-web', demoted: { id: 'svc-a', kind: 'auth' as const, message: '403' } } })).toBe(false)
+    expect(keyMadeGood({ ...session, demotions: [{ id: 'svc-a', kind: 'rate-limit' as const }] }, [], back)).toBe(false)
+    expect(keyMadeGood(null, [], back)).toBe(false)
+  })
+})
+```
+
+In `tests/entry/context-menu.test.ts`, inside `describe('the toggle tells whether it acted …')`, after its last case:
+
+```ts
+  it('the retranslate cue: where the popup offers the way back to a key made good, the toggle re-translates too (UI.md P6b)', async () => {
+    const page = { ...progress('on'), session: 's1' }
+    const cued = { ...deps(page, { revision: null, canRun: true, fallback: false }), madeGood: vi.fn(async () => true) }
+    expect(await toggleTranslation(cued as never, 7)).toBe(true)
+    expect(cued.madeGood).toHaveBeenCalledWith('s1')
+    expect(cued.send).toHaveBeenLastCalledWith(7, { type: 'axt:translate-page', restart: true })
+    const plain = { ...deps(page, { revision: null, canRun: true, fallback: false }), madeGood: vi.fn(async () => false) }
+    expect(await toggleTranslation(plain as never, 7)).toBe(true)
+    expect(plain.sent).toEqual(['axt:page-status', 'axt:restore-page'])
+  })
+```
+
+In `tests/popup/view-model.test.ts`, the case `'P6b the key made good …, the key\'s chip on showing the original (the
+retranslate cue)'` is retitled `'P6b the key made good while the page runs on the free service: P13\'s pair offers the
+way back, with the key, which retranslates too (the retranslate cue)'`, and in it and in the case `'two hand-overs — …'`
+the two expectations become:
+
+```ts
+    expect(v.primary).toEqual({ label: '重新翻译', action: 'retranslate', disabled: false, shortcut: '⌥T' })
+    expect(v.secondary).toEqual({ label: '显示原文', action: 'restore' })
+```
+
+In `tests/popup/view.test.ts`, the P6b case's title ends `— Translate again with the key, and Show original (the
+retranslate cue)` and its chip line becomes `expect(pair.map(b => b.querySelector('kbd')?.textContent ?? null)).toEqual(['⌥T', null])`.
+
+Run: `pnpm vitest run tests/shared/page-action.test.ts tests/entry/context-menu.test.ts tests/popup/view-model.test.ts tests/popup/view.test.ts`
+Expected: FAIL — `keyMadeGood` is not exported, the toggle restores the cued page, and the chip is on 显示原文.
+
+Then the code:
+- `src/shared/page-action.ts` gains, after `behindSettings`:
+
+  ```ts
+  /**
+   * The retranslate cue (UI.md P6b), asked by the popup's view model and by the toggle: the page's session left its own
+   * service for a refused key (`auth` among its hand-overs — `demotions`, since `engine.demoted` names only the most
+   * recent), and that key has been made good since: the record holds the service no more, and the chain a start would
+   * run on runs it again. The saved chain is the test: a 403 is `auth` too and never recorded
+   * (background/health-guard.ts marks a 401 alone), and while the chain in force still passes the service over, a start
+   * would meet the same refusal
+   */
+  export function keyMadeGood(
+    session: Pick<ProviderStatus, 'providerId' | 'demotions'> | null | undefined,
+    rejected: Iterable<string>,
+    saved: Pick<ProviderStatus, 'engine'> | null | undefined,
+  ): boolean {
+    const refused = session?.demotions.find(d => d.kind === 'auth' && d.id === session.providerId)
+    return !!refused && !new Set(rejected).has(refused.id) && saved?.engine.id === refused.id && !saved.engine.demoted
+  }
+  ```
+
+  `pageAction` takes a third parameter `madeGood = false` and its running branch becomes
+  `if (state === 'on') return behindSettings(page, savedRevision) || madeGood ? 'retranslate' : 'restore'`; its comment
+  gains `A running page the retranslate cue holds (keyMadeGood) re-translates too: the key does what the popup's button
+  offers there (P6b).` `pageDecision` takes `madeGood = false` too, passes it to `pageAction`, and decides `enabled`
+  with `const cued = madeGood && page.progress.state === 'on'` as
+  `action === 'restore' ? true : behind || cued ? saved.canRun : saved.canRun || saved.fallback`; its comment gains
+  `So does the cue: the way back is the reader's own service, never a fallback.`
+- `src/entrypoints/popup/view-model.ts`: the import becomes `import { keyMadeGood, pageDecision } from '@/shared/page-action'`;
+  the cue's comment and its two lines (`const refused = …`, `const madeGood = …`) move above `const decision`, the
+  comment's sentence `The key still restores (shared/page-action.ts decides for every door), so its chip goes on Show
+  original.` becoming `The toggle asks the same (shared/page-action.ts keyMadeGood): the key, the context menu and the
+  floating button retranslate there as this button does.`, and the two lines becoming
+  `const madeGood = keyMadeGood(on ? session : null, rejected, saved)`; `pageDecision(page, { … })` gains `, madeGood`
+  as its third argument; the faces lose the cue's branch — `let primary` / `let secondary`, the comment `// behind the
+  settings as well …`, `if (madeGood && !behind) { … } else {` and its closing `}` go, and what the `else` held stays,
+  with `secondary = behind || paused ? …` becoming `secondary = behind || paused || madeGood ? …` (declare both with
+  `const`).
+- `src/entrypoints/background/context-menu.ts`: `ToggleDeps` gains
+
+  ```ts
+    /**
+     * Whether the page's session (its `session` id) runs on another engine for a refused key made good since: the
+     * retranslate cue (UI.md P6b, shared/page-action.ts keyMadeGood). Absent, never
+     */
+    madeGood?(scope: string): Promise<boolean>
+  ```
+
+  and `toggleTranslation` asks the page for `Pick<PageStatus, 'progress' | 'running' | 'epoch' | 'session'>`, then,
+  before its decision:
+
+  ```ts
+      // The retranslate cue: where the popup offers the way back to a key made good, the key re-translates as its button
+      // does (UI.md P6b). Asked of a running page only; a failed ask is no cue
+      const madeGood = status?.progress.state === 'on' && status.session && deps.madeGood ? await deps.madeGood(status.session).catch(() => false) : false
+  ```
+
+  and passes `madeGood` as `pageDecision`'s third argument.
+- `src/entrypoints/background/index.ts`: `keyMadeGood` joins the import of `savedFromStatus`; after `saved`:
+
+  ```ts
+    /**
+     * The retranslate cue for the toggle (UI.md P6b, shared/page-action.ts keyMadeGood): the page's session's own chain,
+     * the refused-key record and the chain in force, read as the popup reads them
+     */
+    const madeGood = async (scope: string): Promise<boolean> => {
+      const own = router.transportFor(scope)
+      if (!own) return false
+      const [session, rejected, inForce] = await Promise.all([own.status(), rejectedServices(), statusInForce(chain)])
+      return keyMadeGood(session, rejected, inForce.status)
+    }
+  ```
+
+  and every door takes it: `menuDeps` and `installToggleCommand`'s deps gain `madeGood,` after `saved,`, and the
+  floating button's `toggle: tabId => toggleTranslation({ send: sendToTab, saved }, tabId)` becomes
+  `toggle: tabId => toggleTranslation({ send: sendToTab, saved, madeGood }, tabId)`.
+
+```bash
+pnpm vitest run tests/shared/page-action.test.ts tests/entry/context-menu.test.ts tests/popup tests/background
+grep -n "still restores" src/entrypoints/popup/view-model.ts
+pnpm build && pnpm e2e:floating
+```
+
+Expected: PASS; nothing from the `grep`; `pnpm e2e:floating` every line PASS (the floating button's main button is the
+toggle's door a browser suite drives — its translate and its restore must decide as before; the native menu and the
+keyboard command are held by `tests/entry/context-menu.test.ts`; a failure is re-run once before it counts). Gate;
+commit
+`feat(ui): the key retranslates where the popup offers a refused key's way back, on every door`. Task 104 writes P6b's
+faces into UI.md (S-P-52, S-P-53).
 
 ### Task 100: two probes for what the parts' probes leave (subagent)
 
@@ -1586,7 +2001,29 @@ node experiments/pdf-bilingual/spikes/reader-ui.mjs
 node experiments/pdf-bilingual/spikes/entries.mjs
 ```
 
-Expected: 24 × `ok`; every line `ok`; every line `ok`.
+Expected: 24 × `ok`; every line `ok`; every line `ok`. `reader-pixels.mjs` mismatched once on `dark-toolbar.png` under
+Part 5's parallel load and never again (row 126): a mismatch here is not rerun away — it goes to Step 7 with the
+probe's diff image and the load average.
+
+Then the five reader spikes Part 5 edited but could not run (row 124): they read the local corpus
+(`experiments/pdf-bilingual/data/corpus/`, in this worktree) and compile through the TeX Live file server on :8070.
+
+```bash
+open -a Docker
+docker info >/dev/null 2>&1 && echo "engine up"
+docker start texlive-server && docker ps --filter name=texlive-server --format '{{.Names}} {{.Status}}'
+pnpm build
+node experiments/pdf-bilingual/spikes/cache-faults.mjs
+node experiments/pdf-bilingual/spikes/cache-revisit.mjs
+node experiments/pdf-bilingual/spikes/viewer-faults.mjs
+node experiments/pdf-bilingual/spikes/reader-a11y.mjs
+node experiments/pdf-bilingual/spikes/reader-ui-live.mjs
+```
+
+Expected: `engine up` (until it prints, Docker is still starting: run that line again); `texlive-server` and
+`texlive-server Up …`; the build exit 0; each spike's last line `all passed`, exit 0. A spike that fails on a service
+it seeds (`seedService`, which Part 5 put in place of the form the page no longer offers) is Part 5's edit: fixed in
+Step 7, test first where a unit test can hold it.
 
 - [ ] **Step 4: The browser suites**
 
@@ -1596,6 +2033,12 @@ pnpm e2e:layout && pnpm e2e:image && pnpm e2e:local-endpoint
 ```
 
 Expected: every suite's lines `PASS`, exit 0; each suite's count in the report.
+
+`pnpm e2e:pdf` is watched (row 125): in Part 5 it failed 4 checks once — the popup's page state missing on
+hep-th/9711200's PDF and on the abstract page (the label `null`, the no-paper screen drawn) — and passed 26/26 on the
+rerun. Run it a second time whatever the first run said, and write both runs' counts into the report. A failure of
+those checks in either run is not rerun away: it goes to Step 7 as a finding about the popup's first answer on an entry
+page (`src/entrypoints/popup/state.ts`'s entry status, `ENTRY_CHECK_MS` in `data.ts`), with the failing lines.
 
 - [ ] **Step 5: The alignment and the looks, both themes and both languages**
 
@@ -1609,8 +2052,9 @@ node tests/e2e/probes/pages-a11y.mjs
 ```
 
 Expected: `every row on its lines, in both themes and both languages`; every reflow line `ok`; every popup-align line
-`ok` (the centre lines within 0.5 px, the edges at 12 and 24, at rest, hovered and each menu open); every controls
-line `ok`; no pages-a11y `FAIL` (its `also` lines in the report).
+`ok` (the centre lines within 0.5 px, the edges at 12 and 24, at rest, hovered and each menu open — and, since Task 99
+Step 8, nothing measured over a state that drew nothing); every controls line `ok`; no pages-a11y `FAIL` (its `also`
+lines in the report).
 
 Then the search's own words (row 84), on the release build, in the Chinese interface — `language` can match only the
 interface language's keyword (§6.1's example), and `图中译文` only the dimming sub-row's description:
@@ -1671,7 +2115,18 @@ the merged build.
 Run: `ps -Ao pid,command | grep -E "vitest|wxt|playwright|chrome-headless|Chromium|node tests/e2e|node experiments" | grep -v grep; uptime`
 Expected: no line from the first command (the controller dispatches this task only when no other worktree builds or
 tests); the load average, for the report. Part 4's record's medians (written here by Task 90) are what the part
-measured on a loaded machine.
+measured on a loaded machine, the numbers to compare against:
+
+| Measured (Part 4, 2026-09-27) | Toolbar | Panel |
+|---|---|---|
+| Task 30's baseline (Part 3's build, three worktrees running) | 36 ms | 52 ms |
+| Part 4's build against it, under the same load (Task 39) | 44.0 ms (FAIL: 0.4 ms over the 43.6 threshold) | 58.0 ms (ok) |
+| Interleaved A/B, the other parts idle, before (Part 3's build), three rounds | 36 / 38 / 42 ms | 52 / 52 / 46 ms |
+| … after (Part 4's build), three rounds | 68 / 36 / 40 ms (68: the build's first launch) | 54 / 44 / 48 ms |
+| Median of the rounds, before → after | 38 → 40 ms | 52 → 48 ms |
+
+Part 4 read the A/B as within the noise and no regression confirmed; its menus draw their rows after the first frame
+(`usePainted`), so the language list is not in it. This task's three rounds decide.
 
 - [ ] **Step 2: Part 3's build beside this one**
 
@@ -1701,8 +2156,10 @@ panel). The task passes when all six are `ok`.
 - [ ] **Step 4: A `FAIL`**
 
 Report the three rounds' six medians before and after, and the load average, to the controller, who decides with the
-maintainer; the threshold is not changed. The suspect Part 4 named: the view model drawing every menu's data before the
-first frame (the language list's 179 rows among them). No commit.
+maintainer; the threshold is not changed. The suspect Part 4's plan named — the view model drawing every menu's data
+before the first frame (the language list's 179 rows among them) — Part 4 answered by drawing the menus' rows after it
+(`usePainted`, its record); a `FAIL` now looks elsewhere first (a trace of the two builds' first frames: script, style,
+layout). No commit.
 
 ### Task 103: what the maintainer must see (controller)
 
@@ -1724,23 +2181,40 @@ Show the maintainer, at full size:
    dark theme it stands out less than the white pill it replaced.
 4. **The panel with the new popup** (Task 93 Step 4): `experiments/pdf-bilingual/out/floating/index.html`, the two
    panel pairs.
+5. **P0, two decisions of Part 4's controller** (row 102): P0's field takes the focus as P0 opens (the design does not
+   say; P0's one purpose is the field, as in the launchers the maintainer names as benchmarks), and P0 draws its
+   no-entry sentence as P17 does, a note in the alert tone — `experiments/pdf-bilingual/out/popup/*-P0*.png`, and the
+   popup opened on a page that is not a paper, live.
+6. **The deep link's focus ring beside its flash** (row 121): a link such as `options.html#translate/prompts` lights
+   its row once and puts the focus on it; with no pointer yet on the load, the keyboard's ring shows beside the flash —
+   `experiments/pdf-bilingual/out/settings/*-deeplink.png`.
+7. **What a style's pencil and a deletion choose** (row 122): the pencil chooses the style it opens, so opening one to
+   look restyles the open pages; deleting the chosen style falls back to the first in the list (`styles[0]`), not to
+   the one chosen before the editor opened (both as Part 5's plan and its tests 2 and 6 ask) — shown live on the
+   release build's settings page, 外观.
+8. **The words Part 5 added** (row 123): 常用地址 (the address suggestions' group, heard by a screen reader, not drawn),
+   添加原文 (the glossary's empty row), 重试 beside 保存失败，请再试一次 (a glossary write refused), and the precision
+   prompt's description without quotes, 翻译即改写：… as settings-2 draws it — from the pack, with
+   `experiments/pdf-bilingual/out/settings/*-translate-{add,glossary,prompts}.png`.
 
 - [ ] **Step 2: The answer**
 
-Write the maintainer's answer, in their words, into the ledger. An approval closes rows 64 and 93. A change asked for
-is written into this plan as a task of its own (after this one, before Task 104), built, and shown again.
+Write the maintainer's answer, in their words, into the ledger. An approval closes rows 64, 93, 102, 121, 122 and 123.
+A change asked for is written into this plan as a task of its own (after this one, before Task 104), built, and shown
+again.
 
 ### Task 104: `docs/UI.md` (subagent)
 
 The design's §13: §2, §3.1–3.3 (§10's copy, ids kept where the element persists), §4 (P0's search, P9 / P13's buttons,
 P17, the rejected key), §5 rewritten as the roles of §2.1 with a pointer to `src/shared/tokens.ts`, §8's feature rows;
-and what the records add (Part 4's list, Part 5's ids, rows 14, 20, 24, 77, 86). **The packs are the truth for copy:**
+and what the records add (Part 4's list, Part 5's ids, rows 14, 20, 24, 77, 86, 112–114, 129). **The packs are the truth for copy:**
 every Chinese word written here is copied from `src/locales/zh-CN.ts` on the merged tree; where the pack and the table
 below differ, the pack's words go in and the difference is reported.
 
 **Files:**
 - Modify: `docs/UI.md`
-- Modify: `src/locales/zh-CN.ts` (comments only: the ids beside the strings this task numbers)
+- Modify: `src/locales/zh-CN.ts` (comments only: the ids beside the strings this task numbers, and the orphan comment
+  Step 2 removes)
 - Modify: `scripts/english-allowlist.txt` (`docs/UI.md`'s count)
 
 - [ ] **Step 1: The header and §2**
@@ -1769,22 +2243,22 @@ Its intro gains `Redrawn 2026-09-27 (the redesign's §5, §10.1).` Rows, by id (
 | S-P-03b | Notes: the entry pages show 翻译服务, 目标语言 (and 提示词) and S-P-50b's two entries only — the display, the two switches and the style belong to a translated page (§5.5) |
 | S-P-03c | Notes: 上下 greyed with S-P-75; no 译文样式; the display and the two switches stay, and the reader follows them |
 | S-P-03d (new) | An arXiv page still loading (PL) · `页面加载中` (`S.loading`) · no field |
-| S-P-04 (new) | P0's field · `按标题、作者、摘要或链接搜索论文` (`S.find.field`) · what it takes is decided as it is typed; nothing happens until Enter; two checks of a paper run once per id after 300 ms of stillness |
+| S-P-04 (new) | P0's field · `按标题、作者、摘要或链接搜索论文` (`S.find.field`) · what it takes is decided as it is typed; nothing happens until Enter; two checks of a paper run once per id after 300 ms of stillness; it takes the focus as P0 opens (P0's one purpose), and what it understood is said in a hidden polite status (`role="status"`), one short line, the entries and the note out of it |
 | S-P-05 (new) | Under the field · `按回车搜索 · 高级搜索` (`S.find.enter`, `S.find.advanced`) · 高级搜索 links to arXiv's advanced search |
 | S-P-06 (new) | Words typed (P0a) · `在 arXiv 搜索「{q}」` (`S.find.search`) · Enter opens `arxiv.org/search/?query={q}&searchtype=all&source=header` in a new tab; the popup lists no results |
 | S-P-07 (new) | An arXiv PDF or HTML address (P0b, P0c) · `PDF 翻译 · arXiv {id}` / `HTML 翻译 · arXiv {id}` (S-P-50b's words and `S.find.paper`) · one brand row with the ↵ label; Enter opens the page with `#readarxiv`; the id at 400 after the words at 500, 85 % white in light, white in dark (§5.4) |
 | S-P-08 (new) | A link elsewhere (P0g) · `只能打开 arXiv 的论文链接。也可以输入标题或作者搜索。` (`S.find.elsewhere`) · Enter does nothing |
 | S-P-32a | Notes gain: a service whose key the service refused says S-P-32e instead; one stored with no key keeps these words |
-| S-P-32d (new row; the pack names it) | `选中的翻译服务已被删除，请重新选择` (`S.notes.serviceGone`) · as the pack's comment and the view model use it |
-| S-P-32e (new) | {为何不能用} · a refused key · `API Key 已失效` (`S.notes.llmRejected`) · the service health record (DESIGN §9): P7 / P8 follow as for any service that cannot run; the chain passes over it; a connection from the settings page clears it |
-| S-P-33b (was the first of two rows both numbered S-P-33) | `arXiv 没有这篇论文的 HTML 版本，无法翻译` (`S.notes.noHtml`) · the second S-P-33 row (paused) keeps S-P-33, as the pack's comment says. Every mention of the no-HTML note becomes S-P-33b: S-P-03b's notes (`with S-P-33 below it`), S-P-33a's (`S-P-33 without its last clause`), S-P-50b's (`disabled with S-P-33`) and S-I-06's (`S-P-33's sentence`); the paused note's mentions (§3.4's `S-P-30/33`, §4's P9, the notes' order) stay S-P-33 |
+| S-P-32d (new row; the pack names it) | `选中的翻译服务已被删除，请重新选择` (`S.note.serviceGone`) · as the pack's comment and the view model use it |
+| S-P-32e (new) | {为何不能用} · a refused key · `API Key 已失效` (`S.note.llmRejected`) · the service health record (DESIGN §9): P7 / P8 follow as for any service that cannot run; the chain passes over it; a connection from the settings page clears it |
+| S-P-33b (was the first of two rows both numbered S-P-33) | `arXiv 没有这篇论文的 HTML 版本，无法翻译` (`S.note.noHtml`) · the second S-P-33 row (paused) keeps S-P-33, as the pack's comment says. Every mention of the no-HTML note becomes S-P-33b: S-P-03b's notes (`with S-P-33 below it`), S-P-33a's (`S-P-33 without its last clause`), S-P-50b's (`disabled with S-P-33`) and S-I-06's (`S-P-33's sentence`); the paused note's mentions (§3.4's `S-P-30/33`, §4's P9, the notes' order) stay S-P-33 |
 | S-P-45 | Copy `{模型名} / 尚未配置 API Key / API Key 已失效` (`S.service.llm_rejected` added); an item of two lines, the name and its hint (§5.3) |
 | S-P-47 | Notes gain: its menu ends with S-P-49 |
 | S-P-48 (new row; the pack names it) | The service menu's last row · `管理翻译服务…` (`S.service.manage`) · opens `options.html#translate/services` (S-O-06) |
 | S-P-49 (new) | The prompt menu's last row · `管理提示词…` (`S.rows.managePrompts`) · opens `options.html#translate/prompts` |
 | S-P-50 | Notes gain: the brand's fill with `on-brand` words; its shortcut label on `brand-chip` (§5.1) |
 | S-P-50b | Notes gain: brand buttons with icons, side by side, equal widths — HTML 翻译 with Lucide `globe`, PDF 翻译 with `file-text`; the one that cannot be used greyed; also P0's entries (P0d–P0f) |
-| S-P-52, S-P-53 | P9, P13 and P6b: 重新翻译 (brand) and 显示原文 (neutral) side by side, equal widths, the brand first; the shortcut label only on the brand one, except P6b, where the key restores and its label is on 显示原文; a disabled button neutral grey, without a shortcut. S-P-53's where becomes `the pair's second button` |
+| S-P-52, S-P-53 | P9, P13 and P6b: 重新翻译 (brand) and 显示原文 (neutral) side by side, equal widths, the brand first; the shortcut label only on the brand one — in P6b too, where the key, the context menu and the floating button retranslate as the button does (`shared/page-action.ts`, `keyMadeGood`); a disabled button neutral grey, without a shortcut. S-P-53's where becomes `the pair's second button` |
 | S-P-70 | Notes gain: a fitted segmented control (`.seg.fit`), the thumb following the chosen segment, with the reader's family of icons |
 | S-P-82 | Notes: the menu's rows are one line a style, its name leading and the sample sentence trailing, drawn in that style |
 | S-P-83 | Notes: opens `options.html#appearance/styles` (the settings page's 外观); the sentence about styles living under 阅读 and `openOptionsPage` passing no hash goes |
@@ -1794,7 +2268,9 @@ After the table's closing sentence (`Removed 2026-09-10: …`) add: `Retired 202
 sentence (P0 finds a paper now, S-P-03…08).`
 
 Write each new id as a comment beside its string in `src/locales/zh-CN.ts` (`// S-P-04`), as the pack's other strings
-carry theirs; `S.notes.noHtml` gains `// S-P-33b`.
+carry theirs; `S.note.noHtml` gains `// S-P-33b`. The orphan comment `/** The guided install on the settings page
+(S-O-30…36). The popup keeps the one-line version above */` (above `entry`) goes: the keys it described are gone, and
+it claims ids §3.2 gives to deep thinking, the appearance and the dimming (row 129).
 
 - [ ] **Step 3: §3.2, the settings page**
 
@@ -1814,14 +2290,14 @@ in the page's order (copy from the pack's `O`; ids kept where the element persis
 | S-O-11 | The Chrome row | · 需要先下载语言包 · 下载 · 语言包下载中 · 当前不可用 | 下载 a neutral button while the pack can be fetched; not choosable until it is there; greyed when Chrome has none |
 | S-O-12 | The reader's own services | {名称} / {模型} · {主机} · 「{名称}」的更多操作 · 编辑… · 删除 | Nothing trailing while it works, the status and 「…」 otherwise; 「…」 on the row's hover or the keyboard's focus |
 | S-O-14 | Add | 添加服务… | The last row; the form opens under it |
-| S-O-15 | The service form | 接口地址 · OpenRouter · DeepSeek · 本机 Ollama · API Key · 模型 · 名称（选填） · 默认使用模型名 · 更多 · 连接 · 取消 · 连接成功后才会添加 | The suggestions fill the address, nothing else (T4); an origin is asked for on a gesture (a suggestion, opening the model list, 连接) |
+| S-O-15 | The service form | 接口地址 · 常用地址 · OpenRouter · DeepSeek · 本机 Ollama · API Key · 模型 · 名称（选填） · 默认使用模型名 · 更多 · 连接 · 取消 · 连接成功后才会添加 | The suggestions fill the address, nothing else (T4); their group is named 常用地址 for a screen reader (heard, not drawn), so that 接口地址 names one control; an origin is asked for on a gesture (a suggestion, opening the model list, 连接) |
 | S-O-15a | The model field | 填好接口地址和 API Key 后列出 · 正在获取模型… · 搜索 {n} 个模型 · 没有匹配的模型，可以直接填写 · 没能列出模型，可以直接填写 | A combobox over the endpoint's list, `aria-busy` while it loads; a name can be typed |
 | S-O-15b | The form's checks | 填写接口地址，例如 https://openrouter.ai/api/v1 · 填写 API Key · 选择或填写一个模型 | Checked on submit: each field at fault `aria-invalid` with its reason, the first focused |
 | S-O-17 | Editing · the key | 已保存 · 留空则不改 · 清除 | The saved key kept unless one is typed; 清除 under it (ruling 18) |
 | S-O-18 | API Key · a local address | · 本机地址可以不填 | In the key's label, for localhost and 127.0.0.1 |
 | S-O-19 | Connect | 连接 / 连接中… | Tests the service as it would be saved, then adds or saves it, chooses it and closes the form (§11: nothing is added without a connection) |
 | S-O-20 | Its result | 已连接 · {ms} ms / 连接失败：{原因} | Success on the row with the icon's arrival; a failure beside the button, the form kept, the focus on the field at fault; a polite status |
-| S-O-21 | Delete | 已删除「{名称}」 · 撤销 | The row replaced for 5 s; a chosen service deleted falls back to Microsoft 翻译 and comes back chosen if undone |
+| S-O-21 | Delete | 已删除「{名称}」 · 撤销 · 保存失败，请再试一次 | The row replaced for 5 s; a chosen service deleted falls back to Microsoft 翻译 and comes back chosen if undone, without its refused mark until its next refusal; a deletion the store refuses leaves the row, the focus on it, and says 保存失败，请再试一次 (`O.saveFailed`, the page's one sentence for a failed save) at the list's foot — the prompts' and the styles' lists too |
 | S-O-21a | A refused key | API Key 已失效 · 服务拒绝了这个 API Key，它可能无效或已过期。换一个新的，其他设置不变。 · 新的 API Key · 更新并连接 · 连接成功后才会保存 | The row's status with the alert icon while the health record holds the service; choosing it opens the form; one stored with no key says 尚未配置 API Key, the same form without the first sentence |
 | S-O-22 | Automatic switch | (copy unchanged) | A sub-row card, only while an LLM service is chosen |
 | S-O-23 | Target language | 目标语言 | The popup's searchable menu (S-P-22 / 23) |
@@ -1830,9 +2306,9 @@ in the page's order (copy from the pack's `O`; ids kept where the element persis
 | S-O-61 | Prompts | 提示词 · 我的 · 复制后修改 · 内置提示词不能直接改 · 完成 · 删除 · 新建提示词… · 导入… · 导出… · 新提示词 | A radio list in place, each with its description; the chosen one's text read as words; 导出… once there is one of one's own |
 | S-O-61a | A prompt's two parts, its variables | 指令 · 翻译时始终遵守的要求 · 消息 · 每次随原文一起发送 · 目标语言 · 原文 · 论文标题 · 摘要 · 章节标题 · 术语表 | Never `{{…}}`; nothing names the protocol the extension appends |
 | S-O-61b | Import failed; an empty message | 无法读取这个文件 · 这个文件里没有可用的提示词 · 消息不能为空 | The last derived (ruling 18) |
-| S-O-62 | Glossary | 术语表 / 让同一篇里的译法一致 · {n} 条 · 原文 · 译文 · 删除第 {n} 行 · 可以直接粘贴多行「原文, 译文」，会自动拆成多行 | A table in place, an empty row at the end to add one; pasted lines split into rows |
+| S-O-62 | Glossary | 术语表 / 让同一篇里的译法一致 · {n} 条 · 原文 · 译文 · 添加原文 · 删除第 {n} 行 · 可以直接粘贴多行「原文, 译文」，会自动拆成多行 · 保存失败，请再试一次 · 重试 | A table in place, an empty row at the end to add one, its source cell saying 添加原文; pasted lines split into rows; a write the store refuses keeps the rows and says so at the table's foot, with 重试 |
 | S-O-63 | Glossary · a row with a problem | 原文为空 / 译文为空 (and today's reasons) | At its row, without line numbers; the table saves what parses, within `GLOSSARY_LIMITS` |
-| S-O-35 | 外观 · appearance | 外观 · 跟随系统 · 浅色 · 深色 | The reader's equal segments with a monitor, a sun, a moon; one setting for the extension (`theme`, v20) |
+| S-O-35 | 外观 · appearance | 外观 · 跟随系统 · 浅色 · 深色 | The reader's equal segments with a monitor, a sun, a moon; one setting for the extension (`theme`, v20); a card too narrow for them (below 312 px of content) drops the icons and keeps the words |
 | S-O-36 | Dimming | 深色时调暗 PDF 页面 / 深色外观下把 PDF 页面调暗；高亮与图中译文保持原色 | A sub-row for 跟随系统 and 深色 (`pdfReader.dimPages`) |
 | S-O-40 | Translation style | 译文样式 · 编辑「{名称}」 · 新建样式… · 新样式 | One radio group: a row a style, its name over the sample written in it, a pencil trailing |
 | S-O-41 | Restore | 恢复内置样式 | On the group's heading: the built-ins as shipped, the reader's own kept |
@@ -1847,18 +2323,23 @@ in the page's order (copy from the pack's `O`; ids kept where the element persis
 | S-O-50 | 阅读 · how to translate | 翻译方式 · 按需翻译 · 整篇翻译 / 只翻译正在阅读和即将读到的段落，用量最少 / 打开论文时就请求整篇译文，滚到哪里都已翻好，用量较多 | `preload` (v20); the description follows the choice; 整篇翻译 reaches an open paper at once |
 | S-O-24 | Figure text | 图片翻译 / 图里的文字也翻，译文叠在图上，悬停查看原文 | The popup's switch (S-P-85) |
 | S-O-49b | Where translations open | 译文在哪里打开 / 从摘要页或 PDF 页打开译文时 · 新标签页 · 当前标签页 | A small segmented control; the old row's notes on the default and its reach stand |
-| S-O-49c | The floating button | 显示悬浮按钮 / 在 arXiv 的摘要页、PDF 和全文页贴在窗口边缘 | The old row's notes stand |
+| S-O-49c | The floating button | 显示悬浮按钮 / 在 arXiv 的摘要页、PDF 和全文页贴在窗口边缘 | The old row's notes stand; the switch is held out of sight, its place kept, until the background says its state (it used to say on, then flip) |
 | S-O-55 | The PDF group | PDF · 在 arXiv 的 PDF 上使用对照阅读器 / 关掉后，PDF 用浏览器自带的查看器打开 · 同步滚动 / 原文和译文一起滚 | `#reading/pdf`; 同步滚动 a sub-row while the reader is on; the appearance and the dimming are S-O-35 and S-O-36 now |
 | S-O-70 | Cache | 已缓存的译文 / {n} 段 · {size} MB · 换了服务、模型或提示词会自动分开存，通常不用清 | |
 | S-O-71 | Read failed | 没能读取缓存 | Never shown as a count of 0 |
 | S-O-72 | Clear | 清空… → 确认清空 → 已清空 | A neutral button; a press arms it with a trash icon, its words `danger` on `button-danger`; back after 3 s untouched, not while the pointer rests on it; done, 已清空 with the success icon |
 | S-O-73 | PDF translations | 已缓存的 PDF 译文 / {n} 篇 · {size} MB | Cleared as S-O-72, reported as S-O-71 |
-| S-O-74 | Diagnostics | 诊断日志 · 导出 | Issue #156; the words as the pack has them |
+| S-O-74 | Diagnostics | 诊断日志 · 导出 | Issue #156; the words as the pack has them (its description says API Key, the pack's one term for it) |
 
 After the table: `Retired 2026-09-27 (the redesign's §10, §11): S-O-13 (the empty list), S-O-16 (the address hint),
-S-O-26 (the image modes), S-O-51 (when translation starts); S-O-14's and S-O-15's drawer titles, S-O-41's 添加配置 and
-重置, S-O-43's 编辑配置, S-O-46's 适合自测, S-O-49's 背景高亮 and its editor, S-O-50's 提前翻译的范围.` Where Part 5's
-record or an id comment in the merged `O` names an id otherwise, the record's id is used (Task 90).
+S-O-26 (the image modes), S-O-51 (when translation starts); S-O-01's five old section names, S-O-10's 内置服务 and
+S-O-12's 我的服务, S-O-14's and S-O-15's drawer titles, S-O-41's 添加配置 and 重置, S-O-43's 编辑配置, S-O-46's 适合自测,
+S-O-49's 背景高亮 and its editor, S-O-50's 提前翻译的范围, the prompt manager's 查看, 复制并自定义, System prompt …,
+用户提示词, 插入变量 and 导出自定义 (S-O-61), and S-O-62's text-box hint.` Task 90 read §10.2's list of the words that
+go (Part 5's record names it the authority) against this table and sentence: every id §10.2 names keeps its row here
+with the new copy (S-O-01, S-O-10, S-O-12, S-O-14, S-O-15, S-O-40 … 46, S-O-49, S-O-50, S-O-61, S-O-62) or is retired
+above (S-O-13, S-O-16, S-O-26, S-O-51); the merged `O` carries four id comments (S-O-02, S-O-05, S-O-30, S-O-73), none
+naming an id otherwise.
 
 - [ ] **Step 4: §3.3, §4, §5, §6, §8**
 
@@ -1894,9 +2375,10 @@ record or an id comment in the merged `O` names an id otherwise, the record's id
   in their place: `The extension's own controls follow the extension's appearance (theme); the controls on the paper —
   the figure viewer's control and bar, the failed block's retry — follow the paper's colour scheme (the redesign's §3,
   §15).`
-- **§5.1**: the row of `public/icon/mark.svg` says `the brand row of the popup and the settings sidebar through
-  src/ui/BrandMark.tsx`; it names what draws the mark on each of the two now, as
-  `grep -rn "BrandMark\|mark.svg\|mark-" src/entrypoints/popup src/entrypoints/options --include='*.tsx'` shows it.
+- **§5.1**: the row of `public/icon/mark.svg` names what draws the mark on each page now, as
+  `grep -rn "BrandMark\|mark.svg\|mark-" src/entrypoints/popup src/entrypoints/options --include='*.tsx'` shows it: on
+  the merged tree (Task 90's trial), the popup's brand row draws the file itself (`<img src="/icon/mark.svg">`,
+  `src/entrypoints/popup/PopupView.tsx`), and the settings sidebar through `src/ui/BrandMark.tsx`.
 - **§6**: `the interface language under the navigation (S-O-05)` becomes `the interface language at the settings
   sidebar's foot (S-O-05)`.
 - **§8**: the Where / Ids columns follow the new page — prompts and glossary `Settings · 翻译 · LLM`; styles and the hover
@@ -2012,7 +2494,9 @@ extension's appearance, where a translation opens, the tab's zoom, the button's 
   moderation refusal or a disallowed origin, not the key — and only while the key and the address that request used are
   still the service's (background/health-guard.ts: isRefusal, shouldMarkRefusal); it clears the mark on a connection that
   succeeds with the stored key and address (testsStoredKey), on any change of the key or the address, and on the
-  service's deletion (idsToClear, from the configuration's watcher). The chain passes over a marked service as the popup
+  service's deletion (idsToClear, from the configuration's watcher) — so a deletion undone brings the service back
+  unmarked until its next refusal, which costs one refused request (a ruling of the redesign). The chain passes over a
+  marked service as the popup
   says it will (it counts as one that cannot run, UI.md §4's runnable, S-P-32e); the settings page and the reader's
   service menu say the key is no longer valid (S-O-21a).`
 
@@ -2062,12 +2546,13 @@ extension's appearance, where a translation opens, the tab's zoom, the button's 
 
 ```bash
 grep -nE "CONFIG_VERSION = [0-9]+" docs/DESIGN.md src/config/schema.ts
-grep -nE "\(enabled, modes\)|\(margin, threshold\)|parks them|parked behind|ticked modes|in the mode in force|every image mode on" docs/DESIGN.md
+grep -nE "\(enabled, modes\)|\(margin, threshold\)|parks them|parked behind|ticked modes|in the mode in force|every image mode on|configFallbackReason" docs/DESIGN.md
+grep -c "a deletion undone brings the service back" docs/DESIGN.md
 git add docs/DESIGN.md && node scripts/check-english.mjs
 ```
 
-Expected: `20` in both; the second `grep` prints nothing; the English gate exits 0 (DESIGN.md's entry unchanged: no
-Chinese added). Gate: exit 0.
+Expected: `20` in both; the second `grep` prints nothing (§9's fallback line lost `configFallbackReason()` in Task 99
+Step 9); `1`; the English gate exits 0 (DESIGN.md's entry unchanged: no Chinese added). Gate: exit 0.
 
 ```bash
 git commit -m "docs(design): configuration v20, the service health record, the floating button's material, the tokens
@@ -2188,6 +2673,17 @@ Dispatch the most capable model available to review the package against the desi
 every part's, this plan's Review Focus, and CLAUDE.md's hard rules: correctness first, then the contracts
 (configuration v20, the health record, `axt:entry-settings`, the host token sheet), then what a reader sees. Findings
 are graded Critical / Important / Minor, each with its file and line.
+
+One named focus besides (row 127; the main ledger, line 192): **StrictMode's double run.** The pages mount under
+`<StrictMode>` (`src/entrypoints/{popup,options,pdf-reader,gallery,controls}/main.tsx`), so in a development build every effect
+runs setup, cleanup, setup. A ref or a closure flag an effect's cleanup sets — `cancelled`, `stopped`, `live = false`,
+a timer id, a granted set emptied — that its setup does not set back leaves the second run dead: Part 5 found it in the
+service forms (Task 65, round 3: Connect never handed over in development builds, a grant released at once). The
+reviewer sweeps the whole branch for the pattern — the popup (Part 4: `state.ts`'s start and stop, the menus), the
+shared controls (Part 3), the settings page, the reader's and the floating button's React parts — starting from
+`git grep -nE "(cancelled|stopped|live|alive|mounted|disposed)(\.current)? = (true|false)" -- 'src/**/*.ts' 'src/**/*.tsx'`,
+and names each cleanup whose setup leaves its flag as the cleanup left it. Each is a finding, graded by what it breaks
+(a development build only is Minor unless it hides a production path, as a probe run on the development build does).
 
 - [ ] **Step 3: One batch of fixes, and a re-review**
 
