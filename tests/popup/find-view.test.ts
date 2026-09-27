@@ -111,4 +111,27 @@ describe('P0: the field and what Enter does (the redesign\'s design, §5.4)', ()
     await act(async () => { html!.click() })
     expect(actions.openLink).not.toHaveBeenCalled()
   })
+
+  // Fix round 1 (Task 36's review, Important): `.found` changes as the reader types — the help line, the brand row,
+  // the search row, the paper line, the "only arXiv links" sentence — but none of that was ever said to a screen
+  // reader. The design's §9: results are polite status messages, never assertive. The echo stays out of the entries'
+  // own buttons and the note on purpose (Find.tsx): each change announces the row's one short line, not the two
+  // buttons or the reason one is greyed, which a reader reaches directly by tabbing to them
+  it('what the field understood is said politely, never as an alert: the words for a PDF link, then for a search', async () => {
+    const pdf = await draw('P0b')
+    const said = pdf.main.querySelector('[role="status"]')!
+    expect(said.textContent).toBe(`${S.entry.pdf} ${S.find.paper('2501.07202v1')}`)
+    expect(pdf.main.querySelector('[role="alert"]')).toBeNull()
+    await pdf.unmount()
+    const words = await draw('P0a')
+    expect(words.main.querySelector('[role="status"]')!.textContent).toBe(S.find.search('attention is all you need'))
+    expect(words.main.querySelector('[role="alert"]')).toBeNull()
+  })
+
+  // Fix round 1: P0's one purpose is this field; the popup opening on a page that is not a paper should let the reader
+  // type at once
+  it('the field takes the focus when P0 mounts', async () => {
+    const { main } = await draw('P0')
+    expect(document.activeElement).toBe(main.querySelector('input'))
+  })
 })
