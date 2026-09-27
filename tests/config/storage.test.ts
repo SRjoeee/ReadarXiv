@@ -257,6 +257,14 @@ describe('the preload, v15 to v20', () => {
     }
   })
 
+  it('the whole paper is written and read back as it is', async () => {
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    await fresh.setConfig({ ...DEFAULT_CONFIG, preload: 'whole' })
+    expect((await fresh.getConfig()).preload).toBe('whole')
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
+  })
+
   it('a hand-edited margin — neither a number nor `all` — is not repaired: passed on, it fails the schema and the fallback names the field', async () => {
     const v19 = v19Stored({ preload: { margin: 'bogus', threshold: 0 } })
     await fakeBrowser.storage.local.set({ config: v19, config$: { v: 19 } })
@@ -738,6 +746,24 @@ describe('provider selection', () => {
     // no throw: the defaults in use, and the reason names the field (S-O-02 shows it)
     expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
     expect(fresh.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'pdfReader' })
+  })
+
+  it('v20 carries a light or a system appearance to the theme as well, and leaves one no theme holds for the schema to name', async () => {
+    for (const appearance of ['light', 'system'] as const) {
+      await fakeBrowser.storage.local.set({ config: v19Stored({ pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance } }), config$: { v: 19 } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      const reading = await fresh.readConfig()
+      expect(reading.config.theme).toBe(appearance)
+      expect(reading.fallbackReason).toBeNull()
+    }
+    await fakeBrowser.storage.local.set({ config: v19Stored({ pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance: 'sepia' } }), config$: { v: 19 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    // no throw: the defaults in use, and the reason names the field (S-O-02 shows it)
+    const reading = await fresh.readConfig()
+    expect(reading.config).toEqual(DEFAULT_CONFIG)
+    expect(reading.fallbackReason).toMatchObject({ kind: 'invalid', where: 'theme' })
   })
 
   it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a stored preload margin becoming on demand', async () => {
