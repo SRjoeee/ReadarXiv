@@ -121,7 +121,12 @@ for (const theme of ['light', 'dark']) {
   const figure = await page.evaluate(() => {
     const image = [...document.querySelectorAll('.ltx_figure img')].find(i => i.getBoundingClientRect().width >= 160)
     if (!image) return null
-    image.scrollIntoView({ block: 'center' })
+    // the figure's top just below what the page pins at the top (arXiv's header): its control sits on that edge, and a
+    // centred tall figure put it under the header, where a click reached the header's link
+    image.scrollIntoView({ block: 'start' })
+    const pinned = [...document.querySelectorAll('body *')].filter(e => /^(fixed|sticky)$/.test(getComputedStyle(e).position))
+      .map(e => e.getBoundingClientRect()).filter(r => r.top <= 1 && r.bottom > 0 && r.bottom < innerHeight / 2)
+    window.scrollBy(0, -(Math.max(0, ...pinned.map(r => r.bottom)) + 24))
     const r = image.getBoundingClientRect()
     return { x: r.left + r.width / 2, y: r.top + r.height / 2, right: r.right, top: r.top }
   })
