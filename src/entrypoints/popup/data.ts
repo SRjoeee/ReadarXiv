@@ -17,9 +17,10 @@ export type { OptionsLink, PopupActions } from './state'
 
 /**
  * P0's two checks of a paper (the redesign's design, §5.4): the PDF page's own HEADs (core/pdf/entry.ts), sent from the
- * extension's origin to arXiv by its host permission, each given ENTRY_CHECK_MS before its entry is offered anyway
+ * extension's origin to arXiv by its host permission, each given ENTRY_CHECK_MS before its entry is offered anyway.
+ * Exported for its own test (the ENTRY_CHECK_MS race, `within`): every other caller goes through `usePopupData`
  */
-function paperEntries(id: string): Promise<{ html: string | null; pdf: string | null }> {
+export function paperEntries(id: string): Promise<{ html: string | null; pdf: string | null }> {
   const send: typeof fetch = (url, init) => fetch(url, init)
   const within = <T>(check: Promise<T>, offered: T) => Promise.race([check, new Promise<T>(resolve => setTimeout(resolve, ENTRY_CHECK_MS, offered))])
   return Promise.all([
@@ -41,7 +42,9 @@ const browserHost = (): PopupHost => ({
   close: closePopup,
   downloadPack,
   config: { localeStale, reload: () => location.reload() },
-  // arXiv's pages alone show their address to the extension (its host permission): any other tab's is null here
+  // arXiv's pages alone show their address to the extension: the host permissions also reach openrouter.ai,
+  // translate-pa.googleapis.com, edge.microsoft.com and any origin the reader granted, but not a tab's address —
+  // any other tab's is null here
   tabUrl: async () => (await browser.tabs.query({ active: true, currentWindow: true }))[0]?.url ?? null,
   entriesOf: paperEntries,
 })

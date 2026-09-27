@@ -91,7 +91,11 @@ export interface PopupHost {
   downloadPack(target: string): Promise<unknown>
   /** The surface configuration's own needs of the page (shared/surface-config.ts) */
   config: Pick<SurfaceConfigDeps, 'localeStale' | 'reload' | 'packState' | 'announce'>
-  /** The active tab's address, where the extension may read it — arXiv's pages, by its host permission — or null */
+  /**
+   * The active tab's address, where the extension may read it — arXiv's pages, by its host permission — or null. The
+   * host permissions also reach openrouter.ai, translate-pa.googleapis.com, edge.microsoft.com and any origin the
+   * reader granted, none of which is a tab whose address this reads
+   */
   tabUrl(): Promise<string | null>
   /**
    * P0's two checks of a paper (the redesign's design, §5.4): its HTML version and its bilingual PDF, the address each
@@ -133,6 +137,13 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
   let rejected: readonly string[] = seed.rejected ?? []
   let error: string | null = null
   let running = false
+  /**
+   * Whether the start() now current is still the one running, read by a callback about to write state it settled
+   * after: reassigned fresh by every start(), so a callback from a start already stopped stays guarded even once a
+   * later start has set its own flag true (StrictMode's start / stop / start; as `src/ui/use-rejected.ts` guards its
+   * effect with `live`)
+   */
+  let isLive = (): boolean => false
   /** The active tab's address (host.tabUrl): undefined until it answers */
   let tabUrl: string | null | undefined
   /** The first ask about the tab's page has settled: until then nothing is known, and the popup draws its brand row alone */
@@ -301,10 +312,13 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
 
   const patchConfig = surface.patch
 
-  /** P0's two checks of a paper, once per id (§5.4): the answer kept, the view told */
+  /** P0's two checks of a paper, once per id (§5.4): the answer kept, the view told — but not once its start has stopped */
   const check = (id: string) => {
     checking.add(id)
-    void host.entriesOf(id).then(found => { checked.set(id, found) }, () => undefined).finally(() => { checking.delete(id); changed() })
+    void host.entriesOf(id).then(found => { if (isLive()) checked.set(id, found) }, () => undefined).finally(() => {
+      checking.delete(id)
+      if (isLive()) changed()
+    })
   }
 
   const actions: PopupActions = {
@@ -409,7 +423,7 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
     chooseStyle: id => void guard(async () => {
       menu = null
       changed()
-      // The last row is not a style but the place to manage them (S-P-83). styles are in the Appearance section, their own row
+      // The last row is not a style but the place to manage them (S-P-83). Styles are in the Appearance section, their own row
       if (id === MANAGE_STYLES) return void openOptions('appearance/styles')
       // Same as the service menu: this list may have been built before another tab deleted the
       // profile, and a dangling id leaves every profile unmarked while the page reads the first
@@ -474,6 +488,10 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
   return {
     start() {
       running = true
+      // This start's own liveness: false once its stop runs below, whether or not a later start has since set its
+      // own back to true (the StrictMode remount this guards against)
+      let live = true
+      isLive = () => live
       const stopSurface = surface.start()
       refresh()
       askWhileSilent()
@@ -481,15 +499,17 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
       void asks.saved()
       host.shortcut().then(found => { shortcut = found; changed() }).catch(() => { shortcut = null; changed() })
       // the tab's address, where the extension may read it: an arXiv paper's page not answering yet is loading (§5.4)
-      host.tabUrl().then(url => { tabUrl = url; changed() }, () => { tabUrl = null; changed() })
+      host.tabUrl().then(url => { if (!live) return; tabUrl = url; changed() }, () => { if (!live) return; tabUrl = null; changed() })
       // Subscribed first, read after: an event heard while the read is still out means the read answers a moment
       // already superseded, and applying it would overwrite what the event just gave (Codex review, round 3)
       let heardRejected = false
       // A change of the record asks again what a start would run on: the chain in force is rebuilt by the background on
       // any such change, and the retranslate cue (view-model.ts) reads it (the branch's final review)
       const stopRejected = watchRejected(ids => { heardRejected = true; rejected = [...ids]; changed(); void asks.saved() })
-      // A read that fails leaves no mark shown, and the watcher still brings the next change
-      void rejectedServices().then(ids => { if (!heardRejected) { rejected = [...ids]; changed() } }).catch(() => undefined)
+      // A read that fails leaves no mark shown, and the watcher still brings the next change. `live` catches what
+      // `heardRejected` alone cannot: a read still out when this start stopped, answering only once a later start
+      // (StrictMode's start / stop / start) has its own subscription current — this one must not overwrite it
+      void rejectedServices().then(ids => { if (live && !heardRejected) { rejected = [...ids]; changed() } }).catch(() => undefined)
       const stopBroadcasts = host.onBroadcast({
         // A pack downloaded on the settings page: this popup's Download button must not stay over an installed pack
         'axt:pack-changed': message => {
@@ -499,12 +519,13 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
       })
       return () => {
         running = false
+        live = false
         stopSurface()
         stopBroadcasts()
         stopSilent()
         stopPoll()
         stopRejected()
-        if (stillTimer !== null) clearTimeout(stillTimer)
+        if (stillTimer !== null) { clearTimeout(stillTimer); stillTimer = null }
       }
     },
     state() {

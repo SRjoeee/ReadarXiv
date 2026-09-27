@@ -7,7 +7,8 @@ import { Button } from '@/ui/controls/Button'
 export interface EntryButton { label: string; disabled: boolean; run: () => void }
 
 export function Entries({ html, pdf }: { html: EntryButton; pdf: EntryButton }) {
-  const press = (entry: EntryButton) => () => { if (!entry.disabled) entry.run() }
+  // Button refuses a disabled click itself (controls.css .btn): this stays the run, not the refusal
+  const press = (entry: EntryButton) => () => entry.run()
   return (
     <div className="twin">
       <Button kind="brand" size="lg" icon={Globe} disabled={html.disabled} onClick={press(html)}>{html.label}</Button>

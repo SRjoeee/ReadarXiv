@@ -34,7 +34,7 @@ async function popupOn(paperTab) {
     return {
       label: button?.textContent?.trim() ?? null,
       disabled: button ? button.getAttribute('aria-disabled') === 'true' : null,
-      // S-P-03: the one-sentence screen the popup used to show on any page but the full text
+      // P0's lead begins the same sentence as the retired S-P-03 did, so this still detects P0's screen
       notArxiv: /打开 arXiv|Open an arXiv/.test(text),
       noHtmlNote: /没有这篇论文的 HTML|no HTML version/.test(text),
       rows: /Microsoft/.test(text),
@@ -130,12 +130,12 @@ check('it carries the same sentence as the abstract page\'s entry (S-I-06)', /Re
 check('Chrome\'s own viewer is left alone', entry.viewerUntouched, 'no embed or object of ours')
 await page.screenshot({ path: `${SHOTS}/pdf-entry.png` })
 
-// The popup on that same page (UI.md S-P-03b): a working popup, not the “not an arXiv page” sentence
+// The popup on that same page (UI.md S-P-03b): a working popup, not P0's sentence
 {
   const { popup, seen } = await popupOn(page)
   check('the popup works on a PDF page: the ordinary rows, and the translate button enabled',
     !seen.notArxiv && seen.rows && seen.label !== null && seen.disabled === false,
-    `label “${seen.label}”, disabled ${seen.disabled}, rows ${seen.rows}, S-P-03 shown ${seen.notArxiv}`)
+    `label “${seen.label}”, disabled ${seen.disabled}, rows ${seen.rows}, P0 shown ${seen.notArxiv}`)
   await popup.screenshot({ path: `${SHOTS}/pdf-popup.png` })
 
   // The button follows the same setting: a new tab, with the PDF still open behind it
@@ -207,7 +207,7 @@ await sleep(3000)
   const { popup, seen } = await popupOn(page)
   check('the popup works on an abstract page too: the ordinary rows, and the button enabled',
     !seen.notArxiv && seen.rows && seen.label !== null && seen.disabled === false,
-    `label “${seen.label}”, disabled ${seen.disabled}, rows ${seen.rows}, S-P-03 shown ${seen.notArxiv}`)
+    `label “${seen.label}”, disabled ${seen.disabled}, rows ${seen.rows}, P0 shown ${seen.notArxiv}`)
   // its second entry, the bilingual PDF, for a paper with a source (the reader's design, §2)
   const pdfEntry = await popup.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /PDF 翻译|Translate PDF/.test(x.textContent ?? '')); return b ? { disabled: b.getAttribute('aria-disabled') === 'true' } : null })
   check('beside it, the PDF entry, enabled for a paper with a source', pdfEntry?.disabled === false, JSON.stringify(pdfEntry))
@@ -286,7 +286,7 @@ if (READER && (await readerRunsHere())) {
     const answeredAfter = Date.now() - loaded
     check('with the source\'s HEAD held 10 s, the reader opens and the popup answers without waiting for it',
       framedAfter !== null && framedAfter < 5000 && !seen.notArxiv && seen.rows && answeredAfter < 9000,
-      `reader after ${framedAfter} ms, popup answered at ${answeredAfter} ms (S-P-03 shown: ${seen.notArxiv})`)
+      `reader after ${framedAfter} ms, popup answered at ${answeredAfter} ms (P0 shown: ${seen.notArxiv})`)
     await popup.close()
   }
   await context.unroute(held)

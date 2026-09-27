@@ -51,6 +51,12 @@ function world(seed: Parameters<typeof createPopupState>[1] = {}) {
     /** Every paper P0's field had checked, in order, and what the checks answer for an id */
     checks: [] as string[],
     entries: {} as Record<string, { html: string | null; pdf: string | null }>,
+    /** Ids whose check the test holds open, and the way to let each go once it does (§5.4's two checks, item 2) */
+    holdEntries: new Set<string>(),
+    releaseEntry: {} as Record<string, () => void>,
+    /** Held while the test wants to decide when the tab's address answers (writes after stop) */
+    holdTabUrl: false,
+    releaseTabUrl: undefined as ((url: string | null) => void) | undefined,
   }
   const host: PopupHost = {
     toTab: (async (message: AxtMessage) => {
@@ -83,8 +89,13 @@ function world(seed: Parameters<typeof createPopupState>[1] = {}) {
     close: () => { w.closed++ },
     downloadPack: async target => { w.downloads.push(target) },
     config: { localeStale: () => false, reload: () => { w.reloads++ }, packState: async () => w.pack, announce: () => undefined },
-    tabUrl: async () => w.url,
-    entriesOf: async id => { w.checks.push(id); return w.entries[id] ?? { html: `https://arxiv.org/html/${id}#readarxiv`, pdf: `https://arxiv.org/pdf/${id}#readarxiv` } },
+    tabUrl: () => (w.holdTabUrl ? new Promise<string | null>(resolve => { w.releaseTabUrl = resolve }) : Promise.resolve(w.url)),
+    entriesOf: id => {
+      w.checks.push(id)
+      const found = w.entries[id] ?? { html: `https://arxiv.org/html/${id}#readarxiv`, pdf: `https://arxiv.org/pdf/${id}#readarxiv` }
+      if (w.holdEntries.has(id)) return new Promise(resolve => { w.releaseEntry[id] = () => resolve(found) })
+      return Promise.resolve(found)
+    },
   }
   const popup = createPopupState(host, seed)
   const sent = (type: string) => w.toTab.filter(m => m.type === type)
@@ -657,13 +668,21 @@ describe('what the popup knows of the tab (the redesign\'s design, §5.4)', () =
   })
 
   it('an entry page is known once it has answered, never in between: its moment without a page is not P0', async () => {
+    // `until` alone cannot catch this: the page-status and entry-status answers resolve as microtasks in one, between
+    // which `until`'s macrotask polling never lands. Every notification is recorded instead (as below, §"the record
+    // of refused keys"), so no moment settled (`tab !== null`) with the entry still unanswered goes unseen
     const made = world()
     made.w.page = undefined
     made.w.entry = { paper: '2501.07202', html: 'https://arxiv.org/html/2501.07202#readarxiv' }
     made.w.url = 'https://arxiv.org/abs/2501.07202'
+    const seen: { tab: unknown; entry: unknown }[] = []
+    const unsubscribe = made.popup.subscribe(() => { const i = made.input(); seen.push({ tab: i.tab, entry: i.entry }) })
     const stop = made.popup.start()
     await until(() => made.input().tab !== null)
     expect(made.input().entry).not.toBeNull()
+    expect(seen.length).toBeGreaterThan(0)
+    expect(seen.every(s => s.tab === null || s.entry !== null)).toBe(true)
+    unsubscribe()
     stop()
   })
 
@@ -713,6 +732,29 @@ describe('P0: the field and its checks (the redesign\'s design, §5.4)', () => {
     p.stop()
   })
 
+  it('a check held open for one paper, while the field moves to another: the newer paper\'s view never shows the older one\'s answer', async () => {
+    const p = await onP0()
+    p.w.holdEntries.add('2501.07202')
+    p.popup.actions.setQuery('2501.07202')
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await settle()
+    expect(p.w.checks).toEqual(['2501.07202'])
+    // still checking: no answer for it yet
+    expect(p.input().find.entries).toBeNull()
+    // the field moves to another paper before the first check answers
+    p.w.entries['hep-th/9711200'] = { html: null, pdf: 'https://arxiv.org/pdf/hep-th/9711200#readarxiv' }
+    p.popup.actions.setQuery('hep-th/9711200')
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await settle()
+    expect(p.w.checks).toEqual(['2501.07202', 'hep-th/9711200'])
+    expect(p.input().find).toEqual({ query: 'hep-th/9711200', entries: { id: 'hep-th/9711200', html: null, pdf: 'https://arxiv.org/pdf/hep-th/9711200#readarxiv' } })
+    // the held check now answers: kept for its own id, never shown under the paper the field names now
+    p.w.releaseEntry['2501.07202']!()
+    await settle()
+    expect(p.input().find).toEqual({ query: 'hep-th/9711200', entries: { id: 'hep-th/9711200', html: null, pdf: 'https://arxiv.org/pdf/hep-th/9711200#readarxiv' } })
+    p.stop()
+  })
+
   it('an address that opens a page, words and a link elsewhere are never checked', async () => {
     const p = await onP0()
     for (const text of ['https://arxiv.org/pdf/2501.07202', 'attention is all you need', 'https://www.nature.com/articles/x']) {
@@ -731,5 +773,39 @@ describe('P0: the field and its checks (the redesign\'s design, §5.4)', () => {
     p.stop()
     await vi.advanceTimersByTimeAsync(STILL_MS * 2)
     expect(p.w.checks).toEqual([])
+  })
+})
+
+describe('writes after the popup stops', () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] }) })
+  const settle = async () => { for (let i = 0; i < 25; i++) await vi.advanceTimersByTimeAsync(0) }
+
+  it('a late tab address, a late paper check and a late refused-key read all find nothing to write once stopped', async () => {
+    let releaseRejected!: (ids: Set<string>) => void
+    const spy = vi.spyOn(serviceHealth, 'rejectedServices').mockReturnValue(new Promise(resolve => { releaseRejected = resolve }))
+    const made = world()
+    made.w.page = null
+    made.w.holdTabUrl = true
+    made.w.holdEntries.add('2501.07202')
+    const stop = made.popup.start()
+    made.popup.actions.setQuery('2501.07202')
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await settle()
+    expect(made.w.checks).toEqual(['2501.07202'])
+    // stopping while the silent timer still runs notifies once, of its own accord (whether the popup still asks is
+    // part of the view); that is not what this test is about, so the recording starts once stop() has returned
+    stop()
+    const after = made.popup.state()
+    const seen: unknown[] = []
+    const unsubscribe = made.popup.subscribe(() => seen.push(made.popup.state()))
+    // three answers that land only once the popup has stopped
+    made.w.releaseTabUrl?.('https://arxiv.org/abs/2501.07202')
+    made.w.releaseEntry['2501.07202']!()
+    releaseRejected(new Set(['svc-late']))
+    await settle()
+    expect(seen).toEqual([])
+    expect(made.popup.state()).toBe(after)
+    unsubscribe()
+    spy.mockRestore()
   })
 })

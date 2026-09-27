@@ -65,7 +65,9 @@ export interface PopupInput {
   rejected: readonly string[]
   /**
    * The active tab as far as the popup may know it, once the first ask about its page has settled (null before): its
-   * address where the extension may read it — arXiv's pages, by the host permission; null on any other — and whether the
+   * address where the extension may read it — arXiv's pages, by the host permission (which also reaches
+   * openrouter.ai, translate-pa.googleapis.com, edge.microsoft.com and any origin the reader granted, none of which
+   * is a tab's address); null on any other — and whether the
    * popup is still asking a page that has not answered (the content script comes at document_idle). An arXiv paper's
    * page still asked is loading, not P0 (the redesign's design, §5.4)
    */
