@@ -3,7 +3,8 @@
 // writing; a built-in copied to be changed; one's own written in place when whole, a draft held when not; a variable
 // inserted at the caret; new, delete with its undo; import and export. Fix round 1 (the review of Task 63): the focus
 // on undo, on expiry and on a prompt chosen again; the list drawn only while open and an edit written as the fields it
-// changed; the message's error wired and cleared; a line read as the browser draws it; import's names, shapes and ids
+// changed; the message's error wired and cleared; a line read as the browser draws it; import's names, shapes and ids.
+// Fix round 2: the list stays drawn while closed, so that a deletion's undo keeps its 5 s; only the editor goes
 import { createElement as h, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
@@ -278,7 +279,7 @@ describe('the LLM group, fix round 1 (the review of Task 63)', () => {
     await m.unmount()
   })
 
-  it('the list is drawn only while open: a draft is held only while it is, and a prompt renamed elsewhere meanwhile opens with its new name (item 4)', async () => {
+  it('the editor is drawn only while the list is open: a draft is held only while it is, and a prompt renamed elsewhere meanwhile opens with its new name (item 4)', async () => {
     const patches: Config[] = []
     const tab: { set?: (c: Config) => void } = {}
     const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches, tab }))
@@ -393,6 +394,49 @@ describe('the LLM group, fix round 1 (the review of Task 63)', () => {
     button(m.container.querySelector<HTMLElement>('[data-undo]')!, O.undo.undo).click()
     await m.flush()
     expect(patches.at(-1)!.prompts).toEqual({ promptId: MINE.id, patterns: [MINE, other] })
+    await m.unmount()
+  })
+})
+
+describe('the LLM group, fix round 2 (the re-review of Task 63)', () => {
+  beforeEach(() => { setLocale('en'); vi.useFakeTimers({ shouldAdvanceTime: true }); wire.downloads.length = 0 })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('a deletion is undone for its 5 s though the list is closed meanwhile: reopened within them, the undo row is there and undoes', async () => {
+    const patches: Config[] = []
+    const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches }))
+    promptsRow(m.container).click()
+    await m.flush()
+    button(m.container, O.prompts.delete).click()
+    await m.flush()
+    expect(patches.at(-1)!.prompts).toEqual({ promptId: 'default', patterns: [] })
+    promptsRow(m.container).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(1000)
+    await m.flush()
+    promptsRow(m.container).click()
+    await m.flush()
+    const undo = m.container.querySelector<HTMLElement>('[data-undo]')
+    expect(undo?.textContent).toContain(O.undo.deleted(MINE.name))
+    button(undo!, O.undo.undo).click()
+    await m.flush()
+    expect(patches.at(-1)!.prompts).toEqual({ promptId: MINE.id, patterns: [MINE] })
+    await m.unmount()
+  })
+
+  it('the import\'s note is gone once the list has been closed and opened again', async () => {
+    const m = await mountElement(h(Harness, { start: LLM, patches: [] }))
+    promptsRow(m.container).click()
+    await m.flush()
+    await give(m, JSON.stringify([{ name: 'Imported', prompt: '{{input}}' }]))
+    expect(m.container.textContent).toContain(O.prompts.imported(1))
+    promptsRow(m.container).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(200)
+    await m.flush()
+    promptsRow(m.container).click()
+    await m.flush()
+    expect(m.container.textContent).not.toContain(O.prompts.imported(1))
     await m.unmount()
   })
 })

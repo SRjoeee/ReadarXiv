@@ -5,8 +5,9 @@
 // changed: Copy to edit makes one's own copy and opens it. One's own is written in place — its name, its two parts, the
 // variables inserted from a row of labels — each change stored at once when it holds a name and a message; Done closes
 // the list; Delete is undone. The list ends with the new-prompt row and, at the same row's end, Import… and Export…
-// (the maintainer: in the list, not in a menu). The list is drawn only while open (fix round 1, item 4): an editor that
-// outlived it would hold the prompt as it was when first drawn
+// (the maintainer: in the list, not in a menu). The list stays drawn while closed, so that a deletion's undo row keeps
+// its 5 s (§6.2; fix round 2); one's own editor is drawn only while it is open (fix round 1, item 4): an editor that
+// outlived the list would hold the prompt as it was when first drawn
 import { Plus } from 'lucide'
 import { Fragment, type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { PromptFileFormatError, downloadPromptFile, readPromptFile } from '@/providers/prompt-file'
@@ -40,8 +41,6 @@ const describe = (p: PromptTemplate) => (isBuiltIn(p) ? (O.prompts.builtIn as Re
 
 export function PromptsRow({ data }: { data: OptionsData }) {
   const [open, setOpen] = useState(false)
-  /** the list, kept for its fold as it closes (§8) */
-  const drawn = useLinger(open || null)
   const row = useRef<HTMLButtonElement>(null)
   const chosen = selectPrompt(data.config!.prompts)
   return (
@@ -51,7 +50,7 @@ export function PromptsRow({ data }: { data: OptionsData }) {
         description={open ? undefined : describe(chosen)} trailing={<Value>{chosen.name}</Value>} expanded={open} buttonProps={{ ref: row }}
         onPress={() => setOpen(o => !o)} />
       <Reveal open={open}>
-        {drawn && <PromptList data={data} onDone={() => { setOpen(false); row.current?.focus() }} />}
+        <PromptList data={data} open={open} onDone={() => { setOpen(false); row.current?.focus() }} />
       </Reveal>
     </>
   )
@@ -59,9 +58,14 @@ export function PromptsRow({ data }: { data: OptionsData }) {
 
 interface GonePrompt { prompt: PromptTemplate; index: number; chosen: boolean; focus: boolean }
 
-function PromptList({ data, onDone }: { data: OptionsData; onDone: () => void }) {
+function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; onDone: () => void }) {
   const { patch } = data
   const prompts = data.config!.prompts
+  /**
+   * the editor, drawn while the list is open and kept for its fold as it closes (§8): it reads the store each time it
+   * opens, and its draft is held only while it is drawn (fix rounds 1 and 2)
+   */
+  const editing = useLinger(open || null)
   const [gone, setGone] = useState<GonePrompt[]>([])
   /** a prompt just made or copied: its row comes in with §8's row motion */
   const [fresh, setFresh] = useState<string | null>(null)
@@ -71,6 +75,8 @@ function PromptList({ data, onDone }: { data: OptionsData; onDone: () => void })
    */
   const [naming, setNaming] = useState<string | null>(null)
   const [note, setNote] = useState<{ alert: boolean; words: string } | null>(null)
+  // the import's note is the moment's: it goes once the list has folded away (fix round 2)
+  useEffect(() => { if (!editing) setNote(null) }, [editing])
   const file = useRef<HTMLInputElement>(null)
   const radios = useRef(new Map<string, HTMLElement>())
   const addButton = useRef<HTMLButtonElement>(null)
@@ -91,7 +97,7 @@ function PromptList({ data, onDone }: { data: OptionsData; onDone: () => void })
    * rest stands; a prompt deleted elsewhere is not written back (fix round 1, item 4)
    */
   const edit = (id: string, words: PromptWords) =>
-    setPrompts(c => (c.patterns.some(x => x.id === id) ? { ...c, patterns: c.patterns.map(x => (x.id === id ? { ...x, ...words } : x)) } : c))
+    void setPrompts(c => (c.patterns.some(x => x.id === id) ? { ...c, patterns: c.patterns.map(x => (x.id === id ? { ...x, ...words } : x)) } : c))
   const undo = (g: GonePrompt) => {
     setGone(x => x.filter(y => y !== g))
     // the focus goes to the prompt's radio once the write has landed and the row is there (the styles list's fix
@@ -127,7 +133,7 @@ function PromptList({ data, onDone }: { data: OptionsData; onDone: () => void })
       <Row kind="radio" level={1} checked={p.id === chosenId} onChoose={() => choose(p.id)} label={p.name} tag={mine ? O.prompts.mine : undefined} description={describe(p)} arriving={fresh === p.id}
         radioRef={el => { if (el) radios.current.set(p.id, el); else radios.current.delete(p.id) }} />
       {p.id === chosenId && (mine
-        ? <OwnPrompt key={p.id} prompt={p} focus={naming === p.id} onFocused={() => setNaming(null)} onChange={words => edit(p.id, words)} onDone={onDone} onDelete={() => remove(p)} />
+        ? editing && <OwnPrompt key={p.id} prompt={p} focus={naming === p.id} onFocused={() => setNaming(null)} onChange={words => edit(p.id, words)} onDone={onDone} onDelete={() => remove(p)} />
         : <BuiltInPrompt prompt={p} onCopy={() => add({ ...p, id: uuid(), name: O.prompts.copyOf(p.name) })} />)}
     </Fragment>
   )
@@ -195,7 +201,7 @@ function OwnPrompt({ prompt, focus, onFocused, onChange, onDone, onDelete }: {
   focus: boolean
   /** the name field has taken the focus it was given */
   onFocused: () => void
-  onChange: (words: PromptWords) => unknown
+  onChange: (words: PromptWords) => void
   onDone: () => void
   onDelete: () => void
 }) {
