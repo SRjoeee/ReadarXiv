@@ -1124,8 +1124,11 @@ In `tests/e2e/floating-button.mjs`, before the line `await context.close()`, add
   })
   await underThemes('dark', 'light')
   const dark = await buttonLook()
+  // the light appearance under a dark system too: the dock's light mark must win over the host's system-dark block
+  await page.emulateMedia({ colorScheme: 'dark' })
   await underThemes('light', 'dark')
   const light = await buttonLook()
+  await page.emulateMedia({ colorScheme: 'light' })
   await setTheme('system')
   await sleep(1500)
   const system = await buttonLook()
