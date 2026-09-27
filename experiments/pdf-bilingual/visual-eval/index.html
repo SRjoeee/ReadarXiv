@@ -1,0 +1,146 @@
+<!doctype html>
+<!-- The geometry lock's visual evaluation (plans/2026-09-27-geometry-lock-visual-eval-design.md). Served by spikes/serve-eval.mjs. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Geometry lock: pages side by side</title>
+<style>
+:root { --bg: #fafaf9; --fg: #1c1917; --muted: #78716c; --line: #e7e5e4; --accent: #b31b1b; --hl: #fde68a }
+@media (prefers-color-scheme: dark) { :root { --bg: #1c1917; --fg: #f5f5f4; --muted: #a8a29e; --line: #44403c; --hl: #854d0e } }
+* { box-sizing: border-box }
+body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--fg) }
+header { display: flex; gap: 12px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 2 }
+header button, #view button { font: inherit; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; cursor: pointer }
+#langs button.on { border-color: var(--accent); color: var(--accent) }
+#flags-count { color: var(--muted) }
+main { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 45px) }
+aside { overflow: auto; border-right: 1px solid var(--line) }
+aside select { margin: 8px 12px }
+.paper { padding: 8px 12px; border-bottom: 1px solid var(--line); cursor: pointer }
+.paper.on { background: var(--line) }
+.paper b { display: block }
+.paper small { color: var(--muted); display: block }
+#view { overflow: auto; padding: 12px 16px }
+.head { display: flex; gap: 16px; align-items: baseline; margin-bottom: 8px; color: var(--muted) }
+.head h2 { color: var(--fg); margin: 0; font-size: 16px }
+.strip { display: grid; gap: 6px; overflow-x: auto; padding-bottom: 8px }
+.row { display: flex; gap: 6px; align-items: center }
+.row .label, .nums .label { width: 64px; flex: none; color: var(--muted) }
+.row img, .row .none { width: 102px; flex: none; border: 1px solid var(--line); background: #fff; cursor: pointer }
+.row .none { height: 132px; display: grid; place-items: center; color: var(--muted); background: transparent; cursor: default; font-size: 12px }
+.row img.hl { outline: 3px solid var(--hl) }
+.row .fail { color: var(--accent) }
+.suspicious { margin-top: 12px; columns: 2 }
+.suspicious a { display: block; color: inherit; cursor: pointer }
+.pageview { display: flex; gap: 8px; align-items: flex-start }
+.col { flex: 1; min-width: 0 }
+.col .cap { display: flex; justify-content: space-between; color: var(--muted) }
+.col img { width: 100%; max-height: calc(100vh - 120px); object-fit: contain; background: #fff; border: 1px solid var(--line) }
+.zoom .col img { width: 200%; max-height: none }
+.zoom .col { overflow: auto; max-height: calc(100vh - 120px) }
+.col .none { padding: 40px; text-align: center; color: var(--muted); border: 1px dashed var(--line) }
+.flagbox { display: none; gap: 6px; margin: 8px 0 }
+.flagbox.open { display: flex }
+.flagbox input { flex: 1; font: inherit; padding: 4px 8px }
+</style>
+</head>
+<body>
+<header><nav id="langs"></nav><span style="flex:1"></span><span id="flags-count"></span><button id="export">Export flags</button></header>
+<main><aside><select id="sort"><option value="paper">By paper</option><option value="gain">Most gained first</option><option value="loss">Least gained first</option></select><div id="papers"></div></aside><section id="view"></section></main>
+<script type="module">
+const $ = s => document.querySelector(s)
+const state = { catalog: null, lang: null, paper: null, index: null, page: 0, hidden: new Set(), zoom: false }
+const rate = (n, d) => (d ? `${Math.round((100 * n) / d)}%` : '—')
+const gain = e => (e.today?.units && e.locked?.units ? e.locked.samePage / e.locked.units - e.today.samePage / e.today.units : -Infinity)
+const flags = () => { try { return JSON.parse(localStorage.getItem('axt-eval-flags') ?? '[]') } catch { return [] } }
+const saveFlags = f => { try { localStorage.setItem('axt-eval-flags', JSON.stringify(f)) } catch {} ; $('#flags-count').textContent = `${f.length} flagged` }
+const base = () => `data/${state.lang}/${state.paper}`
+
+function renderLangs() {
+  $('#langs').replaceChildren(...Object.keys(state.catalog.langs).map(l => {
+    const b = document.createElement('button'); b.textContent = l; b.className = l === state.lang ? 'on' : ''
+    b.onclick = () => { state.lang = l; state.paper = null; renderLangs(); renderPapers(); $('#view').replaceChildren() }
+    return b
+  }))
+}
+function renderPapers() {
+  const list = [...state.catalog.langs[state.lang]]
+  const by = $('#sort').value
+  if (by !== 'paper') list.sort((a, b) => (by === 'gain' ? gain(b) - gain(a) : gain(a) - gain(b)))
+  $('#papers').replaceChildren(...list.map(e => {
+    const d = document.createElement('div'); d.className = `paper${e.paper === state.paper ? ' on' : ''}`
+    const pages = Object.entries(e.pages).map(([k, n]) => `${k} ${n ?? '×'}`).join(' · ')
+    d.innerHTML = `<b>${e.paper}</b><small>${e.cls}</small><small>pages ${pages}</small><small>units on their page ${rate(e.today?.samePage, e.today?.units)} → ${rate(e.locked?.samePage, e.locked?.units)}</small><small>captions ${e.today?.captionsSamePage ?? '—'}/${e.today?.captions ?? '—'} → ${e.locked?.captionsSamePage ?? '—'}/${e.locked?.captions ?? '—'}</small>`
+    d.onclick = () => openPaper(e.paper)
+    return d
+  }))
+}
+async function openPaper(id) {
+  state.paper = id; state.page = 0; renderPapers()
+  state.index = await (await fetch(`${base()}/index.json`)).json()
+  renderStrip()
+}
+function head() {
+  const i = state.index, h = document.createElement('div'); h.className = 'head'
+  h.innerHTML = `<h2>${i.paper}</h2><span>${i.cls}</span>${i.translation?.untranslated ? `<span>${i.translation.untranslated} units untranslated</span>` : ''}${i.flags?.includes('original-mismatch') ? '<span>our compile of the original differs from arXiv\'s</span>' : ''}${i.lostExtra?.length ? `<span>characters lost only when locked: ${i.lostExtra.join(' ')}</span>` : ''}${i.overfull ? `<span>${i.overfull} overfull boxes when locked</span>` : ''}`
+  return h
+}
+function renderStrip() {
+  const i = state.index, max = Math.max(...i.columns.map(c => c.pages ?? 0))
+  const strip = document.createElement('div'); strip.className = 'strip'
+  for (const c of i.columns) {
+    const row = document.createElement('div'); row.className = 'row'; row.dataset.key = c.key
+    row.innerHTML = `<span class="label">${c.label}</span>`
+    if (c.pages == null) { const f = document.createElement('span'); f.className = 'fail'; f.textContent = `compile failed: ${i.failed?.[c.key] ?? 'no file'}`; row.append(f) }
+    else for (let p = 1; p <= max; p++) {
+      if (p > c.pages) { const n = document.createElement('span'); n.className = 'none'; n.textContent = '—'; row.append(n); continue }
+      const img = document.createElement('img'); img.loading = 'lazy'; img.src = `${base()}/thumbs/${c.key}-${p}.jpg`; img.dataset.page = p; img.title = `${c.label} page ${p}`
+      img.onmouseenter = () => document.querySelectorAll(`.row img[data-page="${p}"]`).forEach(x => x.classList.add('hl'))
+      img.onmouseleave = () => document.querySelectorAll('.row img.hl').forEach(x => x.classList.remove('hl'))
+      img.onclick = () => { state.page = p; renderPage() }
+      row.append(img)
+    }
+    strip.append(row)
+  }
+  const sus = document.createElement('div'); sus.className = 'suspicious'
+  for (const s of i.suspicious ?? []) { const a = document.createElement('a'); a.textContent = `page ${s.page} · ${s.kind} · ${s.detail}`; a.onclick = () => { state.page = s.page; renderPage() }; sus.append(a) }
+  $('#view').replaceChildren(head(), strip, sus)
+}
+function renderPage() {
+  const i = state.index, p = state.page
+  const bar = document.createElement('div'); bar.className = 'head'
+  bar.innerHTML = `<button id="back">All pages</button><span>page ${p}</span><span>← → pages · 1–${i.columns.length} hide a column · Z zoom · Esc all pages</span><button id="flag">Flag this page</button>`
+  const box = document.createElement('div'); box.className = 'flagbox'; box.innerHTML = '<input id="flag-note" placeholder="What is wrong on this page"><button id="flag-save">Save</button>'
+  const view = document.createElement('div'); view.className = `pageview${state.zoom ? ' zoom' : ''}`
+  i.columns.forEach(c => {
+    const col = document.createElement('div'); col.className = 'col'; col.dataset.key = c.key; col.hidden = state.hidden.has(c.key)
+    const cap = document.createElement('div'); cap.className = 'cap'
+    cap.innerHTML = `<span>${c.label}</span>${c.pages != null && p <= c.pages ? `<a href="${base()}/${c.key}.pdf#page=${p}" target="_blank">PDF</a>` : ''}`
+    col.append(cap)
+    if (c.pages == null) { const n = document.createElement('div'); n.className = 'none'; n.textContent = `compile failed: ${i.failed?.[c.key] ?? 'no file'}`; col.append(n) }
+    else if (p > c.pages) { const n = document.createElement('div'); n.className = 'none'; n.textContent = `no page ${p}`; col.append(n) }
+    else { const img = document.createElement('img'); img.src = `${base()}/pages/${c.key}-${p}.jpg`; col.append(img) }
+    view.append(col)
+  })
+  $('#view').replaceChildren(head(), bar, box, view)
+  $('#back').onclick = renderStrip
+  $('#flag').onclick = () => { box.classList.add('open'); $('#flag-note').focus() }
+  $('#flag-save').onclick = () => { const f = flags(); f.push({ lang: state.lang, paper: state.paper, page: p, note: $('#flag-note').value, at: new Date().toISOString() }); saveFlags(f); box.classList.remove('open') }
+}
+document.addEventListener('keydown', e => {
+  if (!state.index || !document.querySelector('.pageview') || e.target.tagName === 'INPUT') return
+  const max = Math.max(...state.index.columns.map(c => c.pages ?? 0))
+  if (e.key === 'ArrowRight' && state.page < max) { state.page++; renderPage() }
+  else if (e.key === 'ArrowLeft' && state.page > 1) { state.page--; renderPage() }
+  else if (e.key === 'Escape') renderStrip()
+  else if (e.key === 'z' || e.key === 'Z') { state.zoom = !state.zoom; renderPage() }
+  else if (/^[1-9]$/.test(e.key)) { const c = state.index.columns[Number(e.key) - 1]; if (c) { state.hidden.has(c.key) ? state.hidden.delete(c.key) : state.hidden.add(c.key); renderPage() } }
+})
+$('#sort').onchange = renderPapers
+$('#export').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(flags(), null, 1)], { type: 'application/json' })); a.download = 'flags.json'; a.click() }
+state.catalog = await (await fetch('data/index.json')).json()
+state.lang = Object.keys(state.catalog.langs)[0]
+saveFlags(flags()); renderLangs(); renderPapers()
+</script>
+</body>
+</html>
