@@ -3,11 +3,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { fileName, type ReaderController } from '@/pdf-reader/controller'
 import { DownloadMenu, LanguageMenu, ServiceMenu, ZoomMenu } from '@/pdf-reader/ui/Menus'
-import { setLocale } from '@/ui/strings'
+import { S, setLocale } from '@/ui/strings'
 import { mountElement } from '../../ui/render-hook'
 import { fakeController } from './fake-controller'
 import { stubPopovers } from './popover-stub'
 import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
+import { fakeBrowser } from 'wxt/testing/fake-browser'
+import type { Service } from '@/config/services'
+import { clearRejected, markRejected } from '@/shared/service-health'
 
 let restore = () => {}
 // the interface's words as the maintainer reads them: the controls are found by them
@@ -75,6 +78,21 @@ describe('the reader\'s menus (the reader\'s design, §6.1, §6.7)', () => {
     expect(change(settings).provider).toBe(mine.id)
     const deleted = { ...settings, services: [] }
     expect(change(deleted)).toBe(deleted)
+  })
+
+  it('service: a service whose key the endpoint refused says so, as the popup\'s menu does, and follows the record while the menu is open (the redesign\'s design, §5.2; the controller\'s ruling 22)', async () => {
+    fakeBrowser.reset()
+    const mine: Service = { id: 'svc-abcd1234', kind: 'openai-compat', name: 'My model', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'test', model: 'vendor/model', thinking: 'disabled' }
+    await markRejected(mine.id)
+    const { container, flush } = await openMenu(ServiceMenu, { settings: { ...DEFAULT_CONFIG, services: [mine] } })
+    const row = () => [...container.querySelectorAll<HTMLElement>('[role="option"]')].find(o => o.textContent?.includes(mine.name))!
+    const settled = async (ready: () => boolean) => { for (let i = 0; i < 20 && !ready(); i++) await flush() }
+    await settled(() => row().textContent!.includes(S.service.llm_rejected))
+    expect(row().textContent).toContain(S.service.llm_rejected)
+    // the record's change reaches the menu through a state update: inside act, as a test's updates are
+    await act(async () => { await clearRejected(mine.id) })
+    await settled(() => row().textContent!.includes(mine.model))
+    expect([row().textContent!.includes(mine.model), row().textContent!.includes(S.service.llm_rejected)]).toEqual([true, false])
   })
 
   it('service and zoom: one list each, its separators not items of it (the final review)', async () => {
