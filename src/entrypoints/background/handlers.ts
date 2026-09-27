@@ -118,7 +118,7 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
       deps.getConfig(),
       deps.getFloatingEntry(),
       sender.tabId === undefined ? 1 : deps.zoomOf(sender.tabId).catch(() => 1),
-    ]).then(([config, floating, zoom]) => ({ uiLanguage: config.uiLanguage, openIn: config.reading.openIn, zoom, pdfReader: config.pdfReader.enabled, floating })),
+    ]).then(([config, floating, zoom]) => ({ uiLanguage: config.uiLanguage, openIn: config.reading.openIn, zoom, pdfReader: config.pdfReader.enabled, theme: config.theme, floating })),
 
     // The toolbar button lights for the tab the page is in (UI.md §5.1). Nothing is answered: the page does not wait
     // on it, and a tab closed meanwhile has no button to light

@@ -20,7 +20,7 @@ vi.mock('@/shared/messages', async importOriginal => ({
   },
 }))
 
-const SETTINGS: EntrySettings = { uiLanguage: 'en', openIn: 'same-tab', zoom: 1.25, pdfReader: false, floating: { enabled: false, side: 'left', position: 0.3, locked: true } }
+const SETTINGS: EntrySettings = { uiLanguage: 'en', openIn: 'same-tab', zoom: 1.25, pdfReader: false, theme: 'dark', floating: { enabled: false, side: 'left', position: 0.3, locked: true } }
 const fresh = async () => {
   vi.resetModules()
   return import('@/shared/entry-settings')
@@ -70,6 +70,15 @@ describe('watchEntrySettings', () => {
     wire.answers = [earlier]
     const { watchEntrySettings } = await fresh()
     expect(await watchEntrySettings(() => undefined)).toEqual({ ...SETTINGS, pdfReader: true })
+  })
+
+  it('an answer without the extension\'s appearance, from a background of an earlier build, or with one this build does not know, follows the system\'s (the redesign\'s design, §3)', async () => {
+    const { theme: _, ...earlier } = SETTINGS
+    for (const answer of [earlier, { ...SETTINGS, theme: 'sepia' }]) {
+      wire.answers = [answer]
+      const { watchEntrySettings } = await fresh()
+      expect(await watchEntrySettings(() => undefined)).toEqual({ ...SETTINGS, theme: 'system' })
+    }
   })
 
   it('a later answer that is not the settings changes nothing: the page keeps what it had', async () => {

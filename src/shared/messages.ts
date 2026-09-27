@@ -94,8 +94,8 @@ export interface AxtMessages {
   'axt:toggle': { request: Record<never, never>; response: { acted: boolean } }
   /**
    * content / options → background: what a page needs of the settings, read once and validated by the background
-   * (shared/entry-settings.ts): the interface language, where a translation opens, this tab's zoom, the floating
-   * button's state
+   * (shared/entry-settings.ts): the interface language, where a translation opens, this tab's zoom, the PDF reader's
+   * switch, the extension's appearance, the floating button's state
    */
   'axt:entry-settings': { request: Record<never, never>; response: EntrySettings }
   /** background → content: the reader changed this tab's zoom (`tabs.onZoomChange`) */

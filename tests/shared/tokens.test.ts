@@ -56,11 +56,16 @@ describe('the token source', () => {
     expect(css).toContain('  --float-bg: color-mix(in oklab, var(--n-0) 90%, transparent);')
   })
 
-  it('writes a shadow root\'s sheet on :host, every variable it defines or names prefixed --axt- (hard rule 2)', () => {
+  it('writes a shadow root\'s sheet on :host, light or dark by a mark inside the shadow root, every variable and mark prefixed (hard rule 2)', () => {
     const css = tokenSheet('host')
-    expect(css).toContain(':host,\n:host([data-theme="light"]) {')
-    expect(css).toContain(':host(:not([data-theme="light"]))')
-    expect(css).toContain(':host([data-theme="dark"]) {')
+    expect(css).toContain(':host,\n[data-axt-theme="light"] {\n  color-scheme: light;')
+    // the system's dark reaches the host alone, so that an element marked light inside it stays light
+    expect(css).toContain('@media (prefers-color-scheme: dark) {\n  :host {\n    color-scheme: dark;')
+    expect(css).toContain('\n[data-axt-theme="dark"] {\n  color-scheme: dark;')
+    // arXiv's own sheet styles any [data-theme=dark], and a restore of the page strips every data-axt-* of the
+    // document's elements, a host's among them: the sheet answers its own mark, and never one on the host
+    expect(css).not.toContain('[data-theme')
+    expect(css).not.toContain(':host([')
     const defined = [...css.matchAll(/(--[a-z0-9-]+)\s*:/g)].map(m => m[1]!)
     expect(defined.length).toBeGreaterThan(40)
     expect(defined.filter(n => !n.startsWith('--axt-'))).toEqual([])
