@@ -21,7 +21,7 @@ export interface SegmentOption<T extends string> {
 /** the chosen segment's anchor name, scoped by each `.seg.fit` to itself */
 const CHOSEN = '--seg-on'
 
-export function Segmented<T extends string>({ label, value, options, onChange, fit = false, size = 'md', iconsOnly = false }: {
+export function Segmented<T extends string>({ label, value, options, onChange, fit = false, size = 'md', iconsOnly = false, describedBy }: {
   label: string
   value: T
   options: readonly SegmentOption<T>[]
@@ -29,6 +29,8 @@ export function Segmented<T extends string>({ label, value, options, onChange, f
   fit?: boolean
   size?: 'md' | 'sm'
   iconsOnly?: boolean
+  /** the id of the text that describes this choice (a settings row's description): read by a screen reader with the group's name */
+  describedBy?: string
 }) {
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
   const values = options.map(o => o.value)
@@ -40,7 +42,7 @@ export function Segmented<T extends string>({ label, value, options, onChange, f
   const stop = chosen >= 0 ? chosen : options.findIndex(o => !o.disabled)
   const className = ['seg', fit && 'fit', size === 'sm' && 'small', iconsOnly && 'icons'].filter(Boolean).join(' ')
   return (
-    <div role="radiogroup" aria-label={label} className={className} style={fit ? undefined : ({ '--i': chosen, '--n': options.length } as CSSProperties)}
+    <div role="radiogroup" aria-label={label} aria-describedby={describedBy} className={className} style={fit ? undefined : ({ '--i': chosen, '--n': options.length } as CSSProperties)}
       onKeyDown={radioKeys(values, values[stop] as T, can, choose, i => buttons.current[i]?.focus())}>
       {chosen >= 0 && <span className="thumb" aria-hidden="true" />}
       {options.map((option, i) => (

@@ -30,7 +30,9 @@ interface RowBase {
   lead?: ReactNode
   /** one step of 28 px per level (§6.2) */
   level?: 0 | 1 | 2
-  trailing?: ReactNode
+  /** the row's own description, e.g. a segmented control's `describedBy` (fix round 1): a function reads the description's
+   *  id — undefined where there is none to read, or where it is a sample rather than words (as the radio kind's own aria-describedby decides) */
+  trailing?: ReactNode | ((descId: string | undefined) => ReactNode)
   /** greyed: a service that cannot be chosen yet */
   muted?: boolean
   /** its words in ink-2: an add row, a line with nothing to set */
@@ -91,7 +93,8 @@ export function Row(props: RowProps) {
       )}
     </span>
   )
-  const trail = trailing ? <span data-part="trail" className="o-trail">{trailing}</span> : null
+  const trailContent = typeof trailing === 'function' ? trailing(description && !sample ? descId : undefined) : trailing
+  const trail = trailContent ? <span data-part="trail" className="o-trail">{trailContent}</span> : null
 
   if (props.kind === 'button') {
     return (

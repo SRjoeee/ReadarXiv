@@ -26,12 +26,12 @@ export function Reading({ data }: { data: OptionsData }) {
     <>
       <Card>
         <Row row="reading/way" words={k['reading/way']} label={O.reading.translateWay} description={O.reading.translateWayHints[config.preload === 'whole' ? 1 : 0]} swap
-          trailing={<div className="o-seg" style={segmentWidth(220)}><Segmented size="sm" label={O.reading.translateWay} value={config.preload}
+          trailing={descId => <div className="o-seg" style={segmentWidth(220)}><Segmented size="sm" label={O.reading.translateWay} value={config.preload} describedBy={descId}
             options={WAYS.map((value, i) => ({ value, label: O.reading.translateWays[i]! }))} onChange={preload => void patch(latest => ({ ...latest, preload }))} /></div>} />
         <Row toggles row="reading/images" words={k['reading/images']} label={S.rows.images} description={O.reading.imagesHint}
           trailing={<Switch label={S.rows.images} checked={config.image.enabled} onChange={on => void patch(latest => ({ ...latest, image: { enabled: on } }))} />} />
         <Row row="reading/open-in" words={k['reading/open-in']} label={O.reading.openIn} description={O.reading.openInHint}
-          trailing={<div className="o-seg" style={segmentWidth(200)}><Segmented size="sm" label={O.reading.openIn} value={config.reading.openIn}
+          trailing={descId => <div className="o-seg" style={segmentWidth(200)}><Segmented size="sm" label={O.reading.openIn} value={config.reading.openIn} describedBy={descId}
             options={OPEN_IN.map((value, i) => ({ value, label: O.reading.openInStops[i]! }))} onChange={openIn => void patch(latest => ({ ...latest, reading: { ...latest.reading, openIn } }))} /></div>} />
         <Row toggles row="reading/floating" words={k['reading/floating']} label={O.reading.floatingEntry} description={O.reading.floatingEntryHint}
           trailing={<Switch label={O.reading.floatingEntry} checked={floating.enabled ?? true} onChange={floating.setEnabled} />} />

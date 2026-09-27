@@ -70,4 +70,16 @@ describe('Segmented', () => {
     await key(group, 'ArrowRight')
     expect(onChange).toHaveBeenCalledWith('only')
   })
+
+  // fix round 1: a settings row hands its description's id to the group it describes; the popup and the reader,
+  // which never pass one, are unchanged
+  it('names no description unless the caller gives it one (the popup\'s and the reader\'s groups, unchanged)', async () => {
+    const { group } = await mount()
+    expect(group.hasAttribute('aria-describedby')).toBe(false)
+  })
+
+  it('is described by the id a caller hands it', async () => {
+    const { group } = await mount({ describedBy: 'row-desc-1' })
+    expect(group.getAttribute('aria-describedby')).toBe('row-desc-1')
+  })
 })

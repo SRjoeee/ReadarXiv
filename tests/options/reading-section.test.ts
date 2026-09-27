@@ -27,7 +27,8 @@ function Harness({ start, patches }: { start: Config; patches: Config[] }) {
   return h(Reading, { data })
 }
 const rowOf = (c: HTMLElement, id: string) => c.querySelector<HTMLElement>(`[data-row="${id}"]`)!
-const segments = (c: HTMLElement, label: string) => [...c.querySelectorAll<HTMLElement>(`[role="radiogroup"][aria-label="${label}"] [role="radio"]`)]
+const groupOf = (c: HTMLElement, label: string) => c.querySelector<HTMLElement>(`[role="radiogroup"][aria-label="${label}"]`)!
+const segments = (c: HTMLElement, label: string) => [...groupOf(c, label).querySelectorAll<HTMLElement>('[role="radio"]')]
 const switchOf = (c: HTMLElement, label: string) => c.querySelector<HTMLElement>(`[role="switch"][aria-label="${label}"]`)!
 
 describe('the reading section (§6.5)', () => {
@@ -40,11 +41,15 @@ describe('the reading section (§6.5)', () => {
     const description = () => rowOf(m.container, 'reading/way').querySelector('.o-desc')!
     expect(description().textContent).toBe(O.reading.translateWayHints[0])
     expect(description().classList.contains('o-swap')).toBe(false)
+    // fix round 1: the radiogroup names the row's description, and keeps naming the same element as the choice changes
+    const group = groupOf(m.container, O.reading.translateWay)
+    expect(group.getAttribute('aria-describedby')).toBe(description().id)
     segments(m.container, O.reading.translateWay)[1]!.click()
     await m.flush()
     expect(patches.at(-1)?.preload).toBe('whole')
     expect(description().textContent).toBe(O.reading.translateWayHints[1])
     expect(description().classList.contains('o-swap')).toBe(true)
+    expect(group.getAttribute('aria-describedby')).toBe(description().id)
     await m.unmount()
   })
 
@@ -54,6 +59,8 @@ describe('the reading section (§6.5)', () => {
     rowOf(m.container, 'reading/images').querySelector<HTMLElement>('.o-label')!.click()
     await m.flush()
     expect(patches.at(-1)?.image.enabled).toBe(false)
+    // fix round 1: "where the translation opens" is a second row whose radiogroup names its own description
+    expect(groupOf(m.container, O.reading.openIn).getAttribute('aria-describedby')).toBe(rowOf(m.container, 'reading/open-in').querySelector('.o-desc')!.id)
     segments(m.container, O.reading.openIn)[1]!.click()
     await m.flush()
     expect(patches.at(-1)?.reading.openIn).toBe('same-tab')
