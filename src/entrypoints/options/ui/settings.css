@@ -3,8 +3,10 @@
    Imported after ui.css; the component rules join its `components` layer, so that a rule here wins a tie with a shared
    control's. Later tasks append their blocks below this one */
 @layer components {
-  /* §6.2 a card: chrome, radius 10, 4 px in; a hairline and a 1 px shadow in light, a hairline of white 6 % in dark */
-  .o-card { position: relative; padding: 4px; border-radius: 10px; background: var(--chrome); box-shadow: var(--card-shadow); }
+  /* §6.2 a card: chrome, radius 10, 4 px in; a hairline and a 1 px shadow in light, a hairline of white 6 % in dark. It
+     is its rows' container: a row's control answers the room the card gives it (the fix round of Task 64, below), which
+     a query on the window cannot tell — at 200 % zoom the column beside the sidebar is as narrow as a 320 px window's */
+  .o-card { position: relative; padding: 4px; border-radius: 10px; background: var(--chrome); box-shadow: var(--card-shadow); container-type: inline-size; }
   .o-card[data-gap] { margin-top: 8px; }
   /* a group's heading on the words' edge: 22 px after the card before it, 8 px above its own */
   .o-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 18px; margin: 22px 14px 8px; }
@@ -267,3 +269,16 @@
   .o-prompt-note { margin: -4px 10px 10px 66px; color: var(--ink-2); font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .o-prompt-text[data-editable], .o-var-button { transition: none; } .o-var-button:active { scale: 1; } }
+
+/* ---- Task 64, fix round 1: a card too narrow for the theme control ---- */
+@layer components {
+  /* the theme control with its icons is 286 px wide in Chinese (measured on the built page; 269.5 in English), and its
+     row adds 20 px of padding: a card's content box under 306 px cannot hold it — 312 with 6 px to spare, a 320 px card
+     with its 4 px each side (a 320 px window gives 280, 200 % zoom 304). There its segments keep their words and drop
+     their icons, the words carrying the meaning (the controller's ruling). Of this page's segmented controls only the
+     theme control's segments hold icons */
+  @container (width < 312px) {
+    .o-row .seg > button > svg { display: none; }
+    .o-row .seg > button > svg + span { margin-inline-start: 0; }
+  }
+}

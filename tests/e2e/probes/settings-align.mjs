@@ -7,7 +7,8 @@
 // controls a state shows exactly the agreed set (220 and 200 in reading, 210, 300 and 120 in the style editor,
 // settings-2), each at its width. A state that measures no card or no row fails, so a selector that stopped matching
 // cannot pass. Each state is shot at 2x into experiments/pdf-bilingual/out/settings/, and the page at 320 px and at
-// 200 % zoom: no horizontal scroll, and the sidebar above the column below 640 px. Prints what is off; exits 1 when
+// 200 % zoom, measured there too: no horizontal scroll, the sidebar above the column below 640 px, nothing past its
+// card, a trail that moved under its words still ending on the trailing edge. Prints what is off; exits 1 when
 // anything is.
 //   pnpm build && node tests/e2e/probes/settings-align.mjs
 import { mkdirSync, rmSync } from 'node:fs'
@@ -101,9 +102,12 @@ const seed = over => worker.evaluate(async over => {
 
 /**
  * every row of every card shown: centres, the three leading edges and the trailing one; the headings; the segmented
- * controls' agreed widths as found. `empty`: the state shows no card (a search that found nothing)
+ * controls' agreed widths as found. `empty`: the state shows no card (a search that found nothing). `narrow`: a 320 px
+ * window or 200 % zoom (§9) — nothing inside a card ends past its box, and a row whose end moved under its words is two
+ * lines: its lead stays on its words' centre and its trail's items on the trail's, the trail still ending on the
+ * trailing edge (at full width no row wraps, so a wrap there fails the centre rule as it should)
  */
-const measure = (page, { empty = false } = {}) => page.evaluate(({ empty }) => {
+const measure = (page, { empty = false, narrow = false } = {}) => page.evaluate(({ empty, narrow }) => {
   const out = []
   const r = el => el.getBoundingClientRect()
   const shown = el => { const b = r(el); return b.width > 0 && b.height > 0 && !el.closest('[inert]') }
@@ -113,6 +117,22 @@ const measure = (page, { empty = false } = {}) => page.evaluate(({ empty }) => {
     if (!shown(card)) continue
     cards++
     const c = r(card)
+    if (narrow) {
+      // what ends past the card, outermost only (its children would repeat it); a menu open from a row is drawn in the
+      // top layer, not in the card
+      const past = new Map()
+      for (const el of card.querySelectorAll('*')) {
+        if (el.closest('[popover]') || !shown(el)) continue
+        const b = r(el)
+        const by = Math.max(c.left - b.left, b.right - c.right)
+        if (by > 0.5) past.set(el, by)
+      }
+      for (const [el, by] of past) {
+        if (past.has(el.parentElement)) continue
+        const name = (el.closest('[data-srow]')?.querySelector('.o-label')?.textContent ?? '').trim().slice(0, 16)
+        out.push(`${name} · ${el.getAttribute('class') || el.tagName.toLowerCase()} ends ${by.toFixed(1)} px past its card`)
+      }
+    }
     for (const row of card.querySelectorAll('[data-srow]')) {
       if (!shown(row) || row.closest('[data-card]') !== card) continue
       rows++
@@ -127,13 +147,15 @@ const measure = (page, { empty = false } = {}) => page.evaluate(({ empty }) => {
       // the trail's items: a menu opened from one of them (a service's "…", §6.2) sits in the trail's markup but is drawn
       // in the top layer, placed under its button, not in the row
       const items = trail => [...trail.children].filter(el => shown(el) && !el.matches('[popover]'))
+      const words = part('words')
+      const moved = narrow && !!part('trail') && !!words && r(part('trail')).top >= r(words).bottom - 0.5
       for (const { kind, el } of parts) {
+        const line = !moved ? mid : kind === 'trail' ? r(el).top + r(el).height / 2 : r(words).top + r(words).height / 2
         for (const item of kind === 'trail' ? items(el) : [el]) {
-          const d = r(item).top + r(item).height / 2 - mid
+          const d = r(item).top + r(item).height / 2 - line
           if (Math.abs(d) > 0.5) out.push(`${name} · ${kind} centre ${d > 0 ? '+' : ''}${d.toFixed(1)} px`)
         }
       }
-      const words = part('words')
       if (words) { const x = Math.round(r(words).left - c.left); if (![14, 42, 70].includes(x)) out.push(`${name} · words at ${x} px`) }
       const lead = part('lead')
       if (lead) { const x = Math.round(r(lead).left - c.left); if (![14, 42].includes(x)) out.push(`${name} · lead at ${x} px`) }
@@ -168,7 +190,7 @@ const measure = (page, { empty = false } = {}) => page.evaluate(({ empty }) => {
     if (Math.abs(got - want) > 0.5) out.push(`a segmented control ${got.toFixed(1)} px wide, agreed ${want}`)
   }
   return { out, widths }
-}, { empty })
+}, { empty, narrow })
 
 /** the widths found against the state's agreed set: a control missing, an extra one, or one of a width nobody agreed */
 function agreed(name, widths) {
@@ -301,19 +323,23 @@ for (const lang of ['zh-CN', 'en']) {
     await page.goto('about:blank')
     await worker.evaluate(s => chrome.storage.local.set(s), kept)
 
-    // §9: 320 px and 200 % zoom (a 1280 px window at 2x): nothing scrolls sideways; below 640 px the sidebar is above the column
+    // §9: 320 px and 200 % zoom (a 1280 px window at 2x): nothing scrolls sideways; below 640 px the sidebar is above the
+    // column; every row measured as it is drawn there, nothing past its card
     for (const [name, width, height] of [['narrow', 320, 900], ['zoom', 640, 550]]) {
       await page.setViewportSize({ width, height })
-      await open('translate')
-      const fold = await page.evaluate(() => ({
-        sideways: document.documentElement.scrollWidth > innerWidth,
-        above: document.querySelector('.o-side').getBoundingClientRect().bottom <= document.querySelector('.o-main').getBoundingClientRect().top + 0.5,
-      }))
-      if (fold.sideways) off.push(`${tag} ${name}: the page scrolls sideways`)
-      if (width < 640 && !fold.above) off.push(`${tag} ${name}: the sidebar is not above the column`)
-      await page.screenshot({ path: `${OUT}${tag}-${name}.png`, fullPage: true })
-      await open('appearance')
-      await page.screenshot({ path: `${OUT}${tag}-${name}-appearance.png`, fullPage: true })
+      for (const section of ['translate', 'appearance']) {
+        const shot = section === 'translate' ? name : `${name}-${section}`
+        await open(section)
+        const fold = await page.evaluate(() => ({
+          sideways: document.documentElement.scrollWidth > innerWidth,
+          above: document.querySelector('.o-side').getBoundingClientRect().bottom <= document.querySelector('.o-main').getBoundingClientRect().top + 0.5,
+        }))
+        if (fold.sideways) off.push(`${tag} ${shot}: the page scrolls sideways`)
+        if (width < 640 && !fold.above) off.push(`${tag} ${shot}: the sidebar is not above the column`)
+        const { out, widths } = await measure(page, { narrow: true })
+        off.push(...[...out, ...agreed(shot, widths)].map(o => `${tag} ${shot}: ${o}`))
+        await page.screenshot({ path: `${OUT}${tag}-${shot}.png`, fullPage: true })
+      }
     }
     await page.close()
   }
