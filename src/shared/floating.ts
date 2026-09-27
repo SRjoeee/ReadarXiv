@@ -68,6 +68,8 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
     // A drag saved in another tab, or the lock toggled there, moves this one too
     button.place(placementOf(next.floating))
     button.rescale(zoomed ? next.zoom : 1)
+    // The extension's appearance, changed on the settings page or in the reader (the redesign's design, §3)
+    button.retheme(next.theme)
   }
 
   /** Save a change of the button's own state; what the background says is stored is what the page then shows */
@@ -85,6 +87,7 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
     button = mountFloatingButton(doc, host, {
       main: page.main,
       zoom: zoomed ? from.zoom : 1,
+      theme: from.theme,
       placement: placementOf(from.floating),
       strings: strings(from),
       // The control panel is the extension's own popup page, framed beside the button (button.ts)

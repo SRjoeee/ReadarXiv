@@ -422,6 +422,49 @@ check('a second click restores it: the tick goes, nothing of ours is left but th
     `PDF ${pdfSize.width} × ${pdfSize.height} device px; full text ${seen.map(d => `${d.zoom * 100} %: ${Math.round(d.width * 10) / 10} × ${Math.round(d.height * 10) / 10} (ratio ${d.ratio})`).join(', ')}`)
 }
 
+// ————— Whose light and dark (the redesign's design, §3, §7) —————
+// The button is the extension's own control: it draws in the extension's appearance, whatever the paper's under it
+// and whatever the system's. Set against the paper — the extension dark on arXiv's light theme, then light on its dark
+// one — and then left to the system's (light, headless)
+{
+  const setTheme = theme => worker.evaluate(async theme => {
+    const { config } = await chrome.storage.local.get('config')
+    await chrome.storage.local.set({ config: { ...config, theme } })
+  }, theme)
+  /** The extension's appearance and arXiv's own theme set, and the paper loaded again under them */
+  const underThemes = async (extension, arxiv) => {
+    await setTheme(extension)
+    await page.evaluate(theme => localStorage.setItem('ar5iv_theme', theme), arxiv)
+    await page.reload({ waitUntil: 'load' })
+    await sleep(4000)
+  }
+  /** The dock's mark, the main button's ground, and the chrome as the dock resolves it (a probe given it as its colour) */
+  const buttonLook = () => page.evaluate(() => {
+    const root = document.querySelector('.axt-floating').shadowRoot
+    const dock = root.querySelector('.axt-fb-dock')
+    const probe = document.createElement('i')
+    probe.style.color = 'var(--axt-chrome)'
+    dock.append(probe)
+    const chrome = getComputedStyle(probe).color
+    probe.remove()
+    return { mark: dock.dataset.axtTheme ?? 'system', ground: getComputedStyle(root.querySelector('.axt-fb-main')).backgroundColor, chrome }
+  })
+  await underThemes('dark', 'light')
+  const dark = await buttonLook()
+  // the light appearance under a dark system too: the dock's light mark must win over the host's system-dark block
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await underThemes('light', 'dark')
+  const light = await buttonLook()
+  await page.emulateMedia({ colorScheme: 'light' })
+  await setTheme('system')
+  await sleep(1500)
+  const system = await buttonLook()
+  check('the button draws in the extension\'s appearance, not the paper\'s nor the system\'s: dark on arXiv\'s light theme, light on its dark one, the system\'s when the appearance is',
+    dark.mark === 'dark' && dark.ground === dark.chrome && light.mark === 'light' && light.ground === light.chrome && dark.ground !== light.ground
+      && system.mark === 'system' && system.ground === light.ground,
+    JSON.stringify({ dark, light, system }))
+}
+
 await context.close()
 const pass = results.filter(r => r.ok).length
 console.log(`\n${pass}/${results.length} passed; screenshots in ${SHOTS}`)
