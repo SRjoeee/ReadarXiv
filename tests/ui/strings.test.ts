@@ -112,6 +112,8 @@ describe('the English pack', () => {
     const { LOCALES } = await import('@/locales')
     const texts: { path: string; text: string }[] = []
     const walk = (value: unknown, path: string) => {
+      // the search's keywords are what a reader may type, never drawn: the gate reads what is drawn
+      if (path === 'en.O.search.keywords') return
       if (typeof value === 'string') texts.push({ path, text: value })
       else if (typeof value === 'function') {
         // A sentence built from arguments: any arguments will do, the words around them are what is read

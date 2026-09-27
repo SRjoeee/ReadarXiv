@@ -74,7 +74,7 @@ export function ServiceMenu({ controller }: { controller: ReaderController }) {
             shut(pop.popover.id)
             // managing the services, or a pack to download: the settings page's (the reader downloads no pack itself)
             const item = serviceItems(config, state.pack).find(i => i.id === id)
-            if (id === MANAGE_SERVICES || item?.action) return openOptions('services')
+            if (id === MANAGE_SERVICES || item?.action) return openOptions('translate/services')
             // a service another tab deleted meanwhile is not written: the chain would take an unknown id for Microsoft
             // while the bar showed the raw id (the popup's rule; Codex on #301)
             controller.patchSettings(c => (isBuiltInService(id) || c.services.some(s => s.id === id) ? { ...c, provider: id } : c))

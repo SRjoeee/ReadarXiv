@@ -99,7 +99,7 @@ await page.goto(`https://arxiv.org/pdf/${paper}`, { waitUntil: 'load' })
   await own.goto(`https://arxiv.org/pdf/${paper}`, { waitUntil: 'load' })
   const frame = await (await own.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null))?.contentFrame()
   await frame?.waitForSelector('[data-zone="trail"] > a[aria-label="设置"]', { timeout: 30_000 }).catch(() => null)
-  const settingsTab = () => context.pages().find(p => p.url().endsWith('/options.html#pdf-reader'))
+  const settingsTab = () => context.pages().find(p => p.url().endsWith('/options.html#reading/pdf'))
   // the bar's own: the reading options hold a copy for a narrow window, hidden here
   await frame?.click('[data-zone="trail"] > a[aria-label="设置"]')
   for (let i = 0; i < 50 && !settingsTab(); i++) await sleep(200)

@@ -3,13 +3,16 @@
 // page under test to see the change reloads that page or waits for its own signal.
 import { setTimeout as sleep } from 'node:timers/promises'
 
-/** The section names of the left navigation */
-export const SECTIONS = { services: '翻译服务', reading: '阅读', prompts: '提示词与术语', data: '数据' }
+/**
+ * The sidebar's sections (the redesign's design, §6.1), and the names the suites used before it: the services and the
+ * prompts are the translation section's now
+ */
+export const SECTIONS = { translate: '翻译', appearance: '外观', reading: '阅读', data: '数据', services: '翻译', prompts: '翻译' }
 
 export async function openOptions(context, extId) {
   const options = await context.newPage()
   await options.goto(`chrome-extension://${extId}/options.html`)
-  await options.getByRole('button', { name: SECTIONS.services, exact: true }).waitFor({ timeout: 10_000 })
+  await options.getByRole('button', { name: SECTIONS.translate, exact: true }).waitFor({ timeout: 10_000 })
   return options
 }
 

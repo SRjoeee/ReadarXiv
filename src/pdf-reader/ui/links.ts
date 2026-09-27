@@ -2,6 +2,6 @@
 // (the reader's design, §5): the settings page at its PDF reader section, and the way back to the browser's viewer
 import { browser } from 'wxt/browser'
 
-export const settingsUrl = () => (browser.runtime.getURL as (p: string) => string)('/options.html#pdf-reader')
+export const settingsUrl = () => (browser.runtime.getURL as (p: string) => string)('/options.html#reading/pdf')
 /** the page the reader lies over takes it away (pdf.content.ts) */
 export const leaveReader = () => parent.postMessage({ type: 'axt-pdf-reader-close' }, 'https://arxiv.org')

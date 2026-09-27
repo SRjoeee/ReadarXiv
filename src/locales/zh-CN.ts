@@ -123,7 +123,33 @@ const S = {
 
 const O = {
   title: '设置',
-  nav: { services: '翻译服务', reading: '阅读', 'pdf-reader': 'PDF 阅读器', prompts: '提示词与术语', data: '数据' },
+  /** The four sections of the sidebar (the redesign's design, §6.1); their hashes are these ids */
+  sections: { translate: '翻译', appearance: '外观', reading: '阅读', data: '数据' },
+  search: {
+    placeholder: '搜索设置',
+    clear: '清空搜索',
+    found: (n: number) => `找到 ${n} 项设置`,
+    none: (q: string) => `没有与「${q}」匹配的设置`,
+    /** A few words each row answers to besides its own (§6.1: the interface language answers to “language” too) */
+    keywords: {
+      'translate/services': '服务 模型 LLM 接口 API Key',
+      'translate/fallback': '失效 额度 断网 备用',
+      'translate/language': '语言 翻译成 language',
+      'translate/prompts': 'prompt 指令 消息',
+      'translate/glossary': '术语 词汇 glossary',
+      'appearance/theme': '主题 深色 浅色 夜间 theme dark',
+      'appearance/styles': '颜色 下划线 模糊 字体',
+      'appearance/highlight': '悬停 句子 背景',
+      'reading/way': '提前 用量 按需 整篇',
+      'reading/images': '图片 图 figure',
+      'reading/open-in': '标签页 打开 tab',
+      'reading/floating': '悬浮 按钮 贴边',
+      'reading/pdf': 'PDF 阅读器 查看器',
+      'data/cache': '缓存 清空 存储',
+      'data/diagnostics': '日志 反馈 导出',
+      'language/ui': 'language Interface 语言 界面',
+    },
+  },
   /** S-O-05: the interface language. Not the target language, so it sits under the navigation, away from it */
   uiLanguage: '界面语言',
   uiLanguageAuto: '跟随浏览器',

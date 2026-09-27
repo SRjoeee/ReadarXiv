@@ -116,7 +116,31 @@ const S: Locale['S'] = {
 
 const O: Locale['O'] = {
   title: 'Settings',
-  nav: { services: 'Services', reading: 'Reading', 'pdf-reader': 'PDF reader', prompts: 'Prompts', data: 'Data' },
+  sections: { translate: 'Translation', appearance: 'Appearance', reading: 'Reading', data: 'Data' },
+  search: {
+    placeholder: 'Search settings',
+    clear: 'Clear search',
+    found: n => (n === 1 ? '1 setting found' : `${n} settings found`),
+    none: q => `No settings match “${q}”`,
+    keywords: {
+      'translate/services': 'service model LLM API key endpoint',
+      'translate/fallback': 'expired quota offline backup',
+      'translate/language': 'language into',
+      'translate/prompts': 'prompt instructions message',
+      'translate/glossary': 'terms glossary vocabulary',
+      'appearance/theme': 'theme dark light night',
+      'appearance/styles': 'colour color underline blur',
+      'appearance/highlight': 'hover sentence band',
+      'reading/way': 'preload usage demand whole',
+      'reading/images': 'figure picture image',
+      'reading/open-in': 'tab open',
+      'reading/floating': 'floating button edge',
+      'reading/pdf': 'PDF reader viewer',
+      'data/cache': 'cache clear storage',
+      'data/diagnostics': 'log report export',
+      'language/ui': 'language interface',
+    },
+  },
   uiLanguage: 'Interface language',
   uiLanguageAuto: 'Follow the browser',
   fallbackWhy: {
