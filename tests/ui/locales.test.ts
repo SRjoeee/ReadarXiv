@@ -44,7 +44,7 @@ describe('locale packs', () => {
 
   it('no placeholder English sentences left in the Chinese pack (brand names, protocol words and examples excepted)', () => {
     // Sentences assembled from parameters alone excepted: called with placeholders their result is naturally all English
-    const allowed = /^(S\.brand|S\.service\.(llm|microsoft|google|chrome)|O\.services\.(apiKey|namePlaceholder|baseURLHint)|O\.reading\.previewSource|S\.setup\.step1|S\.setup\.step1Hint|O\.fallbackWhy\.invalid)/
+    const allowed = /^(S\.brand|S\.service\.(llm|microsoft|google|chrome)|S\.find\.paper|O\.services\.(apiKey|namePlaceholder|baseURLHint)|O\.reading\.previewSource|S\.setup\.step1|S\.setup\.step1Hint|O\.fallbackWhy\.invalid)/
     for (const [path, text] of leaves(LOCALES['zh-CN'])) {
       if (allowed.test(path) || text === '') continue
       // A Chinese copy string of pure ASCII can hardly be anything but forgotten
@@ -83,7 +83,7 @@ describe('locale packs', () => {
       for (const [path, text] of leaves(derivePopupView(f.input))) {
         // A language's own name is meant to be in its own script — 「Japanese (日本語)」 — and the
         // sample sentence is a sample of a translation
-        if (path.includes('previewTarget') || path.includes('hint') || path.startsWith('language') || path.startsWith('menu.items')) continue
+        if (path.includes('previewTarget') || path.includes('hint') || path.startsWith('language') || path.startsWith('menus.')) continue
         expect(HAN.test(text), `${f.id} ${path}: ${text}`).toBe(false)
       }
     }

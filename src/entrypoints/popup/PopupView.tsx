@@ -12,7 +12,7 @@ import { Segmented } from '@/ui/Segmented'
 import { MODE_ORDER, S } from '@/ui/strings'
 import { Switch } from '@/ui/Switch'
 import type { PopupActions } from './data'
-import type { MenuKind, PopupView as View } from './view-model'
+import type { MenuKind, MenuView, PopupView as View } from './view-model'
 import { Settings } from 'lucide'
 import { LucideIcon } from '@/ui/LucideIcon'
 
@@ -45,8 +45,8 @@ export function PopupView({ view, error, actions }: { view: View; error: string 
         </button>
       </header>
 
-      {view.empty ? (
-        <p className={`${CARD} p-3.5 leading-relaxed text-fg-2`}>{S.notArxiv}</p>
+      {view.kind === 'pending' || view.kind === 'loading' || view.kind === 'find' ? (
+        view.kind !== 'pending' && <p className={`${CARD} p-3.5 leading-relaxed text-fg-2`}>{view.kind === 'loading' ? S.loading : S.find.lead}</p>
       ) : (
         <>
           <section className={CARD}>
@@ -116,7 +116,8 @@ function Bubble({ tone = 'alert', children }: { tone?: 'alert' | 'neutral'; chil
 
 /** A row that opens a menu under itself. Big: label above the value. Compact: label left, value right */
 function MenuRow({ kind, label, row, view, actions, compact = false, last = false }: { kind: MenuKind; label: string; row: { value: string; replaced?: string }; view: View; actions: PopupActions; compact?: boolean; last?: boolean }) {
-  const open = view.menu?.kind === kind
+  const open = view.menu === kind
+  const menu = view.menus?.[kind] ?? null
   const anchor = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   // The value is truncated when it is long — a language's full name runs to "Simplified Mandarin
@@ -152,13 +153,13 @@ function MenuRow({ kind, label, row, view, actions, compact = false, last = fals
           </>
         )}
       </button>
-      {open && view.menu && (
+      {open && menu && (
         <Menu
           anchor={anchor}
           trigger={trigger}
-          items={view.menu.items}
-          label={view.menu.label}
-          search={view.menu.search}
+          items={oldItems(menu.items)}
+          label={menu.label}
+          search={menu.search}
           searchPlaceholder={S.menu.searchLanguages}
           empty={S.menu.noMatch}
           onSelect={id => {
@@ -183,7 +184,8 @@ function MenuRow({ kind, label, row, view, actions, compact = false, last = fals
  * closes the menu while a click on either switch closes it and still toggles the switch.
  */
 function ReadingRow({ view, actions }: { view: View; actions: PopupActions }) {
-  const open = view.menu?.kind === 'style'
+  const open = view.menu === 'style'
+  const menu = view.menus?.style ?? null
   const anchor = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   return (
@@ -206,12 +208,12 @@ function ReadingRow({ view, actions }: { view: View; actions: PopupActions }) {
           <Chevron up={open} />
         </button>
       )}
-      {open && view.menu && (
+      {open && menu && (
         <Menu
           anchor={anchor}
           trigger={trigger}
-          items={view.menu.items}
-          label={view.menu.label}
+          items={oldItems(menu.items)}
+          label={menu.label}
           search={false}
           empty={S.menu.noMatch}
           onSelect={actions.chooseStyle}
@@ -236,3 +238,6 @@ function SideIcon() {
 function OnlyIcon() {
   return <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5" fill="currentColor" /><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5" stroke="var(--axt-card)" strokeWidth="1.6" strokeLinecap="round" /></svg>
 }
+
+/** The old menu's rows (`@/ui/Menu`), until Task 35 draws the shared menu list */
+const oldItems = (items: MenuView['items']) => items.map(({ checked, ...item }) => ({ ...item, selected: !!checked }))
