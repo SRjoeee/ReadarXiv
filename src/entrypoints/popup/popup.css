@@ -74,3 +74,29 @@
 .popup .line.alert > svg { color: var(--danger); }
 .popup .stack > .line.alert { margin-top: -8px; }
 @media (prefers-reduced-motion: reduce) { .popup .tbtn { transition: none; } }
+
+/* P0 (§5.4, round 6): the sentence, the field, what Enter will do — on the controls' edge, 8 px apart, 14 px from the foot */
+.popup .find { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 14px; }
+.popup .find-field { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: 9px; background: var(--group); color: var(--ink-2); box-shadow: inset 0 0 0 0.5px var(--chrome-line); cursor: text; }
+/* focused, its edge; the ring the keyboard's alone (§9, controls/modality.ts): a field clicked shows its edge, not a ring */
+.popup .find-field:focus-within { background: var(--field); box-shadow: inset 0 0 0 1px var(--ink-3); color: var(--ink); }
+html:not([data-axt-pointer]) .popup .find-field:focus-within { outline: 2px solid var(--focus); outline-offset: 0; }
+.popup .find-field > svg { flex: none; }
+.popup .find-field > input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; color: var(--ink); font: 13px var(--font); }
+.popup .find-field > input:focus-visible { outline: none; }
+.popup .find-field > input::placeholder { color: var(--ink-2); }
+.popup .found { display: flex; flex-direction: column; gap: 8px; }
+.popup .found a { color: var(--ink); text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--ink) 30%, transparent); text-underline-offset: 2px; }
+/* what Enter does: a row of the field's height; the brand's for a paper's page, its id told apart by weight (§5.4) */
+.popup .go { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 0 10px; border-radius: 9px; background: var(--group-hover); color: var(--ink); text-align: start; font-size: 12.5px; transition: scale 150ms ease-out; }
+.popup .go:active { scale: 0.96; }
+.popup .go > svg { flex: none; }
+.popup .go.brand { background: var(--brand); color: var(--on-brand); }
+.popup .go-label { flex: none; font-weight: 500; }
+.popup .go-id, .popup .go-words { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.popup .go-id { font-weight: 400; font-variant-numeric: tabular-nums; }
+.popup .go.brand .go-id { color: var(--on-brand-2); }
+.popup .go.brand kbd { background: var(--brand-chip); color: var(--on-brand); }
+.popup .paper { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ink-2); font-size: 12.5px; }
+.popup .paper > b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .popup .go { transition: none; } }

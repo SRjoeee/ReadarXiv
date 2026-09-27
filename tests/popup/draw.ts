@@ -5,17 +5,23 @@ import type { PopupActions } from '@/entrypoints/popup/data'
 import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
 import { PopupView } from '@/entrypoints/popup/PopupView'
 import { derivePopupView } from '@/entrypoints/popup/view-model'
+import type { PopupInput } from '@/entrypoints/popup/view-model'
 import { mountElement } from '../ui/render-hook'
 
 const ACTIONS = ['translate', 'openHtml', 'openPdf', 'readerTranslate', 'readerOriginal', 'retranslate', 'restore', 'chooseMode', 'retryFailed', 'openMenu', 'closeMenu', 'chooseService', 'chooseLanguage', 'choosePrompt', 'chooseStyle', 'setHighlight', 'setImages', 'downloadPack', 'openOptions', 'setQuery', 'openLink'] as const satisfies readonly (keyof PopupActions)[]
 
 export const fixture = (id: string) => POPUP_FIXTURES.find(f => f.id === id)!
 
-export async function draw(id: string) {
+/** The popup drawn straight from an input, for a state no fixture names — an override on one's, as view-model.test.ts makes one inline */
+export async function drawInput(input: PopupInput, error: string | null = null) {
   const actions = Object.fromEntries(ACTIONS.map(name => [name, vi.fn()])) as Record<(typeof ACTIONS)[number], Mock>
-  const f = fixture(id)
-  const mounted = await mountElement(createElement(PopupView, { view: derivePopupView(f.input), error: f.error ?? null, actions: actions as unknown as PopupActions }))
+  const mounted = await mountElement(createElement(PopupView, { view: derivePopupView(input), error, actions: actions as unknown as PopupActions }))
   return { ...mounted, actions, main: mounted.container.querySelector('main')! }
+}
+
+export async function draw(id: string) {
+  const f = fixture(id)
+  return drawInput(f.input, f.error ?? null)
 }
 
 /** A button's name as assistive technology reads it here: its label, or its words */

@@ -448,7 +448,8 @@ describe('P0 and the moments before it (the redesign\'s design, §5.4)', () => {
   it('a paper named: its line at once, its two entries once both checks are back, a greyed one said as P17 says it', () => {
     expect(view('P0d').find?.found).toEqual({ kind: 'paper', paper: 'arXiv 2501.07202v1', entries: null, note: null })
     expect(view('P0e').find?.found).toMatchObject({ entries: { html: { label: 'HTML 翻译', href: 'https://arxiv.org/html/2501.07202v1#readarxiv' }, pdf: { label: 'PDF 翻译', href: 'https://arxiv.org/pdf/2501.07202v1#readarxiv' } }, note: null })
-    expect(view('P0f').find?.found).toMatchObject({ entries: { html: { href: null } }, note: 'arXiv 没有这篇论文的 HTML 版本' })
+    // the note's tone is P17's own (noHtmlNote): info here, its PDF entry beside it still working (Task 36's fix, carried from Task 33's review)
+    expect(view('P0f').find?.found).toMatchObject({ entries: { html: { href: null } }, note: { text: 'arXiv 没有这篇论文的 HTML 版本', tone: 'info' } })
     // an answer about another paper is not this one's
     expect(derivePopupView({ ...input('P0e'), find: { ...input('P0e').find, query: 'hep-th/9711200' } }).find?.found).toMatchObject({ entries: null })
   })

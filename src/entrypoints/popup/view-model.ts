@@ -91,8 +91,11 @@ export type Found =
   | { kind: 'open'; format: 'pdf' | 'html'; label: string; paper: string; href: string }
   /** words: arXiv's own search */
   | { kind: 'search'; label: string; href: string }
-  /** a paper named by its abstract address, its id or its DOI: its line, and its two entries once both checks are back */
-  | { kind: 'paper'; paper: string; entries: { html: FoundEntry; pdf: FoundEntry } | null; note: string | null }
+  /**
+   * a paper named by its abstract address, its id or its DOI: its line, and its two entries once both checks are back.
+   * `note`'s tone is P17's own (`noHtmlNote`): alert with neither entry offered, info with the PDF entry still working
+   */
+  | { kind: 'paper'; paper: string; entries: { html: FoundEntry; pdf: FoundEntry } | null; note: Pick<Note, 'text' | 'tone'> | null }
   /** a link that is not an arXiv paper's: said, and Enter does nothing */
   | { kind: 'elsewhere'; text: string }
 
@@ -364,7 +367,7 @@ function findView(input: PopupInput): NonNullable<PopupView['find']> {
             pdf: { label: S.entry.pdf, href: canStart ? answer.pdf : null },
           },
           // a greyed entry says why as P17's does (S-P-50b): the HTML version's absence, in full when there is no PDF either
-          note: answer?.html === null ? noHtmlNote(answer.pdf).text : null,
+          note: answer?.html === null ? noHtmlNote(answer.pdf) : null,
         },
       }
     }

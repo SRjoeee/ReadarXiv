@@ -13,6 +13,7 @@ import { useTip } from '@/ui/controls/tip'
 import { MODE_ORDER, R, S } from '@/ui/strings'
 import type { PopupActions } from './data'
 import { Entries } from './ui/Entries'
+import { Find } from './ui/Find'
 import { MenuRow, StyleButton } from './ui/menu'
 import { ModeIcon } from './ui/ModeIcon'
 import { Note } from './ui/Note'
@@ -24,7 +25,7 @@ export function PopupView({ view, error, actions }: { view: View; error: string 
     <main className="ui popup" data-kind={view.kind}>
       <BrandRow onSettings={() => actions.openOptions()} />
       {view.kind === 'loading' && <p className="line solo">{S.loading}</p>}
-      {view.kind === 'find' && <div className="find"><p className="line">{S.find.lead}</p></div>}
+      {view.kind === 'find' && view.find && <Find find={view.find} failure={failure} actions={actions} />}
       {(view.kind === 'paper' || view.kind === 'entry' || view.kind === 'reader') && <Controls view={view} failure={failure} actions={actions} />}
       {/* a failed action said to screen readers, politely (§9: nothing is assertive); its line is drawn in place */}
       <div role="status" className="sr-only">{failure}</div>
