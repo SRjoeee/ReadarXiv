@@ -1494,7 +1494,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await options.reload({ waitUntil: 'domcontentloaded' })
   await chooseUiLanguage(options, '界面语言', 'English')
   const nav = (await options.locator('nav').innerText()).replace(/\n+/g, ' ')
-  check('the settings page follows the interface language into English', /Services/.test(nav) && !/翻译服务/.test(nav), nav.slice(0, 60))
+  check('the settings page follows the interface language into English', /Translation/.test(nav) && !/翻译/.test(nav), nav.slice(0, 60))
 
   // The popup and the paper page read the same configuration: all three have to follow, not the settings page alone
   const enPopup = await context.newPage()
@@ -1508,7 +1508,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await options.bringToFront()
   await chooseUiLanguage(options, 'Interface language', '简体中文')
   const back = await options.locator('nav').innerText()
-  check('switched back to Chinese, the settings page follows back too', /翻译服务/.test(back), back.replace(/\n+/g, ' ').slice(0, 40))
+  check('switched back to Chinese, the settings page follows back too', /翻译/.test(back), back.replace(/\n+/g, ' ').slice(0, 40))
 }
 
 await context.close()

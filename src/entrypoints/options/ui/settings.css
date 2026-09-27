@@ -149,3 +149,12 @@
 @media (prefers-reduced-motion: reduce) { .o-nav-item { transition: none; } }
 /* forced colours drop the raised ground: the current section is outlined in the system's Highlight (§9) */
 @media (forced-colors: active) { .o-nav-item[aria-current] { outline: 1px solid Highlight; outline-offset: -1px; } }
+
+/* ---- Task 53: the interface language at the sidebar's foot; popovers opening upward or at a row's end ---- */
+@layer components {
+  .o-lang { margin-top: auto; }
+  .o-lang-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pop.o-up { margin: 0 0 6px; position-area: top span-right; position-try-fallbacks: top span-left, bottom span-right; transform-origin: bottom left; }
+  .pop.o-end { position-area: bottom span-left; position-try-fallbacks: top span-left; transform-origin: top right; }
+  @media (width < 640px) { .o-lang { margin-top: 8px; } }
+}

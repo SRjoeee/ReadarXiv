@@ -12,6 +12,7 @@ import { O, fallbackText } from '@/ui/strings'
 import { type OptionsData, useOptionsData } from './data'
 import { type Place, SECTIONS, type Section, parseHash, reach } from './hash'
 import { Data } from './sections/Data'
+import { LanguageFoot, LanguageRow } from './sections/Language'
 import { PdfReader } from './sections/PdfReader'
 import { Prompts } from './sections/Prompts'
 import { Reading } from './sections/Reading'
@@ -66,7 +67,8 @@ export function App({ content = CONTENT }: { content?: Content }) {
     setQuery('')
     field.current?.focus()
   }
-  const shown = q ? sections : [current]
+  // while searching, every section — and, after the appearance section, the interface language's own row (settings-2's order)
+  const shown: (Section | 'language')[] = !q ? [current] : unreadable ? ['data'] : ['translate', 'appearance', 'language', 'reading', 'data']
   return (
     <div className="ui o-frame">
       <aside className="o-side">
@@ -85,6 +87,7 @@ export function App({ content = CONTENT }: { content?: Content }) {
             </button>
           ))}
         </nav>
+        {!unreadable && <LanguageFoot data={data} />}
       </aside>
       <main ref={main} className="o-main" data-searching={q ? '' : undefined}>
         <div className="o-column">
@@ -92,8 +95,8 @@ export function App({ content = CONTENT }: { content?: Content }) {
           <SearchQuery.Provider value={q}>
             {shown.map(id => (
               <section key={id} className="o-section" data-section={id}>
-                <h1 className="o-title">{O.sections[id]}</h1>
-                {content[id](data)}
+                <h1 className="o-title">{id === 'language' ? O.uiLanguage : O.sections[id]}</h1>
+                {id === 'language' ? <LanguageRow data={data} /> : content[id](data)}
               </section>
             ))}
           </SearchQuery.Provider>

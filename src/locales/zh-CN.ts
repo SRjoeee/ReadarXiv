@@ -153,6 +153,10 @@ const O = {
   /** S-O-05: the interface language. Not the target language, so it sits under the navigation, away from it */
   uiLanguage: '界面语言',
   uiLanguageAuto: '跟随浏览器',
+  /** §6.1: the foot row's name — a reader who cannot read this interface is the one looking for it */
+  uiLanguageName: '界面语言 · Interface language',
+  /** the row a search shows for it */
+  uiLanguageElsewhere: '也在左下角',
   /** The second half of the notice shown when the settings cannot be read (config/storage.ts reports the cause, not a sentence) */
   fallbackWhy: {
     tooNew: (stored: number, supported: number) => `存储里的配置是 v${stored}，这个版本只认到 v${supported}（可能装过更新的版本）`,
