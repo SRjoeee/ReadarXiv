@@ -130,6 +130,7 @@ const O: Locale['O'] = {
   fallbackReset: 'Reset settings',
   fallbackResetConfirm: 'Confirm reset',
   fallbackResetFailed: 'The reset did not go through. Try again',
+  undo: { deleted: name => `Deleted “${name}”`, undo: 'Undo' },
   services: {
     issue: (field, message) => `${field}: ${FIELD[String(field).split('.').pop() ?? ''] ?? message}`,
     issueSeparator: '; ',

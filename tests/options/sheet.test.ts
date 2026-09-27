@@ -30,6 +30,7 @@ describe('the settings page\'s sheet', () => {
     for (const name of new Set(motions)) expect(SHEET.includes(`@keyframes ${name}`), name).toBe(true)
     expect(reduced).toContain('.o-arrive')
     expect(reduced).toContain('.o-swap')
+    expect(reduced).toContain('[data-arriving]')
     // the reader's words-in is Part 3's (controls.css): used here, never defined again
     expect(SHEET).toContain('animation: words-in 180ms ease-out')
     expect(SHEET).not.toContain('@keyframes words-in')

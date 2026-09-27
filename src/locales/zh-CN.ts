@@ -140,6 +140,8 @@ const O = {
   fallbackReset: '重置设置',
   fallbackResetConfirm: '确认重置',
   fallbackResetFailed: '重置没有成功，请再试一次',
+  /** §6.2: deleting is undone, not confirmed — the row gives way to this for 5 s */
+  undo: { deleted: (name: string) => `已删除「${name}」`, undo: '撤销' },
   services: {
     /** One validation failure of the drawer's form, and what joins several, in this language's punctuation */
     issue: (field: string, message: string) => `${field}：${FIELD[String(field).split('.').pop() ?? ''] ?? `不合法（${message}）`}`,
