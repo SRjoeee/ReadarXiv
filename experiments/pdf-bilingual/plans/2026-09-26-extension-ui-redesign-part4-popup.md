@@ -201,7 +201,7 @@ Expected: `pnpm install` exits 0 (it runs `wxt prepare`); `experiments/pdf-bilin
 // measured against that record, and a median more than 10 % and 4 ms slower fails. Build first; the panel needs the
 // network (arXiv).
 //   node tests/e2e/probes/popup-first-paint.mjs [--baseline]
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -230,7 +230,10 @@ const firstPaint = target => target.evaluate(() => new Promise(resolve => {
   wait()
 }))
 
-const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'popup-first-paint-')), {
+const profile = mkdtempSync(join(tmpdir(), 'popup-first-paint-'))
+// the profile goes when the process ends, a failure's throw included (a profile a run once filled the disk)
+process.on('exit', () => rmSync(profile, { recursive: true, force: true }))
+const context = await chromium.launchPersistentContext(profile, {
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: true,
   viewport: { width: 1280, height: 800 },
@@ -3580,7 +3583,7 @@ In `package.json`, after `"e2e:floating": "node tests/e2e/floating-button.mjs",`
 // floating button's panel growing with a menu. The alignment of every state is the probe's
 // (tests/e2e/probes/popup-align.mjs). Needs the network: arXiv.
 //   pnpm build && pnpm e2e:popup
-import { mkdirSync, mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -3603,7 +3606,10 @@ const check = (name, ok, detail) => {
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const near = (a, b) => Math.abs(a - b) <= 0.5
 
-const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'popup-e2e-')), {
+const profile = mkdtempSync(join(tmpdir(), 'popup-e2e-'))
+// the profile goes when the process ends, a failure's throw included (a profile a run once filled the disk)
+process.on('exit', () => rmSync(profile, { recursive: true, force: true }))
+const context = await chromium.launchPersistentContext(profile, {
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: !process.env.AXT_HEADED,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
@@ -3854,7 +3860,7 @@ process.exit(failed.length ? 1 : 0)
 // fixture is shot at 2x (200 %) into experiments/pdf-bilingual/out/popup/, the menus open too. Prints what is off and
 // exits 1 if anything is. The gallery is in development builds only (wxt.config.ts DEV_PAGES):
 //   pnpm exec wxt build --mode development && node tests/e2e/probes/popup-align.mjs
-import { existsSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -3868,7 +3874,10 @@ const GALLERY = join(EXT, 'gallery.html')
 if (!existsSync(GALLERY) || readFileSync(GALLERY, 'utf8').includes('localhost')) throw new Error('no gallery: pnpm exec wxt build --mode development first')
 mkdirSync(OUT, { recursive: true })
 
-const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'popup-align-')), {
+const profile = mkdtempSync(join(tmpdir(), 'popup-align-'))
+// the profile goes when the process ends, a failure's throw included (a profile a run once filled the disk)
+process.on('exit', () => rmSync(profile, { recursive: true, force: true }))
+const context = await chromium.launchPersistentContext(profile, {
   channel: 'chromium', headless: true, deviceScaleFactor: 2, reducedMotion: 'reduce', viewport: { width: 1200, height: 900 },
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
 })
