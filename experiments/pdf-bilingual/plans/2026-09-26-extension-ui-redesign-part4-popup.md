@@ -4097,3 +4097,58 @@ git commit -m "docs(plan): Part 4's record
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
+
+## Part 4: done
+
+Executed task by task (an implementer and a reviewer per task, fix rounds where a review asked, the controller's look at
+the shots), 2026-09-27, in `.worktrees/redesign-popup` on `exp/ui-popup`, branched from 56d02f2d.
+
+**Commits** (`56d02f2d..`): 2c9da571 the first-paint probe (30) · 545427bb it removes its profile (30's fix) · 91ebc041
+P0's reading of a line, the entry checks shared (31) · 1d606fa9 the popup's state (32) · 87c64942 the view model (33) ·
+df868560 the retranslate cue reads every hand-over, P0's entries greyed as P17's (33's fix) · 5e0af389 the menus (34) ·
+0a922e28 a menu closed by Escape closes once, through its popover (34's fix) · 8e631e1d the popup drawn from round 6 (35)
+· 55dfc5c9 P0 (36) · 0438c0c8 P0 says what it understood in a polite status, and takes the focus (36's fix) · 627cfda3
+the browser suites on the new controls (37) · d2347a69 the placeholders probe too (37, the controller) · a42fb4ff the
+popup suite and the alignment probe (38) · 80e8df56 and 047d3129 the reviews' parked minors · and this record.
+
+**Checks** at 80e8df56 (and the fix at 047d3129 is a runtime guard only): the gate; the alignment probe all `ok` in both
+themes and languages, at rest and hovered, and with the service, download, language, prompt and style menus open — no
+item off its row's centre by more than 0.5 px, no edge but 12 and 24; `reader-pixels` 24 × ok; `reader-ui` 71 × ok;
+`entries.mjs` ok; `pnpm e2e:popup` 20/20, `pnpm e2e` 71/71, `e2e:pdf` 26/26, `e2e:floating` 20/20, `e2e:a11y` 5/5,
+`e2e:layout` 31/31, `e2e:image` 18/18, `e2e:placeholders` 14/14 shapes (Google, its default engine).
+
+**The first paint.** Against Task 30's recorded baseline (toolbar 36, panel 52 ms) under the parallel parts' load, the
+toolbar read 44.0 ms (a FAIL by 0.4 ms of the 43.6 threshold) and the panel 58.0 (ok). Interleaved A/B, the two builds
+back to back with the other parts idle (ten-run medians per round): toolbar before 36 / 38 / 42, after 68 / 36 / 40
+(68 the new build's first launch); panel before 52 / 52 / 46, after 54 / 44 / 48 — medians of the rounds 38 against 40
+and 52 against 48, within the noise. No regression is confirmed; the definitive quiet measurement is Part 7's Task 102.
+The menus' rows are drawn after the first frame (`usePainted`), so the language list is not in it.
+
+**The look** (the shots in `experiments/pdf-bilingual/out/popup/`, 2x, beside round 6 and round 4): P0 with its lead
+above the field (the design's order and popup-decisions, over round 6's shot, ruling 14), the PDF address's brand row
+with its id readable in both themes; P9 / P13's pair of equal widths, the brand first, the key's chip on 重新翻译 only;
+P17's two entries; the English foot on one row; long values cut with their chevron kept; the note's icon on its first
+line; every menu inside its frame, the style menu above the foot — as the prototypes. Two decisions of the controller's,
+for the maintainer's look in Part 7: P0's field takes the focus when P0 opens (the design does not say; P0's one purpose
+is the field, as in the launchers the maintainer names as benchmarks); P0 draws the no-entry sentence as P17 does (a
+note in the alert tone).
+
+**Otherwise than planned:** the retranslate cue reads every hand-over in `demotions`, not the last (33's review); P0's
+entries are greyed by `canStart` as P17's; a menu's `onClose` goes through its popover (the reader's `shut()` pattern);
+P0's understanding is echoed in a hidden polite status, not a status role on its buttons; the probes open the gallery's
+menus by clicking (StrictMode closes a menu a fixture starts open, in development only).
+
+**The local review** (Codex, adversarial, `--base 56d02f2d`): one finding, declined — the popup awaits the refused-key
+record before its first render (an unbounded read); the read is caught and runs beside `prepareFirstPaint`, whose
+`getConfig()` is the same unbounded storage read, so it adds no failure mode; bounding the pages' first-paint reads is a
+question for the pages' design, not this part.
+
+**What the parts after it carry.** Part 6 finished before this record: the key ⌥T doing the retranslate cue too
+(`shared/page-action.ts`, for every door) was not in its plan — Part 7 takes it; the reader's service menu reading the
+record was Part 6's Task 74. Part 7: UI.md's rows (S-P-03 replaced by P0's words; §4's new states PW / PL / P0a–g / P6b /
+P8b / PR / PE; the cue using P13's pair without words of its own; S-P-48 and S-P-83's deep links and 管理提示词…; S-P-53
+as the pair's second button, 显示原文; S-P-90 said politely; P0's focus and its status); the popup no longer uses
+`src/ui/{Menu,Segmented,Switch,Button,LucideIcon,BrandMark}` while the view model still reads `styleTile` from
+`src/ui/appearance/tiles` (ruling 23: moved, not deleted); the gallery's `transform-gpu` comment no longer holds (the
+menus are in the top layer); `tests/e2e/probes/align.mjs` reports nothing for a selector that matches nothing — make that
+a failure before Part 7's verification; the first paint's definitive measurement (Task 102).
