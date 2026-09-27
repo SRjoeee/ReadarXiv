@@ -36,12 +36,28 @@ export const SYNC_TEX = String.raw`\makeatletter
 \makeatother
 `
 
-/** a unit's line count and leading at its paragraph's end, in the log. Through \message: \typeout reads \prevgraf as 0 */
-export const LINES_TEX = String.raw`\protected\def\axtlines#1{\ifdefined\AddToHookNext\AddToHookNext{para/after}{\message{^^JAXT-LINES #1 \the\prevgraf\space\the\baselineskip^^J}}\fi}
+/** a unit's line count and leading at its paragraph's end, in the log. Through \message: \typeout reads \prevgraf as 0.
+ *  The unit's own paragraph, found by the group level the unit began at: a paragraph ending deeper is either the
+ *  unit's, ended inside an environment's group (\begin{itemize} right after it), or one inside the unit (a footnote's).
+ *  Which, the level it comes back to tells (\aftergroup): still in horizontal mode, the unit goes on and the next
+ *  paragraph end at its level is its own; in vertical mode, the one that ended was. A level below the unit's means its
+ *  group closed with no paragraph (a caption measured in a box). */
+export const LINES_TEX = String.raw`\makeatletter
+\def\axt@linesat#1#2{\ifnum\currentgrouplevel=#2 \message{^^JAXT-LINES #1 \the\prevgraf\space\the\baselineskip^^J}\else\ifnum\currentgrouplevel>#2 \expandafter\xdef\csname axt@lg@#1\endcsname{\the\prevgraf\space\the\baselineskip}\expandafter\gdef\csname axt@lr@#1\endcsname{\axt@linesback{#1}{#2}}\expandafter\aftergroup\csname axt@lr@#1\endcsname\fi\fi}
+\def\axt@linesback#1#2{\ifnum\currentgrouplevel>#2 \expandafter\aftergroup\csname axt@lr@#1\endcsname\else\ifnum\currentgrouplevel=#2 \ifhmode\AddToHookNext{para/after}{\axt@linesat{#1}{#2}}\else\message{^^JAXT-LINES #1 \csname axt@lg@#1\endcsname^^J}\fi\fi\fi}
+\protected\def\axtlines#1{\ifdefined\AddToHookNext\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@linesat{#1}{\the\currentgrouplevel}}}\axt@tmp\fi}
+\makeatother
 `
 
-/** baselines `em` × the font size inside translated units alone (or \axtlead@<unit>'s factor), the paper's after */
-export const unitLeadTex = em => String.raw`\makeatletter\protected\def\axtlead#1{\ifdefined\AddToHookNext\edef\axt@bs{\the\baselineskip}\baselineskip=\ifcsname axtlead@#1\endcsname\csname axtlead@#1\endcsname\else ` + em + String.raw`\fi\dimexpr\f@size pt\relax\AddToHookNext{para/after}{\baselineskip=\axt@bs\relax}\fi}\makeatother
+/** baselines `em` × the font size inside translated units alone (or \axtlead@<unit>'s factor), the paper's after: set
+ *  back once the unit's own paragraph is over, found as \axtlines finds it, at the level the unit began at and at every
+ *  level between (a footnote's paragraph ending first inside a unit, or a list opened right after one, left 13 pt
+ *  leading on the English after it, down to the references: 2608.02163) */
+export const unitLeadTex = em => String.raw`\makeatletter
+\def\axt@leadat#1#2#3{\ifnum\currentgrouplevel=#1 \baselineskip=#2\relax\else\ifnum\currentgrouplevel>#1 \baselineskip=#2\relax\expandafter\gdef\csname axt@lb@#3\endcsname{\axt@leadback{#1}{#2}{#3}}\expandafter\aftergroup\csname axt@lb@#3\endcsname\fi\fi}
+\def\axt@leadback#1#2#3{\ifnum\currentgrouplevel>#1 \baselineskip=#2\relax\expandafter\aftergroup\csname axt@lb@#3\endcsname\else\ifnum\currentgrouplevel=#1 \ifhmode\AddToHookNext{para/after}{\axt@leadat{#1}{#2}{#3}}\else\baselineskip=#2\relax\fi\fi\fi}
+\protected\def\axtlead#1{\ifdefined\AddToHookNext\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@leadat{\the\currentgrouplevel}{\the\baselineskip}{#1}}}\baselineskip=\ifcsname axtlead@#1\endcsname\csname axtlead@#1\endcsname\else ` + em + String.raw`\fi\dimexpr\f@size pt\relax\axt@tmp\fi}
+\makeatother
 `
 
 /** the theorem-like environments whose heads are run-in: the usual names and every \newtheorem of the paper */
