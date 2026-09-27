@@ -78,5 +78,16 @@ const [fo, fl] = [await marksOf(join(dir, 'foot-original.pdf')), await marksOf(j
 const at = (mm, k) => { const x = mm.marks.get(k); return x && `${x.page} ${mm.width && x.x >= mm.width / 2 ? 1 : 0}` }
 check('a line past the foot: the next unit starts where the original did', at(fl, '1s') === at(fo, '1s'), `${at(fl, '1s')} vs ${at(fo, '1s')}`)
 check('a line past the foot: same page count', fl.pages === fo.pages, `${fl.pages} vs ${fo.pages}`)
+
+// the same in one column, the next unit a list's first \item, before which the list's \par does nothing: \newpage
+// shipped the page and then a second one holding only the line (2608.09746, pages 8 and 9)
+const itemBody = tr => `\\noindent\\rule{0pt}{\\dimexpr\\textheight-22pt\\relax}\n\n${unit(0, tr ? 'One.\\newline Two.' : 'One.\\newline Two.\\newline Three.\\newline Four.\\newline Five.\\newline Six.', tr)}\\begin{itemize}\n\\item ${unit(1, 'The end.', tr)}\\end{itemize}\n`
+const itemDoc = (tr, tbl = '') => `${MARK_DEF}${LINES_TEX}${SYNC_TEX}${tr ? unitLeadTex(1.3) : ''}\\axtsyncpoints{theorem}\n${tbl}\n\\documentclass{article}\n\\begin{document}\n${itemBody(tr)}\\end{document}\n`
+const itemTargets = readTargets(tex('item-original', itemDoc(false)))
+const itemTable = '\\makeatletter\n' + [...itemTargets].map(([i, x]) => `\\expandafter\\def\\csname axt@t@${i}\\endcsname{{${x.page}}{${x.col}}{${x.total}pt}}`).join('\n') + '\n\\makeatother'
+tex('item-locked', itemDoc(true, itemTable))
+const [io, il] = [await marksOf(join(dir, 'item-original.pdf')), await marksOf(join(dir, 'item-locked.pdf'))]
+check('a line past the foot in a list: the next item starts where the original did', il.marks.get('1s')?.page === io.marks.get('1s')?.page, `${il.marks.get('1s')?.page} vs ${io.marks.get('1s')?.page}`)
+check('a line past the foot in a list: same page count', il.pages === io.pages, `${il.pages} vs ${io.pages}`)
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

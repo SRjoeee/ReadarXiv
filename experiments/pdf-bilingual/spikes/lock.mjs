@@ -16,13 +16,15 @@ import { FORBIDDEN_TO_WARNING, latin1, latin1Bytes, MARK_DEF, markUnits, patch, 
  * alone. \axtsyncpoints{envs} puts a point before every sectioning command, the given environments, \item and float.
  * AXT-BREAK and AXT-GAP lines record what the lock did, for the evaluation's suspicious pages. Both macros read the
  * page after \axt@settle: a line past the column's foot moves on only at the next breakpoint, so after a box a zero
- * skip (the breakpoint \parskip would have given) and \par let the page builder place it first.
+ * skip takes the place of the breakpoint \parskip would have given, and \penalty\@M, no breakpoint itself, runs the page
+ * builder (\par cannot: a list's does nothing before its first \item); a second zero skip leaves \lastskip and
+ * \lastpenalty as a box would. Never under \if@nobreak, where LaTeX wants no breakpoint.
  */
 export const SYNC_TEX = String.raw`\makeatletter
 \newcount\axt@pages \newcount\axt@rel \newcount\axt@h
 \AddToHook{shipout/after}{\global\advance\axt@pages\@ne}
 \def\axt@col{\if@twocolumn\if@firstcolumn1\else2\fi\else1\fi}
-\def\axt@settle{\ifnum\lastnodetype>0 \ifnum\lastnodetype<11 \vskip\z@\par\fi\fi}
+\def\axt@settle{\if@nobreak\else\ifnum\lastnodetype>0 \ifnum\lastnodetype<11 \vskip\z@\penalty\@M\vskip\z@\fi\fi\fi}
 \protected\def\axtat#1{\ifvmode\ifinner\else\par\axt@settle\message{^^JAXT-AT #1 \the\axt@pages\space\axt@col\space\the\pagetotal^^J}\fi\fi}
 \def\axt@cmp#1#2{\axt@rel=0 \ifnum\axt@pages<#1 \axt@rel=-1 \else\ifnum\axt@pages>#1 \axt@rel=1 \else\ifnum\axt@col<#2 \axt@rel=-1 \else\ifnum\axt@col>#2 \axt@rel=1 \fi\fi\fi\fi}
 \def\axt@step#1#2{\ifnum\axt@rel<0 \ifx\@deferlist\@empty\message{^^JAXT-BREAK \the\axt@pages^^J}\newpage\axt@cmp{#1}{#2}\else\axt@rel=2 \fi\fi}
