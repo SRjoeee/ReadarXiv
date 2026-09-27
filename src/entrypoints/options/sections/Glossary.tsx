@@ -3,12 +3,14 @@
 // of source-and-translation pairs splits them into rows. A row missing a side says so at the row once the focus has left it (today's
 // reasons, without their line numbers). The table saves the rows that are whole, and only when they fit GLOSSARY_LIMITS
 // (the schema refuses the rest, and a refused write would leave the reader looking at a glossary that is not stored,
-// Codex on #157); over the limits it says so. It follows a glossary saved elsewhere unless a row of the reader's is
-// unfinished (Codex on #185), and holds a draft while one is, while it is over the limits, or after a refused write
+// Codex on #157); over the limits it says so. A write storage or the schema refuses says so too, with a retry that
+// tries the same rows again (fix round 1, item 1). It follows a glossary saved elsewhere unless a row of the reader's
+// is unfinished (Codex on #185), and holds a draft while one is, while it is over the limits, or after a refused write
 import { X } from 'lucide'
 import { type ClipboardEvent, type FocusEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { GLOSSARY_LIMITS, configSchema } from '@/config/schema'
 import { GLOSSARY_SEPARATOR, type GlossaryEntry } from '@/providers/glossary'
+import { Button } from '@/ui/controls/Button'
 import { Icon } from '@/ui/controls/Icon'
 import { drafts } from '@/ui/drafts'
 import { O } from '@/ui/strings'
@@ -51,6 +53,11 @@ export function GlossaryTable({ data }: { data: OptionsData }) {
   const nextKey = useRef(0)
   const toLines = (entries: readonly GlossaryEntry[]): Line[] => entries.map(e => ({ key: nextKey.current++, term: e.term, translation: e.translation, left: false }))
   const [lines, setLines] = useState<Line[]>(() => toLines(config?.glossary ?? []))
+  /** the one place the rows are read from between renders: every mutation (change, leave, the store followed) writes
+   * here first, so two events before a re-render compose off each other rather than one dropping the other's work
+   * (fix round 1, item 2) */
+  const linesRef = useRef<Line[]>(lines)
+  const setRows = (next: Line[]) => { linesRef.current = next; setLines(next) }
   /** the glossary this table last wrote or last took: a stored value equal to it is not news */
   const own = useRef<readonly GlossaryEntry[]>(config?.glossary ?? [])
   /** writes not landed yet: while one is out, the store is behind the reader */
@@ -73,7 +80,7 @@ export function GlossaryTable({ data }: { data: OptionsData }) {
   useEffect(() => {
     if (!stored || same(stored, own.current) || quiet.current.pending.current > 0 || quiet.current.held) return
     own.current = stored
-    setLines(toLines(stored))
+    setRows(toLines(stored))
   }, [stored])
   useLayoutEffect(() => {
     const id = focusNext.current
@@ -84,29 +91,39 @@ export function GlossaryTable({ data }: { data: OptionsData }) {
     cell?.setSelectionRange(cell.value.length, cell.value.length)
   })
 
-  const change = (after: Line[]) => {
-    setLines(after)
+  const change = (produce: (latest: Line[]) => Line[]) => {
+    const after = produce(linesRef.current)
+    setRows(after)
     const next = entriesOf(after)
     if (same(next, own.current) || !fits(next)) return
+    const before = own.current
     own.current = next
     pending.current++
-    patch(latest => ({ ...latest, glossary: next })).then(() => setFailed(false), () => setFailed(true)).finally(() => { pending.current-- })
+    patch(latest => ({ ...latest, glossary: next })).then(
+      () => setFailed(false),
+      () => {
+        setFailed(true)
+        // a later change already moved own.current on: this attempt's failure is stale, and reverting it now
+        // would put the store behind a write that has not itself failed (fix round 1, item 1)
+        if (own.current === next) own.current = before
+      },
+    ).finally(() => { pending.current-- })
   }
-  const set = (key: number, side: Side, value: string) => change(lines.map(line => (line.key === key ? { ...line, [side]: value } : line)))
+  const set = (key: number, side: Side, value: string) => change(ls => ls.map(line => (line.key === key ? { ...line, [side]: value } : line)))
   const begin = (side: Side, value: string) => {
     const line: Line = { key: nextKey.current++, term: '', translation: '', left: false, [side]: value }
     focusNext.current = `${line.key}:${side}`
-    change([...lines, line])
+    change(ls => [...ls, line])
   }
   const remove = (key: number) => {
-    const at = lines.findIndex(line => line.key === key)
-    const neighbour = lines[at + 1] ?? lines[at - 1]
+    const at = linesRef.current.findIndex(line => line.key === key)
+    const neighbour = linesRef.current[at + 1] ?? linesRef.current[at - 1]
     cells.current.get(neighbour ? `${neighbour.key}:term` : `${EMPTY}:term`)?.focus()
-    change(lines.filter(line => line.key !== key))
+    change(ls => ls.filter(line => line.key !== key))
   }
   const leave = (key: number, e: FocusEvent<HTMLDivElement>) => {
     if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
-    setLines(ls => ls.map(line => (line.key === key && !line.left ? { ...line, left: true } : line)))
+    change(ls => ls.map(line => (line.key === key && !line.left ? { ...line, left: true } : line)))
   }
   const paste = (e: ClipboardEvent<HTMLInputElement>) => {
     const text = e.clipboardData.getData('text')
@@ -116,8 +133,10 @@ export function GlossaryTable({ data }: { data: OptionsData }) {
       const at = s.search(GLOSSARY_SEPARATOR)
       return { key: nextKey.current++, term: at < 0 ? s : s.slice(0, at).trim(), translation: at < 0 ? '' : s.slice(at + 1).trim(), left: true }
     })
-    change([...lines, ...pasted])
+    change(ls => [...ls, ...pasted])
   }
+  /** the current whole rows, written again down the same path as any other change (fix round 1, item 1) */
+  const retry = () => change(ls => ls)
   const enter = (e: KeyboardEvent) => {
     if (e.key !== 'Enter') return
     e.preventDefault()
@@ -161,7 +180,14 @@ export function GlossaryTable({ data }: { data: OptionsData }) {
           <span />
         </div>
       </div>
-      {over && <p className="o-gloss-note"><Status tone="alert">{O.glossary.tooBig}</Status></p>}
+      {over ? (
+        <p className="o-gloss-note"><Status tone="alert">{O.glossary.tooBig}</Status></p>
+      ) : failed ? (
+        <p className="o-gloss-note">
+          <Status tone="alert">{O.saveFailed}</Status>
+          <Button kind="text" size="sm" className="o-gloss-retry" onClick={retry}>{O.glossary.retry}</Button>
+        </p>
+      ) : null}
     </div>
   )
 }

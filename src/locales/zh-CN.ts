@@ -173,6 +173,9 @@ const O = {
   fallbackResetFailed: '重置没有成功，请再试一次',
   /** §6.2: deleting is undone, not confirmed — the row gives way to this for 5 s */
   undo: { deleted: (name: string) => `已删除「${name}」`, undo: '撤销' },
+  /** One sentence for a failed save anywhere on the page (a schema error's JSON or anything else thrown by the
+   * caller's save must never reach the reader): a service's connection, a glossary row (fix round 1, item 1) */
+  saveFailed: '保存失败，请再试一次',
   /** §6.4: 外观 */
   appearance: {
     theme: '外观',
@@ -212,6 +215,8 @@ const O = {
     /** today's reasons without their line numbers: the row itself says it */
     issue: { emptySource: '原文为空', emptyTarget: '译文为空' },
     tooBig: '术语表太长，超出上限后没有保存；请减少条目或缩短内容',
+    /** beside O.saveFailed, once a write is refused (fix round 1, item 1) */
+    retry: '重试',
   },
   services: {
     /** §6.3: the group and its rows */
@@ -243,10 +248,6 @@ const O = {
     connecting: '连接中…',
     connected: (ms: number) => `已连接 · ${ms} ms`,
     failed: (reason: string) => `连接失败：${reason}`,
-    /** The connection itself worked; saving it afterwards did not (the schema's own limits, or storage). One fixed
-     * sentence, no argument: a schema error's JSON or anything else thrown by the caller's save must never reach the
-     * reader (fix round 2, item 2) */
-    saveFailed: '保存失败，请再试一次',
     delete: '删除',
     deleteConfirm: '确认删除',
     cancel: '取消',

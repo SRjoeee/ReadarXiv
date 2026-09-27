@@ -223,7 +223,7 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
       // the save itself refused (the schema's limit of services, storage): nothing stored, the form stays, and the
       // origin this attempt tested goes back — it was never put to use (Opus review round 1, item 3)
       handedOver.current = false
-      setResult(O.services.saveFailed)
+      setResult(O.saveFailed)
       await releaseHostPermission(candidate.baseURL, storedNow.current).catch(() => undefined)
     } finally {
       setBusy(false)
@@ -339,7 +339,7 @@ export function KeyForm({ service, refused, target, focus = false, onConnected }
       } catch {
         // the connection worked; the save afterwards did not (Opus review round 1, item 3 — today an unhandled
         // rejection, since nothing here caught it)
-        setResult(O.services.saveFailed)
+        setResult(O.saveFailed)
       } finally {
         setBusy(false)
       }

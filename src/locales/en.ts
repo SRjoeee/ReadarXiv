@@ -158,6 +158,9 @@ const O: Locale['O'] = {
   fallbackResetConfirm: 'Confirm reset',
   fallbackResetFailed: 'The reset did not go through. Try again',
   undo: { deleted: name => `Deleted “${name}”`, undo: 'Undo' },
+  /** One sentence for a failed save anywhere on the page (a schema error's JSON or anything else thrown by the
+   * caller's save must never reach the reader): a service's connection, a glossary row (fix round 1, item 1) */
+  saveFailed: "Couldn't save. Try again.",
   appearance: {
     theme: 'Appearance',
     themes: { system: 'System', light: 'Light', dark: 'Dark' },
@@ -193,6 +196,8 @@ const O: Locale['O'] = {
     paste: 'Paste lines of “source, translation” to add several at once',
     issue: { emptySource: 'The source is empty', emptyTarget: 'The translation is empty' },
     tooBig: 'The glossary is too long and was not saved. Remove some entries or shorten them',
+    /** beside O.saveFailed, once a write is refused (fix round 1, item 1) */
+    retry: 'Try again',
   },
   services: {
     /** §6.3: the group and its rows */
@@ -223,10 +228,6 @@ const O: Locale['O'] = {
     connecting: 'Connecting…',
     connected: ms => `Connected · ${ms} ms`,
     failed: reason => `Couldn't connect: ${reason}`,
-    /** The connection itself worked; saving it afterwards did not (the schema's own limits, or storage). One fixed
-     * sentence, no argument: a schema error's JSON or anything else thrown by the caller's save must never reach the
-     * reader (fix round 2, item 2) */
-    saveFailed: "Couldn't save. Try again.",
     delete: 'Delete',
     deleteConfirm: 'Confirm delete',
     cancel: 'Cancel',

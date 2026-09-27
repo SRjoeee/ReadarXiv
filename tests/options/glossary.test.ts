@@ -1,6 +1,7 @@
 // The glossary's table (the redesign's design, §6.3): the stored pairs and one empty row to add to; a row saved once it
 // is whole, a row missing a side saying so once the focus leaves it, a draft held meanwhile; removing; pasting lines;
-// the limits; a glossary saved elsewhere followed unless a row of the reader's is unfinished
+// the limits; a glossary saved elsewhere followed unless a row of the reader's is unfinished; a refused write says so
+// and can be retried, and does not block the next write from trying (fix round 1, item 1)
 import { createElement as h } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
@@ -13,10 +14,16 @@ import { GlossaryTable, entriesOf } from '@/entrypoints/options/sections/Glossar
 import { drafts } from '@/ui/drafts'
 import { O, setLocale } from '@/ui/strings'
 
-function data(config: Config, patches: Config[] = []): OptionsData {
+/** `fail`, when given, decides per call whether the write is refused — never resolves, so a chained `.catch` sees it */
+function data(config: Config, patches: Config[] = [], fail: () => boolean = () => false): OptionsData {
   return {
     config, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
-    patch: async fn => { const next = fn(config); patches.push(next); return next },
+    patch: async fn => {
+      const next = fn(config)
+      if (fail()) throw new Error('refused')
+      patches.push(next)
+      return next
+    },
     pack: null, checkPack: async () => 'unsupported', fetchPack: async () => undefined,
     cache: null, cacheError: '', clearCache: async () => undefined, cacheCleared: false,
   }
@@ -100,6 +107,45 @@ describe('the glossary\'s table (§6.3)', () => {
     await m.flush()
     expect(patches).toEqual([])
     expect(m.container.textContent).toContain(O.glossary.tooBig)
+    await m.unmount()
+  })
+
+  it('a refused write says so and can be retried; a later success clears the note and the draft', async () => {
+    const patches: Config[] = []
+    let refuse = true
+    const m = await mountElement(h(GlossaryTable, { data: data(WITH([]), patches, () => refuse) }))
+    type(cells(m.container)[0]!, 'a')
+    await m.flush()
+    type(cells(m.container)[1]!, 'b')
+    await m.flush()
+    expect(patches).toEqual([])
+    expect(m.container.textContent).toContain(O.saveFailed)
+    expect(drafts.any()).toBe(true)
+    refuse = false
+    const retry = [...m.container.querySelectorAll('button')].find(b => b.textContent === O.glossary.retry)!
+    retry.click()
+    await m.flush()
+    expect(patches.at(-1)!.glossary).toEqual([{ term: 'a', translation: 'b' }])
+    expect(m.container.textContent).not.toContain(O.saveFailed)
+    expect(drafts.any()).toBe(false)
+    await m.unmount()
+  })
+
+  it('after a refused write, the reader\'s next change writes — not skipped as the value already stored', async () => {
+    const patches: Config[] = []
+    let refuse = true
+    const m = await mountElement(h(GlossaryTable, { data: data(WITH([]), patches, () => refuse) }))
+    type(cells(m.container)[0]!, 'a')
+    await m.flush()
+    type(cells(m.container)[1]!, 'b')
+    await m.flush()
+    expect(patches).toEqual([])
+    refuse = false
+    // a further edit that trims back to the very same entries, tried again without pressing retry: the store is
+    // known to be behind, not mistaken for what this refused write already claimed to have set
+    type(cells(m.container)[1]!, ' b')
+    await m.flush()
+    expect(patches.at(-1)!.glossary).toEqual([{ term: 'a', translation: 'b' }])
     await m.unmount()
   })
 

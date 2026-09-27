@@ -350,7 +350,7 @@ describe('ServiceForm (§6.3)', () => {
     submit(m.container)
     await m.flush()
     await m.flush()
-    expect(m.container.querySelector('.o-note')!.textContent).toBe(O.services.saveFailed)
+    expect(m.container.querySelector('.o-note')!.textContent).toBe(O.saveFailed)
     expect(wire.released).toEqual(['https://api.newhost.example/v1'])
     await m.unmount()
   })
@@ -495,7 +495,7 @@ describe('KeyForm (§6.3)', () => {
     submit(m.container)
     await m.flush()
     await m.flush()
-    expect(m.container.querySelector('.o-note')!.textContent).toBe(O.services.saveFailed)
+    expect(m.container.querySelector('.o-note')!.textContent).toBe(O.saveFailed)
     await m.unmount()
   })
 
