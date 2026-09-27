@@ -1,4 +1,6 @@
 import '@/styles/ui.css'
+// the settings page's own sheet (the redesign's design, §6), after the shared one so that its rules win a tie
+import './ui/settings.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { prepareFirstPaint } from '@/ui/first-paint'
