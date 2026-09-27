@@ -289,3 +289,11 @@
   .o-list-note { margin: -4px 10px 10px 38px; color: var(--ink-2); font-size: 12px; }
   .o-list-note[data-level="1"] { margin-inline-start: 66px; }
 }
+
+/* ---- the floating button's switch, held until the background answers ---- */
+@layer components {
+  /* the switch keeps its place in the row but is not shown while its state is still unknown (visibility keeps it out
+     of the accessibility tree and the tab order, unlike display: none it does not reflow the row when the answer
+     arrives) */
+  .o-unknown { visibility: hidden; }
+}

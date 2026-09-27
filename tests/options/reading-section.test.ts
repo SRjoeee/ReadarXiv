@@ -32,7 +32,7 @@ const segments = (c: HTMLElement, label: string) => [...groupOf(c, label).queryS
 const switchOf = (c: HTMLElement, label: string) => c.querySelector<HTMLElement>(`[role="switch"][aria-label="${label}"]`)!
 
 describe('the reading section (§6.5)', () => {
-  beforeEach(() => { setLocale('en'); floating.asked.length = 0 })
+  beforeEach(() => { setLocale('en'); floating.asked.length = 0; floating.enabled = true })
 
   it('the way to translate: two choices, the description following the choice and coming in anew as it changes', async () => {
     const patches: Config[] = []
@@ -68,6 +68,22 @@ describe('the reading section (§6.5)', () => {
     expect(floating.asked).toEqual([false])
     expect(rowOf(m.container, 'reading/images').textContent).toContain(O.reading.imagesHint)
     expect(switchOf(m.container, S.rows.images)).not.toBeNull()
+    await m.unmount()
+  })
+
+  it('the floating switch waits for the answer it does not have yet, then shows the stored value', async () => {
+    floating.enabled = null
+    const patches: Config[] = []
+    const m = await mountElement(h(Harness, { start: DEFAULT_CONFIG, patches }))
+    const row = rowOf(m.container, 'reading/floating')
+    const heldSwitch = row.querySelector<HTMLElement>('[role="switch"]')
+    // not found by its role, or found but hidden — either reads as "does not show a state it does not know"
+    expect(heldSwitch === null || heldSwitch.closest('.o-unknown') !== null).toBe(true)
+    floating.enabled = false
+    await m.rerender(h(Harness, { start: DEFAULT_CONFIG, patches }))
+    const shown = switchOf(m.container, O.reading.floatingEntry)
+    expect(shown.closest('.o-unknown')).toBeNull()
+    expect(shown.getAttribute('aria-checked')).toBe('false')
     await m.unmount()
   })
 

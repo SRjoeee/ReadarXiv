@@ -34,7 +34,11 @@ export function Reading({ data }: { data: OptionsData }) {
           trailing={descId => <div className="o-seg" style={segmentWidth(200)}><Segmented size="sm" label={O.reading.openIn} value={config.reading.openIn} describedBy={descId}
             options={OPEN_IN.map((value, i) => ({ value, label: O.reading.openInStops[i]! }))} onChange={openIn => void patch(latest => ({ ...latest, reading: { ...latest.reading, openIn } }))} /></div>} />
         <Row toggles row="reading/floating" words={k['reading/floating']} label={O.reading.floatingEntry} description={O.reading.floatingEntryHint}
-          trailing={<Switch label={O.reading.floatingEntry} checked={floating.enabled ?? true} onChange={floating.setEnabled} />} />
+          // the page cannot say a state it does not know: while the background has not answered, the switch is held
+          // in place (o-unknown, visibility: hidden) rather than shown on, which would say "on" and then flip
+          trailing={<span className={floating.enabled === null ? 'o-unknown' : undefined}>
+            <Switch label={O.reading.floatingEntry} checked={floating.enabled === true} onChange={floating.setEnabled} />
+          </span>} />
       </Card>
       <GroupHeading title={O.reading.pdf} />
       <Card row="reading/pdf">
