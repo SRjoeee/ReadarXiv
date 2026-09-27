@@ -212,8 +212,8 @@ const O = {
     imagesHint: '译文叠在图上，鼠标悬停查看原文',
     autoFallback: '出问题时自动改用免费服务',
     autoFallbackHint: 'API Key 失效、额度用尽或断网时，翻译不会停下',
-    name: '名称',
-    namePlaceholder: '例如 DeepSeek V4 Flash',
+    name: '名称（选填）',
+    namePlaceholder: '默认使用模型名',
     baseURL: '接口地址',
     baseURLHint: 'OpenRouter、DeepSeek、Ollama 等 OpenAI 兼容接口',
     apiKey: 'API Key',
@@ -237,6 +237,21 @@ const O = {
     cancel: '取消',
     newTitle: '添加服务',
     editTitle: '编辑服务',
+    /** §6.3: the address suggestions fill an address, nothing else (T4); the other two are product names, in the form */
+    localOllama: '本机 Ollama',
+    modelEmpty: '填好接口地址和 API Key 后列出',
+    modelLoading: '正在获取模型…',
+    modelSearch: (n: number) => `搜索 ${n} 个模型`,
+    modelNoMatch: '没有匹配的模型，可以直接填写',
+    modelNoList: '没能列出模型，可以直接填写',
+    addedOnConnect: '连接成功后才会添加',
+    savedOnConnect: '连接成功后才会保存',
+    /** A form is checked when it is submitted (§9); each reason at its field */
+    checks: { baseURL: '填写接口地址，例如 https://openrouter.ai/api/v1', apiKey: '填写 API Key', model: '选择或填写一个模型' },
+    /** Editing: the key field empty, the saved key kept unless one is typed */
+    keySaved: '已保存 · 留空则不改',
+    /** A key the endpoint refused (§4's record), or a service an earlier version stored without one */
+    keyForm: { refused: '服务拒绝了这个 API Key，它可能无效或已过期。换一个新的，其他设置不变。', label: '新的 API Key', submit: '更新并连接' },
   },
   reading: {
     add: '添加配置',
