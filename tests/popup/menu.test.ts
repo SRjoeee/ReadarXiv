@@ -66,6 +66,23 @@ describe('a row of the group and its menu (the redesign\'s design, §5.3)', () =
     expect(main.style.minHeight).toBe('')
   })
 
+  it('Escape closes the menu once, through its popover, and clears the popup\'s min-height at once', async () => {
+    const { actions, row } = service()
+    const { container } = await mountElement(row(false))
+    const main = container.querySelector('main')!, button = container.querySelector('button.group-row')!, menu = menuOf(container)
+    main.getBoundingClientRect = () => ({ top: 0 }) as DOMRect
+    button.getBoundingClientRect = () => ({ top: 48, bottom: 84 }) as DOMRect
+    Object.defineProperty(menu, 'scrollHeight', { configurable: true, value: 210 })
+    await act(async () => { menu.showPopover() })
+    expect(main.style.minHeight).not.toBe('')
+    const listbox = menu.querySelector<HTMLElement>('[role="listbox"]')!
+    await act(async () => { listbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })) })
+    expect(isOpen(menu)).toBe(false)
+    expect(actions.closeMenu).toHaveBeenCalledTimes(1)
+    expect(actions.closeMenu).toHaveBeenLastCalledWith('service')
+    expect(main.style.minHeight).toBe('')
+  })
+
   it('a value cut short shows whole in its tooltip after 500 ms; a value that fits shows none', async () => {
     const { row } = service()
     const { container } = await mountElement(row(false))

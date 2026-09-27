@@ -20,6 +20,14 @@ type MenuActions = Pick<PopupActions, 'openMenu' | 'closeMenu'>
 /** Two anchor names on one element take one declaration: a second would replace the first (its menu's and its tooltip's) */
 export const anchors = (...names: string[]): CSSProperties => ({ anchorName: names.join(', ') }) as CSSProperties
 const tipAnchor = (tip: ReturnType<typeof useTip>) => String((tip.props.style as { anchorName?: string }).anchorName)
+/**
+ * The popover shut, as a pick does (the pattern of `src/pdf-reader/ui/Menus.tsx`): `MenuList`'s Escape handler
+ * prevents the browser's own dismiss and calls `onClose` itself, so `onClose` must go through the popover rather
+ * than straight to `actions.closeMenu` — the native `toggle` that follows is the one path that runs `useMenu`'s
+ * closing bookkeeping (`unfit`, `shown`, `actions.closeMenu`); calling `closeMenu` here too would run it twice and
+ * leave the popup's min-height set until the `open` prop's own round trip clears it a second time
+ */
+const shut = (id: string) => document.getElementById(id)?.hidePopover()
 
 function useMenu(kind: MenuKind, open: boolean, actions: MenuActions, up: boolean) {
   const pop = usePopover('listbox')
@@ -129,7 +137,7 @@ export function MenuRow({ kind, label, row, menu, open, actions, onPick, onActio
         {words}
       </button>
       {tip.tip}
-      <MenuPopover kind={kind} menu={menu} up={false} pop={pop} painted={painted} onPick={onPick} onAction={onAction} onClose={() => actions.closeMenu(kind)} />
+      <MenuPopover kind={kind} menu={menu} up={false} pop={pop} painted={painted} onPick={onPick} onAction={onAction} onClose={() => shut(pop.popover.id)} />
     </>
   )
 }
@@ -145,7 +153,7 @@ export function StyleButton({ value, menu, open, actions, onPick }: { value: str
         <Icon node={ChevronDown} size={14} />
       </button>
       {tip.tip}
-      <MenuPopover kind="style" menu={menu} up pop={pop} painted={painted} onPick={onPick} onClose={() => actions.closeMenu('style')} />
+      <MenuPopover kind="style" menu={menu} up pop={pop} painted={painted} onPick={onPick} onClose={() => shut(pop.popover.id)} />
     </>
   )
 }
