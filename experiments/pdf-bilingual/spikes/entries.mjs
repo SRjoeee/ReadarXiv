@@ -39,11 +39,11 @@ async function popupOver(tab, name) {
   await sleep(2500)
   const seen = await popup.evaluate(() => {
     const buttons = [...document.querySelectorAll('button')]
-    const named = re => buttons.filter(b => re.test(b.textContent ?? '')).map(b => ({ text: b.textContent?.trim(), disabled: b.disabled }))
+    const named = re => buttons.filter(b => re.test(b.textContent ?? '')).map(b => ({ text: b.textContent?.trim(), disabled: b.getAttribute('aria-disabled') === 'true' }))
     return {
       entries: named(/^(HTML 翻译|PDF 翻译|Translate HTML|Translate PDF)$/),
       primary: named(/^(翻译本页|显示原文|Translate this page|Show the original)/),
-      stack: buttons.filter(b => /上下|Stacked/.test(b.textContent ?? '')).map(b => ({ disabled: b.getAttribute('aria-disabled') === 'true', title: b.title })),
+      stack: buttons.filter(b => b.getAttribute('role') === 'radio' && /^(上下|Stacked)$/.test(b.querySelector('span:not([hidden])')?.textContent ?? '')).map(b => ({ disabled: b.getAttribute('aria-disabled') === 'true', title: document.getElementById(b.getAttribute('aria-describedby') ?? '')?.textContent ?? '' })),
       style: buttons.some(b => /译文样式|Style/.test(b.textContent ?? '')),
     }
   })

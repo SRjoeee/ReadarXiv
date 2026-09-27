@@ -21,7 +21,19 @@ const FIELD: Record<string, string> = {
 const S = {
   brand: 'Read arXiv', // S-P-01
   settings: '设置', // S-P-02, and the button on every note
-  notArxiv: '打开 arXiv 论文的 HTML 页面后即可翻译', // S-P-03
+  /** P0, no paper in the tab (the redesign's §5.4, §10.1): find one. Replaces S-P-03's sentence */
+  find: {
+    lead: '打开 arXiv 论文（HTML 或 PDF）即可翻译',
+    field: '按标题、作者、摘要或链接搜索论文',
+    enter: '按回车搜索',
+    advanced: '高级搜索',
+    search: (q: string) => `在 arXiv 搜索「${q}」`,
+    elsewhere: '只能打开 arXiv 的论文链接。也可以输入标题或作者搜索。',
+    /** the paper a link or an id names: a name and an id, the same in every language */
+    paper: (id: string) => `arXiv ${id}`,
+  },
+  /** An arXiv paper's page that has not answered yet (the redesign's §5.4): not P0, and no field */
+  loading: '页面加载中',
   rows: {
     service: '翻译服务', // S-P-10
     language: '目标语言', // S-P-20
@@ -30,7 +42,8 @@ const S = {
     highlightTitle: '悬停时高亮对应句子；仅译文模式下停留可查看原文', // S-P-81
     images: '图片翻译', // S-P-85
     style: '译文样式', // S-P-82; the same name as “Reading · Translation style” in the settings: the two are one thing
-    manageStyles: '管理译文样式…', // S-P-83: the last row of the style menu, opening the settings at “Reading”
+    manageStyles: '管理译文样式…', // S-P-83: the last row of the style menu, opening the settings at “Appearance”
+    managePrompts: '管理提示词…', // the redesign's §5.3: the prompt menu's last row, opening the settings at the prompts
   },
   service: {
     microsoft: 'Microsoft 翻译',

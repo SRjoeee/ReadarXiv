@@ -20,7 +20,16 @@ const FIELD: Record<string, string> = {
 const S: Locale['S'] = {
   brand: 'Read arXiv',
   settings: 'Settings',
-  notArxiv: 'Open the HTML version of an arXiv paper to translate it',
+  find: {
+    lead: 'Open an arXiv paper, HTML or PDF, to translate it',
+    field: 'Search by title, author, abstract or link',
+    enter: 'Press Enter to search',
+    advanced: 'Advanced search',
+    search: q => `Search arXiv for “${q}”`,
+    elsewhere: 'Only arXiv paper links open here. You can search by title or author instead.',
+    paper: id => `arXiv ${id}`,
+  },
+  loading: 'Loading the page',
   rows: {
     service: 'Service',
     language: 'Language',
@@ -30,6 +39,7 @@ const S: Locale['S'] = {
     images: 'Images',
     style: 'Style',
     manageStyles: 'Manage styles…',
+    managePrompts: 'Manage prompts…',
   },
   service: {
     microsoft: 'Microsoft Translator',

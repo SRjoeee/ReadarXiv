@@ -12,7 +12,7 @@ experiments/pdf-bilingual/spikes/reader-a11y.mjs 10  # 2026-09-25: the reader's 
 experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md 121  # 2026-09-25: the reader's interface copy as the maintainer agreed it, and the maintainer's words each decision rests on, quoted (product copy the design fixes; the copy moves to docs/UI.md with the build); +1, the three status words said to screen readers (§6.6); +1, 2026-09-26: the value-named buttons' names quoted (the interface review); +1, the maintainer's words keeping the pressed state without a ring; +1, the appearance's three words in their new order; +1, the service-change prompt's two actions as the maintainer named them
 experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-design.md 175  # 2026-09-26: the popup's, the settings page's and the floating button's copy as the maintainer agreed it over the redesign's prototypes, and the maintainer's words each decision rests on, quoted (product copy the design fixes; it moves to docs/UI.md with the build)
 experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign.md 21  # 2026-09-26: the redesign's plan: the locale packs' words its code adds, and the controls its tests and browser checks find by their Chinese names, quoted; +1, 2026-09-26: the manage row named in Part 3's interfaces
-experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part4-popup.md 78  # 2026-09-27: the popup's words its code puts into the locale packs (the design's §10.1, UI.md's ids), and the controls its tests and browser checks find by their Chinese names, quoted; +2, 2026-09-27: the pre-flight scan, the download row found by its Chinese name in a test
+experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part4-popup.md 81  # 2026-09-27: the popup's words its code puts into the locale packs (the design's §10.1, UI.md's ids), and the controls its tests and browser checks find by their Chinese names, quoted; +2, 2026-09-27: the pre-flight scan, the download row found by its Chinese name in a test; +3, 2026-09-27, Part 4's record quotes the popup's words the parts after it carry
 experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part5-settings.md 306  # 2026-09-27: the settings page's words its code puts into the locale packs (the design's §10.2 and the derived words ruled with it), the map of today's controls by their Chinese names, and the controls its tests and browser checks find by those names, quoted
 experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part7-finish.md 83  # 2026-09-27: the redesign's last part: the product copy its document tasks move into UI.md, and the controls its checks find by their Chinese names, quoted
 src/pdf-reader/engine/anchors.mjs 2  # 2026-09-22: the CJK ranges of the tokenizer's regexes
@@ -46,7 +46,6 @@ src/core/renderer/highlight.ts 1
 src/core/renderer/image.ts 1
 src/core/rules/latexml.ts 8
 src/entrypoints/options/index.html 1
-src/entrypoints/popup/PopupView.tsx 1
 src/providers/alignment.ts 4
 src/providers/chrome-builtin.ts 2
 src/providers/glossary.ts 3
@@ -78,6 +77,7 @@ tests/e2e/layout.mjs 11  # 2026-09-20: +2, the reader's-place check finds the po
 tests/e2e/local-endpoint.mjs 2
 tests/e2e/floating-button.mjs 6  # 2026-09-18: the settings switch, the main button's two labels, and the popup's button inside the control panel on a PDF and on the full text, located and checked by their Chinese copy, as the other suites locate controls (issue #169); 2026-09-25: the panel's two entries on the abstract page too, which its main button now opens (the reader's design, §2)
 tests/e2e/pdf-entry.mjs 9  # 2026-09-19: the popup's button (on the PDF and on the abstract page) and the no-HTML reason are located by their Chinese copy, as the other suites locate controls (issue #169); +1, the popup's PDF entry found by its name; 2026-09-25: the two entries in the control panel the floating button's main button now opens on the PDF, found and pressed by their copy (the reader's design, §2); +1: the popup's PDF entry pressed on the PDF page itself (Part 5's final review)
+tests/e2e/popup.mjs 20  # 2026-09-26: the popup's controls and words found by their Chinese names, as the other suites find them (the redesign's Part 4)
 tests/e2e/options-page.mjs 13
 tests/e2e/placeholders.mjs 7
 tests/e2e/probes/chrome-floor.mjs 1  # 2026-09-17: the settings page's download button, located by its reader-visible label
@@ -91,7 +91,8 @@ tests/image/svg-targets.test.ts 2
 tests/options/prompts-section.test.ts 13
 tests/pipeline/run.test.ts 3
 tests/pipeline/session-guard.test.ts 5
-tests/popup/view-model.test.ts 39  # 2026-09-26: +1 for P7b's expectation, the Chinese fallback name in a refused key's note (Task 12); 2026-09-19: +1 for P17c's expectation, the Chinese label of the entry pages' button (issue #169); 2026-09-18: +5 for the P17 cases' expectations, the Chinese copy of S-P-03b / S-P-33; +2, the reader-open popup's buttons by their words
+tests/popup/find.test.ts 1  # 2026-09-26: a search typed in Chinese goes to arXiv's search as it is (the redesign's P0, §5.4)
+tests/popup/view-model.test.ts 52  # 2026-09-27: Task 33 fix round 1: +2, the retranslate cue's two-hand-over test and P0's unrunnable-service test, the LLM's Chinese fallback name each expects (Opus's review); 2026-09-26: the redesign's popup (Part 4): P0's words, the prompt menu's Manage row and a refused key's note, expected as UI.md's copy; 2026-09-26: +1 for P7b's expectation, the Chinese fallback name in a refused key's note (Task 12); 2026-09-19: +1 for P17c's expectation, the Chinese label of the entry pages' button (issue #169); 2026-09-18: +5 for the P17 cases' expectations, the Chinese copy of S-P-03b / S-P-33; +2, the reader-open popup's buttons by their words
 tests/protector/clone.test.ts 5
 tests/protector/label.test.ts 50
 tests/protector/markers.test.ts 12  # 2026-09-19: +1, the translations the wire-space cases fill back, all on one line

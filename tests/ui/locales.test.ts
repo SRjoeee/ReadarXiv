@@ -44,7 +44,7 @@ describe('locale packs', () => {
 
   it('no placeholder English sentences left in the Chinese pack (brand names, protocol words and examples excepted)', () => {
     // Sentences assembled from parameters alone excepted: called with placeholders their result is naturally all English
-    const allowed = /^(S\.brand|S\.service\.(llm|microsoft|google|chrome)|O\.services\.(apiKey|namePlaceholder|baseURLHint)|O\.reading\.previewSource|S\.setup\.step1|S\.setup\.step1Hint|O\.fallbackWhy\.invalid)/
+    const allowed = /^(S\.brand|S\.service\.(llm|microsoft|google|chrome)|S\.find\.paper|O\.services\.(apiKey|namePlaceholder|baseURLHint)|O\.reading\.previewSource|S\.setup\.step1|S\.setup\.step1Hint|O\.fallbackWhy\.invalid)/
     for (const [path, text] of leaves(LOCALES['zh-CN'])) {
       if (allowed.test(path) || text === '') continue
       // A Chinese copy string of pure ASCII can hardly be anything but forgotten
@@ -83,7 +83,10 @@ describe('locale packs', () => {
       for (const [path, text] of leaves(derivePopupView(f.input))) {
         // A language's own name is meant to be in its own script — 「Japanese (日本語)」 — and the
         // sample sentence is a sample of a translation
-        if (path.includes('previewTarget') || path.includes('hint') || path.startsWith('language') || path.startsWith('menu.items')) continue
+        // Only the language menu's own rows are in their own scripts (their name, their keywords); every other
+        // menu's words are the interface's own and must translate like anything else (narrower per Opus's review of
+        // Task 33 — the broad `menus.` used to let a leaked Chinese label in the service or style menu through unseen)
+        if (path.includes('previewTarget') || path.includes('hint') || path.startsWith('language') || path.startsWith('menus.language.items')) continue
         expect(HAN.test(text), `${f.id} ${path}: ${text}`).toBe(false)
       }
     }
@@ -95,10 +98,10 @@ describe('locale packs', () => {
 describe('what a pack is read at', () => {
   it('the empty state is computed at call time: the module loads before applyLocale, and a constant would freeze the fallback language (Codex on #161)', () => {
     setLocale('zh-CN')
-    const zhEmpty = derivePopupView({ page: null, entry: null, saved: null, session: null, config: null, pack: null, menu: null, shortcut: null, savedRevision: null, rejected: [] })
+    const zhEmpty = derivePopupView({ page: null, entry: null, saved: null, session: null, config: null, pack: null, menu: null, shortcut: null, savedRevision: null, rejected: [], tab: null, find: { query: '', entries: null } })
     expect(zhEmpty.primary.label).toBe(LOCALES['zh-CN'].S.primary.translate)
     setLocale('en')
-    const enEmpty = derivePopupView({ page: null, entry: null, saved: null, session: null, config: null, pack: null, menu: null, shortcut: null, savedRevision: null, rejected: [] })
+    const enEmpty = derivePopupView({ page: null, entry: null, saved: null, session: null, config: null, pack: null, menu: null, shortcut: null, savedRevision: null, rejected: [], tab: null, find: { query: '', entries: null } })
     expect(enEmpty.primary.label).toBe(LOCALES.en.S.primary.translate)
     setLocale('zh-CN')
   })

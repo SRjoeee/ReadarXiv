@@ -351,7 +351,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await popup.goto(`chrome-extension://${extId}/popup.html`)
   await page.bringToFront()
   await popup.getByRole('button', { name: S_STYLE, exact: false }).click()
-  await popup.getByRole('option', { name: '绿色', exact: true }).click()
+  await popup.getByRole('option', { name: /^绿色/ }).click()
   await popup.close()
   await page.bringToFront()
   const green = await page.evaluate(async real => {
@@ -953,7 +953,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   const popup = await context.newPage()
   await popup.goto(`chrome-extension://${extId}/popup.html`)
   await page.bringToFront()
-  await popup.getByRole('button', { name: '左右', exact: true }).click()
+  await popup.getByRole('radio', { name: '左右', exact: true }).click()
   await sleep(500)
   await popup.close()
   await scrollThrough(page)
@@ -1253,7 +1253,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   const rejectedNote = await popup.getByText('API Key 已失效').count()
   const primaryDisabled = await popup.evaluate(() => {
     const button = [...document.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === '翻译本页')
-    return button ? button.disabled : null
+    return button ? button.getAttribute('aria-disabled') === 'true' : null
   })
   check('a wrong key remembered + the fallback off: the page never starts, and the popup says the key no longer works, its primary disabled',
     !done && !dom.on && dom.translations === 0 && requests.length === 0 && rejectedNote > 0 && primaryDisabled === true,
@@ -1277,8 +1277,8 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await popup.goto(`chrome-extension://${extId}/popup.html`)
   await page.bringToFront()
   // openPaper starts translating of itself with #readarxiv; only the mode is switched here — the switch changes the attribute on <html> only, no retranslation
-  await popup.getByRole('button', { name: '仅译文', exact: true }).waitFor({ timeout: 10_000 })
-  await popup.getByRole('button', { name: '仅译文', exact: true }).click()
+  await popup.getByRole('radio', { name: '仅译文', exact: true }).waitFor({ timeout: 10_000 })
+  await popup.getByRole('radio', { name: '仅译文', exact: true }).click()
   await sleep(500)
   await popup.close()
   await scrollThrough(page)
@@ -1501,7 +1501,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await enPopup.goto(`chrome-extension://${extId}/popup.html`)
   await enPopup.waitForTimeout(600)
   const popupText = await enPopup.locator('main').innerText()
-  check('the popup follows the interface language into English', /Open the HTML version|Translate this page/.test(popupText) && !/翻译本页|打开 arXiv/.test(popupText), popupText.split('\n')[0] ?? '')
+  check('the popup follows the interface language into English', /Open an arXiv paper|Translate this page/.test(popupText) && !/翻译本页|打开 arXiv/.test(popupText), popupText.split('\n')[0] ?? '')
   await enPopup.close()
 
   // Back to Chinese, leaving the configuration as the rest of this suite expects

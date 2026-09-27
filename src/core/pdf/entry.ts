@@ -47,3 +47,32 @@ export function readerWanted({ enabled, hash }: { enabled: boolean; hash: string
   const asked = hash === AUTO_TRANSLATE_HASH
   return { open: enabled || asked, translate: asked }
 }
+
+/**
+ * How long a check of a paper's entries waits for arXiv (the redesign's design, §5.4): an answer not back by then says
+ * nothing about the paper, and the entry is offered, as the reader's own check of the HTML version does (its session, 3 s)
+ */
+export const ENTRY_CHECK_MS = 3000
+
+/**
+ * The paper's HTML version with the hash that starts its translation, or null where arXiv says it has none: one HEAD.
+ * **Only arXiv saying so means there is none** (404, or 410): a request that failed, a 429 or a 5xx say nothing about
+ * the paper, and the link is offered — at worst it leads to arXiv's own answer (Devin on #247). `fetchFn` is the
+ * caller's: the PDF page asks its own origin, the popup arXiv's by its host permission
+ */
+export function htmlVersionOf(id: string, fetchFn: typeof fetch, origin = 'https://arxiv.org'): Promise<string | null> {
+  return fetchFn(htmlUrlOf(id, origin), { method: 'HEAD', credentials: 'omit' })
+    .then(res => res.status, () => null)
+    .then(status => (status === 404 || status === 410 ? null : translatedHtmlUrlOf(id, origin)))
+}
+
+/**
+ * The paper's PDF asking for the reader, or null where it cannot be had as a bilingual PDF (the reader's design, §2):
+ * one HEAD on its source, where a PDF-only submission answers application/pdf; anything else leaves the entry offered.
+ * Whether this browser runs the reader at all is the caller's to ask first (pdf-reader/support.ts)
+ */
+export function bilingualPdfOf(id: string, fetchFn: typeof fetch, origin = 'https://arxiv.org'): Promise<string | null> {
+  return fetchFn(`${origin}/src/${id}`, { method: 'HEAD', credentials: 'omit' })
+    .then(res => (res.ok ? sourceKindOf(res.headers.get('content-type')) : ('unknown' as const)), () => 'unknown' as const)
+    .then(source => (source === 'pdf-only' ? null : pdfUrlOf(id, origin)))
+}

@@ -62,8 +62,8 @@ async function openSide(id) {
   const popup = await context.newPage()
   await popup.goto(`chrome-extension://${extId}/popup.html`)
   await page.bringToFront()
-  await popup.getByRole('button', { name: '左右', exact: true }).waitFor({ timeout: 10_000 })
-  await popup.getByRole('button', { name: '左右', exact: true }).click()
+  await popup.getByRole('radio', { name: '左右', exact: true }).waitFor({ timeout: 10_000 })
+  await popup.getByRole('radio', { name: '左右', exact: true }).click()
   await sleep(300)
   await popup.getByRole('button', { name: '翻译本页', exact: true }).click()
   await sleep(500)
@@ -348,10 +348,10 @@ async function measureFrame(page) {
     const popup = await context.newPage()
     await popup.goto(`chrome-extension://${extId}/popup.html`)
     await page.bringToFront()
-    await popup.getByRole('button', { name: '上下', exact: true }).waitFor({ timeout: 10_000 })
-    await popup.getByRole('button', { name: '上下', exact: true }).click()
+    await popup.getByRole('radio', { name: '上下', exact: true }).waitFor({ timeout: 10_000 })
+    await popup.getByRole('radio', { name: '上下', exact: true }).click()
     await sleep(600)
-    await popup.getByRole('button', { name: '左右', exact: true }).click()
+    await popup.getByRole('radio', { name: '左右', exact: true }).click()
     await popup.close()
     await sleep(1500)
     const c2 = await converge()
@@ -776,7 +776,7 @@ async function measureFrame(page) {
   const popup = await context.newPage()
   await popup.goto(`chrome-extension://${extId}/popup.html`)
   await page.bringToFront()
-  const sideButton = popup.getByRole('button', { name: '左右', exact: true })
+  const sideButton = popup.getByRole('radio', { name: '左右', exact: true })
   await sideButton.waitFor({ timeout: 10_000 })
   await sideButton.click()
   await sleep(1500)
@@ -808,8 +808,9 @@ async function measureFrame(page) {
     scrollTo(0, target.getBoundingClientRect().top + scrollY - line)
   })
   await sleep(800)
-  const press = name => () => popup.getByRole('button', { name, exact: true }).click()
-  const steps = [['translate', press('翻译本页'), 6000], ['stacked', press('上下'), 2500], ['translation only', press('仅译文'), 2500], ['side by side', press('左右'), 3500], ['restore', press('显示原文'), 3000]]
+  /** a button of the popup's, or one of its display's segments, which are radios */
+  const press = (name, role = 'button') => () => popup.getByRole(role, { name, exact: true }).click()
+  const steps = [['translate', press('翻译本页'), 6000], ['stacked', press('上下', 'radio'), 2500], ['translation only', press('仅译文', 'radio'), 2500], ['side by side', press('左右', 'radio'), 3500], ['restore', press('显示原文'), 3000]]
   const moves = []
   for (const [name, act, wait] of steps) {
     const before = await page.evaluate(() => window.__place.note())

@@ -1,238 +1,141 @@
-// Renders the view model's output and nothing else; every action goes through props, so the
-// gallery can feed the same component the fixtures. Layout (reviewed 2026-09-10): the service and
-// language card, the prompt row for the LLM, then bubbles for anything that needs attention, the
-// primary button, the mode bar, and the two small switches under it.
-import type { ReactNode } from 'react'
-import { useRef } from 'react'
-import type { Mode } from '@/core/renderer'
-import { BrandMark } from '@/ui/BrandMark'
-import { Button } from '@/ui/Button'
-import { Menu } from '@/ui/Menu'
-import { Segmented } from '@/ui/Segmented'
-import { MODE_ORDER, S } from '@/ui/strings'
-import { Switch } from '@/ui/Switch'
+// Renders the view model's output and nothing else; every action goes through props, so the gallery can feed the same
+// component the fixtures. The redesign's popup (its design, §5; round 6 of its prototypes), from the top: the brand row;
+// the group of the service, the target language and, for an LLM, the prompt; a note; the primary — both of its faces when the page is paused
+// or behind its settings — or an entry page's two entries; the display; the foot. P0 is the brand row over the field that
+// finds a paper. Every measure is popup.css's
+import './popup.css'
+import { CircleAlert, Info, Settings } from 'lucide'
+import { Button } from '@/ui/controls/Button'
+import { Icon } from '@/ui/controls/Icon'
+import { Segmented } from '@/ui/controls/Segmented'
+import { Switch } from '@/ui/controls/Switch'
+import { useTip } from '@/ui/controls/tip'
+import { MODE_ORDER, R, S } from '@/ui/strings'
 import type { PopupActions } from './data'
-import type { MenuKind, PopupView as View } from './view-model'
-import { Settings } from 'lucide'
-import { LucideIcon } from '@/ui/LucideIcon'
-
-/** Only the marks are constant; the words come from the pack in use, which is chosen after this
- *  module is imported (see the note at the top of ui/strings.ts) */
-const MODE_ICONS: Record<Mode, ReactNode> = { side: <SideIcon />, stack: <StackIcon />, only: <OnlyIcon /> }
-// The bar follows MODE_ORDER, the one place the order is decided (UI.md S-P-70)
-// A mode the page cannot show (the PDF reader cannot stack: its design, §9.2) stays in place, greyed, its title the reason
-const modes = (disabled: readonly Mode[] = []) => MODE_ORDER.map(value => ({
-  value,
-  label: S.mode[value],
-  title: disabled.includes(value) ? S.mode.stackPdf : S.mode[`${value}Title` as const],
-  icon: MODE_ICONS[value],
-  disabled: disabled.includes(value),
-}))
-
-const CARD = 'rounded-card bg-card shadow-[0_1px_2px_rgba(30,30,36,0.06)]'
+import { Entries } from './ui/Entries'
+import { Find } from './ui/Find'
+import { MenuRow, StyleButton } from './ui/menu'
+import { ModeIcon } from './ui/ModeIcon'
+import { Note } from './ui/Note'
+import type { PopupView as View } from './view-model'
 
 export function PopupView({ view, error, actions }: { view: View; error: string | null; actions: PopupActions }) {
+  const failure = error === null ? null : S.actionFailed(error)
   return (
-    <main className="flex w-[320px] flex-col gap-3 bg-bg p-4 font-ui text-[13px] text-fg">
-      <header className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-2">
-          <BrandMark />
-          <span className="text-[14px] font-bold">{S.brand}</span>
-        </div>
-        <button type="button" aria-label={S.settings} title={S.settings} onClick={() => actions.openOptions()} className="cursor-pointer text-fg-2 hover:text-fg">
-          {/* The same glyph as the floating button's settings button: one control, one icon */}
-          <LucideIcon node={Settings} />
-        </button>
-      </header>
-
-      {view.empty ? (
-        <p className={`${CARD} p-3.5 leading-relaxed text-fg-2`}>{S.notArxiv}</p>
-      ) : (
-        <>
-          <section className={CARD}>
-            <MenuRow kind="service" label={S.rows.service} row={view.service} view={view} actions={actions} />
-            <MenuRow kind="language" label={S.rows.language} row={view.language} view={view} actions={actions} last />
-          </section>
-          {view.prompt && (
-            <section className={CARD}>
-              <MenuRow kind="prompt" label={S.rows.prompt} row={view.prompt} view={view} actions={actions} compact last />
-            </section>
-          )}
-
-          {view.note && (
-            <Bubble>
-              <span className="font-semibold text-accent">{view.note.text}</span>
-              {view.note.settings && <Button variant="solid" onClick={() => actions.openOptions()}>{S.settings}</Button>}
-            </Bubble>
-          )}
-          {view.failed && (
-            <Bubble>
-              <span className="font-bold text-accent">{view.failed}</span>
-              <Button variant="solid" onClick={actions.retryFailed}>{S.failed.retry}</Button>
-            </Bubble>
-          )}
-          {view.entries ? (
-            // an abstract or PDF page: its two entries side by side, in the primary button's place (S-P-50b)
-            <div className="flex gap-2">
-              <Button variant="primary" className="flex-1" disabled={view.entries.html.disabled} onClick={actions.openHtml}>{view.entries.html.label}</Button>
-              <Button variant="primary" className="flex-1" disabled={view.entries.pdf.disabled} onClick={actions.openPdf}>{view.entries.pdf.label}</Button>
-            </div>
-          ) : (
-            // aria-label keeps the accessible name at the label alone, badge or not (the e2e suites find the button by name)
-            <Button variant={view.primary.action === 'restore' ? 'secondary' : 'primary'} disabled={view.primary.disabled} aria-label={view.primary.label} onClick={actions[view.primary.action]}>
-              {view.primary.label}
-              {view.primary.shortcut && (
-                // `current`: the chip reads on the red “Translate this page” and on the plain “Show original” alike, where a
-                // white chip would disappear into the button
-                <kbd className="rounded-[6px] bg-current/15 px-1.5 py-0.5 font-ui text-[11px] font-semibold">{view.primary.shortcut}</kbd>
-              )}
-            </Button>
-          )}
-          {view.secondary && <Button variant="text" className="self-center" onClick={actions[view.secondary.action]}>{view.secondary.label}</Button>}
-
-          <Segmented value={view.mode.value} options={modes(view.mode.disabled)} onChange={actions.chooseMode} />
-          {view.mode.note && <p className="px-1 text-[11px] text-fg-2">{view.mode.note}</p>}
-
-          {/* The three reading choices on one row: two switches and the way in to the styles. The
-              row is what the menu is measured against — a menu the width of the “Style” button
-              alone would be a column of clipped names (S-P-82) */}
-          <ReadingRow view={view} actions={actions} />
-        </>
-      )}
-
-      {error && <p role="alert" className="px-1 text-[12px] text-accent">{S.actionFailed(error)}</p>}
+    <main className="ui popup" data-kind={view.kind}>
+      <BrandRow onSettings={() => actions.openOptions()} />
+      {view.kind === 'loading' && <p className="line solo">{S.loading}</p>}
+      {view.kind === 'find' && view.find && <Find find={view.find} failure={failure} actions={actions} />}
+      {(view.kind === 'paper' || view.kind === 'entry' || view.kind === 'reader') && <Controls view={view} failure={failure} actions={actions} />}
+      {/* a failed action said to screen readers, politely (§9: nothing is assertive); its line is drawn in place */}
+      <div role="status" className="sr-only">{failure}</div>
     </main>
   )
 }
 
-/** A separate rounded block for anything that needs attention: text on the left, its button on the right */
-function Bubble({ tone = 'alert', children }: { tone?: 'alert' | 'neutral'; children: ReactNode }) {
+/** The brand row (§5.1): the mark and the name leading, the settings' gear trailing */
+function BrandRow({ onSettings }: { onSettings: () => void }) {
+  const tip = useTip(S.settings)
   return (
-    <div className={`flex items-center justify-between gap-3 rounded-card px-3.5 py-3 text-[12px] leading-relaxed ${tone === 'alert' ? 'bg-accent-soft' : CARD}`}>
-      {children}
-    </div>
+    <header className="brand-row">
+      <span className="wordmark">
+        <img src="/icon/mark.svg" alt="" width={20} height={17} />
+        {S.brand}
+      </span>
+      <button type="button" className="tbtn" aria-label={S.settings} onClick={onSettings} {...tip.props}>
+        <Icon node={Settings} />
+      </button>
+      {tip.tip}
+    </header>
   )
 }
 
-/** A row that opens a menu under itself. Big: label above the value. Compact: label left, value right */
-function MenuRow({ kind, label, row, view, actions, compact = false, last = false }: { kind: MenuKind; label: string; row: { value: string; replaced?: string }; view: View; actions: PopupActions; compact?: boolean; last?: boolean }) {
-  const open = view.menu?.kind === kind
-  const anchor = useRef<HTMLDivElement>(null)
-  const trigger = useRef<HTMLButtonElement>(null)
-  // The value is truncated when it is long — a language's full name runs to "Simplified Mandarin
-  // Chinese (简体中文)" — so the whole of it is on the row for a reader who needs to check
-  const value = (
-    <span title={row.value} className="truncate font-semibold">
-      {row.value}
-      {row.replaced && <span className="ml-1.5 font-medium text-fg-2 line-through">{row.replaced}</span>}
-    </span>
-  )
+function Controls({ view, failure, actions }: { view: View; failure: string | null; actions: PopupActions }) {
   return (
-    <div ref={anchor} className={last ? '' : 'border-b border-line'}>
-      <button
-        ref={trigger}
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => (open ? actions.closeMenu() : actions.openMenu(kind))}
-        className={`flex w-full cursor-pointer items-center justify-between px-3.5 text-left ${compact ? 'py-2.5' : 'py-3'}`}
-      >
-        {compact ? (
+    <>
+      <div className="group">
+        <MenuRow kind="service" label={S.rows.service} row={view.service} menu={view.menus?.service ?? null} open={view.menu === 'service'} actions={actions} onPick={actions.chooseService} onAction={() => actions.downloadPack()} />
+        <hr className="rule" />
+        <MenuRow kind="language" label={S.rows.language} row={view.language} menu={view.menus?.language ?? null} open={view.menu === 'language'} actions={actions} onPick={id => actions.chooseLanguage(id as Parameters<PopupActions['chooseLanguage']>[0])} />
+        {view.prompt && (
           <>
-            <span className="text-[12px] font-semibold text-fg-2">{label}</span>
-            <span className="flex min-w-0 items-center gap-2">{value}<Chevron up={open} /></span>
-          </>
-        ) : (
-          <>
-            <span className="flex min-w-0 flex-col gap-px">
-              <span className="text-[11px] font-semibold text-fg-2">{label}</span>
-              {value}
-            </span>
-            <Chevron up={open} />
+            <hr className="rule" />
+            <MenuRow kind="prompt" label={S.rows.prompt} row={view.prompt} menu={view.menus?.prompt ?? null} open={view.menu === 'prompt'} actions={actions} onPick={actions.choosePrompt} />
           </>
         )}
-      </button>
-      {open && view.menu && (
-        <Menu
-          anchor={anchor}
-          trigger={trigger}
-          items={view.menu.items}
-          label={view.menu.label}
-          search={view.menu.search}
-          searchPlaceholder={S.menu.searchLanguages}
-          empty={S.menu.noMatch}
-          onSelect={id => {
-            if (kind === 'service') actions.chooseService(id)
-            else if (kind === 'language') actions.chooseLanguage(id as Parameters<PopupActions['chooseLanguage']>[0])
-            else actions.choosePrompt(id)
-          }}
-          onAction={() => actions.downloadPack()}
-          onClose={actions.closeMenu}
-        />
-      )}
-    </div>
+      </div>
+      <div className="stack">
+        {view.note && <Note tone={view.note.tone} text={view.note.text} action={view.note.settings ? { label: S.settings, run: () => actions.openOptions() } : undefined} />}
+        {view.failed && <Note tone="alert" text={view.failed} action={{ label: S.failed.retry, run: actions.retryFailed }} />}
+        {view.entries
+          ? <Entries html={{ ...view.entries.html, run: actions.openHtml }} pdf={{ ...view.entries.pdf, run: actions.openPdf }} />
+          : <Primary view={view} actions={actions} />}
+        {failure && <p className="line mark alert"><Icon node={CircleAlert} size={14} />{failure}</p>}
+        {view.kind !== 'entry' && (
+          <div className="reading">
+            <Segmented
+              label={R.display.name}
+              value={view.mode.value}
+              fit
+              // The bar follows MODE_ORDER, the one place the order is decided (UI.md S-P-70). A mode the page cannot show
+              // (the PDF reader cannot stack: its design, §9.2) stays in place, greyed, its title the reason (S-P-75)
+              options={MODE_ORDER.map(value => ({
+                value,
+                label: S.mode[value],
+                icon: <ModeIcon mode={value} />,
+                title: view.mode.disabled?.includes(value) ? S.mode.stackPdf : S.mode[`${value}Title` as const],
+                disabled: view.mode.disabled?.includes(value),
+              }))}
+              onChange={actions.chooseMode}
+            />
+            {view.mode.note && <p className="line mark"><Icon node={Info} size={14} />{view.mode.note}</p>}
+          </div>
+        )}
+      </div>
+      {view.kind !== 'entry' && <Foot view={view} actions={actions} />}
+    </>
   )
 }
 
 /**
- * The last row of the popup: “Hover highlight”, “Images” and the way in to “Style”, side by side. All three
- * are "how this reads", as against the card at the top, which is what translates (S-P-82).
- *
- * The **row** is the menu's anchor, not the button: the menu is then as wide as the card above it
- * rather than as wide as four characters. The button is passed as the trigger, so pressing it again
- * closes the menu while a click on either switch closes it and still toggles the switch.
+ * The primary (§5.1, §5.2): the brand's for translating, the neutral's for showing the original, neutral grey and without
+ * its key when it cannot act (Part 3's `Button`). The key rides on the face it acts on (S-P-50 / 51), brand or neutral:
+ * the view model says which. Paused or behind its settings — or offered its way back, the retranslate cue — both faces
+ * side by side, the brand's first
  */
-function ReadingRow({ view, actions }: { view: View; actions: PopupActions }) {
-  const open = view.menu?.kind === 'style'
-  const anchor = useRef<HTMLDivElement>(null)
-  const trigger = useRef<HTMLButtonElement>(null)
+function Primary({ view, actions }: { view: View; actions: PopupActions }) {
+  const { primary, secondary } = view
+  const brand = !primary.disabled && primary.action !== 'restore' && primary.action !== 'readerOriginal'
+  // aria-label keeps the accessible name at the words alone, key or not (the e2e suites find the buttons by name)
+  const main = (
+    <Button kind={brand ? 'brand' : 'neutral'} size="lg" disabled={primary.disabled} aria-label={primary.label} shortcut={primary.shortcut} onClick={actions[primary.action]}>
+      {primary.label}
+    </Button>
+  )
+  if (!secondary) return main
   return (
-    // Without the style row (the reader open) the two switches sit together at the start, not pushed to the two ends
-    <div ref={anchor} className={`flex items-center px-1 text-[12px] font-semibold text-fg-2 ${view.style ? 'justify-between gap-2' : 'gap-5'}`}>
-      <Switch small checked={view.highlight} onChange={actions.setHighlight} label={S.rows.highlight} text={S.rows.highlight} title={S.rows.highlightTitle} />
-      <Switch small checked={view.images} onChange={actions.setImages} label={S.rows.images} text={S.rows.images} />
-      {/* no style row where the translation styles do nothing: a typeset PDF (the reader's design, §9.2) */}
-      {view.style && (
-        <button
-          ref={trigger}
-          type="button"
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          title={view.style.value}
-          onClick={() => (open ? actions.closeMenu() : actions.openMenu('style'))}
-          className={`flex shrink-0 cursor-pointer items-center gap-1 ${open ? 'text-fg' : 'hover:text-fg'}`}
-        >
-          {S.rows.style}
-          <Chevron up={open} />
-        </button>
-      )}
-      {open && view.menu && (
-        <Menu
-          anchor={anchor}
-          trigger={trigger}
-          items={view.menu.items}
-          label={view.menu.label}
-          search={false}
-          empty={S.menu.noMatch}
-          onSelect={actions.chooseStyle}
-          onClose={actions.closeMenu}
-        />
-      )}
+    <div className="pair">
+      {main}
+      <Button kind="neutral" size="lg" aria-label={secondary.label} shortcut={secondary.shortcut} onClick={actions[secondary.action]}>{secondary.label}</Button>
     </div>
   )
 }
 
-function Chevron({ up = false }: { up?: boolean }): ReactNode {
-  return <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-fg-2/60"><path d={up ? 'm18 15-6-6-6 6' : 'm6 9 6 6 6-6'} /></svg>
-}
-// The three mode marks (the reviewer's, 2026-09-10). The translation-only mark's lines are drawn in the card colour
-// rather than white so they stay visible on the light fill of a selected segment in dark mode
-function StackIcon() {
-  return <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5" /><path d="M3.5 12h17v5a3.5 3.5 0 0 1-3.5 3.5H7A3.5 3.5 0 0 1 3.5 17z" fill="currentColor" stroke="none" /></svg>
-}
-function SideIcon() {
-  return <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5" /><path d="M12 3.5h5A3.5 3.5 0 0 1 20.5 7v10a3.5 3.5 0 0 1-3.5 3.5h-5z" fill="currentColor" stroke="none" /></svg>
-}
-function OnlyIcon() {
-  return <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5" fill="currentColor" /><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5" stroke="var(--axt-card)" strokeWidth="1.6" strokeLinecap="round" /></svg>
+/** The foot (§5.1): the two switches with their words, their whole row their label (§9); the styles trailing */
+function Foot({ view, actions }: { view: View; actions: PopupActions }) {
+  return (
+    <div className={view.style ? 'foot' : 'foot short'}>
+      {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
+      <label className="toggle" title={S.rows.highlightTitle}>
+        <Switch label={S.rows.highlight} checked={view.highlight} onChange={actions.setHighlight} />
+        {S.rows.highlight}
+      </label>
+      {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
+      <label className="toggle">
+        <Switch label={S.rows.images} checked={view.images} onChange={actions.setImages} />
+        {S.rows.images}
+      </label>
+      {view.style && view.menus?.style && <StyleButton value={view.style.value} menu={view.menus.style} open={view.menu === 'style'} actions={actions} onPick={actions.chooseStyle} />}
+    </div>
+  )
 }
