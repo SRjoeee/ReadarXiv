@@ -288,7 +288,7 @@ One way of writing a list on the whole page (the lesson of 2026-09-26: tiles bes
 
 - **A card**: `chrome`, radius 10, 4 px in, a hairline and a 1 px shadow in light, a hairline of white 6 % in dark.
   Group headings (13 px / 600) sit on the words' edge, 22 px after the card before them and 8 px above their own; a
-  heading may carry an aside at its trailing end (12 px, `ink-3`) or a text button.
+  heading may carry an aside at its trailing end (12 px, `ink-2`: `ink-3` words read under 4.5:1) or a text button.
 - **A row**: at least 48 px, 8 px by 10 px in, radius 6; a label (13 px, `ink`) over a description (12 px / 1.4,
   `ink-2`); a value, a switch, a status or a button at its trailing edge. Rows are separated by a hairline inset 10 px.
 - **Three leading edges and one trailing edge, 14 px from the card's**: controls at 14; words at 42 after a leading

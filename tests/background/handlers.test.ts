@@ -106,6 +106,33 @@ describe('the background\'s handlers', () => {
       await harness({ ...answering({ kind: 'auth', message: 'bad key', isolatable: false, status: 401 }), health: gone, getConfig: vi.fn(async () => DEFAULT_CONFIG) }).send(named)
       expect(gone.reject).not.toHaveBeenCalled()
     })
+
+    it('a candidate\'s test (a service as the settings page would save it): a success clears the mark only when it tested the stored key and address; a failure touches nothing (the redesign\'s design, §4; ruling 16)', async () => {
+      const answering = (answer: unknown) => ({ router: { forCall: vi.fn(async () => ({ translate: vi.fn(async () => answer) })) } as unknown as HandlerDeps['router'] })
+      const health = () => ({ reject: vi.fn(async () => undefined), clear: vi.fn(async () => true) })
+      const stored = vi.fn(async () => ({ ...DEFAULT_CONFIG, services: [SVC] }))
+      const tested = (candidate: typeof SVC) => ({ ...CALL, type: 'axt:translate' as const, providerId: SVC.id, candidate })
+      const good = { ok: true, result: { segments: [], provider: SVC.id }, cached: 0 }
+
+      // the stored key and address, another model: the stored key answered
+      const same = health()
+      await harness({ ...answering(good), health: same, getConfig: stored }).send(tested({ ...SVC, model: 'other/model' }))
+      expect(same.clear).toHaveBeenCalledWith(SVC.id)
+
+      // a new key: not cleared here — the save that follows changes the key, and the watcher clears the mark then
+      const renewed = health()
+      await harness({ ...answering(good), health: renewed, getConfig: stored }).send(tested({ ...SVC, apiKey: 'sk-new' }))
+      expect(renewed.clear).not.toHaveBeenCalled()
+
+      // a refusal, of the stored key or another: nothing marked, nothing cleared, the answer as it came
+      for (const candidate of [SVC, { ...SVC, apiKey: 'sk-new' }]) {
+        const failed = health()
+        const error = { kind: 'auth', message: 'bad key', isolatable: false, status: 401 }
+        const answer = await harness({ ...answering({ ok: false, error }), health: failed, getConfig: stored }).send(tested(candidate))
+        expect([failed.reject.mock.calls.length, failed.clear.mock.calls.length]).toEqual([0, 0])
+        expect(answer).toEqual({ ok: false, error })
+      }
+    })
   })
 
   it('axt:cancel-scope answers how many requests were withdrawn, and 0 when the withdrawal itself fails', async () => {

@@ -7185,3 +7185,61 @@ git commit -m "docs(ui): Part 5's record
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
+
+## Part 5: done
+
+**Commits** (on `exp/ui-settings`, from `56d02f2d`): Tasks 50–64 and their fix rounds, `f6223fa0` … `04d88e78`; the
+batch of parked minors `9a4bf905`; the local Codex review's fix `768c6fce` and its rounds `d94d48fd`, `7f17c894`, `772062dd`, `ba101468`, `a9e97a3f`; the floating button's switch `a24ff50b`; this record. Every task was reviewed, every
+fix round re-reviewed; the ledger (`.superpowers/sdd/2026-09-26-extension-ui-redesign-part5-settings/progress.md`) holds
+each ruling with its reason.
+
+**What the probe measured** (`tests/e2e/probes/settings-align.mjs`, on the build, both themes, both languages, 26 states
+each): every item's centre within 0.5 px of its row's; the words at 14 / 42 / 70 px from the card, a leading control at
+14 / 42, the trailing edge at 14 (an icon button's glyph box); every group heading at 14; a hovered row's fill on the
+card's inner edge with both separators stepped aside; the small segmented controls at exactly their agreed widths as a
+set per state (阅读: 220, 200; the style editor: 210, 300, 120); a search keyword found only in `O.search.keywords`
+finding its row; at 320 px and at 200 % zoom nothing past its card, no sideways scroll, the sidebar above the column
+below 640 px. It fails on a state that draws nothing. Final run: `every row on its lines, in both themes and both
+languages`. What it found and the sheet now does: a row's end moves under its words wherever they would have less than
+12em (a query on the window could not tell a 200 % column from a wide one); a card too narrow for the theme control
+drops its icons and keeps its words (a container query in the page's sheet, not the shared control).
+
+**Settled after the rulings** (the ledger has each): the connection test refuses a candidate whose id is not the one
+named, before the chain; a deletion's side effects (the sessions' rebind, the origin's release) wait for its write, which
+counts as landed only when the write resolves with its own change's value (so the unreadable-value refusal, which
+resolves with the defaults, counts as refused); the release keeps every origin a pending deletion or undo can come back
+to, and gives back none while the stored value cannot be read — known from the read's own verdict (`readConfig()`,
+new in `src/config/storage.ts`, which `surface-config.ts` now reads through too); a refused undo comes back with a fresh
+timer, and one refused after the section unmounted still commits; the forms stay live through StrictMode's double run
+(a ref a cleanup sets is reset by its setup); the floating button's switch is held out of sight until the background
+says its state (it used to say on, then flip — the old page did too, and `e2e:floating` caught it once); a refused deletion leaves the row with a failed-save line in all three lists, the focus on the row; a permission granted after its form is gone
+is given back; a failed save is one sentence for the page (`O.saveFailed`); the glossary's refused write can be retried;
+the prompts' editor is drawn only while their list is open and writes only the field that changed; closing the prompts
+keeps a pending undo; the sample's language is `zh-CN`; the address chips' group is named 常用地址; the dimming row has
+its keywords; the probe checks agreed widths as sets and fails on an empty state.
+
+**Names that came out otherwise than this plan says**: `O.services.saveFailed` is top-level `O.saveFailed`; new words
+`O.glossary.retry` (重试 / Try again), `O.glossary.addSource` (添加原文 / Add a term), `O.services.baseURLSuggestions`
+(常用地址 / Common addresses), `O.search.keywords['appearance/dim']`; `O.prompts.builtIn['precision-rewrite']` reads
+「翻译即改写：…」 without quotes, as settings-2 draws it; the diagnostics line says 「API Key」, the pack's one term.
+
+**For the maintainer's look** (Part 7): the deep link's focus ring beside its flash (a programmatic focus on a load with
+no pointer yet); the pencil choosing the style it opens, and a deletion falling back to `styles[0]`; the new words above.
+
+**For Part 7 to remove once both pages have left them**: `src/ui/appearance/*` except `tiles.ts`, whose `styleTile`
+moves (the settings page, the popup's view model and the controls sheet's `specimens/menus.tsx` import it), with their
+tests (`tests/ui/advanced-css.test.ts`, `tests/ui/profile-editor.test.ts`) and the two comments that still name them
+(`ui/ColourPick.tsx:6` "today's ColorField's", `sections/StyleEditor.tsx:115` "the drawer's AdvancedCss"); the `O.reading`
+and `O.services` keys only those components read ("Kept for Part 7", under the rulings), `O.close`, and
+`O.services.baseURLHint` / `O.services.more` once the controls sheet's `specimens/forms.tsx` reads live words;
+`withItem` in `ui/lists.ts` (no production caller since Task 63's fix round); `configFallbackReason()` in
+`src/config/storage.ts` (no caller in `src` since `a9e97a3f`). For Part 7's documents: UI.md §3.2's ids
+that the design's §10.2 renames or retires (its list is the authority), the stale wording of UI.md S-O-49b / S-O-55 /
+S-O-71 … 73 the task reviews named, and DESIGN §9's line that an undone deletion loses its refused mark. For Part 7's
+verification: the reader spikes this part edited but could not run without the TeX server (`cache-faults.mjs`,
+`cache-revisit.mjs`, `viewer-faults.mjs`, `reader-a11y.mjs`, `reader-ui-live.mjs`); `e2e:pdf` failed 4 checks once
+(the popup's page state on hep-th/9711200's PDF and on the abstract page) and passed 26/26 on the rerun — watch it.
+Carried to #299: a variable inserted in a prompt is outside the browser's undo stack; a tab closed in the moment between
+a service's deletion and its write leaves open pages on that service until they reload; a service deleted while the
+stored value cannot be read keeps its origin granted. For the merges: every test mocking `@/config/storage` must
+provide `readConfig` (Part 4's popup tests above all), and `tests/popup/data.test.ts` is changed on both sides.

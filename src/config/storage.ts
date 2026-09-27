@@ -182,8 +182,10 @@ function migrateStyle(style: V11Style): Appearance {
 
 /**
  * Why the latest `getConfig()` fell back; `null` when the configuration is fine.
- * Each execution context (popup / content / background) keeps the result of its own call — they share no memory,
- * and the popup calls `getConfig()` itself anyway, so reading this variable gives exactly its own conclusion
+ * Each execution context (popup / content / background) keeps the result of its own calls — they share no memory.
+ * Within one context it is the latest call's to finish, not necessarily the caller's own: another read finishing
+ * between a caller's `await getConfig()` and its look here puts its own verdict in its place. A caller that needs
+ * its own read's verdict takes `readConfig()`, which returns it with the value
  */
 let fallbackReason: FallbackReason | null = null
 
@@ -229,18 +231,32 @@ function describeFallback(stored: unknown, issues: readonly { path: PropertyKey[
  * A stored value failing the schema (a failed upgrade, a hand edit gone wrong) falls back to the defaults rather than
  * taking the extension down. **The fallback cannot be silent**: the reader's key is stored yet out of effect, the
  * translation quietly degrades to a free engine, and with no clue in the interface nobody would find out (met 2026-09-06: a v7 configuration + a v6 build)
+ *
+ * **The verdict comes back with the value it belongs to**, in one answer, and the module's `fallbackReason` is left
+ * as it was: a caller that acts on the verdict — the settings page gives an origin back only on a list it could read —
+ * must not be handed another read's
  */
-export async function getConfig(): Promise<Config> {
+export async function readConfig(): Promise<ConfigReading> {
   const stored = await configItem.getValue()
   const parsed = configSchema.safeParse(stored)
-  if (parsed.success) {
-    fallbackReason = null
-    return parsed.data
-  }
-  fallbackReason = describeFallback(stored, parsed.error.issues)
+  if (parsed.success) return { config: parsed.data, fallbackReason: null }
+  const reason = describeFallback(stored, parsed.error.issues)
   // The cause and the failing field's path only: a validation message is not ours to vouch for, and the log never holds a stored value (hard rule 5)
-  console.warn(`[axt] the stored configuration cannot be read, defaults in use: ${fallbackReason.kind}${fallbackReason.kind === 'invalid' ? ` at ${fallbackReason.where}` : ''}${'stored' in fallbackReason ? ` (v${fallbackReason.stored}, this build v${fallbackReason.supported})` : ''}`)
-  return DEFAULT_CONFIG
+  console.warn(`[axt] the stored configuration cannot be read, defaults in use: ${reason.kind}${reason.kind === 'invalid' ? ` at ${reason.where}` : ''}${'stored' in reason ? ` (v${reason.stored}, this build v${reason.supported})` : ''}`)
+  return { config: DEFAULT_CONFIG, fallbackReason: reason }
+}
+
+/** One read of the stored configuration: the configuration in effect, and why that read fell back to the defaults — `null` when it did not */
+export interface ConfigReading {
+  config: Config
+  fallbackReason: FallbackReason | null
+}
+
+/** `readConfig()`'s value; its verdict is kept for `configFallbackReason()` */
+export async function getConfig(): Promise<Config> {
+  const reading = await readConfig()
+  fallbackReason = reading.fallbackReason
+  return reading.config
 }
 
 /** The refusal's `name`, a string of its own: it crosses the message boundary (shared/messages.ts `failure`), and a class's own name does not survive minification */

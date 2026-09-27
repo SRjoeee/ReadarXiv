@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
-import { createHealthKeeper, idsToClear, isRefusal, shouldMarkRefusal } from '@/entrypoints/background/health-guard'
+import { createHealthKeeper, idsToClear, isRefusal, shouldMarkRefusal, testsStoredKey } from '@/entrypoints/background/health-guard'
 import type { ProviderErrorKind } from '@/providers/types'
 
 // Whether a failure marks the service health record, and which marks a configuration change voids (the redesign's
@@ -96,6 +96,18 @@ describe('idsToClear', () => {
 
   it('never clears a free engine\'s id', () => {
     expect(idsToClear(configWith(), { ...DEFAULT_CONFIG, services: [], provider: 'google-web' }, new Set(['microsoft']))).toEqual([])
+  })
+})
+
+describe('testsStoredKey', () => {
+  it('is true for a candidate whose key and address are the service\'s stored ones: the stored key answered', () => {
+    expect(testsStoredKey({ ...SVC, name: 'Renamed', model: 'other/model' }, configWith())).toBe(true)
+  })
+
+  it('is false for another key or another address, and for a service not stored yet', () => {
+    expect(testsStoredKey({ ...SVC, apiKey: 'sk-new' }, configWith())).toBe(false)
+    expect(testsStoredKey({ ...SVC, baseURL: 'https://api.example.com/v1' }, configWith())).toBe(false)
+    expect(testsStoredKey({ ...SVC, id: 'svc-new00000' }, configWith())).toBe(false)
   })
 })
 

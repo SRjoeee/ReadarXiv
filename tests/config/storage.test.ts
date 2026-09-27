@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { z } from 'zod'
 import { appearanceSchema } from '@/config/appearance'
-import { CONFIG_VERSION, DEFAULT_CONFIG, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
+import { CONFIG_VERSION, type Config, DEFAULT_CONFIG, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
 import { serviceSchema } from '@/config/services'
-import { chooseFirstTarget, configItem, getConfig, resetConfig, setConfig, watchConfigChange } from '@/config/storage'
+import { chooseFirstTarget, configFallbackReason, configItem, getConfig, readConfig, resetConfig, setConfig, watchConfigChange } from '@/config/storage'
 
 /** A reader-added service, the shape v12 stores */
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
@@ -157,6 +157,65 @@ describe('config storage', () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, services: [{ ...SVC, model: '' }] })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, services: [{ ...SVC, baseURL: 'not a url' }] })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, provider: 'svc-nope' })).rejects.toThrow()
+  })
+})
+
+describe('a read and its verdict (readConfig)', () => {
+  beforeEach(() => { fakeBrowser.reset() })
+  afterEach(() => { vi.restoreAllMocks() })
+  /** Fails the schema at `mode`; the version is this build's, so the verdict names the field */
+  const BROKEN = { ...DEFAULT_CONFIG, mode: 'sideways' }
+  const SOUND: Config = { ...DEFAULT_CONFIG, targetLanguage: 'jpn' }
+  const BROKEN_VERDICT = { kind: 'invalid', where: 'mode' }
+
+  /**
+   * Two reads of one context, both started before the store answers either: the store answers the first with `first`,
+   * the second with `second` (the value repaired, or broken, elsewhere in between), in one go. The second read then
+   * finishes after the first has its answer and before the first's caller runs its next line. `look` is one caller's
+   * read and its look at the verdict; what the two callers saw is returned
+   */
+  async function interleaved<T>(first: unknown, second: unknown, look: () => Promise<T>): Promise<[T, T]> {
+    const answers: ((value: unknown) => void)[] = []
+    vi.spyOn(configItem, 'getValue').mockImplementation(() => new Promise(resolve => { answers.push(resolve as (value: unknown) => void) }))
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const seen = Promise.all([look(), look()])
+    expect(answers).toHaveLength(2)
+    answers[0]!(first)
+    answers[1]!(second)
+    return seen
+  }
+  /** The pair `readConfig` replaces for a caller that acts on the verdict */
+  const pair = async () => ({ config: await getConfig(), fallbackReason: configFallbackReason() })
+
+  it('a read found unreadable says so, even when a read that finds the value readable finishes before its caller looks (round 5)', async () => {
+    // the premise: in this interleaving the pair hands the first caller the second read's verdict beside its own value
+    const [paired] = await interleaved(BROKEN, SOUND, pair)
+    expect(paired).toEqual({ config: DEFAULT_CONFIG, fallbackReason: null })
+    vi.restoreAllMocks()
+    const [unreadable, readable] = await interleaved(BROKEN, SOUND, readConfig)
+    expect(unreadable).toEqual({ config: DEFAULT_CONFIG, fallbackReason: expect.objectContaining(BROKEN_VERDICT) })
+    expect(readable).toEqual({ config: SOUND, fallbackReason: null })
+  })
+
+  it('a read found readable says so, even when a read that finds the value unreadable finishes before its caller looks (round 5)', async () => {
+    const [paired] = await interleaved(SOUND, BROKEN, pair)
+    expect(paired).toEqual({ config: SOUND, fallbackReason: expect.objectContaining(BROKEN_VERDICT) })
+    vi.restoreAllMocks()
+    const [readable, unreadable] = await interleaved(SOUND, BROKEN, readConfig)
+    expect(readable).toEqual({ config: SOUND, fallbackReason: null })
+    expect(unreadable).toEqual({ config: DEFAULT_CONFIG, fallbackReason: expect.objectContaining(BROKEN_VERDICT) })
+  })
+
+  it('getConfig is readConfig\'s value, its verdict kept for configFallbackReason(); readConfig leaves that verdict as it was', async () => {
+    await fakeBrowser.storage.local.set({ config: BROKEN, config$: { v: CONFIG_VERSION } })
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    expect(await getConfig()).toEqual(DEFAULT_CONFIG)
+    expect(configFallbackReason()).toMatchObject(BROKEN_VERDICT)
+    await fakeBrowser.storage.local.set({ config: SOUND })
+    expect(await readConfig()).toEqual({ config: SOUND, fallbackReason: null })
+    expect(configFallbackReason()).toMatchObject(BROKEN_VERDICT)
+    expect(await getConfig()).toEqual(SOUND)
+    expect(configFallbackReason()).toBeNull()
   })
 })
 

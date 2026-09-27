@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import { serveSite } from './live-site.mjs'
 import { BUILD, launchWithReader } from './extension.mjs'
 import { copyWithGrants } from '../../../tests/e2e/ext-copy.mjs'
-import { addService, openOptions, setSwitch } from '../../../tests/e2e/options-page.mjs'
+import { openOptions, seedService, setSwitch } from '../../../tests/e2e/options-page.mjs'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 const { default: AxeBuilder } = await import(createRequire(REPO).resolve('@axe-core/playwright'))
@@ -171,7 +171,7 @@ if (process.env.AXT_LIVE !== '0') {
   await patch({ targetLanguage: 'cmn' })
   await page.waitForTimeout(800)
   const options = await openOptions(context, id)
-  await addService(options, { name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' })
+  console.log('keyless service:', await seedService(context.serviceWorkers()[0], { id: 'svc-keyless0', name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' }))
   await setSwitch(options, '出问题时自动改用免费服务', false)
   await page.bringToFront()
   await page.evaluate(() => window.__reader.debug?.pdfCache?.clear())

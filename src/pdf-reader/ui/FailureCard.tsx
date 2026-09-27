@@ -12,7 +12,7 @@ export function FailureCard({ controller }: { controller: ReaderController }) {
   const card = useReader(controller, cardOf)
   if (!card) return null
   const act = card.action === 'settings'
-    ? () => void browser.tabs.create({ url: (browser.runtime.getURL as (p: string) => string)('/options.html#services') })
+    ? () => void browser.tabs.create({ url: (browser.runtime.getURL as (p: string) => string)('/options.html#translate/services') })
     : controller.retry
   return (
     <div className="chrome card" data-card>

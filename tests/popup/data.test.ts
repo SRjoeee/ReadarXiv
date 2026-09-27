@@ -30,9 +30,9 @@ vi.mock('wxt/browser', () => ({
 }))
 vi.mock('@/config/storage', () => ({
   getConfig: async () => { if (!store.config) throw new Error('no config'); return store.config },
+  readConfig: async () => { if (!store.config) throw new Error('no config'); return { config: store.config, fallbackReason: null } },
   setConfig: async (config: Config) => { store.config = config },
   watchConfig: (callback: (config: Config) => void) => { store.watchers.push(callback); return () => { store.watchers = store.watchers.filter(w => w !== callback) } },
-  configFallbackReason: () => null,
 }))
 vi.mock('@/shared/messages', async importOriginal => ({
   ...(await importOriginal<typeof import('@/shared/messages')>()),

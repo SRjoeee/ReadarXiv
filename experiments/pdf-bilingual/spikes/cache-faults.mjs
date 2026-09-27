@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { serveSite } from './live-site.mjs'
 import { BUILD, launchWithReader } from './extension.mjs'
 import { copyWithGrants } from '../../../tests/e2e/ext-copy.mjs'
-import { addService, chooseBuiltIn, openOptions, setSwitch } from '../../../tests/e2e/options-page.mjs'
+import { chooseBuiltIn, openOptions, seedService, setSwitch } from '../../../tests/e2e/options-page.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const serve = handler => new Promise(r => { const s = createServer(handler).listen(0, '127.0.0.1', () => r(s)) })
@@ -45,7 +45,7 @@ const paper = '2608.02163'
 await page.goto(urlOf(paper))
 await done()
 const options = await openOptions(context, id)
-console.log('unanswering service:', await addService(options, { name: 'silent', baseURL: 'http://127.0.0.1:9/v1', model: 'x' }))
+console.log('unanswering service:', await seedService(context.serviceWorkers()[0], { id: 'svc-spksilnt', name: 'silent', baseURL: 'http://127.0.0.1:9/v1', model: 'x' }))
 // no fallback, so that every batch is lost rather than translated by a free engine
 await setSwitch(options, '出问题时自动改用免费服务', false)
 await page.goto(urlOf(paper))
@@ -54,8 +54,8 @@ const status = await page.evaluate(() => window.__reader?.status ?? '')
 check('a copy on screen is not called the original', !/still shows the original/.test(status ?? ''), status ?? '')
 
 // 3. a copy that cannot be shown: its PDF replaced by bytes that are none, then a visit, on a service that answers
-await chooseBuiltIn(options, 'Google 翻译')
 await setSwitch(options, '出问题时自动改用免费服务', true)
+await chooseBuiltIn(options, 'Google 翻译')
 await page.evaluate(async () => {
   const d = window.__reader.debug, k = d.cacheKey(), r = await d.pdfCache.get(k.digest, k.lang)
   const { pdf, createdAt, openedAt, ...body } = r

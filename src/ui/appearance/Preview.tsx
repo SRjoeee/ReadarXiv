@@ -8,7 +8,7 @@ import { appearanceSheet } from '@/core/renderer'
 import { BLUR_ATTR, ON_ATTR, UNDERLINE_ATTR } from '@/core/renderer/attrs'
 import { T_CLASS } from '@/core/marks'
 import type { HighlightProfile, Look, StyleProfile } from '@/config/appearance'
-import { O } from '@/ui/strings'
+import { O, PREVIEW_LANG } from '@/ui/strings'
 
 export function Preview({ style, highlight, band = false, height = 96 }: { style: StyleProfile; highlight: HighlightProfile; band?: boolean; height?: number }) {
   const look: Look = { style, highlight }
@@ -21,8 +21,8 @@ export function Preview({ style, highlight, band = false, height = 96 }: { style
   // to show the colour at its strength, which is the only thing this profile decides
   const body = band
     ? `<p>${O.reading.previewSource.replace('bounded', '<span class="band">bounded</span>')}</p>`
-      + `<p class="${T_CLASS}" lang="zh-CN">${O.reading.previewTarget.replace('有界的', '<span class="band">有界的</span>')}</p>`
-    : `<p>${O.reading.previewSource}</p><p class="${T_CLASS}" lang="zh-CN">${O.reading.previewTarget}</p>`
+      + `<p class="${T_CLASS}" lang="${PREVIEW_LANG}">${O.reading.previewTarget.replace('有界的', '<span class="band">有界的</span>')}</p>`
+    : `<p>${O.reading.previewSource}</p><p class="${T_CLASS}" lang="${PREVIEW_LANG}">${O.reading.previewTarget}</p>`
   const srcDoc = `<!doctype html><html ${attrs}><head><meta charset="utf-8">`
     + `<style>${appearanceSheet(look)}`
     + 'body{margin:0;padding:10px 12px;font:14px/1.7 system-ui;color:#1e1e24;background:#fff}'

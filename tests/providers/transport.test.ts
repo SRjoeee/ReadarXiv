@@ -121,6 +121,32 @@ describe('createLocalTransport: translation', () => {
     expect(await t.translate({ request: req, providerId: 'chrome-builtin' })).toEqual({ ok: false, error: { kind: 'unknown', message: 'engine chrome-builtin is not on the current chain', isolatable: false } })
   })
 
+  describe('a candidate: the settings page\'s test of a service as it would save it (the redesign\'s design, §6.3)', () => {
+    it('a service not stored yet is asked as the call carries it', async () => {
+      const t = await withChain([{ ...mockProvider(async r => ({ segments: r.segments, provider: SVC.id })), id: SVC.id }])
+      const fresh = { ...SVC, id: 'svc-fresh000', apiKey: '' }
+      expect(await t.translate({ request: req, providerId: fresh.id, candidate: fresh })).toEqual({ ok: false, error: { kind: 'no-key', message: 'no API key configured', isolatable: false } })
+    })
+
+    it('a stored service carried with another key is asked with that key, never through the chain\'s step', async () => {
+      const t = await withChain([{ ...mockProvider(async r => ({ segments: r.segments, provider: SVC.id })), id: SVC.id }])
+      expect((await t.translate({ request: req, providerId: SVC.id })).ok).toBe(true)
+      expect(await t.translate({ request: req, providerId: SVC.id, candidate: { ...SVC, apiKey: '' } })).toMatchObject({ ok: false, error: { kind: 'no-key' } })
+    })
+
+    it('a candidate that is not the service named is refused', async () => {
+      const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: 'mock' }))])
+      expect(await t.translate({ request: req, providerId: 'svc-other000', candidate: SVC })).toEqual({ ok: false, error: { kind: 'unknown', message: 'the candidate is not the service named', isolatable: false } })
+    })
+
+    it('a candidate with no providerId is refused, never taking the fallback chain', async () => {
+      const chainAsked = vi.fn(async (r: TranslateRequest) => ({ segments: r.segments, provider: 'mock' }))
+      const t = await withChain([mockProvider(chainAsked)])
+      expect(await t.translate({ request: req, candidate: SVC })).toEqual({ ok: false, error: { kind: 'unknown', message: 'the candidate is not the service named', isolatable: false } })
+      expect(chainAsked).not.toHaveBeenCalled()
+    })
+  })
+
   it('cancel withdraws the in-flight requests and reports the count withdrawn as it is', async () => {
     vi.useFakeTimers()
     const t = await withChain([mockProvider(() => new Promise(() => undefined) as never)])

@@ -4,6 +4,7 @@
 // cancellation by scope; BatchQueue collects segments of one batch key into a batch, and its dispatch gate makes it
 // collect more and send less under a rate limit. Assembled after Read Frog's background/translation-queues.ts; it runs
 // in the background (§8.0). Independent of the store: the cache comes through a CachePort — the background passes the local Dexie, a test a double.
+import type { Service } from '@/config/services'
 import type { WireFormat } from '@/core/protector'
 import { wireFormatOf } from '@/cache/key'
 import type { CachedEntry } from '@/cache/store'
@@ -52,6 +53,13 @@ export interface CachePort {
 export type TranslateMessageRequest = {
   request: Omit<TranslateRequest, 'signal'>
   providerId?: string
+  /**
+   * A service as the settings page would save it — one not stored yet, or stored with another key (the redesign's
+   * design, §6.3: a service is added, or a key saved, only once it connects). Asked as the call carries it, off the
+   * chain, whatever the chain holds under that id; its id is `providerId`. Carries a key across runtime messaging, as
+   * the stored configuration does across storage: never logged (hard rule 5)
+   */
+  candidate?: Service
   /** Absent, nothing is cached (the settings page's connection test, say) */
   cache?: {
     paper: string

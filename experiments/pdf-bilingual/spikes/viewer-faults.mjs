@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { serveSite } from './live-site.mjs'
 import { BUILD, launchWithReader } from './extension.mjs'
 import { copyWithGrants } from '../../../tests/e2e/ext-copy.mjs'
-import { addService, openOptions, setSwitch } from '../../../tests/e2e/options-page.mjs'
+import { openOptions, seedService, setSwitch } from '../../../tests/e2e/options-page.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const paper = process.argv[2] ?? '2608.02163'
@@ -97,7 +97,7 @@ check('a link out of the paper opens in a new tab', link?.target === '_blank', J
 
 // 4. the Translation display with no service able to answer and no copy: the page is not blank (Codex on #297)
 const options = await openOptions(context, id)
-console.log('keyless service:', await addService(options, { name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' }))
+console.log('keyless service:', await seedService(context.serviceWorkers()[0], { id: 'svc-spkkeyl2', name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' }))
 await setSwitch(options, '出问题时自动改用免费服务', false)
 // no copy on this machine, where the reader keeps one
 await page.evaluate(() => window.__reader.debug?.pdfCache?.clear())

@@ -9,7 +9,7 @@
 // would re-demote the new key and block it until another test clears the record — so a refusal marks only while the
 // key and the address the failing chain used are still the ones stored **now** (Codex review, round 2).
 import type { Config } from '@/config/schema'
-import { SERVICE_ID_RE, serviceOf } from '@/config/services'
+import { SERVICE_ID_RE, serviceOf, type Service } from '@/config/services'
 import type { ProviderErrorKind } from '@/providers/types'
 
 /** What a failure says about itself: whose it was, its kind, and the HTTP status when it had one */
@@ -54,6 +54,17 @@ export function idsToClear(previous: Config | null, next: Config, marked: Readon
     const before = serviceOf(previous, id)
     return before === undefined || before.apiKey !== after.apiKey || before.baseURL !== after.baseURL
   })
+}
+
+/**
+ * Whether a candidate — a service as the settings page would save it, tested before it is (the redesign's design,
+ * §6.3) — carries the key and the address the service has stored: then its success is the stored key answering, and
+ * clears the mark (§4). Another key or address is not the stored one: its success says nothing of the key stored, and
+ * the save that follows voids the mark through `idsToClear`. Compared in memory only, never logged (hard rule 5)
+ */
+export function testsStoredKey(candidate: Service, storedConfig: Config): boolean {
+  const now = serviceOf(storedConfig, candidate.id)
+  return now !== undefined && now.apiKey === candidate.apiKey && now.baseURL === candidate.baseURL
 }
 
 export interface HealthKeeperDeps {

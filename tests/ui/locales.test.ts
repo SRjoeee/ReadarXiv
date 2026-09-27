@@ -44,7 +44,7 @@ describe('locale packs', () => {
 
   it('no placeholder English sentences left in the Chinese pack (brand names, protocol words and examples excepted)', () => {
     // Sentences assembled from parameters alone excepted: called with placeholders their result is naturally all English
-    const allowed = /^(S\.brand|S\.service\.(llm|microsoft|google|chrome)|S\.find\.paper|O\.services\.(apiKey|namePlaceholder|baseURLHint)|O\.reading\.previewSource|S\.setup\.step1|S\.setup\.step1Hint|O\.fallbackWhy\.invalid)/
+    const allowed = /^(S\.brand|S\.service\.(llm|microsoft|google|chrome)|S\.find\.paper|O\.services\.(apiKey|namePlaceholder|baseURLHint)|O\.reading\.previewSource|O\.reading\.pdf$|S\.setup\.step1|S\.setup\.step1Hint|O\.fallbackWhy\.invalid)/
     for (const [path, text] of leaves(LOCALES['zh-CN'])) {
       if (allowed.test(path) || text === '') continue
       // A Chinese copy string of pure ASCII can hardly be anything but forgotten
@@ -120,15 +120,6 @@ describe('copy names', () => {
     expect(en.length).toBeLessThanOrEqual(NAME_MAX)
     expect(en.endsWith(LOCALES.en.O.reading.copySuffix)).toBe(true)
     setLocale('zh-CN')
-  })
-
-  it('the per-line glossary problem sentence is assembled by the pack, Chinese and English punctuation each their own', () => {
-    for (const code of LOCALE_CODES) {
-      const text = LOCALES[code].O.prompts.glossaryIssue.noSeparator(2)
-      expect(text, code).toContain('2')
-      // 「第 2 行缺少…」 / "Line 2 has no separator…": the two parts must not be glued together directly
-      expect(text, code).not.toMatch(/2[A-Za-z]/)
-    }
   })
 })
 

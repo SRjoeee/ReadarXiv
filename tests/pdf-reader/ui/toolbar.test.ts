@@ -93,7 +93,7 @@ describe('the toolbar (the reader\'s design, §6.1)', () => {
   it('opens the settings as a link, which a middle click or ⌘-click opens as well (the interface review)', async () => {
     const { container } = await mount()
     const link = container.querySelector<HTMLAnchorElement>('a[aria-label="设置"]')!
-    expect([link.getAttribute('href')?.endsWith('/options.html#pdf-reader'), link.target, link.rel]).toEqual([true, '_blank', 'noopener'])
+    expect([link.getAttribute('href')?.endsWith('/options.html#reading/pdf'), link.target, link.rel]).toEqual([true, '_blank', 'noopener'])
   })
 
   it('says whether the contents are open, and which region they are, as a disclosure does (the interface review)', async () => {

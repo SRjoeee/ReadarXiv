@@ -22,7 +22,7 @@ import { join } from 'node:path'
 import { serveSite } from './live-site.mjs'
 import { BUILD, launchWithReader } from './extension.mjs'
 import { copyWithGrants } from '../../../tests/e2e/ext-copy.mjs'
-import { addService, openOptions, setSwitch } from '../../../tests/e2e/options-page.mjs'
+import { addService, openOptions, seedService, setSwitch } from '../../../tests/e2e/options-page.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const paper = process.argv[2] ?? '2608.02163'
@@ -179,7 +179,7 @@ check('offline: its figures\' labels translated', f.entries > 0 && f.translated 
 await context.setOffline(false)
 
 // 7. no service able to answer: one that is not on this machine and has no key, and no fallback; the default service's copy
-console.log('keyless service:', await addService(options, { name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' }))
+console.log('keyless service:', await seedService(context.serviceWorkers()[0], { id: 'svc-spkkeyls', name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' }))
 await setSwitch(options, '出问题时自动改用免费服务', false)
 evs = await visit()
 const status = await page.evaluate(() => window.__reader?.status ?? '')

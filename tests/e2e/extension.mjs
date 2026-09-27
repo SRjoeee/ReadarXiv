@@ -7,7 +7,7 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
-import { addService, chooseBuiltIn, chooseLanguage, chooseStyle, chooseUiLanguage, clearKeyAndReconnect, openOptions, openSection, pick, setPreload, setSwitch } from './options-page.mjs'
+import { addService, chooseBuiltIn, chooseLanguage, chooseStyle, chooseUiLanguage, clearKeyAndReconnect, openOptions, openSection, seedService, setPreload, setSwitch } from './options-page.mjs'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -259,17 +259,17 @@ await options.screenshot({ path: `${SHOTS}/options.png` })
 await setPreload(options, { range: '整篇翻译' })
 await options.reload({ waitUntil: 'domcontentloaded' })
 await openSection(options, 'reading')
-const rangeBack = await options.getByRole('button', { name: '整篇翻译', exact: true }).getAttribute('aria-pressed')
-check('the settings page: the whole paper chosen is still chosen after a reload', rangeBack === 'true', `read back aria-pressed=${rangeBack}`)
+const rangeBack = await options.getByRole('radio', { name: '整篇翻译', exact: true }).getAttribute('aria-checked')
+check('the settings page: the whole paper chosen is still chosen after a reload', rangeBack === 'true', `read back aria-checked=${rangeBack}`)
 
 // ── The settings page: the hover highlight switch really changes (#130: a configuration field was added without a UI, and the reader could not turn it off) ────────
 {
   const stateOf = async () => options.getByRole('switch', { name: '对照高亮', exact: true }).getAttribute('aria-checked')
-  await openSection(options, 'reading')
+  await openSection(options, 'appearance')
   const wasOn = await stateOf()
   await setSwitch(options, '对照高亮', false)
   await options.reload({ waitUntil: 'domcontentloaded' })
-  await openSection(options, 'reading')
+  await openSection(options, 'appearance')
   const back = await stateOf()
   check('the settings page: the hover highlight switch is on by default, and switched off it stays off after a reload (§7.7)', wasOn === 'true' && back === 'false', `default ${wasOn}, switched off and reloaded reads back ${back}`)
   // The checks after this need it on
@@ -297,29 +297,39 @@ await setPreload(options, { range: '按需翻译' })
   await paperTab.close()
 }
 
-// ── The settings page: the target language (the ISO 639-3 code of configuration v4) and a custom prompt apply at once and survive a reload ──────
-await openSection(options, 'prompts')
-await options.getByRole('button', { name: '新建', exact: true }).click()
-await options.getByLabel('名称').fill('e2e 提示词')
-await options.getByRole('button', { name: '加入列表', exact: true }).click()
-await pick(options.getByRole('radio').last())
+// ── The settings page: the target language (the ISO 639-3 code of configuration v4) and a prompt of one's own apply at once and survive a reload ──────
+// The LLM group shows once there is an LLM service (§6.3: with none it is one line): one is put in the configuration, not chosen
+await seedService(extensionWorker(), { id: 'svc-e2eprmpt', name: 'e2e prompts', baseURL: 'https://openrouter.ai/api/v1', model: 'x', apiKey: 'sk-unused' }, { choose: false })
+await openSection(options, 'translate')
+const promptsRow = () => options.locator('[data-row="translate/prompts"]')
+await promptsRow().click()
+await options.getByRole('button', { name: '新建提示词…', exact: true }).click()
+await options.getByLabel('名称', { exact: true }).fill('e2e 提示词')
+await options.getByRole('button', { name: '完成', exact: true }).click()
 await options.reload({ waitUntil: 'domcontentloaded' })
-await openSection(options, 'prompts')
-await options.getByText('e2e 提示词').waitFor({ timeout: 5_000 }).catch(() => undefined)
-await openSection(options, 'services')
-const langBack = await options.getByRole('button', { name: '目标语言' }).textContent()
-await openSection(options, 'prompts')
-const promptRow = options.getByRole('radio').last()
-const promptBack = (await options.getByText('e2e 提示词').count()) === 1 && (await promptRow.isChecked())
+await openSection(options, 'translate')
+// the language row by its place: its label is also a variable's, which the prompts row's description reads (O.prompts.tokens)
+const langBack = await options.locator('[data-row="translate/language"]').textContent()
+await promptsRow().click()
+// the radio is named by its label, its tag (O.prompts.mine) included: the name starts with the prompt's
+const promptRadio = options.getByRole('radio', { name: /^e2e 提示词/ })
+await promptRadio.waitFor({ timeout: 5_000 }).catch(() => undefined)
+const promptBack = (await promptRadio.count()) === 1 && (await promptRadio.isChecked())
 check('the settings page: the target language and the custom prompt survive a reload and stay selected', /日语/.test(langBack ?? '') && promptBack, `language ${langBack}, prompt ${promptBack}`)
-// Delete it and choose the default again: the wrong-key part later must go through the default prompt.
-// Two clicks, as every destructive action on this page: the first arms the confirmation, the second deletes (ui/Confirm.tsx)
+// Delete it, and the default is chosen again: the wrong-key part later goes through the default prompt. Deleting is
+// undone, not confirmed (§6.2): the undo row stands for 5 s, and is left alone here
 await options.getByRole('button', { name: '删除', exact: true }).click()
-await options.getByRole('button', { name: '确认删除', exact: true }).click()
+await options.getByText('已删除「e2e 提示词」').waitFor({ timeout: 5_000 }).catch(() => undefined)
 await chooseLanguage(options, '简体中文', '简体中文')
-await openSection(options, 'prompts')
-const promptGone = (await options.getByText('e2e 提示词').count()) === 0
-check('the settings page: after deleting the custom prompt the default is chosen again', promptGone, `left over ${promptGone ? 0 : 1}`)
+await openSection(options, 'translate')
+// the list is drawn only while open: opened unless it still is
+if ((await promptsRow().getAttribute('aria-expanded')) !== 'true') await promptsRow().click()
+const promptGone = (await options.getByRole('radio', { name: /^e2e 提示词/ }).count()) === 0
+// the built-in prompt's radio is named by the prompt's own name (BUILT_IN_PROMPTS), in every interface language
+const defaultRadio = options.getByRole('radio', { name: 'Default', exact: true })
+await defaultRadio.waitFor({ timeout: 5_000 }).catch(() => undefined)
+const defaultChosen = (await defaultRadio.count()) === 1 && (await defaultRadio.isChecked())
+check('the settings page: after deleting the custom prompt the default is chosen again', promptGone && defaultChosen, `left over ${promptGone ? 0 : 1}, default chosen ${defaultChosen}`)
 
 // ── The settings page: translation appearance and cache management (§7.5 / §9) ──────────────────────────
 {
@@ -371,11 +381,11 @@ check('the settings page: after deleting the custom prompt the default is chosen
   // The underline has to be drawn on formulas: text-decoration does not propagate into atomic inline boxes like math, and a reader reported the dotted line breaking at formulas.
   // Since v12 the line style is a field of the configuration, not a preset id: create a configuration with a dashed line
   await options.bringToFront()
-  await openSection(options, 'reading')
-  await options.getByRole('button', { name: '添加配置', exact: true }).first().click()
-  const editor = options.getByRole('dialog')
+  await openSection(options, 'appearance')
+  await options.getByRole('button', { name: '新建样式…', exact: true }).click()
+  const editor = options.locator('.o-editor')
   await editor.waitFor({ timeout: 5_000 })
-  await editor.getByRole('button', { name: '虚线', exact: true }).click()
+  await editor.getByRole('radio', { name: '虚线', exact: true }).click()
   await editor.getByRole('button', { name: '完成', exact: true }).click()
   // Switch to a math-heavy paper: PAPER's first screen has no inline formula, and the check would run empty
   const dashedPage = await context.newPage()
@@ -1074,21 +1084,21 @@ check('the settings page: after deleting the custom prompt the default is chosen
 
   // The two papers before translated, so the cache should hold entries; the reload guarantees the latest statistics are read
   await openSection(options, 'data')
-  await options.getByText(/^[1-9]\d* 条 · /).waitFor({ timeout: 15_000 }).catch(() => undefined)
-  const before = await options.getByText(/^\d+ 条 · /).textContent()
+  await options.getByText(/^[1-9][\d,]* 段 · /).waitFor({ timeout: 15_000 }).catch(() => undefined)
+  const before = await options.getByText(/^[\d,]+ 段 · /).textContent()
   // The translation cache's own row, not the PDF translations' below it (added since this locator was written): both
   // rows carry the same 清空 / 确认清空 / 已清空 words, and unscoped this matches two buttons in strict mode. The
   // row is found by its own title, excluding any container the PDF row's title (and the settings page's other “PDF”
   // words) would also put a match in
   const cacheRow = options.locator('div').filter({ hasText: '已缓存的译文' }).filter({ hasNotText: 'PDF' })
-  await cacheRow.getByRole('button', { name: '清空', exact: true }).click()
+  await cacheRow.getByRole('button', { name: '清空…', exact: true }).click()
   await cacheRow.getByRole('button', { name: '确认清空', exact: true }).click()
   await cacheRow.getByText('已清空', { exact: true }).waitFor({ timeout: 10_000 })
   // The statistics line refreshes after the confirmation, not with it: read once it says zero, or the last count is read back (seen once, 2026-09-17,
   // right after the whole-paper check above had just hit the cache 351 times and the access-time writes were still landing)
-  await options.getByText(/^0 条 · /).waitFor({ timeout: 15_000 }).catch(() => undefined)
-  const after = await options.getByText(/^\d+ 条 · /).textContent()
-  check('cache management: shows the entry count, zero after clearing', /^[1-9]/.test(before ?? '') && /^0 条/.test(after ?? ''), `before clearing “${before}”, after “${after}”`)
+  await options.getByText(/^0 段 · /).waitFor({ timeout: 15_000 }).catch(() => undefined)
+  const after = await options.getByText(/^[\d,]+ 段 · /).textContent()
+  check('cache management: shows the entry count, zero after clearing', /^[1-9]/.test(before ?? '') && /^0 段/.test(after ?? ''), `before clearing “${before}”, after “${after}”`)
 }
 
 // ── A wrong key met for the first time, with the fallback chain on (§8.5): after the LLM reports auth it switches to google-web of itself, and the whole page translates as usual ──
@@ -1096,14 +1106,21 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await options.bringToFront()
   // “Connect” asks whether this service's endpoint works and must report auth truthfully: going through the fallback service, the free service would show it as a success,
   // the reader would think the key fine while the whole page is translated by Google (the same kind of inconsistency as issue #42, the other way round)
+  // A service is added only once it connects (§6.3, §11): with a wrong key the form says so truthfully — not masked by
+  // the free service on the chain (issue #42) — and nothing is added
+  const marks = async () => Object.keys((await options.evaluate(() => chrome.storage.local.get('serviceHealth'))).serviceHealth ?? {}).sort()
+  const marksBefore = await marks()
   const bogusTest = await addService(options, { name: 'bogus key', baseURL: 'https://openrouter.ai/api/v1', model: 'deepseek/deepseek-v4-flash', apiKey: 'sk-or-v1-bogus-key-for-auth-test' })
-  check('with a wrong key the settings page\'s connection reports the failure truthfully, not masked by the fallback service', /API Key/.test(bogusTest ?? '') && !/已连接/.test(bogusTest ?? ''), bogusTest)
+  const kept = await extensionWorker().evaluate(async () => (await chrome.storage.local.get('config')).config.services.map(s => s.name))
+  check('with a wrong key the settings page\'s connection reports the failure truthfully and adds nothing', /连接失败/.test(bogusTest) && /API Key/.test(bogusTest) && !kept.includes('bogus key'), `${bogusTest}; stored ${JSON.stringify(kept)}`)
+  // What the chain does with a key refused later: a service stored before its key went bad, as an earlier version left it
+  await seedService(extensionWorker(), { id: 'svc-e2ebogus', name: 'bogus key', baseURL: 'https://openrouter.ai/api/v1', model: 'deepseek/deepseek-v4-flash', apiKey: 'sk-or-v1-bogus-key-for-auth-test' })
   const svcId = (await options.evaluate(() => chrome.storage.local.get('config'))).config.provider
 
-  // The connection test just now already marked this service refused (handlers.ts, on its own named call, unaffected
-  // by what follows): cleared here so the page below meets the wrong key for the first time, the service health
-  // record (the redesign's design §4) not yet in its way
-  await options.evaluate(() => chrome.storage.local.remove('serviceHealth'))
+  // The connection test of a service not stored writes no record (the redesign's design §4; ruling 16), so the page
+  // below meets the wrong key for the first time
+  const marksAfter = await marks()
+  check('a refused connection test of a service not added marks nothing', JSON.stringify(marksAfter) === JSON.stringify(marksBefore), `${JSON.stringify(marksBefore)} → ${JSON.stringify(marksAfter)}`)
 
   const { page, logs, requests } = await openPaper(PAPER, 'openrouter.ai')
   const done = await waitForLog(logs, IDLE, 90_000)
@@ -1423,8 +1440,8 @@ check('the settings page: after deleting the custom prompt the default is chosen
 }
 
 // ── The settings page: “Clear” on the API key must really clear it ────────────────────────────────────
-// The drawer opens with the stored key in its form, and a save that reads that prop back writes the old key back as it was (a measured defect).
-// With no key the endpoint reports “not configured”, which is distinct from “invalid or expired”.
+// The edit form opens with the stored key kept; a form that read that key back would write it again after the key is cleared.
+// With the key cleared a remote endpoint cannot be asked: the form says a key is needed and saves nothing.
 // Last on purpose: it writes the service configuration twice more and sends one more sample request, and need not sit among the four wrong-key parts.
 //
 // 7 requests (3 expected) once appeared between the two first-encounter parts and were taken for interference with this guard; the real root cause was a **stale automatic restart**
@@ -1433,7 +1450,9 @@ check('the settings page: after deleting the custom prompt the default is chosen
 {
   await options.bringToFront()
   const cleared = await clearKeyAndReconnect(options)
-  check('the settings page: after clearing the API key the connection reports “not configured” rather than writing the old key back', /尚未配置/.test(cleared ?? ''), cleared)
+  const key = await extensionWorker().evaluate(async () => (await chrome.storage.local.get('config')).config.services.find(s => s.id === 'svc-e2ebogus')?.apiKey)
+  check('the settings page: with the saved key cleared the form asks for a key and saves nothing — the old key neither written back nor lost',
+    /填写 API Key/.test(cleared) && key === 'sk-or-v1-bogus-key-for-auth-test', `${cleared.slice(0, 80)}; the stored key ${key === 'sk-or-v1-bogus-key-for-auth-test' ? 'kept' : 'changed'}`)
 }
 
 // ── Saved settings this build cannot read are never written over (DESIGN §9) ──────────────────────
@@ -1476,7 +1495,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
     /设置读取失败/.test(shown) && /v\d+/.test(shown) && !/添加服务/.test(shown) && JSON.stringify(await stored()) === JSON.stringify(newer), shown.slice(0, 160))
   await reset.click()
   await options.getByRole('button', { name: '确认重置', exact: true }).click()
-  await options.getByRole('button', { name: '添加服务', exact: true }).waitFor({ timeout: 10_000 })
+  await options.getByRole('button', { name: '添加服务…', exact: true }).waitFor({ timeout: 10_000 })
   const after = await stored()
   check('the reset is the way out: the defaults under this build’s version and marker, and the sections are back',
     after.config.version === before.config.version && after.config$.v === before.config$.v && after.config.services.length === 0,
@@ -1484,7 +1503,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
 
   await gateWorker.evaluate(saved => chrome.storage.local.set(saved), before)
   await options.reload({ waitUntil: 'domcontentloaded' })
-  await options.getByRole('button', { name: '添加服务', exact: true }).waitFor({ timeout: 10_000 })
+  await options.getByRole('button', { name: '添加服务…', exact: true }).waitFor({ timeout: 10_000 })
 }
 
 // ── The interface language (UI.md §6) ─────────────────────────────────────────────
@@ -1494,7 +1513,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await options.reload({ waitUntil: 'domcontentloaded' })
   await chooseUiLanguage(options, '界面语言', 'English')
   const nav = (await options.locator('nav').innerText()).replace(/\n+/g, ' ')
-  check('the settings page follows the interface language into English', /Services/.test(nav) && !/翻译服务/.test(nav), nav.slice(0, 60))
+  check('the settings page follows the interface language into English', /Translation/.test(nav) && !/翻译/.test(nav), nav.slice(0, 60))
 
   // The popup and the paper page read the same configuration: all three have to follow, not the settings page alone
   const enPopup = await context.newPage()
@@ -1508,7 +1527,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await options.bringToFront()
   await chooseUiLanguage(options, 'Interface language', '简体中文')
   const back = await options.locator('nav').innerText()
-  check('switched back to Chinese, the settings page follows back too', /翻译服务/.test(back), back.replace(/\n+/g, ' ').slice(0, 40))
+  check('switched back to Chinese, the settings page follows back too', /翻译/.test(back), back.replace(/\n+/g, ' ').slice(0, 40))
 }
 
 await context.close()

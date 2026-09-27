@@ -16,7 +16,7 @@ import { FALLBACK_LOCALE, LOCALES, type Locale, type LocaleCode } from '@/locale
 import type { ProviderErrorKind } from '@/providers/types'
 import { setCoreStrings } from '@/core/strings'
 
-export { PREVIEW_SOURCE, PREVIEW_TARGET } from '@/locales/preview'
+export { PREVIEW_LANG, PREVIEW_SOURCE, PREVIEW_TARGET } from '@/locales/preview'
 
 /**
  * Which set of language names each interface language uses for the target-language menu. A pack
