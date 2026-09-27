@@ -116,6 +116,7 @@ const S: Locale['S'] = {
 
 const O: Locale['O'] = {
   title: 'Settings',
+  more: 'More',
   sections: { translate: 'Translation', appearance: 'Appearance', reading: 'Reading', data: 'Data' },
   search: {
     placeholder: 'Search settings',
@@ -165,6 +166,22 @@ const O: Locale['O'] = {
     highlightHint: 'Highlights the matching sentence on hover; in translation only, rest on one to see the original',
     colour: 'Colour',
     pickColour: 'Pick a colour',
+    styles: 'Translation style',
+    restore: 'Restore built-in styles',
+    edit: (name: string) => `Edit “${name}”`,
+    create: 'New style…',
+    newStyle: 'New style',
+    editor: {
+      name: 'Name',
+      colour: 'Colour',
+      follow: 'Same as the original',
+      pick: 'Pick a colour',
+      strength: 'Strength',
+      strengths: ['Full', 'Lighter', 'Lightest'],
+      css: 'Custom CSS (declarations only, such as letter-spacing: 0.02em)',
+      done: 'Done',
+      delete: 'Delete style',
+    },
   },
   services: {
     issue: (field, message) => `${field}: ${FIELD[String(field).split('.').pop() ?? ''] ?? message}`,
@@ -222,7 +239,7 @@ const O: Locale['O'] = {
     underlines: { none: 'None', solid: 'Solid', dotted: 'Dotted', dashed: 'Dashed', wavy: 'Wavy' },
     thickness: 'Thickness',
     blur: 'Blur until hovered',
-    blurHint: 'The translation stays blurred until the pointer rests on it, for testing yourself',
+    blurHint: 'The translation stays blurred until the pointer rests on it',
     advanced: 'Advanced',
     advancedHint: 'Declarations only, no selectors and no braces; the typeface and size still follow the paper',
     advancedRejected: {

@@ -172,3 +172,32 @@
   .o-pick[data-pressed]:not(:focus-visible) { outline: 1.5px solid var(--line-strong); outline-offset: 2px; }
 }
 @media (prefers-reduced-motion: reduce) { .o-swatch { transition: none; } .o-swatch:active { scale: 1; } }
+
+/* ---- Task 56: the style editor, a form's bar (§6.4) ---- */
+@layer components {
+  /* opened under its row: from the words' edge (42) to the trailing edge (14), its lines 14 px apart */
+  .o-editor { display: flex; flex-direction: column; gap: 14px; padding: 8px 10px 14px 38px; }
+  .o-preview { padding: 12px 14px; border-radius: 8px; background: var(--field); line-height: 1.7; }
+  .o-preview-source { color: var(--ink-2); font-size: 12.5px; }
+  /* the blur until hovered, as on the page: the sample's blur is inline (styleTile), so the hover's must outrank it */
+  .o-preview-target[data-blur]:hover { filter: none !important; }
+  .o-line { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 26px; }
+  /* the line's thickness, a sub-line of the underline: one step in */
+  .o-line[data-sub] { padding-inline-start: 28px; }
+  .o-line-words { display: flex; flex-direction: column; gap: 2px; }
+  .o-line-words small { color: var(--ink-2); font-size: 12px; line-height: 1.4; }
+  /* a segmented control at its agreed width (segmentWidth), never wider than its line: the width is the wrapper's, so
+     that it holds inside a trail that takes its content's width */
+  .o-seg { width: var(--w); max-width: 100%; }
+  .o-seg > [role="radiogroup"] { width: 100%; }
+  .o-disclose { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 12.5px; cursor: pointer; }
+  .o-disclose svg { transition: rotate 150ms ease-out; }
+  .o-disclose[aria-expanded="true"] svg { rotate: 90deg; }
+  .o-more { display: flex; flex-direction: column; gap: 12px; padding-top: 2px; }
+  /* the swatch that follows the original's colour: half the ink, half the ground */
+  .o-follow { background: conic-gradient(var(--ink) 0 50%, var(--chrome) 0); }
+  /* a form's bar: its primary, its text buttons, a note beside them */
+  .o-formbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .o-note { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-2); font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .o-disclose svg { transition: none; } }

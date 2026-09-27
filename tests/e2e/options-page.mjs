@@ -96,10 +96,10 @@ export async function setSwitch(options, name, on) {
   throw new Error(`switch ${name} never became ${on}`)
 }
 
-/** Choose an appearance profile by the name on its tile */
+/** Choose a translation style by its name: a radio row of the appearance section's styles (the redesign's design, §6.4) */
 export async function chooseStyle(options, name) {
-  await openSection(options, 'reading')
-  await options.getByRole('button', { name, exact: true }).click()
+  await openSection(options, 'appearance')
+  await pick(options.getByRole('radio', { name, exact: true }))
   await sleep(200)
 }
 

@@ -1,17 +1,24 @@
 // The appearance section (the redesign's design, §6.4): the extension's appearance (§3) with the dark pages' dimming under it, the
 // translation styles (Task 56), and the hover highlight with its colour. Every control writes at once
-import { Monitor, Moon, Sun } from 'lucide'
-import { BUILT_IN_HIGHLIGHTS, type HighlightProfile } from '@/config/appearance'
+import { Monitor, Moon, Pencil, Plus, Sun } from 'lucide'
+import { Fragment, useRef, useState } from 'react'
+import { type Appearance as Looks, BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, type HighlightProfile, type StyleProfile, duplicateStyle, newProfileId, resetBuiltIns } from '@/config/appearance'
 import type { Config } from '@/config/schema'
+import { styleTile } from '@/ui/appearance/tiles'
+import { Button } from '@/ui/controls/Button'
 import { Icon } from '@/ui/controls/Icon'
+import { radioKeys } from '@/ui/controls/radio'
 import { Reveal } from '@/ui/controls/Reveal'
 import { Segmented } from '@/ui/controls/Segmented'
 import { Switch } from '@/ui/controls/Switch'
-import { O, S, profileName } from '@/ui/strings'
+import { O, S, copyName, profileName } from '@/ui/strings'
 import type { OptionsData } from '../data'
-import { Card } from '../ui/Card'
+import { Card, GroupHeading } from '../ui/Card'
 import { ColourPick } from '../ui/ColourPick'
-import { Row } from '../ui/Row'
+import { insertAt, useLinger, withItem, withUndo } from '../ui/lists'
+import { IconButton, Row } from '../ui/Row'
+import { UndoRow } from '../ui/UndoRow'
+import { StyleEditor } from './StyleEditor'
 
 /** the system's first (the maintainer, 2026-09-26), as in the reader's own options */
 const THEMES = ['system', 'light', 'dark'] as const
@@ -40,6 +47,9 @@ export function Appearance({ data }: { data: OptionsData }) {
             trailing={<Switch label={O.appearance.dim} checked={config.pdfReader.dimPages} onChange={on => void patch(latest => ({ ...latest, pdfReader: { ...latest.pdfReader, dimPages: on } }))} />} />
         </Reveal>
       </Card>
+      <GroupHeading title={O.appearance.styles}
+        action={<Button type="button" kind="text" size="md" onClick={() => void patch(latest => ({ ...latest, appearance: resetBuiltIns(latest.appearance, 'styles') }))}>{O.appearance.restore}</Button>} />
+      <Styles data={data} />
       <Card gap row="appearance/highlight">
         <Row toggles words={k['appearance/highlight']} label={S.rows.highlight} description={O.appearance.highlightHint}
           trailing={<Switch label={S.rows.highlight} checked={config.reading.sentenceHighlight} onChange={on => void patch(latest => ({ ...latest, reading: { ...latest.reading, sentenceHighlight: on } }))} />} />
@@ -71,5 +81,74 @@ function HighlightSwatches({ config, patch }: { config: Config; patch: OptionsDa
       ))}
       <ColourPick label={O.appearance.pickColour} value={own?.color} pressed={a.activeHighlight === OWN_HIGHLIGHT_ID} onPick={setOwn} />
     </span>
+  )
+}
+
+interface GoneStyle { profile: StyleProfile; index: number; active: boolean; focus: boolean }
+
+/** The translation styles (§6.4): one card, one radio group; a row a style, its editor under it; the new-style row last */
+function Styles({ data }: { data: OptionsData }) {
+  const { patch } = data
+  const a = data.config!.appearance
+  const [editing, setEditing] = useState<string | null>(null)
+  const drawn = useLinger(editing)
+  const [gone, setGone] = useState<GoneStyle[]>([])
+  /** a style just made or duplicated: its row comes in with §8's row motion */
+  const [fresh, setFresh] = useState<string | null>(null)
+  const radios = useRef(new Map<string, HTMLElement>())
+  const k = O.search.keywords
+  const setLooks = (fn: (c: Looks) => Looks) => patch(latest => ({ ...latest, appearance: fn(latest.appearance) }))
+  const choose = (id: string) => void setLooks(c => ({ ...c, activeStyle: id }))
+  const open = (id: string) => { choose(id); setEditing(id) }
+  const close = (id: string) => { setEditing(null); radios.current.get(id)?.focus() }
+  const add = (next: StyleProfile) => {
+    void setLooks(c => ({ ...c, styles: [...c.styles, next], activeStyle: next.id }))
+    setFresh(next.id)
+    setEditing(next.id)
+  }
+  const remove = (p: StyleProfile) => {
+    const index = a.styles.findIndex(s => s.id === p.id)
+    setGone(g => [...g, { profile: p, index, active: a.activeStyle === p.id, focus: !document.documentElement.hasAttribute('data-axt-pointer') }])
+    setEditing(null)
+    // the chosen one deleted: the first of the list takes over, never nothing
+    void setLooks(c => {
+      const styles = c.styles.filter(s => s.id !== p.id)
+      return { ...c, styles, activeStyle: c.activeStyle === p.id ? styles[0]?.id ?? BUILT_IN_STYLES[0]!.id : c.activeStyle }
+    })
+  }
+  const undo = (g: GoneStyle) => {
+    setGone(x => x.filter(y => y !== g))
+    void setLooks(c => (c.styles.some(s => s.id === g.profile.id) ? c : { ...c, styles: insertAt(c.styles, g.index, g.profile), activeStyle: g.active ? g.profile.id : c.activeStyle }))
+    requestAnimationFrame(() => radios.current.get(g.profile.id)?.focus())
+  }
+  const ids = a.styles.map(s => s.id)
+  const keys = radioKeys(ids, a.activeStyle, () => true, choose, i => radios.current.get(ids[i]!)?.focus())
+  return (
+    <Card role="radiogroup" label={O.appearance.styles} row="appearance/styles" onKeyDown={keys}>
+      {withUndo(a.styles, gone).map(entry => {
+        if ('gone' in entry) {
+          const g = entry.gone
+          return <UndoRow key={`gone-${g.profile.id}`} name={profileName(g.profile, 'styles')} focus={g.focus} onUndo={() => undo(g)} onExpire={() => setGone(x => x.filter(y => y !== g))} />
+        }
+        const s = entry.item
+        const name = profileName(s, 'styles')
+        return (
+          <Fragment key={s.id}>
+            <Row kind="radio" checked={s.id === a.activeStyle} onChoose={() => choose(s.id)} label={name} words={k['appearance/styles']} arriving={fresh === s.id}
+              description={O.reading.previewTarget} sample={styleTile(s)}
+              radioRef={el => { if (el) radios.current.set(s.id, el); else radios.current.delete(s.id) }}
+              trailing={<IconButton icon={Pencil} label={O.appearance.edit(name)} hover aria-expanded={editing === s.id} onClick={() => open(s.id)} />} />
+            <Reveal open={editing === s.id}>
+              {drawn === s.id && (
+                <StyleEditor value={s} onChange={next => setLooks(c => ({ ...c, styles: withItem(c.styles, next) }))} onDone={() => close(s.id)}
+                  onDuplicate={() => add(duplicateStyle(s, copyName(s, 'styles')))} onDelete={() => remove(s)} />
+              )}
+            </Reveal>
+          </Fragment>
+        )
+      })}
+      <Row kind="button" quiet lead={<Icon node={Plus} size={14} />} label={O.appearance.create}
+        onPress={() => add({ ...BUILT_IN_STYLES[0]!, id: newProfileId('style'), name: O.appearance.newStyle })} />
+    </Card>
   )
 }

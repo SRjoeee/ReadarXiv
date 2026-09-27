@@ -371,11 +371,11 @@ check('the settings page: after deleting the custom prompt the default is chosen
   // The underline has to be drawn on formulas: text-decoration does not propagate into atomic inline boxes like math, and a reader reported the dotted line breaking at formulas.
   // Since v12 the line style is a field of the configuration, not a preset id: create a configuration with a dashed line
   await options.bringToFront()
-  await openSection(options, 'reading')
-  await options.getByRole('button', { name: '添加配置', exact: true }).first().click()
-  const editor = options.getByRole('dialog')
+  await openSection(options, 'appearance')
+  await options.getByRole('button', { name: '新建样式…', exact: true }).click()
+  const editor = options.locator('.o-editor')
   await editor.waitFor({ timeout: 5_000 })
-  await editor.getByRole('button', { name: '虚线', exact: true }).click()
+  await editor.getByRole('radio', { name: '虚线', exact: true }).click()
   await editor.getByRole('button', { name: '完成', exact: true }).click()
   // Switch to a math-heavy paper: PAPER's first screen has no inline formula, and the check would run empty
   const dashedPage = await context.newPage()

@@ -123,6 +123,7 @@ const S = {
 
 const O = {
   title: '设置',
+  more: '更多',
   /** The four sections of the sidebar (the redesign's design, §6.1); their hashes are these ids */
   sections: { translate: '翻译', appearance: '外观', reading: '阅读', data: '数据' },
   search: {
@@ -181,6 +182,23 @@ const O = {
     highlightHint: '悬停时高亮对应的句子；仅译文时停留可查看原文',
     colour: '颜色',
     pickColour: '自选颜色',
+    styles: '译文样式',
+    restore: '恢复内置样式',
+    edit: (name: string) => `编辑「${name}」`,
+    create: '新建样式…',
+    newStyle: '新样式',
+    editor: {
+      name: '名称',
+      colour: '颜色',
+      follow: '跟随原文',
+      pick: '自选颜色',
+      strength: '浓淡',
+      /** §6.4: 1 · 0.7 · 0.5 (0.7 is the built-in 淡一档's) */
+      strengths: ['原样', '淡一些', '更淡'],
+      css: '自定义 CSS（只写声明，例如 letter-spacing: 0.02em）',
+      done: '完成',
+      delete: '删除样式',
+    },
   },
   services: {
     /** One validation failure of the drawer's form, and what joins several, in this language's punctuation */
@@ -240,7 +258,7 @@ const O = {
     underlines: { none: '无', solid: '实线', dotted: '点线', dashed: '虚线', wavy: '波浪' },
     thickness: '线宽',
     blur: '悬停前模糊',
-    blurHint: '译文先糊着，鼠标停上去才清晰，适合自测',
+    blurHint: '译文先糊着，鼠标停上去才清晰',
     advanced: '高级',
     advancedHint: '只填声明，不写选择器和花括号；字体与字号仍随论文',
     /** The four ways advanced CSS is refused (core/renderer/style-values.ts reports which) */
