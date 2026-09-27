@@ -30,6 +30,7 @@ const S: Locale['S'] = {
     images: 'Images',
     style: 'Style',
     manageStyles: 'Manage styles…',
+    managePrompts: 'Manage prompts…',
   },
   service: {
     microsoft: 'Microsoft Translator',

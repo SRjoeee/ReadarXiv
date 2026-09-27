@@ -48,6 +48,9 @@ const base: PopupInput = {
   savedRevision: 'r1',
   // No service is refused unless a fixture says so (the service health record, the redesign's design, §4)
   rejected: [],
+  // The tab is a paper's, heard from; P0's field is empty (the redesign's design, §5.4)
+  tab: { url: 'https://arxiv.org/html/2409.01234', asking: false },
+  find: { query: '', entries: null },
 }
 
 export const POPUP_FIXTURES: { id: string; name: string; when: string; input: PopupInput }[] = [

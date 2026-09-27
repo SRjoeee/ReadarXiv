@@ -95,10 +95,10 @@ describe('locale packs', () => {
 describe('what a pack is read at', () => {
   it('the empty state is computed at call time: the module loads before applyLocale, and a constant would freeze the fallback language (Codex on #161)', () => {
     setLocale('zh-CN')
-    const zhEmpty = derivePopupView({ page: null, entry: null, saved: null, session: null, config: null, pack: null, menu: null, shortcut: null, savedRevision: null, rejected: [] })
+    const zhEmpty = derivePopupView({ page: null, entry: null, saved: null, session: null, config: null, pack: null, menu: null, shortcut: null, savedRevision: null, rejected: [], tab: null, find: { query: '', entries: null } })
     expect(zhEmpty.primary.label).toBe(LOCALES['zh-CN'].S.primary.translate)
     setLocale('en')
-    const enEmpty = derivePopupView({ page: null, entry: null, saved: null, session: null, config: null, pack: null, menu: null, shortcut: null, savedRevision: null, rejected: [] })
+    const enEmpty = derivePopupView({ page: null, entry: null, saved: null, session: null, config: null, pack: null, menu: null, shortcut: null, savedRevision: null, rejected: [], tab: null, find: { query: '', entries: null } })
     expect(enEmpty.primary.label).toBe(LOCALES.en.S.primary.translate)
     setLocale('zh-CN')
   })

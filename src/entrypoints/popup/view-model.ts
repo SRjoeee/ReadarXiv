@@ -31,6 +31,8 @@ export type { PackState }
 export { MANAGE_SERVICES }
 /** The same for the style menu: not a profile, it opens the settings page at the section that holds them */
 export const MANAGE_STYLES = '__manage-styles'
+/** The same for the prompt menu (the redesign's design, §5.3): every menu whose list the reader can change ends so */
+export const MANAGE_PROMPTS = '__manage-prompts'
 export type MenuKind = 'service' | 'language' | 'prompt' | 'style'
 
 export interface PopupInput {
@@ -59,6 +61,15 @@ export interface PopupInput {
   shortcut: string | null
   /** The reader's services whose key the endpoint refused (the service health record, the redesign's design, §4) */
   rejected: readonly string[]
+  /**
+   * The active tab as far as the popup may know it, once the first ask about its page has settled (null before): its
+   * address where the extension may read it — arXiv's pages, by the host permission; null on any other — and whether the
+   * popup is still asking a page that has not answered (the content script comes at document_idle). An arXiv paper's
+   * page still asked is loading, not P0 (the redesign's design, §5.4)
+   */
+  tab: { url: string | null; asking: boolean } | null
+  /** P0's field (§5.4): what it holds, and the two checks' answer for the paper it names, once both are back */
+  find: { query: string; entries: { id: string; html: string | null; pdf: string | null } | null }
 }
 
 export interface Row { value: string; replaced?: string }
@@ -317,7 +328,11 @@ function menuOf(kind: MenuKind, config: Config, pack: PackState | null, rejected
         kind,
         label: S.rows.prompt,
         search: false,
-        items: [...Object.values(BUILT_IN_PROMPTS), ...config.prompts.patterns].map(p => ({ id: p.id, name: p.name, selected: p.id === config.prompts.promptId })),
+        items: [
+          ...[...Object.values(BUILT_IN_PROMPTS), ...config.prompts.patterns].map(p => ({ id: p.id, name: p.name, selected: p.id === config.prompts.promptId })),
+          // the way to where prompts are managed, as the service and style menus end (the redesign's design, §5.3)
+          { id: MANAGE_PROMPTS, name: S.rows.managePrompts, selected: false },
+        ],
       }
     case 'style':
       // Whatever the settings page holds, in its order: the reader's own profiles sit among the

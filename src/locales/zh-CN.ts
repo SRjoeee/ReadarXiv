@@ -31,6 +31,7 @@ const S = {
     images: '图片翻译', // S-P-85
     style: '译文样式', // S-P-82; the same name as “Reading · Translation style” in the settings: the two are one thing
     manageStyles: '管理译文样式…', // S-P-83: the last row of the style menu, opening the settings at “Reading”
+    managePrompts: '管理提示词…', // the redesign's §5.3: the prompt menu's last row, opening the settings at the prompts
   },
   service: {
     microsoft: 'Microsoft 翻译',
