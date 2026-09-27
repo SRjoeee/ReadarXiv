@@ -424,19 +424,31 @@ check('a second click restores it: the tick goes, nothing of ours is left but th
 
 // ————— Whose light and dark (the redesign's design, §3, §7) —————
 // The button is the extension's own control: it draws in the extension's appearance, whatever the paper's under it
-// and whatever the system's. Set against the paper — the extension dark on arXiv's light theme, then light on its dark
-// one — and then left to the system's (light, headless)
+// and whatever the system's. The figure viewer's control stands on the paper: it takes the paper's light or dark,
+// whatever the extension's. Set against each other — the extension dark on arXiv's light theme, then light on its dark
+// one — and then the extension left to the system's (light, headless)
 {
   const setTheme = theme => worker.evaluate(async theme => {
     const { config } = await chrome.storage.local.get('config')
     await chrome.storage.local.set({ config: { ...config, theme } })
   }, theme)
-  /** The extension's appearance and arXiv's own theme set, and the paper loaded again under them */
+  /** The extension's appearance and arXiv's own theme set, the paper loaded again under them, the pointer on its first figure */
   const underThemes = async (extension, arxiv) => {
     await setTheme(extension)
     await page.evaluate(theme => localStorage.setItem('ar5iv_theme', theme), arxiv)
     await page.reload({ waitUntil: 'load' })
     await sleep(4000)
+    const figure = await page.evaluate(() => {
+      const image = [...document.querySelectorAll('.ltx_figure img')].find(i => i.getBoundingClientRect().width >= 160)
+      // A paper with no such figure (AXT_PAPER): the control is never shown, and the check below says so
+      if (!image) return null
+      image.scrollIntoView({ block: 'center' })
+      const r = image.getBoundingClientRect()
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+    })
+    await page.mouse.move(3, 3)
+    if (figure) await page.mouse.move(figure.x, figure.y, { steps: 4 })
+    await sleep(500)
   }
   /** The dock's mark, the main button's ground, and the chrome as the dock resolves it (a probe given it as its colour) */
   const buttonLook = () => page.evaluate(() => {
@@ -449,13 +461,22 @@ check('a second click restores it: the tick goes, nothing of ours is left but th
     probe.remove()
     return { mark: dock.dataset.axtTheme ?? 'system', ground: getComputedStyle(root.querySelector('.axt-fb-main')).backgroundColor, chrome }
   })
+  /** The viewer's control over the figure: shown, its mark, its ground, and the floating ground as it resolves it */
+  const viewerLook = () => page.evaluate(() => {
+    const open = document.querySelector('.axt-viewer-spot').shadowRoot.querySelector('.axt-viewer-open')
+    const probe = document.createElement('i')
+    probe.style.color = 'var(--axt-float-bg)'
+    open.append(probe)
+    const floating = getComputedStyle(probe).color
+    probe.remove()
+    return { shown: open.hasAttribute('data-axt-shown'), mark: open.dataset.axtTheme ?? null, ground: getComputedStyle(open).backgroundColor, floating }
+  })
   await underThemes('dark', 'light')
   const dark = await buttonLook()
-  // the light appearance under a dark system too: the dock's light mark must win over the host's system-dark block
-  await page.emulateMedia({ colorScheme: 'dark' })
+  const onLightPaper = await viewerLook()
   await underThemes('light', 'dark')
   const light = await buttonLook()
-  await page.emulateMedia({ colorScheme: 'light' })
+  const onDarkPaper = await viewerLook()
   await setTheme('system')
   await sleep(1500)
   const system = await buttonLook()
@@ -463,6 +484,10 @@ check('a second click restores it: the tick goes, nothing of ours is left but th
     dark.mark === 'dark' && dark.ground === dark.chrome && light.mark === 'light' && light.ground === light.chrome && dark.ground !== light.ground
       && system.mark === 'system' && system.ground === light.ground,
     JSON.stringify({ dark, light, system }))
+  check('the figure viewer\'s control takes the paper\'s light or dark, not the extension\'s: light on arXiv\'s light theme under a dark extension, dark on its dark one under a light extension',
+    onLightPaper.shown && onLightPaper.mark === 'light' && onLightPaper.ground === onLightPaper.floating
+      && onDarkPaper.shown && onDarkPaper.mark === 'dark' && onDarkPaper.ground === onDarkPaper.floating && onLightPaper.ground !== onDarkPaper.ground,
+    JSON.stringify({ onLightPaper, onDarkPaper }))
 }
 
 await context.close()

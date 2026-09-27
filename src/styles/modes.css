@@ -80,12 +80,15 @@ html:not([data-axt-mode="side"]) :is(p, div, h1, h2, h3, h4, h5, h6, figcaption,
   margin-inline-start: 0.5em;
 }
 
-/* A block whose translation failed: a thin hint line on the left, the original readable as before (§7.4).
+/* A block whose translation failed: a thin hint line on the left, the original readable as before (§7.4), in the
+   family's danger at 60 %, light or dark by the colour scheme the block has from the page, as the retry beside it (the
+   redesign's design, §7). This sheet is static and no token sheet stands on arXiv's page: the two values are
+   src/shared/tokens.ts's `danger`, held to it by tests/renderer/failed.test.ts.
    A half-translated table (data-axt-partial) draws the line too, but stays translated, and only mode shows the clone as usual */
 [data-axt-state="failed"],
 [data-axt-partial],
 [data-axt-partial] + .axt-t {
-  box-shadow: inset 3px 0 0 var(--axt-failed-color, rgba(220, 38, 38, 0.6));
+  box-shadow: inset 3px 0 0 light-dark(color-mix(in oklab, oklch(0.545 0.17 28) 60%, transparent), color-mix(in oklab, oklch(0.69 0.15 28) 60%, transparent));
 }
 
 /* A zero-height page-break marker (what `\newpage` produces; nothing on screen): in block layout its 32px top
