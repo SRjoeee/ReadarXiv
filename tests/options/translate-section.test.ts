@@ -5,7 +5,8 @@
 // language's menu. The page writes no refused-key record (ruling 17): the background's configuration watcher does.
 // Task 65: a deletion is committed only once its own write lands, and one storage refused leaves its row, takes back
 // the focus and says so; an origin is given back only when no service may still use it; an undo storage refused
-// brings its undo row back, or, answered after the section went, commits the deletion itself (round 4)
+// brings its undo row back, or, answered after the section went, commits the deletion itself; while the stored value
+// cannot be read, a commit gives no origin back (round 4)
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Fragment, createElement as h, useEffect, useState } from 'react'
@@ -13,6 +14,7 @@ import { flushSync } from 'react-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { Service } from '@/config/services'
+import type { FallbackReason } from '@/config/storage'
 import type { PackState } from '@/shared/pack'
 import type { OptionsData } from '@/entrypoints/options/data'
 import { stubPopovers } from '../pdf-reader/ui/popover-stub'
@@ -31,7 +33,15 @@ const wire = vi.hoisted(() => ({
   unreadable: false,
 }))
 vi.mock('@/shared/messages', () => ({ sendMessage: vi.fn(async (m: { type: string; id?: string; rebindAll?: boolean }) => { wire.log.push(`send ${m.type} ${m.id}${m.rebindAll ? ' all' : ''}`); return { reset: true } }) }))
-vi.mock('@/config/storage', () => ({ getConfig: async () => wire.stored }))
+// as storage.ts: a value it cannot read is answered with the defaults, and the read's verdict is kept until the next read
+vi.mock('@/config/storage', async () => {
+  const { DEFAULT_CONFIG: defaults } = await import('@/config/schema')
+  let reason: FallbackReason | null = null
+  return {
+    getConfig: async () => { reason = wire.unreadable ? { kind: 'unknown' } : null; return wire.unreadable ? defaults : wire.stored },
+    configFallbackReason: () => reason,
+  }
+})
 vi.mock('@/entrypoints/options/permissions', () => ({
   PermissionError: class extends Error {}, ensureHostPermission: async () => false, hasHostPermission: async () => false,
   // as permissions.ts decides: an origin a still-used address shares is kept
@@ -408,7 +418,7 @@ describe('the translation services (§6.3)', () => {
     await m.unmount()
   })
 
-  it('an undo refused because the stored value cannot be read takes the section away before its answer, the flush run with nothing pending: the deletion is still committed, every session moved off, then the origin given back (round 4, item 1)', async () => {
+  it('an undo refused because the stored value cannot be read takes the section away before its answer, the flush run with nothing pending: the deletion is still committed, every session moved off, and no origin given back while the value cannot be read (round 4, item 1 and addendum)', async () => {
     const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id }, app: true }))
     menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
     await m.flush()
@@ -419,8 +429,25 @@ describe('the translation services (§6.3)', () => {
     await m.flush()
     expect(m.container.querySelector('[data-row="translate/services"]')).toBeNull()
     // the section went, and its flush ran, before the refusal's answer; the commit follows the answer
-    expect(wire.log).toEqual(['patch', 'section gone', 'answered', `send axt:engine-ready ${MINE.id} all`, `release ${MINE.baseURL}`])
+    expect(wire.log).toEqual(['patch', 'section gone', 'answered', `send axt:engine-ready ${MINE.id} all`])
     await m.unmount()
+  })
+
+  it('a deletion committed while the stored value cannot be read moves every session off and gives no origin back: the addresses stored are unknown (round 4, addendum)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id } }))
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    expect(stored().services.map(s => s.id)).toEqual([OTHER.id])
+    // the value turns unreadable while the undo is open; the commit's own read finds it so
+    wire.unreadable = true
+    await vi.advanceTimersByTimeAsync(UNDO_MS)
+    await m.flush()
+    await m.flush()
+    expect(card(m.container).querySelector('[data-undo]')).toBeNull()
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
+    await m.unmount()
+    await m.flush()
+    expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
   })
 
   it('a later write refused as unreadable leaves the failed-save line up; one that lands takes it away (round 3, item 4)', async () => {

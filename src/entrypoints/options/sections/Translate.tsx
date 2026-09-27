@@ -9,7 +9,7 @@ import { type CSSProperties, Fragment, useEffect, useRef, useState } from 'react
 import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, type LangCode } from '@/config/languages'
 import type { Config } from '@/config/schema'
 import { type Service, isLlmChosen, serviceRuns } from '@/config/services'
-import { getConfig } from '@/config/storage'
+import { configFallbackReason, getConfig } from '@/config/storage'
 import { supportsTarget } from '@/providers/microsoft'
 import { sendMessage } from '@/shared/messages'
 import type { PackState } from '@/shared/pack'
@@ -230,7 +230,9 @@ function ServiceMenu({ service, onEdit, onDelete }: { service: Service; onEdit: 
  * storage refused leaves the service deleted: its undo row comes back at its place with a fresh 5 s, and the
  * clean-up waits on it again (round 3, item 3) — unless the section is gone by then: the page draws its data section
  * alone once the stored value cannot be read (App.tsx), so the refusal's own answer finds the section's flush already
- * run, and the deletion is committed at once (round 4, item 1)
+ * run, and the deletion is committed at once (round 4, item 1). While the stored value cannot be read, a commit moves
+ * every session off but gives no origin back: the read answers with the defaults, so the addresses stored are unknown,
+ * and a permission kept a while is the safer failure than one taken from a service still stored (round 4, addendum)
  */
 function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id: string) => void) {
   const [gone, setGone] = useState<Gone[]>([])
@@ -245,7 +247,11 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id:
     await sendMessage({ type: 'axt:engine-ready', id: g.service.id, rebindAll: true }).catch(() => undefined)
     // taken before the stored list is read: an undo that lands in between is then in one or the other
     const waiting = [...pending.current, ...undoing.current].map(x => x.service.baseURL)
-    const inUse = [...(await getConfig()).services.map(s => s.baseURL), ...waiting]
+    const latest = await getConfig()
+    // that read's own verdict (storage.ts), not guessed from the defaults it answers with: the value unreadable, the
+    // addresses it holds are unknown, and an origin kept a while is the safer failure (round 4, addendum)
+    if (configFallbackReason() !== null) return
+    const inUse = [...latest.services.map(s => s.baseURL), ...waiting]
     await releaseHostPermission(g.service.baseURL, inUse).catch(() => undefined)
   }).current
   useEffect(() => {
