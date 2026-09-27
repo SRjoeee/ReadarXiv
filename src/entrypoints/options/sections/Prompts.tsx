@@ -24,7 +24,7 @@ import { Reveal } from '@/ui/controls/Reveal'
 import { drafts } from '@/ui/drafts'
 import { O } from '@/ui/strings'
 import type { OptionsData } from '../data'
-import { insertAt, useLinger, withUndo } from '../ui/lists'
+import { insertAt, useLinger, useListWrites, withUndo } from '../ui/lists'
 import { Row, Status, Value } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { PromptText, insertToken, plainWords, readPrompt } from './PromptText'
@@ -59,7 +59,7 @@ export function PromptsRow({ data }: { data: OptionsData }) {
 interface GonePrompt { prompt: PromptTemplate; index: number; chosen: boolean; focus: boolean }
 
 function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; onDone: () => void }) {
-  const { patch } = data
+  const writes = useListWrites(data.patch)
   const prompts = data.config!.prompts
   /**
    * the editor, drawn while the list is open and kept for its fold as it closes (§8): it reads the store each time it
@@ -80,7 +80,7 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
   const file = useRef<HTMLInputElement>(null)
   const radios = useRef(new Map<string, HTMLElement>())
   const addButton = useRef<HTMLButtonElement>(null)
-  const setPrompts = (fn: (c: PromptsConfig) => PromptsConfig) => patch(latest => ({ ...latest, prompts: fn(latest.prompts) }))
+  const setPrompts = (fn: (c: PromptsConfig) => PromptsConfig) => writes.write(latest => ({ ...latest, prompts: fn(latest.prompts) }))
   // a choice from a list another tab has since changed must not store an id that names nothing (promptExists)
   const choose = (id: string) => void setPrompts(c => (promptExists(c, id) ? { ...c, promptId: id } : c))
   const add = (p: PromptTemplate) => {
@@ -89,8 +89,13 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
     void setPrompts(c => ({ patterns: [...c.patterns, p], promptId: p.id }))
   }
   const remove = (p: PromptTemplate) => {
-    setGone(g => [...g, { prompt: p, index: prompts.patterns.findIndex(x => x.id === p.id), chosen: prompts.promptId === p.id, focus: !document.documentElement.hasAttribute('data-axt-pointer') }])
-    void setPrompts(c => ({ patterns: c.patterns.filter(x => x.id !== p.id), promptId: c.promptId === p.id ? DEFAULT_PROMPT_ID : c.promptId }))
+    const g: GonePrompt = { prompt: p, index: prompts.patterns.findIndex(x => x.id === p.id), chosen: prompts.promptId === p.id, focus: !document.documentElement.hasAttribute('data-axt-pointer') }
+    setGone(x => [...x, g])
+    // refused, the prompt is still stored: its row stays, and its undo row goes (Task 65)
+    void writes.remove(latest => {
+      const c = latest.prompts
+      return { ...latest, prompts: { patterns: c.patterns.filter(x => x.id !== p.id), promptId: c.promptId === p.id ? DEFAULT_PROMPT_ID : c.promptId } }
+    }, stored => stored.prompts.patterns.some(x => x.id === p.id)).then(done => { if (!done) setGone(x => x.filter(y => y !== g)) })
   }
   /**
    * An edit: the fields the reader changed, merged onto the prompt as stored now, so that another tab's change to the
@@ -124,6 +129,8 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
       if (file.current) file.current.value = ''
     }
   }
+  /** the list's note: a refused deletion's until a write lands (Task 65), otherwise the import's */
+  const line = writes.failed ? { alert: true, words: O.saveFailed } : note
   const builtIns = Object.values(BUILT_IN_PROMPTS)
   const chosenId = selectPrompt(prompts).id
   const ids = [...builtIns, ...prompts.patterns].map(p => p.id)
@@ -162,7 +169,7 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
         </span>
         <input ref={file} type="file" accept=".json,application/json" hidden onChange={e => void importFile(e.target.files?.[0])} />
       </div>
-      {note && <p className="o-prompt-note" role="status">{note.alert ? <Status tone="alert">{note.words}</Status> : note.words}</p>}
+      {line && <p className="o-list-note" data-level="1" role="status">{line.alert ? <Status tone="alert">{line.words}</Status> : line.words}</p>}
     </div>
   )
 }

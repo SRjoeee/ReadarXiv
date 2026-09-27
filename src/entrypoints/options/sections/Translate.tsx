@@ -7,6 +7,7 @@
 import { Ellipsis, Plus } from 'lucide'
 import { type CSSProperties, Fragment, useEffect, useRef, useState } from 'react'
 import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, type LangCode } from '@/config/languages'
+import type { Config } from '@/config/schema'
 import { type Service, isLlmChosen, serviceRuns } from '@/config/services'
 import { getConfig } from '@/config/storage'
 import { supportsTarget } from '@/providers/microsoft'
@@ -24,7 +25,7 @@ import { useRejected } from '@/ui/use-rejected'
 import type { OptionsData } from '../data'
 import { releaseHostPermission } from '../permissions'
 import { Card, GroupHeading } from '../ui/Card'
-import { insertAt, shut, useLinger, withUndo } from '../ui/lists'
+import { type ListWrites, insertAt, shut, useLinger, useListWrites, withUndo } from '../ui/lists'
 import { IconButton, Row, Status, Value } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { Llm } from './Llm'
@@ -69,12 +70,16 @@ export function Translate({ data }: { data: OptionsData }) {
   )
 }
 
-interface Gone { service: Service; index: number; chosen: boolean; focus: boolean }
+/** `stored`: whether storage came to hold the deletion, its write's answer (Task 65) */
+interface Gone { service: Service; index: number; chosen: boolean; focus: boolean; stored: Promise<boolean> }
 type Form = { kind: 'add' } | { kind: 'edit'; id: string }
 
 function Services({ data }: { data: OptionsData }) {
-  const { patch, pack, fetchPack } = data
+  const { pack, fetchPack } = data
   const config = data.config!
+  /** the list's writes: one that lands takes a refused deletion's line away (Task 65) */
+  const writes = useListWrites(data.patch)
+  const patch = writes.write
   const rejected = useRejected()
   const [form, setForm] = useState<Form | null>(null)
   const drawnForm = useLinger(form)
@@ -84,7 +89,7 @@ function Services({ data }: { data: OptionsData }) {
   const [pointed, setPointed] = useState<string | null>(null)
   /** the service just added: its row comes in with §8's row motion */
   const [fresh, setFresh] = useState<string | null>(null)
-  const deletions = useDeletions(data)
+  const deletions = useDeletions(config, writes)
   const radios = useRef(new Map<string, HTMLElement>())
   const addRow = useRef<HTMLButtonElement>(null)
   const words = O.search.keywords['translate/services']
@@ -184,6 +189,7 @@ function Services({ data }: { data: OptionsData }) {
       <Reveal open={form?.kind === 'add'}>
         {drawnForm?.kind === 'add' && <ServiceForm target={config.targetLanguage} stored={stored} onConnected={added} onCancel={() => { setForm(null); addRow.current?.focus() }} />}
       </Reveal>
+      {writes.failed && <p className="o-list-note" role="status"><Status tone="alert">{O.saveFailed}</Status></p>}
     </Card>
   )
 }
@@ -215,13 +221,17 @@ function ServiceMenu({ service, onEdit, onDelete }: { service: Service; onEdit: 
  * service, and only then its origin given back (a request still in flight would break) — the old drawer's order. Its
  * mark in the refused-key record is the background's to clear, on the deletion being stored (ruling 17). Undone, it
  * comes back at its place, chosen again if it was and nothing else was chosen since. Leaving the page ends every undo
- * (best effort: the tab may close before the clean-up lands, as it could before)
+ * (best effort: the tab may close before the clean-up lands, as it could before). The clean-up waits for the
+ * deletion's own write, as the old drawer's did: a rebind sent before storage holds the deletion has the background
+ * rebuild from the old configuration and bind every session back to the service, and the configuration's later change
+ * moves no one (Task 65). A deletion storage refused commits nothing: its row stays, as stored
  */
-function useDeletions(data: OptionsData) {
+function useDeletions(config: Config, writes: ListWrites<Config>) {
   const [gone, setGone] = useState<Gone[]>([])
   const pending = useRef(new Set<Gone>())
   const commit = useRef(async (g: Gone) => {
     if (!pending.current.delete(g)) return
+    if (!(await g.stored)) return
     await sendMessage({ type: 'axt:engine-ready', id: g.service.id, rebindAll: true }).catch(() => undefined)
     await releaseHostPermission(g.service.baseURL, (await getConfig()).services.map(s => s.baseURL)).catch(() => undefined)
   }).current
@@ -234,16 +244,23 @@ function useDeletions(data: OptionsData) {
     }
   }, [commit])
   const remove = (service: Service, focus: boolean) => {
-    const config = data.config!
-    const g: Gone = { service, index: config.services.findIndex(s => s.id === service.id), chosen: config.provider === service.id, focus }
+    const stored = writes.remove(
+      latest => ({ ...latest, services: latest.services.filter(s => s.id !== service.id), provider: latest.provider === service.id ? 'microsoft' : latest.provider }),
+      c => c.services.some(s => s.id === service.id),
+    )
+    const g: Gone = { service, index: config.services.findIndex(s => s.id === service.id), chosen: config.provider === service.id, focus, stored }
     pending.current.add(g)
     setGone(x => [...x, g])
-    void data.patch(latest => ({ ...latest, services: latest.services.filter(s => s.id !== service.id), provider: latest.provider === service.id ? 'microsoft' : latest.provider }))
+    void stored.then(done => {
+      if (done) return
+      pending.current.delete(g)
+      setGone(x => x.filter(y => y !== g))
+    })
   }
   const undo = (g: Gone) => {
     pending.current.delete(g)
     setGone(x => x.filter(y => y !== g))
-    void data.patch(latest => (latest.services.some(s => s.id === g.service.id) ? latest
+    void writes.write(latest => (latest.services.some(s => s.id === g.service.id) ? latest
       : { ...latest, services: insertAt(latest.services, g.index, g.service), provider: g.chosen && latest.provider === 'microsoft' ? g.service.id : latest.provider }))
   }
   const expire = (g: Gone) => {

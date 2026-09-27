@@ -4,13 +4,14 @@
 // inserted at the caret; new, delete with its undo; import and export. Fix round 1 (the review of Task 63): the focus
 // on undo, on expiry and on a prompt chosen again; the list drawn only while open and an edit written as the fields it
 // changed; the message's error wired and cleared; a line read as the browser draws it; import's names, shapes and ids.
-// Fix round 2: the list stays drawn while closed, so that a deletion's undo keeps its 5 s; only the editor goes
+// Fix round 2: the list stays drawn while closed, so that a deletion's undo keeps its 5 s; only the editor goes.
+// Task 65: a deletion storage refused leaves its row and says so
 import { createElement as h, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { OptionsData } from '@/entrypoints/options/data'
 import { BUILT_IN_PROMPTS, getTokenCellText } from '@/providers/prompt-library'
-import { mountElement } from '../ui/render-hook'
+import { deferred, mountElement } from '../ui/render-hook'
 
 vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getURL: (path: string) => path } } }))
 const wire = vi.hoisted(() => ({ downloads: [] as { name: string; text: string }[] }))
@@ -26,13 +27,16 @@ const SVC = { id: 'svc-mine0000', kind: 'openai-compat' as const, name: 'Mine', 
 const MINE = { id: 'p-mine', name: 'My prompt', systemPrompt: `Translate into ${getTokenCellText('targetLanguage')} carefully.`, prompt: getTokenCellText('input') }
 const LLM: Config = { ...DEFAULT_CONFIG, services: [SVC], provider: SVC.id }
 
-/** `tab.set`: the configuration changed from elsewhere (another tab), as the page's store would hand it over */
-function Harness({ start, patches, tab }: { start: Config; patches: Config[]; tab?: { set?: (c: Config) => void } }) {
+/**
+ * `tab.set`: the configuration changed from elsewhere (another tab), as the page's store would hand it over. `gate`:
+ * the writes wait for it; rejected, storage refused them (Task 65)
+ */
+function Harness({ start, patches, tab, gate }: { start: Config; patches: Config[]; tab?: { set?: (c: Config) => void }; gate?: { promise: Promise<unknown> } }) {
   const [config, setConfig] = useState(start)
   if (tab) tab.set = setConfig
   const data: OptionsData = {
     config, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
-    patch: async fn => { const next = fn(config); patches.push(next); setConfig(next); return next },
+    patch: async fn => { if (gate) await gate.promise; const next = fn(config); patches.push(next); setConfig(next); return next },
     pack: null, checkPack: async () => 'unsupported', fetchPack: async () => undefined,
     cache: null, cacheError: '', clearCache: async () => undefined, cacheCleared: false,
   }
@@ -421,6 +425,33 @@ describe('the LLM group, fix round 2 (the re-review of Task 63)', () => {
     button(undo!, O.undo.undo).click()
     await m.flush()
     expect(patches.at(-1)!.prompts).toEqual({ promptId: MINE.id, patterns: [MINE] })
+    await m.unmount()
+  })
+
+  it('a deletion storage refused leaves the prompt\'s row, no undo row, and the line at the list\'s foot; the next write that lands takes the line away (Task 65)', async () => {
+    const patches: Config[] = []
+    const gate = { promise: Promise.resolve() as Promise<unknown> }
+    const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches, gate }))
+    promptsRow(m.container).click()
+    await m.flush()
+    const write = deferred<void>()
+    gate.promise = write.promise
+    button(m.container, O.prompts.delete).click()
+    await m.flush()
+    write.reject(new Error('refused'))
+    await m.flush()
+    gate.promise = Promise.resolve()
+    expect(radios(m.container).map(nameOf)).toContain(`My prompt${O.prompts.mine}`)
+    expect(m.container.querySelector('[data-undo]')).toBeNull()
+    const list = m.container.querySelector<HTMLElement>(`[role="radiogroup"][aria-label="${O.prompts.title}"]`)!
+    const note = list.querySelector<HTMLElement>('.o-list-note')!
+    expect(note.getAttribute('role')).toBe('status')
+    expect(note.textContent).toBe(O.saveFailed)
+    expect(list.lastElementChild).toBe(note)
+    radios(m.container)[0]!.click()
+    await m.flush()
+    expect(patches.at(-1)!.prompts.promptId).toBe('default')
+    expect(list.querySelector('.o-list-note')).toBeNull()
     await m.unmount()
   })
 

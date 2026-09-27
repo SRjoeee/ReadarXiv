@@ -3,13 +3,13 @@
 // strength's three steps and a value between them; new, duplicate, delete with its undo, and the built-ins restored.
 // Fix round 1 (Opus's review of Task 56): the styles card's own arrows, the undo's focus and its choice, an edit
 // merged onto the latest profile rather than a stale one, the declarations' own multi-line field, the pencil's
-// toggle, and the sample sentence drawn rather than read
+// toggle, and the sample sentence drawn rather than read. Task 65: a deletion storage refused leaves its row and says so
 import { createElement as h, useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BUILT_IN_STYLES } from '@/config/appearance'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { OptionsData } from '@/entrypoints/options/data'
-import { mountElement } from '../ui/render-hook'
+import { deferred, mountElement } from '../ui/render-hook'
 
 vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getURL: (path: string) => path } } }))
 
@@ -290,6 +290,32 @@ describe('the translation styles (§6.4)', () => {
     expect(names(m.container)).toContain('Green')
     // the style is back on the list; the choice stays with what was picked in the meantime
     expect(patches.at(-1)!.appearance.activeStyle).toBe('blue')
+    await m.unmount()
+  })
+
+  it('a deletion storage refused leaves the row, no undo row, and the line at the list\'s foot; the list\'s next write that lands, its heading\'s Restore among them, takes the line away (Task 65)', async () => {
+    const patches: Config[] = []
+    const start = { ...DEFAULT_CONFIG, appearance: { ...DEFAULT_CONFIG.appearance, activeStyle: 'green' } }
+    const gate = { promise: Promise.resolve() as Promise<unknown> }
+    const m = await mountElement(h(GatedHarness, { start, patches, gate }))
+    button(m.container, O.appearance.edit('Green')).click()
+    await m.flush()
+    const write = deferred<void>()
+    gate.promise = write.promise
+    button(editor(m.container)!, O.appearance.editor.delete).click()
+    await m.flush()
+    write.reject(new Error('refused'))
+    await m.flush()
+    gate.promise = Promise.resolve()
+    expect(names(m.container)).toContain('Green')
+    expect(card(m.container).querySelector('[data-undo]')).toBeNull()
+    const note = card(m.container).querySelector<HTMLElement>('.o-list-note')!
+    expect(note.getAttribute('role')).toBe('status')
+    expect(note.textContent).toBe(O.saveFailed)
+    expect(card(m.container).lastElementChild).toBe(note)
+    button(m.container, O.appearance.restore).click()
+    await m.flush()
+    expect(card(m.container).querySelector('.o-list-note')).toBeNull()
     await m.unmount()
   })
 

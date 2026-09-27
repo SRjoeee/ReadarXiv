@@ -148,10 +148,20 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
   }, [])
 
   const clearError = (field: ServiceField) => setErrors(x => ({ ...x, [field]: undefined }))
-  /** the endpoint's origin, asked for from the gesture that called this */
+  /**
+   * The endpoint's origin, asked for from the gesture that called this. Granted only after the form was cancelled or
+   * gone (the browser's prompt open meanwhile), it goes back at once, kept if a stored service uses it: the clean-up
+   * that gives back what `granted` holds may already have run, and nothing here will use the origin (Task 65)
+   */
   const ask = async (to: string): Promise<boolean> => {
     try {
-      if (await ensureHostPermission(to)) granted.current.add(to)
+      if (await ensureHostPermission(to)) {
+        if (cancelled.current) {
+          await releaseHostPermission(to, storedNow.current).catch(() => undefined)
+          return false
+        }
+        granted.current.add(to)
+      }
       return true
     } catch (e) {
       setErrors(x => ({ ...x, baseURL: deniedWords(e) }))

@@ -1,7 +1,8 @@
 // The service forms (the redesign's design, §6.3): a suggestion fills the address alone and asks for its origin at once;
 // the model list loads by itself only for an origin already granted, and a press on the field asks for one that is
 // not; checked when submitted, the first field at fault taking the focus; connected before anything is handed over,
-// with a stable id; editing keeps the saved key unless one is typed or it is cleared; the refused key's form
+// with a stable id; editing keeps the saved key unless one is typed or it is cleared; the refused key's form. Task 65:
+// a permission the browser grants only after the form is gone is given back
 import { createElement as h } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Service } from '@/config/services'
@@ -31,7 +32,7 @@ vi.mock('@/entrypoints/options/connect', () => ({ connectService: vi.fn(async (c
 
 import { type ConnectResult, connectService } from '@/entrypoints/options/connect'
 import { listModels } from '@/entrypoints/options/models'
-import { releaseHostPermission } from '@/entrypoints/options/permissions'
+import { ensureHostPermission, releaseHostPermission } from '@/entrypoints/options/permissions'
 import { KeyForm, STILL_MS, ServiceForm } from '@/entrypoints/options/sections/ServiceForm'
 import { O, setLocale } from '@/ui/strings'
 
@@ -245,6 +246,27 @@ describe('ServiceForm (§6.3)', () => {
     await m.unmount()
     await vi.advanceTimersByTimeAsync(0)
     expect(wire.released).toEqual(['https://api.deepseek.com/v1'])
+  })
+
+  it('a suggestion\'s permission granted only after the form is gone is given back at once, with the stored addresses that keep an origin in use (Task 65, item 3)', async () => {
+    let answer: (granted: boolean) => void = () => {}
+    vi.mocked(ensureHostPermission).mockImplementationOnce((url: string) => {
+      wire.asked.push(url)
+      return new Promise<boolean>(resolve => { answer = resolve })
+    })
+    const { element } = form({ stored: ['https://other.example.com/v1'] })
+    const m = await mountElement(element)
+    button(m.container, 'DeepSeek').click()
+    await m.flush()
+    // the browser's prompt is still open as the form goes: its clean-up has nothing to give back yet
+    await m.unmount()
+    await m.flush()
+    expect(wire.asked).toEqual(['https://api.deepseek.com/v1'])
+    expect(wire.released).toEqual([])
+    answer(true)
+    await m.flush()
+    expect(wire.released).toEqual(['https://api.deepseek.com/v1'])
+    expect(vi.mocked(releaseHostPermission)).toHaveBeenLastCalledWith('https://api.deepseek.com/v1', ['https://other.example.com/v1'])
   })
 
   // Fix round 1 (Opus review), item 1: Cancel means "stop, save nothing" even once a connection is already in flight

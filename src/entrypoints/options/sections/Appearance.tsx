@@ -15,8 +15,8 @@ import { O, S, copyName, profileName } from '@/ui/strings'
 import type { OptionsData } from '../data'
 import { Card, GroupHeading } from '../ui/Card'
 import { ColourPick } from '../ui/ColourPick'
-import { insertAt, useLinger, withUndo } from '../ui/lists'
-import { IconButton, Row } from '../ui/Row'
+import { type ListWrites, insertAt, useLinger, useListWrites, withUndo } from '../ui/lists'
+import { IconButton, Row, Status } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { StyleEditor } from './StyleEditor'
 
@@ -34,6 +34,8 @@ const band = (h: HighlightProfile) => `color-mix(in oklab, ${h.color || BUILT_IN
 
 export function Appearance({ data }: { data: OptionsData }) {
   const { config, patch } = data
+  /** the styles list's writes, its heading's Restore among them: one that lands takes a refused deletion's line away */
+  const styleWrites = useListWrites(patch)
   if (!config) return null
   const k = O.search.keywords
   return (
@@ -48,8 +50,8 @@ export function Appearance({ data }: { data: OptionsData }) {
         </Reveal>
       </Card>
       <GroupHeading title={O.appearance.styles}
-        action={<Button type="button" kind="text" size="md" onClick={() => void patch(latest => ({ ...latest, appearance: resetBuiltIns(latest.appearance, 'styles') }))}>{O.appearance.restore}</Button>} />
-      <Styles data={data} />
+        action={<Button type="button" kind="text" size="md" onClick={() => void styleWrites.write(latest => ({ ...latest, appearance: resetBuiltIns(latest.appearance, 'styles') }))}>{O.appearance.restore}</Button>} />
+      <Styles data={data} writes={styleWrites} />
       <Card gap row="appearance/highlight">
         <Row toggles words={k['appearance/highlight']} label={S.rows.highlight} description={O.appearance.highlightHint}
           trailing={<Switch label={S.rows.highlight} checked={config.reading.sentenceHighlight} onChange={on => void patch(latest => ({ ...latest, reading: { ...latest.reading, sentenceHighlight: on } }))} />} />
@@ -89,8 +91,7 @@ function HighlightSwatches({ config, patch }: { config: Config; patch: OptionsDa
 interface GoneStyle { profile: StyleProfile; index: number; active: boolean; fallback: string; focus: boolean }
 
 /** The translation styles (§6.4): one card, one radio group; a row a style, its editor under it; the new-style row last */
-function Styles({ data }: { data: OptionsData }) {
-  const { patch } = data
+function Styles({ data, writes }: { data: OptionsData; writes: ListWrites<Config> }) {
   const a = data.config!.appearance
   const [editing, setEditing] = useState<string | null>(null)
   const drawn = useLinger(editing)
@@ -100,7 +101,7 @@ function Styles({ data }: { data: OptionsData }) {
   const radios = useRef(new Map<string, HTMLElement>())
   const newStyleButton = useRef<HTMLButtonElement>(null)
   const k = O.search.keywords
-  const setLooks = (fn: (c: Looks) => Looks) => patch(latest => ({ ...latest, appearance: fn(latest.appearance) }))
+  const setLooks = (fn: (c: Looks) => Looks) => writes.write(latest => ({ ...latest, appearance: fn(latest.appearance) }))
   const choose = (id: string) => void setLooks(c => ({ ...c, activeStyle: id }))
   const open = (id: string) => { choose(id); setEditing(id) }
   const close = (id: string) => { setEditing(null); radios.current.get(id)?.focus() }
@@ -113,13 +114,16 @@ function Styles({ data }: { data: OptionsData }) {
     const index = a.styles.findIndex(s => s.id === p.id)
     const remaining = a.styles.filter(s => s.id !== p.id)
     const fallback = remaining[0]?.id ?? BUILT_IN_STYLES[0]!.id
-    setGone(g => [...g, { profile: p, index, active: a.activeStyle === p.id, fallback, focus: !document.documentElement.hasAttribute('data-axt-pointer') }])
+    const g: GoneStyle = { profile: p, index, active: a.activeStyle === p.id, fallback, focus: !document.documentElement.hasAttribute('data-axt-pointer') }
+    setGone(x => [...x, g])
     setEditing(null)
-    // the chosen one deleted: the first of the list takes over, never nothing
-    void setLooks(c => {
+    // the chosen one deleted: the first of the list takes over, never nothing. Refused, the style is still stored:
+    // its row stays, and its undo row goes (Task 65)
+    void writes.remove(latest => {
+      const c = latest.appearance
       const styles = c.styles.filter(s => s.id !== p.id)
-      return { ...c, styles, activeStyle: c.activeStyle === p.id ? styles[0]?.id ?? BUILT_IN_STYLES[0]!.id : c.activeStyle }
-    })
+      return { ...latest, appearance: { ...c, styles, activeStyle: c.activeStyle === p.id ? styles[0]?.id ?? BUILT_IN_STYLES[0]!.id : c.activeStyle } }
+    }, stored => stored.appearance.styles.some(s => s.id === p.id)).then(done => { if (!done) setGone(x => x.filter(y => y !== g)) })
   }
   const undo = (g: GoneStyle) => {
     setGone(x => x.filter(y => y !== g))
@@ -174,6 +178,7 @@ function Styles({ data }: { data: OptionsData }) {
       })}
       <Row kind="button" quiet lead={<Icon node={Plus} size={14} />} label={O.appearance.create} buttonProps={{ ref: newStyleButton }}
         onPress={() => add({ ...BUILT_IN_STYLES[0]!, id: newProfileId('style'), name: O.appearance.newStyle })} />
+      {writes.failed && <p className="o-list-note" role="status"><Status tone="alert">{O.saveFailed}</Status></p>}
     </Card>
   )
 }

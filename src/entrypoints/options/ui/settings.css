@@ -266,7 +266,6 @@
   .o-var-button:active { scale: 0.96; }
   /* the new-prompt row (O.prompts.create): a button inside the row, which also holds Import… and Export… */
   .o-add { display: flex; flex: 1 1 calc(12em + 28px); align-items: center; gap: 12px; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; text-align: start; cursor: pointer; }
-  .o-prompt-note { margin: -4px 10px 10px 66px; color: var(--ink-2); font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .o-prompt-text[data-editable], .o-var-button { transition: none; } .o-var-button:active { scale: 1; } }
 
@@ -281,4 +280,12 @@
     .o-row .seg > button > svg { display: none; }
     .o-row .seg > button > svg + span { margin-inline-start: 0; }
   }
+}
+
+/* ---- Task 65: a list's note at its foot — a refused deletion's O.saveFailed, the prompts' import ---- */
+@layer components {
+  /* on its rows' words edge: 38 in a card's list (a row's 10 + 16 + 12), a level more (28) in the prompts' list; drawn
+     up 4 px towards the add row above it, 10 px above the card's edge */
+  .o-list-note { margin: -4px 10px 10px 38px; color: var(--ink-2); font-size: 12px; }
+  .o-list-note[data-level="1"] { margin-inline-start: 66px; }
 }

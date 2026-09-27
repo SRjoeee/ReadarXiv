@@ -2,7 +2,8 @@
 // their status — a refused key, none stored, connected —; a refused key's form, saved once it connects; a service added
 // only once it connects, chosen, no session moved; an edit saved in place; a deletion undone within 5 s with nothing
 // irreversible done, and its clean-up after in today's order; the fallback while an LLM is chosen; the target
-// language's menu. The page writes no refused-key record (ruling 17): the background's configuration watcher does
+// language's menu. The page writes no refused-key record (ruling 17): the background's configuration watcher does.
+// Task 65: a deletion is committed only once its write is stored, and one storage refused leaves its row and says so
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createElement as h, useState } from 'react'
@@ -12,12 +13,16 @@ import type { Service } from '@/config/services'
 import type { PackState } from '@/shared/pack'
 import type { OptionsData } from '@/entrypoints/options/data'
 import { stubPopovers } from '../pdf-reader/ui/popover-stub'
-import { mountElement } from '../ui/render-hook'
+import { deferred, mountElement } from '../ui/render-hook'
 
 vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getURL: (path: string) => path } } }))
 const wire = vi.hoisted(() => ({
   log: [] as string[], rejected: [] as string[], stored: null as unknown,
   connect: { ok: true, ms: 42 } as { ok: true; ms: number } | { ok: false; field: null; reason: string },
+  /** the writes wait for it; rejected, storage refused them (Task 65) */
+  gate: null as Promise<unknown> | null,
+  /** the stored value unreadable: the data layer resolves a refused write with the configuration in effect (data.ts) */
+  unreadable: false,
 }))
 vi.mock('@/shared/messages', () => ({ sendMessage: vi.fn(async (m: { type: string; id?: string; rebindAll?: boolean }) => { wire.log.push(`send ${m.type} ${m.id}${m.rebindAll ? ' all' : ''}`); return { reset: true } }) }))
 vi.mock('@/config/storage', () => ({ getConfig: async () => wire.stored }))
@@ -41,7 +46,11 @@ function Harness({ start, pack = null, checks = [] }: { start: Config; pack?: Pa
   wire.stored = config
   const data: OptionsData = {
     config, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
-    patch: async fn => { const next = fn(wire.stored as Config); wire.stored = next; wire.log.push('patch'); setConfig(next); return next },
+    patch: async fn => {
+      if (wire.gate) await wire.gate
+      if (wire.unreadable) return wire.stored as Config
+      const next = fn(wire.stored as Config); wire.stored = next; wire.log.push('patch'); setConfig(next); return next
+    },
     pack, checkPack: async target => { checks.push(target); return 'unsupported' }, fetchPack: async () => { wire.log.push('fetch pack') },
     cache: null, cacheError: '', clearCache: async () => undefined, cacheCleared: false,
   }
@@ -58,6 +67,7 @@ const type = (input: HTMLInputElement, value: string) => {
 }
 const submit = (form: HTMLFormElement) => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
 const menuItem = (row: HTMLElement, name: string) => [...row.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(i => i.textContent === name)!
+const committed = () => wire.log.filter(l => l.startsWith('send') || l.startsWith('release'))
 const OPTIONS = join(import.meta.dirname, '../../src/entrypoints/options')
 
 describe('the translation services (§6.3)', () => {
@@ -66,7 +76,7 @@ describe('the translation services (§6.3)', () => {
   beforeEach(() => {
     setLocale('en')
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    Object.assign(wire, { log: [], rejected: [], connect: { ok: true, ms: 42 } })
+    Object.assign(wire, { log: [], rejected: [], connect: { ok: true, ms: 42 }, gate: null, unreadable: false })
     restore = stubPopovers()
   })
   afterEach(() => { vi.useRealTimers(); restore() })
@@ -248,6 +258,82 @@ describe('the translation services (§6.3)', () => {
     expect(card(m.container).querySelectorAll('[data-undo]')).toHaveLength(1)
     expect(document.activeElement).toBe(othersButton)
     await m.unmount()
+  })
+
+  it('an undo that expires while the deletion\'s write is held sends nothing: every session moved off only once the deletion is stored, then the origin given back (Task 65, item 1)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id } }))
+    const write = deferred<void>()
+    wire.gate = write.promise
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(UNDO_MS)
+    await m.flush()
+    expect(card(m.container).querySelector('[data-undo]')).toBeNull()
+    // a rebind now would have the background rebuild from a configuration that still holds the service
+    expect(wire.log).toEqual([])
+    write.resolve()
+    await m.flush()
+    await m.flush()
+    expect(wire.log).toEqual(['patch', `send axt:engine-ready ${MINE.id} all`, `release ${MINE.baseURL}`])
+    await m.unmount()
+  })
+
+  it('leaving the page with a deletion whose write is held: its clean-up waits for the write, then runs in today\'s order (Task 65, item 1)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id } }))
+    const write = deferred<void>()
+    wire.gate = write.promise
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    await m.unmount()
+    await m.flush()
+    expect(wire.log).toEqual([])
+    write.resolve()
+    await m.flush()
+    await m.flush()
+    expect(wire.log).toEqual(['patch', `send axt:engine-ready ${MINE.id} all`, `release ${MINE.baseURL}`])
+  })
+
+  it('a deletion storage refused: the row stays, its undo row goes, the list\'s foot says so; nothing is committed, and the next write that lands takes the line away (Task 65, items 1 and 2)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: MINE.id } }))
+    const write = deferred<void>()
+    wire.gate = write.promise
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    write.reject(new Error('refused'))
+    await m.flush()
+    await m.flush()
+    wire.gate = null
+    expect(radios(m.container).map(nameOf)).toContain('Mine')
+    expect(card(m.container).querySelector('[data-undo]')).toBeNull()
+    const note = card(m.container).querySelector<HTMLElement>('.o-list-note')!
+    expect(note.getAttribute('role')).toBe('status')
+    expect(note.textContent).toBe(O.saveFailed)
+    expect(card(m.container).lastElementChild).toBe(note)
+    await vi.advanceTimersByTimeAsync(UNDO_MS)
+    await m.flush()
+    radios(m.container)[1]!.click()
+    await m.flush()
+    expect(stored().provider).toBe('google-web')
+    expect(card(m.container).querySelector('.o-list-note')).toBeNull()
+    await m.unmount()
+    await m.flush()
+    expect(committed()).toEqual([])
+  })
+
+  it('a refusal the data layer answers with the configuration in effect (the stored value unreadable) is a refusal too: the service is still there (Task 65)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: MINE.id } }))
+    wire.unreadable = true
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    await m.flush()
+    wire.unreadable = false
+    expect(radios(m.container).map(nameOf)).toContain('Mine')
+    expect(card(m.container).querySelector('[data-undo]')).toBeNull()
+    expect(card(m.container).querySelector('.o-list-note')!.textContent).toBe(O.saveFailed)
+    await vi.advanceTimersByTimeAsync(UNDO_MS)
+    await m.unmount()
+    await m.flush()
+    expect(committed()).toEqual([])
   })
 
   it('nothing on the page writes the refused-key record: it is read here, written by the background alone (ruling 17)', () => {
