@@ -232,6 +232,8 @@ const O = {
     connecting: '连接中…',
     connected: (ms: number) => `已连接 · ${ms} ms`,
     failed: (reason: string) => `连接失败：${reason}`,
+    /** The connection itself worked; saving it afterwards did not (the schema's own limits, or storage) */
+    saveFailed: (reason: string) => `保存失败：${reason}`,
     delete: '删除',
     deleteConfirm: '确认删除',
     cancel: '取消',

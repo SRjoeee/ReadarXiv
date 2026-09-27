@@ -39,7 +39,18 @@ const isAddress = (s: string) => {
     return false
   }
 }
+/** Null for an unparsable address, so a saved key's origin never matches one by accident (Opus review round 1, item 2) */
+const originOf = (s: string): string | null => {
+  try {
+    return new URL(s).origin
+  } catch {
+    return null
+  }
+}
 const deniedWords = (e: unknown) => (e instanceof PermissionError && e.kind === 'denied' ? O.services.permission.denied(e.origin ?? '') : O.services.permission.badURL)
+/** A failure once the connection itself worked: the schema's own limits, or storage — never the endpoint's fault, so
+ * it is worded as a save failing, not a connection (Opus review round 1, item 3) */
+const saveFailedWords = (e: unknown) => O.services.saveFailed(e instanceof Error ? e.message : String(e))
 
 type ListState = { kind: 'idle' } | { kind: 'loading' } | { kind: 'ready'; models: ModelOption[] } | { kind: 'failed' }
 
@@ -88,6 +99,12 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
   /** the endpoint's own name for the model chosen from its list: the service's name by default */
   const [modelName, setModelName] = useState<string | undefined>()
   const [name, setName] = useState(service?.name ?? '')
+  /**
+   * The name follows the model while it still reads as that model's own default — the way it was left after adding
+   * the service, or after the last time it followed. A name the reader types is theirs from then on (Opus review
+   * round 1, item 8)
+   */
+  const [autoName, setAutoName] = useState(Boolean(service) && service?.name === defaultServiceName(service?.model ?? ''))
   const [thinking, setThinking] = useState(service?.thinking === 'enabled')
   const [more, setMore] = useState(service?.thinking === 'enabled')
   const [errors, setErrors] = useState<Partial<Record<ServiceField, string>>>({})
@@ -97,12 +114,23 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
   const keyField = useRef<HTMLInputElement>(null)
   const modelField = useRef<HTMLInputElement>(null)
   const fields: Record<ServiceField, RefObject<HTMLInputElement | null>> = { baseURL: address, apiKey: keyField, model: modelField }
+  /** A suggestion's field may still be disabled at the click that asks for it (e.g. the model field, before `ready`
+   * catches up); the focus goes there once a later render lifts that (Opus review round 1, item 4) */
+  const [focusAfter, setFocusAfter] = useState<'apiKey' | 'model' | null>(null)
   /** origins this form asked for: given back if it closes with nothing saved (permissions.ts: the granted list must not grow with every try) */
   const granted = useRef(new Set<string>())
   const handedOver = useRef(false)
+  /** Cancel means "stop, save nothing": a connection already in flight must not hand itself over once pressed, nor
+   * once the form is gone for any other reason (Opus review round 1, item 1) */
+  const cancelled = useRef(false)
   const storedNow = useRef(stored)
   storedNow.current = stored
-  const keyInEffect = key.trim() || (keepKey ? service?.apiKey ?? '' : '')
+  /** The saved key rides along only while the address still points at the service it was saved for; changed to
+   * another origin, it counts as absent — a secret must never reach an address the reader never gave it to (Opus
+   * review round 1, item 2) */
+  const savedOrigin = service ? originOf(service.baseURL) : null
+  const savedKeyApplies = keepKey && savedOrigin !== null && originOf(url) === savedOrigin
+  const keyInEffect = key.trim() || (savedKeyApplies ? service?.apiKey ?? '' : '')
   const local = isLoopback(url)
   const ready = isAddress(url) && (local || keyInEffect !== '')
   const { list, load } = useModels(url.trim(), keyInEffect, ready)
@@ -110,7 +138,15 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
   useEffect(() => drafts.hold(), [])
   // an opened form puts the focus on its first field (§9)
   useEffect(() => { address.current?.focus({ preventScroll: true }) }, [])
+  useEffect(() => {
+    if (!focusAfter) return
+    const el = (focusAfter === 'model' ? modelField : keyField).current
+    if (!el || el.disabled) return
+    el.focus({ preventScroll: true })
+    setFocusAfter(null)
+  }, [focusAfter])
   useEffect(() => () => {
+    cancelled.current = true
     if (!handedOver.current) for (const u of granted.current) void releaseHostPermission(u, storedNow.current).catch(() => undefined)
   }, [])
 
@@ -129,11 +165,25 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
     setUrl(to)
     clearError('baseURL')
     void ask(to)
-    ;(isLoopback(to) ? modelField : keyField).current?.focus()
+    setFocusAfter(isLoopback(to) ? 'model' : 'apiKey')
   }
   const openList = () => {
     if (!ready || list.kind === 'loading' || list.kind === 'ready') return
     void ask(url.trim()).then(ok => { if (ok) load() })
+  }
+  const cancel = () => {
+    cancelled.current = true
+    onCancel()
+  }
+  /** Origins a chip or the model field asked for, but that the reader moved past before connecting: given back once
+   * the service that runs is saved, exactly as an unused one is on cancel (Opus review round 1, item 9) */
+  const releaseUnused = async (keptURL: string) => {
+    const kept = originOf(keptURL)
+    for (const u of granted.current) {
+      if (originOf(u) === kept) continue
+      granted.current.delete(u)
+      await releaseHostPermission(u, storedNow.current).catch(() => undefined)
+    }
   }
   const connect = async () => {
     const found: Partial<Record<ServiceField, string>> = {}
@@ -153,6 +203,7 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
     }
     setBusy(true)
     const res = await connectService(candidate, target)
+    if (cancelled.current) return
     if (!res.ok) {
       setBusy(false)
       setResult(res.reason)
@@ -162,17 +213,24 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
     handedOver.current = true
     try {
       await onConnected(candidate, res.ms)
+      await releaseUnused(candidate.baseURL)
     } catch (e) {
-      // the save itself refused (the schema's limit of services, storage): nothing stored, the form stays
+      // the save itself refused (the schema's limit of services, storage): nothing stored, the form stays, and the
+      // origin this attempt tested goes back — it was never put to use (Opus review round 1, item 3)
       handedOver.current = false
-      setResult(O.services.failed(e instanceof Error ? e.message : String(e)))
+      setResult(saveFailedWords(e))
+      await releaseHostPermission(candidate.baseURL, storedNow.current).catch(() => undefined)
     } finally {
       setBusy(false)
     }
   }
 
   const keyLabel = local ? `${O.services.apiKey} · ${O.services.apiKeyLocalHint}` : O.services.apiKey
-  const modelPlaceholder = list.kind === 'loading' ? O.services.modelLoading : list.kind === 'ready' ? O.services.modelSearch(list.models.length) : O.services.modelEmpty
+  const modelPlaceholder =
+    list.kind === 'loading' ? O.services.modelLoading
+    : list.kind === 'ready' ? O.services.modelSearch(list.models.length)
+    : list.kind === 'failed' ? O.services.modelNoList
+    : O.services.modelEmpty
   return (
     <form className="o-form" data-form="service" noValidate onSubmit={e => { e.preventDefault(); if (!busy) void connect() }}>
       <div className="o-stack">
@@ -180,22 +238,34 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
           <TextInput ref={address} value={url} inputMode="url" autoComplete="off" spellCheck={false} placeholder="https://…/v1"
             onChange={e => { setUrl(e.target.value); clearError('baseURL') }} />
         </Field>
-        <span className="o-chips">
+        {/* named for a screen reader, since nothing else here says what these buttons fill (Opus review round 1, item 7) */}
+        <fieldset className="o-chips" aria-label={O.services.baseURL}>
           {SUGGESTIONS.map(s => <button key={s.url} type="button" className="o-chip" onClick={() => suggest(s.url)}>{s.name()}</button>)}
-        </span>
+        </fieldset>
       </div>
       <Field label={keyLabel} error={errors.apiKey}>
-        <TextInput ref={keyField} type="password" value={key} autoComplete="off" spellCheck={false} placeholder={keepKey ? O.services.keySaved : 'sk-…'}
+        <TextInput ref={keyField} type="password" value={key} autoComplete="off" spellCheck={false} placeholder={savedKeyApplies ? O.services.keySaved : 'sk-…'}
           onChange={e => { setKey(e.target.value); clearError('apiKey') }} />
       </Field>
-      {keepKey && <Button type="button" kind="text" size="sm" className="o-clear-key" onClick={() => setKeepKey(false)}>{O.services.apiKeyClear}</Button>}
-      <Field label={O.services.model} error={errors.model} hint={list.kind === 'failed' ? O.services.modelNoList : undefined}>
+      {savedKeyApplies && (
+        <Button type="button" kind="text" size="sm" className="o-clear-key" aria-label={`${O.services.apiKeyClear} ${O.services.apiKey}`}
+          onClick={() => { setKeepKey(false); keyField.current?.focus() }}>{O.services.apiKeyClear}</Button>
+      )}
+      <Field label={O.services.model} error={errors.model}>
         <Combobox ref={modelField} value={model} options={list.kind === 'ready' ? list.models : null} busy={list.kind === 'loading'} noMatch={O.services.modelNoMatch}
           placeholder={modelPlaceholder} disabled={!ready && !model} onOpen={openList}
-          onValue={(text, option) => { setModel(text); setModelName(option?.name); clearError('model') }} />
+          onValue={(text, option) => {
+            setModel(text)
+            setModelName(option?.name)
+            clearError('model')
+            // while the name still reads as the previous model's own default, it keeps reading as the new one's
+            // (Opus review round 1, item 8)
+            if (autoName) setName((option?.name || defaultServiceName(text)).slice(0, NAME_MAX))
+          }} />
       </Field>
       <Field label={O.services.name}>
-        <TextInput value={name} maxLength={NAME_MAX} autoComplete="off" placeholder={O.services.namePlaceholder} onChange={e => setName(e.target.value)} />
+        <TextInput value={name} maxLength={NAME_MAX} autoComplete="off" placeholder={O.services.namePlaceholder}
+          onChange={e => { setName(e.target.value); setAutoName(false) }} />
       </Field>
       <div>
         <button type="button" className="o-disclose" aria-expanded={more} onClick={() => setMore(m => !m)}><Icon node={ChevronRight} size={14} />{O.more}</button>
@@ -212,7 +282,9 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
         {/* Part 3's busy: the loader in the icon's place, the words kept, a click refused; the submit guard above stays for
             Enter in a field */}
         <Button type="submit" kind="brand" size="md" busy={busy}>{busy ? O.services.connecting : O.services.connect}</Button>
-        <Button type="button" kind="text" size="md" onClick={onCancel}>{O.services.cancel}</Button>
+        {/* stays pressable while busy: pressing it means stop, save nothing, whatever a pending connection later resolves to
+            (Opus review round 1, item 1) */}
+        <Button type="button" kind="text" size="md" onClick={cancel}>{O.services.cancel}</Button>
         <span className="o-note" role="status">{result ? <Status tone="alert">{result}</Status> : service ? O.services.savedOnConnect : O.services.addedOnConnect}</span>
       </div>
     </form>
@@ -237,9 +309,13 @@ export function KeyForm({ service, refused, target, focus = false, onConnected }
   const [result, setResult] = useState('')
   const [busy, setBusy] = useState(false)
   const field = useRef<HTMLInputElement>(null)
+  /** No Cancel here, but the host may still take this off the tree mid-connection (closing a popover, choosing another
+   * service); the hand-over must not happen once it has (Opus review round 1, item 1) */
+  const cancelled = useRef(false)
   const typed = key !== ''
   useEffect(() => (typed ? drafts.hold() : undefined), [typed])
   useEffect(() => { if (focus) field.current?.focus({ preventScroll: true }) }, [focus])
+  useEffect(() => () => { cancelled.current = true }, [])
   const submit = async () => {
     setResult('')
     if (!key.trim()) {
@@ -251,8 +327,17 @@ export function KeyForm({ service, refused, target, focus = false, onConnected }
     setBusy(true)
     const candidate = { ...service, apiKey: key.trim() }
     const res = await connectService(candidate, target)
+    if (cancelled.current) return
     if (res.ok) {
-      await onConnected(candidate, res.ms).finally(() => setBusy(false))
+      try {
+        await onConnected(candidate, res.ms)
+      } catch (e) {
+        // the connection worked; the save afterwards did not (Opus review round 1, item 3 — today an unhandled
+        // rejection, since nothing here caught it)
+        setResult(saveFailedWords(e))
+      } finally {
+        setBusy(false)
+      }
       return
     }
     setBusy(false)
@@ -261,8 +346,8 @@ export function KeyForm({ service, refused, target, focus = false, onConnected }
   }
   return (
     <form className="o-form" data-form="key" noValidate onSubmit={e => { e.preventDefault(); if (!busy) void submit() }}>
-      {refused && <p className="o-muted">{O.services.keyForm.refused}</p>}
-      <Field label={O.services.keyForm.label} error={error}>
+      {/* the hint, not a bare paragraph, so the field's aria-describedby carries it (Opus review round 1, item 7) */}
+      <Field label={O.services.keyForm.label} hint={refused ? O.services.keyForm.refused : undefined} error={error}>
         <TextInput ref={field} type="password" value={key} autoComplete="off" spellCheck={false} onChange={e => { setKey(e.target.value); setError(undefined) }} />
       </Field>
       <div className="o-formbar">

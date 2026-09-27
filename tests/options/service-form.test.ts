@@ -30,6 +30,7 @@ vi.mock('@/entrypoints/options/models', () => ({
 vi.mock('@/entrypoints/options/connect', () => ({ connectService: vi.fn(async (candidate: Service) => { wire.candidates.push(candidate); return wire.connect }) }))
 
 import { type ConnectResult, connectService } from '@/entrypoints/options/connect'
+import { listModels } from '@/entrypoints/options/models'
 import { KeyForm, STILL_MS, ServiceForm } from '@/entrypoints/options/sections/ServiceForm'
 import { O, setLocale } from '@/ui/strings'
 
@@ -244,6 +245,148 @@ describe('ServiceForm (§6.3)', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(wire.released).toEqual(['https://api.deepseek.com/v1'])
   })
+
+  // Fix round 1 (Opus review), item 1: Cancel means "stop, save nothing" even once a connection is already in flight
+  it('Cancel stops a connection already in flight from being handed over', async () => {
+    const { element, done } = form()
+    const m = await mountElement(element)
+    const [address, key, model] = inputs(m.container)
+    type(address!, 'https://api.example.com/v1')
+    type(key!, 'sk-1')
+    type(model!, 'm-2')
+    let answer: (r: ConnectResult) => void = () => {}
+    vi.mocked(connectService).mockImplementationOnce((candidate: Service) => {
+      wire.candidates.push(candidate)
+      return new Promise<ConnectResult>(resolve => { answer = resolve })
+    })
+    submit(m.container)
+    await m.flush()
+    button(m.container, O.services.cancel).click()
+    answer({ ok: true, ms: 5 })
+    await m.flush()
+    await m.flush()
+    expect(done).toEqual([])
+    await m.unmount()
+  })
+
+  // Fix round 1, item 2: a secret must never reach an address the reader never gave it to
+  it('editing: the saved key does not follow the address to another origin, and returns once the address does too', async () => {
+    const { element } = form({ service: SVC })
+    const m = await mountElement(element)
+    const [address, key] = inputs(m.container)
+    type(address!, 'https://openrouter.ai/api/v1')
+    await vi.advanceTimersByTimeAsync(STILL_MS * 2)
+    await m.flush()
+    expect(wire.listed).toEqual([])
+    expect(key!.getAttribute('placeholder')).toBe('sk-…')
+    submit(m.container)
+    await m.flush()
+    expect(key!.getAttribute('aria-invalid')).toBe('true')
+    type(address!, SVC.baseURL)
+    await m.flush()
+    expect(key!.getAttribute('placeholder')).toBe(O.services.keySaved)
+    await m.unmount()
+  })
+
+  // Fix round 1, item 3: the connection worked, the save afterwards did not — a different sentence, and the origin
+  // this attempt tested goes back since it was never put to use
+  it('a save that fails after connecting says so as a failed save, and gives back the origin it tested', async () => {
+    const { element } = form({ onConnected: async () => { throw new Error('too many services') } })
+    const m = await mountElement(element)
+    const [address, key, model] = inputs(m.container)
+    type(address!, 'https://api.newhost.example/v1')
+    type(key!, 'sk-1')
+    type(model!, 'm-2')
+    submit(m.container)
+    await m.flush()
+    await m.flush()
+    expect(m.container.querySelector('.o-note')!.textContent).toBe(O.services.saveFailed('too many services'))
+    expect(wire.released).toEqual(['https://api.newhost.example/v1'])
+    await m.unmount()
+  })
+
+  // Fix round 1, item 4: the model field may still be disabled at the click that asks for it; the focus catches up
+  it('a local suggestion focuses the model field once it is no longer disabled', async () => {
+    const { element } = form()
+    const m = await mountElement(element)
+    button(m.container, O.services.localOllama).click()
+    await m.flush()
+    const model = inputs(m.container)[2]!
+    expect(document.activeElement).toBe(model)
+    await m.unmount()
+  })
+
+  // Fix round 1, item 5: Clear moves the focus to the field it just cleared, and names what it clears
+  it('Clear moves the focus to the key field and names what it clears', async () => {
+    const { element } = form({ service: SVC })
+    const m = await mountElement(element)
+    const clear = button(m.container, O.services.apiKeyClear)
+    expect(clear.getAttribute('aria-label')).toBe(`${O.services.apiKeyClear} ${O.services.apiKey}`)
+    clear.click()
+    await m.flush()
+    const key = inputs(m.container)[1]!
+    expect(document.activeElement).toBe(key)
+    await m.unmount()
+  })
+
+  // Fix round 1, item 6: a failed list says so, not the empty-form sentence
+  it('the model placeholder says the list failed, not that the form is still empty', async () => {
+    vi.mocked(listModels).mockRejectedValueOnce(new Error('down'))
+    const { element } = form()
+    const m = await mountElement(element)
+    const [address, key, model] = inputs(m.container)
+    type(address!, 'https://openrouter.ai/api/v1')
+    type(key!, 'sk-1')
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await m.flush()
+    await m.flush()
+    expect(model!.getAttribute('placeholder')).toBe(O.services.modelNoList)
+    await m.unmount()
+  })
+
+  // Fix round 1, item 7: nothing else here says what the chips fill
+  it('the address suggestions are grouped and named for a screen reader', async () => {
+    const { element } = form()
+    const m = await mountElement(element)
+    const group = m.container.querySelector('.o-chips')!
+    expect(group.tagName).toBe('FIELDSET')
+    expect(group.getAttribute('aria-label')).toBe(O.services.baseURL)
+    await m.unmount()
+  })
+
+  // Fix round 1, item 8: the name follows the model while it still reads as the model's own default
+  it('editing: the name follows the model while it still reads as the old one\'s default, and stops once typed', async () => {
+    const AUTO_SVC: Service = { id: 'svc-auto0001', kind: 'openai-compat', name: 'm-1', baseURL: 'https://api.example.com/v1', apiKey: 'sk-saved', model: 'm-1', thinking: 'disabled' }
+    const { element } = form({ service: AUTO_SVC })
+    const m = await mountElement(element)
+    const [, , model, name] = inputs(m.container)
+    type(model!, 'm-2')
+    await m.flush()
+    expect(name!.value).toBe('m-2')
+    type(name!, 'Custom')
+    type(model!, 'm-3')
+    await m.flush()
+    expect(name!.value).toBe('Custom')
+    await m.unmount()
+  })
+
+  // Fix round 1, item 9: an origin a chip asked for, but the reader moved past, does not stay granted forever
+  it('a successful connect gives back a chip-granted origin the reader did not end up using', async () => {
+    const { element, done } = form()
+    const m = await mountElement(element)
+    const [address, key, model] = inputs(m.container)
+    button(m.container, 'DeepSeek').click()
+    await m.flush()
+    type(address!, 'https://openrouter.ai/api/v1')
+    type(key!, 'sk-or-1')
+    type(model!, 'm-2')
+    submit(m.container)
+    await m.flush()
+    await m.flush()
+    expect(done).toHaveLength(1)
+    expect(wire.released).toEqual(['https://api.deepseek.com/v1'])
+    await m.unmount()
+  })
 })
 
 describe('KeyForm (§6.3)', () => {
@@ -277,6 +420,42 @@ describe('KeyForm (§6.3)', () => {
     await m.flush()
     await m.flush()
     expect(m.container.querySelector('.o-note')!.textContent).toBe('Couldn\'t connect: no')
+    await m.unmount()
+  })
+
+  // Fix round 1 (Opus review), item 1: no Cancel here, but the host may still take the form off the tree mid-connection
+  it('unmounting before the connection resolves stops it from being handed over', async () => {
+    let answer: (r: ConnectResult) => void = () => {}
+    vi.mocked(connectService).mockImplementationOnce(() => new Promise<ConnectResult>(resolve => { answer = resolve }))
+    const done: Service[] = []
+    const m = await mountElement(h(KeyForm, { service: SVC, refused: true, target: 'cmn', onConnected: async s => { done.push(s) } }))
+    type(inputs(m.container)[0]!, 'sk-new')
+    submit(m.container)
+    await m.flush()
+    await m.unmount()
+    answer({ ok: true, ms: 5 })
+    await m.flush()
+    expect(done).toEqual([])
+  })
+
+  // Fix round 1, item 3: the connection worked, the save afterwards did not — caught, not an unhandled rejection
+  it('a save that fails after connecting is caught and said as a failed save', async () => {
+    const m = await mountElement(h(KeyForm, { service: SVC, refused: true, target: 'cmn', onConnected: async () => { throw new Error('config rejected') } }))
+    type(inputs(m.container)[0]!, 'sk-new')
+    submit(m.container)
+    await m.flush()
+    await m.flush()
+    expect(m.container.querySelector('.o-note')!.textContent).toBe(O.services.saveFailed('config rejected'))
+    await m.unmount()
+  })
+
+  // Fix round 1, item 7: the refused sentence is the field's own hint, so aria-describedby carries it
+  it('the refused sentence is linked to the key field as its hint', async () => {
+    const m = await mountElement(h(KeyForm, { service: SVC, refused: true, target: 'cmn', onConnected: async () => {} }))
+    const field = inputs(m.container)[0]!
+    const describedBy = (field.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean)
+    const hint = describedBy.map(id => document.getElementById(id)).find(el => el?.textContent === O.services.keyForm.refused)
+    expect(hint).toBeTruthy()
     await m.unmount()
   })
 })

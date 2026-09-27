@@ -213,6 +213,8 @@ const O: Locale['O'] = {
     connecting: 'Connecting…',
     connected: ms => `Connected · ${ms} ms`,
     failed: reason => `Couldn't connect: ${reason}`,
+    /** The connection itself worked; saving it afterwards did not (the schema's own limits, or storage) */
+    saveFailed: reason => `Couldn't save: ${reason}`,
     delete: 'Delete',
     deleteConfirm: 'Confirm delete',
     cancel: 'Cancel',
