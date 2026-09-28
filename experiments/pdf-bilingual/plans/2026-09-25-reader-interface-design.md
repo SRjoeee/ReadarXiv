@@ -90,6 +90,13 @@ restraint as the floor (「只是一个及格线」) and alphaXiv's natural tran
 One cool neutral ramp at hue 255 and one status hue, all oklch; light and dark values. The dark ramp is used when the
 appearance is dark, or is the system's and the system is dark.
 
+**Shared since 2026-09-27** (the extension's redesign, its design §2.1): these tokens are the extension's now, held as
+data in `src/shared/tokens.ts`, from which `pnpm tokens` writes `src/styles/tokens.css`; the reader's sheet imports it,
+with the controls it shares (`src/styles/controls.css`, `src/ui/controls/`). The values below are unchanged, and the
+reader was held to its pixels before and after the move (`experiments/pdf-bilingual/spikes/reader-pixels.mjs`). The
+extension adds roles the reader has no use for — the brand, success, the search mark, the page's and the popup's
+grounds — in the redesign's §2.1.
+
 | Token | Light | Dark |
 |---|---|---|
 | `--n-0` | `oklch(1 0 0)` | `oklch(0.255 0.006 255)` |
@@ -363,8 +370,8 @@ the same values, and each follows the others through the shared configuration's 
 **Read, as they are**: `targetLanguage` (the nine are the reader's; §8 for the others), `provider` and `services`,
 `reading.sentenceHighlight` (对照高亮), `appearance.activeHighlight` among `appearance.highlights` (高亮颜色: the swatches are
 the configured highlight profiles, the three built-in and any added), `image.enabled` with `image.modes` (图片翻译:
-figure text is shown when it is on and the display's mode, §3, is among the modes, as on the HTML page), `uiLanguage`
-(the reader's words), `mode` (the display, §3).
+figure text is shown when it is on and the display's mode, §3, is among the modes, as on the HTML page) (since v20 the
+switch alone: figure text in every display), `uiLanguage` (the reader's words), `mode` (the display, §3).
 
 - **Writing the display**: 对照 writes `mode: 'side'`, unless it is `'stack'` (a side-by-side choice already for the
   reader); 译文 writes `'only'`; both clear `pdfReader.original`. 原文 sets `pdfReader.original` and leaves `mode` alone.
@@ -377,7 +384,7 @@ figure text is shown when it is on and the display's mode, §3, is among the mod
 | `pdfReader.original` | boolean | false | the reader was last left in 原文 (the HTML page's "translation on" is the tab's session, not a setting) |
 | `pdfReader.sync` | boolean | true | 同步滚动: the engine's `same` mode on, `off` off |
 | `pdfReader.swapped` | boolean | false | 交换左右 |
-| `pdfReader.appearance` | `'light' \| 'dark' \| 'system'` | `'system'` | 外观 (the extension has no appearance setting; its pages follow the system) |
+| `pdfReader.appearance` | `'light' \| 'dark' \| 'system'` | `'system'` | 外观 (the extension has no appearance setting; its pages follow the system) — moved to the extension's theme at configuration v20 (the redesign's §3): one appearance for every surface, set here or on the settings page |
 | `pdfReader.dimPages` | boolean | true | 深色时调暗页面 |
 
 The experiment's own `axtPdfReader` storage key goes, without a migration: it was never released (rule 7 is about what a
@@ -402,8 +409,9 @@ With the reader closed, a PDF page gets the abstract page's entry view: the two 
 
 ### 9.3 The settings page
 
-- A new section **PDF 阅读器** (`#pdf-reader`, after 阅读): 在 arXiv 的 PDF 上使用对照阅读器, 同步滚动, 外观, 深色时调暗页面.
-  The reader's 设置 button opens the settings page there.
+- A new section **PDF 阅读器** (`#pdf-reader`, after 阅读): 在 arXiv 的 PDF 上使用对照阅读器, 同步滚动, 外观, 深色时调暗页面
+  (since the redesign: the PDF group of the Reading section at `#reading/pdf`, the appearance and the dimming under
+  Appearance; `#pdf-reader` still leads there). The reader's 设置 button opens the settings page there.
 - **数据** gains a line for the PDF translations kept on this machine, `{n} 篇 · {size}`, and 清除 through the existing
   `Confirm` (two presses; it disarms after 4 s), beside the HTML translations' line (the maintainer: 「其他暂时这样」 on
   the proposal). The settings page is on the extension's origin and calls the store's `usage()` and `clear()` directly.
@@ -412,7 +420,8 @@ With the reader closed, a PDF page gets the abstract page's entry view: the two 
 
 The reader's menus are built on `src/ui/Menu.tsx`, and its gaps are closed for every user of it (the popup, the
 settings page's drawers): the active item announced as the arrows move; Home and End; typing a letter jumps to it; focus
-back on the trigger when it closes; no buttons inside a listbox.
+back on the trigger when it closes; no buttons inside a listbox. (Retired with the redesign: the reader's menus are
+`MenuList`, `src/ui/controls/`, and `src/ui/Menu.tsx` is gone.)
 
 ## 10. Engine changes, each measured
 
@@ -553,9 +562,9 @@ viewer's control does).
 
 ### 11.5 Styling
 
-Tailwind v4, as the popup and the settings page use it, with **the reader's own token sheet** (§4.1, `@theme inline`),
-not `ui.css`. PDF.js's viewer sheet with a `box-sizing` reset inside the viewers (pdfslick's lesson; the highlight
-offset of 2026-09-22 was ours for want of it).
+Tailwind v4, as the popup and the settings page use it, with **the extension's token sheet** (`src/styles/tokens.css`
+since the redesign; §4.1) through `@theme inline`, not `ui.css`. PDF.js's viewer sheet with a `box-sizing` reset inside
+the viewers (pdfslick's lesson; the highlight offset of 2026-09-22 was ours for want of it).
 
 ### 11.6 Words
 

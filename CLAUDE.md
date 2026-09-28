@@ -55,17 +55,20 @@ pnpm typecheck           # tsc --noEmit — vitest does not type-check
 pnpm lint                # Biome linter, the English gate, the boundary gate; pnpm lint:fix applies safe fixes
 pnpm test                # vitest; pnpm test:watch
 pnpm build               # wxt build + scripts/check-output.mjs
+pnpm exec wxt build --mode development   # the dev pages too: the gallery (every popup state) and the controls sheet
 pnpm e2e                 # real Chromium with the extension (pnpm build first; once: npx playwright install chromium)
 pnpm e2e:layout          # side-mode layout contract in a real browser
 pnpm e2e:a11y            # A/B axe audit: only differences the extension introduces
 pnpm e2e:local-endpoint  # an http endpoint without CORS headers can translate a whole page
 pnpm e2e:pdf             # arXiv's PDF page: the button is drawn there, it and the popup open the bilingual version
 pnpm e2e:floating        # the floating button on the abstract, PDF and full-text pages: rest, hover, drag, hide, toggle, tick
+pnpm e2e:popup           # the popup: finding a paper, the menus under their rows, the entries, the panel growing
 pnpm e2e:image           # image translation, bitmaps read by the recogniser the extension ships
 pnpm e2e:placeholders    # placeholder survival per sentence shape against a live engine (DESIGN §6.3)
 pnpm fixtures:fetch      # download and verify the fixtures the repository may not hold (tests/fixtures/README.md); pnpm test does it too
 pnpm fixtures:stats      # rule coverage audit over the fixtures
 pnpm zip                 # the store archive; pnpm icons regenerates the icons
+pnpm tokens              # src/styles/tokens.css from src/shared/tokens.ts; a test fails while the two differ
 AXT_MEASURE=1 pnpm vitest run tests/perf       # the cost measurements (readings, not assertions)
 AXT_CHROME=<binary> pnpm e2e                   # the e2e suite on a chosen Chrome; probes live in tests/e2e/probes/
 ```
