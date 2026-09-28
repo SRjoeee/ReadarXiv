@@ -121,8 +121,9 @@ const rows = await page.evaluate(([names, words]) => {
       src: a,
       out: b,
       same: a.math === b.math && a.cite === b.cite && a.ref === b.ref,
-      // a word the engine must not hand back untranslated
-      english: words[i] && (t.textContent ?? '').includes(words[i]) ? words[i] : null,
+      // a word the engine must not hand back untranslated — told only where the translation is in a script other than
+      // Latin: into English, or any language that may keep the word, it proves nothing (Devin on #305)
+      english: words[i] && /(?![\p{Script=Latin}])\p{L}/u.test(t.textContent ?? '') && (t.textContent ?? '').includes(words[i]) ? words[i] : null,
       text: (t.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60),
     }
   })
