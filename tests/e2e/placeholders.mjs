@@ -50,6 +50,9 @@ const SHAPES = [
   // A placeholder that touches a word: under markers the wire sets the two apart (DESIGN §6.2) — as one token the word was left in English, and Google lost the marker on `@a#th`
   ['ordinal on a formula', `We denote the ${math('i', 'i')}th unit vector by ${math('e', 'e')}.`],
   ['citation on its word', `The same effect was reported for BERT${cite(3)} on larger corpora.`],
+  // …and one right after a full stop, as physics papers set a citation: `models.@a#` was one token, the word left in
+  // English with the citation intact — so this row also fails when that word comes back as it went
+  ['citation after a full stop', `These distributions are useful for calibrating theoretical models.${cite(4)} However, the deviation remains.`, 'models'],
   ['paired placeholder', `<em class="ltx_emph ltx_font_italic">The model ${math('f', 'f')} is trained end to end</em> on four GPUs.`],
   ['seven in a long sentence', `The encoder maps ${math('x', 'x')} to ${math('z', 'z')}, the decoder reconstructs ${math('\\hat{x}', 'x̂')} from ${math('z', 'z')}, and the loss compares ${math('\\hat{x}', 'x̂')} with ${math('x', 'x')} under ${math('\\ell_2', 'ℓ₂')}.`],
 ]
@@ -100,7 +103,7 @@ for (let i = 0, stable = 0; i < 80; i++) {
   if (stable >= 3 && i >= 4) break
 }
 
-const rows = await page.evaluate(names => {
+const rows = await page.evaluate(([names, words]) => {
   const countOf = el => ({
     math: el.querySelectorAll('math').length,
     cite: el.querySelectorAll('.ltx_cite').length,
@@ -118,16 +121,20 @@ const rows = await page.evaluate(names => {
       src: a,
       out: b,
       same: a.math === b.math && a.cite === b.cite && a.ref === b.ref,
+      // a word the engine must not hand back untranslated — told only where the translation is in a script other than
+      // Latin: into English, or any language that may keep the word, it proves nothing (Devin on #305)
+      english: words[i] && /(?![\p{Script=Latin}])\p{L}/u.test(t.textContent ?? '') && (t.textContent ?? '').includes(words[i]) ? words[i] : null,
       text: (t.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60),
     }
   })
-}, SHAPES.map(shape => shape[0]))
+}, [SHAPES.map(shape => shape[0]), SHAPES.map(shape => shape[2] ?? null)])
 
 let ok = 0
 for (const row of rows) {
-  if (row.same) ok++
+  const pass = row.same && !row.english
+  if (pass) ok++
   const counts = row.src ? `${Object.values(row.src).join('/')} → ${Object.values(row.out).join('/')}` : row.state
-  console.log(`${row.same ? 'PASS' : 'FAIL'} ${row.name.padEnd(6)} math/cite/ref ${counts}  ${row.text ?? ''}`)
+  console.log(`${pass ? 'PASS' : 'FAIL'} ${row.name.padEnd(6)} math/cite/ref ${counts}${row.english ? `, "${row.english}" left untranslated` : ''}  ${row.text ?? ''}`)
 }
 const total = rows.reduce((sum, row) => sum + (row.src ? row.src.math + row.src.cite + row.src.ref : 0), 0)
 console.log(`\n${engine} → ${language}: ${ok}/${rows.length} sentence shapes passed, ${total} protected nodes in all`)
