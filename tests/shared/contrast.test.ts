@@ -4,8 +4,12 @@ import { describe, expect, it } from 'vitest'
 import { type Mode, resolve } from '@/shared/tokens'
 import { contrast, over, parseOklch, type Rgba } from './wcag'
 
-/** a colour of the sheet, or a literal */
-const colour = (name: string, mode: Mode): Rgba => parseOklch(name.startsWith('oklch(') ? name : resolve(name, mode))
+/** a colour of the sheet, or a literal; `name@9%` is it mixed with transparent, as color-mix(in oklab, …, transparent) draws it */
+const colour = (name: string, mode: Mode): Rgba => {
+  const [base = name, share] = name.split('@')
+  const [r, g, b, a] = parseOklch(base.startsWith('oklch(') ? base : resolve(base, mode))
+  return [r, g, b, share ? (a * Number.parseFloat(share)) / 100 : a]
+}
 /** layers from the top down, the last one opaque */
 const stack = (layers: string[], mode: Mode): Rgba =>
   layers.map(l => colour(l, mode)).reduceRight((below, top) => over(top, below))
@@ -13,6 +17,9 @@ const stack = (layers: string[], mode: Mode): Rgba =>
 const PAIRS: { what: string; fg: string; bg: string[]; floor: number; modes?: Mode[] }[] = [
   { what: 'words on the brand', fg: 'on-brand', bg: ['brand'], floor: 4.5 },
   { what: 'a shortcut label on the brand', fg: 'on-brand', bg: ['brand-chip', 'brand'], floor: 4.5 },
+  { what: 'a shortcut label on the large neutral button', fg: 'ink', bg: ['ink@9%', 'fill'], floor: 4.5 },
+  { what: 'a shortcut label on the small neutral button', fg: 'ink', bg: ['ink@9%', 'button'], floor: 4.5 },
+  { what: 'a shortcut label on P0\'s search row', fg: 'ink', bg: ['ink@9%', 'group-hover'], floor: 4.5 },
   { what: 'P0\'s paper id: on-brand-2, 85 % white in light and white in dark (§5.4)', fg: 'on-brand-2', bg: ['brand'], floor: 4.5 },
   { what: 'a value in the popup\'s group', fg: 'ink-2', bg: ['group'], floor: 4.5 },
   { what: 'a chevron in the popup\'s group', fg: 'ink-3', bg: ['group'], floor: 3 },

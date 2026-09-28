@@ -55,9 +55,11 @@ describe('controls.css: buttons and the shortcut label', () => {
     expect(of('.btn:active', RM)).toEqual({ scale: 'none' })
   })
 
-  it('labels a shortcut 11 px / 500, 3 by 5 in, radius 5, the ink\'s 9 % behind ink-2; on the brand its chip behind white', () => {
+  it('labels a shortcut 11 px / 500, 3 by 5 in, radius 5, the ink\'s 9 % behind ink-2; on the brand its chip behind white; on a neutral button in ink', () => {
     expect(of('.kbd')).toEqual({ padding: '3px 5px', 'border-radius': '5px', background: 'color-mix(in oklab, var(--ink) 9%, transparent)', color: 'var(--ink-2)', font: '500 11px/1 var(--font)' })
     expect(of('.btn.brand .kbd')).toEqual({ background: 'var(--brand-chip)', color: 'var(--on-brand)' })
+    // ink-2 on the chip over a neutral ground was 4.08:1 light, 3.97 dark (Task 101's axe run); the button's own ink
+    expect(of('.btn.neutral .kbd')).toEqual({ color: 'var(--ink)' })
   })
 
   it('turns a busy button\'s loader in 900 ms, and holds it still under reduced motion', () => {

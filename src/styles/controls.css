@@ -76,9 +76,11 @@
   .btn[aria-busy="true"] { cursor: progress; }
   .btn:not([aria-disabled="true"]):not([aria-busy="true"]):active { scale: 0.96; }
   /* a shortcut label: 11 px, 3 by 5 in, radius 5, the ink's 9 % behind ink-2; on the brand its chip behind white
-     (5.41:1 light, 4.59:1 dark; the maintainer, 2026-09-26) */
+     (5.41:1 light, 4.59:1 dark; the maintainer, 2026-09-26); on a neutral button the button's ink, where ink-2 fell
+     under 4.5:1 (4.08 light, 3.97 dark; Task 101) */
   .kbd { padding: 3px 5px; border-radius: 5px; background: color-mix(in oklab, var(--ink) 9%, transparent); color: var(--ink-2); font: 500 11px/1 var(--font); }
   .btn.brand .kbd { background: var(--brand-chip); color: var(--on-brand); }
+  .btn.neutral .kbd { color: var(--ink); }
   /* a field (settings-2): its label 12 px in ink-2 above it, 6 px apart; a hint under it in ink-2; an error under it in
      ink after a danger icon centred on its first line (round 4's failure line: never red words, §5.2) */
   .field { display: flex; flex-direction: column; gap: 6px; }

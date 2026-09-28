@@ -96,6 +96,8 @@ html:not([data-axt-pointer]) .popup .find-field:focus-within { outline: 2px soli
 .popup .go-id, .popup .go-words { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .popup .go-id { font-weight: 400; font-variant-numeric: tabular-nums; }
 .popup .go.brand .go-id { color: var(--on-brand-2); }
+/* what Enter does, labelled in the row's words: ink on the neutral row (ink-2 there was 4.08:1 light; Task 101) */
+.popup .go kbd { color: var(--ink); }
 .popup .go.brand kbd { background: var(--brand-chip); color: var(--on-brand); }
 .popup .paper { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ink-2); font-size: 12.5px; }
 .popup .paper > b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
