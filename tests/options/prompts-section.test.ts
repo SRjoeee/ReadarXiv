@@ -484,6 +484,43 @@ describe('the LLM group, fix round 2 (the re-review of Task 63)', () => {
     await m.unmount()
   })
 
+  it('import says it imported only once its write has landed: nothing while the write is out (Part 7\'s final review, B-M5)', async () => {
+    const patches: Config[] = []
+    const gate: { promise: Promise<unknown>; unreadable?: boolean } = { promise: Promise.resolve() }
+    const m = await mountElement(h(Harness, { start: LLM, patches, gate }))
+    promptsRow(m.container).click()
+    await m.flush()
+    const write = deferred<void>()
+    gate.promise = write.promise
+    await give(m, JSON.stringify([{ name: 'Imported', prompt: '{{input}}' }]))
+    expect(m.container.textContent).not.toContain(O.prompts.imported(1))
+    write.resolve()
+    await m.flush()
+    expect(patches.at(-1)!.prompts.patterns.map(p => p.name)).toEqual(['Imported'])
+    expect(m.container.querySelector('.o-list-note')!.textContent).toBe(O.prompts.imported(1))
+    await m.unmount()
+  })
+
+  it.each(['rejects', 'is refused as unreadable'] as const)('an import whose write %s says the save failed, never that it imported (Part 7\'s final review, B-M5)', async how => {
+    const patches: Config[] = []
+    const gate: { promise: Promise<unknown>; unreadable?: boolean } = { promise: Promise.resolve() }
+    const m = await mountElement(h(Harness, { start: LLM, patches, gate }))
+    promptsRow(m.container).click()
+    await m.flush()
+    const write = deferred<void>()
+    gate.promise = write.promise
+    gate.unreadable = how !== 'rejects'
+    await give(m, JSON.stringify([{ name: 'Imported', prompt: '{{input}}' }]))
+    if (how === 'rejects') write.reject(new Error('refused'))
+    else write.resolve()
+    await m.flush()
+    expect(patches).toEqual([])
+    expect(m.container.textContent).not.toContain(O.prompts.imported(1))
+    const note = m.container.querySelector<HTMLElement>('.o-list-note')!
+    expect([note.getAttribute('role'), note.textContent]).toEqual(['status', O.saveFailed])
+    await m.unmount()
+  })
+
   it('an undo storage refused: the prompt stays deleted, its undo row comes back with a fresh 5 s and the focus, and the list\'s foot says so (round 3, item 3)', async () => {
     const patches: Config[] = []
     const gate: { promise: Promise<unknown>; unreadable?: boolean } = { promise: Promise.resolve() }

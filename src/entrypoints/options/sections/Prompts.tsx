@@ -133,8 +133,13 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
       }
       // a name as the other prompts' are: trimmed, and never empty (fix round 1, item 8)
       const added = entries.map(entry => ({ ...entry, name: entry.name.trim() || O.prompts.newName, id: uuid() }))
-      void setPrompts(c => ({ ...c, patterns: [...c.patterns, ...added] }))
-      setNote({ alert: false, words: O.prompts.imported(entries.length) })
+      // said once the write has landed, and what landed: a write the store refuses — or answers, unreadable, with the
+      // defaults — imported nothing (Part 7's final review; the services' forms' rule, Task 107)
+      setNote(null)
+      void writes.save(latest => ({ ...latest, prompts: { ...latest.prompts, patterns: [...latest.prompts.patterns, ...added] } })).then(
+        () => setNote({ alert: false, words: O.prompts.imported(entries.length) }),
+        () => setNote({ alert: true, words: O.saveFailed }),
+      )
     } catch (e) {
       // the parser says which kind; the sentence is the pack's (Codex on #161)
       setNote({ alert: true, words: e instanceof PromptFileFormatError && e.kind === 'badShape' ? O.prompts.importFailed.noPrompts : O.prompts.importFailed.cantRead })
