@@ -35,8 +35,11 @@ const EIGHT_BIT = new Set(['pdflatex', 'latex'])
  * Chinese from 98 to 106 of 113, REPORT fourth addendum); babel has no CJK captions under pdfTeX, so there they stay
  * the paper's.
  *
- * `leading` multiplies the paper's own line spacing at the end of the preamble (a class that sets its spacing in the
- * body, as ICASSP's \ninept does, keeps its own). CJK characters fill their em square, so lines of them stand closer
+ * `leading` multiplies the paper's own line spacing inside translated units alone (live.mjs translationFiles,
+ * latex-front.mjs unitLeadTex): what stays English — references, tables, code, algorithms — keeps the paper's. A
+ * \linespread for the whole preamble spread them too, a third past the paper's (RT-1's references at 1.43 × the font
+ * size against 1.10), and a class that sets its spacing in the body, as ICASSP's \ninept does, escaped it; the unit's
+ * own spacing is multiplied now, whatever set it. CJK characters fill their em square, so lines of them stand closer
  * than Latin lines at the same spacing, and a translation is as long as its language makes it: the factor is the
  * script's, measured on the gate's pages (`--tune`, REPORT eleventh addendum). Chinese at ctex's 1.3 comes out as long
  * as the original (median pages 1.00, 19 of 24 papers within 10 %). Japanese and Korean translations are longer: at 1.3
@@ -119,28 +122,33 @@ const FACES = {
  *  the paper's languages, since the two do not work together: its captions then stay the paper's (Codex on #294). The
  *  locale imported is the first babel has an ini file for, which TeX checks at compile time: the language's own tag,
  *  then its language and script, then its language alone. The extension names Traditional Chinese zh-TW, which babel has
- *  no file for, while it has zh-Hant; without the check its captions stayed English, with three errors */
+ *  no file for, while it has zh-Hant; without the check its captions stayed English, with three errors.
+ *  `hyphenrules` for a script with no hyphenation of its own (CJK): the Latin words left in the translation — names,
+ *  terms, the references — break as the paper's English did. With the target's locale as the document's they had no
+ *  patterns and broke only at hyphens of their own: the references' lines ended in one less than half as often
+ *  (2608.06701: 5 % against 12 %), their word spaces a fifth wider, and underfull lines went from 10 to 70
+ *  (2608.12333). The source is English in v1 (TranslateRequest.source) */
 const babelTags = lang => { const l = new Intl.Locale(lang); return [...new Set([lang, `${l.language}-${l.maximize().script}`, l.language])] }
-const provide = ([tag, ...rest]) => (rest.length ? `\\IfFileExists{babel-${tag}.ini}{\\babelprovide[import=${tag},main]{axttarget}}{${provide(rest)}}` : `\\babelprovide[import=${tag},main]{axttarget}`)
-const babel = lang => `\\IfPackageLoadedTF{polyglossia}{}{\\IfPackageLoadedTF{babel}{}{\\usepackage[safe=none]{babel}}${provide(babelTags(lang))}}\n`
+const provide = ([tag, ...rest], opts) => (rest.length ? `\\IfFileExists{babel-${tag}.ini}{\\babelprovide[import=${tag},main${opts}]{axttarget}}{${provide(rest, opts)}}` : `\\babelprovide[import=${tag},main${opts}]{axttarget}`)
+const babel = (lang, hyphenrules) => `\\IfPackageLoadedTF{polyglossia}{}{\\IfPackageLoadedTF{babel}{}{\\usepackage[safe=none]{babel}}${provide(babelTags(lang), hyphenrules ? `,hyphenrules=${hyphenrules}` : '')}}\n`
 /** After fontspec: the fonts declared from here on carry exactly the features given them. A paper's class may set
  *  fontspec's defaults for its own faces — newtxtext, which AAAI's style loads, sets Extension=.otf under XeTeX — and
  *  every font declared later inherits them: a .ttf face (bsmi00lp, ipaexm, UnBatang) is then looked for as .otf and
  *  not found. The paper's own faces were declared before, with their features, and keep them */
 const OWN_FEATURES = '\\defaultfontfeatures{}\n'
-/** the paper's own line spacing, times `f`; an empty \baselinestretch, the standard classes' own, means 1 to LaTeX */
-const leading = f => (f === 1 ? '' : `\\expanded{\\noexpand\\linespread{\\fpeval{${f}*\\ifx\\baselinestretch\\empty 1\\else\\baselinestretch\\fi}}}\n`)
 
-/** the strategies to try for a paper, in order: { name, engine, xe, pre(fonts) → the preamble's addition } */
+/** the strategies to try for a paper, in order: { name, engine, xe, pre(fonts) → the preamble's addition, leading —
+ *  the factor on the paper's spacing inside translated units, absent for 1 } */
 export function strategiesFor(meta, lang) {
   const script = scriptOf(lang)
   const cjk = CJK[script]
   if (cjk) {
     const xeCJK = `\\usepackage{xeCJK}\n${OWN_FEATURES}${cjk.spaced ? '\\xeCJKsetup{CJKspace=true}\n' : ''}\\setCJKmainfont${cjk.font}\n`
-    const out = [{ name: 'XeLaTeX + xeCJK', engine: 'xelatex', xe: true, pre: fonts => xeCJK + latinFontsFor(fonts) + leading(cjk.leading) + babel(lang) }]
+    const lead = cjk.leading === 1 ? {} : { leading: cjk.leading }
+    const out = [{ name: 'XeLaTeX + xeCJK', engine: 'xelatex', xe: true, ...lead, pre: fonts => xeCJK + latinFontsFor(fonts) + babel(lang, 'english') }]
     if (EIGHT_BIT.has(meta.compiler)) {
       const cjkutf8 = `\\usepackage{CJKutf8}\n\\AtBeginDocument{\\begin{CJK}{UTF8}{${cjk.cjkutf8}}}\n\\AtEndDocument{\\end{CJK}}\n`
-      out.push({ name: 'pdfLaTeX + CJKutf8', engine: meta.compiler, xe: false, pre: () => cjkutf8 + leading(cjk.leading) })
+      out.push({ name: 'pdfLaTeX + CJKutf8', engine: meta.compiler, xe: false, ...lead, pre: () => cjkutf8 })
     }
     return out
   }

@@ -6,7 +6,7 @@
 // that grew is set at, and how far a compile is from the original.
 import { readFileSync } from 'node:fs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { FORBIDDEN_TO_WARNING, latin1, latin1Bytes, MARK_DEF, markUnits, patch, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { FORBIDDEN_TO_WARNING, latin1, latin1Bytes, MARK_DEF, markUnits, patch, stripPdftexOption, unitLeadTex as engineUnitLeadTex, XETEX_SHIM, XETEX_SHIM_R1 } from '../../../src/pdf-reader/engine/latex-front.mjs'
 
 /**
  * Sync points. \axtat logs page (shipouts so far), column and \pagetotal in outer vertical mode; \axtsync, given the
@@ -49,16 +49,9 @@ export const LINES_TEX = String.raw`\makeatletter
 \makeatother
 `
 
-/** baselines `em` × the font size inside translated units alone (or \axtlead@<unit>'s factor), the paper's after: set
- *  back once the unit's own paragraph is over, found as \axtlines finds it, at the level the unit began at and at every
- *  level between (a footnote's paragraph ending first inside a unit, or a list opened right after one, left 13 pt
- *  leading on the English after it, down to the references: 2608.02163) */
-export const unitLeadTex = em => String.raw`\makeatletter
-\def\axt@leadat#1#2#3{\ifnum\currentgrouplevel=#1 \baselineskip=#2\relax\else\ifnum\currentgrouplevel>#1 \baselineskip=#2\relax\expandafter\gdef\csname axt@lb@#3\endcsname{\axt@leadback{#1}{#2}{#3}}\expandafter\aftergroup\csname axt@lb@#3\endcsname\fi\fi}
-\def\axt@leadback#1#2#3{\ifnum\currentgrouplevel>#1 \baselineskip=#2\relax\expandafter\aftergroup\csname axt@lb@#3\endcsname\else\ifnum\currentgrouplevel=#1 \ifhmode\AddToHookNext{para/after}{\axt@leadat{#1}{#2}{#3}}\else\baselineskip=#2\relax\fi\fi\fi}
-\protected\def\axtlead#1{\ifdefined\AddToHookNext\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@leadat{\the\currentgrouplevel}{\the\baselineskip}{#1}}}\baselineskip=\ifcsname axtlead@#1\endcsname\csname axtlead@#1\endcsname\else ` + em + String.raw`\fi\dimexpr\f@size pt\relax\axt@tmp\fi}
-\makeatother
-`
+/** baselines `em` × the font size inside translated units alone (or \axtlead@<unit>'s factor), the paper's after:
+ *  the engine's unit leading (latex-front.mjs) on the font size rather than on the paper's spacing */
+export const unitLeadTex = em => engineUnitLeadTex(`${em}\\dimexpr\\f@size pt\\relax`)
 
 /** the theorem-like environments whose heads are run-in: the usual names and every \newtheorem of the paper */
 export const theoremEnvs = files => [...new Set(['theorem', 'lemma', 'corollary', 'proposition', 'definition', 'remark', 'example', 'proof', 'claim', 'conjecture', 'assumption', ...[...files].filter(([p]) => /\.(tex|sty|cls)$/i.test(p)).flatMap(([, b]) => [...latin1(b).matchAll(/\\newtheorem\*?\s*\{([^}]+)\}/g)].map(m => m[1].trim()))])]
@@ -72,7 +65,8 @@ export function originalProbeFiles({ project, units }, theorems) {
   return files
 }
 
-/** the translation, locked: the strategy's global leading replaced by unit-local leading, every unit synced */
+/** the translation, locked: units at `em` × the font size rather than the strategy's factor on the paper's spacing,
+ *  every unit synced */
 export function lockedFiles({ fsys, meta, project, units }, translated, { strategy, fonts, em, leads = new Map(), targets = new Map(), theorems }) {
   const index = new Map(units.map((u, i) => [u, i]))
   const base = markUnits(units)
@@ -80,7 +74,7 @@ export function lockedFiles({ fsys, meta, project, units }, translated, { strate
   const files = patch(project, translated, { mark })
   let main = latin1(files.get(project.main))
   const at = main.search(/\\begin\s*\{document\}/)
-  const pre = strategy.pre(fonts).replace(/\\expanded\{\\noexpand\\linespread\{\\fpeval\{[^\n]*\n/, '')
+  const pre = strategy.pre(fonts)
   main = main.slice(0, at) + FORBIDDEN_TO_WARNING + pre + main.slice(at)
   if (strategy.xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
   const table = [

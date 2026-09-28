@@ -573,6 +573,27 @@ export const MARK_DEF = [
   '\\else\\protected\\def\\axtmark#1{}\\fi\\fi\\fi',
   ...END_MARK,
 ].join('\n') + '\n'
+/**
+ * \\axtlead{name}, before a translated unit's start mark: the unit's own paragraph set at `leading`, TeX for the new
+ * \\baselineskip — `1.3\\baselineskip` (the paper's spacing times the script's factor, scripts.mjs) or
+ * `1.3\\dimexpr\\f@size pt\\relax` (the font size times it, the geometry lock); a unit's own factor \\axtlead@<name>,
+ * when defined, multiplies the font size. The paper's leading comes back once that paragraph is over, found by the
+ * group level the unit began at and set at every level between (a footnote's paragraph ending first inside a unit, or a
+ * list opened right after one, left the unit's leading on the English after it, down to the references: 2608.02163).
+ * Never an \\aftergroup inside a box: a paragraph ending there — a table's p-column cell, a box in a display — may
+ * close its group in an alignment or in math, where the token breaks the next \\midrule or \\end{align*} (2608.21180,
+ * 2608.09038: a hundred errors each); inside one the level is set and the hook waits for the next paragraph. And no
+ * hook from restricted horizontal mode, where a caption is measured in an \\hbox before it is set.
+ * Local, because a \\linespread for the whole document also spread what stays English — references, tables, code,
+ * algorithms — a third past the paper's (RT-1's references: 1.43 × the font size against 1.10)
+ */
+export const unitLeadTex = leading => String.raw`\makeatletter
+\def\axt@leadat#1#2#3{\ifnum\currentgrouplevel=#1 \baselineskip=#2\relax\else\ifnum\currentgrouplevel>#1 \baselineskip=#2\relax\ifinner\AddToHookNext{para/after}{\axt@leadat{#1}{#2}{#3}}\else\expandafter\gdef\csname axt@lb@#3\endcsname{\axt@leadback{#1}{#2}{#3}}\expandafter\aftergroup\csname axt@lb@#3\endcsname\fi\fi\fi}
+\def\axt@leadback#1#2#3{\ifnum\currentgrouplevel>#1 \baselineskip=#2\relax\expandafter\aftergroup\csname axt@lb@#3\endcsname\else\ifnum\currentgrouplevel=#1 \ifhmode\AddToHookNext{para/after}{\axt@leadat{#1}{#2}{#3}}\else\baselineskip=#2\relax\fi\fi\fi}
+\protected\def\axtlead#1{\ifhmode\ifinner\else\axt@lead{#1}\fi\else\axt@lead{#1}\fi}
+\def\axt@lead#1{\ifdefined\AddToHookNext\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@leadat{\the\currentgrouplevel}{\the\baselineskip}{#1}}}\baselineskip=\ifcsname axtlead@#1\endcsname\csname axtlead@#1\endcsname\dimexpr\f@size pt\relax\else ` + leading + String.raw`\fi\relax\axt@tmp\fi}
+\makeatother
+`
 // pieces that are always set on the line: inline formulas and references
 const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]ref)(?![A-Za-z]))/
 /** marks for the units whose place a reader shows: not headings (their text is also typeset in running heads and

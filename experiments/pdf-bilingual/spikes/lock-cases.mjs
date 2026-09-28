@@ -91,16 +91,20 @@ check('a line past the foot in a list: the next item starts where the original d
 check('a line past the foot in a list: same page count', il.pages === io.pages, `${il.pages} vs ${io.pages}`)
 // unit leading is the unit's own: a footnote's paragraph ending first inside the unit, a unit in a group that closes
 // before its paragraph ends, a unit set once in a box (as a caption is measured) — after each, the paper's leading
-// again and no TeX error (2608.02163: 13 pt leading leaked into the English that followed, down to the references)
+// again and no TeX error (2608.02163: 13 pt leading leaked into the English that followed, down to the references);
+// a unit begun in a group whose paragraph first ends inside a box — a table's p-column cell, a split in a display —
+// puts nothing in the alignment (2608.21180: "Misplaced \\noalign", 2608.09038: "Missing $ inserted")
 const leadBody = [
   `\\axtlines{0}\\axtlead{0}\\leavevmode A unit with a note.\\footnote{${'A long note. '.repeat(40)}} It goes on.\\par\\message{^^JLEAD-AFTER footnote \\the\\baselineskip^^J}`,
   `\\axtlines{3}\\axtlead{3}\\leavevmode A unit a list ends.\\begin{itemize}\\item\\message{^^JLEAD-AFTER initem \\the\\baselineskip^^J}${'Item text. '.repeat(30)}\\end{itemize}\\message{^^JLEAD-AFTER list \\the\\baselineskip^^J}${'After the list. '.repeat(30)}\\par`,
   `{\\axtlead{1}\\leavevmode A unit in a group.}\\par\\message{^^JLEAD-AFTER group \\the\\baselineskip^^J}`,
   `\\sbox0{\\axtlead{2}\\leavevmode A unit in a box.}\\leavevmode Plain text.\\par\\message{^^JLEAD-AFTER box \\the\\baselineskip^^J}`,
+  `{\\bfseries\\axtlead{4}\\leavevmode A unit begun bold.} It goes on \\begin{tabular}{p{3cm}}\\hline Cell text.\\\\\\hline\\end{tabular} and ends.\\par\\message{^^JLEAD-AFTER table \\the\\baselineskip^^J}`,
+  `\\textbf{\\axtlead{5}\\leavevmode A unit begun bold} goes on\\begin{align*}\\begin{split}a&=b\\\\&=c\\end{split}\\end{align*}and ends.\\par\\message{^^JLEAD-AFTER display \\the\\baselineskip^^J}`,
 ].join('\n\n')
-const leadLog = tex('lead', `${LINES_TEX}${unitLeadTex(1.3)}\n\\documentclass{article}\n\\begin{document}\n${leadBody}\n\\end{document}\n`)
+const leadLog = tex('lead', `${LINES_TEX}${unitLeadTex(1.3)}\n\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\n${leadBody}\n\\end{document}\n`)
 const after = Object.fromEntries([...leadLog.matchAll(/^LEAD-AFTER (\w+) (\S+)/gm)].map(m => [m[1], m[2]]))
-check('the paper\'s leading after a unit with a footnote, in a group, in a box, and in and after a list that ends it', ['footnote', 'group', 'box', 'initem', 'list'].every(k => after[k] === '12.0pt'), JSON.stringify(after))
+check('the paper\'s leading after a unit with a footnote, in a group, in a box, in and after a list that ends it, and before a table and a display', ['footnote', 'group', 'box', 'initem', 'list', 'table', 'display'].every(k => after[k] === '12.0pt'), JSON.stringify(after))
 check('line counts of the unit\'s own paragraph, not its footnote\'s or the list\'s', readLines(leadLog).get(0)?.lines === 1 && readLines(leadLog).get(3)?.lines === 1, JSON.stringify([...readLines(leadLog)]))
 check('unit leading raises no TeX error', !/^! /m.test(leadLog), (leadLog.match(/^! .*/m) ?? [''])[0])
 console.log(failed ? `${failed} failed` : 'all passed')

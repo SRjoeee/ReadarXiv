@@ -11,7 +11,7 @@
 //     or after the final compile: the translation comes first;
 //  5. when every unit is in, the final compile: every pass, the images themselves.
 import { analyze } from './paper-meta.mjs'
-import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, unitLeadTex, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { strategiesFor } from './scripts.mjs'
 import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
 
@@ -108,17 +108,21 @@ export function originalFiles({ fsys, project }) {
   return out
 }
 
-/** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs) */
+/** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs); a strategy's `leading` sets the
+ *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex) */
 export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl }) {
   const xe = strategy.xe
-  const out = patch(project, translated, { mark: markUnits(project.units) })
+  const base = markUnits(project.units)
+  const index = new Map(project.units.map((u, i) => [u, i]))
+  const mark = strategy.leading ? u => { const m = base(u); return m && translated.has(u) ? { start: `\\axtlead{${index.get(u)}}${m.start}`, end: m.end } : m } : base
+  const out = patch(project, translated, { mark })
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
   main = main.slice(0, at) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   if (xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
-  main = (draft ? DRAFT : '') + MARK_DEF + main
+  main = (draft ? DRAFT : '') + MARK_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + main
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
   const stem = stemOf(project.main)
@@ -130,10 +134,12 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
 /**
  * The reader's pipeline version (REPORT, eighteenth addendum): raised with any change to what a compile puts out
  * (latex-front, mt, the fonts, the scripts' strategies, the TeX tree) or to what a cached record holds (the units'
- * cutting, kinds and texts, paperContext(), the marks). A record of another version is translated again
+ * cutting, kinds and texts, paperContext(), the marks). A record of another version is compiled again, its
+ * translations reused wherever a unit's source matches (session.mjs seedFrom)
  */
 // 2: the front matter's notes are units (latex-front.mjs FRONT_MATTER)
-export const PIPELINE_VERSION = '2'
+// 3: CJK leading inside translated units alone, and English hyphenation under a CJK target (scripts.mjs)
+export const PIPELINE_VERSION = '3'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
