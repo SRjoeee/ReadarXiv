@@ -5,7 +5,7 @@ import { createElement as h, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Combobox, type ComboOption } from '@/entrypoints/options/ui/Combobox'
 import { ConfirmButton, DISARM_MS } from '@/entrypoints/options/ui/ConfirmButton'
-import { insertAt, withItem, withUndo } from '@/entrypoints/options/ui/lists'
+import { insertAt, withUndo } from '@/entrypoints/options/ui/lists'
 import { UNDO_MS, UndoRow } from '@/entrypoints/options/ui/UndoRow'
 import { O, setLocale } from '@/ui/strings'
 import { mountElement } from '../ui/render-hook'
@@ -159,7 +159,5 @@ describe('the list helpers', () => {
     expect(withUndo(['a', 'b', 'c'], [{ index: 1, name: 'x' }])).toEqual([{ item: 'a' }, { gone: { index: 1, name: 'x' } }, { item: 'b' }, { item: 'c' }])
     expect(withUndo(['a'], [{ index: 5, name: 'x' }])).toEqual([{ item: 'a' }, { gone: { index: 5, name: 'x' } }])
     expect(insertAt(['a', 'c'], 1, 'b')).toEqual(['a', 'b', 'c'])
-    expect(withItem([{ id: 'a', n: 1 }, { id: 'b', n: 2 }], { id: 'a', n: 3 })).toEqual([{ id: 'a', n: 3 }, { id: 'b', n: 2 }])
-    expect(withItem([{ id: 'a', n: 1 }], { id: 'c', n: 3 })).toEqual([{ id: 'a', n: 1 }, { id: 'c', n: 3 }])
   })
 })

@@ -82,12 +82,5 @@ export function useLinger<T>(value: T | null, ms = 180): T | null {
 /** A popover shut, as a pick does */
 export const shut = (id: string) => document.getElementById(id)?.hidePopover()
 
-/**
- * A list with an edited item written into it — in place, or appended when it is no longer there (another tab deleted
- * it while its editor was open here): the reader's change is their later word on it (the old drawer's `withProfile`)
- */
-export const withItem = <T extends { id: string }>(list: readonly T[], next: T): T[] =>
-  list.some(x => x.id === next.id) ? list.map(x => (x.id === next.id ? next : x)) : [...list, next]
-
 /** A small segmented control's agreed width (settings-2), read by `.o-seg` */
 export const segmentWidth = (px: number) => ({ '--w': `${px}px` }) as CSSProperties
