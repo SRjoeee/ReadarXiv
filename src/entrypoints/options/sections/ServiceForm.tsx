@@ -9,6 +9,7 @@ import { ChevronRight } from 'lucide'
 import { type RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import type { LangCode } from '@/config/languages'
 import { NAME_MAX, type Service, defaultServiceName, isLoopback, newServiceId } from '@/config/services'
+import { readConfig } from '@/config/storage'
 import { Button } from '@/ui/controls/Button'
 import { Field, TextInput } from '@/ui/controls/Field'
 import { Icon } from '@/ui/controls/Icon'
@@ -242,17 +243,18 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
     } catch {
       // the save itself refused (the schema's limit of services, storage, a write that did not land): nothing stored,
       // the form stays, and the origin this attempt tested goes back — it was never put to use (Opus review round 1,
-      // item 3)
+      // item 3). The form gone meanwhile, its clean-up ran while the service was handed over and gave nothing back:
+      // what it asked for goes back here too — the page takes its sections away once the stored value cannot be read,
+      // before the refused write's answer comes (App.tsx; Task 107)
       handedOver.current = false
       setResult(O.saveFailed)
-      await releaseHostPermission(candidate.baseURL, storedNow.current).catch(() => undefined)
-      // The form gone meanwhile, its clean-up ran while the service was handed over and gave nothing back: what it asked
-      // for goes back here. The page takes its sections away once the stored value cannot be read, before the refused
-      // write's answer comes (App.tsx; Task 107)
-      if (cancelled.current) {
-        for (const u of granted.current) await releaseHostPermission(u, storedNow.current).catch(() => undefined)
-        granted.current.clear()
-      }
+      const unused = cancelled.current ? [candidate.baseURL, ...granted.current] : [candidate.baseURL]
+      if (cancelled.current) granted.current.clear()
+      // No origin goes back while the stored value cannot be read, as a deletion's gives none back: which stored
+      // services share one is unknown, and a permission kept a while is the safer failure. The verdict is this read's,
+      // never a snapshot's; a read that fails says nothing either (Task 107)
+      const readable = await readConfig().then(r => r.fallbackReason === null, () => false)
+      if (readable) for (const u of unused) await releaseHostPermission(u, storedNow.current).catch(() => undefined)
     } finally {
       setBusy(false)
     }

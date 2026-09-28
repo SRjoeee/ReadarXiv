@@ -4,7 +4,7 @@
 // with a stable id; editing keeps the saved key unless one is typed or it is cleared; the refused key's form. Task 65:
 // a permission the browser grants only after the form is gone is given back, and a form gone loads no list; both
 // forms are live after StrictMode's double run of their effects, as the settings page renders them. Task 107: a save
-// refused after the form is gone gives back what the form asked for
+// refused after the form is gone gives back what the form asked for, and nothing while the stored value cannot be read
 import { StrictMode, createElement as h, useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Service } from '@/config/services'
@@ -14,7 +14,14 @@ vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getU
 const wire = vi.hoisted(() => ({
   granted: new Set<string>(), asked: [] as string[], released: [] as string[], listed: [] as string[], candidates: [] as Service[],
   connect: { ok: true, ms: 42 } as { ok: true; ms: number } | { ok: false; field: 'apiKey' | null; reason: string },
+  /** the stored value unreadable: a read answers with the defaults and why (config/storage.ts `readConfig`) */
+  unreadable: false,
 }))
+// as storage.ts: the verdict comes with the read
+vi.mock('@/config/storage', async () => {
+  const { DEFAULT_CONFIG: defaults } = await import('@/config/schema')
+  return { readConfig: async () => ({ config: defaults, fallbackReason: wire.unreadable ? { kind: 'unknown' } : null }) }
+})
 vi.mock('@/entrypoints/options/permissions', () => ({
   PermissionError: class extends Error {},
   hasHostPermission: vi.fn(async (url: string) => wire.granted.has(new URL(url).origin)),
@@ -51,7 +58,7 @@ describe('ServiceForm (§6.3)', () => {
   beforeEach(() => {
     setLocale('en')
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    Object.assign(wire, { granted: new Set(['https://openrouter.ai']), asked: [], released: [], listed: [], candidates: [], connect: { ok: true, ms: 42 } })
+    Object.assign(wire, { granted: new Set(['https://openrouter.ai']), asked: [], released: [], listed: [], candidates: [], connect: { ok: true, ms: 42 }, unreadable: false })
   })
   afterEach(() => { vi.useRealTimers() })
   const form = (over: Partial<Parameters<typeof ServiceForm>[0]> = {}) => {
@@ -402,11 +409,11 @@ describe('ServiceForm (§6.3)', () => {
     await m.unmount()
   })
 
-  // Task 107: the settings page takes its sections away once the stored value cannot be read, before a refused save's
-  // answer comes — the form's clean-up runs while the service is handed over, and gives nothing back
-  it('a save refused only after the form is gone gives back what the form asked for too, not only the origin it tested', async () => {
+  // Task 107: a form can be gone before its refused save's answer comes — the settings page takes its sections away
+  // once the stored value cannot be read — and its clean-up then ran while the service was handed over, giving nothing back
+  const goneBeforeTheAnswer = async () => {
     const answer = deferred<void>()
-    const { element } = form({ onConnected: () => answer.promise })
+    const { element } = form({ stored: ['https://other.example.com/v1'], onConnected: () => answer.promise })
     const m = await mountElement(element)
     const [address, key, model] = inputs(m.container)
     button(m.container, 'DeepSeek').click()
@@ -419,9 +426,23 @@ describe('ServiceForm (§6.3)', () => {
     await m.unmount()
     await m.flush()
     expect(wire.released).toEqual([])
+    return { answer, flush: m.flush }
+  }
+
+  it('a save refused by the store, readable, only after the form is gone gives back what the form asked for too, not only the origin it tested', async () => {
+    const { answer, flush } = await goneBeforeTheAnswer()
     answer.reject(new Error('refused'))
-    await m.flush()
+    await flush()
     expect(wire.released).toEqual(['https://openrouter.ai/api/v1', 'https://api.deepseek.com/v1'])
+    expect(vi.mocked(releaseHostPermission)).toHaveBeenLastCalledWith('https://api.deepseek.com/v1', ['https://other.example.com/v1'])
+  })
+
+  it('a save refused while the stored value cannot be read, the form gone before the answer, gives back no origin: which stored services share one is unknown (Task 107)', async () => {
+    const { answer, flush } = await goneBeforeTheAnswer()
+    wire.unreadable = true
+    answer.reject(new Error('refused'))
+    await flush()
+    expect(wire.released).toEqual([])
   })
 
   // Fix round 1, item 4: the model field may still be disabled at the click that asks for it; the focus catches up
@@ -588,7 +609,7 @@ describe('the forms under StrictMode, as the settings page renders them (main.ts
   beforeEach(() => {
     setLocale('en')
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    Object.assign(wire, { granted: new Set(['https://openrouter.ai']), asked: [], released: [], listed: [], candidates: [], connect: { ok: true, ms: 42 } })
+    Object.assign(wire, { granted: new Set(['https://openrouter.ai']), asked: [], released: [], listed: [], candidates: [], connect: { ok: true, ms: 42 }, unreadable: false })
   })
   afterEach(() => { vi.useRealTimers() })
   const strict = (child: ReturnType<typeof h>) => h(StrictMode, null, child)
