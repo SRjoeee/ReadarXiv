@@ -11,7 +11,7 @@
 //     or after the final compile: the translation comes first;
 //  5. when every unit is in, the final compile: every pass, the images themselves.
 import { analyze } from './paper-meta.mjs'
-import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, unitLeadTex, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
 
@@ -119,13 +119,14 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   const out = patch(project, translated, { mark })
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
-  main = main.slice(0, at) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + main.slice(at)
+  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   if (xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
-  main = (draft ? DRAFT : '') + MARK_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + main
+  main = (draft ? DRAFT : '') + MARK_DEF + FIT_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + main
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
+  for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = localizeNames(t); if (u !== t) out.set(f, latin1Bytes(u)) }
   const stem = stemOf(project.main)
   if (aux) out.set(`${stem}.aux`, new TextEncoder().encode(aux))
   if (bbl && !meta.bbl) out.set(`${stem}.bbl`, new TextEncoder().encode(bbl))

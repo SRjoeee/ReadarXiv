@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inMemory, loadProject, patch } from '@/pdf-reader/engine/latex-front.mjs'
+import { inMemory, loadProject, localizeNames, patch } from '@/pdf-reader/engine/latex-front.mjs'
 
 // The PDF reader's LaTeX front end: what of a paper's source is prose to translate
 
@@ -59,7 +59,7 @@ describe('declarations that take no argument (2608.05876: five of eight tables s
     expect(units.filter(u => u.kind === 'cell').map(u => textOf(u).trim())).toEqual(['Frozen profile', 'Prompting only'])
     // the rule's optional width is still the rule's
     expect(units.some(u => /1pt/.test(textOf(u)))).toBe(false)
-    expect(patched(p)).toMatch(/\\centering\n\{\\small\n\\begin\{tabular\}\{ll\}\\toprule\[1pt\]<T\d+>&<T\d+>\\\\/)
+    expect(patched(p)).toMatch(/\\centering\n\{\\small\n\\axtfit\{\\begin\{tabular\}\{ll\}\\toprule\[1pt\]<T\d+>&<T\d+>\\\\/)
   })
 
   it('a size switch before a group in a paragraph: the group\'s words are the paragraph\'s', () => {
@@ -110,5 +110,46 @@ describe('the paper\'s own macros (2608.06007: its run-in headings \\nosection{â
   it('a macro with two prose arguments stays opaque', () => {
     const p = doc('\\newcommand{\\pair}[2]{\\textbf{#1} and \\emph{#2}}', 'Start \\pair{first words}{second words} end.')
     expect((p.units as Unit[]).map(textOf).join('')).not.toMatch(/first words|second words/)
+  })
+})
+
+describe('what goes around the translation: tables fitted, notes the class compares, a heading written out', () => {
+  const withTables = (tex: string) => loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode(tex)]])), 'main.tex', { tables: true })
+  const typeset = (p: ReturnType<typeof withTables>, pick: (u: Unit) => boolean) => {
+    const units = p.units as Unit[]
+    const translated = new Map(units.filter(pick).map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))]))
+    return new TextDecoder().decode(patch(p, translated as Map<(typeof p.units)[number], unknown[]>).get('main.tex'))
+  }
+  const TABLES = '\\documentclass{article}\\begin{document}\n\\begin{tabular}{ll}\nFrozen profile & Prompting only \\\\\n\\end{tabular}\n\n\\begin{longtable}{l}\nA long cell \\\\\n\\end{longtable}\n\\end{document}'
+
+  it('a table with a translated cell goes into \\axtfit, a table that breaks across pages does not (2608.06701)', () => {
+    const tex = typeset(withTables(TABLES), () => true)
+    expect(tex).toMatch(/\\axtfit\{\\begin\{tabular\}\{ll\}[\s\S]*\\end\{tabular\}\}/)
+    expect(tex).not.toMatch(/\\axtfit\{\\begin\{longtable\}/)
+  })
+
+  it('a table set to a width, or holding \\verb, is not boxed (2608.02991\'s tabularx)', () => {
+    const tex = typeset(withTables('\\documentclass{article}\\begin{document}\n\\begin{tabularx}{\\textwidth}{lX}\nFrozen profile & Prompting only \\\\\n\\end{tabularx}\n\n\\begin{tabular}{l}\nThe code \\verb|x| here \\\\\n\\end{tabular}\n\\end{document}'), () => true)
+    expect(tex).not.toContain('\\axtfit')
+  })
+
+  it('a table nothing of which is translated is left as it is', () => {
+    expect(typeset(withTables(TABLES), () => false)).not.toContain('\\axtfit')
+  })
+
+  it('an author block\'s notes carry no mark, so a class that sets equal notes once still can (2608.06233)', () => {
+    const p = project('\\documentclass{article}\\author{Alice\\thanks{Equal contribution.}\\and Bob\\thanks{Equal contribution.}}\\begin{document}\\maketitle\nWords of the paper.\\end{document}')
+    const notes = (p.units as (Unit & { front?: boolean })[]).filter(u => u.kind === 'footnote')
+    expect(notes.length).toBe(2)
+    expect(notes.every(u => u.front)).toBe(true)
+  })
+
+  it('a style\'s abstract heading written out goes by \\abstractname (RT-1\'s ICLR style)', () => {
+    const sty = '\\renewenvironment{abstract}{\\vskip.075in\\centerline{\\large\\sc Abstract}\\vspace{0.5ex}\\begin{quote}}{\\par\\end{quote}}'
+    const out = localizeNames(sty)
+    expect(out).toContain('\\centerline{\\large\\sc \\ifdefined\\abstractname\\abstractname\\else Abstract\\fi{}}')
+    expect(out).toContain('\\begin{quote}}{\\par\\end{quote}}')
+    // elsewhere the word is prose, and stays
+    expect(localizeNames('\\section{Abstract ideas}')).toBe('\\section{Abstract ideas}')
   })
 })

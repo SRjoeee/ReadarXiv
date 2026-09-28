@@ -305,9 +305,16 @@ function frontNotes(s, from, to, b, ctx) {
     if (at < past || inComment(s, at)) continue
     const { args, end } = argsAfter(s, at + m[0].length, 2)
     if (!args.some(a => a.kind === 'req')) continue
-    walk(s, at, end, b, ctx); b.flush()
+    frontNote(s, at, end, b, ctx)
     past = end
   }
+}
+/** a front-matter note, a unit with no mark: a class compares its notes' text (revtex sets two authors' equal
+ *  "contributed equally" once), and a mark of its own would set the same note twice (2608.06233) */
+function frontNote(s, at, end, b, ctx) {
+  const before = b.units.length
+  walk(s, at, end, b, ctx); b.flush()
+  for (const u of b.units.slice(before)) u.front = true
 }
 /** a front-matter argument: its notes as frontNotes cuts them, the names and places between them units of kind
  *  'author'. One written as keys and values (elsarticle's organization={…}, city={…}) keeps its text, notes aside */
@@ -321,7 +328,7 @@ function frontBlock(s, from, to, b, ctx) {
     const { args, end } = argsAfter(s, at + m[0].length, 2)
     if (!args.some(a => a.kind === 'req')) continue
     names(past, at)
-    walk(s, at, end, b, ctx); b.flush()
+    frontNote(s, at, end, b, ctx)
     past = end
   }
   names(past, to)
@@ -382,6 +389,11 @@ function walk(s, from, to, b, ctx) {
         const { end: argsEnd } = argsAfter(s, afterBegin, env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? 3 : 2)
         const saved = b.kind, savedCell = b.cellMode; b.kind = 'cell'; b.cellMode = true
         walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved; b.cellMode = savedCell
+        // fitted to the line once translated (patch, FIT_DEF): a plain tabular, whose width is its columns'. One set to a
+        // width (tabularx, tabular*, tabulary) keeps it, and reads its own body, which it cannot inside an argument
+        // (2608.02991: "Missing \\endgroup inserted"); one that breaks across pages cannot be boxed; \\verb and the
+        // like cannot go into an argument either
+        if (/^tabu(lar)?$/.test(env) && !/\\(?:verb|lstinline|mintinline)(?![A-Za-z])|\\begin\s*\{(?:verbatim|lstlisting|minted)/.test(s.slice(i, afterEnd))) ctx.fits.push({ file: b.file, start: i, end: afterEnd })
         i = afterEnd; continue
       }
       // everything else is a container: its body is walked, its own arguments ([Name] of a theorem, {width} of a minipage) stay
@@ -517,7 +529,7 @@ export function loadProject(root, main, { tables = false } = {}) {
     const t = sourceText(f)
     for (const m of t.matchAll(/\\(?:(?:re|provide)?newcommand\*?\s*\{?\\([A-Za-z@]+)\}?|def\\([A-Za-z@]+))\s*\{\s*\\(begin|end)\s*\{([^}]+)\}\s*\}/g)) envMacros.set(m[1] ?? m[2], { side: m[3], env: m[4].trim() })
   }
-  const ctx = { tables, theorems, macros: paperMacros(sources.map(sourceText)), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim())), skipped, visit: rel => visit(rel) }
+  const ctx = { tables, theorems, fits: [], macros: paperMacros(sources.map(sourceText)), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim())), skipped, visit: rel => visit(rel) }
   function visit(rel) {
     const f = read(rel); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)
@@ -544,7 +556,7 @@ export function loadProject(root, main, { tables = false } = {}) {
   const enc = all.match(/\\usepackage\s*\[([^\]]*)\]\s*\{inputenc\}/)?.[1]?.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
   const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch { return false } }
   const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set()
-  return { main: mainFile.rel, files, units, skipped, inputenc: enc ?? null, transcode }
+  return { main: mainFile.rel, files, units, skipped, fits: ctx.fits, inputenc: enc ?? null, transcode }
 }
 
 /** the unit as the translator sees it: text with ⟦n⟧ for opaque pieces and ⟦n⟧…⟦/n⟧ for formatting pairs */
@@ -669,9 +681,16 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     const us = (byFile.get(file) ?? []).sort((a, b) => a.start - b.start)
     const parts = []
     const enc = project.transcode?.has(file) ? 'utf8' : 'latin1'
+    // a table with a translated cell goes into \\axtfit, which sets it no wider than the line (FIT_DEF)
+    const fits = (project.fits ?? []).filter(f => f.file === file && us.some(u => u.start >= f.start && u.end <= f.end && translated.has(u)))
+    const inserts = fits.flatMap(f => [[f.start, '\\axtfit{'], [f.end, '}']]).sort((a, b) => a[0] - b[0])
+    const copy = (from, to) => {
+      for (const [pos, tex] of inserts) if (pos >= from && pos < to) { parts.push(bytesOf(text.slice(from, pos), enc), utf8Bytes(tex)); from = pos }
+      parts.push(bytesOf(text.slice(from, to), enc))
+    }
     let at = 0
-    for (const u of us) { if (u.start < at) continue; parts.push(bytesOf(text.slice(at, u.start), enc), render(u)); at = u.end }
-    parts.push(bytesOf(text.slice(at), enc))
+    for (const u of us) { if (u.start < at) continue; copy(at, u.start); parts.push(render(u)); at = u.end }
+    copy(at, text.length + 1)
     out.set(file, concat(parts))
   }
   return out
@@ -689,6 +708,36 @@ const END_MARK = [
   '\\protected\\def\\axtend#1{\\relax\\ifhmode\\ifnum\\lastnodetype=11 \\edef\\axtskip{\\the\\lastskip}\\unskip\\nobreak\\axtmark{#1}\\hskip\\axtskip\\relax%',
   '\\else\\axtmark{#1}\\fi\\else\\axtmark{#1}\\fi}',
 ]
+/**
+ * A style's abstract heading written out (ICLR's \\centerline{\\large\\sc Abstract}) in place of \\abstractname, which
+ * babel sets in the target's language: the word goes by \\abstractname, when it is defined, as the class's own
+ * heading does (RT-1's stayed "ABSTRACT" over a translated abstract)
+ */
+export function localizeNames(text) {
+  let out = text
+  for (const m of [...text.matchAll(/\\(?:re)?newenvironment\*?\s*\{abstract\}\s*(?:\[[^\]]*\]\s*)*\{/g)].reverse()) {
+    const open = m.index + m[0].length - 1, close = matchGroup(out, open)
+    if (close < 0) continue
+    const body = out.slice(open, close).replace(/(^|[^\\A-Za-z@])(Abstract|ABSTRACT)(?![A-Za-z])/g, (x, pre) => `${pre}\\ifdefined\\abstractname\\abstractname\\else Abstract\\fi{}`)
+    out = out.slice(0, open) + body + out.slice(close)
+  }
+  return out
+}
+/** Before \\begin{document} of a translation: a line TeX cannot fill within tolerance is set a little looser before it
+ *  is let run past the margin. A translation breaks its lines elsewhere than the paper did, and a long inline formula
+ *  it cannot break then stood out of the column (German 2608.02785: 11 lines over 5 pt, the original's 2). Paragraphs
+ *  that set well are set as they were */
+export const NO_OVERFLOW = '\\AtBeginDocument{\\setlength\\emergencystretch{2em}}\n'
+/** \\axtfit{table}: a translated table set no wider than the line, scaled down when its translation made it wider
+ *  (German in columns that do not wrap ran past the page: 2608.06701's Table I); as it is when it fits, or when no
+ *  \\resizebox is loaded. Never boxed inside a threeparttable, which takes its tabular over to measure it: Springer
+ *  Nature's class sets every table in one, and a box around the tabular left its environments unclosed (2608.02991:
+ *  "Missing \\endgroup inserted", 164 errors). Goes first in the main file */
+export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\def\axt@tpt{threeparttable}
+\long\def\axtfit#1{\ifx\@currenvir\axt@tpt\expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi{#1}{\axt@fit{#1}}}
+\long\def\axt@fit#1{\sbox\axt@fitbox{#1}\ifdim\wd\axt@fitbox>\linewidth\ifdefined\resizebox\resizebox{\linewidth}{!}{\usebox\axt@fitbox}\else\usebox\axt@fitbox\fi\else\usebox\axt@fitbox\fi}
+\makeatother
+`
 /** \\axtmark{name}: a PDF destination named axt-<name> at the current point, in each engine's own way. Protected, so
  *  it survives being written to the .aux and moving arguments unexpanded. Goes first in the main file.
  *  xdvipdfmx, XeTeX's PDF writer, drops every named destination nothing in the PDF refers to, as ours are, unless told
@@ -732,10 +781,10 @@ export const unitLeadTex = leading => String.raw`\makeatletter
 // pieces that are always set on the line: inline formulas and references
 const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]ref)(?![A-Za-z]))/
 /** marks for the units whose place a reader shows: not headings (their text is also typeset in running heads and
- *  tables of contents), not the author block's names and places (typeset again in running heads and the PDF's
- *  metadata, and kept as they are for some languages), not table cells, not the texts of a TikZ picture (set through the picture's own transformation,
+ *  tables of contents), not the author block's names, places and notes (typeset again in running heads and the
+ *  PDF's metadata, compared by the class, kept as they are for some languages), not table cells, not the texts of a TikZ picture (set through the picture's own transformation,
  *  which a destination's position does not follow) */
-export const markUnits = units => { const id = new Map(units.map((u, i) => [u, i])); return u => (u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.kind === 'author' ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` }) }
+export const markUnits = units => { const id = new Map(units.map((u, i) => [u, i])); return u => (u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.kind === 'author' || u.front ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` }) }
 
 /** Goes before \\begin{document} of the original's own compile: the log then says which font families the document set
  *  for its roles, however it set them (its class, a package, a conference style) */
