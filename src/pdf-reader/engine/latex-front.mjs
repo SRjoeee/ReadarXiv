@@ -422,6 +422,9 @@ function walk(s, from, to, b, ctx) {
         const title = b.title, depth = b.depth
         b.cur = null; b.kind = 'footnote'; b.title = false; b.depth = undefined; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.kind = saved; b.title = title; b.depth = depth
         const made = b.units.length - before
+        // a \\thanks is the title's or an author's note wherever it is written (revtex takes it after \\author{…}): no
+        // mark, as frontNote gives the author block's
+        if (name === 'thanks') for (const u of b.units.slice(before)) u.front = true
         b.cur = parent
         if (parent && made === 1) { const inner = b.units[b.units.length - 1]; inner.nested = true; parent.pieces.push({ t: 'nested', pre: s.slice(i, inner.start), unit: inner, post: s.slice(inner.end, e) }); parent.end = e }
         else if (parent && made === 0) { parent.pieces.push({ t: 'ph', src: s.slice(i, e) }); parent.end = e }

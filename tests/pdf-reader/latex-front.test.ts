@@ -144,6 +144,13 @@ describe('what goes around the translation: tables fitted, notes the class compa
     expect(notes.every(u => u.front)).toBe(true)
   })
 
+  it('a \\thanks written after \\author{…}, as revtex takes it, carries no mark either (2608.06233)', () => {
+    const p = project('\\documentclass{article}\\begin{document}\\author{Alice}\\thanks{Equal contribution.}\\author{Bob}\\thanks{Equal contribution.}\\maketitle\nWords of the paper.\\end{document}')
+    const notes = (p.units as (Unit & { front?: boolean })[]).filter(u => u.kind === 'footnote')
+    expect(notes.length).toBe(2)
+    expect(notes.every(u => u.front)).toBe(true)
+  })
+
   it('a style\'s abstract heading written out goes by \\abstractname (RT-1\'s ICLR style)', () => {
     const sty = '\\renewenvironment{abstract}{\\vskip.075in\\centerline{\\large\\sc Abstract}\\vspace{0.5ex}\\begin{quote}}{\\par\\end{quote}}'
     const out = localizeNames(sty)
