@@ -791,12 +791,15 @@ export const EVEN_SPACES = '\\makeatletter\\@ifpackageloaded{microtype}{}{\\usep
  *  wider than it. The original is set in a box that is never used, every LaTeX counter put back after it. Never boxed
  *  inside a threeparttable, which takes its tabular over to measure it: Springer Nature's class sets every table in
  *  one, and a box around the tabular left its environments unclosed (2608.02991: "Missing \endgroup inserted", 164
- *  errors). Goes first in the main file */
-export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newdimen\axt@fitwd\def\axt@tpt{threeparttable}
+ *  errors). With \axtfitheighttrue (the geometry lock, which keeps every block in its original's box, as service H
+ *  does) the translation is set no taller than the original either. Goes first in the main file */
+export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newdimen\axt@fitwd\newdimen\axt@fitht\newdimen\axt@fittot\newif\ifaxtfitheight\def\axt@tpt{threeparttable}
 \long\def\axtfit#1#2{\ifx\@currenvir\axt@tpt\expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi{#1}{\axt@fit{#1}{#2}}}
 \def\axt@counters{\begingroup\def\@elt##1{\global\csname c@##1\endcsname\the\csname c@##1\endcsname\relax}\xdef\axt@countersback{\cl@@ckpt}\endgroup}
 \long\def\axt@fit#1#2{\axt@counters\sbox\axt@fitbox{#2}\axt@countersback\axt@fitwd=\wd\axt@fitbox\ifdim\axt@fitwd<\linewidth\axt@fitwd=\linewidth\fi
-  \sbox\axt@fitbox{#1}\ifdim\wd\axt@fitbox>\axt@fitwd\ifdefined\resizebox\resizebox{\axt@fitwd}{!}{\usebox\axt@fitbox}\else\usebox\axt@fitbox\fi\else\usebox\axt@fitbox\fi}
+  \axt@fitht=\dimexpr\ht\axt@fitbox+\dp\axt@fitbox\relax\sbox\axt@fitbox{#1}\axt@fittot=\dimexpr\ht\axt@fitbox+\dp\axt@fitbox\relax
+  \ifaxtfitheight\ifdim\axt@fitht>\z@\ifdim\axt@fittot>\axt@fitht\axt@fittot=\dimexpr\wd\axt@fitbox*\axt@fitht/\axt@fittot\relax\ifdim\axt@fittot<\axt@fitwd\axt@fitwd=\axt@fittot\fi\fi\fi\fi
+  \ifdim\wd\axt@fitbox>\axt@fitwd\ifdefined\resizebox\resizebox{\axt@fitwd}{!}{\usebox\axt@fitbox}\else\usebox\axt@fitbox\fi\else\usebox\axt@fitbox\fi}
 \makeatother
 `
 
@@ -837,6 +840,9 @@ export const PARA_END_TEX = String.raw`\makeatletter
  * a footnote's paragraph ending first inside a unit, or a list opened right after one, left the unit's leading on the
  * English after it, down to the references: 2608.02163). No hook from restricted horizontal mode, where a caption is
  * measured in an \hbox before it is set.
+ * With \axtfirstpapertrue (the geometry lock, where each unit stands where its original did) the space from the line
+ * before to the unit's first line is the paper's, by \prevdepth, and only the unit's own lines are spaced at its
+ * leading: every unit began 2 pt lower than its original (13 pt against RT-1's 11), which no padding can take back.
  * A display inside a unit is set at the paper's leading, as the displays between units are: it is the paper's math,
  * not translated text, and the unit's leading had spread an align's rows a quarter apart (14.9 pt to 18.5 pt).
  * Local, because a \linespread for the whole document also spread what stays English — references, tables, code,
@@ -844,8 +850,9 @@ export const PARA_END_TEX = String.raw`\makeatletter
  */
 export const unitLeadTex = leading => PARA_END_TEX + String.raw`\makeatletter
 \protected\def\axtlead#1{\ifhmode\ifinner\else\axt@lead{#1}\fi\else\axt@lead{#1}\fi}
-\def\axt@lead#1{\ifdefined\AddToHookNext\edef\axt@paperlead{\the\baselineskip}\edef\axt@tmp{\noexpand\axt@whenover{lead#1}{\baselineskip=\the\baselineskip\relax}{\baselineskip=\the\baselineskip\relax}{\baselineskip=\the\baselineskip\relax}}\axt@tmp\baselineskip=\ifcsname axtlead@#1\endcsname\csname axtlead@#1\endcsname\dimexpr\f@size pt\relax\else ` + leading + String.raw`\fi\relax\edef\axt@unitlead{\the\baselineskip}\fi}
+\def\axt@lead#1{\ifdefined\AddToHookNext\edef\axt@paperlead{\the\baselineskip}\edef\axt@tmp{\noexpand\axt@whenover{lead#1}{\baselineskip=\the\baselineskip\relax}{\baselineskip=\the\baselineskip\relax}{\baselineskip=\the\baselineskip\relax}}\axt@tmp\baselineskip=\ifcsname axtlead@#1\endcsname\csname axtlead@#1\endcsname\dimexpr\f@size pt\relax\else ` + leading + String.raw`\fi\relax\edef\axt@unitlead{\the\baselineskip}\ifaxtfirstpaper\ifvmode\ifdim\prevdepth>-1000pt\prevdepth=\dimexpr\prevdepth+\axt@unitlead-\axt@paperlead\relax\fi\fi\fi\fi}
 \let\axt@unitlead\relax
+\newif\ifaxtfirstpaper
 \def\axt@displaylead{\ifx\axt@unitlead\relax\else\ifdim\baselineskip=\axt@unitlead\relax\baselineskip=\axt@paperlead\relax\fi\fi}
 \AtBeginDocument{\everydisplay\expandafter{\the\everydisplay\axt@displaylead}}
 \makeatother

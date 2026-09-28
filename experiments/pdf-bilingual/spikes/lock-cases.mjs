@@ -8,7 +8,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { FIT_DEF, MARK_DEF, NO_OVERFLOW } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { cjkType, fitLeads, heights, LINES_TEX, marksOf, readLines, readLockEvents, readTargets, shrinkSizes, SIZE_TEX, SYNC_TEX, tightenedLeads, unitLeadTex } from './lock.mjs'
+import { cjkType, fitLeads, heights, LINES_TEX, marksOf, readColumns, readFloats, readLines, readLockEvents, readTargets, shrinkSizes, SIZE_TEX, SYNC_TEX, tightenedLeads, unitLeadTex } from './lock.mjs'
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
@@ -18,6 +18,15 @@ const log = 'x\nAXT-AT 3 0 1 346.0pt\nAXT-AT h2 1 2 12.5pt\nAXT-LINES 3 4 11.0pt
 const t = readTargets(log)
 check('targets read', t.size === 2 && JSON.stringify(t.get('h2')) === JSON.stringify({ page: 1, col: 2, total: 12.5 }), JSON.stringify([...t]))
 check('lines read', JSON.stringify(readLines(log).get(3)) === JSON.stringify({ lines: 4, bs: 11 }))
+// a sync point logged at or past its column's height at the break stood on the next column (RT-1's unit 37); one
+// logged before it stays; the last column has no next and keeps its point
+const moved = readTargets('AXT-AT 37 4 1 397.76pt\nAXT-AT 36 4 1 314.7pt\nAXT-COL 4 1 395.6pt\nAXT-AT 38 5 1 45.1pt\nAXT-AT 50 5 1 400pt\nAXT-COL 5 1 390pt\n')
+check('a point past its column\'s height is the top of the next column', JSON.stringify(moved.get('37')) === JSON.stringify({ page: 5, col: 1, total: 0 }) && moved.get('36').page === 4 && moved.get('50').page === 5, JSON.stringify([...moved]))
+const two = readTargets('AXT-AT 7 2 1 600pt\nAXT-COL 2 1 590pt\nAXT-COL 2 2 580pt\n')
+check('in two columns the next column is the page\'s second', JSON.stringify(two.get('7')) === JSON.stringify({ page: 2, col: 2, total: 0 }), JSON.stringify([...two]))
+check('columns and floats read', readColumns('AXT-COL 3 2 512.5pt\n').get('3@2') === '512.5' && readFloats('AXT-FLOAT 4 230.1pt\n').get('4') === '230.1')
+const aimed = shrinkSizes(new Map([[0, { hy: 100 }]]), new Map([[0, { hy: 121 }]]), new Map(), { min: 0.6, margin: 0.02 })
+check('a size aimed a little inside the box', Math.abs(aimed.get(0) - Math.sqrt(100 / 121) * 0.98) < 1e-9, JSON.stringify([...aimed]))
 const ev = readLockEvents(log)
 check('events read, pages 1-based', ev.breaks[0]?.page === 5 && ev.gaps[0]?.page === 6 && ev.gaps[0]?.pt === 30.5, JSON.stringify(ev))
 
@@ -160,5 +169,13 @@ check('fitted tables raise no TeX error', !/^! /m.test(fitLog), (fitLog.match(/^
 const floatLog = tex('float', `${NO_OVERFLOW}\\documentclass{article}\n\\usepackage{graphicx}\n\\begin{document}\nText.\n\\begin{figure}[p]\\centering\\rule{2cm}{1.3\\textheight}\\caption{A tall one.}\\end{figure}\n\\begin{figure}\\centering\\rule{2cm}{3cm}\\caption{A short one.}\\end{figure}\n\\end{document}\n`)
 check('a float taller than the page is set smaller, and only that one', (floatLog.match(/Float set smaller/g) ?? []).length === 1 && !/Float too large/.test(floatLog), (floatLog.match(/Float (set smaller|too large)[^\n]*/g) ?? []).join(' | '))
 check('floats set smaller raise no TeX error', !/^! /m.test(floatLog), (floatLog.match(/^! .*/m) ?? [''])[0])
+// H's rules: the padding before a unit is glue once the column has content, so that it goes at a break before the
+// unit, and \vspace* at the top of an empty column; a column the translation ends early is filled to its original's
+// height and broken without \vfil
+const padLog = tex('pad', `${SYNC_TEX}\\documentclass{article}\n\\makeatletter\\axt@htrue\\def\\axt@t@a{{0}{1}{60pt}}\\def\\axt@t@b{{1}{1}{30pt}}\\expandafter\\def\\csname axt@c@0@1\\endcsname{200pt}\\makeatother\n\\begin{document}\nFirst line.\\par\n\\axtsync{a}\\message{^^JPAD glue \\the\\lastskip^^J}Second.\\par\n\\axtsync{b}\\message{^^JPAD top \\the\\lastskip\\space\\the\\pagetotal^^J}Third.\\par\n\\end{document}\n`)
+const pad = k => padLog.match(new RegExp(`^PAD ${k} (\\S+)(?: (\\S+))?`, 'm'))
+check('H: padding on a column with content is glue', parseFloat(pad('glue')?.[1]) > 40, pad('glue')?.[0])
+check('H: a column ended early filled to its height, and the next unit\'s padding at its top kept', /AXT-BREAK 0/.test(padLog) && pad('top')?.[1] === '0.0pt', pad('top')?.[0])
+check('H: no TeX error', !/^! /m.test(padLog), (padLog.match(/^! .*/m) ?? [''])[0])
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

@@ -15,8 +15,8 @@ import { latin1, readFontProbe } from '../../../src/pdf-reader/engine/latex-fron
 import { scriptOf, strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
 import { translateTexts, translateUnits } from '../../../src/pdf-reader/engine/mt.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
-import { cjkType, compare, fitLeads, heights, lockedFiles, withCjkType, marksOf, originalProbeFiles, readLines, readLockEvents, readTargets, shrinkSizes, theoremEnvs, tightenedLeads } from './lock.mjs'
-import { catalogEntry, COLUMNS, FIT, overfullCount, PARAMS, SHRINK_MIN, suspiciousPages } from './visual-eval-lib.mjs'
+import { cjkType, compare, fitLeads, heights, lockedFiles, withCjkType, marksOf, originalProbeFiles, readColumns, readFloats, readLines, readLockEvents, readTargets, shrinkSizes, theoremEnvs, tightenedLeads } from './lock.mjs'
+import { catalogEntry, COLUMNS, FIT, H_RULES, overfullCount, PARAMS, suspiciousPages } from './visual-eval-lib.mjs'
 
 const run = promisify(execFile)
 /** a unit as its translation is cached: its kind and its source, pieces by kind and text, pair ids aside */
@@ -124,16 +124,24 @@ async function generate(lang, id) {
   if (locked.ok) copyFileSync(locked.pdf, join(dir, 'locked.pdf')); else base.failed.locked = firstError(locked.log)
   note('locked', locked.ok, 'tightened', leads.size)
 
-  // 2b. Locked with smaller type (the owner, 2026-09-28): the units still taller than their original set smaller, down
-  // to SHRINK_MIN, as service H does to a block too long for its box; twice, since a smaller unit may still not fit
-  let shrunk = null, sizes = new Map()
-  if (locked.ok) for (let pass = 1; pass <= 2; pass++) {
-    const cur = shrunk ?? locked
-    const next = shrinkSizes(orig, heights(units, await marksOf(cur.pdf), readLines(cur.log)), sizes, { min: SHRINK_MIN })
-    if ([...next].every(([i, f]) => sizes.get(i) === f)) break
-    const r = await compile(work, `shrink-${pass}`, paper, files, lockedFiles(paper, translated, { ...opts, leads, sizes: next }), { engine: strategy.engine, rerun: true })
-    if (!r.ok) { base.failed.shrink = firstError(r.log); break }
-    shrunk = r; sizes = next
+  // 2b. Locked by service H's rules (the owner, 2026-09-28): each block in its original's box — units at the lock's
+  // leading with CJK tracked as H does, no unit moved off its original's page, a column ended early filled to its
+  // original's height, floats at their original's height (SYNC_TEX), tables held to their original's box, and a unit still taller than its original set
+  // smaller down to H's floor, twice, since a smaller unit may still not fit
+  let lockh = null, sizes = new Map()
+  {
+    const cjk = ['Hans', 'Hant', 'Jpan', 'Kore'].includes(scriptOf(lang))
+    // CJK at H's leading, 1.3 × the size; an alphabet at the paper's own, which a smaller size scales with it
+    const hopts = { ...opts, strategy: cjk ? withCjkType(strategy, { lead: strategy.leading ?? 1, track: H_RULES.track, scale: 1 }) : strategy, ...(cjk ? {} : { lead: '\\baselineskip' }), h: true, columns: readColumns(o.log), floats: readFloats(o.log) }
+    let r = await compile(work, 'lockh-1', paper, files, lockedFiles(paper, translated, hopts), { engine: strategy.engine, rerun: true })
+    for (let pass = 2; pass <= 4 && r.ok; pass++) {
+      const next = shrinkSizes(orig, heights(units, await marksOf(r.pdf), readLines(r.log)), sizes, { min: H_RULES.min, margin: H_RULES.margin })
+      if ([...next].every(([i, f]) => sizes.get(i) === f)) break
+      const s2 = await compile(work, `lockh-${pass}`, paper, files, lockedFiles(paper, translated, { ...hopts, sizes: next }), { engine: strategy.engine, rerun: true })
+      if (!s2.ok) { base.flags.push(`lockh-pass-${pass}-failed`); break }
+      r = s2; sizes = next
+    }
+    if (r.ok) lockh = r; else base.failed.lockh = firstError(r.log)
   }
   // 2c. The fit (the owner, 2026-09-28): no sync point. A trial at today's leading, the units' heights against the
   // original's, and the paper's one factor with each unit's nudge (lock.mjs fitLeads); a script that grows is first set
@@ -176,14 +184,13 @@ async function generate(lang, id) {
   }
   if (fit) copyFileSync(fit.pdf, join(dir, 'fit.pdf'))
   note('fit', !!fit, fit ? `G ${fit.g.toFixed(3)} held ${fit.held.toFixed(3)} size ${fit.size.toFixed(3)}${fit.type ? ` lead ${fit.type.lead.toFixed(3)} track ${fit.type.track.toFixed(3)}` : ''}` : '')
-  if (shrunk) copyFileSync(shrunk.pdf, join(dir, 'shrink.pdf'))
-  else if (locked.ok && !base.failed.shrink) copyFileSync(locked.pdf, join(dir, 'shrink.pdf'))
-  note('shrink', !!shrunk, 'smaller', sizes.size)
+  if (lockh) copyFileSync(lockh.pdf, join(dir, 'lockh.pdf'))
+  note('lockh', !!lockh, 'smaller', sizes.size)
 
   // 3. numbers and checks
   if (today.ok) base.numbers.today = { ...compare(units, orig, await marksOf(today.pdf)), offPage: undefined }
   if (fit) base.numbers.fit = { ...compare(units, orig, await marksOf(fit.pdf)), offPage: undefined, g: fit.g, held: fit.held, size: fit.size, ...(fit.type ? { type: fit.type } : {}) }
-  if (existsSync(join(dir, 'shrink.pdf')) && !base.failed.shrink) base.numbers.shrink = { ...compare(units, orig, await marksOf(join(dir, 'shrink.pdf'))), offPage: undefined, smaller: sizes.size }
+  if (lockh) base.numbers.lockh = { ...compare(units, orig, await marksOf(lockh.pdf)), offPage: undefined, smaller: sizes.size }
   if (locked.ok) {
     const lm = await marksOf(locked.pdf), lc = compare(units, orig, lm)
     base.numbers.locked = { ...lc, offPage: undefined }

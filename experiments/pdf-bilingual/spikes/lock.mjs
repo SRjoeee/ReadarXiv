@@ -20,6 +20,19 @@ import { typesetBy } from '../../../src/pdf-reader/engine/scripts.mjs'
  * skip takes the place of the breakpoint \parskip would have given, and \penalty\@M, no breakpoint itself, runs the page
  * builder (\par cannot: a list's does nothing before its first \item); a second zero skip leaves \lastskip and
  * \lastpenalty as a box would. Never under \if@nobreak, where LaTeX wants no breakpoint.
+ * Service H's rules (\ifaxt@h: each block stays in its original's box, the page around it as it was). The break the
+ * sync offers before a unit costs 9999: the original set this unit on this page, and the page builder, finding the
+ * translation's first lines a little taller, broke before it and moved it whole to the next — the page left short, and a
+ * \flushbottom class spread the shortfall into every gap above (RT-1's page 6: three paragraphs 40 pt low, the fourth a
+ * page late). A column the translation ends early is filled to the height its original had at its break (AXT-COL,
+ * \axt@c@<page>@<column>) and then broken, where \newpage's \vfil took the stretch the original's gaps had: the page's
+ * glue then stretches as the original's did, and every unit on it stands where the original's did. And each float keeps
+ * its original's height (AXT-FLOAT, \axt@fh@<n>, floats counted in order): a taller one is set smaller as a whole, a
+ * shorter one ends in blank below, where service H leaves a block's unused room. Its height moves everything on the
+ * page: RT-1's figure 2, its Chinese caption spaced wider, set the rest of page 5 13 pt low. The padding before a
+ * unit is glue unless the column is still empty: when the unit does not fit where its original stood and moves on,
+ * the padding meant for this column goes at the break instead of standing at the top of the next (RT-1's unit 93, two
+ * Chinese lines where two English ones had room, went to page 9 under 14 pt of page 8's padding).
  */
 export const SYNC_TEX = String.raw`\makeatletter
 \newcount\axt@pages \newcount\axt@rel \newcount\axt@h
@@ -28,10 +41,22 @@ export const SYNC_TEX = String.raw`\makeatletter
 \def\axt@settle{\if@nobreak\else\ifnum\lastnodetype>0 \ifnum\lastnodetype<11 \vskip\z@\penalty\@M\vskip\z@\fi\fi\fi}
 \protected\def\axtat#1{\ifvmode\ifinner\else\par\axt@settle\message{^^JAXT-AT #1 \the\axt@pages\space\axt@col\space\the\pagetotal^^J}\fi\fi}
 \def\axt@cmp#1#2{\axt@rel=0 \ifnum\axt@pages<#1 \axt@rel=-1 \else\ifnum\axt@pages>#1 \axt@rel=1 \else\ifnum\axt@col<#2 \axt@rel=-1 \else\ifnum\axt@col>#2 \axt@rel=1 \fi\fi\fi\fi}
-\def\axt@step#1#2{\ifnum\axt@rel<0 \ifx\@deferlist\@empty\message{^^JAXT-BREAK \the\axt@pages^^J}\newpage\axt@cmp{#1}{#2}\else\axt@rel=2 \fi\fi}
+\newif\ifaxt@h \newdimen\axt@fill \newbox\axt@colbox
+\AtBeginDocument{\let\axt@makecol\@makecol\def\@makecol{\setbox\axt@colbox\vbox{\unvcopy\@cclv}\message{^^JAXT-COL \the\axt@pages\space\axt@col\space\the\ht\axt@colbox^^J}\axt@makecol}}
+\def\axt@break{\ifaxt@h\ifcsname axt@c@\the\axt@pages @\axt@col\endcsname\axt@fillcol\else\newpage\fi\else\newpage\fi}
+\def\axt@fillcol{\axt@fill=\dimexpr\csname axt@c@\the\axt@pages @\axt@col\endcsname-\pagetotal\relax\ifdim\axt@fill>\z@\vskip\axt@fill\fi\penalty-\@M}
+\def\axt@step#1#2{\ifnum\axt@rel<0 \ifx\@deferlist\@empty\message{^^JAXT-BREAK \the\axt@pages^^J}\axt@break\axt@cmp{#1}{#2}\else\axt@rel=2 \fi\fi}
 \def\axt@sync#1#2#3{\axt@cmp{#1}{#2}\axt@step{#1}{#2}\axt@step{#1}{#2}\axt@step{#1}{#2}%
-\ifnum\axt@rel=0 \ifdim\pagetotal<\dimexpr#3-0.5pt\relax\message{^^JAXT-GAP \the\axt@pages\space\the\dimexpr#3-\pagetotal\relax^^J}\vspace*{\dimexpr#3-\pagetotal\relax}\fi\fi}
-\protected\def\axtsync#1{\ifvmode\ifinner\else\if@noskipsec\else\if@inlabel\else\if@nobreak\else\ifcsname axt@t@#1\endcsname\par\axt@settle\expandafter\expandafter\expandafter\axt@sync\csname axt@t@#1\endcsname\fi\fi\fi\fi\fi\fi}
+\ifnum\axt@rel=0 \ifdim\pagetotal<\dimexpr#3-0.5pt\relax\message{^^JAXT-GAP \the\axt@pages\space\the\dimexpr#3-\pagetotal\relax^^J}\axt@pad{\dimexpr#3-\pagetotal\relax}\fi\fi}
+\def\axt@pad#1{\ifaxt@h\ifdim\pagegoal=\maxdimen\vspace*{#1}\else\vskip#1\relax\fi\else\vspace*{#1}\fi}
+\newcount\axt@fl \newdimen\axt@fh
+\AddToHook{begindocument/end}{\let\axt@lfc\@largefloatcheck\def\@largefloatcheck{\global\advance\axt@fl\@ne\message{^^JAXT-FLOAT \the\axt@fl\space\the\dimexpr\ht\@currbox+\dp\@currbox\relax^^J}\ifaxt@h\axt@floatbox\fi\axt@lfc}}
+\def\axt@floatbox{\ifcsname axt@fh@\the\axt@fl\endcsname\axt@fh=\csname axt@fh@\the\axt@fl\endcsname\relax
+  \ifdim\dimexpr\ht\@currbox+\dp\@currbox\relax>\axt@fh\ifdefined\resizebox\global\setbox\@currbox\vbox{\hbox to\wd\@currbox{\hss\resizebox*{!}{\axt@fh}{\box\@currbox}\hss}}\fi
+  \else\global\setbox\@currbox\vbox to\axt@fh{\unvbox\@currbox\vss}\fi
+  \ifdim\dimexpr\ht\@currbox+\dp\@currbox\relax>\axt@fh\global\ht\@currbox\dimexpr\axt@fh-\dp\@currbox\relax\fi\fi}
+\def\axt@hsettle{\if@nobreak\else\ifnum\lastnodetype>0 \ifnum\lastnodetype<11 \penalty9999 \vskip\z@\fi\fi\fi}
+\protected\def\axtsync#1{\ifvmode\ifinner\else\if@noskipsec\else\if@inlabel\else\if@nobreak\else\ifcsname axt@t@#1\endcsname\par\ifaxt@h\axt@hsettle\else\axt@settle\fi\expandafter\expandafter\expandafter\axt@sync\csname axt@t@#1\endcsname\fi\fi\fi\fi\fi\fi}
 \def\axt@hook{\ifhmode\if@noskipsec\else\par\fi\fi\global\advance\axt@h\@ne\axtat{h\the\axt@h}\axtsync{h\the\axt@h}}
 \protected\def\axtsyncpoints#1{\AtBeginDocument{\AddToHook{cmd/section/before}{\axt@hook}\AddToHook{cmd/subsection/before}{\axt@hook}\AddToHook{cmd/subsubsection/before}{\axt@hook}\AddToHook{cmd/paragraph/before}{\axt@hook}\AddToHook{cmd/subparagraph/before}{\axt@hook}\@for\axt@e:=#1\do{\AddToHook{env/\axt@e/before}{\axt@hook}}\AddToHook{cmd/item/before}{\ifvmode\axt@hook\fi}\AddToHook{cmd/@float/before}{\ifvmode\axt@hook\fi}\AddToHook{cmd/@dblfloat/before}{\ifvmode\axt@hook\fi}}}
 \makeatother
@@ -72,11 +97,11 @@ export const SIZE_TEX = PARA_END_TEX + String.raw`\makeatletter
 
 /** the size factor each unit still taller than its original is set at next: the one it has times the square root of
  *  how much taller it is (a text set smaller takes fewer lines, each closer), down to `min`; the others keep theirs */
-export function shrinkSizes(orig, tr, sizes, { min }) {
+export function shrinkSizes(orig, tr, sizes, { min, margin = 0 }) {
   const next = new Map(sizes)
   for (const [i, o] of orig) {
     const hh = pairOf(o, tr.get(i))
-    if (hh && hh[1] > hh[0] + 1 && hh[1] > 0) next.set(i, Math.max(min, (sizes.get(i) ?? 1) * Math.sqrt(hh[0] / hh[1])))
+    if (hh && hh[1] > hh[0] + 1 && hh[1] > 0) next.set(i, Math.max(min, (sizes.get(i) ?? 1) * Math.sqrt(hh[0] / hh[1]) * (1 - margin)))
   }
   return next
 }
@@ -161,8 +186,10 @@ export function originalProbeFiles({ project, units }, theorems) {
 
 /** the translation, locked: units at `em` × the font size rather than the strategy's factor on the paper's spacing,
  *  every unit synced. `sync: false` and `lead` (TeX for the units' leading) give the fit instead: no sync point, each
- *  unit at the leading `leads` gives it, × its size (fitLeads) */
-export function lockedFiles({ fsys, meta, project, units }, translated, { strategy, fonts, em, leads = new Map(), sizes = new Map(), targets = new Map(), theorems, sync = true, lead = null }) {
+ *  unit at the leading `leads` gives it, × its size (fitLeads). `h`: service H's rules (SYNC_TEX), with `columns` the
+ *  original's column heights (readColumns) and float heights (readFloats), and tables held to their original's height
+ *  too (FIT_DEF) */
+export function lockedFiles({ fsys, meta, project, units }, translated, { strategy, fonts, em, leads = new Map(), sizes = new Map(), targets = new Map(), theorems, sync = true, lead = null, h = false, columns = new Map(), floats = new Map() }) {
   const index = new Map(units.map((u, i) => [u, i]))
   const base = markUnits(units)
   const mark = u => { const m = base(u); if (!m) return m; const i = index.get(u); return { ...m, before: `${sync ? `\\axtsync{${i}}` : ''}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}` } }
@@ -176,6 +203,7 @@ export function lockedFiles({ fsys, meta, project, units }, translated, { strate
     ...[...targets].map(([i, t]) => `\\expandafter\\def\\csname axt@t@${i}\\endcsname{{${t.page}}{${t.col}}{${t.total}pt}}`),
     ...[...leads].map(([i, f]) => `\\expandafter\\def\\csname axtlead@${i}\\endcsname{${f.toFixed(4)}}`),
     ...[...sizes].map(([i, f]) => `\\expandafter\\def\\csname axtsize@${i}\\endcsname{${f.toFixed(4)}}`),
+    ...(h ? ['\\csname axt@htrue\\endcsname\\axtfitheighttrue\\axtfirstpapertrue', ...[...columns].map(([k, v]) => `\\expandafter\\def\\csname axt@c@${k}\\endcsname{${v}pt}`), ...[...floats].map(([k, v]) => `\\expandafter\\def\\csname axt@fh@${k}\\endcsname{${v}pt}`)] : []),
   ].join('\n')
   main = MARK_DEF + FIT_DEF + LINES_TEX + (sync ? SYNC_TEX : '') + (lead ? engineUnitLeadTex(lead) : unitLeadTex(em)) + (sizes.size ? SIZE_TEX : '') + (sync ? `\\axtsyncpoints{${theorems.join(',')}}\n` : '') + table + '\n' + main
   files.set(project.main, latin1Bytes(main))
@@ -184,7 +212,24 @@ export function lockedFiles({ fsys, meta, project, units }, translated, { strate
   return files
 }
 
-export const readTargets = log => new Map([...log.matchAll(/^AXT-AT (h?\d+) (\d+) (\d+) ([\d.]+)pt/gm)].map(m => [m[1], { page: Number(m[2]), col: Number(m[3]), total: Number(m[4]) }]))
+/** each float's height (and depth) as LaTeX set it, by its place in the order floats come, in a log with SYNC_TEX */
+export const readFloats = log => new Map([...log.matchAll(/^AXT-FLOAT (\d+) ([\d.]+)pt/gm)].map(m => [m[1], m[2]]))
+/** each column's natural height at its break in a log with SYNC_TEX, keyed <page>@<column> as \axt@c@ reads it */
+export const readColumns = log => new Map([...log.matchAll(/^AXT-COL (\d+) (\d+) ([\d.]+)pt/gm)].map(m => [`${m[1]}@${m[2]}`, m[3]]))
+/** each sync point's place in the original (AXT-AT), where it lands: a point logged at or past its column's natural
+ *  height at the break (AXT-COL) did not stay on that column — the probe logs before the page builder knows whether
+ *  what follows fits, and the unit or heading moved on whole — so it is the top of the next column. Taken as logged,
+ *  the lock padded down to the foot of the column the original had left: RT-1's unit 37, logged at 397.76 pt of a
+ *  column 395.6 pt high and set at the top of the next page, went to that page under its 40 pt of padding, and every
+ *  unit after it on the page stood 40 pt low, the last pushed on to the page after */
+export const readTargets = log => {
+  const cols = [...readColumns(log)].map(([k, v]) => { const [p, c] = k.split('@').map(Number); return { p, c, h: Number(v) } }).sort((a, b) => a.p - b.p || a.c - b.c)
+  return new Map([...log.matchAll(/^AXT-AT (h?\d+) (\d+) (\d+) ([\d.]+)pt/gm)].map(m => {
+    const at = { page: Number(m[2]), col: Number(m[3]), total: Number(m[4]) }
+    const own = cols.find(x => x.p === at.page && x.c === at.col), next = cols.find(x => x.p > at.page || (x.p === at.page && x.c > at.col))
+    return [m[1], own && next && at.total >= own.h - 0.01 ? { page: next.p, col: next.c, total: 0 } : at]
+  }))
+}
 export const readLines = log => new Map([...log.matchAll(/^AXT-LINES (\d+) (\d+) ([\d.]+)pt(?: ([\d.]+))?/gm)].map(m => [Number(m[1]), { lines: Number(m[2]), bs: Number(m[3]), ...(m[4] ? { size: Number(m[4]) } : {}) }]))
 export const readLockEvents = log => ({
   breaks: [...log.matchAll(/^AXT-BREAK (\d+)/gm)].map(m => ({ page: Number(m[1]) + 1 })),
