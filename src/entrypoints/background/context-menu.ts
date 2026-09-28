@@ -6,7 +6,7 @@
 // page would be wrong the moment the reader switched tabs. Immersive Translate's entry is static too.
 
 import type { PageStatus } from '@/shared/messages'
-import { messageFor, pageDecision, type SavedSettings } from '@/shared/page-action'
+import { messageFor, type PageDecision, pageDecision, type SavedSettings } from '@/shared/page-action'
 import { S } from '@/ui/strings'
 import { STATUS_DEADLINE_MS } from './provider-status'
 
@@ -72,37 +72,47 @@ export interface CommandDeps<S extends SavedSettings = SavedSettings> extends To
 }
 
 /**
- * The toggle itself, shared by the menu and the keyboard command: ask the page its state, decide as the popup's main
- * button does (`pageAction`, shared/page-action.ts — the key does what the button shows) and send the message that
- * button would. A page without a content script yet (just navigated, or the extension updated and the page not
- * reloaded) answers nothing and nothing happens, which is what the popup does in that situation too. The saved
- * settings are read for every toggle: the page's revision against their digest is the "behind" test, so ⌥T on a
- * page left behind by a change in another tab re-translates it, as the button it is badged on offers to.
+ * What the toggle decides for a tab, and the page's action epoch it decided on: ask the page its state, decide as the
+ * popup's main button does (`pageDecision`, shared/page-action.ts — the key does what the button shows). The saved
+ * settings are read for every decision: the page's revision against their digest is the "behind" test, so ⌥T on a
+ * page left behind by a change in another tab re-translates it, as the button it is badged on offers to. Asked
+ * without a press too: the floating button's words say what its press would do (`axt:toggle-decision`, UI.md
+ * S-I-06). `undefined` when the page answered nothing it could decide on; rejects when it could not be asked
+ */
+export async function decideToggle<S extends SavedSettings>(deps: ToggleDeps<S>, tabId: number): Promise<{ decision: PageDecision; epoch?: string } | undefined> {
+  const [status, saved] = await Promise.all([
+    deps.send<Pick<PageStatus, 'progress' | 'running' | 'epoch' | 'session'>>(tabId, { type: 'axt:page-status' }),
+    deps.saved().catch(() => null),
+  ])
+  // Settings that could not be read (a build that failed, the status deadline) are not settings that run: a page
+  // that is on still restores, nothing else starts — the popup with no configuration disables its button too
+  // (Codex on #184)
+  // The retranslate cue: where the popup offers the way back to a key made good, the key re-translates as its button
+  // does (UI.md P6b). Asked of a running page only, and only with the settings read — unread, the popup has no cue
+  // either and offers the restore; a failed ask, or one past the deadline, is no cue
+  const madeGood = status?.progress.state === 'on' && status.session && saved !== null && deps.madeGood
+    ? await cueWithin(deps.madeGood(status.session, saved))
+    : false
+  const decision = pageDecision(status, saved ?? { revision: null, canRun: false, fallback: false }, madeGood)
+  return decision && { decision, epoch: status.epoch }
+}
+
+/**
+ * The toggle itself, shared by the menu and the keyboard command: decide (`decideToggle`) and send the message the
+ * popup's button would. A page without a content script yet (just navigated, or the extension updated and the page not
+ * reloaded) answers nothing and nothing happens, which is what the popup does in that situation too.
  *
  * Resolves to whether a command was sent: the floating button (§4.0c), a fourth door on this toggle, opens the popup
  * when nothing could be done, so a click is never met with silence
  */
 export async function toggleTranslation<S extends SavedSettings>(deps: ToggleDeps<S>, tabId: number): Promise<boolean> {
   try {
-    const [status, saved] = await Promise.all([
-      deps.send<Pick<PageStatus, 'progress' | 'running' | 'epoch' | 'session'>>(tabId, { type: 'axt:page-status' }),
-      deps.saved().catch(() => null),
-    ])
-    // Settings that could not be read (a build that failed, the status deadline) are not settings that run: a page
-    // that is on still restores, nothing else starts — the popup with no configuration disables its button too
-    // (Codex on #184)
-    // The retranslate cue: where the popup offers the way back to a key made good, the key re-translates as its button
-    // does (UI.md P6b). Asked of a running page only, and only with the settings read — unread, the popup has no cue
-    // either and offers the restore; a failed ask, or one past the deadline, is no cue
-    const madeGood = status?.progress.state === 'on' && status.session && saved !== null && deps.madeGood
-      ? await cueWithin(deps.madeGood(status.session, saved))
-      : false
-    const decision = pageDecision(status, saved ?? { revision: null, canRun: false, fallback: false }, madeGood)
-    if (!decision?.enabled) return false
-    await deps.send(tabId, messageFor(decision.action, status.epoch))
+    const decided = await decideToggle(deps, tabId)
+    if (!decided?.decision.enabled) return false
+    await deps.send(tabId, messageFor(decided.decision.action, decided.epoch))
     return true
   } catch {
-    // See above
+    // The page could not be asked, or refused the command: nothing was done
     return false
   }
 }

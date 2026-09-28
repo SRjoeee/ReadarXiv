@@ -42,24 +42,26 @@ describe('pageDecision', () => {
 
   it('a running page always restores; a page behind the settings re-translates only on settings that run on their own (a fallback is not what the reader chose)', () => {
     const on = { progress: progress('on'), running: running('r1') }
-    expect(pageDecision(on, saved({ canRun: false }))).toEqual({ action: 'restore', behind: false, enabled: true })
-    expect(pageDecision(on, saved({ revision: 'r2' }))).toEqual({ action: 'retranslate', behind: true, enabled: true })
-    expect(pageDecision(on, saved({ revision: 'r2', canRun: false, fallback: true }))).toEqual({ action: 'retranslate', behind: true, enabled: false })
+    expect(pageDecision(on, saved({ canRun: false }))).toEqual({ action: 'restore', behind: false, cued: false, enabled: true })
+    expect(pageDecision(on, saved({ revision: 'r2' }))).toEqual({ action: 'retranslate', behind: true, cued: false, enabled: true })
+    expect(pageDecision(on, saved({ revision: 'r2', canRun: false, fallback: true }))).toEqual({ action: 'retranslate', behind: true, cued: false, enabled: false })
   })
 
   it('a page that is not translated, or paused, starts when the chosen service runs or a fallback would', () => {
-    expect(pageDecision({ progress: progress('idle') }, saved({ canRun: false, fallback: true }))).toEqual({ action: 'translate', behind: false, enabled: true })
-    expect(pageDecision({ progress: progress('idle') }, saved({ canRun: false, fallback: false }))).toEqual({ action: 'translate', behind: false, enabled: false })
-    expect(pageDecision({ progress: progress('stopped', 'auth: bad key') }, saved({ canRun: false, fallback: true }))).toEqual({ action: 'retranslate', behind: false, enabled: true })
+    expect(pageDecision({ progress: progress('idle') }, saved({ canRun: false, fallback: true }))).toEqual({ action: 'translate', behind: false, cued: false, enabled: true })
+    expect(pageDecision({ progress: progress('idle') }, saved({ canRun: false, fallback: false }))).toEqual({ action: 'translate', behind: false, cued: false, enabled: false })
+    expect(pageDecision({ progress: progress('stopped', 'auth: bad key') }, saved({ canRun: false, fallback: true }))).toEqual({ action: 'retranslate', behind: false, cued: false, enabled: true })
     expect(pageDecision(undefined, saved())).toBeUndefined()
   })
 
-  it('the retranslate cue: a running page whose refused key was made good re-translates, only on settings that run on their own; any other page decides as before', () => {
+  it('the retranslate cue: a running page whose refused key was made good re-translates, only on settings that run on their own, and the decision says it is the cue\'s (the floating button\'s words follow it); any other page decides as before', () => {
     const on = { progress: progress('on'), running: running('r1') }
-    expect(pageDecision(on, saved(), true)).toEqual({ action: 'retranslate', behind: false, enabled: true })
-    expect(pageDecision(on, saved({ canRun: false, fallback: true }), true)).toEqual({ action: 'retranslate', behind: false, enabled: false })
-    expect(pageDecision(on, saved())).toEqual({ action: 'restore', behind: false, enabled: true })
-    expect(pageDecision({ progress: progress('idle') }, saved({ canRun: false, fallback: true }), true)).toEqual({ action: 'translate', behind: false, enabled: true })
+    expect(pageDecision(on, saved(), true)).toEqual({ action: 'retranslate', behind: false, cued: true, enabled: true })
+    expect(pageDecision(on, saved({ canRun: false, fallback: true }), true)).toEqual({ action: 'retranslate', behind: false, cued: true, enabled: false })
+    expect(pageDecision(on, saved())).toEqual({ action: 'restore', behind: false, cued: false, enabled: true })
+    expect(pageDecision({ progress: progress('idle') }, saved({ canRun: false, fallback: true }), true)).toEqual({ action: 'translate', behind: false, cued: false, enabled: true })
+    // behind the settings as well: the cue's way back still, which the floating button's words say (UI.md S-I-06)
+    expect(pageDecision(on, saved({ revision: 'r2' }), true)).toEqual({ action: 'retranslate', behind: true, cued: true, enabled: true })
   })
 })
 

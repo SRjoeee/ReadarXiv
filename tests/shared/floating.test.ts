@@ -118,4 +118,16 @@ describe('installFloatingButton', () => {
     installed.setActive(true)
     expect([inside('.axt-fb-dock').dataset.axtActive, inside('.axt-fb-main').getAttribute('aria-label')]).toEqual(['yes', LOCALES.en.S.primary.restore])
   })
+
+  it('the main button\'s words are asked of the page again when it says they may have moved: its words read more than whether it is on (the retranslate cue, UI.md S-I-06)', async () => {
+    let cued = false
+    const installed = await installFloatingButton(document, { main: { kind: 'toggle', run: () => undefined }, label: (S, active) => (active && cued ? S.primary.retranslate : active ? S.primary.restore : S.primary.translate) })
+    installed.setActive(true)
+    cued = true
+    installed.relabel()
+    expect([inside('.axt-fb-main').getAttribute('aria-label'), inside('.axt-fb-main .axt-fb-tip').textContent]).toEqual([LOCALES.en.S.primary.retranslate, LOCALES.en.S.primary.retranslate])
+    // taken off the page meanwhile: nothing to draw, nothing thrown
+    wire.follow!(settings({ enabled: false }))
+    expect(() => installed.relabel()).not.toThrow()
+  })
 })

@@ -10,7 +10,7 @@ import { createConfigOffers, statusInForce } from './provider-status'
 import { createOcrService } from './ocr'
 import { createRecogniserClient } from './recogniser'
 import { createSessionRouter } from './sessions'
-import { installContextMenu, refreshContextMenu, installToggleCommand, toggleTranslation } from './context-menu'
+import { decideToggle, installContextMenu, refreshContextMenu, installToggleCommand, toggleTranslation } from './context-menu'
 import { getFloatingEntry, patchFloatingEntry } from './floating-entry'
 import { applyLocaleFrom, resolveLocale } from '@/ui/apply-locale'
 import { setLocale } from '@/ui/strings'
@@ -258,6 +258,7 @@ export default defineBackground(() => {
     diagnostics,
     cache: translationCache,
     toggle: tabId => toggleTranslation({ send: sendToTab, saved, madeGood }, tabId),
+    decide: async tabId => (await decideToggle({ send: sendToTab, saved, madeGood }, tabId))?.decision,
     getConfig,
     getFloatingEntry,
     patchFloatingEntry,

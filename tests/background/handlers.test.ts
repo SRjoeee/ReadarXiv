@@ -19,6 +19,7 @@ function harness(over: Partial<HandlerDeps> = {}) {
     diagnostics: { record: (src: string, line: string) => void lines.push([src, line]), restored: Promise.resolve(), export: vi.fn() },
     cache: { clear: vi.fn(async () => 0), cleanup: vi.fn(async () => undefined), stats: vi.fn(async () => ({ entries: 0, bytes: 0 })) },
     toggle: vi.fn(async () => true),
+    decide: vi.fn(async () => ({ action: 'retranslate', behind: false, cued: true, enabled: true })),
     getConfig: vi.fn(async () => DEFAULT_CONFIG),
     getFloatingEntry: vi.fn(async () => DEFAULT_FLOATING_ENTRY),
     patchFloatingEntry: vi.fn(),
@@ -175,6 +176,16 @@ describe('the background\'s handlers', () => {
     expect(deps.toggle).toHaveBeenCalledTimes(1)
   })
 
+  it('axt:toggle-decision answers what the toggle would do in the tab that asked, doing nothing; from an extension page nothing, and a page with no decision null', async () => {
+    const { send, deps } = harness()
+    await expect(send({ type: 'axt:toggle-decision' })).resolves.toEqual({ decision: { action: 'retranslate', behind: false, cued: true, enabled: true } })
+    expect(deps.decide).toHaveBeenCalledWith(7)
+    expect(deps.toggle).not.toHaveBeenCalled()
+    expect(send({ type: 'axt:toggle-decision' }, { tabId: undefined })).toBeUndefined()
+    vi.mocked(deps.decide).mockResolvedValueOnce(undefined)
+    await expect(send({ type: 'axt:toggle-decision' })).resolves.toEqual({ decision: null })
+  })
+
   describe('axt:entry-settings', () => {
     const config = { ...DEFAULT_CONFIG, uiLanguage: 'ja', reading: { ...DEFAULT_CONFIG.reading, openIn: 'new-tab' } } as typeof DEFAULT_CONFIG
     const floating = { ...DEFAULT_FLOATING_ENTRY, side: 'left' as const }
@@ -276,7 +287,7 @@ describe('the background\'s handlers', () => {
     expect(Object.keys(createHandlers(deps)).sort()).toEqual([
       'axt:cache-clear', 'axt:cache-stats', 'axt:cancel-scope', 'axt:diag', 'axt:diag-export', 'axt:engine-ready',
       'axt:entry-settings', 'axt:ocr', 'axt:open-settings', 'axt:page-usable',
-      'axt:provider-status', 'axt:set-floating-entry', 'axt:toggle', 'axt:translate',
+      'axt:provider-status', 'axt:set-floating-entry', 'axt:toggle', 'axt:toggle-decision', 'axt:translate',
     ])
   })
 })

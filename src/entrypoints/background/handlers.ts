@@ -12,6 +12,7 @@ import { toErrorInfo } from '@/providers/translate-service'
 import { type DiagnosticsExport, failureLine } from '@/shared/diagnostics'
 import type { FloatingEntryState } from '@/shared/entry-settings'
 import type { MessageHandlers } from '@/shared/messages'
+import type { PageDecision } from '@/shared/page-action'
 import type { ChainHolder } from './chain'
 import type { Diagnostics } from './diagnostics'
 import { engineReady } from './engine-ready'
@@ -29,6 +30,8 @@ export interface HandlerDeps {
   cache: { clear(): Promise<number>; cleanup(): Promise<unknown>; stats(): Promise<{ entries: number; bytes: number }> }
   /** The toggle of the key and the menu (context-menu.ts), for one tab */
   toggle(tabId: number): Promise<boolean>
+  /** What that toggle would do in one tab, decided and not acted on (context-menu.ts `decideToggle`) */
+  decide(tabId: number): Promise<PageDecision | undefined>
   getConfig(): Promise<Config>
   getFloatingEntry(): Promise<FloatingEntryState>
   patchFloatingEntry(patch: Partial<FloatingEntryState>): Promise<{ saved: boolean; floating: FloatingEntryState }>
@@ -120,6 +123,10 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
     // The floating button on the full text (§4.0c): the same toggle as the key and the menu, for the tab that asked.
     // From an extension page there is no tab to toggle, and nothing is answered
     'axt:toggle': (_message, sender) => sender.tabId === undefined ? undefined : deps.toggle(sender.tabId).then(acted => ({ acted })),
+
+    // The floating button's words (UI.md S-I-06): the same toggle's decision for the tab that asked, nothing done — so
+    // they say what a press would do there, the retranslate cue included (P6b). A page that could not be asked rejects
+    'axt:toggle-decision': (_message, sender) => sender.tabId === undefined ? undefined : deps.decide(sender.tabId).then(decision => ({ decision: decision ?? null })),
 
     // What a page needs of the settings (shared/entry-settings.ts): the configuration as this build reads it —
     // the defaults, when it cannot — never the raw stored value; the tab's zoom is the browser's to know
