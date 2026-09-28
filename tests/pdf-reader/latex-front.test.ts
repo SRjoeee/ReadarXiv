@@ -13,31 +13,42 @@ const patched = (p: ReturnType<typeof project>) => {
   return new TextDecoder().decode(patch(p, translated as Map<(typeof p.units)[number], unknown[]>).get('main.tex'))
 }
 
-describe('the front matter\'s notes (1706.03762: the author block\'s footnotes stayed in English)', () => {
+describe('the front matter: its notes (1706.03762) and its names and places (the owner, 2026-09-28)', () => {
   const AUTHORS = '\\author{Alice\\thanks{Equal contribution. Listing order is random.}\\\\ Bob\\footnotemark[1] \\hspace{1mm}\\thanks{Work performed while at X.}}'
+  const authors = (p: ReturnType<typeof project>) => (p.units as Unit[]).filter(u => u.kind === 'author').map(u => textOf(u).trim())
 
-  it('in the preamble: each \\thanks of the author block is a footnote of its own, and the names are no unit', () => {
+  it('in the preamble: each \\thanks a footnote of its own, the names between them units of kind author', () => {
     const p = project(`\\documentclass{article}\\title{The Paper}${AUTHORS}\\begin{document}\\maketitle\nWords here.\\end{document}`)
     const units = p.units as Unit[]
     expect(units.filter(u => u.kind === 'footnote').map(textOf)).toEqual(['Equal contribution. Listing order is random.', 'Work performed while at X.'])
-    expect(units.some(u => /Alice|Bob/.test(textOf(u)))).toBe(false)
-    // typeset: the notes translated in place, the names, marks and spacing as the author wrote them
-    const tex = patched(p)
-    expect(tex).toMatch(/\\author\{Alice\\thanks\{<T\d+>\}\\\\ Bob\\footnotemark\[1\] \\hspace\{1mm\}\\thanks\{<T\d+>\}\}/)
+    expect(authors(p)).toEqual(['Alice', 'Bob'])
+    // typeset: names and notes translated in place, the marks and spacing as the author wrote them
+    expect(patched(p)).toMatch(/\\author\{<T\d+>\\thanks\{<T\d+>\}\\\\<T\d+>\\footnotemark\[1\]<T\d+>\\hspace\{1mm\}\\thanks\{<T\d+>\}\}/)
   })
 
   it('in the body too, where some classes want the author block', () => {
     const p = project(`\\documentclass{article}\\begin{document}\\title{The Paper}${AUTHORS}\\maketitle\nWords here.\\end{document}`)
     expect((p.units as Unit[]).filter(u => u.kind === 'footnote').map(textOf)).toEqual(['Equal contribution. Listing order is random.', 'Work performed while at X.'])
-    expect(patched(p)).toContain('\\author{Alice\\thanks{<T')
+    expect(authors(p)).toEqual(['Alice', 'Bob'])
   })
 
-  it('an affiliation\'s note as well; the title\'s note stays the title\'s, and the title is still the title', () => {
+  it('an affiliation and its note; the title\'s note stays the title\'s, and the title is still the title', () => {
     const p = project('\\documentclass{article}\\title{The Paper\\thanks{Supported by a grant.}}\\author{Alice}\\affil{Somewhere\\thanks{Now elsewhere.}}\\begin{document}\\maketitle\nWords.\\end{document}')
     const units = p.units as (Unit & { title?: boolean })[]
     expect(units.filter(u => u.kind === 'footnote').map(textOf).sort()).toEqual(['Now elsewhere.', 'Supported by a grant.'])
     expect(units.filter(u => u.title).map(textOf)).toEqual(['The Paper'])
-    expect(units.some(u => /Somewhere|Alice/.test(textOf(u)))).toBe(false)
+    expect(authors(p)).toEqual(['Alice', 'Somewhere'])
+  })
+
+  it('IEEEtran\'s blocks and acmart\'s parts of an affiliation are names and places; an address, a mark, a key stay', () => {
+    const ieee = project('\\documentclass{article}\\begin{document}\\author{\\IEEEauthorblockN{Alice Smith\\IEEEauthorrefmark{1}}\\IEEEauthorblockA{Peking University\\\\ \\texttt{alice@pku.edu.cn}}}\\maketitle\nWords.\\end{document}')
+    expect(authors(ieee).join('|')).toMatch(/^Alice Smith.*Peking University$/)
+    expect(authors(ieee).join('|')).not.toMatch(/alice@/)
+    const acm = project('\\documentclass{article}\\begin{document}\\author{Alice}\\affiliation{\\institution{Peking University}\\city{Beijing}\\country{China}}\\email{alice@pku.edu.cn}\\maketitle\nWords.\\end{document}')
+    expect(authors(acm).join('|')).toMatch(/Alice\|Peking University.*Beijing.*China/)
+    // elsarticle's keys and values: keys an engine would translate
+    const els = project('\\documentclass{article}\\begin{document}\\author{Alice}\\affiliation{organization={Peking University}, city={Beijing}}\\maketitle\nWords.\\end{document}')
+    expect(authors(els)).toEqual(['Alice'])
   })
 })
 

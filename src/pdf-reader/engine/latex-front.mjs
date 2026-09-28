@@ -34,10 +34,14 @@ const HEADINGS = new Set(['part', 'chapter', 'section', 'subsection', 'subsubsec
 const DEPTH = { part: -1, chapter: 0, section: 1, subsection: 2, subsubsection: 3 }
 const OWN_UNIT_ARG = new Set(['caption', 'subcaption', 'subcaptionbox', 'footnote', 'thanks', 'abstract', 'keywords']) // the argument is a unit of its own
 const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox'])
-/** the front matter's blocks of names and places: nothing in them is prose but their notes (\\thanks, \\footnote), each
- *  a footnote of its own; the names, marks and spacing stay as the author wrote them (1706.03762's author block: its
- *  footnotes stayed in English, the whole block one opaque command) */
+/** the front matter's blocks of names and places: their notes (\\thanks, \\footnote) each a footnote of its own
+ *  (1706.03762's author block: its footnotes stayed in English, the whole block one opaque command), and the names and
+ *  places between them units of kind 'author' — translated where the target's script writes names its own way
+ *  (scripts.mjs authorsTranslated), else kept as the paper has them; the marks, addresses and spacing stay */
 const FRONT_MATTER = new Set(['author', 'affil', 'affiliation', 'institute', 'address'])
+/** commands inside an author block whose argument is a name or a place: IEEEtran's blocks, acmart's parts of an
+ *  affiliation. Anything else there — \\email, \\orcid, \\inst{1}, \\textsuperscript — stays as it is */
+const FRONT_PROSE = new Set(['IEEEauthorblockN', 'IEEEauthorblockA', 'institution', 'department', 'city', 'state', 'country'])
 const INLINE_TEXT = new Set(['textbf', 'textit', 'emph', 'textsl', 'textsc', 'underline', 'textup', 'textrm', 'textsf', 'textmd', 'uline'])
 // commands whose last required argument is typeset as it stands — a scaled table, a boxed or coloured phrase, a TikZ
 // picture fitted to the column — by how many required arguments they take, that one included. The others (a width,
@@ -305,6 +309,23 @@ function frontNotes(s, from, to, b, ctx) {
     past = end
   }
 }
+/** a front-matter argument: its notes as frontNotes cuts them, the names and places between them units of kind
+ *  'author'. One written as keys and values (elsarticle's organization={…}, city={…}) keeps its text, notes aside */
+function frontBlock(s, from, to, b, ctx) {
+  if (/(^|[,{\s])[A-Za-z]+\s*=\s*\{/.test(s.slice(from, to))) { frontNotes(s, from, to, b, ctx); return }
+  const names = (x, y) => { if (y <= x) return; b.flush(); const saved = b.kind; b.kind = 'author'; walk(s, x, y, b, ctx); b.flush(); b.kind = saved }
+  let past = from
+  for (const m of s.slice(from, to).matchAll(/\\(?:thanks|footnote)(?![A-Za-z@])/g)) {
+    const at = from + m.index
+    if (at < past || inComment(s, at)) continue
+    const { args, end } = argsAfter(s, at + m[0].length, 2)
+    if (!args.some(a => a.kind === 'req')) continue
+    names(past, at)
+    walk(s, at, end, b, ctx); b.flush()
+    past = end
+  }
+  names(past, to)
+}
 function walk(s, from, to, b, ctx) {
   let i = from, textStart = -1
   const endText = () => { if (textStart >= 0 && textStart < i) b.text(s.slice(textStart, i), textStart, i); textStart = -1 }
@@ -420,8 +441,12 @@ function walk(s, from, to, b, ctx) {
     if (FRONT_MATTER.has(name)) {
       const { args, end: e } = argsAfter(s, end, 3)
       endText(); b.flush()
-      for (const a of args) frontNotes(s, a.start + 1, a.end - 1, b, ctx)
+      for (const a of args) (a.kind === 'req' ? frontBlock : frontNotes)(s, a.start + 1, a.end - 1, b, ctx)
       i = e; continue
+    }
+    if (FRONT_PROSE.has(name) && b.kind === 'author') {
+      const { args, end: e } = argsAfter(s, end, 1)
+      if (args[0]?.kind === 'req') { endText(); const id = b.open(s.slice(i, args[0].start + 1), i); walk(s, args[0].start + 1, args[0].end - 1, b, ctx); b.close(id, '}', e); i = e; continue }
     }
     if (CONTENT_BOX.has(name)) {
       const { args } = argsAfter(s, end, 8)
@@ -507,7 +532,7 @@ export function loadProject(root, main, { tables = false } = {}) {
       for (const at of [t?.index, ...front.map(c => c.index)].filter(x => x !== undefined).sort((x, y) => x - y)) {
         if (at === t?.index) { const s0 = t.index + t[0].length - 1, e0 = matchGroup(f.text, s0); if (e0 > 0) { b.kind = 'heading'; b.title = true; walk(f.text, s0 + 1, e0 - 1, b, ctx); b.flush(); b.title = false; b.kind = undefined } continue }
         const c = front.find(x => x.index === at)
-        for (const a of argsAfter(f.text, at + c[0].length, 3).args) frontNotes(f.text, a.start + 1, a.end - 1, b, ctx)
+        for (const a of argsAfter(f.text, at + c[0].length, 3).args) (a.kind === 'req' ? frontBlock : frontNotes)(f.text, a.start + 1, a.end - 1, b, ctx)
       }
       from = m ? m.index + m[0].length : 0
       const e = f.text.match(/\\end\s*\{document\}/); to = e ? e.index : to
@@ -707,9 +732,10 @@ export const unitLeadTex = leading => String.raw`\makeatletter
 // pieces that are always set on the line: inline formulas and references
 const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]ref)(?![A-Za-z]))/
 /** marks for the units whose place a reader shows: not headings (their text is also typeset in running heads and
- *  tables of contents), not table cells, not the texts of a TikZ picture (set through the picture's own transformation,
+ *  tables of contents), not the author block's names and places (typeset again in running heads and the PDF's
+ *  metadata, and kept as they are for some languages), not table cells, not the texts of a TikZ picture (set through the picture's own transformation,
  *  which a destination's position does not follow) */
-export const markUnits = units => { const id = new Map(units.map((u, i) => [u, i])); return u => (u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` }) }
+export const markUnits = units => { const id = new Map(units.map((u, i) => [u, i])); return u => (u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.kind === 'author' ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` }) }
 
 /** Goes before \\begin{document} of the original's own compile: the log then says which font families the document set
  *  for its roles, however it set them (its class, a package, a conference style) */

@@ -12,7 +12,7 @@
 //  5. when every unit is in, the final compile: every pass, the images themselves.
 import { analyze } from './paper-meta.mjs'
 import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, unitLeadTex, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
-import { strategiesFor } from './scripts.mjs'
+import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
 
 /** The TeX log of a compile's last pass. The browser's compiler (poc-site/tex.js) joins each step's log with its terminal
@@ -112,6 +112,7 @@ export function originalFiles({ fsys, project }) {
  *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex) */
 export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl }) {
   const xe = strategy.xe
+  translated = typesetBy(translated, strategy)
   const base = markUnits(project.units)
   const index = new Map(project.units.map((u, i) => [u, i]))
   const mark = strategy.leading ? u => { const m = base(u); return m && translated.has(u) ? { start: `\\axtlead{${index.get(u)}}${m.start}`, end: m.end } : m } : base
@@ -131,6 +132,10 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   return out
 }
 
+/** the units a translation into `lang` leaves as they are: the names a table holds (nameCells), and the author block's
+ *  names and places where the target writes them as the paper does (scripts.mjs authorsTranslated) */
+export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : new Set([...paper.kept, ...paper.units.filter(u => u.kind === 'author')]))
+
 /**
  * The reader's pipeline version (REPORT, eighteenth addendum): raised with any change to what a compile puts out
  * (latex-front, mt, the fonts, the scripts' strategies, the TeX tree) or to what a cached record holds (the units'
@@ -139,7 +144,8 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
  */
 // 2: the front matter's notes are units (latex-front.mjs FRONT_MATTER)
 // 3: CJK leading inside translated units alone, their displays at the paper's, and English hyphenation under a CJK
-//    target (scripts.mjs, latex-front.mjs unitLeadTex)
+//    target (scripts.mjs, latex-front.mjs unitLeadTex); the paper's own macros, argument-less declarations and the
+//    author block's names and places cut into units (latex-front.mjs); the wire spaced after a period (mt.mjs)
 export const PIPELINE_VERSION = '3'
 
 /**
@@ -155,7 +161,8 @@ export const PIPELINE_VERSION = '3'
  * state, by, tried }), `changed` (anything typeset changed) and `settled` (a final that set every letter).
  */
 export async function runLive(paper, { lang, compile, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, identity = null, pipelineCurrent = false }) {
-  const { units, kept, meta, project } = paper
+  const { units, meta, project } = paper
+  const kept = keptFor(paper, lang)
   // the chain: a compile that gives no PDF moves on to the next strategy, which is tried at once
   const strategies = strategiesFor(meta, lang)
   let s = 0

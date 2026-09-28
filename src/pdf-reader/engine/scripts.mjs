@@ -17,6 +17,18 @@
 import { latinFontsFor } from './latex-front.mjs'
 
 export const scriptOf = lang => new Intl.Locale(lang).maximize().script
+/**
+ * Whether the author block's names and places are translated: where the target's script writes foreign names its own
+ * way, the byline reads that way too, the original beside it for the names an engine renders wrong (the owner,
+ * 2026-09-28); a language in the Latin script keeps them as the paper writes them. And only where a Unicode engine
+ * sets the translation: a class runs its own macros over the author block — uppercasing, key-value parsing, the PDF's
+ * metadata — which 8-bit text does not survive (2608.12096's CEUR class under CJKutf8: "Extra \\else"). So the CJK
+ * scripts, set by XeLaTeX; Russian, set by pdfLaTeX in T2A, keeps them for now, and a CJK translation that falls back
+ * to CJKutf8 sets them as the paper has them (`authors: false`, translationFiles)
+ */
+export const authorsTranslated = lang => Boolean(CJK[scriptOf(lang)])
+/** the translation a strategy sets: without the author block's names and places under one that cannot take them */
+export const typesetBy = (translated, strategy) => (strategy.authors === false ? new Map([...translated].filter(([u]) => u.kind !== 'author')) : translated)
 /** The languages whose typesetting the multi-language gate verifies (spikes/lang-gate.mjs). Until #295 takes up the
  *  others, the reader sets these alone: single language first. Compared by language and script, since a tag reaches
  *  here as the extension's language table gives it — zh-TW for Traditional Chinese — and a script can be lost on the
@@ -167,7 +179,7 @@ export function strategiesFor(meta, lang) {
       // the floats still held at \\end{document} are set inside the CJK environment, before it closes: set after it, a
       // translated table held to the end had every character "not set up for use with LaTeX" (2608.25210)
       const cjkutf8 = `\\usepackage{CJKutf8}\n\\AtBeginDocument{\\begin{CJK}{UTF8}{${cjk.cjkutf8}}}\n\\AtEndDocument{\\clearpage\\end{CJK}}\n`
-      out.push({ name: 'pdfLaTeX + CJKutf8', engine: meta.compiler, xe: false, ...lead, pre: () => cjkutf8 })
+      out.push({ name: 'pdfLaTeX + CJKutf8', engine: meta.compiler, xe: false, authors: false, ...lead, pre: () => cjkutf8 })
     }
     return out
   }

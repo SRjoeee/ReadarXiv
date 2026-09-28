@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { openPaper, translationFiles } from '@/pdf-reader/engine/live.mjs'
-import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
+import { keptFor, openPaper, translationFiles } from '@/pdf-reader/engine/live.mjs'
+import { authorsTranslated, strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
 
 // How a translation is typeset around its text: the leading of translated units and the hyphenation of the English left
 
@@ -70,5 +70,27 @@ describe('translationFiles: the leading goes to translated units alone', () => {
   it('a strategy with no factor adds neither the macro nor a call', () => {
     const { tex } = typeset('ja', ps => ps)
     expect(tex).not.toContain('axtlead')
+  })
+})
+
+describe('the author block, by the target\'s script', () => {
+  it('the CJK scripts, set by XeLaTeX, write the names their own way; Russian (pdfLaTeX) and the Latin script keep them', () => {
+    expect(['zh', 'zh-TW', 'ja', 'ko'].map(authorsTranslated)).toEqual([true, true, true, true])
+    expect(['ru', 'de', 'fr', 'vi'].map(authorsTranslated)).toEqual([false, false, false, false])
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode('\\documentclass{article}\\author{Alice Smith}\\begin{document}\\maketitle\nThe prose of the paper.\n\\end{document}\n')]]))
+    const author = (p.units as Unit[]).find(u => u.kind === 'author')
+    expect(author && keptFor(p, 'zh').has(author as never)).toBe(false)
+    expect(author && keptFor(p, 'de').has(author as never)).toBe(true)
+  })
+})
+
+describe('a strategy that cannot take the author block sets it as the paper has it (2608.12096 under CJKutf8)', () => {
+  it('CJKutf8 leaves the names in the source; XeLaTeX sets them translated', () => {
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode('\\documentclass{article}\\author{Alice Smith}\\begin{document}\\maketitle\nThe prose of the paper.\n\\end{document}\n')]]))
+    const translated = new Map((p.units as Unit[]).map(u => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: '<T>' } : x))]))
+    const [xe, cjkutf8] = strategiesFor(META, 'zh')
+    const main = (strategy: typeof xe) => new TextDecoder().decode(translationFiles(p, translated as never, { strategy: strategy!, fonts: null, draft: false }).get('main.tex'))
+    expect(main(xe)).toContain('\\author{<T>}')
+    expect(main(cjkutf8)).toContain('\\author{Alice Smith}')
   })
 })

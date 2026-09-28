@@ -18,7 +18,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { pseudoTranslate, readFontProbe } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { lostIn, openPaper, originalFiles, probeFiles, translationFiles, unsettable } from '../../../src/pdf-reader/engine/live.mjs'
+import { keptFor, lostIn, openPaper, originalFiles, probeFiles, translationFiles, unsettable } from '../../../src/pdf-reader/engine/live.mjs'
 import { CJK, scriptOf, strategiesFor, VERIFIED } from '../../../src/pdf-reader/engine/scripts.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
@@ -111,7 +111,7 @@ async function openOne(id) {
 }
 
 async function one({ files, paper, original }, id, lang) {
-  const { meta, project, units, kept } = paper
+  const { meta, project, units } = paper, kept = keptFor(paper, lang)
   const translated = new Map(units.filter(u => !kept.has(u)).map(u => [u, pseudoTranslate(u, lang)]))
   const expected = [...translated.values()].flat().filter(p => p.tr).reduce((a, p) => a + lettersIn(p.s, lang), 0)
   const tried = []
