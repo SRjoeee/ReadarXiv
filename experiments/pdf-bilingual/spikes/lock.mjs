@@ -6,7 +6,7 @@
 // that grew is set at, and how far a compile is from the original.
 import { readFileSync } from 'node:fs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { FORBIDDEN_TO_WARNING, latin1, latin1Bytes, MARK_DEF, markUnits, patch, stripPdftexOption, unitLeadTex as engineUnitLeadTex, XETEX_SHIM, XETEX_SHIM_R1 } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { FIT_DEF, FORBIDDEN_TO_WARNING, latin1, latin1Bytes, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, stripPdftexOption, unitLeadTex as engineUnitLeadTex, XETEX_SHIM, XETEX_SHIM_R1 } from '../../../src/pdf-reader/engine/latex-front.mjs'
 import { typesetBy } from '../../../src/pdf-reader/engine/scripts.mjs'
 
 /**
@@ -47,7 +47,7 @@ export const SYNC_TEX = String.raw`\makeatletter
  *  a display's box — and break the next \\midrule or \\end{align*} (2608.21180, 2608.09038, 2608.29867: the original
  *  with probes did not compile). No probe from restricted horizontal mode, where a caption is measured in an \\hbox. */
 export const LINES_TEX = String.raw`\makeatletter
-\def\axt@linesat#1#2{\ifnum\currentgrouplevel=#2 \message{^^JAXT-LINES #1 \the\prevgraf\space\the\baselineskip^^J}\else\ifnum\currentgrouplevel>#2 \ifinner\AddToHookNext{para/after}{\axt@linesat{#1}{#2}}\else\expandafter\xdef\csname axt@lg@#1\endcsname{\the\prevgraf\space\the\baselineskip}\expandafter\gdef\csname axt@lr@#1\endcsname{\axt@linesback{#1}{#2}}\expandafter\aftergroup\csname axt@lr@#1\endcsname\fi\fi\fi}
+\def\axt@linesat#1#2{\ifnum\currentgrouplevel=#2 \message{^^JAXT-LINES #1 \the\prevgraf\space\the\baselineskip\space\f@size^^J}\else\ifnum\currentgrouplevel>#2 \ifinner\AddToHookNext{para/after}{\axt@linesat{#1}{#2}}\else\expandafter\xdef\csname axt@lg@#1\endcsname{\the\prevgraf\space\the\baselineskip\space\f@size}\expandafter\gdef\csname axt@lr@#1\endcsname{\axt@linesback{#1}{#2}}\expandafter\aftergroup\csname axt@lr@#1\endcsname\fi\fi\fi}
 \def\axt@linesback#1#2{\ifnum\currentgrouplevel>#2 \expandafter\aftergroup\csname axt@lr@#1\endcsname\else\ifnum\currentgrouplevel=#2 \ifhmode\AddToHookNext{para/after}{\axt@linesat{#1}{#2}}\else\message{^^JAXT-LINES #1 \csname axt@lg@#1\endcsname^^J}\fi\fi\fi}
 \protected\def\axtlines#1{\ifhmode\ifinner\else\axt@lines{#1}\fi\else\axt@lines{#1}\fi}
 \def\axt@lines#1{\ifdefined\AddToHookNext\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@linesat{#1}{\the\currentgrouplevel}}}\axt@tmp\fi}
@@ -61,12 +61,19 @@ export const unitLeadTex = em => engineUnitLeadTex(`${em}\\dimexpr\\f@size pt\\r
 /**
  * A unit set smaller: \\axtsize@<unit>, when defined, scales the font size (and so the unit's leading, which is × the
  * size) at the unit's start, the size before it back once the unit's own paragraph is over, found as \\axtlead finds
- * it (never an \\aftergroup inside a box; nothing from restricted horizontal mode). What service H does to a block too
- * long for its box, with a floor (shrinkSizes)
+ * it: at every level between when that paragraph ended in a deeper group (a list opened right after the unit — else
+ * the list's own units were set smaller from a size never put back, and each smaller again: 2608.02785 in German went
+ * down to 7 pt, and in the fit's trial to 4). And from the size before the last unit set smaller when that one's is
+ * still in force, its paragraph's end not yet come (a unit begun inside it): a note's own size is another, and stays
+ * the base. Never an \\aftergroup inside a box, nothing from restricted horizontal mode. What service H does to a block too long for its box, with a floor (shrinkSizes)
  */
 export const SIZE_TEX = String.raw`\makeatletter
-\def\axt@sizeat#1#2#3{\ifnum\currentgrouplevel=#1 \fontsize{#2}{#3}\selectfont\else\ifnum\currentgrouplevel>#1 \AddToHookNext{para/after}{\axt@sizeat{#1}{#2}{#3}}\fi\fi}
-\def\axt@size#1{\ifcsname axtsize@#1\endcsname\ifdefined\AddToHookNext\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@sizeat{\the\currentgrouplevel}{\f@size}{\f@baselineskip}}}\axt@tmp\fontsize{\fpeval{\csname axtsize@#1\endcsname*\f@size}}{\fpeval{\csname axtsize@#1\endcsname*\strip@pt\dimexpr\f@baselineskip\relax}pt}\selectfont\fi\fi}
+\def\axt@sizeat#1#2#3#4{\ifnum\currentgrouplevel=#1 \fontsize{#2}{#3}\selectfont\else\ifnum\currentgrouplevel>#1 \ifinner\AddToHookNext{para/after}{\axt@sizeat{#1}{#2}{#3}{#4}}\else\fontsize{#2}{#3}\selectfont\expandafter\gdef\csname axt@sb@#4\endcsname{\axt@sizeback{#1}{#2}{#3}{#4}}\expandafter\aftergroup\csname axt@sb@#4\endcsname\fi\fi\fi}
+\def\axt@sizeback#1#2#3#4{\ifnum\currentgrouplevel>#1 \fontsize{#2}{#3}\selectfont\expandafter\aftergroup\csname axt@sb@#4\endcsname\else\ifnum\currentgrouplevel=#1 \ifhmode\AddToHookNext{para/after}{\axt@sizeat{#1}{#2}{#3}{#4}}\else\fontsize{#2}{#3}\selectfont\fi\fi\fi}
+\let\axt@szlast\relax
+\def\axt@size#1{\ifcsname axtsize@#1\endcsname\ifdefined\AddToHookNext\edef\axt@szcur{\f@size}\ifx\axt@szcur\axt@szlast\else\xdef\axt@szsaved{\f@size}\xdef\axt@szsavedb{\f@baselineskip}\fi
+  \edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@sizeat{\the\currentgrouplevel}{\axt@szsaved}{\axt@szsavedb}{#1}}}\axt@tmp
+  \fontsize{\fpeval{\csname axtsize@#1\endcsname*\axt@szsaved}}{\fpeval{\csname axtsize@#1\endcsname*\strip@pt\dimexpr\axt@szsavedb\relax}pt}\selectfont\xdef\axt@szlast{\f@size}\fi\fi}
 \protected\def\axtsize#1{\ifhmode\ifinner\else\axt@size{#1}\fi\else\axt@size{#1}\fi}
 \makeatother
 `
@@ -82,6 +89,29 @@ export function shrinkSizes(orig, tr, sizes, { min }) {
   return next
 }
 
+/**
+ * The fit (the owner's proposal, 2026-09-28): no sync point, and no unit set apart from its neighbours — the
+ * translation's units at one leading for the whole paper, each nudged within `band` of it, so that each takes about
+ * the room its original took and the page follows. `tr` the units' heights at the leading a trial compile set, `lines`
+ * its line probes (each unit's leading and size). G, the original's height over the translation's summed over the
+ * units both measure, held within [lo, hi]; a unit's leading, × its size for \\axtlead@<unit>, is its trial leading
+ * × G × its own ratio over G held within 1 ± band. Leading moves no line break, so one compile after the trial does
+ */
+export function fitLeads(orig, tr, lines, { lo, hi, band }) {
+  let so = 0, st = 0
+  const pairs = new Map()
+  for (const [i, o] of orig) { const hh = pairOf(o, tr.get(i)); if (hh && hh[0] > 0 && hh[1] > 0) { pairs.set(i, hh); so += hh[0]; st += hh[1] } }
+  const g = Math.min(hi, Math.max(lo, st ? so / st : 1))
+  const leads = new Map()
+  for (const [i, l] of lines) {
+    if (!l.size || !l.bs) continue
+    const hh = pairs.get(i)
+    const own = hh ? Math.min(1 + band, Math.max(1 - band, hh[0] / hh[1] / g)) : 1
+    leads.set(i, (l.bs * g * own) / l.size)
+  }
+  return { g: st ? so / st : 1, held: g, leads }
+}
+
 /** the theorem-like environments whose heads are run-in: the usual names and every \newtheorem of the paper */
 export const theoremEnvs = files => [...new Set(['theorem', 'lemma', 'corollary', 'proposition', 'definition', 'remark', 'example', 'proof', 'claim', 'conjecture', 'assumption', ...[...files].filter(([p]) => /\.(tex|sty|cls)$/i.test(p)).flatMap(([, b]) => [...latin1(b).matchAll(/\\newtheorem\*?\s*\{([^}]+)\}/g)].map(m => m[1].trim()))])]
 
@@ -95,30 +125,32 @@ export function originalProbeFiles({ project, units }, theorems) {
 }
 
 /** the translation, locked: units at `em` × the font size rather than the strategy's factor on the paper's spacing,
- *  every unit synced */
-export function lockedFiles({ fsys, meta, project, units }, translated, { strategy, fonts, em, leads = new Map(), sizes = new Map(), targets = new Map(), theorems }) {
+ *  every unit synced. `sync: false` and `lead` (TeX for the units' leading) give the fit instead: no sync point, each
+ *  unit at the leading `leads` gives it, × its size (fitLeads) */
+export function lockedFiles({ fsys, meta, project, units }, translated, { strategy, fonts, em, leads = new Map(), sizes = new Map(), targets = new Map(), theorems, sync = true, lead = null }) {
   const index = new Map(units.map((u, i) => [u, i]))
   const base = markUnits(units)
-  const mark = u => { const m = base(u); if (!m) return m; const i = index.get(u); return { start: `\\axtsync{${i}}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}${m.start}`, end: m.end } }
+  const mark = u => { const m = base(u); if (!m) return m; const i = index.get(u); return { start: `${sync ? `\\axtsync{${i}}` : ''}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}${m.start}`, end: m.end } }
   const files = patch(project, typesetBy(translated, strategy), { mark })
   let main = latin1(files.get(project.main))
   const at = main.search(/\\begin\s*\{document\}/)
   const pre = strategy.pre(fonts)
-  main = main.slice(0, at) + FORBIDDEN_TO_WARNING + pre + main.slice(at)
+  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + pre + NO_OVERFLOW + main.slice(at)
   if (strategy.xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
   const table = [
     ...[...targets].map(([i, t]) => `\\expandafter\\def\\csname axt@t@${i}\\endcsname{{${t.page}}{${t.col}}{${t.total}pt}}`),
     ...[...leads].map(([i, f]) => `\\expandafter\\def\\csname axtlead@${i}\\endcsname{${f.toFixed(4)}}`),
     ...[...sizes].map(([i, f]) => `\\expandafter\\def\\csname axtsize@${i}\\endcsname{${f.toFixed(4)}}`),
   ].join('\n')
-  main = MARK_DEF + LINES_TEX + SYNC_TEX + unitLeadTex(em) + (sizes.size ? SIZE_TEX : '') + `\\axtsyncpoints{${theorems.join(',')}}\n` + table + '\n' + main
+  main = MARK_DEF + FIT_DEF + LINES_TEX + (sync ? SYNC_TEX : '') + (lead ? engineUnitLeadTex(lead) : unitLeadTex(em)) + (sizes.size ? SIZE_TEX : '') + (sync ? `\\axtsyncpoints{${theorems.join(',')}}\n` : '') + table + '\n' + main
   files.set(project.main, latin1Bytes(main))
   if (strategy.xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(files.get(f) ?? fsys.read(f)), s = stripPdftexOption(t); if (s !== t) files.set(f, latin1Bytes(s)) }
+  for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(files.get(f) ?? fsys.read(f)), u = localizeNames(t); if (u !== t) files.set(f, latin1Bytes(u)) }
   return files
 }
 
 export const readTargets = log => new Map([...log.matchAll(/^AXT-AT (h?\d+) (\d+) (\d+) ([\d.]+)pt/gm)].map(m => [m[1], { page: Number(m[2]), col: Number(m[3]), total: Number(m[4]) }]))
-export const readLines = log => new Map([...log.matchAll(/^AXT-LINES (\d+) (\d+) ([\d.]+)pt/gm)].map(m => [Number(m[1]), { lines: Number(m[2]), bs: Number(m[3]) }]))
+export const readLines = log => new Map([...log.matchAll(/^AXT-LINES (\d+) (\d+) ([\d.]+)pt(?: ([\d.]+))?/gm)].map(m => [Number(m[1]), { lines: Number(m[2]), bs: Number(m[3]), ...(m[4] ? { size: Number(m[4]) } : {}) }]))
 export const readLockEvents = log => ({
   breaks: [...log.matchAll(/^AXT-BREAK (\d+)/gm)].map(m => ({ page: Number(m[1]) + 1 })),
   gaps: [...log.matchAll(/^AXT-GAP (\d+) (-?[\d.]+)pt/gm)].map(m => ({ page: Number(m[1]) + 1, pt: Number(m[2]) })),

@@ -10,7 +10,10 @@ export const PAPERS = { zh: ['2212.06817', ...GATE], ja: EIGHT, ko: EIGHT, de: E
 /** the page's columns, in the order of their number keys; `before` is Today as it was until 2026-09-28 (the whole
  *  document's CJK \\linespread, no English hyphenation), kept beside the fixed one for the owner, shown when its PDF
  *  is there */
-export const COLUMNS = [{ key: 'original', label: 'Original' }, { key: 'today', label: 'Today' }, { key: 'locked', label: 'Locked' }, { key: 'shrink', label: 'Locked, smaller type' }, { key: 'h', label: 'H' }, { key: 'before', label: 'Today before 09-28' }]
+export const COLUMNS = [{ key: 'original', label: 'Original' }, { key: 'today', label: 'Today' }, { key: 'fit', label: 'Fit' }, { key: 'locked', label: 'Locked' }, { key: 'shrink', label: 'Locked, smaller type' }, { key: 'h', label: 'H' }, { key: 'before', label: 'Today before 09-28' }]
+/** the fit (lock.mjs fitLeads): the paper's factor on its leading held within [lo, hi] and each unit's own within
+ *  1 ± band of it; a script that grows (the alphabets) is first set smaller, to minSize at most */
+export const FIT = { cjk: { lo: 0.9, hi: 1.25, band: 0.08 }, alphabet: { lo: 0.95, hi: 1.1, band: 0.08 }, minSize: 0.93 }
 /** the smallest a unit is set at in the "Locked, smaller type" column, × its size (the owner took 0.9, 2026-09-28) */
 export const SHRINK_MIN = 0.9
 /** a sync point's inserted space worth a look: about two lines */
@@ -38,7 +41,7 @@ export function catalogEntry(index) {
   return {
     paper: index.paper, cls: index.cls,
     pages: Object.fromEntries(index.columns.map(c => [c.key, c.pages ?? null])),
-    today: index.numbers?.today ?? null, locked: index.numbers?.locked ?? null, shrink: index.numbers?.shrink ?? null,
+    today: index.numbers?.today ?? null, locked: index.numbers?.locked ?? null, shrink: index.numbers?.shrink ?? null, fit: index.numbers?.fit ?? null,
     failed: index.failed ?? {}, flags: index.flags ?? [], untranslated: index.translation?.untranslated ?? 0,
   }
 }

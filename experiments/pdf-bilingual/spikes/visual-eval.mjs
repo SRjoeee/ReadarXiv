@@ -12,11 +12,11 @@ import { promisify } from 'node:util'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
 import { keptFor, lostIn, openPaper, probeFiles, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
 import { latin1, readFontProbe } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
+import { scriptOf, strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
 import { translateTexts, translateUnits } from '../../../src/pdf-reader/engine/mt.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
-import { compare, heights, lockedFiles, marksOf, originalProbeFiles, readLines, readLockEvents, readTargets, shrinkSizes, theoremEnvs, tightenedLeads } from './lock.mjs'
-import { catalogEntry, COLUMNS, overfullCount, PARAMS, SHRINK_MIN, suspiciousPages } from './visual-eval-lib.mjs'
+import { compare, fitLeads, heights, lockedFiles, marksOf, originalProbeFiles, readLines, readLockEvents, readTargets, shrinkSizes, theoremEnvs, tightenedLeads } from './lock.mjs'
+import { catalogEntry, COLUMNS, FIT, overfullCount, PARAMS, SHRINK_MIN, suspiciousPages } from './visual-eval-lib.mjs'
 
 const run = promisify(execFile)
 /** a unit as its translation is cached: its kind and its source, pieces by kind and text, pair ids aside */
@@ -135,12 +135,39 @@ async function generate(lang, id) {
     if (!r.ok) { base.failed.shrink = firstError(r.log); break }
     shrunk = r; sizes = next
   }
+  // 2c. The fit (the owner, 2026-09-28): no sync point. A trial at today's leading, the units' heights against the
+  // original's, and the paper's one factor with each unit's nudge (lock.mjs fitLeads); a script that grows is first set
+  // smaller as a whole, so that its leading need not close up
+  let fit = null
+  {
+    const cjk = ['Hans', 'Hant', 'Jpan', 'Kore'].includes(scriptOf(lang))
+    const fopts = { strategy, fonts, em, theorems, sync: false, lead: `${strategy.leading ?? 1}\\baselineskip` }
+    let trial = await compile(work, 'fit-1', paper, files, lockedFiles(paper, translated, fopts), { engine: strategy.engine, rerun: true })
+    const fitSizes = new Map()
+    if (trial.ok && !cjk) {
+      const lines = readLines(trial.log), { g } = fitLeads(orig, heights(units, await marksOf(trial.pdf), lines), lines, { lo: 0, hi: 99, band: 0 })
+      const size = Math.min(1, Math.max(FIT.minSize, Math.sqrt(g)))
+      if (size < 0.999) {
+        for (const i of lines.keys()) fitSizes.set(i, size)
+        const second = await compile(work, 'fit-2', paper, files, lockedFiles(paper, translated, { ...fopts, sizes: fitSizes }), { engine: strategy.engine, rerun: true })
+        if (second.ok) trial = second; else fitSizes.clear()
+      }
+    }
+    if (trial.ok) {
+      const lines = readLines(trial.log), { g, held, leads: fitLeadMap } = fitLeads(orig, heights(units, await marksOf(trial.pdf), lines), lines, cjk ? FIT.cjk : FIT.alphabet)
+      const r = await compile(work, 'fit-3', paper, files, lockedFiles(paper, translated, { ...fopts, sizes: fitSizes, leads: fitLeadMap }), { engine: strategy.engine, rerun: true })
+      if (r.ok) fit = { ...r, g, held, size: fitSizes.values().next().value ?? 1 }; else base.failed.fit = firstError(r.log)
+    } else base.failed.fit = firstError(trial.log)
+  }
+  if (fit) copyFileSync(fit.pdf, join(dir, 'fit.pdf'))
+  note('fit', !!fit, fit ? `G ${fit.g.toFixed(3)} held ${fit.held.toFixed(3)} size ${fit.size.toFixed(3)}` : '')
   if (shrunk) copyFileSync(shrunk.pdf, join(dir, 'shrink.pdf'))
   else if (locked.ok && !base.failed.shrink) copyFileSync(locked.pdf, join(dir, 'shrink.pdf'))
   note('shrink', !!shrunk, 'smaller', sizes.size)
 
   // 3. numbers and checks
   if (today.ok) base.numbers.today = { ...compare(units, orig, await marksOf(today.pdf)), offPage: undefined }
+  if (fit) base.numbers.fit = { ...compare(units, orig, await marksOf(fit.pdf)), offPage: undefined, g: fit.g, held: fit.held, size: fit.size }
   if (existsSync(join(dir, 'shrink.pdf')) && !base.failed.shrink) base.numbers.shrink = { ...compare(units, orig, await marksOf(join(dir, 'shrink.pdf'))), offPage: undefined, smaller: sizes.size }
   if (locked.ok) {
     const lm = await marksOf(locked.pdf), lc = compare(units, orig, lm)
@@ -154,12 +181,15 @@ async function generate(lang, id) {
   return index
 }
 
+/** the page lists the round's papers alone when round.json names them ({ lang: [paper] }): a few at a time, the owner
+ *  reviewing each round before more (2026-09-28); without it every paper generated */
 function catalog() {
   const langs = {}
+  const round = existsSync(join(OUT, 'round.json')) ? JSON.parse(readFileSync(join(OUT, 'round.json'), 'utf8')) : null
   for (const lang of existsSync(OUT) ? readdirSync(OUT) : []) {
     const d = join(OUT, lang)
-    if (!existsSync(join(d)) || lang === 'index.json') continue
-    langs[lang] = readdirSync(d).filter(p => existsSync(join(d, p, 'index.json'))).sort().map(p => catalogEntry(JSON.parse(readFileSync(join(d, p, 'index.json'), 'utf8'))))
+    if (!existsSync(join(d)) || lang.endsWith('.json') || (round && !round[lang])) continue
+    langs[lang] = readdirSync(d).filter(p => existsSync(join(d, p, 'index.json')) && (!round || round[lang].includes(p))).sort().map(p => catalogEntry(JSON.parse(readFileSync(join(d, p, 'index.json'), 'utf8'))))
   }
   writeFileSync(join(OUT, 'index.json'), JSON.stringify({ langs }, null, 1))
   console.log('catalog', Object.entries(langs).map(([l, a]) => `${l} ${a.length}`).join(', '))

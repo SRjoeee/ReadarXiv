@@ -70,7 +70,7 @@ function renderPapers() {
   $('#papers').replaceChildren(...list.map(e => {
     const d = document.createElement('div'); d.className = `paper${e.paper === state.paper ? ' on' : ''}`
     const pages = Object.entries(e.pages).map(([k, n]) => `${k} ${n ?? '×'}`).join(' · ')
-    d.innerHTML = `<b>${e.paper}</b><small>${e.cls}</small><small>pages ${pages}</small><small>units on their page ${rate(e.today?.samePage, e.today?.units)} → ${rate(e.locked?.samePage, e.locked?.units)}${e.shrink ? ` → ${rate(e.shrink.samePage, e.shrink.units)} smaller type` : ''}</small><small>captions ${e.today?.captionsSamePage ?? '—'}/${e.today?.captions ?? '—'} → ${e.locked?.captionsSamePage ?? '—'}/${e.locked?.captions ?? '—'}</small>`
+    d.innerHTML = `<b>${e.paper}</b><small>${e.cls}</small><small>pages ${pages}</small><small>units on their page ${rate(e.today?.samePage, e.today?.units)} → ${rate(e.locked?.samePage, e.locked?.units)}${e.shrink ? ` → ${rate(e.shrink.samePage, e.shrink.units)} smaller type` : ''}${e.fit ? ` · fit ${rate(e.fit.samePage, e.fit.units)}` : ''}</small><small>captions ${e.today?.captionsSamePage ?? '—'}/${e.today?.captions ?? '—'} → ${e.locked?.captionsSamePage ?? '—'}/${e.locked?.captions ?? '—'}</small>`
     d.onclick = () => openPaper(e.paper)
     return d
   }))

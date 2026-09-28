@@ -8,7 +8,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { MARK_DEF } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { heights, LINES_TEX, marksOf, readLines, readLockEvents, readTargets, shrinkSizes, SIZE_TEX, SYNC_TEX, tightenedLeads, unitLeadTex } from './lock.mjs'
+import { fitLeads, heights, LINES_TEX, marksOf, readLines, readLockEvents, readTargets, shrinkSizes, SIZE_TEX, SYNC_TEX, tightenedLeads, unitLeadTex } from './lock.mjs'
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
@@ -111,12 +111,17 @@ const unitAfter = leadLog.match(/^LEAD-UNIT afterdisplay ([\d.]+)pt$/m)
 check('the unit\'s own leading after a display inside it: 1.3 × 10 pt', Math.abs(Number(unitAfter?.[1]) - 13) < 0.001, unitAfter?.[0])
 check('line counts of the unit\'s own paragraph, not its footnote\'s or the list\'s', readLines(leadLog).get(0)?.lines === 1 && readLines(leadLog).get(3)?.lines === 1, JSON.stringify([...readLines(leadLog)]))
 check('unit leading raises no TeX error', !/^! /m.test(leadLog), (leadLog.match(/^! .*/m) ?? [''])[0])
+// the fit: one factor for the paper, each unit nudged within its band
+const fitted = fitLeads(new Map([[0, { hy: 100 }], [1, { hy: 100 }], [2, { hy: 100 }]]), new Map([[0, { hy: 90 }], [1, { hy: 80 }], [2, { hy: 100 }]]), new Map([[0, { lines: 5, bs: 15, size: 10 }], [1, { lines: 5, bs: 15, size: 10 }], [2, { lines: 5, bs: 15, size: 10 }], [3, { lines: 1, bs: 15, size: 10 }]]), { lo: 0.9, hi: 1.25, band: 0.08 })
+check('fit: G the summed ratio, each unit within its band, one with no pair at G', Math.abs(fitted.g - 300 / 270) < 1e-9 && Math.abs(fitted.leads.get(1) - 1.5 * (300 / 270) * 1.08) < 1e-9 && Math.abs(fitted.leads.get(3) - 1.5 * (300 / 270)) < 1e-9, JSON.stringify([fitted.g, [...fitted.leads]]))
+check('lines read with their size', readLines('AXT-LINES 3 4 11.0pt 10.95\n').get(3)?.size === 10.95)
 // a unit set smaller: its own paragraph at the factor, the size back after it; a caption measured in a box gets none
 const sizes = shrinkSizes(new Map([[0, { hy: 90 }], [1, { hy: 90 }], [2, { hy: 100 }]]), new Map([[0, { hy: 100 }], [1, { hy: 200 }], [2, { hy: 90 }]]), new Map(), { min: 0.9 })
 check('size factors: the square root of how much taller, down to the floor, none for a shorter unit', Math.abs(sizes.get(0) - Math.sqrt(0.9)) < 1e-9 && sizes.get(1) === 0.9 && !sizes.has(2), JSON.stringify([...sizes]))
-const sizeLog = tex('size', `\\makeatletter\\expandafter\\def\\csname axtsize@7\\endcsname{0.9}\\makeatother${LINES_TEX}${SIZE_TEX}${unitLeadTex(1.3)}\n\\documentclass{article}\n\\begin{document}\n\\makeatletter\n\\axtsize{7}\\axtlead{7}\\leavevmode A smaller unit with a note.\\footnote{A note.}\\message{^^JSIZE-IN \\f@size^^J}\\par\\message{^^JSIZE-AFTER \\f@size^^J}\n\\sbox0{\\axtsize{7}A caption measured.}\\leavevmode Plain.\\par\\message{^^JSIZE-BOX \\f@size^^J}\n\\end{document}\n`)
+const sizeLog = tex('size', `\\makeatletter\\expandafter\\def\\csname axtsize@7\\endcsname{0.9}\\expandafter\\def\\csname axtsize@8\\endcsname{0.9}\\makeatother${LINES_TEX}${SIZE_TEX}${unitLeadTex(1.3)}\n\\documentclass{article}\n\\begin{document}\n\\makeatletter\n\\axtsize{7}\\axtlead{7}\\leavevmode A smaller unit with a note.\\footnote{A note.}\\message{^^JSIZE-IN \\f@size^^J}\\par\\message{^^JSIZE-AFTER \\f@size^^J}\n\\sbox0{\\axtsize{7}A caption measured.}\\leavevmode Plain.\\par\\message{^^JSIZE-BOX \\f@size^^J}\n\\axtsize{7}\\leavevmode A unit a list ends.\\begin{itemize}\\item\\message{^^JSIZE-ITEM \\f@size^^J}Item text.\\item\\axtsize{8}\\leavevmode A unit in the list.\\par\\message{^^JSIZE-INLIST \\f@size^^J}\\end{itemize}\\message{^^JSIZE-LIST \\f@size^^J}\n\\end{document}\n`)
 const sz = k => sizeLog.match(new RegExp(`^SIZE-${k} (\\S+)`, 'm'))?.[1]
 check('a unit set smaller: 9 pt inside, 10 pt after, and after a box', sz('IN') === '9' && sz('AFTER') === '10' && sz('BOX') === '10', JSON.stringify([sz('IN'), sz('AFTER'), sz('BOX')]))
+check('a list opened right after a smaller unit: its items at 10 pt, a unit in it back to 10 after, 10 after the list (2608.02785)', sz('ITEM') === '10' && sz('INLIST') === '10' && sz('LIST') === '10', JSON.stringify([sz('ITEM'), sz('INLIST'), sz('LIST')]))
 check('unit size raises no TeX error', !/^! /m.test(sizeLog), (sizeLog.match(/^! .*/m) ?? [''])[0])
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)
