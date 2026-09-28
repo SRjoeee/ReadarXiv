@@ -3,6 +3,7 @@
 import { act, createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MenuList, type MenuListItem } from '@/ui/controls/MenuList'
+import { stubPopovers } from '../../pdf-reader/ui/popover-stub'
 import { mountElement } from '../render-hook'
 
 afterEach(() => { document.body.innerHTML = '' })
@@ -112,5 +113,80 @@ describe('MenuList', () => {
     const { rows } = await mount([{ id: 'deu', name: 'Deutsch', hint: 'Free', lang: 'de' }], { layout: 'two-line' })
     const name = rows[0]!.querySelector('.t > span[lang]')
     expect([name?.getAttribute('lang'), name?.textContent]).toEqual(['de', 'Deutsch'])
+  })
+})
+
+/**
+ * The layout happy-dom does not do, for the scroll of the active row: the rows 30 px apart from the top of `box`, a scroll
+ * box `height` px tall that `scrollTop` moves (clamped as a browser clamps it); nothing laid out while `shown()` is false,
+ * as a closed popover's contents are not (display: none). Every other element is where happy-dom puts it: at 0, 0
+ */
+function layOut(box: HTMLElement, height: number, shown: () => boolean = () => true) {
+  const rows = () => [...box.querySelectorAll('[role="option"]')]
+  let top = 0
+  box.style.overflowY = 'auto'
+  Object.defineProperty(box, 'clientHeight', { configurable: true, get: () => (shown() ? height : 0) })
+  Object.defineProperty(box, 'scrollHeight', { configurable: true, get: () => (shown() ? rows().length * 30 : 0) })
+  Object.defineProperty(box, 'scrollTop', { configurable: true, get: () => top, set: (v: number) => { top = Math.max(0, Math.min(v, box.scrollHeight - box.clientHeight)) } })
+  const real = Element.prototype.getBoundingClientRect
+  const rect = (y: number, h: number) => ({ x: 0, y, top: y, bottom: y + h, left: 0, right: 200, width: 200, height: h, toJSON: () => ({}) }) as DOMRect
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    if (!shown()) return rect(0, 0)
+    if (this === box) return rect(0, height)
+    const i = rows().indexOf(this)
+    return i < 0 ? real.call(this) : rect(i * 30 - top, 30)
+  })
+}
+const LANGUAGES: MenuListItem[] = Array.from({ length: 40 }, (_, i) => ({ id: `l${i}`, name: `Lang ${i}` }))
+/** the active row's place in its box: whether it shows whole */
+const inView = (box: HTMLElement, index: number) => index * 30 >= box.scrollTop && index * 30 + 30 <= box.scrollTop + box.clientHeight
+
+describe('MenuList: the active row stays in view (the final review of Part 7, A-I2)', () => {
+  afterEach(() => { vi.restoreAllMocks() })
+
+  it('the arrows past the rows that show scroll the list to the active one, and back; a row already in view leaves it where it is', async () => {
+    // the popup's language list: a search field over a list five rows and a half tall
+    const { container } = await mount(LANGUAGES, { search: 'Search' })
+    const field = container.querySelector<HTMLInputElement>('input')!
+    const list = container.querySelector<HTMLElement>('[role="listbox"]')!
+    layOut(list, 165)
+    for (let i = 1; i <= 4; i++) await key(field, 'ArrowDown')
+    // the fifth row shows whole: nothing moves
+    expect([field.getAttribute('aria-activedescendant'), list.scrollTop]).toEqual([list.querySelectorAll('[role="option"]')[4]!.id, 0])
+    for (let i = 5; i <= 12; i++) {
+      await key(field, 'ArrowDown')
+      expect(inView(list, i), `row ${i}`).toBe(true)
+    }
+    // the nearest edge: the active row at the bottom, not at the top
+    expect(list.scrollTop).toBe(13 * 30 - 165)
+    await key(field, 'ArrowUp')
+    expect(list.scrollTop).toBe(13 * 30 - 165)
+    for (let i = 0; i < 11; i++) await key(field, 'ArrowUp')
+    expect([inView(list, 0), list.scrollTop]).toEqual([true, 0])
+  })
+
+  it('a list opened on a stored option far down shows it: drawn while hidden, it scrolls as its popover opens', async () => {
+    const restore = stubPopovers()
+    try {
+      const items = LANGUAGES.map((l, i) => ({ ...l, checked: i === 25 }))
+      const { container } = await mountElement(createElement('div', { popover: 'auto' }, createElement(MenuList, { items, kind: 'listbox', label: 'Language', search: 'Search', onPick: vi.fn(), onClose: vi.fn() })))
+      const popover = container.querySelector<HTMLElement>('[popover]')!
+      const list = container.querySelector<HTMLElement>('[role="listbox"]')!
+      layOut(list, 165, () => popover.hasAttribute('data-open'))
+      expect(list.scrollTop).toBe(0)
+      await act(async () => { popover.showPopover() })
+      expect([list.querySelector('[data-active]')!.textContent, inView(list, 25), list.scrollTop]).toEqual(['Lang 25', true, 26 * 30 - 165])
+    } finally { restore() }
+  })
+
+  it('scrolls the list alone: nothing around it moves — no scrollIntoView, which would scroll the settings page or the popup too', async () => {
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, writable: true, value: scrollIntoView })
+    try {
+      const { container, list } = await mount(LANGUAGES)
+      layOut(list, 165)
+      for (let i = 0; i < 20; i++) await key(list, 'ArrowDown')
+      expect([inView(list, 20), scrollIntoView.mock.calls.length, container.scrollTop, document.documentElement.scrollTop]).toEqual([true, 0, 0, 0])
+    } finally { delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView }
   })
 })

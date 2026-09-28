@@ -5,11 +5,32 @@
 // lines, each hint under its name (the service menu); a neutral button in a row, which picking the row presses (the
 // Chrome pack's download), a loader turning while it runs; a sample drawn in a style at a row's end (the style menu);
 // the last row, which leads to managing the list, never chosen, a separator before it; and the language of a row's
-// own words, so that a language's own name or a sample in another script is read and drawn as that language
+// own words, so that a language's own name or a sample in another script is read and drawn as that language. The active
+// row stays in view as it moves and as the list opens (the retired popup menu did; Part 7's final review)
 import { Check, Loader } from 'lucide'
-import { type CSSProperties, Fragment, useId, useState } from 'react'
+import { type CSSProperties, Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { useMenuNav } from '@/ui/menu-nav'
 import { Icon } from './Icon'
+
+/**
+ * A row brought into view inside the scroll boxes between it and `stop` (its popover): the list capped at five rows and a
+ * half in the popup, the popover itself past its height. `scrollIntoView`'s "nearest" — a row already in view stays where
+ * it is, one out of view comes to the nearer edge — confined to those boxes: `scrollIntoView` also scrolls every ancestor
+ * (the settings page, the popup's body), and its `container` option is newer than Chrome 131, the floor
+ */
+function reveal(row: Element | null | undefined, stop: Element) {
+  if (!row) return
+  for (let box = row.parentElement; box; box = box.parentElement) {
+    if (box.scrollHeight > box.clientHeight && /auto|scroll/.test(getComputedStyle(box).overflowY)) {
+      const r = row.getBoundingClientRect()
+      const top = box.getBoundingClientRect().top + box.clientTop
+      const bottom = top + box.clientHeight
+      if (r.top < top) box.scrollTop -= top - r.top
+      else if (r.bottom > bottom) box.scrollTop += Math.min(r.bottom - bottom, r.top - top)
+    }
+    if (box === stop) return
+  }
+}
 
 export interface MenuListItem {
   id: string
@@ -59,12 +80,28 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
   const nav = useMenuNav({ count: shown.length, initial: shown.findIndex(i => i.checked && !i.manage), isDisabled: i => !!shown[i]?.disabled && !shown[i]?.action, labelOf: i => shown[i]?.name ?? '', onPick: i => pick(shown[i]), onClose, typeahead: !search })
   const role = kind === 'listbox' ? 'option' : kind === 'radios' ? 'menuitemradio' : 'menuitem'
   const listId = `${useId()}-list`
+  const root = useRef<HTMLDivElement>(null)
+  // the active row in view as it moves, and as a search makes the first row active; a list drawn while its popover is
+  // hidden has no layout to scroll, so the row is brought into view again as the popover opens
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new active row or a new query is what asks for the scroll
+  useLayoutEffect(() => {
+    const el = root.current
+    if (el) reveal(el.querySelector('[data-active]'), el.closest('[popover]') ?? el)
+  }, [nav.active, q])
+  useEffect(() => {
+    const el = root.current
+    const popover = el?.closest('[popover]')
+    if (!el || !popover) return
+    const onToggle = (e: Event) => { if ((e as Event & { newState?: string }).newState === 'open') reveal(el.querySelector('[data-active]'), popover) }
+    popover.addEventListener('toggle', onToggle)
+    return () => popover.removeEventListener('toggle', onToggle)
+  }, [])
   // the element with the focus takes the keys and names the active item (aria-activedescendant): the search field, a
   // combobox that controls the list, when there is one; else the list itself. Only that element handles them, or a
   // key would be handled twice as it bubbles (the final review: the arrows skipped every other language)
   const keys = { 'aria-activedescendant': nav.activeId, onKeyDown: nav.onKeyDown }
   return (
-    <div className="outline-none">
+    <div ref={root} className="outline-none">
       {search && (
         // the search takes the focus when the menu opens (Popover's data-autofocus)
         <input data-autofocus role="combobox" aria-expanded="true" aria-controls={listId} aria-autocomplete="list" {...keys} value={query} placeholder={search} aria-label={search} onChange={e => { setQuery(e.target.value); nav.setActive(0) }} onInput={e => { setQuery((e.target as HTMLInputElement).value); nav.setActive(0) }} className="search" />
