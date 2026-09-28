@@ -108,6 +108,14 @@ for (const theme of ['light', 'dark']) {
     await page.evaluate(value => localStorage.setItem('ar5iv_theme', value), theme)
     await page.reload({ waitUntil: 'load' })
     await sleep(4000)
+    // arXiv's defect, not ours (the controller's ruling on Task 101's F1): below 1280 CSS px arXiv's .ltx_page_navbar is
+    // a fixed, empty, transparent box over the window's right 20rem that takes the pointer, arXiv's own links' too, until
+    // the reader has closed arXiv's table of contents once. Closed here as a reader would, by arXiv's own toggle, while
+    // the window is still 1280 px wide and the contents show; arXiv keeps the choice, so a later load finds it closed
+    if (await page.evaluate(() => document.documentElement.getAttribute('data-toc-display') !== 'none')) {
+      await page.locator('.header-button[aria-label="Toggle navigation"]').click()
+      await sleep(300)
+    }
     await zoomTo(zoom)
     await sleep(1500)
     const shot = async name => {
