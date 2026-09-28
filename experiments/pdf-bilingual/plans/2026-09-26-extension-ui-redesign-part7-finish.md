@@ -2211,6 +2211,72 @@ Write the maintainer's answer, in their words, into the ledger. An approval clos
 A change asked for is written into this plan as a task of its own (after this one, before Task 104), built, and shown
 again.
 
+### Task 103b: the maintainer's asks from the hand check (subagent)
+
+The maintainer checked the build of `059f3aa2` by hand on 2026-09-28 and chose (their answers are in the ledger): the
+presets' colours, F1 (the viewer's control under arXiv's empty navbar — recorded, decided later), O5, P0's autofocus,
+the deep link's ring, the pencil and `styles[0]`, and the new words **stay**; and asked for four changes, each with
+the option they picked. This task makes them; the build is then shown to them again (Task 103's Step 2).
+
+**Files:**
+- Modify: `src/entrypoints/options/ui/settings.css`, `src/entrypoints/options/App.tsx`,
+  `src/entrypoints/options/sections/Language.tsx` (1, 2)
+- Modify: `src/entrypoints/popup/view-model.ts`, `src/entrypoints/popup/PopupView.tsx`,
+  `src/entrypoints/popup/ui/menu.tsx`, `src/entrypoints/popup/popup.css` (3)
+- Create: `src/ui/prompt-name.ts`; Modify: `src/entrypoints/options/sections/Prompts.tsx`,
+  `src/entrypoints/popup/view-model.ts`, `src/locales/zh-CN.ts`, `src/locales/en.ts`, `tests/e2e/extension.mjs` (4)
+- Tests beside each; `tests/e2e/probes/settings-align.mjs` (1, 2), `scripts/english-allowlist.txt` as the gate says
+
+- [ ] **Step 1: The frame centred on a wide window (整体居中)**
+
+The sidebar and the column are one group, centred in the window: `.o-frame` keeps its two columns (232 px and the
+column, whose content stays at most 680 px with the main's 48 px on either side) and gets a `max-width` equal to that
+sum and `margin-inline: auto`; the page's ground (`body`) still fills the window. The sidebar stays sticky and full
+height inside the group, its foot (the interface language) at its bottom. Below 640 px nothing changes but Step 2's.
+The probe learns it: at 1300 px, the frame's left and right margins equal within 1 px; at 1000 px (narrower than the
+group) the frame starts at 0 with no sideways scroll. Every existing probe line stays clean.
+
+- [ ] **Step 2: On a narrow window, the interface language at the title row's end; the gap under it gone**
+
+Below 640 px the sidebar folds above the column (§9). Today the language row then sits alone under the section tabs,
+and a gap opens under it: the frame's `min-height: 100vh` stretches its two stacked rows — fix that (the rows sized to
+their content, e.g. `align-content: start`), a defect whatever the language's place. The maintainer's choice: the
+language control moves to the end of the brand row (「A文 设置 … 🌐 简体中文 ▾」), compact (the globe, the value, the
+chevron; no full-width row), the same control and menu — one element in the DOM, placed by the sheet (a grid on
+`.o-side` below 640 px, areas `brand lang` / `search search` / `nav nav`), never a second copy. On a wide window it
+stays at the sidebar's foot. Its menu opens downward from the title row (upward at the foot, as now), inside the
+window at 320 px. The probe learns it: below 640 px the language's box sits on the brand row's line (centre within
+0.5 px) and ends on the frame's trailing edge (16 px), and the search starts right under the brand row (no gap
+beyond the sheet's own). The e2e helper that picks the interface language (`chooseUiLanguage` in
+`tests/e2e/options-page.mjs`) still finds it at both widths.
+
+- [ ] **Step 3: The popup on the PDF reader keeps 译文样式, disabled (置灰)**
+
+Where the reader has no translation styles (the view model gives `view.style` or `view.menus.style` nothing, so
+`PopupView.tsx:138` draws no button), draw the style button anyway, disabled as the popup's other unavailable
+controls are (上下 in the display control): greyed, `aria-disabled="true"`, not opening its menu, no tooltip giving a
+reason (the maintainer's rule: technical reasons are only greyed, never explained), in the same place and size, so the
+foot row is identical on every page. Tests: on the reader, the button is there, disabled, and a press opens nothing;
+on an HTML page it is as before. The popup's probes (`popup-align.mjs`, the gallery's states) stay clean; add the
+reader's state to the gallery if it lacks one.
+
+- [ ] **Step 4: The built-in prompts' names in the interface's language (默认 / 精准改写)**
+
+The built-in prompts' names come from `src/providers/prompt-library.ts` (`Default`, `Precision rewrite`), which may
+import no pack (the boundary). Add `O.prompts.builtInNames` — zh-CN `{ default: '默认', 'precision-rewrite': '精准改写' }`,
+en `{ default: 'Default', 'precision-rewrite': 'Precision rewrite' }` — and one helper, `promptName(p)` in
+`src/ui/prompt-name.ts`: a built-in's name from the pack, one's own prompt's as stored. Use it everywhere a prompt's
+name is drawn: the settings page's prompts row and radio list (`Prompts.tsx`), a copy's default name
+(`O.prompts.copyOf(promptName(p))`), and the popup's service menu and its name lookup (`view-model.ts:235`, `:475`).
+`tests/e2e/extension.mjs`'s check that finds the Default radio by its name now finds `默认` (it runs in Chinese).
+
+- [ ] **Step 5: The gate, the suites, the commit**
+
+`pnpm typecheck && pnpm lint && pnpm test && pnpm build`; `node tests/e2e/probes/settings-align.mjs`,
+`node tests/e2e/probes/popup-align.mjs`, `node tests/e2e/probes/pages-a11y.mjs`, `pnpm e2e`, `pnpm e2e:popup` — each
+exits 0. One commit per step, `feat(options): …` / `feat(popup): …` / `fix(options): …` as each is, last line exactly
+`Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
+
 ### Task 104: `docs/UI.md` (subagent)
 
 The design's §13: §2, §3.1–3.3 (§10's copy, ids kept where the element persists), §4 (P0's search, P9 / P13's buttons,
