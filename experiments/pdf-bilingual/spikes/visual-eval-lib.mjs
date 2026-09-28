@@ -10,7 +10,9 @@ export const PAPERS = { zh: ['2212.06817', ...GATE], ja: EIGHT, ko: EIGHT, de: E
 /** the page's columns, in the order of their number keys; `before` is Today as it was until 2026-09-28 (the whole
  *  document's CJK \\linespread, no English hyphenation), kept beside the fixed one for the owner, shown when its PDF
  *  is there */
-export const COLUMNS = [{ key: 'original', label: 'Original' }, { key: 'today', label: 'Today' }, { key: 'locked', label: 'Locked' }, { key: 'h', label: 'H' }, { key: 'before', label: 'Today before 09-28' }]
+export const COLUMNS = [{ key: 'original', label: 'Original' }, { key: 'today', label: 'Today' }, { key: 'locked', label: 'Locked' }, { key: 'shrink', label: 'Locked, smaller type' }, { key: 'h', label: 'H' }, { key: 'before', label: 'Today before 09-28' }]
+/** the smallest a unit is set at in the "Locked, smaller type" column, × its size (the owner took 0.9, 2026-09-28) */
+export const SHRINK_MIN = 0.9
 /** a sync point's inserted space worth a look: about two lines */
 export const GAP_PT = 24
 
@@ -36,7 +38,7 @@ export function catalogEntry(index) {
   return {
     paper: index.paper, cls: index.cls,
     pages: Object.fromEntries(index.columns.map(c => [c.key, c.pages ?? null])),
-    today: index.numbers?.today ?? null, locked: index.numbers?.locked ?? null,
+    today: index.numbers?.today ?? null, locked: index.numbers?.locked ?? null, shrink: index.numbers?.shrink ?? null,
     failed: index.failed ?? {}, flags: index.flags ?? [], untranslated: index.translation?.untranslated ?? 0,
   }
 }

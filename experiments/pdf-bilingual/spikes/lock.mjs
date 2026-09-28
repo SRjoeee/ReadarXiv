@@ -7,6 +7,7 @@
 import { readFileSync } from 'node:fs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { FORBIDDEN_TO_WARNING, latin1, latin1Bytes, MARK_DEF, markUnits, patch, stripPdftexOption, unitLeadTex as engineUnitLeadTex, XETEX_SHIM, XETEX_SHIM_R1 } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { typesetBy } from '../../../src/pdf-reader/engine/scripts.mjs'
 
 /**
  * Sync points. \axtat logs page (shipouts so far), column and \pagetotal in outer vertical mode; \axtsync, given the
@@ -57,6 +58,30 @@ export const LINES_TEX = String.raw`\makeatletter
  *  the engine's unit leading (latex-front.mjs) on the font size rather than on the paper's spacing */
 export const unitLeadTex = em => engineUnitLeadTex(`${em}\\dimexpr\\f@size pt\\relax`)
 
+/**
+ * A unit set smaller: \\axtsize@<unit>, when defined, scales the font size (and so the unit's leading, which is × the
+ * size) at the unit's start, the size before it back once the unit's own paragraph is over, found as \\axtlead finds
+ * it (never an \\aftergroup inside a box; nothing from restricted horizontal mode). What service H does to a block too
+ * long for its box, with a floor (shrinkSizes)
+ */
+export const SIZE_TEX = String.raw`\makeatletter
+\def\axt@sizeat#1#2#3{\ifnum\currentgrouplevel=#1 \fontsize{#2}{#3}\selectfont\else\ifnum\currentgrouplevel>#1 \AddToHookNext{para/after}{\axt@sizeat{#1}{#2}{#3}}\fi\fi}
+\def\axt@size#1{\ifcsname axtsize@#1\endcsname\ifdefined\AddToHookNext\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@sizeat{\the\currentgrouplevel}{\f@size}{\f@baselineskip}}}\axt@tmp\fontsize{\fpeval{\csname axtsize@#1\endcsname*\f@size}}{\fpeval{\csname axtsize@#1\endcsname*\strip@pt\dimexpr\f@baselineskip\relax}pt}\selectfont\fi\fi}
+\protected\def\axtsize#1{\ifhmode\ifinner\else\axt@size{#1}\fi\else\axt@size{#1}\fi}
+\makeatother
+`
+
+/** the size factor each unit still taller than its original is set at next: the one it has times the square root of
+ *  how much taller it is (a text set smaller takes fewer lines, each closer), down to `min`; the others keep theirs */
+export function shrinkSizes(orig, tr, sizes, { min }) {
+  const next = new Map(sizes)
+  for (const [i, o] of orig) {
+    const hh = pairOf(o, tr.get(i))
+    if (hh && hh[1] > hh[0] + 1 && hh[1] > 0) next.set(i, Math.max(min, (sizes.get(i) ?? 1) * Math.sqrt(hh[0] / hh[1])))
+  }
+  return next
+}
+
 /** the theorem-like environments whose heads are run-in: the usual names and every \newtheorem of the paper */
 export const theoremEnvs = files => [...new Set(['theorem', 'lemma', 'corollary', 'proposition', 'definition', 'remark', 'example', 'proof', 'claim', 'conjecture', 'assumption', ...[...files].filter(([p]) => /\.(tex|sty|cls)$/i.test(p)).flatMap(([, b]) => [...latin1(b).matchAll(/\\newtheorem\*?\s*\{([^}]+)\}/g)].map(m => m[1].trim()))])]
 
@@ -71,11 +96,11 @@ export function originalProbeFiles({ project, units }, theorems) {
 
 /** the translation, locked: units at `em` × the font size rather than the strategy's factor on the paper's spacing,
  *  every unit synced */
-export function lockedFiles({ fsys, meta, project, units }, translated, { strategy, fonts, em, leads = new Map(), targets = new Map(), theorems }) {
+export function lockedFiles({ fsys, meta, project, units }, translated, { strategy, fonts, em, leads = new Map(), sizes = new Map(), targets = new Map(), theorems }) {
   const index = new Map(units.map((u, i) => [u, i]))
   const base = markUnits(units)
-  const mark = u => { const m = base(u); if (!m) return m; const i = index.get(u); return { start: `\\axtsync{${i}}\\axtlines{${i}}\\axtlead{${i}}${m.start}`, end: m.end } }
-  const files = patch(project, translated, { mark })
+  const mark = u => { const m = base(u); if (!m) return m; const i = index.get(u); return { start: `\\axtsync{${i}}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}${m.start}`, end: m.end } }
+  const files = patch(project, typesetBy(translated, strategy), { mark })
   let main = latin1(files.get(project.main))
   const at = main.search(/\\begin\s*\{document\}/)
   const pre = strategy.pre(fonts)
@@ -84,8 +109,9 @@ export function lockedFiles({ fsys, meta, project, units }, translated, { strate
   const table = [
     ...[...targets].map(([i, t]) => `\\expandafter\\def\\csname axt@t@${i}\\endcsname{{${t.page}}{${t.col}}{${t.total}pt}}`),
     ...[...leads].map(([i, f]) => `\\expandafter\\def\\csname axtlead@${i}\\endcsname{${f.toFixed(4)}}`),
+    ...[...sizes].map(([i, f]) => `\\expandafter\\def\\csname axtsize@${i}\\endcsname{${f.toFixed(4)}}`),
   ].join('\n')
-  main = MARK_DEF + LINES_TEX + SYNC_TEX + unitLeadTex(em) + `\\axtsyncpoints{${theorems.join(',')}}\n` + table + '\n' + main
+  main = MARK_DEF + LINES_TEX + SYNC_TEX + unitLeadTex(em) + (sizes.size ? SIZE_TEX : '') + `\\axtsyncpoints{${theorems.join(',')}}\n` + table + '\n' + main
   files.set(project.main, latin1Bytes(main))
   if (strategy.xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(files.get(f) ?? fsys.read(f)), s = stripPdftexOption(t); if (s !== t) files.set(f, latin1Bytes(s)) }
   return files

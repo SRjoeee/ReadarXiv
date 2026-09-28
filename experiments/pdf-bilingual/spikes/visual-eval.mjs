@@ -10,15 +10,19 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameS
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
-import { lostIn, openPaper, probeFiles, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
+import { keptFor, lostIn, openPaper, probeFiles, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
 import { latin1, readFontProbe } from '../../../src/pdf-reader/engine/latex-front.mjs'
 import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
 import { translateTexts, translateUnits } from '../../../src/pdf-reader/engine/mt.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
-import { compare, heights, lockedFiles, marksOf, originalProbeFiles, readLines, readLockEvents, readTargets, theoremEnvs, tightenedLeads } from './lock.mjs'
-import { catalogEntry, COLUMNS, overfullCount, PARAMS, suspiciousPages } from './visual-eval-lib.mjs'
+import { compare, heights, lockedFiles, marksOf, originalProbeFiles, readLines, readLockEvents, readTargets, shrinkSizes, theoremEnvs, tightenedLeads } from './lock.mjs'
+import { catalogEntry, COLUMNS, overfullCount, PARAMS, SHRINK_MIN, suspiciousPages } from './visual-eval-lib.mjs'
 
 const run = promisify(execFile)
+/** a unit as its translation is cached: its kind and its source, pieces by kind and text, pair ids aside */
+export const unitKey = u => `${u.kind}\u0000${JSON.stringify(u.pieces.map(p => [p.t, p.s ?? p.src ?? `${p.pre}\u0001${p.post}`]))}`
+/** cached pieces with each nested note bound to the unit's own (the cache holds a copy of it) */
+const rebind = (u, pieces) => { const own = u.pieces.filter(p => p.t === 'nested'); return pieces.map(p => (p.t === 'nested' ? own.find(q => q.pre === p.pre && q.post === p.post) ?? p : p)) }
 const root = new URL('..', import.meta.url).pathname
 const OUT = join(root, 'data/runs/visual-eval')
 const argv = process.argv.slice(2)
@@ -73,20 +77,26 @@ async function generate(lang, id) {
   const cls = latin1(files.get(project.main)).match(/\\documentclass\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/)?.[1] ?? '?'
   const base = { lang, paper: id, cls, numbers: {}, failed: {}, flags: [], lostExtra: [], overfull: 0, suspicious: [] }
 
-  // 1. the translation, once: both columns read it
+  // 1. the translation, once: both columns read it. Cached by each unit's kind and source (unitKey), so a front end
+  // that cuts the paper differently asks only for the units it has not seen; a nested note is bound again to the unit
+  // it belongs to now, the cache holding a copy of it
   const cache = join(dir, 'translation.json')
   const translated = new Map()
-  if (existsSync(cache)) {
-    const c = JSON.parse(readFileSync(cache, 'utf8'))
-    for (const { id: i, pieces } of c.pieces) translated.set(units[i], pieces)
-    base.translation = c.summary
-  } else {
-    const todo = units.filter(u => !paper.kept.has(u))
-    const { results } = await translateUnits(todo, texts => translateTexts(texts, lang).then(r => r.map(text => (text == null ? null : { text, by: null }))), 'markers')
-    for (const [u, r] of results) if (r.pieces) translated.set(u, r.pieces)
-    base.translation = { units: todo.length, untranslated: todo.length - translated.size }
-    writeFileSync(cache, JSON.stringify({ summary: base.translation, pieces: [...translated].map(([u, pieces]) => ({ id: units.indexOf(u), pieces })) }))
+  const entries = existsSync(cache) ? (JSON.parse(readFileSync(cache, 'utf8')).entries ?? []) : []
+  const byKey = new Map(entries.map(e => [e.key, e.pieces]))
+  const kept = keptFor(paper, lang), todo = []
+  for (const u of units) {
+    if (kept.has(u)) continue
+    const hit = byKey.get(unitKey(u))
+    if (hit) translated.set(u, rebind(u, hit)); else todo.push(u)
   }
+  if (todo.length) {
+    const { results } = await translateUnits(todo, texts => translateTexts(texts, lang).then(r => r.map(text => (text == null ? null : { text, by: null }))), 'markers')
+    for (const [u, r] of results) if (r.pieces) { translated.set(u, r.pieces); byKey.set(unitKey(u), r.pieces) }
+  }
+  const asked = units.filter(u => !kept.has(u)).length
+  base.translation = { units: asked, untranslated: asked - translated.size, askedNow: todo.length }
+  if (todo.length) writeFileSync(cache, JSON.stringify({ entries: [...byKey].map(([key, pieces]) => ({ key, pieces })) }))
   note('translated', JSON.stringify(base.translation))
 
   // 2. fonts, the original with probes (the lock's target), today, locked twice
@@ -114,8 +124,24 @@ async function generate(lang, id) {
   if (locked.ok) copyFileSync(locked.pdf, join(dir, 'locked.pdf')); else base.failed.locked = firstError(locked.log)
   note('locked', locked.ok, 'tightened', leads.size)
 
+  // 2b. Locked with smaller type (the owner, 2026-09-28): the units still taller than their original set smaller, down
+  // to SHRINK_MIN, as service H does to a block too long for its box; twice, since a smaller unit may still not fit
+  let shrunk = null, sizes = new Map()
+  if (locked.ok) for (let pass = 1; pass <= 2; pass++) {
+    const cur = shrunk ?? locked
+    const next = shrinkSizes(orig, heights(units, await marksOf(cur.pdf), readLines(cur.log)), sizes, { min: SHRINK_MIN })
+    if ([...next].every(([i, f]) => sizes.get(i) === f)) break
+    const r = await compile(work, `shrink-${pass}`, paper, files, lockedFiles(paper, translated, { ...opts, leads, sizes: next }), { engine: strategy.engine, rerun: true })
+    if (!r.ok) { base.failed.shrink = firstError(r.log); break }
+    shrunk = r; sizes = next
+  }
+  if (shrunk) copyFileSync(shrunk.pdf, join(dir, 'shrink.pdf'))
+  else if (locked.ok && !base.failed.shrink) copyFileSync(locked.pdf, join(dir, 'shrink.pdf'))
+  note('shrink', !!shrunk, 'smaller', sizes.size)
+
   // 3. numbers and checks
   if (today.ok) base.numbers.today = { ...compare(units, orig, await marksOf(today.pdf)), offPage: undefined }
+  if (existsSync(join(dir, 'shrink.pdf')) && !base.failed.shrink) base.numbers.shrink = { ...compare(units, orig, await marksOf(join(dir, 'shrink.pdf'))), offPage: undefined, smaller: sizes.size }
   if (locked.ok) {
     const lm = await marksOf(locked.pdf), lc = compare(units, orig, lm)
     base.numbers.locked = { ...lc, offPage: undefined }
