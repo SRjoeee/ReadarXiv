@@ -104,7 +104,7 @@ Redrawn 2026-09-27 (the redesign's §5, §10.1).
 | S-P-47 | Prompt row | 提示词 / {名称} | Only while the LLM is chosen; opens the prompt menu, which ends with S-P-49. A built-in prompt is named by the pack in the interface's language (默认 · 精准改写, S-O-61c), one's own as stored |
 | S-P-48 | Service menu · last row | 管理翻译服务… | Not a service: opens the settings page at `options.html#translate/services` (S-O-06), in a tab of its own (`openOptionsPage` passes no hash); in the floating button's panel the popup closes after it. The reader's service menu ends with it too |
 | S-P-49 | Prompt menu · last row | 管理提示词… | As S-P-48, at `options.html#translate/prompts`: every menu whose list the reader can change ends with its 「管理…」 row, the language menu has none (the redesign's §5.3) |
-| S-P-50 | Primary button · not translated | 翻译本页 | The brand's fill with `on-brand` words; its shortcut label on `brand-chip` (the redesign's §5.1), on a neutral face in `ink` (Task 101). The label is the key Chrome reports for `axt-toggle` (suggested Alt+T). **On every enabled face of the button** (2026-09-11): the key translates an untranslated page and restores a translated one, so 显示原文 carries it too; a paused session's, a page behind its settings' and the retranslate cue's 重新翻译 is what the key does there (P9, P13, P6b). Chrome reports nothing when another extension — or another copy of this one — already holds the combination, and then no label is drawn |
+| S-P-50 | Primary button · not translated | 翻译本页 | The brand's fill (§5's red) with `on-brand` words, 15 px / 600 on a button 44 px tall, radius 10 (round 7's F; the maintainer, 2026-09-28); its shortcut label, 12 px, on `brand-chip` (the redesign's §5.1), on a neutral face in `ink` (Task 101). The label is the key Chrome reports for `axt-toggle` (suggested Alt+T). **On every enabled face of the button** (2026-09-11): the key translates an untranslated page and restores a translated one, so 显示原文 carries it too; a paused session's, a page behind its settings' and the retranslate cue's 重新翻译 is what the key does there (P9, P13, P6b). Chrome reports nothing when another extension — or another copy of this one — already holds the combination, and then no label is drawn |
 | S-P-50b | The two entries · abstract or PDF page (P17) | HTML 翻译 · PDF 翻译 | **In the primary button's place, side by side** (the PDF reader's design, §2): the HTML version or the bilingual PDF, the reader's to choose (the maintainer: 「在PDF入口和HTML入口中自选——我们不替用户做决定」), in as few words as stay clear (the maintainer, 2026-09-25). Brand buttons with icons, equal widths — HTML 翻译 with Lucide `globe`, PDF 翻译 with `file-text` — the one that cannot be used greyed (the redesign's §5.5); also P0's entries for a paper it names (P0d–P0f). HTML 翻译 is disabled with S-P-33a or S-P-33b when arXiv has no HTML version; PDF 翻译 is disabled **without words** when the paper cannot be had as a bilingual PDF (a PDF-only submission, or a browser the reader cannot run on). Both are disabled when no service can run and none takes over (S-P-32). Each opens where S-O-49b says (P0's in a new tab, S-P-03); the PDF entry opens the paper's PDF with `#readarxiv`, the reader translating. Replaces 双语版本 |
 | S-P-51 | Primary button · translating | 显示原文 | The only sign that the page is on: no pill. A neutral button (`fill`), carrying the same shortcut label as S-P-50, in `ink` |
 | S-P-52 | Primary button · paused, a page behind its settings, the retranslate cue | 重新翻译 | P9, P13 and P6b: 重新翻译 (brand) and 显示原文 (S-P-53, neutral) side by side, equal widths, the brand first (the redesign's §5.2); the shortcut label only on the brand one — in P6b too, where the key, the context menu and the floating button retranslate as the button does (`src/shared/page-action.ts`, `keyMadeGood`). Disabled while the saved service cannot run (P13): neutral grey, without a shortcut |
@@ -328,7 +328,9 @@ Rules:
   or the panel's frame holds it, cleared as it closes; the style menu opens upward (the redesign's §5.3). The row
   toggles it, a press outside or Escape closes it.
 - Layout (the redesign's §5.1): the brand row, the group (翻译服务, 目标语言, 提示词), a note, the primary, the display,
-  the foot (对照高亮, 图片翻译, 译文样式).
+  the foot (对照高亮, 图片翻译, 译文样式). 320 px wide; the brand row 48 px, the mark 24 px and the name 15 px / 600; the
+  large buttons (the primary, its pair, a paper's two entries) 44 px, radius 10, their words 15 px / 600 and a shortcut's
+  label 12 px — round 7's F (the maintainer, 2026-09-28).
 - Dev-only information (background version, block stats, raw `fatal` text) lives only in the
   dev-build gallery.
 
@@ -359,7 +361,7 @@ pair a surface draws to its floor.
 | `field` / `field-edge` | n-1 / n-5 | n-2 / n-5 | a text field's ground and its 0.5 px edge |
 | `focus` | ink | ink | the keyboard's ring, 2 px |
 | `danger` | oklch(0.545 0.17 28) | oklch(0.69 0.15 28) | an alert's icon, a destructive action's words |
-| `brand` | oklch(0.474 0.18 20.5) | oklch(0.56 0.19 20.5) | the fill of the one primary action; the logo's red, #AA142D |
+| `brand` | oklch(0.493 0.186 24.5) | oklch(0.559 0.188 24.5) | the fill of the one primary action, and a switch that is on in the popup and on the settings page; arXiv's red to the eye, another value — #B31925, ΔE OK 0.0097 from #B31B1B; #CB3438 in dark (the maintainer, 2026-09-28, round 8). The logo keeps its own red, #AA142D |
 | `on-brand` | white | white | words and icons on `brand` |
 | `brand-chip` | white 18 % | white 8 % | a shortcut label on `brand` (⌥T, ↵) |
 | `success` | oklch(0.62 0.14 150) | oklch(0.72 0.14 150) | the connected icon, the floating button's tick |
@@ -368,14 +370,15 @@ pair a surface draws to its floor.
 | `float-bg` | n-0 at 90 % | n-0 at 90 % | a floating pill or capsule |
 | shadows | `page-shadow`, `float-shadow`, `pop-shadow`, `card-shadow` | their dark values | as the reader's, plus the settings card's |
 | `group-hover` | n-3 | n-3 | a hovered or open row of the popup's group; P0's search row |
-| `on-brand-2` | white 85 % | white | P0's paper id on the brand (5.65:1 light; 85 % read 4.10:1 in dark) |
+| `on-brand-2` | white 85 % | white | P0's paper id on the brand (5.25:1 light; 85 % read 4.11:1 in dark) |
 | `tip-shadow` | 0 4px 12px black 20 % | the same | the tooltip's shadow, the same in both themes |
 | `raised-shadow` | a hairline of n-4 and a 1 px shadow | none | a raised button's or row's hairline: a note's button, the settings sidebar's current section |
 
-- **Brand and danger read as one hue** (20.5° and 28°), so danger is never a fill: a destructive confirmation is a
+- **Brand and danger read as one hue** (24.5° and 28°), so danger is never a fill: a destructive confirmation is a
   neutral button with danger words and a trash icon (S-O-72), and brand is never used for an alert.
-- **The brand fills one action per view.** Switches, chosen states, radios and the focus ring stay ink, as in the
-  reader.
+- **The brand fills one action per view**, and a switch that is on in the popup and on the settings page: the brand's
+  track, its thumb white (the maintainer, 2026-09-28; each page's own sheet). The PDF reader's switches keep their ink,
+  the reader's own. Chosen states, radios and the focus ring stay ink, as in the reader.
 - **Words to be read are `ink` or `ink-2`, never `ink-3`** (chevrons, the disabled), which reads under 4.5:1: placeholders are `ink-2`;
   a shortcut label on a neutral button or row is `ink`, the struck-out service beside the one in use `ink-2`, a search
   hit's words `ink` on `mark` (Task 101).
