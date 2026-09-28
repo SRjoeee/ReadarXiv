@@ -23,6 +23,10 @@ describe('the settings page\'s sheet', () => {
     expect(SHEET).toContain('.o-aside { color: var(--ink-2);')
   })
 
+  it('draws a search hit in ink on the mark, in a description too: its inherited ink-2 fell under 4.5:1 (Task 101)', () => {
+    expect(SHEET).toContain('.o-hit { padding: 0 1px; border-radius: 2px; background: var(--mark); color: var(--ink); }')
+  })
+
   it('gives every motion its reduced form', () => {
     const motions = [...SHEET.matchAll(/animation: (o-[a-z-]+)/g)].map(m => m[1])
     expect(motions.length).toBeGreaterThan(0)

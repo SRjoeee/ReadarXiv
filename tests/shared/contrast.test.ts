@@ -30,7 +30,7 @@ const PAIRS: { what: string; fg: string; bg: string[]; floor: number; modes?: Mo
   { what: 'a destructive confirm\'s words', fg: 'danger', bg: ['button-danger'], floor: 4.5 },
   { what: 'an alert\'s icon in a note', fg: 'danger', bg: ['group'], floor: 3 },
   { what: 'the connected icon', fg: 'success', bg: ['chrome'], floor: 3 },
-  { what: 'a search hit\'s words', fg: 'ink', bg: ['mark', 'chrome'], floor: 4.5 },
+  { what: 'a search hit\'s words, in a label or a description', fg: 'ink', bg: ['mark', 'chrome'], floor: 4.5 },
   { what: 'the neutral primary\'s words', fg: 'ink', bg: ['fill'], floor: 4.5 },
   { what: 'a chosen swatch\'s edge', fg: 'line-strong', bg: ['chrome'], floor: 3 },
 ]
