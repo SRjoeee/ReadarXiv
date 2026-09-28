@@ -50,6 +50,12 @@ describe('strategies: CJK leading as a factor for translated units, English hyph
     expect(cjkutf8?.pre(null)).toContain('\\AtEndDocument{\\clearpage\\end{CJK}}')
   })
 
+  it('every strategy that loads fontspec leaves the paper\'s math as it is (2608.24503, amsart\'s abstract)', () => {
+    for (const lang of ['zh', 'ja', 'ko']) expect(first(META, lang).pre(null)).toMatch(/^\\PassOptionsToPackage\{no-math\}\{fontspec\}\n\\usepackage\{xeCJK\}/)
+    const [, xe] = strategiesFor(META, 'ru')
+    expect(xe?.pre(null)).toMatch(/^\\PassOptionsToPackage\{no-math\}\{fontspec\}\n\\usepackage\{fontspec\}/)
+  })
+
   it('Japanese and Korean at the paper\'s own spacing carry no factor', () => {
     expect(first(META, 'ja').leading).toBeUndefined()
     expect(first(META, 'ko').leading).toBeUndefined()

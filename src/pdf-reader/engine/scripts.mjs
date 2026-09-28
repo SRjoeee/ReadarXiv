@@ -148,6 +148,12 @@ const babel = (lang, hyphenrules) => `\\IfPackageLoadedTF{polyglossia}{}{\\IfPac
  *  every font declared later inherits them: a .ttf face (bsmi00lp, ipaexm, UnBatang) is then looked for as .otf and
  *  not found. The paper's own faces were declared before, with their features, and keep them */
 const OWN_FEATURES = '\\defaultfontfeatures{}\n'
+/** Before fontspec, or xeCJK that loads it: the paper's math left as the paper set it. fontspec by default gives math
+ *  a family of its own for the symbols its text fonts lack, declared as the document begins, and an AMS class sets the
+ *  abstract in a box before that: every parenthesis and equals sign of an abstract's math was "\textfont 6 is
+ *  undefined", and left out (2608.24503, amsart: 24 errors under xeCJK). The paper's math fonts are the original's,
+ *  their metrics the original's */
+const NO_MATH = '\\PassOptionsToPackage{no-math}{fontspec}\n'
 /** At \\begin{document}, under XeTeX: each face in an encoding it has. A class that loads fontspec itself (acmart:
  *  Libertine) and a paper that loads T1 after it left T1 the default encoding, which the OpenType faces do not have: the
  *  body fell back to Computer Modern, bold with it (2608.06007; four of the corpus's eight acmart papers load T1). And
@@ -172,7 +178,7 @@ export function strategiesFor(meta, lang) {
   const script = scriptOf(lang)
   const cjk = CJK[script]
   if (cjk) {
-    const xeCJK = `\\usepackage{xeCJK}\n${OWN_FEATURES}${cjk.spaced ? '\\xeCJKsetup{CJKspace=true}\n' : ''}\\setCJKmainfont${cjk.font}\n`
+    const xeCJK = `${NO_MATH}\\usepackage{xeCJK}\n${OWN_FEATURES}${cjk.spaced ? '\\xeCJKsetup{CJKspace=true}\n' : ''}\\setCJKmainfont${cjk.font}\n`
     const lead = cjk.leading === 1 ? {} : { leading: cjk.leading }
     const out = [{ name: 'XeLaTeX + xeCJK', engine: 'xelatex', xe: true, ...lead, pre: fonts => xeCJK + latinFontsFor(fonts) + TU_AGAIN + babel(lang, 'english') }]
     if (EIGHT_BIT.has(meta.compiler)) {
@@ -185,7 +191,7 @@ export function strategiesFor(meta, lang) {
   }
   if (script === 'Latn' || FACES[script]) {
     // a Unicode engine's faces: the alphabet's own, or the paper's Latin faces in their OpenType form
-    const faces = fonts => `\\usepackage{fontspec}\n${OWN_FEATURES}${FACES[script] ?? latinFontsFor(fonts)}`
+    const faces = fonts => `${NO_MATH}\\usepackage{fontspec}\n${OWN_FEATURES}${FACES[script] ?? latinFontsFor(fonts)}`
     if (!EIGHT_BIT.has(meta.compiler)) return [{ name: 'own engine', engine: meta.compiler, xe: true, pre: fonts => (FACES[script] ? faces(fonts) : '') + babel(lang) }]
     const encoding = ENCODING[script]
     return [
