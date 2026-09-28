@@ -2277,6 +2277,60 @@ name is drawn: the settings page's prompts row and radio list (`Prompts.tsx`), a
 exits 0. One commit per step, `feat(options): …` / `feat(popup): …` / `fix(options): …` as each is, last line exactly
 `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
 
+### Task 103c: the popup's G and the brand red the maintainer chose (subagent)
+
+After seeing the build of `e0260bf6`, the maintainer compared the popup with v0.4.1's and, over two design rounds in
+the archive (`~/Downloads/readarxiv-test/design/extension-ui/round-7/` and `round-8/`, their READMEs), decided
+(2026-09-28): the switches in the brand red, on the popup (so the floating button's panel, which frames it) and the
+settings page together — not the PDF reader; the brand row and the primary at round 7's variant **F**'s measures
+(「G版本比例没有问题」); and a new brand red — arXiv's red to the eye, another value: light `oklch(0.493 0.186 24.5)`
+(#B31925, ΔE OK 0.0097 from #B31B1B), dark `oklch(0.559 0.188 24.5)` (#CB3438); `--danger` unchanged; the logo keeps
+its own red (#AA142D).
+
+**Files:**
+- Modify: `src/shared/tokens.ts` (and the sheet it generates — `pnpm tokens` if that is how `src/styles/tokens.css` is
+  made), `tests/shared/contrast.test.ts`, `tests/shared/tokens.test.ts` as they need
+- Modify: `src/entrypoints/popup/popup.css` (and the popup's components only if a measure needs markup)
+- Modify: `src/entrypoints/options/ui/settings.css` (the settings page's switches)
+- Modify: `tests/e2e/probes/popup-align.mjs`, `tests/e2e/probes/controls.mjs` where they encode today's measures or the
+  switch's colour; `docs/UI.md` (§5's switches, the popup's measures)
+
+- [ ] **Step 1: The brand red**
+
+`brand` becomes `{ light: 'oklch(0.493 0.186 24.5)', dark: 'oklch(0.559 0.188 24.5)' }`. Every pair the contrast gate
+holds with the brand stays at or above its floor (round 8 measured: white words 6.81 / 5.14, the ⌥T label 5.06 /
+4.59, P0's 85 % white paper id 5.25 / 5.14); add the switch's pairs (Step 3). The reader draws no `--brand`
+(checked): `reader-pixels.mjs` stays 24 ok.
+
+- [ ] **Step 2: The brand row and the primary at F's measures**
+
+Port round 7's variant F from `round-7/tools/variants.css` (the rules for `B`, `C`, `F`, the numbers at its top) into
+`popup.css`, for every popup state (P0 … P17, the reader's popup too): the mark 24 px, the brand row 48 px, the name
+15 px / 600 (line height 22 px — round 7 found 0.5 px off at the default), the primary 44 px, its words 15 px / 600,
+radius 10, the ⌥T chip 12 px and visible where the primary carries a shortcut. The popup's width stays 320 px; its
+height grows by what round 7 measured (+12 px on P1). `popup-align.mjs`'s edges (12 / 24 px) and centre lines (0.5 px)
+hold in every state; update any number it encodes for the old measures, with the reason, never a tolerance.
+
+- [ ] **Step 3: The switches in the brand red, on the popup and the settings page**
+
+The on-track `var(--brand)`, the thumb white (round 7's A), on the popup and on the settings page — placed so that the
+PDF reader's switches (it imports `controls.css`) stay as they are: the rule in the pages' own sheets (`popup.css`,
+`settings.css`) or scoped to their roots, never a change to the shared rule the reader reads. The off state, the
+focus ring and the motion unchanged. Add to the contrast gate: the track against the popup's ground and against the
+settings card, light and dark (floor 3; round 8: 6.81 / 3.07), the thumb against the track (floor 3).
+
+- [ ] **Step 4: The document**
+
+`docs/UI.md`: where §5 says the switches stay ink, it now says the brand red on the popup and the settings page
+(the maintainer, 2026-09-28), the reader's own; the popup's measures where UI.md names them; S-P-50's colour words.
+
+- [ ] **Step 5: The gate and the probes**
+
+`pnpm typecheck && pnpm lint && pnpm test && pnpm build`; `node experiments/pdf-bilingual/spikes/reader-pixels.mjs`
+(24 ok); `node tests/e2e/probes/popup-align.mjs`, `settings-align.mjs`, `controls.mjs`, `pages-a11y.mjs`;
+`pnpm e2e:popup`, `pnpm e2e:floating`, `pnpm e2e` — each exits 0 (a network failure re-run once). One commit per step;
+last line exactly `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
+
 ### Task 104: `docs/UI.md` (subagent)
 
 The design's §13: §2, §3.1–3.3 (§10's copy, ids kept where the element persists), §4 (P0's search, P9 / P13's buttons,
