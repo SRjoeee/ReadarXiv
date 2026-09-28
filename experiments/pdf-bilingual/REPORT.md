@@ -531,7 +531,7 @@ What a translation needs besides its text follows from the script its language i
 2. **babel loaded after the cite package** takes cite's `\@citex` for the kernel's and breaks every citation ("Paragraph ended before \org@@citex was complete", on an IEEEtran paper). We load babel only when the paper does not, and then with `safe=none`: a language imported from its ini file makes no character active, which is all that rewriting guards against.
 3. **newtxtext sets fontspec's global defaults** under XeTeX (`Extension=.otf`, `Scale`, stylistic sets), and every font declared after it inherits them. A `.ttf` face was looked for as `.otf`: Japanese, Traditional Chinese and Korean lost 12 000–18 000 characters on an AAAI paper, Japanese already in the baseline. Now `\defaultfontfeatures{}` comes before our faces; fontspec's own per-family defaults (TeX ligatures) stay, and the dashes in page ranges are still dashes.
 4. **XeLaTeX for an alphabet fights the paper's font setup.** newtxtext sets its faces at the end of the preamble, after ours (Russian, 40 000 characters missing); acmart's T1 put Vietnamese into an 8-bit face (10 000); only the serif role had Cyrillic, so sans and mono headings lost theirs; and one paper lost its math fonts in every language. The alphabets' pdfLaTeX set all of these without an error or a missing letter.
-5. **siunitx with Chinese**: at `\begin{document}` siunitx looks for the locale's babel file, and one of its fallbacks checks for one name and loads another — it finds `babel-zh-Hans.ini` and loads `babel-Hans-.ini` (siunitx 3.6.2, `siunitx-localization.dtx`, still so upstream on 2026-09-28). One error in each of four papers, zh and zh-Hant. Harmless: siunitx keeps its English number format, and the PDFs with and without babel differ, character by character, only in the captions. It is for siunitx upstream (this entry said babel until the twenty-eighth addendum); nothing here works around it.
+5. **siunitx with Chinese**: at `\begin{document}` siunitx looks for the locale's babel file, and one of its fallbacks checks for one name and loads another — it finds `babel-zh-Hans.ini` and loads `babel-Hans-.ini` (siunitx 3.6.2, `siunitx-localization.dtx`, still so upstream on 2026-09-28). One error in each of four papers, zh and zh-Hant. Harmless: siunitx keeps its English number format, and the PDFs with and without babel differ, character by character, only in the captions. Reported upstream as siunitx#891 (this entry said babel until the twenty-eighth addendum); nothing here works around it.
 
 Open, and older than this work, all three on XeLaTeX, which a pdfLaTeX paper reaches only for CJK. A paper that loads CJKutf8 itself conflicts with xeCJK: nine errors in every CJK language, the baseline's too, plus one from microtype meeting a TS1 fallback face at `\maketitle`; its own pdfLaTeX would suit it better. One paper's math fonts fail under XeLaTeX (24 errors in every CJK language), as in the baseline. Hangul breaks between syllables, as xeCJK and browsers do; breaking between words (kotex) would be closer to Korean book typesetting.
 
@@ -1826,3 +1826,35 @@ compiles):
 For the languages that grow, the units that do not fit are the cause, which H answers by setting them smaller. For
 Chinese they are not: 382 of its 646 displaced starts are higher than the original's and 264 lower, by a median 24 pt,
 so the sync points themselves do not hold the page; that is the next thing to take apart.
+
+**The maintainer's answers, and what came of them** (the same day):
+
+- **The author block is translated** where the target's script writes foreign names its own way, the original beside it
+  for the names an engine renders wrong (`1f96c6d4`). The names and places between an author block's notes are units of
+  kind `author` (`\author`, `\affil`, `\affiliation`, `\institute`, `\address`, and inside them IEEEtran's blocks and
+  acmart's institution, city, country); marks, addresses and spacing stay, a block of keys and values (elsarticle)
+  keeps its text, and no mark goes in, the block being typeset again in running heads and the PDF's metadata. Which
+  languages is decided by the engine that sets them: the CJK scripts, set by XeLaTeX. A class runs its own macros over
+  the author block — uppercasing, key-value parsing, the metadata — and 8-bit text did not survive them (2608.12096's
+  CEUR class under CJKutf8, "Extra \else"), so Russian (pdfLaTeX, T2A) keeps them for now, and a CJK translation that
+  falls back to CJKutf8 sets them as the paper has them. The corpus of 123 compiled before and after with Chinese
+  pseudo-translations: 115 papers gain author units, and errors and missing letters are unchanged in all 123.
+- **Locked with smaller type**, a column of its own on the evaluation page (`03ad40ab`): the units still taller than
+  their original after the lock tightens their leading are set smaller, down to 0.9 of the size, twice.
+
+  | | Locked: on its page / within 10 pt | with smaller type | pages equal to the original's |
+  |---|---|---|---|
+  | de, 8 | 75 % / 16 % | **95 % / 67 %** | 4 → 8 |
+  | ru, 8 | 65 % / 11 % | **96 % / 59 %** | 3 → 8 |
+  | ja, 8 | 82 % / 29 % | **94 % / 61 %** | 5 → 7 |
+  | zh, 25 | 95 % / 66 % | 94 % / 65 % | 24 → 23 |
+  | ko, 8 | 98 % / 75 % | 92 % / 71 % | 8 → 8 |
+
+  It answers the languages that grow, as the table of the causes above predicted, and does nothing for Chinese and
+  Korean, whose units rarely fail to fit (40 and 33 set smaller). Two papers lost with it: 2608.09038 in Chinese and
+  2608.15761 in Korean, where a few units set smaller moved displays and paragraphs between columns and the sync
+  points, which only add space, could not pull the rest back. So it belongs to the languages that grow.
+- **The extension's markers serializer** has the full stop spaced too: #305, merged into `next`.
+- **The evaluation's cache** is keyed by each unit's kind and source now, not by its index, which a front end that
+  cuts the paper differently shifts; a nested note, whose cached copy lost its translation on reload, is bound again
+  to its unit.
