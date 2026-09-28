@@ -180,7 +180,7 @@ function Services({ data }: { data: OptionsData }) {
         const g = entry.gone
         return (
           <UndoRow key={`gone-${g.service.id}`} item={g.service.id} name={g.service.name} focus={g.focus}
-            onUndo={() => { deletions.undo(g); focusRow(g.service.id) }}
+            onUndo={() => deletions.undo(g)}
             onExpire={hadFocus => {
               deletions.expire(g)
               // the undo row it stood in is gone: land the focus on the row still there, but only when it was this
@@ -294,7 +294,13 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id:
       : { ...latest, services: insertAt(latest.services, g.index, g.service), provider: g.chosen && latest.provider === 'microsoft' ? g.service.id : latest.provider }))
       .then(done => {
         undoing.current.delete(g)
-        if (done) return
+        // the focus goes to the service's radio once the write has landed and its row is drawn again, as the styles
+        // and the prompts lists do: a bare frame after the press finds no row while the write outlasts it, and the
+        // focus falls to the page (Part 7's final review)
+        if (done) {
+          requestAnimationFrame(() => focusRow(g.service.id))
+          return
+        }
         const back: Gone = { ...g, focus: focusLost() }
         pending.current.add(back)
         // the section went before this answer came, and its flush with it: no undo row, no flush to wait for

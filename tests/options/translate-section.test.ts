@@ -365,6 +365,33 @@ describe('the translation services (§6.3)', () => {
     await m.unmount()
   })
 
+  it('focus after undo waits for the write to land, not a bare animation frame: the write held past a frame, the frame is asked for only once it lands — as the styles and the prompts lists do (Part 7\'s final review, B-I3)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id } }))
+    // the keyboard's deletion: the undo row's button takes the focus
+    document.documentElement.removeAttribute('data-axt-pointer')
+    menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
+    await m.flush()
+    expect(undoHolds()).toBe(true)
+    // spied, not stubbed, as the styles' test does: this environment's frames under fake timers run before React's
+    // commit of the landed write, so what is asserted is when the frame is asked for — after the write, never at the press
+    const raf = vi.spyOn(globalThis, 'requestAnimationFrame')
+    const write = deferred<void>()
+    wire.gate = write.promise
+    const before = raf.mock.calls.length
+    ;[...card(m.container).querySelector<HTMLElement>('[data-undo]')!.querySelectorAll('button')].find(b => b.textContent === O.undo.undo)!.click()
+    await m.flush()
+    // a frame and more pass while the write is out (the real page: a storage read, a validated write, a digest)
+    await vi.advanceTimersByTimeAsync(50)
+    await m.flush()
+    expect(raf.mock.calls.length).toBe(before)
+    write.resolve()
+    await m.flush()
+    expect(stored().services.map(s => s.id)).toEqual([MINE.id, OTHER.id])
+    expect(raf.mock.calls.length).toBeGreaterThan(before)
+    raf.mockRestore()
+    await m.unmount()
+  })
+
   it('once the undo is past, the deletion\'s clean-up runs in today\'s order: every session moved off, then the origin given back', async () => {
     const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id } }))
     menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
