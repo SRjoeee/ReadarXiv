@@ -52,7 +52,7 @@ describe('the popup drawn (the redesign\'s design, §5)', () => {
     expect(main.querySelector(`button[aria-label="${S.primary.restore}"] kbd`)?.textContent).toBe('⌥T')
   })
 
-  it('P9: the note with its alert and its settings, then Translate again with its key before Show original without one (§5.2)', async () => {
+  it('P9: the note with its alert and its settings, then Retranslate with its key before Show original without one (§5.2)', async () => {
     const { main, actions } = await draw('P9')
     const note = main.querySelector('.note')!
     expect(note.getAttribute('data-tone')).toBe('alert')
@@ -64,13 +64,13 @@ describe('the popup drawn (the redesign\'s design, §5)', () => {
     expect(actions.restore).toHaveBeenCalled()
   })
 
-  it('P13: Translate again greyed and without its key, Show original beside it', async () => {
+  it('P13: Retranslate greyed and without its key, Show original beside it', async () => {
     const pair = [...(await draw('P13')).main.querySelectorAll('.pair > button')]
     expect(pair.map(nameOf)).toEqual([S.primary.retranslate, S.primary.restore])
     expect([pair[0]!.getAttribute('aria-disabled'), pair[0]!.querySelector('kbd')]).toEqual(['true', null])
   })
 
-  it('P6b: the key made good, the page on the free service offered its way back — Translate again with the key, and Show original (the retranslate cue)', async () => {
+  it('P6b: the key made good, the page on the free service offered its way back — Retranslate with the key, and Show original (the retranslate cue)', async () => {
     const { main, actions } = await draw('P6b')
     expect(main.querySelector('.note')).toBeNull()
     const pair = [...main.querySelectorAll<HTMLElement>('.pair > button')]

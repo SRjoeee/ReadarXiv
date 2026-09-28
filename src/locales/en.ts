@@ -82,7 +82,9 @@ const S: Locale['S'] = {
     // translate the page in front of the reader (UI.md S-P-50b). The same words as the entry on the page itself
     translate: 'Translate this page',
     restore: 'Show original',
-    retranslate: 'Translate again',
+    // S-P-52: one word, to hold its half of the pair (144 px) with its shortcut label at the large buttons' 15 px / 600 —
+    // 'Translate again ⌥T' ran 2.4 px past both edges (Part 7's final review; tests/e2e/probes/popup-align.mjs checks it)
+    retranslate: 'Retranslate',
   },
   failed: {
     text: n => (n === 1 ? '1 passage failed' : `${n} passages failed`),

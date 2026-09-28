@@ -87,6 +87,29 @@ const rest = () => page.evaluate(() => {
   return off
 })
 
+/**
+ * Every button's content inside the button (Part 7's final review): its words, its icon and its shortcut label, as one
+ * box — the range over its contents, which counts a text cut short by its box as the text's own width — against the
+ * button's, within 0.5 px. The popup's large buttons have no padding and never wrap: a longer word, a wider measure or a
+ * wider shortcut label (Alt+T) runs over the button's edge, into the pair's gap or off its fill
+ */
+const overflowing = () => page.evaluate(() => {
+  const off = []
+  for (const button of document.querySelectorAll('.popup .btn')) {
+    const b = button.getBoundingClientRect()
+    if (!b.width || button.closest('[inert]')) continue
+    const range = document.createRange()
+    range.selectNodeContents(button)
+    const c = range.getBoundingClientRect()
+    const over = Math.max(b.left - c.left, c.right - b.right)
+    if (over > 0.5) {
+      const where = `${button.closest('section')?.querySelector('h2 span')?.textContent ?? '?'} ${button.closest('[data-theme]')?.dataset.theme ?? ''}`
+      off.push(`${where}: "${button.textContent}" ${c.width.toFixed(1)} px of content in a ${b.width.toFixed(1)} px button, ${over.toFixed(1)} px over its edge`)
+    }
+  }
+  return off
+})
+
 /** The one open menu: its place against its row and its popup */
 const menuPlace = () => page.evaluate(() => {
   const pop = document.querySelector('.pop.menu:popover-open')
@@ -133,6 +156,7 @@ for (const lang of ['zh-CN', 'en']) {
   await page.keyboard.press('Escape')
   await sleep(300)
   await measureAll(`${lang}, every state at rest`)
+  report(`${lang}, every state: each button's content inside it`, await overflowing())
   for (const row of (await page.locator('.popup button.group-row').all()).slice(0, 4)) { await row.hover(); await sleep(150) }
   await measureAll(`${lang}, the rows hovered`)
   const frameOf = state => page.locator('section', { has: page.locator('h2 span', { hasText: new RegExp(`^${state}$`) }) }).locator('[data-theme="light"] .popup')

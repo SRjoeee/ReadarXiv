@@ -425,7 +425,7 @@ export function derivePopupView(input: PopupInput): PopupView {
   // The page runs on settings other than the saved ones. A change made here restarts the page at
   // once (data.ts), so this is what is left: a choice that cannot start, and a change made from
   // another tab, which leaves this page pinned to the session it began (Codex on #157). Either way
-  // the reader is offered “Translate again” — enabled when the saved settings can actually run. The rule is
+  // the reader is offered “Retranslate” — enabled when the saved settings can actually run. The rule is
   // the toggle's too (shared/page-action.ts): the page's revision against the saved settings' digest
   const decision = pageDecision(page, { revision: savedRevision, canRun, fallback: !!saved?.fallback }, madeGood) ?? { action: 'translate' as const, behind: false, enabled: canRun || !!saved?.fallback }
   const { action, behind } = decision
