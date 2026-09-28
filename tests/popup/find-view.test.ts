@@ -112,6 +112,22 @@ describe('P0: the field and what Enter does (the redesign\'s design, §5.4)', ()
     expect(actions.openLink).not.toHaveBeenCalled()
   })
 
+  // The final review (A-I1): with no service able to run and none to take over, both entries are greyed, and the reason
+  // is the service's, drawn as P17b draws it — an alert Note whose settings button opens the settings — never S-P-33a's line
+  it('a paper whose entries no service can serve: the service\'s reason as an alert Note with the settings button, and no S-P-33a line', async () => {
+    const { config, rejected, saved } = fixture('P8b').input
+    const { main, actions } = await drawInput({ ...fixture('P0f').input, config, rejected, saved })
+    const note = main.querySelector('.found .note')!
+    expect(note.getAttribute('data-tone')).toBe('alert')
+    expect(note.querySelector('p')!.textContent).toBe(S.note.cannotRun(S.note.llmRejected))
+    expect(main.querySelector('.found .line.mark')).toBeNull()
+    expect([...main.querySelectorAll<HTMLElement>('.twin > button')].map(b => b.getAttribute('aria-disabled'))).toEqual(['true', 'true'])
+    const settings = note.querySelector<HTMLButtonElement>('button')!
+    expect(settings.textContent).toBe(S.settings)
+    await act(async () => { settings.click() })
+    expect(actions.openOptions).toHaveBeenCalledOnce()
+  })
+
   // Fix round 1 (Task 36's review, Important): `.found` changes as the reader types — the help line, the brand row,
   // the search row, the paper line, the "only arXiv links" sentence — but none of that was ever said to a screen
   // reader. The design's §9: results are polite status messages, never assertive. The echo stays out of the entries'

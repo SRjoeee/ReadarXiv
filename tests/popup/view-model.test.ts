@@ -462,5 +462,20 @@ describe('P0 and the moments before it (the redesign\'s design, §5.4)', () => {
     // the settings not read yet is not a reason to grey what the checks already cleared
     expect(derivePopupView({ ...input('P0e'), config: null }).find?.found).toMatchObject({ entries: { html: { href: 'https://arxiv.org/html/2501.07202v1#readarxiv' } } })
   })
+
+  it('P0\'s greyed entries say why as P17b does: the service\'s reason, alert, with the settings button — before the HTML version\'s absence, which would imply a working PDF entry (the final review, A-I1)', () => {
+    // P8b's settings (a refused key, nothing to take over) put under P0e / P0f; P17 under them says the same
+    const { config, rejected, saved } = input('P8b')
+    const refused = (id: string) => ({ ...input(id), config, rejected, saved })
+    const reason = { text: S.note.cannotRun(S.note.llmRejected), tone: 'alert', settings: true }
+    expect(derivePopupView({ ...input('P17'), config, rejected, saved }).note).toEqual(reason)
+    expect(derivePopupView(refused('P0e')).find?.found).toMatchObject({ entries: { html: { href: null }, pdf: { href: null } }, note: reason })
+    // no HTML version, and a PDF entry greyed beside it: S-P-33a ("the PDF entry works") is not said
+    expect(derivePopupView(refused('P0f')).find?.found).toMatchObject({ entries: { html: { href: null }, pdf: { href: null } }, note: reason })
+    // nothing said before the checks are back: the entries and their note arrive together
+    expect(derivePopupView(refused('P0d')).find?.found).toMatchObject({ entries: null, note: null })
+    // a fallback takes over: the entries work, and P0f's own line stands
+    expect(derivePopupView({ ...refused('P0f'), saved: input('P7b').saved }).find?.found).toMatchObject({ entries: { pdf: { href: 'https://arxiv.org/pdf/hep-th/9711200#readarxiv' } }, note: { text: S.note.noHtmlVersion, tone: 'info', settings: false } })
+  })
 })
 

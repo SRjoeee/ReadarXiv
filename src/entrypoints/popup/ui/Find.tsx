@@ -88,12 +88,13 @@ export function Find({ find, failure, actions }: { find: NonNullable<PopupView['
                   {/*
                    * Task 33's review: with neither entry offered, P17 draws the reason as a Note in the alert tone
                    * (view-model.ts's noHtmlNote, entry.pdf === null) — the same words this paper's note carries when its
-                   * own PDF entry is also missing. P0 must say it the same way, so a reader who typed a paper's id here
-                   * and one who landed on its abstract page read the same sentence drawn the same way. The plain line
-                   * stays for the lesser case beside it: an HTML version missing while the PDF entry still works (info)
+                   * own PDF entry is also missing; and a service that cannot run, with nothing to take over, says so as
+                   * P17b does, the settings button beside it (the final review). P0 must say it the same way, so a reader who typed a
+                   * paper's id here and one who landed on its abstract page read the same sentence drawn the same way.
+                   * The plain line stays for the lesser case: an HTML version missing while the PDF entry still works (info)
                    */}
                   {paper.note && (paper.note.tone === 'alert'
-                    ? <Note tone="alert" text={paper.note.text} />
+                    ? <Note tone="alert" text={paper.note.text} action={paper.note.settings ? { label: S.settings, run: () => actions.openOptions() } : undefined} />
                     : <p className="line mark"><Icon node={Info} size={14} />{paper.note.text}</p>)}
                 </div>
               </Reveal>
