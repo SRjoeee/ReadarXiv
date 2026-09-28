@@ -1879,3 +1879,36 @@ so the sync points themselves do not hold the page; that is the next thing to ta
   It holds the page without the lock's gaps and without a unit set apart from its neighbours; it does not hold a
   unit's place on the page as the lock does. Chinese needed its leading raised by up to 22 % (G 0.99–1.22); whether that
   reads better than wider character spacing is the next thing to try.
+
+**The owner's third round** (the same day, on the fit): German good, but a line more where the page had room,
+paragraph spacing wider than the original's, a display pushed off the foot of its page, lines past the margin; Chinese
+loose on one page and cramped at the next heading — "set it by common rules, as natural as the English". The causes,
+each general (`a3072c96`, `4ef19e4e`):
+
+- **A unit's leading inside a run-in label.** The unit's paragraph-level macros went where its mark goes, and a
+  paragraph opening on `\\textbf{Label.}` or a paper's `\\nosection{…}` has its mark inside that group, so the
+  assignment ended with the label: 2608.06007's Chinese set such paragraphs at 1.2 beside translated ones at 1.9 — the
+  "loose, then cramped". They now go where the unit begins, outside every group. Chinese Today on the round: on its
+  page 53 % → 79 %.
+- **Lines with nowhere to break.** A path in `\\texttt` (`lib/ansible/plugins/callback/__init__.py`) or a formula like
+  `\\pi_0 Homeo(X)/\\pi_0 Homeo(D^4)` has no legal break, so TeX either lets the line run past the margin or — with
+  `\\emergencystretch` — sets the whole paragraph loose around it, the "line more where there is room". A long one in a
+  translated unit may now break after a slash or an underscore (`withBreaks`), and under pdfTeX microtype's font
+  expansion evens the word spaces. German, the round, real translations: loose lines 91 → 43.
+- **Chinese fitted by leading alone, and paragraph by paragraph.** The CJK fit is now one set of type for the whole
+  translation, three settings within the range natural to Chinese body text, shared out in log terms: leading 1.2–1.45 ×
+  the paper's, space between CJK characters 0–0.05 em (never tighter than the face), CJK face scale 0.92–1. No unit is
+  set apart from another; a second trial takes up what the new line breaks moved (`cjkType`). Two of five papers want
+  more room than those ranges give (2608.06007, 2608.21180: leading and spacing at their limits) and keep their pages
+  equal all the same.
+- **Paragraph spacing wider than the original's** is the class's `\\flushbottom`: a page that lost a display to the next
+  spreads its room into `\\parskip`. It follows from the display moving, not from the spacing; not changed yet.
+
+| round, 5 papers each | on its page | within 10 pt | pages equal |
+|---|---|---|---|
+| zh Today / **Fit** / Locked | 79 % / **89 %** / 99 % | 20 % / 24 % / 68 % | 3 / **5** / 5 of 5 |
+| de Today / **Fit** / Locked / smaller type | 31 % / **92 %** / 91 % / 96 % | 3 % / 26 % / 48 % / 69 % | 1 / **4** / 4 / 5 of 5 |
+
+German 2608.15761's fit is a page short (28 of 29). Language gate, zh, de and ru on its 24 papers before and after these
+changes: nothing worse; its one new Russian "error" was an overfull box's dump wrapped onto a line beginning "!", which
+the gate no longer counts (`74bb43b0`).
