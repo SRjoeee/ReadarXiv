@@ -22,6 +22,11 @@ describe('Button', () => {
     expect([brand.querySelector('span')!.textContent, brand.querySelector('kbd')!.getAttribute('aria-hidden')]).toEqual(['Translate', 'true'])
   })
 
+  it('draws no span for empty words: an icon alone is the icon alone', async () => {
+    const b = await button({ icon: Globe, 'aria-label': 'Globe', children: '' })
+    expect([...b.children].map(c => c.tagName.toLowerCase())).toEqual(['svg'])
+  })
+
   it('shows a shortcut on the brand and on a neutral one (S-P-51: show original), never on a text or a raised one (ruling 7)', async () => {
     const kbd = async (kind: 'neutral' | 'text' | 'raised') => (await button({ kind, shortcut: '⌥T', children: 'Show original' })).querySelector('kbd')?.textContent ?? null
     expect([await kbd('neutral'), await kbd('text'), await kbd('raised')]).toEqual(['⌥T', null, null])

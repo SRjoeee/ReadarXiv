@@ -30,7 +30,7 @@ export function Button({ kind = 'neutral', size = 'md', icon, shortcut, disabled
   return (
     <button type="button" {...rest} aria-disabled={disabled || undefined} aria-busy={busy || undefined} onClick={still ? refuse : onClick} className={`btn ${kind} ${size}${className ? ` ${className}` : ''}`}>
       {busy ? <Icon node={Loader} className="spin" /> : icon && <Icon node={icon} />}
-      {children != null && <span>{children}</span>}
+      {children != null && children !== '' && <span>{children}</span>}
       {shortcut && (kind === 'brand' || kind === 'neutral') && !still && <Kbd>{shortcut}</Kbd>}
     </button>
   )
