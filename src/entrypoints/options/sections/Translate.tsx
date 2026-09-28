@@ -25,7 +25,7 @@ import { useRejected } from '@/ui/use-rejected'
 import type { OptionsData } from '../data'
 import { releaseHostPermission } from '../permissions'
 import { Card, GroupHeading } from '../ui/Card'
-import { type ListWrites, focusLost, insertAt, shut, undoHasFocus, useLinger, useListWrites, withUndo } from '../ui/lists'
+import { type ListWrites, focusLost, insertAt, shut, undoHasFocus, useFocusWhenDrawn, useLinger, useListWrites, withUndo } from '../ui/lists'
 import { IconButton, Row, Status, Value } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { Llm } from './Llm'
@@ -91,7 +91,9 @@ function Services({ data }: { data: OptionsData }) {
   const [fresh, setFresh] = useState<string | null>(null)
   const radios = useRef(new Map<string, HTMLElement>())
   const addRow = useRef<HTMLButtonElement>(null)
-  const deletions = useDeletions(config, writes, id => radios.current.get(id)?.focus())
+  /** a service's row focused once it is drawn: after its write lands (added, saved, undone), or its form closes (ui/lists.ts) */
+  const focusDrawn = useFocusWhenDrawn(id => radios.current.get(id))
+  const deletions = useDeletions(config, writes, { now: id => radios.current.get(id)?.focus(), drawn: focusDrawn })
   const words = O.search.keywords['translate/services']
   const chrome = chromeRow(pack)
   const microsoftOk = supportsTarget(config.targetLanguage)
@@ -108,7 +110,6 @@ function Services({ data }: { data: OptionsData }) {
   }
   const keys = radioKeys(ids, config.provider, can, id => choose(id, 'key'), i => radios.current.get(ids[i]!)?.focus())
   const radioRef = (id: string) => (el: HTMLElement | null) => { if (el) radios.current.set(id, el); else radios.current.delete(id) }
-  const focusRow = (id: string) => requestAnimationFrame(() => radios.current.get(id)?.focus())
   const stored = config.services.map(s => s.baseURL)
 
   /**
@@ -121,7 +122,7 @@ function Services({ data }: { data: OptionsData }) {
     setConnected(c => ({ ...c, [s.id]: ms }))
     setFresh(s.id)
     setForm(null)
-    focusRow(s.id)
+    focusDrawn(s.id)
   }
   /**
    * An edit or a new key, saved now that it answered — in place, the choice left as it is — and connected, as a new
@@ -132,7 +133,7 @@ function Services({ data }: { data: OptionsData }) {
     await writes.save(latest => ({ ...latest, services: latest.services.map(x => (x.id === s.id ? s : x)) }))
     setConnected(c => ({ ...c, [s.id]: ms }))
     setForm(null)
-    focusRow(s.id)
+    focusDrawn(s.id)
   }
 
   const chosenOwn = config.services.find(s => s.id === config.provider)
@@ -156,7 +157,7 @@ function Services({ data }: { data: OptionsData }) {
         </Reveal>
         <Reveal open={editingId === s.id}>
           {drawnForm?.kind === 'edit' && drawnForm.id === s.id && (
-            <ServiceForm service={s} target={config.targetLanguage} stored={stored} onConnected={saved} onCancel={() => { setForm(null); focusRow(s.id) }} />
+            <ServiceForm service={s} target={config.targetLanguage} stored={stored} onConnected={saved} onCancel={() => { setForm(null); focusDrawn(s.id) }} />
           )}
         </Reveal>
       </Fragment>
@@ -240,7 +241,7 @@ function ServiceMenu({ service, onEdit, onDelete }: { service: Service; onEdit: 
  * and a permission kept a while is the safer failure than one taken from a service still stored (round 4, addendum) —
  * by the verdict of the commit's own read, which comes back with its value (round 5)
  */
-function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id: string) => void) {
+function useDeletions(config: Config, writes: ListWrites<Config>, focusOn: { now: (id: string) => void; drawn: (id: string) => void }) {
   const [gone, setGone] = useState<Gone[]>([])
   const pending = useRef(new Set<Gone>())
   /** undone, their write not yet landed */
@@ -282,7 +283,7 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id:
       if (done) return
       pending.current.delete(g)
       // the row is drawn beside its undo row while the write is on its way: the focus goes there before the undo row does
-      if (undoHasFocus(service.id)) focusRow(service.id)
+      if (undoHasFocus(service.id)) focusOn.now(service.id)
       setGone(x => x.filter(y => y !== g))
     })
   }
@@ -294,11 +295,11 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id:
       : { ...latest, services: insertAt(latest.services, g.index, g.service), provider: g.chosen && latest.provider === 'microsoft' ? g.service.id : latest.provider }))
       .then(done => {
         undoing.current.delete(g)
-        // the focus goes to the service's radio once the write has landed and its row is drawn again, as the styles
-        // and the prompts lists do: a bare frame after the press finds no row while the write outlasts it, and the
-        // focus falls to the page (Part 7's final review)
+        // the focus goes to the service's radio once its row is drawn again, as the styles and the prompts lists do: a
+        // frame after the press, or after the write, may find no row yet, and the focus falls to the page (Part 7's
+        // final review)
         if (done) {
-          requestAnimationFrame(() => focusRow(g.service.id))
+          focusOn.drawn(g.service.id)
           return
         }
         const back: Gone = { ...g, focus: focusLost() }

@@ -365,30 +365,51 @@ describe('the translation services (§6.3)', () => {
     await m.unmount()
   })
 
-  it('focus after undo waits for the write to land, not a bare animation frame: the write held past a frame, the frame is asked for only once it lands — as the styles and the prompts lists do (Part 7\'s final review, B-I3)', async () => {
+  it('the keyboard\'s undo whose write outlasts a frame: the focus lands on the service\'s radio once its row is drawn, never on the page — as the styles and the prompts lists do (Part 7\'s final review, B-I3, item 23)', async () => {
     const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: OTHER.id } }))
     // the keyboard's deletion: the undo row's button takes the focus
     document.documentElement.removeAttribute('data-axt-pointer')
     menuItem(rowNamed(m.container, 'Mine'), O.services.delete).click()
     await m.flush()
     expect(undoHolds()).toBe(true)
-    // spied, not stubbed, as the styles' test does: this environment's frames under fake timers run before React's
-    // commit of the landed write, so what is asserted is when the frame is asked for — after the write, never at the press
-    const raf = vi.spyOn(globalThis, 'requestAnimationFrame')
     const write = deferred<void>()
     wire.gate = write.promise
-    const before = raf.mock.calls.length
     ;[...card(m.container).querySelector<HTMLElement>('[data-undo]')!.querySelectorAll('button')].find(b => b.textContent === O.undo.undo)!.click()
     await m.flush()
     // a frame and more pass while the write is out (the real page: a storage read, a validated write, a digest)
     await vi.advanceTimersByTimeAsync(50)
     await m.flush()
-    expect(raf.mock.calls.length).toBe(before)
+    expect(radios(m.container).map(nameOf)).not.toContain('Mine')
     write.resolve()
     await m.flush()
+    await vi.advanceTimersByTimeAsync(50)
+    await m.flush()
     expect(stored().services.map(s => s.id)).toEqual([MINE.id, OTHER.id])
-    expect(raf.mock.calls.length).toBeGreaterThan(before)
-    raf.mockRestore()
+    expect(document.activeElement).toBe(radioNamed(m.container, 'Mine'))
+    await m.unmount()
+  })
+
+  it('a service added whose write outlasts a frame: the focus lands on its radio once its row is drawn (Part 7\'s final review, item 23)', async () => {
+    const m = await mountElement(h(Harness, { start: DEFAULT_CONFIG }))
+    ;[...card(m.container).querySelectorAll<HTMLButtonElement>('button[data-srow]')].find(b => b.textContent === O.services.add)!.click()
+    await m.flush()
+    const form = m.container.querySelector<HTMLFormElement>('form[data-form="service"]')!
+    const [address, , model] = [...form.querySelectorAll<HTMLInputElement>('input')]
+    type(address!, 'http://127.0.0.1:9/v1')
+    type(model!, 'echo')
+    const write = deferred<void>()
+    wire.gate = write.promise
+    submit(form)
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(50)
+    await m.flush()
+    expect(stored().services).toEqual([])
+    write.resolve()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(50)
+    await m.flush()
+    expect(stored().services).toHaveLength(1)
+    expect(document.activeElement).toBe(radioNamed(m.container, 'echo'))
     await m.unmount()
   })
 

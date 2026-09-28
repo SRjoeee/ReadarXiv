@@ -232,32 +232,30 @@ describe('the translation styles (§6.4)', () => {
     await m.unmount()
   })
 
-  it('focus after undo waits for the write to land, not a bare animation frame (item 2)', async () => {
+  it('focus after undo lands on the style\'s radio once its row is drawn: the write held past a frame, the focus is not lost to the page (item 2; Part 7\'s final review, item 23)', async () => {
     const patches: Config[] = []
     const start = { ...DEFAULT_CONFIG, appearance: { ...DEFAULT_CONFIG.appearance, activeStyle: 'green' } }
     const gate = { promise: Promise.resolve() as Promise<unknown> }
-    // spied, not stubbed: replacing requestAnimationFrame outright starves React's own scheduler, which this
-    // environment's rAF-under-fake-timers does not reproduce faithfully enough to race against here; recording when
-    // it is *called* (real behaviour kept) is what item 2 asks: after the write, not at undo()'s own call
-    const raf = vi.spyOn(globalThis, 'requestAnimationFrame')
     const m = await mountElement(h(GatedHarness, { start, patches, gate }))
     button(m.container, O.appearance.edit('Green')).click()
     await m.flush()
     button(editor(m.container)!, O.appearance.editor.delete).click()
     await m.flush()
-    const undoRow = card(m.container).querySelector<HTMLElement>('[data-undo]')!
-    // the write undo() starts is held open: the focus must not be scheduled while it is still on its way
-    let release!: () => void
-    gate.promise = new Promise<void>(r => { release = r })
-    const callsBefore = raf.mock.calls.length
-    button(undoRow, O.undo.undo).click()
+    const undoButton = button(card(m.container).querySelector<HTMLElement>('[data-undo]')!, O.undo.undo)
+    undoButton.focus()
+    // the write undo() starts is held past a frame and more: the undo row goes at once, the style's row not yet
+    const write = deferred<void>()
+    gate.promise = write.promise
+    undoButton.click()
     await m.flush()
-    expect(raf.mock.calls.length).toBe(callsBefore)
-    release()
+    await vi.advanceTimersByTimeAsync(50)
     await m.flush()
-    // only once the write lands is the frame scheduled
-    expect(raf.mock.calls.length).toBeGreaterThan(callsBefore)
-    raf.mockRestore()
+    expect(names(m.container)).not.toContain('Green')
+    write.resolve()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(50)
+    await m.flush()
+    expect(document.activeElement).toBe(styleRadios(m.container)[names(m.container).indexOf('Green')])
     await m.unmount()
   })
 

@@ -1,7 +1,7 @@
 // What the settings page's sections share: an undo row back in its row's place, a list's writes and the line a refused
-// deletion leaves, a reveal's content kept while it folds away, a popover shut from a pick, an edited item written back
-// into its list, a small segmented control's width
-import { type CSSProperties, useEffect, useState } from 'react'
+// deletion leaves, a row focused once it is drawn, a reveal's content kept while it folds away, a popover shut from a
+// pick, an edited item written back into its list, a small segmented control's width
+import { type CSSProperties, useEffect, useLayoutEffect, useState } from 'react'
 
 /** A list with the rows its deletions left, each at the place its row had (§6.2: the undo row stands where the row was) */
 export function withUndo<T, G extends { index: number }>(items: readonly T[], gone: readonly G[]): ({ item: T } | { gone: G })[] {
@@ -53,6 +53,25 @@ export interface ListWrites<C> {
   attempt(fn: (latest: C) => C): Promise<boolean>
   /** resolves once the write landed; rejects when it did not */
   save(fn: (latest: C) => C): Promise<void>
+}
+
+/**
+ * A row focused once it is drawn: a list's write that lands brings a row back (an undo) or in (a service added), and the
+ * row is drawn by the commit that renders the stored value — which a frame asked for as the write lands may come before,
+ * leaving the focus on the page (Part 7's final review: the services list at 60 Hz and more at 120; the styles' and the
+ * prompts' lists the same, more narrowly). `focus(id)` marks the row; after each of the list's commits a layout effect
+ * focuses it as soon as `find` has its element, before that commit is painted, and forgets it. The three lists share it
+ */
+export function useFocusWhenDrawn(find: (id: string) => HTMLElement | null | undefined): (id: string) => void {
+  const [pending, setPending] = useState<string | null>(null)
+  useLayoutEffect(() => {
+    if (pending === null) return
+    const row = find(pending)
+    if (!row) return
+    row.focus()
+    setPending(null)
+  })
+  return setPending
 }
 
 /**

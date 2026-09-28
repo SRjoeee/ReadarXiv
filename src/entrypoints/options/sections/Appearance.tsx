@@ -15,7 +15,7 @@ import { O, S, copyName, profileName } from '@/ui/strings'
 import type { OptionsData } from '../data'
 import { Card, GroupHeading } from '../ui/Card'
 import { ColourPick } from '../ui/ColourPick'
-import { type ListWrites, focusLost, insertAt, undoHasFocus, useLinger, useListWrites, withUndo } from '../ui/lists'
+import { type ListWrites, focusLost, insertAt, undoHasFocus, useFocusWhenDrawn, useLinger, useListWrites, withUndo } from '../ui/lists'
 import { IconButton, Row, Status } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { StyleEditor } from './StyleEditor'
@@ -99,6 +99,8 @@ function Styles({ data, writes }: { data: OptionsData; writes: ListWrites<Config
   /** a style just made or duplicated: its row comes in with §8's row motion */
   const [fresh, setFresh] = useState<string | null>(null)
   const radios = useRef(new Map<string, HTMLElement>())
+  /** a row brought back is focused once it is drawn (ui/lists.ts) */
+  const focusDrawn = useFocusWhenDrawn(id => radios.current.get(id))
   const newStyleButton = useRef<HTMLButtonElement>(null)
   const k = O.search.keywords
   const setLooks = (fn: (c: Looks) => Looks) => writes.write(latest => ({ ...latest, appearance: fn(latest.appearance) }))
@@ -132,14 +134,15 @@ function Styles({ data, writes }: { data: OptionsData; writes: ListWrites<Config
   const undo = (g: GoneStyle) => {
     setGone(x => x.filter(y => y !== g))
     // the write is a real round trip (patch()): the row the focus is meant to land on may not exist until it resolves
-    // (fix round 1, item 2); the choice returns only if nothing else was picked while the window was open (item 3).
-    // Refused, the style stays deleted: its undo row comes back with a fresh 5 s (round 3, item 3)
+    // (fix round 1, item 2) and is drawn, which the focus waits for (Part 7's final review); the choice returns only if
+    // nothing else was picked while the window was open (item 3). Refused, the style stays deleted: its undo row comes
+    // back with a fresh 5 s (round 3, item 3)
     void writes.attempt(latest => {
       const c = latest.appearance
       return c.styles.some(s => s.id === g.profile.id) ? latest
         : { ...latest, appearance: { ...c, styles: insertAt(c.styles, g.index, g.profile), activeStyle: g.active && c.activeStyle === g.fallback ? g.profile.id : c.activeStyle } }
     }).then(done => {
-      if (done) requestAnimationFrame(() => radios.current.get(g.profile.id)?.focus())
+      if (done) focusDrawn(g.profile.id)
       else setGone(x => [...x, { ...g, focus: focusLost() }])
     })
   }

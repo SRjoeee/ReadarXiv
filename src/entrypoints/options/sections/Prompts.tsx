@@ -26,7 +26,7 @@ import { drafts } from '@/ui/drafts'
 import { promptName } from '@/ui/prompt-name'
 import { O } from '@/ui/strings'
 import type { OptionsData } from '../data'
-import { focusLost, insertAt, undoHasFocus, useLinger, useListWrites, withUndo } from '../ui/lists'
+import { focusLost, insertAt, undoHasFocus, useFocusWhenDrawn, useLinger, useListWrites, withUndo } from '../ui/lists'
 import { Row, Status, Value } from '../ui/Row'
 import { UndoRow } from '../ui/UndoRow'
 import { PromptText, insertToken, plainWords, readPrompt } from './PromptText'
@@ -81,6 +81,8 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
   useEffect(() => { if (!editing) setNote(null) }, [editing])
   const file = useRef<HTMLInputElement>(null)
   const radios = useRef(new Map<string, HTMLElement>())
+  /** a row brought back is focused once it is drawn (ui/lists.ts) */
+  const focusDrawn = useFocusWhenDrawn(id => radios.current.get(id))
   const addButton = useRef<HTMLButtonElement>(null)
   const setPrompts = (fn: (c: PromptsConfig) => PromptsConfig) => writes.write(latest => ({ ...latest, prompts: fn(latest.prompts) }))
   // a choice from a list another tab has since changed must not store an id that names nothing (promptExists)
@@ -112,14 +114,15 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
     void setPrompts(c => (c.patterns.some(x => x.id === id) ? { ...c, patterns: c.patterns.map(x => (x.id === id ? { ...x, ...words } : x)) } : c))
   const undo = (g: GonePrompt) => {
     setGone(x => x.filter(y => y !== g))
-    // the focus goes to the prompt's radio once the write has landed and the row is there (the styles list's fix
-    // round 1, item 2). Refused, the prompt stays deleted: its undo row comes back with a fresh 5 s (round 3, item 3)
+    // the focus goes to the prompt's radio once the write has landed and the row is drawn (the styles list's fix
+    // round 1, item 2; Part 7's final review). Refused, the prompt stays deleted: its undo row comes back with a fresh
+    // 5 s (round 3, item 3)
     void writes.attempt(latest => {
       const c = latest.prompts
       return c.patterns.some(x => x.id === g.prompt.id) ? latest
         : { ...latest, prompts: { patterns: insertAt(c.patterns, g.index, g.prompt), promptId: g.chosen && c.promptId === DEFAULT_PROMPT_ID ? g.prompt.id : c.promptId } }
     }).then(done => {
-      if (done) requestAnimationFrame(() => radios.current.get(g.prompt.id)?.focus())
+      if (done) focusDrawn(g.prompt.id)
       else setGone(x => [...x, { ...g, focus: focusLost() }])
     })
   }

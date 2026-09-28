@@ -285,6 +285,30 @@ describe('the LLM group, fix round 1 (the review of Task 63)', () => {
     await m.unmount()
   })
 
+  it('focus after undo lands on the prompt\'s radio once its row is drawn: the write held past a frame, the focus is not lost to the page (Part 7\'s final review, item 23)', async () => {
+    const patches: Config[] = []
+    const gate: { promise: Promise<unknown>; unreadable?: boolean } = { promise: Promise.resolve() }
+    const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches, gate }))
+    promptsRow(m.container).click()
+    await m.flush()
+    button(m.container, O.prompts.delete).click()
+    await m.flush()
+    const write = deferred<void>()
+    gate.promise = write.promise
+    button(m.container.querySelector<HTMLElement>('[data-undo]')!, O.undo.undo).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(50)
+    await m.flush()
+    expect(radios(m.container)).toHaveLength(2)
+    write.resolve()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(50)
+    await m.flush()
+    expect(patches.at(-1)!.prompts.patterns.map(p => p.id)).toEqual([MINE.id])
+    expect(document.activeElement).toBe(radios(m.container)[2])
+    await m.unmount()
+  })
+
   it('a prompt just made takes the focus into its name field once: arrowed off it and back, the focus stays on its radio (item 3)', async () => {
     const patches: Config[] = []
     const m = await mountElement(h(Harness, { start: LLM, patches }))
