@@ -286,7 +286,6 @@ const O = {
     thickness: '线宽',
     blur: '悬停前模糊',
     blurHint: '译文先糊着，鼠标停上去才清晰',
-    advanced: '高级',
     /** The four ways advanced CSS is refused (core/renderer/style-values.ts reports which) */
     advancedRejected: {
       closeBrace: '不要写右花括号：这里只填声明，选择器由扩展补上',

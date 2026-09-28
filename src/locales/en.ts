@@ -262,7 +262,6 @@ const O: Locale['O'] = {
     thickness: 'Thickness',
     blur: 'Blur until hovered',
     blurHint: 'The translation stays blurred until the pointer rests on it',
-    advanced: 'Advanced',
     advancedRejected: {
       closeBrace: 'No closing brace: declarations only, the extension supplies the selector',
       openBrace: 'No opening brace: declarations only, the extension supplies the selector',
