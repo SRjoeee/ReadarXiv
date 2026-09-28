@@ -264,8 +264,6 @@ const O = {
     failed: (reason: string) => `连接失败：${reason}`,
     delete: '删除',
     cancel: '取消',
-    newTitle: '添加服务',
-    editTitle: '编辑服务',
     /** §6.3: the address suggestions fill an address, nothing else (T4); the other two are product names, in the form */
     localOllama: '本机 Ollama',
     modelEmpty: '填好接口地址和 API Key 后列出',
@@ -317,7 +315,6 @@ const O = {
      *  not the reader's writing, so they follow the interface language; once the reader renames one, the reader's name shows */
     builtInStyles: { follow: '与原文相同', green: '绿色', blue: '蓝色', amber: '琥珀', muted: '淡一档', blur: '模糊' },
     builtInHighlights: { 'soft-green': '柔和绿', sand: '淡黄', sky: '淡蓝' },
-    preview: '预览',
     previewSource: PREVIEW_SOURCE,
     previewTarget: PREVIEW_TARGET,
   },
