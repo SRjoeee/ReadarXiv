@@ -19,15 +19,22 @@ import { Row, Value } from '../ui/Row'
 
 const known = (code: string): code is LocaleCode => Object.hasOwn(LOCALE_NAMES, code)
 
+/**
+ * `read`: the settings are in. Until then the value is not said at all — not the browser's (`O.uiLanguageAuto`), which a
+ * reader who chose a language would see flip to theirs — and no language is checked: the page's rule, never say one
+ * thing and then another (S-O-49c's switch, `.o-unknown`; Part 7's final review). The value keeps its place, out of
+ * sight and out of the accessibility tree
+ */
 function useLanguage(data: OptionsData) {
+  const read = data.config !== null
   const chosen = data.config?.uiLanguage ?? 'auto'
   const value = known(chosen) ? LOCALE_NAMES[chosen] : O.uiLanguageAuto
   const items = [
-    { id: 'auto', name: O.uiLanguageAuto, checked: !known(chosen), lang: localeInUse() },
-    ...LOCALE_CODES.map(code => ({ id: code, name: LOCALE_NAMES[code], checked: chosen === code, lang: code })),
+    { id: 'auto', name: O.uiLanguageAuto, checked: read && !known(chosen), lang: localeInUse() },
+    ...LOCALE_CODES.map(code => ({ id: code, name: LOCALE_NAMES[code], checked: read && chosen === code, lang: code })),
   ]
   const choose = (code: string) => { if (code !== chosen) void data.patch(latest => ({ ...latest, uiLanguage: code })) }
-  return { chosen, value, items, choose }
+  return { read, chosen, value, items, choose }
 }
 
 /**
@@ -39,12 +46,12 @@ const menuKey = (generation: number, chosen: string) => `${generation}:${chosen}
 
 export function LanguageFoot({ data }: { data: OptionsData }) {
   const pop = usePopover('listbox')
-  const { chosen, value, items, choose } = useLanguage(data)
+  const { read, chosen, value, items, choose } = useLanguage(data)
   return (
     <>
-      <button type="button" className="o-nav-item o-lang" aria-label={`${O.uiLanguageName}: ${value}`} {...pop.trigger} style={{ anchorName: pop.anchor } as CSSProperties}>
+      <button type="button" className="o-nav-item o-lang" aria-label={read ? `${O.uiLanguageName}: ${value}` : O.uiLanguageName} {...pop.trigger} style={{ anchorName: pop.anchor } as CSSProperties}>
         <Icon node={Globe} size={14} />
-        <span className="o-lang-value">{value}</span>
+        <span className={read ? 'o-lang-value' : 'o-lang-value o-unknown'}>{value}</span>
         <Icon node={ChevronDown} size={14} />
       </button>
       <Popover {...pop.popover} role="listbox" label={O.uiLanguageName} className="o-lang-menu">
@@ -60,12 +67,12 @@ export function LanguageFoot({ data }: { data: OptionsData }) {
  */
 export function LanguageRow({ data }: { data: OptionsData }) {
   const pop = usePopover('listbox')
-  const { chosen, value, items, choose } = useLanguage(data)
+  const { read, chosen, value, items, choose } = useLanguage(data)
   return (
     <Card>
       <Row kind="button" row="language/ui" words={O.search.keywords['language/ui']} label={O.uiLanguage} description={O.uiLanguageElsewhere}
         narrowDescription={O.uiLanguageElsewhereNarrow}
-        trailing={<Value>{value}</Value>} buttonProps={{ ...pop.trigger, style: { anchorName: pop.anchor } as CSSProperties }} />
+        trailing={<Value>{read ? value : <span className="o-unknown">{value}</span>}</Value>} buttonProps={{ ...pop.trigger, style: { anchorName: pop.anchor } as CSSProperties }} />
       <Popover {...pop.popover} role="listbox" label={O.uiLanguageName} className="o-end">
         <MenuList key={menuKey(pop.generation, chosen)} kind="listbox" label={O.uiLanguageName} items={items} onClose={() => shut(pop.popover.id)} onPick={id => { shut(pop.popover.id); choose(id) }} />
       </Popover>

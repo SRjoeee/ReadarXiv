@@ -14,7 +14,7 @@ const state = vi.hoisted(() => ({ data: null as unknown }))
 vi.mock('@/entrypoints/options/data', () => ({ useOptionsData: () => state.data }))
 
 import { App } from '@/entrypoints/options/App'
-import { LanguageFoot } from '@/entrypoints/options/sections/Language'
+import { LanguageFoot, LanguageRow } from '@/entrypoints/options/sections/Language'
 import { O, setLocale } from '@/ui/strings'
 
 function data(config: Config, patches: Config[]): OptionsData {
@@ -42,6 +42,18 @@ describe('the interface language (§6.1)', () => {
     await m.unmount()
   })
 
+  it('drawn before the settings arrive, the foot says no language — not the browser\'s, then the one chosen: its value held out of sight in its place, its name alone, nothing checked (S-O-49c\'s rule; Part 7\'s final review)', async () => {
+    const loaded = data({ ...DEFAULT_CONFIG, uiLanguage: 'en' }, [])
+    const m = await mountElement(h(LanguageFoot, { data: { ...loaded, config: null } }))
+    const button = () => m.container.querySelector<HTMLButtonElement>('button.o-lang')!
+    const value = () => button().querySelector<HTMLElement>('.o-lang-value')!
+    expect([button().getAttribute('aria-label'), value().classList.contains('o-unknown')]).toEqual([O.uiLanguageName, true])
+    expect(options(m.container).filter(o => o.getAttribute('aria-selected') === 'true')).toEqual([])
+    await m.rerender(h(LanguageFoot, { data: loaded }))
+    expect([button().getAttribute('aria-label'), value().textContent, value().classList.contains('o-unknown')]).toEqual([`${O.uiLanguageName}: ${LOCALE_NAMES.en}`, LOCALE_NAMES.en, false])
+    await m.unmount()
+  })
+
   it('drawn before the settings arrive, the menu opens on the language chosen, not on the browser\'s', async () => {
     const loaded = data({ ...DEFAULT_CONFIG, uiLanguage: 'en' }, [])
     const m = await mountElement(h(LanguageFoot, { data: { ...loaded, config: null } }))
@@ -49,6 +61,16 @@ describe('the interface language (§6.1)', () => {
     const active = m.container.querySelector<HTMLElement>('[role="option"][data-active]')
     expect(active?.textContent).toBe(LOCALE_NAMES.en)
     expect(active?.getAttribute('aria-selected')).toBe('true')
+    await m.unmount()
+  })
+
+  it('the row a search shows holds its value out of sight the same way until the settings are read (Part 7\'s final review)', async () => {
+    const loaded = data({ ...DEFAULT_CONFIG, uiLanguage: 'en' }, [])
+    const m = await mountElement(h(LanguageRow, { data: { ...loaded, config: null } }))
+    const words = () => m.container.querySelector<HTMLElement>('.o-value-words')!
+    expect(words().querySelector('.o-unknown')).not.toBeNull()
+    await m.rerender(h(LanguageRow, { data: loaded }))
+    expect([words().querySelector('.o-unknown'), words().textContent]).toEqual([null, LOCALE_NAMES.en])
     await m.unmount()
   })
 
