@@ -1,6 +1,6 @@
 // The settings page (the redesign's design, §6.1): a sidebar — the mark, the search, the four sections, the interface
-// language at its foot (Task 53) — and a column of up to 680 px holding one section, or every section's matches while a
-// search runs. There is no save button: every control writes as it changes. `#<section>/<row>` opens a section at a
+// language at its foot (Task 53; at the end of the mark's row in a narrow window, Task 103b) — and a column of up to 680
+// px holding one section, or every section's matches while a search runs, the two centred as one group (Task 103b). There is no save button: every control writes as it changes. `#<section>/<row>` opens a section at a
 // row and lights it. Settings that cannot be read (S-O-02, §6.7) draw a card at the top and the data section alone: the other
 // sections would show the defaults as if they were the reader's, and nothing they save is accepted
 import { BookOpen, CircleAlert, Database, type IconNode, Languages, Palette, Search, X } from 'lucide'

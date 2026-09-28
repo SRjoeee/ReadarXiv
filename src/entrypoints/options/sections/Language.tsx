@@ -1,7 +1,8 @@
 // The interface language (the redesign's design, §6.1): at the sidebar's foot, a row like the sections' with a globe on
 // the icons' edge — the cue that needs no reading, since a reader who cannot read this interface is the one looking for
-// it — the value after it, and a menu opening upward whose languages are written in their own names, with `lang`. A
-// search shows it as a row too. A change reloads the page in the new language once the write has landed and no draft
+// it — the value after it, and a menu opening upward whose languages are written in their own names, with `lang`. In
+// a narrow window the sheet puts the same control at the end of the mark's row, its menu opening downward (Task 103b:
+// one element, placed by the sheet, never a second copy). A search shows it as a row too. A change reloads the page in the new language once the write has landed and no draft
 // is open (shared/surface-config.ts), so nothing is ever half translated and no draft is lost
 import { ChevronDown, Globe } from 'lucide'
 import type { CSSProperties } from 'react'
@@ -45,7 +46,7 @@ export function LanguageFoot({ data }: { data: OptionsData }) {
         <span className="o-lang-value">{value}</span>
         <Icon node={ChevronDown} size={14} />
       </button>
-      <Popover {...pop.popover} role="listbox" label={O.uiLanguageName} className="o-up">
+      <Popover {...pop.popover} role="listbox" label={O.uiLanguageName} className="o-lang-menu">
         <MenuList key={menuKey(pop.generation, chosen)} kind="listbox" label={O.uiLanguageName} items={items} onClose={() => shut(pop.popover.id)} onPick={id => { shut(pop.popover.id); choose(id) }} />
       </Popover>
     </>

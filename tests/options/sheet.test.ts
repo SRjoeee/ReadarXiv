@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { ruleOf, rules } from '../styles/css-rules'
 
 const SHEET = readFileSync(join(import.meta.dirname, '../../src/entrypoints/options/ui/settings.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
 
@@ -27,6 +28,19 @@ describe('the settings page\'s sheet', () => {
     expect(SHEET).toMatch(/\.o-frame \{[^}]*grid-template-columns: 232px minmax\(0, 1fr\);[^}]*max-width: calc\(232px \+ 48px \+ 680px \+ 48px\);[^}]*margin-inline: auto;/)
     expect(SHEET).toMatch(/\.o-main \{[^}]*padding: 30px 48px 40px;/)
     expect(SHEET).toContain('.o-column { max-width: 680px; }')
+  })
+
+  it('folds the sidebar above the column below 640 px, the rows sized to their content; the interface language at the title row\'s end, its menu opening downward there and upward at the foot (Task 103b)', () => {
+    const all = rules(SHEET)
+    const layer = ['@layer components']
+    const narrow = [...layer, '@media (width < 640px)']
+    expect(ruleOf(all, '.o-frame', narrow)).toMatchObject({ 'grid-template-columns': 'minmax(0, 1fr)', 'align-content': 'start' })
+    expect(ruleOf(all, '.o-side', narrow)).toMatchObject({ display: 'grid', 'grid-template-columns': 'max-content minmax(0, 1fr)', 'grid-template-areas': '"brand lang" "search search" "nav nav"', 'align-items': 'start', padding: '16px 16px 4px' })
+    expect(['.o-brand', '.o-search', '.o-nav', '.o-lang'].map(s => ruleOf(all, s, narrow)['grid-area'])).toEqual(['brand', 'search', 'nav', 'lang'])
+    expect(ruleOf(all, '.o-lang', narrow)).toMatchObject({ 'justify-self': 'end', 'max-width': '100%', 'margin-top': '0' })
+    expect(ruleOf(all, '.o-lang', layer)['margin-top']).toBe('auto')
+    expect(ruleOf(all, '.pop.o-lang-menu', layer)['position-area']).toBe('top span-right')
+    expect(ruleOf(all, '.pop.o-lang-menu', narrow)['position-area']).toBe('bottom span-left')
   })
 
   it('draws a search hit in ink on the mark, in a description too: its inherited ink-2 fell under 4.5:1 (Task 101)', () => {

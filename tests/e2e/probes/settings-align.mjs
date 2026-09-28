@@ -10,13 +10,16 @@
 // 200 % zoom, measured there too: no horizontal scroll, the sidebar above the column below 640 px, nothing past its
 // card, a trail that moved under its words still ending on the trailing edge. The frame, the sidebar and the column one
 // group (Task 103b): centred at 1300 px, the interface language at the sidebar's foot; from the window's edge at 1000
-// px, narrower than the group. Prints what is off; exits 1 when anything is.
+// px, narrower than the group; below 640 px the interface language at the title row's end, its menu opening downward,
+// no gap under the sidebar, and a language chosen from there with the e2e helper. Prints what is off; exits 1 when
+// anything is.
 //   pnpm build && node tests/e2e/probes/settings-align.mjs
 import { mkdirSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { copyWithGrants } from '../ext-copy.mjs'
+import { chooseUiLanguage } from '../options-page.mjs'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const SRC = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
@@ -234,6 +237,29 @@ const frame = page => page.evaluate(() => {
   }
 })
 
+/**
+ * below 640 px (Task 103b): the interface language at the end of the mark's row — on its centre line, ending on the
+ * frame's trailing edge (the sidebar's 16) —, the search right under that row (the mark's 10 below it and the
+ * sidebar's 2 between rows, as before the language came up), and the column right under the sidebar: the two rows
+ * sized to their content, not stretched to the window's height
+ */
+const titleRow = page => page.evaluate(() => {
+  const out = []
+  const r = sel => document.querySelector(sel).getBoundingClientRect()
+  const mid = b => b.top + b.height / 2
+  const brand = r('.o-brand')
+  const lang = r('.o-lang')
+  const line = mid(lang) - mid(brand)
+  if (Math.abs(line) > 0.5) out.push(`the interface language ${line.toFixed(1)} px off the title row's centre line`)
+  const edge = r('.o-frame').right - lang.right
+  if (Math.abs(edge - 16) > 0.5) out.push(`the interface language ends ${edge.toFixed(1)} px from the frame's trailing edge, not 16`)
+  const under = r('.o-search').top - brand.bottom
+  if (Math.abs(under - 12) > 0.5) out.push(`the search ${under.toFixed(1)} px under the title row, not 12`)
+  const gap = r('.o-main').top - r('.o-side').bottom
+  if (Math.abs(gap) > 0.5) out.push(`a gap of ${gap.toFixed(1)} px between the sidebar and the column`)
+  return out
+})
+
 const off = []
 for (const lang of ['zh-CN', 'en']) {
   for (const theme of ['light', 'dark']) {
@@ -274,9 +300,15 @@ for (const lang of ['zh-CN', 'en']) {
     // a service of one's own, found by its name (the list's order is the page's, not the probe's)
     const service = name => page.locator(services).filter({ has: page.locator('.o-label', { hasText: name }) })
 
+    /** the control chooseUiLanguage (tests/e2e/options-page.mjs) presses, found as it finds it: one button, drawn */
+    const oneLanguageButton = async () => {
+      const found = page.getByRole('button', { name: /Interface language/ })
+      return (await found.count()) === 1 && (await found.isVisible())
+    }
     await open('translate')
     {
       const f = await frame(page)
+      if (!(await oneLanguageButton())) off.push(`${tag} wide: the interface language is not one button the e2e helper finds`)
       if (f.sideways) off.push(`${tag} wide: the page scrolls sideways`)
       if (f.left < 1 || Math.abs(f.left - f.right) > 1) off.push(`${tag} wide: the frame ${f.left.toFixed(1)} px from the left, ${f.right.toFixed(1)} px from the right, not centred`)
       if (Math.abs(f.foot) > 0.5) off.push(`${tag} wide: the interface language ${f.foot.toFixed(1)} px off the sidebar's foot`)
@@ -369,10 +401,43 @@ for (const lang of ['zh-CN', 'en']) {
         }))
         if (fold.sideways) off.push(`${tag} ${shot}: the page scrolls sideways`)
         if (width < 640 && !fold.above) off.push(`${tag} ${shot}: the sidebar is not above the column`)
+        if (width < 640) off.push(...(await titleRow(page)).map(o => `${tag} ${shot}: ${o}`))
         const { out, widths } = await measure(page, { narrow: true })
         off.push(...[...out, ...agreed(shot, widths)].map(o => `${tag} ${shot}: ${o}`))
         await page.screenshot({ path: `${OUT}${tag}-${shot}.png`, fullPage: true })
       }
+    }
+    // below 640 px, a section shorter than the window: the column right under the sidebar, no gap the window's height
+    // opened; the interface language's menu opening downward from the title row, inside the window; the control the
+    // e2e helper presses found there as at the foot, and a language chosen through it
+    await page.setViewportSize({ width: 320, height: 900 })
+    await open('data')
+    off.push(...(await titleRow(page)).map(o => `${tag} narrow-data: ${o}`))
+    if (!(await oneLanguageButton())) off.push(`${tag} narrow: the interface language is not one button the e2e helper finds`)
+    await page.locator('.o-lang').click()
+    await sleep(400)
+    const menu = await page.evaluate(() => {
+      const pop = document.querySelector('.o-lang-menu:popover-open')
+      if (!pop) return null
+      const m = pop.getBoundingClientRect()
+      const b = document.querySelector('.o-lang').getBoundingClientRect()
+      return { below: m.top - b.bottom, end: b.right - m.right, left: m.left, right: document.documentElement.clientWidth - m.right, bottom: innerHeight - m.bottom }
+    })
+    if (!menu) off.push(`${tag} narrow-language-menu: not reached: no menu open`)
+    else {
+      if (Math.abs(menu.below - 6) > 0.5) off.push(`${tag} narrow-language-menu: ${menu.below.toFixed(1)} px under its button, not 6 (opening downward)`)
+      if (Math.abs(menu.end) > 0.5) off.push(`${tag} narrow-language-menu: its end ${menu.end.toFixed(1)} px off its button's`)
+      if (menu.left < 0 || menu.right < 0 || menu.bottom < 0) off.push(`${tag} narrow-language-menu: past the window (${menu.left.toFixed(1)} left, ${menu.right.toFixed(1)} right, ${menu.bottom.toFixed(1)} below)`)
+    }
+    await page.screenshot({ path: `${OUT}${tag}-narrow-language-menu.png` })
+    await page.keyboard.press('Escape')
+    await sleep(200)
+    if (lang === 'zh-CN') {
+      // the helper's own path, from the title row; the next pass seeds the language it measures again
+      await chooseUiLanguage(page, 'Interface language', 'English')
+      let now = ''
+      for (let i = 0; i < 20 && now !== 'en'; i++) { now = await page.evaluate(() => document.documentElement.lang).catch(() => ''); if (now !== 'en') await sleep(150) }
+      if (now !== 'en') off.push(`${tag} narrow: English chosen from the title row, the page reads "${now}"`)
     }
     await page.close()
   }

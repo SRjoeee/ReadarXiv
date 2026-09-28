@@ -141,11 +141,16 @@
   .o-empty { display: flex; align-items: center; gap: 8px; padding: 40px 0; color: var(--ink-2); }
   /* a row reached by a deep link lights once (§8): ink at 9 %, held a moment, gone at 1.4 s */
   [data-flash]::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: color-mix(in oklab, var(--ink) 9%, transparent); opacity: 0; pointer-events: none; animation: o-flash 1400ms ease-out; }
-  /* §9: below 640 px the sidebar folds above the column; the sections wrap into a row */
+  /* §9: below 640 px the sidebar folds above the column, its two rows sized to their content (stretched to the window's
+     height, they opened a gap under the sidebar); the mark with the interface language at its row's end (the
+     maintainer, 2026-09-28), the search, the sections wrapping into a row. The mark's column is its own width (the
+     rows under it span a flexible column and do not widen it); the language takes the rest, and its value gives way */
   @media (width < 640px) {
-    .o-frame { grid-template-columns: minmax(0, 1fr); }
-    .o-side { position: static; height: auto; padding: 16px 16px 4px; }
-    .o-nav { flex-flow: row wrap; }
+    .o-frame { grid-template-columns: minmax(0, 1fr); align-content: start; }
+    .o-side { position: static; display: grid; grid-template-columns: max-content minmax(0, 1fr); grid-template-areas: "brand lang" "search search" "nav nav"; align-items: start; column-gap: 8px; height: auto; padding: 16px 16px 4px; }
+    .o-brand { grid-area: brand; }
+    .o-search { grid-area: search; }
+    .o-nav { grid-area: nav; flex-flow: row wrap; }
     .o-nav-item { width: auto; }
     .o-main { padding: 12px 16px 32px; }
   }
@@ -155,13 +160,18 @@
 /* forced colours drop the raised ground: the current section is outlined in the system's Highlight (§9) */
 @media (forced-colors: active) { .o-nav-item[aria-current] { outline: 1px solid Highlight; outline-offset: -1px; } }
 
-/* ---- Task 53: the interface language at the sidebar's foot; popovers opening upward or at a row's end ---- */
+/* ---- Task 53: the interface language at the sidebar's foot, its menu opening upward; a popover at a row's end ---- */
 @layer components {
   .o-lang { margin-top: auto; }
   .o-lang-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pop.o-up { margin: 0 0 6px; position-area: top span-right; position-try-fallbacks: top span-left, bottom span-right; transform-origin: bottom left; }
+  .pop.o-lang-menu { margin: 0 0 6px; position-area: top span-right; position-try-fallbacks: top span-left, bottom span-right; transform-origin: bottom left; }
   .pop.o-end { position-area: bottom span-left; position-try-fallbacks: top span-left; transform-origin: top right; }
-  @media (width < 640px) { .o-lang { margin-top: 8px; } }
+  /* below 640 px (Task 103b): the same control at the end of the mark's row, as wide as its words, on the frame's
+     trailing edge; its menu opening downward from there */
+  @media (width < 640px) {
+    .o-lang { grid-area: lang; justify-self: end; max-width: 100%; margin-top: 0; }
+    .pop.o-lang-menu { margin: 6px 0 0; position-area: bottom span-left; position-try-fallbacks: top span-left; transform-origin: top right; }
+  }
 }
 
 /* ---- Task 55: swatches (§6.4) ---- */

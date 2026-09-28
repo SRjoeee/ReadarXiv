@@ -62,6 +62,20 @@ describe('the interface language (§6.1)', () => {
     await m.unmount()
   })
 
+  it('the page draws one interface language control, the sidebar\'s own, with the menu the sheet places: at the foot, or at the title row\'s end in a narrow window (Task 103b)', async () => {
+    state.data = data(DEFAULT_CONFIG, [])
+    history.replaceState(null, '', '#')
+    const content = { translate: () => null, appearance: () => null, reading: () => null, data: () => null }
+    const m = await mountElement(h(App, { content }))
+    const controls = m.container.querySelectorAll<HTMLButtonElement>('.o-lang')
+    expect(controls.length).toBe(1)
+    expect(controls[0]!.parentElement!.classList.contains('o-side')).toBe(true)
+    const menu = document.getElementById(controls[0]!.getAttribute('popovertarget')!)
+    expect(menu?.parentElement).toBe(controls[0]!.parentElement)
+    expect(menu?.classList.contains('o-lang-menu')).toBe(true)
+    await m.unmount()
+  })
+
   it('a search for it shows the row that says where it lives', async () => {
     state.data = data(DEFAULT_CONFIG, [])
     history.replaceState(null, '', '#')
