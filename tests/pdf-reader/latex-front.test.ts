@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inMemory, loadProject, localizeNames, patch } from '@/pdf-reader/engine/latex-front.mjs'
+import { inMemory, lineBreaks, loadProject, localizeNames, patch } from '@/pdf-reader/engine/latex-front.mjs'
 
 // The PDF reader's LaTeX front end: what of a paper's source is prose to translate
 
@@ -122,9 +122,9 @@ describe('what goes around the translation: tables fitted, notes the class compa
   }
   const TABLES = '\\documentclass{article}\\begin{document}\n\\begin{tabular}{ll}\nFrozen profile & Prompting only \\\\\n\\end{tabular}\n\n\\begin{longtable}{l}\nA long cell \\\\\n\\end{longtable}\n\\end{document}'
 
-  it('a table with a translated cell goes into \\axtfit, a table that breaks across pages does not (2608.06701)', () => {
+  it('a table with a translated cell goes into \\axtfit with its original, a table that breaks across pages does not (2608.06701, RT-1)', () => {
     const tex = typeset(withTables(TABLES), () => true)
-    expect(tex).toMatch(/\\axtfit\{\\begin\{tabular\}\{ll\}[\s\S]*\\end\{tabular\}\}/)
+    expect(tex).toMatch(/\\axtfit\{\\begin\{tabular\}\{ll\}[\s\S]*<T\d+>[\s\S]*\\end\{tabular\}\}\{\\begin\{tabular\}\{ll\}\nFrozen profile & Prompting only \\\\\n\\end\{tabular\}\}/)
     expect(tex).not.toMatch(/\\axtfit\{\\begin\{longtable\}/)
   })
 
@@ -158,5 +158,27 @@ describe('what goes around the translation: tables fitted, notes the class compa
     expect(out).toContain('\\begin{quote}}{\\par\\end{quote}}')
     // elsewhere the word is prose, and stays
     expect(localizeNames('\\section{Abstract ideas}')).toBe('\\section{Abstract ideas}')
+  })
+})
+
+describe('a translation breaks its lines as its own', () => {
+  type P = { t: string; s?: string; src?: string; tr?: boolean }
+  const text = (s: string): P => ({ t: 'text', s, tr: true })
+  const ph = (src: string): P => ({ t: 'ph', src })
+  const joined = (ps: P[]) => ps.map(p => (p.t === 'text' ? p.s : `[${p.src}]`)).join('')
+
+  it('a heading\'s forced break inside a phrase goes: nothing between CJK characters, a space between words (2608.06007)', () => {
+    expect(joined(lineBreaks({ kind: 'heading' }, [ph('\\sys'), text('：大型语言模型基础设施中缺失的张量管理'), ph('\\\\'), text('层')]))).toBe('[\\sys]：大型语言模型基础设施中缺失的张量管理层')
+    expect(joined(lineBreaks({ kind: 'heading' }, [text('Die fehlende Tensorverwaltungs'), ph('\\\\[0.2cm]'), text('schicht')]))).toBe('Die fehlende Tensorverwaltungs schicht')
+  })
+
+  it('one after a colon or a stop, or before a change of size, parts a title from its subtitle and stays', () => {
+    expect(joined(lineBreaks({ kind: 'heading' }, [text('弱法向双曲不变环面：'), ph('\\\\'), text(' 持久性与平均原理')]))).toBe('弱法向双曲不变环面：[\\\\] 持久性与平均原理')
+    expect(joined(lineBreaks({ kind: 'heading' }, [text('论文标题'), ph('\\\\'), text(' '), ph('\\large'), text('补充材料')]))).toBe('论文标题[\\\\] [\\large]补充材料')
+  })
+
+  it('a paragraph keeps its forced breaks; long code and formulas get room to break', () => {
+    expect(joined(lineBreaks({ kind: 'paragraph' }, [text('输入：'), ph('\\\\'), text('输出')]))).toBe('输入：[\\\\]输出')
+    expect(joined(lineBreaks({ kind: 'paragraph' }, [ph('\\texttt{lib/ansible/plugins/callback/__init\\_\\_.py}')]))).toContain('lib/\\allowbreak{}ansible/\\allowbreak{}')
   })
 })

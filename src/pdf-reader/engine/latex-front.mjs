@@ -688,11 +688,12 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     const us = (byFile.get(file) ?? []).sort((a, b) => a.start - b.start)
     const parts = []
     const enc = project.transcode?.has(file) ? 'utf8' : 'latin1'
-    // a table with a translated cell goes into \\axtfit, which sets it no wider than the line (FIT_DEF)
+    // a table with a translated cell goes into \\axtfit with its original, which sets it no wider than the wider of
+    // the line and the original (FIT_DEF)
     const fits = (project.fits ?? []).filter(f => f.file === file && us.some(u => u.start >= f.start && u.end <= f.end && translated.has(u)))
-    const inserts = fits.flatMap(f => [[f.start, '\\axtfit{'], [f.end, '}']]).sort((a, b) => a[0] - b[0])
+    const inserts = fits.flatMap(f => [[f.start, [utf8Bytes('\\axtfit{')]], [f.end, [utf8Bytes('}{'), bytesOf(text.slice(f.start, f.end), enc), utf8Bytes('}')]]]).sort((a, b) => a[0] - b[0])
     const copy = (from, to) => {
-      for (const [pos, tex] of inserts) if (pos >= from && pos < to) { parts.push(bytesOf(text.slice(from, pos), enc), utf8Bytes(tex)); from = pos }
+      for (const [pos, bytes] of inserts) if (pos >= from && pos < to) { parts.push(bytesOf(text.slice(from, pos), enc), ...bytes); from = pos }
       parts.push(bytesOf(text.slice(from, to), enc))
     }
     let at = 0
@@ -730,48 +731,75 @@ export function localizeNames(text) {
   }
   return out
 }
+const FORCED_BREAK = /^\\(?:\\\*?(?:\s*\[[^\]]*\])?|newline|linebreak(?:\s*\[[^\]]*\])?)\s*$/
+const OWN_LINE_AFTER = /^\\(?:tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge|vspace|vskip|smallskip|medskip|bigskip)(?![A-Za-z])/
+const CJK_EDGE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef]/u
 /**
- * A translation's pieces with room to break a line inside a long piece of code or an inline formula: after a slash
- * (and after an underscore in code). The translation breaks its lines elsewhere than the paper did, and a path set in
- * \\texttt or a formula like π₀Homeo(X)/π₀Homeo(D⁴) had no point to break at: the line ran past the margin, or TeX set the
- * whole paragraph loose around it (2608.06701's lib/ansible/plugins/callback/__init__.py, 2608.02785). Short ones are
- * left as they are
+ * A translation's line breaks as its own, not the paper's.
+ * Room to break inside a long piece of code or an inline formula: after a slash (and after an underscore in code). A
+ * path set in \\texttt or a formula like π₀Homeo(X)/π₀Homeo(D⁴) had no point to break at: the line ran past the margin,
+ * or TeX set the whole paragraph loose around it (2608.06701's lib/ansible/plugins/callback/__init__.py, 2608.02785).
+ * Short ones are left as they are.
+ * No forced break in a title or a heading where the translation put it inside a phrase: the author put it where the
+ * English line was to end (21 titles of the corpus's 123 papers, "The Missing Tensor Management\\ Layer"), and the engine
+ * carried it to wherever its placeholder went — "张量管理\\层", a title of three lines once the first ran full
+ * (2608.06007). One the translation keeps after a colon, a dash or a stop parts a title from its subtitle, and one
+ * followed by a change of size or a vertical space begins a line of its own by design: both stay
  */
-export function withBreaks(pieces) {
-  return pieces.map(p => {
-    if (p.t !== 'ph' || p.src.length < 24) return p
+export function lineBreaks(u, pieces) {
+  const before = k => { for (let j = k - 1; j >= 0; j--) if (pieces[j].t !== 'text' || /\S/.test(pieces[j].s)) return pieces[j]; return null }
+  const after = k => { for (let j = k + 1; j < pieces.length; j++) if (pieces[j].t !== 'text' || /\S/.test(pieces[j].s)) return pieces[j]; return null }
+  return pieces.map((p, k) => {
+    if (p.t !== 'ph') return p
+    if (u.kind === 'heading' && FORCED_BREAK.test(p.src)) {
+      const prev = before(k), next = after(k)
+      if (prev?.t === 'text' && /[:;.?!\u2013\u2014\u3002\uff01\uff1a\uff1b\uff1f]\s*$/.test(prev.s)) return p
+      if (next?.t === 'ph' && OWN_LINE_AFTER.test(next.src)) return p
+      const cjk = (prev?.t === 'text' && CJK_EDGE.test(prev.s.trimEnd().slice(-1))) || (next?.t === 'text' && CJK_EDGE.test(next.s.trimStart().slice(0, 1)))
+      return { t: 'text', s: cjk ? '' : ' ', tr: true }
+    }
+    if (p.src.length < 24) return p
     if (/^\$[^$]/.test(p.src) && p.src.endsWith('$') && p.src.includes('/')) return { ...p, src: p.src.replace(/\/(?!\/)/g, '/\\allowbreak ') }
     if (/^\\(?:texttt|path|code|verb)(?![A-Za-z])/.test(p.src) && !/^\\verb/.test(p.src)) return { ...p, src: p.src.replace(/\/(?=[^}])/g, '/\\allowbreak{}').replace(/\\_(?=[A-Za-z0-9])/g, '\\_\\allowbreak{}') }
     return p
   })
 }
-/** Before \\begin{document} of a translation: a line TeX cannot fill within tolerance is set a little looser before it
- *  is let run past the margin. A translation breaks its lines elsewhere than the paper did, and a long inline formula
- *  it cannot break then stood out of the column (German 2608.02785: 11 lines over 5 pt, the original's 2). Paragraphs
- *  that set well are set as they were; one that needs it may be set loose throughout, which EVEN_SPACES and withBreaks
- *  keep down */
-export const NO_OVERFLOW = '\\AtBeginDocument{\\setlength\\emergencystretch{2em}}\n'
+/** Before \\begin{document} of a translation: nothing past the page. A line TeX cannot fill within tolerance is set a
+ *  little looser before it is let run past the margin: a translation breaks its lines elsewhere than the paper did,
+ *  and a long inline formula it cannot break then stood out of the column (German 2608.02785: 11 lines over 5 pt, the
+ *  original's 2). Paragraphs that set well are set as they were; one that needs it may be set loose throughout, which
+ *  EVEN_SPACES and lineBreaks keep down. And a float the translation made taller than the page is set smaller, as a
+ *  whole, to the page's height: LaTeX lets it run past the foot (RT-1's model card, a framed page of lists whose
+ *  Chinese lines are spaced wider than the English ran over the page number, its last lines and caption lost). The
+ *  scaling's rounding is taken back: a float a few sp taller than the page is never placed, and LaTeX stops with "Output
+ *  loop---100 consecutive dead cycles" */
+export const NO_OVERFLOW = String.raw`\makeatletter\AtBeginDocument{\setlength\emergencystretch{2em}\let\axt@largefloat\@largefloatcheck
+\def\@largefloatcheck{\ifdim\dimexpr\ht\@currbox+\dp\@currbox\relax>\textheight\ifdefined\resizebox\axt@floatfit\else\axt@largefloat\fi\fi}}
+\def\axt@floatfit{\@latex@warning{Float set smaller to the page's height}\global\setbox\@currbox\vbox{\hbox to\wd\@currbox{\hss\resizebox*{!}{\textheight}{\box\@currbox}\hss}}%
+\ifdim\dimexpr\ht\@currbox+\dp\@currbox\relax>\textheight\ht\@currbox\dimexpr\textheight-\dp\@currbox\relax\fi}\makeatother
+`
 /** Before \\begin{document} of a translation set by pdfTeX: microtype, unless the paper loads it, whose font expansion
  *  evens the word spaces of a language whose words are longer than English's. German on the round's five papers, with
- *  NO_OVERFLOW and withBreaks: loose lines (badness 1000 and over) 91 → 43, overfull ones 4 → 4. XeTeX expands no
+ *  NO_OVERFLOW and lineBreaks: loose lines (badness 1000 and over) 91 → 43, overfull ones 4 → 4. XeTeX expands no
  *  font, and CJK text breaks between any two characters */
 export const EVEN_SPACES = '\\makeatletter\\@ifpackageloaded{microtype}{}{\\usepackage{microtype}}\\makeatother\n'
-/** \\axtfit{table}: a translated table set no wider than the line, scaled down when its translation made it wider
- *  (German in columns that do not wrap ran past the page: 2608.06701's Table I); as it is when it fits, or when no
- *  \\resizebox is loaded. Never boxed inside a threeparttable, which takes its tabular over to measure it: Springer
- *  Nature's class sets every table in one, and a box around the tabular left its environments unclosed (2608.02991:
- *  "Missing \\endgroup inserted", 164 errors). Goes first in the main file */
-export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\def\axt@tpt{threeparttable}
-\long\def\axtfit#1{\ifx\@currenvir\axt@tpt\expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi{#1}{\axt@fit{#1}}}
-\long\def\axt@fit#1{\sbox\axt@fitbox{#1}\ifdim\wd\axt@fitbox>\linewidth\ifdefined\resizebox\resizebox{\linewidth}{!}{\usebox\axt@fitbox}\else\usebox\axt@fitbox\fi\else\usebox\axt@fitbox\fi}
+/** \axtfit{translated table}{original table}: the translation set no wider than the wider of the line and the
+ *  original, scaled down when its translation made it wider (German in columns that do not wrap ran past the page:
+ *  2608.06701's Table I); as it is when it fits, or when no \resizebox is loaded. The original's own width counts: a
+ *  table its author let run past a narrow box (RT-1's model card, four p columns 13 cm wide in a minipage a third of
+ *  the text wide) was scaled to that box's width, a third of its size and unreadable, although its translation was no
+ *  wider than it. The original is set in a box that is never used, every LaTeX counter put back after it. Never boxed
+ *  inside a threeparttable, which takes its tabular over to measure it: Springer Nature's class sets every table in
+ *  one, and a box around the tabular left its environments unclosed (2608.02991: "Missing \endgroup inserted", 164
+ *  errors). Goes first in the main file */
+export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newdimen\axt@fitwd\def\axt@tpt{threeparttable}
+\long\def\axtfit#1#2{\ifx\@currenvir\axt@tpt\expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi{#1}{\axt@fit{#1}{#2}}}
+\def\axt@counters{\begingroup\def\@elt##1{\global\csname c@##1\endcsname\the\csname c@##1\endcsname\relax}\xdef\axt@countersback{\cl@@ckpt}\endgroup}
+\long\def\axt@fit#1#2{\axt@counters\sbox\axt@fitbox{#2}\axt@countersback\axt@fitwd=\wd\axt@fitbox\ifdim\axt@fitwd<\linewidth\axt@fitwd=\linewidth\fi
+  \sbox\axt@fitbox{#1}\ifdim\wd\axt@fitbox>\axt@fitwd\ifdefined\resizebox\resizebox{\axt@fitwd}{!}{\usebox\axt@fitbox}\else\usebox\axt@fitbox\fi\else\usebox\axt@fitbox\fi}
 \makeatother
 `
-/** \\axtmark{name}: a PDF destination named axt-<name> at the current point, in each engine's own way. Protected, so
- *  it survives being written to the .aux and moving arguments unexpanded. Goes first in the main file.
- *  xdvipdfmx, XeTeX's PDF writer, drops every named destination nothing in the PDF refers to, as ours are, unless told
- *  not to (its flag C 0x0010) by a special on the first page: without it every translation set by XeLaTeX — every CJK
- *  one — had no marks, and the reader located its units by text alone (the owner, 2026-09-23: headings that did not
- *  light, a Japanese paragraph lit from its second line) */
+
 export const MARK_DEF = [
   '\\ifdefined\\XeTeXrevision\\protected\\def\\axtmark#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}',
   '\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\special{dvipdfmx:config C 0x0010}}\\fi',
@@ -781,26 +809,42 @@ export const MARK_DEF = [
   ...END_MARK,
 ].join('\n') + '\n'
 /**
- * \\axtlead{name}, before a translated unit's start mark: the unit's own paragraph set at `leading`, TeX for the new
- * \\baselineskip — `1.3\\baselineskip` (the paper's spacing times the script's factor, scripts.mjs) or
- * `1.3\\dimexpr\\f@size pt\\relax` (the font size times it, the geometry lock); a unit's own factor \\axtlead@<name>,
- * when defined, multiplies the font size. The paper's leading comes back once that paragraph is over, found by the
- * group level the unit began at and set at every level between (a footnote's paragraph ending first inside a unit, or a
- * list opened right after one, left the unit's leading on the English after it, down to the references: 2608.02163).
- * Never an \\aftergroup inside a box: a paragraph ending there — a table's p-column cell, a box in a display — may
- * close its group in an alignment or in math, where the token breaks the next \\midrule or \\end{align*} (2608.21180,
- * 2608.09038: a hundred errors each); inside one the level is set and the hook waits for the next paragraph. And no
- * hook from restricted horizontal mode, where a caption is measured in an \\hbox before it is set.
+ * The end of a unit's own paragraph, which the unit's leading, size and line probe act on (\axt@whenover{id}{at its
+ * end}{at each level back}{at its level}). The unit began at a group level; its paragraph is the next to end at that
+ * level, or one ending deeper whose groups close back to it in vertical mode — \begin{itemize} right after a heading's
+ * paragraph ends it inside the list's group. Each group closed on the way back is followed (\aftergroup) and the
+ * setting put back at its level too, so the list's own units start from the paper's. Only through ordinary groups (a
+ * brace group, an environment's): a paragraph ending inside a box, a table's cell, a note or math is one inside the
+ * unit, and the hook waits for the next — an \aftergroup there may close its group in an alignment, where the token
+ * breaks the next \midrule or \end{align*} (2608.21180, 2608.09038: a hundred errors each). Told by the group's type,
+ * not by \ifinner: framed.sty and tcolorbox set a whole box of text in a \vbox, where every paragraph is inner and the
+ * setting was put back only at the list's level, never at the unit's — RT-1's model card, whose leading grew unit by
+ * unit from 13 pt to 43 pt until the card ran off its page
+ */
+export const PARA_END_TEX = String.raw`\makeatletter
+\def\axt@plain{\ifnum\ifnum\currentgrouptype=1 1\else\ifnum\currentgrouptype=14 1\else0\fi\fi=1 \expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi}
+\long\def\axt@whenover#1#2#3#4{\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@over{\the\currentgrouplevel}{#1}\unexpanded{{#2}{#3}{#4}}}}\axt@tmp}
+\long\def\axt@over#1#2#3#4#5{\ifnum\currentgrouplevel<#1 \else\ifnum\currentgrouplevel=#1 #3#5\else\axt@plain{#3\axt@ovafter{#1}{#2}{#3}{#4}{#5}}{\AddToHookNext{para/after}{\axt@over{#1}{#2}{#3}{#4}{#5}}}\fi\fi}
+\long\def\axt@ovafter#1#2#3#4#5{\expandafter\gdef\csname axt@ob@#2\endcsname{\axt@overback{#1}{#2}{#3}{#4}{#5}}\expandafter\aftergroup\csname axt@ob@#2\endcsname}
+\long\def\axt@overback#1#2#3#4#5{\ifnum\currentgrouplevel>#1 \axt@plain{#4\axt@ovafter{#1}{#2}{#3}{#4}{#5}}{\AddToHookNext{para/after}{\axt@over{#1}{#2}{#3}{#4}{#5}}}\else\ifnum\currentgrouplevel=#1 \ifhmode\AddToHookNext{para/after}{\axt@over{#1}{#2}{#3}{#4}{#5}}\else#5\fi\fi\fi}
+\makeatother
+`
+/**
+ * \axtlead{name}, before a translated unit's start mark: the unit's own paragraph set at `leading`, TeX for the new
+ * \baselineskip — `1.3\baselineskip` (the paper's spacing times the script's factor, scripts.mjs) or
+ * `1.3\dimexpr\f@size pt\relax` (the font size times it, the geometry lock); a unit's own factor \axtlead@<name>,
+ * when defined, multiplies the font size. The paper's leading comes back once that paragraph is over (PARA_END_TEX;
+ * a footnote's paragraph ending first inside a unit, or a list opened right after one, left the unit's leading on the
+ * English after it, down to the references: 2608.02163). No hook from restricted horizontal mode, where a caption is
+ * measured in an \hbox before it is set.
  * A display inside a unit is set at the paper's leading, as the displays between units are: it is the paper's math,
  * not translated text, and the unit's leading had spread an align's rows a quarter apart (14.9 pt to 18.5 pt).
- * Local, because a \\linespread for the whole document also spread what stays English — references, tables, code,
+ * Local, because a \linespread for the whole document also spread what stays English — references, tables, code,
  * algorithms — a third past the paper's (RT-1's references: 1.43 × the font size against 1.10)
  */
-export const unitLeadTex = leading => String.raw`\makeatletter
-\def\axt@leadat#1#2#3{\ifnum\currentgrouplevel=#1 \baselineskip=#2\relax\else\ifnum\currentgrouplevel>#1 \baselineskip=#2\relax\ifinner\AddToHookNext{para/after}{\axt@leadat{#1}{#2}{#3}}\else\expandafter\gdef\csname axt@lb@#3\endcsname{\axt@leadback{#1}{#2}{#3}}\expandafter\aftergroup\csname axt@lb@#3\endcsname\fi\fi\fi}
-\def\axt@leadback#1#2#3{\ifnum\currentgrouplevel>#1 \baselineskip=#2\relax\expandafter\aftergroup\csname axt@lb@#3\endcsname\else\ifnum\currentgrouplevel=#1 \ifhmode\AddToHookNext{para/after}{\axt@leadat{#1}{#2}{#3}}\else\baselineskip=#2\relax\fi\fi\fi}
+export const unitLeadTex = leading => PARA_END_TEX + String.raw`\makeatletter
 \protected\def\axtlead#1{\ifhmode\ifinner\else\axt@lead{#1}\fi\else\axt@lead{#1}\fi}
-\def\axt@lead#1{\ifdefined\AddToHookNext\edef\axt@paperlead{\the\baselineskip}\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@leadat{\the\currentgrouplevel}{\the\baselineskip}{#1}}}\baselineskip=\ifcsname axtlead@#1\endcsname\csname axtlead@#1\endcsname\dimexpr\f@size pt\relax\else ` + leading + String.raw`\fi\relax\edef\axt@unitlead{\the\baselineskip}\axt@tmp\fi}
+\def\axt@lead#1{\ifdefined\AddToHookNext\edef\axt@paperlead{\the\baselineskip}\edef\axt@tmp{\noexpand\axt@whenover{lead#1}{\baselineskip=\the\baselineskip\relax}{\baselineskip=\the\baselineskip\relax}{\baselineskip=\the\baselineskip\relax}}\axt@tmp\baselineskip=\ifcsname axtlead@#1\endcsname\csname axtlead@#1\endcsname\dimexpr\f@size pt\relax\else ` + leading + String.raw`\fi\relax\edef\axt@unitlead{\the\baselineskip}\fi}
 \let\axt@unitlead\relax
 \def\axt@displaylead{\ifx\axt@unitlead\relax\else\ifdim\baselineskip=\axt@unitlead\relax\baselineskip=\axt@paperlead\relax\fi\fi}
 \AtBeginDocument{\everydisplay\expandafter{\the\everydisplay\axt@displaylead}}

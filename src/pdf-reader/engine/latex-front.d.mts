@@ -8,3 +8,6 @@ export declare function loadProject(root: ReturnType<typeof inMemory>, main: str
 export declare function patch(project: { units: SourceUnit[] }, translated: Map<SourceUnit, unknown[]>, options?: { guardControlWords?: boolean }): Map<string, Uint8Array>
 /** a style's abstract heading written out, made to go by \\abstractname */
 export declare function localizeNames(text: string): string
+/** a translation's pieces with its own line breaks: room to break in long code and formulas, a heading's forced break
+ *  kept only where it parts a title from its subtitle */
+export declare function lineBreaks<P>(unit: { kind: string }, pieces: P[]): P[]

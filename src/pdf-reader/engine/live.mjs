@@ -11,7 +11,7 @@
 //     or after the final compile: the translation comes first;
 //  5. when every unit is in, the final compile: every pass, the images themselves.
 import { analyze } from './paper-meta.mjs'
-import { EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, withBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
 
@@ -112,7 +112,7 @@ export function originalFiles({ fsys, project }) {
  *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex) */
 export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl }) {
   const xe = strategy.xe
-  translated = new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, withBreaks(pieces)]))
+  translated = new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, lineBreaks(u, pieces)]))
   const base = markUnits(project.units)
   const index = new Map(project.units.map((u, i) => [u, i]))
   const mark = strategy.leading ? u => { const m = base(u); return m && translated.has(u) ? { ...m, before: `\\axtlead{${index.get(u)}}` } : m } : base

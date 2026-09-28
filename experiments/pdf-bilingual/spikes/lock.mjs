@@ -6,7 +6,7 @@
 // that grew is set at, and how far a compile is from the original.
 import { readFileSync } from 'node:fs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { EVEN_SPACES, FIT_DEF, FORBIDDEN_TO_WARNING, latin1, latin1Bytes, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, stripPdftexOption, unitLeadTex as engineUnitLeadTex, withBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { EVEN_SPACES, FIT_DEF, FORBIDDEN_TO_WARNING, latin1, latin1Bytes, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, PARA_END_TEX, patch, stripPdftexOption, unitLeadTex as engineUnitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from '../../../src/pdf-reader/engine/latex-front.mjs'
 import { typesetBy } from '../../../src/pdf-reader/engine/scripts.mjs'
 
 /**
@@ -37,20 +37,14 @@ export const SYNC_TEX = String.raw`\makeatletter
 \makeatother
 `
 
-/** a unit's line count and leading at its paragraph's end, in the log. Through \message: \typeout reads \prevgraf as 0.
- *  The unit's own paragraph, found by the group level the unit began at: a paragraph ending deeper is either the
- *  unit's, ended inside an environment's group (\begin{itemize} right after it), or one inside the unit (a footnote's).
- *  Which, the level it comes back to tells (\aftergroup): still in horizontal mode, the unit goes on and the next
- *  paragraph end at its level is its own; in vertical mode, the one that ended was. A level below the unit's means its
- *  group closed with no paragraph. Inside a box the deeper paragraph is taken for one inside the unit and the hook
- *  waits for the next: an \\aftergroup there may close its group in an alignment or in math — a table's p-column cell,
- *  a display's box — and break the next \\midrule or \\end{align*} (2608.21180, 2608.09038, 2608.29867: the original
- *  with probes did not compile). No probe from restricted horizontal mode, where a caption is measured in an \\hbox. */
-export const LINES_TEX = String.raw`\makeatletter
-\def\axt@linesat#1#2{\ifnum\currentgrouplevel=#2 \message{^^JAXT-LINES #1 \the\prevgraf\space\the\baselineskip\space\f@size^^J}\else\ifnum\currentgrouplevel>#2 \ifinner\AddToHookNext{para/after}{\axt@linesat{#1}{#2}}\else\expandafter\xdef\csname axt@lg@#1\endcsname{\the\prevgraf\space\the\baselineskip\space\f@size}\expandafter\gdef\csname axt@lr@#1\endcsname{\axt@linesback{#1}{#2}}\expandafter\aftergroup\csname axt@lr@#1\endcsname\fi\fi\fi}
-\def\axt@linesback#1#2{\ifnum\currentgrouplevel>#2 \expandafter\aftergroup\csname axt@lr@#1\endcsname\else\ifnum\currentgrouplevel=#2 \ifhmode\AddToHookNext{para/after}{\axt@linesat{#1}{#2}}\else\message{^^JAXT-LINES #1 \csname axt@lg@#1\endcsname^^J}\fi\fi\fi}
+/** a unit's line count and leading at its paragraph's end (PARA_END_TEX), in the log. Through \message: \typeout
+ *  reads \prevgraf as 0. A unit whose group closed with no paragraph gives none. No probe from restricted horizontal
+ *  mode, where a caption is measured in an \hbox */
+export const LINES_TEX = PARA_END_TEX + String.raw`\makeatletter
+\def\axt@linescap#1{\expandafter\xdef\csname axt@lg@#1\endcsname{\the\prevgraf\space\the\baselineskip\space\f@size}}
+\def\axt@linesmsg#1{\message{^^JAXT-LINES #1 \csname axt@lg@#1\endcsname^^J}}
 \protected\def\axtlines#1{\ifhmode\ifinner\else\axt@lines{#1}\fi\else\axt@lines{#1}\fi}
-\def\axt@lines#1{\ifdefined\AddToHookNext\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@linesat{#1}{\the\currentgrouplevel}}}\axt@tmp\fi}
+\def\axt@lines#1{\ifdefined\AddToHookNext\axt@whenover{lines#1}{\axt@linescap{#1}}{}{\axt@linesmsg{#1}}\fi}
 \makeatother
 `
 
@@ -60,19 +54,17 @@ export const unitLeadTex = em => engineUnitLeadTex(`${em}\\dimexpr\\f@size pt\\r
 
 /**
  * A unit set smaller: \\axtsize@<unit>, when defined, scales the font size (and so the unit's leading, which is × the
- * size) at the unit's start, the size before it back once the unit's own paragraph is over, found as \\axtlead finds
- * it: at every level between when that paragraph ended in a deeper group (a list opened right after the unit — else
- * the list's own units were set smaller from a size never put back, and each smaller again: 2608.02785 in German went
- * down to 7 pt, and in the fit's trial to 4). And from the size before the last unit set smaller when that one's is
- * still in force, its paragraph's end not yet come (a unit begun inside it): a note's own size is another, and stays
- * the base. Never an \\aftergroup inside a box, nothing from restricted horizontal mode. What service H does to a block too long for its box, with a floor (shrinkSizes)
+ * size) at the unit's start, the size before it back once the unit's own paragraph is over (PARA_END_TEX), at every
+ * level between when that paragraph ended in a deeper group (a list opened right after the unit — else the list's own
+ * units were set smaller from a size never put back, and each smaller again: 2608.02785 in German went down to 7 pt,
+ * and in the fit's trial to 4). And from the size before the last unit set smaller when that one's is still in force,
+ * its paragraph's end not yet come (a unit begun inside it): a note's own size is another, and stays the base. Nothing
+ * from restricted horizontal mode. What service H does to a block too long for its box, with a floor (shrinkSizes)
  */
-export const SIZE_TEX = String.raw`\makeatletter
-\def\axt@sizeat#1#2#3#4{\ifnum\currentgrouplevel=#1 \fontsize{#2}{#3}\selectfont\else\ifnum\currentgrouplevel>#1 \ifinner\AddToHookNext{para/after}{\axt@sizeat{#1}{#2}{#3}{#4}}\else\fontsize{#2}{#3}\selectfont\expandafter\gdef\csname axt@sb@#4\endcsname{\axt@sizeback{#1}{#2}{#3}{#4}}\expandafter\aftergroup\csname axt@sb@#4\endcsname\fi\fi\fi}
-\def\axt@sizeback#1#2#3#4{\ifnum\currentgrouplevel>#1 \fontsize{#2}{#3}\selectfont\expandafter\aftergroup\csname axt@sb@#4\endcsname\else\ifnum\currentgrouplevel=#1 \ifhmode\AddToHookNext{para/after}{\axt@sizeat{#1}{#2}{#3}{#4}}\else\fontsize{#2}{#3}\selectfont\fi\fi\fi}
+export const SIZE_TEX = PARA_END_TEX + String.raw`\makeatletter
 \let\axt@szlast\relax
 \def\axt@size#1{\ifcsname axtsize@#1\endcsname\ifdefined\AddToHookNext\edef\axt@szcur{\f@size}\ifx\axt@szcur\axt@szlast\else\xdef\axt@szsaved{\f@size}\xdef\axt@szsavedb{\f@baselineskip}\fi
-  \edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@sizeat{\the\currentgrouplevel}{\axt@szsaved}{\axt@szsavedb}{#1}}}\axt@tmp
+  \edef\axt@tmp{\noexpand\axt@whenover{size#1}{\noexpand\fontsize{\axt@szsaved}{\axt@szsavedb}\noexpand\selectfont}{\noexpand\fontsize{\axt@szsaved}{\axt@szsavedb}\noexpand\selectfont}{\noexpand\fontsize{\axt@szsaved}{\axt@szsavedb}\noexpand\selectfont}}\axt@tmp
   \fontsize{\fpeval{\csname axtsize@#1\endcsname*\axt@szsaved}}{\fpeval{\csname axtsize@#1\endcsname*\strip@pt\dimexpr\axt@szsavedb\relax}pt}\selectfont\xdef\axt@szlast{\f@size}\fi\fi}
 \protected\def\axtsize#1{\ifhmode\ifinner\else\axt@size{#1}\fi\else\axt@size{#1}\fi}
 \makeatother
@@ -174,7 +166,7 @@ export function lockedFiles({ fsys, meta, project, units }, translated, { strate
   const index = new Map(units.map((u, i) => [u, i]))
   const base = markUnits(units)
   const mark = u => { const m = base(u); if (!m) return m; const i = index.get(u); return { ...m, before: `${sync ? `\\axtsync{${i}}` : ''}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}` } }
-  const files = patch(project, new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, withBreaks(pieces)])), { mark })
+  const files = patch(project, new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, lineBreaks(u, pieces)])), { mark })
   let main = latin1(files.get(project.main))
   const at = main.search(/\\begin\s*\{document\}/)
   const pre = strategy.pre(fonts)

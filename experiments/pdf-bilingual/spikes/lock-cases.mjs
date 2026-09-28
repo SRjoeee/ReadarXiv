@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { MARK_DEF } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { FIT_DEF, MARK_DEF, NO_OVERFLOW } from '../../../src/pdf-reader/engine/latex-front.mjs'
 import { cjkType, fitLeads, heights, LINES_TEX, marksOf, readLines, readLockEvents, readTargets, shrinkSizes, SIZE_TEX, SYNC_TEX, tightenedLeads, unitLeadTex } from './lock.mjs'
 
 let failed = 0
@@ -111,6 +111,15 @@ const unitAfter = leadLog.match(/^LEAD-UNIT afterdisplay ([\d.]+)pt$/m)
 check('the unit\'s own leading after a display inside it: 1.3 × 10 pt', Math.abs(Number(unitAfter?.[1]) - 13) < 0.001, unitAfter?.[0])
 check('line counts of the unit\'s own paragraph, not its footnote\'s or the list\'s', readLines(leadLog).get(0)?.lines === 1 && readLines(leadLog).get(3)?.lines === 1, JSON.stringify([...readLines(leadLog)]))
 check('unit leading raises no TeX error', !/^! /m.test(leadLog), (leadLog.match(/^! .*/m) ?? [''])[0])
+// the same inside a box, as framed.sty and tcolorbox set their contents: a unit whose paragraph a list ends, the list's
+// own units, a unit after the list — each at 1.3 × 10 pt and the paper's leading after each, never 1.3 × 1.3 × …
+// (RT-1's model card: the leading grew unit by unit, 13 pt to 43 pt, and the card ran off the page)
+const boxedBody = `\\setbox0\\vbox{\\axtlines{10}\\axtlead{10}\\leavevmode A heading.\\begin{itemize}\\item\\axtlines{11}\\axtlead{11}\\leavevmode Item one.\\item\\axtlead{12}\\leavevmode Item two.\\end{itemize}\\message{^^JBOXED afterlist \\the\\baselineskip^^J}\\axtlines{13}\\axtlead{13}\\leavevmode Another heading\\message{^^JBOXED inunit \\the\\baselineskip^^J}.\\par\\message{^^JBOXED afterunit \\the\\baselineskip^^J}}\\box0`
+const boxedLog = tex('lead-boxed', `${LINES_TEX}${unitLeadTex(1.3)}\n\\documentclass{article}\n\\begin{document}\n${boxedBody}\n\\end{document}\n`)
+const boxed = Object.fromEntries([...boxedLog.matchAll(/^BOXED (\w+) (\S+)/gm)].map(m => [m[1], m[2]]))
+check('in a box: the paper\'s leading after a list that ends a unit and after the next unit, the next at 1.3 × 10 pt', boxed.afterlist === '12.0pt' && Math.abs(parseFloat(boxed.inunit) - 13) < 0.001 && boxed.afterunit === '12.0pt', JSON.stringify(boxed))
+check('in a box: line counts of each unit\'s own paragraph', readLines(boxedLog).get(10)?.lines === 1 && readLines(boxedLog).get(11)?.lines === 1 && readLines(boxedLog).get(13)?.lines === 1, JSON.stringify([...readLines(boxedLog)]))
+check('in a box: no TeX error', !/^! /m.test(boxedLog), (boxedLog.match(/^! .*/m) ?? [''])[0])
 // the fit: one factor for the paper, each unit nudged within its band
 const fitted = fitLeads(new Map([[0, { hy: 100 }], [1, { hy: 100 }], [2, { hy: 100 }]]), new Map([[0, { hy: 90 }], [1, { hy: 80 }], [2, { hy: 100 }]]), new Map([[0, { lines: 5, bs: 15, size: 10 }], [1, { lines: 5, bs: 15, size: 10 }], [2, { lines: 5, bs: 15, size: 10 }], [3, { lines: 1, bs: 15, size: 10 }]]), { lo: 0.9, hi: 1.25, band: 0.08 })
 check('fit: G the summed ratio, each unit within its band, one with no pair at G', Math.abs(fitted.g - 300 / 270) < 1e-9 && Math.abs(fitted.leads.get(1) - 1.5 * (300 / 270) * 1.08) < 1e-9 && Math.abs(fitted.leads.get(3) - 1.5 * (300 / 270)) < 1e-9, JSON.stringify([fitted.g, [...fitted.leads]]))
@@ -129,5 +138,27 @@ const sz = k => sizeLog.match(new RegExp(`^SIZE-${k} (\\S+)`, 'm'))?.[1]
 check('a unit set smaller: 9 pt inside, 10 pt after, and after a box', sz('IN') === '9' && sz('AFTER') === '10' && sz('BOX') === '10', JSON.stringify([sz('IN'), sz('AFTER'), sz('BOX')]))
 check('a list opened right after a smaller unit: its items at 10 pt, a unit in it back to 10 after, 10 after the list (2608.02785)', sz('ITEM') === '10' && sz('INLIST') === '10' && sz('LIST') === '10', JSON.stringify([sz('ITEM'), sz('INLIST'), sz('LIST')]))
 check('unit size raises no TeX error', !/^! /m.test(sizeLog), (sizeLog.match(/^! .*/m) ?? [''])[0])
+const sizeBoxLog = tex('size-boxed', `\\makeatletter\\expandafter\\def\\csname axtsize@7\\endcsname{0.9}\\makeatother${LINES_TEX}${SIZE_TEX}${unitLeadTex(1.3)}\n\\documentclass{article}\n\\begin{document}\n\\makeatletter\n\\setbox0\\vbox{\\axtsize{7}\\leavevmode A unit a list ends.\\begin{itemize}\\item Item text.\\end{itemize}\\message{^^JSIZE-BOXLIST \\f@size^^J}Plain.\\par\\message{^^JSIZE-BOXAFTER \\f@size^^J}}\\box0\n\\end{document}\n`)
+const szb = k => sizeBoxLog.match(new RegExp(`^SIZE-${k} (\\S+)`, 'm'))?.[1]
+check('in a box: 10 pt after a list that ends a smaller unit, and after the next paragraph', szb('BOXLIST') === '10' && szb('BOXAFTER') === '10', JSON.stringify([szb('BOXLIST'), szb('BOXAFTER')]))
+// a translated table no wider than the wider of the line and its original, the original's counters not counted twice
+const fitBody = [
+  `\\begin{minipage}{0.3\\textwidth}\\sbox0{\\axtfit{\\begin{tabular}{p{5cm}p{5cm}}A & B\\end{tabular}}{\\begin{tabular}{p{5cm}p{5cm}}C & D\\end{tabular}}}\\message{^^JFIT narrowbox \\the\\wd0 \\space\\the\\linewidth^^J}\\end{minipage}`,
+  `\\sbox0{\\axtfit{\\begin{tabular}{l}${'Wide translated text '.repeat(12)}\\end{tabular}}{\\begin{tabular}{l}Narrow\\end{tabular}}}\\message{^^JFIT toline \\the\\wd0 \\space\\the\\linewidth^^J}`,
+  `\\sbox0{\\axtfit{\\begin{tabular}{l}${'Wider translated text '.repeat(16)}\\end{tabular}}{\\begin{tabular}{l}${'Wide original '.repeat(14)}\\end{tabular}}}\\sbox2{\\begin{tabular}{l}${'Wide original '.repeat(14)}\\end{tabular}}\\message{^^JFIT tooriginal \\the\\wd0 \\space\\the\\wd2^^J}`,
+  `\\newcounter{probe}\\sbox0{\\axtfit{\\begin{tabular}{l}\\stepcounter{probe}A\\end{tabular}}{\\begin{tabular}{l}\\stepcounter{probe}B\\end{tabular}}}\\message{^^JFIT counter \\the\\value{probe}^^J}`,
+].join('\n\n')
+const fitLog = tex('fit', `${FIT_DEF}\\documentclass{article}\n\\usepackage{graphicx}\n\\begin{document}\n${fitBody}\n\\end{document}\n`)
+const fw = k => fitLog.match(new RegExp(`^FIT ${k} (\\S+)pt (\\S+)pt`, 'm'))?.slice(1).map(Number)
+const [nb, nl] = fw('narrowbox') ?? [], [tl, tlw] = fw('toline') ?? [], [to, tow] = fw('tooriginal') ?? []
+check('a table as wide as its original, past a narrow box, is not scaled to the box (RT-1\'s model card)', nb > 280 && nl < 110, JSON.stringify([nb, nl]))
+check('a translation wider than the line, its original not: scaled to the line', Math.abs(tl - tlw) < 0.01, JSON.stringify([tl, tlw]))
+check('a translation wider than an original already past the line: scaled to the original', Math.abs(to - tow) < 0.01 && tow > 345, JSON.stringify([to, tow]))
+check('the original, set only to be measured, counts nothing', fitLog.match(/^FIT counter (\d+)/m)?.[1] === '1', fitLog.match(/^FIT counter .*/m)?.[0])
+check('fitted tables raise no TeX error', !/^! /m.test(fitLog), (fitLog.match(/^! .*/m) ?? [''])[0])
+// a float the translation made taller than the page: set smaller to the page's height, not past its foot (RT-1's model card)
+const floatLog = tex('float', `${NO_OVERFLOW}\\documentclass{article}\n\\usepackage{graphicx}\n\\begin{document}\nText.\n\\begin{figure}[p]\\centering\\rule{2cm}{1.3\\textheight}\\caption{A tall one.}\\end{figure}\n\\begin{figure}\\centering\\rule{2cm}{3cm}\\caption{A short one.}\\end{figure}\n\\end{document}\n`)
+check('a float taller than the page is set smaller, and only that one', (floatLog.match(/Float set smaller/g) ?? []).length === 1 && !/Float too large/.test(floatLog), (floatLog.match(/Float (set smaller|too large)[^\n]*/g) ?? []).join(' | '))
+check('floats set smaller raise no TeX error', !/^! /m.test(floatLog), (floatLog.match(/^! .*/m) ?? [''])[0])
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)
