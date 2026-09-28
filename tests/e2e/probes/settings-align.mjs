@@ -11,8 +11,8 @@
 // card, a trail that moved under its words still ending on the trailing edge. The frame, the sidebar and the column one
 // group (Task 103b): centred at 1300 px, the interface language at the sidebar's foot; from the window's edge at 1000
 // px, narrower than the group; below 640 px the interface language at the title row's end, its menu opening downward,
-// no gap under the sidebar, and a language chosen from there with the e2e helper. Prints what is off; exits 1 when
-// anything is.
+// no gap under the sidebar, and a language chosen from there with the e2e helper. Its row a search shows names the
+// place true at each width (Task 104b). Prints what is off; exits 1 when anything is.
 //   pnpm build && node tests/e2e/probes/settings-align.mjs
 import { mkdirSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -238,6 +238,33 @@ const frame = page => page.evaluate(() => {
 })
 
 /**
+ * the interface language's row a search shows (Task 104b): of its description's two sentences, the one true at the
+ * window's width is drawn and read — the foot's (`.o-wide`) at 1300 px, the title row's (`.o-narrow`) at 320 — and the
+ * other neither drawn nor in the row's accessible name. The search is cleared after
+ */
+async function languageRow(page, shown) {
+  const search = page.locator('.o-search input')
+  await search.fill('interface')
+  await sleep(300)
+  const row = page.locator('main [data-row="language/ui"]')
+  const said = (await row.count()) === 1 ? await row.evaluate(el => {
+    const d = el.querySelector('.o-desc')
+    const drawn = part => !!part && part.getClientRects().length > 0 && part.textContent.length > 0
+    return { wide: drawn(d.querySelector('.o-wide')), narrow: drawn(d.querySelector('.o-narrow')), read: d.innerText.trim(), text: { wide: d.querySelector('.o-wide')?.textContent ?? '', narrow: d.querySelector('.o-narrow')?.textContent ?? '' } }
+  }) : null
+  const name = said ? await row.ariaSnapshot() : ''
+  await search.fill('')
+  await sleep(300)
+  if (!said) return ['the interface language\'s row is not one row a search finds']
+  const hidden = shown === 'wide' ? 'narrow' : 'wide'
+  const out = []
+  if (!said[shown] || said[hidden]) out.push(`its search row draws the ${[said.wide && 'foot\'s', said.narrow && 'title row\'s'].filter(Boolean).join(' and ') || 'no'} place, not the ${shown === 'wide' ? 'foot\'s' : 'title row\'s'} alone`)
+  if (said.read !== said.text[shown]) out.push(`its search row reads "${said.read}", not its ${shown} sentence "${said.text[shown]}"`)
+  if (!name.includes(said.text[shown]) || name.includes(said.text[hidden])) out.push(`its search row's accessible name ${name.trim()} does not carry its ${shown} sentence alone`)
+  return out
+}
+
+/**
  * below 640 px (Task 103b): the interface language at the end of the mark's row — on its centre line, ending on the
  * frame's trailing edge (the sidebar's 16) —, the search right under that row (the mark's 10 below it and the
  * sidebar's 2 between rows, as before the language came up), and the column right under the sidebar: the two rows
@@ -365,6 +392,7 @@ for (const lang of ['zh-CN', 'en']) {
       })
       if (!found) off.push(`${tag} search-keyword: the glossary's row is not found by "${KEYWORD[lang]}"`)
     })
+    off.push(...(await languageRow(page, 'wide')).map(o => `${tag} wide: the interface language: ${o}`))
     await open('translate/prompts')
     await state('deeplink', undefined, { shows: '[data-row="translate/prompts"][data-flash]' })
     await state('language-menu', () => page.locator('.o-lang').click(), { shows: ':popover-open [role="listbox"]' })
@@ -413,6 +441,7 @@ for (const lang of ['zh-CN', 'en']) {
     await page.setViewportSize({ width: 320, height: 900 })
     await open('data')
     off.push(...(await titleRow(page)).map(o => `${tag} narrow-data: ${o}`))
+    off.push(...(await languageRow(page, 'narrow')).map(o => `${tag} narrow: the interface language: ${o}`))
     if (!(await oneLanguageButton())) off.push(`${tag} narrow: the interface language is not one button the e2e helper finds`)
     await page.locator('.o-lang').click()
     await sleep(400)

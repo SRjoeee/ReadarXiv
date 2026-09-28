@@ -157,6 +157,7 @@ const O: Locale['O'] = {
   uiLanguageAuto: 'Browser language',
   uiLanguageName: 'Interface language',
   uiLanguageElsewhere: 'Also at the foot of the sidebar',
+  uiLanguageElsewhereNarrow: 'Also at the top right',
   fallbackWhy: {
     tooNew: (stored, supported) => `The stored settings are v${stored}; this build reads up to v${supported} (a newer build may have been installed)`,
     upgradeFailed: (stored, supported) => `The stored settings are v${stored} and could not be upgraded to v${supported}. A later version may still read them; a reset replaces them`,

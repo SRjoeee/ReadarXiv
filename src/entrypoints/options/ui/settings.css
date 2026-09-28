@@ -166,11 +166,16 @@
   .o-lang-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pop.o-lang-menu { margin: 0 0 6px; position-area: top span-right; position-try-fallbacks: top span-left, bottom span-right; transform-origin: bottom left; }
   .pop.o-end { position-area: bottom span-left; position-try-fallbacks: top span-left; transform-origin: top right; }
+  /* the search's row for it says where it is (Task 104b): of its two sentences the one true at the window's width,
+     the other out of sight and, `display: none`, out of the accessibility tree */
+  .o-narrow { display: none; }
   /* below 640 px (Task 103b): the same control at the end of the mark's row, as wide as its words, on the frame's
      trailing edge; its menu opening downward from there */
   @media (width < 640px) {
     .o-lang { grid-area: lang; justify-self: end; max-width: 100%; margin-top: 0; }
     .pop.o-lang-menu { margin: 6px 0 0; position-area: bottom span-left; position-try-fallbacks: top span-left; transform-origin: top right; }
+    .o-wide { display: none; }
+    .o-narrow { display: inline; }
   }
 }
 

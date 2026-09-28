@@ -43,6 +43,15 @@ describe('the settings page\'s sheet', () => {
     expect(ruleOf(all, '.pop.o-lang-menu', narrow)['position-area']).toBe('bottom span-left')
   })
 
+  it('shows the interface language\'s search row the place true at the window\'s width, by the query that moves the control: the other sentence out of sight and of the accessibility tree (Task 104b)', () => {
+    const all = rules(SHEET)
+    const layer = ['@layer components']
+    const narrow = [...layer, '@media (width < 640px)']
+    expect(ruleOf(all, '.o-narrow', layer).display).toBe('none')
+    expect(ruleOf(all, '.o-wide', narrow).display).toBe('none')
+    expect(ruleOf(all, '.o-narrow', narrow).display).toBe('inline')
+  })
+
   it('draws a search hit in ink on the mark, in a description too: its inherited ink-2 fell under 4.5:1 (Task 101)', () => {
     expect(SHEET).toContain('.o-hit { padding: 0 1px; border-radius: 2px; background: var(--mark); color: var(--ink); }')
   })

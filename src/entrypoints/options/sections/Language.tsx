@@ -2,8 +2,9 @@
 // the icons' edge — the cue that needs no reading, since a reader who cannot read this interface is the one looking for
 // it — the value after it, and a menu opening upward whose languages are written in their own names, with `lang`. In
 // a narrow window the sheet puts the same control at the end of the mark's row, its menu opening downward (Task 103b:
-// one element, placed by the sheet, never a second copy). A search shows it as a row too. A change reloads the page in the new language once the write has landed and no draft
-// is open (shared/surface-config.ts), so nothing is ever half translated and no draft is lost
+// one element, placed by the sheet, never a second copy). A search shows it as a row too, which says where it is at
+// the window's width. A change reloads the page in the new language once the write has landed and no draft is open
+// (shared/surface-config.ts), so nothing is ever half translated and no draft is lost
 import { ChevronDown, Globe } from 'lucide'
 import type { CSSProperties } from 'react'
 import { LOCALE_CODES, LOCALE_NAMES, type LocaleCode } from '@/locales'
@@ -53,13 +54,17 @@ export function LanguageFoot({ data }: { data: OptionsData }) {
   )
 }
 
-/** The row only a search shows (§6.1): the interface language lives in the sidebar */
+/**
+ * The row only a search shows (§6.1): the interface language lives in the sidebar. Its description says where, as the
+ * window's width has it — the sidebar's foot, or below 640 px the title row's end (Task 104b)
+ */
 export function LanguageRow({ data }: { data: OptionsData }) {
   const pop = usePopover('listbox')
   const { chosen, value, items, choose } = useLanguage(data)
   return (
     <Card>
       <Row kind="button" row="language/ui" words={O.search.keywords['language/ui']} label={O.uiLanguage} description={O.uiLanguageElsewhere}
+        narrowDescription={O.uiLanguageElsewhereNarrow}
         trailing={<Value>{value}</Value>} buttonProps={{ ...pop.trigger, style: { anchorName: pop.anchor } as CSSProperties }} />
       <Popover {...pop.popover} role="listbox" label={O.uiLanguageName} className="o-end">
         <MenuList key={menuKey(pop.generation, chosen)} kind="listbox" label={O.uiLanguageName} items={items} onClose={() => shut(pop.popover.id)} onPick={id => { shut(pop.popover.id); choose(id) }} />

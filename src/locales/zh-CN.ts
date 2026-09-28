@@ -169,8 +169,9 @@ const O = {
   uiLanguageAuto: '跟随浏览器',
   /** §6.1: the foot row's name — a reader who cannot read this interface is the one looking for it */
   uiLanguageName: '界面语言 · Interface language',
-  /** the row a search shows for it */
+  /** the row a search shows for it: where the control is, at the window's width (the sidebar's foot; below 640 px the title row's end) */
   uiLanguageElsewhere: '也在左下角',
+  uiLanguageElsewhereNarrow: '也在右上角',
   /** The second half of the notice shown when the settings cannot be read (config/storage.ts reports the cause, not a sentence) */
   fallbackWhy: {
     tooNew: (stored: number, supported: number) => `存储里的配置是 v${stored}，这个版本只认到 v${supported}（可能装过更新的版本）`,

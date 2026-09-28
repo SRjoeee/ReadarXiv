@@ -21,6 +21,12 @@ interface RowBase {
   /** a small label after the name: a prompt of one's own carries O.prompts.mine */
   tag?: string
   description?: string
+  /**
+   * the description below 640 px, where it says something else there (the interface language's place, Task 104b): both
+   * are drawn, and the sheet shows the one true at the window's width — the other, `display: none`, is out of the
+   * accessibility tree too
+   */
+  narrowDescription?: string
   /** the description is swapped as a choice changes (the way to translate): it comes in with the reader's words-in (§8; Part 3 moved it into controls.css) */
   swap?: boolean
   /** the description written in a translation style: the styles list's sample */
@@ -59,7 +65,7 @@ const inControl = (e: MouseEvent, row: Element) => {
 }
 
 export function Row(props: RowProps) {
-  const { row, words, label, tag, description, swap, sample, lead, level = 0, trailing, muted, quiet, arriving } = props
+  const { row, words, label, tag, description, narrowDescription, swap, sample, lead, level = 0, trailing, muted, quiet, arriving } = props
   const labelId = useId()
   const descId = useId()
   // a swapped description comes in with words-in from its first change on — not as the section is first drawn. Once it
@@ -75,7 +81,7 @@ export function Row(props: RowProps) {
     'data-srow': '',
     'data-row': row,
     // a sample is drawn, not read: a style's sample sentence is not the row's own words (fix round 1, item 7)
-    'data-search': `${label} ${sample ? '' : description ?? ''} ${words ?? ''}`.trim().toLowerCase(),
+    'data-search': `${label} ${sample ? '' : description ?? ''}${narrowDescription ? ` ${narrowDescription}` : ''} ${words ?? ''}`.trim().toLowerCase(),
     'data-level': level || undefined,
     'data-lead': lead || props.kind === 'radio' ? '' : undefined,
     'data-press': press ? '' : undefined,
@@ -92,7 +98,9 @@ export function Row(props: RowProps) {
         // description and out of it, in its own language, not the interface's (fix round 1, item 7)
         <span key={swapping ? description : 'description'} id={descId} className={swapping ? 'o-desc o-swap' : 'o-desc'} data-sample={sample ? '' : undefined} style={sample}
           aria-hidden={sample ? true : undefined} lang={sample ? PREVIEW_LANG : undefined}>
-          <Marked text={description} />
+          {narrowDescription === undefined ? <Marked text={description} /> : (
+            <><span className="o-wide"><Marked text={description} /></span><span className="o-narrow"><Marked text={narrowDescription} /></span></>
+          )}
         </span>
       )}
     </span>

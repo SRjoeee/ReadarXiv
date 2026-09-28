@@ -76,7 +76,7 @@ describe('the interface language (§6.1)', () => {
     await m.unmount()
   })
 
-  it('a search for it shows the row that says where it lives', async () => {
+  it('a search for it shows the row that says where it lives, at either width: both places in its description, each marked for the width it is true at (the sheet shows one, Task 104b)', async () => {
     state.data = data(DEFAULT_CONFIG, [])
     history.replaceState(null, '', '#')
     const content = { translate: () => null, appearance: () => null, reading: () => null, data: () => null }
@@ -87,7 +87,9 @@ describe('the interface language (§6.1)', () => {
     await m.flush()
     const section = m.container.querySelector<HTMLElement>('section[data-section="language"]')!
     expect(section.hasAttribute('data-miss')).toBe(false)
-    expect(section.querySelector('[data-row="language/ui"]')!.textContent).toContain(O.uiLanguageElsewhere)
+    const description = section.querySelector('[data-row="language/ui"] .o-desc')!
+    expect([description.querySelector('.o-wide')?.textContent, description.querySelector('.o-narrow')?.textContent]).toEqual([O.uiLanguageElsewhere, O.uiLanguageElsewhereNarrow])
+    expect(O.uiLanguageElsewhereNarrow).not.toBe(O.uiLanguageElsewhere)
     await m.unmount()
   })
 })
