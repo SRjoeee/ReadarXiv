@@ -26,18 +26,17 @@ await applyLocale(brand => `${brand} · ${GALLERY_TITLE}`)
 
 function Gallery() {
   return (
-    <div className="min-h-screen bg-bg p-8 font-ui text-fg">
+    <div className="ui min-h-screen bg-page p-8">
       <h1 className="mb-6 text-[18px] font-bold">Popup · state table (docs/UI.md §4)</h1>
       <div className="flex flex-col gap-8">
         {POPUP_FIXTURES.map(f => {
           const view = derivePopupView(f.input)
           return (
             <section key={f.id} className="flex flex-col gap-2">
-              <h2 className="text-[12px] font-semibold text-fg-2"><span className="mr-2 rounded bg-control px-1.5 py-0.5 font-mono text-fg">{f.id}</span>{f.name}<span className="ml-3 font-mono font-normal">{f.when}</span></h2>
+              <h2 className="text-[12px] font-semibold text-ink-2"><span className="mr-2 rounded bg-fill px-1.5 py-0.5 font-mono text-ink">{f.id}</span>{f.name}<span className="ml-3 font-mono font-normal">{f.when}</span></h2>
               <div className="flex items-start gap-8">
-                {/* transform-gpu makes each frame the containing block of the popup's fixed menu, as the popup window is */}
-                <div data-theme="light" className="transform-gpu rounded-[18px] shadow-[0_8px_24px_rgba(0,0,0,0.08)]"><PopupView view={view} error={f.error ?? null} actions={actions} /></div>
-                <div data-theme="dark" className="transform-gpu rounded-[18px] shadow-[0_8px_24px_rgba(0,0,0,0.3)]"><PopupView view={view} error={f.error ?? null} actions={actions} /></div>
+                <div data-theme="light" className="rounded-[18px] shadow-pop"><PopupView view={view} error={f.error ?? null} actions={actions} /></div>
+                <div data-theme="dark" className="rounded-[18px] shadow-pop"><PopupView view={view} error={f.error ?? null} actions={actions} /></div>
               </div>
             </section>
           )

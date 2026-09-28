@@ -1,74 +1,16 @@
-/* Tokens and the Tailwind entry for the extension's own pages — popup, options, the gallery
-   (UI.md §5). The tokens are plain CSS variables: light on :root, dark in two places — the system
-   preference, and an explicit data-theme="dark" (the gallery shows light and dark side by side,
-   which a media query cannot do). @theme must sit at the top level, never inside a media query
-   (Tailwind v4 docs), so the utilities reference the variables through @theme inline and only the
-   variables change when the theme does. */
+/* The Tailwind entry for the extension's own pages — the popup, the settings page, the gallery and the controls sheet
+   (the redesign's design, §2.2): the tokens generated from src/shared/tokens.ts, the controls the pages share, the
+   roles as Tailwind's colours and shadows, and the pages' base. @theme must sit at the top level, never inside a media
+   query (Tailwind v4), so the utilities name the variables through @theme inline and only the variables change with
+   the theme */
 @import "tailwindcss";
-/* the extension's tokens (the redesign's design, §2.2): the popup and the settings page draw the shared controls
-   (controls.css) from Part 3 on; the --axt- tokens below serve the old pages until then */
 @import "./tokens.css";
 @import "./controls.css";
 
-:root,
-[data-theme="light"] {
-  color-scheme: light;
-  --axt-bg: #f5f5f7;
-  --axt-card: #ffffff;
-  --axt-fg: #1e1e24;
-  --axt-fg-2: #7c7c89;
-  --axt-line: #ececf0;
-  --axt-control: #e9e9ee;
-  --axt-accent: #b31b1b;
-  --axt-accent-soft: #fbecec;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --axt-bg: #1c1c1e;
-    --axt-card: #2c2c2e;
-    --axt-fg: #f2f2f7;
-    --axt-fg-2: #8e8e93;
-    --axt-line: #3a3a3c;
-    --axt-control: #3a3a3c;
-    --axt-accent: #d63c3c;
-    --axt-accent-soft: #3b1f1f;
-  }
-}
-
-[data-theme="dark"] {
-  color-scheme: dark;
-  --axt-bg: #1c1c1e;
-  --axt-card: #2c2c2e;
-  --axt-fg: #f2f2f7;
-  --axt-fg-2: #8e8e93;
-  --axt-line: #3a3a3c;
-  --axt-control: #3a3a3c;
-  --axt-accent: #d63c3c;
-  --axt-accent-soft: #3b1f1f;
-}
-
-@theme inline {
-  --color-bg: var(--axt-bg);
-  --color-card: var(--axt-card);
-  --color-fg: var(--axt-fg);
-  --color-fg-2: var(--axt-fg-2);
-  --color-line: var(--axt-line);
-  --color-control: var(--axt-control);
-  --color-accent: var(--axt-accent);
-  --color-accent-soft: var(--axt-accent-soft);
-  --radius-card: 14px;
-  --radius-control: 10px;
-  /* The system font stack for now: the popup's opening speed comes first, and no font file is
-     loaded for Latin glyphs; whether to bundle Manrope is UI.md §8 */
-  --font-ui: system-ui, "PingFang SC", "Noto Sans SC", sans-serif;
-}
-
 /* the roles as Tailwind's colours and shadows, for the pages' own layouts (the redesign's design, §2.2), under the
-   reader's names (reader.css) — but the hairline is `chrome-line`: `line` is the old pages' until Part 7 retires them */
+   reader's names (reader.css), the hairline `line` as the reader's sheet names it */
 @theme inline {
-  --color-canvas: var(--canvas); --color-chrome: var(--chrome); --color-chrome-line: var(--chrome-line); --color-line-strong: var(--line-strong);
+  --color-canvas: var(--canvas); --color-chrome: var(--chrome); --color-line: var(--chrome-line); --color-line-strong: var(--line-strong);
   --color-ink: var(--ink); --color-ink-2: var(--ink-2); --color-ink-3: var(--ink-3);
   --color-fill: var(--fill); --color-well: var(--well); --color-lift: var(--lift); --color-float: var(--float-bg);
   --color-focus: var(--focus); --color-danger: var(--danger); --color-success: var(--success); --color-mark: var(--mark);
@@ -82,7 +24,7 @@
    extension's font and ink, its buttons take the pointer, and its focus is ringed for the keyboard alone: 2 px of the
    focus ink, 2 px off; a text field's ring hugs it, and there is none under the pointer, whose caret and edge say where
    the focus is (controls/modality.ts; the reader's `.chrome` does the same). It paints no ground: each page paints its
-   own (the popup `chrome`, the settings page `page`). The old pages have no such root, and nothing here reaches them */
+   own (the popup `chrome`, the settings page `page`) */
 @layer base {
   .ui { color: var(--ink); font: 13px/1.4 var(--font); -webkit-font-smoothing: antialiased; }
   .ui button { cursor: pointer; }
@@ -91,5 +33,3 @@
   .ui :is(input, textarea):focus-visible { outline-offset: 0; }
   html[data-axt-pointer] .ui :is(input, textarea):focus-visible { outline: none; }
 }
-
-@keyframes axt-spin { to { transform: rotate(360deg); } }
