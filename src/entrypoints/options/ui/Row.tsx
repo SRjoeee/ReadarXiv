@@ -24,7 +24,8 @@ interface RowBase {
   /**
    * the description below 640 px, where it says something else there (the interface language's place, Task 104b): both
    * are drawn, and the sheet shows the one true at the window's width — the other, `display: none`, is out of the
-   * accessibility tree too
+   * accessibility tree too. A description that says where, by the width, is a hint and not the setting's words: neither
+   * sentence is searched, or a search would find the row by the one hidden
    */
   narrowDescription?: string
   /** the description is swapped as a choice changes (the way to translate): it comes in with the reader's words-in (§8; Part 3 moved it into controls.css) */
@@ -81,7 +82,7 @@ export function Row(props: RowProps) {
     'data-srow': '',
     'data-row': row,
     // a sample is drawn, not read: a style's sample sentence is not the row's own words (fix round 1, item 7)
-    'data-search': `${label} ${sample ? '' : description ?? ''}${narrowDescription ? ` ${narrowDescription}` : ''} ${words ?? ''}`.trim().toLowerCase(),
+    'data-search': `${label} ${sample || narrowDescription !== undefined ? '' : description ?? ''} ${words ?? ''}`.trim().toLowerCase(),
     'data-level': level || undefined,
     'data-lead': lead || props.kind === 'radio' ? '' : undefined,
     'data-press': press ? '' : undefined,

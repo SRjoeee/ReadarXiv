@@ -92,4 +92,24 @@ describe('the interface language (§6.1)', () => {
     expect(O.uiLanguageElsewhereNarrow).not.toBe(O.uiLanguageElsewhere)
     await m.unmount()
   })
+
+  it('a search finds the row by the setting\'s name, never by the place it names: a hint, and one of its two sentences is hidden at any width (Task 104b)', async () => {
+    state.data = data(DEFAULT_CONFIG, [])
+    history.replaceState(null, '', '#')
+    const content = { translate: () => null, appearance: () => null, reading: () => null, data: () => null }
+    const m = await mountElement(h(App, { content }))
+    const input = m.container.querySelector<HTMLInputElement>('.o-search input')!
+    const search = async (q: string) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, q)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      await m.flush()
+    }
+    await search('language')
+    const words = m.container.querySelector<HTMLElement>('[data-row="language/ui"]')!.dataset.search ?? ''
+    expect(words).toContain(O.uiLanguage.toLowerCase())
+    expect([words.includes(O.uiLanguageElsewhere.toLowerCase()), words.includes(O.uiLanguageElsewhereNarrow.toLowerCase())]).toEqual([false, false])
+    await search(O.uiLanguageElsewhereNarrow)
+    expect(m.container.querySelector('section[data-section="language"]')!.hasAttribute('data-miss')).toBe(true)
+    await m.unmount()
+  })
 })

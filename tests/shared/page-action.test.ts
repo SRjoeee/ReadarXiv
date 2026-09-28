@@ -65,6 +65,29 @@ describe('pageDecision', () => {
   })
 })
 
+describe('what the settings and the record decide', () => {
+  // The floating button's words ask again on a change of the settings or of the refused-key record only while the
+  // page runs, and not at all on an idle page (content/toggle-words.ts): both rest on this
+  const every = [null, 'r1', 'r2'].flatMap(revision => [true, false].flatMap(canRun => [true, false].map(fallback => ({ revision, canRun, fallback }))))
+
+  it('decide a running page\'s action alone: an idle page always translates, a paused one always retries, whatever is saved and whatever the cue', () => {
+    const idle = { progress: progress('idle') }
+    const paused = { progress: progress('stopped', 'auth: bad key'), running: running('r1') }
+    const stopped = { progress: progress('stopped') }
+    for (const saved of every) {
+      for (const madeGood of [true, false]) {
+        expect(pageAction(idle, saved.revision, madeGood)).toBe('translate')
+        expect(pageAction(paused, saved.revision, madeGood)).toBe('retranslate')
+        expect(pageAction(stopped, saved.revision, madeGood)).toBe('translate')
+        expect([pageDecision(idle, saved, madeGood)?.action, pageDecision(paused, saved, madeGood)?.action]).toEqual(['translate', 'retranslate'])
+      }
+    }
+    // a running page is the one they move
+    const on = { progress: progress('on'), running: running('r1') }
+    expect(new Set(every.flatMap(saved => [true, false].map(madeGood => pageAction(on, saved.revision, madeGood))))).toEqual(new Set(['restore', 'retranslate']))
+  })
+})
+
 describe('keyMadeGood', () => {
   const session = { providerId: 'svc-a', demotions: [{ id: 'svc-a', kind: 'auth' as const }] }
   const back = { engine: { id: 'svc-a' } }

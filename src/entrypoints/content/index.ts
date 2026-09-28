@@ -39,8 +39,8 @@ export default defineContentScript({
     let floating: InstalledFloatingButton | null = null
     /**
      * Its main button's words: what its press does, from the toggle's own decision (./toggle-words.ts). Asked again
-     * where what that decision reads may move: every change of the page's state, and while it runs a restart, the
-     * saved settings, the refused-key record
+     * where what that decision reads may move: a change of the page's state, and while it runs a restart, the saved
+     * settings, the refused-key record
      */
     const words = createToggleWords({
       decide: () => sendMessage({ type: 'axt:toggle-decision' }).then(answer => answer?.decision),
@@ -59,7 +59,7 @@ export default defineContentScript({
       // menu, the hash, the button itself. A stopped session (a fatal error) shows no translation in progress, so no tick
       onState: state => {
         floating?.setActive(state === 'on')
-        words.follow(state === 'on')
+        words.follow(state)
       },
       // The same line goes to the diagnostics log (issue #156): a reader's export then shows what this page did
       trace: line => {
@@ -98,9 +98,9 @@ export default defineContentScript({
       label: words.label,
     }).then(async installed => {
       floating = installed
-      const on = (await session.status()).progress.state === 'on'
-      installed.setActive(on)
-      words.follow(on)
+      const { state } = (await session.status()).progress
+      installed.setActive(state === 'on')
+      words.follow(state)
     })
 
     // The figure viewer (DESIGN §15.7): nothing of the paper is touched, so it is there whether or not the page is
