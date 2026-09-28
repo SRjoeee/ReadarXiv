@@ -1,4 +1,4 @@
-import { getConfig, setConfig, watchConfig } from '@/config/storage'
+import { getConfig, setConfig, watchConfigChange } from '@/config/storage'
 import { startsTranslation } from '@/core/abstract/link'
 import { extract, paperContext } from '@/core/extractor'
 import { IMG_CLASS, T_CLASS } from '@/core/marks'
@@ -40,7 +40,7 @@ export default defineContentScript({
     /**
      * Its main button's words: what its press does, from the toggle's own decision (./toggle-words.ts). Asked again
      * where what that decision reads may move: a change of the page's state, and while it runs a restart, the saved
-     * settings, the refused-key record
+     * settings' chain fields, the refused-key record
      */
     const words = createToggleWords({
       decide: () => sendMessage({ type: 'axt:toggle-decision' }).then(answer => answer?.decision),
@@ -67,10 +67,12 @@ export default defineContentScript({
         void sendMessage({ type: 'axt:diag', src: 'content', line }).catch(() => undefined)
       },
     })
-    // watchConfig rather than a message: the settings page is itself the active tab and cannot reach the content page; the subscription also updates every open paper at once
-    watchConfig(config => {
+    // A subscription rather than a message: the settings page is itself the active tab and cannot reach the content page;
+    // the subscription also updates every open paper at once. The session hears every write; the words ask again only
+    // for a write that moves what the decision reads (./toggle-words.ts `configChanged`)
+    watchConfigChange((config, previous) => {
       session.onConfig(config)
-      words.refresh()
+      words.configChanged(config, previous)
     })
     watchRejected(() => words.refresh())
 

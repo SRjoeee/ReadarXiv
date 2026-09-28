@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { createToggleWords } from '@/entrypoints/content/toggle-words'
 import { LOCALES } from '@/locales'
 import type { PageAction } from '@/shared/page-action'
@@ -114,5 +115,39 @@ describe('createToggleWords', () => {
       await settle()
       expect([words.label(S, true), words.label(S, false)]).toEqual([S.primary.restore, S.primary.translate])
     }
+  })
+
+  it('a write of the settings asks again only when it moves a field the decision reads — a colour dragged, a display switched ask nothing; the service, the language, the fallback ask (Part 7\'s final review, C-M1)', async () => {
+    const decide = vi.fn(async () => decision('restore'))
+    const words = createToggleWords({ decide, changed: () => undefined })
+    words.follow('on')
+    await settle()
+    const asks = () => decide.mock.calls.length
+    expect(asks()).toBe(1)
+    // a drag on the settings page's colour: a write a frame, two seconds of them, and a display switch among them
+    let config: Config = DEFAULT_CONFIG
+    for (let i = 0; i < 120; i++) {
+      const next: Config = { ...config, appearance: { ...config.appearance, activeStyle: `style-${i}` }, mode: i % 2 ? 'side' : 'stack' }
+      words.configChanged(next, config)
+      config = next
+      await settle()
+    }
+    expect(asks()).toBe(1)
+    // the fields the chain is built from (config/revision.ts CHAIN_CONFIG_FIELDS), each one ask
+    for (const next of [{ ...config, provider: 'google-web' }, { ...config, targetLanguage: 'jpn' as const }, { ...config, fallback: { enabled: false } }]) {
+      const before = asks()
+      words.configChanged(next, config)
+      await settle()
+      expect(asks(), JSON.stringify(Object.keys(next))).toBe(before + 1)
+    }
+    // a value before the write that did not parse (a migration's own write) is no evidence the chain stayed: asked
+    words.configChanged(config, null)
+    await settle()
+    expect(asks()).toBe(5)
+    // a page that is not running asks nothing, whatever moved (its press does not depend on the settings)
+    words.follow('idle')
+    words.configChanged({ ...config, provider: 'microsoft' }, config)
+    await settle()
+    expect(asks()).toBe(5)
   })
 })

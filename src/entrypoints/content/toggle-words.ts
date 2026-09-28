@@ -6,9 +6,14 @@
 // act and opens the control panel, the words that button shows disabled there.
 //
 // The decision reads the page's state and session, the saved settings and the refused-key record, which move while
-// the page stays open. The page asks again when one of them may have: on a change of its state (`follow`), and on a
-// restart, a change of the settings or of the record while it runs (`refresh`, content/index.ts says where). One ask
-// is out at a time, and at most one waits behind it: a burst of settings writes (a colour dragged) asks twice.
+// the page stays open. The page asks again when one of them may have: on a change of its state (`follow`), and while
+// it runs on a restart or a change of the record (`refresh`) and on a write of the settings that moves a field the
+// decision reads (`configChanged`) — the chain's fields alone (config/revision.ts `CHAIN_CONFIG_FIELDS`: the saved
+// settings reach the decision only through the chain built from them). A colour dragged on the settings page writes
+// the settings every frame and asks nothing; it asked back to back for as long as the drag lasted (Part 7's final
+// review). One ask is out at a time, and at most one waits behind it.
+import { chainConfigChanged } from '@/config/revision'
+import type { Config } from '@/config/schema'
 import type { Progress } from '@/core/pipeline/run'
 import type { Locale } from '@/locales'
 import type { PageAction, PageDecision } from '@/shared/page-action'
@@ -20,6 +25,11 @@ export interface ToggleWords {
   follow: (state: Progress['state']) => void
   /** What a running page's decision reads may have moved: asked again, while the page runs */
   refresh: () => void
+  /**
+   * The saved settings were written (`previous`: the value before, null when it did not parse): asked again, while the
+   * page runs, when a field the decision reads moved
+   */
+  configChanged: (next: Config, previous: Config | null) => void
 }
 
 export interface ToggleWordsDeps {
@@ -60,6 +70,11 @@ export function createToggleWords(deps: ToggleWordsDeps): ToggleWords {
       } else if (mine === generation) set(next)
     })
   }
+  const refresh = () => {
+    // The settings and the record decide a running page's action alone (the same premise, the same test): a page
+    // that is not running keeps the answer it has
+    if (state === 'on') ask()
+  }
   return {
     // With no decision — none yet for this state, or none to be had — the words say whether the page is on, as the
     // button did before it could ask
@@ -74,10 +89,9 @@ export function createToggleWords(deps: ToggleWordsDeps): ToggleWords {
       // answer would be the words it has without one, so it is not asked. A stopped page's may be a retry
       if (next !== 'idle') ask()
     },
-    refresh: () => {
-      // The settings and the record decide a running page's action alone (the same premise, the same test): a page
-      // that is not running keeps the answer it has
-      if (state === 'on') ask()
+    refresh,
+    configChanged: (next, previous) => {
+      if (previous === null || chainConfigChanged(previous, next)) refresh()
     },
   }
 }
