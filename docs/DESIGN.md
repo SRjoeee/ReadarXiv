@@ -703,7 +703,7 @@ A key the endpoint refused is remembered outside the configuration (`local:servi
 | Counter-examples | Vitest | From the independent audit of 2026-09-11: **held** (a lost placeholder does not move the formula to the sentence's end), **known lossy** (runs keeps links and positions, flattens `<em>`), **refused** (systemic failures are not halved, bad translations do not enter the cache), and the former "known behaviour to change" (a node swapped after serialisation), now the stale refusal of #212 |
 | Measurements | Vitest, `AXT_MEASURE=1 pnpm vitest run tests/perf` | The lazy scheduler at 880 blocks, the highlight observer under a burst, the cache port's writes and reads — readings, not assertions; the numbers are kept in §7.7, §9 and §10 |
 
-**Browser suites** (Playwright driving Chrome for Testing with the built extension; not in CI, run on the final build of every PR that touches behaviour; 1 774 unit tests and the suites of the day on 2026-09-17; 2 910 and the counts below on 2026-09-28, at the redesign's end):
+**Browser suites** (Playwright driving Chrome for Testing with the built extension; not in CI, run on the final build of every PR that touches behaviour; 1 774 unit tests and the suites of the day on 2026-09-17; 2 912 and the counts below on 2026-09-28, at the redesign's end):
 
 | Suite | Checks | Protects |
 |---|---|---|

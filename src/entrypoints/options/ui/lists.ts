@@ -59,16 +59,17 @@ export interface ListWrites<C> {
  * A row focused once it is drawn: a list's write that lands brings a row back (an undo) or in (a service added), and the
  * row is drawn by the commit that renders the stored value — which a frame asked for as the write lands may come before,
  * leaving the focus on the page (Part 7's final review: the services list at 60 Hz and more at 120; the styles' and the
- * prompts' lists the same, more narrowly). `focus(id)` marks the row; after each of the list's commits a layout effect
- * focuses it as soon as `find` has its element, before that commit is painted, and forgets it. The three lists share it
+ * prompts' lists the same, more narrowly). `focus(id)` marks the row, and the layout effect of the commit that renders
+ * the mark focuses it, before that commit is painted. That commit draws the row, or an earlier one did: the store
+ * publishes the value before the write resolves (shared/surface-config.ts). The mark lives for that one draw: a row it
+ * does not find — gone again, never stored — is not waited for, or it would take the focus whenever it appeared later,
+ * wherever the reader was by then (item 23b). The three lists share it
  */
 export function useFocusWhenDrawn(find: (id: string) => HTMLElement | null | undefined): (id: string) => void {
   const [pending, setPending] = useState<string | null>(null)
   useLayoutEffect(() => {
     if (pending === null) return
-    const row = find(pending)
-    if (!row) return
-    row.focus()
+    find(pending)?.focus()
     setPending(null)
   })
   return setPending

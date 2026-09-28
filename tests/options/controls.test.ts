@@ -1,11 +1,11 @@
 // The settings page's own controls (the redesign's design, §6.2, §6.3, §6.6): the undo row that stands for 5 s where a
 // deleted row was, the confirm in place that turns back after 3 s untouched, the model field's combobox, and the list
 // helpers the sections share
-import { createElement as h, useState } from 'react'
+import { act, createElement as h, useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Combobox, type ComboOption } from '@/entrypoints/options/ui/Combobox'
 import { ConfirmButton, DISARM_MS } from '@/entrypoints/options/ui/ConfirmButton'
-import { insertAt, withUndo } from '@/entrypoints/options/ui/lists'
+import { insertAt, useFocusWhenDrawn, withUndo } from '@/entrypoints/options/ui/lists'
 import { UNDO_MS, UndoRow } from '@/entrypoints/options/ui/UndoRow'
 import { O, setLocale } from '@/ui/strings'
 import { mountElement } from '../ui/render-hook'
@@ -159,5 +159,39 @@ describe('the list helpers', () => {
     expect(withUndo(['a', 'b', 'c'], [{ index: 1, name: 'x' }])).toEqual([{ item: 'a' }, { gone: { index: 1, name: 'x' } }, { item: 'b' }, { item: 'c' }])
     expect(withUndo(['a'], [{ index: 5, name: 'x' }])).toEqual([{ item: 'a' }, { gone: { index: 5, name: 'x' } }])
     expect(insertAt(['a', 'c'], 1, 'b')).toEqual(['a', 'b', 'c'])
+  })
+
+  /** A list of buttons whose rows the test draws (`draw`), and the focus it asks for through the list's own hook */
+  interface Asks { draw?: (rows: string[]) => void; focus?: (id: string) => void }
+  function Rows({ asks }: { asks: Asks }) {
+    const [rows, draw] = useState(['a'])
+    const found = useRef(new Map<string, HTMLElement>())
+    asks.draw = draw
+    asks.focus = useFocusWhenDrawn(id => found.current.get(id))
+    return h('div', null, rows.map(id => h('button', { key: id, type: 'button', ref: (el: HTMLElement | null) => { if (el) found.current.set(id, el); else found.current.delete(id) } }, id)))
+  }
+  const drawn = (c: HTMLElement, id: string) => byText(c, id)!
+
+  it('focuses a row asked for in the commit that draws it, as a write that lands draws its row (Part 7\'s final review, item 23)', async () => {
+    const asks: Asks = {}
+    const m = await mountElement(h(Rows, { asks }))
+    await act(async () => { asks.draw!(['a', 'b']); asks.focus!('b') })
+    expect(document.activeElement).toBe(drawn(m.container, 'b'))
+    // and a row already drawn at once
+    await act(async () => { asks.focus!('a') })
+    expect(document.activeElement).toBe(drawn(m.container, 'a'))
+    await m.unmount()
+  })
+
+  it('a focus asked for a row its commit does not draw lives for that draw only: the row drawn later does not take the focus (item 23b)', async () => {
+    const asks: Asks = {}
+    const m = await mountElement(h(Rows, { asks }))
+    drawn(m.container, 'a').focus()
+    await act(async () => { asks.focus!('b') })
+    expect(document.activeElement).toBe(drawn(m.container, 'a'))
+    // later, the row appears (another tab put it back): the focus stays where the reader has it
+    await act(async () => { asks.draw!(['a', 'b']) })
+    expect(document.activeElement).toBe(drawn(m.container, 'a'))
+    await m.unmount()
   })
 })
