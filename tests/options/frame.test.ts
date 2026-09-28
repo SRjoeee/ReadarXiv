@@ -84,6 +84,23 @@ describe('applySearch (§6.1)', () => {
     expect(applySearch(root, 'sync')).toBe(0)
     expect([root.querySelector('[data-undo]')!.hasAttribute('data-miss'), root.querySelector('[data-card]')!.hasAttribute('data-miss')]).toEqual([true, true])
   })
+
+  it('keeps the rows of a list a found row opens, open or not yet, so that opening it needs no second pass; a row found for its own words in a list whose row was not, alone (Part 7\'s final review, B-I2)', () => {
+    const root = document.createElement('div')
+    const list = (open: boolean) => `<div data-card><button data-srow data-search="prompt"></button>
+      <div class="reveal"${open ? ' data-open' : ''}><div${open ? '' : ' inert'}><div data-srow data-search="default"></div><div data-srow data-search="new prompt"></div>
+        <div class="reveal" data-open><div><div data-srow data-search="nested"></div></div></div></div></div></div>`
+    for (const open of [true, false]) {
+      root.innerHTML = `<section data-section="a">${list(open)}<div data-card><div data-srow data-search="sync"></div></div></section>`
+      const rows = () => [...root.querySelectorAll('[data-srow]')].map(r => r.hasAttribute('data-miss'))
+      // the row found; its list's rows, and a list inside that list, kept; only an open list's matches counted
+      expect(applySearch(root, 'prompt'), `open: ${open}`).toBe(open ? 2 : 1)
+      expect(rows(), `open: ${open}`).toEqual([false, false, false, false, true])
+      // the list's own row not found: its rows as any others, found by their own words alone (and only when shown)
+      expect(applySearch(root, 'default')).toBe(open ? 1 : 0)
+      expect(rows()).toEqual([true, !open, true, true, true])
+    }
+  })
 })
 
 describe('the frame (§6.1)', () => {

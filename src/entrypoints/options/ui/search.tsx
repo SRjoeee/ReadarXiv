@@ -21,12 +21,23 @@ export function Marked({ text }: { text: string }) {
 }
 
 /**
+ * The row a reveal belongs to: the row just before it, whose press or switch opens it — a list, a form, a sub-row are
+ * drawn so on this page; null for a reveal that follows no row
+ */
+function ownerOf(row: Element): Element | null {
+  const owner = row.parentElement?.closest('.reveal')?.previousElementSibling
+  return owner?.hasAttribute('data-srow') ? owner : null
+}
+
+/**
  * The search's pass over what is drawn (§6.1): a row is found when its words hold the query and it shows — a closed
  * reveal is inert, so a sub-row that does not apply is not found; a card and a section with no row found miss too,
- * and each card's first row found loses its top line. A deletion's undo row that shows is never hidden: it is the only
- * way back, and its 5 s run whether it shows or not (Part 7's final review); it keeps its card and section shown, and is
- * no match itself. Attributes only, read and written in one pass, no layout. Returns how many rows were found. With no query it
- * clears what an earlier pass marked
+ * and each card's first row found loses its top line. Two kinds of row stay shown besides (Part 7's final review): a
+ * deletion's undo row that shows, the only way back, whose 5 s run whether it shows or not — it keeps its card and
+ * section shown, and is no match itself; and the rows of what a shown row opens (a list, a form, a sub-row), open or not
+ * yet, so that a list opened from a result shows its rows with no second pass — found only for their own words. A row
+ * comes before what it opens, so its mark is known when the pass reaches them. Attributes only, read and written in one
+ * pass, no layout. Returns how many rows were found. With no query it clears what an earlier pass marked
  */
 export function applySearch(root: HTMLElement, q: string): number {
   for (const el of root.querySelectorAll('[data-miss], [data-first]')) {
@@ -38,8 +49,10 @@ export function applySearch(root: HTMLElement, q: string): number {
   for (const row of root.querySelectorAll<HTMLElement>('[data-srow]')) {
     const shows = !row.closest('[inert]')
     if (shows && row.hasAttribute('data-undo')) continue
-    if (shows && (row.dataset.search ?? '').includes(q)) found++
-    else row.setAttribute('data-miss', '')
+    if (shows && (row.dataset.search ?? '').includes(q)) { found++; continue }
+    const owner = ownerOf(row)
+    if (owner && !owner.hasAttribute('data-miss')) continue
+    row.setAttribute('data-miss', '')
   }
   for (const box of root.querySelectorAll<HTMLElement>('[data-card], section[data-section]')) {
     const first = box.querySelector<HTMLElement>('[data-srow]:not([data-miss])')

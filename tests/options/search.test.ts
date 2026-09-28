@@ -35,6 +35,8 @@ import { O, setLocale } from '@/ui/strings'
 // happy-dom draws nothing: a scroll is nothing to it
 Element.prototype.scrollIntoView ??= () => {}
 
+const SVC = { id: 'svc-mine0000', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://api.example.com/v1', apiKey: 'k', model: 'm', thinking: 'disabled' as const }
+const LLM: Config = { ...DEFAULT_CONFIG, services: [SVC], provider: SVC.id }
 const plain = (label: string) => () => h(Card, null, h(Row, { label }))
 const CONTENT = {
   translate: (d: OptionsData) => h(Llm, { data: d }),
@@ -72,6 +74,21 @@ describe('the search over the sections (Part 7\'s final review)', () => {
     const undo = m.container.querySelector<HTMLElement>('[data-undo]')!
     expect(undo.textContent).toContain(O.undo.undo)
     expect([undo.hasAttribute('data-miss'), hidden(undo)]).toEqual([false, false])
+    await m.unmount()
+  })
+
+  it('a list opened from a row the search found shows its rows: the prompts, the new-prompt row, import and export (B-I2)', async () => {
+    const m = await searching('prompt', { ...LLM, prompts: { ...LLM.prompts, patterns: [{ id: 'mine', name: 'Terse', systemPrompt: 'Be terse.', prompt: 'Translate: {{input}}' }] } })
+    const row = m.container.querySelector<HTMLButtonElement>('[data-row="translate/prompts"]')!
+    expect(hidden(row)).toBe(false)
+    row.click()
+    await m.flush()
+    const list = m.container.querySelector<HTMLElement>(`[role="radiogroup"][aria-label="${O.prompts.title}"]`)!
+    const rows = [...list.querySelectorAll<HTMLElement>('[data-srow]')]
+    // the two built-ins, one's own, the new-prompt row
+    expect(rows.length).toBe(4)
+    expect(rows.filter(hidden)).toEqual([])
+    expect([O.prompts.create, O.prompts.import, O.prompts.export].map(name => hidden(button(list, name)))).toEqual([false, false, false])
     await m.unmount()
   })
 })
