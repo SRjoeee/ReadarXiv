@@ -2929,3 +2929,137 @@ When CI is green, the terminal signals are in, every comment is answered and the
 tell the maintainer, and merge unless they asked to hold — `gh pr merge <number> --merge` (a merge commit; never
 `--squash`, never `--rebase`). Then `git fetch origin && git log --oneline -1 origin/exp/pdf-bilingual`: the merge is
 the tip.
+
+## Part 7: done
+
+Branch `exp/extension-ui-redesign`, base `cc781213` (its merge-base with `exp/pdf-bilingual`), last commit `5a1155fb`
+(2026-09-29). The ledger: `.superpowers/sdd/2026-09-26-extension-ui-redesign-part7-finish/progress.md`.
+
+**The three merges:** `93763c58` Part 4 (the popup), `6abedfcc` Part 5 (the settings page), `5af9e56b` Part 6 (the
+floating button and the controls on arXiv's pages); each re-joined as Tasks 91–93 planned, the gate and the suites after
+each (2843, then 2857 tests; `e2e` 72/72; `entries.mjs` ok; `e2e:floating` 22/22; the panel shot again with the new
+popup in its frame).
+
+**The tasks' commits:**
+
+| Task | Commits |
+|---|---|
+| 90 | `8b26542f` (the plan amended); pre-flight amendments `c805fa55`, `218e1163` |
+| 94 | `07dc183b`, `cd3b0334` — the protector suite's timeout (20 × 4.76 s), migration 20's cases through `readConfig` |
+| 95 | `91af7176` — the image run's dead gate |
+| 96 | `e0c48b10` — `styleSample`; the controls sheet on live keys |
+| 97 | `2a619d01` — the old `src/ui` components and `src/ui/appearance/*` retired; `MenuItem` moved; 16 keys deleted |
+| 98 | `b76f31e6` — `ui.css`'s old `--axt-*` tokens retired; the gallery on roles; `pages-pixels.mjs` retired |
+| 99 | `1550fc73`, `07f5f8b6`, `e562e69e`, `7716bd1c`, `14c62dff`, `97b4bedb`, `1f64758a`, `aa36df32` (Steps 1–10: `configFallbackReason` and `withItem` retired, `align.mjs` fails on nothing measured); `eaa6ff25`, `92923d5a`, `8b0fb6fb` (Step 11: ⌥T, the context menu and the floating button do the retranslate cue, bounded) |
+| 100 | `7c585c3e` — `reflow-shots.mjs`, `pages-a11y.mjs` |
+| 101 | `52df238b`, `e0523e48`, `fc6daef1`, `8900b186`, `9fa3939c`, `21482ac3`, `c636a2a3`, `059f3aa2` |
+| 103b | `1ee04094` (plan); `77b91f4d` (the frame centred), `e6e82eef` (the interface language at the title row's end on a narrow window), `7ebbe98c` (the PDF popup's style button greyed), `e0260bf6` (the built-in prompts' names in the interface's language, `promptName`) |
+| 103c | `74446ab2` (plan); `e2ea988c` (the brand red), `567c0ab4` (round-7 F's measures), `cbb5af59` (the red switches), `f2717a98` (UI.md) |
+| 104 | `51ff9d98`, `b07ecf99` — UI.md rewritten; S-I-03 retired |
+| 104b | `ebfc03c4`, `8e3e76e9`, `c13ce186`, `8114da24`, `20f5670b`, `c3935ae2` — the floating button's words from the press's own decision, coalesced and bounded |
+| 105 | `01d83799`, `53f4d3cd` — DESIGN.md |
+| 106 | `f98b0f41`, `e498d915` — the reader's design, CHANGELOG, CLAUDE.md, THIRD_PARTY, RELEASE |
+| 107 | `489e4709`, `50dfab9d` — Codex's point |
+| 108 | `de9a6fbb`, `e0db947d`, `bd8616bf`, `9eb61c30`, `c5cf0902`, `106929f1`, `60261e68`, `e2c41099`, `2f54aafd`, `0d4ecf86`, `11d2cb29`, `e3854e93`, `d707edcf`, `94b3d56d`, `03106143`, `ddb5c87b`, `d85e8f39`, `fb37cd8b`, `d462d590`, `5a1155fb` — the final review's fixes |
+
+**Checks at the last commit** (`5a1155fb`, the controller's sweep; a browser suite that failed was rerun once and both
+runs are named):
+
+- The gate: `pnpm typecheck && pnpm lint && pnpm test && pnpm build` exits 0 — 2 912 tests passed, 3 skipped (2 888
+  before the final review's fixes).
+- The suites: `pnpm e2e` 72/72, `e2e:popup` 20/20, `e2e:pdf` 26/26, `e2e:floating` 22/22, `e2e:a11y` 5/5,
+  `e2e:layout` 31/31, `e2e:image` 18/18, `e2e:local-endpoint` 6/6.
+- The reader's spikes: `reader-pixels.mjs` 24 × ok (the baseline Parts 1–3 were judged against, never re-recorded),
+  `reader-ui.mjs` 71, `entries.mjs` 11, `cache-faults.mjs` 5, `cache-revisit.mjs` 26, `viewer-faults.mjs` 8,
+  `reader-a11y.mjs` 22, `reader-ui-live.mjs` 10 — all passed.
+- The probes: `settings-align.mjs` every row on its lines in both themes and both languages; `reflow-shots.mjs` 30 ok;
+  on the development build `popup-align.mjs` 46 ok (with the new check that no popup button's content is wider than
+  itself), `controls.mjs` 232 ok, `pages-a11y.mjs` 30 ok and no `also` line.
+- Every one passed on its first run (2026-09-29, 01:21–01:45, load average ~5).
+
+**The first paint (Task 102):** three rounds back to back, Part 3's build (`build-before`, kept by Part 4's Task 30) then this one, on
+2026-09-29 at a load average of 4.9 falling to 3.6 (another session's idle servers only): toolbar 38 → 36, 44 → 32,
+34 → 32 ms; panel 50 → 40, 44 → 46, 46 → 46 ms (medians of 10 launches each) — six `ok`. The rounds' medians: toolbar
+38 → 32 ms, panel 46 → 46 ms. The popup opens as fast as it did (§12); Part 4's one failure on a loaded machine (44.0
+against a 43.6 threshold) was the load.
+
+**The maintainer's look (Task 103, 2026-09-28)**, on the build of `059f3aa2` with an eight-question checklist:
+1 the built-in style presets' colours (green 2.50, amber 2.73, blue 3.62 on arXiv's light page) — kept;
+2 F1, the figure viewer's control under arXiv's empty navigation box below 1280 CSS px — kept as arXiv's defect, recorded
+in DESIGN §15.7's known limits, to be discussed later;
+3 the viewer's bar over the fitted figure at 400 % — acceptable;
+4 P0's search field focused on open, with the keyboard ring — kept;
+5 a deep link's row flashing with its focus ring — kept;
+6 the pencil choosing the style it opens, a deletion falling back to the list's first — kept;
+7 the new words (the address suggestions' heard name, the glossary's example row, retry, the precision prompt's
+description unquoted) — all accepted;
+8 the built-in prompts' names — in the interface's language (Task 103b).
+The checklist's second section (narrow and zoomed pages, a field's red edge, the dark tooltip on both themes, the panel's
+new popup, P0's alert-toned sentence) raised no change. The maintainer's own asks became Task 103b (the frame centred as
+one group; the interface language at the title row's end on a narrow window; the PDF popup's style button kept and
+greyed; the prompts' names) and, after two scratch rounds (`~/Downloads/readarxiv-test/design/extension-ui/round-7`,
+`round-8`), Task 103c: the switches in the brand red on the popup and the settings page (never the reader), the brand
+row and the primary at round-7 F's measures (G = A + F, "the proportions are right"), and the brand red itself —
+arXiv's red to the eye, `#B31925` / dark `#CB3438` (`oklch(0.493 0.186 24.5)` / `oklch(0.559 0.188 24.5)`), the error
+red (`--danger`) and the logo's `#AA142D` unchanged. The dark hover of a red switch's row (the track at 2.76 against its
+ground, 3.07 at rest) was accepted.
+
+**The local Codex review (Task 107,** the whole branch, base `cc781213`**):** one point, [P2] — the settings page's
+service form reported a service connected and closed whatever its write did (an unreadable store answers with the
+defaults). Adopted: `489e4709` (`useListWrites.save` on the page's landed rule; the form's give-back of origins when it
+is already gone), `50dfab9d` (no origin given back while the stored value cannot be read — the deletions' rule). Two
+residuals carried to #299 (below).
+
+**The final review (Task 108)**, in four lanes read at once (the popup and the shared controls; the settings page and
+the configuration; the background, the content scripts and the reader; a StrictMode sweep of the whole tree, the
+documents and the probes), each on the most capable model: 0 Critical, 6 Important, 16 Minor (one found by two lanes), 3 unconfirmed, and one Minor
+at re-review; every lane re-reviewed its fixes and approved.
+
+| Finding | Grade | Outcome |
+|---|---|---|
+| P0 greys a found paper's entries when no service can run and says nothing (or that the paper has no HTML version) | Important | `de9a6fbb` — the service's reason with the settings button, as on the abstract page |
+| The shared menu list never scrolled its active option into view (a regression from the retired popup menu) | Important | `e0db947d` — confined to the popover's own scroll boxes |
+| The English 'Translate again ⌥T' overflowed its half of the pair at 15 px / 600 | Important | `bd8616bf` — 'Retranslate' (121.6 px in 144; 132.6 with Alt+T); `popup-align.mjs` now fails on any popup button whose content is wider than itself, both languages |
+| A deletion under a running search hid its own undo row | Important | `c5cf0902` |
+| A list opened from a search result showed none of its rows | Important | `106929f1` — a found row keeps what it opens |
+| Undoing a service's deletion dropped the focus to the page | Important | `60261e68`, then `d85e8f39` and `5a1155fb`: the three lists move the focus once the row is drawn, and a pending focus lives for one draw |
+| P0's field and Enter rows had no edge in forced colours | Minor | `9eb61c30` |
+| The group names (the services', the styles') found nothing | Minor | `e2c41099` |
+| `O.reading.advanced` orphaned | Minor | `2f54aafd` |
+| UI.md S-O-19 said an edit is chosen | Minor | `0d4ecf86` |
+| The prompts' import reported before its write | Minor | `11d2cb29` |
+| The interface language's foot said "follow the browser" before the settings were read (unconfirmed) | Minor | `e3854e93` |
+| A colour dragged kept every translated tab asking for its decision (94 asks in 2 s) | Minor | `d707edcf` — the words re-ask only when the chain's settings move |
+| The floating button's words after a back/forward-cache restore (unconfirmed) | Minor | `94b3d56d` — asked again on `pageshow` |
+| Three comments still describing per-display figure modes | Minor | `03106143` |
+| The reader's document area slid on open in a development build (a one-shot ref spent by StrictMode's double run; before this branch) — the sweep's one finding | Minor | `ddb5c87b` |
+| `floating-shots.mjs` exited 0 on a moved part | Minor | `fb37cd8b` |
+| DESIGN §7.6's dark skeleton colour, §11's count; THIRD_PARTY's three dev-only icons and the glyph's 0.76; RELEASE's permission row; two lines of Chinese outside the allowed kinds | Minor | `d462d590` |
+| A deletion's commit can give back an origin a form on the same page is connecting with (a 5 s window) | Minor | Carried to #299 with the other origin items: one ledger of who holds an origin |
+| A row unmounted while its popup menu is open would leave the popup's `min-height` set (unconfirmed) | — | Closed: no transition a reader can make unmounts a row while its menu holds the focus |
+| The settings page's language popover scrolls as a whole, so opening on a stored language past ~25 rows scrolls its search field out of view | Minor | No change in this part: a long menu opening on its chosen row; typing brings the field back. A list box of its own (as the popup's) is a visual change — put to the maintainer as a scratch round |
+
+**The parked table's final state** (130 rows): 42 fixed, 48 closed, 40 carried. Beyond the table's own outcomes: the six rows for the maintainer's look (64,
+93, 102, 121, 122, 123) closed by their answers above (each kept or accepted); row 83 (several `<h1>` while a search
+runs) carried — Task 101's axe probe called it neither serious nor critical; row 125 (`e2e:pdf`'s four checks once)
+closed — 26/26 at every run since (Task 101 twice, the sweep above); row 126 (`reader-pixels.mjs`' dark shots once)
+carried as a watch — it recurred in three loaded runs (`dark-toolbar.png` twice, `dark-tip-x.png` once), each cleared
+on a rerun of the spike alone, and was clean at the sweep; row 127 (StrictMode's double run) fixed — the final review's
+sweep of every effect in the tree found one, `ddb5c87b`; rows 35 and 48 carried in their second halves. The carried
+rows, with this part's own carries (the ~10 s worst case when the settings read and the retranslate cue's ask both
+stall; an origin kept for good after a failed deletion or save while the store is unreadable; the service form's
+Cancel giving back its origins without a read; the final review's origin window), go to #299 by Task 110.
+
+**Otherwise than planned:**
+- The reader's pixel probe shoots the toolbar, the four popovers and a tooltip, not the status capsule and the failure
+  card that the design's §2.4 names (row 48): recorded, the probe's extension carried.
+- The preload's constants: the design's §4 names `ON_DEMAND_MARGIN` and `ENTER_THRESHOLD`; the code keeps
+  `DEFAULT_PRELOAD` and `preloadOf`, which DESIGN §10 names.
+- The maintainer's look added two tasks (103b, 103c) and two scratch rounds; the brand colour changed from the logo's
+  red to arXiv's.
+- The final review ran as four parallel lanes instead of one reviewer (a single reviewer over 24 k lines stalled before
+  on smaller packages); each lane re-reviewed its own fixes.
+- Task 104b followed Task 104's review: the floating button's words from the press's own decision (they said what the
+  last state was, not what a press would do).
+- The reader's pixel spike's two dark shots (`dark-toolbar.png`, `dark-tip-x.png`) mismatched once in each of three
+  loaded runs and matched on a rerun of the spike alone (row 126): a watch, carried.
