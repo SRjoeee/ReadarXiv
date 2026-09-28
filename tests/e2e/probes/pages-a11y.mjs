@@ -36,6 +36,11 @@ const patch = change => worker.evaluate(async change => {
   await chrome.storage.local.set({ config: { ...config, ...change } })
 }, change)
 
+/** A style's sample shows the colour a reader chooses for translations as arXiv's page draws it — a picture of that
+ * colour, not the page's words: left out of color-contrast alone, every other rule still runs on it (the controller's
+ * ruling on Task 101's F2 d; the presets' own ratios are the maintainer's to look at, Task 103) */
+const SAMPLES = '[data-sample], .o-preview-target'
+
 /** Axe on the page as it is; `scope` keeps the nodes inside it (the gallery's own frame is not the product); `off`, rules not run */
 async function audit(name, scope, off = []) {
   await page.mouse.move(2, 2)
@@ -43,7 +48,12 @@ async function audit(name, scope, off = []) {
   const { violations } = await new AxeBuilder({ page }).disableRules(off).analyze()
   const ours = []
   for (const v of violations) {
-    const kept = await Promise.all(v.nodes.map(n => page.evaluate(([selector, scope]) => !scope || !!document.querySelector(selector)?.closest(scope), [n.target.join(' '), scope]).catch(() => true)))
+    const samples = v.id === 'color-contrast' ? SAMPLES : null
+    const kept = await Promise.all(v.nodes.map(n => page.evaluate(([selector, scope, samples]) => {
+      const node = document.querySelector(selector)
+      if (samples && node?.closest(samples)) return false
+      return !scope || !!node?.closest(scope)
+    }, [n.target.join(' '), scope, samples]).catch(() => true)))
     const nodes = v.nodes.filter((_, i) => kept[i])
     if (nodes.length) ours.push({ id: v.id, impact: v.impact, n: nodes.length, first: nodes[0].target.join(' ') })
   }
