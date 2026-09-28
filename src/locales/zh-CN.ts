@@ -21,19 +21,19 @@ const FIELD: Record<string, string> = {
 const S = {
   brand: 'Read arXiv', // S-P-01
   settings: '设置', // S-P-02, and the button on every note
-  /** P0, no paper in the tab (the redesign's §5.4, §10.1): find one. Replaces S-P-03's sentence */
+  /** P0, no paper in the tab (the redesign's §5.4, §10.1): find one (S-P-03…08) */
   find: {
-    lead: '打开 arXiv 论文（HTML 或 PDF）即可翻译',
-    field: '按标题、作者、摘要或链接搜索论文',
-    enter: '按回车搜索',
-    advanced: '高级搜索',
-    search: (q: string) => `在 arXiv 搜索「${q}」`,
-    elsewhere: '只能打开 arXiv 的论文链接。也可以输入标题或作者搜索。',
+    lead: '打开 arXiv 论文（HTML 或 PDF）即可翻译', // S-P-03
+    field: '按标题、作者、摘要或链接搜索论文', // S-P-04
+    enter: '按回车搜索', // S-P-05
+    advanced: '高级搜索', // S-P-05
+    search: (q: string) => `在 arXiv 搜索「${q}」`, // S-P-06
+    elsewhere: '只能打开 arXiv 的论文链接。也可以输入标题或作者搜索。', // S-P-08
     /** the paper a link or an id names: a name and an id, the same in every language */
-    paper: (id: string) => `arXiv ${id}`,
+    paper: (id: string) => `arXiv ${id}`, // S-P-07
   },
   /** An arXiv paper's page that has not answered yet (the redesign's §5.4): not P0, and no field */
-  loading: '页面加载中',
+  loading: '页面加载中', // S-P-03d
   rows: {
     service: '翻译服务', // S-P-10
     language: '目标语言', // S-P-20
@@ -43,7 +43,7 @@ const S = {
     images: '图片翻译', // S-P-85
     style: '译文样式', // S-P-82; the same name as “Reading · Translation style” in the settings: the two are one thing
     manageStyles: '管理译文样式…', // S-P-83: the last row of the style menu, opening the settings at “Appearance”
-    managePrompts: '管理提示词…', // the redesign's §5.3: the prompt menu's last row, opening the settings at the prompts
+    managePrompts: '管理提示词…', // S-P-49: the prompt menu's last row (the redesign's §5.3), opening the settings at the prompts
   },
   service: {
     microsoft: 'Microsoft 翻译',
@@ -53,7 +53,7 @@ const S = {
     free: '免费', // S-P-44
     chrome_ready: '浏览器内置，无需联网', // S-P-46
     llm_noKey: '尚未配置 API Key', // S-P-45: the LLM item's hint until a key is set
-    llm_rejected: 'API Key 已失效',
+    llm_rejected: 'API Key 已失效', // S-P-45: the hint of a service whose key the endpoint refused
     microsoft_unsupported: '不支持当前目标语言',
     chrome_download: '下载', // S-P-40
     chrome_downloading: '语言包下载中', // S-P-41
@@ -72,17 +72,16 @@ const S = {
     // S-P-32: the chosen service cannot run and nothing takes over; the reason alone
     cannotRun: (why: string) => why,
     llmNoKey: 'LLM 尚未配置 API Key',
-    llmRejected: 'API Key 已失效', // the redesign's §5.2: a key the endpoint refused
+    llmRejected: 'API Key 已失效', // S-P-32e: a key the endpoint refused (the redesign's §5.2)
     chromeNoPack: 'Chrome 翻译的语言包尚未下载',
     chromeDownloading: 'Chrome 翻译的语言包下载中，约需 1 分钟',
     microsoftUnsupported: 'Microsoft 翻译不支持当前目标语言',
     serviceGone: '选中的翻译服务已被删除，请重新选择', // S-P-32d
     paused: (reason: string) => `${reason}。请检查设置后重新翻译`, // S-P-33
     imagesPaused: (reason: string) => `图片翻译已暂停：${reason}`, // S-P-35
-    noHtml: 'arXiv 没有这篇论文的 HTML 版本，无法翻译',
+    noHtml: 'arXiv 没有这篇论文的 HTML 版本，无法翻译', // S-P-33b
     noHtmlVersion: 'arXiv 没有这篇论文的 HTML 版本', // S-P-33a: the PDF entry beside it translates
   },
-  /** The guided install on the settings page (S-O-30…36). The popup keeps the one-line version above */
   // an abstract or PDF page's two entries, the reader's to choose (S-P-50b; the reader's design, §2, §15)
   entry: { html: 'HTML 翻译', pdf: 'PDF 翻译' },
   primary: {
