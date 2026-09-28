@@ -36,11 +36,11 @@ const patch = change => worker.evaluate(async change => {
   await chrome.storage.local.set({ config: { ...config, ...change } })
 }, change)
 
-/** Axe on the page as it is; `scope` keeps the nodes inside it (the gallery's own frame is not the product) */
-async function audit(name, scope) {
+/** Axe on the page as it is; `scope` keeps the nodes inside it (the gallery's own frame is not the product); `off`, rules not run */
+async function audit(name, scope, off = []) {
   await page.mouse.move(2, 2)
   await sleep(300)
-  const { violations } = await new AxeBuilder({ page }).analyze()
+  const { violations } = await new AxeBuilder({ page }).disableRules(off).analyze()
   const ours = []
   for (const v of violations) {
     const kept = await Promise.all(v.nodes.map(n => page.evaluate(([selector, scope]) => !scope || !!document.querySelector(selector)?.closest(scope), [n.target.join(' '), scope]).catch(() => true)))
@@ -73,7 +73,8 @@ for (const lang of ['zh-CN', 'en']) {
   await goto(`chrome-extension://${extensionId}/gallery.html`)
   await page.waitForSelector('main.popup')
   await sleep(800)
-  await audit(`${lang}: the popup, every state, light and dark (the gallery)`, 'main.popup')
+  // The gallery draws the popup twice side by side, two <main>s no real popup has: the two landmark rules are off here alone
+  await audit(`${lang}: the popup, every state, light and dark (the gallery)`, 'main.popup', ['landmark-no-duplicate-main', 'landmark-unique'])
   for (const theme of ['light', 'dark']) {
     await patch({ theme })
     for (const section of ['translate', 'appearance', 'reading', 'data']) {
