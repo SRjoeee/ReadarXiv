@@ -7,7 +7,10 @@ export const PARAMS = { zh: { em: 1.3, min: 1.1 }, ja: { em: 1.2, min: 1.05 }, k
 const GATE = ['2608.02163', '2608.05876', '2608.09746', '2608.12333', '2608.18090', '2608.23393', '2608.26528', '2608.29867', '2608.06701', '2608.15016', '2608.25750', '2608.06233', '2608.20847', '2608.23586', '2608.06007', '2608.24839', '2608.02785', '2608.24503', '2608.21180', '2608.15761', '2608.25928', '2608.09038', '2608.02991', '2608.12606']
 const EIGHT = ['2608.05876', '2608.18090', '2608.06701', '2608.24839', '2608.02785', '2608.21180', '2608.15761', '2608.06233']
 export const PAPERS = { zh: ['2212.06817', ...GATE], ja: EIGHT, ko: EIGHT, de: EIGHT, ru: EIGHT }
-export const COLUMNS = [{ key: 'original', label: 'Original' }, { key: 'today', label: 'Today' }, { key: 'locked', label: 'Locked' }, { key: 'h', label: 'H' }]
+/** the page's columns, in the order of their number keys; `before` is Today as it was until 2026-09-28 (the whole
+ *  document's CJK \\linespread, no English hyphenation), kept beside the fixed one for the owner, shown when its PDF
+ *  is there */
+export const COLUMNS = [{ key: 'original', label: 'Original' }, { key: 'today', label: 'Today' }, { key: 'locked', label: 'Locked' }, { key: 'h', label: 'H' }, { key: 'before', label: 'Today before 09-28' }]
 /** a sync point's inserted space worth a look: about two lines */
 export const GAP_PT = 24
 
