@@ -7,14 +7,17 @@ import { join } from 'node:path'
 
 /**
  * The items of each row whose vertical centre lies more than `tolerance` px from the row's, as `{ row, item, off }`. A
- * row with no height, or inside an `inert` (a closed reveal), is passed over, and so is an item with no height
+ * row with no height, or inside an `inert` (a closed reveal), is passed over, and so is an item with no height. Throws
+ * when nothing drawn matches: a state that drew nothing is not aligned
  */
-export function offCentre(page, { rows, items = ':scope > *', tolerance = 0.5 }) {
-  return page.evaluate(({ rows, items, tolerance }) => {
+export async function offCentre(page, { rows, items = ':scope > *', tolerance = 0.5 }) {
+  const { out, measured } = await page.evaluate(({ rows, items, tolerance }) => {
     const out = []
+    let measured = 0
     for (const row of document.querySelectorAll(rows)) {
       const r = row.getBoundingClientRect()
       if (!r.height || row.closest('[inert]')) continue
+      measured++
       const mid = r.top + r.height / 2
       for (const item of row.querySelectorAll(items)) {
         const b = item.getBoundingClientRect()
@@ -23,25 +26,29 @@ export function offCentre(page, { rows, items = ':scope > *', tolerance = 0.5 })
         if (Math.abs(off) > tolerance) out.push({ row: (row.dataset.row || row.textContent || '').trim().slice(0, 24), item: String(item.getAttribute('class') ?? item.tagName), off: Math.round(off * 10) / 10 })
       }
     }
-    return out
+    return { out, measured }
   }, { rows, items, tolerance })
+  if (!measured) throw new Error(`offCentre: nothing drawn matches ${rows}`)
+  return out
 }
 
 /**
  * The distinct edges of `items` from the closest ancestor matching `frame`: `start` from its left, `end` from its right;
  * rounded to 0.5 px, sorted. A surface keeps a few agreed ones (the popup's 12 and 24; 14, 42 and 70 from a settings
- * card's start, 14 from its end)
+ * card's start, 14 from its end). Throws when nothing drawn matches: a state that drew nothing is not aligned
  */
-export function edges(page, { items, frame, side = 'start' }) {
-  return page.evaluate(({ items, frame, side }) => {
+export async function edges(page, { items, frame, side = 'start' }) {
+  const { found, measured } = await page.evaluate(({ items, frame, side }) => {
     const found = new Set()
     for (const item of document.querySelectorAll(items)) {
       const b = item.getBoundingClientRect(), f = item.closest(frame)?.getBoundingClientRect()
       if (!b.width || !f || item.closest('[inert]')) continue
       found.add(Math.round((side === 'start' ? b.left - f.left : f.right - b.right) * 2) / 2)
     }
-    return [...found].sort((a, b) => a - b)
+    return { found: [...found].sort((a, b) => a - b), measured: found.size }
   }, { items, frame, side })
+  if (!measured) throw new Error(`edges: nothing drawn matches ${items}`)
+  return found
 }
 
 /** A screenshot of each element matching `selector` into `dir`, named `name(<its data-<key> attribute>)` */
