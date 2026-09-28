@@ -46,7 +46,8 @@ describe('the redesign\'s colour pairs', () => {
     }
   }
 
-  it('reads the prototypes\' numbers: white on the light brand is 7.38:1 (brand.py)', () => {
-    expect(contrast(colour('on-brand', 'light'), colour('brand', 'light'))).toBeCloseTo(7.38, 1)
+  it('reads round 8\'s numbers for the brand red the maintainer chose: white on it 6.81:1 light, 5.14:1 dark', () => {
+    expect(contrast(colour('on-brand', 'light'), colour('brand', 'light'))).toBeCloseTo(6.81, 1)
+    expect(contrast(colour('on-brand', 'dark'), colour('brand', 'dark'))).toBeCloseTo(5.14, 1)
   })
 })

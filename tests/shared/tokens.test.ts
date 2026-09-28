@@ -43,6 +43,10 @@ describe('the token source', () => {
     expect(both('on-brand-2')).toEqual(['oklch(1 0 0 / 0.85)', 'oklch(1 0 0)'])
   })
 
+  it('holds the brand red the maintainer chose (2026-09-28, round 8): arXiv\'s red to the eye, another value', () => {
+    expect([resolve('brand', 'light'), resolve('brand', 'dark')]).toEqual(['oklch(0.493 0.186 24.5)', 'oklch(0.559 0.188 24.5)'])
+  })
+
   it('holds the tooltip\'s shadow as a role, its value the one the tooltip drew, the same in both themes (Task 21)', () => {
     expect([resolve('tip-shadow', 'light'), resolve('tip-shadow', 'dark')]).toEqual(['0 4px 12px oklch(0 0 0 / 0.2)', '0 4px 12px oklch(0 0 0 / 0.2)'])
   })

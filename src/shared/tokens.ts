@@ -67,11 +67,13 @@ export const ROLES = {
   field: { light: '$n-1', dark: '$n-2' },
   'field-edge': '$n-5',
   'card-shadow': { light: '0 0 0 0.5px $n-4, 0 1px 2px oklch(0 0 0 / 0.03)', dark: '0 0 0 0.5px oklch(1 0 0 / 0.06)' },
-  /** the logo's red, #AA142D; the one primary action's fill */
-  brand: { light: 'oklch(0.474 0.18 20.5)', dark: 'oklch(0.56 0.19 20.5)' },
+  /** the one primary action's fill, and a switch that is on (the popup's, the settings page's): arXiv's red to the eye,
+   *  another value — #B31925, ΔE OK 0.0097 from arXiv's #B31B1B, turned 3° towards the logo's red; #CB3438 in dark
+   *  (the maintainer, 2026-09-28, round 8). The logo keeps its own red, #AA142D */
+  brand: { light: 'oklch(0.493 0.186 24.5)', dark: 'oklch(0.559 0.188 24.5)' },
   'on-brand': 'oklch(1 0 0)',
   /** words on the brand told apart from its words by a lighter white and their weight (P0's paper id, §5.4): 85 % white
-   *  in light (5.65:1), white in dark, where 85 % read 4.10:1 */
+   *  in light (5.25:1), white in dark, where 85 % read 4.11:1 */
   'on-brand-2': { light: 'oklch(1 0 0 / 0.85)', dark: 'oklch(1 0 0)' },
   /** a shortcut label on the brand (the maintainer, 2026-09-26: round 2's light label) */
   'brand-chip': { light: 'oklch(1 0 0 / 0.18)', dark: 'oklch(1 0 0 / 0.08)' },
