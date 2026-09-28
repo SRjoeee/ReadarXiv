@@ -50,6 +50,8 @@ const SHAPES = [
   // A placeholder that touches a word: under markers the wire sets the two apart (DESIGN §6.2) — as one token the word was left in English, and Google lost the marker on `@a#th`
   ['ordinal on a formula', `We denote the ${math('i', 'i')}th unit vector by ${math('e', 'e')}.`],
   ['citation on its word', `The same effect was reported for BERT${cite(3)} on larger corpora.`],
+  // …and one right after a full stop, as physics papers set a citation: `models.@a#` was one token, the word left in English
+  ['citation after a full stop', `These distributions are useful for calibrating theoretical models.${cite(4)} However, the deviation remains.`],
   ['paired placeholder', `<em class="ltx_emph ltx_font_italic">The model ${math('f', 'f')} is trained end to end</em> on four GPUs.`],
   ['seven in a long sentence', `The encoder maps ${math('x', 'x')} to ${math('z', 'z')}, the decoder reconstructs ${math('\\hat{x}', 'x̂')} from ${math('z', 'z')}, and the loss compares ${math('\\hat{x}', 'x̂')} with ${math('x', 'x')} under ${math('\\ell_2', 'ℓ₂')}.`],
 ]
