@@ -1,6 +1,7 @@
-// Tooltips (the reader's design, §6.1, §13): one line always; after 500 ms of hover, at once on keyboard focus, never on a
-// press; a shortcut or a second thought in a lighter span. A hint popover (it closes no menu) anchored to its control by
-// CSS anchor positioning, below it and kept inside the window by position-try (reader.css .tip), so nothing is measured.
+// Tooltips (the reader's design, §6.1, §13; shared by every surface since the redesign's §2.3): one line always; after
+// 500 ms of hover, at once on keyboard focus, never on a press; a shortcut or a second thought in a lighter span. A hint
+// popover (it closes no menu) anchored to its control by CSS anchor positioning, below it and kept inside the window by
+// position-try (controls.css .tip), so nothing is measured.
 // Its words are the control's name already, so the tip is hidden from assistive technology
 import { type CSSProperties, type FocusEvent, type ReactNode, useId, useRef } from 'react'
 

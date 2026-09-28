@@ -1,4 +1,4 @@
-// The reader's popovers (the reader's design, §6.7): anchored under their button, 6 px below it, kept within the window
+// Popovers (the reader's design, §6.7; every surface's since the redesign's §2.3): anchored under their button, 6 px below it, kept within the window
 // (position-try); they grow from the button. The browser's own light-dismiss popover: its button opens and closes it
 // (popovertarget), Escape and a press outside close it; the focus comes back to the button when it closes with the
 // focus inside, and closes when the focus leaves it for another control, as a Tab out of a menu does (APG; the interface

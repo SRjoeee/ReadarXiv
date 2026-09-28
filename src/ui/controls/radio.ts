@@ -1,5 +1,6 @@
-// A radio group's keys (the reader's design, §13), for the display switch and the appearance: the arrows move the
-// choice to the next one that can be had, wrapping, and the focus goes with it; only the chosen radio is in the tab order.
+// A radio group's keys (the reader's design, §13), for every radio group — the reader's display switch and appearance,
+// the pages' segmented controls and lists: the arrows move the choice to the next one that can be had, wrapping, and
+// the focus goes with it; only the chosen radio is in the tab order.
 // And a radio's mark (the redesign's design, §6.2, §8; Part 3): 16 px, a 1.5 px ring of ink-3, ink when chosen, its dot
 // growing from the centre (controls.css .radio) — the direct child of the element that is the radio (a row with
 // role="radio" and aria-checked), whose state the sheet reads through it. Here, not in a Radio.tsx beside this file: on

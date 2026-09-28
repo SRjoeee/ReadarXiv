@@ -1,5 +1,5 @@
-/* The PDF reader's page (the reader's design, §4, §5, §11.5): its own tokens, not the extension's ui.css, with
-   Tailwind's theme and utilities and **without Preflight**, whose resets would reach inside PDF.js's viewers: their
+/* The PDF reader's page (the reader's design, §4, §5, §11.5): the extension's tokens and shared controls (tokens.css,
+   controls.css) and not the pages' ui.css, with Tailwind's theme and utilities and **without Preflight**, whose resets would reach inside PDF.js's viewers: their
    layout assumes the browser's defaults (a box-sizing of ours once shifted the highlight, 2026-09-22). The chrome — every
    control the page draws — takes its own small base under the class `chrome`; the viewers keep theirs */
 @layer theme, base, components, utilities;
