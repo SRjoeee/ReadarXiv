@@ -304,6 +304,7 @@ const O: Locale['O'] = {
     parts: { system: ['Instructions', 'Followed in every translation'], user: ['Message', 'Sent with each passage'] },
     tokens: { targetLanguage: 'Target language', input: 'Source text', paperTitle: 'Paper title', abstract: 'Abstract', sectionTitle: 'Section title', glossary: 'Glossary' },
     copyOf: name => `${name} copy`,
+    builtInNames: { default: 'Default', 'precision-rewrite': 'Precision rewrite' },
     builtIn: {
       default: 'General academic translation: settled terms, and names, journals, code and links left as they are',
       'precision-rewrite': 'Translation as rewriting: leaves the source syntax behind and writes the sentence the way the target language would, with terms and formatting unchanged',

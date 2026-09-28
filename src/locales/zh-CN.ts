@@ -340,6 +340,8 @@ const O = {
     tokens: { targetLanguage: '目标语言', input: '原文', paperTitle: '论文标题', abstract: '摘要', sectionTitle: '章节标题', glossary: '术语表' },
     /** What a copy of a built-in prompt is called */
     copyOf: (name: string) => `${name}（副本）`,
+    /** The names of the two prompts shipped with the extension, by id (the maintainer, 2026-09-28: in the interface's language) */
+    builtInNames: { default: '默认', 'precision-rewrite': '精准改写' },
     /** The descriptions of the two prompts shipped with the extension, by id */
     builtIn: {
       default: '通用学术翻译：术语用既定译法，人名、期刊名、代码与链接保留原文',

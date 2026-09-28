@@ -325,8 +325,8 @@ await openSection(options, 'translate')
 // the list is drawn only while open: opened unless it still is
 if ((await promptsRow().getAttribute('aria-expanded')) !== 'true') await promptsRow().click()
 const promptGone = (await options.getByRole('radio', { name: /^e2e 提示词/ }).count()) === 0
-// the built-in prompt's radio is named by the prompt's own name (BUILT_IN_PROMPTS), in every interface language
-const defaultRadio = options.getByRole('radio', { name: 'Default', exact: true })
+// the built-in prompt's radio is named in the interface's language (O.prompts.builtInNames, Task 103b): Chinese here
+const defaultRadio = options.getByRole('radio', { name: '默认', exact: true })
 await defaultRadio.waitFor({ timeout: 5_000 }).catch(() => undefined)
 const defaultChosen = (await defaultRadio.count()) === 1 && (await defaultRadio.isChecked())
 check('the settings page: after deleting the custom prompt the default is chosen again', promptGone && defaultChosen, `left over ${promptGone ? 0 : 1}, default chosen ${defaultChosen}`)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { S, setLocale } from '@/ui/strings'
+import { O, S, setLocale } from '@/ui/strings'
 import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
 import { MANAGE_PROMPTS, MANAGE_SERVICES, MANAGE_STYLES, derivePopupView, runnable } from '@/entrypoints/popup/view-model'
 import { searchUrl } from '@/entrypoints/popup/find'
@@ -162,7 +162,8 @@ describe('derivePopupView (UI.md §4)', () => {
     const v = view('P7')
     expect(v.note).toEqual({ text: 'LLM 尚未配置 API Key，本次将使用 Microsoft 翻译', tone: 'info', settings: true })
     expect(v.primary.disabled).toBe(false)
-    expect(v.prompt).toEqual({ value: 'Default' })
+    // the built-in named in the interface's language, not the prompt library's English (Task 103b)
+    expect(v.prompt).toEqual({ value: O.prompts.builtInNames.default })
   })
   it('P7b a chosen service whose key was refused cannot run: the note says so and who takes over (the redesign\'s design, §5.2)', () => {
     const i = input('P7b')
@@ -246,7 +247,7 @@ describe('derivePopupView (UI.md §4)', () => {
     const v = view('P15')
     expect(v.menu).toBe('prompt')
     const m = v.menus!.prompt!
-    expect(m.items[0]).toMatchObject({ id: 'default', name: 'Default', checked: true })
+    expect(m.items.slice(0, 2)).toMatchObject([{ id: 'default', name: O.prompts.builtInNames.default, checked: true }, { id: 'precision-rewrite', name: O.prompts.builtInNames['precision-rewrite'] }])
     expect(m.items.at(-1)).toMatchObject({ id: MANAGE_PROMPTS, name: '管理提示词…', checked: false, manage: true })
   })
   it('runnable follows the settings alone', () => {

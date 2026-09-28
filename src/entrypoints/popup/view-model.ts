@@ -22,6 +22,7 @@ import type { EntryStatus, PageStatus } from '@/shared/messages'
 import type { StartResult } from '@/core/session'
 import { keyMadeGood, pageDecision } from '@/shared/page-action'
 import type { PackState } from '@/shared/pack'
+import { promptName } from '@/ui/prompt-name'
 import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
 import { styleSample } from '@/ui/style-sample'
 import { NoActiveTabError } from '@/shared/messages'
@@ -235,7 +236,8 @@ function menusOf(config: Config, { pack, rejected }: PopupInput, { reader = fals
           label: S.rows.prompt,
           search: false,
           items: [
-            ...[...Object.values(BUILT_IN_PROMPTS), ...config.prompts.patterns].map(p => ({ id: p.id, name: p.name, checked: p.id === config.prompts.promptId })),
+            // a built-in named in the interface's language, one's own as stored (Task 103b)
+            ...[...Object.values(BUILT_IN_PROMPTS), ...config.prompts.patterns].map(p => ({ id: p.id, name: promptName(p), checked: p.id === config.prompts.promptId })),
             // the way to where prompts are managed, as the service and style menus end (§5.3)
             { id: MANAGE_PROMPTS, name: S.rows.managePrompts, checked: false, manage: true as const },
           ],
@@ -290,7 +292,7 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
     kind: 'entry',
     service: { value: named(config.provider) },
     language: { value: languageName(config.targetLanguage) },
-    prompt: isLlmChosen(config) ? { value: promptName(config) } : null,
+    prompt: isLlmChosen(config) ? { value: chosenPromptName(config) } : null,
     style: null,
     highlight: config.reading.sentenceHighlight,
     images: config.image.enabled,
@@ -429,7 +431,7 @@ export function derivePopupView(input: PopupInput): PopupView {
     : { value: named(config.provider) }
   const language: Row = { value: languageName(config.targetLanguage) }
   // The prompt decides how an LLM translates; the free services do not read it
-  const prompt: Row | null = isLlmChosen(config) ? { value: promptName(config) } : null
+  const prompt: Row | null = isLlmChosen(config) ? { value: chosenPromptName(config) } : null
   // How the translation looks. The page applies a change straight away, so this needs no restart
   const style: Row = { value: profileName(activeStyle(config.appearance)) }
 
@@ -474,9 +476,11 @@ export function derivePopupView(input: PopupInput): PopupView {
   }
 }
 
-function promptName(config: Config): string {
+/** The prompt in use as its row names it: a built-in in the interface's language, one's own as stored, else its id */
+function chosenPromptName(config: Config): string {
   const id = config.prompts.promptId
-  return BUILT_IN_PROMPTS[id]?.name ?? config.prompts.patterns.find(p => p.id === id)?.name ?? id
+  const prompt = Object.hasOwn(BUILT_IN_PROMPTS, id) ? BUILT_IN_PROMPTS[id] : config.prompts.patterns.find(p => p.id === id)
+  return prompt ? promptName(prompt) : id
 }
 
 /** What a failed popup action says (S-P-90): a known failure in the interface language, anything else as it was thrown */

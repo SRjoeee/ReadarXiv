@@ -120,6 +120,22 @@ describe('the LLM group (§6.3)', () => {
     await m.unmount()
   })
 
+  it('in a Chinese interface the built-ins are named in its language — the row, the radios, a copy — and one\'s own as given (Task 103b)', async () => {
+    setLocale('zh-CN')
+    const patches: Config[] = []
+    const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: 'default', patterns: [MINE] } }, patches }))
+    const names = O.prompts.builtInNames
+    expect(names.default).not.toBe(BUILT_IN_PROMPTS.default!.name)
+    expect(promptsRow(m.container).textContent).toContain(names.default)
+    promptsRow(m.container).click()
+    await m.flush()
+    expect(radios(m.container).map(nameOf)).toEqual([names.default, names['precision-rewrite'], `${MINE.name}${O.prompts.mine}`])
+    button(m.container.querySelector<HTMLElement>('.o-prompt')!, O.prompts.copy).click()
+    await m.flush()
+    expect(patches.at(-1)!.prompts.patterns.at(-1)!.name).toBe(O.prompts.copyOf(names.default))
+    await m.unmount()
+  })
+
   it('one\'s own is written in place when whole; an empty message is not written, holds a draft, and Done says why', async () => {
     const patches: Config[] = []
     const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches }))

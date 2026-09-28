@@ -1,4 +1,5 @@
-// The prompts (the redesign's design, §6.3): the row's value is the prompt in use, its description the prompt's.
+// The prompts (the redesign's design, §6.3): the row's value is the prompt in use, its description the prompt's; a
+// built-in's name is the pack's, in the interface's language (promptName, Task 103b).
 // Opened, a radio list in place: each prompt with its description, one's own carrying its tag (O.prompts.mine) and the
 // start of its instructions. The chosen prompt shows its text under it, read as words, in two parts named for what
 // they do — the instructions and the message —; nothing names the protocol the extension appends. A built-in cannot be
@@ -22,6 +23,7 @@ import { Icon } from '@/ui/controls/Icon'
 import { radioKeys } from '@/ui/controls/radio'
 import { Reveal } from '@/ui/controls/Reveal'
 import { drafts } from '@/ui/drafts'
+import { promptName } from '@/ui/prompt-name'
 import { O } from '@/ui/strings'
 import type { OptionsData } from '../data'
 import { focusLost, insertAt, undoHasFocus, useLinger, useListWrites, withUndo } from '../ui/lists'
@@ -47,7 +49,7 @@ export function PromptsRow({ data }: { data: OptionsData }) {
     <>
       <Row kind="button" row="translate/prompts" words={O.search.keywords['translate/prompts']} label={O.prompts.title}
         // the row's own description steps aside while the list under it says the same (settings-2)
-        description={open ? undefined : describe(chosen)} trailing={<Value>{chosen.name}</Value>} expanded={open} buttonProps={{ ref: row }}
+        description={open ? undefined : describe(chosen)} trailing={<Value>{promptName(chosen)}</Value>} expanded={open} buttonProps={{ ref: row }}
         onPress={() => setOpen(o => !o)} />
       <Reveal open={open}>
         <PromptList data={data} open={open} onDone={() => { setOpen(false); row.current?.focus() }} />
@@ -148,11 +150,11 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
   const keys = radioKeys(ids, chosenId, () => true, choose, i => radios.current.get(ids[i]!)?.focus())
   const rowOf = (p: PromptTemplate, mine: boolean) => (
     <Fragment key={p.id}>
-      <Row kind="radio" level={1} checked={p.id === chosenId} onChoose={() => choose(p.id)} label={p.name} tag={mine ? O.prompts.mine : undefined} description={describe(p)} arriving={fresh === p.id}
+      <Row kind="radio" level={1} checked={p.id === chosenId} onChoose={() => choose(p.id)} label={promptName(p)} tag={mine ? O.prompts.mine : undefined} description={describe(p)} arriving={fresh === p.id}
         radioRef={el => { if (el) radios.current.set(p.id, el); else radios.current.delete(p.id) }} />
       {p.id === chosenId && (mine
         ? editing && <OwnPrompt key={p.id} prompt={p} focus={naming === p.id} onFocused={() => setNaming(null)} onChange={words => edit(p.id, words)} onDone={onDone} onDelete={() => remove(p)} />
-        : <BuiltInPrompt prompt={p} onCopy={() => add({ ...p, id: uuid(), name: O.prompts.copyOf(p.name) })} />)}
+        : <BuiltInPrompt prompt={p} onCopy={() => add({ ...p, id: uuid(), name: O.prompts.copyOf(promptName(p)) })} />)}
     </Fragment>
   )
   return (
@@ -161,7 +163,7 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
     <div role="radiogroup" aria-label={O.prompts.title} onKeyDown={e => { if ([...radios.current.values()].includes(e.target as HTMLElement)) keys(e) }}>
       {builtIns.map(p => rowOf(p, false))}
       {withUndo(prompts.patterns, gone).map(entry => ('gone' in entry
-        ? <UndoRow key={`gone-${entry.gone.prompt.id}`} item={entry.gone.prompt.id} level={1} name={entry.gone.prompt.name} focus={entry.gone.focus} onUndo={() => undo(entry.gone)}
+        ? <UndoRow key={`gone-${entry.gone.prompt.id}`} item={entry.gone.prompt.id} level={1} name={promptName(entry.gone.prompt)} focus={entry.gone.focus} onUndo={() => undo(entry.gone)}
             onExpire={hadFocus => {
               setGone(x => x.filter(y => y !== entry.gone))
               // the undo row it stood in is gone: land the focus on the row still there (the services and styles lists'
