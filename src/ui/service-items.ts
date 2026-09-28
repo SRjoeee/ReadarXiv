@@ -11,7 +11,7 @@ import { S } from './strings'
 export const MANAGE_SERVICES = '__manage'
 
 /** UI.md §2: Microsoft, Google, LLM, Chrome. Only Chrome and an unsupported language disable an item; the LLM without a key stays selectable and gets the settings note */
-export function serviceItems(config: Config, pack: PackState | null, rejected: readonly string[] = []): MenuItem[] {
+export function serviceItems(config: Config, pack: PackState | null, rejected: readonly string[]): MenuItem[] {
   const microsoftOk = supportsTarget(config.targetLanguage)
   const chrome = (): MenuItem => {
     const base = { id: 'chrome-builtin', name: S.service.chrome, selected: config.provider === 'chrome-builtin' }
