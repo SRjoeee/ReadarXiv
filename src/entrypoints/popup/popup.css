@@ -70,6 +70,13 @@
 /* the foot (§5.1): the two switches with their words, the style button trailing — on every page, greyed on the reader */
 .popup .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 14px; }
 .popup .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+/* a switch that is on: the brand's track, the thumb white (round 7's A, the maintainer 2026-09-28), as on the settings
+   page; the reader's keeps the shared ink. Not in forced colours, whose Highlight (controls.css) a rule of this
+   unlayered sheet would outrank */
+@media (forced-colors: none) {
+  .popup .switch[aria-checked="true"] { background: var(--brand); }
+  .popup .switch[aria-checked="true"]::after { background: var(--on-brand); }
+}
 .popup .style-btn { padding-inline: 8px 6px; font-size: 12.5px; }
 .popup .style-btn > svg { color: var(--ink-3); }
 

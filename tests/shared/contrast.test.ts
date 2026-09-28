@@ -33,6 +33,10 @@ const PAIRS: { what: string; fg: string; bg: string[]; floor: number; modes?: Mo
   { what: 'a search hit\'s words, in a label or a description', fg: 'ink', bg: ['mark', 'chrome'], floor: 4.5 },
   { what: 'the neutral primary\'s words', fg: 'ink', bg: ['fill'], floor: 4.5 },
   { what: 'a chosen swatch\'s edge', fg: 'line-strong', bg: ['chrome'], floor: 3 },
+  // a switch that is on, in the popup and on the settings page (the maintainer, 2026-09-28; round 8: 6.81 / 3.07)
+  { what: 'a switch\'s on-track against the popup\'s ground', fg: 'brand', bg: ['chrome'], floor: 3 },
+  { what: 'a switch\'s on-track against the settings card', fg: 'brand', bg: ['chrome'], floor: 3 },
+  { what: 'a switch\'s thumb, white, against its on-track', fg: 'on-brand', bg: ['brand'], floor: 3 },
 ]
 
 describe('the redesign\'s colour pairs', () => {

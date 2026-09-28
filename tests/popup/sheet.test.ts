@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { ruleOf, rules } from '../styles/css-rules'
 
 const read = (path: string) => readFileSync(join(import.meta.dirname, path), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
 const SHEET = read('../../src/entrypoints/popup/popup.css')
@@ -25,6 +26,13 @@ describe('popup.css', () => {
   it('draws a replaced service, struck, in its value\'s ink-2: ink-3 was under 4.5:1 for words (3.26 light; Task 101)', () => {
     expect(SHEET).toMatch(/\.popup \.group-row > \.v \{[^}]*color: var\(--ink-2\);/)
     expect(SHEET).not.toMatch(/\.v s \{/)
+  })
+
+  it('draws a switch that is on in the brand, its thumb white, outside forced colours, whose Highlight the shared sheet draws (the maintainer, 2026-09-28)', () => {
+    const all = rules(SHEET)
+    const within = ['@media (forced-colors: none)']
+    expect(ruleOf(all, '.popup .switch[aria-checked="true"]', within)).toEqual({ background: 'var(--brand)' })
+    expect(ruleOf(all, '.popup .switch[aria-checked="true"]::after', within)).toEqual({ background: 'var(--on-brand)' })
   })
 
   it('names only tokens the token sheet defines', () => {

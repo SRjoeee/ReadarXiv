@@ -157,6 +157,13 @@ describe('controls.css: the menus\' rows for the pages', () => {
   })
 })
 
+describe('controls.css: the switch the reader reads', () => {
+  it('keeps a switch that is on the reader\'s, an ink track and a chrome thumb: the popup and the settings page draw the brand in their own sheets (Task 103c)', () => {
+    expect(of('.switch[aria-checked="true"]')).toEqual({ background: 'var(--ink)' })
+    expect(of('.switch[aria-checked="true"]::after')).toEqual({ translate: '11px 0', background: 'var(--chrome)' })
+  })
+})
+
 describe('controls.css: the tooltip\'s shadow, a role now (Task 21)', () => {
   it('draws the tooltip\'s shadow from its role', () => {
     expect(of('.tip')['box-shadow']).toBe('var(--tip-shadow)')

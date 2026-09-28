@@ -68,4 +68,10 @@ describe('the settings page\'s sheet', () => {
     expect(SHEET).toContain('animation: words-in 180ms ease-out')
     expect(SHEET).not.toContain('@keyframes words-in')
   })
+
+  it('draws a switch that is on in the brand, its thumb white, in the components layer, where the shared forced-colours Highlight still wins (the maintainer, 2026-09-28)', () => {
+    const all = rules(SHEET)
+    expect(ruleOf(all, '.o-frame .switch[aria-checked="true"]', ['@layer components'])).toEqual({ background: 'var(--brand)' })
+    expect(ruleOf(all, '.o-frame .switch[aria-checked="true"]::after', ['@layer components'])).toEqual({ background: 'var(--on-brand)' })
+  })
 })
