@@ -82,11 +82,13 @@ async function compile(files, dir, { main, engine, rerun, bibtex, overrides }) {
 const pdfText = pdf => (sh('pdftotext', ['-q', pdf, '-']) ?? '').replace(/-\n/g, '')
 const pagesOf = pdf => Number(sh('pdfinfo', [pdf])?.match(/^Pages:\s+(\d+)/m)?.[1]) || null
 const count = (text, re) => (text.match(re) ?? []).length
+/** a box's dump is wrapped at 79 columns, so a line of it can begin with "! " (a factorial, a "!" in the text) without being an error */
+const withoutDumps = log => log.replace(/^(?:Over|Under)full \\[hv]box.*\n(?:.+\n)*/gm, '')
 const logSignals = log => ({
   missing: count(log, /^Missing character: There is no/gm),
-  errors: count(log, /^! /gm),
+  errors: count(withoutDumps(log), /^! /gm),
   overfull: count(log, /^Overfull \\hbox/gm),
-  firstError: log.match(/^! .*$/m)?.[0]?.slice(0, 160) ?? null,
+  firstError: withoutDumps(log).match(/^! .*$/m)?.[0]?.slice(0, 160) ?? null,
 })
 
 /** the originals, cached by what their compiles are made of: the pipeline's files for the probe and the marked original */
