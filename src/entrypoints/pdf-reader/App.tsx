@@ -46,11 +46,15 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   // the contents sidebar, open or not: this visit's, not a setting. The document area moves with it at once, each side
   // refitted once to its new width, and is drawn sliding there by a transform, on the compositor (reader.css .doc)
   const [contents, setContents] = useState(false)
-  const toggled = useRef(false)
+  // the value last drawn: the area slides only when it changes, never as the page mounts — a first-run flag was spent
+  // by StrictMode's second run of this effect, and a development build slid the area in on every load (Part 7's final
+  // review)
+  const drawn = useRef(contents)
   useLayoutEffect(() => {
     const root = document.documentElement
     root.toggleAttribute('data-axt-contents', contents)
-    if (!toggled.current) { toggled.current = true; return }
+    if (drawn.current === contents) return
+    drawn.current = contents
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const side = Number.parseFloat(getComputedStyle(root).getPropertyValue('--side')) || 0
     doc.current?.animate([{ translate: `${contents ? -side : side}px 0` }, { translate: '0 0' }], { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' })
