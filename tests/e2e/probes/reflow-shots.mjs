@@ -8,7 +8,7 @@
 // experiments/pdf-bilingual/out/reflow/, are for reading at full size. Needs the network (arXiv).
 //   pnpm build && node tests/e2e/probes/reflow-shots.mjs
 // Environment: AXT_EXT_DIR another build; AXT_PAPER another paper; AXT_CHROME another Chrome.
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
@@ -35,6 +35,9 @@ const context = await chromium.launchPersistentContext(PROFILE, {
 })
 context.setDefaultNavigationTimeout(90_000)
 const page = context.pages()[0] ?? (await context.newPage())
+/** The paper's window as the browser draws it. Playwright clips a page's shot by the scroll offset in CSS pixels, which
+ * a tab's zoom does not scale: scrolled 3000 px down at 200 %, its shot was the page's ground alone (measured, Task 101) */
+const cdp = await context.newCDPSession(page)
 const [worker] = context.serviceWorkers().length ? context.serviceWorkers() : [await context.waitForEvent('serviceworker')]
 const extensionId = new URL(worker.url()).host
 
@@ -120,7 +123,8 @@ for (const theme of ['light', 'dark']) {
     await sleep(1500)
     const shot = async name => {
       await sleep(300)
-      await page.screenshot({ path: join(OUT, `${tag}-${name}.png`), ...STILL })
+      const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' })
+      writeFileSync(join(OUT, `${tag}-${name}.png`), Buffer.from(data, 'base64'))
     }
     const inside = async name => {
       const boxes = await dockBoxes()
