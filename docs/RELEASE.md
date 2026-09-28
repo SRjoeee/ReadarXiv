@@ -62,7 +62,7 @@ Category: Productivity. Language: English, with the Chinese description below. T
 | `offscreen` | The hidden page the figure recogniser runs in: recognising text in a bitmap figure is WebAssembly in a worker, which the service worker cannot host. Opened when a bitmap needs reading, closed by itself a minute after the last one |
 | `https://arxiv.org/*` (content scripts) | The pages it translates, the bilingual link on abstract pages, and the floating button on abstract, PDF and full-text pages |
 | `https://edge.microsoft.com/*`, `https://translate-pa.googleapis.com/*`, `https://openrouter.ai/*` | The free translators and the most common LLM gateway |
-| `https://*/*`, `http://*/*` (optional) | An endpoint the reader adds in the settings; each origin is asked for on its own when saved |
+| `https://*/*`, `http://*/*` (optional) | An endpoint the reader adds in the settings; each origin is asked for on its own, on the reader's click while adding the service (an address suggestion, the model list, Connect), and given back if the service is not added |
 
 The dashboard asks for each **named** permission separately, but for **all host permissions at once**, in one "host permission justification" field (1 000 characters), and warns that host permissions may mean an in-depth review. What is pasted there — as submitted for 0.4.0, the PDF pages added for 0.4.1 — covering every match pattern in the manifest:
 

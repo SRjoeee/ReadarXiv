@@ -1087,7 +1087,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await options.getByText(/^[1-9][\d,]* 段 · /).waitFor({ timeout: 15_000 }).catch(() => undefined)
   const before = await options.getByText(/^[\d,]+ 段 · /).textContent()
   // The translation cache's own row, not the PDF translations' below it (added since this locator was written): both
-  // rows carry the same 清空 / 确认清空 / 已清空 words, and unscoped this matches two buttons in strict mode. The
+  // rows carry the same clear / confirm / cleared words, and unscoped this matches two buttons in strict mode. The
   // row is found by its own title, excluding any container the PDF row's title (and the settings page's other “PDF”
   // words) would also put a match in
   const cacheRow = options.locator('div').filter({ hasText: '已缓存的译文' }).filter({ hasNotText: 'PDF' })
