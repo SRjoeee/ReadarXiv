@@ -33,7 +33,8 @@ export async function rejectedServices(): Promise<Set<string>> {
  * `still`, when given, decides in the mark's own turn, so no other mutation lands between the check and the write. The
  * keeper's refusal reads the stored configuration there: a clear queued by a key change either runs first, and the
  * check sees the new key, or runs after, and sees this mark (background/health-guard.ts). It answering false marks
- * nothing; it rejecting rejects this mark only
+ * nothing; it rejecting rejects this mark only. `still` must itself ask for no mutation of this record: it runs inside
+ * the queue's turn, and a mutation it awaited would wait for that turn to end, for ever
  */
 export async function markRejected(id: string, still?: () => Promise<boolean>): Promise<void> {
   return serialized(async () => {
