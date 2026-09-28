@@ -2062,8 +2062,9 @@ Expected: `every row on its lines, in both themes and both languages`; every ref
 Step 8, nothing measured over a state that drew nothing); every controls line `ok`; no pages-a11y `FAIL` (its `also`
 lines in the report).
 
-Then the search's own words (row 84), on the release build, in the Chinese interface — `language` can match only the
-interface language's keyword (§6.1's example), and `图中译文` only the dimming sub-row's description:
+Then the search's own words (row 84), on the release build, in the Chinese interface — `language` matches the
+interface language's keyword (§6.1's example) and the target language's (its words hold it too), and `图中译文` only
+the dimming sub-row's description:
 
 ```bash
 pnpm build && node --input-type=module -e '
