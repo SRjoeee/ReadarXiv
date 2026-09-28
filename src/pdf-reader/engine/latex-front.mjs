@@ -43,6 +43,14 @@ const INLINE_TEXT = new Set(['textbf', 'textit', 'emph', 'textsl', 'textsc', 'un
 // picture fitted to the column — by how many required arguments they take, that one included. The others (a width,
 // an angle, a colour) stay as they are
 const CONTENT_BOX = new Map([['resizebox', 3], ['scalebox', 2], ['adjustbox', 2], ['rotatebox', 2], ['raisebox', 2], ['fbox', 1], ['mbox', 1], ['framebox', 1], ['makebox', 1], ['parbox', 2], ['colorbox', 2], ['fcolorbox', 3], ['textcolor', 2]])
+/** declarations that take no argument: a brace group after one is a group of its own, never its argument. Taken for
+ *  \\centering's argument, the {\\small …} a table sat in stayed untranslated whole (five of 2608.05876's eight
+ *  tables). The rules take an optional width alone (\\toprule[1pt]) */
+const NO_ARGS = new Set(['centering', 'raggedright', 'raggedleft', 'noindent', 'indent', 'normalfont', 'rmfamily', 'sffamily', 'ttfamily', 'bfseries', 'mdseries', 'itshape', 'upshape', 'slshape', 'scshape', 'em', 'bf', 'it', 'rm', 'sf', 'tt', 'sc', 'sl', 'normalsize', 'small', 'footnotesize', 'scriptsize', 'tiny', 'large', 'Large', 'LARGE', 'huge', 'Huge', 'selectfont', 'smallskip', 'medskip', 'bigskip', 'hfill', 'vfill', 'hfil', 'vfil', 'newline', 'clearpage', 'newpage', 'cleardoublepage', 'maketitle', 'appendix', 'toprule', 'midrule', 'bottomrule', 'hline', 'arraybackslash', 'protect', 'relax', 'leavevmode', 'strut', 'null', 'quad', 'qquad', 'enspace', 'thinspace', 'nobreak', 'allowbreak', 'sloppy', 'fussy', 'ignorespaces', 'unskip'])
+const OPT_ONLY = new Set(['toprule', 'midrule', 'bottomrule'])
+/** how many required arguments some commands of fixed arity take, after any optional ones: a brace group after them is
+ *  a group of its own (\\hspace{1mm}{#1}, the bulleted headings of 2608.06007) */
+const ARITY = new Map([['hspace', 1], ['vspace', 1], ['addvspace', 1], ['color', 1], ['label', 1], ['ref', 1], ['eqref', 1], ['pageref', 1], ['setlength', 2], ['addtolength', 2], ['rule', 2], ['includegraphics', 1]])
 const MATH_ENVS = /^(equation|align|alignat|gather|multline|flalign|eqnarray|math|displaymath|dmath|IEEEeqnarray|subequations)\*?$/
 const SKIP_ENVS = /^(verbatim|Verbatim|lstlisting|minted|comment|tcblisting|tcboutputlisting|alltt|BVerbatim|LVerbatim|tikzpicture|pgfpicture|forest|array|algorithmic|algorithm2e|thebibliography|bibdiv|biblist|filecontents|picture|asy|pspicture|axis|circuitikz|dot2tex|pythontex|sagesilent)\*?$/
 const ACCENTS = new Set(["'", '`', '"', '^', '~', '=', '.', 'u', 'v', 'H', 'c', 'd', 'b', 't', 'r', 'k'])
@@ -96,6 +104,27 @@ function argsAfter(s, i, max = 9) {
   }
   return { args, end: i }
 }
+/** a command's arguments: every adjacent one, or for a command of fixed arity (ARITY) its optional ones and then that
+ *  many required */
+function commandArgs(s, i, name) {
+  const want = ARITY.get(name)
+  if (want === undefined) return argsAfter(s, i)
+  const args = []
+  for (let got = 0; got < want;) {
+    let k = skipSpaces(s, i)
+    if (s[k] === '*' && (s[k + 1] === '{' || s[k + 1] === '[')) k++
+    const e = s[k] === '[' ? matchGroup(s, k, '[', ']') : s[k] === '{' ? matchGroup(s, k) : -1
+    if (e < 0) break
+    args.push({ kind: s[k] === '[' ? 'opt' : 'req', start: k, end: e }); i = e
+    if (s[k] === '{') got++
+  }
+  return { args, end: i }
+}
+/** after a command that takes no required argument: past its optional ones when it has any, else where it ends */
+function optsAfter(s, i, opts) {
+  if (!opts) return { end: i }
+  for (;;) { const k = skipSpaces(s, i); if (s[k] !== '[') return { end: i }; const e = matchGroup(s, k, '[', ']'); if (e < 0) return { end: i }; i = e }
+}
 function endOfEnv(s, i, name) { // i just after \begin{name}; returns [bodyEnd, afterEnd]
   const re = new RegExp(`\\\\(begin|end)\\s*\\{${name.replace(/[*]/g, '\\*')}\\}`, 'g')
   re.lastIndex = i
@@ -116,6 +145,71 @@ function mathEnd(s, i) { // s[i] is '$' or starts \( \[ ; returns index after th
   const e = s.indexOf(close, i + 2)
   return e < 0 ? -1 : e + 2
 }
+
+/**
+ * Where a macro body sets its parameters: `text` those it typesets as prose — bare, in a group, in \\textbf and the
+ * like, in the content of a box — and `other` those it hands to anything else: \\label, \\ref, a width, math
+ */
+function paramUse(s, from, to, textual = true, use = { text: new Set(), other: new Set() }) {
+  let i = from
+  while (i < to) {
+    const c = s[i]
+    if (c === '%') { i = skipComment(s, i) + 1; continue }
+    if (c === '#') { if (/\d/.test(s[i + 1] ?? '')) (textual ? use.text : use.other).add(Number(s[i + 1])); i += 2; continue }
+    if (c === '$' || (c === '\\' && (s[i + 1] === '(' || s[i + 1] === '['))) { const e = mathEnd(s, i); if (e < 0 || e > to) { i++; continue } paramUse(s, i + 1, e - 1, false, use); i = e; continue }
+    if (c === '{') { const e = matchGroup(s, i); if (e < 0 || e > to) { i++; continue } paramUse(s, i + 1, e - 1, textual, use); i = e; continue }
+    if (c !== '\\') { i++; continue }
+    const { name, end } = commandAt(s, i)
+    if (NO_ARGS.has(name) || !/^[A-Za-z@]+$/.test(name)) { i = end; continue }
+    const { args, end: e } = commandArgs(s, end, name)
+    const reqs = args.filter(a => a.kind === 'req')
+    const prose = INLINE_TEXT.has(name) ? reqs[0] : CONTENT_BOX.has(name) ? reqs[CONTENT_BOX.get(name) - 1] : null
+    for (const a of args) paramUse(s, a.start + 1, a.end - 1, textual && a === prose, use)
+    i = e
+  }
+  return use
+}
+/**
+ * The paper's own macros, by name: `params` they take and `opt` whether the first is optional, as \\newcommand (or \\def)
+ * declares them, and `prose`, which one they typeset as prose, when one does. \\newcommand{\\nosection}[1]{\\vspace{3pt}
+ * \\noindent\\textbf{#1}} gives the run-in headings of 2608.06007, and as any command the paper defines its argument
+ * stayed in English, the heading's words with it. A macro with two such arguments has no `prose`: an engine that swapped
+ * them would swap the arguments. The count alone matters too: TeX takes a token for an argument without braces
+ * (\\inline{\\onenode x}, 2608.12096), and translated, the x became a character pdfTeX could not take
+ */
+function paperMacros(texts) {
+  const out = new Map()
+  const re = /\\(?:(?:re|provide)?newcommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*\[(\d)\]|\\(?:[egx]?def)\s*\\([A-Za-z@]+)((?:#\d)+)(?=\s*\{)/g
+  for (const t of texts) for (const m of t.matchAll(re)) {
+    if (inComment(t, m.index)) continue
+    const name = m[1] ?? m[2] ?? m[4], params = m[3] ? Number(m[3]) : m[5].length / 2
+    let k = skipSpaces(t, m.index + m[0].length), opt = false
+    if (m[3] && t[k] === '[') { const e = matchGroup(t, k, '[', ']'); if (e < 0) continue; k = skipSpaces(t, e); opt = true }
+    if (t[k] !== '{') continue
+    const e = matchGroup(t, k); if (e < 0) continue
+    const use = paramUse(t, k + 1, e - 1)
+    const prose = [...use.text].filter(n => n <= params && !use.other.has(n) && !(opt && n === 1))
+    out.set(name, { params, opt, prose: prose.length === 1 ? prose[0] : undefined })
+  }
+  return out
+}
+/** a paper macro's arguments at a call, as TeX takes them: its optional one when given, then each required one a brace
+ *  group or a single token; null when the call runs past `to` */
+function macroArgs(s, i, macro, to) {
+  const reqs = []
+  let k = i
+  if (macro.opt) { const k0 = skipSpaces(s, k); if (s[k0] === '[') { const e0 = matchGroup(s, k0, '[', ']'); if (e0 < 0 || e0 > to) return null; k = e0 } }
+  while (reqs.length < macro.params - (macro.opt ? 1 : 0)) {
+    const k0 = skipSpaces(s, k)
+    const e0 = s[k0] === '{' ? matchGroup(s, k0) : s[k0] === '\\' ? commandAt(s, k0).end : k0 + 1
+    if (e0 < 0 || e0 > to || k0 >= to || s[k0] === '}') return null
+    reqs.push({ start: k0, end: e0, group: s[k0] === '{' }); k = e0
+  }
+  return { reqs, end: k }
+}
+/** what a paragraph cannot hold: a paragraph break, an item, a heading, a caption, or an environment other than math */
+const BLOCK = /\n[ \t]*\n|\\(?:par|item|part|chapter|(?:sub)*section|(?:sub)?paragraph|caption)(?![A-Za-z@])|\\begin\s*\{([^}]+)\}/g
+const holdsBlock = text => [...text.matchAll(BLOCK)].some(m => !m[1] || !MATH_ENVS.test(m[1].trim()))
 
 // ---------------------------------------------------------------- units
 // A unit: { file, kind, start, end, pieces: [{t:'text', s} | {t:'ph', src} | {t:'open', id, src} | {t:'close', id, src}] }
@@ -338,6 +432,18 @@ function walk(s, from, to, b, ctx) {
       const { args, end: e } = argsAfter(s, end, 1)
       if (args[0]?.kind === 'req') { endText(); const id = b.open(s.slice(i, args[0].start + 1), i); walk(s, args[0].start + 1, args[0].end - 1, b, ctx); b.close(id, '}', e); i = e; continue }
     }
+    const macro = ctx.macros.get(name)
+    const call = macro && macroArgs(s, end, macro, to)
+    if (call && macro.prose) {
+      const arg = call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)]
+      if (arg?.group) {
+        // an argument that holds paragraphs, a figure or a proof (\\techreport{…}, \\revised{…} around whole passages)
+        // is walked as an environment's body is; one within a paragraph is part of it, the call around it a pair
+        if (holdsBlock(s.slice(arg.start + 1, arg.end - 1))) { endText(); b.flush(); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.flush(); i = call.end; continue }
+        endText(); const id = b.open(s.slice(i, arg.start + 1), i); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.close(id, s.slice(arg.end - 1, call.end), call.end); i = call.end; continue
+      }
+    }
+    if (call) { endText(); b.ph(s.slice(i, call.end), i, call.end); i = call.end; continue }
     if (name === 'verb') { const d = s[end]; const e = s.indexOf(d, end + 1); const stop = e < 0 ? end : e + 1; endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue }
     if (name === 'par') { endText(); b.flush(); i = end; continue }
     // an accent and the letter it sits on are one opaque piece: \'o, \'{o}, \"\i, \v c. Left as text, the letter would be
@@ -355,7 +461,7 @@ function walk(s, from, to, b, ctx) {
     // booktabs' \cmidrule(lr){2-5} and \cmidrule[w](lr){2-5}: a trim argument in parentheses
     let from = end
     if (name === 'cmidrule') { const k0 = skipSpaces(s, argsAfter(s, end, 1).end); if (s[k0] === '(') { const c0 = s.indexOf(')', k0); if (c0 > 0 && c0 < to) from = c0 + 1 } }
-    let { end: e } = /^[A-Za-z@]+$/.test(name) ? argsAfter(s, from) : { end }
+    let { end: e } = !/^[A-Za-z@]+$/.test(name) ? { end } : NO_ARGS.has(name) ? optsAfter(s, from, OPT_ONLY.has(name)) : commandArgs(s, from, name)
     // TeX's own assignment and glue syntax belongs to the command: \looseness=-1, \parindent=0pt, \vskip 3pt plus 1fil, \penalty-100
     if (e === end && /^[A-Za-z@]+$/.test(name)) { const m = s.slice(e, Math.min(to, e + 120)).match(name === 'hrule' || name === 'vrule' ? RULE_SPEC : ASSIGNMENT); if (m) e += m[0].length }
     endText(); b.ph(s.slice(i, e), i, e)
@@ -378,7 +484,6 @@ export function loadProject(root, main, { tables = false } = {}) {
   if (!mainFile) throw new Error(`main file ${main} not found`)
   const all = mainFile.text
   const theorems = new Set([...all.matchAll(/\\newtheorem\*?\s*\{([^}]+)\}/g)].map(m => m[1].trim()).concat(['proof', 'theorem', 'lemma', 'corollary', 'proposition', 'definition', 'remark', 'example']))
-  const macroArgs = new Map([...all.matchAll(/\\(?:re)?newcommand\*?\s*\{?\\([A-Za-z@]+)\}?\s*\[(\d)\]/g)].map(m => [m[1], Number(m[2])]))
   const skipped = {}
   // \newcommand{\be}{\begin{equation}}, \def\ee{\end{equation}} and the like, in any .tex or .sty of the package
   const envMacros = new Map()
@@ -387,7 +492,7 @@ export function loadProject(root, main, { tables = false } = {}) {
     const t = sourceText(f)
     for (const m of t.matchAll(/\\(?:(?:re|provide)?newcommand\*?\s*\{?\\([A-Za-z@]+)\}?|def\\([A-Za-z@]+))\s*\{\s*\\(begin|end)\s*\{([^}]+)\}\s*\}/g)) envMacros.set(m[1] ?? m[2], { side: m[3], env: m[4].trim() })
   }
-  const ctx = { tables, theorems, macroArgs, envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim())), skipped, visit: rel => visit(rel) }
+  const ctx = { tables, theorems, macros: paperMacros(sources.map(sourceText)), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim())), skipped, visit: rel => visit(rel) }
   function visit(rel) {
     const f = read(rel); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)

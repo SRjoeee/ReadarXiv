@@ -39,6 +39,11 @@ describe('strategies: CJK leading as a factor for translated units, English hyph
     expect(first(META, 'de').pre(null)).not.toContain('hyphenrules')
   })
 
+  it('CJKutf8 closes its environment after the floats held to the end are set (2608.25210)', () => {
+    const [, cjkutf8] = strategiesFor(META, 'zh')
+    expect(cjkutf8?.pre(null)).toContain('\\AtEndDocument{\\clearpage\\end{CJK}}')
+  })
+
   it('Japanese and Korean at the paper\'s own spacing carry no factor', () => {
     expect(first(META, 'ja').leading).toBeUndefined()
     expect(first(META, 'ko').leading).toBeUndefined()

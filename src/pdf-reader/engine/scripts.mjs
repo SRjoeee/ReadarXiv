@@ -147,7 +147,9 @@ export function strategiesFor(meta, lang) {
     const lead = cjk.leading === 1 ? {} : { leading: cjk.leading }
     const out = [{ name: 'XeLaTeX + xeCJK', engine: 'xelatex', xe: true, ...lead, pre: fonts => xeCJK + latinFontsFor(fonts) + babel(lang, 'english') }]
     if (EIGHT_BIT.has(meta.compiler)) {
-      const cjkutf8 = `\\usepackage{CJKutf8}\n\\AtBeginDocument{\\begin{CJK}{UTF8}{${cjk.cjkutf8}}}\n\\AtEndDocument{\\end{CJK}}\n`
+      // the floats still held at \\end{document} are set inside the CJK environment, before it closes: set after it, a
+      // translated table held to the end had every character "not set up for use with LaTeX" (2608.25210)
+      const cjkutf8 = `\\usepackage{CJKutf8}\n\\AtBeginDocument{\\begin{CJK}{UTF8}{${cjk.cjkutf8}}}\n\\AtEndDocument{\\clearpage\\end{CJK}}\n`
       out.push({ name: 'pdfLaTeX + CJKutf8', engine: meta.compiler, xe: false, ...lead, pre: () => cjkutf8 })
     }
     return out
