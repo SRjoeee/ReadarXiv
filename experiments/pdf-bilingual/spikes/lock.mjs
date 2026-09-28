@@ -41,11 +41,15 @@ export const SYNC_TEX = String.raw`\makeatletter
  *  unit's, ended inside an environment's group (\begin{itemize} right after it), or one inside the unit (a footnote's).
  *  Which, the level it comes back to tells (\aftergroup): still in horizontal mode, the unit goes on and the next
  *  paragraph end at its level is its own; in vertical mode, the one that ended was. A level below the unit's means its
- *  group closed with no paragraph (a caption measured in a box). */
+ *  group closed with no paragraph. Inside a box the deeper paragraph is taken for one inside the unit and the hook
+ *  waits for the next: an \\aftergroup there may close its group in an alignment or in math — a table's p-column cell,
+ *  a display's box — and break the next \\midrule or \\end{align*} (2608.21180, 2608.09038, 2608.29867: the original
+ *  with probes did not compile). No probe from restricted horizontal mode, where a caption is measured in an \\hbox. */
 export const LINES_TEX = String.raw`\makeatletter
-\def\axt@linesat#1#2{\ifnum\currentgrouplevel=#2 \message{^^JAXT-LINES #1 \the\prevgraf\space\the\baselineskip^^J}\else\ifnum\currentgrouplevel>#2 \expandafter\xdef\csname axt@lg@#1\endcsname{\the\prevgraf\space\the\baselineskip}\expandafter\gdef\csname axt@lr@#1\endcsname{\axt@linesback{#1}{#2}}\expandafter\aftergroup\csname axt@lr@#1\endcsname\fi\fi}
+\def\axt@linesat#1#2{\ifnum\currentgrouplevel=#2 \message{^^JAXT-LINES #1 \the\prevgraf\space\the\baselineskip^^J}\else\ifnum\currentgrouplevel>#2 \ifinner\AddToHookNext{para/after}{\axt@linesat{#1}{#2}}\else\expandafter\xdef\csname axt@lg@#1\endcsname{\the\prevgraf\space\the\baselineskip}\expandafter\gdef\csname axt@lr@#1\endcsname{\axt@linesback{#1}{#2}}\expandafter\aftergroup\csname axt@lr@#1\endcsname\fi\fi\fi}
 \def\axt@linesback#1#2{\ifnum\currentgrouplevel>#2 \expandafter\aftergroup\csname axt@lr@#1\endcsname\else\ifnum\currentgrouplevel=#2 \ifhmode\AddToHookNext{para/after}{\axt@linesat{#1}{#2}}\else\message{^^JAXT-LINES #1 \csname axt@lg@#1\endcsname^^J}\fi\fi\fi}
-\protected\def\axtlines#1{\ifdefined\AddToHookNext\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@linesat{#1}{\the\currentgrouplevel}}}\axt@tmp\fi}
+\protected\def\axtlines#1{\ifhmode\ifinner\else\axt@lines{#1}\fi\else\axt@lines{#1}\fi}
+\def\axt@lines#1{\ifdefined\AddToHookNext\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@linesat{#1}{\the\currentgrouplevel}}}\axt@tmp\fi}
 \makeatother
 `
 
