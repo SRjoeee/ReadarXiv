@@ -20,7 +20,7 @@ const FIELD: Record<string, string> = {
 
 const S = {
   brand: 'Read arXiv', // S-P-01
-  settings: '设置', // S-P-02, and the button on every note
+  settings: '设置', // S-P-02
   /** P0, no paper in the tab (the redesign's §5.4, §10.1): find one (S-P-03…08) */
   find: {
     lead: '打开 arXiv 论文（HTML 或 PDF）即可翻译', // S-P-03
@@ -51,13 +51,13 @@ const S = {
     llm: 'LLM',
     chrome: 'Chrome 翻译',
     free: '免费', // S-P-44
-    chrome_ready: '浏览器内置，无需联网', // S-P-46
+    chrome_ready: '浏览器内置，无需联网', // S-P-43
     llm_noKey: '尚未配置 API Key', // S-P-45: the LLM item's hint until a key is set
     llm_rejected: 'API Key 已失效', // S-P-45: the hint of a service whose key the endpoint refused
     microsoft_unsupported: '不支持当前目标语言',
     chrome_download: '下载', // S-P-40
     chrome_downloading: '语言包下载中', // S-P-41
-    chrome_unavailable: '当前不可用', // S-P-42 / S-P-43
+    chrome_unavailable: '当前不可用', // S-P-42
     manage: '管理翻译服务…', // S-P-48: the last row of the menu, opens the settings page
   },
   menu: {
