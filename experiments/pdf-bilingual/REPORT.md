@@ -531,7 +531,7 @@ What a translation needs besides its text follows from the script its language i
 2. **babel loaded after the cite package** takes cite's `\@citex` for the kernel's and breaks every citation ("Paragraph ended before \org@@citex was complete", on an IEEEtran paper). We load babel only when the paper does not, and then with `safe=none`: a language imported from its ini file makes no character active, which is all that rewriting guards against.
 3. **newtxtext sets fontspec's global defaults** under XeTeX (`Extension=.otf`, `Scale`, stylistic sets), and every font declared after it inherits them. A `.ttf` face was looked for as `.otf`: Japanese, Traditional Chinese and Korean lost 12 000–18 000 characters on an AAAI paper, Japanese already in the baseline. Now `\defaultfontfeatures{}` comes before our faces; fontspec's own per-family defaults (TeX ligatures) stay, and the dashes in page ranges are still dashes.
 4. **XeLaTeX for an alphabet fights the paper's font setup.** newtxtext sets its faces at the end of the preamble, after ours (Russian, 40 000 characters missing); acmart's T1 put Vietnamese into an 8-bit face (10 000); only the serif role had Cyrillic, so sans and mono headings lost theirs; and one paper lost its math fonts in every language. The alphabets' pdfLaTeX set all of these without an error or a missing letter.
-5. **babel 26.12 with siunitx and Chinese**: siunitx's `translations` asks babel for the locale at `\begin{document}`, and babel builds a file name with an empty region (`babel-zh-Hans-.ini`) — one error in each of four papers, zh and zh-Hant. Harmless: the PDFs with and without babel differ, character by character, only in the captions. It is for babel upstream; nothing here works around it.
+5. **siunitx with Chinese**: at `\begin{document}` siunitx looks for the locale's babel file, and one of its fallbacks checks for one name and loads another — it finds `babel-zh-Hans.ini` and loads `babel-Hans-.ini` (siunitx 3.6.2, `siunitx-localization.dtx`, still so upstream on 2026-09-28). One error in each of four papers, zh and zh-Hant. Harmless: siunitx keeps its English number format, and the PDFs with and without babel differ, character by character, only in the captions. It is for siunitx upstream (this entry said babel until the twenty-eighth addendum); nothing here works around it.
 
 Open, and older than this work, all three on XeLaTeX, which a pdfLaTeX paper reaches only for CJK. A paper that loads CJKutf8 itself conflicts with xeCJK: nine errors in every CJK language, the baseline's too, plus one from microtype meeting a TS1 fallback face at `\maketitle`; its own pdfLaTeX would suit it better. One paper's math fonts fail under XeLaTeX (24 errors in every CJK language), as in the baseline. Hangul breaks between syllables, as xeCJK and browsers do; breaking between words (kotex) would be closer to Korean book typesetting.
 
@@ -1727,3 +1727,102 @@ the load stayed between 3.0 and 4.1. Runs used a headed 1440 × 900 window on th
 
   The fifth, chosen and pressed states barely visible in dark (1.06:1), would change the approved dark palette. It
   goes to the maintainer as a proposal with screenshots. The medium and low findings join #299's list.
+
+## Twenty-eighth addendum, 2026-09-28: Today's typesetting — FIXED: English as the paper set it, CJK leading for translated text alone
+
+The maintainer compared Today and Locked on the visual evaluation's page (branch `exp/geometry-lock`): Today's density
+reads more naturally, but the English in it is set wider than in the original. Today stays, its faults are fixed, and
+the reader will later choose between naturalness first (Today) and the original first, for comparison (Locked). Both
+run on one pipeline — units, marks, translation — and differ in the typesetting pass alone, so what follows lands in
+both.
+
+**Three causes, each for every CJK target and every paper** (`969a75b9`, `01ebfd00`):
+
+- **English had no hyphenation.** babel's main language was the target's locale, which has no patterns for Latin
+  text, so the English left in a translation — names, terms, the references — broke only at hyphens of its own. The
+  target is now imported with `hyphenrules=english` (`\babelprovide[import=<tag>,main,hyphenrules=english]`; the
+  source is English in v1). The patterns are in the format BusyTeX loads: nothing to add to the file server.
+- **The script's factor spread the whole document.** `\linespread{1.3 × the paper's}` in the preamble spread the
+  references, tables, code and algorithms too, and a class that sets its spacing in the body (ICASSP's `\ninept`)
+  escaped it. Each translated unit now opens with `\axtlead{i}` (`latex-front.mjs` `unitLeadTex`, the geometry lock's
+  unit leading moved into the engine): its own paragraph at 1.3 × the paper's `\baselineskip` there, the paper's again
+  once it ends. Headings, units not yet translated (a progressive compile) and everything left in English keep the
+  paper's spacing.
+- **A display inside a unit took the unit's leading**: an align's rows 14.9 pt apart went to 18.5 pt, while displays
+  between units kept the paper's, so one paper's math was set two ways. `\everydisplay` now puts the paper's
+  `\baselineskip` back inside a display whenever a unit's is in force.
+
+**What the gate found on the way.** The unit leading finds the end of its unit's paragraph with a `para/after` hook,
+and a paragraph ending deeper than the unit — a list opened right after it — sets the paper's leading back through
+`\aftergroup`. Inside a box that token may close its group in an alignment or in math: a paragraph ended in a table's
+p-column cell or in a display's box put it before the next `\midrule` or `\end{align*}` (2608.21180, 2608.09038,
+2608.29867: a hundred errors each, zh and zh-Hant). Inside a box the level is now set and the hook waits for the next
+paragraph, and no hook is set from restricted horizontal mode, where a caption is measured in an `\hbox`. The lock's
+line probes (`LINES_TEX`) had the same flaw since `c184940c`: the original with probes of those three papers no longer
+compiled, and regenerating the evaluation lost their Locked column (`7577f224`). `lock-cases.mjs` covers both, and fails on the old macros.
+
+**The maintainer's flags on the fixed Today** (five, on RT-1, 2608.05876 and 2608.06007), each traced to its cause and
+fixed where it arises (`82bd111d`, `56653c2f`):
+
+- **Run-in labels half translated** ("tokenization." and "speed." left in English after a Chinese first word). The
+  markers wire spaced a marker from a word (#254) but not from a period: Microsoft reads `speed.@b#` as one token.
+  Of nine marks of punctuation before a closing marker only the period did this, on 6 of 6 labels as sent and 0 of 6
+  with a space. The wire now spaces it. The extension's own markers serializer (`src/core/protector/serialize.ts`) has
+  the same rule and the same gap; it is not changed here.
+- **Tables left in English** (five of 2608.05876's eight). `\centering` took the `{\small …}` group the table sat in for
+  its argument, since the front end gives an unknown command every adjacent brace group. Declarations that take no
+  argument now take none, the booktabs rules keep their optional width, and a few commands of fixed arity (`\hspace`,
+  `\vspace`, `\color`, `\label`, …) take exactly theirs.
+- **Headings the paper defines** (2608.06007's `\nosection{Contributions.}` and its bulleted `\blnosection{…}`). The
+  paper's own macros were opaque with their arguments. Each `\newcommand` or `\def` is now read for the one argument
+  its body typesets as prose (bare, in a group, in `\textbf` and the like, in a box's content); that argument is
+  translated with the call kept around it. An argument that holds paragraphs, an item or a non-math environment
+  (`\techreport{…}` around whole proofs and figures, 2608.25210) is walked as an environment's body. The other
+  arguments of a paper macro go with it as TeX takes them, a single token included (`\inline{\onenode x}`, whose x
+  pdfTeX could not take once translated, 2608.12096).
+- **Bold lost** ("Contributions."). Not the heading: under XeLaTeX the whole Latin text of 2608.06007 was in Computer
+  Modern. acmart loads fontspec itself (Libertine), the paper loads T1 after it, and T1 stayed the default encoding,
+  which the OpenType faces lack. Four of the corpus's eight acmart papers load T1. At `\begin{document}` TU is the
+  default again when the main face has it, and `\fontfamily` switches between TU and T1 to the one each face has,
+  learned from its font definition file, so a mono face with T1 alone (Bera Sans Mono for code) keeps it.
+- **CJKutf8 closed its environment before the floats held to the end** were set (2608.25210, exposed by its tables now
+  translated): `\clearpage` first.
+
+Corpus of 123: 34 papers cut differently, 1.1 % more letters to translate; the vanished units grew rather than went
+(a run-in heading now leads its paragraph's unit). The language gate lost nothing; the 30 changed papers outside it,
+compiled with the old and the new front end, came out none worse and one with an error fewer. Of the gate's 96 PDFs
+only 2608.06007's four changed their Latin faces. Two things stay open: a TikZ label or a unit of measure passed to a
+paper macro (`\units{kpc}`) is now sent to the engine, which usually keeps it; and 2608.06007 still fails in BusyTeX
+because it loads CJKutf8 itself, as before.
+
+**Measured, with everything above** (the visual evaluation regenerated, every paper translated afresh by Microsoft; `measure` = medians over 25 Chinese papers, pitch × the font size):
+
+| zh, 25 papers | pages | Chinese line pitch | references' pitch | their lines ending hyphenated | their word gap (× x-height) |
+|---|---|---|---|---|---|
+| original | 458 | — | 1.200 | 11.7 % | 0.346 |
+| Today before | 464 | 1.560 | 1.511 | 2.0 % | 0.380 |
+| Today | 438 | 1.560 | 1.200 | 15.9 % | 0.361 |
+| Locked | 459 | 1.300 | 1.200 | 15.9 % | 0.361 |
+
+Half-translated run-in labels in the PDFs' text: RT-1 18 → 0, 2608.06007 5 → 0.
+
+Today's pages against the original's, by language (real translations): zh 0.97 (0.86–1.10), ja 1.00 (0.92–1.08),
+ko 0.93 (0.86–1.00), de 1.14 (1.00–1.17), ru 1.14 (1.00–1.17); within one language the papers spread by a standard
+deviation of about 0.05.
+
+**Why service H keeps the original's layout better than Locked.** H writes each translated block into its original box
+of the original PDF: nothing is set again, so floats, equations and page breaks stay where they were, and a block too
+long for its box is set smaller (down to 0.6 of the size). Locked sets the paper again and holds each unit's start
+with a sync point that can add space but not take it away; its only means of making a longer unit fit is tighter
+leading, down to a floor. Where it loses the original's positions (`lock-drift.mjs` in the session, over the Locked
+compiles):
+
+| Locked | units still taller than the original after tightening | start > 10 pt off on its page | of those, after a taller unit on that page |
+|---|---|---|---|
+| zh, 2271 units | 2 % | 28 % | 28 of 646 |
+| ja, 640 | 28 % | 53 % | 193 of 338 |
+| de, 640 | 49 % | 58 % | 275 of 373 |
+
+For the languages that grow, the units that do not fit are the cause, which H answers by setting them smaller. For
+Chinese they are not: 382 of its 646 displaced starts are higher than the original's and 264 lower, by a median 24 pt,
+so the sync points themselves do not hold the page; that is the next thing to take apart.
