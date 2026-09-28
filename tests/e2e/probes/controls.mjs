@@ -97,7 +97,7 @@ async function buttons(page, lang) {
       ['.btn.brand[aria-disabled="true"]', 'var(--fill)', 'var(--ink-3)'],
       ['.btn.neutral.sm[aria-disabled="true"]', 'var(--button)', 'var(--ink-3)'],
       ['.btn.brand .kbd', 'var(--brand-chip)', 'var(--on-brand)'],
-      ['.btn.neutral .kbd', 'color-mix(in oklab, var(--ink) 9%, transparent)', 'var(--ink-2)'],
+      ['.btn.neutral .kbd', 'color-mix(in oklab, var(--ink) 9%, transparent)', 'var(--ink)'],
       ['[data-row] > .kbd', 'color-mix(in oklab, var(--ink) 9%, transparent)', 'var(--ink-2)'],
       ['.btn[aria-busy="true"]', 'var(--brand)', 'var(--on-brand)'],
     ]) {
