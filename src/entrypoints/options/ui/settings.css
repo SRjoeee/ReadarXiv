@@ -107,7 +107,9 @@
 /* ---- Task 52: the frame (§6.1) ---- */
 @layer components {
   body { margin: 0; background: var(--page); }
-  .o-frame { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; color: var(--ink); font: 13px/1.4 var(--font); }
+  /* the sidebar and the column one group, centred in a window wider than the two (the maintainer, 2026-09-28): 232 px,
+     and the column's 680 with the main's 48 on either side; the page's ground (body) fills the window */
+  .o-frame { display: grid; grid-template-columns: 232px minmax(0, 1fr); max-width: calc(232px + 48px + 680px + 48px); min-height: 100vh; margin-inline: auto; color: var(--ink); font: 13px/1.4 var(--font); }
   /* the sidebar: 232 px on the page's ground; the mark, the search, the sections, the interface language at its foot */
   .o-side { position: sticky; top: 0; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box; height: 100vh; padding: 18px 12px; overflow: auto; }
   .o-brand { display: flex; align-items: center; gap: 8px; height: 32px; margin-bottom: 10px; padding: 0 10px; font-weight: 600; }

@@ -23,6 +23,12 @@ describe('the settings page\'s sheet', () => {
     expect(SHEET).toContain('.o-aside { color: var(--ink-2);')
   })
 
+  it('centres the frame, the sidebar and the column one group: 232 px, and the column\'s 680 with 48 on either side (Task 103b)', () => {
+    expect(SHEET).toMatch(/\.o-frame \{[^}]*grid-template-columns: 232px minmax\(0, 1fr\);[^}]*max-width: calc\(232px \+ 48px \+ 680px \+ 48px\);[^}]*margin-inline: auto;/)
+    expect(SHEET).toMatch(/\.o-main \{[^}]*padding: 30px 48px 40px;/)
+    expect(SHEET).toContain('.o-column { max-width: 680px; }')
+  })
+
   it('draws a search hit in ink on the mark, in a description too: its inherited ink-2 fell under 4.5:1 (Task 101)', () => {
     expect(SHEET).toContain('.o-hit { padding: 0 1px; border-radius: 2px; background: var(--mark); color: var(--ink); }')
   })

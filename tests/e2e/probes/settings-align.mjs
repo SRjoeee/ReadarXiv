@@ -8,8 +8,9 @@
 // settings-2), each at its width. A state that measures no card or no row fails, so a selector that stopped matching
 // cannot pass. Each state is shot at 2x into experiments/pdf-bilingual/out/settings/, and the page at 320 px and at
 // 200 % zoom, measured there too: no horizontal scroll, the sidebar above the column below 640 px, nothing past its
-// card, a trail that moved under its words still ending on the trailing edge. Prints what is off; exits 1 when
-// anything is.
+// card, a trail that moved under its words still ending on the trailing edge. The frame, the sidebar and the column one
+// group (Task 103b): centred at 1300 px, the interface language at the sidebar's foot; from the window's edge at 1000
+// px, narrower than the group. Prints what is off; exits 1 when anything is.
 //   pnpm build && node tests/e2e/probes/settings-align.mjs
 import { mkdirSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -216,6 +217,23 @@ const hovered = (page, selector) => page.evaluate(selector => {
   return out
 }, selector)
 
+/**
+ * the frame as one group (Task 103b, the maintainer's choice): the sidebar and the column centred in a window wider
+ * than the two, from the window's edge in one narrower; the interface language at the sidebar's foot there
+ */
+const frame = page => page.evaluate(() => {
+  const r = el => el.getBoundingClientRect()
+  const f = r(document.querySelector('.o-frame'))
+  const side = document.querySelector('.o-side')
+  const width = document.documentElement.clientWidth
+  return {
+    left: f.left,
+    right: width - f.right,
+    sideways: document.documentElement.scrollWidth > innerWidth,
+    foot: r(side).bottom - Number.parseFloat(getComputedStyle(side).paddingBottom) - r(document.querySelector('.o-lang')).bottom,
+  }
+})
+
 const off = []
 for (const lang of ['zh-CN', 'en']) {
   for (const theme of ['light', 'dark']) {
@@ -257,6 +275,12 @@ for (const lang of ['zh-CN', 'en']) {
     const service = name => page.locator(services).filter({ has: page.locator('.o-label', { hasText: name }) })
 
     await open('translate')
+    {
+      const f = await frame(page)
+      if (f.sideways) off.push(`${tag} wide: the page scrolls sideways`)
+      if (f.left < 1 || Math.abs(f.left - f.right) > 1) off.push(`${tag} wide: the frame ${f.left.toFixed(1)} px from the left, ${f.right.toFixed(1)} px from the right, not centred`)
+      if (Math.abs(f.foot) > 0.5) off.push(`${tag} wide: the interface language ${f.foot.toFixed(1)} px off the sidebar's foot`)
+    }
     await state('translate')
     await state('translate-hover', async () => {
       await page.hover(`${services}:nth-child(2)`)
@@ -322,6 +346,15 @@ for (const lang of ['zh-CN', 'en']) {
     // under the next navigation
     await page.goto('about:blank')
     await worker.evaluate(s => chrome.storage.local.set(s), kept)
+
+    // a window narrower than the group (1008 px): the frame from the window's edge, nothing scrolling sideways
+    await page.setViewportSize({ width: 1000, height: 900 })
+    await open('translate')
+    {
+      const f = await frame(page)
+      if (f.sideways) off.push(`${tag} 1000 px: the page scrolls sideways`)
+      if (Math.abs(f.left) > 0.5 || Math.abs(f.right) > 0.5) off.push(`${tag} 1000 px: the frame ${f.left.toFixed(1)} px from the left, ${f.right.toFixed(1)} px from the right, not the window's width`)
+    }
 
     // §9: 320 px and 200 % zoom (a 1280 px window at 2x): nothing scrolls sideways; below 640 px the sidebar is above the
     // column; every row measured as it is drawn there, nothing past its card
