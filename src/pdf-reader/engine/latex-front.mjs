@@ -655,7 +655,11 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     }
     let endAt = -1
     if (m) for (let k = pieces.length - 1; k >= 0; k--) if (pieces[k].t === 'text' && /[^ \t\r\n]/.test(pieces[k].s)) { endAt = k; break }
-    const parts = []
+    // what acts on the unit's paragraph as a whole — its leading, its line probe — goes where the unit begins, outside
+    // every group: inside a run-in label's (\\textbf{Label.}, a paper's \\nosection{…}), where the mark goes, an
+    // assignment is undone when the label ends, and those paragraphs kept the paper's leading beside translated ones
+    // at 1.3 times it (2608.06007)
+    const parts = m?.before ? [utf8Bytes(m.before)] : []
     for (let k = 0; k < pieces.length; k++) {
       const p = pieces[k]
       if (p.t === 'nested') { parts.push(bytesOf(p.pre, srcEnc), render(p.unit), bytesOf(p.post, srcEnc)); continue }
@@ -726,11 +730,32 @@ export function localizeNames(text) {
   }
   return out
 }
+/**
+ * A translation's pieces with room to break a line inside a long piece of code or an inline formula: after a slash
+ * (and after an underscore in code). The translation breaks its lines elsewhere than the paper did, and a path set in
+ * \\texttt or a formula like π₀Homeo(X)/π₀Homeo(D⁴) had no point to break at: the line ran past the margin, or TeX set the
+ * whole paragraph loose around it (2608.06701's lib/ansible/plugins/callback/__init__.py, 2608.02785). Short ones are
+ * left as they are
+ */
+export function withBreaks(pieces) {
+  return pieces.map(p => {
+    if (p.t !== 'ph' || p.src.length < 24) return p
+    if (/^\$[^$]/.test(p.src) && p.src.endsWith('$') && p.src.includes('/')) return { ...p, src: p.src.replace(/\/(?!\/)/g, '/\\allowbreak ') }
+    if (/^\\(?:texttt|path|code|verb)(?![A-Za-z])/.test(p.src) && !/^\\verb/.test(p.src)) return { ...p, src: p.src.replace(/\/(?=[^}])/g, '/\\allowbreak{}').replace(/\\_(?=[A-Za-z0-9])/g, '\\_\\allowbreak{}') }
+    return p
+  })
+}
 /** Before \\begin{document} of a translation: a line TeX cannot fill within tolerance is set a little looser before it
  *  is let run past the margin. A translation breaks its lines elsewhere than the paper did, and a long inline formula
  *  it cannot break then stood out of the column (German 2608.02785: 11 lines over 5 pt, the original's 2). Paragraphs
- *  that set well are set as they were */
+ *  that set well are set as they were; one that needs it may be set loose throughout, which EVEN_SPACES and withBreaks
+ *  keep down */
 export const NO_OVERFLOW = '\\AtBeginDocument{\\setlength\\emergencystretch{2em}}\n'
+/** Before \\begin{document} of a translation set by pdfTeX: microtype, unless the paper loads it, whose font expansion
+ *  evens the word spaces of a language whose words are longer than English's. German on the round's five papers, with
+ *  NO_OVERFLOW and withBreaks: loose lines (badness 1000 and over) 91 → 43, overfull ones 4 → 4. XeTeX expands no
+ *  font, and CJK text breaks between any two characters */
+export const EVEN_SPACES = '\\makeatletter\\@ifpackageloaded{microtype}{}{\\usepackage{microtype}}\\makeatother\n'
 /** \\axtfit{table}: a translated table set no wider than the line, scaled down when its translation made it wider
  *  (German in columns that do not wrap ran past the page: 2608.06701's Table I); as it is when it fits, or when no
  *  \\resizebox is loaded. Never boxed inside a threeparttable, which takes its tabular over to measure it: Springer

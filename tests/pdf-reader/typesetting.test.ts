@@ -67,6 +67,14 @@ describe('translationFiles: the leading goes to translated units alone', () => {
     expect(tex).toContain('1.3\\baselineskip')
   })
 
+  it('a paragraph opening on a run-in label gets its leading before the label\'s group, not inside it (2608.06007)', () => {
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode('\\documentclass{article}\\begin{document}\n\\textbf{Label.} The prose after it.\n\\end{document}\n')]]))
+    const units = p.units as Unit[]
+    const translated = new Map(units.map(u => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: '<T>' } : x))]))
+    const tex = new TextDecoder().decode(translationFiles(p, translated as never, { strategy: first(META, 'zh'), fonts: null, draft: false }).get('main.tex'))
+    expect(tex).toMatch(/\\axtlead\{0\}\\textbf\{/)
+  })
+
   it('a strategy with no factor adds neither the macro nor a call', () => {
     const { tex } = typeset('ja', ps => ps)
     expect(tex).not.toContain('axtlead')

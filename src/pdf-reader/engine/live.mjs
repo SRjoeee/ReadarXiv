@@ -11,7 +11,7 @@
 //     or after the final compile: the translation comes first;
 //  5. when every unit is in, the final compile: every pass, the images themselves.
 import { analyze } from './paper-meta.mjs'
-import { FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, withBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
 
@@ -112,14 +112,14 @@ export function originalFiles({ fsys, project }) {
  *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex) */
 export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl }) {
   const xe = strategy.xe
-  translated = typesetBy(translated, strategy)
+  translated = new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, withBreaks(pieces)]))
   const base = markUnits(project.units)
   const index = new Map(project.units.map((u, i) => [u, i]))
-  const mark = strategy.leading ? u => { const m = base(u); return m && translated.has(u) ? { start: `\\axtlead{${index.get(u)}}${m.start}`, end: m.end } : m } : base
+  const mark = strategy.leading ? u => { const m = base(u); return m && translated.has(u) ? { ...m, before: `\\axtlead{${index.get(u)}}` } : m } : base
   const out = patch(project, translated, { mark })
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
-  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + main.slice(at)
+  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe ? '' : EVEN_SPACES) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   if (xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
