@@ -129,7 +129,7 @@ export function createSurfaceConfig(deps: SurfaceConfigDeps): SurfaceConfig {
 
   /**
    * One reading of the store, on the chain: the first, or the one a change saved elsewhere asks for. Its verdict is
-   * the one returned with it (storage.ts `readConfig`), not the module's latest: the chain orders this surface's own
+   * the one returned with it (storage.ts `readConfig`), never another read's: the chain orders this surface's own
    * reads, not the page's others (the settings page's pack download reads the store too), and one of those finishing
    * in between would have its verdict published beside this read's value
    */

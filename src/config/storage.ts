@@ -181,23 +181,6 @@ function migrateStyle(style: V11Style): Appearance {
 }
 
 /**
- * Why the latest `getConfig()` fell back; `null` when the configuration is fine.
- * Each execution context (popup / content / background) keeps the result of its own calls — they share no memory.
- * Within one context it is the latest call's to finish, not necessarily the caller's own: another read finishing
- * between a caller's `await getConfig()` and its look here puts its own verdict in its place. A caller that needs
- * its own read's verdict takes `readConfig()`, which returns it with the value
- */
-let fallbackReason: FallbackReason | null = null
-
-/**
- * For the UI: did the configuration fall back to the defaults. On a fallback the reader's API key, engine and mode
- * are all out of effect, and the reader must see it. **The material for the explanation, not a sentence**: the sentence is written in the interface language, and this layer knows no locale pack (Codex on #161)
- */
-export function configFallbackReason(): FallbackReason | null {
-  return fallbackReason
-}
-
-/**
  * `tooNew`: the stored version is newer than this extension. `upgradeFailed`: older, so a migration should have
  * carried it here and did not — WXT runs every step before it writes anything, so a step that threw left the value as
  * it was (a later build that fixes the step may still read it; a reset replaces it). `invalid`: the structure fails
@@ -232,9 +215,9 @@ function describeFallback(stored: unknown, issues: readonly { path: PropertyKey[
  * taking the extension down. **The fallback cannot be silent**: the reader's key is stored yet out of effect, the
  * translation quietly degrades to a free engine, and with no clue in the interface nobody would find out (met 2026-09-06: a v7 configuration + a v6 build)
  *
- * **The verdict comes back with the value it belongs to**, in one answer, and the module's `fallbackReason` is left
- * as it was: a caller that acts on the verdict — the settings page gives an origin back only on a list it could read —
- * must not be handed another read's
+ * **The verdict comes back with the value it belongs to**, in one answer: a caller that acts on the verdict — the
+ * settings page gives an origin back only on a list it could read — is never handed another read's (a module-wide
+ * verdict, the latest read's to finish, once was: the redesign's Part 5)
  */
 export async function readConfig(): Promise<ConfigReading> {
   const stored = await configItem.getValue()
@@ -252,11 +235,9 @@ export interface ConfigReading {
   fallbackReason: FallbackReason | null
 }
 
-/** `readConfig()`'s value; its verdict is kept for `configFallbackReason()` */
+/** `readConfig()`'s value, for a caller that does not act on the verdict */
 export async function getConfig(): Promise<Config> {
-  const reading = await readConfig()
-  fallbackReason = reading.fallbackReason
-  return reading.config
+  return (await readConfig()).config
 }
 
 /** The refusal's `name`, a string of its own: it crosses the message boundary (shared/messages.ts `failure`), and a class's own name does not survive minification */
@@ -280,10 +261,7 @@ export async function setConfig(config: Config): Promise<void> {
   const next = configSchema.parse(config)
   const stored = await configItem.getValue()
   const readable = configSchema.safeParse(stored)
-  if (!readable.success) {
-    fallbackReason = describeFallback(stored, readable.error.issues)
-    throw new ConfigUnreadableError(fallbackReason)
-  }
+  if (!readable.success) throw new ConfigUnreadableError(describeFallback(stored, readable.error.issues))
   await configItem.setValue(next)
 }
 
@@ -300,7 +278,6 @@ export async function resetConfig(): Promise<void> {
     { key: CONFIG_KEY, value: DEFAULT_CONFIG },
     { key: `${CONFIG_KEY}$`, value: { v: CONFIG_VERSION } },
   ])
-  fallbackReason = null
 }
 
 /**

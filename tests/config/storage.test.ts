@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { appearanceSchema } from '@/config/appearance'
 import { CONFIG_VERSION, type Config, DEFAULT_CONFIG, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
 import { serviceSchema } from '@/config/services'
-import { chooseFirstTarget, configFallbackReason, configItem, getConfig, readConfig, resetConfig, setConfig, watchConfigChange } from '@/config/storage'
+import { chooseFirstTarget, configItem, getConfig, readConfig, resetConfig, setConfig, watchConfigChange } from '@/config/storage'
 
 /** A reader-added service, the shape v12 stores */
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
@@ -51,7 +51,7 @@ describe('config storage', () => {
     const fresh = await import('@/config/storage')
     expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
     // Returned is the cause, not a sentence: the sentence is written in the interface language (UI.md §6)
-    expect(fresh.configFallbackReason()).toEqual({ kind: 'tooNew', stored: CONFIG_VERSION + 1, supported: CONFIG_VERSION })
+    expect((await fresh.readConfig()).fallbackReason).toEqual({ kind: 'tooNew', stored: CONFIG_VERSION + 1, supported: CONFIG_VERSION })
   })
 
   it('a broken structure names the field, not just “invalid”', async () => {
@@ -59,7 +59,7 @@ describe('config storage', () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
-    expect(fresh.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'targetLanguage' })
+    expect((await fresh.readConfig()).fallbackReason).toMatchObject({ kind: 'invalid', where: 'targetLanguage' })
   })
 
   describe('a stored value this build cannot read is never written over', () => {
@@ -84,7 +84,7 @@ describe('config storage', () => {
         vi.resetModules()
         const fresh = await import('@/config/storage')
         await expect(fresh.setConfig(DEFAULT_CONFIG)).rejects.toBeInstanceOf(fresh.ConfigUnreadableError)
-        expect(fresh.configFallbackReason()).toMatchObject({ kind: c.kind })
+        expect((await fresh.readConfig()).fallbackReason).toMatchObject({ kind: c.kind })
       })
 
       it(`${c.name}: the reader’s reset is the way out — defaults stored under this build’s version marker, writes accepted again`, async () => {
@@ -98,7 +98,7 @@ describe('config storage', () => {
         // **same write** as the value: cut short between two, the newer build would migrate its own value again
         expect(writes.mock.calls.map(([items]) => Object.keys(items as object).sort())).toEqual([['config', 'config$']])
         expect(await fakeBrowser.storage.local.get(['config', 'config$'])).toEqual({ config: DEFAULT_CONFIG, config$: { v: CONFIG_VERSION } })
-        expect(fresh.configFallbackReason()).toBeNull()
+        expect((await fresh.readConfig()).fallbackReason).toBeNull()
         writes.mockRestore()
         await fresh.setConfig({ ...DEFAULT_CONFIG, mode: 'stack' })
         expect((await fresh.getConfig()).mode).toBe('stack')
@@ -113,7 +113,7 @@ describe('config storage', () => {
       vi.resetModules()
       const fresh = await import('@/config/storage')
       expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
-      expect(fresh.configFallbackReason()).toEqual({ kind: 'upgradeFailed', stored: CONFIG_VERSION - 1, supported: CONFIG_VERSION })
+      expect((await fresh.readConfig()).fallbackReason).toEqual({ kind: 'upgradeFailed', stored: CONFIG_VERSION - 1, supported: CONFIG_VERSION })
       await expect(fresh.setConfig(DEFAULT_CONFIG)).rejects.toMatchObject({ reason: { kind: 'upgradeFailed' } })
       expect((await fakeBrowser.storage.local.get('config')).config).toEqual(v14)
     })
@@ -138,14 +138,14 @@ describe('config storage', () => {
     const fresh = await import('@/config/storage')
     await fresh.setConfig({ ...DEFAULT_CONFIG, services: [{ ...SVC, apiKey: 'sk-ok' }] })
     expect((await fresh.getConfig()).services[0]?.apiKey).toBe('sk-ok')
-    expect(fresh.configFallbackReason()).toBeNull()
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
   })
 
   it('empty storage reading the defaults is no fallback either (a first install must not alarm)', async () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
-    expect(fresh.configFallbackReason()).toBeNull()
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
   })
 
   it('bad data in storage falls back to the defaults', async () => {
@@ -184,38 +184,24 @@ describe('a read and its verdict (readConfig)', () => {
     answers[1]!(second)
     return seen
   }
-  /** The pair `readConfig` replaces for a caller that acts on the verdict */
-  const pair = async () => ({ config: await getConfig(), fallbackReason: configFallbackReason() })
-
   it('a read found unreadable says so, even when a read that finds the value readable finishes before its caller looks (round 5)', async () => {
-    // the premise: in this interleaving the pair hands the first caller the second read's verdict beside its own value
-    const [paired] = await interleaved(BROKEN, SOUND, pair)
-    expect(paired).toEqual({ config: DEFAULT_CONFIG, fallbackReason: null })
-    vi.restoreAllMocks()
     const [unreadable, readable] = await interleaved(BROKEN, SOUND, readConfig)
     expect(unreadable).toEqual({ config: DEFAULT_CONFIG, fallbackReason: expect.objectContaining(BROKEN_VERDICT) })
     expect(readable).toEqual({ config: SOUND, fallbackReason: null })
   })
 
   it('a read found readable says so, even when a read that finds the value unreadable finishes before its caller looks (round 5)', async () => {
-    const [paired] = await interleaved(SOUND, BROKEN, pair)
-    expect(paired).toEqual({ config: SOUND, fallbackReason: expect.objectContaining(BROKEN_VERDICT) })
-    vi.restoreAllMocks()
     const [readable, unreadable] = await interleaved(SOUND, BROKEN, readConfig)
     expect(readable).toEqual({ config: SOUND, fallbackReason: null })
     expect(unreadable).toEqual({ config: DEFAULT_CONFIG, fallbackReason: expect.objectContaining(BROKEN_VERDICT) })
   })
 
-  it('getConfig is readConfig\'s value, its verdict kept for configFallbackReason(); readConfig leaves that verdict as it was', async () => {
+  it('getConfig is readConfig\'s value', async () => {
     await fakeBrowser.storage.local.set({ config: BROKEN, config$: { v: CONFIG_VERSION } })
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     expect(await getConfig()).toEqual(DEFAULT_CONFIG)
-    expect(configFallbackReason()).toMatchObject(BROKEN_VERDICT)
     await fakeBrowser.storage.local.set({ config: SOUND })
-    expect(await readConfig()).toEqual({ config: SOUND, fallbackReason: null })
-    expect(configFallbackReason()).toMatchObject(BROKEN_VERDICT)
     expect(await getConfig()).toEqual(SOUND)
-    expect(configFallbackReason()).toBeNull()
   })
 })
 
@@ -251,7 +237,7 @@ describe('the preload, v15 to v20', () => {
       vi.resetModules()
       const fresh = await import('@/config/storage')
       const c = await fresh.getConfig()
-      expect(fresh.configFallbackReason()).toBeNull()
+      expect((await fresh.readConfig()).fallbackReason).toBeNull()
       expect(c.preload).toBe(expected)
       expect(c.mode).toBe(DEFAULT_CONFIG.mode)
     }
@@ -271,7 +257,7 @@ describe('the preload, v15 to v20', () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
-    expect(fresh.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'preload' })
+    expect((await fresh.readConfig()).fallbackReason).toMatchObject({ kind: 'invalid', where: 'preload' })
     // WXT's migration still lands the unrepaired value at v20 in storage: left as it is, that would corrupt every
     // test after this one that reads through the file's top-level, statically-imported storage module
     fakeBrowser.reset()
@@ -512,7 +498,7 @@ describe('provider selection', () => {
     const fresh = await import('@/config/storage')
     const c = await fresh.getConfig()
     // The reader's key and endpoint survive: the config did not fall back to defaults
-    expect(fresh.configFallbackReason()).toBeNull()
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(c.services[0]?.apiKey).toBe('sk-keep')
     expect(c.services[0]?.model).toBe(long)
     expect(c.services[0]?.name.length).toBeLessThanOrEqual(40)
@@ -524,7 +510,7 @@ describe('provider selection', () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     const c = await fresh.getConfig()
-    expect(fresh.configFallbackReason()).toBeNull()
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(c.version).toBe(CONFIG_VERSION)
     expect(c.reading).toEqual({ sentenceHighlight: true, openIn: 'new-tab' })
     expect(c.services[0]).toMatchObject({ id: SVC.id, apiKey: 'sk-keep', thinking: 'disabled' })
@@ -534,7 +520,7 @@ describe('provider selection', () => {
     vi.resetModules()
     const nulled = await import('@/config/storage')
     expect(await nulled.getConfig()).toEqual(DEFAULT_CONFIG)
-    expect(nulled.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'reading' })
+    expect((await nulled.readConfig()).fallbackReason).toMatchObject({ kind: 'invalid', where: 'reading' })
     // Malformed storage at version 13 reaches the migration before any validation and must not throw there: `null`
     // is "nothing stored" to WXT (the defaults, no migration, no alarm — a first install looks the same), and any other
     // wrong value is migrated as it is and then fails the schema, taking the documented fallback (Copilot on #209)
@@ -542,19 +528,19 @@ describe('provider selection', () => {
     vi.resetModules()
     const empty = await import('@/config/storage')
     expect(await empty.getConfig()).toEqual(DEFAULT_CONFIG)
-    expect(empty.configFallbackReason()).toBeNull()
+    expect((await empty.readConfig()).fallbackReason).toBeNull()
     await fakeBrowser.storage.local.set({ config: 'garbage', config$: { v: 13 } })
     vi.resetModules()
     const broken = await import('@/config/storage')
     expect(await broken.getConfig()).toEqual(DEFAULT_CONFIG)
-    expect(broken.configFallbackReason()).toMatchObject({ kind: 'invalid' })
+    expect((await broken.readConfig()).fallbackReason).toMatchObject({ kind: 'invalid' })
     // Nothing legitimately stored lacks `thinking` (the v12 migration and the drawer write it): not repaired, named
     const { thinking: _thinking, ...bare } = SVC
     await fakeBrowser.storage.local.set({ config: { ...v13, reading: { sentenceHighlight: true }, services: [bare] }, config$: { v: 13 } })
     vi.resetModules()
     const stripped = await import('@/config/storage')
     expect(await stripped.getConfig()).toEqual(DEFAULT_CONFIG)
-    expect(stripped.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'services.0.thinking' })
+    expect((await stripped.readConfig()).fallbackReason).toMatchObject({ kind: 'invalid', where: 'services.0.thinking' })
     // A v13 value with both present migrates unchanged, apart from what later versions add: v16's `reading.openIn`
     const full = { ...DEFAULT_CONFIG, version: 13, reading: { sentenceHighlight: false }, provider: SVC.id, services: [{ ...SVC, thinking: 'enabled' as const }], preload: { margin: 1000, threshold: 0 } }
     await fakeBrowser.storage.local.set({ config: full, config$: { v: 13 } })
@@ -599,7 +585,7 @@ describe('provider selection', () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     expect((await fresh.getConfig()).image).toEqual({ enabled: true })
-    expect(fresh.configFallbackReason()).toBeNull()
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
   })
 
   it('a reader who had unticked every display keeps figure translation off: before v20 an empty list meant off (migration 11 read it so)', async () => {
@@ -613,7 +599,7 @@ describe('provider selection', () => {
       vi.resetModules()
       const fresh = await import('@/config/storage')
       expect((await fresh.getConfig()).image).toEqual(expected)
-      expect(fresh.configFallbackReason()).toBeNull()
+      expect((await fresh.readConfig()).fallbackReason).toBeNull()
     }
     fakeBrowser.reset()
   })
@@ -624,7 +610,7 @@ describe('provider selection', () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
-    expect(fresh.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'image' })
+    expect((await fresh.readConfig()).fallbackReason).toMatchObject({ kind: 'invalid', where: 'image' })
     // the next describe block reads storage through this file's static import: reset so it does not see this hand edit
     fakeBrowser.reset()
   })
@@ -643,7 +629,7 @@ describe('provider selection', () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     const c = await fresh.getConfig()
-    expect(fresh.configFallbackReason()).toBeNull()
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(c.version).toBe(CONFIG_VERSION)
     expect(c.services).toHaveLength(1)
     expect(c.services[0]).toMatchObject({ apiKey: 'sk-keep', model: 'x/y', baseURL: 'https://openrouter.ai/api/v1' })
@@ -669,7 +655,7 @@ describe('provider selection', () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     const c = await fresh.getConfig()
-    expect(fresh.configFallbackReason()).toBeNull()
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(c.version).toBe(CONFIG_VERSION)
     expect(c.provider).toBe('google-web')
     expect(c.services).toEqual([])
@@ -684,7 +670,7 @@ describe('provider selection', () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     const config = await fresh.getConfig()
-    expect(fresh.configFallbackReason()).toBeNull()
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(config.version).toBe(CONFIG_VERSION)
     // The reader's own choice about highlighting survives; the new field takes the default
     expect(config.reading).toEqual({ sentenceHighlight: false, openIn: 'new-tab' })
@@ -696,7 +682,7 @@ describe('provider selection', () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     const config = await fresh.getConfig()
-    expect(fresh.configFallbackReason()).toBeNull()
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(config.version).toBe(CONFIG_VERSION)
     expect('floatingEntry' in config).toBe(false)
     // Nothing the reader chose is touched
@@ -717,7 +703,7 @@ describe('provider selection', () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     const config = await fresh.getConfig()
-    expect(fresh.configFallbackReason()).toBeNull()
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(config.version).toBe(CONFIG_VERSION)
     // a configuration from before v19 has no appearance, and reaches v20 following the system
     expect(config.pdfReader).toEqual({ enabled: true, original: false, sync: true, swapped: false, dimPages: true })
@@ -732,7 +718,7 @@ describe('provider selection', () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     const config = await fresh.getConfig()
-    expect(fresh.configFallbackReason()).toBeNull()
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(config.theme).toBe('dark')
     expect(config.pdfReader).toEqual({ enabled: false, original: true, sync: false, swapped: true, dimPages: false })
     expect(config.mode).toBe('only')
@@ -745,7 +731,7 @@ describe('provider selection', () => {
     const fresh = await import('@/config/storage')
     // no throw: the defaults in use, and the reason names the field (S-O-02 shows it)
     expect(await fresh.getConfig()).toEqual(DEFAULT_CONFIG)
-    expect(fresh.configFallbackReason()).toMatchObject({ kind: 'invalid', where: 'pdfReader' })
+    expect((await fresh.readConfig()).fallbackReason).toMatchObject({ kind: 'invalid', where: 'pdfReader' })
   })
 
   it('v20 carries a light or a system appearance to the theme as well, and leaves one no theme holds for the schema to name', async () => {
@@ -777,7 +763,7 @@ describe('provider selection', () => {
     vi.resetModules()
     const fresh = await import('@/config/storage')
     const c = await fresh.getConfig()
-    expect(fresh.configFallbackReason()).toBeNull()
+    expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(c.version).toBe(CONFIG_VERSION)
     expect(c.uiLanguage).toBe('auto')
     expect(c.services).toEqual([{ ...SVC, apiKey: 'sk-keep' }])

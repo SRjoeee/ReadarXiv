@@ -35,11 +35,9 @@ const wire = vi.hoisted(() => ({
   during: null as (() => Promise<unknown>) | null,
 }))
 vi.mock('@/shared/messages', () => ({ sendMessage: vi.fn(async (m: { type: string; id?: string; rebindAll?: boolean }) => { wire.log.push(`send ${m.type} ${m.id}${m.rebindAll ? ' all' : ''}`); return { reset: true } }) }))
-// as storage.ts: a value it cannot read is answered with the defaults; `readConfig` answers with its read's verdict,
-// `getConfig` keeps it for `configFallbackReason()` until the next read finishes
+// as storage.ts: a value it cannot read is answered with the defaults, and `readConfig` with its read's verdict
 vi.mock('@/config/storage', async () => {
   const { DEFAULT_CONFIG: defaults } = await import('@/config/schema')
-  let reason: FallbackReason | null = null
   const take = (): { config: Config; fallbackReason: FallbackReason | null } =>
     wire.unreadable ? { config: defaults, fallbackReason: { kind: 'unknown' } } : { config: wire.stored as Config, fallbackReason: null }
   const between = async () => {
@@ -49,8 +47,7 @@ vi.mock('@/config/storage', async () => {
   }
   return {
     readConfig: async () => { const reading = take(); await between(); return reading },
-    getConfig: async () => { const reading = take(); reason = reading.fallbackReason; await between(); return reading.config },
-    configFallbackReason: () => reason,
+    getConfig: async () => { const reading = take(); await between(); return reading.config },
   }
 })
 vi.mock('@/entrypoints/options/permissions', () => ({
@@ -65,7 +62,7 @@ vi.mock('@/entrypoints/options/connect', () => ({ connectService: vi.fn(async (c
 vi.mock('@/entrypoints/options/models', () => ({ listModels: async () => [] }))
 vi.mock('@/ui/use-rejected', () => ({ useRejected: () => wire.rejected }))
 
-import { configFallbackReason, getConfig } from '@/config/storage'
+import { getConfig } from '@/config/storage'
 import { Translate } from '@/entrypoints/options/sections/Translate'
 import { UNDO_MS } from '@/entrypoints/options/ui/UndoRow'
 import { O, S, setLocale } from '@/ui/strings'
@@ -474,9 +471,8 @@ describe('the translation services (§6.3)', () => {
     await vi.advanceTimersByTimeAsync(UNDO_MS)
     await m.flush()
     await m.flush()
-    // the premise: the other read ran inside the commit's, and the latest verdict is its own, readable
+    // the premise: the other read ran inside the commit's, finding the value readable
     expect(wire.during).toBeNull()
-    expect(configFallbackReason()).toBeNull()
     expect(committed()).toEqual([`send axt:engine-ready ${MINE.id} all`])
     await m.unmount()
     await m.flush()

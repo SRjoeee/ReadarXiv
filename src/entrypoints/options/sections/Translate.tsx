@@ -249,10 +249,10 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusRow: (id:
     // taken before the stored list is read: an undo that lands in between is then in one or the other
     const waiting = [...pending.current, ...undoing.current].map(x => x.service.baseURL)
     // the verdict of this read, returned with its value, not guessed from the defaults it answers with (round 4,
-    // addendum) and not the module's latest (storage.ts `configFallbackReason`): another read of this page — another
-    // list's write, the watcher's re-read, a second commit — can finish between this read and the line after it, and
-    // hand this commit its own verdict (round 5). The value unreadable, the addresses it holds are unknown, and an
-    // origin kept a while is the safer failure
+    // addendum) and never another read's: another read of this page — another list's write, the watcher's re-read, a
+    // second commit — can finish between this read and the line after it, and hand this commit its own verdict
+    // (round 5). The value unreadable, the addresses it holds are unknown, and an origin kept a while is the safer
+    // failure
     const { config: latest, fallbackReason } = await readConfig()
     if (fallbackReason !== null) return
     const inUse = [...latest.services.map(s => s.baseURL), ...waiting]
