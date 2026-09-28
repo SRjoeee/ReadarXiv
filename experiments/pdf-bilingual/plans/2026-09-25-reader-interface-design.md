@@ -403,7 +403,7 @@ reader cannot do is greyed or hidden):
   a technical reason). A `mode` of `'stack'` shows as 左右 chosen, since that is what the reader shows.
 - The primary button: 翻译本页 / 显示原文, clearing or setting `pdfReader.original`.
 - 对照高亮 and 图片翻译: as elsewhere.
-- The style menu: hidden (it has no effect on a typeset PDF; hidden, not explained).
+- The style menu: greyed, in its place (it has no effect on a typeset PDF; greyed, not explained — the maintainer, 2026-09-28: the foot stays the same on every page).
 
 With the reader closed, a PDF page gets the abstract page's entry view: the two buttons.
 
