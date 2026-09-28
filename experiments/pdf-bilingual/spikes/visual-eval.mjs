@@ -15,7 +15,7 @@ import { latin1, readFontProbe } from '../../../src/pdf-reader/engine/latex-fron
 import { scriptOf, strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
 import { translateTexts, translateUnits } from '../../../src/pdf-reader/engine/mt.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
-import { compare, fitLeads, heights, lockedFiles, marksOf, originalProbeFiles, readLines, readLockEvents, readTargets, shrinkSizes, theoremEnvs, tightenedLeads } from './lock.mjs'
+import { cjkType, compare, fitLeads, heights, lockedFiles, withCjkType, marksOf, originalProbeFiles, readLines, readLockEvents, readTargets, shrinkSizes, theoremEnvs, tightenedLeads } from './lock.mjs'
 import { catalogEntry, COLUMNS, FIT, overfullCount, PARAMS, SHRINK_MIN, suspiciousPages } from './visual-eval-lib.mjs'
 
 const run = promisify(execFile)
@@ -139,12 +139,27 @@ async function generate(lang, id) {
   // original's, and the paper's one factor with each unit's nudge (lock.mjs fitLeads); a script that grows is first set
   // smaller as a whole, so that its leading need not close up
   let fit = null
-  {
-    const cjk = ['Hans', 'Hant', 'Jpan', 'Kore'].includes(scriptOf(lang))
+  if (['Hans', 'Hant', 'Jpan', 'Kore'].includes(scriptOf(lang))) {
+    // CJK: one set of type for the whole translation (lock.mjs cjkType): a trial at today's, the shares worked out,
+    // a second trial to take up what the new line breaks moved, then the fit
+    const todayType = { lead: strategy.leading ?? 1, track: 0, scale: 1 }
+    const typeset = (name, t) => compile(work, name, paper, files, lockedFiles(paper, translated, { strategy: withCjkType(strategy, t), fonts, em, theorems, sync: false, lead: `${t.lead}\\baselineskip` }), { engine: strategy.engine, rerun: true })
+    const ratio = async r => { const lines = readLines(r.log); return fitLeads(orig, heights(units, await marksOf(r.pdf), lines), lines, { lo: 0, hi: 99, band: 0 }).g }
+    let t = todayType, r = await typeset('fit-1', todayType), total = 1
+    for (let pass = 2; pass <= 3 && r.ok; pass++) {
+      total *= await ratio(r)
+      t = cjkType(total, todayType)
+      const next = await typeset(`fit-${pass}`, t)
+      if (!next.ok) { base.failed.fit = firstError(next.log); break }
+      r = next
+      total = t.reached
+    }
+    if (r.ok) fit = { ...r, g: total, held: t.reached, size: t.scale, type: t }; else base.failed.fit = firstError(r.log)
+  } else {
     const fopts = { strategy, fonts, em, theorems, sync: false, lead: `${strategy.leading ?? 1}\\baselineskip` }
     let trial = await compile(work, 'fit-1', paper, files, lockedFiles(paper, translated, fopts), { engine: strategy.engine, rerun: true })
     const fitSizes = new Map()
-    if (trial.ok && !cjk) {
+    if (trial.ok) {
       const lines = readLines(trial.log), { g } = fitLeads(orig, heights(units, await marksOf(trial.pdf), lines), lines, { lo: 0, hi: 99, band: 0 })
       const size = Math.min(1, Math.max(FIT.minSize, Math.sqrt(g)))
       if (size < 0.999) {
@@ -154,20 +169,20 @@ async function generate(lang, id) {
       }
     }
     if (trial.ok) {
-      const lines = readLines(trial.log), { g, held, leads: fitLeadMap } = fitLeads(orig, heights(units, await marksOf(trial.pdf), lines), lines, cjk ? FIT.cjk : FIT.alphabet)
+      const lines = readLines(trial.log), { g, held, leads: fitLeadMap } = fitLeads(orig, heights(units, await marksOf(trial.pdf), lines), lines, FIT.alphabet)
       const r = await compile(work, 'fit-3', paper, files, lockedFiles(paper, translated, { ...fopts, sizes: fitSizes, leads: fitLeadMap }), { engine: strategy.engine, rerun: true })
       if (r.ok) fit = { ...r, g, held, size: fitSizes.values().next().value ?? 1 }; else base.failed.fit = firstError(r.log)
     } else base.failed.fit = firstError(trial.log)
   }
   if (fit) copyFileSync(fit.pdf, join(dir, 'fit.pdf'))
-  note('fit', !!fit, fit ? `G ${fit.g.toFixed(3)} held ${fit.held.toFixed(3)} size ${fit.size.toFixed(3)}` : '')
+  note('fit', !!fit, fit ? `G ${fit.g.toFixed(3)} held ${fit.held.toFixed(3)} size ${fit.size.toFixed(3)}${fit.type ? ` lead ${fit.type.lead.toFixed(3)} track ${fit.type.track.toFixed(3)}` : ''}` : '')
   if (shrunk) copyFileSync(shrunk.pdf, join(dir, 'shrink.pdf'))
   else if (locked.ok && !base.failed.shrink) copyFileSync(locked.pdf, join(dir, 'shrink.pdf'))
   note('shrink', !!shrunk, 'smaller', sizes.size)
 
   // 3. numbers and checks
   if (today.ok) base.numbers.today = { ...compare(units, orig, await marksOf(today.pdf)), offPage: undefined }
-  if (fit) base.numbers.fit = { ...compare(units, orig, await marksOf(fit.pdf)), offPage: undefined, g: fit.g, held: fit.held, size: fit.size }
+  if (fit) base.numbers.fit = { ...compare(units, orig, await marksOf(fit.pdf)), offPage: undefined, g: fit.g, held: fit.held, size: fit.size, ...(fit.type ? { type: fit.type } : {}) }
   if (existsSync(join(dir, 'shrink.pdf')) && !base.failed.shrink) base.numbers.shrink = { ...compare(units, orig, await marksOf(join(dir, 'shrink.pdf'))), offPage: undefined, smaller: sizes.size }
   if (locked.ok) {
     const lm = await marksOf(locked.pdf), lc = compare(units, orig, lm)

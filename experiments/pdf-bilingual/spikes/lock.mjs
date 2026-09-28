@@ -6,7 +6,7 @@
 // that grew is set at, and how far a compile is from the original.
 import { readFileSync } from 'node:fs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { FIT_DEF, FORBIDDEN_TO_WARNING, latin1, latin1Bytes, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, stripPdftexOption, unitLeadTex as engineUnitLeadTex, XETEX_SHIM, XETEX_SHIM_R1 } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { EVEN_SPACES, FIT_DEF, FORBIDDEN_TO_WARNING, latin1, latin1Bytes, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, stripPdftexOption, unitLeadTex as engineUnitLeadTex, withBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from '../../../src/pdf-reader/engine/latex-front.mjs'
 import { typesetBy } from '../../../src/pdf-reader/engine/scripts.mjs'
 
 /**
@@ -112,6 +112,49 @@ export function fitLeads(orig, tr, lines, { lo, hi, band }) {
   return { g: st ? so / st : 1, held: g, leads }
 }
 
+/**
+ * The fit for CJK (the owner, 2026-09-28): one set of type for the whole translation, no unit set apart from another —
+ * the leading, the space between CJK characters and the CJK face's scale — each within the range natural to Chinese
+ * body text, shared out in proportion so that the translation takes the original's room. `a` the original's height
+ * over the translation's at `base`; each knob moves, in log terms, an equal share of what is needed, a knob at the end
+ * of its range handing the rest to the others, and what no knob can give is left (the page ends a little early or
+ * late: better than type out of its range). Leading × the paper's spacing; tracking in em; scale × the size
+ */
+export const CJK_RANGES = { lead: [1.2, 1.45], track: [0, 0.05], scale: [0.92, 1] }
+export function cjkType(a, base, ranges = CJK_RANGES) {
+  const knobs = [
+    { key: 'lead', at: base.lead, lo: ranges.lead[0], hi: ranges.lead[1], factor: v => v / base.lead },
+    { key: 'track', at: base.track, lo: ranges.track[0], hi: ranges.track[1], factor: v => (1 + v) / (1 + base.track) },
+    { key: 'scale', at: base.scale, lo: ranges.scale[0], hi: ranges.scale[1], factor: v => v / base.scale },
+  ]
+  // each knob's room in the direction needed, as a log factor it can still give
+  const room = k => Math.log(k.factor(a > 1 ? k.hi : k.lo))
+  const want = Math.log(a)
+  const share = new Map(knobs.map(k => [k.key, 0]))
+  let left = want, open = knobs.filter(k => (a > 1 ? room(k) > 1e-9 : room(k) < -1e-9))
+  while (open.length && Math.abs(left) > 1e-9) {
+    const each = left / open.length
+    const next = []
+    for (const k of open) {
+      const can = room(k) - share.get(k.key)
+      const take = a > 1 ? Math.min(each, can) : Math.max(each, can)
+      share.set(k.key, share.get(k.key) + take); left -= take
+      if (Math.abs(take - each) < 1e-12) next.push(k)
+    }
+    if (next.length === open.length) break
+    open = next
+  }
+  const value = k => (k.key === 'track' ? (1 + base.track) * Math.exp(share.get(k.key)) - 1 : k.at * Math.exp(share.get(k.key)))
+  return { lead: value(knobs[0]), track: value(knobs[1]), scale: value(knobs[2]), reached: Math.exp(want - left) }
+}
+/** a CJK strategy with the type cjkType gives: the leading its factor, the tracking as xeCJK's glue, the scale on the
+ *  CJK face (the Latin text keeps the paper's size) */
+export const withCjkType = (strategy, t) => ({
+  ...strategy, leading: t.lead,
+  pre: fonts => strategy.pre(fonts).replace('\\setCJKmainfont[', `\\setCJKmainfont[Scale=${t.scale.toFixed(4)},`)
+    + (t.track > 0.0005 ? `\\xeCJKsetup{CJKglue={\\hskip ${t.track.toFixed(4)}em plus 0.08\\baselineskip}}\n` : ''),
+})
+
 /** the theorem-like environments whose heads are run-in: the usual names and every \newtheorem of the paper */
 export const theoremEnvs = files => [...new Set(['theorem', 'lemma', 'corollary', 'proposition', 'definition', 'remark', 'example', 'proof', 'claim', 'conjecture', 'assumption', ...[...files].filter(([p]) => /\.(tex|sty|cls)$/i.test(p)).flatMap(([, b]) => [...latin1(b).matchAll(/\\newtheorem\*?\s*\{([^}]+)\}/g)].map(m => m[1].trim()))])]
 
@@ -119,7 +162,7 @@ export const theoremEnvs = files => [...new Set(['theorem', 'lemma', 'corollary'
 export function originalProbeFiles({ project, units }, theorems) {
   const index = new Map(units.map((u, i) => [u, i]))
   const base = markUnits(units)
-  const files = patch(project, new Map(), { mark: u => { const m = base(u); return m && { start: `\\axtat{${index.get(u)}}\\axtlines{${index.get(u)}}${m.start}`, end: m.end } } })
+  const files = patch(project, new Map(), { mark: u => { const m = base(u); return m && { ...m, before: `\\axtat{${index.get(u)}}\\axtlines{${index.get(u)}}` } } })
   files.set(project.main, latin1Bytes(MARK_DEF + LINES_TEX + SYNC_TEX + `\\axtsyncpoints{${theorems.join(',')}}\n` + latin1(files.get(project.main))))
   return files
 }
@@ -130,12 +173,12 @@ export function originalProbeFiles({ project, units }, theorems) {
 export function lockedFiles({ fsys, meta, project, units }, translated, { strategy, fonts, em, leads = new Map(), sizes = new Map(), targets = new Map(), theorems, sync = true, lead = null }) {
   const index = new Map(units.map((u, i) => [u, i]))
   const base = markUnits(units)
-  const mark = u => { const m = base(u); if (!m) return m; const i = index.get(u); return { start: `${sync ? `\\axtsync{${i}}` : ''}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}${m.start}`, end: m.end } }
-  const files = patch(project, typesetBy(translated, strategy), { mark })
+  const mark = u => { const m = base(u); if (!m) return m; const i = index.get(u); return { ...m, before: `${sync ? `\\axtsync{${i}}` : ''}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}` } }
+  const files = patch(project, new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, withBreaks(pieces)])), { mark })
   let main = latin1(files.get(project.main))
   const at = main.search(/\\begin\s*\{document\}/)
   const pre = strategy.pre(fonts)
-  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + pre + NO_OVERFLOW + main.slice(at)
+  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + pre + NO_OVERFLOW + (strategy.xe ? '' : EVEN_SPACES) + main.slice(at)
   if (strategy.xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
   const table = [
     ...[...targets].map(([i, t]) => `\\expandafter\\def\\csname axt@t@${i}\\endcsname{{${t.page}}{${t.col}}{${t.total}pt}}`),

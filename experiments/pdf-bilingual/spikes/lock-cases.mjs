@@ -8,7 +8,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { MARK_DEF } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { fitLeads, heights, LINES_TEX, marksOf, readLines, readLockEvents, readTargets, shrinkSizes, SIZE_TEX, SYNC_TEX, tightenedLeads, unitLeadTex } from './lock.mjs'
+import { cjkType, fitLeads, heights, LINES_TEX, marksOf, readLines, readLockEvents, readTargets, shrinkSizes, SIZE_TEX, SYNC_TEX, tightenedLeads, unitLeadTex } from './lock.mjs'
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
@@ -114,6 +114,12 @@ check('unit leading raises no TeX error', !/^! /m.test(leadLog), (leadLog.match(
 // the fit: one factor for the paper, each unit nudged within its band
 const fitted = fitLeads(new Map([[0, { hy: 100 }], [1, { hy: 100 }], [2, { hy: 100 }]]), new Map([[0, { hy: 90 }], [1, { hy: 80 }], [2, { hy: 100 }]]), new Map([[0, { lines: 5, bs: 15, size: 10 }], [1, { lines: 5, bs: 15, size: 10 }], [2, { lines: 5, bs: 15, size: 10 }], [3, { lines: 1, bs: 15, size: 10 }]]), { lo: 0.9, hi: 1.25, band: 0.08 })
 check('fit: G the summed ratio, each unit within its band, one with no pair at G', Math.abs(fitted.g - 300 / 270) < 1e-9 && Math.abs(fitted.leads.get(1) - 1.5 * (300 / 270) * 1.08) < 1e-9 && Math.abs(fitted.leads.get(3) - 1.5 * (300 / 270)) < 1e-9, JSON.stringify([fitted.g, [...fitted.leads]]))
+// the CJK fit's type: shared out within its ranges, what no knob can give left over
+const base = { lead: 1.3, track: 0, scale: 1 }
+const grow = cjkType(1.1, base), shrink = cjkType(0.9, base), far = cjkType(1.4, base)
+check('CJK type: a translation 10 % short grows by leading and tracking, the scale kept', Math.abs(grow.reached - 1.1) < 1e-9 && grow.lead > 1.3 && grow.track > 0 && grow.scale === 1, JSON.stringify(grow))
+check('CJK type: a translation 10 % long shrinks by leading and scale, no negative tracking', Math.abs(shrink.reached - 0.9) < 1e-9 && shrink.lead < 1.3 && shrink.scale < 1 && shrink.track === 0, JSON.stringify(shrink))
+check('CJK type: past every range, each knob at its end and the rest left', Math.abs(far.lead - 1.45) < 1e-9 && Math.abs(far.track - 0.05) < 1e-9 && far.reached < 1.4, JSON.stringify(far))
 check('lines read with their size', readLines('AXT-LINES 3 4 11.0pt 10.95\n').get(3)?.size === 10.95)
 // a unit set smaller: its own paragraph at the factor, the size back after it; a caption measured in a box gets none
 const sizes = shrinkSizes(new Map([[0, { hy: 90 }], [1, { hy: 90 }], [2, { hy: 100 }]]), new Map([[0, { hy: 100 }], [1, { hy: 200 }], [2, { hy: 90 }]]), new Map(), { min: 0.9 })
