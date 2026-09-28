@@ -7,8 +7,9 @@
 //
 // The decision reads the page's state and session, the saved settings and the refused-key record, which move while
 // the page stays open. The page asks again when one of them may have: on a change of its state (`follow`), and while
-// it runs on a restart or a change of the record (`refresh`) and on a write of the settings that moves a field the
-// decision reads (`configChanged`) — the chain's fields alone (config/revision.ts `CHAIN_CONFIG_FIELDS`: the saved
+// it runs on a restart, a change of the record or a return from the back/forward cache (`refresh`,
+// `askAgainOnRestore`) and on a write of the settings that moves a field the decision reads (`configChanged`) — the
+// chain's fields alone (config/revision.ts `CHAIN_CONFIG_FIELDS`: the saved
 // settings reach the decision only through the chain built from them). A colour dragged on the settings page writes
 // the settings every frame and asks nothing; it asked back to back for as long as the drag lasted (Part 7's final
 // review). One ask is out at a time, and at most one waits behind it.
@@ -94,4 +95,14 @@ export function createToggleWords(deps: ToggleWordsDeps): ToggleWords {
       if (previous === null || chainConfigChanged(previous, next)) refresh()
     },
   }
+}
+
+/**
+ * A page brought back from the back/forward cache (`pageshow`, `persisted`) runs no script again, and what the decision
+ * reads may have moved while it was frozen — the settings changed in the tab it left for, a key made good — with no
+ * watcher to say so if Chrome dropped the change for the frozen document. A running page asks again (`refresh`); any
+ * other keeps its words, which no setting moves. The toolbar icon's own pattern (shared/action-icon.ts), idempotent
+ */
+export function askAgainOnRestore(words: Pick<ToggleWords, 'refresh'>, win: Window = window): void {
+  win.addEventListener('pageshow', event => { if (event.persisted) words.refresh() })
 }

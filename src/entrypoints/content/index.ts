@@ -15,7 +15,7 @@ import { createMessageTransport } from '@/shared/transport'
 import { applyLocaleFrom } from '@/ui/apply-locale'
 import { S } from '@/ui/strings'
 import { enableDebug } from './debug'
-import { createToggleWords } from './toggle-words'
+import { askAgainOnRestore, createToggleWords } from './toggle-words'
 
 // Injected into arxiv.org/html/*. On page load it only extracts and keeps the Block[] in memory — the one DOM write
 // is the floating button's host on <body> (DESIGN §4.0c, §7.1), and the figure viewer's beside it (§15.7); translation starts when the reader asks (DESIGN §4.1). A URL with #axt-debug draws outlines, one with #readarxiv starts of itself — for debugging and automated checks.
@@ -75,6 +75,7 @@ export default defineContentScript({
       words.configChanged(config, previous)
     })
     watchRejected(() => words.refresh())
+    askAgainOnRestore(words)
 
     onMessages({
       // A restart replaces the session in place, and a running page's state does not move: the words ask again here

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
-import { createToggleWords } from '@/entrypoints/content/toggle-words'
+import { askAgainOnRestore, createToggleWords } from '@/entrypoints/content/toggle-words'
 import { LOCALES } from '@/locales'
 import type { PageAction } from '@/shared/page-action'
 
@@ -149,5 +149,30 @@ describe('createToggleWords', () => {
     words.configChanged({ ...config, provider: 'microsoft' }, config)
     await settle()
     expect(asks()).toBe(5)
+  })
+
+  it('a page brought back from the back/forward cache asks again while it runs: what the decision reads may have moved while it was frozen, and no watcher said so (Part 7\'s final review, C-U)', async () => {
+    const pageshow = (persisted: boolean) => Object.defineProperty(new Event('pageshow'), 'persisted', { value: persisted })
+    let answer = decision('restore')
+    const decide = vi.fn(async () => answer)
+    const words = createToggleWords({ decide, changed: () => undefined })
+    const win = new EventTarget() as unknown as Window
+    askAgainOnRestore(words, win)
+    words.follow('on')
+    await settle()
+    expect([decide.mock.calls.length, words.label(S, true)]).toEqual([1, S.primary.restore])
+    // left for another page, the service changed there, and back: the page as it was, its words the old decision's
+    answer = decision('retranslate')
+    win.dispatchEvent(pageshow(false))
+    await settle()
+    expect(decide.mock.calls.length).toBe(1)
+    win.dispatchEvent(pageshow(true))
+    await settle()
+    expect([decide.mock.calls.length, words.label(S, true)]).toEqual([2, S.primary.retranslate])
+    // an idle page's press translates whatever moved: nothing to ask
+    words.follow('idle')
+    win.dispatchEvent(pageshow(true))
+    await settle()
+    expect(decide.mock.calls.length).toBe(2)
   })
 })
