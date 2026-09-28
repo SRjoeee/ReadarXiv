@@ -45,7 +45,7 @@ aside select { margin: 8px 12px }
 </style>
 </head>
 <body>
-<header><nav id="langs"></nav><span style="flex:1"></span><span id="flags-count"></span><button id="export">Export flags</button></header>
+<header><nav id="langs"></nav><span style="flex:1"></span><span id="flags-count"></span><button id="export">Export flags</button><button id="clear">Clear flags</button></header>
 <main><aside><select id="sort"><option value="paper">By paper</option><option value="gain">Most gained first</option><option value="loss">Least gained first</option></select><div id="papers"></div></aside><section id="view"></section></main>
 <script type="module">
 const $ = s => document.querySelector(s)
@@ -53,7 +53,7 @@ const state = { catalog: null, lang: null, paper: null, index: null, page: 0, hi
 const rate = (n, d) => (d ? `${Math.round((100 * n) / d)}%` : '—')
 const gain = e => (e.today?.units && e.locked?.units ? e.locked.samePage / e.locked.units - e.today.samePage / e.today.units : -Infinity)
 const flags = () => { try { return JSON.parse(localStorage.getItem('axt-eval-flags') ?? '[]') } catch { return [] } }
-const saveFlags = f => { try { localStorage.setItem('axt-eval-flags', JSON.stringify(f)) } catch {} ; $('#flags-count').textContent = `${f.length} flagged` }
+const saveFlags = f => { try { localStorage.setItem('axt-eval-flags', JSON.stringify(f)) } catch {} ; $('#flags-count').textContent = `${f.length} flagged`; $('#clear').disabled = !f.length }
 const base = () => `data/${state.lang}/${state.paper}`
 
 function renderLangs() {
@@ -138,6 +138,13 @@ document.addEventListener('keydown', e => {
 })
 $('#sort').onchange = renderPapers
 $('#export').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(flags(), null, 1)], { type: 'application/json' })); a.download = 'flags.json'; a.click() }
+// clearing takes a second click within 3 s, the count on the button: flags already exported are dropped, not the next ones
+let clearArmed = null
+const disarm = () => { clearTimeout(clearArmed); clearArmed = null; $('#clear').textContent = 'Clear flags' }
+$('#clear').onclick = () => {
+  if (!clearArmed) { $('#clear').textContent = `Clear ${flags().length}? Click again`; clearArmed = setTimeout(disarm, 3000); return }
+  disarm(); saveFlags([])
+}
 state.catalog = await (await fetch('data/index.json')).json()
 state.lang = Object.keys(state.catalog.langs)[0]
 saveFlags(flags()); renderLangs(); renderPapers()

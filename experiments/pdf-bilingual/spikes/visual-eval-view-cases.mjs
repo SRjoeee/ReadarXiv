@@ -51,6 +51,11 @@ try {
   const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#export').click()])
   const flags = JSON.parse(readFileSync(await download.path(), 'utf8'))
   check('flag exported', flags.length === 1 && flags[0].page === 3 && flags[0].note === 'a test note' && flags[0].paper === 'p1', JSON.stringify(flags))
+  // cleared on a second click only, and then the next flag is exported alone
+  await page.locator('#clear').click()
+  check('one click does not clear', (await page.locator('#flags-count').textContent()) === '1 flagged' && /Click again/.test(await page.locator('#clear').textContent()))
+  await page.locator('#clear').click()
+  check('the second click clears', (await page.locator('#flags-count').textContent()) === '0 flagged' && (await page.locator('#clear').isDisabled()))
 } finally { await browser.close(); server.kill() }
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)
