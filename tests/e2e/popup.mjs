@@ -166,8 +166,9 @@ await sleep(1500)
     const box = sel => { const r = document.querySelector(sel)?.getBoundingClientRect(); return r ? { left: r.left - m.left, right: m.right - r.right, height: r.height } : null }
     return { width: m.width, brand: box('.brand-row'), group: box('.group'), row: box('.group-row'), primary: box('.stack button[aria-label]'), display: box('[role="radiogroup"]') }
   })
-  check('P1: 320 wide, the brand row 44, the group 12 from both edges, its rows 36, the primary 36, the display 30',
-    g.width === 320 && g.brand?.height === 44 && near(g.group?.left, 12) && near(g.group?.right, 12) && g.row?.height === 36 && g.primary?.height === 36 && g.display?.height === 30, JSON.stringify(g))
+  // the brand row 48 and the primary 44: round 7's F, the maintainer's choice of 2026-09-28 (Task 103c)
+  check('P1: 320 wide, the brand row 48, the group 12 from both edges, its rows 36, the primary 44, the display 30',
+    g.width === 320 && g.brand?.height === 48 && near(g.group?.left, 12) && near(g.group?.right, 12) && g.row?.height === 36 && g.primary?.height === 44 && g.display?.height === 30, JSON.stringify(g))
   await popup.screenshot({ path: `${SHOTS}/p1.png` })
 
   await popup.getByRole('button', { name: /翻译服务/ }).click()
