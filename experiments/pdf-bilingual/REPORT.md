@@ -1912,3 +1912,53 @@ each general (`a3072c96`, `4ef19e4e`):
 German 2608.15761's fit is a page short (28 of 29). Language gate, zh, de and ru on its 24 papers before and after these
 changes: nothing worse; its one new Russian "error" was an overfull box's dump wrapped onto a line beginning "!", which
 the gate no longer counts (`74bb43b0`).
+
+## Twenty-ninth addendum, 2026-09-28: the owner's fourth round — Locked by service H's rules
+
+**The flags** (RT-1's model card, 2608.06007's title), each traced to a general cause (`51bddb2e`, `53dae5a2`):
+
+- *The model card ran off its page in Today and the fit, its table and charts lost.* framed.sty sets its text in a
+  `\vbox`, where every paragraph is inner, and the unit leading was put back at its own level only outside boxes: a
+  heading's leading, undone inside the list after it, came back when the list ended, and each unit after measured the
+  last one's as the paper's — 13 pt to 43 pt a line. The unit leading, size and line probe now share one
+  paragraph-end mechanism (`PARA_END_TEX`) that follows ordinary groups back to the unit's level and waits at a box, a
+  cell, a note or math, told by `\currentgrouptype`. A float still taller than the page is set smaller as a whole
+  (`NO_OVERFLOW`; LaTeX lets it run past the foot).
+- *The table scaled to a third, unreadable, in every column.* `\axtfit` scaled a table to the line even when its
+  original was already wider (four p columns, 13 cm, in a minipage a third of the text wide). A translated table is now
+  set no wider than the wider of the line and its original, set once in a box never used, counters put back.
+- *The title in three lines.* The English title's `\\` stayed where the engine carried its placeholder
+  ("张量管理\\层"). In a heading it goes unless the translation keeps it after a colon, a dash or a stop, or before a
+  change of size (21 titles of 123 papers had one, all for the English line's length). A translated title is then set
+  in lines of about the same length (`\axtbalance`: the skips' stretch made finite) and broken between words
+  (`\nobreak` inside each word `Intl.Segmenter` finds): "TensorCast：大型语言模型 / 基础设施中缺失的张量管理层".
+- *Found on the way:* an AMS class's abstract lost every parenthesis and equals sign of its math under xeCJK
+  (2608.24503, 24 errors): fontspec's math family is declared as the document begins, after amsart has set the
+  abstract. fontspec is now loaded with `no-math` (`b55129b3`); the math fonts are the original's. Still open, not a
+  file server matter: 2608.06007 loads CJKutf8 itself (9 errors under xeCJK, output intact), and acmart's microtype
+  under XeTeX meets a TFM font once.
+
+Language gate before and after, de, ru and zh on 24 papers: nothing worse; zh 2608.24503 24 errors to 0.
+
+**Locked by H's rules** (the owner: align Locked with H — each block in its original's box — with our own targets and
+fonts; `d415267f`, column "Locked, H's rules"). Measuring where Locked's unit starts left the original's found the
+causes, each general:
+
+| cause | seen as | rule |
+|---|---|---|
+| the probe logs a sync point before the page builder knows whether what follows fits (RT-1: 23 of 225 points) | a unit the original set at the top of the next page targeted at the foot of this one | a point at or past its column's natural height at the break (`AXT-COL`) is the next column's top |
+| `\vspace*` is kept at a page's top | a unit that moved on carried 14–40 pt of this page's padding | padding is glue once the column has content |
+| the sync's own breakpoint before a unit | the page builder moved a unit whole when its first Chinese lines were taller; `\flushbottom` spread the shortfall above (RT-1 p. 6: three paragraphs 40 pt low) | that break costs 9999 |
+| `\newpage` ends a short column with `\vfil` | the page's glue did not stretch as the original's did | the column is filled to its original's natural height, then broken |
+| the first line spaced at the unit's leading | every unit 2 pt low (13 pt against 11) | the space to the first line is the paper's (`\prevdepth`) |
+| a float's caption taller or shorter | the rest of the page moved (RT-1 p. 5: 13 pt) | each float keeps its original's height (`AXT-FLOAT`) |
+| a unit a little over its box at a column's foot | moved on whole, the next page low (2608.15761 in German) | set smaller down to H's 0.6, aiming 2 % inside the box; an alphabet at the paper's own leading |
+
+| round, 5 papers each | on its page | within 10 pt | pages equal |
+|---|---|---|---|
+| zh Locked / **H's rules** | 89 % / **97 %** | 67 % / **70 %** | 3 / **4** of 5 |
+| de Locked / **H's rules** | 92 % / **98 %** | 48 % / **76 %** | 4 / **4** of 5 |
+
+Open: the author block (RT-1's Chinese names take 12 lines for the English 8, which H sets smaller into the 8 — the
+lock needs a box for `\maketitle`'s output or a size for its units); 10–15 pt at headings under a top float; RT-1's
+last floats a page late (32 pages for 31).
