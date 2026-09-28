@@ -14,7 +14,6 @@
 .popup .group-row > .k { flex: none; white-space: nowrap; color: var(--ink); }
 .popup .group-row > .v { display: inline-flex; align-items: center; gap: 4px; min-width: 0; color: var(--ink-2); }
 .popup .group-row > .v > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.popup .group-row > .v s { color: var(--ink-3); }
 .popup .group-row > .v > svg { flex: none; color: var(--ink-3); }
 .popup .group > .rule { height: 0.5px; margin: 0 8px; border: 0; background: var(--chrome-line); }
 

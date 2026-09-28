@@ -22,6 +22,11 @@ describe('popup.css', () => {
     expect(SHEET).toContain('.popup .go.brand kbd { background: var(--brand-chip); color: var(--on-brand); }')
   })
 
+  it('draws a replaced service, struck, in its value\'s ink-2: ink-3 was under 4.5:1 for words (3.26 light; Task 101)', () => {
+    expect(SHEET).toMatch(/\.popup \.group-row > \.v \{[^}]*color: var\(--ink-2\);/)
+    expect(SHEET).not.toMatch(/\.v s \{/)
+  })
+
   it('names only tokens the token sheet defines', () => {
     const named = [...new Set([...SHEET.matchAll(/var\((--[a-z0-9-]+)/g)].map(m => m[1]!))]
     expect(named.filter(name => !TOKENS.includes(`${name}:`))).toEqual([])
