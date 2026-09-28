@@ -14,7 +14,7 @@ import { installContextMenu, refreshContextMenu, installToggleCommand, toggleTra
 import { getFloatingEntry, patchFloatingEntry } from './floating-entry'
 import { applyLocaleFrom, resolveLocale } from '@/ui/apply-locale'
 import { setLocale } from '@/ui/strings'
-import { savedFromStatus } from '@/shared/page-action'
+import { keyMadeGood, savedFromStatus } from '@/shared/page-action'
 import { BUILD_REF } from '@/shared/build'
 import { createDiagnostics } from './diagnostics'
 import { clearRejected, clearRejectedAmong, markRejected, rejectedServices, watchRejected } from '@/shared/service-health'
@@ -174,6 +174,16 @@ export default defineBackground(() => {
     await offers.offer()
     return savedFromStatus((await statusInForce(chain)).status)
   }
+  /**
+   * The retranslate cue for the toggle (UI.md P6b, shared/page-action.ts keyMadeGood): the page's session's own chain,
+   * the refused-key record and the chain in force, read as the popup reads them
+   */
+  const madeGood = async (scope: string): Promise<boolean> => {
+    const own = router.transportFor(scope)
+    if (!own) return false
+    const [session, rejected, inForce] = await Promise.all([own.status(), rejectedServices(), statusInForce(chain)])
+    return keyMadeGood(session, rejected, inForce.status)
+  }
   const menuDeps = {
     create: (options: { id: string; title: string; contexts: string[]; documentUrlPatterns: string[] }) =>
       browser.contextMenus.create(options as Parameters<typeof browser.contextMenus.create>[0]),
@@ -181,6 +191,7 @@ export default defineBackground(() => {
     onClicked: (handler: Parameters<typeof browser.contextMenus.onClicked.addListener>[0]) => browser.contextMenus.onClicked.addListener(handler),
     send: sendToTab,
     saved,
+    madeGood,
   }
   installContextMenu(menuDeps)
   // The reader changed the interface language while this read was out: the watcher has swapped the pack already, and
@@ -198,6 +209,7 @@ export default defineBackground(() => {
     activeTab: async () => (await browser.tabs.query({ active: true, currentWindow: true }))[0],
     send: sendToTab,
     saved,
+    madeGood,
   })
 
   // The floating button undoes the page's zoom (§4.0c): every tab is told when its zoom changes. A tab with none of
@@ -236,7 +248,7 @@ export default defineBackground(() => {
     ocr,
     diagnostics,
     cache: translationCache,
-    toggle: tabId => toggleTranslation({ send: sendToTab, saved }, tabId),
+    toggle: tabId => toggleTranslation({ send: sendToTab, saved, madeGood }, tabId),
     getConfig,
     getFloatingEntry,
     patchFloatingEntry,

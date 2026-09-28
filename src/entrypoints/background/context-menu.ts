@@ -31,6 +31,11 @@ export interface ToggleDeps {
   send<T>(tabId: number, message: { type: string }): Promise<T>
   /** The saved settings as the decision needs them; null when they cannot be read (a running page then restores) */
   saved(): Promise<SavedSettings | null>
+  /**
+   * Whether the page's session (its `session` id) runs on another engine for a refused key made good since: the
+   * retranslate cue (UI.md P6b, shared/page-action.ts keyMadeGood). Absent, never
+   */
+  madeGood?(scope: string): Promise<boolean>
 }
 
 export interface MenuDeps extends ToggleDeps {
@@ -59,13 +64,16 @@ export interface CommandDeps extends ToggleDeps {
 export async function toggleTranslation(deps: ToggleDeps, tabId: number): Promise<boolean> {
   try {
     const [status, saved] = await Promise.all([
-      deps.send<Pick<PageStatus, 'progress' | 'running' | 'epoch'>>(tabId, { type: 'axt:page-status' }),
+      deps.send<Pick<PageStatus, 'progress' | 'running' | 'epoch' | 'session'>>(tabId, { type: 'axt:page-status' }),
       deps.saved().catch(() => null),
     ])
     // Settings that could not be read (a build that failed, the status deadline) are not settings that run: a page
     // that is on still restores, nothing else starts — the popup with no configuration disables its button too
     // (Codex on #184)
-    const decision = pageDecision(status, saved ?? { revision: null, canRun: false, fallback: false })
+    // The retranslate cue: where the popup offers the way back to a key made good, the key re-translates as its button
+    // does (UI.md P6b). Asked of a running page only; a failed ask is no cue
+    const madeGood = status?.progress.state === 'on' && status.session && deps.madeGood ? await deps.madeGood(status.session).catch(() => false) : false
+    const decision = pageDecision(status, saved ?? { revision: null, canRun: false, fallback: false }, madeGood)
     if (!decision?.enabled) return false
     await deps.send(tabId, messageFor(decision.action, status.epoch))
     return true

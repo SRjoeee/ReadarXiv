@@ -373,12 +373,12 @@ describe('the redesign\'s popup (its design, §5)', () => {
     expect(view('P8b').primary.disabled).toBe(true)
   })
 
-  it('P6b the key made good while the page runs on the free service: P13\'s pair offers the way back, the key\'s chip on showing the original (the retranslate cue)', () => {
+  it('P6b the key made good while the page runs on the free service: P13\'s pair offers the way back, with the key, which retranslates too (the retranslate cue)', () => {
     const v = view('P6b')
     expect(v.note).toBeNull()
     expect(v.service).toEqual({ value: 'Google 翻译', replaced: 'deepseek-v4-flash' })
-    expect(v.primary).toEqual({ label: '重新翻译', action: 'retranslate', disabled: false })
-    expect(v.secondary).toEqual({ label: '显示原文', action: 'restore', shortcut: '⌥T' })
+    expect(v.primary).toEqual({ label: '重新翻译', action: 'retranslate', disabled: false, shortcut: '⌥T' })
+    expect(v.secondary).toEqual({ label: '显示原文', action: 'restore' })
     const id = input('P6b').config!.services[0]!.id
     // the refusal still recorded, or the chain a start would run on still passing the service over (a 403: `auth`,
     // never recorded): P6 as it was
@@ -401,8 +401,8 @@ describe('the redesign\'s popup (its design, §5)', () => {
       demotions: [{ id, kind: 'auth' as const }, { id: 'microsoft', kind: 'rate-limit' as const }],
     }
     const v = derivePopupView({ ...input('P6b'), session: twoHandovers })
-    expect(v.primary).toEqual({ label: '重新翻译', action: 'retranslate', disabled: false })
-    expect(v.secondary).toEqual({ label: '显示原文', action: 'restore', shortcut: '⌥T' })
+    expect(v.primary).toEqual({ label: '重新翻译', action: 'retranslate', disabled: false, shortcut: '⌥T' })
+    expect(v.secondary).toEqual({ label: '显示原文', action: 'restore' })
   })
 
   it('lang: the reader\'s languages in their own, and the style rows\' sample in its; the full list names each in the interface\'s language first', () => {

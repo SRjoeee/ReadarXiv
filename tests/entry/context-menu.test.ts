@@ -208,4 +208,15 @@ describe('the toggle tells whether it acted (the floating button, DESIGN §4.0c)
     expect(stuck.sent).toEqual(['axt:page-status'])
     expect(await toggleTranslation(deps(undefined, { revision: 'r1', canRun: true, fallback: false }) as never, 7)).toBe(false)
   })
+
+  it('the retranslate cue: where the popup offers the way back to a key made good, the toggle re-translates too (UI.md P6b)', async () => {
+    const page = { ...progress('on'), session: 's1' }
+    const cued = { ...deps(page, { revision: null, canRun: true, fallback: false }), madeGood: vi.fn(async () => true) }
+    expect(await toggleTranslation(cued as never, 7)).toBe(true)
+    expect(cued.madeGood).toHaveBeenCalledWith('s1')
+    expect(cued.send).toHaveBeenLastCalledWith(7, { type: 'axt:translate-page', restart: true })
+    const plain = { ...deps(page, { revision: null, canRun: true, fallback: false }), madeGood: vi.fn(async () => false) }
+    expect(await toggleTranslation(plain as never, 7)).toBe(true)
+    expect(plain.sent).toEqual(['axt:page-status', 'axt:restore-page'])
+  })
 })

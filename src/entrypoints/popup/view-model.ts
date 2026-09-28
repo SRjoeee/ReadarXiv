@@ -20,7 +20,7 @@ import { BUILT_IN_PROMPTS } from '@/providers/prompt-library'
 import type { ProviderStatus } from '@/providers/transport'
 import type { EntryStatus, PageStatus } from '@/shared/messages'
 import type { StartResult } from '@/core/session'
-import { pageDecision } from '@/shared/page-action'
+import { keyMadeGood, pageDecision } from '@/shared/page-action'
 import type { PackState } from '@/shared/pack'
 import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
 import { styleSample } from '@/ui/style-sample'
@@ -401,27 +401,27 @@ export function derivePopupView(input: PopupInput): PopupView {
   const paused = progress.state === 'stopped' && progress.fatal !== undefined
   const canRun = runnable(config, pack, rejected)
   const demoted = on ? session?.engine.demoted : undefined
-  // The page runs on settings other than the saved ones. A change made here restarts the page at
-  // once (data.ts), so this is what is left: a choice that cannot start, and a change made from
-  // another tab, which leaves this page pinned to the session it began (Codex on #157). Either way
-  // the reader is offered “Translate again” — enabled when the saved settings can actually run. The rule is
-  // the toggle's too (shared/page-action.ts): the page's revision against the saved settings' digest
-  const decision = pageDecision(page, { revision: savedRevision, canRun, fallback: !!saved?.fallback }) ?? { action: 'translate' as const, behind: false, enabled: canRun || !!saved?.fallback }
-  const { action, behind } = decision
-  const named = (id: string) => serviceName(id, config.services)
   // The retranslate cue (the branch's final review): the page runs on the free service since its chosen one's key was
   // refused, and that key has been made good — the record holds the service no more, and the chain a start would run on
   // runs it again. The saved chain is the test: a 403 is `auth` too and never recorded (background/health-guard.ts marks
   // a 401 alone), and while the chain in force
   // still passes the service over, a start would meet the same refusal. The page is offered its way back as P13 offers
   // it (the design gives the cue no words of its own: P13's pair, as it is), and P6's note, whose reason no longer
-  // holds, goes. The key still restores (shared/page-action.ts decides for every door), so its chip goes on Show original.
+  // holds, goes. The toggle asks the same (shared/page-action.ts keyMadeGood): the key, the context menu and the
+  // floating button retranslate there as this button does.
   // `session.engine.demoted` is only the most recent hand-over (transport.ts): a transient failure of the free engine
   // that took over — one more hand-over, on top of the key's — would hide the key's refusal here, and the cue would
   // never show even once the key is good again (Opus's review of Task 33). `demotions` holds every hand-over still in
   // force, by engine; the chosen engine's own is the one the cue reads, whichever position it is in
-  const refused = on ? session?.demotions.find(d => d.kind === 'auth' && d.id === session.providerId) : undefined
-  const madeGood = !!refused && !!session && !rejected.includes(refused.id) && saved?.engine.id === refused.id && !saved.engine.demoted
+  const madeGood = keyMadeGood(on ? session : null, rejected, saved)
+  // The page runs on settings other than the saved ones. A change made here restarts the page at
+  // once (data.ts), so this is what is left: a choice that cannot start, and a change made from
+  // another tab, which leaves this page pinned to the session it began (Codex on #157). Either way
+  // the reader is offered “Translate again” — enabled when the saved settings can actually run. The rule is
+  // the toggle's too (shared/page-action.ts): the page's revision against the saved settings' digest
+  const decision = pageDecision(page, { revision: savedRevision, canRun, fallback: !!saved?.fallback }, madeGood) ?? { action: 'translate' as const, behind: false, enabled: canRun || !!saved?.fallback }
+  const { action, behind } = decision
+  const named = (id: string) => serviceName(id, config.services)
 
   const service: Row = demoted && session
     ? { value: named(session.engine.id), replaced: named(demoted.id) }
@@ -448,17 +448,9 @@ export function derivePopupView(input: PopupInput): PopupView {
   // translated and restores one that is, so the badge belongs on both faces of the same button
   // (user 2026-09-11). A paused session retries rather than restores, which is what its label says
   const key = shortcut ?? undefined
-  let primary: PopupView['primary']
-  let secondary: PopupView['secondary']
-  // behind the settings as well (the key changed, say), the ordinary faces already offer Translate again, and the key does it
-  if (madeGood && !behind) {
-    primary = { label: S.primary.retranslate, action: 'retranslate', disabled: !canRun }
-    secondary = { label: S.primary.restore, action: 'restore', ...(key ? { shortcut: key } : {}) }
-  } else {
-    primary = { label: action === 'restore' ? S.primary.restore : action === 'retranslate' ? S.primary.retranslate : S.primary.translate, action, disabled: !decision.enabled }
-    if (!primary.disabled && key) primary.shortcut = key
-    secondary = behind || paused ? { label: S.primary.restore, action: 'restore' } : null
-  }
+  const primary: PopupView['primary'] = { label: action === 'restore' ? S.primary.restore : action === 'retranslate' ? S.primary.retranslate : S.primary.translate, action, disabled: !decision.enabled }
+  if (!primary.disabled && key) primary.shortcut = key
+  const secondary: PopupView['secondary'] = behind || paused || madeGood ? { label: S.primary.restore, action: 'restore' } : null
   const menus = menusOf(config, input)
 
   return {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Progress } from '@/core/pipeline/run'
-import { behindSettings, messageFor, pageAction, pageDecision, savedFromStatus } from '@/shared/page-action'
+import { behindSettings, keyMadeGood, messageFor, pageAction, pageDecision, savedFromStatus } from '@/shared/page-action'
 
 // One decision for the popup's main button and the toggle
 
@@ -52,6 +52,31 @@ describe('pageDecision', () => {
     expect(pageDecision({ progress: progress('idle') }, saved({ canRun: false, fallback: false }))).toEqual({ action: 'translate', behind: false, enabled: false })
     expect(pageDecision({ progress: progress('stopped', 'auth: bad key') }, saved({ canRun: false, fallback: true }))).toEqual({ action: 'retranslate', behind: false, enabled: true })
     expect(pageDecision(undefined, saved())).toBeUndefined()
+  })
+
+  it('the retranslate cue: a running page whose refused key was made good re-translates, only on settings that run on their own; any other page decides as before', () => {
+    const on = { progress: progress('on'), running: running('r1') }
+    expect(pageDecision(on, saved(), true)).toEqual({ action: 'retranslate', behind: false, enabled: true })
+    expect(pageDecision(on, saved({ canRun: false, fallback: true }), true)).toEqual({ action: 'retranslate', behind: false, enabled: false })
+    expect(pageDecision(on, saved())).toEqual({ action: 'restore', behind: false, enabled: true })
+    expect(pageDecision({ progress: progress('idle') }, saved({ canRun: false, fallback: true }), true)).toEqual({ action: 'translate', behind: false, enabled: true })
+  })
+})
+
+describe('keyMadeGood', () => {
+  const session = { providerId: 'svc-a', demotions: [{ id: 'svc-a', kind: 'auth' as const }] }
+  const back = { engine: { id: 'svc-a' } }
+
+  it('the session left its own service for a refused key, the record no longer holds it, and the chain a start would run on runs it again', () => {
+    expect(keyMadeGood(session, [], back)).toBe(true)
+    expect(keyMadeGood({ ...session, demotions: [{ id: 'svc-a', kind: 'auth' as const }, { id: 'microsoft', kind: 'rate-limit' as const }] }, new Set<string>(), back)).toBe(true)
+  })
+
+  it('no cue while the record holds the service, while the chain in force still passes it over, for a hand-over that was not the key\'s, or without a session', () => {
+    expect(keyMadeGood(session, ['svc-a'], back)).toBe(false)
+    expect(keyMadeGood(session, [], { engine: { id: 'google-web', demoted: { id: 'svc-a', kind: 'auth' as const, message: '403' } } })).toBe(false)
+    expect(keyMadeGood({ ...session, demotions: [{ id: 'svc-a', kind: 'rate-limit' as const }] }, [], back)).toBe(false)
+    expect(keyMadeGood(null, [], back)).toBe(false)
   })
 })
 

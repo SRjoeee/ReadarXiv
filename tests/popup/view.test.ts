@@ -65,12 +65,12 @@ describe('the popup drawn (the redesign\'s design, §5)', () => {
     expect([pair[0]!.getAttribute('aria-disabled'), pair[0]!.querySelector('kbd')]).toEqual(['true', null])
   })
 
-  it('P6b: the key made good, the page on the free service offered its way back — Translate again, and Show original with the key (the retranslate cue)', async () => {
+  it('P6b: the key made good, the page on the free service offered its way back — Translate again with the key, and Show original (the retranslate cue)', async () => {
     const { main, actions } = await draw('P6b')
     expect(main.querySelector('.note')).toBeNull()
     const pair = [...main.querySelectorAll<HTMLElement>('.pair > button')]
     expect(pair.map(nameOf)).toEqual([S.primary.retranslate, S.primary.restore])
-    expect(pair.map(b => b.querySelector('kbd')?.textContent ?? null)).toEqual([null, '⌥T'])
+    expect(pair.map(b => b.querySelector('kbd')?.textContent ?? null)).toEqual(['⌥T', null])
     await act(async () => { pair[0]!.click() })
     expect(actions.retranslate).toHaveBeenCalled()
   })
