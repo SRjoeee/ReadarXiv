@@ -111,20 +111,25 @@ function Services({ data }: { data: OptionsData }) {
   const focusRow = (id: string) => requestAnimationFrame(() => radios.current.get(id)?.focus())
   const stored = config.services.map(s => s.baseURL)
 
-  /** a new service, stored now that it answered, and chosen (§6.3) */
+  /**
+   * A new service, stored now that it answered, and chosen (§6.3). Connected only once its write has landed: one
+   * refused — the stored value unreadable answers with the defaults, not with this change — rejects, and the form
+   * stays open saying so, the service not handed over (Task 107)
+   */
   const added = async (s: Service, ms: number) => {
-    await patch(latest => ({ ...latest, services: latest.services.some(x => x.id === s.id) ? latest.services : [...latest.services, s], provider: s.id }))
+    await writes.save(latest => ({ ...latest, services: latest.services.some(x => x.id === s.id) ? latest.services : [...latest.services, s], provider: s.id }))
     setConnected(c => ({ ...c, [s.id]: ms }))
     setFresh(s.id)
     setForm(null)
     focusRow(s.id)
   }
   /**
-   * An edit or a new key, saved now that it answered — in place, the choice left as it is. Nothing more: a key or an
-   * address that changed clears the service's mark in the background, which alone writes the record (ruling 17)
+   * An edit or a new key, saved now that it answered — in place, the choice left as it is — and connected, as a new
+   * service is, only once its write has landed. Nothing more: a key or an address that changed clears the service's
+   * mark in the background, which alone writes the record (ruling 17)
    */
   const saved = async (s: Service, ms: number) => {
-    await patch(latest => ({ ...latest, services: latest.services.map(x => (x.id === s.id ? s : x)) }))
+    await writes.save(latest => ({ ...latest, services: latest.services.map(x => (x.id === s.id ? s : x)) }))
     setConnected(c => ({ ...c, [s.id]: ms }))
     setForm(null)
     focusRow(s.id)

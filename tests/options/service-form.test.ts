@@ -3,11 +3,12 @@
 // not; checked when submitted, the first field at fault taking the focus; connected before anything is handed over,
 // with a stable id; editing keeps the saved key unless one is typed or it is cleared; the refused key's form. Task 65:
 // a permission the browser grants only after the form is gone is given back, and a form gone loads no list; both
-// forms are live after StrictMode's double run of their effects, as the settings page renders them
+// forms are live after StrictMode's double run of their effects, as the settings page renders them. Task 107: a save
+// refused after the form is gone gives back what the form asked for
 import { StrictMode, createElement as h, useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Service } from '@/config/services'
-import { mountElement } from '../ui/render-hook'
+import { deferred, mountElement } from '../ui/render-hook'
 
 vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getURL: (path: string) => path } } }))
 const wire = vi.hoisted(() => ({
@@ -399,6 +400,28 @@ describe('ServiceForm (§6.3)', () => {
     expect(m.container.querySelector('.o-note')!.textContent).toBe(O.saveFailed)
     expect(wire.released).toEqual(['https://api.newhost.example/v1'])
     await m.unmount()
+  })
+
+  // Task 107: the settings page takes its sections away once the stored value cannot be read, before a refused save's
+  // answer comes — the form's clean-up runs while the service is handed over, and gives nothing back
+  it('a save refused only after the form is gone gives back what the form asked for too, not only the origin it tested', async () => {
+    const answer = deferred<void>()
+    const { element } = form({ onConnected: () => answer.promise })
+    const m = await mountElement(element)
+    const [address, key, model] = inputs(m.container)
+    button(m.container, 'DeepSeek').click()
+    await m.flush()
+    type(address!, 'https://openrouter.ai/api/v1')
+    type(key!, 'sk-or-1')
+    type(model!, 'm-2')
+    submit(m.container)
+    await m.flush()
+    await m.unmount()
+    await m.flush()
+    expect(wire.released).toEqual([])
+    answer.reject(new Error('refused'))
+    await m.flush()
+    expect(wire.released).toEqual(['https://openrouter.ai/api/v1', 'https://api.deepseek.com/v1'])
   })
 
   // Fix round 1, item 4: the model field may still be disabled at the click that asks for it; the focus catches up

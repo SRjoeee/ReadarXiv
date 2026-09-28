@@ -6,7 +6,8 @@
 // Task 65: a deletion is committed only once its own write lands, and one storage refused leaves its row, takes back
 // the focus and says so; an origin is given back only when no service may still use it; an undo storage refused
 // brings its undo row back, or, answered after the section went, commits the deletion itself; while the stored value
-// cannot be read, a commit gives no origin back (round 4), by its own read's verdict (round 5)
+// cannot be read, a commit gives no origin back (round 4), by its own read's verdict (round 5). Task 107: a service
+// added, edited or given a new key is connected only once its own write lands
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Fragment, createElement as h, useEffect, useState } from 'react'
@@ -227,6 +228,100 @@ describe('the translation services (§6.3)', () => {
     expect(stored().services.map(s => s.name)).toEqual(['Mine', 'Renamed'])
     expect(stored().provider).toBe(MINE.id)
     expect(wire.log).toEqual([`connect ${OTHER.id}`, 'patch'])
+    await m.unmount()
+  })
+
+  it('a new service whose write is refused as unreadable — answered with the defaults — is not connected: its form stays open with the failed-save line and the origin it tested goes back; a write that lands then adds it as before (Task 107)', async () => {
+    const m = await mountElement(h(Harness, { start: DEFAULT_CONFIG }))
+    ;[...card(m.container).querySelectorAll<HTMLButtonElement>('button[data-srow]')].find(b => b.textContent === O.services.add)!.click()
+    await m.flush()
+    const form = m.container.querySelector<HTMLFormElement>('form[data-form="service"]')!
+    const [address, , model] = [...form.querySelectorAll<HTMLInputElement>('input')]
+    type(address!, 'http://127.0.0.1:9/v1')
+    type(model!, 'echo')
+    wire.unreadable = true
+    submit(form)
+    await m.flush()
+    await m.flush()
+    expect(form.closest('[inert]')).toBeNull()
+    expect(form.querySelector('.o-note')!.textContent).toBe(O.saveFailed)
+    expect(card(m.container).querySelector('.o-status[data-tone="ok"]')).toBeNull()
+    // the form says so; the list's foot is for the list's own refusals
+    expect(card(m.container).querySelector('.o-list-note')).toBeNull()
+    // not handed over: the origin the connection was granted goes back, no service using it
+    expect(committed()).toEqual(['release http://127.0.0.1:9/v1'])
+    wire.unreadable = false
+    submit(form)
+    await m.flush()
+    await m.flush()
+    expect(stored().services).toHaveLength(1)
+    expect(stored().provider).toBe(stored().services[0]!.id)
+    expect(form.closest('[inert]')).not.toBeNull()
+    expect(rowNamed(m.container, 'echo').querySelector('.o-status[data-tone="ok"]')!.textContent).toBe(O.services.connected(42))
+    await m.unmount()
+  })
+
+  it('an edit whose write is refused as unreadable is not connected: its form stays open with the failed-save line, the stored service as it was; a write that lands then saves it as before (Task 107)', async () => {
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: MINE.id } }))
+    menuItem(rowNamed(m.container, 'Other'), O.services.edit).click()
+    await m.flush()
+    const form = m.container.querySelector<HTMLFormElement>('form[data-form="service"]')!
+    type([...form.querySelectorAll<HTMLInputElement>('input')][3]!, 'Renamed')
+    wire.unreadable = true
+    submit(form)
+    await m.flush()
+    await m.flush()
+    expect(form.closest('[inert]')).toBeNull()
+    expect(form.querySelector('.o-note')!.textContent).toBe(O.saveFailed)
+    expect(stored().services.map(s => s.name)).toEqual(['Mine', 'Other'])
+    expect(rowNamed(m.container, 'Other').querySelector('.o-status[data-tone="ok"]')).toBeNull()
+    // not handed over; the stored service still uses the origin, so it is kept
+    expect(committed()).toEqual([`keep ${OTHER.baseURL}`])
+    wire.unreadable = false
+    submit(form)
+    await m.flush()
+    await m.flush()
+    expect(stored().services.map(s => s.name)).toEqual(['Mine', 'Renamed'])
+    expect(form.closest('[inert]')).not.toBeNull()
+    expect(rowNamed(m.container, 'Renamed').querySelector('.o-status[data-tone="ok"]')!.textContent).toBe(O.services.connected(42))
+    await m.unmount()
+  })
+
+  it('a new key whose write is refused as unreadable is not connected: the key form says the save failed, and the stored key is the old one (Task 107)', async () => {
+    wire.rejected = [MINE.id]
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE], provider: MINE.id } }))
+    const form = m.container.querySelector<HTMLFormElement>('form[data-form="key"]')!
+    type(form.querySelector('input')!, 'sk-new')
+    wire.unreadable = true
+    submit(form)
+    await m.flush()
+    await m.flush()
+    wire.unreadable = false
+    expect(form.closest('[inert]')).toBeNull()
+    expect(form.querySelector('.o-note')!.textContent).toBe(O.saveFailed)
+    expect(stored().services[0]!.apiKey).toBe('sk-old')
+    // the mark cleared (the background's, ruling 17): the row says nothing of a connection that stored nothing
+    wire.rejected = []
+    await m.rerender(h(Harness, { start: stored() }))
+    expect(rowNamed(m.container, 'Mine').querySelector('.o-status[data-tone="ok"]')).toBeNull()
+    await m.unmount()
+  })
+
+  it('in the page\'s own order — the section taken away before the refusal\'s answer — a new service refused as unreadable is not handed over: the origin it tested goes back once the answer comes (Task 107)', async () => {
+    const m = await mountElement(h(Harness, { start: DEFAULT_CONFIG, app: true }))
+    ;[...card(m.container).querySelectorAll<HTMLButtonElement>('button[data-srow]')].find(b => b.textContent === O.services.add)!.click()
+    await m.flush()
+    const form = m.container.querySelector<HTMLFormElement>('form[data-form="service"]')!
+    const [address, , model] = [...form.querySelectorAll<HTMLInputElement>('input')]
+    type(address!, 'http://127.0.0.1:9/v1')
+    type(model!, 'echo')
+    wire.unreadable = true
+    submit(form)
+    await m.flush()
+    await m.flush()
+    expect(m.container.querySelector('[data-row="translate/services"]')).toBeNull()
+    expect(wire.log[0]).toMatch(/^connect /)
+    expect(wire.log.slice(1)).toEqual(['section gone', 'answered', 'release http://127.0.0.1:9/v1'])
     await m.unmount()
   })
 

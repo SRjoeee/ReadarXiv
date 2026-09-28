@@ -17,7 +17,8 @@ export function withUndo<T, G extends { index: number }>(items: readonly T[], go
  * surface-config.ts returns and data.ts passes on: a refused write rejects, or, the stored value unreadable, resolves
  * with the configuration in effect — the defaults, whose lists may well lack the item (round 2, item 1). `attempt`
  * is a write the list answers itself when refused — a deletion, an undo —: it resolves whether the write landed, never
- * rejects, and a refusal puts the line up (round 3, item 3)
+ * rejects, and a refusal puts the line up (round 3, item 3). `save` is one its caller answers — a form's save, which
+ * says so in the form —: it rejects unless the write landed, and leaves the line to the list's own refusals (Task 107)
  */
 export function useListWrites<C>(patch: (fn: (latest: C) => C) => Promise<C>): ListWrites<C> {
   const [failed, setFailed] = useState(false)
@@ -32,13 +33,15 @@ export function useListWrites<C>(patch: (fn: (latest: C) => C) => Promise<C>): L
     })
     return { write, landed: write.then(stored => next !== undefined && stored === next, () => false) }
   }
-  const write = (fn: (latest: C) => C): Promise<C> => {
+  /** a write of the list's that lands takes the line away */
+  const clearing = (fn: (latest: C) => C) => {
     const sent = send(fn)
-    void sent.landed.then(done => { if (done) setFailed(false) })
-    return sent.write
+    return { write: sent.write, landed: sent.landed.then(done => { if (done) setFailed(false); return done }) }
   }
+  const write = (fn: (latest: C) => C): Promise<C> => clearing(fn).write
   const attempt = (fn: (latest: C) => C): Promise<boolean> => send(fn).landed.then(done => { setFailed(!done); return done })
-  return { failed, write, attempt }
+  const save = (fn: (latest: C) => C): Promise<void> => clearing(fn).landed.then(done => { if (!done) throw new Error('the write did not land') })
+  return { failed, write, attempt, save }
 }
 
 export interface ListWrites<C> {
@@ -48,6 +51,8 @@ export interface ListWrites<C> {
   write(fn: (latest: C) => C): Promise<C>
   /** whether the write landed; never rejects */
   attempt(fn: (latest: C) => C): Promise<boolean>
+  /** resolves once the write landed; rejects when it did not */
+  save(fn: (latest: C) => C): Promise<void>
 }
 
 /**

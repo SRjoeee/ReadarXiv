@@ -240,11 +240,19 @@ export function ServiceForm({ service, target, stored, onConnected, onCancel }: 
       await onConnected(candidate, res.ms)
       await releaseUnused(candidate.baseURL)
     } catch {
-      // the save itself refused (the schema's limit of services, storage): nothing stored, the form stays, and the
-      // origin this attempt tested goes back — it was never put to use (Opus review round 1, item 3)
+      // the save itself refused (the schema's limit of services, storage, a write that did not land): nothing stored,
+      // the form stays, and the origin this attempt tested goes back — it was never put to use (Opus review round 1,
+      // item 3)
       handedOver.current = false
       setResult(O.saveFailed)
       await releaseHostPermission(candidate.baseURL, storedNow.current).catch(() => undefined)
+      // The form gone meanwhile, its clean-up ran while the service was handed over and gave nothing back: what it asked
+      // for goes back here. The page takes its sections away once the stored value cannot be read, before the refused
+      // write's answer comes (App.tsx; Task 107)
+      if (cancelled.current) {
+        for (const u of granted.current) await releaseHostPermission(u, storedNow.current).catch(() => undefined)
+        granted.current.clear()
+      }
     } finally {
       setBusy(false)
     }
