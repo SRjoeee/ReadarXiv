@@ -28,9 +28,15 @@ vi.mock('@/entrypoints/options/data', async () => {
 import { App } from '@/entrypoints/options/App'
 import { Appearance } from '@/entrypoints/options/sections/Appearance'
 import { Llm } from '@/entrypoints/options/sections/Llm'
+import { Reading } from '@/entrypoints/options/sections/Reading'
+import { Translate } from '@/entrypoints/options/sections/Translate'
 import { Card } from '@/entrypoints/options/ui/Card'
 import { Row } from '@/entrypoints/options/ui/Row'
 import { O, setLocale } from '@/ui/strings'
+
+// the reading section's floating-button switch reads its own store, and the translation section the refused-key record
+vi.mock('@/entrypoints/options/floating-entry', () => ({ useFloatingEntry: () => ({ enabled: true, setEnabled: () => {} }) }))
+vi.mock('@/ui/use-rejected', () => ({ useRejected: () => [] }))
 
 // happy-dom draws nothing: a scroll is nothing to it
 Element.prototype.scrollIntoView ??= () => {}
@@ -90,5 +96,37 @@ describe('the search over the sections (Part 7\'s final review)', () => {
     expect(rows.filter(hidden)).toEqual([])
     expect([O.prompts.create, O.prompts.import, O.prompts.export].map(name => hidden(button(list, name)))).toEqual([false, false, false])
     await m.unmount()
+  })
+
+  it('each group heading\'s words find its rows: the services, the styles, the LLM\'s prompts and glossary, the PDF reader — in both languages (B-M1)', async () => {
+    const whole = { translate: (d: OptionsData) => h(Translate, { data: d }), appearance: CONTENT.appearance, reading: (d: OptionsData) => h(Reading, { data: d }), data: CONTENT.data }
+    for (const lang of ['zh-CN', 'en'] as const) {
+      setLocale(lang)
+      start.config = LLM
+      const m = await mountElement(h(App, { content: whole }))
+      const field = m.container.querySelector<HTMLInputElement>('.o-search input')!
+      // every group the page heads, as it is drawn with nothing searched: its words, and the rows of the card it heads
+      // (an add row, whose words are its action's, aside)
+      const groups: [string, string[]][] = []
+      for (const id of ['translate', 'appearance', 'reading'] as const) {
+        location.hash = `#${id}`
+        window.dispatchEvent(new HashChangeEvent('hashchange'))
+        await m.flush()
+        for (const heading of m.container.querySelectorAll<HTMLElement>('[data-heading]')) {
+          const card = heading.nextElementSibling!
+          groups.push([heading.querySelector('h2')!.textContent!, [...card.querySelectorAll<HTMLElement>('[data-srow]:not([data-quiet])')].map(r => r.dataset.search!)])
+        }
+      }
+      expect(groups.map(([title]) => title), lang).toEqual([O.services.title, 'LLM', O.appearance.styles, O.reading.pdf])
+      for (const [title, rows] of groups) {
+        type(field, title)
+        await m.flush()
+        const found = new Set([...m.container.querySelectorAll<HTMLElement>('[data-srow]:not([data-miss])')].filter(r => !r.closest('[data-miss]')).map(r => r.dataset.search))
+        expect(rows.length, `${lang} ${title}`).toBeGreaterThan(0)
+        expect(rows.filter(r => !found.has(r)), `${lang} ${title}`).toEqual([])
+      }
+      type(field, '')
+      await m.unmount()
+    }
   })
 })

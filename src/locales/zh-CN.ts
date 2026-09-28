@@ -145,14 +145,14 @@ const O = {
     none: (q: string) => `没有与「${q}」匹配的设置`,
     /** A few words each row answers to besides its own (§6.1: the interface language answers to “language” too) */
     keywords: {
-      'translate/services': '服务 模型 LLM 接口 API Key',
+      'translate/services': '翻译服务 模型 LLM 接口 API Key',
       'translate/fallback': '失效 额度 断网 备用',
       'translate/language': '语言 翻译成 language',
-      'translate/prompts': 'prompt 指令 消息',
-      'translate/glossary': '术语 词汇 glossary',
+      'translate/prompts': 'LLM prompt 指令 消息',
+      'translate/glossary': 'LLM 术语 词汇 glossary',
       'appearance/theme': '主题 深色 浅色 夜间 theme dark',
       'appearance/dim': '夜间 亮度 阅读器',
-      'appearance/styles': '颜色 下划线 模糊 字体',
+      'appearance/styles': '译文样式 颜色 下划线 模糊 字体',
       'appearance/highlight': '悬停 句子 背景',
       'reading/way': '提前 用量 按需 整篇',
       'reading/images': '图片 图 figure',
