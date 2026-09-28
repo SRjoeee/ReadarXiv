@@ -744,9 +744,28 @@ const CJK_EDGE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script
  * English line was to end (21 titles of the corpus's 123 papers, "The Missing Tensor Management\\ Layer"), and the engine
  * carried it to wherever its placeholder went — "张量管理\\层", a title of three lines once the first ran full
  * (2608.06007). One the translation keeps after a colon, a dash or a stop parts a title from its subtitle, and one
- * followed by a change of size or a vertical space begins a line of its own by design: both stay
+ * followed by a change of size or a vertical space begins a line of its own by design: both stay.
+ * A title that takes two lines takes two of about the same length (\\axtbalance, BALANCE_DEF): set as it came, its
+ * last line held one character (2608.06007). And it breaks between words: TeX breaks CJK text between any two
+ * characters, and the balanced title's first line ended inside a two-character word
  */
+const HAN_KANA = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u
+/** a translated text piece of a title with its CJK words kept whole: \nobreak between the characters of each word the
+ *  segmenter finds, so a line ends between words (Japanese by its kana, Chinese otherwise) */
+function wordsKept(p) {
+  if (p.t !== 'text' || !p.tr || !HAN_KANA.test(p.s) || typeof Intl?.Segmenter !== 'function') return [p]
+  const out = []
+  let text = ''
+  for (const { segment, isWordLike } of new Intl.Segmenter(/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(p.s) ? 'ja' : 'zh', { granularity: 'word' }).segment(p.s)) {
+    const chars = [...segment]
+    if (!isWordLike || chars.length < 2 || !chars.every(c => HAN_KANA.test(c))) { text += segment; continue }
+    chars.forEach((c, k) => { text += c; if (k < chars.length - 1) { out.push({ ...p, s: text }, { t: 'ph', src: '\\nobreak ' }); text = '' } })
+  }
+  if (text) out.push({ ...p, s: text })
+  return out
+}
 export function lineBreaks(u, pieces) {
+  if (u.title) pieces = [{ t: 'ph', src: '\\axtbalance ' }, ...pieces.flatMap(wordsKept)]
   const before = k => { for (let j = k - 1; j >= 0; j--) if (pieces[j].t !== 'text' || /\S/.test(pieces[j].s)) return pieces[j]; return null }
   const after = k => { for (let j = k + 1; j < pieces.length; j++) if (pieces[j].t !== 'text' || /\S/.test(pieces[j].s)) return pieces[j]; return null }
   return pieces.map((p, k) => {
@@ -793,6 +812,13 @@ export const EVEN_SPACES = '\\makeatletter\\@ifpackageloaded{microtype}{}{\\usep
  *  one, and a box around the tabular left its environments unclosed (2608.02991: "Missing \endgroup inserted", 164
  *  errors). With \axtfitheighttrue (the geometry lock, which keeps every block in its original's box, as service H
  *  does) the translation is set no taller than the original either. Goes first in the main file */
+/** \axtbalance, at the start of a translated title: its lines of about the same length. A skip that stretches without
+ *  limit (\centering, \raggedright) lets TeX fill every line but the last and leave that one short; the same skips with
+ *  a finite stretch (the page's width in all, halved when both sides stretch) and no \parfillskip make a short line
+ *  cost more than two even ones. Justified text, whose skips do not stretch, is left as it is. Not for headings, whose
+ *  text is set again in the table of contents, where \parfillskip draws the dotted line */
+export const BALANCE_DEF = String.raw`\protected\def\axtbalance{\ifnum\gluestretchorder\rightskip>0 \ifnum\gluestretchorder\leftskip>0 \leftskip=0pt plus .5\hsize\rightskip=0pt plus .5\hsize\else\rightskip=0pt plus \hsize\fi\parfillskip=0pt\relax\fi}
+`
 export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newdimen\axt@fitwd\newdimen\axt@fitht\newdimen\axt@fittot\newif\ifaxtfitheight\def\axt@tpt{threeparttable}
 \long\def\axtfit#1#2{\ifx\@currenvir\axt@tpt\expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi{#1}{\axt@fit{#1}{#2}}}
 \def\axt@counters{\begingroup\def\@elt##1{\global\csname c@##1\endcsname\the\csname c@##1\endcsname\relax}\xdef\axt@countersback{\cl@@ckpt}\endgroup}

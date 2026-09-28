@@ -10,4 +10,4 @@ export declare function patch(project: { units: SourceUnit[] }, translated: Map<
 export declare function localizeNames(text: string): string
 /** a translation's pieces with its own line breaks: room to break in long code and formulas, a heading's forced break
  *  kept only where it parts a title from its subtitle */
-export declare function lineBreaks<P>(unit: { kind: string }, pieces: P[]): P[]
+export declare function lineBreaks<P>(unit: { kind: string; title?: boolean }, pieces: P[]): P[]

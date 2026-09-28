@@ -6,7 +6,7 @@
 // that grew is set at, and how far a compile is from the original.
 import { readFileSync } from 'node:fs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { EVEN_SPACES, FIT_DEF, FORBIDDEN_TO_WARNING, latin1, latin1Bytes, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, PARA_END_TEX, patch, stripPdftexOption, unitLeadTex as engineUnitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FORBIDDEN_TO_WARNING, latin1, latin1Bytes, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, PARA_END_TEX, patch, stripPdftexOption, unitLeadTex as engineUnitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from '../../../src/pdf-reader/engine/latex-front.mjs'
 import { typesetBy } from '../../../src/pdf-reader/engine/scripts.mjs'
 
 /**
@@ -205,7 +205,7 @@ export function lockedFiles({ fsys, meta, project, units }, translated, { strate
     ...[...sizes].map(([i, f]) => `\\expandafter\\def\\csname axtsize@${i}\\endcsname{${f.toFixed(4)}}`),
     ...(h ? ['\\csname axt@htrue\\endcsname\\axtfitheighttrue\\axtfirstpapertrue', ...[...columns].map(([k, v]) => `\\expandafter\\def\\csname axt@c@${k}\\endcsname{${v}pt}`), ...[...floats].map(([k, v]) => `\\expandafter\\def\\csname axt@fh@${k}\\endcsname{${v}pt}`)] : []),
   ].join('\n')
-  main = MARK_DEF + FIT_DEF + LINES_TEX + (sync ? SYNC_TEX : '') + (lead ? engineUnitLeadTex(lead) : unitLeadTex(em)) + (sizes.size ? SIZE_TEX : '') + (sync ? `\\axtsyncpoints{${theorems.join(',')}}\n` : '') + table + '\n' + main
+  main = MARK_DEF + FIT_DEF + BALANCE_DEF + LINES_TEX + (sync ? SYNC_TEX : '') + (lead ? engineUnitLeadTex(lead) : unitLeadTex(em)) + (sizes.size ? SIZE_TEX : '') + (sync ? `\\axtsyncpoints{${theorems.join(',')}}\n` : '') + table + '\n' + main
   files.set(project.main, latin1Bytes(main))
   if (strategy.xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(files.get(f) ?? fsys.read(f)), s = stripPdftexOption(t); if (s !== t) files.set(f, latin1Bytes(s)) }
   for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(files.get(f) ?? fsys.read(f)), u = localizeNames(t); if (u !== t) files.set(f, latin1Bytes(u)) }

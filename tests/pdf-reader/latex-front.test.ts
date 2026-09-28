@@ -177,6 +177,18 @@ describe('a translation breaks its lines as its own', () => {
     expect(joined(lineBreaks({ kind: 'heading' }, [text('论文标题'), ph('\\\\'), text(' '), ph('\\large'), text('补充材料')]))).toBe('论文标题[\\\\] [\\large]补充材料')
   })
 
+  it('a title is set in lines of about the same length; a heading is not, its text set again in the contents', () => {
+    expect(joined(lineBreaks({ kind: 'heading', title: true }, [text('A title')]))).toBe('[\\axtbalance ]A title')
+    expect(joined(lineBreaks({ kind: 'heading' }, [text('A heading')]))).toBe('A heading')
+  })
+
+  it('a title breaks between CJK words, never inside one (2608.06007: "基" over "础")', () => {
+    const set = joined(lineBreaks({ kind: 'heading', title: true }, [text('基础设施中的层')]))
+    expect(set).toContain('基[\\nobreak ]础')
+    expect(set).toContain('设[\\nobreak ]施')
+    expect(set).not.toContain('础[\\nobreak ]设')
+  })
+
   it('a paragraph keeps its forced breaks; long code and formulas get room to break', () => {
     expect(joined(lineBreaks({ kind: 'paragraph' }, [text('输入：'), ph('\\\\'), text('输出')]))).toBe('输入：[\\\\]输出')
     expect(joined(lineBreaks({ kind: 'paragraph' }, [ph('\\texttt{lib/ansible/plugins/callback/__init\\_\\_.py}')]))).toContain('lib/\\allowbreak{}ansible/\\allowbreak{}')
