@@ -39,6 +39,12 @@ describe('strategies: CJK leading as a factor for translated units, English hyph
     expect(first(META, 'de').pre(null)).not.toContain('hyphenrules')
   })
 
+  it('XeLaTeX sets each face in an encoding it has: \\fontfamily switches between TU and T1 (2608.06007)', () => {
+    const pre = first(META, 'zh').pre(null)
+    expect(pre).toContain('\\csname fontfamily \\endcsname#1{\\axt@fontfamily{#1}\\axt@famenc}')
+    expect(pre).toContain('\\renewcommand\\encodingdefault{TU}')
+  })
+
   it('CJKutf8 closes its environment after the floats held to the end are set (2608.25210)', () => {
     const [, cjkutf8] = strategiesFor(META, 'zh')
     expect(cjkutf8?.pre(null)).toContain('\\AtEndDocument{\\clearpage\\end{CJK}}')

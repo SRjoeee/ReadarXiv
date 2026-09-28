@@ -136,6 +136,23 @@ const babel = (lang, hyphenrules) => `\\IfPackageLoadedTF{polyglossia}{}{\\IfPac
  *  every font declared later inherits them: a .ttf face (bsmi00lp, ipaexm, UnBatang) is then looked for as .otf and
  *  not found. The paper's own faces were declared before, with their features, and keep them */
 const OWN_FEATURES = '\\defaultfontfeatures{}\n'
+/** At \\begin{document}, under XeTeX: each face in an encoding it has. A class that loads fontspec itself (acmart:
+ *  Libertine) and a paper that loads T1 after it left T1 the default encoding, which the OpenType faces do not have: the
+ *  body fell back to Computer Modern, bold with it (2608.06007; four of the corpus's eight acmart papers load T1). And
+ *  with TU the default, a face that has T1 alone (Bera Sans Mono, chosen for code by \\fontfamily{fvm}) fell back to
+ *  Latin Modern's roman. So TU is the default again when the main face has it, and \\fontfamily — which \\rmfamily,
+ *  \\ttfamily and the rest go through — switches between TU and T1 to the one the face has, learned once per face from
+ *  its font definition file (tu….fd, t1….fd), else from the TU shapes fontspec declared. Never from a shape alone: a
+ *  lookup that failed is cached as the substitute's shape */
+const TU_AGAIN = String.raw`\makeatletter
+\def\axt@tone{T1}\def\axt@tu{TU}
+\def\axt@learn#1{\edef\axt@fd{tu#1.fd}\edef\axt@tfd{t1#1.fd}\IfFileExists{\axt@fd}{\def\axt@e{TU}}{\IfFileExists{\axt@tfd}{\def\axt@e{T1}}{\ifcsname TU/#1/\mddefault/\shapedefault\endcsname\def\axt@e{TU}\else\let\axt@e\@empty\fi}}\expandafter\global\expandafter\let\csname axt@fe@#1\endcsname\axt@e}
+\def\axt@famenc{\ifx\f@encoding\axt@tu\axt@switch\else\ifx\f@encoding\axt@tone\axt@switch\fi\fi}
+\def\axt@switch{\ifcsname axt@fe@\f@family\endcsname\else\axt@learn\f@family\fi\expandafter\let\expandafter\axt@e\csname axt@fe@\f@family\endcsname\ifx\axt@e\@empty\else\ifx\axt@e\f@encoding\else\fontencoding\axt@e\fi\fi}
+\AtBeginDocument{\edef\axt@enc{\encodingdefault}\ifx\axt@enc\axt@tone\ifcsname TU/\rmdefault/\mddefault/\shapedefault\endcsname\renewcommand\encodingdefault{TU}\fi\fi
+  \expandafter\let\expandafter\axt@fontfamily\csname fontfamily \endcsname\expandafter\def\csname fontfamily \endcsname#1{\axt@fontfamily{#1}\axt@famenc}\normalfont}
+\makeatother
+`
 
 /** the strategies to try for a paper, in order: { name, engine, xe, pre(fonts) → the preamble's addition, leading —
  *  the factor on the paper's spacing inside translated units, absent for 1 } */
@@ -145,7 +162,7 @@ export function strategiesFor(meta, lang) {
   if (cjk) {
     const xeCJK = `\\usepackage{xeCJK}\n${OWN_FEATURES}${cjk.spaced ? '\\xeCJKsetup{CJKspace=true}\n' : ''}\\setCJKmainfont${cjk.font}\n`
     const lead = cjk.leading === 1 ? {} : { leading: cjk.leading }
-    const out = [{ name: 'XeLaTeX + xeCJK', engine: 'xelatex', xe: true, ...lead, pre: fonts => xeCJK + latinFontsFor(fonts) + babel(lang, 'english') }]
+    const out = [{ name: 'XeLaTeX + xeCJK', engine: 'xelatex', xe: true, ...lead, pre: fonts => xeCJK + latinFontsFor(fonts) + TU_AGAIN + babel(lang, 'english') }]
     if (EIGHT_BIT.has(meta.compiler)) {
       // the floats still held at \\end{document} are set inside the CJK environment, before it closes: set after it, a
       // translated table held to the end had every character "not set up for use with LaTeX" (2608.25210)
