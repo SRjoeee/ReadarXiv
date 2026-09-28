@@ -1858,3 +1858,24 @@ so the sync points themselves do not hold the page; that is the next thing to ta
 - **The evaluation's cache** is keyed by each unit's kind and source now, not by its index, which a front end that
   cuts the paper differently shifts; a nested note, whose cached copy lost its translation on reload, is bound again
   to its unit.
+
+**The owner's second round, and the fit** (the same day; five papers a round from now on, `round.json`):
+
+- Fixed from the flags: German tables past the page (`\\axtfit`, a plain tabular with a translated cell set no wider
+  than the line, never inside a threeparttable, which Springer Nature's class uses for every table); a revtex note set
+  twice (a `\\thanks` carries no mark); RT-1's abstract heading in English (an abstract environment's written-out
+  "Abstract" goes by `\\abstractname`); lines past the margin (`\\emergencystretch`: German 2608.02785 11 → 0); smaller
+  type that compounded inside lists, down to 7 pt, the "type squeezed although there is room" (`d3ab73fa`,
+  `24b75e19`, and the `\\thanks` commit after). The corpus of 123 compiled before and after: unchanged.
+- **The fit**, the owner's proposal: no lock and no gap, the translation set so that it takes the original's room of
+  itself — one factor on the leading for the whole paper, each unit within 8 % of it, and for a script that grows the
+  type set smaller as a whole first (0.93 at most). On the round's papers:
+
+  | | on its page | within 10 pt | pages equal |
+  |---|---|---|---|
+  | zh Today / **Fit** / Locked | 53 % / **70 %** / 98 % | 9 % / 17 % / 62 % | 2 / **3** / 5 of 5 |
+  | de Today / **Fit** / smaller type | 29 % / **97 %** / 95 % | 4 % / 38 % / 61 % | 1 / **5** / 5 of 5 |
+
+  It holds the page without the lock's gaps and without a unit set apart from its neighbours; it does not hold a
+  unit's place on the page as the lock does. Chinese needed its leading raised by up to 22 % (G 0.99–1.22); whether that
+  reads better than wider character spacing is the next thing to try.
