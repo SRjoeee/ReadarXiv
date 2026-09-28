@@ -2,7 +2,7 @@ import { cachePortOf, translationCache } from '@/cache'
 import { pickTargetLanguage } from '@/config/first-target'
 import { chooseFirstTarget, getConfig, watchConfigChange } from '@/config/storage'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
-import { createLocalTransport } from '@/providers/transport'
+import { createLocalTransport, type ProviderStatus } from '@/providers/transport'
 import { type AxtMessage, answerMessages, sendMessage, sendToTab } from '@/shared/messages'
 import { createChainHolder } from './chain'
 import { createHandlers } from './handlers'
@@ -14,11 +14,17 @@ import { installContextMenu, refreshContextMenu, installToggleCommand, toggleTra
 import { getFloatingEntry, patchFloatingEntry } from './floating-entry'
 import { applyLocaleFrom, resolveLocale } from '@/ui/apply-locale'
 import { setLocale } from '@/ui/strings'
-import { keyMadeGood, savedFromStatus } from '@/shared/page-action'
+import { keyMadeGood, type SavedSettings, savedFromStatus } from '@/shared/page-action'
 import { BUILD_REF } from '@/shared/build'
 import { createDiagnostics } from './diagnostics'
 import { clearRejected, clearRejectedAmong, markRejected, rejectedServices, watchRejected } from '@/shared/service-health'
 import { createHealthKeeper } from './health-guard'
+
+/**
+ * The saved settings with the status of the chain in force they were read from: one read per press, for the decision
+ * and the cue
+ */
+type SavedRead = SavedSettings & { status: ProviderStatus }
 
 // The background: the engine chain, the queues, the cache and the recogniser, wired together (DESIGN §8.0); what it
 // answers is the table in ./handlers.ts.
@@ -166,23 +172,26 @@ export default defineBackground(() => {
   // the fallback language first and rebuilt once the pack is read, so the title follows the interface language (UI.md §6)
   /**
    * The saved settings as the toggle decides on them (shared/page-action.ts): their identity, and whether they run —
-   * from the chain in force, which is built from them. The popup decides the same from the settings it holds
+   * from the chain in force, which is built from them. The popup decides the same from the settings it holds. The
+   * status they came from goes with them: the retranslate cue is judged against the same one (`madeGood`)
    */
-  const saved = async () => {
+  const saved = async (): Promise<SavedRead> => {
     // One snapshot: the chain in force, built from what is stored now (offered in order with every other offer),
     // and still in force once its probes have answered
     await offers.offer()
-    return savedFromStatus((await statusInForce(chain)).status)
+    const { status } = await statusInForce(chain)
+    return { ...savedFromStatus(status), status }
   }
   /**
-   * The retranslate cue for the toggle (UI.md P6b, shared/page-action.ts keyMadeGood): the page's session's own chain,
-   * the refused-key record and the chain in force, read as the popup reads them
+   * The retranslate cue for the toggle (UI.md P6b, shared/page-action.ts keyMadeGood): the page's session's own chain
+   * and the refused-key record, read as the popup reads them, against the chain in force this press's `saved` read —
+   * not read again: one status of it per press, as `savedFromStatus` asks
    */
-  const madeGood = async (scope: string): Promise<boolean> => {
+  const madeGood = async (scope: string, read: SavedRead): Promise<boolean> => {
     const own = router.transportFor(scope)
     if (!own) return false
-    const [session, rejected, inForce] = await Promise.all([own.status(), rejectedServices(), statusInForce(chain)])
-    return keyMadeGood(session, rejected, inForce.status)
+    const [session, rejected] = await Promise.all([own.status(), rejectedServices()])
+    return keyMadeGood(session, rejected, read.status)
   }
   const menuDeps = {
     create: (options: { id: string; title: string; contexts: string[]; documentUrlPatterns: string[] }) =>

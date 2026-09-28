@@ -116,7 +116,7 @@ function Primary({ view, actions }: { view: View; actions: PopupActions }) {
   return (
     <div className="pair">
       {main}
-      <Button kind="neutral" size="lg" aria-label={secondary.label} shortcut={secondary.shortcut} onClick={actions[secondary.action]}>{secondary.label}</Button>
+      <Button kind="neutral" size="lg" aria-label={secondary.label} onClick={actions[secondary.action]}>{secondary.label}</Button>
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { COMMAND_ID, MENU_CONTEXTS, MENU_ID, MENU_PATTERNS, installContextMenu, installToggleCommand, menuTitle, toggleTranslation } from '@/entrypoints/background/context-menu'
+import { STATUS_DEADLINE_MS } from '@/entrypoints/background/provider-status'
 import type { Progress } from '@/core/pipeline/run'
 
 /** Progress in its real shape: the first version wrote an improvised `{ state: 'off' }` here, a value `Progress` does not have at all,
@@ -177,7 +178,7 @@ describe('the keyboard command (S-P-50)', () => {
 // The floating button's main button on the full text (issue #169): a fourth door on the same toggle, which has to
 // know whether anything was done — a click met with silence is what the popup opens to explain
 describe('the toggle tells whether it acted (the floating button, DESIGN §4.0c)', () => {
-  const deps = (status: { progress: Progress } | undefined, saved: { revision: string | null; canRun: boolean; fallback: boolean } | null) => {
+  const deps = (status: { progress: Progress; session?: string } | undefined, saved: { revision: string | null; canRun: boolean; fallback: boolean } | null) => {
     const sent: string[] = []
     return {
       sent,
@@ -213,10 +214,45 @@ describe('the toggle tells whether it acted (the floating button, DESIGN §4.0c)
     const page = { ...progress('on'), session: 's1' }
     const cued = { ...deps(page, { revision: null, canRun: true, fallback: false }), madeGood: vi.fn(async () => true) }
     expect(await toggleTranslation(cued as never, 7)).toBe(true)
-    expect(cued.madeGood).toHaveBeenCalledWith('s1')
+    // asked with the settings this press read: one status of the chain in force per press (savedFromStatus)
+    expect(cued.madeGood).toHaveBeenCalledWith('s1', { revision: null, canRun: true, fallback: false })
     expect(cued.send).toHaveBeenLastCalledWith(7, { type: 'axt:translate-page', restart: true })
     const plain = { ...deps(page, { revision: null, canRun: true, fallback: false }), madeGood: vi.fn(async () => false) }
     expect(await toggleTranslation(plain as never, 7)).toBe(true)
     expect(plain.sent).toEqual(['axt:page-status', 'axt:restore-page'])
+  })
+
+  it('the cue is asked of a running page only, and a failed ask is no cue: the page restores', async () => {
+    const idle = { ...deps({ ...progress('idle'), session: 's1' }, { revision: null, canRun: true, fallback: false }), madeGood: vi.fn(async () => true) }
+    expect(await toggleTranslation(idle as never, 7)).toBe(true)
+    expect(idle.madeGood).not.toHaveBeenCalled()
+    expect(idle.sent).toEqual(['axt:page-status', 'axt:translate-page'])
+    const failed = { ...deps({ ...progress('on'), session: 's1' }, { revision: null, canRun: true, fallback: false }), madeGood: vi.fn(async (): Promise<boolean> => { throw new Error('the session is gone') }) }
+    expect(await toggleTranslation(failed as never, 7)).toBe(true)
+    expect(failed.sent).toEqual(['axt:page-status', 'axt:restore-page'])
+  })
+
+  it('with the settings unread there is no cue to ask: a running page restores, as the popup offers then', async () => {
+    const unread = { ...deps({ ...progress('on'), session: 's1' }, null), madeGood: vi.fn(async () => true) }
+    expect(await toggleTranslation(unread as never, 7)).toBe(true)
+    expect(unread.madeGood).not.toHaveBeenCalled()
+    expect(unread.sent).toEqual(['axt:page-status', 'axt:restore-page'])
+  })
+
+  it('a cue that never answers holds no door: past the chain\'s status deadline it is no cue, and the page restores', async () => {
+    vi.useFakeTimers()
+    try {
+      const stalled = { ...deps({ ...progress('on'), session: 's1' }, { revision: null, canRun: true, fallback: false }), madeGood: vi.fn(() => new Promise<boolean>(() => undefined)) }
+      let acted: boolean | undefined
+      void toggleTranslation(stalled as never, 7).then(a => { acted = a })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(stalled.madeGood).toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(STATUS_DEADLINE_MS - 1)
+      expect([acted, stalled.sent]).toEqual([undefined, ['axt:page-status']])
+      await vi.advanceTimersByTimeAsync(1)
+      expect([acted, stalled.sent]).toEqual([true, ['axt:page-status', 'axt:restore-page']])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -123,11 +123,8 @@ export interface PopupView {
   note: Note | null
   failed: string | null
   primary: { label: string; action: 'translate' | 'restore' | 'retranslate' | 'openHtml' | 'readerTranslate' | 'readerOriginal'; disabled: boolean; shortcut?: string }
-  /**
-   * The primary's other face beside it (P9 / P13, §5.2; the retranslate cue): showing the original. `shortcut` where the
-   * key restores while Translate again is offered beside it (the cue): the chip goes on the face the key acts on
-   */
-  secondary: { label: string; action: 'restore'; shortcut?: string } | null
+  /** The primary's other face beside it (P9 / P13, §5.2; the retranslate cue): showing the original */
+  secondary: { label: string; action: 'restore' } | null
   /**
    * An abstract or PDF page's two entries, drawn in the primary button's place (the reader's design, §2): the HTML
    * version or the bilingual PDF, the reader's to choose. Null elsewhere
