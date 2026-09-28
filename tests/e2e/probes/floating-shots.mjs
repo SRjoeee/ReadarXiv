@@ -5,7 +5,8 @@
 // the system's colour scheme) and one from after it (following the extension's appearance) are shot in the same one:
 // the system's scheme, the extension's `theme`, and arXiv's own theme for the paper under them. Where each part of the
 // button stands is written beside the shots (measures.json); with both sets there, the two are compared part by part,
-// and a page shows them side by side (index.html). The setup is floating-button.mjs's. Needs the network (arXiv).
+// and a page shows them side by side (index.html). A part that moved fails the probe (exit 1), but for those the
+// redesign changed on purpose (FREE, below). The setup is floating-button.mjs's. Needs the network (arXiv).
 //   pnpm build && node tests/e2e/probes/floating-shots.mjs <before|after>
 // Environment: AXT_EXT_DIR points at another build (Part 6 keeps Part 3's in out/floating/build-before); AXT_PAPER
 // another paper; AXT_CHROME another Chrome.
@@ -153,15 +154,34 @@ writeFileSync(join(dir, 'measures.json'), JSON.stringify(measures, null, 1))
 console.log(`${shots} shots in ${dir}`)
 for (const line of missing) console.log(`MISSING ${line}`)
 
+/**
+ * What the redesign's Part 6 changed on purpose (its design, §7; DESIGN §4.0c): the tooltip's and the close menu's own
+ * measures, and the control panel's frame in its top and height — it grows with a menu it holds, from the same left
+ * edge and at the same width. Every other part must stand where it stood (Part 6's constraint), and one that moved
+ * fails the probe: its exit code is the only re-check the constraint has (Part 7's final review)
+ */
+const FREE = new Set(['.axt-fb-main .axt-fb-tip', '.axt-fb-menu', '.axt-fb-menu button'])
+const KEPT = { '.axt-fb-panel-box': box => box && [box[0], box[2]] }
+/** whether a part stood where it stood: all of it, but what the redesign was free to change */
+const held = (part, was, now) => {
+  if (FREE.has(part)) return true
+  const keep = KEPT[part] ?? (box => box)
+  const of = boxes => (Array.isArray(boxes) && part !== 'state' ? boxes.map(keep) : boxes)
+  return JSON.stringify(of(was)) === JSON.stringify(of(now))
+}
+
 // With both sets there: every part of the button compared, shot by shot, and a page pairing the shots
 const other = join(OUT, label === 'before' ? 'after' : 'before', 'measures.json')
+const moved = []
 if (existsSync(other)) {
   const [was, is] = label === 'before' ? [measures, JSON.parse(readFileSync(other, 'utf8'))] : [JSON.parse(readFileSync(other, 'utf8')), measures]
   for (const [name, parts] of Object.entries(was)) {
     for (const [part, boxes] of Object.entries(parts)) {
       const now = is[name]?.[part]
       const same = JSON.stringify(boxes) === JSON.stringify(now)
-      console.log(`${same ? 'same   ' : 'differs'} ${name} ${part}${same ? '' : ` — ${JSON.stringify(boxes)} → ${JSON.stringify(now)}`}`)
+      const allowed = !same && held(part, boxes, now)
+      if (!same && !allowed) moved.push(`${name} ${part}`)
+      console.log(`${same ? 'same   ' : allowed ? 'differs (free to)' : 'differs'} ${name} ${part}${same ? '' : ` — ${JSON.stringify(boxes)} → ${JSON.stringify(now)}`}`)
     }
   }
   const names = readdirSync(join(OUT, 'before')).filter(n => n.endsWith('.png')).sort()
@@ -170,4 +190,5 @@ if (existsSync(other)) {
 ${names.map(n => `<figure><figcaption>${n}: before, after</figcaption><div><img src="before/${n}" alt="before"><img src="after/${n}" alt="after"></div></figure>`).join('\n')}\n`)
   console.log(`side by side: ${join(OUT, 'index.html')}`)
 }
-process.exit(missing.length ? 1 : 0)
+for (const part of moved) console.log(`MOVED ${part}`)
+process.exit(missing.length || moved.length ? 1 : 0)
