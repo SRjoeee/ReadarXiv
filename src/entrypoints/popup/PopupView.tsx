@@ -121,10 +121,13 @@ function Primary({ view, actions }: { view: View; actions: PopupActions }) {
   )
 }
 
-/** The foot (§5.1): the two switches with their words, their whole row their label (§9); the styles trailing */
+/**
+ * The foot (§5.1): the two switches with their words, their whole row their label (§9); the styles trailing — greyed
+ * where there are none to choose (the reader), so that the foot is the same on every page
+ */
 function Foot({ view, actions }: { view: View; actions: PopupActions }) {
   return (
-    <div className={view.style ? 'foot' : 'foot short'}>
+    <div className="foot">
       {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
       <label className="toggle" title={S.rows.highlightTitle}>
         <Switch label={S.rows.highlight} checked={view.highlight} onChange={actions.setHighlight} />
@@ -135,7 +138,7 @@ function Foot({ view, actions }: { view: View; actions: PopupActions }) {
         <Switch label={S.rows.images} checked={view.images} onChange={actions.setImages} />
         {S.rows.images}
       </label>
-      {view.style && view.menus?.style && <StyleButton value={view.style.value} menu={view.menus.style} open={view.menu === 'style'} actions={actions} onPick={actions.chooseStyle} />}
+      <StyleButton value={view.style?.value ?? null} menu={view.menus?.style ?? null} open={view.menu === 'style'} actions={actions} onPick={actions.chooseStyle} />
     </div>
   )
 }

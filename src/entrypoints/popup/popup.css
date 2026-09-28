@@ -35,8 +35,11 @@
 .popup .tbtn { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 4px; height: 30px; min-width: 30px; border-radius: 7px; color: var(--ink-2); transition: background-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out; }
 .popup .tbtn::before { content: ""; position: absolute; inset: -7px -2px; }
 .popup .tbtn[aria-expanded="true"] { background: var(--fill); color: var(--ink); }
-@media (hover: hover) { .popup .tbtn:hover { background: var(--fill); color: var(--ink); } }
-.popup .tbtn:active { scale: 0.96; }
+@media (hover: hover) { .popup .tbtn:not([aria-disabled="true"]):hover { background: var(--fill); color: var(--ink); } }
+.popup .tbtn:not([aria-disabled="true"]):active { scale: 0.96; }
+/* one that cannot act (the style button on the reader): greyed as a segment that cannot be had is, no hover, no press */
+.popup .tbtn[aria-disabled="true"] { color: var(--ink-3); opacity: 0.55; }
+@media (forced-colors: active) { .popup .tbtn[aria-disabled="true"] { color: GrayText; } }
 
 /* under the group: a note, the primary or the entries, the display — 16 px apart, twice the 8 within a group (§5.1) */
 .popup .stack { display: flex; flex-direction: column; gap: 16px; padding: 16px 12px 0; }
@@ -56,9 +59,8 @@
 /* the display and the line under it (S-P-74): 8 px within */
 .popup .reading { display: flex; flex-direction: column; gap: 8px; }
 
-/* the foot (§5.1): the two switches with their words, the style button trailing; the reader's, without it, together */
+/* the foot (§5.1): the two switches with their words, the style button trailing — on every page, greyed on the reader */
 .popup .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 14px; }
-.popup .foot.short { justify-content: flex-start; gap: 20px; }
 .popup .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 .popup .style-btn { padding-inline: 8px 6px; font-size: 12.5px; }
 .popup .style-btn > svg { color: var(--ink-3); }

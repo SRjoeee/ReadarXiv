@@ -1,10 +1,12 @@
-import { act } from 'react'
+import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import type { PopupActions } from '@/entrypoints/popup/data'
 import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
+import { PopupView } from '@/entrypoints/popup/PopupView'
 import { derivePopupView } from '@/entrypoints/popup/view-model'
 import { S, setLocale } from '@/ui/strings'
 import { stubPopovers } from '../pdf-reader/ui/popover-stub'
-import { draw, fixture, nameOf, wordsOf } from './draw'
+import { draw, drawInput, fixture, nameOf, wordsOf } from './draw'
 
 // The popup as it draws each state (the redesign's design, §5; round 6): found by role and by the pack's words, from the
 // fixtures the gallery draws. Where things stand is the browser's to measure (tests/e2e/probes/popup-align.mjs)
@@ -39,7 +41,10 @@ describe('the popup drawn (the redesign\'s design, §5)', () => {
     // (Part 3's Segmented, its description), which textContent would read too
     expect(radios.map(r => [wordsOf(r), r.getAttribute('aria-checked'), !!r.querySelector('svg')])).toEqual([[S.mode.side, 'false', true], [S.mode.stack, 'true', true], [S.mode.only, 'false', true]])
     expect([...main.querySelectorAll('.foot [role="switch"]')].map(s => s.getAttribute('aria-label'))).toEqual([S.rows.highlight, S.rows.images])
-    expect(main.querySelector('.foot .style-btn')!.textContent).toBe(S.rows.style)
+    const style = main.querySelector('.foot .style-btn')!
+    expect(style.textContent).toBe(S.rows.style)
+    // a page with styles: the button opens their menu, as before Task 103b
+    expect([style.hasAttribute('aria-disabled'), style.getAttribute('aria-haspopup'), !!style.getAttribute('popovertarget')]).toEqual([false, 'listbox', true])
   })
 
   it('P4: showing the original is the neutral face, and keeps its key (S-P-51)', async () => {
@@ -130,12 +135,29 @@ describe('the popup drawn (the redesign\'s design, §5)', () => {
     expect([actions.downloadPack.mock.calls.length, actions.chooseService.mock.calls.length]).toEqual([2, 0])
   })
 
-  it('PR: stacked greyed, the switches kept, no style button (§5.2)', async () => {
-    const { main } = await draw('PR')
+  it('PR: stacked greyed, the switches kept, the style button in its place greyed: it opens nothing and says no reason (§5.2; the maintainer, 2026-09-28)', async () => {
+    const { main, actions } = await draw('PR')
     const stack = [...main.querySelectorAll('[role="radio"]')].find(r => wordsOf(r) === S.mode.stack)!
     expect(stack.getAttribute('aria-disabled')).toBe('true')
     expect(main.querySelectorAll('.foot [role="switch"]').length).toBe(2)
-    expect(main.querySelector('.foot .style-btn')).toBeNull()
+    // the foot as every page's: the two switches, then the style button with its words and its chevron
+    const foot = main.querySelector('.foot')!
+    expect([foot.className, ...[...foot.children].map(c => c.className)]).toEqual(['foot', 'toggle', 'toggle', 'tbtn style-btn'])
+    const style = foot.querySelector<HTMLButtonElement>(':scope > .style-btn')!
+    expect([style.getAttribute('aria-disabled'), style.textContent, !!style.querySelector('svg')]).toEqual(['true', S.rows.style, true])
+    // nothing to open and nothing to say: no menu, no tooltip, no anchor for either
+    expect([style.hasAttribute('popovertarget'), style.hasAttribute('aria-haspopup'), style.getAttribute('style'), foot.querySelector('[popover]')]).toEqual([false, false, null, null])
+    await act(async () => { style.click() })
+    expect([document.querySelector('[data-open]'), actions.openMenu.mock.calls.length, actions.chooseStyle.mock.calls.length]).toEqual([null, 0, 0])
+  })
+
+  it('a paper whose settings are not read yet: the style button greyed in its place; read, the same place opens the styles (Task 103b)', async () => {
+    const m = await drawInput({ ...fixture('P1').input, config: null })
+    const style = () => m.main.querySelector('.foot > .style-btn')!
+    expect([style().getAttribute('aria-disabled'), style().hasAttribute('popovertarget')]).toEqual(['true', false])
+    await m.rerender(createElement(PopupView, { view: derivePopupView(fixture('P1').input), error: null, actions: m.actions as unknown as PopupActions }))
+    expect([style().hasAttribute('aria-disabled'), style().hasAttribute('popovertarget')]).toEqual([false, true])
+    await m.unmount()
   })
 
   it('PL says the page is loading and draws nothing else; PW is the brand row alone (§5.4)', async () => {

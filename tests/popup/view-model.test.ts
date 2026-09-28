@@ -342,7 +342,7 @@ describe('the core strings seam (DESIGN §4.2)', () => {
       expect(reader(withConfig({ pdfReader: { ...cfg.pdfReader, original: false } })).primary).toMatchObject({ label: '显示原文', action: 'readerOriginal' })
     })
 
-    it('has no style row and no entries; the service, the highlight and the images are as elsewhere', () => {
+    it('has no style to choose (the foot greys its button) and no entries; the service, the highlight and the images are as elsewhere', () => {
       const v = reader()
       expect([v.style, v.entries]).toEqual([null, null])
       expect(v.service.value).toBe(view('P17').service.value)

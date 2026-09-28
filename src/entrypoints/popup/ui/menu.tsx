@@ -142,8 +142,19 @@ export function MenuRow({ kind, label, row, menu, open, actions, onPick, onActio
   )
 }
 
-/** The foot's way to the styles (§5.1): its words and a chevron, the chosen style in its tooltip; its menu opens upward */
-export function StyleButton({ value, menu, open, actions, onPick }: { value: string; menu: MenuView; open: boolean; actions: MenuActions; onPick: (id: string) => void }) {
+/**
+ * The foot's way to the styles (§5.1): its words and a chevron, the chosen style in its tooltip; its menu opens upward.
+ * Where there are no styles to choose — the PDF reader, whose typeset pages styles do nothing to; the settings not read
+ * yet — the same button in the same place, greyed, so that the foot is the same on every page (the maintainer,
+ * 2026-09-28)
+ */
+export function StyleButton({ value, menu, open, actions, onPick }: { value: string | null; menu: MenuView | null; open: boolean; actions: MenuActions; onPick: (id: string) => void }) {
+  return value !== null && menu !== null
+    ? <StyleMenuButton value={value} menu={menu} open={open} actions={actions} onPick={onPick} />
+    : <StyleButtonGreyed />
+}
+
+function StyleMenuButton({ value, menu, open, actions, onPick }: { value: string; menu: MenuView; open: boolean; actions: MenuActions; onPick: (id: string) => void }) {
   const { pop, trigger, painted } = useMenu('style', open, actions, true)
   const tip = useTip(value)
   return (
@@ -155,5 +166,18 @@ export function StyleButton({ value, menu, open, actions, onPick }: { value: str
       {tip.tip}
       <MenuPopover kind="style" menu={menu} up pop={pop} painted={painted} onPick={onPick} onClose={() => shut(pop.popover.id)} />
     </>
+  )
+}
+
+/**
+ * Greyed as a segment that cannot be had is (stacked, on the reader): aria-disabled, in the tab order as a disabled `Button`
+ * is; it opens nothing, and no tooltip gives a reason — a technical reason is only greyed, never explained (§1)
+ */
+function StyleButtonGreyed() {
+  return (
+    <button type="button" className="tbtn style-btn" aria-disabled="true">
+      {S.rows.style}
+      <Icon node={ChevronDown} size={14} />
+    </button>
   )
 }

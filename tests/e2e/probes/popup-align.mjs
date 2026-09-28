@@ -112,7 +112,7 @@ async function measureAll(what) {
   report(`${what}: rows on their centre lines`, await offCentre(page, { rows: ROWS }))
   report(`${what}: the foot, the switches' words, the notes`, await rest())
   await edgesAt(`${what}: the brand, the group, the blocks under it`, '.popup .brand-row .wordmark, .popup .group, .popup .stack > *, .popup .reading > *, .popup .find > *, .popup .found > *, .popup .twin, .popup .foot > .toggle:first-child', 12)
-  await edgesAt(`${what}: the group, the blocks under it, the gear's glyph, the foot's end`, '.popup .group, .popup .stack > *, .popup .reading > *, .popup .find > *, .popup .found > *, .popup .twin, .popup .brand-row .tbtn svg, .popup .foot:not(.short) > .style-btn', 12, 'end')
+  await edgesAt(`${what}: the group, the blocks under it, the gear's glyph, the foot's end`, '.popup .group, .popup .stack > *, .popup .reading > *, .popup .find > *, .popup .found > *, .popup .twin, .popup .brand-row .tbtn svg, .popup .foot > .style-btn', 12, 'end')
   await edgesAt(`${what}: the group's words`, '.popup .group-row > .k', 24)
   await edgesAt(`${what}: the group's values`, '.popup .group-row > .v', 24, 'end')
 }

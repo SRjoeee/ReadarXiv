@@ -112,7 +112,10 @@ export interface PopupView {
   language: Row
   /** Only while the LLM is the chosen service */
   prompt: Row | null
-  /** The chosen translation style (S-P-82). Null where styles do nothing or are not shown: the reader, an entry page */
+  /**
+   * The chosen translation style (S-P-82). Null where there is none to choose: the reader, whose foot greys the style
+   * button (the maintainer, 2026-09-28), and an entry page, which draws no foot
+   */
   style: Row | null
   highlight: boolean
   images: boolean
@@ -312,7 +315,8 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
  * The popup while the PDF reader is laid over a PDF page (the reader's design, §9.2): it acts on the reader through the
  * settings alone, which the reader follows. The rows are the ordinary ones, the language menu holds the nine the reader
  * typesets, stacked is greyed (a stored stacked shows as side by side, what the reader shows), the primary shows the
- * original or the translation, and there is no style: styles do nothing on a typeset PDF
+ * original or the translation, and there is no style to choose: styles do nothing on a typeset PDF (the foot greys its
+ * button)
  */
 function readerView(entry: EntryStatus, config: Config, input: PopupInput): PopupView {
   const base = entryView(entry, config, input)

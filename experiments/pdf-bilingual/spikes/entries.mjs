@@ -44,7 +44,7 @@ async function popupOver(tab, name) {
       entries: named(/^(HTML 翻译|PDF 翻译|Translate HTML|Translate PDF)$/),
       primary: named(/^(翻译本页|显示原文|Translate this page|Show the original)/),
       stack: buttons.filter(b => b.getAttribute('role') === 'radio' && /^(上下|Stacked)$/.test(b.querySelector('span:not([hidden])')?.textContent ?? '')).map(b => ({ disabled: b.getAttribute('aria-disabled') === 'true', title: document.getElementById(b.getAttribute('aria-describedby') ?? '')?.textContent ?? '' })),
-      style: buttons.some(b => /译文样式|Style/.test(b.textContent ?? '')),
+      style: buttons.filter(b => /译文样式|Style/.test(b.textContent ?? '')).map(b => ({ disabled: b.getAttribute('aria-disabled') === 'true', opens: b.hasAttribute('popovertarget') })),
     }
   })
   await popup.locator('main').screenshot({ path: join(out, `${name}.png`) })
@@ -80,7 +80,7 @@ await sleep(6000)
 }
 
 // 3. the reader open over the PDF: the popup is the reader's — its primary switches the translation and the original,
-// the stacked display greyed with its reason, no style row
+// the stacked display greyed with its reason, the style button greyed in its place, opening nothing (Task 103b)
 await setReader(true)
 await page.goto('about:blank')
 await page.goto(`https://arxiv.org/pdf/${paper}`, { waitUntil: 'load' })
@@ -88,8 +88,8 @@ await page.goto(`https://arxiv.org/pdf/${paper}`, { waitUntil: 'load' })
   const framed = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null)
   await sleep(4000)
   const seen = await popupOver(page, '4-reader-popup')
-  check('the reader open: the popup\'s primary, the stacked display greyed with its reason, no style row',
-    !!framed && seen.entries.length === 0 && seen.primary.length === 1 && seen.stack[0]?.disabled && !!seen.stack[0]?.title && !seen.style,
+  check('the reader open: the popup\'s primary, the stacked display greyed with its reason, the style button greyed',
+    !!framed && seen.entries.length === 0 && seen.primary.length === 1 && seen.stack[0]?.disabled && !!seen.stack[0]?.title && seen.style.length === 1 && seen.style[0].disabled && !seen.style[0].opens,
     JSON.stringify(seen))
   // the settings are a link (the interface review): from the reader's frame over arXiv's page it opens the settings page
   // at the reader's section, in a new tab. On a tab of its own: popupOver sizes the popup's page (setViewportSize, a
