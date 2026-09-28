@@ -35,6 +35,13 @@ describe('popup.css', () => {
     expect(ruleOf(all, '.popup .switch[aria-checked="true"]::after', within)).toEqual({ background: 'var(--on-brand)' })
   })
 
+  it('keeps P0\'s field and its Enter rows an edge in forced colours, whose box-shadows and grounds are dropped: the field a CanvasText border, a row a ButtonText outline while not focused — as controls.css draws .input and .btn (Part 7\'s final review)', () => {
+    const all = rules(SHEET)
+    const within = ['@media (forced-colors: active)']
+    expect(ruleOf(all, '.popup .find-field', within)).toEqual({ border: '1px solid CanvasText' })
+    expect(ruleOf(all, '.popup .go:not(:focus-visible)', within)).toEqual({ outline: '1px solid ButtonText', 'outline-offset': '-1px' })
+  })
+
   it('names only tokens the token sheet defines', () => {
     const named = [...new Set([...SHEET.matchAll(/var\((--[a-z0-9-]+)/g)].map(m => m[1]!))]
     expect(named.filter(name => !TOKENS.includes(`${name}:`))).toEqual([])

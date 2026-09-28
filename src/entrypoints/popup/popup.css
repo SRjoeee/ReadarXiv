@@ -118,3 +118,9 @@ html:not([data-axt-pointer]) .popup .find-field:focus-within { outline: 2px soli
 .popup .paper { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ink-2); font-size: 12.5px; }
 .popup .paper > b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .popup .go { transition: none; } }
+/* in forced colours the field's edge (a box-shadow) and the rows' grounds are dropped: the system's colours draw an edge
+   instead, as controls.css does for .input and .btn — a row's not while focused, whose ring it is */
+@media (forced-colors: active) {
+  .popup .find-field { border: 1px solid CanvasText; }
+  .popup .go:not(:focus-visible) { outline: 1px solid ButtonText; outline-offset: -1px; }
+}
