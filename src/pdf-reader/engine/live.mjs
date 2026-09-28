@@ -138,7 +138,8 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
  * translations reused wherever a unit's source matches (session.mjs seedFrom)
  */
 // 2: the front matter's notes are units (latex-front.mjs FRONT_MATTER)
-// 3: CJK leading inside translated units alone, and English hyphenation under a CJK target (scripts.mjs)
+// 3: CJK leading inside translated units alone, their displays at the paper's, and English hyphenation under a CJK
+//    target (scripts.mjs, latex-front.mjs unitLeadTex)
 export const PIPELINE_VERSION = '3'
 
 /**

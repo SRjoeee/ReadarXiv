@@ -584,6 +584,8 @@ export const MARK_DEF = [
  * close its group in an alignment or in math, where the token breaks the next \\midrule or \\end{align*} (2608.21180,
  * 2608.09038: a hundred errors each); inside one the level is set and the hook waits for the next paragraph. And no
  * hook from restricted horizontal mode, where a caption is measured in an \\hbox before it is set.
+ * A display inside a unit is set at the paper's leading, as the displays between units are: it is the paper's math,
+ * not translated text, and the unit's leading had spread an align's rows a quarter apart (14.9 pt to 18.5 pt).
  * Local, because a \\linespread for the whole document also spread what stays English — references, tables, code,
  * algorithms — a third past the paper's (RT-1's references: 1.43 × the font size against 1.10)
  */
@@ -591,7 +593,10 @@ export const unitLeadTex = leading => String.raw`\makeatletter
 \def\axt@leadat#1#2#3{\ifnum\currentgrouplevel=#1 \baselineskip=#2\relax\else\ifnum\currentgrouplevel>#1 \baselineskip=#2\relax\ifinner\AddToHookNext{para/after}{\axt@leadat{#1}{#2}{#3}}\else\expandafter\gdef\csname axt@lb@#3\endcsname{\axt@leadback{#1}{#2}{#3}}\expandafter\aftergroup\csname axt@lb@#3\endcsname\fi\fi\fi}
 \def\axt@leadback#1#2#3{\ifnum\currentgrouplevel>#1 \baselineskip=#2\relax\expandafter\aftergroup\csname axt@lb@#3\endcsname\else\ifnum\currentgrouplevel=#1 \ifhmode\AddToHookNext{para/after}{\axt@leadat{#1}{#2}{#3}}\else\baselineskip=#2\relax\fi\fi\fi}
 \protected\def\axtlead#1{\ifhmode\ifinner\else\axt@lead{#1}\fi\else\axt@lead{#1}\fi}
-\def\axt@lead#1{\ifdefined\AddToHookNext\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@leadat{\the\currentgrouplevel}{\the\baselineskip}{#1}}}\baselineskip=\ifcsname axtlead@#1\endcsname\csname axtlead@#1\endcsname\dimexpr\f@size pt\relax\else ` + leading + String.raw`\fi\relax\axt@tmp\fi}
+\def\axt@lead#1{\ifdefined\AddToHookNext\edef\axt@paperlead{\the\baselineskip}\edef\axt@tmp{\noexpand\AddToHookNext{para/after}{\noexpand\axt@leadat{\the\currentgrouplevel}{\the\baselineskip}{#1}}}\baselineskip=\ifcsname axtlead@#1\endcsname\csname axtlead@#1\endcsname\dimexpr\f@size pt\relax\else ` + leading + String.raw`\fi\relax\edef\axt@unitlead{\the\baselineskip}\axt@tmp\fi}
+\let\axt@unitlead\relax
+\def\axt@displaylead{\ifx\axt@unitlead\relax\else\ifdim\baselineskip=\axt@unitlead\relax\baselineskip=\axt@paperlead\relax\fi\fi}
+\AtBeginDocument{\everydisplay\expandafter{\the\everydisplay\axt@displaylead}}
 \makeatother
 `
 // pieces that are always set on the line: inline formulas and references
