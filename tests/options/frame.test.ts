@@ -69,6 +69,21 @@ describe('applySearch (§6.1)', () => {
     expect(applySearch(root, '')).toBe(0)
     expect(root.querySelector('[data-miss], [data-first]')).toBeNull()
   })
+
+  it('never hides a deletion\'s undo row, the only way back — found or not, it keeps its card and section shown, and is no match itself (Part 7\'s final review, B-I1)', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `<section data-section="a"><div data-card><div data-srow data-search="green colour"></div><div data-srow data-undo="blue"></div></div></section>`
+    const undo = root.querySelector('[data-undo]')!
+    expect(applySearch(root, 'colour')).toBe(1)
+    expect(undo.hasAttribute('data-miss')).toBe(false)
+    expect(applySearch(root, 'sync')).toBe(0)
+    expect([undo.hasAttribute('data-miss'), root.querySelector('[data-card]')!.hasAttribute('data-miss'), root.querySelector('section')!.hasAttribute('data-miss')]).toEqual([false, false, false])
+    expect(undo.hasAttribute('data-first')).toBe(true)
+    // one in a list folded away (the prompts' list stays drawn while closed) shows nothing: it holds no card open
+    root.innerHTML = `<section data-section="a"><div data-card><div data-srow data-search="prompt"></div><div inert><div data-srow data-undo="mine"></div></div></div></section>`
+    expect(applySearch(root, 'sync')).toBe(0)
+    expect([root.querySelector('[data-undo]')!.hasAttribute('data-miss'), root.querySelector('[data-card]')!.hasAttribute('data-miss')]).toEqual([true, true])
+  })
 })
 
 describe('the frame (§6.1)', () => {

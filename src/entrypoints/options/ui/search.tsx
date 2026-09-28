@@ -23,8 +23,10 @@ export function Marked({ text }: { text: string }) {
 /**
  * The search's pass over what is drawn (§6.1): a row is found when its words hold the query and it shows — a closed
  * reveal is inert, so a sub-row that does not apply is not found; a card and a section with no row found miss too,
- * and each card's first row found loses its top line. Attributes only, read and written in one pass, no layout.
- * Returns how many rows were found. With no query it clears what an earlier pass marked
+ * and each card's first row found loses its top line. A deletion's undo row that shows is never hidden: it is the only
+ * way back, and its 5 s run whether it shows or not (Part 7's final review); it keeps its card and section shown, and is
+ * no match itself. Attributes only, read and written in one pass, no layout. Returns how many rows were found. With no query it
+ * clears what an earlier pass marked
  */
 export function applySearch(root: HTMLElement, q: string): number {
   for (const el of root.querySelectorAll('[data-miss], [data-first]')) {
@@ -34,7 +36,9 @@ export function applySearch(root: HTMLElement, q: string): number {
   if (!q) return 0
   let found = 0
   for (const row of root.querySelectorAll<HTMLElement>('[data-srow]')) {
-    if (!row.closest('[inert]') && (row.dataset.search ?? '').includes(q)) found++
+    const shows = !row.closest('[inert]')
+    if (shows && row.hasAttribute('data-undo')) continue
+    if (shows && (row.dataset.search ?? '').includes(q)) found++
     else row.setAttribute('data-miss', '')
   }
   for (const box of root.querySelectorAll<HTMLElement>('[data-card], section[data-section]')) {
