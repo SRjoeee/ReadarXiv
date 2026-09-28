@@ -19,7 +19,7 @@ function harness(over: Partial<HandlerDeps> = {}) {
     diagnostics: { record: (src: string, line: string) => void lines.push([src, line]), restored: Promise.resolve(), export: vi.fn() },
     cache: { clear: vi.fn(async () => 0), cleanup: vi.fn(async () => undefined), stats: vi.fn(async () => ({ entries: 0, bytes: 0 })) },
     toggle: vi.fn(async () => true),
-    decide: vi.fn(async () => ({ action: 'retranslate', behind: false, cued: true, enabled: true })),
+    decide: vi.fn(async () => ({ action: 'retranslate', behind: false, enabled: true })),
     getConfig: vi.fn(async () => DEFAULT_CONFIG),
     getFloatingEntry: vi.fn(async () => DEFAULT_FLOATING_ENTRY),
     patchFloatingEntry: vi.fn(),
@@ -178,7 +178,7 @@ describe('the background\'s handlers', () => {
 
   it('axt:toggle-decision answers what the toggle would do in the tab that asked, doing nothing; from an extension page nothing, and a page with no decision null', async () => {
     const { send, deps } = harness()
-    await expect(send({ type: 'axt:toggle-decision' })).resolves.toEqual({ decision: { action: 'retranslate', behind: false, cued: true, enabled: true } })
+    await expect(send({ type: 'axt:toggle-decision' })).resolves.toEqual({ decision: { action: 'retranslate', behind: false, enabled: true } })
     expect(deps.decide).toHaveBeenCalledWith(7)
     expect(deps.toggle).not.toHaveBeenCalled()
     expect(send({ type: 'axt:toggle-decision' }, { tabId: undefined })).toBeUndefined()

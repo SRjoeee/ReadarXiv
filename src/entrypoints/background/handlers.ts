@@ -125,7 +125,7 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
     'axt:toggle': (_message, sender) => sender.tabId === undefined ? undefined : deps.toggle(sender.tabId).then(acted => ({ acted })),
 
     // The floating button's words (UI.md S-I-06): the same toggle's decision for the tab that asked, nothing done — so
-    // they say what a press would do there, the retranslate cue included (P6b). A page that could not be asked rejects
+    // they say what a press would do there, whatever it is. A page that could not be asked rejects
     'axt:toggle-decision': (_message, sender) => sender.tabId === undefined ? undefined : deps.decide(sender.tabId).then(decision => ({ decision: decision ?? null })),
 
     // What a page needs of the settings (shared/entry-settings.ts): the configuration as this build reads it —

@@ -95,8 +95,8 @@ export interface AxtMessages {
   'axt:toggle': { request: Record<never, never>; response: { acted: boolean } }
   /**
    * content → background: what that toggle would do in this tab now, decided as a press decides and not acted on — the
-   * floating button's words say it (UI.md S-I-06: S-P-52's words where the retranslate cue holds, P6b). `decision` is null
-   * when the page answered nothing to decide on
+   * floating button's words say it, in the popup's primary button's words for the action (UI.md S-I-06). `decision` is
+   * null when the page answered nothing to decide on
    */
   'axt:toggle-decision': { request: Record<never, never>; response: { decision: PageDecision | null } }
   /**

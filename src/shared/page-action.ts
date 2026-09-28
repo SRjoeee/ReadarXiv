@@ -63,11 +63,6 @@ export interface SavedSettings {
 export interface PageDecision {
   action: PageAction
   behind: boolean
-  /**
-   * The retranslate cue holds on a running page (P6b): the action is the way back to the key made good. The floating
-   * button's words say it where the popup's button does (UI.md S-I-06), from this decision rather than a rule of their own
-   */
-  cued: boolean
   /** Whether the reader may press it: the popup disables the button, the toggle does nothing */
   enabled: boolean
 }
@@ -85,7 +80,7 @@ export function pageDecision(page: Pick<PageStatus, 'progress' | 'running'> | un
   const behind = behindSettings(page, saved.revision)
   const cued = madeGood && page.progress.state === 'on'
   const enabled = action === 'restore' ? true : behind || cued ? saved.canRun : saved.canRun || saved.fallback
-  return { action, behind, cued, enabled }
+  return { action, behind, enabled }
 }
 
 /**

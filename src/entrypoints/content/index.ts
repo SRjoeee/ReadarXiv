@@ -39,7 +39,7 @@ export default defineContentScript({
     let floating: InstalledFloatingButton | null = null
     /**
      * Its main button's words: what its press does, from the toggle's own decision (./toggle-words.ts). Asked again
-     * where what that decision reads may move while the page is on: the page starting, restarting or stopping, the
+     * where what that decision reads may move: every change of the page's state, and while it runs a restart, the
      * saved settings, the refused-key record
      */
     const words = createToggleWords({

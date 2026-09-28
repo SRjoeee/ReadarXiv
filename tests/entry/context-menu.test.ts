@@ -239,16 +239,16 @@ describe('the toggle tells whether it acted (the floating button, DESIGN §4.0c)
     expect(unread.sent).toEqual(['axt:page-status', 'axt:restore-page'])
   })
 
-  it('the decision a press makes, asked without pressing (the floating button\'s words, UI.md S-I-06): the cue\'s retranslate in P6b, as before anywhere else, and nothing sent', async () => {
+  it('the decision a press makes, asked without pressing (the floating button\'s words, UI.md S-I-06): the cue\'s retranslate in P6b, as the press decides anywhere else, and nothing sent', async () => {
     const page = { ...progress('on'), session: 's1', epoch: 'd#1' }
     const cued = { ...deps(page, { revision: null, canRun: true, fallback: false }), madeGood: vi.fn(async () => true) }
-    expect(await decideToggle(cued as never, 7)).toEqual({ decision: { action: 'retranslate', behind: false, cued: true, enabled: true }, epoch: 'd#1' })
+    expect(await decideToggle(cued as never, 7)).toEqual({ decision: { action: 'retranslate', behind: false, enabled: true }, epoch: 'd#1' })
     expect(cued.madeGood).toHaveBeenCalledWith('s1', { revision: null, canRun: true, fallback: false })
     expect(cued.sent).toEqual(['axt:page-status'])
     const plain = { ...deps(page, { revision: null, canRun: true, fallback: false }), madeGood: vi.fn(async () => false) }
-    expect((await decideToggle(plain as never, 7))?.decision).toEqual({ action: 'restore', behind: false, cued: false, enabled: true })
+    expect((await decideToggle(plain as never, 7))?.decision).toEqual({ action: 'restore', behind: false, enabled: true })
     const idle = { ...deps({ ...progress('idle'), session: 's1' }, { revision: null, canRun: true, fallback: false }), madeGood: vi.fn(async () => true) }
-    expect((await decideToggle(idle as never, 7))?.decision).toEqual({ action: 'translate', behind: false, cued: false, enabled: true })
+    expect((await decideToggle(idle as never, 7))?.decision).toEqual({ action: 'translate', behind: false, enabled: true })
     // a page that does not answer has no decision; the toggle's own `false` is its caller's
     await expect(decideToggle(deps(undefined, { revision: null, canRun: true, fallback: false }) as never, 7)).rejects.toThrow()
   })
