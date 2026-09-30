@@ -123,18 +123,48 @@ const IN_TEXT = new Set(['para', 'theorem', 'abstract'])
 /** a display environment: a math environment but the inline one */
 const displayEnv = env => MATH_ENVS.test(env) && !/^math\*?$/.test(env)
 /**
- * Whether a unit sets a display before its first words (`lead`) or after its last (`trail`): outside its marks, which
- * stand in running text (patch: the start mark before the first word or inline formula, the end mark after the last
- * word) — the reader's anchors take it from beyond them (anchors.mjs). Nothing typeset depends on it
+ * A display's letters as the page sets them, for telling its lines from a float's (anchors.mjs): the source's letters,
+ * the paper's own macros put in (`macros`, name → body: `\\rmx` is `\\mathbf{x}`, `\\E` is `\\mathbb{E}`) and the commands
+ * left out, run together — a subscript runs on with its letter, `N_{\\text{out}}` → `nout` — then the commands' names,
+ * which some set as words (`\\log`, `\\softmax`)
  */
-function displayOutside(pieces, displays) {
+export function displayLetters(src, macros = new Map()) {
+  let s = src
+  for (let depth = 0; depth < 3 && macros.size; depth++) {
+    const t = s.replace(/\\([A-Za-z@]+)/g, (m, name) => (macros.has(name) ? ` ${macros.get(name)} ` : m))
+    if (t === s || t.length > 20000) break
+    s = t
+  }
+  // the commands that set a Latin letter (ℓ reads as l)
+  s = s.replace(/\\(ell|imath|jmath)(?![A-Za-z@])/g, (m, c) => ({ ell: 'l', imath: 'i', jmath: 'j' })[c]).normalize('NFKC').toLowerCase()
+  return `${s.replace(/\\[a-z@]+/g, '').replace(/[^\p{L}]/gu, '')} ${[...new Set([...s.matchAll(/\\([a-z]+)/g)].map(m => m[1]))].join(' ')}`
+}
+/** the bodies of the macros a paper defines in its sources (\\newcommand, \\def, \\DeclareMathOperator), by name */
+function macroBodies(texts) {
+  const out = new Map()
+  for (const t of texts) {
+    for (const m of t.matchAll(/\\(?:(?:re|provide)?newcommand\*?\s*\{?\s*\\([A-Za-z@]+)\s*\}?\s*(?:\[\d\]\s*)?(?:\[[^\]]*\]\s*)?|def\s*\\([A-Za-z@]+)\s*(?:#\d\s*)*|DeclareMathOperator\*?\s*\{\s*\\([A-Za-z@]+)\s*\}\s*)(?=\{)/g)) {
+      const at = m.index + m[0].length, e = matchGroup(t, at)
+      if (e > 0) out.set(m[1] ?? m[2] ?? m[3], t.slice(at + 1, e - 1))
+    }
+  }
+  return out
+}
+/**
+ * The displays a unit sets before its first words (`lead`) or after its last (`trail`), outside its marks, which stand
+ * in running text (patch: the start mark before the first word or inline formula, the end mark after the last word):
+ * their letters (displayLetters), or null — the reader's anchors take such a display from beyond the marks, and only
+ * lines its letters explain. Nothing typeset depends on it
+ */
+function displayOutside(pieces, displays, macros) {
   const first = pieces.findIndex(p => (p.t === 'text' && /[^ \t\r\n]/.test(p.s)) || (p.t === 'ph' && INLINE.test(p.src)))
   const last = pieces.findLastIndex(p => p.t === 'text' && /[^ \t\r\n]/.test(p.s))
-  return { lead: first > 0 && pieces.slice(0, first).some(p => displays.has(p)), trail: last >= 0 && pieces.slice(last + 1).some(p => displays.has(p)) }
+  const letters = ps => { const ds = ps.filter(p => displays.has(p)); return ds.length ? ds.map(p => displayLetters(p.src, macros)).join(' ') : null }
+  return { lead: first > 0 ? letters(pieces.slice(0, first)) : null, trail: last >= 0 ? letters(pieces.slice(last + 1)) : null }
 }
 // A unit: { file, kind, start, end, pieces: [{t:'text', s} | {t:'ph', src} | {t:'open', id, src} | {t:'close', id, src}] }
 class Builder {
-  constructor(file, units, src = '') { this.file = file; this.units = units; this.src = src; this.cur = null; this.pairId = 0; this.displays = new WeakSet() }
+  constructor(file, units, src = '', macros = new Map()) { this.file = file; this.units = units; this.src = src; this.macros = macros; this.cur = null; this.pairId = 0; this.displays = new WeakSet() }
   text(s, start, end) { if (!this.cur) { if (!s.trim()) return; this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] } } this.cur.pieces.push({ t: 'text', s }); this.cur.end = end }
   /** `display`: a formula set on lines of its own (displayOutside) */
   ph(src, start, end, display = false) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; const p = { t: 'ph', src }; if (display) this.displays.add(p); this.cur.pieces.push(p); this.cur.end = end; return true }
@@ -148,13 +178,13 @@ class Builder {
     if ((letters.match(/\p{L}/gu) ?? []).length < 2) {
       // a display standing alone between blank lines is read with the paragraph it follows, nothing but white space
       // and comments between them
-      const prev = this.units.at(-1)
-      if (u.pieces.some(p => this.displays.has(p)) && prev?.file === u.file && IN_TEXT.has(prev.kind) && !this.src.slice(prev.end, u.start).replace(/(^|[^\\])%.*$/gm, '$1').trim()) prev.trail = true
+      const prev = this.units.at(-1), shown = u.pieces.filter(p => this.displays.has(p)).map(p => displayLetters(p.src, this.macros))
+      if (shown.length && prev?.file === u.file && IN_TEXT.has(prev.kind) && !this.src.slice(prev.end, u.start).replace(/(^|[^\\])%.*$/gm, '$1').trim()) prev.trail = [prev.trail, ...shown].filter(Boolean).join(' ')
       return
     }
-    const { lead, trail } = displayOutside(u.pieces, this.displays)
-    if (lead) u.lead = true
-    if (trail) u.trail = true
+    const { lead, trail } = displayOutside(u.pieces, this.displays, this.macros)
+    if (lead) u.lead = lead
+    if (trail) u.trail = trail
     // the paper's title, which goes with every batch to an LLM as the HTML page's does (DESIGN §8.2)
     if (this.title) u.title = true
     if (this.depth !== undefined) u.depth = this.depth
@@ -411,11 +441,11 @@ export function loadProject(root, main, { tables = false } = {}) {
     const t = sourceText(f)
     for (const m of t.matchAll(/\\(?:(?:re|provide)?newcommand\*?\s*\{?\\([A-Za-z@]+)\}?|def\\([A-Za-z@]+))\s*\{\s*\\(begin|end)\s*\{([^}]+)\}\s*\}/g)) envMacros.set(m[1] ?? m[2], { side: m[3], env: m[4].trim() })
   }
-  const ctx = { tables, theorems, macroArgs, envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim())), skipped, visit: rel => visit(rel) }
+  const ctx = { tables, theorems, macroArgs, envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim())), skipped, visit: rel => visit(rel), macros: macroBodies(sources.map(sourceText)) }
   function visit(rel) {
     const f = read(rel); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)
-    const b = new Builder(f.rel, units, f.text)
+    const b = new Builder(f.rel, units, f.text, ctx.macros)
     let from = 0, to = f.text.length
     if (f.rel === mainFile.rel) {
       const m = f.text.match(/\\begin\s*\{document\}/)

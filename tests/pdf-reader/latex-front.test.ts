@@ -42,8 +42,19 @@ describe('the front matter\'s notes (1706.03762: the author block\'s footnotes s
 })
 
 describe('a display outside a unit\'s marks (the reader\'s anchors take it from beyond them: 211 of 747 displays were lit with no unit)', () => {
-  const body = (b: string) => project(`\\documentclass{article}\\begin{document}\n${b}\n\\end{document}`).units as (Unit & { lead?: true; trail?: true })[]
-  const flags = (b: string) => body(b).map(u => [textOf(u).trim().split(' ')[0], u.lead ?? false, u.trail ?? false])
+  const body = (b: string) => project(`\\documentclass{article}\\begin{document}\n${b}\n\\end{document}`).units as (Unit & { lead?: string; trail?: string })[]
+  const flags = (b: string) => body(b).map(u => [textOf(u).trim().split(' ')[0], typeof u.lead === 'string', typeof u.trail === 'string'])
+
+  it('the hint is the display\'s letters, as the page sets them: the words a command sets, and a subscript run on with its letter (the review of A1, I1)', () => {
+    const [u] = body('It holds that\n\\begin{equation} N_{\\text{out}} = \\log x + \\softmax(y) \\end{equation}\n\nNext.')
+    for (const w of ['nout', 'log', 'softmax', 'x', 'y']) expect(u?.trail).toContain(w)
+    expect(u?.trail).not.toContain('model')
+  })
+
+  it('with the paper\'s own macros put in, and ℓ read as l: \\rma_{kk} sets akk, W^\\ell W sets wlw (2608.08350)', () => {
+    const [u] = body('\\def\\rma{{\\mathrm{a}}}\\newcommand{\\E}{\\mathbb{E}}\n\nIt holds that\n\\[ \\E\\,\\rma_{kk} = W^\\ell W \\]\n\nNext.')
+    for (const w of ['akk', 'wlw', 'e']) expect(u?.trail).toContain(w)
+  })
 
   it('a paragraph that ends with a display trails it; one that opens with a display leads with it', () => {
     expect(flags('It holds that\n\\begin{equation}a = b\\end{equation}\n\n\\[ c = d \\]\nwhere c is given.\n\nPlain words, $x$ inline, and an \\[ e \\] inner display in the middle of it.')).toEqual([

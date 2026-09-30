@@ -111,12 +111,12 @@ describe('anchorUnits: a display outside a unit\'s marks is the unit\'s', () => 
   const words = (s: string, y: number, size = 10) => [item(s, 50, y, { size, width: 250, eol: true })]
   // a display: x = y, a subscript under its baseline, and its number at the right
   const display = (y: number) => [item('x = y', 150, y), item('i', 177, y - 3, { size: 7 }), item('(1)', 290, y, { eol: true })]
-  const at = (doc: DocToken[], t: string) => doc.findIndex(d => d.t === t)
+  const at = (doc: DocToken[], t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
 
   it('a paragraph that ends with a display (latex-front\'s trail): the display is lit with it, the page\'s number is not (07683: a conjecture\'s display)', () => {
     const pages = [pageAt(1, [words('the paragraph before it', 700), words('it ends with a display', 676), display(652), words('another paragraph after', 620)]), pageAt(2, [words('more words on the next page', 700)])]
     const doc = tokenizeDocument(pages)
-    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'it ends with a display', trail: true as const }, { id: 2, text: 'another paragraph after' }, { id: 3, text: 'more words on the next page' }]
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'it ends with a display', trail: 'xy' }, { id: 2, text: 'another paragraph after' }, { id: 3, text: 'more words on the next page' }]
     const found = anchorUnits(doc, units, { bounds: new Map([['0', [0, 3]], ['1', [4, 8]], ['2', [at(doc, 'another'), at(doc, 'another') + 2]], ['3', [at(doc, 'more'), at(doc, 'page')]]]) })
     expect(found.get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['it', 'ends', 'with', 'a', 'display', 'x', 'y', 'i', '1'])
     // the last paragraph of the page goes no further than its words: below it is the page's number
@@ -126,7 +126,7 @@ describe('anchorUnits: a display outside a unit\'s marks is the unit\'s', () => 
   it('the same display at the foot of its page: the page\'s number under it stays out', () => {
     const pages = [pageAt(1, [words('the paragraph before it', 700), words('it ends with a display', 100), display(76)]), pageAt(2, [words('more words on the next page', 700)])]
     const doc = tokenizeDocument(pages)
-    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'it ends with a display', trail: true as const }, { id: 3, text: 'more words on the next page' }]
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'it ends with a display', trail: 'xy' }, { id: 3, text: 'more words on the next page' }]
     const found = anchorUnits(doc, units, { bounds: new Map([['0', [0, 3]], ['1', [4, 8]], ['3', [at(doc, 'more'), at(doc, 'page')]]]) })
     expect(found.get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['it', 'ends', 'with', 'a', 'display', 'x', 'y', 'i', '1'])
     expect(found.get(1)?.tokens.at(-1)).toBe(12)
@@ -135,16 +135,60 @@ describe('anchorUnits: a display outside a unit\'s marks is the unit\'s', () => 
   it('a paragraph that opens with a display (latex-front\'s lead) takes it', () => {
     const pages = [pageAt(1, [words('the paragraph before it', 700), display(676), words('where x is the input', 652)]), pageAt(2, [words('more words on the next page', 700)])]
     const doc = tokenizeDocument(pages)
-    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'where x is the input', lead: true as const }, { id: 3, text: 'more words on the next page' }]
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'where x is the input', lead: 'xy' }, { id: 3, text: 'more words on the next page' }]
     const found = anchorUnits(doc, units, { bounds: new Map([['0', [0, 3]], ['1', [at(doc, 'where'), at(doc, 'input')]], ['3', [at(doc, 'more'), at(doc, 'page')]]]) })
     expect(found.get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['x', 'y', 'i', '1', 'where', 'x', 'is', 'the', 'input'])
     expect(found.get(0)?.tokens.map(k => doc[k]?.t)).toEqual(['the', 'paragraph', 'before', 'it'])
   })
 
+  // the display's letters as latex-front gives them with the hint: x = y
+  const row = (cells: string[], y: number) => cells.map((c, i) => item(c, 80 + i * 70, y, { eol: i === cells.length - 1 }))
+
+  it('a table of the body\'s size where the display is not: the display closed the page before, the table opens the unit\'s page (the review of A1, I1 a)', () => {
+    const pages = [
+      pageAt(1, [words('the paragraph before it', 700), display(100)]),
+      pageAt(2, [words('table one results of models', 730), row(['model', 'score', 'cost'], 710), row(['ours', '91', '12'], 698), words('where x is the input', 674), words('more words on the page', 650)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'where x is the input', lead: 'xy' }, { id: 2, text: 'table one results of models' }, { id: 3, text: 'more words on the page' }]
+    const bounds = new Map<string, [number, number]>([['0', [0, 3]], ['1', [at(doc, 'where'), at(doc, 'input')]], ['2', [at(doc, 'table'), at(doc, 'models')]], ['3', [at(doc, 'more'), at(doc, 'page', at(doc, 'more'))]]])
+    expect(anchorUnits(doc, units, { bounds, floating: id => id === 2 }).get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['where', 'x', 'is', 'the', 'input'])
+  })
+
+  it('a display alone that went over to the next page: the table under the paragraph is not the display (I1 b)', () => {
+    const pages = [
+      pageAt(1, [words('the paragraph before it', 700), words('we have that', 160), row(['model', 'score', 'cost'], 130), row(['ours', '91', '12'], 118), words('table one results of models', 98)]),
+      pageAt(2, [display(700), words('more words on the page', 676)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'we have that', trail: 'xy' }, { id: 2, text: 'table one results of models' }, { id: 3, text: 'more words on the page' }]
+    const bounds = new Map<string, [number, number]>([['0', [0, 3]], ['1', [at(doc, 'we'), at(doc, 'that')]], ['2', [at(doc, 'table'), at(doc, 'models')]], ['3', [at(doc, 'more'), at(doc, 'page', at(doc, 'more'))]]])
+    expect(anchorUnits(doc, units, { bounds, floating: id => id === 2 }).get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['we', 'have', 'that'])
+  })
+
+  it('the translation moved the display inside the unit\'s words: the table set right after it is not taken (I1 c)', () => {
+    const pages = [
+      pageAt(1, [words('the paragraph before it', 700), words('it holds that', 676), display(652), words('the rest of it', 628), row(['model', 'score', 'cost'], 604), row(['ours', '91', '12'], 592), words('table one results of models', 572), words('more words on the page', 540)]),
+      pageAt(2, [words('another page', 700)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'it holds that the rest of it', trail: 'xy' }, { id: 2, text: 'table one results of models' }, { id: 3, text: 'more words on the page' }, { id: 4, text: 'another page' }]
+    const bounds = new Map<string, [number, number]>([['0', [0, 3]], ['1', [at(doc, 'it', 4), at(doc, 'it', at(doc, 'rest'))]], ['2', [at(doc, 'table'), at(doc, 'models')]], ['3', [at(doc, 'more'), at(doc, 'page', at(doc, 'more'))]], ['4', [at(doc, 'another'), at(doc, 'page', at(doc, 'another'))]]])
+    expect(anchorUnits(doc, units, { bounds, floating: id => id === 2 }).get(1)?.tokens.map(k => doc[k]?.t)).not.toContain('model')
+  })
+
+  it('a tall display three body heights below the text, its words the display\'s own, is still taken (revtex: a bracket is no word)', () => {
+    const pages = [pageAt(1, [words('the paragraph before it', 700), words('it ends with a display', 676), [item('x = y', 150, 642), item('out', 160, 638, { size: 7 }), item('(1)', 290, 642, { eol: true })], words('another paragraph after', 610)]), pageAt(2, [words('more words on the next page', 700)])]
+    const doc = tokenizeDocument(pages)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'it ends with a display', trail: 'xyout sum' }, { id: 2, text: 'another paragraph after' }, { id: 3, text: 'more words on the next page' }]
+    const found = anchorUnits(doc, units, { bounds: new Map([['0', [0, 3]], ['1', [4, 8]], ['2', [at(doc, 'another'), at(doc, 'another') + 2]], ['3', [at(doc, 'more'), at(doc, 'page')]]]) })
+    expect(found.get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['it', 'ends', 'with', 'a', 'display', 'x', 'y', 'out', '1'])
+  })
+
   it('a table set smaller right after the display is not taken with it', () => {
     const pages = [pageAt(1, [words('the paragraph before it', 700), words('it ends with a display', 676), display(652), words('model score cost', 632, 8), words('ours 0.91 12', 623, 8), words('another paragraph after', 596)]), pageAt(2, [words('more words on the next page', 700)])]
     const doc = tokenizeDocument(pages)
-    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'it ends with a display', trail: true as const }, { id: 2, text: 'another paragraph after' }, { id: 3, text: 'more words on the next page' }]
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'it ends with a display', trail: 'xy' }, { id: 2, text: 'another paragraph after' }, { id: 3, text: 'more words on the next page' }]
     const found = anchorUnits(doc, units, { bounds: new Map([['0', [0, 3]], ['1', [4, 8]], ['2', [at(doc, 'another'), at(doc, 'another') + 2]], ['3', [at(doc, 'more'), at(doc, 'page')]]]) })
     expect(found.get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['it', 'ends', 'with', 'a', 'display', 'x', 'y', 'i', '1'])
   })

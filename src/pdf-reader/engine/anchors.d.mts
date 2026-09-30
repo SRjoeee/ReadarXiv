@@ -6,9 +6,9 @@ export interface TextPage { page: number; items: unknown[]; styles?: Record<stri
 export interface Rect { page: number; x0: number; y0: number; x1: number; y1: number }
 /** a unit's place: its line rectangles and the document tokens they are made of */
 export interface Anchor { rects: Rect[]; coverage: number; tokens: number[]; bounded: boolean }
-/** a unit as the reader passes it: its text as that PDF has it, the offsets in it where a placeholder stood, and a
- *  display it sets before its first words or after its last (latex-front's displayOutside) */
-export interface UnitText { id: number; text: string; gaps?: number[]; lead?: true; trail?: true }
+/** a unit as the reader passes it: its text as that PDF has it, the offsets in it where a placeholder stood, and the
+ *  letters of the displays it sets before its first words or after its last (latex-front's displayOutside) */
+export interface UnitText { id: number; text: string; gaps?: number[]; lead?: string; trail?: string }
 
 export declare function tokens(s: string): { t: string; at: number; len: number }[]
 export declare function tokenizeDocument(pages: TextPage[]): DocToken[]

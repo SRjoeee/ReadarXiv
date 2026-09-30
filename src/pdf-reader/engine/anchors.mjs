@@ -351,9 +351,23 @@ function pageFrame(doc, ms) {
 }
 
 /**
+ * Whether a word of the page can be a display's whose letters are `letters` (latex-front's displayLetters): its runs of
+ * three letters or more, Greek set aside, stand in them, and so does a CJK character. A table's row, a listing's line,
+ * a caption's words cannot (the review of A1: normal-size rows were taken where the display was not)
+ */
+const explained = (t, letters) => {
+  if (!t) return true
+  // a CJK character; the range also holds the private-use glyphs of a bracket's pieces, which are no letters
+  if (CJK.test(t)) return !/\p{L}/u.test(t) || letters.includes(t)
+  for (const run of t.replace(/\p{Script=Greek}/gu, ' ').match(/\p{L}{3,}/gu) ?? []) if (!letters.includes(run)) return false
+  return true
+}
+
+/**
  * Takes for unit `u` the words past its edge token `k0` — after it (`dir` 1) or before it (-1) — that are no other
  * unit's: a display beyond its marks. The stream's lines are gathered up to a line another unit's words are on, a new
- * page, a new column (back up the page past the edge's line) or the page's frame (pageFrame); then taken by where they
+ * page, a new column (back up the page past the edge's line), the page's frame (pageFrame) or a line the display's
+ * `letters` do not explain (explained); then taken by where they
  * stand, nearest first: the lines holding a glyph of the unit's body size, the first `first` body heights at most from
  * the edge's line, each next GAP at most from those taken; then the smaller glyphs among them, SMALL at most outside
  * them — a display's limits, scripts and fractions' parts. Further, or smaller and apart, is a float, a footnote, the
@@ -372,7 +386,7 @@ function walker(doc, ms, owner, line) {
   }
   const body = new Float64Array(ms.length)
   const bodyOf = u => { if (!body[u]) { const hs = ms[u].map(k => doc[k].h).sort((x, y) => x - y); body[u] = hs[hs.length >> 1] } return body[u] }
-  function take(u, k0, dir, first) {
+  function take(u, k0, dir, first, letters) {
     const A = doc[k0], h = bodyOf(u), lines = []
     for (let k = k0 + dir, end = false; !end && k >= 0 && k < doc.length;) {
       const l = line[k], ks = []
@@ -381,7 +395,9 @@ function walker(doc, ms, owner, line) {
         if (t.page !== A.page || (owner[k] !== -1 && owner[k] !== u) || (dir > 0 ? t.y > A.y + 0.5 * A.h : t.y < A.y - 0.5 * A.h) || !inFrame(t)) { end = true; break }
         ks.push(k)
       }
-      if (!ks.length || (lineOwner[l] !== -1 && lineOwner[l] !== u)) break
+      // the edge's own line is the unit's: what follows its last word there, and the scripts of its last formula a little
+      // above or below it, need no explaining
+      if (!ks.length || (lineOwner[l] !== -1 && lineOwner[l] !== u) || (letters != null && Math.abs(doc[ks[0]].y - A.y) >= 0.5 * A.h && !ks.every(j => explained(doc[j].t, letters)))) break
       let top = -Infinity, bottom = Infinity, body = false
       for (const j of ks) { const t = doc[j]; top = Math.max(top, t.top); bottom = Math.min(bottom, t.bottom); body ||= t.h >= BODY * h }
       lines.push({ ks, top, bottom, body })
@@ -398,7 +414,7 @@ function walker(doc, ms, owner, line) {
   }
   return {
     take,
-    claim(u, k0, dir, first) { const ks = take(u, k0, dir, first); for (const k of ks) { owner[k] = u; own(k, u) } return ks },
+    claim(u, k0, dir, first, letters) { const ks = take(u, k0, dir, first, letters); for (const k of ks) { owner[k] = u; own(k, u) } return ks },
   }
 }
 
@@ -484,15 +500,15 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
     const m = f.bounded ? [...new Set([f.bounded[0], ...kept, f.bounded[1]])].sort((x, y) => x - y) : kept
     return m.length ? m : null
   })
-  // a display a unit sets before its first words or after its last (latex-front's `lead`, `trail`) stands outside its
-  // marks, which are in running text: it is taken from beyond them — the leading ones first, so that a unit's trailing
-  // walk stops at the display the next unit opens with
+  // a display a unit sets before its first words or after its last (latex-front's `lead`, `trail`: its letters) stands
+  // outside its marks, which are in running text: it is taken from beyond them, the lines its letters explain — the
+  // leading ones first, so that a unit's trailing walk stops at the display the next unit opens with
   const walk = walker(doc, ms, owner, line)
   const beyond = []
   for (const edge of ['lead', 'trail']) {
     units.forEach((unit, u) => {
       const b = found[u]?.bounded
-      if (b && ms[u] && unit[edge]) beyond[u] = (beyond[u] ?? []).concat(walk.claim(u, edge === 'lead' ? b[0] : b[1], edge === 'lead' ? -1 : 1, FIRST))
+      if (b && ms[u] && typeof unit[edge] === 'string') beyond[u] = (beyond[u] ?? []).concat(walk.claim(u, edge === 'lead' ? b[0] : b[1], edge === 'lead' ? -1 : 1, FIRST, unit[edge]))
     })
   }
   const out = new Map()
