@@ -1854,13 +1854,14 @@ async function demo() {
   timing.opened = performance.now() - timing.start
   const t1 = performance.now()
   // the text each unit has on the right: translated in the stages that have it, the original before
-  const textsAt = translated => units.map(u => ({ id: u.i, text: u.i < translated ? u.tr : u.src }))
+  // with the displays beyond each unit's marks (displayEdges), where the demo's units carry their letters
+  const textsAt = translated => units.map(u => ({ id: u.i, text: u.i < translated ? u.tr : u.src, ...displayEdges(u) }))
   // the marks: the translation's own destinations; for arXiv's PDF, those of our compile of the original with the word
   // each follows, so that only the ones that land on the same word are used
   prose = units.map(u => u.src).join('\n')
   unitKind = new Map(units.map(u => [u.i, u.kind]))
   const lMarks = await fetch(`${base}original-marks.json`).then(r => (r.ok ? r.json() : {})).then(o => new Map(Object.entries(o))).catch(() => new Map())
-  const [marksLeft, marksRight] = await Promise.all([anchorSide(left, units.map(u => ({ id: u.i, text: u.src })), lMarks), anchorSide(right, textsAt(stages ? stages[0].translated : Infinity))])
+  const [marksLeft, marksRight] = await Promise.all([anchorSide(left, units.map(u => ({ id: u.i, text: u.src, ...displayEdges(u) })), lMarks), anchorSide(right, textsAt(stages ? stages[0].translated : Infinity))])
   Object.assign(timing, { marksLeft, marksRight })
   // the contents: a demo's units carry no depth, so levels.json holds the source's (made with the demo); its first heading is the title
   const levels = await fetch(`${base}levels.json`).then(r => (r.ok ? r.json() : {})).catch(() => ({}))
