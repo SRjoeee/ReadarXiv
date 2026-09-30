@@ -46,12 +46,14 @@ aside select { margin: 8px 12px }
 </head>
 <body>
 <header><nav id="langs"></nav><span style="flex:1"></span><span id="flags-count"></span><button id="export">Export flags</button><button id="clear">Clear flags</button></header>
-<main><aside><select id="sort"><option value="paper">By paper</option><option value="gain">Most gained first</option><option value="loss">Least gained first</option></select><div id="papers"></div></aside><section id="view"></section></main>
+<main><aside><select id="sort"><option value="paper">By paper</option><option value="gain">Generic ahead of FIT first</option><option value="loss">Generic behind FIT first</option></select><div id="papers"></div></aside><section id="view"></section></main>
 <script type="module">
 const $ = s => document.querySelector(s)
 const state = { catalog: null, lang: null, paper: null, index: null, page: 0, hidden: new Set(), zoom: false }
 const rate = (n, d) => (d ? `${Math.round((100 * n) / d)}%` : '—')
-const gain = e => (e.fit?.units && e.lockh?.units ? e.lockh.samePage / e.lockh.units - e.fit.samePage / e.fit.units : -Infinity)
+const gain = e => (e.fit?.align?.drift?.median != null && e.generic?.align?.drift?.median != null ? e.fit.align.drift.median - e.generic.align.drift.median : -Infinity)
+const drift = x => (x?.align?.drift?.median != null ? x.align.drift.median.toFixed(2) : '—')
+const sized = x => (x?.align?.size?.within != null ? `${Math.round(100 * x.align.size.within)}%` : '—')
 const flags = () => { try { return JSON.parse(localStorage.getItem('axt-eval-flags') ?? '[]') } catch { return [] } }
 const saveFlags = f => { try { localStorage.setItem('axt-eval-flags', JSON.stringify(f)) } catch {} ; $('#flags-count').textContent = `${f.length} flagged`; $('#clear').disabled = !f.length }
 const base = () => `data/${state.lang}/${state.paper}`
@@ -70,7 +72,7 @@ function renderPapers() {
   $('#papers').replaceChildren(...list.map(e => {
     const d = document.createElement('div'); d.className = `paper${e.paper === state.paper ? ' on' : ''}`
     const pages = state.catalog.columns.filter(c => Object.hasOwn(e.pages, c.key)).map(c => `${c.label} ${e.pages[c.key] ?? '×'}`).join(' · ')
-    d.innerHTML = `<b>${e.paper}</b><small>${e.cls}</small><small>pages ${pages}</small><small>units on their page: FIT ${rate(e.fit?.samePage, e.fit?.units)} · H rules ${rate(e.lockh?.samePage, e.lockh?.units)}</small><small>captions: FIT ${e.fit?.captionsSamePage ?? '—'}/${e.fit?.captions ?? '—'} · H rules ${e.lockh?.captionsSamePage ?? '—'}/${e.lockh?.captions ?? '—'}</small>`
+    d.innerHTML = `<b>${e.paper}</b><small>${e.cls}</small><small>pages ${pages}</small><small>units on their page: FIT ${rate(e.fit?.samePage, e.fit?.units)} · Generic ${rate(e.generic?.samePage, e.generic?.units)} · H rules ${rate(e.lockh?.samePage, e.lockh?.units)}</small><small>drift, median columns: FIT ${drift(e.fit)} · Generic ${drift(e.generic)} · H rules ${drift(e.lockh)}</small><small>blocks within 15 %: FIT ${sized(e.fit)} · Generic ${sized(e.generic)} · H rules ${sized(e.lockh)}</small>`
     d.onclick = () => openPaper(e.paper)
     return d
   }))

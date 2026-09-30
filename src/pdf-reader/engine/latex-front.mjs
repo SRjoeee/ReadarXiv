@@ -811,7 +811,9 @@ export const EVEN_SPACES = '\\makeatletter\\@ifpackageloaded{microtype}{}{\\usep
  *  inside a threeparttable, which takes its tabular over to measure it: Springer Nature's class sets every table in
  *  one, and a box around the tabular left its environments unclosed (2608.02991: "Missing \endgroup inserted", 164
  *  errors). With \axtfitheighttrue (the geometry lock, which keeps every block in its original's box, as service H
- *  does) the translation is set no taller than the original either. Goes first in the main file */
+ *  does, and the generic type) the translation is set no taller than the original either, and with \axt@fitmin never
+ *  below that share of its own width: long German cells capped at a short original's height went to a sixth of their
+ *  width. Goes first in the main file */
 /** \axtbalance, at the start of a translated title: its lines of about the same length. A skip that stretches without
  *  limit (\centering, \raggedright) lets TeX fill every line but the last and leave that one short; the same skips with
  *  a finite stretch (the page's width in all, halved when both sides stretch) and no \parfillskip make a short line
@@ -819,12 +821,12 @@ export const EVEN_SPACES = '\\makeatletter\\@ifpackageloaded{microtype}{}{\\usep
  *  text is set again in the table of contents, where \parfillskip draws the dotted line */
 export const BALANCE_DEF = String.raw`\protected\def\axtbalance{\ifnum\gluestretchorder\rightskip>0 \ifnum\gluestretchorder\leftskip>0 \leftskip=0pt plus .5\hsize\rightskip=0pt plus .5\hsize\else\rightskip=0pt plus \hsize\fi\parfillskip=0pt\relax\fi}
 `
-export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newdimen\axt@fitwd\newdimen\axt@fitht\newdimen\axt@fittot\newif\ifaxtfitheight\def\axt@tpt{threeparttable}
+export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newdimen\axt@fitwd\newdimen\axt@fitht\newdimen\axt@fittot\newif\ifaxtfitheight\def\axt@tpt{threeparttable}\def\axt@fitmin{0}
 \long\def\axtfit#1#2{\ifx\@currenvir\axt@tpt\expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi{#1}{\axt@fit{#1}{#2}}}
 \def\axt@counters{\begingroup\def\@elt##1{\global\csname c@##1\endcsname\the\csname c@##1\endcsname\relax}\xdef\axt@countersback{\cl@@ckpt}\endgroup}
 \long\def\axt@fit#1#2{\axt@counters\sbox\axt@fitbox{#2}\axt@countersback\axt@fitwd=\wd\axt@fitbox\ifdim\axt@fitwd<\linewidth\axt@fitwd=\linewidth\fi
   \axt@fitht=\dimexpr\ht\axt@fitbox+\dp\axt@fitbox\relax\sbox\axt@fitbox{#1}\axt@fittot=\dimexpr\ht\axt@fitbox+\dp\axt@fitbox\relax
-  \ifaxtfitheight\ifdim\axt@fitht>\z@\ifdim\axt@fittot>\axt@fitht\axt@fittot=\dimexpr\wd\axt@fitbox*\axt@fitht/\axt@fittot\relax\ifdim\axt@fittot<\axt@fitwd\axt@fitwd=\axt@fittot\fi\fi\fi\fi
+  \ifaxtfitheight\ifdim\axt@fitht>\z@\ifdim\axt@fittot>\axt@fitht\axt@fittot=\dimexpr\wd\axt@fitbox*\axt@fitht/\axt@fittot\relax\ifdim\axt@fittot<\axt@fitmin\wd\axt@fitbox\axt@fittot=\axt@fitmin\wd\axt@fitbox\fi\ifdim\axt@fittot<\axt@fitwd\axt@fitwd=\axt@fittot\fi\fi\fi\fi
   \ifdim\wd\axt@fitbox>\axt@fitwd\ifdefined\resizebox\resizebox{\axt@fitwd}{!}{\usebox\axt@fitbox}\else\usebox\axt@fitbox\fi\else\usebox\axt@fitbox\fi}
 \makeatother
 `

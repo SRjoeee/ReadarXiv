@@ -78,6 +78,8 @@ export const LINES_TEX = PARA_END_TEX + String.raw`\makeatletter
 export const unitLeadTex = em => engineUnitLeadTex(`${em}\\dimexpr\\f@size pt\\relax`)
 
 /**
+ * \\axtsizein{<unit>}: a translated table cell, heading or figure text at the same factor, a declaration that its own group —
+ * the cell, the heading's — ends, and nothing in a PDF bookmark (plans/2026-09-30-generic-type.md, step 3).
  * A unit set smaller: \\axtsize@<unit>, when defined, scales the font size (and so the unit's leading, which is × the
  * size) at the unit's start, the size before it back once the unit's own paragraph is over (PARA_END_TEX), at every
  * level between when that paragraph ended in a deeper group (a list opened right after the unit — else the list's own
@@ -92,6 +94,8 @@ export const SIZE_TEX = PARA_END_TEX + String.raw`\makeatletter
   \edef\axt@tmp{\noexpand\axt@whenover{size#1}{\noexpand\fontsize{\axt@szsaved}{\axt@szsavedb}\noexpand\selectfont}{\noexpand\fontsize{\axt@szsaved}{\axt@szsavedb}\noexpand\selectfont}{\noexpand\fontsize{\axt@szsaved}{\axt@szsavedb}\noexpand\selectfont}}\axt@tmp
   \fontsize{\fpeval{\csname axtsize@#1\endcsname*\axt@szsaved}}{\fpeval{\csname axtsize@#1\endcsname*\strip@pt\dimexpr\axt@szsavedb\relax}pt}\selectfont\xdef\axt@szlast{\f@size}\fi\fi}
 \protected\def\axtsize#1{\ifhmode\ifinner\else\axt@size{#1}\fi\else\axt@size{#1}\fi}
+\protected\def\axtsizein#1{\ifcsname axtsize@#1\endcsname\fontsize{\fpeval{\csname axtsize@#1\endcsname*\f@size}}{\fpeval{\csname axtsize@#1\endcsname*\strip@pt\dimexpr\f@baselineskip\relax}pt}\selectfont\fi}
+\AtBeginDocument{\ifdefined\pdfstringdefDisableCommands\pdfstringdefDisableCommands{\def\axtsizein#1{}}\fi}
 \makeatother
 `
 
@@ -189,10 +193,14 @@ export function originalProbeFiles({ project, units }, theorems) {
  *  unit at the leading `leads` gives it, × its size (fitLeads). `h`: service H's rules (SYNC_TEX), with `columns` the
  *  original's column heights (readColumns) and float heights (readFloats), and tables held to their original's height
  *  too (FIT_DEF) */
-export function lockedFiles({ fsys, meta, project, units }, translated, { strategy, fonts, em, leads = new Map(), sizes = new Map(), targets = new Map(), theorems, sync = true, lead = null, h = false, columns = new Map(), floats = new Map() }) {
+export function lockedFiles({ fsys, meta, project, units }, translated, { strategy, fonts, em, leads = new Map(), sizes = new Map(), targets = new Map(), theorems, sync = true, lead = null, h = false, columns = new Map(), floats = new Map(), fitHeight = false, fitMin = 0 }) {
   const index = new Map(units.map((u, i) => [u, i]))
   const base = markUnits(units)
-  const mark = u => { const m = base(u); if (!m) return m; const i = index.get(u); return { ...m, before: `${sync ? `\\axtsync{${i}}` : ''}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}` } }
+  // a unit with no mark — a table cell, a heading, a figure's text — takes its size, when it has one, as a declaration
+  // before its first word, inside its own group (\\axtsizein): after whatever opens it, a row's \\toprule among them,
+  // which is \\noalign and must follow the row's end (2608.06701), so that every role of the translation has one type
+  const ROLES = new Set(['cell', 'heading', 'figure'])
+  const mark = u => { const m = base(u), i = index.get(u); if (!m) return sizes.has(i) && ROLES.has(u.kind) && !u.front ? { start: `\\axtsizein{${i}}`, end: '' } : m; return { ...m, before: `${sync ? `\\axtsync{${i}}` : ''}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}` } }
   const files = patch(project, new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, lineBreaks(u, pieces)])), { mark })
   let main = latin1(files.get(project.main))
   const at = main.search(/\\begin\s*\{document\}/)
@@ -203,6 +211,8 @@ export function lockedFiles({ fsys, meta, project, units }, translated, { strate
     ...[...targets].map(([i, t]) => `\\expandafter\\def\\csname axt@t@${i}\\endcsname{{${t.page}}{${t.col}}{${t.total}pt}}`),
     ...[...leads].map(([i, f]) => `\\expandafter\\def\\csname axtlead@${i}\\endcsname{${f.toFixed(4)}}`),
     ...[...sizes].map(([i, f]) => `\\expandafter\\def\\csname axtsize@${i}\\endcsname{${f.toFixed(4)}}`),
+    // a table no taller than its original, never below fitMin of its width (FIT_DEF): the generic type's rule for tables
+    ...(fitHeight && !h ? ['\\axtfitheighttrue', `\\expandafter\\def\\csname axt@fitmin\\endcsname{${fitMin}}`] : []),
     ...(h ? ['\\csname axt@htrue\\endcsname\\axtfitheighttrue\\axtfirstpapertrue', ...[...columns].map(([k, v]) => `\\expandafter\\def\\csname axt@c@${k}\\endcsname{${v}pt}`), ...[...floats].map(([k, v]) => `\\expandafter\\def\\csname axt@fh@${k}\\endcsname{${v}pt}`)] : []),
   ].join('\n')
   main = MARK_DEF + FIT_DEF + BALANCE_DEF + LINES_TEX + (sync ? SYNC_TEX : '') + (lead ? engineUnitLeadTex(lead) : unitLeadTex(em)) + (sizes.size ? SIZE_TEX : '') + (sync ? `\\axtsyncpoints{${theorems.join(',')}}\n` : '') + table + '\n' + main
@@ -242,11 +252,11 @@ export async function marksOf(file) {
   const dests = await pdf.getDestinations()
   const marks = new Map()
   for (const [name, d] of dests instanceof Map ? dests : Object.entries(dests)) if (/^axt-\d+[se]$/.test(name) && d) marks.set(name.slice(4), { page: await pdf.getPageIndex(d[0]), x: d[2], y: d[3] })
-  const [x0, , x1] = (await pdf.getPage(1)).view
-  const width = x1 - x0, pages = pdf.numPages
+  const [x0, y0, x1, y1] = (await pdf.getPage(1)).view
+  const width = x1 - x0, height = y1 - y0, pages = pdf.numPages
   await task.destroy()
   const starts = [...marks].filter(([k]) => k.endsWith('s'))
-  return { pages, width, twoColumn: starts.length > 0 && starts.filter(([, s]) => s.x >= width / 2).length >= 0.2 * starts.length, marks }
+  return { pages, width, height, twoColumn: starts.length > 0 && starts.filter(([, s]) => s.x >= width / 2).length >= 0.2 * starts.length, marks }
 }
 
 const DISPLAY = /^(\$\$|\\\[|\\begin\s*\{(equation|align|gather|multline|eqnarray|displaymath|flalign|alignat|dmath))/

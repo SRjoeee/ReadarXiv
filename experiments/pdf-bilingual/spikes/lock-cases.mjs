@@ -7,8 +7,10 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { FIT_DEF, MARK_DEF, NO_OVERFLOW } from '../../../src/pdf-reader/engine/latex-front.mjs'
-import { cjkType, fitLeads, heights, LINES_TEX, marksOf, readColumns, readFloats, readLines, readLockEvents, readTargets, shrinkSizes, SIZE_TEX, SYNC_TEX, tightenedLeads, unitLeadTex } from './lock.mjs'
+import { FIT_DEF, latin1Bytes, MARK_DEF, NO_OVERFLOW } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { openPaper } from '../../../src/pdf-reader/engine/live.mjs'
+import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
+import { cjkType, fitLeads, heights, LINES_TEX, lockedFiles, marksOf, readColumns, readFloats, readLines, readLockEvents, readTargets, shrinkSizes, SIZE_TEX, SYNC_TEX, tightenedLeads, unitLeadTex } from './lock.mjs'
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
@@ -177,5 +179,58 @@ const pad = k => padLog.match(new RegExp(`^PAD ${k} (\\S+)(?: (\\S+))?`, 'm'))
 check('H: padding on a column with content is glue', parseFloat(pad('glue')?.[1]) > 40, pad('glue')?.[0])
 check('H: a column ended early filled to its height, and the next unit\'s padding at its top kept', /AXT-BREAK 0/.test(padLog) && pad('top')?.[1] === '0.0pt', pad('top')?.[0])
 check('H: no TeX error', !/^! /m.test(padLog), (padLog.match(/^! .*/m) ?? [''])[0])
+// every role at the same type (plans/2026-09-30-generic-type.md, step 3): a translated table cell, heading or figure text
+// set at the unit's size inside its own group — the cell, the heading — and the paper's size after it; a PDF bookmark
+// keeps the heading's text alone
+const rolesDoc = `${SIZE_TEX}\\makeatletter\\expandafter\\def\\csname axtsize@0\\endcsname{0.5}\\expandafter\\def\\csname axtsize@1\\endcsname{0.5}\\makeatother
+\\documentclass{article}\\usepackage{hyperref}\\begin{document}\\makeatletter
+\\section{\\axtsizein{0}\\texorpdfstring{\\message{^^JROLE-SIZE head \\f@size^^J}}{}Heading}\\message{^^JROLE-SIZE after-head \\f@size^^J}
+\\begin{tabular}{l}\\axtsizein{1}\\message{^^JROLE-SIZE cell \\f@size^^J}Cell\\\\ Next\\message{^^JROLE-SIZE next-cell \\f@size^^J}\\end{tabular}\\message{^^JROLE-SIZE after-table \\f@size^^J}
+\\makeatother\\end{document}\n`
+const rolesLog = tex('roles', rolesDoc) + tex('roles', rolesDoc)
+const roleSizes = [...rolesLog.matchAll(/^ROLE-SIZE (\S+) ([\d.]+)/gm)].reduce((m, x) => m.set(x[1], Number(x[2])), new Map())
+check('a translated role at its unit\'s size, inside its group only', roleSizes.get('head') === 7.2 && roleSizes.get('after-head') === 10 && roleSizes.get('cell') === 5 && roleSizes.get('next-cell') === 10 && roleSizes.get('after-table') === 10, JSON.stringify([...roleSizes]))
+// the bookmark as hyperref writes it (UTF-16, each character an escaped pair): a leaked {0} would read 0Heading
+const bookmark = readFileSync(join(dir, 'roles.out'), 'latin1').replace(/\\000/g, '')
+check('a sized heading raises no TeX error and keeps its bookmark text', !/^! /m.test(rolesLog) && !/Token not allowed in a PDF string/.test(rolesLog) && /\{(\\376\\377)?Heading\}/.test(bookmark), bookmark)
+// the same through the pipeline: a paper with a booktabs table and a heading, every unit translated and sized, through
+// lockedFiles and patch — a table cell's size goes after its row's rules (\toprule is \noalign, which must follow the
+// row's end: before it, 2608.06701 stopped at "Misplaced \noalign")
+const tablePaper = openPaper(new Map([['main.tex', latin1Bytes(String.raw`\documentclass{article}
+\usepackage{booktabs}
+\begin{document}
+\section{A heading of the paper}
+Some body text long enough to be a paragraph of the paper, with a second sentence after it.
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+Name & Value \\
+\midrule
+First row & one \\
+\bottomrule
+\end{tabular}
+\caption{A caption for the table.}
+\end{table}
+\end{document}
+`)]]))
+const upper = new Map(tablePaper.units.map(u => [u, u.pieces.map(q => (q.t === 'text' ? { ...q, tr: true, s: q.s.toUpperCase() } : q))]))
+const tableFiles = lockedFiles(tablePaper, upper, { strategy: strategiesFor(tablePaper.meta, 'de')[0], fonts: null, em: 1.05, theorems: [], sync: false, lead: '\\baselineskip', sizes: new Map(tablePaper.units.map((u, i) => [i, 0.8])) })
+writeFileSync(join(dir, 'table.tex'), tableFiles.get('main.tex'))
+const tableLog = tex('table', readFileSync(join(dir, 'table.tex'), 'latin1'))
+check('sized cells, heading and caption through the pipeline: no TeX error', !/^! /m.test(tableLog) && tablePaper.units.some(u => u.kind === 'cell'), (tableLog.match(/^! .*/m) ?? [''])[0])
+check('the sized roles are marked in the source', (readFileSync(join(dir, 'table.tex'), 'latin1').match(/\\axtsizein\{/g) ?? []).length >= 4)
+// a table no taller than its original (the generic type, step 3): \axtfit with \axtfitheighttrue scales a translation
+// that wraps to more lines down to the original's height — and with \axt@fitmin, never below that share of its width
+const fitDoc = min => `${FIT_DEF}\\documentclass{article}\\usepackage{graphicx}\\begin{document}\\makeatletter\\axtfitheighttrue${min ? `\\def\\axt@fitmin{${min}}` : ''}
+\\setbox0\\hbox{\\begin{tabular}{p{4cm}}Short text\\end{tabular}}\\message{^^JFIT orig \\the\\dimexpr\\ht0+\\dp0\\relax^^J}
+\\setbox2\\hbox{\\begin{tabular}{p{4cm}}${'Long translated text '.repeat(6)}\\end{tabular}}\\message{^^JFIT natural \\the\\dimexpr\\ht2+\\dp2\\relax\\space\\the\\wd2^^J}
+\\setbox4\\hbox{\\axtfit{\\begin{tabular}{p{4cm}}${'Long translated text '.repeat(6)}\\end{tabular}}{\\begin{tabular}{p{4cm}}Short text\\end{tabular}}}\\message{^^JFIT fitted \\the\\dimexpr\\ht4+\\dp4\\relax\\space\\the\\wd4^^J}
+\\makeatother\\end{document}\n`
+const fitRead = log => Object.fromEntries([...log.matchAll(/^FIT (\w+) ([\d.]+)pt(?: ([\d.]+)pt)?/gm)].map(m => [m[1], { h: Number(m[2]), w: Number(m[3] ?? 0) }]))
+const capped = fitRead(tex('fitcap', fitDoc(0)))
+check('a table that grew is set no taller than its original', capped.fitted.h <= capped.orig.h + 0.5 && capped.natural.h > capped.orig.h * 2, JSON.stringify(capped))
+const floored = fitRead(tex('fitmin', fitDoc(0.9)))
+check('never below the floor\'s share of its width', floored.fitted.w >= 0.9 * floored.natural.w - 0.5 && floored.fitted.h > floored.orig.h, JSON.stringify(floored))
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

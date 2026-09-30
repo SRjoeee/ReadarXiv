@@ -4,6 +4,7 @@
 // compiled natively in Docker, every page rendered, the checks, and the paper's index; then the catalog.
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>...   generate
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --reindex   render and index existing PDFs
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --generic   add the generic column to generated papers
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs --catalog
 import { execFile, execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -11,12 +12,15 @@ import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
 import { keptFor, openPaper, probeFiles } from '../../../src/pdf-reader/engine/live.mjs'
-import { latin1, readFontProbe } from '../../../src/pdf-reader/engine/latex-front.mjs'
+import { latin1, latin1Bytes, markUnits, readFontProbe } from '../../../src/pdf-reader/engine/latex-front.mjs'
 import { scriptOf, strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
 import { translateTexts, translateUnits } from '../../../src/pdf-reader/engine/mt.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
 import { cjkType, compare, fitLeads, heights, lockedFiles, withCjkType, marksOf, originalProbeFiles, readColumns, readFloats, readLines, readLockEvents, readTargets, shrinkSizes, theoremEnvs } from './lock.mjs'
 import { catalogEntry, COLUMNS, FIT, H_RULES, overfullCount, PARAMS, suspiciousPages } from './visual-eval-lib.mjs'
+import { citeStyleOf, measureUnits, readWidthProbe, WIDTH_PROBE } from './density.mjs'
+import { DESIGN, solveType } from './generic-type.mjs'
+import { alignment, uniformity } from './alignment.mjs'
 
 const run = promisify(execFile)
 /** a unit as its translation is cached: its kind and its source, pieces by kind and text, pair ids aside */
@@ -27,6 +31,57 @@ const root = new URL('..', import.meta.url).pathname
 const OUT = join(root, 'data/runs/visual-eval')
 const argv = process.argv.slice(2)
 const firstError = log => (log.match(/^(?:\S+:\d+: .*|! .*)$/m)?.[0] ?? 'no PDF').slice(0, 200)
+/** a compile directory's main log and PDF, by the main file's name: a source tree holds figures as PDFs too, and the
+ *  first PDF in the directory was one of them (2608.02785, 2608.06233: no marks, no numbers) */
+const stemOf = paper => paper.project.main.split('/').pop().replace(/\.[^./]+$/, '')
+const logIn = (d, stem) => { const f = join(d, `${stem}.log`); return existsSync(f) ? readFileSync(f, 'latin1') : '' }
+const pdfIn = (d, stem) => { const f = join(d, `${stem}.pdf`); return existsSync(f) ? f : null }
+
+/** the generic type for a translation (plans/2026-09-30-generic-type.md): its units measured against the original's
+ *  lines (density.mjs), one type solved for the whole (generic-type.mjs), and how long that took — what the reader
+ *  would spend on it, the paper's sources already in memory */
+function genericType({ paper, files, translated, lang, fonts, probe = null, oLog }) {
+  const t0 = performance.now()
+  const { units } = paper, script = scriptOf(lang)
+  const sources = [...files].filter(([f]) => /\.(tex|sty|cls)$/i.test(f)).map(([, b]) => latin1(b)).join('\n')
+  const bbl = [...files].filter(([f]) => /\.bbl$/i.test(f)).map(([, b]) => latin1(b)).join('\n')
+  const byIndex = new Map(units.map((u, i) => [i, translated.get(u)]).filter(([, pieces]) => pieces))
+  const measured = measureUnits({ units, translated: byIndex, lines: readLines(oLog), fonts, probe, citeStyle: citeStyleOf(sources, bbl), script })
+  const type = solveType(measured, script)
+  return { type, script, units: measured.length, ms: performance.now() - t0 }
+}
+/** lockedFiles options for a generic type: CJK through the strategy's CJK face and glue (withCjkType), which reach every
+ *  role, the leading × the paper's; an alphabet's translated text at the size, then at the leading × the paper's */
+function genericOpts({ type, script }, { strategy, fonts, em, theorems, paper, translated }) {
+  const lead = `${type.lead.toFixed(4)}\\baselineskip`
+  // a table: no taller than its original, never below 0.85 of its width — a block's rule, the same for every script
+  const table = { fitHeight: true, fitMin: 0.85 }
+  if (DESIGN[script].cjk) return { strategy: withCjkType(strategy, type), fonts, em, theorems, sync: false, lead, ...table }
+  // the size compensates text that flows: paragraphs, captions and notes through their marks, a figure's text (a boxed
+  // passage) through lock.mjs's in-group declaration. A line that does not flow — a table cell, a heading — is as tall
+  // as its type whatever its length: set smaller it came out shorter than the original's, and on 2608.06701 the tables
+  // pulled the pages after them a third of a column ahead (step 3). The author block keeps the class's
+  const marked = markUnits(paper.units), index = new Map(paper.units.map((u, i) => [u, i])), sizes = new Map()
+  for (const u of translated.keys()) if (marked(u) || (u.kind === 'figure' && !u.front)) sizes.set(index.get(u), type.size)
+  return { strategy, fonts, em, theorems, sync: false, lead, sizes, ...table }
+}
+/** the reader's font probe with the width probe in its body (density.mjs WIDTH_PROBE): the families and the body face's scale */
+function widthProbeFiles(paper) {
+  const files = probeFiles(paper), main = latin1(files.get(paper.project.main))
+  files.set(paper.project.main, latin1Bytes(main.replace('\\begin{document}\\end{document}', `\\begin{document}${WIDTH_PROBE}\\end{document}`)))
+  return files
+}
+/** a compile's numbers against the original: compare's, and the owner's terms (alignment.mjs) without their raw lists */
+async function numbersFor(units, orig, om, pdf, log, extra = {}) {
+  const tm = await marksOf(pdf), a = alignment(om, tm)
+  return { ...compare(units, orig, tm), offPage: undefined, align: { pages: a.pages, matched: a.matched, missing: a.missing, drift: { ...a.drift, values: undefined }, size: { ...a.size, values: undefined } }, uniformity: uniformity(readLines(log), units), ...extra }
+}
+/** the last of a column's compiles, the one whose PDF the column shows (fit-3, else fit-2, ...) */
+const finalOf = (work, prefix, shown, stem) => {
+  const want = existsSync(shown) ? readFileSync(shown) : null
+  for (let n = 6; n >= 1; n--) { const pdf = pdfIn(join(work, `${prefix}-${n}`), stem); if (pdf && want && readFileSync(pdf).equals(want)) return join(work, `${prefix}-${n}`) }
+  return null
+}
 
 async function compile(work, name, paper, files, overrides, { engine, rerun }) {
   const dir = join(work, name)
@@ -100,7 +155,8 @@ async function generate(lang, id) {
   note('translated', JSON.stringify(base.translation))
 
   // 2. fonts and the original with probes: the target shared by FIT and the H-rule lock
-  const fonts = readFontProbe((await compile(work, 'probe', paper, files, probeFiles(paper), { engine: meta.compiler, rerun: false })).log)
+  const probed = await compile(work, 'probe', paper, files, widthProbeFiles(paper), { engine: meta.compiler, rerun: false })
+  const fonts = readFontProbe(probed.log), widthProbe = readWidthProbe(probed.log)
   const strategy = strategiesFor(meta, lang)[0]
   const theorems = theoremEnvs(files)
   const o = await compile(work, 'original', paper, files, originalProbeFiles(paper, theorems), { engine: meta.compiler, rerun: true })
@@ -175,6 +231,16 @@ async function generate(lang, id) {
   if (lockh) copyFileSync(lockh.pdf, join(dir, 'lockh.pdf'))
   note('lockh', !!lockh, 'smaller', sizes.size)
 
+  // 2d. The generic type (plans/2026-09-30-generic-type.md): one set of type for the whole translation, found from its
+  // predicted lines against the original's — no trial, one compile
+  let generic = null
+  const g = genericType({ paper, files, translated, lang, fonts, probe: widthProbe, oLog: o.log })
+  {
+    const r = await compile(work, 'generic', paper, files, lockedFiles(paper, translated, genericOpts(g, { strategy, fonts, em, theorems, paper, translated })), { engine: strategy.engine, rerun: true })
+    if (r.ok) { generic = r; copyFileSync(r.pdf, join(dir, 'generic.pdf')) } else base.failed.generic = firstError(r.log)
+  }
+  note('generic', !!generic, JSON.stringify(g.type), `${g.ms.toFixed(1)} ms`)
+
   // 3. numbers and checks
   if (fit) base.numbers.fit = { ...compare(units, orig, await marksOf(fit.pdf)), offPage: undefined, g: fit.g, held: fit.held, size: fit.size, ...(fit.type ? { type: fit.type } : {}) }
   if (lockh) base.numbers.lockh = { ...compare(units, orig, await marksOf(lockh.pdf)), offPage: undefined, smaller: sizes.size }
@@ -186,9 +252,45 @@ async function generate(lang, id) {
       suspicious: key === 'lockh' ? suspiciousPages({ events: readLockEvents(result.log), leads: new Map(), min: em, lockedMarks: marks, lockedCompare: compare(units, orig, marks) }) : [],
     }
   }
+  if (generic) base.numbers.generic = await numbersFor(units, orig, om, generic.pdf, generic.log, { type: g.type, predicted: g.type.ratio, solveMs: g.ms, measured: g.units })
+  for (const [key, result] of [['fit', fit], ['lockh', lockh]]) if (result) Object.assign(base.numbers[key], await numbersFor(units, orig, om, result.pdf, result.log))
   const index = await writeIndex(dir, base)
   note('done', JSON.stringify({ fit: index.numbers.fit?.samePage, lockh: index.numbers.lockh?.samePage, units: index.numbers.fit?.units }))
   return index
+}
+
+/** the generic column alone, for a paper generated before it: the cached translation, the probe's fonts and the marked
+ *  original already in its work directory, one compile; then its numbers, the owner's terms for FIT and the H-rule
+ *  lock from their own compiles, and the index again */
+async function addGeneric(lang, id) {
+  const dir = join(OUT, lang, id), work = join(dir, 'work')
+  const t0 = Date.now(), note = (...a) => console.log(`[${lang} ${id} ${Math.round((Date.now() - t0) / 1000)}s]`, ...a)
+  const index = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'))
+  const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
+  const paper = openPaper(files), { units, meta } = paper
+  const byKey = new Map((existsSync(join(dir, 'translation.json')) ? JSON.parse(readFileSync(join(dir, 'translation.json'), 'utf8')).entries : []).map(e => [e.key, e.pieces]))
+  const kept = keptFor(paper, lang), translated = new Map()
+  for (const u of units) { if (kept.has(u)) continue; const hit = byKey.get(unitKey(u)); if (hit) translated.set(u, rebind(u, hit)) }
+  const stem = stemOf(paper), fonts = readFontProbe(logIn(join(work, 'probe'), stem)), oLog = logIn(join(work, 'original'), stem), oPdf = pdfIn(join(work, 'original'), stem)
+  const probe = readWidthProbe(logIn(join(work, 'width'), stem))
+  if (!oLog || !oPdf) { note('no marked original in', work); return }
+  const strategy = strategiesFor(meta, lang)[0], theorems = theoremEnvs(files), { em } = PARAMS[lang]
+  const g = genericType({ paper, files, translated, lang, fonts, probe, oLog })
+  const r = await compile(work, 'generic', paper, files, lockedFiles(paper, translated, genericOpts(g, { strategy, fonts, em, theorems, paper, translated })), { engine: strategy.engine, rerun: true })
+  index.failed ??= {}; index.numbers ??= {}
+  delete index.failed.generic
+  if (r.ok) copyFileSync(r.pdf, join(dir, 'generic.pdf')); else { index.failed.generic = firstError(r.log); rmSync(join(dir, 'generic.pdf'), { force: true }); delete index.numbers.generic }
+  const om = await marksOf(oPdf), orig = heights(units, om, readLines(oLog))
+  if (r.ok) index.numbers.generic = await numbersFor(units, orig, om, r.pdf, r.log, { type: g.type, predicted: g.type.ratio, solveMs: g.ms, measured: g.units })
+  // FIT and the H-rule lock in the same terms, from the PDFs the page shows; their uniformity from the compile that made
+  // them, when it is still in the work directory
+  for (const key of ['fit', 'lockh']) {
+    if (!index.numbers[key] || !existsSync(join(dir, `${key}.pdf`))) continue
+    const last = finalOf(work, key, join(dir, `${key}.pdf`), stem)
+    Object.assign(index.numbers[key], await numbersFor(units, orig, om, join(dir, `${key}.pdf`), last ? logIn(last, stem) : ''))
+  }
+  await writeIndex(dir, index)
+  note('generic', r.ok, JSON.stringify(g.type), `solve ${g.ms.toFixed(1)} ms`, JSON.stringify({ fit: index.numbers.fit?.align?.drift?.median, generic: index.numbers.generic?.align?.drift?.median }))
 }
 
 /** the page lists the round's papers alone when round.json names them ({ lang: [paper] }): a few at a time, the owner
@@ -208,9 +310,10 @@ function catalog() {
 if (argv.includes('--catalog')) catalog()
 else {
   const [lang, ...ids] = argv.filter(a => !a.startsWith('--'))
-  if (!PARAMS[lang] || !ids.length) { console.error('usage: visual-eval.mjs <lang> <paper>... [--reindex] | --catalog'); process.exit(2) }
+  if (!PARAMS[lang] || !ids.length) { console.error('usage: visual-eval.mjs <lang> <paper>... [--reindex | --generic] | --catalog'); process.exit(2) }
   for (const id of ids) {
     if (argv.includes('--reindex')) { const dir = join(OUT, lang, id); await writeIndex(dir, JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'))) }
+    else if (argv.includes('--generic')) await addGeneric(lang, id).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
     else await generate(lang, id).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
   }
   catalog()
