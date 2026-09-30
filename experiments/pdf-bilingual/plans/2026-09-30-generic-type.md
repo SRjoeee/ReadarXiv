@@ -135,3 +135,44 @@ Errors are leave-one-paper-out. The text predictor was crude (every non-CJK char
     ceiling (Chinese at 1.45), per-block leading can only move one way and shortens or lengthens the whole: the
     take-back (`horizon`) limits it, and zh 2608.21180 at 1.448 still came out 0.17 column ahead with each block.
     Next: the type solved with the leading's working point clear of its ends, the other knobs taking up the rest.
+- 2026-09-30, the owner chose Flow and set the target: the original, not FIT. Asked for: the figures and tables on the
+  pages the original has them on, within LaTeX's own rules; three overflows in Japanese fixed.
+  - The overflows, each in a box that does not wrap (latex-front.mjs, PIPELINE_VERSION 4): a table narrower than its
+    original keeps the original's width, so that the paper's own scaling (adjustbox's max width, a \resizebox) scales
+    both alike (2608.15761's Table 9 had escaped its original's 0.95 and stood 5.6 % larger); a tabular* is measured at
+    its columns' width and scaled back to the width it had (2608.05876's Table 1 ran 38 pt into the next column); a
+    line of names wider than the line in a table's cell (IEEEtran's and article's author blocks) is set as a centred
+    paragraph of the line's width (2608.06701's Japanese names ran 126 pt past the page). IEEEtran's blocks of names
+    and of places are units of their own, and an e-mail address, or a list of names in braces before its domain, a
+    placeholder: a machine translation had spelled one of 06701's names in katakana.
+  - Floats held (lock.mjs FLOAT_TEX): a caption notes for its float the page and column the original set it on; the
+    float is reported as not fitting, wherever LaTeX places floats, until then. Alone it moved floats from 94 % to 95 %
+    on their original's page and pages did not follow: a held float leaves its room to the text, which runs on. (That
+    round had a fault: IEEEtran, revtex, llncs and amsart define \@floatboxreset anew, and the note was taken through
+    it; now through \@currbox, which every float's group has.)
+  - The drift the preview measured (flowLeads `measured`, alignment.mjs drifts): the final setting corrects where each
+    unit actually started in the preview — pages, floats and forced breaks and all — carried forward by what it changes.
+    After a \clearpage, where the preview stands level again, a lead ahead is built again before the next thing that
+    cannot break. 2608.06233 (German) with a lead of two lines and floats held: pages +1 → 0, drift median 0.198 →
+    0.015 column (FIT 0.012), 90 % of units within 0.1 column, 95 % of blocks within ±15 %.
+  - The leading's room: with the take-back, Flow at a floor or ceiling did as well as one type or better (Japanese
+    2608.15761: 0.165 → 0.027, pages −1 → 0) except Korean 2608.18090 (a page more). A working point clear of the ends
+    is left for now: one paper, and it would move Japanese and Korean type the owner has not asked to change.
+  - The measure, taken everywhere, also carried the preview's noise into the final — a paragraph that went whole to the
+    next page, a column ended early: 2212.06817 measured 30 pt behind the heights' account at the median and ran 0.12
+    page ahead; a lead of two lines everywhere cost every unit its lines of drift (2608.21180, Chinese: 0.26 column).
+    Taken only where it parts from the heights by more than eight lines (`measured.snap`), with floats held and no
+    lead, the round of 34:
+
+    | | Pages equal (more / fewer) | Drift median / p90 | Within 0.1 column | Floats on the original's page / column | Leading step between neighbours, median / p90 |
+    |---|---|---|---|---|---|
+    | FIT | 29 (2 / 3) | 0.055 / 0.240 | 69 % | 93 % / 92 % | alphabets 2–8 % |
+    | Flow, first (window 50, take-back) | 25 (5 / 4) | 0.059 / 0.333 | 70 % | 94 % / 92 % | 0.6 % / 3.6 % |
+    | Flow: floats held, measured drift past 8 lines | 27 (5 / 2) | 0.051 / 0.297 | 74 % | 98 % / 96 % | 0.7 % / 5.5 % |
+    | H-rule lock | 32 (2 / 0) | 0.019 / 0.140 | 92 % | 96 % / 96 % | — |
+
+    German and Russian gain most (drift median 0.076 → 0.052, p90 0.289 → 0.168); CJK holds (0.049 → 0.050). The
+    evaluation page shows it as Flow, the first version beside it.
+  - A lead only before what the preview saw jump (`measured.local`, 30 lines): on six papers it gave 2608.24839
+    (German) its last page back and cost the two Chinese papers nothing, but Korean 2608.15761 went 0.057 → 0.104
+    column; Russian 2608.06233's [H] figure after its \clearpage still moves. Not yet on the round of 34.

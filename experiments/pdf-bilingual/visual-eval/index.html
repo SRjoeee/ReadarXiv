@@ -46,12 +46,12 @@ aside select { margin: 8px 12px }
 </head>
 <body>
 <header><nav id="langs"></nav><span style="flex:1"></span><span id="flags-count"></span><button id="export">Export flags</button><button id="clear">Clear flags</button></header>
-<main><aside><select id="sort"><option value="paper">By paper</option><option value="gain">Generic ahead of FIT first</option><option value="loss">Generic behind FIT first</option></select><div id="papers"></div></aside><section id="view"></section></main>
+<main><aside><select id="sort"><option value="paper">By paper</option><option value="gain">Flow ahead of FIT first</option><option value="loss">Flow behind FIT first</option></select><div id="papers"></div></aside><section id="view"></section></main>
 <script type="module">
 const $ = s => document.querySelector(s)
 const state = { catalog: null, lang: null, paper: null, index: null, page: 0, hidden: new Set(), zoom: false }
 const rate = (n, d) => (d ? `${Math.round((100 * n) / d)}%` : '—')
-const gain = e => (e.fit?.align?.drift?.median != null && e.generic?.align?.drift?.median != null ? e.fit.align.drift.median - e.generic.align.drift.median : -Infinity)
+const gain = e => (e.fit?.align?.drift?.median != null && e.flowfp8?.align?.drift?.median != null ? e.fit.align.drift.median - e.flowfp8.align.drift.median : -Infinity)
 const drift = x => (x?.align?.drift?.median != null ? x.align.drift.median.toFixed(2) : '—')
 const sized = x => (x?.align?.size?.within != null ? `${Math.round(100 * x.align.size.within)}%` : '—')
 const flags = () => { try { return JSON.parse(localStorage.getItem('axt-eval-flags') ?? '[]') } catch { return [] } }
@@ -73,7 +73,7 @@ function renderPapers() {
     const d = document.createElement('div'); d.className = `paper${e.paper === state.paper ? ' on' : ''}`
     const pages = state.catalog.columns.filter(c => Object.hasOwn(e.pages, c.key)).map(c => `${c.label} ${e.pages[c.key] ?? '×'}`).join(' · ')
     // the columns with numbers, as the page lists them: FIT, the generic variants, the H-rule lock
-    const cols = [['FIT', e.fit], ['Generic', e.generic], ['Flow', e.flow], ['Each block', e.flow0], ['H rules', e.lockh]].filter(([, x]) => x)
+    const cols = [['FIT', e.fit], ['Generic', e.generic], ['Flow, first', e.flow], ['Flow', e.flowfp8], ['H rules', e.lockh]].filter(([, x]) => x)
     const line = (label, f) => `<small>${label}: ${cols.map(([n, x]) => `${n} ${f(x)}`).join(' · ')}</small>`
     d.innerHTML = `<b>${e.paper}</b><small>${e.cls}</small><small>pages ${pages}</small>${line('units on their page', x => rate(x.samePage, x.units))}${line('drift, median columns', drift)}${line('blocks within 15 %', sized)}`
     d.onclick = () => openPaper(e.paper)
