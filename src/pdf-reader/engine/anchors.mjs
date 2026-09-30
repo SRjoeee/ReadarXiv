@@ -6,8 +6,12 @@
 //  - text alone (REPORT §2, spike A): 3-gram anchors, the longest chain rising in both texts, a bounded fill between
 //    anchors. Used inside the bounds when there are marks, on its own when there are none.
 
-const CJK = /[㐀-鿿豈-﫿぀-ヿ가-힯]/
-const TOKEN = /[㐀-鿿豈-﫿぀-ヿ가-힯]|[\p{L}\p{N}]+/gu, PARTS = /[㐀-鿿豈-﫿぀-ヿ가-힯]|[^㐀-鿿豈-﫿぀-ヿ가-힯]+/gu
+// CJK: unified ideographs with extension A, compatibility ideographs, kana, Hangul syllables. Written as escapes: typed as
+// characters, the compatibility range's first (U+F900) was normalized into the unified U+8C48, and the range ran on over
+// U+A000–U+F8FF — the private-use area with it, a bracket's pieces read as CJK words, and surrogates for this pattern
+const CJK_RANGES = '\\u3400-\\u9fff\\uf900-\\ufaff\\u3040-\\u30ff\\uac00-\\ud7af'
+const CJK = new RegExp(`[${CJK_RANGES}]`, 'u')
+const TOKEN = new RegExp(`[${CJK_RANGES}]|[\\p{L}\\p{N}]+`, 'gu'), PARTS = new RegExp(`[${CJK_RANGES}]|[^${CJK_RANGES}]+`, 'gu')
 const K = 3
 
 /** one token per CJK character, one per run of other letters and digits; lower case, compatibility forms folded. A run
@@ -359,8 +363,7 @@ function pageFrame(doc, ms) {
  */
 const explained = (t, letters) => {
   if (!t) return true
-  // a CJK character; the range also holds the private-use glyphs of a bracket's pieces, which are no letters
-  if (CJK.test(t)) return !/\p{L}/u.test(t) || letters.includes(t)
+  if (CJK.test(t)) return letters.includes(t)
   for (const run of t.replace(/\p{Script=Greek}/gu, ' ').match(/\p{L}{3,}/gu) ?? []) if (!letters.includes(run)) return false
   return true
 }
