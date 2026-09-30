@@ -50,5 +50,13 @@ check('nudged leading: the spread shows', near(uniformity(nudged, units).spread,
   const d = drifts(om, tm), block = (700 - 100) * 72.27 / 72
   check('drifts: level, a column behind, a quarter ahead, and a unit the compile lacks left out', Math.abs(d.get(0)) < 1e-9 && Math.abs(d.get(1) - block) < 1e-6 && Math.abs(d.get(2) + block / 4) < 1e-6 && !d.has(9), JSON.stringify([...d]))
 }
+// a unit that starts above the original's highest mark on its page — a title a line shorter left room at the top —
+// is ahead by that much: the metric's clamp to the text block would read it level (Korean 2608.21180's abstract, 56 pt)
+{
+  const mk = list => ({ pages: 2, width: 600, height: 800, twoColumn: false, marks: new Map(list) })
+  const om = mk([['3s', { page: 0, x: 50, y: 480 }], ['3e', { page: 0, x: 50, y: 200 }]])
+  const tm = mk([['3s', { page: 0, x: 50, y: 536 }], ['3e', { page: 0, x: 50, y: 250 }]])
+  check('drifts: a start above the original\'s highest mark on the page is read ahead, not level', Math.abs(drifts(om, tm).get(3) + 56 * 72.27 / 72) < 1e-6, JSON.stringify([...drifts(om, tm)]))
+}
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

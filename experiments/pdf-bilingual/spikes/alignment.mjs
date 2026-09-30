@@ -15,8 +15,9 @@ function blocks(om) {
   const fallback = tall.length ? { top: q(tall.map(b => b.top), 0.5), bottom: q(tall.map(b => b.bottom), 0.5) } : { top: om.height, bottom: 0 }
   return page => { const b = byPage.get(page); return b && b.top - b.bottom >= 100 ? b : fallback }
 }
-/** a place in reading order, in columns: the columns before it, and its height down its text block */
-const place = (m, at, block) => { const b = block(at.page); return at.page * (m.twoColumn ? 2 : 1) + column(m, at) + Math.min(1, Math.max(0, (b.top - at.y) / (b.top - b.bottom))) }
+/** a place in reading order, in columns: the columns before it, and its height down its text block — held within the
+ *  block for the metric, as it may not be for a correction (drifts) */
+const place = (m, at, block, held = true) => { const b = block(at.page), f = (b.top - at.y) / (b.top - b.bottom); return at.page * (m.twoColumn ? 2 : 1) + column(m, at) + (held ? Math.min(1, Math.max(0, f)) : f) }
 
 export function alignment(om, tm) {
   const block = blocks(om)
@@ -43,7 +44,9 @@ export function alignment(om, tm) {
 
 /** each unit's start against the original's, signed (a later start positive), in points of the original's text block
  *  on the unit's page (TeX points, as a compile's heights are): what a translation's final setting corrects from the
- *  preview it measured (generic-type.mjs flowLeads `measured`). Units the compile lacks are left out */
+ *  preview it measured (generic-type.mjs flowLeads `measured`). Not held within the block: a start above the
+ *  original's highest mark on its page is ahead by that much (Korean 2608.21180's abstract, 56 pt, which the metric's
+ *  clamp read as level). Units the compile lacks are left out */
 export function drifts(om, tm) {
   const block = blocks(om), out = new Map()
   for (const [k, o] of om.marks) {
@@ -51,7 +54,7 @@ export function drifts(om, tm) {
     const t = tm.marks.get(k)
     if (!t) continue
     const b = block(o.page)
-    out.set(Number(k.slice(0, -1)), ((place(tm, t, block) - place(om, o, block)) * (b.top - b.bottom) * 72.27) / 72)
+    out.set(Number(k.slice(0, -1)), ((place(tm, t, block, false) - place(om, o, block, false)) * (b.top - b.bottom) * 72.27) / 72)
   }
   return out
 }
