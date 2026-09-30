@@ -68,11 +68,11 @@ export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, D
  * the median of the next `measured.span` readings (five), so that one unit read far off and the next back is left out
  * (Korean 2608.06701: a paragraph moved from the foot of the left column to below a figure heading the right read 0.42
  * column late, the next paragraph level), and a jump that lasts is taken a little before it, where the text can still
- * make way. The offset moves only where that median parts from it by more than `measured.snap` (points): less is noise
- * (2212.06817: a final that followed every reading ran 0.12 page ahead). The first reading is taken as it is, and kept
- * until one parts from it: before the first unit stands only the front matter (Korean 2608.21180: a title a line
- * shorter left page 1 51 pt ahead, room it took by shrinking its glue until the paper's own \\vspace{-2.8em} set the
- * abstract on the e-mail line). With `measured.local` (lines), the lead ahead is kept only in the stretch of that
+ * make way. A median within `measured.snap` (points) of level is noise and read as level (2212.06817: a final that
+ * followed every reading ran 0.12 page ahead); with `measured.keep`, one within that of the offset standing leaves it
+ * standing. The first reading is taken as it is: before the first unit stands only the front matter (Korean 2608.21180:
+ * a title a line shorter left page 1 51 pt ahead, room it took by shrinking its glue until the paper's own
+ * \\vspace{-2.8em} set the abstract on the e-mail line). With `measured.local` (lines), the lead ahead is kept only in the stretch of that
  * length before each jump the preview measured — a rise in its drift the heights do not account for, something that
  * could not break moved on — each unit there set to put the text on a ramp to `ahead` lines ahead by the jump;
  * elsewhere the text keeps level. A lead ahead everywhere cost every unit two lines of drift, and 2608.21180 (Chinese)
@@ -118,7 +118,8 @@ export function flowLeads(units, script, heights, { window = 50, horizon = windo
     readings.forEach((r, j) => {
       const next = readings.slice(j, j + span).map(x => x.beyond).sort((a, b) => a - b), med = next[next.length >> 1]
       if (j === 0) current = r.beyond
-      else if (!(Math.abs(med - current) <= measured.snap)) current = med
+      else if (measured.keep) { if (!(Math.abs(med - current) <= measured.snap)) current = med }
+      else current = !(Math.abs(med) <= measured.snap) ? med : 0
       offsetAt.set(r.i, current)
     })
   }
