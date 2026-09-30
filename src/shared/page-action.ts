@@ -18,15 +18,34 @@ export function behindSettings(page: Pick<PageStatus, 'progress' | 'running'>, s
 }
 
 /**
+ * The retranslate cue (UI.md P6b), asked by the popup's view model and by the toggle: the page's session left its own
+ * service for a refused key (`auth` among its hand-overs — `demotions`, since `engine.demoted` names only the most
+ * recent), and that key has been made good since: the record holds the service no more, and the chain a start would
+ * run on runs it again. The saved chain is the test: a 403 is `auth` too and never recorded
+ * (background/health-guard.ts marks a 401 alone), and while the chain in force still passes the service over, a start
+ * would meet the same refusal
+ */
+export function keyMadeGood(
+  session: Pick<ProviderStatus, 'providerId' | 'demotions'> | null | undefined,
+  rejected: Iterable<string>,
+  saved: Pick<ProviderStatus, 'engine'> | null | undefined,
+): boolean {
+  const refused = session?.demotions.find(d => d.kind === 'auth' && d.id === session.providerId)
+  return !!refused && !new Set(rejected).has(refused.id) && saved?.engine.id === refused.id && !saved.engine.demoted
+}
+
+/**
  * Which of the three actions the page calls for. Whether it can be pressed is the popup's business (`runnable`);
  * the toggle just sends it and lets the page refuse. A paused session (a fatal error) retries rather than restores
  * (Codex on #157); a page behind the settings re-translates on them; a running page restores; anything else
- * translates. `undefined` when the page did not answer (no content script yet): nothing to do, not a guess
+ * translates. `undefined` when the page did not answer (no content script yet): nothing to do, not a guess. A running
+ * page the retranslate cue holds (keyMadeGood) re-translates too: the key does what the popup's button offers there
+ * (P6b).
  */
-export function pageAction(page: Pick<PageStatus, 'progress' | 'running'> | undefined, savedRevision: string | null): PageAction | undefined {
+export function pageAction(page: Pick<PageStatus, 'progress' | 'running'> | undefined, savedRevision: string | null, madeGood = false): PageAction | undefined {
   if (page === undefined) return undefined
   const { state, fatal } = page.progress
-  if (state === 'on') return behindSettings(page, savedRevision) ? 'retranslate' : 'restore'
+  if (state === 'on') return behindSettings(page, savedRevision) || madeGood ? 'retranslate' : 'restore'
   if (state === 'stopped' && fatal !== undefined) return 'retranslate'
   return 'translate'
 }
@@ -52,13 +71,15 @@ export interface PageDecision {
  * The action and whether it is open. A running page always restores. A page behind the settings re-translates only
  * on settings that run on their own — a fallback is not what the reader chose, and the reader is told to fix the
  * choice (popup P13). Anything else starts when something can run, the fallback included (§8.5). The toggle applies
- * this too (local review): the keyboard command must not restart a page the button refuses to
+ * this too (local review): the keyboard command must not restart a page the button refuses to. So does the cue: the
+ * way back is the reader's own service, never a fallback.
  */
-export function pageDecision(page: Pick<PageStatus, 'progress' | 'running'> | undefined, saved: SavedSettings): PageDecision | undefined {
-  const action = pageAction(page, saved.revision)
+export function pageDecision(page: Pick<PageStatus, 'progress' | 'running'> | undefined, saved: SavedSettings, madeGood = false): PageDecision | undefined {
+  const action = pageAction(page, saved.revision, madeGood)
   if (page === undefined || action === undefined) return undefined
   const behind = behindSettings(page, saved.revision)
-  const enabled = action === 'restore' ? true : behind ? saved.canRun : saved.canRun || saved.fallback
+  const cued = madeGood && page.progress.state === 'on'
+  const enabled = action === 'restore' ? true : behind || cued ? saved.canRun : saved.canRun || saved.fallback
   return { action, behind, enabled }
 }
 

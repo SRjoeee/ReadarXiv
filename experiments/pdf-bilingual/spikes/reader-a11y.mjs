@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import { serveSite } from './live-site.mjs'
 import { BUILD, launchWithReader } from './extension.mjs'
 import { copyWithGrants } from '../../../tests/e2e/ext-copy.mjs'
-import { addService, openOptions, setSwitch } from '../../../tests/e2e/options-page.mjs'
+import { openOptions, seedService, setSwitch } from '../../../tests/e2e/options-page.mjs'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 const { default: AxeBuilder } = await import(createRequire(REPO).resolve('@axe-core/playwright'))
@@ -68,7 +68,8 @@ async function audit(page, name) {
   await page.getByRole('radio', { name: '对照' }).click()
   // each menu, opened from the keyboard: audited open, closed by Escape with the focus back on its trigger
   for (const name of ['缩放比例', '目标语言', '翻译服务', '下载', '阅读选项']) {
-    const trigger = page.getByRole('button', { name, exact: true })
+    // the bar's own, named by its words and what it shows (WCAG 2.5.3); the reading options hold copies for a narrow window
+    const trigger = page.locator('header').getByRole('button', { name })
     await trigger.focus()
     await page.keyboard.press('Enter')
     await page.waitForTimeout(400)
@@ -76,7 +77,7 @@ async function audit(page, name) {
     await audit(page, `the ${name} menu open`)
     await page.keyboard.press('Escape')
     await page.waitForTimeout(300)
-    const back = await page.evaluate(n => document.activeElement?.getAttribute('aria-label') === n, name)
+    const back = await page.evaluate(n => !!(a => a && (a.getAttribute('aria-labelledby')?.split(' ').map(i => document.getElementById(i)?.textContent).join(' ') ?? a.getAttribute('aria-label')))(document.activeElement)?.includes(n), name)
     check(`the ${name} menu: opened from the keyboard, Escape closes it and the focus is back on its trigger`, opened && !(await popOpen()) && back)
   }
   // a tooltip, shown in full: hovered, past its delay and its fade
@@ -91,11 +92,11 @@ async function audit(page, name) {
   await page.waitForTimeout(500)
   await audit(page, 'the contents open')
   await page.getByRole('button', { name: '目录' }).click()
-  await patch({ pdfReader: { appearance: 'dark', dimPages: true } })
+  await patch({ theme: 'dark', pdfReader: { dimPages: true } })
   await page.waitForTimeout(700)
   await audit(page, 'dark')
   await page.screenshot({ path: join(out, 'dark.png') })
-  await patch({ pdfReader: { appearance: 'system' } })
+  await patch({ theme: 'system' })
   await page.setViewportSize({ width: 760, height: 900 })
   await page.waitForTimeout(800)
   await audit(page, 'narrow, the capsule saying so')
@@ -170,7 +171,7 @@ if (process.env.AXT_LIVE !== '0') {
   await patch({ targetLanguage: 'cmn' })
   await page.waitForTimeout(800)
   const options = await openOptions(context, id)
-  await addService(options, { name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' })
+  console.log('keyless service:', await seedService(context.serviceWorkers()[0], { id: 'svc-keyless0', name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' }))
   await setSwitch(options, '出问题时自动改用免费服务', false)
   await page.bringToFront()
   await page.evaluate(() => window.__reader.debug?.pdfCache?.clear())

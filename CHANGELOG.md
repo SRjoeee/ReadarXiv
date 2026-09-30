@@ -2,6 +2,21 @@
 
 Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
+## Unreleased
+
+- A new look for the popup, the settings page and the floating button, drawn from the PDF reader's: the same greys, type, controls and motion, and a new red — arXiv's own, to the eye — for the one main action on each screen and for the switches of the popup and the settings page (the PDF reader keeps its own). The popup's name and its main button are larger. Every row of the popup and the settings page is measured so that its parts stand on one line.
+- One appearance for the whole extension — follow the system, light or dark — set on the settings page, under Appearance, or in the PDF reader's reading options. The reader used to have its own and the popup and the settings page followed the system; what you had chosen in the reader is now the extension's.
+- The popup finds papers. On a page that is not an arXiv paper, type or paste into its search field: a paper's PDF or HTML link opens its translation, an abstract link, a paper's id or its arXiv DOI offers the HTML and PDF translations, and anything else searches arXiv in a new tab when you press Enter.
+- The popup's menus open under their rows, and each list you can change ends with a way to manage it — services, prompts, styles — that opens the settings page at that place. A paused page offers "Retranslate" and "Show original" side by side. On an abstract page or a PDF the popup shows the two ways in, HTML and PDF, with the service and the language, and nothing only a translated page uses.
+- The settings page, rebuilt: four sections — Translation, Appearance, Reading, Data — a search that finds a setting by its name or what it does, and links that open a setting in place. The page sits in the middle of a wide window. The interface language sits at the foot of the sidebar, beside a globe, and at the end of the title's row on a narrow window.
+- A service you add is added once it connects. Enter its address (OpenRouter, DeepSeek and a local Ollama are one click away), its key and its model — picked from the service's own list when it offers one — and Connect. A service that cannot translate a sentence is no longer saved. Editing one works the same way, in place.
+- A key the service refuses is remembered. The popup, the settings page and the PDF reader say "API key no longer valid" for that service; with the automatic switch on, pages go to a free service instead of trying the refused key again; and connecting with a new key — or the same one, once your account is fixed — clears it.
+- Deleting a service, a prompt or a style is undone rather than confirmed: its row says it was deleted, with Undo, for five seconds. Clearing a cache, which cannot be undone, asks once more in place.
+- The glossary is a table, one term a row; paste lines of "source, translation" to add several at once. The translation styles are a list, each written in its own style, and every one — built in or yours — is edited in place; "Restore built-in styles" brings the shipped ones back. The hover highlight's colours are swatches, one of them yours to pick.
+- Two ways to translate: As you read, the default — the paragraphs you reach and those just below — and Whole paper. If you had chosen two or three screens ahead, or to start only when half or all of a paragraph shows, you now have As you read.
+- The words in figures show in every display — split, stacked and translation only — whenever figure translation is on; the per-display ticks are gone. If you had unticked every display, figure translation stays off.
+- The floating button and the figure viewer take the new look. The button follows the extension's appearance; the viewer's controls and a failed paragraph's retry follow the paper's own theme on arXiv.
+
 ## 0.4.1 — 2026-09-21
 
 - The toolbar button shows where the extension works: in colour on an arXiv abstract, PDF or full text, grey everywhere else. The mark itself is redrawn, a touch cleaner at small sizes.

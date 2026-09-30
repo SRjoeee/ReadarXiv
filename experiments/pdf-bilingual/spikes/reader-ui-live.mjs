@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { serveSite } from './live-site.mjs'
 import { BUILD, launchWithReader } from './extension.mjs'
 import { copyWithGrants } from '../../../tests/e2e/ext-copy.mjs'
-import { addService, openOptions, setSwitch } from '../../../tests/e2e/options-page.mjs'
+import { openOptions, seedService, setSwitch } from '../../../tests/e2e/options-page.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const out = join(root, 'out/reader-ui')
@@ -62,7 +62,7 @@ await page.evaluate(() => window.__reader.debug?.pdfCache?.clear())
 await visit('bilingual')
 const translating = await until(page, () => window.__reader.controller.getState().phase === 'translating')
 check('a first translation: said in the status region, no capsule on screen', translating && (await page.getByRole('status').textContent()).includes('正在翻译') && await page.evaluate(() => !document.querySelector('.capsule')))
-const lineAt = () => page.evaluate(() => { const l = document.querySelector('header[role="toolbar"] .progress-line'), r = l?.getBoundingClientRect(); return l && { on: l.hasAttribute('data-on'), p: Number(l.style.getPropertyValue('--p')), bottom: Math.round(r.bottom), height: Math.round(r.height) } })
+const lineAt = () => page.evaluate(() => { const l = document.querySelector('header .progress-line'), r = l?.getBoundingClientRect(); return l && { on: l.hasAttribute('data-on'), p: Number(l.style.getPropertyValue('--p')), bottom: Math.round(r.bottom), height: Math.round(r.height) } })
 const first = await lineAt()
 check('…the progress line along the toolbar\'s foot, 2 px', !!first?.on && first.bottom === 44 && first.height === 2, JSON.stringify(first))
 const grew = await page.waitForFunction(p => Number(document.querySelector('.progress-line')?.style.getPropertyValue('--p')) > p + 0.01, first?.p ?? 0, { timeout: 120_000, polling: 200 }).then(() => true, () => false)
@@ -85,12 +85,24 @@ await page.waitForTimeout(400)
 check('…whose action opens the language menu', await page.evaluate(() => !!document.querySelector('#pop-language:popover-open')))
 await page.screenshot({ path: join(out, '25-unsupported.png') })
 await page.keyboard.press('Escape')
+// below 500 px the menu is one the reading options hold, first rows the download and the settings: the action opens it
+// there, its search taking the focus (the branch review: the focus went to the download)
+await page.setViewportSize({ width: 400, height: 800 })
+await page.waitForTimeout(400)
+await page.getByRole('button', { name: '选择语言' }).click()
+await page.waitForTimeout(500)
+const narrowChoice = await page.evaluate(() => ({ menu: !!document.querySelector('#pop-options-language:popover-open'), focus: !!document.activeElement?.closest('#pop-options-language') && document.activeElement?.tagName }))
+check('…and under 500 px, the menu the reading options hold, its search taking the focus', narrowChoice.menu && narrowChoice.focus === 'INPUT', JSON.stringify(narrowChoice))
+await page.keyboard.press('Escape')
+await page.keyboard.press('Escape')
+await page.setViewportSize({ width: 1440, height: 900 })
+await page.waitForTimeout(400)
 await patch({ targetLanguage: 'cmn' })
 await page.waitForTimeout(800)
 
 // 3. no service able to answer, no copy: the card in the translation's pane
 const options = await openOptions(context, id)
-await addService(options, { name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' })
+console.log('keyless service:', await seedService(context.serviceWorkers()[0], { id: 'svc-keyless1', name: 'keyless', baseURL: 'https://example.invalid/v1', model: 'x' }))
 await setSwitch(options, '出问题时自动改用免费服务', false)
 await page.bringToFront()
 await page.evaluate(() => window.__reader.debug?.pdfCache?.clear())

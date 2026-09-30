@@ -1,14 +1,20 @@
 # Files that may hold lines with CJK characters, and how many (scripts/check-english.mjs). The numbers are exact: the gate asks for an entry to be lowered when lines go, and raised only with a reason beside it.
-docs/DESIGN.md 10  # 2026-09-19: +1, §6.2 quotes what the Edge endpoint returned for a marker touching a word; 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
+docs/DESIGN.md 10  # 2026-09-28: −1, §16 names the two greyed displays by what they are and UI.md's id (Part 7's final review); 2026-09-26: +1, §16 names the two greyed displays of a paper that cannot be had in their Chinese words; 2026-09-19: +1, §6.2 quotes what the Edge endpoint returned for a marker touching a word; 2026-09-17: regenerated; the Chinese is quoted evidence (measured engine output) and the sentence separators the protocol recognises, inside English sentences
 docs/RELEASE.md 6  # 2026-09-17: the Chinese store listing (product copy the owner submits)
-docs/UI.md 190  # 2026-09-18: S-I-06 / S-I-06a / S-I-06b / S-I-06c (the floating button, its two side buttons and its menu), S-P-03b / S-P-33 / S-P-50b (the popup on entry pages), S-O-49b / S-O-49c (where the translation opens, the floating button switch), issue #169; 2026-09-21: S-I-07 (the figure viewer, issue #276); −18, the macOS helper's rows went with the helper (issue #280); 2026-09-25: §3.5, the PDF reader's surface (S-R), +18; +2, S-P-03c and S-P-75: the popup while the PDF reader is open; 2026-09-25: S-O-55 / S-O-73 (the PDF reader's section and its translations' line on the settings page, the reader's design, §9.3); +1: S-P-33a, the no-HTML note beside an offered PDF entry (Part 5's final review); +1: S-R-16, the reader's card for a rate limit (Part 6's interface review)
+docs/UI.md 238  # 2026-09-18: S-I-06 / S-I-06a / S-I-06b / S-I-06c (the floating button, its two side buttons and its menu), S-P-03b / S-P-33 / S-P-50b (the popup on entry pages), S-O-49b / S-O-49c (where the translation opens, the floating button switch), issue #169; 2026-09-21: S-I-07 (the figure viewer, issue #276); −18, the macOS helper's rows went with the helper (issue #280); 2026-09-25: §3.5, the PDF reader's surface (S-R), +18; +2, S-P-03c and S-P-75: the popup while the PDF reader is open; 2026-09-25: S-O-55 / S-O-73 (the PDF reader's section and its translations' line on the settings page, the reader's design, §9.3); +1: S-P-33a, the no-HTML note beside an offered PDF entry (Part 5's final review); +1: S-R-16, the reader's card for a rate limit (Part 6's interface review); 2026-09-26: +2, S-R-17 / S-R-18, a paper that cannot be had and its HTML version; 2026-09-26: −1, S-R-01 retired, the bar being a banner that needs no name (the interface review); 2026-09-27: the redesign — the popup's and the settings page's rows redrawn, §4's new states, §5 the roles; 2026-09-28: §2's and §3.4's words requoted from the pack; 2026-09-28: +1, P0e's row names S-P-32 and its settings button under a paper P0 names (Part 7's final review, A-I1)
 experiments/pdf-bilingual/REPORT.md 12  # 2026-09-22: the experiment's record; engine outputs quoted as the evidence its decisions rest on; +1, the captions babel gives each CJK language (#32); +1, 2026-09-25: the maintainer's words for the popup's two entries, quoted in the twenty-sixth addendum
 experiments/pdf-bilingual/plans/2026-09-25-reader-interface.md 160  # 2026-09-25: the reader's words the plan's code puts into the locale packs, and the design's copy it names (the controls a reader sees), quoted; +130 for Part 3: its zh-CN pack, docs/UI.md's S-R table, and the tests finding controls by their Chinese names, all verbatim; +4 for Part 4: the design's words it quotes and the controls its probe finds by their Chinese names; +20 for Part 5: the popup's and the settings page's words (§15) and the controls its checks find
-experiments/pdf-bilingual/spikes/reader-ui.mjs 27  # 2026-09-25: the reader's controls found by their Chinese names in a real browser (grows task by task in the plan's Part 3); +2, the contents button the final review's refit check presses; +2: the other two display keys and the switch's arrows, by the switch's Chinese names (Part 6, Task 46); +3: the interface review's menu, service and options checks, by the controls' Chinese names (Part 6, Task 47)
-experiments/pdf-bilingual/spikes/reader-ui-live.mjs 6  # 2026-09-25: the reader's live states found by their Chinese words in a real browser
-experiments/pdf-bilingual/spikes/entries.mjs 11  # 2026-09-25: the popup's entries, its primary, its stacked display and its style row, and the panel's entries, found by their Chinese words on arXiv's pages, as the e2e suites find them; +6, 2026-09-25: a PDF-only submission's entries and the settings page's PDF reader section and data line, found by their Chinese words (Part 6, Task 46)
+experiments/pdf-bilingual/spikes/reader-ui.mjs 56  # 2026-09-25: the reader's controls found by their Chinese names in a real browser (grows task by task in the plan's Part 3); +2, the contents button the final review's refit check presses; +2: the other two display keys and the switch's arrows, by the switch's Chinese names (Part 6, Task 46); +3: the interface review's menu, service and options checks, by the controls' Chinese names (Part 6, Task 47); +13, 2026-09-26: the interface review's fixes checked, their controls found by their Chinese names; +3, 2026-09-26: the popovers' own buttons and the touch check, found by their Chinese names; +1, the focus rings' check, the language menu found by its Chinese name; +8, 2026-09-26: the appearance's icons, the swatches and the theme's flip, their controls found by their Chinese names; +4, the appearance thumb's slide, its radios found by their Chinese names
+experiments/pdf-bilingual/spikes/reader-ui-live.mjs 7  # 2026-09-25: the reader's live states found by their Chinese words in a real browser; +1, 2026-09-26: the choose-language action in a narrow window, found by its Chinese name
+experiments/pdf-bilingual/spikes/reader-pixels.mjs 2  # 2026-09-26: the reader's toolbar buttons found by their Chinese names, as reader-ui.mjs finds them (the redesign's pixel check, §2.4)
+experiments/pdf-bilingual/spikes/entries.mjs 14  # 2026-09-25: the popup's entries, its primary, its stacked display and its style row, and the panel's entries, found by their Chinese words on arXiv's pages, as the e2e suites find them; +6, 2026-09-25: a PDF-only submission's entries and the settings page's PDF reader section and data line, found by their Chinese words (Part 6, Task 46); +1, 2026-09-26: the capsule that says a paper cannot be had, as the reader shows it; +2, 2026-09-26: the reader's settings link, found by its Chinese name
 experiments/pdf-bilingual/spikes/reader-a11y.mjs 10  # 2026-09-25: the reader's accessibility audit finds its displays, menus and options by their Chinese names in a real browser, as reader-ui.mjs does (Part 6, Task 45)
-experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md 120  # 2026-09-25: the reader's interface copy as the maintainer agreed it, and the maintainer's words each decision rests on, quoted (product copy the design fixes; the copy moves to docs/UI.md with the build); +1, the three status words said to screen readers (§6.6)
+experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md 121  # 2026-09-25: the reader's interface copy as the maintainer agreed it, and the maintainer's words each decision rests on, quoted (product copy the design fixes; the copy moves to docs/UI.md with the build); +1, the three status words said to screen readers (§6.6); +1, 2026-09-26: the value-named buttons' names quoted (the interface review); +1, the maintainer's words keeping the pressed state without a ring; +1, the appearance's three words in their new order; +1, the service-change prompt's two actions as the maintainer named them
+experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-design.md 175  # 2026-09-26: the popup's, the settings page's and the floating button's copy as the maintainer agreed it over the redesign's prototypes, and the maintainer's words each decision rests on, quoted (product copy the design fixes; it moves to docs/UI.md with the build)
+experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign.md 21  # 2026-09-26: the redesign's plan: the locale packs' words its code adds, and the controls its tests and browser checks find by their Chinese names, quoted; +1, 2026-09-26: the manage row named in Part 3's interfaces
+experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part4-popup.md 81  # 2026-09-27: the popup's words its code puts into the locale packs (the design's §10.1, UI.md's ids), and the controls its tests and browser checks find by their Chinese names, quoted; +2, 2026-09-27: the pre-flight scan, the download row found by its Chinese name in a test; +3, 2026-09-27, Part 4's record quotes the popup's words the parts after it carry
+experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part5-settings.md 311  # 2026-09-27: the settings page's words its code puts into the locale packs (the design's §10.2 and the derived words ruled with it), the map of today's controls by their Chinese names, and the controls its tests and browser checks find by those names, quoted; 2026-09-27: Part 5's record
+experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part7-finish.md 110  # 2026-09-27: the redesign's last part: the product copy its document tasks move into UI.md, and the controls its checks find by their Chinese names, quoted; 2026-09-27: Task 90's amendments; 2026-09-28: the pre-flight scan's amendments; 2026-09-28: Task 103b, the maintainer's asks in their words; 2026-09-28: Task 103c, the maintainer's words on G
 src/pdf-reader/engine/anchors.mjs 2  # 2026-09-22: the CJK ranges of the tokenizer's regexes
 src/pdf-reader/engine/latex-front.mjs 4  # 2026-09-22: the pseudo-translation's zh, zh-Hant and ja sample text (+1, zh-Hant, #32); a control word glued to a CJK character, quoted
 src/pdf-reader/engine/mt.mjs 3  # 2026-09-22: engine outputs quoted as evidence
@@ -26,7 +32,7 @@ experiments/pdf-bilingual/spikes/eval-names3.mjs 1  # 2026-09-22: the CJK punctu
 experiments/pdf-bilingual/spikes/eval-names4.mjs 1  # 2026-09-22: the CJK punctuation the comparison ignores
 experiments/pdf-bilingual/spikes/typo-metrics.mjs 1  # 2026-09-22: the CJK range the character count reads
 experiments/pdf-bilingual/spikes/verify-figure-names.mjs 2  # 2026-09-22: the Chinese labels the script locates the settings controls by
-experiments/pdf-bilingual/spikes/service-faults.mjs 1  # 2026-09-25: the settings page's label the probe turns the fallback chain off by (the e2e locate controls by their Chinese names)
+experiments/pdf-bilingual/spikes/service-faults.mjs 2  # 2026-09-25: the settings page's label the probe turns the fallback chain off by (the e2e locate controls by their Chinese names); +1, 2026-09-26: the capsule that says a paper cannot be had, as the reader shows it
 experiments/pdf-bilingual/spikes/viewer-faults.mjs 1  # 2026-09-24: the settings page's label the probe turns the fallback chain off by (the e2e locate controls by their Chinese labels)
 README.md 1  # 2026-09-17: the link to the Chinese README
 src/config/languages.ts 188  # localisation data: the Chinese name table and the native names; four evidence quotes in comments
@@ -40,25 +46,23 @@ src/core/renderer/highlight.ts 1
 src/core/renderer/image.ts 1
 src/core/rules/latexml.ts 8
 src/entrypoints/options/index.html 1
-src/entrypoints/popup/PopupView.tsx 1
 src/providers/alignment.ts 4
 src/providers/chrome-builtin.ts 2
 src/providers/glossary.ts 3
 src/providers/microsoft.ts 1
-src/ui/appearance/Preview.tsx 1
 src/ui/strings.ts 3
 tests/pdf-reader/ui/copy.test.ts 4  # 2026-09-25: the reader's words, zh-CN expectations and the technical terms checked in Chinese
 tests/pdf-reader/ui/display-switch.test.ts 3  # 2026-09-25: the display switch's choices found by their Chinese names
 tests/pdf-reader/ui/languages.test.ts 1  # 2026-09-25: the nine languages each named in its own language, the expectation
 tests/pdf-reader/ui/menus.test.ts 2  # 2026-09-25: the menus' items found by their Chinese names
-tests/pdf-reader/ui/reading-options.test.ts 7  # 2026-09-25: the reading options' controls found by their Chinese names; +1, the appearance radio the arrows focus
+tests/pdf-reader/ui/reading-options.test.ts 9  # 2026-09-25: the reading options' controls found by their Chinese names; +1, the appearance radio the arrows focus; +2, 2026-09-26: the rows a window under 500 px moves in, found by their words
 tests/pdf-reader/controller.test.ts 1  # 2026-09-25: the contents' titles as a Chinese reader sees them, the expectations
 tests/pdf-reader/ui/outline.test.ts 8  # 2026-09-25: the contents' titles as a Chinese reader sees them, the expectations
 tests/pdf-reader/ui/pane-floats.test.ts 1  # 2026-09-25: the pills' fields found by their Chinese names
-tests/pdf-reader/ui/status-views.test.ts 6  # 2026-09-25: the states' words as the reader shows them, the expectations; +1, the card's reason said in the status region
+tests/pdf-reader/ui/status-views.test.ts 8  # 2026-09-25: the states' words as the reader shows them, the expectations; +1, the card's reason said in the status region; +2, 2026-09-26: a paper that cannot be had, its words and its link's
 tests/pdf-reader/ui/status.test.ts 9  # 2026-09-25: the states' words as the reader shows them, the expectations; +1: the rate-limit card's words hold no promise of a retry by itself, checked in both packs' terms
-tests/pdf-reader/ui/tip.test.ts 3  # 2026-09-25: the reader's controls found by their Chinese names, as the interface shows them
-tests/pdf-reader/ui/toolbar.test.ts 10  # 2026-09-25: the toolbar's controls found by their Chinese names
+tests/pdf-reader/ui/tip.test.ts 4  # 2026-09-25: the reader's controls found by their Chinese names, as the interface shows them; +1, 2026-09-26: a tooltip inside a popover, its button named in Chinese
+tests/pdf-reader/ui/toolbar.test.ts 19  # 2026-09-25: the toolbar's controls found by their Chinese names; +7, 2026-09-26: the interface review's names, links and shortcuts, found by their Chinese names; +2, 2026-09-26: the zoom value's width held, found by its Chinese name
 tests/cache/key.test.ts 3
 tests/cache/store.test.ts 10
 tests/config/appearance.test.ts 1
@@ -66,26 +70,30 @@ tests/config/languages.test.ts 3
 tests/config/storage.test.ts 20  # raised 2026-09-17: the migration test starting from v8 carries a glossary entry with a Chinese translation in and out — the non-Latin value a migration must not mangle
 tests/core/marks.test.ts 8
 tests/e2e/a11y.mjs 2
-tests/e2e/extension.mjs 77  # raised 2026-09-17: the whole-paper preload check clicks two more stop labels and the cache check waits for the zero-count line; the unreadable-settings check locates the notice, its reset and the section that must be absent by their labels
-tests/e2e/image.mjs 17  # 2026-09-21: +4, the loose-graphic section (2609.20818v1's teaser) switches modes and ticks the image modes by the popup's and the settings page's Chinese labels, as the rest of the script does
+tests/e2e/extension.mjs 74  # −1, 2026-09-28: the cache row's comment says its words in English (Part 7's final review); +1, 2026-09-28: the default prompt's radio found by its Chinese name, the built-ins now named in the interface's language (Task 103b); raised 2026-09-26: the cache-clearing locator now names the translation cache's own row and the PDF row it is told apart from (finding 4, Task 13); +5, 2026-09-26: the wrong-key section tests the remembered refusal; −1, 2026-09-27: the prompt's check in the LLM group (Part 5, Task 63); −1, 2026-09-27: the language row found by its place, not its Chinese label (Task 63, fix round 1)
+tests/e2e/image.mjs 11  # lowered 2026-09-26: image translation is one switch, the mode-gate section and the per-mode loops are gone (the redesign's design, §4)
 tests/e2e/layout.mjs 11  # 2026-09-20: +2, the reader's-place check finds the popup's mode, translate and restore buttons by their Chinese labels, as the rest of the suite does; 2026-09-21: +1, the figure viewer's restore-under-the-dialog check presses the popup's restore button by its label
-tests/e2e/local-endpoint.mjs 2
+tests/e2e/local-endpoint.mjs 7  # +5, 2026-09-27: the model list's check finds the form's controls and its placeholder by their Chinese words (Part 5, Task 61)
 tests/e2e/floating-button.mjs 6  # 2026-09-18: the settings switch, the main button's two labels, and the popup's button inside the control panel on a PDF and on the full text, located and checked by their Chinese copy, as the other suites locate controls (issue #169); 2026-09-25: the panel's two entries on the abstract page too, which its main button now opens (the reader's design, §2)
 tests/e2e/pdf-entry.mjs 9  # 2026-09-19: the popup's button (on the PDF and on the abstract page) and the no-HTML reason are located by their Chinese copy, as the other suites locate controls (issue #169); +1, the popup's PDF entry found by its name; 2026-09-25: the two entries in the control panel the floating button's main button now opens on the PDF, found and pressed by their copy (the reader's design, §2); +1: the popup's PDF entry pressed on the PDF page itself (Part 5's final review)
-tests/e2e/options-page.mjs 13
+tests/e2e/popup.mjs 20  # 2026-09-26: the popup's controls and words found by their Chinese names, as the other suites find them (the redesign's Part 4)
+tests/e2e/options-page.mjs 15  # +2, 2026-09-27: the switches the suites set, each found by its Chinese name in its section (Part 5, Task 57); +1, 2026-09-27: the new services list's controls found by their Chinese names — 11 lines in place of the drawer's 10 (Part 5, Task 61); −1, 2026-09-27: the language row found by its place, not its Chinese label (Task 63, fix round 1)
 tests/e2e/placeholders.mjs 7
 tests/e2e/probes/chrome-floor.mjs 1  # 2026-09-17: the settings page's download button, located by its reader-visible label
 tests/e2e/probes/highlight-lag.mjs 8  # 2026-09-17: the settings switches and the popup's mode buttons, located by their reader-visible labels
 tests/e2e/probes/reading-position.mjs 5  # 2026-09-20: the settings page's engine card and image switch and the popup's three mode buttons, located by their reader-visible labels
 tests/e2e/probes/ref-highlight.mjs 2  # 2026-09-17: the highlight switch and the two engine cards, located by their reader-visible labels
+tests/e2e/probes/settings-align.mjs 2  # 2026-09-27: the glossary pairs the probe seeds, in the reader's language, and the Chinese keyword a search finds the glossary by (Part 5, Task 64)
 tests/extractor/context.test.ts 1
 tests/extractor/extract.test.ts 2  # raised 2026-09-17: “any Unicode letter makes a block” moved here from the rules tests with its Chinese input, the rule being the extractor's
 tests/image/run.test.ts 11
 tests/image/svg-targets.test.ts 2
-tests/options/prompts-section.test.ts 13
+tests/options/glossary.test.ts 5  # 2026-09-27: the glossary's pairs, typed and pasted in the reader's language (Part 5, Task 62)
+tests/options/styles.test.ts 1  # 2026-09-27: fix round 1, item 7's own expectation — the sample sentence's Chinese character that must not leak into a style row's search words
 tests/pipeline/run.test.ts 3
 tests/pipeline/session-guard.test.ts 5
-tests/popup/view-model.test.ts 38  # 2026-09-19: +1 for P17c's expectation, the Chinese label of the entry pages' button (issue #169); 2026-09-18: +5 for the P17 cases' expectations, the Chinese copy of S-P-03b / S-P-33; +2, the reader-open popup's buttons by their words
+tests/popup/find.test.ts 1  # 2026-09-26: a search typed in Chinese goes to arXiv's search as it is (the redesign's P0, §5.4)
+tests/popup/view-model.test.ts 52  # 2026-09-27: Task 33 fix round 1: +2, the retranslate cue's two-hand-over test and P0's unrunnable-service test, the LLM's Chinese fallback name each expects (Opus's review); 2026-09-26: the redesign's popup (Part 4): P0's words, the prompt menu's Manage row and a refused key's note, expected as UI.md's copy; 2026-09-26: +1 for P7b's expectation, the Chinese fallback name in a refused key's note (Task 12); 2026-09-19: +1 for P17c's expectation, the Chinese label of the entry pages' button (issue #169); 2026-09-18: +5 for the P17 cases' expectations, the Chinese copy of S-P-03b / S-P-33; +2, the reader-open popup's buttons by their words
 tests/protector/clone.test.ts 5
 tests/protector/label.test.ts 50
 tests/protector/markers.test.ts 12  # 2026-09-19: +1, the translations the wire-space cases fill back, all on one line
@@ -138,5 +146,5 @@ tests/scheduler/title.test.ts 6
 tests/shared/digest.test.ts 1
 tests/shared/transport.test.ts 1
 tests/ui/language-names.test.ts 9
-tests/ui/locales.test.ts 3
-tests/ui/strings.test.ts 13  # raised 2026-09-13: expectations for the locale-pack sentences (fallback text, drawer issue, popup action error)
+tests/ui/locales.test.ts 2
+tests/ui/strings.test.ts 11  # raised 2026-09-13: expectations for the locale-pack sentences (fallback text, drawer issue, popup action error); −2, 2026-09-27: the drawer's issue sentence left with its key (Part 5, Task 60)

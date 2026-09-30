@@ -1,5 +1,6 @@
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { DEFAULT_CONFIG } from '@/config/schema'
 import { FailureCard } from '@/pdf-reader/ui/FailureCard'
 import { StatusCapsule } from '@/pdf-reader/ui/StatusCapsule'
 import { setLocale } from '@/ui/strings'
@@ -42,6 +43,23 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     // past the closed notice's 160 ms way out
     await act(async () => { await new Promise(r => setTimeout(r, 220)) })
     expect(container.querySelector('[role="status"]')!.textContent).not.toContain('翻译失败')
+  })
+
+  it('a paper that cannot be had: the sentence, and its HTML version a link opened where the settings say; no close (the maintainer, 2026-09-26)', async () => {
+    const href = 'https://arxiv.org/html/2608.02163#readarxiv'
+    const fake = fakeController({ phase: 'ready', available: false, htmlVersion: href })
+    const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
+    const link = () => container.querySelector<HTMLAnchorElement>('.capsule a[data-action]')
+    expect([container.querySelector('.capsule .words')?.textContent, link()?.textContent, link()?.getAttribute('href'), link()?.target, link()?.rel]).toEqual(['这篇论文暂不支持 PDF 翻译', '改用 HTML 翻译', href, '_blank', 'noopener'])
+    expect(container.querySelector('.capsule .close')).toBeNull()
+    expect(container.querySelector('.capsule')!.hasAttribute('data-alone')).toBe(false)
+    // this tab: the reader's own, or the PDF page it lies over
+    await act(async () => fake.set({ settings: { ...DEFAULT_CONFIG, reading: { ...DEFAULT_CONFIG.reading, openIn: 'same-tab' } } }))
+    expect(link()?.target).toBe('_top')
+    await act(async () => fake.set({ htmlVersion: null }))
+    expect([container.querySelector('.capsule .words')?.textContent, link()]).toEqual(['这篇论文暂不支持 PDF 翻译', null])
+    // words alone: the capsule's end padded as the start is, with no chip there to fill it (reader.css)
+    expect(container.querySelector('.capsule')!.hasAttribute('data-alone')).toBe(true)
   })
 
   it('the card says the reason and offers what can be done, never taking the focus', async () => {

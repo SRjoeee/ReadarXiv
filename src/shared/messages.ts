@@ -8,6 +8,7 @@ import type { TranslateCall, TranslateMessageResponse } from '@/providers/transl
 import type { EntrySettings, FloatingEntryState } from '@/shared/entry-settings'
 import type { ImageProgress, OcrCall, OcrMessageResponse, OcrRunResponse } from './ocr'
 import type { DiagnosticSource, DiagnosticsExport } from '@/shared/diagnostics'
+import type { PageDecision } from '@/shared/page-action'
 
 /** What an abstract or PDF page answers the popup (§4.0b) */
 export interface EntryStatus {
@@ -93,9 +94,15 @@ export interface AxtMessages {
    */
   'axt:toggle': { request: Record<never, never>; response: { acted: boolean } }
   /**
+   * content → background: what that toggle would do in this tab now, decided as a press decides and not acted on — the
+   * floating button's words say it, in the popup's primary button's words for the action (UI.md S-I-06). `decision` is
+   * null when the page answered nothing to decide on
+   */
+  'axt:toggle-decision': { request: Record<never, never>; response: { decision: PageDecision | null } }
+  /**
    * content / options → background: what a page needs of the settings, read once and validated by the background
-   * (shared/entry-settings.ts): the interface language, where a translation opens, this tab's zoom, the floating
-   * button's state
+   * (shared/entry-settings.ts): the interface language, where a translation opens, this tab's zoom, the PDF reader's
+   * switch, the extension's appearance, the floating button's state
    */
   'axt:entry-settings': { request: Record<never, never>; response: EntrySettings }
   /** background → content: the reader changed this tab's zoom (`tabs.onZoomChange`) */

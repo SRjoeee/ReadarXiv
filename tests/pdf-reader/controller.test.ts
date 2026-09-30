@@ -95,6 +95,10 @@ describe('reduce: the session events folded into the reader state', () => {
 
   it('tells a paper that cannot be had from a language not supported from a failure', () => {
     expect(fold([{ type: 'fail', event: 'no source', text: '' }])).toMatchObject({ available: false, phase: 'ready', failure: null })
+    // nothing typeset, every strategy tried: a paper that cannot be had as a bilingual PDF too, not a failure to retry
+    expect(fold([{ type: 'fail', event: 'cannot typeset', text: '' }])).toMatchObject({ available: false, phase: 'ready', failure: null })
+    // its HTML version, where the reader can go instead
+    expect(fold([{ type: 'html', url: 'https://arxiv.org/html/1706.03762#readarxiv' }])).toMatchObject({ htmlVersion: 'https://arxiv.org/html/1706.03762#readarxiv' })
     expect(fold([{ type: 'fail', event: 'not verified', text: '' }])).toMatchObject({ languageSupported: false, phase: 'ready', failure: null })
     expect(fold([{ type: 'fail', event: 'no engine', text: '', kind: 'no-key' }])).toMatchObject({ phase: 'failed', failure: 'no-key' })
     expect(fold([{ type: 'fail', event: 'crashed', text: '' }])).toMatchObject({ phase: 'failed', failure: 'unknown' })

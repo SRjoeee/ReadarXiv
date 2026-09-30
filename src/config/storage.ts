@@ -48,7 +48,7 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
     10: (v9: Omit<Config, 'version'> & { version: 9 }) => ({ ...v9, version: 10 as const }),
     // v10 -> v11: the image switch the popup shows (`image.enabled`). Derived from what the reader
     // had: any mode ticked means it was on, an empty list means it was off
-    11: (v10: Omit<Config, 'version' | 'image'> & { version: 10; image: { modes: Config['image']['modes'] } }) =>
+    11: (v10: Omit<Config, 'version' | 'image'> & { version: 10; image: { modes: (typeof MODE_VALUES)[number][] } }) =>
       ({ ...v10, version: 11 as const, image: { enabled: v10.image.modes.length > 0, modes: v10.image.modes } }),
     // v11 -> v12: user-added services replace the single endpoint; appearance profiles replace the
     // preset. Total: every v11 value maps somewhere, so nothing falls back to defaults
@@ -108,6 +108,37 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
     // under another key, never released, which is not carried over
     19: (v18: (Omit<Config, 'version' | 'pdfReader'> & { version: 18 }) | null) =>
       typeof v18 !== 'object' || v18 === null ? v18 : { ...v18, version: 19 as const, pdfReader: { ...DEFAULT_PDF_READER } },
+    // v19 -> v20: the redesign (its design, §3, §4). The reader's appearance becomes the extension's theme; the stored
+    // preload numbers become the two ways to translate — `all` is whole, a number on demand. A field that is not an
+    // object, or a margin that is neither (a hand edit), is passed through for the schema to name, as every migration
+    // here does — repairing it would hide the very thing the fallback exists to report (§9, S-O-02)
+    20: (v19: (Omit<Config, 'version' | 'theme' | 'preload' | 'pdfReader' | 'image'> & { version: 19; pdfReader?: unknown; preload?: unknown; image?: unknown }) | null) => {
+      if (typeof v19 !== 'object' || v19 === null) return v19
+      const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
+      const out: Record<string, unknown> = { ...v19, version: 20 as const, theme: 'system' }
+      if (isObject(v19.pdfReader)) {
+        const { appearance, ...rest } = v19.pdfReader
+        // load-bearing: every configuration from v18 or older reaches v20 with no `appearance` at all, because
+        // migration 19 spreads today's DEFAULT_PDF_READER, which no longer has one — `'system'` is what those
+        // readers had in effect
+        out.theme = appearance ?? 'system'
+        out.pdfReader = rest
+      }
+      if (isObject(v19.preload)) {
+        const { margin } = v19.preload
+        if (margin === 'all') out.preload = 'whole'
+        else if (typeof margin === 'number') out.preload = 'on-demand'
+        // else: left as the initial spread has it (the malformed object itself), for the schema to name
+      }
+      // figure text shows in every display: the per-display list goes, the switch stays. A switch left on over an
+      // empty list was off in effect — the session translated no figure for an empty list, as migration 11 read it —
+      // and stays off. A non-boolean `enabled` passes through for the schema to name
+      if (isObject(v19.image)) {
+        const { enabled, modes } = v19.image
+        out.image = { enabled: enabled === true && Array.isArray(modes) && modes.length === 0 ? false : enabled }
+      }
+      return out
+    },
   },
 })
 
@@ -150,21 +181,6 @@ function migrateStyle(style: V11Style): Appearance {
 }
 
 /**
- * Why the latest `getConfig()` fell back; `null` when the configuration is fine.
- * Each execution context (popup / content / background) keeps the result of its own call — they share no memory,
- * and the popup calls `getConfig()` itself anyway, so reading this variable gives exactly its own conclusion
- */
-let fallbackReason: FallbackReason | null = null
-
-/**
- * For the UI: did the configuration fall back to the defaults. On a fallback the reader's API key, engine and mode
- * are all out of effect, and the reader must see it. **The material for the explanation, not a sentence**: the sentence is written in the interface language, and this layer knows no locale pack (Codex on #161)
- */
-export function configFallbackReason(): FallbackReason | null {
-  return fallbackReason
-}
-
-/**
  * `tooNew`: the stored version is newer than this extension. `upgradeFailed`: older, so a migration should have
  * carried it here and did not — WXT runs every step before it writes anything, so a step that threw left the value as
  * it was (a later build that fixes the step may still read it; a reset replaces it). `invalid`: the structure fails
@@ -198,18 +214,30 @@ function describeFallback(stored: unknown, issues: readonly { path: PropertyKey[
  * A stored value failing the schema (a failed upgrade, a hand edit gone wrong) falls back to the defaults rather than
  * taking the extension down. **The fallback cannot be silent**: the reader's key is stored yet out of effect, the
  * translation quietly degrades to a free engine, and with no clue in the interface nobody would find out (met 2026-09-06: a v7 configuration + a v6 build)
+ *
+ * **The verdict comes back with the value it belongs to**, in one answer: a caller that acts on the verdict — the
+ * settings page gives an origin back only on a list it could read — is never handed another read's (a module-wide
+ * verdict, the latest read's to finish, once was: the redesign's Part 5)
  */
-export async function getConfig(): Promise<Config> {
+export async function readConfig(): Promise<ConfigReading> {
   const stored = await configItem.getValue()
   const parsed = configSchema.safeParse(stored)
-  if (parsed.success) {
-    fallbackReason = null
-    return parsed.data
-  }
-  fallbackReason = describeFallback(stored, parsed.error.issues)
+  if (parsed.success) return { config: parsed.data, fallbackReason: null }
+  const reason = describeFallback(stored, parsed.error.issues)
   // The cause and the failing field's path only: a validation message is not ours to vouch for, and the log never holds a stored value (hard rule 5)
-  console.warn(`[axt] the stored configuration cannot be read, defaults in use: ${fallbackReason.kind}${fallbackReason.kind === 'invalid' ? ` at ${fallbackReason.where}` : ''}${'stored' in fallbackReason ? ` (v${fallbackReason.stored}, this build v${fallbackReason.supported})` : ''}`)
-  return DEFAULT_CONFIG
+  console.warn(`[axt] the stored configuration cannot be read, defaults in use: ${reason.kind}${reason.kind === 'invalid' ? ` at ${reason.where}` : ''}${'stored' in reason ? ` (v${reason.stored}, this build v${reason.supported})` : ''}`)
+  return { config: DEFAULT_CONFIG, fallbackReason: reason }
+}
+
+/** One read of the stored configuration: the configuration in effect, and why that read fell back to the defaults — `null` when it did not */
+export interface ConfigReading {
+  config: Config
+  fallbackReason: FallbackReason | null
+}
+
+/** `readConfig()`'s value, for a caller that does not act on the verdict */
+export async function getConfig(): Promise<Config> {
+  return (await readConfig()).config
 }
 
 /** The refusal's `name`, a string of its own: it crosses the message boundary (shared/messages.ts `failure`), and a class's own name does not survive minification */
@@ -233,10 +261,7 @@ export async function setConfig(config: Config): Promise<void> {
   const next = configSchema.parse(config)
   const stored = await configItem.getValue()
   const readable = configSchema.safeParse(stored)
-  if (!readable.success) {
-    fallbackReason = describeFallback(stored, readable.error.issues)
-    throw new ConfigUnreadableError(fallbackReason)
-  }
+  if (!readable.success) throw new ConfigUnreadableError(describeFallback(stored, readable.error.issues))
   await configItem.setValue(next)
 }
 
@@ -253,7 +278,6 @@ export async function resetConfig(): Promise<void> {
     { key: CONFIG_KEY, value: DEFAULT_CONFIG },
     { key: `${CONFIG_KEY}$`, value: { v: CONFIG_VERSION } },
   ])
-  fallbackReason = null
 }
 
 /**
@@ -279,5 +303,19 @@ export function watchConfig(callback: (config: Config) => void) {
   return configItem.watch(value => {
     const parsed = configSchema.safeParse(value)
     if (parsed.success) callback(parsed.data)
+  })
+}
+
+/**
+ * As `watchConfig`, with the value just before the change as well: parsed, or `null` when it did not parse (a
+ * migration's own write, a hand edit). For a watcher that compares the two — the background's, which clears a refused
+ * key's mark when its key or address changes (background/health-guard.ts); the others are spared the second parse
+ */
+export function watchConfigChange(callback: (config: Config, previous: Config | null) => void) {
+  return configItem.watch((value, oldValue) => {
+    const parsed = configSchema.safeParse(value)
+    if (!parsed.success) return
+    const before = configSchema.safeParse(oldValue)
+    callback(parsed.data, before.success ? before.data : null)
   })
 }

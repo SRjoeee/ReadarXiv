@@ -7,12 +7,13 @@ import { isBuiltInService } from '@/config/services'
 import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
 import { R, S, languageName, serviceName } from '@/ui/strings'
 import type { ReaderController } from '../controller'
-import { Icon } from './icons'
+import { Icon } from '@/ui/controls/Icon'
 import { languageItems } from './languages'
-import { Popover, usePopover } from './Popover'
-import { ReaderMenu } from './ReaderMenu'
+import { Popover, usePopover } from '@/ui/controls/Popover'
+import { MenuList } from '@/ui/controls/MenuList'
 import { ToolbarButton } from './ToolbarButton'
 import { useReader } from './use-reader'
+import { useRejected } from '@/ui/use-rejected'
 
 const FITS = [['page-width', () => R.zoom.width], ['page-fit', () => R.zoom.page], ['page-actual', () => R.zoom.actual]] as const
 const SCALES = [0.5, 0.75, 1, 1.25, 1.5, 2]
@@ -29,29 +30,28 @@ export function ZoomMenu({ controller }: { controller: ReaderController }) {
   ]
   return (
     <>
-      <ToolbarButton label={R.zoom.value} anchor={pop.anchor} {...pop.trigger} className="zoom-value">
-        <span data-zoom-value className="tabular-nums">{Math.round(state.scale * 100)}%</span>
+      <ToolbarButton label={R.zoom.value} value={`${Math.round(state.scale * 100)}%`} valueClassName="tabular-nums" valueWidest="000%" anchor={pop.anchor} {...pop.trigger} className="zoom-value">
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
       <Popover {...pop.popover} role="menu" label={R.zoom.value}>
-        <ReaderMenu key={pop.generation} kind="radios" label={R.zoom.value} items={items} onClose={() => shut(pop.popover.id)} onPick={id => { controller.zoomTo(FITS.some(([f]) => f === id) ? (id as 'page-width') : Number(id)); shut(pop.popover.id) }} />
+        <MenuList key={pop.generation} kind="radios" label={R.zoom.value} items={items} onClose={() => shut(pop.popover.id)} onPick={id => { controller.zoomTo(FITS.some(([f]) => f === id) ? (id as 'page-width') : Number(id)); shut(pop.popover.id) }} />
       </Popover>
     </>
   )
 }
 
-/** `name`: the toolbar's menu has one, so that the capsule's choose-language action can open it (usePopover) */
+/** `name`: the toolbar's menu and the reading options' each have one, so that the capsule's choose-language action can
+ *  open either (usePopover, App.tsx) */
 export function LanguageMenu({ controller, name }: { controller: ReaderController; name?: string }) {
   const current = useReader(controller, s => s.settings?.targetLanguage ?? '')
   const pop = usePopover('listbox', name)
   return (
     <>
-      <ToolbarButton label={S.rows.language} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
-        <span>{current ? languageName(current) : ''}</span>
+      <ToolbarButton label={S.rows.language} value={current ? languageName(current) : ''} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
       <Popover {...pop.popover} role="listbox" label={S.rows.language}>
-        <ReaderMenu key={pop.generation} kind="listbox" label={S.rows.language} search={S.menu.searchLanguages} noMatch={S.menu.noMatch} items={languageItems(current).map(i => ({ ...i, checked: i.selected }))} onClose={() => shut(pop.popover.id)}
+        <MenuList key={pop.generation} kind="listbox" label={S.rows.language} search={S.menu.searchLanguages} noMatch={S.menu.noMatch} items={languageItems(current).map(i => ({ ...i, checked: i.selected }))} onClose={() => shut(pop.popover.id)}
           onPick={code => { controller.patchSettings(c => ({ ...c, targetLanguage: code as LangCode })); shut(pop.popover.id) }} />
       </Popover>
     </>
@@ -60,23 +60,24 @@ export function LanguageMenu({ controller, name }: { controller: ReaderControlle
 
 export function ServiceMenu({ controller }: { controller: ReaderController }) {
   const state = useReader(controller, s => ({ settings: s.settings, pack: s.pack }))
+  // a refused key says so in the list, as in the popup (the redesign's design, §5.2; the controller's ruling 22)
+  const rejected = useRejected()
   const pop = usePopover('listbox')
   const config = state.settings
   if (!config) return null
-  const items = serviceItems(config, state.pack).map(i => ({ id: i.id, name: i.name, hint: i.hint, checked: i.selected, disabled: i.disabled && !i.action }))
+  const items = serviceItems(config, state.pack, rejected).map(i => ({ id: i.id, name: i.name, hint: i.hint, checked: i.selected, disabled: i.disabled && !i.action }))
   return (
     <>
-      <ToolbarButton label={S.rows.service} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
-        <span>{serviceName(config.provider, config.services)}</span>
+      <ToolbarButton label={S.rows.service} value={serviceName(config.provider, config.services)} anchor={pop.anchor} {...pop.trigger} className="menu-btn">
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
       <Popover {...pop.popover} role="listbox" label={S.rows.service}>
-        <ReaderMenu key={pop.generation} kind="listbox" label={S.rows.service} items={items} onClose={() => shut(pop.popover.id)}
+        <MenuList key={pop.generation} kind="listbox" label={S.rows.service} items={items} onClose={() => shut(pop.popover.id)}
           onPick={id => {
             shut(pop.popover.id)
             // managing the services, or a pack to download: the settings page's (the reader downloads no pack itself)
-            const item = serviceItems(config, state.pack).find(i => i.id === id)
-            if (id === MANAGE_SERVICES || item?.action) return openOptions('services')
+            const item = serviceItems(config, state.pack, rejected).find(i => i.id === id)
+            if (id === MANAGE_SERVICES || item?.action) return openOptions('translate/services')
             // a service another tab deleted meanwhile is not written: the chain would take an unknown id for Microsoft
             // while the bar showed the raw id (the popup's rule; Codex on #301)
             controller.patchSettings(c => (isBuiltInService(id) || c.services.some(s => s.id === id) ? { ...c, provider: id } : c))
@@ -86,18 +87,19 @@ export function ServiceMenu({ controller }: { controller: ReaderController }) {
   )
 }
 
-export function DownloadMenu({ controller }: { controller: ReaderController }) {
+/** `wide`: the bar's, which leaves it in a narrow window for the reading options' own (reader.css data-wide) */
+export function DownloadMenu({ controller, wide = false }: { controller: ReaderController; wide?: boolean }) {
   // the original only once its document is open: loading, or after a fetch that failed, there are no bytes to give (Codex on #301)
   const state = useReader(controller, s => ({ finalReady: s.finalReady, original: s.sides.left.pages > 0 }))
   const pop = usePopover('menu')
   const items = [{ id: 'translation', name: R.download.translation, disabled: !state.finalReady }, { id: 'original', name: R.download.original, disabled: !state.original }]
   return (
     <>
-      <ToolbarButton label={R.download.name} anchor={pop.anchor} {...pop.trigger}>
+      <ToolbarButton label={R.download.name} anchor={pop.anchor} {...pop.trigger} data-wide={wide || undefined}>
         <Icon node={Download} />
       </ToolbarButton>
       <Popover {...pop.popover} role="menu" label={R.download.name} className="!min-w-[160px]">
-        <ReaderMenu key={pop.generation} kind="items" label={R.download.name} items={items} onClose={() => shut(pop.popover.id)} onPick={which => { shut(pop.popover.id); void controller.download(which as 'translation' | 'original') }} />
+        <MenuList key={pop.generation} kind="items" label={R.download.name} items={items} onClose={() => shut(pop.popover.id)} onPick={which => { shut(pop.popover.id); void controller.download(which as 'translation' | 'original') }} />
       </Popover>
     </>
   )

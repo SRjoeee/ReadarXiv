@@ -35,7 +35,7 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
 // ---------------------------------------------------------------- Task 13: the frame
 {
   const page = await open({ mode: 'bilingual' })
-  const bar = await box(page, 'header[role="toolbar"]'), doc = await box(page, '.doc')
+  const bar = await box(page, 'header'), doc = await box(page, '.doc')
   check('the toolbar is 44 px, the document area under it', bar?.h === 44 && doc?.y === 44, JSON.stringify({ bar, doc }))
   const [l, r] = [await box(page, '.pane[data-side="left"]'), await box(page, '.pane[data-side="right"]')]
   check('side by side: two panes, an 8 px gutter', l && r && Math.round(r.x - (l.x + l.w)) === 8, JSON.stringify({ l, r }))
@@ -53,12 +53,12 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.waitForTimeout(400)
   const [l2, r2] = [await box(page, '.pane[data-side="left"]'), await box(page, '.pane[data-side="right"]')]
   check('swapped: the translation on the left', !!(l2 && r2) && r2.x < l2.x, JSON.stringify({ l2, r2 }))
-  await patch(page, { pdfReader: { swapped: false, appearance: 'dark', dimPages: true } })
+  await patch(page, { theme: 'dark', pdfReader: { swapped: false, dimPages: true } })
   await page.waitForTimeout(600)
   const dark = await page.evaluate(() => ({ theme: document.documentElement.dataset.theme, dim: document.documentElement.hasAttribute('data-axt-dim'), filter: getComputedStyle(document.querySelector('#left .page canvas')).filter, blend: (() => { window.__reader.debug.light(3); const b = document.querySelector('.axt-hl'); return b && getComputedStyle(b).mixBlendMode })() }))
   check('dark: the theme, the canvas inverted, the band screened', dark.theme === 'dark' && dark.dim && /invert/.test(dark.filter) && dark.blend === 'screen', JSON.stringify(dark))
   await shot(page, '13-dark-bilingual')
-  await patch(page, { pdfReader: { appearance: 'system', dimPages: true } })
+  await patch(page, { theme: 'system', pdfReader: { dimPages: true } })
   await page.close()
 }
 {
@@ -176,16 +176,10 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.waitForTimeout(500)
   check('the display switch changes the display', (await state(page)).display === 'translation')
   check('sync and swap grey out in a single display', await page.evaluate(() => ['同步滚动', '交换左右'].every(n => document.querySelector(`button[aria-label="${n}"]`)?.getAttribute('aria-disabled') === 'true')))
-  await page.keyboard.press('2')
-  await page.waitForTimeout(500)
-  check('the 2 key comes back to side by side', (await state(page)).display === 'bilingual')
-  // the other two keys, and the switch's arrows as a radio group's (the design, §6.2, §14)
-  await page.keyboard.press('1')
+  // no single key chooses a display (WCAG 2.1.4; the maintainer, 2026-09-26); the switch's arrows do, as a radio group's
+  for (const k of ['1', '2', '3']) await page.keyboard.press(k)
   await page.waitForTimeout(400)
-  const one = (await state(page)).display
-  await page.keyboard.press('3')
-  await page.waitForTimeout(400)
-  const three = (await state(page)).display
+  const digits = (await state(page)).display
   await page.getByRole('radio', { name: '译文' }).focus()
   await page.keyboard.press('ArrowLeft')
   await page.waitForTimeout(400)
@@ -193,8 +187,8 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.keyboard.press('ArrowRight')
   await page.waitForTimeout(400)
   const right = (await state(page)).display
-  check('the 1 and 3 keys choose the original and the translation; the switch\'s arrows move its choice and its focus', one === 'original' && three === 'translation' && left.display === 'bilingual' && left.focus === '对照' && right === 'translation', JSON.stringify({ one, three, left, right }))
-  await page.keyboard.press('2')
+  check('a digit chooses no display; the switch\'s arrows move its choice and its focus', digits === 'translation' && left.display === 'bilingual' && left.focus === '对照' && right === 'translation', JSON.stringify({ digits, left, right }))
+  await page.getByRole('radio', { name: '对照' }).click()
   await page.waitForTimeout(400)
   const before = (await state(page)).scale
   await page.getByRole('button', { name: '放大' }).click()
@@ -221,7 +215,7 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.keyboard.type('fra')
   check('the language menu searches as it is typed', (await page.getByRole('option').count()) === 1)
   await page.keyboard.press('Escape')
-  check('Escape closes it, the focus back on its button', await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === '目标语言'))
+  check('Escape closes it, the focus back on its button', await page.evaluate(() => !!(a => a && (a.getAttribute('aria-labelledby')?.split(' ').map(i => document.getElementById(i)?.textContent).join(' ') ?? a.getAttribute('aria-label')))(document.activeElement)?.includes('目标语言')))
   const [download] = await Promise.all([page.waitForEvent('download'), (async () => { await page.getByRole('button', { name: '下载' }).click(); await page.getByRole('menuitem', { name: '原文 PDF' }).click() })()])
   check('the original downloads, named by the paper', download.suggestedFilename() === `${paper}.pdf`, download.suggestedFilename())
   await page.getByRole('button', { name: '翻译服务' }).click()
@@ -245,10 +239,10 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.keyboard.press('Escape')
   await page.setViewportSize({ width: 880, height: 900 })
   await page.waitForTimeout(400)
-  const inBar = await page.evaluate(() => getComputedStyle(document.querySelector('[data-zone="trail"] > button[aria-label="目标语言"]')).display)
+  const inBar = await page.evaluate(() => getComputedStyle([...document.querySelectorAll('[data-zone="trail"] > button')].find(b => b.textContent.includes('目标语言'))).display)
   await page.getByRole('button', { name: '阅读选项' }).click()
   await page.waitForTimeout(300)
-  const inOptions = await page.evaluate(() => { const b = document.querySelector('.pop:popover-open .narrow-only button[aria-label="目标语言"]'); return !!b && b.getBoundingClientRect().width > 0 })
+  const inOptions = await page.evaluate(() => { const b = [...document.querySelectorAll('.pop:popover-open .narrow-only button')].find(x => x.textContent.includes('目标语言')); return !!b && b.getBoundingClientRect().width > 0 })
   check('under 900 px the language menu leaves the bar for the options', inBar === 'none' && inOptions, JSON.stringify({ inBar, inOptions }))
   await shot(page, '20-options-narrow')
   await page.close()
@@ -366,7 +360,7 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
 {
   const page = await open({ mode: 'bilingual' })
   // the progress line (the maintainer, 2026-09-25): there, along the toolbar's foot, and out of sight while reading
-  const line = await page.evaluate(() => { const l = document.querySelector('header[role="toolbar"] .progress-line'); return l && { on: l.hasAttribute('data-on'), opacity: getComputedStyle(l).opacity } })
+  const line = await page.evaluate(() => { const l = document.querySelector('header .progress-line'); return l && { on: l.hasAttribute('data-on'), opacity: getComputedStyle(l).opacity } })
   check('the progress line is out of sight while reading', !!line && !line.on && line.opacity === '0', JSON.stringify(line))
   // I5: the offline service's language pack is looked up after the settings land, and the service menu follows it
   const pack = await page.waitForFunction(() => window.__reader.controller.getState().pack, null, { timeout: 8000 }).then(h => h.jsonValue(), () => null)
@@ -414,11 +408,12 @@ for (const embedded of ['1', '0']) {
 {
   const page = await open({ mode: 'bilingual' })
   for (const dark of [false, true]) {
-    await patch(page, { pdfReader: { appearance: dark ? 'dark' : 'light' } })
+    await patch(page, { theme: dark ? 'dark' : 'light' })
     await page.waitForTimeout(500)
     const seen = {}
     for (const name of ['缩放比例', '目标语言']) {
-      await page.getByRole('button', { name, exact: true }).focus()
+      // the bar's own: named by its words and what it shows (WCAG 2.5.3)
+      await page.locator('header').getByRole('button', { name }).focus()
       await page.keyboard.press('Enter')
       await page.waitForTimeout(350)
       await page.keyboard.press('ArrowDown')
@@ -429,9 +424,9 @@ for (const embedded of ['1', '0']) {
     }
     check(`${dark ? 'dark' : 'light'}: a menu's active item, moved by the keyboard, shows the focus ring`, Object.values(seen).every(s => s === 'solid'), JSON.stringify(seen))
   }
-  await patch(page, { pdfReader: { appearance: 'system' } })
+  await patch(page, { theme: 'system' })
   // C. every name in the service menu whole
-  await page.getByRole('button', { name: '翻译服务', exact: true }).click()
+  await page.locator('header').getByRole('button', { name: '翻译服务' }).click()
   await page.waitForTimeout(400)
   const cut = await page.evaluate(() => [...document.querySelectorAll('.pop:popover-open .item .truncate')].filter(s => s.scrollWidth > s.clientWidth + 1).map(s => s.textContent))
   check('the service menu shows every name whole', cut.length === 0, JSON.stringify(cut))
@@ -454,7 +449,7 @@ for (const embedded of ['1', '0']) {
 // maintainer adopted the raised thumb, 2026-09-26)
 {
   const page = await open({ mode: 'bilingual' })
-  await patch(page, { pdfReader: { appearance: 'dark', sync: true } })
+  await patch(page, { theme: 'dark', pdfReader: { sync: true } })
   await page.waitForTimeout(700)
   const ratios = await page.evaluate(() => {
     const px = color => { const c = document.createElement('canvas'); c.width = c.height = 1; const g = c.getContext('2d'); g.fillStyle = color; g.fillRect(0, 0, 1, 1); return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3) }
@@ -464,7 +459,238 @@ for (const embedded of ['1', '0']) {
     return { thumb: ratio(bg('.seg .thumb'), bg('.seg')), pressed: ratio(bg('header .tbtn[aria-pressed="true"]'), bg('header')) }
   })
   check('dark: the chosen segment\'s thumb and a pressed button stand out from what they sit on', ratios.thumb >= 1.5 && ratios.pressed >= 1.15, JSON.stringify(ratios))
-  await patch(page, { pdfReader: { appearance: 'system' } })
+  await patch(page, { theme: 'system' })
+  await page.close()
+}
+
+// ---------------------------------------------------------------- the interface review's fixes (2026-09-26)
+{
+  const page = await open({ mode: 'bilingual' })
+  // the bar at every width, in both languages and with a service's longest name (40 characters): no control drawn over
+  // another or past the window's edges, and below 500 px what leaves the bar is in the reading options (§5)
+  const layout = () => {
+    const vw = innerWidth
+    const els = [...document.querySelectorAll('header button, header a, header [role="radiogroup"]')].filter(e => !e.closest('[role="radiogroup"]') && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden' || e.matches('[role="radiogroup"]'))
+    const rects = els.map(e => { const r = e.getBoundingClientRect(); return { name: e.getAttribute('aria-label') || e.textContent.trim().slice(0, 16), l: r.left, r: r.right } })
+    const overlaps = []
+    for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) if (rects[i].l < rects[j].r - 0.5 && rects[j].l < rects[i].r - 0.5) overlaps.push(`${rects[i].name} × ${rects[j].name}`)
+    return { overlaps, outside: rects.filter(r => r.r > vw + 0.5 || r.l < -0.5).map(r => r.name) }
+  }
+  const setLocale = async lang => {
+    await Promise.all([page.waitForEvent('load', { timeout: 30000 }).catch(() => null), page.evaluate(l => { window.__reader.controller.patchSettings(c => ({ ...c, uiLanguage: l })) }, lang).catch(() => null)])
+    await page.waitForFunction(() => window.__reader?.ready && window.__reader?.controller?.getState().settings, null, { timeout: 90000 })
+    await page.waitForTimeout(800)
+  }
+  const bad = []
+  const sweep = async tag => {
+    for (const w of [1440, 1100, 1024, 960, 900, 899, 640, 500, 499, 400, 320]) {
+      await page.setViewportSize({ width: w, height: 800 })
+      await page.waitForTimeout(300)
+      const l = await page.evaluate(layout)
+      if (l.overlaps.length || l.outside.length) bad.push(`${tag} ${w}: ${JSON.stringify(l)}`)
+      await page.screenshot({ path: join(out, `review-bar-${tag}-${w}.png`), clip: { x: 0, y: 0, width: w, height: 48 } })
+    }
+  }
+  await sweep('zh')
+  await setLocale('en')
+  await sweep('en')
+  await setLocale('zh-CN')
+  await page.evaluate(async () => {
+    window.__reader.controller.patchSettings(c => ({ ...c, provider: 'svc-review01', services: [...c.services, { id: 'svc-review01', kind: 'openai-compat', name: 'OpenRouter · Claude Sonnet 5 (work acct)', baseURL: 'http://127.0.0.1:9/v1', apiKey: '', model: 'm', thinking: 'disabled' }] }))
+    await new Promise(r => setTimeout(r, 800))
+  })
+  await sweep('long')
+  check('the bar at every width, in both languages and with the longest service name: nothing drawn over another or past the window (the interface review)', bad.length === 0, bad.join(' | '))
+  // below 500 px the download and the settings are the reading options' first rows
+  await page.setViewportSize({ width: 400, height: 800 })
+  await page.waitForTimeout(300)
+  await page.click('header [aria-label="阅读选项"]')
+  await page.waitForTimeout(400)
+  const rows = await page.evaluate(() => [...document.querySelectorAll('.pop:popover-open .narrowest-only.row')].filter(r => r.getBoundingClientRect().height > 0).map(r => r.firstChild?.textContent))
+  const firstFocus = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))
+  check('under 500 px: the download and the settings open from the reading options, which take the focus to the first of them', JSON.stringify(rows) === JSON.stringify(['下载', '设置']) && firstFocus === '下载', JSON.stringify({ rows, firstFocus }))
+  await page.keyboard.press('Escape')
+  await page.evaluate(async () => {
+    window.__reader.controller.patchSettings(c => ({ ...c, provider: 'microsoft', services: c.services.filter(s => s.id !== 'svc-review01') }))
+    await new Promise(r => setTimeout(r, 600))
+  })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.waitForTimeout(400)
+  check('the bar is the page\'s banner, not a toolbar it does not behave as', await page.evaluate(() => document.querySelector('header').getAttribute('role') === null))
+  // the reading options put the focus in, at a width where their first rows are the highlight's
+  await page.focus('header [aria-label="阅读选项"]')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(400)
+  const inside = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))
+  await page.keyboard.press('Escape')
+  check('the reading options take the focus to their first control that shows', inside === '对照高亮', String(inside))
+  // a Tab out of an open menu closes it, and the focus goes on
+  await page.locator('header').getByRole('button', { name: '缩放比例' }).focus()
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(300)
+  await page.keyboard.press('Tab')
+  await page.waitForTimeout(300)
+  const after = await page.evaluate(() => ({ open: [...document.querySelectorAll('.pop')].some(p => p.matches(':popover-open')), focus: document.activeElement?.getAttribute('aria-label') }))
+  check('a Tab out of an open menu closes it, the focus going on to the next control', !after.open && after.focus === '放大', JSON.stringify(after))
+  // every point of a control's drawn box is that control's (the zoom's three sit side by side)
+  const stolen = await page.evaluate(() => {
+    const out = []
+    for (const b of document.querySelectorAll('header button, header a')) {
+      const r = b.getBoundingClientRect()
+      if (!r.width) continue
+      for (let x = Math.ceil(r.left); x < Math.floor(r.right); x++) { const hit = document.elementFromPoint(x, r.top + r.height / 2)?.closest('header button, header a'); if (hit && hit !== b) { out.push(`${b.getAttribute('aria-label')} @${x}`); break } }
+    }
+    return out
+  })
+  check('every point of a control\'s drawn box is that control\'s: grown hit areas never overlap', stolen.length === 0, stolen.join(', '))
+  // a press on an open popover's own button closes it: the button's click, not the focus it takes on mousedown (the
+  // branch review: the press closed it and the click opened it again); a menu the reading options hold, likewise
+  const shown = id => page.evaluate(i => !!document.getElementById(i)?.matches(':popover-open'), id)
+  const zoomButton = page.locator('header').getByRole('button', { name: '缩放比例' })
+  const zoomMenu = await zoomButton.getAttribute('popovertarget')
+  await zoomButton.click(); await page.waitForTimeout(300)
+  const zoomOpened = await shown(zoomMenu)
+  await zoomButton.click(); await page.waitForTimeout(400)
+  const zoomAfter = await shown(zoomMenu)
+  await page.setViewportSize({ width: 800, height: 800 }); await page.waitForTimeout(300)
+  const optionsButton = page.locator('header button[aria-label="阅读选项"]')
+  await optionsButton.click(); await page.waitForTimeout(400)
+  const inner = page.locator('#pop-options').getByRole('button', { name: '目标语言' })
+  await inner.click(); await page.waitForTimeout(400)
+  const innerOpened = await shown('pop-options-language')
+  await inner.click(); await page.waitForTimeout(400)
+  const innerAfter = { menu: await shown('pop-options-language'), options: await shown('pop-options') }
+  await optionsButton.click(); await page.waitForTimeout(400)
+  const optionsAfter = await shown('pop-options')
+  await page.setViewportSize({ width: 1440, height: 900 }); await page.waitForTimeout(300)
+  check('a press on an open popover\'s own button closes it, the reading options\' menus too', zoomOpened && !zoomAfter && innerOpened && !innerAfter.menu && innerAfter.options && !optionsAfter, JSON.stringify({ zoomOpened, zoomAfter, innerOpened, innerAfter, optionsAfter }))
+  // the zoom's value through its range: its button's width, and the − beside it, never move (better-typography: a
+  // changing value shifts nothing; measured before, 60 → 63 px and 3.1 px at 99 % → 100 %)
+  const across = []
+  for (const s of [0.25, 0.83, 0.99, 1, 1.25, 4]) {
+    await page.evaluate(v => window.__reader.controller.zoomTo(v), s)
+    await page.waitForTimeout(400)
+    across.push(await page.evaluate(() => { const v = document.querySelector('[data-zoom] .zoom-value'), m = document.querySelector('[data-zoom] > .tbtn:first-child'); return [v.querySelector('[data-value]').textContent, Math.round(v.getBoundingClientRect().width * 10) / 10, Math.round(m.getBoundingClientRect().left * 10) / 10] }))
+  }
+  await page.evaluate(() => window.__reader.controller.zoomTo('page-width'))
+  check('the zoom\'s value from 25 % to 400 %: its button\'s width and the − beside it do not move (better-typography)', new Set(across.map(a => a[1])).size === 1 && new Set(across.map(a => a[2])).size === 1, JSON.stringify(across))
+  // the focus rings are the keyboard's, in the ink, hugging a field (better-accessibility; the maintainer, 2026-09-26):
+  // a click into the page's field or on the language menu shows the caret and the field's fill, no ring; Tab and the
+  // arrows bring the rings back. Before, a click ringed the field and, in the menu, the search and its first option
+  const look = sel => page.evaluate(s => { const e = document.querySelector(s), c = getComputedStyle(e); return { ring: c.outlineStyle === 'none' ? null : `${c.outlineWidth} +${c.outlineOffset} ${c.outlineColor}`, bg: c.backgroundColor } }, sel)
+  const ink = await page.evaluate(() => { const i = document.createElement('i'); i.style.color = 'var(--ink)'; document.body.append(i); const c = getComputedStyle(i).color; i.remove(); return c })
+  await page.mouse.move(320, 400); await page.mouse.wheel(0, 300); await page.waitForTimeout(300)
+  await page.click('.pane[data-side="left"] .pill input'); await page.waitForTimeout(150)
+  const pillClicked = await look('.pane[data-side="left"] .pill input')
+  await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab'); await page.waitForTimeout(150)
+  const pillKeyed = await look('.pane[data-side="left"] .pill input')
+  await page.keyboard.press('Escape'); await page.mouse.click(640, 400)
+  await page.locator('header').getByRole('button', { name: '目标语言' }).click(); await page.waitForTimeout(400)
+  const menuClicked = { search: await look('.pop:popover-open .search'), item: await look('.pop:popover-open .item[data-active]') }
+  await page.keyboard.press('ArrowDown'); await page.waitForTimeout(150)
+  const menuKeyed = { search: await look('.pop:popover-open .search'), item: await look('.pop:popover-open .item[data-active]') }
+  await page.keyboard.press('Escape'); await page.waitForTimeout(300)
+  const rings = { ink, pillClicked, pillKeyed, menuClicked, menuKeyed }
+  check('a click shows no ring, the keyboard does: in the ink, hugging a field (the maintainer, 2026-09-26)',
+    !pillClicked.ring && pillClicked.bg !== 'rgba(0, 0, 0, 0)' && pillKeyed.ring === `2px +0px ${ink}` && !menuClicked.search.ring && !menuClicked.item.ring && menuKeyed.search.ring === `2px +0px ${ink}` && menuKeyed.item.ring?.endsWith(ink),
+    JSON.stringify(rings))
+  // the reading options' appearance: system, light, dark, as icons in equal thirds, the thumb on the chosen one; a
+  // chosen swatch's line a step lighter than the focus's ring; a tooltip on an icon inside the popover; a theme's flip
+  // with no element fading on its own (the maintainer, 2026-09-26: the words ran off the thumb, the pressed buttons flashed)
+  await patch(page, { theme: 'system', pdfReader: { sync: true } })
+  await page.waitForTimeout(500)
+  await page.locator('header button[aria-label="阅读选项"]').click(); await page.waitForTimeout(400)
+  const seg = await page.evaluate(() => {
+    const radios = [...document.querySelectorAll('.pop:popover-open [aria-label="外观"] [role="radio"]')]
+    const thumb = document.querySelector('.pop:popover-open [aria-label="外观"] .thumb').getBoundingClientRect()
+    const chosen = radios.find(r => r.getAttribute('aria-checked') === 'true').getBoundingClientRect()
+    const icon = radios.map(r => { const b = r.getBoundingClientRect(), i = r.querySelector('svg').getBoundingClientRect(); return Math.round((i.x + i.width / 2 - (b.x + b.width / 2)) * 10) / 10 })
+    return { names: radios.map(r => r.getAttribute('aria-label')), widths: radios.map(r => Math.round(r.getBoundingClientRect().width * 10) / 10), thumbOff: Math.round(Math.abs(thumb.x - chosen.x) * 10) / 10, thumbWidth: Math.round(Math.abs(thumb.width - chosen.width) * 10) / 10, iconOff: icon }
+  })
+  check('the appearance: system, light, dark, in equal thirds, each icon centred, the thumb on the chosen one', JSON.stringify(seg.names) === JSON.stringify(['跟随系统', '浅色', '深色']) && new Set(seg.widths).size === 1 && seg.thumbOff <= 0.5 && seg.thumbWidth <= 0.5 && seg.iconOff.every(o => Math.abs(o) <= 0.5), JSON.stringify(seg))
+  await page.locator('.pop:popover-open [role="radio"][aria-label="浅色"]').hover(); await page.waitForTimeout(700)
+  const iconTip = await page.evaluate(() => [...document.querySelectorAll('.tip')].find(t => t.matches(':popover-open'))?.textContent ?? null)
+  check('…its icons named in a tooltip, inside the popover', iconTip === '浅色', String(iconTip))
+  const swatchRings = await page.evaluate(() => {
+    const px = color => { const c = document.createElement('canvas'); c.width = c.height = 1; const g = c.getContext('2d'); g.fillStyle = color; g.fillRect(0, 0, 1, 1); return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3) }
+    const lum = ([r, g, b]) => [r, g, b].map(v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [x, y] = [lum(px(a)), lum(px(b))].sort((m, n) => n - m); return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100 }
+    const chosen = getComputedStyle(document.querySelector('.pop:popover-open .swatch[aria-pressed="true"]')).outlineColor
+    const focus = getComputedStyle(document.documentElement).getPropertyValue('--focus').trim(), chrome = getComputedStyle(document.querySelector('.pop:popover-open')).backgroundColor
+    const token = n => { const i = document.createElement('i'); i.style.color = `var(${n})`; document.body.append(i); const c = getComputedStyle(i).color; i.remove(); return c }
+    return { chosen, focus: token('--focus'), chosenOnChrome: ratio(chosen, chrome), focusOnChrome: ratio(token('--focus'), chrome) }
+  })
+  check('…a chosen swatch\'s line apart from the focus\'s ring, and 3:1 on the popover', swatchRings.chosen !== swatchRings.focus && swatchRings.chosenOnChrome >= 3, JSON.stringify(swatchRings))
+  // the pointer away first: with the icon's tooltip up, Escape closes the tooltip, the topmost, and leaves the options open
+  await page.mouse.move(700, 600); await page.waitForTimeout(200)
+  await page.keyboard.press('Escape'); await page.waitForTimeout(300)
+  // the appearance's thumb slides as the display switch's does, while the theme it picks snaps (the maintainer,
+  // 2026-09-26: holding every transition for the flip had stopped the thumb too)
+  await page.locator('header button[aria-label="阅读选项"]').click(); await page.waitForTimeout(400)
+  const thumbAt = () => page.evaluate(() => { const t = document.querySelector('.pop:popover-open [aria-label="外观"] .thumb'), r = t.getBoundingClientRect(), p = t.parentElement.getBoundingClientRect(); return Math.round((r.x - p.x) * 10) / 10 })
+  await page.locator('.pop:popover-open [role="radio"][aria-label="浅色"]').click(); await page.waitForTimeout(500)
+  const from = await thumbAt()
+  await page.locator('.pop:popover-open [role="radio"][aria-label="深色"]').click()
+  const mid = await page.evaluate(() => new Promise(r => setTimeout(() => r(null), 60))).then(thumbAt)
+  await page.waitForTimeout(500)
+  const to = await thumbAt()
+  await page.mouse.move(700, 600); await page.waitForTimeout(200)
+  await page.keyboard.press('Escape'); await page.waitForTimeout(300)
+  check('the appearance\'s thumb slides to the one chosen, as the display switch\'s does, the theme snapping', to > from && mid > from && mid < to, JSON.stringify({ from, mid, to }))
+  // the flip: the pressed sync button's fill is the new theme's at the next frame, not a fade toward it
+  const bgNow = () => page.evaluate(() => getComputedStyle(document.querySelector('header button[aria-label="同步滚动"]')).backgroundColor)
+  const flips = []
+  for (const theme of ['dark', 'light']) {
+    await page.evaluate(t => window.__reader.controller.patchSettings(c => ({ ...c, theme: t })), theme)
+    await page.waitForFunction(t => document.documentElement.dataset.theme === t, theme, { timeout: 5000 })
+    const early = await page.evaluate(() => new Promise(r => requestAnimationFrame(() => r(getComputedStyle(document.querySelector('header button[aria-label="同步滚动"]')).backgroundColor))))
+    await page.waitForTimeout(600)
+    flips.push({ theme, early, settled: await bgNow() })
+  }
+  check('a theme\'s flip: a pressed button\'s fill is the new one at the next frame, no fade of its own (better-ui)', flips.every(f => f.early === f.settled), JSON.stringify(flips))
+  await patch(page, { theme: 'system' })
+  // a touch screen: no hover's look is left on a control once a tap has passed (the pointer 'hovers' there after it)
+  const cdp = await page.context().newCDPSession(page)
+  // touch emulation, which makes (hover: none) true; emulating the media feature alone did not reach the page
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 })
+  const swap = page.locator('header button[aria-label="交换左右"]')
+  await swap.hover(); await page.waitForTimeout(250)
+  const touched = await swap.evaluate(b => ({ pressed: b.getAttribute('aria-pressed'), bg: getComputedStyle(b).backgroundColor }))
+  await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false })
+  await page.mouse.move(700, 500)
+  check('a touch screen: a control keeps no hover\'s look once the pointer is on it (the interface review)', touched.pressed === 'false' && /rgba\(0, 0, 0, 0\)|transparent/.test(touched.bg), JSON.stringify(touched))
+  // forced colours: the chosen display, a pressed button and a switch that is on keep a mark of their own
+  await patch(page, { pdfReader: { sync: true } })
+  await page.waitForTimeout(400)
+  await page.emulateMedia({ forcedColors: 'active' })
+  await page.waitForTimeout(300)
+  const forced = await page.evaluate(() => {
+    const s = e => { const c = getComputedStyle(e); return [c.backgroundColor, c.borderTopStyle, c.borderTopColor, c.outlineStyle, c.color].join(' ') }
+    const radios = [...document.querySelectorAll('.seg.display [role="radio"]')]
+    const chosen = radios.find(r => r.getAttribute('aria-checked') === 'true'), other = radios.find(r => r.getAttribute('aria-checked') === 'false')
+    return {
+      segment: s(chosen) + ' / thumb ' + getComputedStyle(document.querySelector('.seg.display .thumb')).backgroundColor, otherSegment: s(other) + ' / well ' + getComputedStyle(document.querySelector('.seg.display')).backgroundColor,
+      pressed: s(document.querySelector('header button[aria-label="同步滚动"]')), unpressed: s(document.querySelector('header button[aria-label="交换左右"]')),
+    }
+  })
+  await page.click('header [aria-label="阅读选项"]')
+  await page.waitForTimeout(400)
+  // one switch off, so that both looks are there to compare; turned on again after
+  const dim = page.locator('.pop:popover-open [role="switch"][aria-label="深色时调暗页面"]')
+  await dim.click(); await page.waitForTimeout(400)
+  const switches = await page.evaluate(() => [...document.querySelectorAll('.pop:popover-open [role="switch"]')].map(b => [b.getAttribute('aria-checked'), getComputedStyle(b).backgroundColor, getComputedStyle(b).borderTopStyle].join(' ')))
+  await dim.click(); await page.waitForTimeout(400)
+  await page.keyboard.press('Escape')
+  await page.screenshot({ path: join(out, 'review-forced-colors.png'), clip: { x: 0, y: 0, width: 1440, height: 48 } })
+  await page.emulateMedia({ forcedColors: 'none' })
+  const thumbDiffers = !forced.segment.endsWith(forced.otherSegment.split(' / well ')[1])
+  check('forced colours: the chosen display, a pressed button and a switch that is on keep a mark of their own (the interface review)', thumbDiffers && forced.pressed !== forced.unpressed && new Set(switches.filter(x => x.startsWith('true')).map(x => x.slice(5))).size === 1 && !switches.filter(x => x.startsWith('false')).some(x => switches.find(y => y.startsWith('true'))?.slice(5) === x.slice(6)), JSON.stringify({ forced, switches }))
+  // the contents: a row is its link, top to bottom
+  await page.click('header [aria-label="目录"]')
+  await page.waitForTimeout(500)
+  const entry = await page.evaluate(() => { const e = document.querySelector('.toc .entry'), a = e.querySelector('a'); return { row: Math.round(e.getBoundingClientRect().height), link: Math.round(a.getBoundingClientRect().height) } })
+  check('a contents row is its link from top to bottom: no dead band above and below', entry.link === entry.row, JSON.stringify(entry))
+  await page.click('header [aria-label="目录"]')
   await page.close()
 }
 

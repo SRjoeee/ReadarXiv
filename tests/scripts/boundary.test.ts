@@ -21,7 +21,7 @@ describe('resolveSpecifier', () => {
   it('reads a file extension and an index file as the module they name', () => {
     expect(resolveSpecifier(FROM, '../../ui/strings.ts')).toBe('src/ui/strings')
     expect(resolveSpecifier(FROM, '@/locales/index.ts')).toBe('src/locales')
-    expect(resolveSpecifier(FROM, '@/ui/appearance/Preview.tsx')).toBe('src/ui/appearance/Preview')
+    expect(resolveSpecifier(FROM, '@/ui/controls/Button.tsx')).toBe('src/ui/controls/Button')
   })
 })
 

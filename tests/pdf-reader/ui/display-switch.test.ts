@@ -34,29 +34,11 @@ describe('the display switch (the reader\'s design, §6.2)', () => {
     expect(onChange).toHaveBeenLastCalledWith('bilingual')
   })
 
-  it('takes 1, 2 and 3 anywhere on the page, but not where text goes', async () => {
-    const { onChange } = await mount('original')
-    await key(document.body, '3')
-    expect(onChange).toHaveBeenLastCalledWith('translation')
-    const input = document.body.appendChild(document.createElement('input'))
-    await key(input, '2')
-    expect(onChange).toHaveBeenCalledTimes(1)
-    await act(async () => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '2', metaKey: true, bubbles: true })) })
-    expect(onChange).toHaveBeenCalledTimes(1)
-  })
-
-  it('leaves a digit to a menu or a dialog that has the focus, and to whatever took the key first (the final review)', async () => {
-    // the zoom menu's letter jump: 1 goes to 100 %, and must not switch to the original, nor write it
-    const { onChange } = await mount('bilingual')
-    for (const role of ['menu', 'listbox', 'dialog']) {
-      const box = document.body.appendChild(document.createElement('div'))
-      box.setAttribute('role', role)
-      await key(box.appendChild(document.createElement('div')), '1')
-    }
-    const taker = document.body.appendChild(document.createElement('div'))
-    taker.addEventListener('keydown', e => e.preventDefault())
-    await act(async () => { taker.dispatchEvent(new KeyboardEvent('keydown', { key: '3', bubbles: true, cancelable: true })) })
+  it('takes no single key on the page: a digit typed anywhere changes nothing, nor do its tooltips offer one (WCAG 2.1.4; the maintainer, 2026-09-26)', async () => {
+    const { container, onChange } = await mount('original')
+    for (const k of ['1', '2', '3']) await key(document.body, k)
     expect(onChange).not.toHaveBeenCalled()
+    expect(container.querySelectorAll('.tip kbd').length).toBe(0)
   })
 
   it('greys the translated displays when there is no translation to be had, and skips them', async () => {

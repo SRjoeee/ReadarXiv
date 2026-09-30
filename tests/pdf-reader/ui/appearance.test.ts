@@ -47,4 +47,14 @@ describe('the appearance (the reader\'s design, §4.3)', () => {
     expect(transition).toHaveBeenCalledOnce()
     expect([root.dataset.theme, root.hasAttribute('data-axt-dim')]).toEqual([undefined, false])
   })
+
+  it('holds every transition but a motion for the flip, and lets go two frames later: a pressed button flashed as it faded, and the thumb must still slide (better-ui)', async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }))
+    Object.assign(document, { startViewTransition: undefined })
+    const off = () => [...document.head.querySelectorAll('style')].some(s => /transition-property:\s*translate\s*!important/.test(s.textContent ?? ''))
+    applyAppearance(document.documentElement, { theme: 'dark', dim: false }, true)
+    expect([document.documentElement.dataset.theme, off()]).toEqual(['dark', true])
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))))
+    expect(off()).toBe(false)
+  })
 })

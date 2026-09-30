@@ -20,8 +20,20 @@ const FIELD: Record<string, string> = {
 
 const S = {
   brand: 'Read arXiv', // S-P-01
-  settings: '设置', // S-P-02, and the button on every note
-  notArxiv: '打开 arXiv 论文的 HTML 页面后即可翻译', // S-P-03
+  settings: '设置', // S-P-02
+  /** P0, no paper in the tab (the redesign's §5.4, §10.1): find one (S-P-03…08) */
+  find: {
+    lead: '打开 arXiv 论文（HTML 或 PDF）即可翻译', // S-P-03
+    field: '按标题、作者、摘要或链接搜索论文', // S-P-04
+    enter: '按回车搜索', // S-P-05
+    advanced: '高级搜索', // S-P-05
+    search: (q: string) => `在 arXiv 搜索「${q}」`, // S-P-06
+    elsewhere: '只能打开 arXiv 的论文链接。也可以输入标题或作者搜索。', // S-P-08
+    /** the paper a link or an id names: a name and an id, the same in every language */
+    paper: (id: string) => `arXiv ${id}`, // S-P-07
+  },
+  /** An arXiv paper's page that has not answered yet (the redesign's §5.4): not P0, and no field */
+  loading: '页面加载中', // S-P-03d
   rows: {
     service: '翻译服务', // S-P-10
     language: '目标语言', // S-P-20
@@ -30,7 +42,8 @@ const S = {
     highlightTitle: '悬停时高亮对应句子；仅译文模式下停留可查看原文', // S-P-81
     images: '图片翻译', // S-P-85
     style: '译文样式', // S-P-82; the same name as “Reading · Translation style” in the settings: the two are one thing
-    manageStyles: '管理译文样式…', // S-P-83: the last row of the style menu, opening the settings at “Reading”
+    manageStyles: '管理译文样式…', // S-P-83: the last row of the style menu, opening the settings at “Appearance”
+    managePrompts: '管理提示词…', // S-P-49: the prompt menu's last row (the redesign's §5.3), opening the settings at the prompts
   },
   service: {
     microsoft: 'Microsoft 翻译',
@@ -38,12 +51,13 @@ const S = {
     llm: 'LLM',
     chrome: 'Chrome 翻译',
     free: '免费', // S-P-44
-    chrome_ready: '浏览器内置，无需联网', // S-P-46
+    chrome_ready: '浏览器内置，无需联网', // S-P-43
     llm_noKey: '尚未配置 API Key', // S-P-45: the LLM item's hint until a key is set
+    llm_rejected: 'API Key 已失效', // S-P-45: the hint of a service whose key the endpoint refused
     microsoft_unsupported: '不支持当前目标语言',
     chrome_download: '下载', // S-P-40
     chrome_downloading: '语言包下载中', // S-P-41
-    chrome_unavailable: '当前不可用', // S-P-42 / S-P-43
+    chrome_unavailable: '当前不可用', // S-P-42
     manage: '管理翻译服务…', // S-P-48: the last row of the menu, opens the settings page
   },
   menu: {
@@ -58,16 +72,16 @@ const S = {
     // S-P-32: the chosen service cannot run and nothing takes over; the reason alone
     cannotRun: (why: string) => why,
     llmNoKey: 'LLM 尚未配置 API Key',
+    llmRejected: 'API Key 已失效', // S-P-32e: a key the endpoint refused (the redesign's §5.2)
     chromeNoPack: 'Chrome 翻译的语言包尚未下载',
     chromeDownloading: 'Chrome 翻译的语言包下载中，约需 1 分钟',
     microsoftUnsupported: 'Microsoft 翻译不支持当前目标语言',
     serviceGone: '选中的翻译服务已被删除，请重新选择', // S-P-32d
     paused: (reason: string) => `${reason}。请检查设置后重新翻译`, // S-P-33
     imagesPaused: (reason: string) => `图片翻译已暂停：${reason}`, // S-P-35
-    noHtml: 'arXiv 没有这篇论文的 HTML 版本，无法翻译',
+    noHtml: 'arXiv 没有这篇论文的 HTML 版本，无法翻译', // S-P-33b
     noHtmlVersion: 'arXiv 没有这篇论文的 HTML 版本', // S-P-33a: the PDF entry beside it translates
   },
-  /** The guided install on the settings page (S-O-30…36). The popup keeps the one-line version above */
   // an abstract or PDF page's two entries, the reader's to choose (S-P-50b; the reader's design, §2, §15)
   entry: { html: 'HTML 翻译', pdf: 'PDF 翻译' },
   primary: {
@@ -121,10 +135,43 @@ const S = {
 
 const O = {
   title: '设置',
-  nav: { services: '翻译服务', reading: '阅读', 'pdf-reader': 'PDF 阅读器', prompts: '提示词与术语', data: '数据' },
+  more: '更多',
+  /** The four sections of the sidebar (the redesign's design, §6.1); their hashes are these ids */
+  sections: { translate: '翻译', appearance: '外观', reading: '阅读', data: '数据' },
+  search: {
+    placeholder: '搜索设置',
+    clear: '清空搜索',
+    found: (n: number) => `找到 ${n} 项设置`,
+    none: (q: string) => `没有与「${q}」匹配的设置`,
+    /** A few words each row answers to besides its own (§6.1: the interface language answers to “language” too) */
+    keywords: {
+      'translate/services': '翻译服务 模型 LLM 接口 API Key',
+      'translate/fallback': '失效 额度 断网 备用',
+      'translate/language': '语言 翻译成 language',
+      'translate/prompts': 'LLM prompt 指令 消息',
+      'translate/glossary': 'LLM 术语 词汇 glossary',
+      'appearance/theme': '主题 深色 浅色 夜间 theme dark',
+      'appearance/dim': '夜间 亮度 阅读器',
+      'appearance/styles': '译文样式 颜色 下划线 模糊 字体',
+      'appearance/highlight': '悬停 句子 背景',
+      'reading/way': '提前 用量 按需 整篇',
+      'reading/images': '图片 图 figure',
+      'reading/open-in': '标签页 打开 tab',
+      'reading/floating': '悬浮 按钮 贴边',
+      'reading/pdf': 'PDF 阅读器 查看器',
+      'data/cache': '缓存 清空 存储',
+      'data/diagnostics': '日志 反馈 导出',
+      'language/ui': 'language Interface 语言 界面',
+    },
+  },
   /** S-O-05: the interface language. Not the target language, so it sits under the navigation, away from it */
   uiLanguage: '界面语言',
   uiLanguageAuto: '跟随浏览器',
+  /** §6.1: the foot row's name — a reader who cannot read this interface is the one looking for it */
+  uiLanguageName: '界面语言 · Interface language',
+  /** the row a search shows for it: where the control is, at the window's width (the sidebar's foot; below 640 px the title row's end) */
+  uiLanguageElsewhere: '也在左下角',
+  uiLanguageElsewhereNarrow: '也在右上角',
   /** The second half of the notice shown when the settings cannot be read (config/storage.ts reports the cause, not a sentence) */
   fallbackWhy: {
     tooNew: (stored: number, supported: number) => `存储里的配置是 v${stored}，这个版本只认到 v${supported}（可能装过更新的版本）`,
@@ -138,29 +185,78 @@ const O = {
   fallbackReset: '重置设置',
   fallbackResetConfirm: '确认重置',
   fallbackResetFailed: '重置没有成功，请再试一次',
+  /** §6.2: deleting is undone, not confirmed — the row gives way to this for 5 s */
+  undo: { deleted: (name: string) => `已删除「${name}」`, undo: '撤销' },
+  /** One sentence for a failed save anywhere on the page (a schema error's JSON or anything else thrown by the
+   * caller's save must never reach the reader): a service's connection, a glossary row (fix round 1, item 1) */
+  saveFailed: '保存失败，请再试一次',
+  /** §6.4: 外观 */
+  appearance: {
+    theme: '外观',
+    themes: { system: '跟随系统', light: '浅色', dark: '深色' },
+    dim: '深色时调暗 PDF 页面',
+    dimHint: '深色外观下把 PDF 页面调暗；高亮与图中译文保持原色',
+    highlightHint: '悬停时高亮对应的句子；仅译文时停留可查看原文',
+    colour: '颜色',
+    pickColour: '自选颜色',
+    styles: '译文样式',
+    restore: '恢复内置样式',
+    edit: (name: string) => `编辑「${name}」`,
+    create: '新建样式…',
+    newStyle: '新样式',
+    /** at the schema's cap (APPEARANCE_LIMITS): 新建样式… and 复制一份 greyed, this their reason */
+    stylesLimit: (n: number) => `最多 ${n} 个样式`,
+    /** at the schema's cap with no colour of one's own yet: 自选颜色 greyed, this the 颜色 row's reason */
+    coloursLimit: (n: number) => `最多 ${n} 种颜色`,
+    editor: {
+      name: '名称',
+      colour: '颜色',
+      follow: '跟随原文',
+      pick: '自选颜色',
+      strength: '浓淡',
+      /** §6.4: 1 · 0.7 · 0.5 (0.7 is the built-in 淡一档's) */
+      strengths: ['原样', '淡一些', '更淡'],
+      css: '自定义 CSS（只写声明，例如 letter-spacing: 0.02em）',
+      done: '完成',
+      delete: '删除样式',
+    },
+  },
+  /** §6.3: the glossary, a table (T8) */
+  glossary: {
+    title: '术语表',
+    hint: '让同一篇里的译法一致',
+    count: (n: number) => `${n} 条`,
+    source: '原文',
+    target: '译文',
+    addSource: '添加原文',
+    remove: (n: number) => `删除第 ${n} 行`,
+    paste: '可以直接粘贴多行「原文, 译文」，会自动拆成多行',
+    /** today's reasons without their line numbers: the row itself says it */
+    issue: { emptySource: '原文为空', emptyTarget: '译文为空' },
+    tooBig: '术语表太长，超出上限后没有保存；请减少条目或缩短内容',
+    /** beside O.saveFailed, once a write is refused (fix round 1, item 1) */
+    retry: '重试',
+  },
   services: {
-    /** One validation failure of the drawer's form, and what joins several, in this language's punctuation */
-    issue: (field: string, message: string) => `${field}：${FIELD[String(field).split('.').pop() ?? ''] ?? `不合法（${message}）`}`,
-    issueSeparator: '；',
-    builtIn: '内置服务',
-    mine: '我的服务',
-    empty: '还没有添加服务。添加后即可使用 LLM 翻译。',
-    add: '添加服务',
-    edit: '编辑',
-    imagesHint: '译文叠在图上，鼠标悬停查看原文',
-    imageModes: '在这些模式下显示图片译文',
-    imageModesHint: '只影响显示：切到没勾的模式时叠加层隐藏，切回来再显示，不重新识别',
+    /** §6.3: the group and its rows */
+    title: '翻译服务',
+    packNeeded: ' · 需要先下载语言包',
+    moreFor: (name: string) => `「${name}」的更多操作`,
+    rejected: 'API Key 已失效',
+    add: '添加服务…',
+    /** at the schema's cap (SERVICES_MAX): 添加服务… greyed, this its reason */
+    limit: (n: number) => `最多 ${n} 个服务`,
+    edit: '编辑…',
     autoFallback: '出问题时自动改用免费服务',
     autoFallbackHint: 'API Key 失效、额度用尽或断网时，翻译不会停下',
-    name: '名称',
-    namePlaceholder: '例如 DeepSeek V4 Flash',
+    name: '名称（选填）',
+    namePlaceholder: '默认使用模型名',
     baseURL: '接口地址',
-    baseURLHint: 'OpenRouter、DeepSeek、Ollama 等 OpenAI 兼容接口',
+    baseURLSuggestions: '常用地址',
     apiKey: 'API Key',
     apiKeyClear: '清除',
     apiKeyLocalHint: '本机地址可以不填',
     model: '模型',
-    more: '更多选项',
     thinking: '深度思考',
     thinkingHint: '翻译不需要推理，开启会明显变慢',
     /** Asking for access to the endpoint's address failed (entrypoints/options/permissions.ts reports which way) */
@@ -171,36 +267,31 @@ const O = {
     connect: '连接',
     connecting: '连接中…',
     connected: (ms: number) => `已连接 · ${ms} ms`,
+    failed: (reason: string) => `连接失败：${reason}`,
     delete: '删除',
-    deleteConfirm: '确认删除',
     cancel: '取消',
-    newTitle: '添加服务',
-    editTitle: '编辑服务',
+    /** §6.3: the address suggestions fill an address, nothing else (T4); the other two are product names, in the form */
+    localOllama: '本机 Ollama',
+    modelEmpty: '填好接口地址和 API Key 后列出',
+    modelLoading: '正在获取模型…',
+    modelSearch: (n: number) => `搜索 ${n} 个模型`,
+    modelNoMatch: '没有匹配的模型，可以直接填写',
+    modelNoList: '没能列出模型，可以直接填写',
+    addedOnConnect: '连接成功后才会添加',
+    savedOnConnect: '连接成功后才会保存',
+    /** A form is checked when it is submitted (§9); each reason at its field */
+    checks: { baseURL: '填写接口地址，例如 https://openrouter.ai/api/v1', apiKey: '填写 API Key', model: '选择或填写一个模型' },
+    /** Editing: the key field empty, the saved key kept unless one is typed */
+    keySaved: '已保存 · 留空则不改',
+    /** A key the endpoint refused (§4's record), or a service an earlier version stored without one */
+    keyForm: { refused: '服务拒绝了这个 API Key，它可能无效或已过期。换一个新的，其他设置不变。', label: '新的 API Key', submit: '更新并连接' },
   },
   reading: {
-    newProfile: '新配置',
-    styles: '译文样式',
-    stylesHint: '选中的样式立即生效',
-    highlights: '背景高亮',
-    highlightsHint: '悬停时用来标出对应句子的底色',
-    add: '添加配置',
-    reset: '重置',
-    resetHint: '把内置配置恢复原样，自己添加的保留',
-    editTitle: '编辑配置',
-    editAria: (name: string) => `编辑配置：${name}`,
-    name: '名称',
-    color: '文字颜色',
-    bandColor: '底色',
-    followText: '跟随原文',
-    custom: '自定义',
-    opacity: '透明度',
     underline: '下划线',
     underlines: { none: '无', solid: '实线', dotted: '点线', dashed: '虚线', wavy: '波浪' },
     thickness: '线宽',
     blur: '悬停前模糊',
-    blurHint: '译文先糊着，鼠标停上去才清晰，适合自测',
-    advanced: '高级',
-    advancedHint: '只填声明，不写选择器和花括号；字体与字号仍随论文',
+    blurHint: '译文先糊着，鼠标停上去才清晰',
     /** The four ways advanced CSS is refused (core/renderer/style-values.ts reports which) */
     advancedRejected: {
       closeBrace: '不要写右花括号：这里只填声明，选择器由扩展补上',
@@ -211,100 +302,72 @@ const O = {
     duplicate: '复制一份',
     /** What a copy is called: the shown name + this suffix (duplicateStyle in config/appearance.ts) */
     copySuffix: '副本',
-    delete: '删除',
-    done: '完成',
-    preloadRange: '提前翻译的范围',
-    preloadRangeHint: '屏幕下方多远的段落先翻；越近越省费用，整篇则一开始就全部请求',
-    preloadStops: ['一屏', '两屏', '三屏', '整篇'],
+    translateWay: '翻译方式',
+    translateWays: ['按需翻译', '整篇翻译'],
+    translateWayHints: ['只翻译正在阅读和即将读到的段落，用量最少', '打开论文时就请求整篇译文，滚到哪里都已翻好，用量较多'],
     openIn: '译文在哪里打开',
-    openInHint: '从论文的摘要页或 PDF 打开时，译文是这篇论文的 HTML 版本',
+    openInHint: '从摘要页或 PDF 页打开译文时',
     openInStops: ['新标签页', '当前标签页'],
     floatingEntry: '显示悬浮按钮',
-    floatingEntryHint: '在 arXiv 的摘要页、PDF 和论文全文页贴在窗口边缘：翻译、控制面板、设置',
-    threshold: '开始翻译的时机',
-    thresholdHint: '段落露出多少才开始翻',
-    thresholdStops: ['刚露出', '露出一半', '完全露出'],
+    floatingEntryHint: '在 arXiv 的摘要页、PDF 和全文页贴在窗口边缘',
+    imagesHint: '图里的文字也翻，译文叠在图上，悬停查看原文',
+    /** §6.5: the PDF group */
+    pdf: 'PDF',
+    pdfEnabled: '在 arXiv 的 PDF 上使用对照阅读器',
+    pdfEnabledHint: '关掉后，PDF 用浏览器自带的查看器打开',
+    syncHint: '原文和译文一起滚',
     /** The names of the profiles shipped with the extension (`BUILT_IN_STYLES` / `BUILT_IN_HIGHLIGHTS`): they are ours,
      *  not the reader's writing, so they follow the interface language; once the reader renames one, the reader's name shows */
     builtInStyles: { follow: '与原文相同', green: '绿色', blue: '蓝色', amber: '琥珀', muted: '淡一档', blur: '模糊' },
     builtInHighlights: { 'soft-green': '柔和绿', sand: '淡黄', sky: '淡蓝' },
-    preview: '预览',
     previewSource: PREVIEW_SOURCE,
     previewTarget: PREVIEW_TARGET,
   },
+  /** §6.3: the prompts, read as words */
   prompts: {
-    /** Prompt management (S-O-6x): the built-in one, the reader's own, and variable buttons that insert at the caret */
-    manager: {
-      view: '查看',
-      viewTitle: '查看内置提示词',
-      copy: '复制并自定义',
-      /** What a copy of the built-in prompt is called (the same thing as the appearance profiles' copySuffix; each language keeps its own punctuation) */
-      copyOf: (name: string) => `${name}（副本）`,
-      copyTitle: '复制并自定义',
-      custom: '自定义',
-      edit: '编辑',
-      editTitle: '编辑提示词',
-      remove: '删除',
-      removeConfirm: '确认删除',
-      create: '新建',
-      createTitle: '新建提示词',
-      /** The two ways importing a prompt file fails (providers/prompt-file.ts reports which) */
-      importFailed: {
-        notJson: '这个文件不是合法的 JSON',
-        badShape: '文件格式不对：应是 [{ "name", "systemPrompt", "prompt" }] 这样的数组，name 与 prompt 必填',
-      },
-      importFile: '导入 JSON',
-      exportMine: '导出自定义',
-      imported: (n: number) => `已导入 ${n} 条`,
-      saved: '已保存',
-      added: '已加入列表',
-      addToList: '加入列表',
-      close: '关闭',
-      cancel: '取消',
-      nameEmpty: '名称不能为空',
-      promptEmpty: '用户提示词不能为空',
-      systemPrompt: 'System prompt（收发协议会自动追加在它后面，改不掉）',
-      userPrompt: '用户提示词',
-      name: '名称',
-      insert: '插入变量：',
-      /** The descriptions of the two prompts shipped with the extension, by id */
-      builtIn: {
-        default: '通用学术翻译：术语用既定译法，人名、期刊名、代码与链接保留原文',
-        'precision-rewrite': '"翻译即改写"：摆脱原文句法、消除翻译腔，按目标语言的表达习惯重写，术语与格式照旧',
-      },
-      tokens: {
-        targetLanguage: '目标语言的英文名',
-        input: '待翻译的 JSON 段落（用户消息里必须有）',
-        paperTitle: '论文标题',
-        abstract: '论文摘要',
-        sectionTitle: '当前章节标题',
-        glossary: '术语表',
-      },
+    title: '提示词',
+    mine: '我的',
+    copy: '复制后修改',
+    locked: '内置提示词不能直接改',
+    done: '完成',
+    delete: '删除',
+    create: '新建提示词…',
+    import: '导入…',
+    export: '导出…',
+    newName: '新提示词',
+    name: '名称',
+    /** a prompt's two parts, named for what they do; nothing names the protocol the extension appends after them */
+    parts: { system: ['指令', '翻译时始终遵守的要求'], user: ['消息', '每次随原文一起发送'] },
+    /** its variables, drawn as labels, never {{…}} */
+    tokens: { targetLanguage: '目标语言', input: '原文', paperTitle: '论文标题', abstract: '摘要', sectionTitle: '章节标题', glossary: '术语表' },
+    /** What a copy of a built-in prompt is called */
+    copyOf: (name: string) => `${name}（副本）`,
+    /** The names of the two prompts shipped with the extension, by id (the maintainer, 2026-09-28: in the interface's language) */
+    builtInNames: { default: '默认', 'precision-rewrite': '精准改写' },
+    /** The descriptions of the two prompts shipped with the extension, by id */
+    builtIn: {
+      default: '通用学术翻译：术语用既定译法，人名、期刊名、代码与链接保留原文',
+      'precision-rewrite': '翻译即改写：摆脱原文句法、消除翻译腔，按目标语言的表达习惯重写，术语与格式照旧',
     },
-    title: '提示词', glossaryTooBig: '术语表太长，超出上限后没有保存；请减少条目或缩短内容', glossary: '术语表', glossaryHint: '每行「原文, 译文」，让同一篇里的译法一致', glossaryCount: (n: number) => `${n} 条`, onlyLlm: '只对 LLM 服务生效',
-    /** The glossary's line-by-line problems (providers/glossary.ts reports which) */
-    glossaryIssue: {
-      /** The whole sentence is the pack's to assemble: punctuation is part of a language, and the Chinese sentence is not built the way "Line 1: ..." is */
-      noSeparator: (n: number) => `第 ${n} 行缺少分隔符，应写成「原文, 译文」`,
-      emptySource: (n: number) => `第 ${n} 行原文为空`,
-      emptyTarget: (n: number) => `第 ${n} 行译文为空`,
-    },
-    glossaryPlaceholder: 'token, 词元\nembedding, 嵌入' },
-  close: '关闭',
-  /** S-O-55: the PDF reader's section; its other rows are the reader's own words (R) */
-  pdfReader: { enabled: '在 arXiv 的 PDF 上使用对照阅读器' },
+    imported: (n: number) => `已导入 ${n} 条`,
+    importFailed: { cantRead: '无法读取这个文件', noPrompts: '这个文件里没有可用的提示词' },
+    /** also the style editor's (StyleEditor.tsx): words for any name, so kept free of the prompt */
+    nameEmpty: '名称不能为空',
+    messageEmpty: '消息不能为空',
+  },
+  /** §6.3: the LLM group */
+  llm: { aside: '提示词与术语表只对 LLM 服务生效', empty: '添加 LLM 服务后可设置提示词与术语表' },
   data: {
     cache: '已缓存的译文',
-    cacheHint: '换了服务、模型或提示词会自动分开存，通常不用清',
-    cacheLine: (entries: number, mb: string) => `${entries} 条 · ${mb} MB`,
+    cacheLine: (entries: number, mb: string) => `${entries.toLocaleString('zh-CN')} 段 · ${mb} MB · 换了服务、模型或提示词会自动分开存，通常不用清`,
     cacheError: '没能读取缓存',
     pdf: '已缓存的 PDF 译文', // S-O-73
     pdfLine: (papers: number, mb: string) => `${papers} 篇 · ${mb} MB`,
-    clear: '清空',
+    clear: '清空…',
     clearConfirm: '确认清空',
     cleared: '已清空',
     diagnostics: '诊断日志',
-    diagnosticsHint: '最近几百条运行记录：请求失败、服务切换、页面事件。不含 API 密钥与论文正文，可随问题反馈一并附上',
+    diagnosticsHint: '最近几百条运行记录：请求失败、服务切换、页面事件。不含 API Key 与论文正文，可随问题反馈一并附上',
     diagnosticsExport: '导出',
     diagnosticsError: '没能导出',
   },
@@ -316,7 +379,6 @@ const O = {
  * search, 对照高亮, 图片翻译, 设置, the failures' count and 重试, the reasons
  */
 const R = {
-  bar: '阅读器', // S-R-01: the toolbar's name, for screen readers
   contents: '目录', // S-R-02
   abstract: '在 arXiv 打开摘要页', // S-R-03
   display: { name: '显示', original: '原文', bilingual: '对照', translation: '译文' }, // S-R-04
@@ -336,6 +398,8 @@ const R = {
     chooseLanguage: '选择语言',
     narrow: '窗口较窄，暂只显示译文', // S-R-14, after S-P-74
     rateLimited: '请求过于频繁', // S-R-16: a stopped run does not retry by itself, so the card promises no retry
+    noPdf: '这篇论文暂不支持 PDF 翻译', // S-R-17: no source, or nothing typeset (the maintainer, 2026-09-26)
+    useHtml: '改用 HTML 翻译', // S-R-18: the capsule's action, where the paper has an HTML version
   },
 }
 

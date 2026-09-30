@@ -4,6 +4,7 @@
 // cancellation by scope; BatchQueue collects segments of one batch key into a batch, and its dispatch gate makes it
 // collect more and send less under a rate limit. Assembled after Read Frog's background/translation-queues.ts; it runs
 // in the background (§8.0). Independent of the store: the cache comes through a CachePort — the background passes the local Dexie, a test a double.
+import type { Service } from '@/config/services'
 import type { WireFormat } from '@/core/protector'
 import { wireFormatOf } from '@/cache/key'
 import type { CachedEntry } from '@/cache/store'
@@ -52,6 +53,13 @@ export interface CachePort {
 export type TranslateMessageRequest = {
   request: Omit<TranslateRequest, 'signal'>
   providerId?: string
+  /**
+   * A service as the settings page would save it — one not stored yet, or stored with another key (the redesign's
+   * design, §6.3: a service is added, or a key saved, only once it connects). Asked as the call carries it, off the
+   * chain, whatever the chain holds under that id; its id is `providerId`. Carries a key across runtime messaging, as
+   * the stored configuration does across storage: never logged (hard rule 5)
+   */
+  candidate?: Service
   /** Absent, nothing is cached (the settings page's connection test, say) */
   cache?: {
     paper: string
@@ -75,7 +83,14 @@ export type TranslateMessageResponse =
    * (Codex on #163): those translations are already in the cache, but without them here the caller
    * marks every segment failed and the reader is told nothing arrived. Absent when none did.
    */
-  | { ok: false; error: { kind: ProviderErrorKind; message: string; isolatable: boolean }; partial?: TranslatedSegment[] }
+  | { ok: false; error: ErrorInfo; partial?: TranslatedSegment[] }
+
+/**
+ * A failure as it crosses the message boundary. `status` is the HTTP status when the failure had one: `auth` covers
+ * both 401 and 403 (http-errors.ts), and only a 401 says the key was refused — the background marks the service health
+ * record by it (the redesign's design, §4)
+ */
+export interface ErrorInfo { kind: ProviderErrorKind; message: string; isolatable: boolean; status?: number }
 
 export interface TranslateServiceDeps {
   getProvider: (providerId?: string) => Promise<TranslationProvider>
@@ -647,8 +662,11 @@ function pickError(errors: unknown[]): unknown {
  * had long ruled on the same matter (`asBatchError` does not turn a systemic failure into a batch error, Codex on
  * #61). A non-`ProviderError` takes the default by kind, the criterion being `ISOLATABLE_BY_KIND` of types.ts
  */
-export function toErrorInfo(e: unknown): { kind: ProviderErrorKind; message: string; isolatable: boolean } {
-  if (e instanceof ProviderError) return { kind: e.kind, message: e.message, isolatable: e.isolatable }
+export function toErrorInfo(e: unknown): ErrorInfo {
+  if (e instanceof ProviderError) {
+    const status = getRequestErrorMeta(e).statusCode
+    return { kind: e.kind, message: e.message, isolatable: e.isolatable, ...(status !== undefined ? { status } : {}) }
+  }
   if (isTranslationCancelledError(e)) return { kind: 'aborted', message: (e as Error).message, isolatable: false }
   // Recovering from a timeout is the queue's job (a budget by character count, a deadline per batch); splitting again at the content layer multiplies the two — 8 segments measured 15 calls
   if (e instanceof Error && e.name === REQUEST_TIMEOUT_ERROR_NAME) return { kind: 'timeout', message: e.message, isolatable: false }

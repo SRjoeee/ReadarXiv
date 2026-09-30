@@ -12,10 +12,14 @@ export const HL_OPACITY_MAX = 0.6
 // The zod messages are diagnostics; the reader sees the locale pack's sentence for the field (ui/strings.ts fallbackText)
 const colorField = z.string().max(COLOR_MAX).refine(v => sanitizeColor(v).ok, 'not a valid colour value')
 const idField = z.string().min(1).max(40)
+/** A profile's name at most: the schema's cap, which the style editor's name field holds to */
+export const NAME_MAX = 40
+/** A style's custom declarations at most: the schema's cap, which the style editor's field holds to (Codex 4c) */
+export const CSS_MAX = 2000
 
 const styleProfileSchema = z.object({
   id: idField,
-  name: z.string().min(1).max(40),
+  name: z.string().min(1).max(NAME_MAX),
   /** '' = follow the original text */
   color: colorField,
   opacity: z.number().min(OPACITY_MIN).max(OPACITY_MAX),
@@ -24,23 +28,26 @@ const styleProfileSchema = z.object({
   /** Blurred until hovered */
   blur: z.boolean(),
   /** Advanced: declarations only; the selector is the extension's */
-  css: z.string().max(2000).refine(v => sanitizeCustomCss(v).ok, 'declarations only, no selector and no braces'),
+  css: z.string().max(CSS_MAX).refine(v => sanitizeCustomCss(v).ok, 'declarations only, no selector and no braces'),
 })
 export type StyleProfile = z.infer<typeof styleProfileSchema>
 
 const highlightProfileSchema = z.object({
   id: idField,
-  name: z.string().min(1).max(40),
+  name: z.string().min(1).max(NAME_MAX),
   /** '' = the default green */
   color: colorField,
   opacity: z.number().min(HL_OPACITY_MIN).max(HL_OPACITY_MAX),
 })
 export type HighlightProfile = z.infer<typeof highlightProfileSchema>
 
+/** How many profiles each list holds at most: the schema's caps, which the settings page's additions stop at and name */
+export const APPEARANCE_LIMITS = { styles: 50, highlights: 50 } as const
+
 export const appearanceSchema = z.object({
-  styles: z.array(styleProfileSchema).max(50),
+  styles: z.array(styleProfileSchema).max(APPEARANCE_LIMITS.styles),
   activeStyle: idField,
-  highlights: z.array(highlightProfileSchema).max(50),
+  highlights: z.array(highlightProfileSchema).max(APPEARANCE_LIMITS.highlights),
   activeHighlight: idField,
 })
 export type Appearance = z.infer<typeof appearanceSchema>
@@ -104,8 +111,7 @@ export function resetBuiltIns(a: Appearance, list: 'styles' | 'highlights'): App
 /**
  * Duplicate. **The name is the caller's**: it has to be written in the interface language (“绿色 副本” / “Green
  * copy”), and the display names of the profiles shipped with the extension follow the language too — all matters of
- * the UI layer, and the configuration layer knows no locale pack (Codex on #161). The name is still held to the schema's cap here: over it the whole configuration cannot be stored, and the reader only sees “not saved” (Codex on #157)
+ * the UI layer, and the configuration layer knows no locale pack (Codex on #161). The name is still held to the schema's cap (NAME_MAX) here: over it the whole configuration cannot be stored, and the reader only sees “not saved” (Codex on #157)
  */
-export const NAME_MAX = 40
 export const duplicateStyle = (p: StyleProfile, name: string): StyleProfile => ({ ...p, id: newProfileId('style'), name: name.slice(0, NAME_MAX) })
 export const duplicateHighlight = (p: HighlightProfile, name: string): HighlightProfile => ({ ...p, id: newProfileId('hl'), name: name.slice(0, NAME_MAX) })

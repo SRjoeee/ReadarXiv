@@ -1,8 +1,9 @@
 // The ways into the reader as a reader meets them (the reader's design, §2, §9), in a real browser on arXiv's own pages,
 // each with its screenshot in out/entries/: the popup on an abstract page and on a PDF page with the reader closed (the
 // two entries), the popup while the reader is open over the PDF (the reader's view), and the floating button's panel
-// on the abstract page (the main button is the way in); a PDF-only submission's greyed PDF entry; the settings page's
-// PDF reader section and its data line. Needs the network; the build at the repository root.
+// on the abstract page (the main button is the way in); a PDF-only submission's greyed PDF entry, and the reader over
+// its PDF saying it cannot be had, its HTML version a link; the settings page's PDF reader section and its data line.
+// Needs the network; the build at the repository root.
 //   node experiments/pdf-bilingual/spikes/entries.mjs [paper]
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -27,6 +28,7 @@ const setReader = on => worker.evaluate(async on => {
   }
   throw new Error('no configuration after 10 s')
 }, on)
+const setOpenIn = where => worker.evaluate(async where => { const { config } = await chrome.storage.local.get('config'); await chrome.storage.local.set({ config: { ...config, reading: { ...config.reading, openIn: where } } }) }, where)
 
 /** The popup as the toolbar opens it over `tab`: its own page, the paper's tab then in front, and what it shows */
 async function popupOver(tab, name) {
@@ -37,12 +39,12 @@ async function popupOver(tab, name) {
   await sleep(2500)
   const seen = await popup.evaluate(() => {
     const buttons = [...document.querySelectorAll('button')]
-    const named = re => buttons.filter(b => re.test(b.textContent ?? '')).map(b => ({ text: b.textContent?.trim(), disabled: b.disabled }))
+    const named = re => buttons.filter(b => re.test(b.textContent ?? '')).map(b => ({ text: b.textContent?.trim(), disabled: b.getAttribute('aria-disabled') === 'true' }))
     return {
       entries: named(/^(HTML 翻译|PDF 翻译|Translate HTML|Translate PDF)$/),
       primary: named(/^(翻译本页|显示原文|Translate this page|Show the original)/),
-      stack: buttons.filter(b => /上下|Stacked/.test(b.textContent ?? '')).map(b => ({ disabled: b.getAttribute('aria-disabled') === 'true', title: b.title })),
-      style: buttons.some(b => /译文样式|Style/.test(b.textContent ?? '')),
+      stack: buttons.filter(b => b.getAttribute('role') === 'radio' && /^(上下|Stacked)$/.test(b.querySelector('span:not([hidden])')?.textContent ?? '')).map(b => ({ disabled: b.getAttribute('aria-disabled') === 'true', title: document.getElementById(b.getAttribute('aria-describedby') ?? '')?.textContent ?? '' })),
+      style: buttons.filter(b => /译文样式|Style/.test(b.textContent ?? '')).map(b => ({ disabled: b.getAttribute('aria-disabled') === 'true', opens: b.hasAttribute('popovertarget') })),
     }
   })
   await popup.locator('main').screenshot({ path: join(out, `${name}.png`) })
@@ -78,7 +80,7 @@ await sleep(6000)
 }
 
 // 3. the reader open over the PDF: the popup is the reader's — its primary switches the translation and the original,
-// the stacked display greyed with its reason, no style row
+// the stacked display greyed with its reason, the style button greyed in its place, opening nothing (Task 103b)
 await setReader(true)
 await page.goto('about:blank')
 await page.goto(`https://arxiv.org/pdf/${paper}`, { waitUntil: 'load' })
@@ -86,9 +88,24 @@ await page.goto(`https://arxiv.org/pdf/${paper}`, { waitUntil: 'load' })
   const framed = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null)
   await sleep(4000)
   const seen = await popupOver(page, '4-reader-popup')
-  check('the reader open: the popup\'s primary, the stacked display greyed with its reason, no style row',
-    !!framed && seen.entries.length === 0 && seen.primary.length === 1 && seen.stack[0]?.disabled && !!seen.stack[0]?.title && !seen.style,
+  check('the reader open: the popup\'s primary, the stacked display greyed with its reason, the style button greyed',
+    !!framed && seen.entries.length === 0 && seen.primary.length === 1 && seen.stack[0]?.disabled && !!seen.stack[0]?.title && seen.style.length === 1 && seen.style[0].disabled && !seen.style[0].opens,
     JSON.stringify(seen))
+  // the settings are a link (the interface review): from the reader's frame over arXiv's page it opens the settings page
+  // at the reader's section, in a new tab. On a tab of its own: popupOver sizes the popup's page (setViewportSize, a
+  // device-metrics emulation), after which the reader's frame in this tab hears the pointer over its left part only —
+  // the harness's doing, which no browser a reader uses does (#302)
+  const own = await context.newPage()
+  await own.goto(`https://arxiv.org/pdf/${paper}`, { waitUntil: 'load' })
+  const frame = await (await own.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).catch(() => null))?.contentFrame()
+  await frame?.waitForSelector('[data-zone="trail"] > a[aria-label="设置"]', { timeout: 30_000 }).catch(() => null)
+  const settingsTab = () => context.pages().find(p => p.url().endsWith('/options.html#reading/pdf'))
+  // the bar's own: the reading options hold a copy for a narrow window, hidden here
+  await frame?.click('[data-zone="trail"] > a[aria-label="设置"]')
+  for (let i = 0; i < 50 && !settingsTab(); i++) await sleep(200)
+  check('the reader over the PDF: its settings link opens the settings page at the reader\'s section, in a new tab', !!settingsTab(), context.pages().map(p => p.url()).join(' '))
+  await settingsTab()?.close()
+  await own.close()
 }
 
 // 4. a PDF-only submission (the corpus's 2608.07562): the PDF entry greyed, without words (the design, §2)
@@ -100,6 +117,34 @@ await sleep(3000)
   check('a PDF-only submission: the PDF entry greyed', pdf?.disabled === true, JSON.stringify(seen.entries))
 }
 
+// 4b. its PDF page, a translation asked for: no source, so the reader says it cannot be had as a bilingual PDF. arXiv has
+// no HTML version of it: no link. One answered here (a route, for the reader's HEAD and the page), this tab as the
+// settings say: the link takes the PDF page to it (the maintainer, 2026-09-26)
+{
+  const capsuleIn = async () => {
+    const frame = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 30_000 }).then(h => h.contentFrame()).catch(() => null)
+    const drawn = frame && (await frame.waitForSelector('.capsule[data-kind="unavailable"]', { timeout: 120_000 }).catch(() => null))
+    const capsule = drawn && (await frame.evaluate(() => { const c = document.querySelector('.capsule'), a = c.querySelector('a[data-action]'); return { words: c.querySelector('.words')?.textContent, href: a?.getAttribute('href') ?? null, target: a?.target ?? null } }))
+    return { frame, capsule }
+  }
+  await page.goto('about:blank')
+  await page.goto('https://arxiv.org/pdf/2608.07562#readarxiv', { waitUntil: 'load' })
+  const none = await capsuleIn()
+  await page.screenshot({ path: join(out, '5b-no-source-capsule.png') })
+  check('a PDF-only submission, a translation asked for: the capsule says it cannot be had; no HTML version, no link', none.capsule?.words === '这篇论文暂不支持 PDF 翻译' && none.capsule.href === null, JSON.stringify(none.capsule))
+  const html = 'https://arxiv.org/html/2608.07562#readarxiv'
+  await setOpenIn('same-tab')
+  await context.route('https://arxiv.org/html/2608.07562', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>html</title>' }))
+  await page.goto('about:blank')
+  await page.goto('https://arxiv.org/pdf/2608.07562#readarxiv', { waitUntil: 'load' })
+  const one = await capsuleIn()
+  check('…an HTML version, this tab: the link, to the page under the reader', one.capsule?.href === html && one.capsule.target === '_top', JSON.stringify(one.capsule))
+  if (one.capsule?.href) await Promise.all([page.waitForURL(html, { timeout: 15_000 }).catch(() => null), one.frame.click('.capsule a[data-action]')])
+  check('…pressed: the PDF page goes to the HTML version, translating', page.url() === html, page.url())
+  await context.unroute('https://arxiv.org/html/2608.07562')
+  await setOpenIn('new-tab')
+}
+
 // 5. the settings page: the PDF reader's section writes at once; the data section's PDF line counts what the reader
 // keeps and clears it in two presses. The store is the reader's IndexedDB on the extension's origin: the page opens it
 // first (its schema), then one entry row is written the way the store's eviction reads them
@@ -107,12 +152,12 @@ await sleep(3000)
   const options = await context.newPage()
   await options.goto(`chrome-extension://${id}/options.html#pdf-reader`)
   await sleep(1200)
-  const rows = await options.evaluate(() => [...document.querySelectorAll('main [role="switch"]')].map(b => b.getAttribute('aria-label')))
+  const rows = await options.evaluate(() => [...document.querySelectorAll('main [data-row="reading/pdf"] [role="switch"]')].map(b => b.getAttribute('aria-label')))
   await options.getByRole('switch', { name: /同步滚动|Sync scrolling/ }).click()
   await sleep(500)
   const synced = await worker.evaluate(async () => (await chrome.storage.local.get('config')).config.pdfReader.sync)
   await options.getByRole('switch', { name: /同步滚动|Sync scrolling/ }).click()
-  check('the settings page\'s PDF reader section: its switches, each written at once', rows.length === 3 && synced === false, JSON.stringify({ rows, synced }))
+  check('the settings page\'s PDF reader section: its switches, each written at once', rows.length === 2 && synced === false, JSON.stringify({ rows, synced }))
   await options.goto('about:blank')
   await options.goto(`chrome-extension://${id}/options.html#data`)
   await sleep(1200)
@@ -125,9 +170,9 @@ await sleep(3000)
   await sleep(1200)
   const line = () => options.evaluate(() => [...document.querySelectorAll('main span')].map(e => e.textContent).find(t => /^\d+ (篇|papers?) · /.test(t ?? '')) ?? null)
   const before = await line()
-  const clears = options.getByRole('button', { name: /^(清空|Clear)$/ })
+  const clears = options.getByRole('button', { name: /^(清空…|Clear…)$/ })
   await clears.nth(1).click()
-  await options.getByRole('button', { name: /确认清空|Confirm clear/ }).click()
+  await options.getByRole('button', { name: /确认清空|Clear now/ }).click()
   await sleep(1500)
   const after = await line()
   await options.screenshot({ path: join(out, '6-settings-data.png') })

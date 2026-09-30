@@ -11,7 +11,7 @@
 // asks for it (`#readarxiv`, which asks for a translation too): the address stays the paper's, and the reader's way
 // back to the browser's viewer takes the reader away and shows the floating button. A browser the reader's PDF.js
 // cannot run on (pdf-reader/support.ts) keeps the page as it was, with the floating button.
-import { htmlUrlOf, paperIdFromPdfPath, pdfUrlOf, readerWanted, sourceKindOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
+import { bilingualPdfOf, htmlVersionOf, paperIdFromPdfPath, pdfUrlOf, readerWanted, translatedHtmlUrlOf } from '@/core/pdf/entry'
 import { readerRuns } from '@/pdf-reader/support'
 import { announceUsablePage } from '@/shared/action-icon'
 import { answerEntryMessages } from '@/shared/entry-page'
@@ -32,23 +32,12 @@ export default defineContentScript({
     /** what the two HEADs below have said so far: an entry they have not ruled out is offered */
     const heard: { html?: string | null; pdf?: string | null } = {}
     const offeredHtml = translatedHtmlUrlOf(id, location.origin)
-    // Only the head: the HTML full text is hundreds of kilobytes, and all that is asked here is whether it exists.
-    // **Only arXiv saying so means there is none** (404, or 410): a request that failed, a 429 or a 5xx say nothing
-    // about the paper, and "arXiv has no HTML version" would then be a false statement the reader is left with until
-    // a reload (Devin on #247). Unknown, the link is offered: at worst it leads to arXiv's own answer
-    const href = fetch(htmlUrlOf(id, location.origin), { method: 'HEAD', credentials: 'omit' })
-      .then(res => res.status)
-      .catch(() => null)
-      .then(status => (heard.html = status === 404 || status === 410 ? null : offeredHtml))
+    // Only the head: the HTML full text is hundreds of kilobytes, and all that is asked is whether it exists. What a HEAD
+    // says is htmlVersionOf's rule (core/pdf/entry.ts), which the popup's search follows too
+    const href = htmlVersionOf(id, fetch, location.origin).then(html => (heard.html = html))
     // Whether the paper can be had as a bilingual PDF (the reader's design, §2): one HEAD on its source, same-origin as
-    // the HTML one and at the same time. A PDF-only submission answers application/pdf; anything else leaves the entry
-    // offered. A browser that cannot run the reader offers none
-    const pdf = (readerRuns()
-      ? fetch(`${location.origin}/src/${id}`, { method: 'HEAD', credentials: 'omit' })
-          .then(res => (res.ok ? sourceKindOf(res.headers.get('content-type')) : 'unknown'))
-          .catch(() => 'unknown' as const)
-      : Promise.resolve(null))
-      .then(source => (heard.pdf = source === null || source === 'pdf-only' ? null : pdfUrlOf(id, location.origin)))
+    // the HTML one and at the same time. A browser that cannot run the reader offers none
+    const pdf = (readerRuns() ? bilingualPdfOf(id, fetch, location.origin) : Promise.resolve(null)).then(bilingual => (heard.pdf = bilingual))
     // **Nothing waits for the two HEADs but the floating button's words** (Part 5's final review: the reader opened, and
     // the popup found the page, only once both were back — half a second and more, or never within the popup's few
     // seconds on a slow network). The popup is answered from the start with what the HEADs have said so far, and an

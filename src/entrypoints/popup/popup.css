@@ -1,0 +1,130 @@
+/* The popup (the redesign's design, §5; round 6 of its prototypes, and the rounds it builds on): 320 px on the chrome.
+   Every measure is the prototype's, every colour a role of src/shared/tokens.ts. Two leading edges, the controls at 12
+   px and the group's words at 24; two trailing, the controls at 12 and the group's values at 24 (§12's probe measures
+   them: tests/e2e/probes/popup-align.mjs). No :has() (tests/popup/sheet.test.ts) */
+.ui.popup { display: flex; flex-direction: column; width: 320px; background: var(--chrome); color: var(--ink); font: 13px/1.4 var(--font); -webkit-font-smoothing: antialiased; anchor-name: --popup; anchor-scope: --popup; }
+
+/* the group (§5.1): 12 px from the edges, 4 px in, radius 10; rows of 36 inset 4 with a radius of 6 (concentric),
+   separated by a hairline on the words' edge */
+.popup .group { margin: 0 12px; padding: 4px; border-radius: 10px; background: var(--group); }
+.popup .group-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 36px; padding: 0 8px; border-radius: 6px; text-align: start; font-size: 13px; transition: background-color 150ms ease-out; }
+@media (hover: hover) { .popup button.group-row:hover { background: var(--group-hover); } }
+.popup .group-row[aria-expanded="true"] { background: var(--group-hover); }
+/* the label never shrinks; the value gives way, whole in its tooltip */
+.popup .group-row > .k { flex: none; white-space: nowrap; color: var(--ink); }
+.popup .group-row > .v { display: inline-flex; align-items: center; gap: 4px; min-width: 0; color: var(--ink-2); }
+.popup .group-row > .v > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.popup .group-row > .v > svg { flex: none; color: var(--ink-3); }
+.popup .group > .rule { height: 0.5px; margin: 0 8px; border: 0; background: var(--chrome-line); }
+
+/* the menus (§5.3, round 4): under their row, 4 px below it and 8 px from the popup's edges; the style menu above its
+   button, 6 px from it. One below makes the popup tall enough to hold it, one above is held to the room there
+   (ui/menu-fit.ts); past 400 px a menu scrolls */
+.popup .pop.menu { position-area: none; position-try-fallbacks: none; inset: auto; margin: 0; top: calc(anchor(bottom) + 4px); left: calc(anchor(--popup left) + 8px); right: calc(anchor(--popup right) + 8px); width: auto; min-width: 0; max-width: none; max-height: 400px; }
+.popup .pop.menu.up { top: auto; bottom: calc(anchor(top) + 6px); transform-origin: bottom left; }
+@media (prefers-reduced-motion: reduce) { .popup .group-row { transition: none; } }
+
+/* the brand row (§5.1; round 7's F, the maintainer 2026-09-28): 48 px; the mark and the name at 12, the gear's glyph
+   ending 12 from the trailing edge */
+.popup .brand-row { display: flex; flex: none; align-items: center; justify-content: space-between; height: 48px; padding: 0 5px 0 12px; }
+/* the mark and the name: not `.brand`, which is Part 3's `Button` kind. The name 15 px / 600, the one step it shares
+   with the large buttons' words; its line 22 px, even, where the inherited 21 left its words 0.5 px above the row's
+   centre line (round 7). The mark 24 px wide, its height the drawing's own ratio (20.4 px) */
+.popup .wordmark { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; line-height: 22px; letter-spacing: -0.005em; }
+.popup .wordmark > img { display: block; width: 24px; height: auto; aspect-ratio: 66 / 56.17; }
+/* a small button of the chrome, as the reader's toolbar draws one: 30 px, radius 7, a hit area 44 px tall */
+.popup .tbtn { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 4px; height: 30px; min-width: 30px; border-radius: 7px; color: var(--ink-2); transition: background-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out; }
+.popup .tbtn::before { content: ""; position: absolute; inset: -7px -2px; }
+.popup .tbtn[aria-expanded="true"] { background: var(--fill); color: var(--ink); }
+@media (hover: hover) { .popup .tbtn:not([aria-disabled="true"]):hover { background: var(--fill); color: var(--ink); } }
+.popup .tbtn:not([aria-disabled="true"]):active { scale: 0.96; }
+/* one that cannot act (the style button on the reader): greyed as a segment that cannot be had is, no hover, no press */
+.popup .tbtn[aria-disabled="true"] { color: var(--ink-3); opacity: 0.55; }
+@media (forced-colors: active) { .popup .tbtn[aria-disabled="true"] { color: GrayText; } }
+
+/* under the group: a note, the primary or the entries, the display — 16 px apart, twice the 8 within a group (§5.1) */
+.popup .stack { display: flex; flex-direction: column; gap: 16px; padding: 16px 12px 0; }
+.popup[data-kind="entry"] .stack { padding-bottom: 14px; }
+
+/* a note (§5.2): a row on the group; its icon on its first line, its words in ink, a raised button trailing */
+.popup .note { display: flex; align-items: center; gap: 8px; padding: 9px 8px 9px 10px; border-radius: 10px; background: var(--group); }
+.popup .note > p { position: relative; flex: 1; min-width: 0; margin: 0; padding-inline-start: 24px; font-size: 12.5px; line-height: 1.45; text-wrap: pretty; }
+.popup .note > p > svg { position: absolute; inset-inline-start: 0; top: calc((1lh - 16px) / 2); color: var(--ink-2); }
+.popup .note[data-tone="alert"] > p > svg { color: var(--danger); }
+
+/* two buttons side by side, equal widths: the primary's two faces (P9 / P13), a paper's two entries (icon 7 px from its words) */
+.popup .pair, .popup .twin { display: flex; gap: 8px; }
+.popup .pair > *, .popup .twin > * { flex: 1 1 0; min-width: 0; }
+.popup .twin > * { gap: 7px; }
+/* the popup's large buttons — the primary, its pair, a paper's two entries (P17's, and P0's for a paper it names): 44
+   px, radius 10 as the group above them, their words 15 px / 600; a shortcut's label 12 px, 3 by 6 in, radius 6, in
+   the shared label's colours (round 7's F, the maintainer 2026-09-28). The shared .btn.lg keeps its 36 elsewhere */
+.popup .btn.lg { height: 44px; border-radius: 10px; font-size: 15px; font-weight: 600; }
+.popup .btn.lg .kbd { padding: 3px 6px; border-radius: 6px; font-size: 12px; }
+
+/* the display and the line under it (S-P-74): 8 px within */
+.popup .reading { display: flex; flex-direction: column; gap: 8px; }
+
+/* the foot (§5.1): the two switches with their words, the style button trailing — on every page, greyed on the reader */
+.popup .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 14px; }
+.popup .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+/* a switch that is on: the brand's track, the thumb white (round 7's A, the maintainer 2026-09-28), as on the settings
+   page; the reader's keeps the shared ink. Not in forced colours, whose Highlight (controls.css) a rule of this
+   unlayered sheet would outrank */
+@media (forced-colors: none) {
+  .popup .switch[aria-checked="true"] { background: var(--brand); }
+  .popup .switch[aria-checked="true"]::after { background: var(--on-brand); }
+}
+.popup .style-btn { padding-inline: 8px 6px; font-size: 12.5px; }
+.popup .style-btn > svg { color: var(--ink-3); }
+
+/* a line of words: 12 px, ink-2, on the controls' edge; one with a mark carries its icon on its first line */
+.popup .line { margin: 0; color: var(--ink-2); font-size: 12px; line-height: 1.45; }
+.popup .line.solo { padding: 0 12px 14px; }
+.popup .line.mark { display: flex; align-items: flex-start; gap: 6px; }
+.popup .line.mark > svg { flex: none; margin-top: calc((1lh - 14px) / 2); }
+/* an action that failed (S-P-90): ink words after the alert, never red words; 8 px under the button it follows */
+.popup .line.alert { color: var(--ink); }
+.popup .line.alert > svg { color: var(--danger); }
+.popup .stack > .line.alert { margin-top: -8px; }
+@media (prefers-reduced-motion: reduce) { .popup .tbtn { transition: none; } }
+
+/* P0 (§5.4, round 6): the sentence, the field, what Enter will do — on the controls' edge, 8 px apart, 14 px from the foot */
+.popup .find { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 14px; }
+.popup .find-field { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: 9px; background: var(--group); color: var(--ink-2); box-shadow: inset 0 0 0 0.5px var(--chrome-line); cursor: text; }
+/* focused, its edge; the ring the keyboard's alone (§9, controls/modality.ts): a field clicked shows its edge, not a ring */
+.popup .find-field:focus-within { background: var(--field); box-shadow: inset 0 0 0 1px var(--ink-3); color: var(--ink); }
+html:not([data-axt-pointer]) .popup .find-field:focus-within { outline: 2px solid var(--focus); outline-offset: 0; }
+.popup .find-field > svg { flex: none; }
+.popup .find-field > input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; color: var(--ink); font: 13px var(--font); }
+.popup .find-field > input:focus-visible { outline: none; }
+.popup .find-field > input::placeholder { color: var(--ink-2); }
+.popup .found { display: flex; flex-direction: column; gap: 8px; }
+.popup .found a { color: var(--ink); text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--ink) 30%, transparent); text-underline-offset: 2px; }
+/* what Enter does: a row of the field's height; the brand's for a paper's page, its id told apart by weight (§5.4) */
+.popup .go { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 0 10px; border-radius: 9px; background: var(--group-hover); color: var(--ink); text-align: start; font-size: 12.5px; transition: scale 150ms ease-out; }
+.popup .go:active { scale: 0.96; }
+.popup .go > svg { flex: none; }
+.popup .go.brand { background: var(--brand); color: var(--on-brand); }
+.popup .go-label { flex: none; font-weight: 500; }
+.popup .go-id, .popup .go-words { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.popup .go-id { font-weight: 400; font-variant-numeric: tabular-nums; }
+.popup .go.brand .go-id { color: var(--on-brand-2); }
+/* what Enter does, labelled in the row's words: ink on the neutral row (ink-2 there was 4.08:1 light; Task 101) */
+.popup .go kbd { color: var(--ink); }
+.popup .go.brand kbd { background: var(--brand-chip); color: var(--on-brand); }
+/* a row no service can serve (Codex 5a): greyed as a greyed entry is (controls.css .btn.lg[aria-disabled]) — the large
+   button's fill, its words ink-3 — and pressed nowhere */
+.popup .go[aria-disabled="true"] { background: var(--fill); color: var(--ink-3); cursor: default; }
+.popup .go[aria-disabled="true"] .go-id { color: var(--ink-3); }
+.popup .go[aria-disabled="true"]:active { scale: 1; }
+.popup .paper { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ink-2); font-size: 12.5px; }
+.popup .paper > b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .popup .go { transition: none; } }
+/* in forced colours the field's edge (a box-shadow) and the rows' grounds are dropped: the system's colours draw an edge
+   instead, as controls.css does for .input and .btn — a row's not while focused, whose ring it is */
+@media (forced-colors: active) {
+  .popup .find-field { border: 1px solid CanvasText; }
+  .popup .go:not(:focus-visible) { outline: 1px solid ButtonText; outline-offset: -1px; }
+  .popup .go[aria-disabled="true"] { color: GrayText; }
+}

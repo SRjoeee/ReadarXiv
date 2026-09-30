@@ -7,13 +7,16 @@
 // two cache messages answer `{ ok: false, … }` themselves, because their callers show the reason; the others reject,
 // and the listener answers with the failure reply that `sendMessage` turns back into a rejection.
 import type { Config } from '@/config/schema'
+import { SERVICE_ID_RE } from '@/config/services'
 import { toErrorInfo } from '@/providers/translate-service'
 import { type DiagnosticsExport, failureLine } from '@/shared/diagnostics'
 import type { FloatingEntryState } from '@/shared/entry-settings'
 import type { MessageHandlers } from '@/shared/messages'
+import type { PageDecision } from '@/shared/page-action'
 import type { ChainHolder } from './chain'
 import type { Diagnostics } from './diagnostics'
 import { engineReady } from './engine-ready'
+import { isRefusal, shouldMarkRefusal, testsStoredKey } from './health-guard'
 import type { OcrService } from './ocr'
 import { type ConfigOffers, providerStatus } from './provider-status'
 import type { SessionRouter } from './sessions'
@@ -27,6 +30,8 @@ export interface HandlerDeps {
   cache: { clear(): Promise<number>; cleanup(): Promise<unknown>; stats(): Promise<{ entries: number; bytes: number }> }
   /** The toggle of the key and the menu (context-menu.ts), for one tab */
   toggle(tabId: number): Promise<boolean>
+  /** What that toggle would do in one tab, decided and not acted on (context-menu.ts `decideToggle`) */
+  decide(tabId: number): Promise<PageDecision | undefined>
   getConfig(): Promise<Config>
   getFloatingEntry(): Promise<FloatingEntryState>
   patchFloatingEntry(patch: Partial<FloatingEntryState>): Promise<{ saved: boolean; floating: FloatingEntryState }>
@@ -37,6 +42,8 @@ export interface HandlerDeps {
   lightAction(tabId: number): Promise<void>
   /** The environment a reader cannot be expected to report: the build, the browser, the platform */
   environment(): Promise<Omit<DiagnosticsExport, 'entries' | 'exportedAt'>>
+  /** The service health record (the redesign's design, §4) */
+  health: { reject(id: string): Promise<void>; clear(id: string): Promise<boolean> }
 }
 
 const messageOf = (e: unknown): string => e instanceof Error ? e.message : String(e)
@@ -47,6 +54,30 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
     // A failed chain build (a provider constructor throwing) is answered honestly too: unanswered, the caller waits for “message channel closed”
     'axt:translate': (message, sender) => deps.router.forCall(message.scope, sender.tabId)
       .then(transport => transport.translate(message))
+      .then(async response => {
+        // A call naming one of the reader's services is the settings page asking whether it answers: its answer is the
+        // record's (the redesign's design, §4). Any success clears it; a refused key — a 401, for a service still
+        // stored — marks it (./health-guard.ts). The call was built from the stored configuration, so that is both the
+        // configuration it used and the one in force; one that cannot be read marks nothing and leaves the answer be
+        const id = message.providerId
+        if (id && SERVICE_ID_RE.test(id)) {
+          if (message.candidate) {
+            // A candidate: a service as the settings page would save it, tested before it is (ruling 16). Its success
+            // clears the mark only when it tested the stored key and address; another key is cleared by the watcher once
+            // the save lands (idsToClear). Its failure touches nothing: it says nothing of the key stored. The page itself
+            // never writes the record (ruling 17)
+            if (response.ok) {
+              const stored = await deps.getConfig().catch(() => null)
+              if (stored && testsStoredKey(message.candidate, stored)) await deps.health.clear(id)
+            }
+          } else if (response.ok) await deps.health.clear(id)
+          else if (isRefusal({ id, ...response.error })) {
+            const stored = await deps.getConfig().catch(() => null)
+            if (stored && shouldMarkRefusal({ id, ...response.error }, stored, stored)) await deps.health.reject(id)
+          }
+        }
+        return response
+      })
       .catch((e: unknown) => {
         const error = toErrorInfo(e)
         diag(`[axt] translate call failed before any request: ${failureLine(error.kind, error.message)}`)
@@ -93,13 +124,17 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
     // From an extension page there is no tab to toggle, and nothing is answered
     'axt:toggle': (_message, sender) => sender.tabId === undefined ? undefined : deps.toggle(sender.tabId).then(acted => ({ acted })),
 
+    // The floating button's words (UI.md S-I-06): the same toggle's decision for the tab that asked, nothing done — so
+    // they say what a press would do there, whatever it is. A page that could not be asked rejects
+    'axt:toggle-decision': (_message, sender) => sender.tabId === undefined ? undefined : deps.decide(sender.tabId).then(decision => ({ decision: decision ?? null })),
+
     // What a page needs of the settings (shared/entry-settings.ts): the configuration as this build reads it —
     // the defaults, when it cannot — never the raw stored value; the tab's zoom is the browser's to know
     'axt:entry-settings': (_message, sender) => Promise.all([
       deps.getConfig(),
       deps.getFloatingEntry(),
       sender.tabId === undefined ? 1 : deps.zoomOf(sender.tabId).catch(() => 1),
-    ]).then(([config, floating, zoom]) => ({ uiLanguage: config.uiLanguage, openIn: config.reading.openIn, zoom, pdfReader: config.pdfReader.enabled, floating })),
+    ]).then(([config, floating, zoom]) => ({ uiLanguage: config.uiLanguage, openIn: config.reading.openIn, zoom, pdfReader: config.pdfReader.enabled, theme: config.theme, floating })),
 
     // The toolbar button lights for the tab the page is in (UI.md §5.1). Nothing is answered: the page does not wait
     // on it, and a tab closed meanwhile has no button to light

@@ -1,0 +1,176 @@
+/* The controls the extension's pages share (the redesign's design, §2.3): the reader's segmented control, popover,
+   tooltip, switch and swatch, moved here unchanged so that the popup and the settings page draw the same ones. The
+   component rules join the page's `components` layer; the tokens they name are tokens.css's */
+@layer components {
+  /* tooltips: below their control, centred on it, kept inside the window; one line always */
+  .tip { position: fixed; inset: auto; margin: 8px 0 0; position-area: bottom; position-try-fallbacks: bottom span-right, bottom span-left;
+    padding: 5px 8px; border: 0; border-radius: 6px; background: var(--tip-bg); color: var(--tip-ink); font: 12px/1.2 var(--font);
+    white-space: nowrap; display: none; gap: 10px; box-shadow: var(--tip-shadow); pointer-events: none; overflow: visible; }
+  .tip:popover-open { display: flex; animation: tip-in 120ms ease-out; }
+  .tip[data-side="right"] { margin: 0 0 0 8px; position-area: right; position-try-fallbacks: none; }
+  .tip kbd { color: var(--tip-ink-2); }
+  /* a segmented control: equal segments in a well, the chosen one on a lifted thumb that slides */
+  .seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; height: 30px; padding: 2px; border-radius: 9px; background: var(--well); --i: 0; }
+  .seg .thumb { position: absolute; inset-block: 2px; inset-inline-start: 2px; width: calc((100% - 4px) / var(--n, 3)); border-radius: 7px; background: var(--lift);
+    box-shadow: 0 0 0 0.5px oklch(0 0 0 / 0.06), 0 1px 2px oklch(0 0 0 / 0.08); translate: calc(var(--i) * 100%) 0; transition: translate 220ms var(--ease); pointer-events: none; }
+  .seg > button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; height: 100%; padding: 0 12px; border-radius: 7px; color: var(--ink-2); font: 500 12.5px/1 var(--font); white-space: nowrap; transition: color 150ms ease-out; }
+  .seg > button[aria-checked="true"], .seg > button[aria-pressed="true"] { color: var(--ink); }
+  @media (hover: hover) { .seg > button:not([aria-checked="true"]):not([aria-disabled="true"]):hover { color: var(--ink); } }
+  .seg > button[aria-disabled="true"] { color: var(--ink-3); opacity: 0.55; }
+  .seg.small { height: 26px; }
+  .seg.small > button { padding: 0 10px; font-size: 12px; }
+  /* a segment of icons: equal whatever the language, its icon at the centre of its thumb */
+  .seg.icons > button { width: 36px; padding: 0; }
+  /* popovers: under their button, 6 px below, kept inside the window; they grow from it */
+  .pop { position: fixed; inset: auto; margin: 6px 0 0; position-area: bottom span-right; position-try-fallbacks: bottom span-left, bottom;
+    min-width: 220px; width: max-content; max-width: calc(100vw - 16px); max-height: calc(100vh - var(--bar, 0px) - 16px); overflow: auto; padding: 4px; border: 0; border-radius: 12px;
+    background: var(--chrome); color: var(--ink); box-shadow: var(--pop-shadow); font-size: 13px; transform-origin: top left; }
+  .pop:popover-open { animation: pop-in 150ms var(--ease); }
+  .pop .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 34px; padding: 0 10px; }
+  .pop .sep { height: 0.5px; margin: 4px 8px; border: 0; background: var(--chrome-line); }
+  .pop .search { display: block; width: 100%; height: 30px; margin: 0 0 4px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--fill); color: var(--ink); }
+  .pop .search::placeholder { color: var(--ink-2); }
+  .pop .item { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px 0 8px; border-radius: 8px; cursor: pointer; }
+  .pop .item[data-active] { background: var(--fill); }
+  /* the item the keyboard moves is the focus (aria-activedescendant), and carries the ring a focused control does */
+  .pop :is([role="menu"], [role="listbox"]):focus-visible .item[data-active],
+  html:not([data-axt-pointer]) .pop .search:focus-visible ~ [role="listbox"] .item[data-active] { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .pop .item[aria-disabled="true"] { color: var(--ink-3); cursor: default; }
+  .pop .item .hint { margin-inline-start: auto; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .pop .item .check { color: var(--ink); }
+  .switch { position: relative; width: 28px; height: 17px; flex: none; border-radius: 999px; background: var(--ink-3); transition: background-color 150ms; }
+  .switch::after { content: ""; position: absolute; inset-block-start: 2px; inset-inline-start: 2px; width: 13px; height: 13px; border-radius: 999px; background: oklch(1 0 0); box-shadow: 0 1px 2px oklch(0 0 0 / 0.25); transition: translate 150ms ease-out; }
+  .switch[aria-checked="true"] { background: var(--ink); }
+  .switch[aria-checked="true"]::after { translate: 11px 0; background: var(--chrome); }
+  .swatch { width: 16px; height: 16px; border-radius: 999px; box-shadow: inset 0 0 0 0.5px oklch(0 0 0 / 0.15); }
+  .swatch[aria-pressed="true"]:not(:focus-visible) { outline: 1.5px solid var(--line-strong); outline-offset: 2px; }
+}
+/* The controls the pages add (the redesign's design, §2.1, §5, §6, §8; Part 3's interfaces), every measure the
+   prototypes' (the popup's round 6, the settings page's settings-2). Each class compounds with its control's own, so
+   that nothing here reaches an element that is not one of these controls */
+@layer components {
+  /* buttons: the brand for the one primary action, a neutral one (its grey small, the fill large), a text one with no
+     ground but its hover's, a raised one on a group; pressed to 0.96 (§8). lg fills its width and has no padding of
+     its own (round 6's primary); a disabled one takes the neutral grey of its size, a busy one keeps its look */
+  .btn { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 8px; padding: 0; font: 500 13px/1 var(--font); white-space: nowrap;
+    transition: scale 150ms ease-out, background-color 150ms ease-out, color 150ms ease-out; }
+  /* the words 7 px after an icon (round 6's entries), a shortcut 8 px after the words (round 1) */
+  .btn > svg + span { margin-inline-start: -1px; }
+  .btn.lg { height: 36px; border-radius: 9px; }
+  .btn.md { height: 32px; padding: 0 16px; border-radius: 8px; }
+  .btn.sm { height: 28px; padding: 0 12px; border-radius: 7px; font-size: 12.5px; }
+  .btn.brand { background: var(--brand); color: var(--on-brand); }
+  .btn.neutral { background: var(--button); color: var(--ink); }
+  .btn.neutral.lg { background: var(--fill); }
+  /* a text button, as both prototypes draw it: 10 px in, radius 7, in the page's weight */
+  .btn.text { padding-inline: 10px; border-radius: 7px; color: var(--ink-2); font-weight: 400; }
+  @media (hover: hover) { .btn.text:not([aria-disabled="true"]):hover { background: var(--fill); color: var(--ink); } }
+  /* a note's button (round 4), one measure whatever the size: on the group, raised by a hairline in light */
+  .btn.raised { height: 26px; padding: 0 10px; border-radius: 7px; font-size: 12.5px; background: var(--button-raised); color: var(--ink); box-shadow: var(--raised-shadow); }
+  /* a disabled one takes the neutral grey of its size — the small one's, the large one's fill — its words ink-3: on
+     the small neutral's own fill it would read heavier than an enabled one */
+  .btn[aria-disabled="true"] { background: var(--button); color: var(--ink-3); box-shadow: none; }
+  .btn.lg[aria-disabled="true"] { background: var(--fill); }
+  .btn.text[aria-disabled="true"] { background: none; }
+  /* a busy one keeps its look: its loader says the wait, and it takes no second press */
+  .btn[aria-busy="true"] { cursor: progress; }
+  .btn:not([aria-disabled="true"]):not([aria-busy="true"]):active { scale: 0.96; }
+  /* a shortcut label: 11 px, 3 by 5 in, radius 5, the ink's 9 % behind ink-2; on the brand its chip behind white
+     (5.07:1 light, 4.59:1 dark; the maintainer, 2026-09-26); on a neutral button the button's ink, where ink-2 fell
+     under 4.5:1 (4.08 light, 3.97 dark; Task 101) */
+  .kbd { padding: 3px 5px; border-radius: 5px; background: color-mix(in oklab, var(--ink) 9%, transparent); color: var(--ink-2); font: 500 11px/1 var(--font); }
+  .btn.brand .kbd { background: var(--brand-chip); color: var(--on-brand); }
+  .btn.neutral .kbd { color: var(--ink); }
+  /* a field (settings-2): its label 12 px in ink-2 above it, 6 px apart; a hint under it in ink-2; an error under it in
+     ink after a danger icon centred on its first line (round 4's failure line: never red words, §5.2) */
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field > label { color: var(--ink-2); font-size: 12px; line-height: 1.4; }
+  .field-hint { margin: 0; color: var(--ink-2); font-size: 12px; line-height: 1.4; }
+  .field-error { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--ink); font-size: 12px; line-height: 1.45; }
+  .field-error > svg { flex: none; margin-block-start: calc((1.45em - 14px) / 2); color: var(--danger); }
+  /* a text field (settings-2): 34 px, its ground with a 0.5 px edge, a 1 px ink-3 edge while focused, the danger's at
+     fault; placeholders in ink-2 (ink-3 read 3.49:1). The keyboard's ring is the base's, hugging it (ui.css) */
+  .input { width: 100%; min-width: 0; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--field); box-shadow: inset 0 0 0 0.5px var(--field-edge); color: var(--ink); font: 13px var(--font); transition: box-shadow 150ms ease-out; }
+  .input::placeholder { color: var(--ink-2); }
+  .input:focus { box-shadow: inset 0 0 0 1px var(--ink-3); }
+  .input[aria-invalid="true"] { box-shadow: inset 0 0 0 1px var(--danger); }
+  .input:disabled { opacity: 0.55; }
+  /* a radio's mark (settings-2): a 16 px ring of ink-3, ink when chosen, its dot growing from the centre (§8) */
+  .radio { position: relative; width: 16px; height: 16px; flex: none; border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--ink-3); transition: box-shadow 150ms ease-out; }
+  .radio::after { content: ""; position: absolute; inset: 4px; border-radius: 999px; background: var(--ink); scale: 0; transition: scale 150ms var(--ease); }
+  [aria-checked="true"] > .radio { box-shadow: inset 0 0 0 1.5px var(--ink); }
+  [aria-checked="true"] > .radio::after { scale: 1; }
+  [aria-disabled="true"] > .radio { opacity: 0.45; }
+  /* what appears only when it applies (§8): its rows 0fr to 1fr in 220 ms on the ease, its opacity 180 ms after 40;
+     closing softer and quicker, 180 ms and 120 ms. The inside clips while it moves; closed, it is inert (Reveal) */
+  .reveal { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 180ms ease-out, opacity 120ms ease-out; }
+  .reveal[data-open] { grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 220ms var(--ease), opacity 180ms ease-out 40ms; }
+  .reveal > div { min-height: 0; overflow: hidden; }
+  /* a segment's icon and its words, 6 px apart (round 1; the settings page's appearance, the popup's display); the
+     reader's segments hold one child each, and nothing of theirs moves */
+  .seg > button > span:not(:first-child) { margin-inline-start: 6px; }
+  /* segments that take their words' widths (§5.1, the popup's display; round 3): the thumb follows the chosen one by
+     anchor positioning, its start and width moving 220 ms on the ease (§8); the control scopes the chosen one's name to
+     itself, so that two on a page never share one (anchor-scope, Chrome 131). The reader's unlayered reduced-motion rule
+     for `.seg .thumb` holds this one still too */
+  .seg.fit { display: flex; anchor-scope: --seg-on; }
+  .seg.fit > button { flex: 1 1 auto; padding: 0 8px; }
+  .seg.fit .thumb { position-anchor: --seg-on; inset-inline-start: anchor(start); width: anchor-size(width); translate: none; transition: inset-inline-start 220ms var(--ease), width 220ms var(--ease); }
+  /* a menu's rows for the pages (§5.3): a name over its hint, the row at least 40 px (the service menu, round 4); a
+     neutral button in a row (the pack's download: 24 px, 9 in, radius 6, 12 px), on the active row the lift's ground,
+     since in dark the neutral's equals the row's fill (ruling 5); a sample drawn in a style at a row's end (the style
+     menu); the last row, which leads to managing the list, in ink-2. The reader's rows are untouched */
+  .pop .item.two { height: auto; min-height: 40px; padding-block: 5px; }
+  .pop .item .t { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
+  .pop .item .t > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pop .item .sub { color: var(--ink-2); font-size: 11.5px; }
+  .pop .item .act { display: inline-flex; flex: none; align-items: center; height: 24px; padding: 0 9px; border-radius: 6px; background: var(--button); color: var(--ink); font-size: 12px; font-weight: 500; }
+  .pop .item[data-active] .act { background: var(--lift); }
+  .pop .item .spin { flex: none; color: var(--ink-2); }
+  .pop .item .nm { flex: none; }
+  .pop .item .preview { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: clip; text-align: end; font-size: 12.5px; }
+  .pop .item.manage { color: var(--ink-2); }
+  /* a row disabled but with an action (the pack's download): greyed the disabled row's colour, its cursor left the
+     row's normal pointer, since clicking it runs the action (finding 2) */
+  .pop .item.unavailable { color: var(--ink-3); }
+  /* a wait with one subject (a busy button; the pack's download in a menu): a loader turning */
+  .spin { animation: turn 900ms linear infinite; }
+}
+@keyframes tip-in { from { opacity: 0; } }
+@keyframes pop-in { from { opacity: 0; scale: 0.97; translate: 0 -4px; } }
+@media (prefers-reduced-motion: reduce) { @keyframes pop-in { from { opacity: 0; } } }
+/* a line of words that takes another's place (the reader's capsule; the settings page's description, §8): 3 px up and
+   in, 180 ms where it is named; a fade alone under reduced motion. Moved from reader.css unchanged (Part 3) */
+@keyframes words-in { from { opacity: 0; translate: 0 3px; } }
+@media (prefers-reduced-motion: reduce) { @keyframes words-in { from { opacity: 0; } } }
+@media (prefers-reduced-motion: reduce) { .seg .thumb { transition: none; } .switch::after { transition: none; } }
+/* forced colours (Windows' contrast themes) drop the fills and the rings: the chosen segment and a switch that is on
+   take the system's Highlight, as a selection does */
+@media (forced-colors: active) {
+  .seg .thumb, .switch[aria-checked="true"] { forced-color-adjust: none; background: Highlight; }
+  .seg > button[aria-checked="true"] { forced-color-adjust: none; color: HighlightText; }
+  /* an outline, which takes no room: a border would push the knob to the track's edge */
+  .switch { outline: 1px solid ButtonText; outline-offset: -1px; }
+  .switch::after { forced-color-adjust: none; background: ButtonText; }
+  .switch[aria-checked="true"]::after { background: HighlightText; }
+  .seg > button[aria-disabled="true"] { color: GrayText; }
+}
+@keyframes turn { to { rotate: 1turn; } }
+/* the pages' controls under reduced motion (§8: each motion a fade or nothing) and in forced colours; unlayered, as the
+   rules above are, so that they win over the component rules */
+@media (prefers-reduced-motion: reduce) {
+  .btn:active { scale: none; }
+  .radio::after { transition: none; }
+  .reveal, .reveal[data-open] { transition: opacity 150ms ease-out; }
+  .spin { animation: none; }
+}
+@media (forced-colors: active) {
+  /* a grounded button keeps an edge the system draws, its ground being dropped; not while focused, whose ring it is */
+  .btn:not(.text):not(:focus-visible) { outline: 1px solid ButtonText; outline-offset: -1px; }
+  .btn[aria-disabled="true"] { color: GrayText; }
+  /* rings and edges drawn by box-shadows are dropped: the system's colours draw them instead */
+  .radio { forced-color-adjust: none; box-shadow: inset 0 0 0 1.5px CanvasText; }
+  [aria-checked="true"] > .radio { box-shadow: inset 0 0 0 1.5px Highlight; }
+  [aria-checked="true"] > .radio::after { background: Highlight; }
+  .input { border: 1px solid CanvasText; }
+}

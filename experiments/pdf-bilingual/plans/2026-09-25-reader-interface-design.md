@@ -24,7 +24,8 @@ The maintainer's standards, which every section below answers to:
   filter, animation) is measured on the heaviest paper before it ships (§12).
 - **No technical path is ever shown to a reader**: 「过去和将来都不应该出现这种纯技术性的、非用户可感知的纯开发者提示」.
   LaTeX, compiling, typesetting services, engines, providers never appear in the interface; when a technical reason makes
-  a function unavailable, its control is greyed out, without an explanation.
+  a function unavailable, its control is greyed out, without an explanation. (A paper that cannot be had says that much,
+  and never why: §8, the maintainer, 2026-09-26.)
 - **Its own visual language**: the reader does not inherit the extension's design system (「不用继承我们之前的系统」);
   the extension's interaction rules (one kind of control, one popover; settings apply at once) and copy rules still do.
 
@@ -89,6 +90,13 @@ restraint as the floor (「只是一个及格线」) and alphaXiv's natural tran
 One cool neutral ramp at hue 255 and one status hue, all oklch; light and dark values. The dark ramp is used when the
 appearance is dark, or is the system's and the system is dark.
 
+**Shared since 2026-09-27** (the extension's redesign, its design §2.1): these tokens are the extension's now, held as
+data in `src/shared/tokens.ts`, from which `pnpm tokens` writes `src/styles/tokens.css`; the reader's sheet imports it,
+with the controls it shares (`src/styles/controls.css`, `src/ui/controls/`). The values below are unchanged, and the
+reader was held to its pixels before and after the move (`experiments/pdf-bilingual/spikes/reader-pixels.mjs`). The
+extension adds roles the reader has no use for — the brand, success, the search mark, the page's and the popup's
+grounds — in the redesign's §2.1.
+
 | Token | Light | Dark |
 |---|---|---|
 | `--n-0` | `oklch(1 0 0)` | `oklch(0.255 0.006 255)` |
@@ -101,11 +109,12 @@ appearance is dark, or is the system's and the system is dark.
 | `--n-8` | `oklch(0.505 0.014 255)` | `oklch(0.71 0.01 255)` |
 | `--n-10` | `oklch(0.235 0.012 255)` | `oklch(0.935 0.005 255)` |
 | `--danger` | `oklch(0.545 0.17 28)` | `oklch(0.69 0.15 28)` |
-| `--focus` | `oklch(0.55 0.15 255)` | `oklch(0.72 0.12 255)` |
+| `--focus` | `--n-10`, the ink (a blue until 2026-09-26) | `--n-10` |
 
 Roles: `--canvas` n-3 (behind the pages), `--chrome` n-0 (toolbar, sidebar, popovers), `--chrome-line` n-4 (0.5 px
-hairlines), `--ink` n-10, `--ink-2` n-8, `--ink-3` n-7, `--fill` n-3 (hover and pressed), `--well` n-3 (the display
-switch's track), `--lift` n-0 (its thumb). Floating surfaces: `--float-bg` n-0 at 90 %, with a hairline and a soft
+hairlines), `--line-strong` n-7 (an edge that marks a choice, a chosen swatch's: a step lighter than the focus's ink,
+3.64:1 and 3.39:1 on the chrome; 2026-09-26), `--ink` n-10, `--ink-2` n-8, `--ink-3` n-7, `--fill` n-3 (hover and
+pressed), `--well` n-3 (the display switch's track), `--lift` n-0 (its thumb). Floating surfaces: `--float-bg` n-0 at 90 %, with a hairline and a soft
 shadow. Pages carry a hairline and a 1–2 px shadow; 14 px between pages.
 
 Contrast, measured (WCAG 2.2, OKLCH → sRGB): ink on chrome 16.7:1 (dark 13.0:1); ink-2 on chrome 5.9:1 (6.1:1), on the
@@ -142,8 +151,13 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 - **Contents sidebar**, 236 px, slides in from the left over 200 ms and moves the document area with it.
 - **Floating over the document**: one page pill per pane at its bottom centre (16 px up); the status capsule at the
   document area's bottom centre, 58 px up, above the pills; the scroll indicator on each pane's right edge.
-- **Narrow windows**: the title yields first (it truncates; below 1100 px only the arXiv id is left, the title in its
-  tooltip); below 900 px the language and service menus move into the reading options, as their first two rows. When the
+- **Narrow windows**: the title yields first (it truncates, and leaves when the lead has too little room for it —
+  the lead's own width, which the trail's menus narrow; the title stays in the id's tooltip), then the id, when the
+  lead cannot hold it; the service's and the language's names are cut short at 11 em, whole in their tooltips; below
+  900 px the language and service menus move into the reading options, as their first two rows; below 500 px the
+  download, the settings and the way back move there too, before them, and the zoom keeps its value's menu (− and +
+  give way; ⌘± and the pinch stay), so that the bar holds at 320 px (the interface review; the maintainer,
+  2026-09-26). When the
   document area is narrower than 840 px, two pages side by side are too small to read: 对照 stays chosen, the translation
   is shown alone, and the capsule says so once, 窗口较窄，暂只显示译文 — the HTML page's rule and wording (S-P-74, 窗口较窄，
   暂按上下显示). The widths are to be checked by reading at them while building.
@@ -166,13 +180,17 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 
 1. 交换左右 (`arrow-left-right`, pressed when swapped) and 同步滚动 (`link-2`, pressed when on). Both act in 对照 only;
    in the single displays they stay in place, greyed, so the bar never reflows.
-2. Zoom: − · the value with a chevron · +. The value opens a menu: 适合宽度, 适合页面, 实际大小, then 50 %–200 %; the
+2. Zoom: − · the value with a chevron · +. The value keeps the width of its widest, 000 %, in tabular figures, its
+   figures at the trailing edge, so that nothing on the bar moves as it changes (at 99 % → 100 % the button grew 3 px and
+   shifted everything beside it: better-typography, 2026-09-26). The value opens a menu: 适合宽度, 适合页面, 实际大小, then 50 %–200 %; the
    current one checked. Shortcuts ⌘− and ⌘+ (Ctrl on other systems).
 3. The target language (its name and a chevron, **no icon**: the translation mark belongs to the display switch alone,
    and the name says what the menu is) and the service (its name and a chevron). Their menus are §6.7's.
 4. 阅读选项 (`sliders-horizontal`), a popover: 对照高亮 (switch), 高亮颜色 (a swatch for each highlight profile: the
    three built-in, 柔和绿, 淡黄, 淡蓝, and any added in the settings), a separator, 图片翻译 (switch; the popup's word,
-   the maintainer's ruling of 2026-09-25), a separator, 外观 (a small segmented control: 浅色, 深色, 跟随系统),
+   the maintainer's ruling of 2026-09-25), a separator, 外观 (a small segmented control of three icons, equal whatever
+   the language — 跟随系统 a monitor, 浅色 a sun, 深色 a moon, in that order — their words in tooltips and to screen
+   readers; the maintainer, 2026-09-26: words ran off the thumb in English),
    深色时调暗页面 (switch). All are settings (§9.1), the same values the popup and the settings page change; a change
    applies at once.
 5. 下载 (`download`), a menu of two items, text only: 译文 PDF, 原文 PDF (the maintainer: 「只要译文 PDF / 原文 PDF」).
@@ -181,9 +199,16 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 6. 设置 (`settings`): opens the settings page at its PDF reader section.
 7. 在默认查看器中打开 (`log-out`): leaves the reader for the browser's own viewer (the maintainer's wording, 2026-09-25).
 
-Buttons are 30 × 30 with a 7 px radius and a hit area grown to the bar's height; hover and open take the fill. Every
-button has a tooltip: after 500 ms of hover, at once on keyboard focus; one line always (a tooltip wrapped when it was
-measured at its last place near the window's edge); the shortcut, when there is one, in a lighter `kbd` after the words.
+Buttons are 30 × 30 with a 7 px radius and a hit area grown to the bar's height; hover, open and pressed take the fill,
+and a hover's look only where a pointer hovers (`@media (hover: hover)`: on a touch screen it latched after a tap).
+The interface review proposed a 1 px ring for pressed, since the fill is the hover's too and stands 1.2:1 against the
+bar; the maintainer kept the design without it (「这个不要 我们保留之前的设计」, 2026-09-26). Every button has a tooltip:
+after 500 ms of hover, at once on keyboard focus; one line always (a tooltip wrapped when it was measured at its last
+place near the window's edge); the shortcut, or the value the button shows, in a lighter `kbd` after the words. The
+zoom's value, the language and the service are labelled by what is on them — the value first, then their words, hidden
+(83% 缩放比例, 简体中文 目标语言: WCAG 2.5.3, by `aria-labelledby`). 设置 is a link, opened in a new tab. The bar is the page's banner: each control a Tab stop of its own (an
+ARIA toolbar would have promised arrow keys between them). In forced colours the chosen display, a pressed button and
+a switch that is on take the system's Highlight (the interface review, 2026-09-26).
 
 ### 6.2 The display switch
 
@@ -192,21 +217,24 @@ interface's language** (the maintainer's reason for icons: 「不同语言界面
 The chosen one sits on a lifted thumb that slides between segments in 220 ms; chosen icons take ink, the others ink-2,
 a disabled one ink-3 at 55 %.
 
-The icons, each on a 24 × 18 canvas, 1 unit = 1 CSS px, stroke 1.2 with round caps and joins:
+The icons, each on a 24 × 18 canvas, 1 unit = 1 CSS px, stroke 1 with round caps and joins — as the toolbar's Lucide
+icons render beside them — the frame's edges on the pixel grid (the maintainer's round 11, 2026-09-25; stroke 1.2 and
+`x 2.25 w 19.5` before):
 
-- **原文**: a pane (`rect x 2.25 y 2.5 w 19.5 h 13 rx 3`) with an **A** in its middle.
-- **对照**: the same pane split by a vertical rule at x 12.
+- **原文**: a pane (`rect x 2.5 y 2.5 w 19 h 13 rx 3`) with an **A** in its middle.
+- **对照**: the same pane split by a vertical rule at x 12, drawn `crispEdges` so that a 1x screen keeps it one pixel.
 - **译文**: the same pane with **文** in its middle.
 
 The letters are Noto Sans SC (SIL OFL 1.1) at weight 350, the face's DemiLight — its Latin and CJK designed together —
 turned into outlines so that every system draws the same shapes (system faces were tried first: headless Chromium gave
 PingFang's heaviest weight at that size, and Windows and Linux would draw other faces). Each is centred on the pane by
-its ink, not its em box: A 8 px high, 文 9 px (a CJK glyph looks smaller than a Latin capital of its height). 文 is
-narrowed across to 0.8 of its width (9.1 → 7.3 px, beside A's 6.5; the maintainer asked for it to come near A's width),
-and the weight that takes from its verticals and diagonals is given back by a 0.16 px stroke round its outline. The
+its ink, not its em box: A 8 px high, 文 8.8 px (a CJK glyph looks smaller than a Latin capital of its height). 文 is
+narrowed across to 0.76 of its width (to 6.74 px, beside A's 6.47; the maintainer asked for it to come near A's width),
+and the weight that takes from its verticals and diagonals is given back by a 0.18 px stroke round its outline (round
+11: 9 px, 0.8 and 0.16 before; its measurements are with the round's files). The
 outlines are produced by a script from the font (kept with the reader's code) and committed as path data; the font's
-licence goes into `docs/THIRD_PARTY.md`. The maintainer may refine 文 by hand later (「这个之后有时间我们再改」); editable
-SVGs of the three icons and of 文's full-width source outline were handed over for that.
+licence goes into `docs/THIRD_PARTY.md`. These are the final glyphs: the hand refinement once left for later was dropped
+by the maintainer (2026-09-26).
 
 Rejected on the way, so that nobody tries them again: words (their width changes with the language); letter pairs and
 panes marked by drawn letters (「文字的都设计太差了」); left half / right half for the single displays (which side is
@@ -214,9 +242,9 @@ which is a convention, 「解释有点牵强」); a translation badge on the pan
 then replaced by the maintainer's letters in the middle).
 
 It is a single choice, so it is a radio group to assistive technology: `role="radiogroup"` named 显示, three
-`role="radio"` with `aria-checked` and the words as their names, arrow keys moving the choice. Keys **1**, **2**, **3**
-choose 原文, 对照, 译文 anywhere on the page outside a text field; the tooltips show them. A display that cannot be had
-(§8) is `aria-disabled` and skipped by the arrows.
+`role="radio"` with `aria-checked` and the words as their names, arrow keys moving the choice. No single key chooses a
+display anywhere on the page: 1, 2 and 3 did, which a stray keystroke or a spoken word could set off (WCAG 2.1.4; the
+maintainer removed them, 2026-09-26). A display that cannot be had (§8) is `aria-disabled` and skipped by the arrows.
 
 ### 6.3 The contents sidebar
 
@@ -307,7 +335,7 @@ overlays follow the pinch exactly (§10.1).
 - A press on a toolbar button scales it to 0.96; hover and open take the fill in 150 ms.
 - The display switch's thumb slides; the sidebar slides; the pills and indicators fade; the capsule rises; the appearance
   crossfades. Nothing jumps.
-- Escape closes the open popover; 1 / 2 / 3 choose the display; ⌘± zoom.
+- Escape closes the open popover, and a Tab out of it closes it too, the focus going on; ⌘± zoom.
 
 ## 8. States
 
@@ -323,7 +351,7 @@ No state that tells the reader nothing is shown (no "done").
 | Some paragraphs failed | a translation with gaps | capsule: {n} 处翻译失败 · 重试 · close |
 | Language not supported | the shared target language is not one of the nine | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the nine translates |
 | Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services) |
-| Cannot be had | the paper cannot be turned into a bilingual PDF, for any technical reason | 对照 and 译文 greyed in the switch, no words; the reader shows 原文 |
+| Cannot be had | the paper has no source, or none of the ways of typesetting it worked (every one tried, none for want of time) | 对照 and 译文 greyed in the switch; the reader shows 原文, with the capsule: 这篇论文暂不支持 PDF 翻译, and 改用 HTML 翻译 where arXiv has an HTML version (opened where `reading.openIn` says); no close. Remembered on this machine by paper version, language and pipeline, when the paper's own source set there: a visit again asks nothing of the service, a new pipeline tries once more (the maintainer, 2026-09-26; the words first had none) |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
 
 - Recovery is automatic where it can be: when the network comes back the translation goes on by itself; 重试 asks only
@@ -342,8 +370,8 @@ the same values, and each follows the others through the shared configuration's 
 **Read, as they are**: `targetLanguage` (the nine are the reader's; §8 for the others), `provider` and `services`,
 `reading.sentenceHighlight` (对照高亮), `appearance.activeHighlight` among `appearance.highlights` (高亮颜色: the swatches are
 the configured highlight profiles, the three built-in and any added), `image.enabled` with `image.modes` (图片翻译:
-figure text is shown when it is on and the display's mode, §3, is among the modes, as on the HTML page), `uiLanguage`
-(the reader's words), `mode` (the display, §3).
+figure text is shown when it is on and the display's mode, §3, is among the modes, as on the HTML page) (since v20 the
+switch alone: figure text in every display), `uiLanguage` (the reader's words), `mode` (the display, §3).
 
 - **Writing the display**: 对照 writes `mode: 'side'`, unless it is `'stack'` (a side-by-side choice already for the
   reader); 译文 writes `'only'`; both clear `pdfReader.original`. 原文 sets `pdfReader.original` and leaves `mode` alone.
@@ -356,7 +384,7 @@ figure text is shown when it is on and the display's mode, §3, is among the mod
 | `pdfReader.original` | boolean | false | the reader was last left in 原文 (the HTML page's "translation on" is the tab's session, not a setting) |
 | `pdfReader.sync` | boolean | true | 同步滚动: the engine's `same` mode on, `off` off |
 | `pdfReader.swapped` | boolean | false | 交换左右 |
-| `pdfReader.appearance` | `'light' \| 'dark' \| 'system'` | `'system'` | 外观 (the extension has no appearance setting; its pages follow the system) |
+| `pdfReader.appearance` | `'light' \| 'dark' \| 'system'` | `'system'` | 外观 (the extension has no appearance setting; its pages follow the system) — moved to the extension's theme at configuration v20 (the redesign's §3): one appearance for every surface, set here or on the settings page |
 | `pdfReader.dimPages` | boolean | true | 深色时调暗页面 |
 
 The experiment's own `axtPdfReader` storage key goes, without a migration: it was never released (rule 7 is about what a
@@ -375,14 +403,15 @@ reader cannot do is greyed or hidden):
   a technical reason). A `mode` of `'stack'` shows as 左右 chosen, since that is what the reader shows.
 - The primary button: 翻译本页 / 显示原文, clearing or setting `pdfReader.original`.
 - 对照高亮 and 图片翻译: as elsewhere.
-- The style menu: hidden (it has no effect on a typeset PDF; hidden, not explained).
+- The style menu: greyed, in its place (it has no effect on a typeset PDF; greyed, not explained — the maintainer, 2026-09-28: the foot stays the same on every page).
 
 With the reader closed, a PDF page gets the abstract page's entry view: the two buttons.
 
 ### 9.3 The settings page
 
-- A new section **PDF 阅读器** (`#pdf-reader`, after 阅读): 在 arXiv 的 PDF 上使用对照阅读器, 同步滚动, 外观, 深色时调暗页面.
-  The reader's 设置 button opens the settings page there.
+- A new section **PDF 阅读器** (`#pdf-reader`, after 阅读): 在 arXiv 的 PDF 上使用对照阅读器, 同步滚动, 外观, 深色时调暗页面
+  (since the redesign: the PDF group of the Reading section at `#reading/pdf`, the appearance and the dimming under
+  Appearance; `#pdf-reader` still leads there). The reader's 设置 button opens the settings page there.
 - **数据** gains a line for the PDF translations kept on this machine, `{n} 篇 · {size}`, and 清除 through the existing
   `Confirm` (two presses; it disarms after 4 s), beside the HTML translations' line (the maintainer: 「其他暂时这样」 on
   the proposal). The settings page is on the extension's origin and calls the store's `usage()` and `clear()` directly.
@@ -391,7 +420,8 @@ With the reader closed, a PDF page gets the abstract page's entry view: the two 
 
 The reader's menus are built on `src/ui/Menu.tsx`, and its gaps are closed for every user of it (the popup, the
 settings page's drawers): the active item announced as the arrows move; Home and End; typing a letter jumps to it; focus
-back on the trigger when it closes; no buttons inside a listbox.
+back on the trigger when it closes; no buttons inside a listbox. (Retired with the redesign: the reader's menus are
+`MenuList`, `src/ui/controls/`, and `src/ui/Menu.tsx` is gone.)
 
 ## 10. Engine changes, each measured
 
@@ -532,9 +562,9 @@ viewer's control does).
 
 ### 11.5 Styling
 
-Tailwind v4, as the popup and the settings page use it, with **the reader's own token sheet** (§4.1, `@theme inline`),
-not `ui.css`. PDF.js's viewer sheet with a `box-sizing` reset inside the viewers (pdfslick's lesson; the highlight
-offset of 2026-09-22 was ours for want of it).
+Tailwind v4, as the popup and the settings page use it, with **the extension's token sheet** (`src/styles/tokens.css`
+since the redesign; §4.1) through `@theme inline`, not `ui.css`. PDF.js's viewer sheet with a `box-sizing` reset inside
+the viewers (pdfslick's lesson; the highlight offset of 2026-09-22 was ours for want of it).
 
 ### 11.6 Words
 
@@ -561,11 +591,18 @@ Each before the stage's pull request, on the heaviest demo paper, in a real wind
 
 ## 13. Accessibility
 
-- Every control has a name; icon-only buttons by `aria-label` equal to their tooltip's words.
+- Every control has a name; icon-only buttons by `aria-label` equal to their tooltip's words; a button that shows a
+  value is labelled by it, then by its words (WCAG 2.5.3); the zoom's shortcuts are in `aria-keyshortcuts`.
 - Tooltips on keyboard focus as on hover; everything a pointer does, a keyboard does; focus rings are 2 px `--focus`,
-  2 px offset.
+  2 px offset, in the ink, and the keyboard's alone: a text field rings on a click too (the browser's rule), so under
+  the pointer a field shows its caret and its fill, and its ring, a Tab away, hugs it (offset 0) so that it crosses no
+  word beside it (`modality.ts`; the maintainer, 2026-09-26).
 - The display switch is a radio group (§6.2); the zoom, download and language/service menus are menus or listboxes with
-  the shared `Menu`'s fixed keyboard behaviour; the reading options are a dialog.
+  the shared `Menu`'s fixed keyboard behaviour; the reading options are a dialog, which takes the focus to its first
+  control that shows. A popover closes when the focus leaves it for another control, a press on its own button left to
+  that button's click. The capsule's 选择语言 opens the language menu itself, the one the reading options hold in a
+  narrow window.
+- Forced colours keep every state: the chosen, pressed and switched-on controls take `Highlight`.
 - The status capsule is a live region present from the start; failures never move focus.
 - Contrast as §4.1; meaning never rides on colour alone (the danger colour always has its icon and words).
 - `prefers-reduced-motion` honoured everywhere (§4.2).
@@ -573,16 +610,16 @@ Each before the stage's pull request, on the heaviest demo paper, in a real wind
 ## 14. Testing
 
 - **Unit** (Vitest): the display ↔ `mode` mapping both ways; the 18 → 19 migration; the popup view-model's reader
-  rules (§9.2); the engine's failure classes to `ProviderErrorKind`; `DisplaySwitch` as a radio group (arrows, 1/2/3, a
-  disabled choice skipped); the `Menu` fixes; the overlay transform and the redraw observer against a fake page.
+  rules (§9.2); the engine's failure classes to `ProviderErrorKind`; `DisplaySwitch` as a radio group (arrows, a
+  disabled choice skipped, no single key on the page); the `Menu` fixes; the overlay transform and the redraw observer against a fake page.
 - **Copy**: every reader string comes from the locale packs in both languages; a test fails on a reader-facing string
   naming LaTeX, TeX, compiling, typesetting, an engine or a provider (§1's rule).
 - **The engine moved intact**: the existing browser checks pass on the new page unchanged — the cache revisit, the
   viewer faults, the lost cases, the sync frame measurement, `e2e:pdf`.
 - **New browser checks**: the pinch (both sides scale; overlays within 1 px mid-pinch; no bare time after the redraw);
   the page pills; the indicators (a drag moves both sides); the abstract popup's two buttons and their disabled states;
-  the settings section and the PDF translations' line and 清除; dark pages; the keyboard (1/2/3, the switch's arrows,
-  Escape).
+  the settings section and the PDF translations' line and 清除; dark pages; the keyboard (the switch's arrows, Escape, a
+  Tab out of a menu); the bar at every width in both languages; forced colours.
 - **Probes** for §12, committed with the checks.
 - Before the pull request: a `better-interface` review, `break` (every state of §8 rendered), and the gate
   `pnpm typecheck && pnpm lint && pnpm test && pnpm build`.
@@ -602,7 +639,7 @@ the same thing, its string is reused (marked).
 | | 目标语言 · 搜索语言 · 翻译服务 | Target language · Search languages · Translation service |
 | | 阅读选项 | Reading options |
 | | 对照高亮 (S-P-80, reused) · 高亮颜色 · 图片翻译 (S-P-85, reused) | Hover highlight · Highlight colour · Images |
-| | 外观 · 浅色 · 深色 · 跟随系统 · 深色时调暗页面 | Appearance · Light · Dark · System · Dim pages in dark mode |
+| | 外观 · 跟随系统 · 浅色 · 深色 · 深色时调暗页面 | Appearance · System · Light · Dark · Dim pages in dark mode |
 | | 下载 · 译文 PDF · 原文 PDF | Download · Translation PDF · Original PDF |
 | | 设置 (S-P-02, reused) · 在默认查看器中打开 | Settings · Open in the default viewer |
 | Page pills | 原文页码 · 译文页码 · 上一页 · 下一页 | Original's page · Translation's page · Previous page · Next page |
@@ -618,5 +655,5 @@ the same thing, its string is reused (marked).
 
 ## 16. Open and deferred
 
-- 文 may be refined by hand (§6.2); the committed path data is replaced when it is.
 - Jump back (#300), the engine's TypeScript port and #299: the next stage.
+- A service changed while a paper is translating takes effect on the next visit. Decided (maintainer, 2026-09-26), not built: the capsule says so and offers two actions, 「重新加载翻译」 (translate again now) and 「下次生效」 (leave it for the next visit); its sentence is written with the build.

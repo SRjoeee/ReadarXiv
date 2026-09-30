@@ -19,6 +19,8 @@ export interface ReaderState {
   display: Display
   /** false: the paper cannot be had as a bilingual PDF (the design, §8): the two translated displays greyed, the original shown */
   available: boolean
+  /** where the reader can read the paper translated instead, when it cannot be had as a bilingual PDF: its HTML version */
+  htmlVersion: string | null
   phase: Phase
   /** 0–1, the share of the paper's paragraphs translated */
   progress: number
@@ -57,6 +59,7 @@ export interface ReaderState {
 export const INITIAL: ReaderState = {
   display: 'original',
   available: true,
+  htmlVersion: null,
   phase: 'loading',
   progress: 0,
   loaded: 0,
@@ -82,7 +85,7 @@ export const INITIAL: ReaderState = {
 export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage' | 'patchSettings' | 'pdfBytes' | 'goToUnit' | 'lead' | 'retry' | 'setNarrow' | 'pinch'>
 
 /** the runs that end without a translation because of the paper, or of the language: not failures a reader can retry */
-const CANNOT_BE_HAD = new Set(['no source'])
+const CANNOT_BE_HAD = new Set(['no source', 'cannot typeset'])
 const NOT_SUPPORTED = new Set(['not verified'])
 /** what each step of a run puts on the translation's side (session.mjs note) */
 const SHOWS: Record<string, Shown> = { 'shown cached': 'copy', 'cache unusable': 'none', 'shown preview': 'preview', 'shown final': 'final' }
@@ -120,6 +123,8 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       return { ...state, paper: { id: event.id, title: event.title } }
     case 'sync':
       return event.on === state.sync ? state : { ...state, sync: event.on }
+    case 'html':
+      return event.url === state.htmlVersion ? state : { ...state, htmlVersion: event.url }
     case 'settings':
       return event.config === state.settings && event.pack === state.pack ? state : { ...state, settings: event.config, pack: event.pack }
     case 'fail':

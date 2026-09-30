@@ -52,6 +52,8 @@ describe('the diagnostics hook (issue #156)', () => {
     const service = build({ getProvider: async () => provider(async () => { throw echo }), retired: () => false, warn: line => lines.push(line), batch: { maxRetries: 0 } })
     const res = await service.translate(req(['a']))
     expect(res.ok).toBe(false)
+    // and the status survives the queues to the answer, where the background reads it (the redesign's design, §4)
+    expect(res).toMatchObject({ ok: false, error: { kind: 'auth', status: 401 } })
     expect(lines.length).toBeGreaterThanOrEqual(1)
     for (const line of lines) {
       expect(line).toContain('auth (HTTP 401)')
@@ -817,6 +819,9 @@ describe('attributing failures: isolatable travels with the error across the mes
 
   it('toErrorInfo carries it across the boundary; a non-ProviderError gets it by origin', () => {
     expect(toErrorInfo(new ProviderError('rate-limit', 'slow down'))).toEqual({ kind: 'rate-limit', message: 'slow down', isolatable: false })
+    // The HTTP status goes along when the failure had one: the background tells a refused key (401) from a 403 by it
+    expect(toErrorInfo(attachRequestErrorMeta(new ProviderError('auth', 'refused'), { statusCode: 401 }))).toEqual({ kind: 'auth', message: 'refused', isolatable: false, status: 401 })
+    expect(toErrorInfo(attachRequestErrorMeta(new ProviderError('auth', 'forbidden'), { statusCode: 403 }))).toMatchObject({ kind: 'auth', status: 403 })
     // A count mismatch is the typical “one segment threw the output off”
     expect(toErrorInfo(new BatchCountMismatchError(4, 3, ['x'])).isolatable).toBe(true)
     expect(toErrorInfo(new Error('boom'))).toMatchObject({ kind: 'unknown', isolatable: true })

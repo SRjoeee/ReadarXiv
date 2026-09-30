@@ -19,6 +19,7 @@ function harness(over: Partial<HandlerDeps> = {}) {
     diagnostics: { record: (src: string, line: string) => void lines.push([src, line]), restored: Promise.resolve(), export: vi.fn() },
     cache: { clear: vi.fn(async () => 0), cleanup: vi.fn(async () => undefined), stats: vi.fn(async () => ({ entries: 0, bytes: 0 })) },
     toggle: vi.fn(async () => true),
+    decide: vi.fn(async () => ({ action: 'retranslate', behind: false, enabled: true })),
     getConfig: vi.fn(async () => DEFAULT_CONFIG),
     getFloatingEntry: vi.fn(async () => DEFAULT_FLOATING_ENTRY),
     patchFloatingEntry: vi.fn(),
@@ -26,6 +27,7 @@ function harness(over: Partial<HandlerDeps> = {}) {
     openSettings: vi.fn(async () => undefined),
     lightAction: vi.fn(async () => undefined),
     environment: vi.fn(),
+    health: { reject: vi.fn(async () => undefined), clear: vi.fn(async () => false) },
     ...over,
   } as unknown as HandlerDeps
   const handlers = createHandlers(deps)
@@ -38,6 +40,8 @@ function harness(over: Partial<HandlerDeps> = {}) {
 }
 
 const CALL = { scope: 's1', paper: '2401.00001v1', segments: [] } as unknown as AxtMessage<'axt:translate'>
+/** One of the reader's services, as the settings page stores it before its connection test */
+const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
 
 describe('the background\'s handlers', () => {
   describe('axt:translate', () => {
@@ -58,6 +62,77 @@ describe('the background\'s handlers', () => {
       expect(lines[0]?.[0]).toBe('background')
       expect(lines[0]?.[1]).toContain('auth')
       expect(lines[0]?.[1]).not.toContain('sk-secret')
+    })
+
+    it('a call naming one of the reader\'s services writes the health record: success clears it, a refused key marks it; a call naming none, or a free engine, writes nothing (the redesign\'s design, §4)', async () => {
+      const answering = (answer: unknown) => ({ router: { forCall: vi.fn(async () => ({ translate: vi.fn(async () => answer) })) } as unknown as HandlerDeps['router'] })
+      const health = () => ({ reject: vi.fn(async () => undefined), clear: vi.fn(async () => true) })
+      const named = { ...CALL, type: 'axt:translate' as const, providerId: 'svc-abcd1234' }
+      const good = { ok: true, result: { segments: [], provider: 'svc-abcd1234' }, cached: 0 }
+
+      const cleared = health()
+      await harness({ ...answering(good), health: cleared }).send(named)
+      expect(cleared.clear).toHaveBeenCalledWith('svc-abcd1234')
+      expect(cleared.reject).not.toHaveBeenCalled()
+
+      const refused = health()
+      const stored = vi.fn(async () => ({ ...DEFAULT_CONFIG, services: [SVC] }))
+      await harness({ ...answering({ ok: false, error: { kind: 'auth', message: 'bad key', isolatable: false, status: 401 } }), health: refused, getConfig: stored }).send(named)
+      expect(refused.reject).toHaveBeenCalledWith('svc-abcd1234')
+
+      const plain = health()
+      await harness({ ...answering(good), health: plain }).send({ ...CALL, type: 'axt:translate' })
+      await harness({ ...answering(good), health: plain }).send({ ...named, providerId: 'google-web' })
+      expect(plain.clear).not.toHaveBeenCalled()
+      expect(plain.reject).not.toHaveBeenCalled()
+    })
+
+    it('a named call marks only a 401 (the redesign\'s design, §4): a 403 is not about the key, and a service no longer stored is not marked', async () => {
+      const answering = (error: unknown) => ({ router: { forCall: vi.fn(async () => ({ translate: vi.fn(async () => ({ ok: false, error })) })) } as unknown as HandlerDeps['router'] })
+      const named = { ...CALL, type: 'axt:translate' as const, providerId: SVC.id }
+      const withService = vi.fn(async () => ({ ...DEFAULT_CONFIG, services: [SVC] }))
+      for (const error of [
+        { kind: 'auth', message: 'forbidden', isolatable: false, status: 403 },
+        { kind: 'auth', message: 'no status', isolatable: false },
+        { kind: 'rate-limit', message: 'slow down', isolatable: false, status: 429 },
+        { kind: 'network', message: 'offline', isolatable: false },
+      ]) {
+        const health = { reject: vi.fn(async () => undefined), clear: vi.fn(async () => true) }
+        const answer = await harness({ ...answering(error), health, getConfig: withService }).send(named)
+        expect([error.message, health.reject.mock.calls.length]).toEqual([error.message, 0])
+        // the answer itself is untouched: the settings page shows the failure as it came
+        expect(answer).toEqual({ ok: false, error })
+      }
+      const gone = { reject: vi.fn(async () => undefined), clear: vi.fn(async () => true) }
+      await harness({ ...answering({ kind: 'auth', message: 'bad key', isolatable: false, status: 401 }), health: gone, getConfig: vi.fn(async () => DEFAULT_CONFIG) }).send(named)
+      expect(gone.reject).not.toHaveBeenCalled()
+    })
+
+    it('a candidate\'s test (a service as the settings page would save it): a success clears the mark only when it tested the stored key and address; a failure touches nothing (the redesign\'s design, §4; ruling 16)', async () => {
+      const answering = (answer: unknown) => ({ router: { forCall: vi.fn(async () => ({ translate: vi.fn(async () => answer) })) } as unknown as HandlerDeps['router'] })
+      const health = () => ({ reject: vi.fn(async () => undefined), clear: vi.fn(async () => true) })
+      const stored = vi.fn(async () => ({ ...DEFAULT_CONFIG, services: [SVC] }))
+      const tested = (candidate: typeof SVC) => ({ ...CALL, type: 'axt:translate' as const, providerId: SVC.id, candidate })
+      const good = { ok: true, result: { segments: [], provider: SVC.id }, cached: 0 }
+
+      // the stored key and address, another model: the stored key answered
+      const same = health()
+      await harness({ ...answering(good), health: same, getConfig: stored }).send(tested({ ...SVC, model: 'other/model' }))
+      expect(same.clear).toHaveBeenCalledWith(SVC.id)
+
+      // a new key: not cleared here — the save that follows changes the key, and the watcher clears the mark then
+      const renewed = health()
+      await harness({ ...answering(good), health: renewed, getConfig: stored }).send(tested({ ...SVC, apiKey: 'sk-new' }))
+      expect(renewed.clear).not.toHaveBeenCalled()
+
+      // a refusal, of the stored key or another: nothing marked, nothing cleared, the answer as it came
+      for (const candidate of [SVC, { ...SVC, apiKey: 'sk-new' }]) {
+        const failed = health()
+        const error = { kind: 'auth', message: 'bad key', isolatable: false, status: 401 }
+        const answer = await harness({ ...answering({ ok: false, error }), health: failed, getConfig: stored }).send(tested(candidate))
+        expect([failed.reject.mock.calls.length, failed.clear.mock.calls.length]).toEqual([0, 0])
+        expect(answer).toEqual({ ok: false, error })
+      }
     })
   })
 
@@ -101,13 +176,23 @@ describe('the background\'s handlers', () => {
     expect(deps.toggle).toHaveBeenCalledTimes(1)
   })
 
+  it('axt:toggle-decision answers what the toggle would do in the tab that asked, doing nothing; from an extension page nothing, and a page with no decision null', async () => {
+    const { send, deps } = harness()
+    await expect(send({ type: 'axt:toggle-decision' })).resolves.toEqual({ decision: { action: 'retranslate', behind: false, enabled: true } })
+    expect(deps.decide).toHaveBeenCalledWith(7)
+    expect(deps.toggle).not.toHaveBeenCalled()
+    expect(send({ type: 'axt:toggle-decision' }, { tabId: undefined })).toBeUndefined()
+    vi.mocked(deps.decide).mockResolvedValueOnce(undefined)
+    await expect(send({ type: 'axt:toggle-decision' })).resolves.toEqual({ decision: null })
+  })
+
   describe('axt:entry-settings', () => {
     const config = { ...DEFAULT_CONFIG, uiLanguage: 'ja', reading: { ...DEFAULT_CONFIG.reading, openIn: 'new-tab' } } as typeof DEFAULT_CONFIG
     const floating = { ...DEFAULT_FLOATING_ENTRY, side: 'left' as const }
 
     it('answers what a page needs of the configuration, the floating button\'s state and the tab\'s zoom', async () => {
       const { send, deps } = harness({ getConfig: async () => config, getFloatingEntry: async () => floating, zoomOf: vi.fn(async () => 1.25) })
-      await expect(send({ type: 'axt:entry-settings' })).resolves.toEqual({ uiLanguage: 'ja', openIn: 'new-tab', zoom: 1.25, pdfReader: true, floating })
+      await expect(send({ type: 'axt:entry-settings' })).resolves.toEqual({ uiLanguage: 'ja', openIn: 'new-tab', zoom: 1.25, pdfReader: true, theme: 'system', floating })
       expect(deps.zoomOf).toHaveBeenCalledWith(7)
     })
 
@@ -115,6 +200,12 @@ describe('the background\'s handlers', () => {
       const off = { ...config, pdfReader: { ...config.pdfReader, enabled: false } }
       const { send } = harness({ getConfig: async () => off, getFloatingEntry: async () => floating, zoomOf: vi.fn(async () => 1) })
       await expect(send({ type: 'axt:entry-settings' })).resolves.toMatchObject({ pdfReader: false })
+    })
+
+    it('answers the extension\'s appearance, for the floating button (the redesign\'s design, §3)', async () => {
+      const dark = { ...config, theme: 'dark' as const }
+      const { send } = harness({ getConfig: async () => dark, getFloatingEntry: async () => floating, zoomOf: vi.fn(async () => 1) })
+      await expect(send({ type: 'axt:entry-settings' })).resolves.toMatchObject({ theme: 'dark' })
     })
 
     it('a zoom that cannot be read, or a sender without a tab, is a zoom of 1', async () => {
@@ -196,7 +287,7 @@ describe('the background\'s handlers', () => {
     expect(Object.keys(createHandlers(deps)).sort()).toEqual([
       'axt:cache-clear', 'axt:cache-stats', 'axt:cancel-scope', 'axt:diag', 'axt:diag-export', 'axt:engine-ready',
       'axt:entry-settings', 'axt:ocr', 'axt:open-settings', 'axt:page-usable',
-      'axt:provider-status', 'axt:set-floating-entry', 'axt:toggle', 'axt:translate',
+      'axt:provider-status', 'axt:set-floating-entry', 'axt:toggle', 'axt:toggle-decision', 'axt:translate',
     ])
   })
 })

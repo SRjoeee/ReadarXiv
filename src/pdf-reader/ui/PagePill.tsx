@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide'
 import { forwardRef, useState } from 'react'
 import { R } from '@/ui/strings'
 import type { ReaderController, Side } from '../controller'
-import { Icon } from './icons'
+import { Icon } from '@/ui/controls/Icon'
 import { useReader } from './use-reader'
 
 export const PagePill = forwardRef<HTMLDivElement, { controller: ReaderController; side: Side }>(function PagePill({ controller, side }, ref) {

@@ -19,6 +19,8 @@ export interface DemotedInfo {
   id: string
   kind: ProviderErrorKind
   message: string
+  /** The HTTP status, when the failure had one; `onFailure` carries it (only a 401 is a refused key, the redesign's design, §4) */
+  status?: number
 }
 
 export interface FallbackStatus {
@@ -70,13 +72,21 @@ interface Demotion {
 
 export function createFallbackService(
   steps: readonly FallbackStep[],
-  opts: { cooldownMs?: number; now?: () => number; warn?: (line: string) => void } = {},
+  opts: { cooldownMs?: number; now?: () => number; warn?: (line: string) => void; demoted?: readonly DemotedInfo[]; onFailure?: (info: DemotedInfo) => void } = {},
 ): FallbackService {
   if (steps.length === 0) throw new Error('a fallback chain needs at least one engine')
   const cooldownMs = opts.cooldownMs ?? DEFAULT_COOLDOWN_MS
   const now = opts.now ?? Date.now
   const demotions = new Map<string, Demotion>()
   let lastDemoted: DemotedInfo | undefined
+
+  // Demotions known before the first call (the redesign's design, §4): a service whose key the endpoint refused, which
+  // the background remembers across sessions. For good, as any permanent kind is; a connection that succeeds clears
+  // the record and rebuilds the chain. The first of them is also `lastDemoted`: with nothing translated yet, this is
+  // still the most recent reason the popup has for showing anything other than the configured engine (Codex review, round 1)
+  const seeded = opts.demoted ?? []
+  for (const info of seeded) demotions.set(info.id, { info })
+  if (seeded.length > 0) lastDemoted = seeded[0]
 
   const isDemoted = (id: string): boolean => {
     const demotion = demotions.get(id)
@@ -127,6 +137,11 @@ export function createFallbackService(
         demotions.delete(step.provider.id)
         return response
       }
+      // Every failed step is reported, whether or not it goes on to demote: with fallback off the chain is one
+      // step, and `demote` (which only runs when there is a next step to hand over to) is never reached — yet the
+      // background still has to learn this engine's key was refused (Codex review, round 1)
+      const { kind, message, status } = response.error
+      opts.onFailure?.({ id: step.provider.id, kind, message, ...(status !== undefined ? { status } : {}) })
       for (const segment of response.partial ?? []) gathered.set(segment.id, segment)
       last = response
       const isLast = index === chain.length - 1

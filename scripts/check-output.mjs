@@ -42,6 +42,8 @@ for (const [what, ok] of [
   // The recogniser's worker is a build of its own (wxt.config.ts `worker.plugins`): without the plugin there its two
   // packages ship unlisted
   [`${NOTICES} lists what the recogniser's worker bundles`, /^onnxruntime-web \d[^\n]* — MIT$/m.test(notices) && /^esearch-ocr \d[^\n]* — Apache-2\.0$/m.test(notices)],
+  // the dev pages (wxt.config.ts DEV_PAGES) are for development builds: a release holding one would ship a debug page
+  [`${OUT} holds no dev page`, !existsSync(join(OUT, 'gallery.html')) && !existsSync(join(OUT, 'controls.html'))],
 ]) {
   if (ok) console.log(`✓ ${what}`)
   else {

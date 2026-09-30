@@ -53,7 +53,7 @@ export function useMenuNav({ count, initial, isDisabled, labelOf, onPick, onClos
     const from = q.length > 1 ? active : active + 1
     for (let k = 0; k < count; k++) {
       const j = (from + k) % count
-      // the key is the menu's: nothing else on the page acts on it (the reader's display keys, 1 to 3)
+      // the key is the menu's: nothing else on the page acts on it
       if (!isDisabled(j) && labelOf(j).toLowerCase().startsWith(q)) { e.preventDefault(); setActive(j); return }
     }
   }

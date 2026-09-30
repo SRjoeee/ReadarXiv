@@ -20,7 +20,7 @@ function firstOptions(first: ReturnType<typeof setup>): ImageRunOptions {
   return {
     doc: first.doc, targets: first.targets, paper: '2507.00150', target: 'cmn', scope: 's2', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
     fetchBytes: async () => ({ bytes: PNG, mime: 'image/png' }), ocr: first.ocr, translate: first.translate,
-    isEnabled: () => true, isCurrent: () => true,
+    isCurrent: () => true,
   }
 }
 
@@ -41,7 +41,6 @@ function setup(overrides: Partial<ImageRunOptions> = {}) {
     context: { paperTitle: 'Paper' },
     fetchBytes: async () => ({ bytes: PNG, mime: 'image/png' }),
     ocr, translate,
-    isEnabled: () => true,
     isCurrent: () => true,
     onRendered: ts => { rendered.push(ts) },
     onProgress: p => { progress.push({ requested: p.requested, done: p.done, failed: p.failed }) },
@@ -52,14 +51,10 @@ function setup(overrides: Partial<ImageRunOptions> = {}) {
 }
 
 describe('startImageTranslation', () => {
-  it('waiting() names the targets never requested, and whether each is parked behind the gate', async () => {
-    let enabled = false
-    const { targets, run } = setup({ isEnabled: () => enabled })
-    expect(run.waiting().map(w => [w.target.id, w.parked])).toEqual(targets.map(t => [t.id, false]))
-    await run.translate(targets) // the gate refuses: parked, still waiting
-    expect(run.waiting().map(w => w.parked)).toEqual(targets.map(() => true))
-    enabled = true
-    run.resume()
+  it('waiting() names the targets never requested, and none once each has been', async () => {
+    const { targets, run } = setup()
+    expect(run.waiting().map(t => t.id)).toEqual(targets.map(t => t.id))
+    await run.translate(targets)
     await vi.waitFor(() => expect(run.progress().done).toBe(targets.length))
     expect(run.waiting()).toEqual([])
   })
@@ -148,20 +143,6 @@ describe('startImageTranslation', () => {
     expect(doc.querySelector(`.${IMG_CLASS}`)).toBeNull()
   })
 
-  it('the mode gate closed: targets entering wait without a request; released on resume', async () => {
-    let enabled = false
-    const { doc, targets, run, ocr } = setup({ isEnabled: () => enabled })
-    await run.translate(targets)
-    expect(ocr).not.toHaveBeenCalled()
-    expect(run.progress().requested).toBe(0)
-    run.resume() // still closed: nothing happens
-    expect(ocr).not.toHaveBeenCalled()
-    enabled = true
-    run.resume()
-    await vi.waitFor(() => expect(doc.querySelector(`.${IMG_CLASS}`)).not.toBeNull())
-    expect(ocr).toHaveBeenCalledTimes(1)
-  })
-
   it('not a bitmap / over the cap: recorded failed, zero requests; failed() lists it, retry goes through translate', async () => {
     let mime = 'image/svg+xml'
     const { targets, run, ocr } = setup({ fetchBytes: async () => ({ bytes: PNG, mime }) })
@@ -217,7 +198,7 @@ describe('startImageTranslation', () => {
       fetchBytes: async () => ({ bytes: PNG, mime: 'image/png' }),
       ocr,
       translate: async () => ({ ok: false, error: { kind: 'auth', message: 'User not found.', isolatable: false } }),
-      isEnabled: () => true, isCurrent: () => true,
+      isCurrent: () => true,
     })
     await run.translate([targets[0]!])
     expect(run.fatal()).toContain('auth')
@@ -243,7 +224,7 @@ describe('startImageTranslation', () => {
       },
       ocr: async () => ({ ok: true as const, result: { width: 1, height: 1, lines: LINES }, cached: false }),
       translate: async () => ({ ok: false, error: { kind: 'auth', message: 'User not found.', isolatable: false } }),
-      isEnabled: () => true, isCurrent: () => true,
+      isCurrent: () => true,
       // Two at once, so the second fetch is out when the first image's translation fails
       maxConcurrent: 2,
     })
@@ -267,7 +248,7 @@ describe('startImageTranslation', () => {
       doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
       fetchBytes: async () => ({ bytes: PNG, mime: 'image/png' }), ocr,
       translate: async () => ({ ok: false, error: { kind: 'network', message: 'offline', isolatable: false } }),
-      isEnabled: () => true, isCurrent: () => true,
+      isCurrent: () => true,
     })
     await run.translate(targets)
     expect(run.fatal()).toBeUndefined()
@@ -337,7 +318,7 @@ describe('startImageTranslation', () => {
       doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
       fetchBytes: async () => ({ bytes: PNG, mime: 'image/png' }), ocr, maxConcurrent: 2,
       translate: async (call: { request: { segments: { id: string; text: string }[] } }) => ({ ok: true as const, result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock' }, cached: 0 }),
-      isEnabled: () => true, isCurrent: () => true,
+      isCurrent: () => true,
     })
     const all = run.translate(targets)
     const releaseAll = () => { for (const r of release.splice(0)) r() }
@@ -371,7 +352,7 @@ describe('startImageTranslation', () => {
       doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
       fetchBytes: async () => ({ bytes: PNG, mime: 'image/png' }), ocr, maxConcurrent: 2,
       translate: async (call: { request: { segments: { id: string; text: string }[] } }) => ({ ok: true as const, result: { segments: call.request.segments.map(s => ({ id: s.id, text: `译:${s.text}` })), provider: 'mock' }, cached: 0 }),
-      isEnabled: () => true, isCurrent: () => true,
+      isCurrent: () => true,
     })
     const first = run.translate(targets.slice(0, 3))
     const second = run.translate(targets.slice(3)) // the observer's second callback
@@ -402,7 +383,7 @@ describe('startImageTranslation', () => {
       doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
       fetchBytes: async () => ({ bytes: PNG, mime: 'image/png' }), ocr, maxConcurrent: 2,
       translate: async () => ({ ok: false, error: { kind: 'no-key', message: 'no key configured', isolatable: false } }),
-      isEnabled: () => true, isCurrent: () => true,
+      isCurrent: () => true,
       onProgress: p => { progress.push({ failed: p.failed, fatal: p.fatal }) },
     })
     const all = run.translate(targets) // 2 in flight, 1 queued
@@ -430,7 +411,7 @@ describe('startImageTranslation', () => {
       doc, targets, paper: 'p', target: 'cmn', scope: 's', renderPath: 'tags' as const, preload: DEFAULT_PRELOAD,
       fetchBytes, ocr, maxConcurrent: 1,
       translate: async () => ({ ok: false, error: { kind: 'network', message: 'x', isolatable: false } }),
-      isEnabled: () => true, isCurrent: () => true,
+      isCurrent: () => true,
     })
     const all = run.translate(targets) // 1 in flight, 2 queued
     await vi.waitFor(() => expect(ocr).toHaveBeenCalledTimes(1))

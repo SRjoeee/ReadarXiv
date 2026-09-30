@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULT_COOLDOWN_MS, createFallbackService, type FallbackStep } from '@/providers/fallback'
+import { DEFAULT_COOLDOWN_MS, createFallbackService, type DemotedInfo, type FallbackStep } from '@/providers/fallback'
 import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
 import type { ProviderErrorKind, TranslationProvider } from '@/providers/types'
 
@@ -157,6 +157,50 @@ describe('createFallbackService', () => {
     await service.translate(call)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('demoted'))
     warn.mockRestore()
+  })
+
+  it('starts with the demotions it is given, for good: a service whose key was refused is passed over from the first call (the redesign\'s design, §4)', async () => {
+    const first = step('svc-abcd1234', [ok('svc-abcd1234')])
+    const second = step('microsoft', [ok('microsoft')])
+    const seededInfo = { id: 'svc-abcd1234', kind: 'auth' as const, message: 'refused before' }
+    const service = createFallbackService([first, second], { demoted: [seededInfo] })
+    const res = await service.translate(call)
+    expect(res.ok && res.result.provider).toBe('microsoft')
+    expect(first.calls).toBe(0)
+    expect(service.status().demotions.map(d => d.id)).toEqual(['svc-abcd1234'])
+    // The seeded demotion is also the popup's reason to show, even before a call: without it `engine.demoted` would
+    // stay empty and the popup would name the free engine with no explanation (Codex review, round 1)
+    expect(service.status().demoted).toEqual(seededInfo)
+  })
+
+  it('tells whoever asked of every failed step, with its kind', async () => {
+    const seen: string[] = []
+    const service = createFallbackService([step('svc-abcd1234', [fail('auth', 'bad key')]), step('microsoft', [ok('microsoft')])], { onFailure: info => seen.push(`${info.id}:${info.kind}`) })
+    await service.translate(call)
+    expect(seen).toEqual(['svc-abcd1234:auth'])
+  })
+
+  it('reports a single step\'s failure too, though a lone step never demotes: fallback off must not silence an auth refusal (the redesign\'s design, §4)', async () => {
+    const seen: DemotedInfo[] = []
+    const only = step('svc-abcd1234', [fail('auth', 'bad key')])
+    const service = createFallbackService([only], { onFailure: info => seen.push(info) })
+    const res = await service.translate(call)
+    expect(res.ok).toBe(false)
+    expect(seen).toEqual([{ id: 'svc-abcd1234', kind: 'auth', message: 'bad key' }])
+    // No next step to hand over to: demote() never runs, and the record carries no demotion
+    expect(service.status().demotions).toEqual([])
+  })
+
+  it('carries the failure\'s HTTP status to whoever asked: only a 401 means the key was refused (the redesign\'s design, §4)', async () => {
+    const seen: DemotedInfo[] = []
+    const withStatus = (status: number): TranslateMessageResponse => ({ ok: false, error: { kind: 'auth', message: 'refused', isolatable: false, status } })
+    const service = createFallbackService([step('svc-abcd1234', [withStatus(401), withStatus(403)])], { onFailure: info => seen.push(info) })
+    await service.translate(call)
+    await service.translate(call)
+    expect(seen).toEqual([
+      { id: 'svc-abcd1234', kind: 'auth', message: 'refused', status: 401 },
+      { id: 'svc-abcd1234', kind: 'auth', message: 'refused', status: 403 },
+    ])
   })
 })
 

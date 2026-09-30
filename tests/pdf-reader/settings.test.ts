@@ -37,12 +37,10 @@ describe('withDisplay: what a display chosen in the reader writes', () => {
 })
 
 describe('figuresShown: figure text in a display', () => {
-  it('follows the switch and the modes ticked, a side-by-side display standing for the HTML page\'s side or stacked mode', () => {
+  it('follows the switch alone: figure text shows in every translated display (the redesign\'s design, §4)', () => {
     expect(figuresShown(with_({}), 'bilingual')).toBe(true)
-    expect(figuresShown(with_({ image: { enabled: false, modes: ['stack', 'side', 'only'] } }), 'bilingual')).toBe(false)
-    expect(figuresShown(with_({ mode: 'side', image: { enabled: true, modes: ['only'] } }), 'bilingual')).toBe(false)
-    expect(figuresShown(with_({ mode: 'side', image: { enabled: true, modes: ['only'] } }), 'translation')).toBe(true)
-    expect(figuresShown(with_({ mode: 'stack', image: { enabled: true, modes: ['stack'] } }), 'bilingual')).toBe(true)
+    expect(figuresShown(with_({}), 'translation')).toBe(true)
+    expect(figuresShown(with_({ image: { enabled: false } }), 'bilingual')).toBe(false)
   })
 
   it('is off for the original alone, which has no figure text to show', () => {

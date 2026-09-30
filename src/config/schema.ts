@@ -1,17 +1,19 @@
 // The configuration's shape (DESIGN §9). A change of shape bumps `CONFIG_VERSION` and gets a migration in storage.ts — the
 // only way (DESIGN §9): no field carries a zod default, so the version alone says what is in storage.
 import { z } from 'zod'
-import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
 import { DEFAULT_PROMPTS_CONFIG } from '@/providers/prompt-library'
 import { DEFAULT_APPEARANCE, appearanceSchema } from './appearance'
 import { BUILT_IN_SERVICES, SERVICE_ID_RE, serviceSchema } from './services'
 import { DEFAULT_LANG_CODE, langCodeSchema } from './languages'
 
-export const CONFIG_VERSION = 19
+export const CONFIG_VERSION = 20
 
 /** The three reading modes (DESIGN §7); `mode` is shared with the image translation's mode gate */
 export const MODE_VALUES = ['stack', 'side', 'only'] as const
 const modeSchema = z.enum(MODE_VALUES)
+
+/** How many services of one's own the configuration holds at most: the schema's cap, which the settings page's add stops at and names */
+export const SERVICES_MAX = 20
 
 /** The glossary's limits. Shared by the migration and the schema, so one change applies to both */
 export const GLOSSARY_LIMITS = { term: 120, translation: 200, entries: 200, totalChars: 6000 } as const
@@ -43,10 +45,10 @@ export function normalizeGlossary(value: unknown): { term: string; translation: 
 /**
  * The PDF reader's own settings (the reader's design, §9.1; v19): whether arXiv's PDFs open in it; whether it was last
  * left on the original alone (the HTML page's translation-on is its tab's session, not a setting); whether its sides
- * scroll together and are swapped; and its appearance — the extension's pages follow the system, the reader lets its
- * reader choose, and dim the pages in the dark
+ * scroll together and are swapped; and whether the pages dim in the dark. Its appearance moved to `theme` at v20 —
+ * one setting for every surface the extension draws, not the reader's alone
  */
-export const DEFAULT_PDF_READER = { enabled: true, original: false, sync: true, swapped: false, appearance: 'system', dimPages: true } as const
+export const DEFAULT_PDF_READER = { enabled: true, original: false, sync: true, swapped: false, dimPages: true } as const
 
 export const configSchema = z.object({
   version: z.literal(CONFIG_VERSION),
@@ -54,7 +56,7 @@ export const configSchema = z.object({
   // The zod messages are diagnostics: the settings page's fallback notice shows the locale pack's sentence for the field (ui/strings.ts fallbackText)
   provider: z.string().refine(v => (BUILT_IN_SERVICES as readonly string[]).includes(v) || SERVICE_ID_RE.test(v), 'not a valid translation service'),
   /** The reader's own services (v12); keys stay local (CLAUDE.md hard rule 5) */
-  services: z.array(serviceSchema).max(20),
+  services: z.array(serviceSchema).max(SERVICES_MAX),
   /** ISO 639-3 (since v4; languages.ts); an LLM gets the English name, Google a BCP-47 conversion */
   targetLanguage: langCodeSchema,
   mode: modeSchema,
@@ -81,14 +83,12 @@ export const configSchema = z.object({
   /** The engine fallback chain (§8.5): a failing first choice switches to the free engines of itself, so the whole page does not stop */
   fallback: z.object({ enabled: z.boolean() }),
   /**
-   * The viewport translation range (§10, Read Frog's preload): how many pixels below the viewport count as near
-   * (0–10000), or `all` — the whole paper is requested as the session starts (v15); how much must show to count as
-   * entered (0–1). The settings page offers the margin as one, two or three screens, or the whole paper
+   * How a paper is translated (v20; the redesign's design, §4): `on-demand`, what is being read and what comes next (a
+   * screen below the window, a paragraph entered as it first shows), or `whole`, the whole paper requested as it opens.
+   * The observer's numbers are the core's (`preloadOf`); until v20 they were stored, one to three screens and three
+   * starting points
    */
-  preload: z.object({
-    margin: z.union([z.number().min(0).max(10_000), z.literal('all')]),
-    threshold: z.number().min(0).max(1),
-  }),
+  preload: z.enum(['on-demand', 'whole']),
   /**
    * Reading aid (§7.7, since v10): on hover the matching sentence in the original and in the translation is marked
    * with a band (issue #105). On by default — it shows anything only when the engine reported sentence boundaries and
@@ -103,11 +103,10 @@ export const configSchema = z.object({
    */
   reading: z.object({ sentenceHighlight: z.boolean(), openIn: z.enum(['new-tab', 'same-tab']) }),
   /**
-   * Image translation (§15). `enabled` is the reader's switch (popup, v11); `modes` says in which
-   * display modes the overlays show, a detail kept on the options page. Both are display gates:
-   * switching to a mode that is off only hides the overlays, nothing is re-requested
+   * Image translation (§15): one switch, the popup's and the settings page's. Figure text shows in every display
+   * (v20; the redesign's design, §4): until v20 a list of displays gated it, a choice nobody needed
    */
-  image: z.object({ enabled: z.boolean(), modes: z.array(modeSchema).max(3) }),
+  image: z.object({ enabled: z.boolean() }),
   /**
    * The **interface's** language (v13), not the paper's: a reader may translate into Japanese and
    * still want the buttons in Japanese, or in English, and neither choice implies the other.
@@ -121,9 +120,14 @@ export const configSchema = z.object({
     original: z.boolean(),
     sync: z.boolean(),
     swapped: z.boolean(),
-    appearance: z.enum(['light', 'dark', 'system']),
     dimPages: z.boolean(),
   }),
+  /**
+   * The appearance of every surface the extension draws (v20; the redesign's design, §3): the popup, the settings page,
+   * the reader and the floating button. `system` follows the browser's colour scheme. Until v20 the reader alone had one
+   * (`pdfReader.appearance`), which the migration carries here
+   */
+  theme: z.enum(['system', 'light', 'dark']),
 })
 
 export type Config = z.infer<typeof configSchema>
@@ -141,9 +145,10 @@ export const DEFAULT_CONFIG: Config = {
   appearance: DEFAULT_APPEARANCE,
   fallback: { enabled: true },
   prompts: DEFAULT_PROMPTS_CONFIG,
-  preload: { ...DEFAULT_PRELOAD },
+  preload: 'on-demand',
   reading: { sentenceHighlight: true, openIn: 'new-tab' },
-  image: { enabled: true, modes: [...MODE_VALUES] },
+  image: { enabled: true },
   uiLanguage: 'auto',
   pdfReader: { ...DEFAULT_PDF_READER },
+  theme: 'system',
 }

@@ -59,6 +59,19 @@ describe('installFloatingButton', () => {
     expect([hosts(), inside('.axt-fb-dock').dataset.axtSide]).toEqual([1, 'left'])
   })
 
+  it('draws in the extension\'s appearance, from the first paint and through a change of it while the page stays open (the redesign\'s design, §3)', async () => {
+    await install()
+    expect(inside('.axt-fb-dock').dataset.axtTheme).toBeUndefined()
+    wire.follow!({ ...DEFAULT_ENTRY_SETTINGS, theme: 'dark' })
+    expect(inside('.axt-fb-dock').dataset.axtTheme).toBe('dark')
+    // taken off and put back: mounted afresh in the appearance in force
+    wire.follow!({ ...settings({ enabled: false }), theme: 'dark' })
+    wire.follow!({ ...DEFAULT_ENTRY_SETTINGS, theme: 'light' })
+    expect([hosts(), inside('.axt-fb-dock').dataset.axtTheme]).toEqual([1, 'light'])
+    wire.follow!({ ...DEFAULT_ENTRY_SETTINGS, theme: 'system' })
+    expect(inside('.axt-fb-dock').dataset.axtTheme).toBeUndefined()
+  })
+
   it('"hide for now" lasts through other changes of the settings, and ends when the reader turns the switch on again (Devin on #251)', async () => {
     await install()
     click('.axt-fb-options')
@@ -104,5 +117,17 @@ describe('installFloatingButton', () => {
     expect(inside('.axt-fb-main').getAttribute('aria-label')).toBe(LOCALES.en.S.primary.translate)
     installed.setActive(true)
     expect([inside('.axt-fb-dock').dataset.axtActive, inside('.axt-fb-main').getAttribute('aria-label')]).toEqual(['yes', LOCALES.en.S.primary.restore])
+  })
+
+  it('the main button\'s words are asked of the page again when it says they may have moved: its words read more than whether it is on (the retranslate cue, UI.md S-I-06)', async () => {
+    let cued = false
+    const installed = await installFloatingButton(document, { main: { kind: 'toggle', run: () => undefined }, label: (S, active) => (active && cued ? S.primary.retranslate : active ? S.primary.restore : S.primary.translate) })
+    installed.setActive(true)
+    cued = true
+    installed.relabel()
+    expect([inside('.axt-fb-main').getAttribute('aria-label'), inside('.axt-fb-main .axt-fb-tip').textContent]).toEqual([LOCALES.en.S.primary.retranslate, LOCALES.en.S.primary.retranslate])
+    // taken off the page meanwhile: nothing to draw, nothing thrown
+    wire.follow!(settings({ enabled: false }))
+    expect(() => installed.relabel()).not.toThrow()
   })
 })

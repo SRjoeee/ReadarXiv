@@ -13,9 +13,10 @@
 // sink for its events. What the prototype's header controls did, it now exports as commands; what it wrote into the
 // header, it reports as events (session.d.mts). The controller (../controller.ts) is its only caller.
 import { createPdfStore } from '@/cache/pdf-store'
-import { isCurrent } from '@/cache/pdf-record'
+import { isCurrent, stillUntypeset } from '@/cache/pdf-record'
 import { lookOf } from '@/config/appearance'
 import { toBcp47 } from '@/config/languages'
+import { htmlUrlOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
 import { isTranslatable, linesToBoxes } from '@/core/image/boxes'
 import { appearanceRule } from '@/core/renderer/style-preset'
 import { renderImage, setImageModes } from '@/core/renderer/image'
@@ -29,7 +30,7 @@ import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
-import { decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
@@ -1496,6 +1497,17 @@ async function replaceRight(url, texts, { draft = false } = {}) {
 }
 
 // ---------------------------------------------------------------- live (#292)
+/** the failures that say the paper cannot be had as a bilingual PDF (controller.ts CANNOT_BE_HAD) */
+const CANNOT_BE_HAD = new Set(['no source', 'cannot typeset'])
+/**
+ * The paper's HTML version, translating, or null where arXiv says it has none (404, 410); a HEAD, as the PDF page's
+ * own (pdf.content.ts). Anything else, or no answer within 3 s, says nothing about the paper, and the link is offered:
+ * at worst it leads to arXiv's own answer
+ */
+const htmlVersion = () => Promise.race([
+  fetch(htmlUrlOf(paper), { method: 'HEAD', credentials: 'omit' }).then(r => (r.status === 404 || r.status === 410 ? null : translatedHtmlUrlOf(paper)), () => translatedHtmlUrlOf(paper)),
+  new Promise(resolve => setTimeout(resolve, 3000, translatedHtmlUrlOf(paper))),
+])
 const waitFor = (origin, type) => new Promise(r => addEventListener('message', function h(e) { if (e.origin === origin && e.data?.type === type) { removeEventListener('message', h); r(e.data) } }))
 /** our compile of the original, with unit marks → each mark with the word it stands by, to carry over to arXiv's PDF */
 async function marksOfPdf(bytes) {
@@ -1563,14 +1575,17 @@ async function live() {
     const missed = lost ? ` (${lost} not: ${lostWhy})` : ''
     status(`${again ? 'translating again · ' : ''}${total ? `${got} of ${total} translated${by}${missed}` : 'opening…'} · ${said}${data.ms != null && data.ok !== false ? ` (${(data.ms / 1000).toFixed(1)} s)` : ''}`)
   }
-  const fail = (event, text, kind) => {
+  const fail = async (event, text, kind) => {
     // a failure a retry can mend, and why: the retry, the network's return and a change of the services go by it
     stopped = ['fetch failed', 'no engine', 'no compiler', 'failed'].includes(event) ? { event, kind: kind ?? 'unknown' } : null
+    // a paper that cannot be had — no source, or none of the ways of setting it worked —: its HTML version is where it
+    // can be read translated, told with the failure so that the capsule comes whole (the maintainer, 2026-09-26)
+    if (CANNOT_BE_HAD.has(event)) host.emit({ type: 'html', url: await htmlVersion() })
     host.emit({ type: 'fail', event, text, kind })
     setContext({}); note(event); status(text); L.done = true; L.failed = text
     // a failure stays in its display: with nothing translated, the card fills the translation's pane (the reader's design,
     // §8). A language the reader cannot typeset, or a paper that cannot be had, shows the original, for this visit
-    if (event === 'not verified' || event === 'no source') { held = true; changeDisplay('original', false) }
+    if (event === 'not verified' || CANNOT_BE_HAD.has(event)) { held = true; changeDisplay('original', false) }
   }
   // the engine and the language are the extension's settings; asked first, so that a reader with no service set up is
   // told at once
@@ -1701,6 +1716,11 @@ async function live() {
       L.done = true
       return
     }
+    // a paper none of this pipeline's ways could set, on this machine before: said again, the service and the TeX page
+    // asked for nothing; a new pipeline tries once more (the maintainer, 2026-09-26). Only once the extension has said
+    // which service would translate, and only for the same one: the failure was its translation's, which another
+    // service, model or prompt may not repeat (Codex on #306)
+    if (!cached && cacheKey && stillUntypeset(await pdfCache.untypeset(cacheKey.digest, cacheKey.lang), { identity: engine.identity, pipeline: PIPELINE_VERSION })) return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
     // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
     if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
     // the decision to translate, the step the controller's phase moves at: a copy on screen is translated again, and
@@ -1748,6 +1768,20 @@ async function live() {
     if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
     stopped = result.stopped ? { event: 'stopped', kind: result.stopped } : null
     await swaps
+    // every way of setting it tried and failed, a whole translation in hand and nothing on screen (the maintainer,
+    // 2026-09-26). Remembered, so that a visit again asks nothing of the service, only when the paper's own source set
+    // here: a TeX error from a compiler whose files were not there says nothing of the paper, and is tried again (Codex).
+    // With the identity that would answer now, as a copy is written: the mark holds for that service alone (Codex on #306),
+    // and is left only when that service made the whole translation — a run a hand-over mixed is tried again (its final
+    // review)
+    if (result.exhausted && !result.stopped && !compiledOnce && !cached) {
+      if (cacheKey && result.originalOk) {
+        const identity = await engine.now().catch(() => engine.identity)
+        if (allTranslatedBy(result.results, identity)) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity, pipeline: PIPELINE_VERSION })
+      }
+      note('done', result)
+      return fail('cannot typeset', `None of the ways of typesetting ${paper} into ${lang} worked: the right side shows the original`)
+    }
     // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
     // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
     if (cacheKey) {

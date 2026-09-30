@@ -1,6 +1,6 @@
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReaderController, Side } from '@/pdf-reader/controller'
-import { type Appearance, applyAppearance, dimmed, themeOf } from '@/pdf-reader/ui/appearance'
+import { type Appearance, applyAppearance, dimmed, themeOf, withoutTransitions } from '@/pdf-reader/ui/appearance'
 import { FailureCard } from '@/pdf-reader/ui/FailureCard'
 import { Outline } from '@/pdf-reader/ui/Outline'
 import { PagePill } from '@/pdf-reader/ui/PagePill'
@@ -20,7 +20,7 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   const left = useRef<HTMLDivElement>(null)
   const right = useRef<HTMLDivElement>(null)
   // what the page itself shows; each part below takes its own (use-reader.ts)
-  const state = useReader(controller, s => ({ appearance: s.settings?.pdfReader.appearance, dimPages: s.settings?.pdfReader.dimPages, swapped: s.settings?.pdfReader.swapped ?? false, title: s.paper.title, card: cardOf(s) !== null }))
+  const state = useReader(controller, s => ({ appearance: s.settings?.theme, dimPages: s.settings?.pdfReader.dimPages, swapped: s.settings?.pdfReader.swapped ?? false, title: s.paper.title, card: cardOf(s) !== null }))
   const doc = useRef<HTMLDivElement>(null)
   usePinch(controller, doc)
   // a document area under 840 px shows the translation alone in side by side (the design, §5); the session applies it
@@ -46,11 +46,15 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   // the contents sidebar, open or not: this visit's, not a setting. The document area moves with it at once, each side
   // refitted once to its new width, and is drawn sliding there by a transform, on the compositor (reader.css .doc)
   const [contents, setContents] = useState(false)
-  const toggled = useRef(false)
+  // the value last drawn: the area slides only when it changes, never as the page mounts — a first-run flag was spent
+  // by StrictMode's second run of this effect, and a development build slid the area in on every load (Part 7's final
+  // review)
+  const drawn = useRef(contents)
   useLayoutEffect(() => {
     const root = document.documentElement
     root.toggleAttribute('data-axt-contents', contents)
-    if (!toggled.current) { toggled.current = true; return }
+    if (drawn.current === contents) return
+    drawn.current = contents
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const side = Number.parseFloat(getComputedStyle(root).getPropertyValue('--side')) || 0
     doc.current?.animate([{ translate: `${contents ? -side : side}px 0` }, { translate: '0 0' }], { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' })
@@ -72,10 +76,14 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   )
 }
 
-/** the capsule's choose-language action: the toolbar's language menu, or the reading options where it lives below 900 px (§5) */
+/** the capsule's choose-language action: the language menu itself, the toolbar's, or below 900 px the one the reading
+ *  options hold (§5), opened in them — its search takes the focus, whatever rows come before it (the branch review:
+ *  below 500 px the focus went to the download) */
 function chooseLanguage() {
   const inBar = document.querySelector<HTMLElement>('[popovertarget="pop-language"]')
-  document.getElementById(inBar?.offsetParent ? 'pop-language' : 'pop-options')?.showPopover()
+  if (inBar?.offsetParent) { document.getElementById('pop-language')?.showPopover(); return }
+  document.getElementById('pop-options')?.showPopover()
+  document.getElementById('pop-options-language')?.showPopover()
 }
 
 /**
@@ -106,7 +114,8 @@ function useAppearance(appearance: Appearance | undefined, dimPages: boolean | u
   const [systemDark, setSystemDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches)
   useEffect(() => {
     const query = matchMedia('(prefers-color-scheme: dark)')
-    const on = () => setSystemDark(query.matches)
+    // the system's own flip changes the colours at once: the transitions are held there too (better-ui)
+    const on = () => withoutTransitions(document, () => setSystemDark(query.matches))
     query.addEventListener('change', on)
     return () => query.removeEventListener('change', on)
   }, [])

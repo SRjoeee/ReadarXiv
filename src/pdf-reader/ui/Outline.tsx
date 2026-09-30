@@ -7,8 +7,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { R } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import type { OutlineEntry } from '../outline'
-import { Icon } from './icons'
-import { useTip } from './tip'
+import { Icon } from '@/ui/controls/Icon'
+import { useTip } from '@/ui/controls/tip'
 import { useReader } from './use-reader'
 
 export function Outline({ controller, open }: { controller: ReaderController; open: boolean }) {
@@ -32,7 +32,7 @@ export function Outline({ controller, open }: { controller: ReaderController; op
   return (
     // closed, inert, not hidden: out of the tab order and the accessibility tree, still displayed, so that the style
     // sheet slides it (a hidden sidebar is display: none, which no transition leaves: the final review)
-    <aside className="chrome toc" aria-label={R.contents} inert={!open}>
+    <aside id="axt-contents" className="chrome toc" aria-label={R.contents} inert={!open}>
       <div className="toc-h">{R.contents}</div>
       <ul className="toc-list">
         {entries.map((e, k) => (

@@ -21,6 +21,7 @@
 // click inside one goes to its own document — and half of arXiv's figures are one.
 
 import { AXT_ATTR_PREFIX, stripAttributes, VIEWED_ATTR, VIEWED_FRAME_ATTR } from '@/core/marks'
+import { tokenSheet } from '@/shared/tokens'
 
 export interface FigureViewerStrings {
   open: string
@@ -122,23 +123,29 @@ const ICONS = {
 }
 const icon = (d: string) => `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`
 
+/**
+ * One sheet for both shadow roots. The control and the dialog's bar are the family's floating things (the redesign's
+ * design, §7): the floating ground under the floating shadow, the control at a radius of 8, the keyboard's ring in the
+ * focus ink — light or dark by the page they stand on, as the paper is (`dress` marks them), from the host token sheet.
+ * The dialog's frame keeps its own: its ground is the page's paper, its shadow and its scrim the viewer's
+ */
 const SHEET = `
 :host { all: initial; }
+${tokenSheet('host')}
 button { all: unset; box-sizing: border-box; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; cursor: pointer; color: inherit; opacity: 0.7; transition: opacity 0.15s; }
 button:hover, button:focus-visible { opacity: 1; }
-button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
-.axt-viewer-open { color: #1c1c1e; background: rgb(255 255 255 / 0.86); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.16); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.15s; }
+button:focus-visible { outline: 2px solid var(--axt-focus); outline-offset: -2px; }
+.axt-viewer-open { border-radius: 8px; color: var(--axt-ink); background: var(--axt-float-bg); box-shadow: var(--axt-float-shadow); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.15s; }
 .axt-viewer-open[data-axt-shown] { opacity: 0.85; visibility: visible; pointer-events: auto; transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s; }
 .axt-viewer-open[data-axt-shown]:hover, .axt-viewer-open[data-axt-shown]:focus-visible { opacity: 1; }
-dialog { box-sizing: border-box; width: 90vw; height: 90vh; max-width: none; max-height: none; margin: auto; padding: 0; border: 0; border-radius: 12px; overflow: hidden; color: var(--axt-viewer-ink, #1c1c1e); background: var(--axt-viewer-paper, #f4f3f2); box-shadow: 0 24px 64px rgb(0 0 0 / 0.35); }
+dialog { box-sizing: border-box; width: 90vw; height: 90vh; max-width: none; max-height: none; margin: auto; padding: 0; border: 0; border-radius: 12px; overflow: hidden; color: var(--axt-ink); background: var(--axt-viewer-paper, #f4f3f2); box-shadow: 0 24px 64px rgb(0 0 0 / 0.35); }
 dialog[open] { animation: enter 0.15s cubic-bezier(0.4, 0, 0.2, 1); }
 dialog::backdrop { background: rgb(0 0 0 / 0.5); backdrop-filter: blur(4px); animation: fade 0.15s; }
 .axt-viewer-stage { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
 .axt-viewer-stage[data-axt-dragging] { cursor: grabbing; }
-.axt-viewer-bar { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; padding: 2px; border-radius: 8px; background: color-mix(in srgb, var(--axt-viewer-paper, #f4f3f2) 78%, transparent); }
+.axt-viewer-bar { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; padding: 2px; border-radius: 8px; background: var(--axt-float-bg); box-shadow: var(--axt-float-shadow); }
 @keyframes enter { from { opacity: 0; transform: scale(0.95); } }
 @keyframes fade { from { opacity: 0; } }
-.axt-viewer-open[data-axt-dark] { color: #f5f5f4; background: rgb(40 40 40 / 0.86); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), 0 1px 3px rgb(0 0 0 / 0.4); }
 @media (prefers-reduced-motion: reduce) { dialog[open], dialog::backdrop { animation: none; } .axt-viewer-open { transition: none; } }
 `
 
@@ -282,8 +289,12 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   const dress = (): void => {
     const { paper, dark } = ground()
     host.style.setProperty('--axt-viewer-paper', paper)
-    host.style.setProperty('--axt-viewer-ink', dark ? '#f5f5f4' : '#1c1c1e')
-    open.toggleAttribute('data-axt-dark', dark)
+    // The control and the bar stand on the paper and take its light or dark (the redesign's design, §3, §7): a mark
+    // inside each shadow root, where restoring the page — which strips every data-axt-* of the document's own
+    // elements, our hosts' among them — does not reach
+    const theme = dark ? 'dark' : 'light'
+    open.dataset.axtTheme = theme
+    dialog.dataset.axtTheme = theme
   }
 
   // ── The control over the figure under the pointer ──

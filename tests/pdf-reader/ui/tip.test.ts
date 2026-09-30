@@ -46,6 +46,19 @@ describe('a toolbar button and its tooltip (the reader\'s design, §6.1, §13)',
     expect(isOpen(tip)).toBe(false)
   })
 
+  it('shows inside an open popover, and not over one it is outside of (the appearance\'s icons in the reading options)', async () => {
+    // an open popover (the stub's data-open) holding a button, and a button outside it
+    const inside = await mountElement(createElement('div', { className: 'pop', 'data-open': '' }, createElement(ToolbarButton, { label: '浅色', onClick: () => {} }, 'x')))
+    const outside = await mount()
+    // each read as it is focused: the other one's blur hides a tip
+    const shown = []
+    for (const { container } of [inside, outside]) {
+      await act(async () => { container.querySelector('button')!.focus() })
+      shown.push(isOpen(container.querySelector('.tip')))
+    }
+    expect(shown).toEqual([true, false])
+  })
+
   it('does nothing when disabled, and says so', async () => {
     const onClick = vi.fn()
     const { container } = await mount({ disabled: true, onClick })
