@@ -51,6 +51,12 @@ describe('a display outside a unit\'s marks (the reader\'s anchors take it from 
     expect(u?.trail).not.toContain('model')
   })
 
+  it('a display between a unit\'s words is its inner one, its letters too (the review of A1, M1: the fill across a page break is for these)', () => {
+    const [u, v] = body('It holds that \\[ x_{ij} = y \\] for all i.\n\nPlain words, $z$ inline, no display.')
+    expect(u).toMatchObject({ inner: expect.stringContaining('xij') })
+    expect(v).not.toHaveProperty('inner')
+  })
+
   it('with the paper\'s own macros put in, and ℓ read as l: \\rma_{kk} sets akk, W^\\ell W sets wlw (2608.08350)', () => {
     const [u] = body('\\def\\rma{{\\mathrm{a}}}\\newcommand{\\E}{\\mathbb{E}}\n\nIt holds that\n\\[ \\E\\,\\rma_{kk} = W^\\ell W \\]\n\nNext.')
     for (const w of ['akk', 'wlw', 'e']) expect(u?.trail).toContain(w)

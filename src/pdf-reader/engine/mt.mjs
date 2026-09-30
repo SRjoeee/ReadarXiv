@@ -271,6 +271,6 @@ export function unitText(pieces) {
   if (bare.trimEnd() !== text) return { text }
   return { text, gaps: gaps.map(g => Math.min(g, text.length)).filter((g, i, a) => a.indexOf(g) === i) }
 }
-/** the unit's displays beyond its marks, their letters as latex-front found them (displayOutside) or a copy keeps them:
- *  for the anchors. A copy made when they were a bare `true` gives none */
-export const displayEdges = u => ({ ...(typeof u.lead === 'string' ? { lead: u.lead } : {}), ...(typeof u.trail === 'string' ? { trail: u.trail } : {}) })
+/** the unit's displays beyond its marks and between its words, their letters as latex-front found them (displayOutside)
+ *  or a copy keeps them: for the anchors. A copy made when they were a bare `true` gives none */
+export const displayEdges = u => Object.fromEntries(['lead', 'trail', 'inner'].filter(k => typeof u[k] === 'string').map(k => [k, u[k]]))

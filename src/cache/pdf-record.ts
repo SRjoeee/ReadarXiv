@@ -29,6 +29,8 @@ export interface CachedUnit {
    *  did, anchored as then */
   lead?: string
   trail?: string
+  /** the displays between its words, as their letters: the reader's anchors fill a page break inside the unit with them */
+  inner?: string
 }
 
 /**

@@ -526,11 +526,14 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
       if (n + 1 === m.length) continue
       const A = doc[m[n]], B = doc[m[n + 1]]
       if (between(doc, owner, u, m[n], m[n + 1])) for (k++; k < m[n + 1]; k++) idx.push(k)
-      // the unit goes on over a page or at the head of the next column: what stands below the one word on its page,
-      // and above the other on its own, as far as the unit's lines go — a display's parts; not the page's head and foot,
-      // a footnote, a float (walker)
-      else if (f.bounded && (A.page !== B.page || B.y > A.y + A.h * 0.6)) {
-        const down = walk.take(u, k, 1, ACROSS), up = walk.take(u, m[n + 1], -1, ACROSS)
+      // a unit with a display between its words (latex-front's `inner`: its letters) goes on over a page or at the
+      // head of the next column: what stands below the one word on its page, and above the other on its own, that the
+      // display's letters or the unit's own words explain — the display's parts, the words about them the text did not
+      // match; not the page's head and foot, a footnote, a float (walker). A unit with no display there has nothing to
+      // fill: a table of its size a float's skip away would be taken
+      else if (f.bounded && typeof units[u].inner === 'string' && (A.page !== B.page || B.y > A.y + A.h * 0.6)) {
+        const letters = `${units[u].inner} ${(units[u].text ?? '').normalize('NFKC').toLowerCase()}`
+        const down = walk.take(u, k, 1, ACROSS, letters), up = walk.take(u, m[n + 1], -1, ACROSS, letters)
         const last = down.at(-1) ?? k
         idx.push(...down.filter(j => j < m[n + 1]), ...up.filter(j => j > last).reverse())
       }

@@ -152,15 +152,15 @@ function macroBodies(texts) {
 }
 /**
  * The displays a unit sets before its first words (`lead`) or after its last (`trail`), outside its marks, which stand
- * in running text (patch: the start mark before the first word or inline formula, the end mark after the last word):
- * their letters (displayLetters), or null — the reader's anchors take such a display from beyond the marks, and only
- * lines its letters explain. Nothing typeset depends on it
+ * in running text (patch: the start mark before the first word or inline formula, the end mark after the last word),
+ * and between them (`inner`): their letters (displayLetters), or null — the reader's anchors take a display beyond the
+ * marks, or across a page break inside them, only on lines its letters explain. Nothing typeset depends on it
  */
 function displayOutside(pieces, displays, macros) {
   const first = pieces.findIndex(p => (p.t === 'text' && /[^ \t\r\n]/.test(p.s)) || (p.t === 'ph' && INLINE.test(p.src)))
   const last = pieces.findLastIndex(p => p.t === 'text' && /[^ \t\r\n]/.test(p.s))
   const letters = ps => { const ds = ps.filter(p => displays.has(p)); return ds.length ? ds.map(p => displayLetters(p.src, macros)).join(' ') : null }
-  return { lead: first > 0 ? letters(pieces.slice(0, first)) : null, trail: last >= 0 ? letters(pieces.slice(last + 1)) : null }
+  return { lead: first > 0 ? letters(pieces.slice(0, first)) : null, trail: last >= 0 ? letters(pieces.slice(last + 1)) : null, inner: first >= 0 && last > first ? letters(pieces.slice(first + 1, last)) : null }
 }
 // A unit: { file, kind, start, end, pieces: [{t:'text', s} | {t:'ph', src} | {t:'open', id, src} | {t:'close', id, src}] }
 class Builder {
@@ -182,9 +182,10 @@ class Builder {
       if (shown.length && prev?.file === u.file && IN_TEXT.has(prev.kind) && !this.src.slice(prev.end, u.start).replace(/(^|[^\\])%.*$/gm, '$1').trim()) prev.trail = [prev.trail, ...shown].filter(Boolean).join(' ')
       return
     }
-    const { lead, trail } = displayOutside(u.pieces, this.displays, this.macros)
+    const { lead, trail, inner } = displayOutside(u.pieces, this.displays, this.macros)
     if (lead) u.lead = lead
     if (trail) u.trail = trail
+    if (inner) u.inner = inner
     // the paper's title, which goes with every batch to an LLM as the HTML page's does (DESIGN §8.2)
     if (this.title) u.title = true
     if (this.depth !== undefined) u.depth = this.depth

@@ -204,6 +204,23 @@ describe('anchorUnits: a unit with no text', () => {
 })
 
 describe('anchorUnits: a unit\'s display across a page break', () => {
+  it('a unit with no display between its words fills nothing across the break: a table of its size at the next page\'s head, 12 pt, a float\'s skip shrunk to 16 pt (the review of A1, M1)', () => {
+    const big = (str: string, x: number, y: number, eol = false) => ({ str, transform: [12, 0, 0, 12, x, y], width: str.length * 6, height: 12, hasEOL: eol, fontName: 'f' })
+    const line = (s: string, y: number) => [{ ...big(s, 50, y, true), width: 300 }]
+    const cells = (cs: string[], y: number) => cs.map((c, i) => big(c, 80 + i * 80, y, i === cs.length - 1))
+    const pageOf = (n: number, lines: ReturnType<typeof big>[][]) => ({ page: n, items: [...lines.flat(), big(String(n), 150, 62, true)], styles: {} })
+    const firstText = 700 - 2.64 - 17 - 9
+    const pages = [
+      pageOf(1, [line('the paragraph before it', 700), line('a long paragraph that goes', 100)]),
+      pageOf(2, [line('table one results of models', 740), cells(['model', 'score', 'cost'], 714), cells(['ours', '91', '12'], 700), line('on over the page here', firstText), line('another paragraph after', firstText - 30)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'a long paragraph that goes on over the page here' }, { id: 2, text: 'table one results of models' }, { id: 3, text: 'another paragraph after' }]
+    const bounds = new Map<string, [number, number]>([['0', [0, 3]], ['1', [at('a', 4), at('here')]], ['2', [at('table'), at('models')]], ['3', [at('another'), at('after')]]])
+    expect(anchorUnits(doc, units, { bounds, floating: id => id === 2 }).get(1)?.tokens.map(k => doc[k]?.t)).not.toContain('model')
+  })
+
   const pageAt = (n: number, lines: Item[][]) => ({ page: n, items: [...lines.flat(), item(String(n), 150, 62, { eol: true })], styles: {} })
   const words = (s: string, y: number, size = 10) => [item(s, 50, y, { size, width: 250, eol: true })]
   const display = (y: number) => [item('x = y', 150, y), item('i', 177, y - 3, { size: 7 }), item('(1)', 290, y, { eol: true })]
@@ -215,7 +232,7 @@ describe('anchorUnits: a unit\'s display across a page break', () => {
       pageAt(2, [words('model score cost', 716, 8), words('ours 0.91 12', 707, 8), display(676), words('goes on over the page', 652), words('another paragraph after', 628)]),
     ]
     const doc = tokenizeDocument(pages)
-    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'a paragraph whose display goes on over the page' }, { id: 2, text: 'a footnote set smaller' }, { id: 3, text: 'another paragraph after' }]
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'a paragraph whose display goes on over the page', inner: 'xy' }, { id: 2, text: 'a footnote set smaller' }, { id: 3, text: 'another paragraph after' }]
     const bounds = new Map<string, [number, number]>([['0', [0, 3]], ['1', [4, at(doc, 'page')]], ['2', [at(doc, 'footnote') - 1, at(doc, 'smaller')]], ['3', [at(doc, 'another'), at(doc, 'after')]]])
     const found = anchorUnits(doc, units, { bounds, floating: id => id === 2 })
     expect(found.get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['a', 'paragraph', 'whose', 'display', 'x', 'y', 'i', '1', 'x', 'y', 'i', '1', 'goes', 'on', 'over', 'the', 'page'])
