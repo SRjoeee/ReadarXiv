@@ -30,6 +30,10 @@ export function tokens(s) {
  * inside it (a heading's small capitals after its capital letter: E + XPERIMENTAL), the second part beginning where
  * the first ends with no space between; the second part keeps its own box with no text, so a line's box still starts
  * where its text does. An item's width is shared evenly between its characters, so a Latin word's box is approximate.
+ * An item that repeats the one before it on its baseline, less than a tenth of its size further on, is that item
+ * printed over itself to look bold, and is read once: pdfLaTeX's CJK bold prints each character three times 0.015 em
+ * apart (2608.02991, 2608.29181), which made a bold heading's every character three tokens; the same string again as
+ * text of its own stands a third of an em further at least.
  */
 export function tokenizeDocument(pages) {
   const doc = []
@@ -41,6 +45,7 @@ export function tokenizeDocument(pages) {
       if (!it.str) continue
       const [a, b, c, d, x, y] = it.transform
       const size = Math.hypot(a, b) || it.height || Math.abs(d)
+      if (prev && it.str === prev.str && Math.abs(y - prev.y) < 0.05 * size && Math.abs(x - prev.x) < 0.1 * size) continue
       const st = styles?.[it.fontName], asc = st?.ascent > 0 ? st.ascent : 0.75, desc = st?.descent < 0 ? st.descent : -0.22
       const perChar = it.str.length ? it.width / it.str.length : 0
       const toks = tokens(it.str)
@@ -53,7 +58,7 @@ export function tokenizeDocument(pages) {
       }
       const tail = it.str.trimEnd()
       carry = it.hasEOL && /[-­]$/.test(tail) && toks.length && !CJK.test(tail.at(-2) ?? '') ? last : null
-      prev = { end: x + it.width, y, size, flat, word: !it.hasEOL && toks.length > 0 && WORD_END.test(it.str) && !CJK.test(it.str.at(-1)) }
+      prev = { str: it.str, x, end: x + it.width, y, size, flat, word: !it.hasEOL && toks.length > 0 && WORD_END.test(it.str) && !CJK.test(it.str.at(-1)) }
     }
   }
   return doc

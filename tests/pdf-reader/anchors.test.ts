@@ -46,3 +46,19 @@ describe('tokens: a run of Latin letters or digits ends where a CJK character be
     expect(boundsFromMarks(doc, marks).get('0')).toEqual([0, 4])
   })
 })
+
+describe('tokenizeDocument: a word printed over itself is read once', () => {
+  // pdfLaTeX's CJK bold (CJKutf8): each character printed three times, 0.21 units apart at 14 (2608.02991, 2608.29181)
+  const bold = (s: string, x: number, y: number) => [...s].flatMap((c, k) => [0, 0.21, 0.42].map(d => item(c, x + k * 14 + d, y, { width: 14, size: 14 })))
+
+  it('a bold heading is found between its marked neighbours, each of its characters one token', () => {
+    const pages = [{ page: 1, items: [...page([['甲乙丙丁戊己']]).items, ...bold('相关工作', 50, 686), ...page([[], [], ['庚辛壬癸子丑']]).items], styles: {} }]
+    const { doc, found } = anchors(pages, [{ id: 0, text: '甲乙丙丁戊己' }, { id: 1, text: '相关工作' }, { id: 2, text: '庚辛壬癸子丑' }], [[0, 0, 5], [2, 10, 15]])
+    expect(doc.map(t => t.t).join('')).toBe('甲乙丙丁戊己相关工作庚辛壬癸子丑')
+    expect(found.get(1)?.tokens).toEqual([6, 7, 8, 9])
+  })
+
+  it('the same word twice, a space apart, is two words', () => {
+    expect(tokenizeDocument([page([['the', 'the', 'end']])]).map(t => t.t)).toEqual(['the', 'the', 'end'])
+  })
+})
