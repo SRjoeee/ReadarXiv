@@ -176,3 +176,38 @@ Errors are leave-one-paper-out. The text predictor was crude (every non-CJK char
   - A lead only before what the preview saw jump (`measured.local`, 30 lines): on six papers it gave 2608.24839
     (German) its last page back and cost the two Chinese papers nothing, but Korean 2608.15761 went 0.057 → 0.104
     column; Russian 2608.06233's [H] figure after its \clearpage still moves. Not yet on the round of 34.
+- 2026-10-01, the owner's review of that round: Japanese and German better, Chinese a little, Korean and Russian worse on
+  eight papers, and two faults. What was wrong:
+  - The width a narrower table keeps went out as a bare \hbox in the float's vertical list, where \centering does not
+    reach: tables sat at the left margin (2608.21180's Table 3, 80 pt off). A table on the page looked moved wherever
+    its translation was narrower — a good part of what read as worse. It now starts a paragraph first.
+  - \axtwide took in llncs's \and; in article \and ends the table the names are set in, which cannot happen in a box.
+    Lines holding \and are left as they are.
+  - Korean 2608.21180's abstract sat on its e-mail line. The title came out a line shorter, page 1 took the room by
+    shrinking its glue (tracingpages: 564.6 pt set in a 549.1 pt page), and the paper's own \vspace{-2.8em} did the
+    rest. Every version but the H-rule lock had it. The correction did not see it for two reasons: the first unit's
+    drift, 20 pt, was under the snap threshold — now the first unit's measure is always taken, only the front matter
+    stands before it — and the drift a correction reads was held within the text block, which the original's highest
+    mark on the page bounds, so a start above it read as level. Unheld (alignment.mjs drifts), 21180 came out with the
+    gap back (20 pt against 32) and drift median 0.162 → 0.013 column.
+  - The correction took single readings for drifts: a paragraph moved from the foot of the left column to below a
+    figure heading the right read 0.42 column late in Korean 2608.06701, the next paragraph level, and the final chased
+    both (a page more). What the preview measured beyond its own heights' account is now read as the median of the next
+    five readings; the first reading, before which stands only the front matter, stands for the rest; a later median
+    within eight lines of it reads as it, one past it holds while it lasts (flowLeads `measured`). Round of 34, both
+    Flows on the same engine:
+
+    | | Pages equal (more / fewer) | Drift median / p90 | Within 0.1 column | Against the first Flow: better / worse |
+    |---|---|---|---|---|
+    | FIT | 29 (2 / 3) | 0.055 / 0.240 | 69 % | — |
+    | Flow, first | 25 (5 / 4) | 0.060 / 0.336 | 70 % | — |
+    | Floats held alone | 24 (5 / 5) | 0.059 / 0.345 | 70 % | 1 / 2 |
+    | Floats held, readings past eight lines taken | 26 (6 / 2) | 0.046 / 0.295 | 76 % | 10 / 4 |
+    | Floats held, medians against the front matter's | 29 (4 / 1) | 0.044 / 0.260 | 78 % | 10 / 4 |
+    | H-rule lock | 32 (2 / 0) | 0.019 / 0.140 | 92 % | — |
+
+    The last is the page's Flow now. Worse than the first Flow: Chinese 2608.05876, Japanese 2608.15761, Korean
+    2608.18090 and 2608.06701 — a float that took another column, and the rest after it (06701: identical to page 4).
+    Showing whichever of the two compiles lies nearer the original would give 31 papers and drift 0.038, three worse;
+    the reader's previews are drafts (no rerun, references unresolved), so it would cost the last preview a full
+    compile. Not taken.
