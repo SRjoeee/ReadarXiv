@@ -15,9 +15,10 @@ export const utf8 = s => new TextDecoder().decode(latin1Bytes(s))
 // the engine's text is plain text: TeX's special characters in it (a % for "percent", a # for "number") are escaped
 export const texEscape = s => s.replace(/[\\#$%&_{}~^]/g, c => ({ '\\': '\\textbackslash{}', '~': '\\textasciitilde{}', '^': '\\textasciicircum{}' })[c] ?? `\\${c}`)
 
-/** a unit → the wire text, and the table from marker id back to the original piece */
+/** a unit → the wire text, the table from marker id back to the original piece, and the markers the wire set apart
+ *  from a full stop (`stops`), whose space rehydrate takes off again */
 export function serialize(u) {
-  const slots = []
+  const slots = [], stops = new Set()
   let wire = ''
   const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
   const trail = u.pieces.at(-1)?.t === 'text' ? u.pieces.at(-1).s.match(/\s*$/)[0] : ''
@@ -29,15 +30,18 @@ export function serialize(u) {
     // right after a full stop, `models.@a#` — a citation or a footnote's mark after a sentence — which left the
     // sentence's last word in English (the HTML page's protector, 09c25622: 13 of 17 blocks as sent, none with the space)
     const before = /[\p{L}.]$/u.test(wire) ? ' ' : ''
+    if (wire.endsWith('.')) stops.add(slots.length)
     const nextText = u.pieces[k + 1]?.t === 'text' ? u.pieces[k + 1].s : ''
     const after = /^\p{L}/u.test(utf8(nextText)) ? ' ' : ''
     wire += before + m + after
   })
-  return { wire, slots, lead, trail }
+  return { wire, slots, lead, trail, stops }
 }
 
-/** the translation → pieces, or why it cannot be used */
-export function rehydrate(text, { slots, lead, trail }, tolerant = false) {
+/** the translation → pieces, or why it cannot be used. The space the wire set after a full stop before a marker is the
+ *  wire's, not the source's: it is taken off the text before that marker, as the HTML page's protector takes its own
+ *  (09c25622) — kept, `Fig.~\ref` came back as an ordinary space and then the tie (the review of A1, M3) */
+export function rehydrate(text, { slots, lead, trail, stops }, tolerant = false) {
   const pieces = [], seen = new Map()
   let last = 0
   const pushText = s => { if (s) pieces.push({ t: 'text', tr: true, s: texEscape(s) }) }
@@ -52,7 +56,7 @@ export function rehydrate(text, { slots, lead, trail }, tolerant = false) {
     const id = fromAlpha(m[1] ?? m[2])
     if (!slots[id - 1]) return { error: 'unknown marker' }
     if (seen.has(id)) return { error: 'duplicated marker' }
-    pushText(decode(buf)); buf = ''
+    pushText(decode(stops?.has(id) ? buf.replace(/[ \t\n\f\r]+$/, '') : buf)); buf = ''
     seen.set(id, pieces.length); pieces.push(slots[id - 1])
   }
   buf += text.slice(last); pushText(decode(buf))

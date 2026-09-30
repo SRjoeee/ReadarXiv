@@ -7,4 +7,6 @@ export declare function plainTranslated(pieces: Piece[]): string
 /** a unit's plain text (the translation's where the pieces are translated) and the offsets in it where a placeholder stood */
 export declare function unitText(pieces: Piece[]): { text: string; gaps?: number[] }
 /** a unit → the wire text of the markers format, and the table from marker id back to the original piece */
-export declare function serialize(u: { pieces: Piece[] }): { wire: string; slots: Piece[]; lead: string; trail: string }
+export declare function serialize(u: { pieces: Piece[] }): { wire: string; slots: Piece[]; lead: string; trail: string; stops?: Set<number> }
+/** the translation → pieces, or why it cannot be used */
+export declare function rehydrate(text: string, ser: ReturnType<typeof serialize>, tolerant?: boolean): { pieces: Piece[] } | { error: string }

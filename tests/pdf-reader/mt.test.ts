@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { plainSource, plainTranslated, serialize, unitText } from '@/pdf-reader/engine/mt.mjs'
+import { plainSource, plainTranslated, rehydrate, serialize, unitText } from '@/pdf-reader/engine/mt.mjs'
 
 // A unit's plain text as the PDF shows it, which the reader locates it by (anchors.mjs)
 
@@ -30,5 +30,15 @@ describe('serialize: a marker that touches a word is set apart from it on the wi
 
   it('not after other punctuation, nor between two markers', () => {
     expect(wire([{ t: 'text', s: 'follows (' }, { t: 'ph', src: '\\ref{a}' }, { t: 'ph', src: '\\ref{b}' }, { t: 'text', s: '), so' }])).toBe('follows (@a#@b#), so')
+  })
+})
+
+describe('rehydrate: the space the wire set after a full stop is taken off again', () => {
+  it('Fig.~\\ref and et al.~\\cite come back tied as the source has them, not with a space before the tie (the review of A1, M3)', () => {
+    const u = { pieces: [{ t: 'text', s: 'as shown in Fig.' }, { t: 'ph', src: '~' }, { t: 'ph', src: '\\ref{f}' }, { t: 'text', s: ' and by Smith et al.' }, { t: 'ph', src: '~' }, { t: 'ph', src: '\\cite{s}' }, { t: 'text', s: ', the loss' }] }
+    const ser = serialize(u)
+    expect(ser.wire).toBe('as shown in Fig. @a#@b# and by Smith et al. @c#@d#, the loss')
+    const back = rehydrate('wie in Abb. @a#@b# und von Smith et al. @c#@d#, der Verlust', ser)
+    expect('pieces' in back && back.pieces.map(p => (p.t === 'text' ? p.s : p.src)).join('')).toBe('wie in Abb.~\\ref{f} und von Smith et al.~\\cite{s}, der Verlust')
   })
 })
