@@ -30,7 +30,7 @@ import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
-import { decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
@@ -1771,9 +1771,14 @@ async function live() {
     // every way of setting it tried and failed, a whole translation in hand and nothing on screen (the maintainer,
     // 2026-09-26). Remembered, so that a visit again asks nothing of the service, only when the paper's own source set
     // here: a TeX error from a compiler whose files were not there says nothing of the paper, and is tried again (Codex).
-    // With the identity that would answer now, as a copy is written: the mark holds for that service alone (Codex on #306)
+    // With the identity that would answer now, as a copy is written: the mark holds for that service alone (Codex on #306),
+    // and is left only when that service made the whole translation — a run a hand-over mixed is tried again (its final
+    // review)
     if (result.exhausted && !result.stopped && !compiledOnce && !cached) {
-      if (cacheKey && result.originalOk) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION })
+      if (cacheKey && result.originalOk) {
+        const identity = await engine.now().catch(() => engine.identity)
+        if (allTranslatedBy(result.results, identity)) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity, pipeline: PIPELINE_VERSION })
+      }
       note('done', result)
       return fail('cannot typeset', `None of the ways of typesetting ${paper} into ${lang} worked: the right side shows the original`)
     }

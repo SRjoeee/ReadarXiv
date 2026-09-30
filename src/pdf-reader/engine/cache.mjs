@@ -67,3 +67,17 @@ export function decideWrite({ result, cached, units, marks, shown }) {
   const marksGained = !cached.marks?.length && !!marks?.length
   return tally(cached.units) !== tally(units) || marksGained ? 'provenance' : null
 }
+
+/**
+ * Whether a run whose translation none of the ways could set may leave the untypeset mark under `identity`, the one that
+ * would answer now: only when every unit the run has a translation of was made by it. The mark answers the next visit
+ * on that identity alone (src/cache/pdf-record.ts stillUntypeset), so it must stand for that service's whole translation,
+ * as a copy is current only when every unit is (unitIsCurrent). A run a hand-over or a demotion mixed — the reader's key
+ * refused midway and the free service finishing — leaves none, and the next visit asks again: the service that would
+ * answer then never translated the whole paper (the final review of Codex 1 on #306). A run with nothing translated
+ * leaves none either: its failure was not a translation's
+ */
+export function allTranslatedBy(results, identity) {
+  const made = [...results.values()].filter(r => r.pieces)
+  return made.length > 0 && made.every(r => r.by === identity)
+}
