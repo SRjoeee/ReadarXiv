@@ -83,6 +83,46 @@ describe('tokenizeDocument: a word printed over itself is read once', () => {
   })
 })
 
+describe('tokenizeDocument: a token\'s ink reaches over the marks that touch it', () => {
+  // `l` and `r`, the ink's left and right edges: the token's box widened over the punctuation and brackets its item
+  // sets against it, so that a highlight ends after a sentence's full stop; what anchoring reads (t, x, w) is the same
+  const edges = (items: Item[]) => tokenizeDocument([{ page: 1, items, styles: {} }]).map(t => [t.t, t.x, t.w, t.l, t.r])
+
+  it('a closing mark after a word, an opening one before it, in the word\'s item', () => {
+    expect(edges([item('word.', 50, 700), item('(it)', 90, 700), item('ends),', 120, 700, { eol: true })])).toEqual([
+      ['word', 50, 20, 50, 75],
+      ['it', 95, 10, 90, 110],
+      ['ends', 120, 20, 120, 150],
+    ])
+  })
+
+  it('a plain word and the words a hyphen joins keep their box, the hyphen after the word it follows', () => {
+    expect(edges([item('plain', 50, 700), item('state-of-art', 80, 700, { eol: true })])).toEqual([
+      ['plain', 50, 25, 50, 75],
+      ['state', 80, 25, 80, 110],
+      ['of', 110, 10, 110, 125],
+      ['art', 125, 15, 125, 140],
+    ])
+  })
+
+  it('a CJK closing mark inks half its em: the full stop after a character, and a bracket then a stop', () => {
+    // 。 and 」 are set in a full em and ink their left half; 「 inks its right half
+    expect(edges([item('模型。', 50, 700, { width: 30 }), item('「图」。', 100, 700, { width: 40, eol: true })])).toEqual([
+      ['模', 50, 10, 50, 60],
+      ['型', 60, 10, 60, 75],
+      ['图', 110, 10, 105, 135],
+    ])
+  })
+
+  it('an item of marks alone on the word\'s baseline carries the word\'s ink to its end; one on another baseline does not', () => {
+    // a formula's closing bracket and full stop set in their own font; a display's row of operators below
+    expect(edges([item('word', 50, 700), item(').', 70, 700, { width: 8 }), item('x', 50, 688), item('=+', 60, 680, { width: 12, eol: true })])).toEqual([
+      ['word', 50, 20, 50, 78],
+      ['x', 50, 5, 50, 55],
+    ])
+  })
+})
+
 describe('anchorUnits: a word the text layer gives in parts is lit whole', () => {
   it('a small-caps heading is lit to the end of its word, not over its first capital (every IEEEtran section title, 2608.06701)', () => {
     // I + NTRODUCTION, the capital and the smaller capitals two items with no space between: one token with the
