@@ -40,7 +40,15 @@ export function serialize(u) {
 
 /** the translation → pieces, or why it cannot be used. The space the wire set after a full stop before a marker is the
  *  wire's, not the source's: it is taken off the text before that marker, as the HTML page's protector takes its own
- *  (09c25622) — kept, `Fig.~\ref` came back as an ordinary space and then the tie (the review of A1, M3) */
+ *  (09c25622) — kept, `Fig.~\ref` came back as an ordinary space and then the tie (the review of A1, M3). Only while
+ *  that text still ends in a full stop (any script's, as the HTML page's label.ts knows them), or before a piece a space
+ *  never goes before: an engine that set a citation before the stop, `Modelle @a#.`, chose the space (the re-review of
+ *  A1, m5), but one that wrote `Eq.~` out as `Gleichung @a#` did not — a space and then the tie. Over the ten papers'
+ *  pieces set apart after a full stop, Microsoft's German, French, Spanish and Chinese left a space and no stop before
+ *  34, 38, 49 and 12 of them: a tie, a control space or a group's end every one, a citation never */
+const STOP_SPACE = /(?<=[.\u3002\uff0e\u0964\u0965\u06d4\u0589\u1362\u104b\u0f0d])[ \t\n\f\r]+$/, SPACE = /[ \t\n\f\r]+$/
+/** a piece a space never goes before: one that is a space itself (a tie, a control space, a kern), a group's end */
+const SPACING = /^(?:~|\\[ ,;:]|\\(?:q?quad|enspace|thinspace|nobreakspace)(?![A-Za-z])|\\hspace\*?\{|\}$)/
 export function rehydrate(text, { slots, lead, trail, stops }, tolerant = false) {
   const pieces = [], seen = new Map()
   let last = 0
@@ -56,7 +64,8 @@ export function rehydrate(text, { slots, lead, trail, stops }, tolerant = false)
     const id = fromAlpha(m[1] ?? m[2])
     if (!slots[id - 1]) return { error: 'unknown marker' }
     if (seen.has(id)) return { error: 'duplicated marker' }
-    pushText(decode(stops?.has(id) ? buf.replace(/[ \t\n\f\r]+$/, '') : buf)); buf = ''
+    const wires = stops?.has(id) && (SPACING.test(slots[id - 1].src ?? '') ? SPACE : STOP_SPACE)
+    pushText(decode(wires ? buf.replace(wires, '') : buf)); buf = ''
     seen.set(id, pieces.length); pieces.push(slots[id - 1])
   }
   buf += text.slice(last); pushText(decode(buf))

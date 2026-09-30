@@ -41,4 +41,31 @@ describe('rehydrate: the space the wire set after a full stop is taken off again
     const back = rehydrate('wie in Abb. @a#@b# und von Smith et al. @c#@d#, der Verlust', ser)
     expect('pieces' in back && back.pieces.map(p => (p.t === 'text' ? p.s : p.src)).join('')).toBe('wie in Abb.~\\ref{f} und von Smith et al.~\\cite{s}, der Verlust')
   })
+
+  it('only while the text before the marker still ends in a full stop: an engine that set the marker before the stop chose its space (the re-review of A1, m5)', () => {
+    const ser = serialize({ pieces: [{ t: 'text', s: 'theoretical models.' }, { t: 'ph', src: '\\cite{x}' }, { t: 'text', s: ' However, this' }] })
+    expect(ser.wire).toBe('theoretical models. @a# However, this')
+    const back = (reply: string, tolerant = false) => {
+      const r = rehydrate(reply, ser, tolerant)
+      return 'pieces' in r && r.pieces.map(p => (p.t === 'text' ? p.s : p.src)).join('')
+    }
+    expect(back('theoretischen Modelle @a#. Jedoch')).toBe('theoretischen Modelle \\cite{x}. Jedoch')
+    expect(back('theoretischen Modelle. @a# Jedoch')).toBe('theoretischen Modelle.\\cite{x} Jedoch')
+    expect(back('theoretischen Modelle.\n@a# Jedoch', true)).toBe('theoretischen Modelle.\\cite{x} Jedoch')
+    // the full stops of CJK text, which the engine may set with a space before the marker too
+    expect(back('理论模型。 @a# 然而')).toBe('理论模型。\\cite{x} 然而')
+    expect(back('理論モデル． @a# しかし')).toBe('理論モデル．\\cite{x} しかし')
+  })
+
+  it('before a piece a space never goes before, whatever stands before it: a tie or a control space after an abbreviation the engine wrote out, a group\'s end', () => {
+    const ser = serialize({ pieces: [{ t: 'text', s: 'as shown in Fig.' }, { t: 'ph', src: '~' }, { t: 'ph', src: '\\ref{f}' }, { t: 'text', s: ', the U.S.' }, { t: 'ph', src: '\\ ' }, { t: 'text', s: 'voting age' }] })
+    expect(ser.wire).toBe('as shown in Fig. @a#@b#, the U.S. @c# voting age')
+    const back = rehydrate('wie in Abbildung @a#@b# gezeigt, das US-Wahlalter @c# von', ser)
+    // the space after the control space is TeX's to skip
+    expect('pieces' in back && back.pieces.map(p => (p.t === 'text' ? p.s : p.src)).join('')).toBe('wie in Abbildung~\\ref{f} gezeigt, das US-Wahlalter\\  von')
+    const cell = serialize({ pieces: [{ t: 'ph', src: '\\textbf{' }, { t: 'text', s: 'Avg.' }, { t: 'ph', src: '}' }] })
+    expect(cell.wire).toBe('@a# Avg. @b#')
+    const avg = rehydrate('@a# Durchschnitt @b#', cell)
+    expect('pieces' in avg && avg.pieces.map(p => (p.t === 'text' ? p.s : p.src)).join('')).toBe('\\textbf{ Durchschnitt}')
+  })
 })
