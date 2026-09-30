@@ -11,6 +11,10 @@ general, efficient and stable, then replace the PDF reader's current translation
 After that acceptance, refine local paragraph correspondence, page layout and length through controlled language
 experiments while preserving natural typography. Equal page counts alone are not a quality target.
 
+The owner clarified the objective: Original correspondence is primary, both local block placement and global page
+count/layout. FIT is the current strongest baseline, not a mandatory algorithm. A simpler, cheaper alternative that
+aligns more faithfully with Original and preserves readable content should replace its mechanism if evidence supports it.
+
 The H-rule comparison remains a secondary research/control track. Native-PDF block replacement is supporting
 performance research, not the current replacement for FIT and not a reason to defer its production work.
 

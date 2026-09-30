@@ -2040,3 +2040,19 @@ a runtime candidate without extra whole-paper calibration compiles, then browser
 activation after quality/performance comparison. The native-PDF prototype and H-rule track become supporting work.
 Language-controlled experiments follow default acceptance, keeping natural typography and all five language controls.
 This records the new priority; the reader default and deployed build have not been changed by this documentation.
+
+## Thirty-fourth addendum, 2026-09-30: Original is the objective; fixed profiles are insufficient
+
+The owner clarified: local block alignment and global page/layout alignment target Original. FIT is the best current
+baseline, not a required architecture; prefer a simpler, cheaper method if it aligns better and preserves readability.
+The [fixed-profile ablation](fit-generic/PROFILE-ABLATION.md) tests one shared median estimator with writing-system
+data, excluding each test paper from training. Five cases retain the cached translated bodies and source scaffolds;
+each candidate uses one latexmk invocation, not a new trial loop. Native compiles take 7,175–23,468 ms with 2–3 TeX
+passes; these are single-case native observations, not browser latency or a controlled speedup against historical FIT.
+
+All candidates retain FIT's page counts, but four lose block same-page/column correspondence to Original. Korean
+same-page starts fall from 35/38 to 24/38; its Table 1 moves up and Figure 1 enters page 4 early. Chinese RT-1 slightly
+improves same-page starts from 130/158 to 132/158. The candidate is rejected overall, not deployed. Two Japanese
+missing-glyph warnings and three German original marks absent in both translations remain explicit in the evidence.
+The next hypothesis is a cheap source/translation occupancy estimate plus bounded role/flow rules; neither fixed
+profiles nor fewer compiler calls by themselves establish the requested Original correspondence.
