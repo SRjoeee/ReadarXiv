@@ -607,6 +607,38 @@ describe('the LLM group, fix round 2 (the re-review of Task 63)', () => {
     await m.unmount()
   })
 
+  // Codex on #306 (Codex 4): a write of the list's other than a deletion, an undo or an import was refused without a word
+  it.each([
+    ['a choice', (c: HTMLElement) => radios(c)[1]!.click()],
+    ['a new prompt', (c: HTMLElement) => button(c, O.prompts.create).click()],
+    ['an edit', (c: HTMLElement) => type(nameField(c), 'Renamed')],
+  ] as const)('%s the store refuses says so at the list\'s foot and leaves no rejection unhandled', async (_, press) => {
+    const patches: Config[] = []
+    const gate: { promise: Promise<unknown>; unreadable?: boolean } = { promise: Promise.resolve() }
+    const unhandled: unknown[] = []
+    const listen = (reason: unknown) => { unhandled.push(reason) }
+    process.on('unhandledRejection', listen)
+    try {
+      const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches, gate }))
+      promptsRow(m.container).click()
+      await m.flush()
+      const write = deferred<void>()
+      gate.promise = write.promise
+      press(m.container)
+      await m.flush()
+      write.reject(new Error('refused'))
+      await m.flush()
+      await m.flush()
+      gate.promise = Promise.resolve()
+      expect(patches).toEqual([])
+      expect(m.container.querySelector('.o-list-note')?.textContent).toBe(O.saveFailed)
+      expect(unhandled).toEqual([])
+      await m.unmount()
+    } finally {
+      process.off('unhandledRejection', listen)
+    }
+  })
+
   it('the import\'s note is gone once the list has been closed and opened again', async () => {
     const m = await mountElement(h(Harness, { start: LLM, patches: [] }))
     promptsRow(m.container).click()

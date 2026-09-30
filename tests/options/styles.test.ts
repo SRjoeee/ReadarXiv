@@ -371,6 +371,42 @@ describe('the translation styles (§6.4)', () => {
     await m.unmount()
   })
 
+  // Codex on #306 (Codex 4): a write of the list's other than a deletion or an undo was refused without a word
+  it.each([
+    ['a choice', (c: HTMLElement) => styleRadios(c)[2]!.click()],
+    ['the heading\'s Restore', (c: HTMLElement) => button(c, O.appearance.restore).click()],
+    ['an edit', (c: HTMLElement) => button(editor(c)!, 'oklch(0.62 0.15 250)').click()],
+  ] as const)('%s the store refuses says so at the list\'s foot and leaves no rejection unhandled; the list\'s next write that lands takes the line away', async (_, press) => {
+    const patches: Config[] = []
+    const gate: { promise: Promise<unknown>; unreadable?: boolean } = { promise: Promise.resolve() }
+    const unhandled: unknown[] = []
+    const listen = (reason: unknown) => { unhandled.push(reason) }
+    process.on('unhandledRejection', listen)
+    try {
+      const m = await mountElement(h(GatedHarness, { start: DEFAULT_CONFIG, patches, gate }))
+      button(m.container, O.appearance.edit('Green')).click()
+      await m.flush()
+      const written = patches.length
+      const write = deferred<void>()
+      gate.promise = write.promise
+      press(m.container)
+      await m.flush()
+      write.reject(new Error('refused'))
+      await m.flush()
+      await m.flush()
+      gate.promise = Promise.resolve()
+      expect(patches).toHaveLength(written)
+      expect(card(m.container).querySelector('.o-list-note')?.textContent).toBe(O.saveFailed)
+      expect(unhandled).toEqual([])
+      styleRadios(m.container)[3]!.click()
+      await m.flush()
+      expect(card(m.container).querySelector('.o-list-note')).toBeNull()
+      await m.unmount()
+    } finally {
+      process.off('unhandledRejection', listen)
+    }
+  })
+
   it('an undo storage refused: the style stays deleted, its undo row comes back with a fresh 5 s and the focus, and the list\'s foot says so (round 3, item 3)', async () => {
     const patches: Config[] = []
     const start = { ...DEFAULT_CONFIG, appearance: { ...DEFAULT_CONFIG.appearance, activeStyle: 'green' } }

@@ -11,18 +11,20 @@ export function withUndo<T, G extends { index: number }>(items: readonly T[], go
 }
 
 /**
- * A list's writes (Task 65). A deletion storage refused leaves its item stored: its row stays and its undo row goes
- * (the caller drops it), and `failed` holds — the line at the list's foot, O.saveFailed — until a write of the list's
- * lands. A write has landed only when `patch` resolves with the very value its own change produced, which is what
- * surface-config.ts returns and data.ts passes on: a refused write rejects, or, the stored value unreadable, resolves
- * with the configuration in effect — the defaults, whose lists may well lack the item (round 2, item 1). `attempt`
- * is a write the list answers itself when refused — a deletion, an undo —: it resolves whether the write landed, never
- * rejects, and a refusal puts the line up (round 3, item 3). `save` is one its caller answers — a form's save, which
- * says so in the form —: it rejects unless the write landed, and leaves the line to the list's own refusals (Task 107)
+ * A list's writes (Task 65). A write has landed only when `patch` resolves with the very value its own change produced,
+ * which is what surface-config.ts returns and data.ts passes on: a refused write rejects, or, the stored value
+ * unreadable, resolves with the configuration in effect — the defaults, whose lists may well lack the item (round 2,
+ * item 1). Two kinds. `attempt` is every write the list answers itself — a choice, an edit, an addition, the styles'
+ * Restore, a deletion, an undo —: it resolves whether the write landed and never rejects, and a refusal puts up
+ * `failed`, the line at the list's foot (O.saveFailed), until a write of the list's lands (round 3, item 3; a choice's
+ * or an edit's refusal went unsaid until Codex 4). A deletion refused leaves its item stored: its row stays and its undo
+ * row goes (the caller drops it). `save` is one its caller answers — a form's save, which says so in the form —: it
+ * rejects unless the write landed, and leaves the line to the list's own refusals (Task 107)
  */
 export function useListWrites<C>(patch: (fn: (latest: C) => C) => Promise<C>): ListWrites<C> {
   const [failed, setFailed] = useState(false)
-  const send = (fn: (latest: C) => C) => {
+  /** whether the write landed */
+  const send = (fn: (latest: C) => C): Promise<boolean> => {
     let next: C | undefined
     // a change that changes nothing (an undo of what another tab put back) is written as a copy: `latest` itself is
     // what a refusal answers with, and the answer could not tell the two apart
@@ -31,25 +33,18 @@ export function useListWrites<C>(patch: (fn: (latest: C) => C) => Promise<C>): L
       next = made === latest ? { ...made } : made
       return next
     })
-    return { write, landed: write.then(stored => next !== undefined && stored === next, () => false) }
+    return write.then(stored => next !== undefined && stored === next, () => false)
   }
-  /** a write of the list's that lands takes the line away */
-  const clearing = (fn: (latest: C) => C) => {
-    const sent = send(fn)
-    return { write: sent.write, landed: sent.landed.then(done => { if (done) setFailed(false); return done }) }
-  }
-  const write = (fn: (latest: C) => C): Promise<C> => clearing(fn).write
-  const attempt = (fn: (latest: C) => C): Promise<boolean> => send(fn).landed.then(done => { setFailed(!done); return done })
-  const save = (fn: (latest: C) => C): Promise<void> => clearing(fn).landed.then(done => { if (!done) throw new Error('the write did not land') })
-  return { failed, write, attempt, save }
+  const attempt = (fn: (latest: C) => C): Promise<boolean> => send(fn).then(done => { setFailed(!done); return done })
+  // a save that lands takes the line away too; one refused leaves it as it was
+  const save = (fn: (latest: C) => C): Promise<void> => send(fn).then(done => { if (!done) throw new Error('the write did not land'); setFailed(false) })
+  return { failed, attempt, save }
 }
 
 export interface ListWrites<C> {
-  /** a deletion or an undo of the list's was refused, and no write of its has landed since */
+  /** a write the list answers itself was refused, and no write of its has landed since */
   failed: boolean
-  /** resolves or rejects as `patch` does */
-  write(fn: (latest: C) => C): Promise<C>
-  /** whether the write landed; never rejects */
+  /** whether the write landed; never rejects, and a refusal puts `failed` up */
   attempt(fn: (latest: C) => C): Promise<boolean>
   /** resolves once the write landed; rejects when it did not */
   save(fn: (latest: C) => C): Promise<void>

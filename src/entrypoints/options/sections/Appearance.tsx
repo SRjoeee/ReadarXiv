@@ -34,7 +34,7 @@ const band = (h: HighlightProfile) => `color-mix(in oklab, ${h.color || BUILT_IN
 
 export function Appearance({ data }: { data: OptionsData }) {
   const { config, patch } = data
-  /** the styles list's writes, its heading's Restore among them: one that lands takes a refused deletion's line away */
+  /** the styles list's writes, its heading's Restore among them: one refused puts the list's line up, one that lands takes it away */
   const styleWrites = useListWrites(patch)
   if (!config) return null
   const k = O.search.keywords
@@ -53,7 +53,7 @@ export function Appearance({ data }: { data: OptionsData }) {
         </Reveal>
       </Card>
       <GroupHeading title={O.appearance.styles}
-        action={<Button type="button" kind="text" size="md" onClick={() => void styleWrites.write(latest => ({ ...latest, appearance: resetBuiltIns(latest.appearance, 'styles') }))}>{O.appearance.restore}</Button>} />
+        action={<Button type="button" kind="text" size="md" onClick={() => void styleWrites.attempt(latest => ({ ...latest, appearance: resetBuiltIns(latest.appearance, 'styles') }))}>{O.appearance.restore}</Button>} />
       <Styles data={data} writes={styleWrites} />
       <Card gap row="appearance/highlight">
         <Row toggles words={k['appearance/highlight']} label={S.rows.highlight} description={O.appearance.highlightHint}
@@ -112,7 +112,7 @@ function Styles({ data, writes }: { data: OptionsData; writes: ListWrites<Config
   const focusDrawn = useFocusWhenDrawn(id => radios.current.get(id))
   const newStyleButton = useRef<HTMLButtonElement>(null)
   const k = O.search.keywords
-  const setLooks = (fn: (c: Looks) => Looks) => writes.write(latest => ({ ...latest, appearance: fn(latest.appearance) }))
+  const setLooks = (fn: (c: Looks) => Looks) => writes.attempt(latest => ({ ...latest, appearance: fn(latest.appearance) }))
   const choose = (id: string) => void setLooks(c => ({ ...c, activeStyle: id }))
   const open = (id: string) => { choose(id); setEditing(id) }
   const close = (id: string) => { setEditing(null); radios.current.get(id)?.focus() }

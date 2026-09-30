@@ -77,9 +77,8 @@ type Form = { kind: 'add' } | { kind: 'edit'; id: string }
 function Services({ data }: { data: OptionsData }) {
   const { pack, fetchPack } = data
   const config = data.config!
-  /** the list's writes: one that lands takes a refused deletion's line away (Task 65) */
+  /** the list's writes: one refused puts the list's line up, one that lands takes it away (Task 65; Codex 4) */
   const writes = useListWrites(data.patch)
-  const patch = writes.write
   const rejected = useRejected()
   const [form, setForm] = useState<Form | null>(null)
   const drawnForm = useLinger(form)
@@ -105,7 +104,7 @@ function Services({ data }: { data: OptionsData }) {
   const ids = [...builtIns.map(b => b.id), ...config.services.map(s => s.id)]
   const can = (id: string) => !builtIns.some(b => b.id === id && b.disabled)
   const choose = (id: string, how: 'pointer' | 'key') => {
-    void patch(latest => ({ ...latest, provider: id }))
+    void writes.attempt(latest => ({ ...latest, provider: id }))
     setPointed(how === 'pointer' ? id : null)
   }
   const keys = radioKeys(ids, config.provider, can, id => choose(id, 'key'), i => radios.current.get(ids[i]!)?.focus())

@@ -84,7 +84,7 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
   /** a row brought back is focused once it is drawn (ui/lists.ts) */
   const focusDrawn = useFocusWhenDrawn(id => radios.current.get(id))
   const addButton = useRef<HTMLButtonElement>(null)
-  const setPrompts = (fn: (c: PromptsConfig) => PromptsConfig) => writes.write(latest => ({ ...latest, prompts: fn(latest.prompts) }))
+  const setPrompts = (fn: (c: PromptsConfig) => PromptsConfig) => writes.attempt(latest => ({ ...latest, prompts: fn(latest.prompts) }))
   // a choice from a list another tab has since changed must not store an id that names nothing (promptExists)
   const choose = (id: string) => void setPrompts(c => (promptExists(c, id) ? { ...c, promptId: id } : c))
   const add = (p: PromptTemplate) => {

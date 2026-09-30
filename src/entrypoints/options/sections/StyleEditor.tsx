@@ -30,9 +30,9 @@ export function StyleEditor({ value, onChange, onDone, full, onDuplicate, onDele
    * A partial change, merged onto the *latest* stored profile by the owner (`Styles`'s `patch(latest => …)`), not
    * onto this render's `value`: two quick edits both read from `value` before either write lands would otherwise
    * merge a stale copy back and lose the first (fix round 1, item 4 — `src/shared/surface-config.ts`'s note).
-   * Answers with the write: the declarations' field waits for its own (CustomCss)
+   * Answers whether the write landed: the declarations' field waits for its own (CustomCss)
    */
-  onChange: (over: Partial<StyleProfile>) => Promise<unknown>
+  onChange: (over: Partial<StyleProfile>) => Promise<boolean>
   onDone: () => void
   /** the list is at its cap: Duplicate is greyed, and these words beside it say why */
   full?: string
@@ -137,7 +137,7 @@ export function StyleEditor({ value, onChange, onDone, full, onDuplicate, onDele
  * profile when it changes elsewhere, never while a write of its own is out; a refused write leaves it the reader's to
  * finish (as the old style drawer's box did, retired with the redesign)
  */
-function CustomCss({ value, onChange }: { value: string; onChange: (css: string) => Promise<unknown> }) {
+function CustomCss({ value, onChange }: { value: string; onChange: (css: string) => Promise<boolean> }) {
   const [draft, setDraft] = useState(value)
   const committed = useRef(value)
   const pending = useRef(0)
@@ -154,7 +154,7 @@ function CustomCss({ value, onChange }: { value: string; onChange: (css: string)
         setDraft(next)
         if (!sanitizeCustomCss(next).ok) return
         pending.current++
-        onChange(next).then(() => { failed.current = false }, () => { failed.current = true }).finally(() => { pending.current-- })
+        void onChange(next).then(done => { failed.current = !done }).finally(() => { pending.current-- })
       }} />
     </Field>
   )

@@ -237,6 +237,33 @@ describe('the translation services (§6.3)', () => {
     await n.unmount()
   })
 
+  // Codex on #306 (Codex 4): a choice the store refused was not said
+  it('a choice the store refuses says so at the list\'s foot and leaves no rejection unhandled; the next that lands takes the line away', async () => {
+    const unhandled: unknown[] = []
+    const listen = (reason: unknown) => { unhandled.push(reason) }
+    process.on('unhandledRejection', listen)
+    try {
+      const m = await mountElement(h(Harness, { start: DEFAULT_CONFIG }))
+      const write = deferred<void>()
+      wire.gate = write.promise
+      radioNamed(m.container, S.service.google).click()
+      await m.flush()
+      write.reject(new Error('refused'))
+      await m.flush()
+      await m.flush()
+      wire.gate = null
+      expect(stored().provider).toBe('microsoft')
+      expect(card(m.container).querySelector('.o-list-note')?.textContent).toBe(O.saveFailed)
+      expect(unhandled).toEqual([])
+      radioNamed(m.container, S.service.google).click()
+      await m.flush()
+      expect([stored().provider, card(m.container).querySelector('.o-list-note')]).toEqual(['google-web', null])
+      await m.unmount()
+    } finally {
+      process.off('unhandledRejection', listen)
+    }
+  })
+
   it('Edit… opens the same form under its row; connected, the service is saved in place, not chosen', async () => {
     const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: [MINE, OTHER], provider: MINE.id } }))
     menuItem(rowNamed(m.container, 'Other'), O.services.edit).click()
