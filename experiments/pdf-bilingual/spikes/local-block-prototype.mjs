@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/live.mjs'
 import { plainSource, plainTranslated, utf8 } from '../../../src/pdf-reader/engine/mt.mjs'
+import { preparePieces } from '../local-block-prototype/pieces.mjs'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const exp = join(repo, 'experiments/pdf-bilingual')
@@ -30,22 +31,7 @@ for (const [lang, paper, font] of cases) {
   const translations = new Map(cache.entries.map(e => [e.key, e.pieces]))
   const units = source.units.map((u, id) => {
     const tr = translations.get(unitKey(u))
-    const protectedContent = u.pieces.some(p => p.t === 'nested' || (p.t === 'open' && !/^\\(?:emph|textbf|textit|textrm|textsf|texttt|text|mbox)\{$/.test(p.src)) || (p.t === 'ph' && !/^(?:~|\\label\{[^}]*\}|\\(?:noindent|bf|bfseries|it|itshape|em|small|par)|\\vspace\*?\{[^}]*\})$/.test(p.src)))
-    const stack = [], runs = []
-    let declaration = {}
-    for (const piece of tr ?? []) {
-      if (piece.t === 'open') stack.push({ bold: /textbf/.test(piece.src), italic: /emph|textit/.test(piece.src), mono: /texttt/.test(piece.src) })
-      else if (piece.t === 'close') stack.pop()
-      else if (piece.t === 'ph') {
-        if (/^\\(?:bf|bfseries)$/.test(piece.src)) declaration = { ...declaration, bold: true }
-        if (/^\\(?:it|itshape|em)$/.test(piece.src)) declaration = { ...declaration, italic: true }
-        if (piece.src === '~') runs.push({ text: ' ' })
-      } else if (piece.t === 'text') {
-        const text = (piece.tr ? piece.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1') : utf8(piece.s)).replace(/\s+/g, ' ')
-        runs.push({ text, bold: declaration.bold || stack.some(s => s.bold), italic: declaration.italic || stack.some(s => s.italic), mono: stack.some(s => s.mono) })
-      }
-    }
-    return { id, kind: u.kind, source: plainSource(u), text: tr ? plainTranslated(tr) : null, runs, protectedContent }
+    return { id, kind: u.kind, source: plainSource(u), text: tr ? plainTranslated(tr) : null, ...preparePieces(u.pieces, tr, utf8) }
   })
   const dest = join(output, font.split('/').at(-1))
   if (!existsSync(join(fontRoot, font))) throw new Error(`The prototype needs this font asset: ${join(fontRoot, font)}`)

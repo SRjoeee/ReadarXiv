@@ -4,6 +4,9 @@
 can update locally without recompiling the paper. **Yes for the supported subset; production acceptance fails on
 coverage and fitting quality.** This does not establish an end-to-end speedup or solve the owner's FIT flags.
 
+This is the first-probe snapshot (`850b353d`). The subsequent [mixed-content probe](MIXED-RESULTS.md) extends the same
+viewer and keeps these original raw `run-{1,2,3}.json` files as historical evidence.
+
 Run from the geometry-lock worktree:
 
 ```bash

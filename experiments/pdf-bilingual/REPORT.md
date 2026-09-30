@@ -2014,3 +2014,19 @@ typography are absent. Existing TeX font assets suffice; no server resource addi
 
 Next acceptance work is mixed-content integrity and geometry, fitting failures, font delivery and full-pipeline
 measurement before integration. The earlier Japanese/Korean flags are still pending reproduction and repair.
+
+## Thirty-second addendum, 2026-09-30: mixed-content local replacement
+
+The [second prototype report](local-block-prototype/MIXED-RESULTS.md) records native glyph provenance, opaque cache
+integrity, citation word wrapping and page-local crop/analysis reuse. A complete 76-page survey of the same five
+papers admits 19 mixed regions; 11 fit without going below 0.90 (zh 3/3, ja 2/4, ko 6/6, de 0/1, ru 0/5).
+The successful regions retain 11 citations, 7 references and one simple inline-math element. Complex/cross-line and
+uncertain cases stay original. The old pure-prose control's 5/9 outcomes stay unchanged.
+
+Three first-candidate rounds measured warm local fit p50 0.3–1.0 ms and p95 0.4–1.3 ms; first local fit/crop costs
+were 5.5–20.1 ms, separate from page/font preparation. No update added PDF loads/renders/operator reads or TeX compiles.
+Glyph verification now indexes native rows/fonts rather than rescanning the page per item. Source pixel readback is
+once per logical element; word fragments reuse it. A generic block-canvas style and unbreakable citation images caused
+avoidable line breaks/spacing and were corrected. Two mixed regions update/restore independently, and cached navigation
+restores them without repeated glyph analysis. These are experimental subset results, not production acceptance:
+native vector writing, tables, full-paper coverage, cold delivery, total memory and language typography still need work.
