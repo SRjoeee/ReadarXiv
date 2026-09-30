@@ -17,6 +17,7 @@ vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getU
 
 import { Appearance } from '@/entrypoints/options/sections/Appearance'
 import { UNDO_MS } from '@/entrypoints/options/ui/UndoRow'
+import { drafts } from '@/ui/drafts'
 import { O, setLocale } from '@/ui/strings'
 
 function Harness({ start, patches }: { start: Config; patches: Config[] }) {
@@ -430,6 +431,43 @@ describe('the translation styles (§6.4)', () => {
     await vi.advanceTimersByTimeAsync(200)
     await m.flush()
     expect(editor(m.container)?.querySelector('input')?.value).toBe(document.getElementById(styleRadios(m.container).at(-1)!.getAttribute('aria-labelledby')!)!.textContent)
+    await m.unmount()
+  })
+
+  // Codex 5b: the editor kept a blank name, or declarations the sanitiser refuses, in its own state alone, and a reload
+  // for the interface language (surface-config.ts) dropped them; the other editors hold the page's drafts
+  it('holds the page\'s drafts while it keeps what the store does not — declarations the sanitiser refuses, a blank name — and lets go once they are stored again or it closes', async () => {
+    const patches: Config[] = []
+    const m = await mountElement(h(SerialHarness, { start: DEFAULT_CONFIG, patches }))
+    expect(drafts.any()).toBe(false)
+    button(m.container, O.appearance.edit('Blue')).click()
+    await m.flush()
+    button(editor(m.container)!, O.more).click()
+    await m.flush()
+    expect(drafts.any()).toBe(false)
+    const css = editor(m.container)!.querySelector<HTMLTextAreaElement>('textarea')!
+    type(css, 'color: red }')
+    await m.flush()
+    expect(drafts.any()).toBe(true)
+    type(css, 'letter-spacing: 0.02em')
+    await m.flush()
+    expect([patches.at(-1)!.appearance.styles.find(s => s.id === 'blue')!.css, drafts.any()]).toEqual(['letter-spacing: 0.02em', false])
+    const name = editor(m.container)!.querySelector('input')!
+    type(name, '')
+    await m.flush()
+    expect(drafts.any()).toBe(true)
+    type(name, 'Sky')
+    await m.flush()
+    expect(drafts.any()).toBe(false)
+    // closed with a draft open: the editor lets go as it goes
+    type(css, 'color: red }')
+    await m.flush()
+    expect(drafts.any()).toBe(true)
+    button(m.container, O.appearance.edit('Sky')).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(200)
+    await m.flush()
+    expect([editor(m.container), drafts.any()]).toEqual([null, false])
     await m.unmount()
   })
 

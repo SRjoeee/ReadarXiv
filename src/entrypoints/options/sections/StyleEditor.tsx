@@ -5,7 +5,8 @@
 // once: the name as it is typed, and while the field is empty the name the editor opened with (the schema's name is
 // never empty, and a name emptied is no name: however the editor closes, it never keeps the letter a clearing stopped
 // at), Done saying a name is needed rather than close (Codex on #306); the declarations only when they will survive the
-// sanitiser, the rest staying in the field with its reason
+// sanitiser, the rest staying in the field with its reason. What it keeps that the store does not — a blank name,
+// declarations not stored — holds the page's drafts, as the other editors' does (Codex 5b)
 import { ChevronRight } from 'lucide'
 import { type ComponentProps, useEffect, useId, useRef, useState } from 'react'
 import { CSS_MAX, NAME_MAX, PALETTE, type StyleProfile, UNDERLINES } from '@/config/appearance'
@@ -17,6 +18,7 @@ import { Icon } from '@/ui/controls/Icon'
 import { Reveal } from '@/ui/controls/Reveal'
 import { Segmented } from '@/ui/controls/Segmented'
 import { Switch } from '@/ui/controls/Switch'
+import { drafts } from '@/ui/drafts'
 import { O, PREVIEW_LANG, profileName } from '@/ui/strings'
 import { ColourPick } from '../ui/ColourPick'
 import { segmentWidth } from '../ui/lists'
@@ -48,6 +50,12 @@ export function StyleEditor({ value, onChange, onDone, full, onDuplicate, onDele
   const [more, setMore] = useState(value.blur || value.css !== '')
   const nameField = useRef<HTMLInputElement>(null)
   const fullNote = useId()
+  /**
+   * a blank name is held here alone — the store keeps the one the editor opened with —: the page's drafts hold, so that
+   * a reload for the interface language waits for it, as the other editors' drafts do (Codex 5b)
+   */
+  const blank = !name.trim()
+  useEffect(() => (blank ? drafts.hold() : undefined), [blank])
   // an opened editor puts the focus on its first field (§9)
   useEffect(() => { nameField.current?.focus({ preventScroll: true }) }, [])
   const set = (over: Partial<StyleProfile>) => void onChange(over)
@@ -142,6 +150,10 @@ function CustomCss({ value, onChange }: { value: string; onChange: (css: string)
   const committed = useRef(value)
   const pending = useRef(0)
   const failed = useRef(false)
+  // what the field holds and the store does not — a block the sanitiser refuses, one the store refused, one on its way —
+  // holds the page's drafts, so that a reload for the interface language waits for it (Codex 5b)
+  const unstored = draft !== value
+  useEffect(() => (unstored ? drafts.hold() : undefined), [unstored])
   if (committed.current !== value) {
     committed.current = value
     if (pending.current === 0 && !failed.current && draft !== value && sanitizeCustomCss(draft).ok) setDraft(value)
