@@ -939,8 +939,10 @@ export const PARA_END_TEX = String.raw`\makeatletter
  * `1.3\dimexpr\f@size pt\relax` (the font size times it, the geometry lock); a unit's own factor \axtlead@<name>,
  * when defined, multiplies the font size. The paper's leading comes back once that paragraph is over (PARA_END_TEX;
  * a footnote's paragraph ending first inside a unit, or a list opened right after one, left the unit's leading on the
- * English after it, down to the references: 2608.02163). No hook from restricted horizontal mode, where a caption is
- * measured in an \hbox before it is set.
+ * English after it, down to the references: 2608.02163), and it is the leading before the unit's own size when one was
+ * set just before (\axt@leadbefore, which the size hands over): read after it, the leading that came back was the
+ * smaller size's, and the references after the last unit were set 0.9 as far apart (2608.05876 in Russian). No hook
+ * from restricted horizontal mode, where a caption is measured in an \hbox before it is set.
  * With \axtfirstpapertrue (the geometry lock, where each unit stands where its original did) the space from the line
  * before to the unit's first line is the paper's, by \prevdepth, and only the unit's own lines are spaced at its
  * leading: every unit began 2 pt lower than its original (13 pt against RT-1's 11), which no padding can take back.
@@ -951,8 +953,9 @@ export const PARA_END_TEX = String.raw`\makeatletter
  */
 export const unitLeadTex = leading => PARA_END_TEX + String.raw`\makeatletter
 \protected\def\axtlead#1{\ifhmode\ifinner\else\axt@lead{#1}\fi\else\axt@lead{#1}\fi}
-\def\axt@lead#1{\ifdefined\AddToHookNext\edef\axt@paperlead{\the\baselineskip}\edef\axt@tmp{\noexpand\axt@whenover{lead#1}{\baselineskip=\the\baselineskip\relax}{\baselineskip=\the\baselineskip\relax}{\baselineskip=\the\baselineskip\relax}}\axt@tmp\baselineskip=\ifcsname axtlead@#1\endcsname\csname axtlead@#1\endcsname\dimexpr\f@size pt\relax\else ` + leading + String.raw`\fi\relax\edef\axt@unitlead{\the\baselineskip}\ifaxtfirstpaper\ifvmode\ifdim\prevdepth>-1000pt\prevdepth=\dimexpr\prevdepth+\axt@unitlead-\axt@paperlead\relax\fi\fi\fi\fi}
+\def\axt@lead#1{\ifdefined\AddToHookNext\ifx\axt@leadbefore\relax\edef\axt@paperlead{\the\baselineskip}\else\let\axt@paperlead\axt@leadbefore\let\axt@leadbefore\relax\fi\edef\axt@tmp{\noexpand\axt@whenover{lead#1}{\baselineskip=\axt@paperlead\relax}{\baselineskip=\axt@paperlead\relax}{\baselineskip=\axt@paperlead\relax}}\axt@tmp\baselineskip=\ifcsname axtlead@#1\endcsname\csname axtlead@#1\endcsname\dimexpr\f@size pt\relax\else ` + leading + String.raw`\fi\relax\edef\axt@unitlead{\the\baselineskip}\ifaxtfirstpaper\ifvmode\ifdim\prevdepth>-1000pt\prevdepth=\dimexpr\prevdepth+\axt@unitlead-\axt@paperlead\relax\fi\fi\fi\fi}
 \let\axt@unitlead\relax
+\let\axt@leadbefore\relax
 \newif\ifaxtfirstpaper
 \def\axt@displaylead{\ifx\axt@unitlead\relax\else\ifdim\baselineskip=\axt@unitlead\relax\baselineskip=\axt@paperlead\relax\fi\fi}
 \AtBeginDocument{\everydisplay\expandafter{\the\everydisplay\axt@displaylead}}

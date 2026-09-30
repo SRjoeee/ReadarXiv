@@ -111,15 +111,21 @@ export const FLOAT_TEX = String.raw`\makeatletter
  * size) at the unit's start, the size before it back once the unit's own paragraph is over (PARA_END_TEX), at every
  * level between when that paragraph ended in a deeper group (a list opened right after the unit — else the list's own
  * units were set smaller from a size never put back, and each smaller again: 2608.02785 in German went down to 7 pt,
- * and in the fit's trial to 4). And from the size before the last unit set smaller when that one's is still in force,
- * its paragraph's end not yet come (a unit begun inside it): a note's own size is another, and stays the base. Nothing
- * from restricted horizontal mode. What service H does to a block too long for its box, with a floor (shrinkSizes)
+ * and in the fit's trial to 4), and with it the note of which unit's size is in force. The leading before the size
+ * goes to the unit's leading (\axt@leadbefore, latex-front.mjs), whose own return comes after the size's. A unit is
+ * set from the size in force, or from the one before the unit set smaller whose size and leading are still in force
+ * (a unit begun inside it, that one's paragraph not yet over): a note's own size is another, and stays the base. By
+ * the size alone, the paper's own 9 pt — a note, \small — after a unit set from 10 pt to 9 was taken for that unit's,
+ * set at 9, and 10 pt after it (2608.05876 in Russian). Nothing from restricted horizontal mode. What service H does
+ * to a block too long for its box, with a floor (shrinkSizes)
  */
 export const SIZE_TEX = PARA_END_TEX + String.raw`\makeatletter
-\let\axt@szlast\relax
-\def\axt@size#1{\ifcsname axtsize@#1\endcsname\ifdefined\AddToHookNext\edef\axt@szcur{\f@size}\ifx\axt@szcur\axt@szlast\else\xdef\axt@szsaved{\f@size}\xdef\axt@szsavedb{\f@baselineskip}\fi
-  \edef\axt@tmp{\noexpand\axt@whenover{size#1}{\noexpand\fontsize{\axt@szsaved}{\axt@szsavedb}\noexpand\selectfont}{\noexpand\fontsize{\axt@szsaved}{\axt@szsavedb}\noexpand\selectfont}{\noexpand\fontsize{\axt@szsaved}{\axt@szsavedb}\noexpand\selectfont}}\axt@tmp
-  \fontsize{\fpeval{\csname axtsize@#1\endcsname*\axt@szsaved}}{\fpeval{\csname axtsize@#1\endcsname*\strip@pt\dimexpr\axt@szsavedb\relax}pt}\selectfont\xdef\axt@szlast{\f@size}\fi\fi}
+\let\axt@szset\@empty\let\axt@szbase\@empty
+\def\axt@szback{\noexpand\fontsize{\f@size}{\f@baselineskip}\noexpand\selectfont\noexpand\def\noexpand\axt@szset{\axt@szset}\noexpand\def\noexpand\axt@szbase{\axt@szbase}}
+\def\axt@size#1{\ifcsname axtsize@#1\endcsname\ifdefined\AddToHookNext\edef\axt@tmp{\noexpand\axt@whenover{size#1}{\axt@szback}{\axt@szback}{\axt@szback}}\axt@tmp
+  \edef\axt@szcur{\f@size/\f@baselineskip}\ifx\axt@szcur\axt@szset\else\edef\axt@szbase{{\f@size}{\f@baselineskip}}\fi
+  \edef\axt@leadbefore{\the\baselineskip}\expandafter\axt@szto\axt@szbase{\csname axtsize@#1\endcsname}\edef\axt@szset{\f@size/\f@baselineskip}\fi\fi}
+\def\axt@szto#1#2#3{\fontsize{\fpeval{#3*#1}}{\fpeval{#3*\strip@pt\dimexpr#2\relax}pt}\selectfont}
 \protected\def\axtsize#1{\ifhmode\ifinner\else\axt@size{#1}\fi\else\axt@size{#1}\fi}
 \protected\def\axtsizein#1{\ifcsname axtsize@#1\endcsname\fontsize{\fpeval{\csname axtsize@#1\endcsname*\f@size}}{\fpeval{\csname axtsize@#1\endcsname*\strip@pt\dimexpr\f@baselineskip\relax}pt}\selectfont\fi}
 \AtBeginDocument{\ifdefined\pdfstringdefDisableCommands\pdfstringdefDisableCommands{\def\axtsizein#1{}}\fi}

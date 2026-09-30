@@ -152,6 +152,20 @@ check('unit size raises no TeX error', !/^! /m.test(sizeLog), (sizeLog.match(/^!
 const sizeBoxLog = tex('size-boxed', `\\makeatletter\\expandafter\\def\\csname axtsize@7\\endcsname{0.9}\\makeatother${LINES_TEX}${SIZE_TEX}${unitLeadTex(1.3)}\n\\documentclass{article}\n\\begin{document}\n\\makeatletter\n\\setbox0\\vbox{\\axtsize{7}\\leavevmode A unit a list ends.\\begin{itemize}\\item Item text.\\end{itemize}\\message{^^JSIZE-BOXLIST \\f@size^^J}Plain.\\par\\message{^^JSIZE-BOXAFTER \\f@size^^J}}\\box0\n\\end{document}\n`)
 const szb = k => sizeBoxLog.match(new RegExp(`^SIZE-${k} (\\S+)`, 'm'))?.[1]
 check('in a box: 10 pt after a list that ends a smaller unit, and after the next paragraph', szb('BOXLIST') === '10' && szb('BOXAFTER') === '10', JSON.stringify([szb('BOXLIST'), szb('BOXAFTER')]))
+// what a unit set smaller hands back, and the size the next one starts from, where the paper's own smaller sizes are
+// the size a unit was set at: article's \small is 9 pt, 0.9 of its 10; its \footnotesize 8 pt, 0.8 of it
+const typeLog = tex('size-type', `\\makeatletter\\expandafter\\def\\csname axtsize@7\\endcsname{0.9}\\expandafter\\def\\csname axtsize@8\\endcsname{0.9}\\expandafter\\def\\csname axtsize@9\\endcsname{0.8}\\expandafter\\def\\csname axtsize@10\\endcsname{0.8}\\makeatother${LINES_TEX}${SIZE_TEX}${unitLeadTex(1.3)}\n\\documentclass{article}\n\\begin{document}\n\\makeatletter\n`
+  + `\\axtsize{7}\\axtlead{7}\\leavevmode A smaller unit.\\par\\message{^^JTYPE-AFTER \\f@size\\space\\the\\baselineskip^^J}\n`
+  + `{\\small\\axtsize{8}\\axtlead{8}\\leavevmode A smaller unit in the paper's small type.\\message{^^JTYPE-SMALLIN \\f@size^^J}\\par\\message{^^JTYPE-SMALLAFTER \\f@size\\space\\the\\baselineskip^^J}}\n`
+  + `\\axtsize{9}\\axtlead{9}\\leavevmode A unit with a note.\\footnote{\\axtsize{10}\\axtlead{10}A note that is a unit.\\message{^^JTYPE-NOTE \\f@size^^J}}\\message{^^JTYPE-BODY \\f@size^^J}\\par\n`
+  + `\\axtsize{7}\\axtlead{7}\\leavevmode A unit with a box \\parbox{5cm}{\\axtsize{8}\\axtlead{8}A unit in the box.\\message{^^JTYPE-INBOX \\f@size^^J}\\par} and on.\\message{^^JTYPE-OUTBOX \\f@size^^J}\\par\\message{^^JTYPE-LAST \\f@size\\space\\the\\baselineskip^^J}\n`
+  + `\\end{document}\n`)
+const ty = k => typeLog.match(new RegExp(`^TYPE-${k} (.+)$`, 'm'))?.[1]
+check('after a unit set smaller at its own leading: the paper\'s 10 pt on 12 pt, and the references after it (2608.05876 in Russian)', ty('AFTER') === '10 12.0pt' && ty('LAST') === '10 12.0pt', JSON.stringify([ty('AFTER'), ty('LAST')]))
+check('a unit in the paper\'s \\small once a unit set at 9 pt is over: 0.9 of its own 9 pt, and \\small\'s 9 pt on 11 pt after it', ty('SMALLIN') === '8.1' && ty('SMALLAFTER') === '9 11.0pt', JSON.stringify([ty('SMALLIN'), ty('SMALLAFTER')]))
+check('a note that is a unit, in a unit set at the note size: 0.8 of the note\'s own 8 pt, the unit\'s 8 pt after it', ty('NOTE') === '6.4' && ty('BODY') === '8', JSON.stringify([ty('NOTE'), ty('BODY')]))
+check('a unit begun inside one set smaller, the paper\'s size unchanged: 0.9 of the paper\'s 10 pt, not of 9', ty('INBOX') === '9' && ty('OUTBOX') === '9', JSON.stringify([ty('INBOX'), ty('OUTBOX')]))
+check('unit type raises no TeX error', !/^! /m.test(typeLog), (typeLog.match(/^! .*/m) ?? [''])[0])
 // a translated table no wider than the wider of the line and its original, the original's counters not counted twice
 const fitBody = [
   `\\begin{minipage}{0.3\\textwidth}\\sbox0{\\axtfit{\\begin{tabular}{p{5cm}p{5cm}}A & B\\end{tabular}}{\\begin{tabular}{p{5cm}p{5cm}}C & D\\end{tabular}}}\\message{^^JFIT narrowbox \\the\\wd0 \\space\\the\\linewidth^^J}\\end{minipage}`,
