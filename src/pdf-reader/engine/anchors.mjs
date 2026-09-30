@@ -23,9 +23,9 @@ const OPENS = new Set([...'([{\u2018\u201c\u201a\u201e\u00ab\u2039\u300a\u3008\u
 const OPENING = new Set([...OPENS, 34, 39])
 const LETTER = /[\p{L}\p{N}]/u
 /** whether a character after a word stops the scan of the marks it sets against the word: white space, a letter or a
- *  digit (a word cut from the next where the script changes), or a mark that only opens. By code first: the text
- *  layer's every word is looked at, and a test of the letters' class for each of a translation's CJK characters made
- *  tokenizing it up to half as slow again (2608.08350) */
+ *  digit (a word cut from the next where the script changes), or a mark that only opens. By code first: every word of
+ *  the text layer is looked at, and a test of the letters' class for each of a translation's CJK characters made the
+ *  scan up to half as slow again as tokenizing it (2608.08350) */
 const stopsMarks = (s, i) => {
   const c = s.charCodeAt(i)
   if (c < 128) return c <= 32 || (c >= 48 && c <= 57) || (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || c === 40 || c === 91 || c === 123
@@ -37,7 +37,7 @@ const stopsMarks = (s, i) => {
 /** whether a character opens before a word */
 const opens = c => (c < 128 ? c === 40 || c === 91 || c === 123 || c === 34 || c === 39 : c <= 0x301a && OPENING.has(c))
 /** what a word's marks count less: half an em for a CJK character's, which ink half of theirs */
-const halfOf = (s, tk) => (tk.len === 1 && isCJKCode(s.charCodeAt(tk.at)) ? 0.5 : 0)
+const halfOf = (s, at, len) => (len === 1 && isCJKCode(s.charCodeAt(at)) ? 0.5 : 0)
 const isCJKCode = c => (c >= 0x3400 && c <= 0x9fff) || (c >= 0x3040 && c <= 0x30ff) || (c >= 0xac00 && c <= 0xd7af) || (c >= 0xf900 && c <= 0xfaff)
 
 /** one token per CJK character, one per run of other letters and digits; lower case, compatibility forms folded. A run
@@ -45,12 +45,8 @@ const isCJKCode = c => (c >= 0x3400 && c <= 0x9fff) || (c >= 0x3040 && c <= 0x30
  *  and the words after it, a name and a heading's words) was one token in a unit's text where the text layer, setting
  *  the two scripts in two fonts, has several — and a heading, found as a run of words, was never found (2608.08350) */
 export function tokens(s) {
-  return tokensIn(s.normalize('NFKC').toLowerCase())
-}
-/** tokens of a string already normalized and lower-cased */
-function tokensIn(s) {
   const out = []
-  for (const m of s.matchAll(TOKEN)) {
+  for (const m of s.normalize('NFKC').toLowerCase().matchAll(TOKEN)) {
     const w = m[0]
     if (!CJK.test(w)) out.push({ t: w, at: m.index, len: w.length })
     else if (w.length === 1) out.push({ t: w, at: m.index, len: 1 })
@@ -96,28 +92,14 @@ export function tokenizeDocument(pages) {
       if (prev && Math.abs(x - prev.x) < 0.1 * size && Math.abs(y - prev.y) < 0.05 * size && it.str === prev.str) continue
       const st = styles?.[it.fontName], asc = st?.ascent > 0 ? st.ascent : 0.75, desc = st?.descent < 0 ? st.descent : -0.22
       const perChar = it.str.length ? it.width / it.str.length : 0
-      const s = it.str.normalize('NFKC').toLowerCase()
-      const toks = tokensIn(s)
+      const toks = tokens(it.str)
       const flat = b === 0 && c === 0
       if (!carry && prev?.word && flat && prev.flat && Math.abs(y - prev.y) < 0.3 * Math.max(size, prev.size) && x - prev.end > -0.3 * size && x - prev.end < 0.12 * size && WORD_START.test(it.str) && !CJK.test(it.str[0])) carry = last
       for (const tk of toks) {
-        // the ink's edges (l, r): the box widened over the marks its item sets against the word — the brackets and
-        // quotes that open before it, the stops, commas and brackets that close after it — so that a highlight ends
-        // after a sentence's full stop and a heading's colon; a CJK mark is set in a full em and inks half of it, the
-        // closing ones their left half, the opening ones their right. Anchoring reads none of it
-        const x0 = x + perChar * tk.at, wide = perChar * tk.len, end = tk.at + tk.len
-        const w = { t: tk.t, page, x: x0, y, w: wide, h: size, top: y + asc * size, bottom: y + desc * size, l: x0, r: x0 + wide }
-        // most words have a space or nothing on either side: only those that do not are scanned
-        if (tk.at > 0 && opens(s.charCodeAt(tk.at - 1))) {
-          let from = tk.at - 1
-          while (from > 0 && opens(s.charCodeAt(from - 1))) from--
-          w.l = x0 - (tk.at - from - halfOf(s, tk)) * perChar
-        }
-        if (end < s.length && !stopsMarks(s, end)) {
-          let to = end + 1
-          while (to < s.length && !stopsMarks(s, to)) to++
-          w.r = x0 + (to - tk.at - halfOf(s, tk)) * perChar
-        }
+        // `item`: the text item the token was read from, for its ink (inkEdges); `sym`: where an item of marks alone after
+        // it ends. Nothing more is worked out here: the reader tokenizes a paper once, cold, and each test a token took
+        // here cost a heavy paper's first tokenizing a third more (2608.02459, 38 → 52 ms)
+        const w = { t: tk.t, page, x: x + perChar * tk.at, y, w: perChar * tk.len, h: size, top: y + asc * size, bottom: y + desc * size, item: it, sym: null }
         if (carry) { carry.t += w.t; w.t = ''; last = carry; carry = null } else last = w
         doc.push(w)
       }
@@ -125,7 +107,7 @@ export function tokenizeDocument(pages) {
       // the last word's baseline and after it carries that word's ink to its end
       if (!toks.length && doc.length && (it.str.length > 1 || it.str.charCodeAt(0) > 32)) {
         const t = doc[doc.length - 1]
-        if (t.page === page && Math.abs(y - t.y) < 0.5 * t.h && x + it.width > t.x && /\S/.test(it.str)) t.r = Math.max(t.r, x + it.width)
+        if (t.page === page && Math.abs(y - t.y) < 0.5 * t.h && x + it.width > t.x && /\S/.test(it.str)) t.sym = Math.max(t.sym ?? -Infinity, x + it.width)
       }
       const tail = it.str.trimEnd()
       carry = it.hasEOL && /[-­]$/.test(tail) && toks.length && !CJK.test(tail.at(-2) ?? '') ? last : null
@@ -133,6 +115,43 @@ export function tokenizeDocument(pages) {
     }
   }
   return doc
+}
+
+/**
+ * Each token's ink across, { l, r }: its box widened over the marks its item sets against the word — the brackets and
+ * quotes that open before it, the stops, commas and brackets that close after it, in its item — and to the end of an
+ * item of marks alone after it on its baseline (`sym`), so that a highlight ends after a sentence's full stop and a
+ * heading's colon. A CJK mark is set in a full em and inks half of it (the closing ones their left half, the opening
+ * ones their right): NFKC folds the full-width marks into ASCII, so it is told by the word, a CJK character. Worked out
+ * from each token's item (tokenizeDocument), when the highlight's layout is made and not as the paper is tokenized;
+ * anchoring reads none of it. A token with no item has its box
+ */
+export function inkEdges(doc) {
+  const n = doc.length, l = new Float32Array(n), r = new Float32Array(n)
+  let item = null, s = '', perChar = 0, x0 = 0
+  for (let k = 0; k < n; k++) {
+    const w = doc[k], it = w.item
+    let left = w.x, right = w.x + w.w
+    if (it && it !== item) { item = it; s = it.str.normalize('NFKC').toLowerCase(); perChar = it.str.length ? it.width / it.str.length : 0; x0 = it.transform[4] }
+    if (it && perChar > 0) {
+      // the token's place in its item's text, as tokenizeDocument placed it: x = the item's x + perChar × its offset
+      const at = Math.round((w.x - x0) / perChar), end = at + Math.round(w.w / perChar)
+      // most words have a space or nothing on either side: only those that do not are scanned
+      if (at > 0 && opens(s.charCodeAt(at - 1))) {
+        let from = at - 1
+        while (from > 0 && opens(s.charCodeAt(from - 1))) from--
+        left = w.x - (at - from - halfOf(s, at, end - at)) * perChar
+      }
+      if (end < s.length && !stopsMarks(s, end)) {
+        let to = end + 1
+        while (to < s.length && !stopsMarks(s, to)) to++
+        right = w.x + (to - at - halfOf(s, at, end - at)) * perChar
+      }
+    }
+    if (w.sym != null && w.sym > right) right = w.sym
+    l[k] = left; r[k] = right
+  }
+  return { l, r }
 }
 
 // ---------------------------------------------------------------- marks

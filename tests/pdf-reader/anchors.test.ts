@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchorUnits, boundsFromMarks, type DocToken, markWords, type TextPage, tokenizeDocument, tokens, type UnitText } from '@/pdf-reader/engine/anchors.mjs'
+import { anchorUnits, boundsFromMarks, type DocToken, inkEdges, markWords, type TextPage, tokenizeDocument, tokens, type UnitText } from '@/pdf-reader/engine/anchors.mjs'
 
 // Where each unit sits in a PDF, found from the text layer (anchors.mjs): the page given as PDF.js's text items, the
 // units as the reader passes them. Heights are 10 PDF units, lines 12 apart down from y = 700
@@ -83,10 +83,13 @@ describe('tokenizeDocument: a word printed over itself is read once', () => {
   })
 })
 
-describe('tokenizeDocument: a token\'s ink reaches over the marks that touch it', () => {
-  // `l` and `r`, the ink's left and right edges: the token's box widened over the punctuation and brackets its item
-  // sets against it, so that a highlight ends after a sentence's full stop; what anchoring reads (t, x, w) is the same
-  const edges = (items: Item[]) => tokenizeDocument([{ page: 1, items, styles: {} }]).map(t => [t.t, t.x, t.w, t.l, t.r])
+describe('inkEdges: a token\'s ink reaches over the marks that touch it', () => {
+  // the ink's left and right edges: the token's box widened over the punctuation and brackets its item sets against it,
+  // so that a highlight ends after a sentence's full stop; what anchoring reads (t, x, w) is the same
+  const edges = (items: Item[]) => {
+    const doc = tokenizeDocument([{ page: 1, items, styles: {} }]), { l, r } = inkEdges(doc)
+    return doc.map((t, k) => [t.t, t.x, t.w, l[k], r[k]])
+  }
 
   it('a closing mark after a word, an opening one before it, in the word\'s item', () => {
     expect(edges([item('word.', 50, 700), item('(it)', 90, 700), item('ends),', 120, 700, { eol: true })])).toEqual([

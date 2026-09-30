@@ -2,15 +2,17 @@
 // point lights a unit exactly when it is inside what the unit paints. Pure — no DOM — so that the reader and the Node
 // probes run the same code.
 //
-// From the side's tokens (anchors.mjs tokenizeDocument, with their ink's edges) and its anchors: the page's lines;
+// From the side's tokens (anchors.mjs tokenizeDocument; their ink's edges, inkEdges) and its anchors: the page's lines;
 // each unit's runs (one page and one column each), and inside a run its rows (lines that overlap merged, so that a
 // display's zig-zag of numerator, denominator, limits, scripts and number is one row); a run's block, across its rows
 // inside the column's text edges. The edges are the document's (per page parity and column, from every page's long
 // lines): a page of displays has too few lines of prose to give its own, and a two-sided class shifts the text between
-// odd and even pages. The document's layout is made when the side is anchored; a page's runs when the page is first
+// odd and even pages. The document's layout is made once a side is anchored; a page's runs when the page is first
 // drawn or pointed at, since most pages of a long paper are never looked at in a visit.
 // The look was chosen on a draft (round 1 of the highlight, 2026-10-01): one block per run, padded half the leading
 // above and below and 3 px beside, one outline with 3 px corners.
+
+import { inkEdges } from './anchors.mjs'
 
 /** kinds of unit that are no running text: what lies among their words is their float's, not theirs */
 const NOT_RUNNING = new Set(['caption', 'heading', 'cell', 'figure'])
@@ -31,21 +33,22 @@ function lowerBound(xs, v) {
 }
 
 /**
- * A side's layout, made once when it is anchored: what a page's geometry needs of each token, kept compact (its ink
- * across, its baseline and size, its glyphs' height), and from the units' lines (anchorUnits' rects, a few thousand
- * where the tokens are tens of thousands) each page's columns, the document's column text edges and each page's half
- * leading; the units on each page. `doc` tokenizeDocument's tokens; `views` each page's box, [x0, y0, x1, y1];
- * `anchors` anchorUnits' result; `kindOf(id)` a unit's kind. Nothing of `doc` is kept: its objects are four times the
- * size of the copy
+ * A side's layout, made once it is anchored: what a page's geometry needs of each token, kept compact (its ink across,
+ * its baseline and size, its glyphs' height), and from the units' lines (anchorUnits' rects, a few thousand where the
+ * tokens are tens of thousands) each page's columns, the document's column text edges and each page's half leading;
+ * the units on each page. `doc` tokenizeDocument's tokens; `views` each page's box, [x0, y0, x1, y1]; `anchors`
+ * anchorUnits' result; `kindOf(id)` a unit's kind. Nothing of `doc` is kept: its objects, with their words and items,
+ * are ten times the copy (2608.02459: 9 and 11.6 MB a side)
  */
 export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
   const n = doc.length, pages = views.length
-  const tok = { l: new Float32Array(n), r: new Float32Array(n), y: new Float32Array(n), h: new Float32Array(n), top: new Float32Array(n), bottom: new Float32Array(n) }
+  const { l, r } = inkEdges(doc)
+  const tok = { l, r, y: new Float32Array(n), h: new Float32Array(n), top: new Float32Array(n), bottom: new Float32Array(n) }
   // tokens are in page order: page p's are [pageStart[p], pageStart[p + 1])
   const pageStart = new Int32Array(pages + 2).fill(n)
   for (let k = 0, last = 0; k < n; k++) {
     const w = doc[k]
-    tok.l[k] = w.l ?? w.x; tok.r[k] = w.r ?? w.x + w.w; tok.y[k] = w.y; tok.h[k] = w.h; tok.top[k] = w.top; tok.bottom[k] = w.bottom
+    tok.y[k] = w.y; tok.h[k] = w.h; tok.top[k] = w.top; tok.bottom[k] = w.bottom
     if (w.page !== last) { pageStart[w.page] = k; last = w.page }
   }
   for (let p = pages; p >= 1; p--) if (pageStart[p] > pageStart[p + 1]) pageStart[p] = pageStart[p + 1]
