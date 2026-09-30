@@ -317,11 +317,16 @@ function unitWords(text, gaps) {
 }
 
 /** in a unit's body heights: how far from its edge line a display beyond its marks may begin (the display's skip, and
- *  its tallest glyphs, a bracket or a sum, which are no words); how far from a word of the unit the part of a display
- *  across a page or a column break may begin (a float's skip is further); how far each next line of the body's size may
- *  stand from those taken; how far a smaller glyph may stand outside them (a limit, a script); and what counts as the
- *  body's size */
-const FIRST = 3.5, ACROSS = 1.6, GAP = 1.2, SMALL = 0.4, BODY = 0.95
+ *  its tallest glyphs, a bracket or a sum, which are no words); how far each next line of the body's size may stand
+ *  from those taken; how far a smaller glyph may stand outside them (a limit, a script); and what counts as the body's
+ *  size */
+const FIRST = 3.5, GAP = 1.2, SMALL = 0.4, BODY = 0.95
+/** how far from a word of the unit the part of a display across a page or a column break may begin: 1.6 body heights,
+ *  and FLOAT_SKIP points at the most — LaTeX's skip between a float at a page's head or foot and the text is a length
+ *  of its own (\textfloatsep, 20 pt less 4 at the most, at every body size), where a display's grows with the body:
+ *  1.6 heights of a 12 pt body reached a table's row 17 pt above the text (the re-review of A1, m3). Not less: at a
+ *  10 pt body, displays' first lines stand up to 15.7 pt from the unit's word (14.5 lost five on A's ten papers) */
+const ACROSS = 1.6, FLOAT_SKIP = 16
 /** a unit's own words at a break: how many of the unit's next words a word is looked for among, and the share of a line's
  *  words that must be found so (inOrder) */
 const AHEAD = 4, OWN = 0.6
@@ -436,7 +441,7 @@ function inOrder(doc, words, dir) {
  * page, a new column (back up the page past the edge's line), the page's frame (pageFrame) or a line the display's
  * `letters` do not explain (explained); then taken by where they
  * stand, nearest first: the lines holding a glyph of the unit's body size, the first `first` body heights at most from
- * the edge's line, each next GAP at most from those taken; then the smaller glyphs among them, SMALL at most outside
+ * the edge's line (and `most` points), each next GAP at most from those taken; then the smaller glyphs among them, SMALL at most outside
  * them — a display's limits, scripts and fractions' parts. Further, or smaller and apart, is a float, a footnote, the
  * page's foot. What is taken becomes the unit's, so that no other unit takes it
  */
@@ -453,7 +458,7 @@ function walker(doc, ms, owner, line) {
   }
   const body = new Float64Array(ms.length)
   const bodyOf = u => { if (!body[u]) { const hs = ms[u].map(k => doc[k].h).sort((x, y) => x - y); body[u] = hs[hs.length >> 1] } return body[u] }
-  function take(u, k0, dir, first, fits) {
+  function take(u, k0, dir, first, fits, most = Infinity) {
     const A = doc[k0], h = bodyOf(u), lines = [], held = []
     for (let k = k0 + dir, end = false; !end && k >= 0 && k < doc.length;) {
       const l = line[k], ks = []
@@ -476,7 +481,7 @@ function walker(doc, ms, owner, line) {
     lines.push(...held.filter(x => lines.some(l => l.top >= x.bottom) && lines.some(l => l.bottom <= x.top)))
     let reach = dir > 0 ? A.bottom : A.top, n = 0
     for (const l of lines.filter(l => l.body).sort((x, y) => (dir > 0 ? y.top - x.top : x.bottom - y.bottom))) {
-      if ((dir > 0 ? reach - l.top : l.bottom - reach) > (n ? GAP : first) * h) break
+      if ((dir > 0 ? reach - l.top : l.bottom - reach) > (n ? GAP * h : Math.min(first * h, most))) break
       reach = dir > 0 ? Math.min(reach, l.bottom) : Math.max(reach, l.top)
       n++
     }
@@ -585,9 +590,11 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
       if (b && ms[u] && typeof unit[edge] === 'string') beyond[u] = (beyond[u] ?? []).concat(walk.claim(u, edge === 'lead' ? b[0] : b[1], edge === 'lead' ? -1 : 1, FIRST, byLetters(doc, unit[edge])))
     })
   }
-  /** the unit's words between two of its tokens in the document, as its text has them: none were matched there */
+  /** the unit's words between two of its tokens in the document, as its text has them: none were matched there. A
+   *  bound's token not matched is still the unit's first or last word, and none of those between (the re-review of A1,
+   *  m3: a last word alone on the next page counted itself, and a table's row repeating it passed) */
   const wordsBetween = (f, a, b) => {
-    let i = -1, j = f.ws.length
+    let i = a === f.bounded[0] ? 0 : -1, j = b === f.bounded[1] ? f.ws.length - 1 : f.ws.length
     if (f.pairs) for (const [w, k] of f.pairs) { if (k === a) i = w; if (k === b) j = w }
     return i < j ? f.ws.slice(i + 1, j) : []
   }
@@ -618,7 +625,7 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
         // with a display: its lines (its letters) or the unit's own words left there — not any word of the paragraph's,
         // which a table's row at the break may share (the re-review of A1, m2)
         const fits = dir => (typeof inner === 'string' ? either(byLetters(doc, inner), inOrder(doc, words, dir)) : inOrder(doc, words, dir))
-        down = walk.take(u, k, 1, ACROSS, fits(1)); up = walk.take(u, m[n + 1], -1, ACROSS, fits(-1))
+        down = walk.take(u, k, 1, ACROSS, fits(1), FLOAT_SKIP); up = walk.take(u, m[n + 1], -1, ACROSS, fits(-1), FLOAT_SKIP)
         const last = down.at(-1) ?? k
         idx.push(...down.filter(j => j < m[n + 1]), ...up.filter(j => j > last).reverse())
       }

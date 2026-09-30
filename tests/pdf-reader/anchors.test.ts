@@ -286,6 +286,56 @@ describe('anchorUnits: a unit\'s display across a page break', () => {
     expect(got).toEqual(['our', 'model', 'has', 'a', 'lower', 'cost', 'and', 'x', 'y', '1', 'so', 'the', 'score', 'of', 'ours', 'is', 'better'])
   })
 
+  // 12 pt: the body's heights put 19 pt of room where a float stands 16 pt away at the least (\textfloatsep, 20 pt less
+  // 4), its glyphs further (the re-review of A1, m3)
+  const b12 = (str: string, x: number, y: number, eol = false, width = str.length * 6) => ({ str, transform: [12, 0, 0, 12, x, y], width, height: 12, hasEOL: eol, fontName: 'f' })
+  const line12 = (s: string, y: number) => [b12(s, 50, y, true, 300)]
+  const cells12 = (cs: string[], y: number) => cs.map((c, i) => b12(c, 80 + i * 80, y, i === cs.length - 1))
+  const page12 = (n: number, lines: ReturnType<typeof b12>[][]) => ({ page: n, items: [b12(String(n), 150, 62, true), ...lines.flat()], styles: {} })
+  // the text's first baseline `skip` points of box below a row at baseline 700 (ascent 9, descent 2.64): 17, a float at
+  // the page's head (the review's probe); 11, an in-text float
+  const below = (skip = 17) => 700 - 2.64 - skip - 9
+
+  for (const [rest, skip] of [['results', 17], ['final results', 17], ['results', 11]] as const) {
+    it(`a unit's last words alone on the next page, ${skip} pt under a table whose last row repeats them ("${rest}"): the row is not the unit's`, () => {
+      const pages = [
+        page12(1, [line12('the paragraph before it', 700), line12(rest === 'results' ? 'long paragraph that ends with the final' : 'long paragraph that ends with the', 100)]),
+        page12(2, [line12('table one scores of models', 740), cells12(['model', 'score'], 714), cells12(rest.split(' ').concat(['12']), 700), line12(rest, below(skip)), line12('another paragraph after', below(skip) - 30)]),
+      ]
+      const doc = tokenizeDocument(pages)
+      const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+      const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'long paragraph that ends with the final results' }, { id: 2, text: 'table one scores of models' }, { id: 3, text: 'another paragraph after' }]
+      const bounds = new Map<string, [number, number]>([['0', [at('the'), at('it')]], ['1', [at('long'), doc.length - 4]], ['2', [at('table'), at('models')]], ['3', [at('another'), at('after')]]])
+      expect(anchorUnits(doc, units, { bounds, floating: id => id === 2 }).get(1)?.tokens.map(k => doc[k]?.t)).not.toContain('12')
+    })
+  }
+
+  it('a figure\'s labels a float\'s skip above the text are not a display\'s part across the break, whatever the body\'s size', () => {
+    const pages = [
+      page12(1, [line12('the paragraph before it', 700), line12('our model has a lower cost and', 124), [b12('x = y', 150, 100), b12('(1)', 290, 100, true)]]),
+      page12(2, [cells12(['x', 'y'], 700), line12('so the score of ours is better', below()), line12('another paragraph after', below() - 30)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'our model has a lower cost and so the score of ours is better', inner: 'xy' }, { id: 3, text: 'another paragraph after' }]
+    const bounds = new Map<string, [number, number]>([['0', [at('the'), at('it')]], ['1', [at('our'), at('better')]], ['3', [at('another'), at('after')]]])
+    expect(anchorUnits(doc, units, { bounds }).get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['our', 'model', 'has', 'a', 'lower', 'cost', 'and', 'x', 'y', '1', 'so', 'the', 'score', 'of', 'ours', 'is', 'better'])
+  })
+
+  it('a display\'s part across the break 15.5 pt from the unit\'s word at a 10 pt body is the unit\'s: the bound is no tighter than the body\'s heights there', () => {
+    const at10 = (str: string, x: number, y: number, eol = false) => item(str, x, y, { eol, width: str.length * 5 })
+    const text = 700 - 2.2 - 15.5 - 7.5
+    const pages = [
+      { page: 1, items: [at10('1', 150, 62, true), at10('the paragraph before it', 50, 700, true), at10('our model has a lower cost and', 50, 124, true)], styles: {} },
+      { page: 2, items: [at10('2', 150, 62, true), at10('x', 80, 700), at10('y', 160, 700, true), at10('so the score of ours is better', 50, text, true), at10('another paragraph after', 50, text - 24, true)], styles: {} },
+    ]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'our model has a lower cost and so the score of ours is better', inner: 'xy' }, { id: 3, text: 'another paragraph after' }]
+    const bounds = new Map<string, [number, number]>([['0', [at('the'), at('it')]], ['1', [at('our'), at('better')]], ['3', [at('another'), at('after')]]])
+    expect(anchorUnits(doc, units, { bounds }).get(1)?.tokens.map(k => doc[k]?.t)).toContain('x')
+  })
+
   it('a unit with no display between its words fills nothing across the break: a table of its size at the next page\'s head, 12 pt, a float\'s skip shrunk to 16 pt (the review of A1, M1)', () => {
     const big = (str: string, x: number, y: number, eol = false) => ({ str, transform: [12, 0, 0, 12, x, y], width: str.length * 6, height: 12, hasEOL: eol, fontName: 'f' })
     const line = (s: string, y: number) => [{ ...big(s, 50, y, true), width: 300 }]
