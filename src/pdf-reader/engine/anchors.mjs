@@ -9,9 +9,10 @@
 // CJK: unified ideographs with extension A, compatibility ideographs, kana, Hangul syllables. Written as escapes: typed as
 // characters, the compatibility range's first (U+F900) was normalized into the unified U+8C48, and the range ran on over
 // U+A000–U+F8FF — the private-use area with it, a bracket's pieces read as CJK words, and surrogates for this pattern
-const CJK_RANGES = '\\u3400-\\u9fff\\uf900-\\ufaff\\u3040-\\u30ff\\uac00-\\ud7af'
-const CJK = new RegExp(`[${CJK_RANGES}]`, 'u')
-const TOKEN = /[\p{L}\p{N}]+/gu, PARTS = new RegExp(`[${CJK_RANGES}]|[^${CJK_RANGES}]+`, 'gu')
+const CJK_SPANS = [[0x3400, 0x9fff], [0xf900, 0xfaff], [0x3040, 0x30ff], [0xac00, 0xd7af]]
+const CJK = new RegExp(`[${CJK_SPANS.map(([a, b]) => `\\u${a.toString(16)}-\\u${b.toString(16)}`).join('')}]`, 'u')
+const isCJK = c => CJK_SPANS.some(([a, b]) => c >= a && c <= b)
+const TOKEN = /[\p{L}\p{N}]+/gu
 const K = 3
 
 /** one token per CJK character, one per run of other letters and digits; lower case, compatibility forms folded. A run
@@ -25,9 +26,18 @@ export function tokens(s) {
     if (!CJK.test(w)) out.push({ t: w, at: m.index, len: w.length })
     else if (w.length === 1) out.push({ t: w, at: m.index, len: 1 })
     // a run of letters that holds CJK characters, cut into them and the runs between: matched as one class and cut
-    // after, since a lookahead in the pattern, or the CJK ranges beside the letters' class, cost the text layer's every
-    // character a test (5 to 10 % of tokenizing a heavy paper)
-    else for (const p of w.matchAll(PARTS)) out.push({ t: p[0], at: m.index + p.index, len: CJK.test(p[0]) ? 1 : p[0].length })
+    // after, character by character, since a lookahead in the pattern, or the CJK ranges beside the letters' class,
+    // cost the text layer's every character a test (5 to 10 % of tokenizing a heavy paper), and cutting with a second
+    // pattern doubled a translation's (all BMP: a surrogate is never CJK)
+    else {
+      let from = -1
+      for (let i = 0; i <= w.length; i++) {
+        const cjk = i < w.length && isCJK(w.charCodeAt(i))
+        if (from >= 0 && (cjk || i === w.length)) { out.push({ t: w.slice(from, i), at: m.index + from, len: i - from }); from = -1 }
+        if (cjk) out.push({ t: w[i], at: m.index + i, len: 1 })
+        else if (from < 0 && i < w.length) from = i
+      }
+    }
   }
   return out
 }
@@ -491,18 +501,18 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
     // around it keeps using)
     let m = !b && bounds?.size && ws.length && !floating(id) ? inRow(doc, ws, before[u] + 1, after[u] - 1, true, gap) : null
     let pairs = null
-    const located = (...args) => { const r = locate(...args); if (r) pairs = r.pairs; return r?.tokens ?? null }
-    if (!m && ws.length >= K && lo <= hi) m = located(doc, index, ws, lo, hi, !!b)
+    if (!m && ws.length >= K && lo <= hi) { const r = locate(doc, index, ws, lo, hi, !!b); if (r) { m = r.tokens; pairs = r.pairs } }
     // a float's text too short for 3-grams (a table's cell of one or two words): the words in a row, once, in the gap
     // between its located neighbours alone
     if (!m && !b && ws.length && ws.length < K && bounds?.size) m = inRow(doc, ws, before[u] + 1, after[u] - 1, false, gap)
     // a float's text that is not there: its float may stand anywhere, so the whole document, as with no marks at all —
     // the words of a located unit are that unit's (owner, below)
-    if (!m && !b && ws.length >= K && bounds?.size && floating(id)) m = located(doc, index, ws, 0, doc.length - 1, false)
+    if (!m && !b && ws.length >= K && bounds?.size && floating(id)) m = locate(doc, index, ws, 0, doc.length - 1, false)?.tokens ?? null
     // a run takes a placeholder's words besides the unit's own, which are all there
     const coverage = m ? Math.min(1, m.length / ws.length) : 0
     if (!b && (!m || coverage < minCoverage)) { found.push(null); return }
-    found.push({ m: m ?? [], coverage, bounded: b, ws, pairs })
+    // a unit with marks keeps its words and which of them were matched where, for a break (wordsBetween)
+    found.push(b ? { m: m ?? [], coverage, bounded: b, ws, pairs } : { m: m ?? [], coverage, bounded: b })
   })
   // who owns each token: a marked unit its whole range, the innermost range winning (a footnote inside a paragraph
   // is the footnote's); an unmarked unit its matched words
