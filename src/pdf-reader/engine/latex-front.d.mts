@@ -5,7 +5,10 @@ export declare function inMemory(map: Map<string, Uint8Array>): { list(): string
 /** a paper's source read from its main file: its units, the paper's prose in reading order */
 export declare function loadProject(root: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[] }
 /** the patched files (path → bytes): each unit's range replaced by its translated pieces, the rest untouched */
-export declare function patch(project: { units: SourceUnit[] }, translated: Map<SourceUnit, unknown[]>, options?: { guardControlWords?: boolean }): Map<string, Uint8Array>
+/** what goes around a unit when it is written out (markUnits): `whole` puts it around all of the unit, inside the groups that open and close it */
+export type UnitMark = { start: string; end: string; before?: string; whole?: boolean } | null
+export declare function patch(project: { units: SourceUnit[] }, translated: Map<SourceUnit, unknown[]>, options?: { guardControlWords?: boolean; mark?: (unit: SourceUnit) => UnitMark }): Map<string, Uint8Array>
+export declare function markUnits(units: SourceUnit[], translated?: Map<SourceUnit, unknown[]> | null): (unit: SourceUnit) => UnitMark
 /** a style's abstract heading written out, made to go by \\abstractname */
 export declare function localizeNames(text: string): string
 /** a translation's pieces with its own line breaks: room to break in long code and formulas, a heading's forced break

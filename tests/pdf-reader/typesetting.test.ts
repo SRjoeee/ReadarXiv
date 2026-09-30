@@ -99,12 +99,12 @@ describe('the author block, by the target\'s script', () => {
 })
 
 describe('a strategy that cannot take the author block sets it as the paper has it (2608.12096 under CJKutf8)', () => {
-  it('CJKutf8 leaves the names in the source; XeLaTeX sets them translated', () => {
+  it('CJKutf8 leaves the names in the source; XeLaTeX sets them translated, in \\axtwide should they not fit their box', () => {
     const p = openPaper(new Map([['main.tex', new TextEncoder().encode('\\documentclass{article}\\author{Alice Smith}\\begin{document}\\maketitle\nThe prose of the paper.\n\\end{document}\n')]]))
     const translated = new Map((p.units as Unit[]).map(u => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: '<T>' } : x))]))
     const [xe, cjkutf8] = strategiesFor(META, 'zh')
     const main = (strategy: typeof xe) => new TextDecoder().decode(translationFiles(p, translated as never, { strategy: strategy!, fonts: null, draft: false }).get('main.tex'))
-    expect(main(xe)).toContain('\\author{<T>}')
+    expect(main(xe)).toContain('\\author{\\axtwide{<T>}}')
     expect(main(cjkutf8)).toContain('\\author{Alice Smith}')
   })
 })

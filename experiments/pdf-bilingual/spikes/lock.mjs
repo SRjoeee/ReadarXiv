@@ -195,12 +195,13 @@ export function originalProbeFiles({ project, units }, theorems) {
  *  too (FIT_DEF) */
 export function lockedFiles({ fsys, meta, project, units }, translated, { strategy, fonts, em, leads = new Map(), sizes = new Map(), targets = new Map(), theorems, sync = true, lead = null, h = false, columns = new Map(), floats = new Map(), fitHeight = false, fitMin = 0 }) {
   const index = new Map(units.map((u, i) => [u, i]))
-  const base = markUnits(units)
+  const base = markUnits(units, translated)
   // a unit with no mark — a table cell, a heading, a figure's text — takes its size, when it has one, as a declaration
   // before its first word, inside its own group (\\axtsizein): after whatever opens it, a row's \\toprule among them,
   // which is \\noalign and must follow the row's end (2608.06701), so that every role of the translation has one type
   const ROLES = new Set(['cell', 'heading', 'figure'])
-  const mark = u => { const m = base(u), i = index.get(u); if (!m) return sizes.has(i) && ROLES.has(u.kind) && !u.front ? { start: `\\axtsizein{${i}}`, end: '' } : m; return { ...m, before: `${sync ? `\\axtsync{${i}}` : ''}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}` } }
+  // (a line of names fitted to its box, AUTHOR_WIDE, carries nothing else: the author block keeps the class's type)
+  const mark = u => { const m = base(u), i = index.get(u); if (m?.whole) return m; if (!m) return sizes.has(i) && ROLES.has(u.kind) && !u.front ? { start: `\\axtsizein{${i}}`, end: '' } : m; return { ...m, before: `${sync ? `\\axtsync{${i}}` : ''}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}` } }
   const files = patch(project, new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, lineBreaks(u, pieces)])), { mark })
   let main = latin1(files.get(project.main))
   const at = main.search(/\\begin\s*\{document\}/)

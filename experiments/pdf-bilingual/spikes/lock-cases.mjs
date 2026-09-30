@@ -232,5 +232,53 @@ const capped = fitRead(tex('fitcap', fitDoc(0)))
 check('a table that grew is set no taller than its original', capped.fitted.h <= capped.orig.h + 0.5 && capped.natural.h > capped.orig.h * 2, JSON.stringify(capped))
 const floored = fitRead(tex('fitmin', fitDoc(0.9)))
 check('never below the floor\'s share of its width', floored.fitted.w >= 0.9 * floored.natural.w - 0.5 && floored.fitted.h > floored.orig.h, JSON.stringify(floored))
+// a translation narrower than its original keeps the original's width, the table in its middle: whatever the paper
+// scales the table by — adjustbox's max width, a \resizebox to the line — it scales the translation by alike. A
+// narrower Japanese Table 9 of 2608.15761 escaped the 0.95 its original was scaled by and stood 5.6 % larger
+const WIDE_ORIG = `\\begin{tabular}{l}${'A wide original column '.repeat(5)}\\end{tabular}`
+const keptDoc = `${FIT_DEF}\\documentclass{article}\\usepackage{graphicx}\\usepackage{adjustbox}\\begin{document}\\makeatletter
+\\setbox0\\hbox{\\axtfit{\\begin{tabular}{l}Narrow translation\\end{tabular}}{\\begin{tabular}{l}${'A wider original '.repeat(3)}\\end{tabular}}}\\setbox2\\hbox{\\begin{tabular}{l}${'A wider original '.repeat(3)}\\end{tabular}}\\message{^^JKEPT width \\the\\wd0 \\space\\the\\wd2^^J}
+\\setbox4\\hbox{\\begin{adjustbox}{max width=\\linewidth}${WIDE_ORIG}\\end{adjustbox}}\\setbox6\\hbox{\\begin{adjustbox}{max width=\\linewidth}\\axtfit{\\begin{tabular}{l}Narrow translation\\end{tabular}}{${WIDE_ORIG}}\\end{adjustbox}}\\message{^^JKEPT scaled \\the\\wd6 \\space\\the\\wd4^^J}
+\\setbox8\\hbox{\\resizebox{\\linewidth}{!}{\\axtfit{\\begin{tabular}{l}Narrow translation\\end{tabular}}{\\begin{tabular}{l}${'A wider original '.repeat(3)}\\end{tabular}}}}\\setbox9\\hbox{\\resizebox{\\linewidth}{!}{\\begin{tabular}{l}Narrow translation\\end{tabular}}}\\message{^^JKEPT line \\the\\ht8 \\space\\the\\ht9^^J}
+\\makeatother\\end{document}\n`
+const keptLog = tex('fitkept', keptDoc)
+const kept = k => keptLog.match(new RegExp(`^KEPT ${k} (\\S+)pt (\\S+)pt`, 'm'))?.slice(1).map(Number)
+const [kw, kow] = kept('width') ?? [], [ks, kos] = kept('scaled') ?? [], [kl, knl] = kept('line') ?? []
+check('a narrower translation keeps its original\'s width', Math.abs(kw - kow) < 0.01, JSON.stringify([kw, kow]))
+check('scaled by the paper as its original was: adjustbox\'s max width', Math.abs(ks - kos) < 0.01, JSON.stringify([ks, kos]))
+check('and a \\resizebox to the line: no taller than the original would be, far less than the narrow table alone', kl < 0.6 * knl, JSON.stringify([kl, knl]))
+check('kept widths raise no TeX error', !/^! /m.test(keptLog), (keptLog.match(/^! .*/m) ?? [''])[0])
+// a table set to a width (tabular*) whose translation is wider than that width: set at its natural width and scaled
+// to the width it had, not run past the column (Japanese Table 1 of 2608.05876 ran 38 pt into the next column); one
+// that fits keeps its width and its spread columns
+const STAR = '@{}l@{\\extracolsep{\\fill}}rr@{}'
+const starDoc = `${FIT_DEF}\\documentclass{article}\\usepackage{graphicx}\\begin{document}\\makeatletter
+\\setbox0\\hbox{\\axtfit{\\axtstar\\begin{tabular*}{\\linewidth}{${STAR}}${'Very wide translated heading '.repeat(3)} & 1 & 2 \\\\ Row & 3 & 4\\axtstarbody\\end{tabular*}}{\\begin{tabular*}{\\linewidth}{${STAR}}Heading & 1 & 2 \\\\ Row & 3 & 4\\end{tabular*}}}\\message{^^JSTAR wide \\the\\wd0 \\space\\the\\linewidth^^J}
+\\setbox2\\hbox{\\axtfit{\\axtstar\\begin{tabular*}{\\linewidth}{${STAR}}Short & 1 & 2\\axtstarbody\\end{tabular*}}{\\begin{tabular*}{\\linewidth}{${STAR}}Heading & 1 & 2\\end{tabular*}}}\\message{^^JSTAR fits \\the\\wd2 \\space\\the\\linewidth^^J}
+\\newcounter{probe}\\setbox4\\hbox{\\axtfit{\\axtstar\\begin{tabular*}{\\linewidth}{${STAR}}\\stepcounter{probe}A & 1 & 2\\axtstarbody\\end{tabular*}}{\\begin{tabular*}{\\linewidth}{${STAR}}B & 1 & 2\\end{tabular*}}}\\message{^^JSTAR counter \\the\\value{probe}^^J}
+\\makeatother\\end{document}\n`
+const starLog = tex('fitstar', starDoc)
+const star = k => starLog.match(new RegExp(`^STAR ${k} (\\S+)pt (\\S+)pt`, 'm'))?.slice(1).map(Number)
+const [sw, slw] = star('wide') ?? [], [sf, sfl] = star('fits') ?? []
+check('a tabular* wider than its width once translated: scaled to that width, not past it', Math.abs(sw - slw) < 0.01 && !/Overfull \\hbox[^\n]*in alignment/.test(starLog), JSON.stringify([sw, slw, (starLog.match(/Overfull \\hbox[^\n]*/) ?? [''])[0]]))
+check('a tabular* that fits keeps its width', Math.abs(sf - sfl) < 0.01, JSON.stringify([sf, sfl]))
+check('a tabular* measured once counts once', starLog.match(/^STAR counter (\d+)/m)?.[1] === '1', starLog.match(/^STAR counter .*/m)?.[0])
+check('fitted tabular* raises no TeX error', !/^! /m.test(starLog), (starLog.match(/^! .*/m) ?? [''])[0])
+// a translated line of names in a box that does not wrap (IEEEtran's author block, article's \author: a tabular's c
+// column) wider than the line: set as a paragraph of the line's width, centred, its lines broken. Japanese names ran
+// 126 pt past 2608.06701's page. One that fits is as it was
+const wideDoc = `${FIT_DEF}\\documentclass{article}\\begin{document}\\makeatletter
+\\setbox0\\hbox{\\begin{tabular}[t]{@{}c@{}}\\axtwide{${'Alice Example\\textsuperscript{1}, '.repeat(9)}and Bob Example\\textsuperscript{2}}\\\\ Somewhere\\end{tabular}}\\message{^^JWIDE long \\the\\wd0 \\space\\the\\linewidth\\space\\the\\dimexpr\\ht0+\\dp0\\relax^^J}
+\\setbox2\\hbox{\\begin{tabular}[t]{@{}c@{}}\\axtwide{Alice Example, Bob Example}\\\\ Somewhere\\end{tabular}}\\setbox4\\hbox{\\begin{tabular}[t]{@{}c@{}}Alice Example, Bob Example\\\\ Somewhere\\end{tabular}}\\message{^^JWIDE short \\the\\wd2 \\space\\the\\wd4^^J}
+\\newcounter{probe}\\setbox6\\hbox{\\begin{tabular}{c}\\axtwide{\\stepcounter{probe}${'Name '.repeat(90)}}\\end{tabular}}\\message{^^JWIDE counter \\the\\value{probe}^^J}
+\\par\\axtwide{A name in running text stays as it is.}
+\\makeatother\\end{document}\n`
+const wideLog = tex('wide', wideDoc)
+const wide = k => wideLog.match(new RegExp(`^WIDE ${k} (\\S+)pt (\\S+)pt`, 'm'))?.slice(1).map(Number)
+const [ww, wlw] = wide('long') ?? [], [ws, wso] = wide('short') ?? []
+check('a line of names wider than the line, in a box that does not wrap: broken within the line', ww <= wlw + 0.01 && !/Overfull \\hbox/.test(wideLog), JSON.stringify([ww, wlw, (wideLog.match(/Overfull \\hbox[^\n]*/) ?? [''])[0]]))
+check('a line of names that fits is as it was', Math.abs(ws - wso) < 0.01, JSON.stringify([ws, wso]))
+check('names measured once count once', wideLog.match(/^WIDE counter (\d+)/m)?.[1] === '1', wideLog.match(/^WIDE counter .*/m)?.[0])
+check('wide names raise no TeX error', !/^! /m.test(wideLog), (wideLog.match(/^! .*/m) ?? [''])[0])
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

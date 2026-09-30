@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inMemory, lineBreaks, loadProject, localizeNames, patch } from '@/pdf-reader/engine/latex-front.mjs'
+import { inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '@/pdf-reader/engine/latex-front.mjs'
 
 // The PDF reader's LaTeX front end: what of a paper's source is prose to translate
 
@@ -113,6 +113,31 @@ describe('the paper\'s own macros (2608.06007: its run-in headings \\nosection{â
   })
 })
 
+describe('a translated line of names that may not fit its box (2608.06701: Japanese names ran 126 pt past the page)', () => {
+  const IEEE = '\\documentclass[conference]{IEEEtran}\\author{\\IEEEauthorblockN{Alice Example\\IEEEauthorrefmark{1}, Bob Example\\IEEEauthorrefmark{2}}\n\\IEEEauthorblockA{Somewhere\\\\ Elsewhere}}\\begin{document}\\maketitle\nWords here.\\end{document}'
+  const marked = (tex: string) => {
+    const p = project(tex)
+    const units = p.units as Unit[]
+    const translated = new Map(units.map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))]))
+    return new TextDecoder().decode(patch(p, translated as Map<(typeof p.units)[number], unknown[]>, { mark: markUnits(p.units, translated) }).get('main.tex'))
+  }
+
+  it('its names go into \\axtwide, their marks with them, the block\'s own braces around it', () => {
+    expect(marked(IEEE)).toMatch(/\\IEEEauthorblockN\{\\axtwide\{<T\d+>\\IEEEauthorrefmark\{1\}<T\d+>\\IEEEauthorrefmark\{2\}\}\}/)
+  })
+
+  it('a block that breaks its own lines, or holds a note, is left as it is: set twice to be measured, a note would be kept twice', () => {
+    const tex = marked(IEEE)
+    expect(tex).toMatch(/\\IEEEauthorblockA\{<T\d+>\\\\\s*<T\d+>\}/)
+    expect(marked('\\documentclass{article}\\author{Alice\\thanks{A note.}}\\begin{document}\\maketitle\nWords.\\end{document}')).not.toMatch(/\\axtwide\{[^}]*\\thanks/)
+  })
+
+  it('nothing is wrapped where nothing is translated: the original compiles as the paper does', () => {
+    const p = project(IEEE)
+    expect(new TextDecoder().decode(patch(p, new Map(), { mark: markUnits(p.units) }).get('main.tex'))).not.toContain('\\axtwide')
+  })
+})
+
 describe('what goes around the translation: tables fitted, notes the class compares, a heading written out', () => {
   const withTables = (tex: string) => loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode(tex)]])), 'main.tex', { tables: true })
   const typeset = (p: ReturnType<typeof withTables>, pick: (u: Unit) => boolean) => {
@@ -126,6 +151,16 @@ describe('what goes around the translation: tables fitted, notes the class compa
     const tex = typeset(withTables(TABLES), () => true)
     expect(tex).toMatch(/\\axtfit\{\\begin\{tabular\}\{ll\}[\s\S]*<T\d+>[\s\S]*\\end\{tabular\}\}\{\\begin\{tabular\}\{ll\}\nFrozen profile & Prompting only \\\\\n\\end\{tabular\}\}/)
     expect(tex).not.toMatch(/\\axtfit\{\\begin\{longtable\}/)
+  })
+
+  it('a tabular* goes into \\axtfit too, its body measured at its natural width by \\axtstar (2608.05876\'s Table 1)', () => {
+    const tex = typeset(withTables('\\documentclass{article}\\begin{document}\n\\begin{tabular*}{\\linewidth}{@{}l@{\\extracolsep{\\fill}}r@{}}\nTrain & 105 \\\\\n\\end{tabular*}\n\\end{document}'), () => true)
+    expect(tex).toMatch(/\\axtfit\{\\axtstar\\begin\{tabular\*\}\{\\linewidth\}\{@\{\}l@\{\\extracolsep\{\\fill\}\}r@\{\}\}[\s\S]*<T\d+>[\s\S]*\\axtstarbody\\end\{tabular\*\}\}\{\\begin\{tabular\*\}\{\\linewidth\}[\s\S]*Train & 105[\s\S]*\\end\{tabular\*\}\}/)
+  })
+
+  it('a tabular* with a position argument is left as it is: \\axtstar reads the width and the columns alone', () => {
+    const tex = typeset(withTables('\\documentclass{article}\\begin{document}\n\\begin{tabular*}{\\linewidth}[t]{lr}\nTrain & 105 \\\\\n\\end{tabular*}\n\\end{document}'), () => true)
+    expect(tex).not.toContain('\\axtfit')
   })
 
   it('a table set to a width, or holding \\verb, is not boxed (2608.02991\'s tabularx)', () => {

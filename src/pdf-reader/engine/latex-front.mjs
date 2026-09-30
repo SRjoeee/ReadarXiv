@@ -42,6 +42,9 @@ const FRONT_MATTER = new Set(['author', 'affil', 'affiliation', 'institute', 'ad
 /** commands inside an author block whose argument is a name or a place: IEEEtran's blocks, acmart's parts of an
  *  affiliation. Anything else there — \\email, \\orcid, \\inst{1}, \\textsuperscript — stays as it is */
 const FRONT_PROSE = new Set(['IEEEauthorblockN', 'IEEEauthorblockA', 'institution', 'department', 'city', 'state', 'country'])
+/** IEEEtran's blocks, each a group of lines the class sets on its own in a cell of a table: a unit each, so that a
+ *  line of names is fitted to its box alone (AUTHOR_WIDE), apart from the places' block and its line breaks */
+const FRONT_LINES = new Set(['IEEEauthorblockN', 'IEEEauthorblockA'])
 const INLINE_TEXT = new Set(['textbf', 'textit', 'emph', 'textsl', 'textsc', 'underline', 'textup', 'textrm', 'textsf', 'textmd', 'uline'])
 // commands whose last required argument is typeset as it stands — a scaled table, a boxed or coloured phrase, a TikZ
 // picture fitted to the column — by how many required arguments they take, that one included. The others (a width,
@@ -389,11 +392,14 @@ function walk(s, from, to, b, ctx) {
         const { end: argsEnd } = argsAfter(s, afterBegin, env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? 3 : 2)
         const saved = b.kind, savedCell = b.cellMode; b.kind = 'cell'; b.cellMode = true
         walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved; b.cellMode = savedCell
-        // fitted to the line once translated (patch, FIT_DEF): a plain tabular, whose width is its columns'. One set to a
-        // width (tabularx, tabular*, tabulary) keeps it, and reads its own body, which it cannot inside an argument
-        // (2608.02991: "Missing \\endgroup inserted"); one that breaks across pages cannot be boxed; \\verb and the
-        // like cannot go into an argument either
-        if (/^tabu(lar)?$/.test(env) && !/\\(?:verb|lstinline|mintinline)(?![A-Za-z])|\\begin\s*\{(?:verbatim|lstlisting|minted)/.test(s.slice(i, afterEnd))) ctx.fits.push({ file: b.file, start: i, end: afterEnd })
+        // fitted to the line once translated (patch, FIT_DEF): a plain tabular, whose width is its columns'; a tabular*,
+        // set to a width it cannot shrink below, measured at its columns' width first (\\axtstar) — not one with a
+        // position argument, which \\axtstar does not read. tabularx and tabulary keep their width and read their own
+        // body, which they cannot inside an argument (2608.02991: "Missing \\endgroup inserted"); one that breaks across
+        // pages cannot be boxed; \\verb and the like cannot go into an argument either
+        const verbatim = /\\(?:verb|lstinline|mintinline)(?![A-Za-z])|\\begin\s*\{(?:verbatim|lstlisting|minted)/.test(s.slice(i, afterEnd))
+        if (/^tabu(lar)?$/.test(env) && !verbatim) ctx.fits.push({ file: b.file, start: i, end: afterEnd })
+        if (env === 'tabular*' && !verbatim && !/^\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\[/.test(s.slice(afterBegin).trimStart())) ctx.fits.push({ file: b.file, start: i, end: afterEnd, star: bodyEnd })
         i = afterEnd; continue
       }
       // everything else is a container: its body is walked, its own arguments ([Name] of a theorem, {width} of a minipage) stay
@@ -461,7 +467,13 @@ function walk(s, from, to, b, ctx) {
     }
     if (FRONT_PROSE.has(name) && b.kind === 'author') {
       const { args, end: e } = argsAfter(s, end, 1)
-      if (args[0]?.kind === 'req') { endText(); const id = b.open(s.slice(i, args[0].start + 1), i); walk(s, args[0].start + 1, args[0].end - 1, b, ctx); b.close(id, '}', e); i = e; continue }
+      if (args[0]?.kind === 'req') {
+        endText()
+        if (FRONT_LINES.has(name)) b.flush()
+        const id = b.open(s.slice(i, args[0].start + 1), i); walk(s, args[0].start + 1, args[0].end - 1, b, ctx); b.close(id, '}', e)
+        if (FRONT_LINES.has(name)) b.flush()
+        i = e; continue
+      }
     }
     if (CONTENT_BOX.has(name)) {
       const { args } = argsAfter(s, end, 8)
@@ -655,6 +667,16 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     }
     let endAt = -1
     if (m) for (let k = pieces.length - 1; k >= 0; k--) if (pieces[k].t === 'text' && /[^ \t\r\n]/.test(pieces[k].s)) { endAt = k; break }
+    // a mark around the whole of a unit (AUTHOR_WIDE): from its first piece to its last, inside the groups that open
+    // and close it; a command at either end goes inside too
+    let endAfter = false
+    if (m?.whole) {
+      const inside = q => q.t !== 'open' && q.t !== 'close' && !(q.t === 'text' && !/[^ \t\r\n]/.test(q.s))
+      startAt = pieces.findIndex(inside)
+      startCut = pieces[startAt]?.t === 'text' ? /^[ \t\r\n]*/.exec(pieces[startAt].s)[0].length : -1
+      endAt = pieces.findLastIndex(inside)
+      endAfter = endAt >= 0 && pieces[endAt].t !== 'text'
+    }
     // what acts on the unit's paragraph as a whole — its leading, its line probe — goes where the unit begins, outside
     // every group: inside a run-in label's (\\textbf{Label.}, a paper's \\nosection{…}), where the mark goes, an
     // assignment is undone when the label ends, and those paragraphs kept the paper's leading beside translated ones
@@ -676,6 +698,7 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       }
       if (k === startAt && startCut === -1) parts.push(utf8Bytes(m.start))
       parts.push(bytesOf(p.src, srcEnc))
+      if (k === endAt && endAfter) parts.push(utf8Bytes(m.end))
       // XeTeX reads CJK characters as letters: \method后 would be one control word. {} ends the name
       const next = pieces[k + 1]
       if (guardControlWords && /\\[A-Za-z@]+\*?$/.test(p.src) && next?.t === 'text' && next.tr && /^[^\s{[]/.test(next.s)) parts.push(utf8Bytes('{}'))
@@ -691,7 +714,8 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     // a table with a translated cell goes into \\axtfit with its original, which sets it no wider than the wider of
     // the line and the original (FIT_DEF)
     const fits = (project.fits ?? []).filter(f => f.file === file && us.some(u => u.start >= f.start && u.end <= f.end && translated.has(u)))
-    const inserts = fits.flatMap(f => [[f.start, [utf8Bytes('\\axtfit{')]], [f.end, [utf8Bytes('}{'), bytesOf(text.slice(f.start, f.end), enc), utf8Bytes('}')]]]).sort((a, b) => a[0] - b[0])
+    // (a tabular* between \\axtstar and \\axtstarbody, which measure its body at its columns' width)
+    const inserts = fits.flatMap(f => [[f.start, [utf8Bytes(f.star ? '\\axtfit{\\axtstar' : '\\axtfit{')]], ...(f.star ? [[f.star, [utf8Bytes('\\axtstarbody')]]] : []), [f.end, [utf8Bytes('}{'), bytesOf(text.slice(f.start, f.end), enc), utf8Bytes('}')]]]).sort((a, b) => a[0] - b[0])
     const copy = (from, to) => {
       for (const [pos, bytes] of inserts) if (pos >= from && pos < to) { parts.push(bytesOf(text.slice(from, pos), enc), ...bytes); from = pos }
       parts.push(bytesOf(text.slice(from, to), enc))
@@ -813,7 +837,13 @@ export const EVEN_SPACES = '\\makeatletter\\@ifpackageloaded{microtype}{}{\\usep
  *  errors). With \axtfitheighttrue (the geometry lock, which keeps every block in its original's box, as service H
  *  does, and the generic type) the translation is set no taller than the original either, and with \axt@fitmin never
  *  below that share of its own width: long German cells capped at a short original's height went to a sixth of their
- *  width. Goes first in the main file */
+ *  width. A translation narrower than its original keeps the original's width, the table in its middle, so that the
+ *  paper's own scaling (adjustbox's max width, a \resizebox to the line) scales it as it scaled the original: a
+ *  Japanese Table 9 of 2608.15761 narrower than its original escaped the 0.95 that one was scaled by and stood 5.6 %
+ *  larger. \axtstar … \axtstarbody around a tabular* (patch) sets it at its columns' width where that is wider than
+ *  the width it was given, which \axtfit then scales back: Japanese Table 1 of 2608.05876 ran 38 pt into the next
+ *  column. \axtwide{names} (AUTHOR_WIDE), in a box that does not wrap, sets a line wider than the line as a centred
+ *  paragraph of the line's width, and anything else as it is. Goes first in the main file */
 /** \axtbalance, at the start of a translated title: its lines of about the same length. A skip that stretches without
  *  limit (\centering, \raggedright) lets TeX fill every line but the last and leave that one short; the same skips with
  *  a finite stretch (the page's width in all, halved when both sides stretch) and no \parfillskip make a short line
@@ -821,13 +851,19 @@ export const EVEN_SPACES = '\\makeatletter\\@ifpackageloaded{microtype}{}{\\usep
  *  text is set again in the table of contents, where \parfillskip draws the dotted line */
 export const BALANCE_DEF = String.raw`\protected\def\axtbalance{\ifnum\gluestretchorder\rightskip>0 \ifnum\gluestretchorder\leftskip>0 \leftskip=0pt plus .5\hsize\rightskip=0pt plus .5\hsize\else\rightskip=0pt plus \hsize\fi\parfillskip=0pt\relax\fi}
 `
-export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newdimen\axt@fitwd\newdimen\axt@fitht\newdimen\axt@fittot\newif\ifaxtfitheight\def\axt@tpt{threeparttable}\def\axt@fitmin{0}
+export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newsavebox\axt@widebox\newdimen\axt@fitwd\newdimen\axt@fitht\newdimen\axt@fittot\newdimen\axt@origwd\newdimen\axt@starwd\newif\ifaxtfitheight\def\axt@tpt{threeparttable}\def\axt@fitmin{0}
 \long\def\axtfit#1#2{\ifx\@currenvir\axt@tpt\expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi{#1}{\axt@fit{#1}{#2}}}
 \def\axt@counters{\begingroup\def\@elt##1{\global\csname c@##1\endcsname\the\csname c@##1\endcsname\relax}\xdef\axt@countersback{\cl@@ckpt}\endgroup}
-\long\def\axt@fit#1#2{\axt@counters\sbox\axt@fitbox{#2}\axt@countersback\axt@fitwd=\wd\axt@fitbox\ifdim\axt@fitwd<\linewidth\axt@fitwd=\linewidth\fi
+\long\def\axt@fit#1#2{\axt@counters\sbox\axt@fitbox{#2}\axt@countersback\axt@origwd=\wd\axt@fitbox\axt@fitwd=\axt@origwd\ifdim\axt@fitwd<\linewidth\axt@fitwd=\linewidth\fi
   \axt@fitht=\dimexpr\ht\axt@fitbox+\dp\axt@fitbox\relax\sbox\axt@fitbox{#1}\axt@fittot=\dimexpr\ht\axt@fitbox+\dp\axt@fitbox\relax
   \ifaxtfitheight\ifdim\axt@fitht>\z@\ifdim\axt@fittot>\axt@fitht\axt@fittot=\dimexpr\wd\axt@fitbox*\axt@fitht/\axt@fittot\relax\ifdim\axt@fittot<\axt@fitmin\wd\axt@fitbox\axt@fittot=\axt@fitmin\wd\axt@fitbox\fi\ifdim\axt@fittot<\axt@fitwd\axt@fitwd=\axt@fittot\fi\fi\fi\fi
-  \ifdim\wd\axt@fitbox>\axt@fitwd\ifdefined\resizebox\resizebox{\axt@fitwd}{!}{\usebox\axt@fitbox}\else\usebox\axt@fitbox\fi\else\usebox\axt@fitbox\fi}
+  \ifdim\wd\axt@fitbox>\axt@fitwd\ifdefined\resizebox\sbox\axt@fitbox{\resizebox{\axt@fitwd}{!}{\usebox\axt@fitbox}}\fi\fi
+  \ifdim\wd\axt@fitbox<\axt@origwd\hbox to\axt@origwd{\hss\usebox\axt@fitbox\hss}\else\usebox\axt@fitbox\fi}
+\long\def\axtstar\begin#1#2#3#4\axtstarbody\end#5{\axt@counters\setbox\z@\hbox{\begin{tabular}{#3}#4\end{tabular}}\axt@countersback\axt@starwd=\wd\z@\ifdim\axt@starwd<#2\relax\axt@starwd=#2\relax\fi\begin{tabular*}{\axt@starwd}{#3}#4\end{tabular*}}
+\protected\long\def\axtwide#1{\let\axt@next\@firstofone\ifhmode\ifinner\let\axt@next\axt@wide\fi\fi\axt@next{#1}}
+\long\def\axt@wide#1{\axt@counters\sbox\axt@widebox{#1}\axt@countersback\ifdim\wd\axt@widebox>\linewidth\expandafter\axt@widepar\else\expandafter\@firstofone\fi{#1}}
+\long\def\axt@widepar#1{\parbox[t]{\dimexpr\linewidth-2\tabcolsep\relax}{\centering#1}}
+\AtBeginDocument{\ifdefined\pdfstringdefDisableCommands\pdfstringdefDisableCommands{\def\axtwide#1{#1}}\fi}
 \makeatother
 `
 
@@ -891,7 +927,17 @@ const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]r
  *  tables of contents), not the author block's names, places and notes (typeset again in running heads and the
  *  PDF's metadata, compared by the class, kept as they are for some languages), not table cells, not the texts of a TikZ picture (set through the picture's own transformation,
  *  which a destination's position does not follow) */
-export const markUnits = units => { const id = new Map(units.map((u, i) => [u, i])); return u => (u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.kind === 'author' || u.front ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` }) }
+export const markUnits = (units, translated = null) => {
+  const id = new Map(units.map((u, i) => [u, i]))
+  return u => (u.kind === 'author' ? (translated?.has(u) && fitsWide(u) ? AUTHOR_WIDE : null) : u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.front ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` })
+}
+/** A translated line of names or places goes into \\axtwide (FIT_DEF), all of it — its marks, a \\IEEEauthorrefmark
+ *  after the last name — inside the braces that hold it: in a box that does not wrap (a table's c column, where
+ *  article and IEEEtran set their author blocks) a line the translation made wider than the page is set as a paragraph
+ *  of the line's width instead (2608.06701: Japanese names ran 126 pt past the page). Not one that breaks its own lines
+ *  or holds a note: \\axtwide sets its argument twice to measure it, and a \\thanks set twice is kept twice */
+const AUTHOR_WIDE = { start: '\\axtwide{', end: '}', whole: true }
+const fitsWide = u => !u.pieces.some(p => p.t === 'nested' || (p.t === 'ph' && /\\(?:\\|newline|linebreak|par|thanks|footnote|footnotemark)(?![A-Za-z@])|^\\\\/.test(p.src ?? '')))
 
 /** Goes before \\begin{document} of the original's own compile: the log then says which font families the document set
  *  for its roles, however it set them (its class, a package, a conference style) */

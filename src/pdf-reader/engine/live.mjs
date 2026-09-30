@@ -113,9 +113,9 @@ export function originalFiles({ fsys, project }) {
 export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl }) {
   const xe = strategy.xe
   translated = new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, lineBreaks(u, pieces)]))
-  const base = markUnits(project.units)
+  const base = markUnits(project.units, translated)
   const index = new Map(project.units.map((u, i) => [u, i]))
-  const mark = strategy.leading ? u => { const m = base(u); return m && translated.has(u) ? { ...m, before: `\\axtlead{${index.get(u)}}` } : m } : base
+  const mark = strategy.leading ? u => { const m = base(u); return m && !m.whole && translated.has(u) ? { ...m, before: `\\axtlead{${index.get(u)}}` } : m } : base
   const out = patch(project, translated, { mark })
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
@@ -147,7 +147,10 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 // 3: CJK leading inside translated units alone, their displays at the paper's, and English hyphenation under a CJK
 //    target (scripts.mjs, latex-front.mjs unitLeadTex); the paper's own macros, argument-less declarations and the
 //    author block's names and places cut into units (latex-front.mjs); the wire spaced after a period (mt.mjs)
-export const PIPELINE_VERSION = '3'
+// 4: IEEEtran's blocks of names and of places each a unit; a translated line of names in a box that does not wrap set
+//    as a paragraph of the line's width (\\axtwide); a table narrower than its original kept at the original's width,
+//    and a tabular* measured at its columns' width before it is fitted (latex-front.mjs FIT_DEF, AUTHOR_WIDE)
+export const PIPELINE_VERSION = '4'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
