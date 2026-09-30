@@ -19,7 +19,8 @@
 //   BUILD=<dir> the build under test (default .output/chrome-mv3), LABEL its name in the output; BASE_BUILD=<dir> the one
 //   to compare with (costs);
 //   PAPERS=<dir> the demo papers (default poc-reader/papers); CHECK=<ids> the papers checked (default 2608.02163);
-//   SWEEP=<id:unit,…> the sweeps' papers and the unit each starts at; OPEN=<ids> the papers opened; ROUNDS=<n>
+//   SWEEP=<id:unit,…> the sweeps' papers and the unit each starts at; OPEN=<ids> the papers opened (either `none`);
+//   ROUNDS=<n>
 //   → out/highlight-gate-browser.json
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -33,8 +34,9 @@ const what = process.argv[2] ?? 'all'
 const BUILD = process.env.BUILD ?? join(REPO, '.output/chrome-mv3'), BASE = process.env.BASE_BUILD
 const PAPERS = process.env.PAPERS ?? join(root, 'poc-reader/papers')
 const CHECK = (process.env.CHECK ?? '2608.02163').split(',')
-const SWEEP = (process.env.SWEEP ?? '2608.08350:139,2608.29181:30,2608.06701:17').split(',').map(s => s.split(':')).map(([id, unit]) => [id, Number(unit)])
-const OPEN = (process.env.OPEN ?? '2608.02459,2608.04322').split(',')
+const list = (v, d) => (v === 'none' ? [] : (v ?? d).split(','))
+const SWEEP = list(process.env.SWEEP, '2608.08350:139,2608.29181:30,2608.06701:17').map(s => s.split(':')).map(([id, unit]) => [id, Number(unit)])
+const OPEN = list(process.env.OPEN, '2608.02459,2608.04322')
 const ROUNDS = Number(process.env.ROUNDS ?? 3)
 const result = {}
 let failed = 0

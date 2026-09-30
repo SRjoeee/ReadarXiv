@@ -190,9 +190,9 @@ function makeSide(container) {
   // fit: the fit the side was last given (page-width, page-fit, page-actual), kept as its pane's width changes; null at a scale
   // keeper: the overlays PDF.js removes from a page it draws again, put back (overlay.mjs); laid: each page's figures, by
   // the viewport scale they were laid at
-  // geo: the highlight's geometry (highlight.mjs), made when the side is anchored; at, scrollX, scrollY: where its pane and
+  // geo: the highlight's geometry (highlight.mjs), made after the side is anchored (makeGeo); at, scrollX, scrollY: where its pane and
   // pages are, kept for the pointer (measure); lit: the highlight's elements painted on it
-  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), geo: null, at: null, scrollX: 0, scrollY: 0, lit: [], figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
+  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), geo: null, makeGeo: null, at: null, scrollX: 0, scrollY: 0, lit: [], figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
 }
 const left = makeSide(host.left)
 let right = makeSide(host.right)
@@ -291,7 +291,7 @@ function paint(side) {
   for (const el of side.lit) el.remove()
   side.lit = []
   if (lit == null) return
-  for (const run of runsOf(side.geo, lit)) {
+  for (const run of runsOf(geoOf(side), lit)) {
     const pv = pageView(side, run.page), layer = layerOf(side, run.page)
     if (!layer) continue
     const s = pv.viewport.scale, el = document.createElement('div')
@@ -303,6 +303,8 @@ function paint(side) {
   }
 }
 function light(id) { if (!config.reading.sentenceHighlight) id = null; if (id === lit) return; lit = id; for (const s of sides) paint(s) }
+/** a side's highlight geometry: its layout, made now if the idle time after anchoring has not come yet */
+const geoOf = side => side.geo ?? side.makeGeo?.() ?? null
 
 // The pointer's path: its moves remembered, and in the next animation frame — one per frame, however many moves came —
 // the unit under it found and lit, the pointer's place read before anything is written. Nothing there reads the
@@ -322,7 +324,7 @@ function pointerStep() {
   pointerFrame = 0
   const p = pointer
   if (!p || !config.reading.sentenceHighlight) return
-  const at = pointAt(p.side, p.x, p.y), hit = at && hitOf(p.side.geo, at.page, at.x, at.y, PAD / at.scale)
+  const at = pointAt(p.side, p.x, p.y), hit = at && hitOf(geoOf(p.side), at.page, at.x, at.y, PAD / at.scale)
   pointerHit = hit?.id ?? null
   if (hit) { clearTimeout(missTimer); missTimer = 0; light(hit.id) } else missed()
 }
@@ -659,7 +661,7 @@ function pointOf(side, event) {
 function hitAt(side, event) {
   const at = pointOf(side, event)
   if (!at) return null
-  const hit = hitOf(side.geo, at.page, at.x, at.y, PAD / pageView(side, at.page).viewport.scale)
+  const hit = hitOf(geoOf(side), at.page, at.x, at.y, PAD / pageView(side, at.page).viewport.scale)
   if (!hit) return null
   const { run } = hit
   let line = -1, far = Infinity
@@ -1419,18 +1421,51 @@ export async function pdfBytes(which) {
 /** the units TeX sets away from where the source has them: a caption with its float, a footnote at the foot of its
  *  page, a table's cells, a picture's text (anchors.mjs anchorUnits) */
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
+/** how many sides are being anchored: the highlight's layouts wait for none to be (makeLayouts) */
+let anchoring = 0
 /** every unit located on a side: `texts` is the unit's text as that PDF has it; `marks` null = read them from the PDF */
 async function anchorSide(side, texts, marks) {
+  anchoring++
+  try { return await anchorOne(side, texts, marks) } finally { anchoring--; makeLayouts() }
+}
+async function anchorOne(side, texts, marks) {
   const pages = await textPages(side.doc)
   const doc = tokenizeDocument(pages)
   // the marks it went by, kept on the side: a cached copy keeps the right side's, which cost a second to read from its PDF
   side.marks = marks ?? (await pdfMarks(side.doc))
   const bounds = boundsFromMarks(doc, side.marks)
   index(side, anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(unitKind.get(id)) }))
-  const t0 = performance.now()
-  side.geo = layoutOf(doc, pages.map(p => p.view), side.anchors, id => unitKind.get(id))
-  timing[side === left ? 'leftLayout' : 'rightLayout'] = performance.now() - t0
+  // the highlight's layout, made in the page's idle time once no side is being anchored (makeLayouts), or at once if
+  // the highlight needs it first (geoOf): the sides are anchored and shown without waiting for it
+  const views = pages.map(p => p.view), anchors = side.anchors
+  side.geo = null
+  side.makeGeo = () => {
+    const t0 = performance.now()
+    side.geo = layoutOf(doc, views, anchors, id => unitKind.get(id))
+    side.makeGeo = null
+    layoutsDue.delete(side)
+    timing[side === left ? 'leftLayout' : 'rightLayout'] = performance.now() - t0
+    return side.geo
+  }
+  layoutsDue.add(side)
   return bounds.size
+}
+/** the sides' layouts still to make, one an idle period, none while a side is being anchored: an idle period comes
+ *  while the other side's text is still on its way from PDF.js's worker, and a layout made there held the worker's
+ *  answer back (2608.02459: 7.7 ms a side, cold) */
+const layoutsDue = new Set()
+let layoutsAsked = false
+function makeLayouts() {
+  if (layoutsAsked) return
+  layoutsAsked = true
+  requestIdleCallback(function next(deadline) {
+    layoutsAsked = false
+    const side = layoutsDue.values().next().value
+    if (!side || anchoring) return
+    if (deadline.timeRemaining() < 10) { layoutsAsked = true; requestIdleCallback(next); return }
+    side.makeGeo()
+    makeLayouts()
+  })
 }
 
 // ---------------------------------------------------------------- replacing the right side (#292)
@@ -1556,6 +1591,7 @@ async function replaceRight(url, texts, { draft = false } = {}) {
   container.classList.remove('axt-incoming')
   old.keeper.disconnect()
   measured.unobserve(old.container); measured.unobserve(old.viewer.viewer)
+  layoutsDue.delete(old)
   old.container.remove()
   // the old viewer lets go of its pages (the reader's design, §10.4): its document set to none cancels every page view
   // and their text layers, which PDF.js otherwise keeps in the one map all its text layers share — a viewer per compile
