@@ -169,7 +169,8 @@ function chainOf(win) {
   return { len, prev }
 }
 
-/** the matched document token indices of one unit's tokens, or null; only inside [lo, hi]. `exact`: [lo, hi] are the
+/** the matched document token indices of one unit's tokens (`tokens`), and which unit token each is (`pairs`: unit
+ *  token → document token), or null; only inside [lo, hi]. `exact`: [lo, hi] are the
  *  unit's own first and last token (marks), so every hit inside counts — no densest stretch, no split — and a float
  *  the unit runs around (a full-width table between its two pages) cannot cost it either part */
 function locate(doc, index, ws, lo, hi, exact) {
@@ -225,7 +226,7 @@ function locate(doc, index, ws, lo, hi, exact) {
   }
   edge(anchored[0], -1, -1, Math.max(lo - 1, at.get(anchored[0]) - (anchored[0] * 3 + 20)))
   edge(anchored.at(-1), ws.length, 1, Math.min(hi + 1, at.get(anchored.at(-1)) + (ws.length - anchored.at(-1)) * 3 + 20))
-  return [...at.values()].sort((a, b) => a - b)
+  return { tokens: [...at.values()].sort((a, b) => a - b), pairs: at }
 }
 
 /** tokens → one rectangle per line: same page, baselines within half a line of each other */
@@ -310,6 +311,9 @@ function unitWords(text, gaps) {
  *  stand from those taken; how far a smaller glyph may stand outside them (a limit, a script); and what counts as the
  *  body's size */
 const FIRST = 3.5, ACROSS = 1.6, GAP = 1.2, SMALL = 0.4, BODY = 0.95
+/** a unit's own words at a break: how many of the unit's next words a word is looked for among, and the share of a line's
+ *  words that must be found so (inOrder) */
+const AHEAD = 4, OWN = 0.6
 
 /**
  * The pages' frame, as the located units' words give it: across, where the text's lines begin and end on most pages;
@@ -368,6 +372,36 @@ const explained = (t, letters) => {
   return true
 }
 
+/** a line a display's `letters` explain (explained); the edge's own line needs no explaining */
+const byLetters = (doc, letters) => (ks, edge) => edge || ks.every(j => explained(doc[j].t, letters))
+
+/**
+ * A line of the unit's own words, in the order its text has them: `words` are the unit's words between two of its
+ * matched tokens — the words the text matching left there, at a page or column break — and the lines are met in stream
+ * order after the first of them (`dir` 1) or before the second (-1). Each word of two letters or more on the line is
+ * looked for among the next few of `words` (a word a hyphen cut at the break matches its first or its last part); a
+ * placeholder's single letters and digits pass. The line is the unit's when OWN of its words are found so, and the
+ * edge's own line is (what follows the last matched word on it, before the first: a placeholder's words, a word's half a
+ * hyphen cut). A table's row that shares a word or two with the paragraph does not pass: its words are not the unit's
+ * next ones
+ */
+function inOrder(doc, words, dir) {
+  let p = dir > 0 ? 0 : words.length - 1
+  return (ks, edge) => {
+    let found = 0, all = 0
+    for (const j of ks) {
+      const t = doc[j].t
+      if (!t || (!CJK.test(t) && !/\p{L}{2}/u.test(t.replace(/\p{Script=Greek}/gu, ' ')))) continue
+      all++
+      for (let q = p, n = 0; n < AHEAD && q >= 0 && q < words.length; q += dir, n++) {
+        const w = words[q]
+        if (w === t || (!CJK.test(t) && (dir > 0 ? w.startsWith(t) : w.endsWith(t)))) { found++; p = q + dir; break }
+      }
+    }
+    return edge || (all > 0 && found / all >= OWN)
+  }
+}
+
 /**
  * Takes for unit `u` the words past its edge token `k0` — after it (`dir` 1) or before it (-1) — that are no other
  * unit's: a display beyond its marks. The stream's lines are gathered up to a line another unit's words are on, a new
@@ -391,7 +425,7 @@ function walker(doc, ms, owner, line) {
   }
   const body = new Float64Array(ms.length)
   const bodyOf = u => { if (!body[u]) { const hs = ms[u].map(k => doc[k].h).sort((x, y) => x - y); body[u] = hs[hs.length >> 1] } return body[u] }
-  function take(u, k0, dir, first, letters) {
+  function take(u, k0, dir, first, fits) {
     const A = doc[k0], h = bodyOf(u), lines = []
     for (let k = k0 + dir, end = false; !end && k >= 0 && k < doc.length;) {
       const l = line[k], ks = []
@@ -400,9 +434,9 @@ function walker(doc, ms, owner, line) {
         if (t.page !== A.page || (owner[k] !== -1 && owner[k] !== u) || (dir > 0 ? t.y > A.y + 0.5 * A.h : t.y < A.y - 0.5 * A.h) || !inFrame(t)) { end = true; break }
         ks.push(k)
       }
-      // the edge's own line is the unit's: what follows its last word there, and the scripts of its last formula a little
-      // above or below it, need no explaining
-      if (!ks.length || (lineOwner[l] !== -1 && lineOwner[l] !== u) || (letters != null && Math.abs(doc[ks[0]].y - A.y) >= 0.5 * A.h && !ks.every(j => explained(doc[j].t, letters)))) break
+      // `fits` says whether the line can be the unit's; the edge's own line is told apart (within half a line of it: the
+      // scripts of its last formula a little above or below)
+      if (!ks.length || (lineOwner[l] !== -1 && lineOwner[l] !== u) || (fits && !fits(ks, Math.abs(doc[ks[0]].y - A.y) < 0.5 * A.h))) break
       let top = -Infinity, bottom = Infinity, body = false
       for (const j of ks) { const t = doc[j]; top = Math.max(top, t.top); bottom = Math.min(bottom, t.bottom); body ||= t.h >= BODY * h }
       lines.push({ ks, top, bottom, body })
@@ -419,7 +453,7 @@ function walker(doc, ms, owner, line) {
   }
   return {
     take,
-    claim(u, k0, dir, first, letters) { const ks = take(u, k0, dir, first, letters); for (const k of ks) { owner[k] = u; own(k, u) } return ks },
+    claim(u, k0, dir, first, fits) { const ks = take(u, k0, dir, first, fits); for (const k of ks) { owner[k] = u; own(k, u) } return ks },
   }
 }
 
@@ -455,17 +489,19 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
     // paragraph beside it that has the same words (2608.02163 in Chinese: a heading of four characters the text
     // around it keeps using)
     let m = !b && bounds?.size && ws.length && !floating(id) ? inRow(doc, ws, before[u] + 1, after[u] - 1, true, gap) : null
-    if (!m && ws.length >= K && lo <= hi) m = locate(doc, index, ws, lo, hi, !!b)
+    let pairs = null
+    const located = (...args) => { const r = locate(...args); if (r) pairs = r.pairs; return r?.tokens ?? null }
+    if (!m && ws.length >= K && lo <= hi) m = located(doc, index, ws, lo, hi, !!b)
     // a float's text too short for 3-grams (a table's cell of one or two words): the words in a row, once, in the gap
     // between its located neighbours alone
     if (!m && !b && ws.length && ws.length < K && bounds?.size) m = inRow(doc, ws, before[u] + 1, after[u] - 1, false, gap)
     // a float's text that is not there: its float may stand anywhere, so the whole document, as with no marks at all —
     // the words of a located unit are that unit's (owner, below)
-    if (!m && !b && ws.length >= K && bounds?.size && floating(id)) m = locate(doc, index, ws, 0, doc.length - 1, false)
+    if (!m && !b && ws.length >= K && bounds?.size && floating(id)) m = located(doc, index, ws, 0, doc.length - 1, false)
     // a run takes a placeholder's words besides the unit's own, which are all there
     const coverage = m ? Math.min(1, m.length / ws.length) : 0
     if (!b && (!m || coverage < minCoverage)) { found.push(null); return }
-    found.push({ m: m ?? [], coverage, bounded: b })
+    found.push({ m: m ?? [], coverage, bounded: b, ws, pairs })
   })
   // who owns each token: a marked unit its whole range, the innermost range winning (a footnote inside a paragraph
   // is the footnote's); an unmarked unit its matched words
@@ -513,8 +549,14 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
   for (const edge of ['lead', 'trail']) {
     units.forEach((unit, u) => {
       const b = found[u]?.bounded
-      if (b && ms[u] && typeof unit[edge] === 'string') beyond[u] = (beyond[u] ?? []).concat(walk.claim(u, edge === 'lead' ? b[0] : b[1], edge === 'lead' ? -1 : 1, FIRST, unit[edge]))
+      if (b && ms[u] && typeof unit[edge] === 'string') beyond[u] = (beyond[u] ?? []).concat(walk.claim(u, edge === 'lead' ? b[0] : b[1], edge === 'lead' ? -1 : 1, FIRST, byLetters(doc, unit[edge])))
     })
+  }
+  /** the unit's words between two of its tokens in the document, as its text has them: none were matched there */
+  const wordsBetween = (f, a, b) => {
+    let i = -1, j = f.ws.length
+    if (f.pairs) for (const [w, k] of f.pairs) { if (k === a) i = w; if (k === b) j = w }
+    return i < j ? f.ws.slice(i + 1, j) : []
   }
   const out = new Map()
   units.forEach(({ id }, u) => {
@@ -531,14 +573,22 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
       if (n + 1 === m.length) continue
       const A = doc[m[n]], B = doc[m[n + 1]]
       if (between(doc, owner, u, m[n], m[n + 1])) for (k++; k < m[n + 1]; k++) idx.push(k)
-      // a unit with a display between its words (latex-front's `inner`: its letters) goes on over a page or at the
-      // head of the next column: what stands below the one word on its page, and above the other on its own, that the
-      // display's letters or the unit's own words explain — the display's parts, the words about them the text did not
-      // match; not the page's head and foot, a footnote, a float (walker). A unit with no display there has nothing to
-      // fill: a table of its size a float's skip away would be taken
-      else if (f.bounded && typeof units[u].inner === 'string' && (A.page !== B.page || B.y > A.y + A.h * 0.6)) {
-        const letters = `${units[u].inner} ${(units[u].text ?? '').normalize('NFKC').toLowerCase()}`
-        const down = walk.take(u, k, 1, ACROSS, letters), up = walk.take(u, m[n + 1], -1, ACROSS, letters)
+      // the unit goes on over a page or at the head of the next column: what stands below the one word on its page,
+      // and above the other on its own — not the page's head and foot, a footnote, a float (walker). With a display
+      // between its words (latex-front's `inner`: its letters), the lines those letters or the unit's own words explain:
+      // the display's parts, the words about them; without, the unit's own words the text did not match there, in their
+      // order (inOrder): a column's last words, a word a hyphen cut over the page. Anything else of the unit's size a
+      // float's skip away would be taken — a table
+      else if (f.bounded && (A.page !== B.page || B.y > A.y + A.h * 0.6)) {
+        const inner = units[u].inner
+        let down, up
+        if (typeof inner === 'string') {
+          const fits = byLetters(doc, `${inner} ${(units[u].text ?? '').normalize('NFKC').toLowerCase()}`)
+          down = walk.take(u, k, 1, ACROSS, fits); up = walk.take(u, m[n + 1], -1, ACROSS, fits)
+        } else {
+          const words = wordsBetween(f, m[n], m[n + 1])
+          down = walk.take(u, k, 1, ACROSS, inOrder(doc, words, 1)); up = walk.take(u, m[n + 1], -1, ACROSS, inOrder(doc, words, -1))
+        }
         const last = down.at(-1) ?? k
         idx.push(...down.filter(j => j < m[n + 1]), ...up.filter(j => j > last).reverse())
       }

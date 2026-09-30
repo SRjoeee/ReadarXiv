@@ -219,6 +219,33 @@ describe('anchorUnits: a unit with no text', () => {
   })
 })
 
+describe('anchorUnits: a unit\'s own words across a page or column break (fix round 2 of the review of A1)', () => {
+  const line = (s: string, x: number, y: number) => [item(s, x, y, { width: 200, eol: true })]
+  // the page's number first in the stream: after a word a hyphen cuts at the page's end, the tokenizer would join it
+  const pageOf = (n: number, lines: Item[][]) => ({ page: n, items: [item(String(n), 150, 62, { eol: true }), ...lines.flat()], styles: {} })
+  const words = (doc: DocToken[], f: { tokens: number[] } | null | undefined) => f?.tokens.map(k => doc[k]?.t)
+
+  it('a word a hyphen cut over a page: both halves are the unit\'s', () => {
+    const pages = [pageOf(1, [line('the paragraph before it', 50, 700), line('we have to gen-', 50, 100)]), pageOf(2, [line('erate the text again here', 50, 700), line('another paragraph after', 50, 676)])]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string) => doc.findIndex(d => d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'we have to generate the text again here' }, { id: 2, text: 'another paragraph after' }]
+    const found = anchorUnits(doc, units, { bounds: new Map([['0', [0, 3]], ['1', [at('we'), at('here')]], ['2', [at('another'), at('after')]]]) })
+    expect(words(doc, found.get(1))).toEqual(['we', 'have', 'to', 'gen', 'erate', 'the', 'text', 'again', 'here'])
+  })
+
+  it('the words a placeholder set at a column\'s end are the unit\'s; a table\'s row at the next column\'s head sharing its word is not', () => {
+    // the text has the placeholder's place only (\\swe{}~\\cite{…}); the page has its words, after the column's last matched word
+    const pages = [pageOf(1, [line('the paragraph before it', 50, 700), line('an example where the plan', 50, 676), line('was originally resolved by SWE-agent [37]', 50, 100),
+      line('resolved model score', 300, 720), line('ours 91 12', 300, 708), line('with a model', 300, 690), line('another paragraph after', 300, 666)]), pageOf(2, [line('more words on the next page', 50, 700)])]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'an example where the plan was originally resolved by with a model' }, { id: 2, text: 'another paragraph after' }, { id: 3, text: 'more words on the next page' }]
+    const found = anchorUnits(doc, units, { bounds: new Map([['0', [0, 3]], ['1', [at('an'), at('model', at('with'))]], ['2', [at('another'), at('after')]], ['3', [at('more'), at('page')]]]) })
+    expect(words(doc, found.get(1))).toEqual(['an', 'example', 'where', 'the', 'plan', 'was', 'originally', 'resolved', 'by', 'swe', 'agent', '37', 'with', 'a', 'model'])
+  })
+})
+
 describe('anchorUnits: a unit\'s display across a page break', () => {
   it('a unit with no display between its words fills nothing across the break: a table of its size at the next page\'s head, 12 pt, a float\'s skip shrunk to 16 pt (the review of A1, M1)', () => {
     const big = (str: string, x: number, y: number, eol = false) => ({ str, transform: [12, 0, 0, 12, x, y], width: str.length * 6, height: 12, hasEOL: eol, fontName: 'f' })
