@@ -8,7 +8,7 @@ const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok 
 
 check('corpus sizes', PAPERS.zh.length === 25 && ['ja', 'ko', 'de', 'ru'].every(l => PAPERS[l].length === 8))
 check('parameters per language', PARAMS.zh.em === 1.3 && PARAMS.ja.min === 1.05 && PARAMS.de.em === 1.05 && PARAMS.ru.min === 1)
-check('column labels', COLUMNS.map(c => c.label).join('|') === "Original|FIT|Generic|Flow, first|Flow|Locked (H rules)|H")
+check('column labels', COLUMNS.map(c => c.label).join('|') === "Original|FIT|Generic|Flow, first|Flow|Flow, even|Locked (H rules)|H")
 
 const s = suspiciousPages({
   events: { breaks: [{ page: 4 }], gaps: [{ page: 2, pt: 10 }, { page: 3, pt: 40 }, { page: 3, pt: 30 }] },
