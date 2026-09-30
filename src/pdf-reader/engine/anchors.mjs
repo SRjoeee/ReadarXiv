@@ -8,7 +8,10 @@
 
 // CJK: unified ideographs with extension A, compatibility ideographs, kana, Hangul syllables. Written as escapes: typed as
 // characters, the compatibility range's first (U+F900) was normalized into the unified U+8C48, and the range ran on over
-// U+A000–U+F8FF — the private-use area with it, a bracket's pieces read as CJK words, and surrogates for this pattern
+// U+A000–U+F8FF — the private-use area with it, a bracket's pieces read as CJK words, and surrogates for this pattern.
+// What the spans hold that is no letter or digit is no token, as outside them (125 code points: the katakana middle dot
+// U+30FB between a compound's words, the sound marks U+3099–U+309C, U+30A0, the hexagrams U+4DC0–U+4DFF, and unassigned
+// ones): punctuation, dropped alike on both sides
 const CJK_SPANS = [[0x3400, 0x9fff], [0xf900, 0xfaff], [0x3040, 0x30ff], [0xac00, 0xd7af]]
 const CJK = new RegExp(`[${CJK_SPANS.map(([a, b]) => `\\u${a.toString(16)}-\\u${b.toString(16)}`).join('')}]`, 'u')
 const isCJK = c => CJK_SPANS.some(([a, b]) => c >= a && c <= b)

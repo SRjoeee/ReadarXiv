@@ -32,6 +32,10 @@ describe('tokens: a run of Latin letters or digits ends where a CJK character be
     expect(tokenizeDocument([{ page: 1, items: [item('\uf8f1', 50, 700), item('x', 60, 700, { eol: true })], styles: {} }]).map(t => t.t)).toEqual(['x'])
   })
 
+  it('a mark that is no letter inside the CJK spans is no token: the katakana middle dot between a compound\'s words (the re-review of A1, m4)', () => {
+    expect(tokens('ニューラル・ネット').map(t => t.t)).toEqual(['ニ', 'ュ', 'ー', 'ラ', 'ル', 'ネ', 'ッ', 'ト'])
+  })
+
   it('a figure number or a name before CJK text is a token of its own', () => {
     expect(tokens('图3显示NTK块矩').map(t => t.t)).toEqual(['图', '3', '显', '示', 'ntk', '块', '矩'])
     // after CJK, and between Latin words, as before
