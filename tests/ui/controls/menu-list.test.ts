@@ -145,7 +145,7 @@ describe('MenuList: the active row stays in view (the final review of Part 7, A-
   afterEach(() => { vi.restoreAllMocks() })
 
   it('the arrows past the rows that show scroll the list to the active one, and back; a row already in view leaves it where it is', async () => {
-    // the popup's language list: a search field over a list five rows and a half tall
+    // the language list of the popup and the settings page: a search field over a list five rows and a half tall (ui.css)
     const { container } = await mount(LANGUAGES, { search: 'Search' })
     const field = container.querySelector<HTMLInputElement>('input')!
     const list = container.querySelector<HTMLElement>('[role="listbox"]')!

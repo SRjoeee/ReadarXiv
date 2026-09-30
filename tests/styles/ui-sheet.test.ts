@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ruleOf, rules } from './css-rules'
+import { ruleOf, rules, sheet } from './css-rules'
 
 const SHEET = readFileSync(join(import.meta.dirname, '../../src/styles/ui.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
 
@@ -14,6 +14,21 @@ describe('ui.css', () => {
 
   it('holds no token of the old pages: every colour a role of the generated sheet', () => {
     expect(SHEET).not.toMatch(/--axt-|--color-(bg|card|fg|fg-2|control|accent|accent-soft):|--radius-(card|control)|--font-ui/)
+  })
+})
+
+// The language list, one for the popup and the settings page (the maintainer, 2026-09-30): under its search field, five
+// rows and a half in a box of its own, so that the field stays in view as the list scrolls to its active row
+describe('ui.css: a list under a search field', () => {
+  const all = rules(SHEET)
+
+  it('is five rows and a half, scrolling in its own box, keyed on MenuList\'s markup and not on one page\'s class', () => {
+    expect(ruleOf(all, '.pop .search ~ [role="listbox"]', ['@layer components'])).toEqual({ 'max-height': '165px', overflow: 'auto', 'scrollbar-width': 'none' })
+  })
+
+  it('is the only cap on a menu\'s list among the pages\' sheets: the popup\'s is gone, the settings page adds none', () => {
+    const pages = rules(sheet('../../src/entrypoints/popup/popup.css', '../../src/entrypoints/options/ui/settings.css', '../../src/styles/controls.css'))
+    expect(pages.filter(r => /\[role="(listbox|menu)"\]/.test(r.selector) && /max-height/.test(r.body)).map(r => r.selector)).toEqual([])
   })
 })
 

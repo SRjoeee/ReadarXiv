@@ -33,3 +33,12 @@
   .ui :is(input, textarea):focus-visible { outline-offset: 0; }
   html[data-axt-pointer] .ui :is(input, textarea):focus-visible { outline: none; }
 }
+
+/* a list under a search field (the language menu, the popup's and the settings page's alike): five rows and a half,
+   the half saying there is more (round 1). The list scrolls in a box of its own, so that the field above it never
+   leaves the view as the active row is brought into it (MenuList's reveal). Keyed on MenuList's own markup, the field
+   drawn before the list; here and not in controls.css, which the PDF reader imports alone: its nine languages are
+   not capped (the maintainer, 2026-09-30) */
+@layer components {
+  .pop .search ~ [role="listbox"] { max-height: 165px; overflow: auto; scrollbar-width: none; }
+}

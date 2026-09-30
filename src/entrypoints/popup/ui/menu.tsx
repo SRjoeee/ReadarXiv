@@ -73,7 +73,7 @@ function MenuPopover({ kind, menu, up, pop, painted, onPick, onAction, onClose }
   onClose: () => void
 }) {
   return (
-    <Popover {...pop.popover} role="listbox" label={menu.label} className={['menu', up && 'up', menu.search && 'searching'].filter(Boolean).join(' ')}>
+    <Popover {...pop.popover} role="listbox" label={menu.label} className={up ? 'menu up' : 'menu'}>
       {painted && (
         <MenuList
           key={pop.generation}

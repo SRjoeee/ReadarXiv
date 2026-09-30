@@ -13,8 +13,9 @@ import { useMenuNav } from '@/ui/menu-nav'
 import { Icon } from './Icon'
 
 /**
- * A row brought into view inside the scroll boxes between it and `stop` (its popover): the list capped at five rows and a
- * half in the popup, the popover itself past its height. `scrollIntoView`'s "nearest" — a row already in view stays where
+ * A row brought into view inside the scroll boxes between it and `stop` (its popover): the list under a search field,
+ * capped at five rows and a half on the popup and the settings page (ui.css), the popover itself past its height (the
+ * reader's lists, and any other). `scrollIntoView`'s "nearest" — a row already in view stays where
  * it is, one out of view comes to the nearer edge — confined to those boxes: `scrollIntoView` also scrolls every ancestor
  * (the settings page, the popup's body), and its `container` option is newer than Chrome 131, the floor
  */
