@@ -247,9 +247,10 @@ function inRow(doc, ws, lo, hi, last, gap) {
 }
 const FOREIGN = 8
 const SLOT = '\uFFFC'
-/** a unit's words, and before which of them a placeholder stood (`gaps`, offsets in its text: mt.mjs unitText) */
-function unitWords(text = '', gaps) {
-  if (!gaps?.length) return { ws: tokens(text).map(x => x.t), gap: null }
+/** a unit's words, and before which of them a placeholder stood (`gaps`, offsets in its text: mt.mjs unitText); a
+ *  unit with no text (null: a cell a run left untranslated, as the spikes pass it) has none */
+function unitWords(text, gaps) {
+  if (!gaps?.length || !text) return { ws: tokens(text ?? '').map(x => x.t), gap: null }
   let s = text
   for (let g = gaps.length - 1; g >= 0; g--) s = s.slice(0, gaps[g]) + SLOT + s.slice(gaps[g])
   const n = s.normalize('NFKC').toLowerCase(), ts = tokens(s), gap = new Uint8Array(ts.length)

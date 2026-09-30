@@ -149,3 +149,12 @@ describe('anchorUnits: a display outside a unit\'s marks is the unit\'s', () => 
     expect(found.get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['it', 'ends', 'with', 'a', 'display', 'x', 'y', 'i', '1'])
   })
 })
+
+describe('anchorUnits: a unit with no text', () => {
+  it('is not found, and the others are (a cell the translation left untranslated has no text: gt-eval, 2608.04322)', () => {
+    const doc = tokenizeDocument([page([['some', 'words', 'here']])])
+    const found = anchorUnits(doc, [{ id: 0, text: null as unknown as string }, { id: 1, text: 'some words here' }])
+    expect(found.get(0)).toBeNull()
+    expect(found.get(1)?.tokens).toEqual([0, 1, 2])
+  })
+})
