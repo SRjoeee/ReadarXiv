@@ -30,6 +30,7 @@ import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
+import { blockOf, hitOf, layoutOf, pageGeometry, runsOf } from './highlight.mjs'
 import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
@@ -189,7 +190,8 @@ function makeSide(container) {
   // fit: the fit the side was last given (page-width, page-fit, page-actual), kept as its pane's width changes; null at a scale
   // keeper: the overlays PDF.js removes from a page it draws again, put back (overlay.mjs); laid: each page's figures, by
   // the viewport scale they were laid at
-  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), byPage: new Map(), figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
+  // geo: the highlight's geometry (highlight.mjs), made when the side is anchored; lit: the highlight's elements painted on it
+  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), geo: null, lit: [], figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
 }
 const left = makeSide(host.left)
 let right = makeSide(host.right)
@@ -212,7 +214,7 @@ async function open(side, url) {
 // ---------------------------------------------------------------- anchors
 async function textPages(doc) {
   const pages = []
-  for (let p = 1; p <= doc.numPages; p++) { const tc = await (await doc.getPage(p)).getTextContent(); pages.push({ page: p, items: tc.items, styles: tc.styles }) }
+  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p), tc = await pg.getTextContent(); pages.push({ page: p, items: tc.items, styles: tc.styles, view: pg.view }) }
   return pages
 }
 /** the named destinations of our marks (axt-<unit>s / axt-<unit>e) in a PDF, as { page, x, y } */
@@ -239,8 +241,6 @@ async function pdfFrames(doc) {
 function index(side, anchors) {
   side.anchors = anchors
   side.groups = null
-  side.byPage = new Map()
-  for (const [id, a] of anchors) if (a) a.rects.forEach((r, k) => (side.byPage.get(r.page) ?? side.byPage.set(r.page, []).get(r.page)).push({ id, r, k }))
 }
 
 // ---------------------------------------------------------------- geometry: PDF units ↔ positions in a container
@@ -262,42 +262,41 @@ function unitTop(side, id) {
 }
 
 // ---------------------------------------------------------------- highlight
+// What a unit paints and where the pointer lights it are one geometry (highlight.mjs): a block per run of the unit —
+// one page and one column of it — across its rows inside the column's text edges, padded half the leading above and
+// below and PAD beside; a point lights the unit whose block holds it, the smallest where blocks overlap. So a pointer
+// anywhere on what is lit keeps it lit, over a formula as over its words (report-A: 43–50 % of a display unit's wash
+// turned it off). The look is the draft's (round 1 of the highlight, 2026-10-01), multiplied into the page as the HTML
+// page's band is (engine.css)
 let lit = null
 /** how many times each of the right side's pages had its figures laid (paintFigures), for the probes */
 const paints = new Map()
+/** the pad beside a block, in CSS pixels */
+const PAD = 3
+/** the highlight's layer of a page, over its text layer (engine.css), made on first use and kept through PDF.js's
+ *  redraws (keepOverlays) */
+function layerOf(side, page) {
+  const pv = pageView(side, page)
+  if (!pv?.div) return null
+  let layer = pv.div.querySelector(':scope > .axt-hl-layer')
+  if (!layer) { layer = document.createElement('div'); layer.className = 'axt-hl-layer'; pv.div.append(layer) }
+  return layer
+}
+/** the lit unit's blocks on a side, written only: every number comes from the geometry and the pages' viewports */
 function paint(side) {
-  for (const layer of side.container.querySelectorAll('.axt-hl-layer')) layer.replaceChildren()
+  for (const el of side.lit) el.remove()
+  side.lit = []
   if (lit == null) return
-  const a = side.anchors.get(lit)
-  if (!a) return
-  for (const r of blocksOf(a.rects)) {
-    const pv = pageView(side, r.page)
-    if (!pv?.div) continue
-    let layer = pv.div.querySelector(':scope > .axt-hl-layer')
-    if (!layer) { layer = document.createElement('div'); layer.className = 'axt-hl-layer'; pv.div.append(layer) }
-    const box = toPageBox(side, r), el = document.createElement('div')
+  for (const run of runsOf(side.geo, lit)) {
+    const pv = pageView(side, run.page), layer = layerOf(side, run.page)
+    if (!layer) continue
+    const s = pv.viewport.scale, el = document.createElement('div')
     el.className = 'axt-hl'
     // scaled with the page while a pinch lasts (overlay.mjs pinned)
-    Object.assign(el.style, pinned({ left: box.left - 4, top: box.top - 3, width: box.width + 8, height: box.height + 6 }, pv.viewport.scale))
+    Object.assign(el.style, pinned(toPageBox(side, blockOf(run, PAD / s)), s))
     layer.append(el)
+    side.lit.push(el)
   }
-}
-/**
- * A unit's lines as blocks: one per run of them down one column of one page, from the run's first line to its last and
- * across its widest, so that a paragraph reads as one wash behind its text, as on the HTML page, not as a selection of
- * lines with gaps between them (the owner, 2026-09-23). A line starts a new block on another page, in another column
- * (its span across the page no longer overlapping the block's), or far below the block (a large display between)
- */
-function blocksOf(rects) {
-  const out = []
-  for (const r of rects) {
-    const b = out.at(-1), h = r.y1 - r.y0
-    const across = b && Math.min(b.x1, r.x1) - Math.max(b.x0, r.x0)
-    if (b && b.page === r.page && across > 0.3 * Math.min(b.x1 - b.x0, r.x1 - r.x0) && r.y1 <= b.y1 + h && b.y0 - r.y1 < 6 * h) {
-      b.x0 = Math.min(b.x0, r.x0); b.x1 = Math.max(b.x1, r.x1); b.y0 = Math.min(b.y0, r.y0)
-    } else out.push({ page: r.page, x0: r.x0, x1: r.x1, y0: r.y0, y1: r.y1 })
-  }
-  return out
 }
 function light(id) { if (!config.reading.sentenceHighlight) id = null; if (id === lit) return; lit = id; for (const s of sides) paint(s) }
 
@@ -594,20 +593,24 @@ function pointOf(side, event) {
   const [x, y] = pv.viewport.convertToPdfPoint(event.clientX - box.left - pageDiv.clientLeft, event.clientY - box.top - pageDiv.clientTop)
   return { page, x, y }
 }
-/** the unit under a pointer event, the line of it (its rect's index) and how far down that line */
+/** the unit a click is on — the one lit there (hitOf) —, the line of it (its rect's index: the one at the click's
+ *  height in the block's column, else the nearest there) and how far down that line */
 function hitAt(side, event) {
   const at = pointOf(side, event)
   if (!at) return null
-  const m = 2
-  let hit = null
-  for (const { id, r, k } of side.byPage.get(at.page) ?? []) {
-    if (at.x < r.x0 - m || at.x > r.x1 + m || at.y < r.y0 - m || at.y > r.y1 + m) continue
-    const area = (r.x1 - r.x0) * (r.y1 - r.y0)
-    if (!hit || area < hit.area) hit = { id, line: k, f: Math.min(1, Math.max(0, (r.y1 - at.y) / Math.max(1, r.y1 - r.y0))), area }
-  }
-  return hit
+  const hit = hitOf(side.geo, at.page, at.x, at.y, PAD / pageView(side, at.page).viewport.scale)
+  if (!hit) return null
+  const { run } = hit
+  let line = -1, far = Infinity
+  side.anchors.get(hit.id)?.rects.forEach((r, k) => {
+    if (r.page !== at.page || r.x1 < run.x0 || r.x0 > run.x1) return
+    const d = at.y > r.y1 ? at.y - r.y1 : at.y < r.y0 ? r.y0 - at.y : 0
+    if (d < far) { far = d; line = k }
+  })
+  if (line < 0) return null
+  const r = side.anchors.get(hit.id).rects[line]
+  return { id: hit.id, line, f: Math.min(1, Math.max(0, (r.y1 - at.y) / Math.max(1, r.y1 - r.y0))) }
 }
-const unitAt = (side, event) => hitAt(side, event)?.id ?? null
 
 // ---------------------------------------------------------------- scroll sync
 // Only the side the reader is scrolling drives the other: the one last touched by wheel, touch, keys or a press on
@@ -1268,7 +1271,7 @@ function attach(side) {
     clearTimeout(follow.rest)
     follow.rest = setTimeout(() => { follow.rest = 0; alignTop(side) }, 150)
   }, { passive: true })
-  side.container.addEventListener('mousemove', e => light(unitAt(side, e)))
+  side.container.addEventListener('mousemove', e => light(hitAt(side, e)?.id ?? null))
   side.container.addEventListener('mouseleave', () => light(null))
   // A click, told apart from a drag that selects text, by the pointer's press and release: PDF.js moves its selection
   // helper (the text layer's endOfContent) under the pointer on the press, and a press whose target moves gets no
@@ -1285,6 +1288,8 @@ function attach(side) {
   side.eventBus.on('pagerendered', ({ pageNumber }) => {
     if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start
     paint(side)
+    // the page's highlight geometry, on its first drawing (a page never drawn never needs it)
+    if (side.geo) pageGeometry(side.geo, pageNumber)
     // figures laid once per page: kept through a redraw (keepOverlays), scaled with it (pinned); a draft preview's
     // copies of the left's figures are bitmaps drawn for one scale, and are drawn again at another
     const at = side.laid.get(pageNumber)
@@ -1357,6 +1362,9 @@ async function anchorSide(side, texts, marks) {
   side.marks = marks ?? (await pdfMarks(side.doc))
   const bounds = boundsFromMarks(doc, side.marks)
   index(side, anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(unitKind.get(id)) }))
+  const t0 = performance.now()
+  side.geo = layoutOf(doc, pages.map(p => p.view), side.anchors, id => unitKind.get(id))
+  timing[side === left ? 'leftLayout' : 'rightLayout'] = performance.now() - t0
   return bounds.size
 }
 
@@ -1516,7 +1524,7 @@ async function marksOfPdf(bytes) {
   try { return markWords(tokenizeDocument(await textPages(doc)), await pdfMarks(doc)) } finally { task.destroy() }
 }
 /** the test harness's hooks (spikes/*): the sides, the anchoring's and the sync's helpers, the cache's; getters stay live */
-const harness = () => ({ left, get right() { return right }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
+const harness = () => ({ left, get right() { return right }, get lit() { return lit }, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
   // the right side replaced by a copy of what it shows, as a new compile replaces it (replaceRight)
   paintsOf: n => paints.get(n) ?? 0,
   paperContext: () => paperCtx,
