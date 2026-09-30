@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MIXED, atLeastAsGood, isCurrent, unitIsCurrent, type CachedUnit, type PdfRecordBody } from '@/cache/pdf-record'
+import { MIXED, atLeastAsGood, isCurrent, stillUntypeset, unitIsCurrent, type CachedUnit, type PdfRecordBody } from '@/cache/pdf-record'
 
 const now = { identity: 'B', pipeline: '2' }
 const unit = (u: Partial<CachedUnit>): CachedUnit => ({ kind: 'para', src: 's', hash: 'h', state: 'whole', by: 'B', tried: 'B', ...u })
@@ -50,5 +50,18 @@ describe('atLeastAsGood', () => {
     const withKept = record([...current.units, unit({ state: 'kept', by: undefined, tried: undefined })])
     expect(atLeastAsGood(withKept, current, now)).toBe(true)
     expect(atLeastAsGood(current, withKept, now)).toBe(true)
+  })
+})
+
+// A paper none of the ways of typesetting could set is said again without asking the service or the TeX page (the
+// maintainer, 2026-09-26) — only when the same service would be asked for the same translation: the failure is the
+// translated text's, which another service, model or prompt may not repeat (Codex on #306)
+describe('stillUntypeset', () => {
+  it('holds under the same pipeline and the same identity', () => expect(stillUntypeset({ pipeline: '2', identity: 'B' }, now)).toBe(true))
+  it('not under another identity: another service, model or prompt is asked', () => expect(stillUntypeset({ pipeline: '2', identity: 'A' }, now)).toBe(false))
+  it('not under another pipeline: a new one tries once more', () => expect(stillUntypeset({ pipeline: '1', identity: 'B' }, now)).toBe(false))
+  it('not for a mark written before the identity was kept, nor for none', () => {
+    expect(stillUntypeset({ pipeline: '2' }, now)).toBe(false)
+    expect(stillUntypeset(undefined, now)).toBe(false)
   })
 })

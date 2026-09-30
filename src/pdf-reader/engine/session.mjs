@@ -13,7 +13,7 @@
 // sink for its events. What the prototype's header controls did, it now exports as commands; what it wrote into the
 // header, it reports as events (session.d.mts). The controller (../controller.ts) is its only caller.
 import { createPdfStore } from '@/cache/pdf-store'
-import { isCurrent } from '@/cache/pdf-record'
+import { isCurrent, stillUntypeset } from '@/cache/pdf-record'
 import { lookOf } from '@/config/appearance'
 import { toBcp47 } from '@/config/languages'
 import { htmlUrlOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
@@ -1620,9 +1620,6 @@ async function live() {
       figureEntries = new Map()
     }
   }
-  // a paper none of this pipeline's ways could set, on this machine before: said again, the service and the TeX page
-  // asked for nothing; a new pipeline tries once more (the maintainer, 2026-09-26)
-  if (!cached && cacheKey && (await pdfCache.untypeset(digest, lang0)) === PIPELINE_VERSION) return fail('cannot typeset', `${paper} could not be typeset into ${lang0} on this machine before: the right side shows the original`)
   if (cached) {
     total = cached.units.filter(u => u.state !== 'kept').length; got = total
     window.__reader.debug = Object.assign(harness(), { units: cached.units.map((u, i) => ({ i, kind: u.kind, text: u.src })) })
@@ -1719,6 +1716,11 @@ async function live() {
       L.done = true
       return
     }
+    // a paper none of this pipeline's ways could set, on this machine before: said again, the service and the TeX page
+    // asked for nothing; a new pipeline tries once more (the maintainer, 2026-09-26). Only once the extension has said
+    // which service would translate, and only for the same one: the failure was its translation's, which another
+    // service, model or prompt may not repeat (Codex on #306)
+    if (!cached && cacheKey && stillUntypeset(await pdfCache.untypeset(cacheKey.digest, cacheKey.lang), { identity: engine.identity, pipeline: PIPELINE_VERSION })) return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
     // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
     if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
     // the decision to translate, the step the controller's phase moves at: a copy on screen is translated again, and
@@ -1768,9 +1770,10 @@ async function live() {
     await swaps
     // every way of setting it tried and failed, a whole translation in hand and nothing on screen (the maintainer,
     // 2026-09-26). Remembered, so that a visit again asks nothing of the service, only when the paper's own source set
-    // here: a TeX error from a compiler whose files were not there says nothing of the paper, and is tried again (Codex)
+    // here: a TeX error from a compiler whose files were not there says nothing of the paper, and is tried again (Codex).
+    // With the identity that would answer now, as a copy is written: the mark holds for that service alone (Codex on #306)
     if (result.exhausted && !result.stopped && !compiledOnce && !cached) {
-      if (cacheKey && result.originalOk) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, PIPELINE_VERSION)
+      if (cacheKey && result.originalOk) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION })
       note('done', result)
       return fail('cannot typeset', `None of the ways of typesetting ${paper} into ${lang} worked: the right side shows the original`)
     }

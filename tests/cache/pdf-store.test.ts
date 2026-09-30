@@ -125,13 +125,23 @@ describe('createPdfStore', () => {
     await expect(s.patchFigures('d', 'zh-CN', [])).resolves.toBeUndefined()
   })
 
-  it('remembers a paper that could not be typeset, by version and language and the pipeline that tried; clear forgets it (the maintainer, 2026-09-26)', async () => {
-    const s = createPdfStore({ db: dbOf() })
+  it('remembers a paper that could not be typeset, by version and language, with the pipeline that tried and the identity whose translation it was; clear forgets it (the maintainer, 2026-09-26; Codex on #306)', async () => {
+    const db = dbOf()
+    const s = createPdfStore({ db })
     expect(await s.untypeset('d', 'zh-CN')).toBeUndefined()
-    await s.markUntypeset('d', 'zh-CN', '2')
-    expect([await s.untypeset('d', 'zh-CN'), await s.untypeset('d', 'ja')]).toEqual(['2', undefined])
+    await s.markUntypeset('d', 'zh-CN', { pipeline: '2', identity: 'B' })
+    // the two beside each other in the row, the pipeline where a mark written before keeps it
+    expect(await db.untypeset.get(['d', 'zh-CN'])).toEqual({ digest: 'd', lang: 'zh-CN', pipeline: '2', identity: 'B' })
+    expect([await s.untypeset('d', 'zh-CN'), await s.untypeset('d', 'ja')]).toEqual([{ pipeline: '2', identity: 'B' }, undefined])
     await s.clear()
     expect(await s.untypeset('d', 'zh-CN')).toBeUndefined()
+  })
+
+  it('reads a mark written before the identity was kept as one with none, under the same table: no new schema version', async () => {
+    const db = dbOf()
+    await db.untypeset.put({ digest: 'd', lang: 'zh-CN', pipeline: '2' })
+    expect(await createPdfStore({ db }).untypeset('d', 'zh-CN')).toEqual({ pipeline: '2' })
+    expect(db.verno).toBe(2)
   })
 
   it('patchFigures changes the figures alone; usage and clear', async () => {

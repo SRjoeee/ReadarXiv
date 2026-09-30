@@ -4,7 +4,7 @@
 // reader's reads and writes is a miss, as in the translation cache (./store.ts); the settings page's count and clear
 // report theirs. Its own database, so that neither's schema or migrations touch the other's.
 import Dexie, { type DexieOptions, type Table } from 'dexie'
-import { atLeastAsGood, mergeFigures, type FigureEntry, type Now, type PdfRecord, type PdfRecordBody } from './pdf-record'
+import { atLeastAsGood, mergeFigures, type FigureEntry, type Now, type PdfRecord, type PdfRecordBody, type UntypesetMark } from './pdf-record'
 
 /** The small row eviction reads: no PDF, no units */
 interface Entry {
@@ -38,8 +38,9 @@ class PdfDatabase extends Dexie {
   bodies!: Table<Body, [string, string]>
   pdfs!: Table<Pdf, [string, string]>
   keys!: Table<{ id: string; key: CryptoKey }, string>
-  /** the papers no typesetting strategy could set, by version and language, with the pipeline that tried */
-  untypeset!: Table<{ digest: string; lang: string; pipeline: string }, [string, string]>
+  /** the papers no typesetting strategy could set, by version and language, with the pipeline that tried and the
+   *  identity whose translation it was (pdf-record.ts UntypesetMark: not indexed, so no new version) */
+  untypeset!: Table<{ digest: string; lang: string } & UntypesetMark, [string, string]>
 
   constructor(name = 'axt-pdf', options?: DexieOptions) {
     super(name, options)
@@ -65,10 +66,10 @@ export interface PdfStore {
   patchFigures(digest: string, lang: string, figures: FigureEntry[]): Promise<void>
   touch(digest: string, lang: string): Promise<void>
   delete(digest: string, lang: string): Promise<void>
-  /** The pipeline under which no strategy could typeset this paper in this language, or undefined; a failure reads as
-   *  undefined (the paper is tried) */
-  untypeset(digest: string, lang: string): Promise<string | undefined>
-  markUntypeset(digest: string, lang: string, pipeline: string): Promise<void>
+  /** The mark left when no strategy could typeset this paper in this language (the pipeline, the identity), or
+   *  undefined; a failure reads as undefined (the paper is tried). Whether it still answers: pdf-record.ts stillUntypeset */
+  untypeset(digest: string, lang: string): Promise<UntypesetMark | undefined>
+  markUntypeset(digest: string, lang: string, mark: Now): Promise<void>
   /** These two reject on a failure: the settings page reports a store it cannot read or empty, rather than show it empty.
    *  Clearing forgets the untypeset papers too: a way to have them tried again */
   clear(): Promise<void>
@@ -217,15 +218,17 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
 
     async untypeset(digest, lang) {
       try {
-        return (await db.untypeset.get([digest, lang]))?.pipeline
+        const row = await db.untypeset.get([digest, lang])
+        if (!row) return undefined
+        return row.identity === undefined ? { pipeline: row.pipeline } : { pipeline: row.pipeline, identity: row.identity }
       } catch {
         return undefined
       }
     },
 
-    async markUntypeset(digest, lang, pipeline) {
+    async markUntypeset(digest, lang, mark) {
       try {
-        await db.untypeset.put({ digest, lang, pipeline })
+        await db.untypeset.put({ digest, lang, pipeline: mark.pipeline, identity: mark.identity })
       } catch (e) {
         warn(`[axt-pdf] untypeset mark failed: ${(e as Error).message}`)
       }
