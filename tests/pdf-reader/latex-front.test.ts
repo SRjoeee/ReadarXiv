@@ -40,3 +40,24 @@ describe('the front matter\'s notes (1706.03762: the author block\'s footnotes s
     expect(units.some(u => /Somewhere|Alice/.test(textOf(u)))).toBe(false)
   })
 })
+
+describe('a display outside a unit\'s marks (the reader\'s anchors take it from beyond them: 211 of 747 displays were lit with no unit)', () => {
+  const body = (b: string) => project(`\\documentclass{article}\\begin{document}\n${b}\n\\end{document}`).units as (Unit & { lead?: true; trail?: true })[]
+  const flags = (b: string) => body(b).map(u => [textOf(u).trim().split(' ')[0], u.lead ?? false, u.trail ?? false])
+
+  it('a paragraph that ends with a display trails it; one that opens with a display leads with it', () => {
+    expect(flags('It holds that\n\\begin{equation}a = b\\end{equation}\n\n\\[ c = d \\]\nwhere c is given.\n\nPlain words, $x$ inline, and an \\[ e \\] inner display in the middle of it.')).toEqual([
+      ['It', false, true], ['where', true, false], ['Plain', false, false]])
+  })
+
+  it('a display standing alone after a paragraph is the paragraph\'s; after a heading, or apart from it by a figure, nobody\'s', () => {
+    expect(flags('First words here.\n\n\\begin{align}a &= b\\end{align}\n\n\\section{A Heading}\n\n\\[ x \\]\n\nMore words.\n\n\\begin{figure}\\caption{A caption.}\\end{figure}\n\n\\[ y \\]\n\nLast.')).toEqual([
+      ['First', false, true], ['A', false, false], ['More', false, false], ['A', false, false], ['Last.', false, false]])
+  })
+
+  it('an inline formula, an inline math environment and $$ at the head of a paragraph are no display beyond its marks', () => {
+    // $$ counts as inline for the start mark (patch), which goes before it
+    expect(flags('\\begin{math}m\\end{math} opens this one.\n\n$$ d $$ and this one.\n\nThis ends inline $x$')).toEqual([
+      ['opens', false, false], ['and', false, false], ['This', false, false]])
+  })
+})

@@ -258,6 +258,89 @@ function unitWords(text = '', gaps) {
   return { ws: ts.map(x => x.t), gap }
 }
 
+/** in a unit's body heights: how far from its edge line a display beyond its marks may begin (the display's skip, and
+ *  its tallest glyphs, a bracket or a sum, which are no words); how far each next line of the body's size may stand from
+ *  those taken; how far a smaller glyph may stand outside them (a limit, a script); and what counts as the body's size */
+const FIRST = 3.5, GAP = 1.2, SMALL = 0.4, BODY = 0.95
+
+/**
+ * The pages' frame, as the located units' words give it: across, where the text's lines begin and end on most pages;
+ * down, the running head's and foot's baselines — the highest and the lowest word of a page, no unit's, above or below
+ * the text on most pages, at one height on a quarter of the pages at least (a display that opens or closes a page is
+ * none: it stands where the text does). Outside it are the margin (arXiv's stamp, line numbers) and the page's head and
+ * foot, never a unit
+ */
+function pageFrame(doc, ms) {
+  const extent = new Map(), located = new Uint8Array(doc.length)
+  for (const m of ms) if (m) for (const k of m) {
+    located[k] = 1
+    const t = doc[k], e = extent.get(t.page)
+    if (!e) extent.set(t.page, [t.x, t.x + t.w, t.y, t.y])
+    else { e[0] = Math.min(e[0], t.x); e[1] = Math.max(e[1], t.x + t.w); e[2] = Math.min(e[2], t.y); e[3] = Math.max(e[3], t.y) }
+  }
+  if (!extent.size) return () => true
+  const at = (i, f) => { const v = [...extent.values()].map(e => e[i]).sort((x, y) => x - y); return v[Math.min(v.length - 1, Math.floor(f * v.length))] }
+  const left = at(0, 0.1), right = at(1, 0.9), low = at(2, 0.25), high = at(3, 0.75)
+  const lowest = new Map(), highest = new Map()
+  doc.forEach((t, k) => {
+    const lo = lowest.get(t.page), hi = highest.get(t.page)
+    if (lo == null || t.y < doc[lo].y) lowest.set(t.page, k)
+    if (hi == null || t.y > doc[hi].y) highest.set(t.page, k)
+  })
+  const recurring = (ends, outside) => {
+    const votes = new Map()
+    for (const k of ends.values()) if (!located[k] && outside(doc[k])) { const y = Math.round(doc[k].y); votes.set(y, (votes.get(y) ?? 0) + 1) }
+    let best = null
+    for (const [y, n] of votes) if (n >= Math.max(2, Math.ceil(ends.size / 4)) && (!best || n > best[1])) best = [y, n]
+    return best?.[0] ?? null
+  }
+  const foot = recurring(lowest, t => t.y < low - 0.5 * t.h), head = recurring(highest, t => t.y > high + 0.5 * t.h)
+  return t => t.x >= left - t.h && t.x + t.w <= right + t.h && (foot == null || t.y > foot + 0.5 * t.h) && (head == null || t.y < head - 0.5 * t.h)
+}
+
+/**
+ * Takes for unit `u` the words past its edge token `k0` — after it (`dir` 1) or before it (-1) — that are no other
+ * unit's: a display beyond its marks. The stream's lines are gathered up to a line another unit's words are on, a new
+ * page, a new column (back up the page past the edge's line) or the page's frame (pageFrame); then taken by where they
+ * stand, nearest first: the lines holding a glyph of the unit's body size, the first `first` body heights at most from
+ * the edge's line, each next GAP at most from those taken; then the smaller glyphs among them, SMALL at most outside
+ * them — a display's limits, scripts and fractions' parts. Further, or smaller and apart, is a float, a footnote, the
+ * page's foot. What is taken becomes the unit's, so that no other unit takes it
+ */
+function walker(doc, ms, owner, line) {
+  const inFrame = pageFrame(doc, ms)
+  // which unit each line holds words of: -1 none, -2 several
+  const lineOwner = new Int32Array((line[doc.length - 1] ?? 0) + 1).fill(-1)
+  const own = (k, u) => { const l = line[k]; lineOwner[l] = lineOwner[l] === -1 || lineOwner[l] === u ? u : -2 }
+  for (let k = 0; k < doc.length; k++) if (owner[k] !== -1) own(k, owner[k])
+  const bodyOf = u => { const hs = ms[u].map(k => doc[k].h).sort((x, y) => x - y); return hs[hs.length >> 1] }
+  function take(u, k0, dir, first) {
+    const A = doc[k0], h = bodyOf(u), lines = []
+    for (let k = k0 + dir, end = false; !end && k >= 0 && k < doc.length;) {
+      const l = line[k], ks = []
+      for (; k >= 0 && k < doc.length && line[k] === l; k += dir) {
+        const t = doc[k]
+        if (t.page !== A.page || (owner[k] !== -1 && owner[k] !== u) || (dir > 0 ? t.y > A.y + 0.5 * A.h : t.y < A.y - 0.5 * A.h) || !inFrame(t)) { end = true; break }
+        ks.push(k)
+      }
+      if (!ks.length || (lineOwner[l] !== -1 && lineOwner[l] !== u)) break
+      let top = -Infinity, bottom = Infinity, body = false
+      for (const j of ks) { const t = doc[j]; top = Math.max(top, t.top); bottom = Math.min(bottom, t.bottom); body ||= t.h >= BODY * h }
+      lines.push({ ks, top, bottom, body })
+    }
+    let reach = dir > 0 ? A.bottom : A.top, n = 0
+    for (const l of lines.filter(l => l.body).sort((x, y) => (dir > 0 ? y.top - x.top : x.bottom - y.bottom))) {
+      if ((dir > 0 ? reach - l.top : l.bottom - reach) > (n ? GAP : first) * h) break
+      reach = dir > 0 ? Math.min(reach, l.bottom) : Math.max(reach, l.top)
+      n++
+    }
+    if (!n) return []
+    const edge = reach - dir * SMALL * h
+    return lines.filter(l => (dir > 0 ? l.bottom >= edge : l.top <= edge)).flatMap(l => l.ks)
+  }
+  return { claim(u, k0, dir, first) { const ks = take(u, k0, dir, first); for (const k of ks) { owner[k] = u; own(k, u) } return ks } }
+}
+
 /**
  * Every unit's place in the document: { rects: [{ page, x0, y0, x1, y1 }], coverage, tokens, bounded } or null when
  * it was not found. `units` is [{ id, text, gaps? }] in document order (`gaps`: mt.mjs unitText). With `bounds` (boundsFromMarks) a unit's first and
@@ -318,10 +401,10 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
   }
   const lineSize = new Map()
   for (let k = 0; k < doc.length; k++) lineSize.set(line[k], (lineSize.get(line[k]) ?? 0) + 1)
-  const out = new Map()
-  units.forEach(({ id }, u) => {
+  // each located unit's words
+  const ms = units.map((_, u) => {
     const f = found[u]
-    if (!f) { out.set(id, null); return }
+    if (!f) return null
     const mine = f.m.filter(k => owner[k] === u || (!f.bounded && owner[k] === -1))
     const perLine = new Map()
     for (const k of mine) perLine.set(line[k], (perLine.get(line[k]) ?? 0) + 1)
@@ -337,7 +420,23 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
       if (same.length) kept = same
     }
     const m = f.bounded ? [...new Set([f.bounded[0], ...kept, f.bounded[1]])].sort((x, y) => x - y) : kept
-    if (!m.length) { out.set(id, null); return }
+    return m.length ? m : null
+  })
+  // a display a unit sets before its first words or after its last (latex-front's `lead`, `trail`) stands outside its
+  // marks, which are in running text: it is taken from beyond them — the leading ones first, so that a unit's trailing
+  // walk stops at the display the next unit opens with
+  const walk = walker(doc, ms, owner, line)
+  const beyond = []
+  for (const edge of ['lead', 'trail']) {
+    units.forEach((unit, u) => {
+      const b = found[u]?.bounded
+      if (b && ms[u] && unit[edge]) beyond[u] = (beyond[u] ?? []).concat(walk.claim(u, edge === 'lead' ? b[0] : b[1], edge === 'lead' ? -1 : 1, FIRST))
+    })
+  }
+  const out = new Map()
+  units.forEach(({ id }, u) => {
+    const f = found[u], m = ms[u]
+    if (!m) { out.set(id, null); return }
     const idx = []
     for (let n = 0; n < m.length; n++) {
       let k = m[n]
@@ -348,7 +447,8 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
       while (k + 1 < doc.length && !doc[k + 1].t && (n + 1 === m.length || k + 1 < m[n + 1])) idx.push(++k)
       if (n + 1 < m.length && between(doc, owner, u, m[n], m[n + 1])) for (k++; k < m[n + 1]; k++) idx.push(k)
     }
-    out.set(id, { rects: lineRects(doc, idx), coverage: +f.coverage.toFixed(3), tokens: idx, bounded: !!f.bounded })
+    const all = beyond[u]?.length ? [...new Set([...idx, ...beyond[u]])].sort((x, y) => x - y) : idx
+    out.set(id, { rects: lineRects(doc, all), coverage: +f.coverage.toFixed(3), tokens: all, bounded: !!f.bounded })
   })
   return out
 }

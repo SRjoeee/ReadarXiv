@@ -269,3 +269,5 @@ export function unitText(pieces) {
   if (bare.trimEnd() !== text) return { text }
   return { text, gaps: gaps.map(g => Math.min(g, text.length)).filter((g, i, a) => a.indexOf(g) === i) }
 }
+/** the unit's display beyond its marks, as latex-front found it (displayOutside) or a copy keeps it: for the anchors */
+export const displayEdges = u => ({ ...(u.lead ? { lead: true } : {}), ...(u.trail ? { trail: true } : {}) })

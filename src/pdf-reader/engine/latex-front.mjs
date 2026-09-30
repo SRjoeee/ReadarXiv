@@ -118,11 +118,26 @@ function mathEnd(s, i) { // s[i] is '$' or starts \( \[ ; returns index after th
 }
 
 // ---------------------------------------------------------------- units
+/** the kinds set in the running text, which a display standing alone after them belongs to */
+const IN_TEXT = new Set(['para', 'theorem', 'abstract'])
+/** a display environment: a math environment but the inline one */
+const displayEnv = env => MATH_ENVS.test(env) && !/^math\*?$/.test(env)
+/**
+ * Whether a unit sets a display before its first words (`lead`) or after its last (`trail`): outside its marks, which
+ * stand in running text (patch: the start mark before the first word or inline formula, the end mark after the last
+ * word) — the reader's anchors take it from beyond them (anchors.mjs). Nothing typeset depends on it
+ */
+function displayOutside(pieces, displays) {
+  const first = pieces.findIndex(p => (p.t === 'text' && /[^ \t\r\n]/.test(p.s)) || (p.t === 'ph' && INLINE.test(p.src)))
+  const last = pieces.findLastIndex(p => p.t === 'text' && /[^ \t\r\n]/.test(p.s))
+  return { lead: first > 0 && pieces.slice(0, first).some(p => displays.has(p)), trail: last >= 0 && pieces.slice(last + 1).some(p => displays.has(p)) }
+}
 // A unit: { file, kind, start, end, pieces: [{t:'text', s} | {t:'ph', src} | {t:'open', id, src} | {t:'close', id, src}] }
 class Builder {
-  constructor(file, units) { this.file = file; this.units = units; this.cur = null; this.pairId = 0 }
+  constructor(file, units, src = '') { this.file = file; this.units = units; this.src = src; this.cur = null; this.pairId = 0; this.displays = new WeakSet() }
   text(s, start, end) { if (!this.cur) { if (!s.trim()) return; this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] } } this.cur.pieces.push({ t: 'text', s }); this.cur.end = end }
-  ph(src, start, end) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; this.cur.pieces.push({ t: 'ph', src }); this.cur.end = end; return true }
+  /** `display`: a formula set on lines of its own (displayOutside) */
+  ph(src, start, end, display = false) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; const p = { t: 'ph', src }; if (display) this.displays.add(p); this.cur.pieces.push(p); this.cur.end = end; return true }
   open(src, start) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end: start, pieces: [] }; const id = ++this.pairId; this.cur.pieces.push({ t: 'open', id, src }); return id }
   close(id, src, end) { if (this.cur) { this.cur.pieces.push({ t: 'close', id, src }); this.cur.end = end } }
   flush() {
@@ -130,7 +145,16 @@ class Builder {
     if (!u) return
     // trim placeholders and whitespace at both ends out of the unit: they stay in the source untouched
     const letters = u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
-    if ((letters.match(/\p{L}/gu) ?? []).length < 2) return
+    if ((letters.match(/\p{L}/gu) ?? []).length < 2) {
+      // a display standing alone between blank lines is read with the paragraph it follows, nothing but white space
+      // and comments between them
+      const prev = this.units.at(-1)
+      if (u.pieces.some(p => this.displays.has(p)) && prev?.file === u.file && IN_TEXT.has(prev.kind) && !this.src.slice(prev.end, u.start).replace(/(^|[^\\])%.*$/gm, '$1').trim()) prev.trail = true
+      return
+    }
+    const { lead, trail } = displayOutside(u.pieces, this.displays)
+    if (lead) u.lead = true
+    if (trail) u.trail = true
     // the paper's title, which goes with every batch to an LLM as the HTML page's does (DESIGN §8.2)
     if (this.title) u.title = true
     if (this.depth !== undefined) u.depth = this.depth
@@ -224,7 +248,7 @@ function walk(s, from, to, b, ctx) {
       if (s[k] === '\n') { endText(); b.flush(); i = k + 1; continue }
       startText(); i++; continue
     }
-    if (c === '$') { const e = mathEnd(s, i); if (e < 0 || e > to) { i++; continue } endText(); if (!b.ph(s.slice(i, e), i, e)) { /* display math alone: nothing to do */ } i = e; continue }
+    if (c === '$') { const e = mathEnd(s, i); if (e < 0 || e > to) { i++; continue } endText(); b.ph(s.slice(i, e), i, e, s.startsWith('$$', i)); i = e; continue }
     if (c === '~') { endText(); b.ph('~', i, i + 1); i++; continue }
     if (c === '{') {
       const e = matchGroup(s, i); if (e < 0 || e > to) { i++; continue }
@@ -241,7 +265,7 @@ function walk(s, from, to, b, ctx) {
       const stop = branchEnd(s, end, to, ctx.ifs)
       if (stop > 0) { endText(); b.flush(); ctx.skipped[name] = (ctx.skipped[name] ?? 0) + 1; i = stop; continue }
     }
-    if (name === '(' || name === '[') { const e = mathEnd(s, i); if (e > 0 && e <= to) { endText(); b.ph(s.slice(i, e), i, e); i = e; continue } }
+    if (name === '(' || name === '[') { const e = mathEnd(s, i); if (e > 0 && e <= to) { endText(); b.ph(s.slice(i, e), i, e, name === '['); i = e; continue } }
     const shorthand = ctx.envMacros.get(name)
     if (shorthand?.side === 'begin' && (MATH_ENVS.test(shorthand.env) || SKIP_ENVS.test(shorthand.env))) {
       // the block ends at the partner macro or at a literal \end{env}
@@ -250,13 +274,13 @@ function walk(s, from, to, b, ctx) {
       re.lastIndex = end
       const m = re.exec(s)
       const stop = m && m.index < to ? m.index + m[0].length : end
-      endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue
+      endText(); b.ph(s.slice(i, stop), i, stop, displayEnv(shorthand.env)); i = stop; continue
     }
     if (name === 'begin') {
       const m = s.slice(end).match(/^\s*\{([^}]+)\}/); if (!m) { i = end; continue }
       const env = m[1].trim(), afterBegin = end + m[0].length
       const [bodyEnd, afterEnd] = endOfEnv(s, afterBegin, env)
-      if (MATH_ENVS.test(env)) { endText(); if (!b.ph(s.slice(i, afterEnd), i, afterEnd)) b.flush(); i = afterEnd; continue }
+      if (MATH_ENVS.test(env)) { endText(); b.ph(s.slice(i, afterEnd), i, afterEnd, displayEnv(env)); i = afterEnd; continue }
       endText(); b.flush()
       // a TikZ picture: only its texts are prose (tikzText); the drawing stays as it is
       if (env === 'tikzpicture') { tikzText(s, afterBegin, bodyEnd, b, ctx); i = afterEnd; continue }
@@ -391,7 +415,7 @@ export function loadProject(root, main, { tables = false } = {}) {
   function visit(rel) {
     const f = read(rel); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)
-    const b = new Builder(f.rel, units)
+    const b = new Builder(f.rel, units, f.text)
     let from = 0, to = f.text.length
     if (f.rel === mainFile.rel) {
       const m = f.text.match(/\\begin\s*\{document\}/)

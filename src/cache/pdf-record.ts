@@ -24,6 +24,10 @@ export interface CachedUnit {
   /** the identity the unit was last tried under */
   tried?: string
   state: UnitState
+  /** a display the unit sets before its first words, or after its last: outside its marks, which the reader's anchors
+   *  take it from beyond (latex-front's displayOutside); absent in a copy made before they did, anchored as then */
+  lead?: true
+  trail?: true
 }
 
 /**

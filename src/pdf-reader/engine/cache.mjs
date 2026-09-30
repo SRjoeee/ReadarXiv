@@ -2,7 +2,7 @@
 // again starts from, the units a record keeps, when a run writes, the figures' keys. The store itself is the
 // extension's (src/cache/pdf-store.ts). Pure but for the hash, so that experiments/pdf-bilingual/spikes/cache-cases.mjs
 // runs it in Node.
-import { plainSource, plainTranslated } from './mt.mjs'
+import { displayEdges, plainSource, plainTranslated } from './mt.mjs'
 
 const hex = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('')
 /** SHA-256 hex of bytes: arXiv's PDF, the key of its record */
@@ -38,7 +38,8 @@ export async function seedFrom(record, units) {
 export function unitsOf(units, kept, hashes, results) {
   return units.map((u, i) => {
     // a heading's depth, and whether it is the title, for the contents a stored copy lists (outline.ts)
-    const base = { kind: u.kind, src: plainSource(u), hash: hashes[i], ...(u.title ? { title: true } : {}), ...(u.depth !== undefined ? { depth: u.depth } : {}) }
+    // and its displays beyond its marks, which the anchors take on either side (displayEdges)
+    const base = { kind: u.kind, src: plainSource(u), hash: hashes[i], ...(u.title ? { title: true } : {}), ...(u.depth !== undefined ? { depth: u.depth } : {}), ...displayEdges(u) }
     if (kept.has(u)) return { ...base, state: 'kept' }
     const r = results.get(i)
     if (!r) return { ...base, state: 'none' }
