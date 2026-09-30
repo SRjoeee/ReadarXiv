@@ -8,7 +8,7 @@
 // though the defaults make its change a no-op (round 4)
 import { createElement as h, useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BUILT_IN_STYLES } from '@/config/appearance'
+import { BUILT_IN_STYLES, appearanceSchema } from '@/config/appearance'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { OptionsData } from '@/entrypoints/options/data'
 import { deferred, mountElement } from '../ui/render-hook'
@@ -169,6 +169,44 @@ describe('the translation styles (§6.4)', () => {
     await m.flush()
     expect(names(m.container).at(-1)).toBe(`${O.appearance.newStyle} ${O.reading.copySuffix}`)
     await m.unmount()
+  })
+
+  // Codex on #306 (Codex 4): at the schema's cap New style and Duplicate still wrote; the write was refused, unhandled,
+  // and the editor moved to a style that was never made
+  it('at the schema\'s 50 styles New style and Duplicate are greyed and say why, and a press writes nothing; one fewer, both add', async () => {
+    const patches: Config[] = []
+    const own = Array.from({ length: 50 - BUILT_IN_STYLES.length }, (_, i) => ({ ...BUILT_IN_STYLES[0]!, id: `style-own${String(i).padStart(5, '0')}`, name: `Own ${i}` }))
+    const full = { ...DEFAULT_CONFIG, appearance: { ...DEFAULT_CONFIG.appearance, styles: [...BUILT_IN_STYLES, ...own] } }
+    expect(appearanceSchema.safeParse(full.appearance).success).toBe(true)
+    expect(appearanceSchema.safeParse({ ...full.appearance, styles: [...full.appearance.styles, own[0]!] }).success).toBe(false)
+    const create = (c: HTMLElement) => [...card(c).querySelectorAll<HTMLButtonElement>(':scope > button[data-srow]')].at(-1)!
+    const m = await mountElement(h(Harness, { start: full, patches }))
+    expect(create(m.container).getAttribute('aria-disabled')).toBe('true')
+    expect(create(m.container).querySelector('.o-desc')?.textContent).toBe('Up to 50 styles')
+    create(m.container).click()
+    await m.flush()
+    expect([patches, editor(m.container)]).toEqual([[], null])
+    button(m.container, O.appearance.edit('Green')).click()
+    await m.flush()
+    const written = patches.length
+    const duplicate = button(editor(m.container)!, O.reading.duplicate)
+    expect(duplicate.getAttribute('aria-disabled')).toBe('true')
+    expect(document.getElementById(duplicate.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Up to 50 styles')
+    duplicate.click()
+    await m.flush()
+    expect([patches.length, names(m.container).length, editor(m.container)!.querySelector('input')!.value]).toEqual([written, 50, 'Green'])
+    await m.unmount()
+    // one fewer: both are there, and add
+    const n = await mountElement(h(Harness, { start: { ...full, appearance: { ...full.appearance, styles: full.appearance.styles.slice(0, 49) } }, patches }))
+    expect([create(n.container).getAttribute('aria-disabled'), create(n.container).querySelector('.o-desc')]).toEqual([null, null])
+    button(n.container, O.appearance.edit('Green')).click()
+    await n.flush()
+    const again = button(editor(n.container)!, O.reading.duplicate)
+    expect([again.getAttribute('aria-disabled'), again.getAttribute('aria-describedby')]).toEqual([null, null])
+    again.click()
+    await n.flush()
+    expect(names(n.container)).toHaveLength(50)
+    await n.unmount()
   })
 
   it('deleting is undone: the undo row stands in its place for 5 s, and undoing puts the style back, chosen', async () => {

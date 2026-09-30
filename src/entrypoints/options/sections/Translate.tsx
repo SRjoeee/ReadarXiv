@@ -7,7 +7,7 @@
 import { Ellipsis, Plus } from 'lucide'
 import { type CSSProperties, Fragment, useEffect, useRef, useState } from 'react'
 import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, type LangCode } from '@/config/languages'
-import type { Config } from '@/config/schema'
+import { type Config, SERVICES_MAX } from '@/config/schema'
 import { type Service, isLlmChosen, serviceRuns } from '@/config/services'
 import { readConfig } from '@/config/storage'
 import { supportsTarget } from '@/providers/microsoft'
@@ -111,6 +111,8 @@ function Services({ data }: { data: OptionsData }) {
   const keys = radioKeys(ids, config.provider, can, id => choose(id, 'key'), i => radios.current.get(ids[i]!)?.focus())
   const radioRef = (id: string) => (el: HTMLElement | null) => { if (el) radios.current.set(id, el); else radios.current.delete(id) }
   const stored = config.services.map(s => s.baseURL)
+  /** at the schema's cap the add row is greyed and says why: a service connected there could not be stored (Codex 4) */
+  const full = config.services.length >= SERVICES_MAX
 
   /**
    * A new service, stored now that it answered, and chosen (§6.3). Connected only once its write has landed: one
@@ -190,7 +192,8 @@ function Services({ data }: { data: OptionsData }) {
             }} />
         )
       })}
-      <Row kind="button" quiet lead={<Icon node={Plus} size={14} />} label={O.services.add} expanded={form?.kind === 'add'} buttonProps={{ ref: addRow }}
+      <Row kind="button" quiet lead={<Icon node={Plus} size={14} />} label={O.services.add} description={full ? O.services.limit(SERVICES_MAX) : undefined} disabled={full}
+        expanded={form?.kind === 'add'} buttonProps={{ ref: addRow }}
         onPress={() => setForm(f => (f?.kind === 'add' ? null : { kind: 'add' }))} />
       <Reveal open={form?.kind === 'add'}>
         {drawnForm?.kind === 'add' && <ServiceForm target={config.targetLanguage} stored={stored} onConnected={added} onCancel={() => { setForm(null); addRow.current?.focus() }} />}

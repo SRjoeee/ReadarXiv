@@ -4,7 +4,7 @@
 // and can be retried, and does not block the next write from trying (fix round 1, item 1)
 import { createElement as h } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { type Config, DEFAULT_CONFIG } from '@/config/schema'
+import { type Config, DEFAULT_CONFIG, GLOSSARY_LIMITS, configSchema } from '@/config/schema'
 import type { OptionsData } from '@/entrypoints/options/data'
 import { mountElement } from '../ui/render-hook'
 
@@ -118,6 +118,23 @@ describe('the glossary\'s table (§6.3)', () => {
     await m.flush()
     expect(patches).toEqual([])
     expect(m.container.textContent).toContain(O.glossary.tooBig)
+    await m.unmount()
+  })
+
+  // Codex on #306 (Codex 4): the table already words its limits, so its add at the entry limit keeps that treatment
+  it('at the entry limit, a row added in the empty row is kept, not saved, and the table says why', async () => {
+    const patches: Config[] = []
+    const stored = Array.from({ length: GLOSSARY_LIMITS.entries }, (_, i) => ({ term: `t${i}`, translation: `r${i}` }))
+    expect(configSchema.shape.glossary.safeParse([...stored, { term: 'x', translation: 'y' }]).success).toBe(false)
+    const m = await mountElement(h(GlossaryTable, { data: data(WITH(stored), patches) }))
+    const empty = () => cells(m.container).slice(-2)
+    type(empty()[0]!, 'token')
+    await m.flush()
+    type(cells(m.container).at(-3)!, 'lexeme')
+    await m.flush()
+    expect(patches).toEqual([])
+    expect(cells(m.container).slice(-4).map(i => i.value)).toEqual(['token', 'lexeme', '', ''])
+    expect(m.container.querySelector('.o-gloss-note')!.textContent).toBe(O.glossary.tooBig)
     await m.unmount()
   })
 

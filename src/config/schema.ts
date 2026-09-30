@@ -12,6 +12,9 @@ export const CONFIG_VERSION = 20
 export const MODE_VALUES = ['stack', 'side', 'only'] as const
 const modeSchema = z.enum(MODE_VALUES)
 
+/** How many services of one's own the configuration holds at most: the schema's cap, which the settings page's add stops at and names */
+export const SERVICES_MAX = 20
+
 /** The glossary's limits. Shared by the migration and the schema, so one change applies to both */
 export const GLOSSARY_LIMITS = { term: 120, translation: 200, entries: 200, totalChars: 6000 } as const
 
@@ -53,7 +56,7 @@ export const configSchema = z.object({
   // The zod messages are diagnostics: the settings page's fallback notice shows the locale pack's sentence for the field (ui/strings.ts fallbackText)
   provider: z.string().refine(v => (BUILT_IN_SERVICES as readonly string[]).includes(v) || SERVICE_ID_RE.test(v), 'not a valid translation service'),
   /** The reader's own services (v12); keys stay local (CLAUDE.md hard rule 5) */
-  services: z.array(serviceSchema).max(20),
+  services: z.array(serviceSchema).max(SERVICES_MAX),
   /** ISO 639-3 (since v4; languages.ts); an LLM gets the English name, Google a BCP-47 conversion */
   targetLanguage: langCodeSchema,
   mode: modeSchema,

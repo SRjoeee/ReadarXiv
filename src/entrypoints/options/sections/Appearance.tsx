@@ -2,7 +2,7 @@
 // translation styles (Task 56), and the hover highlight with its colour. Every control writes at once
 import { Monitor, Moon, Pencil, Plus, Sun } from 'lucide'
 import { Fragment, useRef, useState } from 'react'
-import { type Appearance as Looks, BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, type HighlightProfile, type StyleProfile, duplicateStyle, newProfileId, resetBuiltIns } from '@/config/appearance'
+import { APPEARANCE_LIMITS, type Appearance as Looks, BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, type HighlightProfile, type StyleProfile, duplicateStyle, newProfileId, resetBuiltIns } from '@/config/appearance'
 import type { Config } from '@/config/schema'
 import { styleSample } from '@/ui/style-sample'
 import { Button } from '@/ui/controls/Button'
@@ -38,6 +38,9 @@ export function Appearance({ data }: { data: OptionsData }) {
   const styleWrites = useListWrites(patch)
   if (!config) return null
   const k = O.search.keywords
+  const bands = config.appearance.highlights
+  /** a colour of one's own is added the first time: no room for it once the list is at its cap (Codex 4) */
+  const ownFull = !bands.some(h => h.id === OWN_HIGHLIGHT_ID) && bands.length >= APPEARANCE_LIMITS.highlights
   return (
     <>
       <Card>
@@ -56,15 +59,17 @@ export function Appearance({ data }: { data: OptionsData }) {
         <Row toggles words={k['appearance/highlight']} label={S.rows.highlight} description={O.appearance.highlightHint}
           trailing={<Switch label={S.rows.highlight} checked={config.reading.sentenceHighlight} onChange={on => void patch(latest => ({ ...latest, reading: { ...latest.reading, sentenceHighlight: on } }))} />} />
         <Reveal open={config.reading.sentenceHighlight}>
-          <Row level={1} label={O.appearance.colour} trailing={<HighlightSwatches config={config} patch={patch} />} />
+          <Row level={1} label={O.appearance.colour} description={ownFull ? O.appearance.coloursLimit(APPEARANCE_LIMITS.highlights) : undefined}
+            trailing={<HighlightSwatches config={config} patch={patch} full={ownFull} />} />
         </Reveal>
       </Card>
     </>
   )
 }
 
-/** The highlight's colours (§6.4): its profiles as swatches, as the reader's reading options show them, and one of one's own */
-function HighlightSwatches({ config, patch }: { config: Config; patch: OptionsData['patch'] }) {
+/** The highlight's colours (§6.4): its profiles as swatches, as the reader's reading options show them, and one of one's
+ *  own — unavailable while the list is `full`, its row saying why */
+function HighlightSwatches({ config, patch, full }: { config: Config; patch: OptionsData['patch']; full: boolean }) {
   const a = config.appearance
   const choose = (id: string) => void patch(latest => ({ ...latest, appearance: { ...latest.appearance, activeHighlight: id } }))
   const setOwn = (color: string) => void patch(latest => {
@@ -81,7 +86,7 @@ function HighlightSwatches({ config, patch }: { config: Config; patch: OptionsDa
         <button key={h.id} type="button" className="swatch o-swatch" aria-label={profileName(h, 'highlights')} title={profileName(h, 'highlights')}
           aria-pressed={h.id === a.activeHighlight} style={{ background: band(h) }} onClick={() => choose(h.id)} />
       ))}
-      <ColourPick label={O.appearance.pickColour} value={own?.color} pressed={a.activeHighlight === OWN_HIGHLIGHT_ID} onPick={setOwn} />
+      <ColourPick label={O.appearance.pickColour} value={own?.color} pressed={a.activeHighlight === OWN_HIGHLIGHT_ID} disabled={full} onPick={setOwn} />
     </span>
   )
 }
@@ -90,9 +95,13 @@ function HighlightSwatches({ config, patch }: { config: Config; patch: OptionsDa
  *  nothing else was picked in the meantime (fix round 1, item 3) */
 interface GoneStyle { profile: StyleProfile; index: number; active: boolean; fallback: string; focus: boolean }
 
-/** The translation styles (§6.4): one card, one radio group; a row a style, its editor under it; the new-style row last */
+/**
+ * The translation styles (§6.4): one card, one radio group; a row a style, its editor under it; the new-style row last.
+ * At the schema's cap New style and the editor's Duplicate are greyed, saying why (Codex 4)
+ */
 function Styles({ data, writes }: { data: OptionsData; writes: ListWrites<Config> }) {
   const a = data.config!.appearance
+  const full = a.styles.length >= APPEARANCE_LIMITS.styles ? O.appearance.stylesLimit(APPEARANCE_LIMITS.styles) : undefined
   const [editing, setEditing] = useState<string | null>(null)
   const drawn = useLinger(editing)
   const [gone, setGone] = useState<GoneStyle[]>([])
@@ -182,13 +191,13 @@ function Styles({ data, writes }: { data: OptionsData; writes: ListWrites<Config
                 <StyleEditor value={s}
                   // a partial change merged onto the *latest* stored profile, not onto this render's `s` (item 4)
                   onChange={over => setLooks(c => ({ ...c, styles: c.styles.map(x => (x.id === s.id ? { ...x, ...over } : x)) }))}
-                  onDone={() => close(s.id)} onDuplicate={() => add(duplicateStyle(s, copyName(s, 'styles')))} onDelete={() => remove(s)} />
+                  onDone={() => close(s.id)} full={full} onDuplicate={() => add(duplicateStyle(s, copyName(s, 'styles')))} onDelete={() => remove(s)} />
               )}
             </Reveal>
           </Fragment>
         )
       })}
-      <Row kind="button" quiet lead={<Icon node={Plus} size={14} />} label={O.appearance.create} buttonProps={{ ref: newStyleButton }}
+      <Row kind="button" quiet lead={<Icon node={Plus} size={14} />} label={O.appearance.create} description={full} disabled={full !== undefined} buttonProps={{ ref: newStyleButton }}
         onPress={() => add({ ...BUILT_IN_STYLES[0]!, id: newProfileId('style'), name: O.appearance.newStyle })} />
       {writes.failed && <p className="o-list-note" role="status"><Status tone="alert">{O.saveFailed}</Status></p>}
     </Card>

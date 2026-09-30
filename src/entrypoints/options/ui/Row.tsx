@@ -50,7 +50,15 @@ interface RowBase {
 
 export type RowProps = RowBase & (
   | { kind?: 'plain'; toggles?: boolean }
-  | { kind: 'button'; onPress?: () => void; expanded?: boolean; buttonProps?: ButtonHTMLAttributes<HTMLButtonElement> & { ref?: Ref<HTMLButtonElement> } }
+  | {
+    kind: 'button'
+    onPress?: () => void
+    expanded?: boolean
+    /** unavailable (an add row at its list's cap): greyed and still in the tab order, as the pages' buttons are
+     *  (Button.tsx), a press doing nothing; its description says why */
+    disabled?: boolean
+    buttonProps?: ButtonHTMLAttributes<HTMLButtonElement> & { ref?: Ref<HTMLButtonElement> }
+  }
   | { kind: 'radio'; checked: boolean; disabled?: boolean; onChoose: (how: 'pointer' | 'key') => void; radioRef?: Ref<HTMLSpanElement> }
 )
 
@@ -75,8 +83,8 @@ export function Row(props: RowProps) {
   const changed = useRef(false)
   if (description !== first.current) changed.current = true
   const swapping = swap === true && changed.current
-  // the prior two disjuncts already exclude 'button' and 'radio', narrowing props to the plain variant here
-  const press = props.kind === 'button' || props.kind === 'radio' || props.toggles === true
+  // a button presses unless it is unavailable; past 'button' and 'radio', props narrows to the plain variant
+  const press = props.kind === 'button' ? !props.disabled : props.kind === 'radio' || props.toggles === true
   const attrs = {
     className: 'o-row',
     'data-srow': '',
@@ -112,7 +120,7 @@ export function Row(props: RowProps) {
   if (props.kind === 'button') {
     return (
       // a popover's trigger (buttonProps) says itself whether it is expanded; a disclosure says it with `expanded`
-      <button type="button" {...attrs} aria-expanded={props.expanded} {...props.buttonProps} onClick={props.onPress}>
+      <button type="button" {...attrs} aria-expanded={props.expanded} aria-disabled={props.disabled || undefined} {...props.buttonProps} onClick={props.disabled ? undefined : props.onPress}>
         {leadPart}{wordsPart}{trail}
       </button>
     )

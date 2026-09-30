@@ -188,6 +188,8 @@ const O: Locale['O'] = {
     edit: (name: string) => `Edit “${name}”`,
     create: 'New style…',
     newStyle: 'New style',
+    stylesLimit: n => `Up to ${n} styles`,
+    coloursLimit: n => `Up to ${n} colours`,
     editor: {
       name: 'Name',
       colour: 'Colour',
@@ -221,6 +223,7 @@ const O: Locale['O'] = {
     moreFor: name => `More for “${name}”`,
     rejected: 'API key no longer valid',
     add: 'Add a service…',
+    limit: n => `Up to ${n} services`,
     edit: 'Edit…',
     autoFallback: 'Fall back to a free service on trouble',
     autoFallbackHint: 'An expired key, a spent quota or a dropped connection will not stop the translation',

@@ -204,6 +204,10 @@ const O = {
     edit: (name: string) => `编辑「${name}」`,
     create: '新建样式…',
     newStyle: '新样式',
+    /** at the schema's cap (APPEARANCE_LIMITS): 新建样式… and 复制一份 greyed, this their reason */
+    stylesLimit: (n: number) => `最多 ${n} 个样式`,
+    /** at the schema's cap with no colour of one's own yet: 自选颜色 greyed, this the 颜色 row's reason */
+    coloursLimit: (n: number) => `最多 ${n} 种颜色`,
     editor: {
       name: '名称',
       colour: '颜色',
@@ -240,6 +244,8 @@ const O = {
     moreFor: (name: string) => `「${name}」的更多操作`,
     rejected: 'API Key 已失效',
     add: '添加服务…',
+    /** at the schema's cap (SERVICES_MAX): 添加服务… greyed, this its reason */
+    limit: (n: number) => `最多 ${n} 个服务`,
     edit: '编辑…',
     autoFallback: '出问题时自动改用免费服务',
     autoFallbackHint: 'API Key 失效、额度用尽或断网时，翻译不会停下',

@@ -37,10 +37,13 @@ const highlightProfileSchema = z.object({
 })
 export type HighlightProfile = z.infer<typeof highlightProfileSchema>
 
+/** How many profiles each list holds at most: the schema's caps, which the settings page's additions stop at and name */
+export const APPEARANCE_LIMITS = { styles: 50, highlights: 50 } as const
+
 export const appearanceSchema = z.object({
-  styles: z.array(styleProfileSchema).max(50),
+  styles: z.array(styleProfileSchema).max(APPEARANCE_LIMITS.styles),
   activeStyle: idField,
-  highlights: z.array(highlightProfileSchema).max(50),
+  highlights: z.array(highlightProfileSchema).max(APPEARANCE_LIMITS.highlights),
   activeHighlight: idField,
 })
 export type Appearance = z.infer<typeof appearanceSchema>

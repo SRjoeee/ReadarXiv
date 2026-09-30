@@ -42,6 +42,10 @@
   .o-desc[data-sample] { color: var(--ink); font-size: 13px; line-height: 1.5; }
   .o-row[data-quiet] .o-label, .o-row[data-muted] .o-label { color: var(--ink-2); }
   .o-row[data-muted] .radio { opacity: 0.45; }
+  /* an add row at its list's cap: its plus and its words in ink-3, as a disabled button's (controls.css), the reason
+     under them in the description's ink-2; no hover, no pointer */
+  button.o-row[aria-disabled="true"] { cursor: default; }
+  button.o-row[aria-disabled="true"] :is(.o-lead, .o-label) { color: var(--ink-3); }
   /* a radio row: the radio and the words are the control; its keyboard ring runs to the row's leading edge */
   .o-choice { display: flex; flex: 1 1 calc(12em + 38px); align-items: center; gap: 12px; min-width: 0; margin-block: -8px; margin-inline-start: -10px; padding-block: 8px; padding-inline-start: 10px; border-radius: 6px; outline: none; }
   /* its basis holds its words' 12em past the radio and its own start (10, 38 or 66 in, 16 + 12 for the radio) */
@@ -190,6 +194,8 @@
   .o-pick::-webkit-color-swatch-wrapper { padding: 0; }
   .o-pick::-webkit-color-swatch { border: 0; opacity: 0; }
   .o-pick[data-pressed]:not(:focus-visible) { outline: 1.5px solid var(--line-strong); outline-offset: 2px; }
+  /* no room for a colour of one's own (the list at its cap): the wheel faded as a disabled radio's mark is, its row saying why */
+  .o-pick:disabled { opacity: 0.45; cursor: default; }
 }
 @media (prefers-reduced-motion: reduce) { .o-swatch { transition: none; } .o-swatch:active { scale: 1; } }
 

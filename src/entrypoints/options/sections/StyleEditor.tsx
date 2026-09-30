@@ -7,7 +7,7 @@
 // at), Done saying a name is needed rather than close (Codex on #306); the declarations only when they will survive the
 // sanitiser, the rest staying in the field with its reason
 import { ChevronRight } from 'lucide'
-import { type ComponentProps, useEffect, useRef, useState } from 'react'
+import { type ComponentProps, useEffect, useId, useRef, useState } from 'react'
 import { NAME_MAX, PALETTE, type StyleProfile, UNDERLINES } from '@/config/appearance'
 import { sanitizeCustomCss } from '@/core/renderer'
 import { styleSample } from '@/ui/style-sample'
@@ -24,7 +24,7 @@ import { segmentWidth } from '../ui/lists'
 /** The strength's steps (§6.4): as it is, a step lighter (the built-in muted style's 0.7), lighter still */
 export const STRENGTHS = [1, 0.7, 0.5] as const
 
-export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: {
+export function StyleEditor({ value, onChange, onDone, full, onDuplicate, onDelete }: {
   value: StyleProfile
   /**
    * A partial change, merged onto the *latest* stored profile by the owner (`Styles`'s `patch(latest => …)`), not
@@ -34,6 +34,8 @@ export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: 
    */
   onChange: (over: Partial<StyleProfile>) => Promise<unknown>
   onDone: () => void
+  /** the list is at its cap: Duplicate is greyed, and these words beside it say why */
+  full?: string
   onDuplicate: () => void
   onDelete: () => void
 }) {
@@ -45,6 +47,7 @@ export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: 
   const [nameError, setNameError] = useState<string | undefined>()
   const [more, setMore] = useState(value.blur || value.css !== '')
   const nameField = useRef<HTMLInputElement>(null)
+  const fullNote = useId()
   // an opened editor puts the focus on its first field (§9)
   useEffect(() => { nameField.current?.focus({ preventScroll: true }) }, [])
   const set = (over: Partial<StyleProfile>) => void onChange(over)
@@ -120,8 +123,9 @@ export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: 
       </Reveal>
       <div className="o-formbar">
         <Button type="button" kind="brand" size="md" onClick={done}>{e.done}</Button>
-        <Button type="button" kind="text" size="md" onClick={onDuplicate}>{O.reading.duplicate}</Button>
+        <Button type="button" kind="text" size="md" disabled={full !== undefined} aria-describedby={full && fullNote} onClick={onDuplicate}>{O.reading.duplicate}</Button>
         <Button type="button" kind="text" size="md" onClick={onDelete}>{e.delete}</Button>
+        {full && <span id={fullNote} className="o-note">{full}</span>}
       </div>
     </div>
   )

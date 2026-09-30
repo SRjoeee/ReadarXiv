@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import { Fragment, createElement as h, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { type Config, DEFAULT_CONFIG } from '@/config/schema'
+import { type Config, DEFAULT_CONFIG, configSchema } from '@/config/schema'
 import type { Service } from '@/config/services'
 import type { FallbackReason } from '@/config/storage'
 import type { PackState } from '@/shared/pack'
@@ -213,6 +213,28 @@ describe('the translation services (§6.3)', () => {
     expect(wire.log.some(l => l.startsWith('send'))).toBe(false)
     expect(rowNamed(m.container, 'echo').querySelector('.o-status[data-tone="ok"]')!.textContent).toBe(O.services.connected(42))
     await m.unmount()
+  })
+
+  // Codex on #306 (Codex 4): at the schema's cap the form opened, and its connection's save was refused with a line
+  // that trying again could not help
+  it('at the schema\'s 20 services the add row is greyed and says why, and a press opens nothing; one fewer, it opens the form', async () => {
+    const own = Array.from({ length: 20 }, (_, i): Service => ({ ...MINE, id: `svc-own${String(i).padStart(5, '0')}`, name: `Own ${i}` }))
+    expect(configSchema.shape.services.safeParse(own).success).toBe(true)
+    expect(configSchema.shape.services.safeParse([...own, MINE]).success).toBe(false)
+    const addRow = (c: HTMLElement) => [...card(c).querySelectorAll<HTMLButtonElement>(':scope > button[data-srow]')].at(-1)!
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: own } }))
+    expect(addRow(m.container).getAttribute('aria-disabled')).toBe('true')
+    expect(addRow(m.container).querySelector('.o-desc')?.textContent).toBe('Up to 20 services')
+    addRow(m.container).click()
+    await m.flush()
+    expect([addRow(m.container).getAttribute('aria-expanded'), m.container.querySelector('form[data-form="service"]')]).toEqual(['false', null])
+    await m.unmount()
+    const n = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, services: own.slice(1) } }))
+    expect([addRow(n.container).getAttribute('aria-disabled'), addRow(n.container).querySelector('.o-desc')]).toEqual([null, null])
+    addRow(n.container).click()
+    await n.flush()
+    expect(n.container.querySelector('form[data-form="service"]')).not.toBeNull()
+    await n.unmount()
   })
 
   it('Edit… opens the same form under its row; connected, the service is saved in place, not chosen', async () => {

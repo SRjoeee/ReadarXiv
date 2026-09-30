@@ -3,6 +3,7 @@
 // and changed after
 import { createElement as h, useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { BUILT_IN_HIGHLIGHTS, appearanceSchema } from '@/config/appearance'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { OptionsData } from '@/entrypoints/options/data'
 import { mountElement } from '../ui/render-hook'
@@ -90,6 +91,30 @@ describe('the appearance section (§6.4)', () => {
     expect(patches.at(-1)!.appearance.activeHighlight).toBe(OWN_HIGHLIGHT_ID)
     expect(own().hasAttribute('data-pressed')).toBe(true)
     await m.unmount()
+  })
+
+  // Codex on #306 (Codex 4): 0.4.1 let a reader duplicate bands up to the schema's cap, and the first colour of one's
+  // own then added one more, which the store refused, unhandled and unsaid
+  it('at the schema\'s 50 colours with none of one\'s own, Pick a colour is greyed and its row says why; with one\'s own among them it still changes that one', async () => {
+    const patches: Config[] = []
+    const bands = Array.from({ length: 50 - BUILT_IN_HIGHLIGHTS.length }, (_, i) => ({ id: `hl-band${String(i).padStart(4, '0')}`, name: `Band ${i}`, color: 'oklch(0.7 0.1 30)', opacity: 0.3 }))
+    const full = { ...DEFAULT_CONFIG, appearance: { ...DEFAULT_CONFIG.appearance, highlights: [...BUILT_IN_HIGHLIGHTS, ...bands] } }
+    expect(appearanceSchema.safeParse(full.appearance).success).toBe(true)
+    expect(appearanceSchema.safeParse({ ...full.appearance, highlights: [...full.appearance.highlights, bands[0]!] }).success).toBe(false)
+    const own = (c: HTMLElement) => c.querySelector<HTMLInputElement>('input[type="color"]')!
+    const m = await mountElement(h(Harness, { start: full, patches }))
+    expect(own(m.container).disabled).toBe(true)
+    expect(own(m.container).closest('[data-srow]')!.querySelector('.o-desc')?.textContent).toBe('Up to 50 colours')
+    await m.unmount()
+    // one's own among the 50: picking changes it, adds nothing
+    const mine = { ...bands.at(-1)!, id: OWN_HIGHLIGHT_ID }
+    const n = await mountElement(h(Harness, { start: { ...full, appearance: { ...full.appearance, highlights: [...full.appearance.highlights.slice(0, 49), mine] } }, patches }))
+    expect([own(n.container).disabled, own(n.container).closest('[data-srow]')!.querySelector('.o-desc')]).toEqual([false, null])
+    pick(own(n.container), '#ff0000')
+    await n.flush()
+    expect(patches.at(-1)!.appearance.highlights).toHaveLength(50)
+    expect(patches.at(-1)!.appearance.highlights.at(-1)).toMatchObject({ id: OWN_HIGHLIGHT_ID, color: '#ff0000' })
+    await n.unmount()
   })
 
   it('a profile an earlier version let the reader add stays as a swatch', async () => {
