@@ -17,17 +17,27 @@ import { Icon } from './Icon'
  * capped at five rows and a half on the popup and the settings page (ui.css), the popover itself past its height (the
  * reader's lists, and any other). `scrollIntoView`'s "nearest" — a row already in view stays where
  * it is, one out of view comes to the nearer edge — confined to those boxes: `scrollIntoView` also scrolls every ancestor
- * (the settings page, the popup's body), and its `container` option is newer than Chrome 131, the floor
+ * (the settings page, the popup's body), and its `container` option is newer than Chrome 131, the floor.
+ *
+ * The distances are read off the drawing and counted in the layout: a rect carries every scroll between the row and the
+ * box, but also the popover's scale while it grows in (pop-in, from 0.97), which `scrollTop` does not count — read as
+ * they were, the scroll as a list opened fell short and left its chosen row below the box (Task 110c). So each is
+ * divided by the box's drawn height over its layout height, 1 once the popover is still. Offsets would ignore the scale,
+ * but Chrome's `offsetTop` ignores every scroll too, so the popover's distance to a row in the scrolled list would have
+ * to be rebuilt from each scroller between them
  */
 function reveal(row: Element | null | undefined, stop: Element) {
   if (!row) return
   for (let box = row.parentElement; box; box = box.parentElement) {
     if (box.scrollHeight > box.clientHeight && /auto|scroll/.test(getComputedStyle(box).overflowY)) {
       const r = row.getBoundingClientRect()
-      const top = box.getBoundingClientRect().top + box.clientTop
-      const bottom = top + box.clientHeight
-      if (r.top < top) box.scrollTop -= top - r.top
-      else if (r.bottom > bottom) box.scrollTop += Math.min(r.bottom - bottom, r.top - top)
+      const b = box.getBoundingClientRect()
+      /** drawn pixels to a layout pixel */
+      const k = b.height > 0 && box.offsetHeight > 0 ? b.height / box.offsetHeight : 1
+      const top = b.top + box.clientTop * k
+      const bottom = top + box.clientHeight * k
+      if (r.top < top) box.scrollTop -= (top - r.top) / k
+      else if (r.bottom > bottom) box.scrollTop += Math.min(r.bottom - bottom, r.top - top) / k
     }
     if (box === stop) return
   }

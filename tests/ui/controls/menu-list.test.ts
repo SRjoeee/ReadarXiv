@@ -119,27 +119,30 @@ describe('MenuList', () => {
 /**
  * The layout happy-dom does not do, for the scroll of the active row: the rows 30 px apart from the top of `box`, a scroll
  * box `height` px tall that `scrollTop` moves (clamped as a browser clamps it); nothing laid out while `shown()` is false,
- * as a closed popover's contents are not (display: none). Every other element is where happy-dom puts it: at 0, 0
+ * as a closed popover's contents are not (display: none). `scale`: the drawing's size against the layout's, as the
+ * popover's grow-in (pop-in, from 0.97) draws it — the rects are drawn lengths, `offsetHeight`, `clientHeight` and
+ * `scrollTop` layout ones. Every other element is where happy-dom puts it: at 0, 0
  */
-function layOut(box: HTMLElement, height: number, shown: () => boolean = () => true) {
+function layOut(box: HTMLElement, height: number, shown: () => boolean = () => true, scale = 1) {
   const rows = () => [...box.querySelectorAll('[role="option"]')]
   let top = 0
   box.style.overflowY = 'auto'
   Object.defineProperty(box, 'clientHeight', { configurable: true, get: () => (shown() ? height : 0) })
+  Object.defineProperty(box, 'offsetHeight', { configurable: true, get: () => (shown() ? height : 0) })
   Object.defineProperty(box, 'scrollHeight', { configurable: true, get: () => (shown() ? rows().length * 30 : 0) })
   Object.defineProperty(box, 'scrollTop', { configurable: true, get: () => top, set: (v: number) => { top = Math.max(0, Math.min(v, box.scrollHeight - box.clientHeight)) } })
   const real = Element.prototype.getBoundingClientRect
   const rect = (y: number, h: number) => ({ x: 0, y, top: y, bottom: y + h, left: 0, right: 200, width: 200, height: h, toJSON: () => ({}) }) as DOMRect
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     if (!shown()) return rect(0, 0)
-    if (this === box) return rect(0, height)
+    if (this === box) return rect(0, height * scale)
     const i = rows().indexOf(this)
-    return i < 0 ? real.call(this) : rect(i * 30 - top, 30)
+    return i < 0 ? real.call(this) : rect((i * 30 - top) * scale, 30 * scale)
   })
 }
 const LANGUAGES: MenuListItem[] = Array.from({ length: 40 }, (_, i) => ({ id: `l${i}`, name: `Lang ${i}` }))
-/** the active row's place in its box: whether it shows whole */
-const inView = (box: HTMLElement, index: number) => index * 30 >= box.scrollTop && index * 30 + 30 <= box.scrollTop + box.clientHeight
+/** the active row's place in its box: whether it shows whole (to a thousandth of a pixel, the float's error on a scaled drawing) */
+const inView = (box: HTMLElement, index: number) => index * 30 >= box.scrollTop - 1e-3 && index * 30 + 30 <= box.scrollTop + box.clientHeight + 1e-3
 
 describe('MenuList: the active row stays in view (the final review of Part 7, A-I2)', () => {
   afterEach(() => { vi.restoreAllMocks() })
@@ -176,6 +179,28 @@ describe('MenuList: the active row stays in view (the final review of Part 7, A-
       expect(list.scrollTop).toBe(0)
       await act(async () => { popover.showPopover() })
       expect([list.querySelector('[data-active]')!.textContent, inView(list, 25), list.scrollTop]).toEqual(['Lang 25', true, 26 * 30 - 165])
+    } finally { restore() }
+  })
+
+  it('lands exactly while the popover grows in: the rows drawn at 0.97 of their layout, the scroll counted in the layout (Task 110c)', async () => {
+    // on 2cc12d83 the distances were read off the drawing and scrolled as they were, short of the layout's: opened on row
+    // 25 the list stopped at 591.6 for 615, the row below the box's foot (in Chromium on the settings page: 4 113 for 4 245)
+    const restore = stubPopovers()
+    try {
+      const items = LANGUAGES.map((l, i) => ({ ...l, checked: i === 25 }))
+      const { container } = await mountElement(createElement('div', { popover: 'auto' }, createElement(MenuList, { items, kind: 'listbox', label: 'Language', search: 'Search', onPick: vi.fn(), onClose: vi.fn() })))
+      const popover = container.querySelector<HTMLElement>('[popover]')!
+      const field = container.querySelector<HTMLInputElement>('input')!
+      const list = container.querySelector<HTMLElement>('[role="listbox"]')!
+      layOut(list, 165, () => popover.hasAttribute('data-open'), 0.97)
+      await act(async () => { popover.showPopover() })
+      expect(list.scrollTop).toBeCloseTo(26 * 30 - 165, 6)
+      expect(inView(list, 25)).toBe(true)
+      for (let i = 26; i <= 28; i++) {
+        await key(field, 'ArrowDown')
+        expect(inView(list, i), `row ${i}`).toBe(true)
+      }
+      expect(list.scrollTop).toBeCloseTo(29 * 30 - 165, 6)
     } finally { restore() }
   })
 
