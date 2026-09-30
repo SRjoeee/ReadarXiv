@@ -25,8 +25,10 @@ export function serialize(u) {
     if (p.t === 'text') { let s = utf8(p.s).replace(/\s+/g, ' '); if (k === 0) s = s.trimStart(); if (k === u.pieces.length - 1) s = s.trimEnd(); wire += escape(s); return }
     slots.push(p)
     const m = `@${toAlpha(slots.length)}#`
-    // a marker touching a letter is read as part of the word by the engine (#254): a space of ours around it
-    const before = /\p{L}$/u.test(wire) ? ' ' : ''
+    // a marker touching a letter is read as part of the word by the engine (#254): a space of ours around it. So is one
+    // right after a full stop, `models.@a#` — a citation or a footnote's mark after a sentence — which left the
+    // sentence's last word in English (the HTML page's protector, 09c25622: 13 of 17 blocks as sent, none with the space)
+    const before = /[\p{L}.]$/u.test(wire) ? ' ' : ''
     const nextText = u.pieces[k + 1]?.t === 'text' ? u.pieces[k + 1].s : ''
     const after = /^\p{L}/u.test(utf8(nextText)) ? ' ' : ''
     wire += before + m + after
