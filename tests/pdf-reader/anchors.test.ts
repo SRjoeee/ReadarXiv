@@ -62,3 +62,20 @@ describe('tokenizeDocument: a word printed over itself is read once', () => {
     expect(tokenizeDocument([page([['the', 'the', 'end']])]).map(t => t.t)).toEqual(['the', 'the', 'end'])
   })
 })
+
+describe('anchorUnits: a word the text layer gives in parts is lit whole', () => {
+  it('a small-caps heading is lit to the end of its word, not over its first capital (every IEEEtran section title, 2608.06701)', () => {
+    // I + NTRODUCTION, the capital and the smaller capitals two items with no space between: one token with the
+    // capital's box, then the rest of the word with its own box and no text
+    const pages = [{ page: 1, items: [...page([['the paragraph before it']]).items, item('I', 50, 688, { width: 7 }), item('NTRODUCTION', 57, 688, { size: 8, width: 66, eol: true }), ...page([[], [], ['the paragraph after it']]).items], styles: {} }]
+    const { doc, found } = anchors(pages, [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'Introduction' }, { id: 2, text: 'the paragraph after it' }], [[0, 0, 3], [2, 6, 9]])
+    expect(doc.slice(4, 6).map(t => t.t)).toEqual(['introduction', ''])
+    expect(found.get(1)?.rects.map(r => [r.x0, r.x1])).toEqual([[50, 123]])
+  })
+
+  it('a unit whose last word a hyphen cuts at a line\'s end is lit on the line its word ends on', () => {
+    const pages = [page([['the', 'last', 'word', 'is', 'hyphen-'], ['ated']])]
+    const { found } = anchors(pages, [{ id: 0, text: 'the last word is hyphenated' }], [[0, 0, 4]])
+    expect(found.get(0)?.rects.map(r => [r.x0, r.x1])).toEqual([[50, 165], [50, 70]])
+  })
+})

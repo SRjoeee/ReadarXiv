@@ -316,8 +316,13 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
     if (!m.length) { out.set(id, null); return }
     const idx = []
     for (let n = 0; n < m.length; n++) {
-      idx.push(m[n])
-      if (n + 1 < m.length && between(doc, owner, u, m[n], m[n + 1])) for (let k = m[n] + 1; k < m[n + 1]; k++) idx.push(k)
+      let k = m[n]
+      idx.push(k)
+      // the rest of a word the text layer gives in parts, which has a box and no text (tokenizeDocument): matched by
+      // its text, a small-caps title was lit over its first capital alone, and a last word cut by a hyphen missed its
+      // line's end
+      while (k + 1 < doc.length && !doc[k + 1].t && (n + 1 === m.length || k + 1 < m[n + 1])) idx.push(++k)
+      if (n + 1 < m.length && between(doc, owner, u, m[n], m[n + 1])) for (k++; k < m[n + 1]; k++) idx.push(k)
     }
     out.set(id, { rects: lineRects(doc, idx), coverage: +f.coverage.toFixed(3), tokens: idx, bounded: !!f.bounded })
   })
