@@ -141,6 +141,29 @@ async function writeIndex(dir, base) {
   return index
 }
 
+/** a paper's translation from its cache (translation.json, by each unit's kind and source), the units it lacks asked
+ *  for and added to it: a front end that cuts the paper differently (a unit's pieces changed) asks only for the units it
+ *  has not seen; a nested note is bound again to the unit it belongs to now, the cache holding a copy of it */
+async function translationOf(dir, paper, lang) {
+  const { units } = paper, cache = join(dir, 'translation.json')
+  const translated = new Map()
+  const entries = existsSync(cache) ? (JSON.parse(readFileSync(cache, 'utf8')).entries ?? []) : []
+  const byKey = new Map(entries.map(e => [e.key, e.pieces]))
+  const kept = keptFor(paper, lang), todo = []
+  for (const u of units) {
+    if (kept.has(u)) continue
+    const hit = byKey.get(unitKey(u))
+    if (hit) translated.set(u, rebind(u, hit)); else todo.push(u)
+  }
+  if (todo.length) {
+    const { results } = await translateUnits(todo, texts => translateTexts(texts, lang).then(r => r.map(text => (text == null ? null : { text, by: null }))), 'markers')
+    for (const [u, r] of results) if (r.pieces) { translated.set(u, r.pieces); byKey.set(unitKey(u), r.pieces) }
+    writeFileSync(cache, JSON.stringify({ entries: [...byKey].map(([key, pieces]) => ({ key, pieces })) }))
+  }
+  const asked = units.filter(u => !kept.has(u)).length
+  return { translated, stats: { units: asked, untranslated: asked - translated.size, askedNow: todo.length } }
+}
+
 async function generate(lang, id) {
   const dir = join(OUT, lang, id), work = join(dir, 'work')
   mkdirSync(work, { recursive: true })
@@ -155,23 +178,8 @@ async function generate(lang, id) {
   // 1. the translation, once: both columns read it. Cached by each unit's kind and source (unitKey), so a front end
   // that cuts the paper differently asks only for the units it has not seen; a nested note is bound again to the unit
   // it belongs to now, the cache holding a copy of it
-  const cache = join(dir, 'translation.json')
-  const translated = new Map()
-  const entries = existsSync(cache) ? (JSON.parse(readFileSync(cache, 'utf8')).entries ?? []) : []
-  const byKey = new Map(entries.map(e => [e.key, e.pieces]))
-  const kept = keptFor(paper, lang), todo = []
-  for (const u of units) {
-    if (kept.has(u)) continue
-    const hit = byKey.get(unitKey(u))
-    if (hit) translated.set(u, rebind(u, hit)); else todo.push(u)
-  }
-  if (todo.length) {
-    const { results } = await translateUnits(todo, texts => translateTexts(texts, lang).then(r => r.map(text => (text == null ? null : { text, by: null }))), 'markers')
-    for (const [u, r] of results) if (r.pieces) { translated.set(u, r.pieces); byKey.set(unitKey(u), r.pieces) }
-  }
-  const asked = units.filter(u => !kept.has(u)).length
-  base.translation = { units: asked, untranslated: asked - translated.size, askedNow: todo.length }
-  if (todo.length) writeFileSync(cache, JSON.stringify({ entries: [...byKey].map(([key, pieces]) => ({ key, pieces })) }))
+  const { translated, stats } = await translationOf(dir, paper, lang)
+  base.translation = stats
   note('translated', JSON.stringify(base.translation))
 
   // 2. fonts and the original with probes: the target shared by FIT and the H-rule lock
@@ -288,9 +296,7 @@ async function addGeneric(lang, id) {
   const index = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'))
   const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
   const paper = openPaper(files), { units, meta } = paper
-  const byKey = new Map((existsSync(join(dir, 'translation.json')) ? JSON.parse(readFileSync(join(dir, 'translation.json'), 'utf8')).entries : []).map(e => [e.key, e.pieces]))
-  const kept = keptFor(paper, lang), translated = new Map()
-  for (const u of units) { if (kept.has(u)) continue; const hit = byKey.get(unitKey(u)); if (hit) translated.set(u, rebind(u, hit)) }
+  const { translated } = await translationOf(dir, paper, lang)
   const stem = stemOf(paper), fonts = readFontProbe(logIn(join(work, 'probe'), stem)), oLog = logIn(join(work, 'original'), stem), oPdf = pdfIn(join(work, 'original'), stem)
   const probe = readWidthProbe(logIn(join(work, 'width'), stem)), sizes = readSizeProbe(logIn(join(work, 'width'), stem))
   if (!oLog || !oPdf) { note('no marked original in', work); return }
@@ -334,9 +340,7 @@ async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, k
   const index = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'))
   const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
   const paper = openPaper(files), { units, meta } = paper
-  const byKey = new Map((existsSync(join(dir, 'translation.json')) ? JSON.parse(readFileSync(join(dir, 'translation.json'), 'utf8')).entries : []).map(e => [e.key, e.pieces]))
-  const kept = keptFor(paper, lang), translated = new Map()
-  for (const u of units) { if (kept.has(u)) continue; const hit = byKey.get(unitKey(u)); if (hit) translated.set(u, rebind(u, hit)) }
+  const { translated } = await translationOf(dir, paper, lang)
   const stem = stemOf(paper), fonts = readFontProbe(logIn(join(work, 'probe'), stem)), oLog = logIn(join(work, 'original'), stem), oPdf = pdfIn(join(work, 'original'), stem)
   const widthLog = logIn(join(work, 'width'), stem), probe = readWidthProbe(widthLog), sizes = readSizeProbe(widthLog)
   if (!oLog || !oPdf) { note('no marked original in', work); return }
