@@ -326,17 +326,33 @@ const pointer = pointerPath({
   later: setTimeout,
   cancel: clearTimeout,
 })
-/** where a side's pane and pages are on the screen (pointer.mjs measurePane), read where the layout is known clean: a
- *  ResizeObserver's callback runs after the layout, whenever the pane or its pages change size — the pages laid, a
- *  zoom, a pinch's steps, the window, the display — and a pane moved without a change of size (swapped) is measured in
- *  the next frame */
+/** where a side's pane and pages are on the screen (pointer.mjs measurePane: the pane's place as its layout has it,
+ *  whatever transform draws it moving), read where the layout is known clean: a ResizeObserver's callback runs after
+ *  the layout, whenever the pane or its pages change size — the pages laid, a zoom, a pinch's steps, the window, the
+ *  contents panel, a display of one pane or two */
 function measure(side) {
   side.at = measurePane(side.container, side.viewer.viewer, side.viewer._pages ?? [])
   side.scrollX = side.container.scrollLeft; side.scrollY = side.container.scrollTop
 }
 const measuredSide = new WeakMap() // a pane's container and page stack → its side, the one coming in too (replaceRight)
 const measured = new ResizeObserver(entries => { for (const s of new Set(entries.map(e => measuredSide.get(e.target)))) if (s) measure(s) })
-new MutationObserver(() => requestAnimationFrame(() => { for (const s of sides) measure(s) })).observe(document.documentElement, { attributeFilter: ['data-axt-swapped'] })
+/** What moves a pane, or draws it moving, is on <html>: the panes swapped (their places, not their sizes), the contents
+ *  panel (the document area slid in by a translation, App.tsx), the display of one pane or two, a narrow window's. On
+ *  any of them both sides are measured in the next frame, and again as a slide of a pane's box ends, when its box on
+ *  the screen gives the fraction of a pixel the offsets round away (measurePane). What else was looked at moves no
+ *  pane: the dimmed pages (a filter, drawn in by a view transition over a layout that stays), the fonts coming in (the
+ *  panes are in a fixed box under a toolbar of fixed height), a zoom (PDF.js resizes the pages: the ResizeObserver);
+ *  the browser gate checks the kept places after each */
+function remeasure() {
+  requestAnimationFrame(() => {
+    for (const s of sides) measure(s)
+    for (const a of document.getAnimations()) {
+      const el = a.effect?.target
+      if (el && !a.effect.pseudoElement && sides.some(s => el.contains(s.container))) a.finished.then(() => { for (const s of sides) measure(s) }, () => {})
+    }
+  })
+}
+new MutationObserver(remeasure).observe(document.documentElement, { attributeFilter: ['data-axt-swapped', 'data-axt-contents', 'data-axt-pdf-mode', 'data-axt-narrow'] })
 /** a point of the screen → the page under it and the point in PDF units, from what measure kept; null off the pages.
  *  A side that follows on the compositor shows its pages shifted from its scroll (glass) */
 function pointAt(side, clientX, clientY) {

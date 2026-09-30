@@ -23,6 +23,19 @@ describe('measurePane: where a pane and its pages are', () => {
     const still = measurePane(pane, box(0, 44), pages(0)), moved = measurePane(pane, box(0, 44 - 57.5, { offsetTop: 0 }), pages(57.5))
     expect([...moved.tops]).toEqual([...still.tops])
   })
+  // the reader's panes: the scroller absolute in its pane, the pane in the fixed document area (App.tsx, reader.css)
+  const chain = (paneLeft: number, drawnAt: number) => {
+    const doc = box(0, 0, { offsetLeft: 236, offsetTop: 44 }), pane = box(0, 0, { offsetLeft: paneLeft, offsetParent: doc })
+    return box(drawnAt, 44, { offsetParent: pane })
+  }
+  it('a pane drawn sliding by a transform (the contents panel opening) is where its layout puts it, where the slide ends', () => {
+    // the document area moved 236 across at once and drawn from its old place, translated back by 236
+    const pages = [{ div: box(0, 0) }]
+    expect(measurePane(chain(754, 754), box(0, 0), pages)).toMatchObject({ left: 990, top: 44 })
+  })
+  it('a pane not transformed keeps the fraction of a pixel its box has, which offsets round away', () => {
+    expect(measurePane(chain(755, 990.5), box(0, 0), [])).toMatchObject({ left: 990.5, top: 44 })
+  })
 })
 
 describe('pointOn: a point of the screen on a page, in PDF units', () => {

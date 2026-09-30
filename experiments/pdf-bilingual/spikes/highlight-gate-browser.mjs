@@ -5,6 +5,10 @@
 //    its own, or a smaller one painted over it (a heading run into its paragraph's first line)
 //  - a miss is held: the pointer moved off every unit keeps what is lit 50 ms, not 250 ms
 //  - both sides painted; the tasks that write the highlight force no layout (a Chrome trace: no Layout inside them)
+//  - where the pointer's path keeps each pane and page (debug.pointAt) is where the layout has them, at 60 points a
+//    pane, after everything that moves a pane or draws it moving: the load, the contents panel opened and closed, a
+//    zoom and back, the panes swapped and back, one pane shown (the translation, the original) and two again, the
+//    pages dimmed and not, the right side replaced (a new compile), the fonts loaded
 //  costs, the build against BASE_BUILD, interleaved (both browsers open, runs alternating):
 //  - a sweep of real pointer moves (220 down each pane, zig-zagging, one a frame) over a spread of formulas, of aligned
 //    displays, and a two-column page: per light — a move that changed what is lit — the script of the task that
@@ -84,9 +88,66 @@ async function trace(page, fn) {
 }
 
 // ---------------------------------------------------------------- checks
+const patch = (page, change) => page.evaluate(p => window.__reader.controller.patchSettings(c => {
+  const next = { ...c }
+  for (const [k, v] of Object.entries(p)) next[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...c[k], ...v } : v
+  return next
+}), change)
+/** what moves a pane or draws it moving, each with the time it takes to end (the contents panel slides 200 ms, PDF.js
+ *  draws a zoom's pages, a view transition crossfades the dimmed pages) */
+const MOVES = [
+  ['the load', async () => {}],
+  ['the contents opened', page => page.locator('button[aria-controls="axt-contents"]').click()],
+  ['the contents closed', page => page.locator('button[aria-controls="axt-contents"]').click()],
+  ['a zoom', page => page.evaluate(() => window.__reader.controller.zoomBy(1.1))],
+  ['the zoom back', page => page.evaluate(() => window.__reader.controller.zoomTo('page-width'))],
+  ['the panes swapped', page => patch(page, { pdfReader: { swapped: true } })],
+  ['the panes back', page => patch(page, { pdfReader: { swapped: false } })],
+  ['the translation alone', page => page.evaluate(() => window.__reader.controller.setDisplay('translation'))],
+  ['the original alone', page => page.evaluate(() => window.__reader.controller.setDisplay('original'))],
+  ['both again', page => page.evaluate(() => window.__reader.controller.setDisplay('bilingual'))],
+  ['the pages dimmed', page => patch(page, { theme: 'dark', pdfReader: { dimPages: true } })],
+  ['the pages not dimmed', page => patch(page, { theme: 'light' })],
+  ['the right side replaced', page => page.evaluate(() => window.__reader.debug.swapRight())],
+  ['the fonts loaded', page => page.evaluate(() => document.fonts.ready.then(() => {}))],
+]
+/** debug.pointAt against the layout read now (the page under the point, its box), at 60 seeded points a pane shown:
+ *  the points where they differ by more than half a unit, out of those on a page, and those where it finds a page the
+ *  layout has none. A point in a page's margin that the page's text layer overflows into is no page's for the pointer
+ *  and is left out */
+const places = page => page.evaluate(() => {
+  let seed = 7
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+  const d = window.__reader.debug, out = { n: 0, bad: 0, worst: [] }
+  for (const s of [d.left, d.right]) {
+    const c = s.container.getBoundingClientRect()
+    if (!c.width) continue
+    for (let i = 0; i < 60; i++) {
+      const x = c.left + 10 + rand() * (c.width - 20), y = c.top + 10 + rand() * (c.height - 20)
+      // under whatever floats over the pane there (its page pill, its scroll indicator)
+      const el = document.elementsFromPoint(x, y).map(e => e.closest('.page')).find(e => e && s.container.contains(e))
+      const a = d.pointAt(s, x, y)
+      const b = el?.getBoundingClientRect()
+      if (!el || x < b.left + el.clientLeft || x > b.right - el.clientLeft || y < b.top + el.clientTop || y > b.bottom - el.clientTop) { if (!el && a) { out.n++; out.bad++ } continue }
+      const n = Number(el.dataset.pageNumber), pv = d.pageView(s, n)
+      const [px, py] = pv.viewport.convertToPdfPoint(x - b.left - el.clientLeft, y - b.top - el.clientTop)
+      out.n++
+      const e = !a || a.page !== n ? Infinity : Math.hypot(a.x - px, a.y - py)
+      if (e > 0.5) { out.bad++; if (out.worst.length < 3) out.worst.push({ side: s === d.left ? 'L' : 'R', off: a ? +((a.x - px) * pv.viewport.scale).toFixed(1) : null }) }
+    }
+  }
+  return out
+})
 async function checks(b) {
   for (const paper of CHECK) {
     const page = await open(b, paper)
+    // where the pointer's path keeps the panes and pages, after each of what moves them
+    for (const [what, move] of MOVES) {
+      await move(page)
+      await page.waitForTimeout(900)
+      const p = await places(page)
+      check(`${b.label} ${paper}: the kept places are the layout's after ${what}`, p.n > 0 && p.bad === 0, `${p.bad} of ${p.n} points off${p.worst.length ? ` ${JSON.stringify(p.worst)}` : ''}`)
+    }
     // units lit on both sides whose first lines are on the first two pages of each side, a dozen
     const ids = await page.evaluate(() => {
       const d = window.__reader.debug

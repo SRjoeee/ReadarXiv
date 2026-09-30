@@ -10,7 +10,7 @@
  * away: while the stack is transformed it is its pages' offsetParent, and their offsets were a page's margin short
  */
 export function measurePane(container, stack, pages) {
-  const b = container.getBoundingClientRect(), vb = stack.getBoundingClientRect()
+  const b = placeOf(container), vb = stack.getBoundingClientRect()
   const tops = new Float64Array(pages.length), lefts = new Float64Array(pages.length)
   pages.forEach((pv, i) => {
     const r = pv.div.getBoundingClientRect()
@@ -18,6 +18,22 @@ export function measurePane(container, stack, pages) {
     lefts[i] = r.left - vb.left + stack.offsetLeft + pv.div.clientLeft
   })
   return { left: b.left + container.clientLeft, top: b.top + container.clientTop, tops, lefts }
+}
+
+/**
+ * An element's border box's top left on the screen as the layout places it, transforms left out. A transform draws a
+ * pane elsewhere than its layout for a while — the contents panel moves the document area at once and draws it sliding
+ * there by a translation (App.tsx) — and the pane is measured then, its size changed: its box on the screen was the
+ * slide's start, 236 px off until something next resized it (the review of B1). The offsets' chain, which transforms do
+ * not affect, gives the layout's place to a whole pixel; the box on the screen gives it exactly and is taken when the
+ * two agree (no transform in the way). The reader's page does not scroll (its document area is fixed), and the chain
+ * takes out the scroll of the boxes in it
+ */
+function placeOf(el) {
+  let x = el.offsetLeft, y = el.offsetTop
+  for (let p = el.offsetParent; p; p = p.offsetParent) { x += p.offsetLeft + p.clientLeft - p.scrollLeft; y += p.offsetTop + p.clientTop - p.scrollTop }
+  const b = el.getBoundingClientRect()
+  return Math.abs(b.left - x) < 1 && Math.abs(b.top - y) < 1 ? b : { left: x, top: y }
 }
 
 /**
