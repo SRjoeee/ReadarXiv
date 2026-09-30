@@ -2030,3 +2030,13 @@ once per logical element; word fragments reuse it. A generic block-canvas style 
 avoidable line breaks/spacing and were corrected. Two mixed regions update/restore independently, and cached navigation
 restores them without repeated glyph analysis. These are experimental subset results, not production acceptance:
 native vector writing, tables, full-paper coverage, cold delivery, total memory and language typography still need work.
+
+## Thirty-third addendum, 2026-09-30: FIT default takes priority
+
+The owner prioritizes a general, efficient, stable FIT default before fine language alignment. Small translation-length
+differences are deferred; content integrity and obvious title/table/overflow defects remain acceptance blockers.
+The [production roadmap](plans/2026-09-30-fit-default-roadmap.md) separates the measured offline FIT baseline from
+a runtime candidate without extra whole-paper calibration compiles, then browser/cache integration and default
+activation after quality/performance comparison. The native-PDF prototype and H-rule track become supporting work.
+Language-controlled experiments follow default acceptance, keeping natural typography and all five language controls.
+This records the new priority; the reader default and deployed build have not been changed by this documentation.
