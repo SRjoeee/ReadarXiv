@@ -211,3 +211,67 @@ Errors are leave-one-paper-out. The text predictor was crude (every non-CJK char
     Showing whichever of the two compiles lies nearer the original would give 31 papers and drift 0.038, three worse;
     the reader's previews are drafts (no rerun, references unresolved), so it would cost the last preview a full
     compile. Not taken.
+- 2026-10-01, the owner's verdicts paper by paper on that round, Flow against Flow, first: Flow 12, Flow, first 9,
+  level 13 (German four of five Flow, Korean four of eight Flow, first), and one fault: Russian 2608.05876's
+  references, untranslated, ended sooner than the original's. What was wrong:
+  - A unit's size ran before its leading, and the leading it gave back after its paragraph was the smaller size's:
+    every line after the last sized unit that selected no size of its own was set 0.9 as far apart — the references
+    of Russian 2608.05876, 18090, 06701 and 15761 and German 06701 and 15761 (9.9 pt against the paper's 11). The size
+    now hands the leading it replaced to the unit's leading (latex-front.mjs \axt@leadbefore). CJK sets no unit size
+    and was not touched; the references of every CJK paper matched the original's pitch.
+  - A unit started from the size in force unless that equalled the size the last unit was set at, taken as still in
+    force: the paper's own 9 pt — notes, \small — after a unit set from 10 pt to 9 stayed 9 pt and came back at 10.
+    The note of whose size is in force is now the size and leading together, local, and restored with the size.
+  - Where the two Flows were level on pages and floats, the owner chose the one whose paragraphs are set evenly. The
+    final's correction took a jump the preview measured back within its horizon and set the paragraphs after it up to
+    a quarter looser than those around them (Korean 2608.05876: 1.36 against 1.11; 06701: 1.54 against 1.20). Counted
+    as units more than 8 % from the median of the three before and after: the first Flow 3 of 2,531, the Flow 53.
+    The same correction took the preview's first reading — its front matter a little short — as an offset to keep,
+    set the abstract looser, and pushed Korean 2608.15761's keywords off page 1: every page after it 45 pt late.
+    flowLeads' `rate` bounds how far what is taken back moves a unit's leading from the window's.
+  - `rate` at 3 % and 5 % on the round of 34 (German and Russian's two Flows compiled again with the size fix): 5 %
+    kept Flow's places and set the text as evenly as the first Flow; 3 % cost a page (German 2608.06233).
+
+    | | Pages equal | Drift median / p90 | Within 0.1 column | Blocks within 15 % | Floats within 30 pt of the original's | Units standing out |
+    |---|---|---|---|---|---|---|
+    | Flow, first | 26 | 0.059 / 0.333 | 71 % | 84 % | 78 % | 3 |
+    | Flow | 30 | 0.043 / 0.259 | 78 % | 84 % | 83 % | 53 |
+    | rate 3 % | 29 | 0.045 / 0.271 | 77 % | 85 % | 82 % | 12 |
+    | rate 5 % | 30 | 0.044 / 0.255 | 78 % | 85 % | 84 % | 9 |
+
+    Worse than Flow at 5 %: Korean 2608.05876 (0.025 → 0.060 column) and 2608.21180 (0.011 → 0.043, its abstract
+    33 pt below the e-mail line as the original's, against Flow's 22). 05876's loss was all in its appendix, and the
+    rate only showed what had been wrong before it: the correction read across the \clearpage before the appendix.
+  - A forced break puts the preview and the final at the top of a page whatever came before it, but the correction's
+    account ran across it: what the final's heights had parted from the preview's before the break (113 pt over
+    05876's main text, the final's type a little tighter) was read as the appendix running that far early, and the
+    appendix set looser — at Flow's full take-back a few paragraphs a tenth looser, at 5 % the whole appendix. The
+    output routine now logs each column made at a forced break (LINES_TEX AXT-FORCED, readForced), and flowLeads
+    starts the final's drift again from the preview's account there and the offset from the first reading after it
+    (`measured.breaks`), the median of readings stopping at the break. 05876's appendix at 5 %: 65, 47, 66 pt off on
+    its pages against the original, now 11, 14, 22 (Flow 9, 14, 22).
+  - Not the rate: Korean 2608.15761's abstract, 21 lines against the original's 23, is set 1.18 against the first
+    Flow's 1.16 — the window's leading, which its shorter neighbours raise, and the first reading's offset on it — and
+    comes out 8 % taller than the original's; its keywords, split across the page break in the original, went whole
+    to page 2 and every page after was 20–40 pt late. Open.
+  - Rate 5 % with the correction started again after forced breaks, the round of 34: the page's Flow, even (key
+    flow46fp8r5b).
+
+    | | Pages equal | Drift median / p90 | Within 0.1 column | Blocks within 15 % | Floats within 30 pt | Units standing out |
+    |---|---|---|---|---|---|---|
+    | Flow, first | 26 | 0.059 / 0.333 | 71 % | 84 % | 78 % | 3 |
+    | Flow | 30 | 0.043 / 0.259 | 78 % | 84 % | 83 % | 53 |
+    | Flow, even | 30 | 0.042 / 0.253 | 78 % | 85 % | 83 % | 9 |
+
+    Against Flow: Korean 2608.06701 better (0.054 → 0.010, its floats back in their columns), 2608.21180 worse
+    (0.011 → 0.043: pages 3–10 one or two lines late, the rate taking the offset back more slowly; its abstract as far
+    below the e-mail line as the original's), the other 32 level. Against the first Flow: ten better, Japanese
+    2608.15761 and Korean 2608.18090 worse (the keywords above, and 18090's floor below). On the papers the owner gave
+    to the first Flow: Korean 02785, 05876 and 06701 set as evenly as it (units standing out 0, 0, 1 against Flow's 4,
+    3, 7), Russian 05876's page 6 back (every unit on its page, 10 pt off against Flow's 95), Russian 02785 and 15761
+    level in every number, Chinese 2212.06817 even but two or three lines late on pages 14–26 (on 29–31, where the
+    first Flow's float pages ran 180–230 pt off, it holds).
+  - Korean and Japanese 2608.18090, a page more in every Flow: sections 7 and 8 run 0.16 page long where the leading
+    already sits at its floor (Japanese and Korean at the paper's own, the type's 1.01), the references start a page
+    later and run past it, and the checklist after its \newpage takes page 13. Nothing but the floor can take it
+    back — the owner's call (tracking tightened, a unit's face a little smaller, or the type leaving room below).
