@@ -113,6 +113,11 @@ html:not([data-axt-pointer]) .popup .find-field:focus-within { outline: 2px soli
 /* what Enter does, labelled in the row's words: ink on the neutral row (ink-2 there was 4.08:1 light; Task 101) */
 .popup .go kbd { color: var(--ink); }
 .popup .go.brand kbd { background: var(--brand-chip); color: var(--on-brand); }
+/* a row no service can serve (Codex 5a): greyed as a greyed entry is (controls.css .btn.lg[aria-disabled]) — the large
+   button's fill, its words ink-3 — and pressed nowhere */
+.popup .go[aria-disabled="true"] { background: var(--fill); color: var(--ink-3); cursor: default; }
+.popup .go[aria-disabled="true"] .go-id { color: var(--ink-3); }
+.popup .go[aria-disabled="true"]:active { scale: 1; }
 .popup .paper { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ink-2); font-size: 12.5px; }
 .popup .paper > b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .popup .go { transition: none; } }
@@ -121,4 +126,5 @@ html:not([data-axt-pointer]) .popup .find-field:focus-within { outline: 2px soli
 @media (forced-colors: active) {
   .popup .find-field { border: 1px solid CanvasText; }
   .popup .go:not(:focus-visible) { outline: 1px solid ButtonText; outline-offset: -1px; }
+  .popup .go[aria-disabled="true"] { color: GrayText; }
 }

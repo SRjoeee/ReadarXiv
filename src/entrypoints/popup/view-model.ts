@@ -93,8 +93,12 @@ export interface MenuView { label: string; search: boolean; items: MenuListItem[
 export interface FoundEntry { label: string; href: string | null }
 /** What P0's field recognised (§5.4), drawn under it; null for an empty field, under which the help line stands */
 export type Found =
-  /** an arXiv PDF or HTML address: one brand row, the way it opens and the paper */
-  | { kind: 'open'; format: 'pdf' | 'html'; label: string; paper: string; href: string }
+  /**
+   * an arXiv PDF or HTML address: one brand row, the way it opens and the paper. Gated as a paper's entries are
+   * (`canStart`): with no service able to run and none to take over, no `href` — the row greyed — and `note` the
+   * service's reason, with the settings button (Codex 5a)
+   */
+  | { kind: 'open'; format: 'pdf' | 'html'; label: string; paper: string; href: string | null; note: Note | null }
   /** words: arXiv's own search */
   | { kind: 'search'; label: string; href: string }
   /**
@@ -201,6 +205,18 @@ function cannotRunWhy(config: Config, pack: PackState | null, rejected: readonly
   }
 }
 
+/**
+ * Whether a translation opened from here would start — the rule that starts one on the full text (`pageDecision`): the
+ * chosen service runs, or the free one takes over from it. The page an entry opens starts by that rule, so an entry must
+ * not refuse what the page would do (Devin on #247: with a fallback the full text's button was enabled and an entry
+ * page's was not). The settings not read yet (P0 alone) are no reason to grey what arXiv's checks already cleared. One
+ * rule for an entry page's entries, P0's for a paper it names, and P0's row for an address (the final review, A-I1;
+ * Codex 5a)
+ */
+function canStart(config: Config | null, { pack, saved, rejected }: PopupInput): boolean {
+  return config === null || runnable(config, pack, rejected) || !!saved?.fallback
+}
+
 /** Why the chosen service cannot run, and who takes over if one does; null when it can run (the entry pages' views) */
 function serviceNote(config: Config, { pack, saved, rejected }: PopupInput): Note | null {
   if (runnable(config, pack, rejected)) return null
@@ -283,12 +299,7 @@ const noHtmlNote = (pdf: string | null): Pick<Note, 'text' | 'tone'> => (pdf ===
  * translated page, and are hidden here
  */
 function entryView(entry: EntryStatus, config: Config, input: PopupInput): PopupView {
-  const { pack, saved, rejected } = input
-  const canRun = runnable(config, pack, rejected)
-  // The rule that starts a translation on the full text (`pageDecision`): the chosen service, or the free one that
-  // takes over from it. The page this button opens starts by that rule, so the button must not refuse what the page
-  // would do (Devin on #247: with a fallback the full text's button was enabled and this one was not)
-  const canStart = canRun || !!saved?.fallback
+  const starts = canStart(config, input)
   const named = (id: string) => serviceName(id, config.services)
   const noHtml = entry.html === null
   const menus = menusOf(config, input, { style: false })
@@ -307,11 +318,11 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
     note: serviceNote(config, input) ?? (noHtml ? { ...noHtmlNote(entry.pdf), settings: false } : null),
     failed: null,
     // not drawn: the entries below are (S-P-50b); kept as the HTML entry, the action a page's own button would take
-    primary: { label: S.entry.html, action: 'openHtml', disabled: noHtml || !canStart },
+    primary: { label: S.entry.html, action: 'openHtml', disabled: noHtml || !starts },
     secondary: null,
     // a paper that cannot be had as a bilingual PDF greys its entry without words (§1's rule); either entry opens a page
     // that translates by the same rule as the full text's button (Devin on #247)
-    entries: { html: { label: S.entry.html, disabled: noHtml || !canStart }, pdf: { label: S.entry.pdf, disabled: entry.pdf === null || !canStart } },
+    entries: { html: { label: S.entry.html, disabled: noHtml || !starts }, pdf: { label: S.entry.pdf, disabled: entry.pdf === null || !starts } },
     mode: { value: config.mode, note: null },
     find: null,
   }
@@ -349,12 +360,17 @@ function readerView(entry: EntryStatus, config: Config, input: PopupInput): Popu
 /** P0's field and what it recognises (§5.4): the words of the row under it, and a paper's entries once both checks are back */
 function findView(input: PopupInput): NonNullable<PopupView['find']> {
   const { query, entries } = input.find
+  const { config } = input
   const read = offeredQuery(readQuery(query), input.readerRuns)
+  // the chosen service able to start, or one to take over; else what would open is bound to fail, and says why
+  const starts = canStart(config, input)
+  const why = config !== null && !starts ? serviceNote(config, input) : null
   switch (read.kind) {
     case 'empty':
       return { query, found: null }
     case 'open':
-      return { query, found: { kind: 'open', format: read.format, label: S.entry[read.format], paper: S.find.paper(read.id), href: read.href } }
+      // the address opens a translation as a paper's entries do, and is greyed by the same rule, saying the same (Codex 5a)
+      return { query, found: { kind: 'open', format: read.format, label: S.entry[read.format], paper: S.find.paper(read.id), href: starts ? read.href : null, note: why } }
     case 'search':
       return { query, found: { kind: 'search', label: S.find.search(read.query), href: read.href } }
     case 'elsewhere':
@@ -362,25 +378,21 @@ function findView(input: PopupInput): NonNullable<PopupView['find']> {
     case 'paper': {
       const answer = entries?.id === read.id ? entries : null
       // The same two entries as P17's (the design's §5.4): greyed by the two checks arXiv answers AND by whether the
-      // chosen service can even start — nothing here would then open a translation bound to fail (the config unread
-      // yet, at P0, is no reason to grey what the checks already cleared)
-      const { config, pack, saved, rejected } = input
-      const canStart = config === null || runnable(config, pack, rejected) || !!saved?.fallback
+      // chosen service can even start — nothing here would then open a translation bound to fail
       return {
         query,
         found: {
           kind: 'paper',
           paper: S.find.paper(read.id),
           entries: answer && {
-            html: { label: S.entry.html, href: canStart ? answer.html : null },
-            pdf: { label: S.entry.pdf, href: canStart ? answer.pdf : null },
+            html: { label: S.entry.html, href: starts ? answer.html : null },
+            pdf: { label: S.entry.pdf, href: starts ? answer.pdf : null },
           },
           // a greyed entry says why as P17's does (S-P-50b), once the entries are there: the service first, since it is
           // why both are greyed (S-P-33a beside a greyed PDF entry would say that entry works); then the HTML version's
           // absence, in full when there is no PDF either
           note: answer === null ? null
-            : config !== null && !canStart ? serviceNote(config, input)
-            : answer.html === null ? { ...noHtmlNote(answer.pdf), settings: false } : null,
+            : why ?? (answer.html === null ? { ...noHtmlNote(answer.pdf), settings: false } : null),
         },
       }
     }

@@ -441,7 +441,7 @@ describe('P0 and the moments before it (the redesign\'s design, §5.4)', () => {
   it('an empty field has nothing under it but the help line; what is typed says what Enter will do', () => {
     expect(view('P0').find).toEqual({ query: '', found: null })
     expect(view('P0a').find?.found).toEqual({ kind: 'search', label: '在 arXiv 搜索「attention is all you need」', href: searchUrl('attention is all you need') })
-    expect(view('P0b').find?.found).toEqual({ kind: 'open', format: 'pdf', label: 'PDF 翻译', paper: 'arXiv 2501.07202v1', href: 'https://arxiv.org/pdf/2501.07202v1#readarxiv' })
+    expect(view('P0b').find?.found).toEqual({ kind: 'open', format: 'pdf', label: 'PDF 翻译', paper: 'arXiv 2501.07202v1', href: 'https://arxiv.org/pdf/2501.07202v1#readarxiv', note: null })
     expect(view('P0c').find?.found).toMatchObject({ kind: 'open', format: 'html', label: 'HTML 翻译', paper: 'arXiv 2501.07202v1', href: 'https://arxiv.org/html/2501.07202v1#readarxiv' })
     expect(view('P0g').find?.found).toEqual({ kind: 'elsewhere', text: '只能打开 arXiv 的论文链接。也可以输入标题或作者搜索。' })
   })
@@ -487,6 +487,24 @@ describe('P0 and the moments before it (the redesign\'s design, §5.4)', () => {
     expect(derivePopupView(refused('P0d')).find?.found).toMatchObject({ entries: null, note: null })
     // a fallback takes over: the entries work, and P0f's own line stands
     expect(derivePopupView({ ...refused('P0f'), saved: input('P7b').saved }).find?.found).toMatchObject({ entries: { pdf: { href: 'https://arxiv.org/pdf/hep-th/9711200#readarxiv' } }, note: { text: S.note.noHtmlVersion, tone: 'info', settings: false } })
+  })
+
+  // Codex 5a: a pasted arXiv address became a row that opened a translation bound to fail, where the paper's entries
+  // under the same settings were greyed and said why
+  it('P0\'s row for an arXiv HTML or PDF address is gated as the paper\'s entries are: under P8b\'s settings no address and the service\'s reason with the settings button; with P7b\'s fallback it opens', () => {
+    const { config, rejected, saved } = input('P8b')
+    const refused = (id: string) => ({ ...input(id), config, rejected, saved, readerRuns: true })
+    const reason = { text: S.note.cannotRun(S.note.llmRejected), tone: 'alert', settings: true }
+    expect(derivePopupView(refused('P0c')).find?.found).toEqual({ kind: 'open', format: 'html', label: S.entry.html, paper: 'arXiv 2501.07202v1', href: null, note: reason })
+    expect(derivePopupView(refused('P0b')).find?.found).toEqual({ kind: 'open', format: 'pdf', label: S.entry.pdf, paper: 'arXiv 2501.07202v1', href: null, note: reason })
+    // P17 under the same settings says the same
+    expect(derivePopupView({ ...input('P17'), config, rejected, saved }).note).toEqual(reason)
+    // a fallback takes over: the row opens, nothing said
+    const fallback = input('P7b').saved
+    expect(derivePopupView({ ...refused('P0c'), saved: fallback }).find?.found).toMatchObject({ href: 'https://arxiv.org/html/2501.07202v1#readarxiv', note: null })
+    expect(derivePopupView({ ...refused('P0b'), saved: fallback }).find?.found).toMatchObject({ href: 'https://arxiv.org/pdf/2501.07202v1#readarxiv', note: null })
+    // the settings not read yet is no reason to grey, as for the entries
+    expect(derivePopupView({ ...input('P0c'), config: null }).find?.found).toMatchObject({ href: 'https://arxiv.org/html/2501.07202v1#readarxiv', note: null })
   })
 })
 

@@ -128,6 +128,23 @@ describe('P0: the field and what Enter does (the redesign\'s design, §5.4)', ()
     expect(actions.openOptions).toHaveBeenCalledOnce()
   })
 
+  // Codex 5a: the row for a pasted arXiv address is greyed as a greyed entry is, and says why as the entries' note does
+  it.each(['P0c', 'P0b'])('%s under settings no service can serve: the brand row greyed, still focusable, without its key; a click or Enter opens nothing; the service\'s reason as an alert Note with the settings button', async id => {
+    const { config, rejected, saved } = fixture('P8b').input
+    const { main, actions } = await drawInput({ ...fixture(id).input, config, rejected, saved })
+    const row = main.querySelector<HTMLButtonElement>('.go.brand')!
+    expect([row.getAttribute('aria-disabled'), row.disabled, row.querySelector('kbd')]).toEqual(['true', false, null])
+    await act(async () => { row.click() })
+    await enter(main.querySelector('input')!)
+    expect(actions.openLink).not.toHaveBeenCalled()
+    const note = main.querySelector('.found .note')!
+    expect([note.getAttribute('data-tone'), note.querySelector('p')!.textContent]).toEqual(['alert', S.note.cannotRun(S.note.llmRejected)])
+    const settings = note.querySelector<HTMLButtonElement>('button')!
+    expect(settings.textContent).toBe(S.settings)
+    await act(async () => { settings.click() })
+    expect(actions.openOptions).toHaveBeenCalledOnce()
+  })
+
   // Fix round 1 (Task 36's review, Important): `.found` changes as the reader types — the help line, the brand row,
   // the search row, the paper line, the "only arXiv links" sentence — but none of that was ever said to a screen
   // reader. The design's §9: results are polite status messages, never assertive. The echo stays out of the entries'

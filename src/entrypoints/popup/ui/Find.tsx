@@ -10,7 +10,7 @@ import { Reveal } from '@/ui/controls/Reveal'
 import { S } from '@/ui/strings'
 import type { PopupActions } from '../data'
 import { ADVANCED_SEARCH } from '../find'
-import type { FoundEntry, PopupView } from '../view-model'
+import type { FoundEntry, Note as NoteView, PopupView } from '../view-model'
 import { Entries } from './Entries'
 import { Note } from './Note'
 
@@ -20,6 +20,13 @@ export function Find({ find, failure, actions }: { find: NonNullable<PopupView['
   const go = found?.kind === 'open' || found?.kind === 'search' ? found : null
   const paper = found?.kind === 'paper' ? found : null
   const entry = (e: FoundEntry) => ({ label: e.label, disabled: e.href === null, run: () => { if (e.href) actions.openLink(e.href) } })
+  /**
+   * A reason under what the field found, as P17 draws it: an alert as a Note — the settings button beside it when the
+   * service is the reason —, the lesser case (an HTML version missing, the PDF entry working) as a plain line
+   */
+  const reason = (note: NoteView) => (note.tone === 'alert'
+    ? <Note tone="alert" text={note.text} action={note.settings ? { label: S.settings, run: () => actions.openOptions() } : undefined} />
+    : <p className="line mark"><Icon node={Info} size={14} />{note.text}</p>)
   /*
    * What the field understood, echoed to a screen reader politely (the design's §9: results are status, nothing
    * assertive) — the same words the row itself already carries (the sentence, the row's label and id, or the paper's
@@ -54,7 +61,8 @@ export function Find({ find, failure, actions }: { find: NonNullable<PopupView['
             autoFocus
             onChange={e => actions.setQuery(e.target.value)}
             // Enter acts; the Enter that ends an input method's composition (a title typed in Pinyin) is the method's
-            onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && go) { e.preventDefault(); actions.openLink(go.href) } }}
+            // (a row greyed — no service can serve the paper — has no address: Enter opens nothing, as a greyed entry would)
+            onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && go?.href) { e.preventDefault(); actions.openLink(go.href) } }}
           />
         </label>
         <div id={under} className="found">
@@ -64,12 +72,18 @@ export function Find({ find, failure, actions }: { find: NonNullable<PopupView['
             </p>
           )}
           {go?.kind === 'open' && (
-            <button type="button" className="go brand" aria-label={`${go.label} ${go.paper}`} onClick={() => actions.openLink(go.href)}>
-              <Icon node={go.format === 'pdf' ? FileText : Globe} size={14} />
-              <span className="go-label">{go.label}</span>
-              <span className="go-id">{go.paper}</span>
-              <Kbd>↵</Kbd>
-            </button>
+            <>
+              {/* greyed as a greyed entry is (Button.tsx): aria-disabled, still in the tab order, its press and its key
+                  gone, its reason under it (Codex 5a) */}
+              <button type="button" className="go brand" aria-label={`${go.label} ${go.paper}`} aria-disabled={go.href === null || undefined}
+                onClick={() => { if (go.href) actions.openLink(go.href) }}>
+                <Icon node={go.format === 'pdf' ? FileText : Globe} size={14} />
+                <span className="go-label">{go.label}</span>
+                <span className="go-id">{go.paper}</span>
+                {go.href && <Kbd>↵</Kbd>}
+              </button>
+              {go.note && reason(go.note)}
+            </>
           )}
           {go?.kind === 'search' && (
             <button type="button" className="go" aria-label={go.label} onClick={() => actions.openLink(go.href)}>
@@ -93,9 +107,7 @@ export function Find({ find, failure, actions }: { find: NonNullable<PopupView['
                    * paper's id here and one who landed on its abstract page read the same sentence drawn the same way.
                    * The plain line stays for the lesser case: an HTML version missing while the PDF entry still works (info)
                    */}
-                  {paper.note && (paper.note.tone === 'alert'
-                    ? <Note tone="alert" text={paper.note.text} action={paper.note.settings ? { label: S.settings, run: () => actions.openOptions() } : undefined} />
-                    : <p className="line mark"><Icon node={Info} size={14} />{paper.note.text}</p>)}
+                  {paper.note && reason(paper.note)}
                 </div>
               </Reveal>
             </>
