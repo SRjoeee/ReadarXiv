@@ -68,7 +68,9 @@ export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, D
  * a lead ahead is built again. Heights alone saw neither. With `measured.snap` (points), the measure is taken only where
  * it parts from the heights' account by more than that: the preview measures noise too — a paragraph that did not fit
  * at a page's foot went whole to the next, a column ended a little early — and a final that followed it all ran 0.12
- * page ahead on 2212.06817. Under it the heights go on. With `measured.local` (lines), the lead ahead is kept only in
+ * page ahead on 2212.06817. Under it the heights go on — except at the first unit, before which stands only the front
+ * matter: a title a line shorter (2608.21180, Korean, 20 pt) left page 1 room it took by shrinking its glue, until the
+ * paper's own \\vspace{-2.8em} set the abstract on the e-mail line. With `measured.local` (lines), the lead ahead is kept only in
  * the stretch of that length before each jump the preview measured — a rise in its drift the heights do not account
  * for, something that could not break moved on — each unit there set to put the text on a ramp to `ahead` lines ahead
  * by the jump; elsewhere the text keeps level. A lead ahead everywhere cost every unit two lines of drift, and
@@ -104,7 +106,8 @@ export function flowLeads(units, script, heights, { window = 50, horizon = windo
     for (; hi < list.length && mid[hi] <= mid[k] + half; hi++) { o += list[hi].lo * list[hi].bs; t += heights.get(list[hi].i) }
     for (; mid[lo] < mid[k] - half; lo++) { o -= list[lo].lo * list[lo].bs; t -= heights.get(list[lo].i) }
     const i = list[k].i, seen = measured?.drift.get(i)
-    if (seen != null && !(Math.abs(seen + change - drift) <= measured.snap)) drift = seen + change
+    // (the first unit's measure always: before it stands only the front matter, no page break's noise)
+    if (seen != null && (k === 0 || !(Math.abs(seen + change - drift) <= measured.snap))) drift = seen + change
     const near = toJump.get(i)
     const x = near != null
       ? clamp((list[k].lo * list[k].bs - lead * (1 - near / local) - drift) / heights.get(i), design.lead)

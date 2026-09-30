@@ -128,7 +128,7 @@ check('measured: after a break that put it level, the lead ahead is built again'
 // page, a column ended a little early (2212.06817: measured 30 pt behind the heights' account at the median, 85 at p90,
 // and the final set tighter throughout ran 0.12 page ahead). With `snap`, the measure is taken only where it parts from
 // the heights by more than that; less, it is noise, and the heights go on
-const noisy = new Map(even.map(u => [u.i, u.i % 2 ? 30 : -20]))
+const noisy = new Map(even.map(u => [u.i, u.i === 0 ? 0 : u.i % 2 ? 30 : -20]))   // level at the first unit, whose measure is always taken
 const calm = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, measured: { drift: noisy, preview: previewHeights, snap: 60 } })
 check('snap: noise under the threshold leaves the heights\' account alone', [...calm.values()].every(l => near(l, 1, 1e-9)), JSON.stringify([...calm.values()].slice(0, 4)))
 const snapped = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, measured: { drift: jumped, preview: previewHeights, snap: 40 } })
@@ -142,5 +142,11 @@ check('local lead: the stretch just before the jump set tighter', local.get(18) 
 let before = 0
 for (const u of even) if (u.i < 20) before += 96 * local.get(u.i) - 96
 check('local lead: about the lead gained by the jump, as far as the range allows', before <= -15 && before >= -30, `${before}`)
+// the first unit's measure is always taken: before it stands only the front matter — a title a line shorter in the
+// translation (2608.21180, Korean: 20 pt), no page break's noise — and a page 1 that took the room shrank its glue
+// until the paper's own \\vspace{-2.8em} set the abstract on the e-mail line
+const frontShort = new Map(even.map(u => [u.i, u.i === 0 ? -20 : null]).filter(([, d]) => d != null))
+const front = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, measured: { drift: frontShort, preview: previewHeights, snap: 60 } })
+check('the first measure is taken under the threshold: the units after it set looser to take back the front matter', front.get(0) > 1 + 1e-6, `${front.get(0)}`)
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)
