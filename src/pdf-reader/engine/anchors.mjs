@@ -325,6 +325,8 @@ const FIRST = 3.5, ACROSS = 1.6, GAP = 1.2, SMALL = 0.4, BODY = 0.95
 /** a unit's own words at a break: how many of the unit's next words a word is looked for among, and the share of a line's
  *  words that must be found so (inOrder) */
 const AHEAD = 4, OWN = 0.6
+/** a line `fits` takes only if a line it takes outright comes after it (take) */
+const HELD = 'held'
 
 /**
  * The pages' frame, as the located units' words give it: across, where the text's lines begin and end on most pages;
@@ -383,8 +385,15 @@ const explained = (t, letters) => {
   return true
 }
 
-/** a line a display's `letters` explain (explained); the edge's own line needs no explaining */
-const byLetters = (doc, letters) => (ks, edge) => edge || ks.every(j => explained(doc[j].t, letters))
+/** a line a display's `letters` explain (explained); the edge's own line needs no explaining. A line with no letter —
+ *  digits alone: a table's row of numbers, a page's number, or a display's row of digits — explains nothing: it is taken
+ *  only between lines that are (take's HELD), not as the last one (the re-review of A1, m1) */
+const byLetters = (doc, letters) => (ks, edge) => {
+  if (edge) return true
+  let words = false
+  for (const j of ks) { const t = doc[j].t; if (!explained(t, letters)) return false; words ||= /\p{L}/u.test(t) }
+  return words || HELD
+}
 
 /**
  * A line of the unit's own words, in the order its text has them: `words` are the unit's words between two of its
@@ -437,7 +446,7 @@ function walker(doc, ms, owner, line) {
   const body = new Float64Array(ms.length)
   const bodyOf = u => { if (!body[u]) { const hs = ms[u].map(k => doc[k].h).sort((x, y) => x - y); body[u] = hs[hs.length >> 1] } return body[u] }
   function take(u, k0, dir, first, fits) {
-    const A = doc[k0], h = bodyOf(u), lines = []
+    const A = doc[k0], h = bodyOf(u), lines = [], held = []
     for (let k = k0 + dir, end = false; !end && k >= 0 && k < doc.length;) {
       const l = line[k], ks = []
       for (; k >= 0 && k < doc.length && line[k] === l; k += dir) {
@@ -445,13 +454,18 @@ function walker(doc, ms, owner, line) {
         if (t.page !== A.page || (owner[k] !== -1 && owner[k] !== u) || (dir > 0 ? t.y > A.y + 0.5 * A.h : t.y < A.y - 0.5 * A.h) || !inFrame(t)) { end = true; break }
         ks.push(k)
       }
-      // `fits` says whether the line can be the unit's; the edge's own line is told apart (within half a line of it: the
-      // scripts of its last formula a little above or below)
-      if (!ks.length || (lineOwner[l] !== -1 && lineOwner[l] !== u) || (fits && !fits(ks, Math.abs(doc[ks[0]].y - A.y) < 0.5 * A.h))) break
+      // `fits` says whether the line can be the unit's, or only between lines that can (HELD: before a line taken in the
+      // stream, or where the lines taken stand above and below it — an equation's number beside its rows); the edge's
+      // own line is told apart (within half a line of it: the scripts of its last formula a little above or below)
+      if (!ks.length || (lineOwner[l] !== -1 && lineOwner[l] !== u)) break
+      const fit = fits ? fits(ks, Math.abs(doc[ks[0]].y - A.y) < 0.5 * A.h) : true
+      if (!fit) break
       let top = -Infinity, bottom = Infinity, body = false
       for (const j of ks) { const t = doc[j]; top = Math.max(top, t.top); bottom = Math.min(bottom, t.bottom); body ||= t.h >= BODY * h }
-      lines.push({ ks, top, bottom, body })
+      if (fit === HELD) held.push({ ks, top, bottom, body })
+      else lines.push(...held.splice(0), { ks, top, bottom, body })
     }
+    lines.push(...held.filter(x => lines.some(l => l.top >= x.bottom) && lines.some(l => l.bottom <= x.top)))
     let reach = dir > 0 ? A.bottom : A.top, n = 0
     for (const l of lines.filter(l => l.body).sort((x, y) => (dir > 0 ? y.top - x.top : x.bottom - y.bottom))) {
       if ((dir > 0 ? reach - l.top : l.bottom - reach) > (n ? GAP : first) * h) break
