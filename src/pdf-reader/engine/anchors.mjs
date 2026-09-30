@@ -385,6 +385,14 @@ const explained = (t, letters) => {
   return true
 }
 
+/** a line one of two rules takes (either), or holds (HELD) */
+const either = (a, b) => (ks, edge) => {
+  const x = a(ks, edge)
+  if (x === true) return true
+  const y = b(ks, edge)
+  return y === true || (x === HELD || y === HELD ? HELD : false)
+}
+
 /** a line a display's `letters` explain (explained); the edge's own line needs no explaining. A line with no letter —
  *  digits alone: a table's row of numbers, a page's number, or a display's row of digits — explains nothing: it is taken
  *  only between lines that are (take's HELD), not as the last one (the re-review of A1, m1) */
@@ -599,21 +607,18 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
       const A = doc[m[n]], B = doc[m[n + 1]]
       if (between(doc, owner, u, m[n], m[n + 1])) for (k++; k < m[n + 1]; k++) idx.push(k)
       // the unit goes on over a page or at the head of the next column: what stands below the one word on its page,
-      // and above the other on its own — not the page's head and foot, a footnote, a float (walker). With a display
-      // between its words (latex-front's `inner`: its letters), the lines those letters or the unit's own words explain:
-      // the display's parts, the words about them; without, the unit's own words the text did not match there, in their
-      // order (inOrder): a column's last words, a word a hyphen cut over the page. Anything else of the unit's size a
-      // float's skip away would be taken — a table
+      // and above the other on its own — not the page's head and foot, a footnote, a float (walker): the unit's own
+      // words the text did not match there, in their order (inOrder) — a column's last words, a word a hyphen cut over
+      // the page — and with a display between its words (latex-front's `inner`: its letters), the lines those letters
+      // explain. Anything else of the unit's size a float's skip away would be taken — a table
       else if (f.bounded && (A.page !== B.page || B.y > A.y + A.h * 0.6)) {
         const inner = units[u].inner
         let down, up
-        if (typeof inner === 'string') {
-          const fits = byLetters(doc, `${inner} ${(units[u].text ?? '').normalize('NFKC').toLowerCase()}`)
-          down = walk.take(u, k, 1, ACROSS, fits); up = walk.take(u, m[n + 1], -1, ACROSS, fits)
-        } else {
-          const words = wordsBetween(f, m[n], m[n + 1])
-          down = walk.take(u, k, 1, ACROSS, inOrder(doc, words, 1)); up = walk.take(u, m[n + 1], -1, ACROSS, inOrder(doc, words, -1))
-        }
+        const words = wordsBetween(f, m[n], m[n + 1])
+        // with a display: its lines (its letters) or the unit's own words left there — not any word of the paragraph's,
+        // which a table's row at the break may share (the re-review of A1, m2)
+        const fits = dir => (typeof inner === 'string' ? either(byLetters(doc, inner), inOrder(doc, words, dir)) : inOrder(doc, words, dir))
+        down = walk.take(u, k, 1, ACROSS, fits(1)); up = walk.take(u, m[n + 1], -1, ACROSS, fits(-1))
         const last = down.at(-1) ?? k
         idx.push(...down.filter(j => j < m[n + 1]), ...up.filter(j => j > last).reverse())
       }

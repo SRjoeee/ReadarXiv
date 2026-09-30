@@ -266,6 +266,26 @@ describe('anchorUnits: a unit\'s own words across a page or column break (fix ro
 })
 
 describe('anchorUnits: a unit\'s display across a page break', () => {
+  it('a unit with a display between its words fills the break with the display\'s lines and its own words, not a table\'s row whose words the paragraph uses (the re-review of A1, m2)', () => {
+    const b12 = (str: string, x: number, y: number, eol = false, width = str.length * 6) => ({ str, transform: [12, 0, 0, 12, x, y], width, height: 12, hasEOL: eol, fontName: 'f' })
+    const line = (s: string, y: number) => [b12(s, 50, y, true, 300)]
+    const cells = (cs: string[], y: number) => cs.map((c, i) => b12(c, 80 + i * 80, y, i === cs.length - 1))
+    const pageOf = (n: number, lines: ReturnType<typeof b12>[][]) => ({ page: n, items: [...lines.flat(), b12(String(n), 150, 62, true)], styles: {} })
+    // an in-text table at the next page's head, 11 pt above the text: a float's skip no rule of distance can tell from a
+    // display's
+    const firstText = 700 - 2.64 - 11 - 9
+    const pages = [
+      pageOf(1, [line('the paragraph before it', 700), line('our model has a lower cost and', 124), [b12('x = y', 150, 100), b12('(1)', 290, 100, true)]]),
+      pageOf(2, [line('table one results of models', 740), cells(['model', 'cost'], 714), cells(['ours', '12'], 700), line('so the score of ours is better', firstText), line('another paragraph after', firstText - 30)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'our model has a lower cost and so the score of ours is better', inner: 'xy' }, { id: 2, text: 'table one results of models' }, { id: 3, text: 'another paragraph after' }]
+    const bounds = new Map<string, [number, number]>([['0', [0, 3]], ['1', [at('our'), at('better')]], ['2', [at('table'), at('models')]], ['3', [at('another'), at('after')]]])
+    const got = anchorUnits(doc, units, { bounds, floating: id => id === 2 }).get(1)?.tokens.map(k => doc[k]?.t)
+    expect(got).toEqual(['our', 'model', 'has', 'a', 'lower', 'cost', 'and', 'x', 'y', '1', 'so', 'the', 'score', 'of', 'ours', 'is', 'better'])
+  })
+
   it('a unit with no display between its words fills nothing across the break: a table of its size at the next page\'s head, 12 pt, a float\'s skip shrunk to 16 pt (the review of A1, M1)', () => {
     const big = (str: string, x: number, y: number, eol = false) => ({ str, transform: [12, 0, 0, 12, x, y], width: str.length * 6, height: 12, hasEOL: eol, fontName: 'f' })
     const line = (s: string, y: number) => [{ ...big(s, 50, y, true), width: 300 }]
