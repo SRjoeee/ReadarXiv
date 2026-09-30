@@ -28,7 +28,7 @@ import { styleSample } from '@/ui/style-sample'
 import { NoActiveTabError } from '@/shared/messages'
 import type { MenuListItem } from '@/ui/controls/MenuList'
 import { PREVIEW_TARGET, S, languageLabel, languageName, parseFatal, profileName, reasonText, serviceName } from '@/ui/strings'
-import { isPaperAddress, readQuery } from './find'
+import { isPaperAddress, offeredQuery, readQuery } from './find'
 
 export type { PackState }
 export { MANAGE_SERVICES }
@@ -75,6 +75,9 @@ export interface PopupInput {
   tab: { url: string | null; asking: boolean } | null
   /** P0's field (§5.4): what it holds, and the two checks' answer for the paper it names, once both are back */
   find: { query: string; entries: { id: string; html: string | null; pdf: string | null } | null }
+  /** Whether this browser runs the PDF reader (pdf-reader/support.ts): where it does not, P0 reads a pasted PDF address
+   *  as the paper it names (find.ts offeredQuery) */
+  readerRuns: boolean
 }
 
 export interface Row { value: string; replaced?: string }
@@ -346,7 +349,7 @@ function readerView(entry: EntryStatus, config: Config, input: PopupInput): Popu
 /** P0's field and what it recognises (§5.4): the words of the row under it, and a paper's entries once both checks are back */
 function findView(input: PopupInput): NonNullable<PopupView['find']> {
   const { query, entries } = input.find
-  const read = readQuery(query)
+  const read = offeredQuery(readQuery(query), input.readerRuns)
   switch (read.kind) {
     case 'empty':
       return { query, found: null }

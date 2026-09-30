@@ -68,6 +68,16 @@ function linkOf(text: string): Query {
 }
 
 /**
+ * What P0 offers for what was read, where this browser cannot run the PDF reader (pdf-reader/support.ts readerRuns): an
+ * arXiv PDF address is then the paper it names — its two entries, the PDF one ruled out as P0's checks rule it out
+ * (popup/data.ts paperEntries) and as the PDF page's own entry is (P17) — rather than a row that would leave the PDF in
+ * the browser's own viewer without a word (Codex on #306). `readQuery` stays a function of the text alone
+ */
+export function offeredQuery(query: Query, readerRuns: boolean): Query {
+  return !readerRuns && query.kind === 'open' && query.format === 'pdf' ? { kind: 'paper', id: query.id } : query
+}
+
+/**
  * Whether an address is an arXiv paper's page the extension answers on — its full text, its abstract, its PDF — so that
  * a tab there not answering yet is a page still loading, not P0 (§5.4). arxiv.org's alone: the content scripts match it
  */

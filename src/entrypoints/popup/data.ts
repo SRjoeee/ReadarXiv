@@ -47,6 +47,7 @@ const browserHost = (): PopupHost => ({
   // any other tab's is null here
   tabUrl: async () => (await browser.tabs.query({ active: true, currentWindow: true }))[0]?.url ?? null,
   entriesOf: paperEntries,
+  readerRuns: readerRuns(),
 })
 
 export function usePopupData(seed: { rejected?: readonly string[] } = {}): { input: PopupInput; error: string | null; actions: PopupActions } {

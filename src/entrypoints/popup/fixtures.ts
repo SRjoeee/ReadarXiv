@@ -60,6 +60,8 @@ const base: PopupInput = {
   // The tab is a paper's, heard from; P0's field is empty (the redesign's design, §5.4)
   tab: { url: 'https://arxiv.org/html/2409.01234', asking: false },
   find: { query: '', entries: null },
+  // This browser runs the PDF reader unless a fixture says not
+  readerRuns: true,
 }
 /** No paper in the tab, and the page heard from: P0 (§5.4) */
 const p0: PopupInput = { ...base, page: null, tab: { url: null, asking: false } }

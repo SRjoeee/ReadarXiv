@@ -26,7 +26,7 @@ import { rejectedServices, watchRejected } from '@/shared/service-health'
 import { messageFor } from '@/shared/page-action'
 import { type SurfaceConfig, type SurfaceConfigDeps, createSurfaceConfig } from '@/shared/surface-config'
 import { S } from '@/ui/strings'
-import { readQuery } from './find'
+import { offeredQuery, readQuery } from './find'
 import { createProviderAsks } from './provider-asks'
 import { MANAGE_PROMPTS, MANAGE_SERVICES, MANAGE_STYLES, type MenuKind, type PopupInput, actionErrorText, runnable, startRefusalText } from './view-model'
 
@@ -102,6 +102,9 @@ export interface PopupHost {
    * opens or null for one ruled out, by the PDF page's own rule (core/pdf/entry.ts)
    */
   entriesOf(id: string): Promise<{ html: string | null; pdf: string | null }>
+  /** Whether this browser runs the PDF reader (pdf-reader/support.ts readerRuns): where it does not, P0 offers a pasted
+   *  PDF address as the paper it names (find.ts offeredQuery) */
+  readonly readerRuns: boolean
 }
 
 export interface PopupState {
@@ -457,7 +460,7 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
       query = text
       if (stillTimer !== null) clearTimeout(stillTimer)
       stillTimer = null
-      const named = readQuery(text)
+      const named = offeredQuery(readQuery(text), host.readerRuns)
       if (named.kind === 'paper' && !checked.has(named.id) && !checking.has(named.id)) {
         stillTimer = setTimeout(() => { stillTimer = null; check(named.id) }, STILL_MS)
       }
@@ -478,10 +481,10 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
    */
   const inputNow = (): PopupInput => {
     const { config, revision: savedRevision, pack } = surface.state()
-    const named = readQuery(query)
+    const named = offeredQuery(readQuery(query), host.readerRuns)
     const answer = named.kind === 'paper' ? checked.get(named.id) : undefined
     return {
-      page, entry, saved, session: on() ? session : null, config, pack, menu, shortcut, savedRevision, rejected,
+      page, entry, saved, session: on() ? session : null, config, pack, menu, shortcut, savedRevision, rejected, readerRuns: host.readerRuns,
       tab: settled && tabUrl !== undefined ? { url: tabUrl, asking: silentTimer !== null } : null,
       find: { query, entries: named.kind === 'paper' && answer ? { id: named.id, ...answer } : null },
     }

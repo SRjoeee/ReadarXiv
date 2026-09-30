@@ -60,6 +60,8 @@ function world(seed: Parameters<typeof createPopupState>[1] = {}) {
     /** Held while the test wants to decide when the shortcut answers (writes after stop) */
     holdShortcut: false,
     releaseShortcut: undefined as ((s: string | null) => void) | undefined,
+    /** Whether this browser runs the PDF reader (pdf-reader/support.ts readerRuns) */
+    readerRuns: true,
   }
   const host: PopupHost = {
     toTab: (async (message: AxtMessage) => {
@@ -93,6 +95,7 @@ function world(seed: Parameters<typeof createPopupState>[1] = {}) {
     downloadPack: async target => { w.downloads.push(target) },
     config: { localeStale: () => false, reload: () => { w.reloads++ }, packState: async () => w.pack, announce: () => undefined },
     tabUrl: () => (w.holdTabUrl ? new Promise<string | null>(resolve => { w.releaseTabUrl = resolve }) : Promise.resolve(w.url)),
+    get readerRuns() { return w.readerRuns },
     entriesOf: id => {
       w.checks.push(id)
       const found = w.entries[id] ?? { html: `https://arxiv.org/html/${id}#readarxiv`, pdf: `https://arxiv.org/pdf/${id}#readarxiv` }
@@ -700,13 +703,30 @@ describe('P0: the field and its checks (the redesign\'s design, §5.4)', () => {
   // the stillness is a timeout: faked here with the intervals, and the popup opened and settled on the fake clock
   beforeEach(() => { vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] }) })
   const settle = async () => { for (let i = 0; i < 25; i++) await vi.advanceTimersByTimeAsync(0) }
-  async function onP0() {
+  async function onP0(setup: (w: ReturnType<typeof world>['w']) => void = () => undefined) {
     const made = world()
     made.w.page = null
+    setup(made.w)
     const stop = made.popup.start()
     await settle()
     return { ...made, stop }
   }
+
+  it('an arXiv PDF address is checked as the paper it names where the browser cannot run the reader, and opened as it is where it can (Codex on #306)', async () => {
+    const cannot = await onP0(w => { w.readerRuns = false })
+    cannot.w.entries['2501.07202'] = { html: 'https://arxiv.org/html/2501.07202#readarxiv', pdf: null }
+    cannot.popup.actions.setQuery('https://arxiv.org/pdf/2501.07202')
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await settle()
+    expect([cannot.w.checks, cannot.input().readerRuns, cannot.input().find.entries]).toEqual([['2501.07202'], false, { id: '2501.07202', html: 'https://arxiv.org/html/2501.07202#readarxiv', pdf: null }])
+    cannot.stop()
+    const can = await onP0()
+    can.popup.actions.setQuery('https://arxiv.org/pdf/2501.07202')
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await settle()
+    expect([can.w.checks, can.input().readerRuns, can.input().find.entries]).toEqual([[], true, null])
+    can.stop()
+  })
 
   it('a paper is checked once the field has been still for 300 ms, once per id, never per keystroke', async () => {
     const p = await onP0()

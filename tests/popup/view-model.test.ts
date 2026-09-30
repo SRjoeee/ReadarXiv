@@ -446,6 +446,17 @@ describe('P0 and the moments before it (the redesign\'s design, §5.4)', () => {
     expect(view('P0g').find?.found).toEqual({ kind: 'elsewhere', text: '只能打开 arXiv 的论文链接。也可以输入标题或作者搜索。' })
   })
 
+  it('an arXiv PDF address where the browser cannot run the reader is the paper it names: its entries once checked, the PDF one greyed as P0\'s checks grey it, never a row that leaves the PDF in the browser\'s own viewer (Codex on #306)', () => {
+    const cannot = { ...input('P0b'), readerRuns: false }
+    expect(derivePopupView(cannot).find?.found).toEqual({ kind: 'paper', paper: 'arXiv 2501.07202v1', entries: null, note: null })
+    // its checks back, as paperEntries answers without the reader: the HTML version, and no PDF entry
+    const checked = { ...cannot, find: { ...cannot.find, entries: { id: '2501.07202v1', html: 'https://arxiv.org/html/2501.07202v1#readarxiv', pdf: null } } }
+    expect(derivePopupView(checked).find?.found).toEqual({ kind: 'paper', paper: 'arXiv 2501.07202v1', entries: { html: { label: S.entry.html, href: 'https://arxiv.org/html/2501.07202v1#readarxiv' }, pdf: { label: S.entry.pdf, href: null } }, note: null })
+    // where it runs, the one brand row as before; an HTML address is opened either way
+    expect(derivePopupView({ ...input('P0b'), readerRuns: true }).find?.found).toMatchObject({ kind: 'open', format: 'pdf' })
+    expect(derivePopupView({ ...input('P0c'), readerRuns: false }).find?.found).toMatchObject({ kind: 'open', format: 'html' })
+  })
+
   it('a paper named: its line at once, its two entries once both checks are back, a greyed one said as P17 says it', () => {
     expect(view('P0d').find?.found).toEqual({ kind: 'paper', paper: 'arXiv 2501.07202v1', entries: null, note: null })
     expect(view('P0e').find?.found).toMatchObject({ entries: { html: { label: 'HTML 翻译', href: 'https://arxiv.org/html/2501.07202v1#readarxiv' }, pdf: { label: 'PDF 翻译', href: 'https://arxiv.org/pdf/2501.07202v1#readarxiv' } }, note: null })
