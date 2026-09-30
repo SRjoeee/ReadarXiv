@@ -68,7 +68,11 @@ export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, D
  * a lead ahead is built again. Heights alone saw neither. With `measured.snap` (points), the measure is taken only where
  * it parts from the heights' account by more than that: the preview measures noise too — a paragraph that did not fit
  * at a page's foot went whole to the next, a column ended a little early — and a final that followed it all ran 0.12
- * page ahead on 2212.06817. Under it the heights go on.
+ * page ahead on 2212.06817. Under it the heights go on. With `measured.local` (lines), the lead ahead is kept only in
+ * the stretch of that length before each jump the preview measured — a rise in its drift the heights do not account
+ * for, something that could not break moved on — each unit there set to put the text on a ramp to `ahead` lines ahead
+ * by the jump; elsewhere the text keeps level. A lead ahead everywhere cost every unit two lines of drift, and
+ * 2608.21180 (Chinese) ran a quarter column ahead.
  * `heights`: Map(unit index → the translation's height at leading one), from unitHeights or a compile's lines. The
  * leading is × the paper's for CJK, × the size's for an alphabet, as the type's is
  */
@@ -78,6 +82,22 @@ export function flowLeads(units, script, heights, { window = 50, horizon = windo
   const bs = [...list.map(u => u.bs)].sort((a, b) => a - b)[list.length >> 1] ?? 12, half = (window * bs) / 2, back = horizon * bs, lead = ahead * bs
   let at = 0
   const mid = list.map(u => { const m = at + (u.lo * u.bs) / 2; at += u.lo * u.bs; return m })
+  // the stretches before the preview's jumps (measured.local): each unit's distance from its end to the jump after it
+  const local = measured?.local && ahead > 0 ? measured.local * bs : 0, toJump = new Map()
+  if (local) {
+    let prev = null, jump = null
+    const jumps = new Set()
+    for (const u of list) {
+      const m = measured.drift.get(u.i)
+      if (m != null && prev && m - prev.m - (prev.p - prev.h) > (measured.snap ?? 0)) jumps.add(u.i)
+      prev = m != null ? { m, p: measured.preview.get(u.i) ?? heights.get(u.i), h: u.lo * u.bs } : null
+    }
+    for (let k = list.length - 1; k >= 0; k--) {
+      const start = mid[k] - (list[k].lo * list[k].bs) / 2, end = mid[k] + (list[k].lo * list[k].bs) / 2
+      if (jump != null && jump - end <= local) toJump.set(list[k].i, jump - end)
+      if (jumps.has(list[k].i)) jump = start
+    }
+  }
   const out = new Map()
   let lo = 0, hi = 0, o = 0, t = 0, drift = 0, change = 0
   for (let k = 0; k < list.length; k++) {
@@ -85,7 +105,10 @@ export function flowLeads(units, script, heights, { window = 50, horizon = windo
     for (; mid[lo] < mid[k] - half; lo++) { o -= list[lo].lo * list[lo].bs; t -= heights.get(list[lo].i) }
     const i = list[k].i, seen = measured?.drift.get(i)
     if (seen != null && !(Math.abs(seen + change - drift) <= measured.snap)) drift = seen + change
-    const x = clamp((o / t) * (back > 0 && back < Infinity ? 1 - (drift + lead) / back : 1), design.lead)
+    const near = toJump.get(i)
+    const x = near != null
+      ? clamp((list[k].lo * list[k].bs - lead * (1 - near / local) - drift) / heights.get(i), design.lead)
+      : clamp((o / t) * (back > 0 && back < Infinity ? 1 - (drift + (local ? 0 : lead)) / back : 1), design.lead)
     out.set(i, x)
     const h = heights.get(i) * x
     drift += h - list[k].lo * list[k].bs

@@ -133,5 +133,14 @@ const calm = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, meas
 check('snap: noise under the threshold leaves the heights\' account alone', [...calm.values()].every(l => near(l, 1, 1e-9)), JSON.stringify([...calm.values()].slice(0, 4)))
 const snapped = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, measured: { drift: jumped, preview: previewHeights, snap: 40 } })
 check('snap: a jump over the threshold is taken', snapped.get(21) < 0.99, `${snapped.get(21)}`)
+// a lead ahead only where the preview jumped: a jump is a rise in the measured drift the heights do not account for;
+// the stretch before it is set a little ahead, so that what jumped fits this time, and everywhere else the text keeps
+// level (a lead ahead everywhere cost every unit two lines of drift, and 2608.21180 ran a quarter column ahead)
+const local = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, ahead: 2, measured: { drift: jumped, preview: previewHeights, snap: 40, local: 30 } })
+check('local lead: level far from the jump', near(local.get(5), 1, 1e-9), `${local.get(5)}`)
+check('local lead: the stretch just before the jump set tighter', local.get(18) < 0.99 && local.get(19) < 0.99, `${local.get(18)} ${local.get(19)}`)
+let before = 0
+for (const u of even) if (u.i < 20) before += 96 * local.get(u.i) - 96
+check('local lead: about the lead gained by the jump, as far as the range allows', before <= -15 && before >= -30, `${before}`)
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)
