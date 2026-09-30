@@ -104,5 +104,25 @@ check('ahead: after the first stretch the translation keeps about two lines ahea
 const level = flowLeads(wavy, 'Latn', wavyHeights, { window: 0, horizon: 40 })
 d = 0
 check('without it, each unit its own original\'s height: no drift', wavy.every(u => Math.abs((d += wavyHeights.get(u.i) * level.get(u.i) - u.lo * u.bs)) < 1e-6))
+// what the preview measured (the owner's two compiles: the preview's places are known before the final is set): the
+// drift at each unit's start as the preview came out, pages, floats and all. The final starts from it, not from the
+// heights alone: a figure that jumped a column in the preview is taken back after it, and after a forced break, where
+// the preview stood level again, a lead ahead is built again before the next thing that cannot break
+const even = Array.from({ length: 40 }, (_, i) => ({ lo: 8, bs: 12, cap: 24, i, width: () => 0 }))
+const evenHeights = new Map(even.map(u => [u.i, 96]))
+const jumped = new Map(even.map(u => [u.i, u.i >= 20 ? 60 : 0]))   // the preview: 60 pt late from unit 20 on
+const previewHeights = new Map(even.map(u => [u.i, 96]))
+const blind = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40 })
+const seen = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, measured: { drift: jumped, preview: previewHeights } })
+check('measured: without the preview\'s places, a jump goes unseen', [...blind.values()].every(l => near(l, 1, 1e-9)))
+check('measured: before the jump as before, after it set tighter to take it back', near(seen.get(10), 1, 1e-9) && seen.get(21) < 0.99 && seen.get(21) >= 0.95 - 1e-9, `${seen.get(10)} ${seen.get(21)}`)
+let taken = 60
+for (const u of even) if (u.i >= 20) taken += 96 * seen.get(u.i) - 96
+check('measured: most of the jump taken back by the end', taken < 20, `${taken}`)
+// a forced break the preview reset: level at unit 20 though the height before it ran 2 lines ahead; with a lead aimed
+// ahead, the units after the break are set tighter again
+const reset = new Map(even.map(u => [u.i, u.i < 20 ? -24 : 0]))
+const rebuilt = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, ahead: 2, measured: { drift: reset, preview: previewHeights } })
+check('measured: after a break that put it level, the lead ahead is built again', rebuilt.get(20) < 1 - 1e-6 && rebuilt.get(21) < 1 - 1e-6, `${rebuilt.get(20)} ${rebuilt.get(21)}`)
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

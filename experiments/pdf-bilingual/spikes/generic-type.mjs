@@ -61,23 +61,32 @@ export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, D
  * little long pushes what cannot break to the next column — a figure set here ([H]), the last page before a forced
  * break (2608.06233: ten points too many before an [H] figure moved it on, and every page after it half a column late);
  * text a little short leaves a little white space. The lead is kept, not grown: it costs no page.
+ * `measured`, from a compile already made (the reader's preview): `drift`, Map(unit index → how far behind the original
+ * the unit started there, in points, pages and floats and all), and `preview`, Map(unit index → its height there). The
+ * drift is then the one measured at each unit, carried forward by what this setting changes against the preview: a
+ * float that jumped a column is taken back after it, and after a forced break, where the preview stood level again,
+ * a lead ahead is built again. Heights alone saw neither.
  * `heights`: Map(unit index → the translation's height at leading one), from unitHeights or a compile's lines. The
  * leading is × the paper's for CJK, × the size's for an alphabet, as the type's is
  */
-export function flowLeads(units, script, heights, { window = 50, horizon = window, ahead = 0 } = {}) {
+export function flowLeads(units, script, heights, { window = 50, horizon = window, ahead = 0, measured = null } = {}) {
   const design = DESIGN[script]
   const list = units.filter(u => heights.get(u.i) > 0).sort((a, b) => a.i - b.i)
   const bs = [...list.map(u => u.bs)].sort((a, b) => a - b)[list.length >> 1] ?? 12, half = (window * bs) / 2, back = horizon * bs, lead = ahead * bs
   let at = 0
   const mid = list.map(u => { const m = at + (u.lo * u.bs) / 2; at += u.lo * u.bs; return m })
   const out = new Map()
-  let lo = 0, hi = 0, o = 0, t = 0, drift = 0
+  let lo = 0, hi = 0, o = 0, t = 0, drift = 0, change = 0
   for (let k = 0; k < list.length; k++) {
     for (; hi < list.length && mid[hi] <= mid[k] + half; hi++) { o += list[hi].lo * list[hi].bs; t += heights.get(list[hi].i) }
     for (; mid[lo] < mid[k] - half; lo++) { o -= list[lo].lo * list[lo].bs; t -= heights.get(list[lo].i) }
+    const i = list[k].i, seen = measured?.drift.get(i)
+    if (seen != null) drift = seen + change
     const x = clamp((o / t) * (back > 0 && back < Infinity ? 1 - (drift + lead) / back : 1), design.lead)
-    out.set(list[k].i, x)
-    drift += heights.get(list[k].i) * x - list[k].lo * list[k].bs
+    out.set(i, x)
+    const h = heights.get(i) * x
+    drift += h - list[k].lo * list[k].bs
+    if (measured) change += h - (measured.preview.get(i) ?? h)
   }
   return out
 }

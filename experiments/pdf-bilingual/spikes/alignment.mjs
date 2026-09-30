@@ -41,6 +41,21 @@ export function alignment(om, tm) {
   }
 }
 
+/** each unit's start against the original's, signed (a later start positive), in points of the original's text block
+ *  on the unit's page (TeX points, as a compile's heights are): what a translation's final setting corrects from the
+ *  preview it measured (generic-type.mjs flowLeads `measured`). Units the compile lacks are left out */
+export function drifts(om, tm) {
+  const block = blocks(om), out = new Map()
+  for (const [k, o] of om.marks) {
+    if (!k.endsWith('s')) continue
+    const t = tm.marks.get(k)
+    if (!t) continue
+    const b = block(o.page)
+    out.set(Number(k.slice(0, -1)), ((place(tm, t, block) - place(om, o, block)) * (b.top - b.bottom) * 72.27) / 72)
+  }
+  return out
+}
+
 /** how even the type of translated paragraphs is: the spread (standard deviation over mean) of each paragraph's leading
  *  as a multiple of its size, over paragraphs of three lines or more; `lines` readLines of the compile's log */
 export function uniformity(lines, units) {

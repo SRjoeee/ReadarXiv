@@ -1,7 +1,7 @@
 // Cases for alignment.mjs: pages, drift, block size and uniformity from unit marks and line probes. Synthetic marks.
 // Exits non-zero on a failure.
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/alignment-cases.mjs
-import { alignment, uniformity } from './alignment.mjs'
+import { alignment, drifts, uniformity } from './alignment.mjs'
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
@@ -41,5 +41,14 @@ check('one leading for every paragraph: no spread', uniformity(even, units).spre
 const nudged = new Map([[0, { lines: 5, bs: 12, size: 10 }], [1, { lines: 4, bs: 13, size: 10 }], [3, { lines: 6, bs: 14, size: 10 }]])
 check('nudged leading: the spread shows', near(uniformity(nudged, units).spread, (Math.sqrt(2 / 3) * 0.1) / 1.3, 1e-9), `${uniformity(nudged, units).spread}`)
 
+// each unit's drift, signed, in points of the original's text block: one a column later is a block's height behind,
+// one a quarter of a block earlier a quarter ahead (flowLeads' `measured`)
+{
+  const mk = (list, twoColumn = true) => ({ pages: 2, width: 600, height: 800, twoColumn, marks: new Map(list) })
+  const om = mk([['0s', { page: 0, x: 50, y: 700 }], ['1s', { page: 0, x: 50, y: 100 }], ['2s', { page: 0, x: 350, y: 400 }], ['9s', { page: 0, x: 350, y: 700 }]])
+  const tm = mk([['0s', { page: 0, x: 50, y: 700 }], ['1s', { page: 0, x: 350, y: 100 }], ['2s', { page: 0, x: 350, y: 550 }]])
+  const d = drifts(om, tm), block = (700 - 100) * 72.27 / 72
+  check('drifts: level, a column behind, a quarter ahead, and a unit the compile lacks left out', Math.abs(d.get(0)) < 1e-9 && Math.abs(d.get(1) - block) < 1e-6 && Math.abs(d.get(2) + block / 4) < 1e-6 && !d.has(9), JSON.stringify([...d]))
+}
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)
