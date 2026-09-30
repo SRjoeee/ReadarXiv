@@ -7,7 +7,7 @@
 //    anchors. Used inside the bounds when there are marks, on its own when there are none.
 
 const CJK = /[㐀-鿿豈-﫿぀-ヿ가-힯]/
-const TOKEN = /[㐀-鿿豈-﫿぀-ヿ가-힯]|(?:(?![㐀-鿿豈-﫿぀-ヿ가-힯])[\p{L}\p{N}])+/gu
+const TOKEN = /[㐀-鿿豈-﫿぀-ヿ가-힯]|[\p{L}\p{N}]+/gu, PARTS = /[㐀-鿿豈-﫿぀-ヿ가-힯]|[^㐀-鿿豈-﫿぀-ヿ가-힯]+/gu
 const K = 3
 
 /** one token per CJK character, one per run of other letters and digits; lower case, compatibility forms folded. A run
@@ -17,8 +17,12 @@ const K = 3
 export function tokens(s) {
   const out = []
   for (const m of s.normalize('NFKC').toLowerCase().matchAll(TOKEN)) {
-    if (CJK.test(m[0])) out.push({ t: m[0], at: m.index, len: 1 })
-    else out.push({ t: m[0], at: m.index, len: m[0].length })
+    const w = m[0]
+    if (!CJK.test(w)) out.push({ t: w, at: m.index, len: w.length })
+    else if (w.length === 1) out.push({ t: w, at: m.index, len: 1 })
+    // a run that went on into CJK characters, cut where they begin (a lookahead in the pattern cost the text layer's
+    // every character a test: 5 % of tokenizing a heavy paper)
+    else for (const p of w.matchAll(PARTS)) out.push({ t: p[0], at: m.index + p.index, len: CJK.test(p[0]) ? 1 : p[0].length })
   }
   return out
 }
@@ -45,7 +49,7 @@ export function tokenizeDocument(pages) {
       if (!it.str) continue
       const [a, b, c, d, x, y] = it.transform
       const size = Math.hypot(a, b) || it.height || Math.abs(d)
-      if (prev && it.str === prev.str && Math.abs(y - prev.y) < 0.05 * size && Math.abs(x - prev.x) < 0.1 * size) continue
+      if (prev && Math.abs(x - prev.x) < 0.1 * size && Math.abs(y - prev.y) < 0.05 * size && it.str === prev.str) continue
       const st = styles?.[it.fontName], asc = st?.ascent > 0 ? st.ascent : 0.75, desc = st?.descent < 0 ? st.descent : -0.22
       const perChar = it.str.length ? it.width / it.str.length : 0
       const toks = tokens(it.str)
@@ -126,6 +130,39 @@ function buildIndex(doc) {
   return index
 }
 
+/**
+ * The longest chains of hits rising in both texts: for each hit of `win` (sorted by the unit's token, then the
+ * document's), the length of the longest chain ending at it and the hit before it there — of the hits before it in
+ * both texts, the earliest in `win` whose chain is longest. Pair by pair for a few hits; for more, a Fenwick tree over
+ * the document's tokens keeps each prefix's best chain, the hits of one unit token all asked before any is added so
+ * that no chain takes two of them — the same chains in O(n log n), where the pairs grew with the square of a long
+ * unit's hits (a third of a translation's anchoring)
+ */
+function chainOf(win) {
+  const n = win.length, len = new Int32Array(n), prev = new Int32Array(n)
+  if (n <= 64) {
+    for (let a = 0; a < n; a++) {
+      len[a] = 1; prev[a] = -1
+      for (let b = 0; b < a; b++) if (win[b][0] < win[a][0] && win[b][1][0] < win[a][1][0] && len[b] + 1 > len[a]) { len[a] = len[b] + 1; prev[a] = b }
+    }
+    return { len, prev }
+  }
+  const ds = [...new Set(win.map(h => h[1][0]))].sort((x, y) => x - y), rank = new Map(ds.map((d, r) => [d, r + 1]))
+  const bestLen = new Int32Array(ds.length + 1), bestAt = new Int32Array(ds.length + 1).fill(-1)
+  for (let g = 0; g < n;) {
+    let e = g
+    while (e < n && win[e][0] === win[g][0]) e++
+    for (let a = g; a < e; a++) {
+      let l = 0, at = -1
+      for (let r = rank.get(win[a][1][0]) - 1; r > 0; r -= r & -r) if (bestLen[r] > l || (bestLen[r] === l && l > 0 && bestAt[r] < at)) { l = bestLen[r]; at = bestAt[r] }
+      len[a] = l + 1; prev[a] = at
+    }
+    for (let a = g; a < e; a++) for (let r = rank.get(win[a][1][0]); r <= ds.length; r += r & -r) if (len[a] > bestLen[r] || (len[a] === bestLen[r] && a < bestAt[r])) { bestLen[r] = len[a]; bestAt[r] = a }
+    g = e
+  }
+  return { len, prev }
+}
+
 /** the matched document token indices of one unit's tokens, or null; only inside [lo, hi]. `exact`: [lo, hi] are the
  *  unit's own first and last token (marks), so every hit inside counts — no densest stretch, no split — and a float
  *  the unit runs around (a full-width table between its two pages) cannot cost it either part */
@@ -146,12 +183,9 @@ function locate(doc, index, ws, lo, hi, exact) {
   }
   let win = hits.slice(best[1], best[2]).sort((a, b) => a[0] - b[0] || a[1][0] - b[1][0])
   if (win.length > 1500) win = win.filter((_, n) => n % Math.ceil(win.length / 1500) === 0)
-  const len = win.map(() => 1), prev = win.map(() => -1)
+  const { len, prev } = chainOf(win)
   let tail = 0
-  for (let a = 0; a < win.length; a++) {
-    for (let b = 0; b < a; b++) if (win[b][0] < win[a][0] && win[b][1][0] < win[a][1][0] && len[b] + 1 > len[a]) { len[a] = len[b] + 1; prev[a] = b }
-    if (len[a] > len[tail]) tail = a
-  }
+  for (let a = 1; a < win.length; a++) if (len[a] > len[tail]) tail = a
   let chain = []
   for (let a = tail; a !== -1; a = prev[a]) chain.unshift(win[a])
   // the chain split where the document jumps much further than the unit does; the largest piece is the unit
@@ -246,17 +280,22 @@ function inRow(doc, ws, lo, hi, last, gap) {
   return found
 }
 const FOREIGN = 8
-const SLOT = '\uFFFC'
 /** a unit's words, and before which of them a placeholder stood (`gaps`, offsets in its text: mt.mjs unitText); a
  *  unit with no text (null: a cell a run left untranslated, as the spikes pass it) has none */
 function unitWords(text, gaps) {
   if (!gaps?.length || !text) return { ws: tokens(text ?? '').map(x => x.t), gap: null }
-  let s = text
-  for (let g = gaps.length - 1; g >= 0; g--) s = s.slice(0, gaps[g]) + SLOT + s.slice(gaps[g])
-  const n = s.normalize('NFKC').toLowerCase(), ts = tokens(s), gap = new Uint8Array(ts.length)
+  // the text cut at the offsets, which stand where a placeholder's space was, never inside a word: each piece's first
+  // word has a placeholder before it
+  const ws = [], at = []
   let from = 0
-  ts.forEach((t, i) => { if (n.slice(from, t.at).includes(SLOT)) gap[i] = 1; from = t.at + t.len })
-  return { ws: ts.map(x => x.t), gap }
+  for (const g of [...gaps, text.length]) {
+    const ts = tokens(text.slice(from, g))
+    if (ts.length) { at.push(ws.length); for (const t of ts) ws.push(t.t) }
+    from = g
+  }
+  const gap = new Uint8Array(ws.length)
+  for (let j = 1; j < at.length; j++) gap[at[j]] = 1
+  return { ws, gap }
 }
 
 /** in a unit's body heights: how far from its edge line a display beyond its marks may begin (the display's skip, and
@@ -274,27 +313,37 @@ const FIRST = 3.5, ACROSS = 1.6, GAP = 1.2, SMALL = 0.4, BODY = 0.95
  * foot, never a unit
  */
 function pageFrame(doc, ms) {
-  const extent = new Map(), located = new Uint8Array(doc.length)
+  // arrays by page number, the document's tokens being in page order
+  const pages = doc.length ? doc[doc.length - 1].page + 1 : 1
+  const x0 = new Float64Array(pages).fill(Infinity), x1 = new Float64Array(pages).fill(-Infinity), y0 = new Float64Array(pages).fill(Infinity), y1 = new Float64Array(pages).fill(-Infinity)
+  const located = new Uint8Array(doc.length)
   for (const m of ms) if (m) for (const k of m) {
     located[k] = 1
-    const t = doc[k], e = extent.get(t.page)
-    if (!e) extent.set(t.page, [t.x, t.x + t.w, t.y, t.y])
-    else { e[0] = Math.min(e[0], t.x); e[1] = Math.max(e[1], t.x + t.w); e[2] = Math.min(e[2], t.y); e[3] = Math.max(e[3], t.y) }
+    const t = doc[k], p = t.page
+    if (t.x < x0[p]) x0[p] = t.x
+    if (t.x + t.w > x1[p]) x1[p] = t.x + t.w
+    if (t.y < y0[p]) y0[p] = t.y
+    if (t.y > y1[p]) y1[p] = t.y
   }
-  if (!extent.size) return () => true
-  const at = (i, f) => { const v = [...extent.values()].map(e => e[i]).sort((x, y) => x - y); return v[Math.min(v.length - 1, Math.floor(f * v.length))] }
-  const left = at(0, 0.1), right = at(1, 0.9), low = at(2, 0.25), high = at(3, 0.75)
-  const lowest = new Map(), highest = new Map()
-  doc.forEach((t, k) => {
-    const lo = lowest.get(t.page), hi = highest.get(t.page)
-    if (lo == null || t.y < doc[lo].y) lowest.set(t.page, k)
-    if (hi == null || t.y > doc[hi].y) highest.set(t.page, k)
-  })
-  const recurring = (ends, outside) => {
+  const lowest = new Int32Array(pages).fill(-1), highest = new Int32Array(pages).fill(-1)
+  const lowY = new Float64Array(pages).fill(Infinity), highY = new Float64Array(pages).fill(-Infinity)
+  for (let k = 0; k < doc.length; k++) {
+    const t = doc[k], p = t.page, y = t.y
+    if (y < lowY[p]) { lowY[p] = y; lowest[p] = k }
+    if (y > highY[p]) { highY[p] = y; highest[p] = k }
+  }
+  const seen = []
+  for (let p = 0; p < pages; p++) if (x0[p] !== Infinity) seen.push(p)
+  if (!seen.length) return () => true
+  const at = (v, f) => { const s = seen.map(p => v[p]).sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(f * s.length))] }
+  const left = at(x0, 0.1), right = at(x1, 0.9), low = at(y0, 0.25), high = at(y1, 0.75)
+  let withText = 0
+  for (const k of lowest) if (k >= 0) withText++
+  const recurring = (ends, beyond) => {
     const votes = new Map()
-    for (const k of ends.values()) if (!located[k] && outside(doc[k])) { const y = Math.round(doc[k].y); votes.set(y, (votes.get(y) ?? 0) + 1) }
+    for (const k of ends) if (k >= 0 && !located[k] && beyond(doc[k])) { const y = Math.round(doc[k].y); votes.set(y, (votes.get(y) ?? 0) + 1) }
     let best = null
-    for (const [y, n] of votes) if (n >= Math.max(2, Math.ceil(ends.size / 4)) && (!best || n > best[1])) best = [y, n]
+    for (const [y, n] of votes) if (n >= Math.max(2, Math.ceil(withText / 4)) && (!best || n > best[1])) best = [y, n]
     return best?.[0] ?? null
   }
   const foot = recurring(lowest, t => t.y < low - 0.5 * t.h), head = recurring(highest, t => t.y > high + 0.5 * t.h)
@@ -315,8 +364,14 @@ function walker(doc, ms, owner, line) {
   // which unit each line holds words of: -1 none, -2 several
   const lineOwner = new Int32Array((line[doc.length - 1] ?? 0) + 1).fill(-1)
   const own = (k, u) => { const l = line[k]; lineOwner[l] = lineOwner[l] === -1 || lineOwner[l] === u ? u : -2 }
-  for (let k = 0; k < doc.length; k++) if (owner[k] !== -1) own(k, owner[k])
-  const bodyOf = u => { const hs = ms[u].map(k => doc[k].h).sort((x, y) => x - y); return hs[hs.length >> 1] }
+  for (let k = 0; k < doc.length; k++) {
+    const u = owner[k]
+    if (u === -1) continue
+    const l = line[k], o = lineOwner[l]
+    if (o !== u) lineOwner[l] = o === -1 ? u : -2
+  }
+  const body = new Float64Array(ms.length)
+  const bodyOf = u => { if (!body[u]) { const hs = ms[u].map(k => doc[k].h).sort((x, y) => x - y); body[u] = hs[hs.length >> 1] } return body[u] }
   function take(u, k0, dir, first) {
     const A = doc[k0], h = bodyOf(u), lines = []
     for (let k = k0 + dir, end = false; !end && k >= 0 && k < doc.length;) {
@@ -369,8 +424,9 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
   for (let u = units.length - 1, a = doc.length; u >= 0; u--) { after[u] = a; if (inText(u)) a = hard[u][0] }
   const found = []
   units.forEach(({ id, text, gaps }, u) => {
-    const { ws, gap } = unitWords(text, gaps)
     const b = hard[u]
+    // where its placeholders stood matters to a unit found as a run of words, which a unit with marks never is
+    const { ws, gap } = unitWords(text, b ? null : gaps)
     const [lo, hi] = b ?? (bounds?.size ? [Math.max(0, before[u] + 1 - MARGIN), Math.min(doc.length - 1, after[u] - 1 + MARGIN)] : [0, doc.length - 1])
     // a heading — no marks, in the text between its located neighbours: its words in a row in the gap between them
     // alone, no margin, the last place they come there, since a heading is followed by its own text; a running head
