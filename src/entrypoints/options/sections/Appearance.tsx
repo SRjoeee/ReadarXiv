@@ -1,7 +1,7 @@
 // The appearance section (the redesign's design, §6.4): the extension's appearance (§3) with the dark pages' dimming under it, the
 // translation styles (Task 56), and the hover highlight with its colour. Every control writes at once
 import { Monitor, Moon, Pencil, Plus, Sun } from 'lucide'
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useId, useRef, useState } from 'react'
 import { APPEARANCE_LIMITS, type Appearance as Looks, BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, type HighlightProfile, type StyleProfile, duplicateStyle, newProfileId, resetBuiltIns } from '@/config/appearance'
 import type { Config } from '@/config/schema'
 import { styleSample } from '@/ui/style-sample'
@@ -36,11 +36,16 @@ export function Appearance({ data }: { data: OptionsData }) {
   const { config, patch } = data
   /** the styles list's writes, its heading's Restore among them: one refused puts the list's line up, one that lands takes it away */
   const styleWrites = useListWrites(patch)
+  /** the highlight's colours' writes, a choice and one's own: the same, the line under the colours (Codex 4b) */
+  const bandWrites = useListWrites(patch)
+  const restoreNote = useId()
   if (!config) return null
   const k = O.search.keywords
   const bands = config.appearance.highlights
   /** a colour of one's own is added the first time: no room for it once the list is at its cap (Codex 4) */
   const ownFull = !bands.some(h => h.id === OWN_HIGHLIGHT_ID) && bands.length >= APPEARANCE_LIMITS.highlights
+  /** the built-ins Restore would bring back take the list past its cap: it is greyed, saying why (Codex 4b) */
+  const restoreFull = resetBuiltIns(config.appearance, 'styles').styles.length > APPEARANCE_LIMITS.styles
   return (
     <>
       <Card>
@@ -53,14 +58,21 @@ export function Appearance({ data }: { data: OptionsData }) {
         </Reveal>
       </Card>
       <GroupHeading title={O.appearance.styles}
-        action={<Button type="button" kind="text" size="md" onClick={() => void styleWrites.attempt(latest => ({ ...latest, appearance: resetBuiltIns(latest.appearance, 'styles') }))}>{O.appearance.restore}</Button>} />
+        action={
+          <span className="o-heading-end">
+            {restoreFull && <span id={restoreNote} className="o-aside">{O.appearance.stylesLimit(APPEARANCE_LIMITS.styles)}</span>}
+            <Button type="button" kind="text" size="md" disabled={restoreFull} aria-describedby={restoreFull ? restoreNote : undefined}
+              onClick={() => void styleWrites.attempt(latest => ({ ...latest, appearance: resetBuiltIns(latest.appearance, 'styles') }))}>{O.appearance.restore}</Button>
+          </span>
+        } />
       <Styles data={data} writes={styleWrites} />
       <Card gap row="appearance/highlight">
         <Row toggles words={k['appearance/highlight']} label={S.rows.highlight} description={O.appearance.highlightHint}
           trailing={<Switch label={S.rows.highlight} checked={config.reading.sentenceHighlight} onChange={on => void patch(latest => ({ ...latest, reading: { ...latest.reading, sentenceHighlight: on } }))} />} />
         <Reveal open={config.reading.sentenceHighlight}>
           <Row level={1} label={O.appearance.colour} description={ownFull ? O.appearance.coloursLimit(APPEARANCE_LIMITS.highlights) : undefined}
-            trailing={<HighlightSwatches config={config} patch={patch} full={ownFull} />} />
+            trailing={<HighlightSwatches config={config} writes={bandWrites} full={ownFull} />} />
+          {bandWrites.failed && <p className="o-list-note" role="status"><Status tone="alert">{O.saveFailed}</Status></p>}
         </Reveal>
       </Card>
     </>
@@ -68,11 +80,12 @@ export function Appearance({ data }: { data: OptionsData }) {
 }
 
 /** The highlight's colours (§6.4): its profiles as swatches, as the reader's reading options show them, and one of one's
- *  own — unavailable while the list is `full`, its row saying why */
-function HighlightSwatches({ config, patch, full }: { config: Config; patch: OptionsData['patch']; full: boolean }) {
+ *  own — unavailable while the list is `full`, its row saying why. A write refused — another tab filled the list after
+ *  this page drew it — puts the line up under the row, as the other lists' do (Codex 4b) */
+function HighlightSwatches({ config, writes, full }: { config: Config; writes: ListWrites<Config>; full: boolean }) {
   const a = config.appearance
-  const choose = (id: string) => void patch(latest => ({ ...latest, appearance: { ...latest.appearance, activeHighlight: id } }))
-  const setOwn = (color: string) => void patch(latest => {
+  const choose = (id: string) => void writes.attempt(latest => ({ ...latest, appearance: { ...latest.appearance, activeHighlight: id } }))
+  const setOwn = (color: string) => void writes.attempt(latest => {
     const list = latest.appearance.highlights
     const highlights = list.some(h => h.id === OWN_HIGHLIGHT_ID)
       ? list.map(h => (h.id === OWN_HIGHLIGHT_ID ? { ...h, color } : h))

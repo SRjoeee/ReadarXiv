@@ -4,7 +4,7 @@
 import { createElement as h, useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BUILT_IN_HIGHLIGHTS, appearanceSchema } from '@/config/appearance'
-import { type Config, DEFAULT_CONFIG } from '@/config/schema'
+import { type Config, DEFAULT_CONFIG, configSchema } from '@/config/schema'
 import type { OptionsData } from '@/entrypoints/options/data'
 import { mountElement } from '../ui/render-hook'
 
@@ -115,6 +115,51 @@ describe('the appearance section (§6.4)', () => {
     expect(patches.at(-1)!.appearance.highlights).toHaveLength(50)
     expect(patches.at(-1)!.appearance.highlights.at(-1)).toMatchObject({ id: OWN_HIGHLIGHT_ID, color: '#ff0000' })
     await n.unmount()
+  })
+
+  // Codex 4b: another tab filled the colours after this page drew its pick; the pick's own write was refused, unhandled
+  it('a colour of one\'s own the store refuses — another tab filled the list meanwhile — says so under the row and leaves no rejection unhandled; a write that lands takes the line away', async () => {
+    const bands = Array.from({ length: 49 - BUILT_IN_HIGHLIGHTS.length }, (_, i) => ({ id: `hl-band${String(i).padStart(4, '0')}`, name: `Band ${i}`, color: 'oklch(0.7 0.1 30)', opacity: 0.3 }))
+    const start = { ...DEFAULT_CONFIG, appearance: { ...DEFAULT_CONFIG.appearance, highlights: [...BUILT_IN_HIGHLIGHTS, ...bands] } }
+    // what storage holds: the change runs on it, and a value the schema refuses is not stored (config/storage.ts setConfig)
+    const stored = { current: start }
+    function StoreHarness() {
+      const [config, setConfig] = useState(start)
+      const data: OptionsData = {
+        config, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
+        patch: async fn => {
+          const next = fn(stored.current)
+          if (!configSchema.safeParse(next).success) throw new Error('refused')
+          stored.current = next; setConfig(next); return next
+        },
+        pack: null, checkPack: async () => 'unsupported', fetchPack: async () => undefined,
+        cache: null, cacheError: '', clearCache: async () => undefined, cacheCleared: false,
+      }
+      return h(Appearance, { data })
+    }
+    const unhandled: unknown[] = []
+    const listen = (reason: unknown) => { unhandled.push(reason) }
+    process.on('unhandledRejection', listen)
+    try {
+      const m = await mountElement(h(StoreHarness))
+      const own = () => m.container.querySelector<HTMLInputElement>('[data-row="appearance/highlight"] input[type="color"]')!
+      const note = () => rowOf(m.container, 'appearance/highlight').querySelector('.o-list-note')
+      expect(own().disabled).toBe(false)
+      // another tab adds the fiftieth colour; this page has not heard yet
+      const other = { id: 'hl-othertab', name: 'Other', color: 'oklch(0.7 0.1 90)', opacity: 0.3 }
+      stored.current = { ...start, appearance: { ...start.appearance, highlights: [...start.appearance.highlights, other] } }
+      pick(own(), '#ff0000')
+      await m.flush()
+      await m.flush()
+      expect(note()?.textContent).toBe(O.saveFailed)
+      expect(unhandled).toEqual([])
+      m.container.querySelector<HTMLButtonElement>('[data-row="appearance/highlight"] button.o-swatch')!.click()
+      await m.flush()
+      expect(note()).toBeNull()
+      await m.unmount()
+    } finally {
+      process.off('unhandledRejection', listen)
+    }
   })
 
   it('a profile an earlier version let the reader add stays as a swatch', async () => {

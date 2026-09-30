@@ -12,6 +12,9 @@
   .o-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 18px; margin: 22px 14px 8px; }
   .o-heading h2 { margin: 0; font-size: 13px; font-weight: 600; }
   .o-aside { color: var(--ink-2); font-size: 12px; }
+  /* a heading's action with its reason before it (Restore at the styles' cap): the reason 12 px from the button's words,
+     past the text button's own 10 px */
+  .o-heading-end { display: inline-flex; flex: none; align-items: center; gap: 2px; }
   .o-title + .o-heading { margin-top: 0; }
   /* a row: at least 48 px, 8 × 10 in, radius 6. The edges, from the card's: controls 14 (its 4 + the row's 10), words 42
      after a leading control (16 + 12), one step of 28 per level; the trailing edge 14. Its end moves under its words

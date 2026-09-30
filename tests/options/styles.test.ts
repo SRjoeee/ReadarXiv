@@ -8,7 +8,7 @@
 // though the defaults make its change a no-op (round 4)
 import { createElement as h, useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BUILT_IN_STYLES, appearanceSchema } from '@/config/appearance'
+import { BUILT_IN_STYLES, appearanceSchema, resetBuiltIns } from '@/config/appearance'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { OptionsData } from '@/entrypoints/options/data'
 import { deferred, mountElement } from '../ui/render-hook'
@@ -246,6 +246,31 @@ describe('the translation styles (§6.4)', () => {
     expect(styles.find(s => s.id === 'green')!.color).toBe(BUILT_IN_STYLES[1]!.color)
     expect(styles.at(-1)).toEqual(mine)
     await m.unmount()
+  })
+
+  // Codex 4b: the built-ins brought back could take the list past the schema's cap, and the store refused the write
+  it('Restore is greyed and says why when the built-ins it would bring back take the list past the schema\'s 50; when they fit, it restores', async () => {
+    const patches: Config[] = []
+    const own = (n: number) => Array.from({ length: n }, (_, i) => ({ ...BUILT_IN_STYLES[0]!, id: `style-own${String(i).padStart(5, '0')}`, name: `Own ${i}` }))
+    // two built-ins deleted, 45 of one's own: 49 stored, 51 once restored
+    const over = { ...DEFAULT_CONFIG, appearance: { ...DEFAULT_CONFIG.appearance, styles: [...BUILT_IN_STYLES.slice(0, 4), ...own(45)] } }
+    expect(appearanceSchema.safeParse(resetBuiltIns(over.appearance, 'styles')).success).toBe(false)
+    const restore = (c: HTMLElement) => button(c, O.appearance.restore)
+    const m = await mountElement(h(Harness, { start: over, patches }))
+    expect(restore(m.container).getAttribute('aria-disabled')).toBe('true')
+    expect(document.getElementById(restore(m.container).getAttribute('aria-describedby') ?? '')?.textContent).toBe('Up to 50 styles')
+    restore(m.container).click()
+    await m.flush()
+    expect(patches).toEqual([])
+    await m.unmount()
+    // 44 of one's own: 50 once restored, which fits
+    const fits = { ...over, appearance: { ...over.appearance, styles: [...BUILT_IN_STYLES.slice(0, 4), ...own(44)] } }
+    const n = await mountElement(h(Harness, { start: fits, patches }))
+    expect([restore(n.container).getAttribute('aria-disabled'), restore(n.container).getAttribute('aria-describedby')]).toEqual([null, null])
+    restore(n.container).click()
+    await n.flush()
+    expect(patches.at(-1)!.appearance.styles).toHaveLength(50)
+    await n.unmount()
   })
 
   it('an arrow key in the open editor leaves the choice and the focus where they are; on a style radio it still moves the choice (item 1)', async () => {
