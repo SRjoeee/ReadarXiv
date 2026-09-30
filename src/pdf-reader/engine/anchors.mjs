@@ -260,9 +260,11 @@ function unitWords(text, gaps) {
 }
 
 /** in a unit's body heights: how far from its edge line a display beyond its marks may begin (the display's skip, and
- *  its tallest glyphs, a bracket or a sum, which are no words); how far each next line of the body's size may stand from
- *  those taken; how far a smaller glyph may stand outside them (a limit, a script); and what counts as the body's size */
-const FIRST = 3.5, GAP = 1.2, SMALL = 0.4, BODY = 0.95
+ *  its tallest glyphs, a bracket or a sum, which are no words); how far from a word of the unit the part of a display
+ *  across a page or a column break may begin (a float's skip is further); how far each next line of the body's size may
+ *  stand from those taken; how far a smaller glyph may stand outside them (a limit, a script); and what counts as the
+ *  body's size */
+const FIRST = 3.5, ACROSS = 1.6, GAP = 1.2, SMALL = 0.4, BODY = 0.95
 
 /**
  * The pages' frame, as the located units' words give it: across, where the text's lines begin and end on most pages;
@@ -339,7 +341,10 @@ function walker(doc, ms, owner, line) {
     const edge = reach - dir * SMALL * h
     return lines.filter(l => (dir > 0 ? l.bottom >= edge : l.top <= edge)).flatMap(l => l.ks)
   }
-  return { claim(u, k0, dir, first) { const ks = take(u, k0, dir, first); for (const k of ks) { owner[k] = u; own(k, u) } return ks } }
+  return {
+    take,
+    claim(u, k0, dir, first) { const ks = take(u, k0, dir, first); for (const k of ks) { owner[k] = u; own(k, u) } return ks },
+  }
 }
 
 /**
@@ -446,7 +451,17 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
       // its text, a small-caps title was lit over its first capital alone, and a last word cut by a hyphen missed its
       // line's end
       while (k + 1 < doc.length && !doc[k + 1].t && (n + 1 === m.length || k + 1 < m[n + 1])) idx.push(++k)
-      if (n + 1 < m.length && between(doc, owner, u, m[n], m[n + 1])) for (k++; k < m[n + 1]; k++) idx.push(k)
+      if (n + 1 === m.length) continue
+      const A = doc[m[n]], B = doc[m[n + 1]]
+      if (between(doc, owner, u, m[n], m[n + 1])) for (k++; k < m[n + 1]; k++) idx.push(k)
+      // the unit goes on over a page or at the head of the next column: what stands below the one word on its page,
+      // and above the other on its own, as far as the unit's lines go — a display's parts; not the page's head and foot,
+      // a footnote, a float (walker)
+      else if (f.bounded && (A.page !== B.page || B.y > A.y + A.h * 0.6)) {
+        const down = walk.take(u, k, 1, ACROSS), up = walk.take(u, m[n + 1], -1, ACROSS)
+        const last = down.at(-1) ?? k
+        idx.push(...down.filter(j => j < m[n + 1]), ...up.filter(j => j > last).reverse())
+      }
     }
     const all = beyond[u]?.length ? [...new Set([...idx, ...beyond[u]])].sort((x, y) => x - y) : idx
     out.set(id, { rects: lineRects(doc, all), coverage: +f.coverage.toFixed(3), tokens: all, bounded: !!f.bounded })

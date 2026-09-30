@@ -158,3 +158,22 @@ describe('anchorUnits: a unit with no text', () => {
     expect(found.get(1)?.tokens).toEqual([0, 1, 2])
   })
 })
+
+describe('anchorUnits: a unit\'s display across a page break', () => {
+  const pageAt = (n: number, lines: Item[][]) => ({ page: n, items: [...lines.flat(), item(String(n), 150, 62, { eol: true })], styles: {} })
+  const words = (s: string, y: number, size = 10) => [item(s, 50, y, { size, width: 250, eol: true })]
+  const display = (y: number) => [item('x = y', 150, y), item('i', 177, y - 3, { size: 7 }), item('(1)', 290, y, { eol: true })]
+  const at = (doc: DocToken[], t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+
+  it('its parts at the foot of one page and the head of the next are lit with it; the footnote between, the page\'s number and a table set smaller are not (2608.29181: 39 tokens)', () => {
+    const pages = [
+      pageAt(1, [words('the paragraph before it', 700), words('a paragraph whose display', 124), display(100), words('a footnote set smaller', 80, 8)]),
+      pageAt(2, [words('model score cost', 716, 8), words('ours 0.91 12', 707, 8), display(676), words('goes on over the page', 652), words('another paragraph after', 628)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'a paragraph whose display goes on over the page' }, { id: 2, text: 'a footnote set smaller' }, { id: 3, text: 'another paragraph after' }]
+    const bounds = new Map<string, [number, number]>([['0', [0, 3]], ['1', [4, at(doc, 'page')]], ['2', [at(doc, 'footnote') - 1, at(doc, 'smaller')]], ['3', [at(doc, 'another'), at(doc, 'after')]]])
+    const found = anchorUnits(doc, units, { bounds, floating: id => id === 2 })
+    expect(found.get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['a', 'paragraph', 'whose', 'display', 'x', 'y', 'i', '1', 'x', 'y', 'i', '1', 'goes', 'on', 'over', 'the', 'page'])
+  })
+})
