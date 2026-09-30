@@ -371,6 +371,50 @@ describe('the translation styles (§6.4)', () => {
     await m.unmount()
   })
 
+  // Codex on #306 (Codex 4): the editor moved to the new style as the press was made, and a refused add left it on a
+  // style that was never made
+  it.each([
+    ['New style', (c: HTMLElement) => [...card(c).querySelectorAll<HTMLButtonElement>(':scope > button[data-srow]')].at(-1)!.click()],
+    ['Duplicate', (c: HTMLElement) => button(editor(c)!, O.reading.duplicate).click()],
+  ] as const)('%s opens the editor on the new style only once its write has landed; refused, the editor stays where it was and the list\'s foot says so', async (_, press) => {
+    const patches: Config[] = []
+    const gate: { promise: Promise<unknown>; unreadable?: boolean } = { promise: Promise.resolve() }
+    const m = await mountElement(h(GatedHarness, { start: DEFAULT_CONFIG, patches, gate }))
+    button(m.container, O.appearance.edit('Green')).click()
+    await m.flush()
+    const held = deferred<void>()
+    gate.promise = held.promise
+    press(m.container)
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(200)
+    await m.flush()
+    // the write is out: the editor has not moved
+    expect(editor(m.container)?.querySelector('input')?.value).toBe('Green')
+    held.resolve()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(200)
+    await m.flush()
+    // landed: the new style's row came in, chosen, its editor open
+    const made = patches.at(-1)!.appearance.styles.at(-1)!
+    expect([patches.at(-1)!.appearance.activeStyle, editor(m.container)?.querySelector('input')?.value]).toEqual([made.id, made.name])
+    expect(styleRadios(m.container).at(-1)!.closest('[data-srow]')!.hasAttribute('data-arriving')).toBe(true)
+    // refused: the editor stays on the style it was on, nothing new is drawn, and the foot says so
+    const written = patches.length
+    const refused = deferred<void>()
+    gate.promise = refused.promise
+    press(m.container)
+    await m.flush()
+    refused.reject(new Error('refused'))
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(200)
+    await m.flush()
+    gate.promise = Promise.resolve()
+    expect([patches.length, names(m.container).length]).toEqual([written, BUILT_IN_STYLES.length + 1])
+    expect(editor(m.container)?.querySelector('input')?.value).toBe(made.name)
+    expect(card(m.container).querySelector('.o-list-note')?.textContent).toBe(O.saveFailed)
+    await m.unmount()
+  })
+
   // Codex on #306 (Codex 4): a write of the list's other than a deletion or an undo was refused without a word
   it.each([
     ['a choice', (c: HTMLElement) => styleRadios(c)[2]!.click()],

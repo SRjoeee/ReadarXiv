@@ -87,10 +87,14 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
   const setPrompts = (fn: (c: PromptsConfig) => PromptsConfig) => writes.attempt(latest => ({ ...latest, prompts: fn(latest.prompts) }))
   // a choice from a list another tab has since changed must not store an id that names nothing (promptExists)
   const choose = (id: string) => void setPrompts(c => (promptExists(c, id) ? { ...c, promptId: id } : c))
+  /** a new prompt or a copy, chosen and so opened by the store; marked as come, its name to be focused, once its write
+   *  has landed, as a style or a service added is (Codex 4) */
   const add = (p: PromptTemplate) => {
-    setFresh(p.id)
-    setNaming(p.id)
-    void setPrompts(c => ({ patterns: [...c.patterns, p], promptId: p.id }))
+    void setPrompts(c => ({ patterns: [...c.patterns, p], promptId: p.id })).then(done => {
+      if (!done) return
+      setFresh(p.id)
+      setNaming(p.id)
+    })
   }
   const remove = (p: PromptTemplate) => {
     const g: GonePrompt = { prompt: p, index: prompts.patterns.findIndex(x => x.id === p.id), chosen: prompts.promptId === p.id, focus: !document.documentElement.hasAttribute('data-axt-pointer') }

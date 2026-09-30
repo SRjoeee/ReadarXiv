@@ -116,10 +116,16 @@ function Styles({ data, writes }: { data: OptionsData; writes: ListWrites<Config
   const choose = (id: string) => void setLooks(c => ({ ...c, activeStyle: id }))
   const open = (id: string) => { choose(id); setEditing(id) }
   const close = (id: string) => { setEditing(null); radios.current.get(id)?.focus() }
+  /**
+   * A new style or a duplicate, chosen, its editor open — once its write has landed, as a service added is (Task 107):
+   * refused, the editor stays where it was, and the list's foot says so (Codex 4)
+   */
   const add = (next: StyleProfile) => {
-    void setLooks(c => ({ ...c, styles: [...c.styles, next], activeStyle: next.id }))
-    setFresh(next.id)
-    setEditing(next.id)
+    void setLooks(c => ({ ...c, styles: [...c.styles, next], activeStyle: next.id })).then(done => {
+      if (!done) return
+      setFresh(next.id)
+      setEditing(next.id)
+    })
   }
   const remove = (p: StyleProfile) => {
     const index = a.styles.findIndex(s => s.id === p.id)
