@@ -155,5 +155,10 @@ const spike = new Map(even.map(u => [u.i, u.i === 10 ? 225 : 0]))
 const steady = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, measured: { drift: spike, preview: previewHeights, snap: 40 } })
 check('measured: one reading far off, the units around it read level, is left out', [...steady.values()].every(l => near(l, 1, 1e-9)), JSON.stringify([...steady.values()].slice(8, 13)))
 check('measured: a jump that lasts is taken a little before it, where the text can still make way', snapped.get(18) < 1 - 1e-6 || snapped.get(19) < 1 - 1e-6, `${snapped.get(18)} ${snapped.get(19)}`)
+// the front matter's offset is kept until a reading parts from it by more than the threshold: Korean 2608.21180's title
+// left page 1 51 pt ahead, under the threshold; set back to level at the next reading, the room it left was taken again
+const frontThenSame = new Map(even.map(u => [u.i, u.i === 0 ? -56 : -51]))
+const kept = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, measured: { drift: frontThenSame, preview: previewHeights, snap: 96 } })
+check('measured: an offset under the threshold at the first unit is kept through the readings like it', kept.get(3) > 1 + 1e-6 && kept.get(8) > 1 + 1e-6, `${kept.get(3)} ${kept.get(8)}`)
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)
