@@ -76,6 +76,27 @@ describe('runsOf: a unit\'s runs, one per page and column, and their rows', () =
     expect(runs.map(r => [r.col, ...across(r), r.rows.length])).toEqual([['L', 50, 290, 3], ['R', 310, 550, 2]])
   })
 
+  it('two columns: an overfull display that passes the page\'s middle stays in its column, clamped 6 past its edge', () => {
+    // the left column's lines from 50 to 290, a display in it running on to 305 (past the middle, 300, short of the
+    // right column's text by more than the overhang): no full-width block over both columns
+    const pages = [[...prose(700, 20, 50, 290), line('the paragraph ends with a display', 460, 50, 290), item('x = a + b + c + d', 60, 440, { width: 245 }), ...prose(420, 10, 50, 290), ...prose(700, 30, 310, 550)]]
+    const d = docOf(pages), s = at(d, 'the')
+    const runs = runsOf(side(pages, [[0, range(s, at(d, 'd', s))]]), 0)
+    expect(runs.map(r => [r.col, ...across(r)])).toEqual([['L', 50, 296]])
+  })
+
+  it('two columns: a paragraph around a full-width display (revtex widetext) is cut by it, its own, in each column', () => {
+    // left above, right above, the display across both columns, left below: four runs, none overlapping another
+    const pages = [[...prose(740, 4, 50, 290), line('words above on the left of it', 692, 50, 290), line('more words above it on the left', 680, 50, 290), ...prose(740, 4, 310, 550), line('words above on the right of it', 692, 310, 550), line('more words above on the right', 680, 310, 550),
+      item('x = y + z', 150, 656, { width: 300 }), line('words below on the left of it', 632, 50, 290), line('more words below on the left', 620, 50, 290), ...prose(608, 20, 50, 290), ...prose(632, 20, 310, 550)]]
+    // the unit: the lines at 692 and 680 in both columns, the display at 656, the left column's lines at 632 and 620
+    const unit = docOf(pages).flatMap((t, k) => ([692, 680, 656].includes(t.y) || ([632, 620].includes(t.y) && t.x < 300) ? [k] : []))
+    const runs = runsOf(side(pages, [[0, unit]]), 0)
+    // a column's runs from the top, the columns as the unit's words first reach them
+    expect(runs.map(r => [r.col, r.rows.length, r.top > 670])).toEqual([['L', 2, true], ['L', 2, false], ['R', 2, true], ['F', 1, false]])
+    for (const a of runs) for (const b of runs) if (a !== b) expect(Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0) && Math.min(a.top, b.top) > Math.max(a.bottom, b.bottom)).toBe(false)
+  })
+
   it('a column break over a page: one run on each page', () => {
     const runs = runsOf(side([prose(700, 30), prose(700, 30)], [[0, range(8 * 28, 8 * 32 - 1)]]), 0)
     expect(runs.map(r => [r.page, r.rows.length])).toEqual([[1, 2], [2, 2]])

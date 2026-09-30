@@ -88,12 +88,14 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
     else if (P.two === false) ones++
   }
   for (let p = 1; p <= pages; p++) if (page[p].two === null) page[p].two = twos > ones
-  const colOf = (P, x0, x1) => (!P.two || (x0 < P.mid - 1 && x1 > P.mid + 1) ? 'F' : x1 <= P.mid + 1 ? 'L' : 'R')
+  // a long line's column for the edges' pool, before the columns' edges are known: the half it is in, both where it
+  // crosses the middle
+  const halfOf = (P, x0, x1) => (!P.two || (x0 < P.mid - 1 && x1 > P.mid + 1) ? 'F' : x1 <= P.mid + 1 ? 'L' : 'R')
   // the text block's edges, per page parity and column: the outermost that enough long lines share (justified prose is
   // flush on both sides; displays, lists and indents stand inside, an equation's number flush right)
   const pool = new Map()
   for (const r of long) {
-    const P = page[r.page], key = `${r.page % 2}${P.two ? 'T' : 'O'}${colOf(P, r.x0, r.x1)}`
+    const P = page[r.page], key = `${r.page % 2}${P.two ? 'T' : 'O'}${halfOf(P, r.x0, r.x1)}`
     const q = pool.get(key) ?? pool.set(key, { x0s: [], x1s: [] }).get(key)
     q.x0s.push(r.x0); q.x1s.push(r.x1)
   }
@@ -117,7 +119,16 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
     P.lead = (P.gaps.length >= 3 ? median(P.gaps) : docGap) / 2
     P.gaps = null
   }
-  return { tok, pageStart, page, colOf, anchors, kindOf, unitsOn, pagesOf, cache: new Map() }
+  return { tok, pageStart, page, anchors, kindOf, unitsOn, pagesOf, cache: new Map() }
+}
+
+/** a line's column on a page: on two columns, both only where it reaches into both columns' text by more than the
+ *  overhang (a full-width display, a float across the page); else the one its middle stands in, so that an overfull
+ *  display stays in its column, clamped (a display passing the middle made a block over both, doubling the wash) */
+function colOf(P, x0, x1) {
+  if (!P.two) return 'F'
+  if (x0 < P.cols.L.x1 - OVERHANG && x1 > P.cols.R.x0 + OVERHANG) return 'F'
+  return (x0 + x1) / 2 <= P.mid ? 'L' : 'R'
 }
 
 /**
@@ -145,7 +156,7 @@ export function pageGeometry(L, p) {
     }
     lineOf[k - k0] = lines.length - 1
   }
-  for (const l of lines) l.col = L.colOf(P, l.x0, l.x1)
+  for (const l of lines) l.col = colOf(P, l.x0, l.x1)
   // who owns each of the page's tokens, and each of its lines: -1 none, a unit, -2 several
   const owner = new Int32Array(k1 - k0).fill(-1), mine = new Map()
   for (const id of L.unitsOn[p] ?? []) {
@@ -228,7 +239,9 @@ function unitRuns(L, p, { k0, lines, lineOf, owner, lineOwner }, id, toks) {
       } else rows.push({ y0: l.y0, y1: l.y1, x0: x.x0, x1: x.x1 })
     }
     // runs: the rows cut where another unit's line stands between two of them in the column (a float set inside a
-    // paragraph, a footnote); a gap alone is the unit's (a display)
+    // paragraph, a footnote), and in a column of two where a line across both does, the unit's own too (a paragraph
+    // around a full-width display, revtex's widetext: one run above and one below it, not one over it); a gap alone
+    // is the unit's (a display)
     let start = 0
     for (let r = 1; r <= rows.length; r++) {
       if (r < rows.length && !interrupted(lines, lineOwner, col, id, rows[r - 1], rows[r])) continue
@@ -240,12 +253,13 @@ function unitRuns(L, p, { k0, lines, lineOf, owner, lineOwner }, id, toks) {
   return runs
 }
 
-/** whether a line of another unit stands in the column between two rows, one above the other: its middle between them */
+/** whether a line stands between two rows of a run in `col`, one above the other (its middle between them): another
+ *  unit's in the column, or in a column of two any line across both */
 function interrupted(lines, lineOwner, col, id, above, below) {
   if (above.y0 - below.y1 < Math.min(above.y1 - above.y0, below.y1 - below.y0)) return false
   for (let i = 0; i < lines.length; i++) {
     const o = lineOwner[i], l = lines[i]
-    if (o === -1 || o === id || l.col !== col) continue
+    if (!(l.col === col ? o !== -1 && o !== id : col !== 'F' && l.col === 'F')) continue
     const y = (l.y0 + l.y1) / 2
     if (y < above.y0 && y > below.y1) return true
   }
