@@ -11,7 +11,7 @@
 // U+A000–U+F8FF — the private-use area with it, a bracket's pieces read as CJK words, and surrogates for this pattern
 const CJK_RANGES = '\\u3400-\\u9fff\\uf900-\\ufaff\\u3040-\\u30ff\\uac00-\\ud7af'
 const CJK = new RegExp(`[${CJK_RANGES}]`, 'u')
-const TOKEN = new RegExp(`[${CJK_RANGES}]|[\\p{L}\\p{N}]+`, 'gu'), PARTS = new RegExp(`[${CJK_RANGES}]|[^${CJK_RANGES}]+`, 'gu')
+const TOKEN = /[\p{L}\p{N}]+/gu, PARTS = new RegExp(`[${CJK_RANGES}]|[^${CJK_RANGES}]+`, 'gu')
 const K = 3
 
 /** one token per CJK character, one per run of other letters and digits; lower case, compatibility forms folded. A run
@@ -24,8 +24,9 @@ export function tokens(s) {
     const w = m[0]
     if (!CJK.test(w)) out.push({ t: w, at: m.index, len: w.length })
     else if (w.length === 1) out.push({ t: w, at: m.index, len: 1 })
-    // a run that went on into CJK characters, cut where they begin (a lookahead in the pattern cost the text layer's
-    // every character a test: 5 % of tokenizing a heavy paper)
+    // a run of letters that holds CJK characters, cut into them and the runs between: matched as one class and cut
+    // after, since a lookahead in the pattern, or the CJK ranges beside the letters' class, cost the text layer's every
+    // character a test (5 to 10 % of tokenizing a heavy paper)
     else for (const p of w.matchAll(PARTS)) out.push({ t: p[0], at: m.index + p.index, len: CJK.test(p[0]) ? 1 : p[0].length })
   }
   return out
