@@ -93,3 +93,45 @@ Errors are leave-one-paper-out. The text predictor was crude (every non-CJK char
   A line that does not flow (a table cell, a heading) is as tall as its type whatever its length: set smaller it came
   out shorter than the original's and pulled the pages after it ahead (2608.06701). Tables are held to their
   original's height, never below 0.85 of their width (FIT_DEF's \axt@fitmin).
+- 2026-09-30, step 2, two faults found by measuring the first compile against its prediction:
+  - `measureUnits` still applied the dropped CJK ruler by default; zh 2608.06007's first compile measured 9 % long
+    against a prediction density-check put at 1 %. Removed; now 0.7 %.
+  - Fixed sizes. Computer Modern (OT1, T1, T2A) has 9, 10, 10.95 and 12 pt and nothing between; a size between comes
+    out at the nearest, so 0.96 of an 11 pt body came out at 10.95 pt and 2608.02785 ran 7 % long, and a correction
+    that crossed the step jumped from 0.97 to 1.07. The size probe (`density.mjs SIZE_PROBE`, in the font probe and in
+    every translation's compile) measures how wide the body face sets at each size of the range; the solver chooses
+    among those, the leading taking up the rest. A face's em is no measure of its size (Latin Modern's 9 pt design has
+    an em of 9.25 pt); the sample's width is. An alphabet's size floor is now 0.9, a 10 pt class's \small.
+  - After both, the first compile lands at 0.985–1.02 of the original's height (CJK) and 0.987–1.015 (alphabets),
+    except papers at the design's floors: four Japanese papers at scale 0.92 and leading 1.0 stay 2–6 % long, and a
+    face whose sizes from 9.1 pt use a narrower design (2608.06701) 5.7 %. The second compile, corrected by the first's
+    measurement, lands within ±0.5 %.
+- 2026-09-30, the round of 34 (zh 5, ja 8, ko 8, de 5, ru 8), every variant two compiles (the reader's preview and its
+  final), against FIT (three trial compiles) and the H-rule lock:
+
+  | | Pages equal (more / fewer) | Drift median / p90, columns | Within 0.1 column | Blocks within ±15 % | Leading, p10–p90 / step between neighbours (median) |
+  |---|---|---|---|---|---|
+  | FIT | 29 (2 / 3) | 0.056 / 0.236 | 69 % | 86 % | alphabets 13–17 % / 2–8 %; CJK one type |
+  | Generic: one type | 26 (4 / 4) | 0.077 / 0.382 | 63 % | 84 % | 0 |
+  | Flow: a window of 50 lines | 25 (5 / 4) | 0.058 / 0.328 | 71 % | 84 % | 7 % / 0.6 % |
+  | Flow, each block (window 0) | 26 (5 / 3) | 0.063 / 0.331 | 70 % | 88 % | 15 % / 0.7 % (p90 13 %) |
+  | H-rule lock | 32 (2 / 0) | 0.019 / 0.140 | 92 % | 73 % | — |
+
+  By script: CJK's best is Flow (drift 0.047 against FIT's 0.063, 76 % within 0.1 against 66 %); FIT's CJK is one
+  type, like Generic, and the two land within 0.004 of each other. The alphabets' best is each block a little ahead
+  (window 0, two lines ahead: drift 0.053 against FIT's 0.045, pages 9 of 13 against 11).
+- What one type cannot do, and why the rest is fragile:
+  - One type keeps the paper's height, not its places: a translation's density changes along a paper and each
+    stretch keeps what the one before it lost (German 2608.24839: 0.20 column ahead by page 4 at a whole-paper ratio
+    of 0.994). Flow takes a quarter of it off on average (drift median 0.077 → 0.058), not everywhere: on 24839 it
+    stood 0.29 ahead, and what moves it there is still to find.
+  - Pages change at what cannot break. 2608.06233's [H] figure fitted its column exactly in the original; ten points
+    more before it moved it a column on, `\flushbottom` spread the column it left, and every page after stood half a
+    column late (FIT's six points more fitted). 2608.09038's main text ran a third of a column long before a
+    `\clearpage`: its references took a page of their own, two pages added. 2608.24839's last page holds nine lines,
+    and a translation a few lines short loses it. A lead of two lines ahead did not save 06233: the `\clearpage`
+    before its appendix starts both on a fresh page, and the height-based drift does not see that.
+  - The leading needs room both ways. At a floor (Japanese and Korean set no tighter than the paper's leading) or a
+    ceiling (Chinese at 1.45), per-block leading can only move one way and shortens or lengthens the whole: the
+    take-back (`horizon`) limits it, and zh 2608.21180 at 1.448 still came out 0.17 column ahead with each block.
+    Next: the type solved with the leading's working point clear of its ends, the other knobs taking up the rest.

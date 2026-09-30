@@ -372,7 +372,12 @@ async function addFlow(lang, id, { window, horizon, ahead = 0, key }) {
     window, horizon, ahead, type: (r2?.ok ? second : g).type, leads: spread(r2?.ok ? second.leads : leads1), solveMs: g.ms + ms1 + (second?.ms ?? 0), compiles: r2?.ok ? 2 : 1,
     first: r1.ok ? { type: g.type, leads: spread(leads1), measured: second?.measured, numbers: await numbersFor(units, orig, om, r1.pdf, r1.log) } : null,
   })
-  await writeIndex(dir, index)
+  // other variants of the same paper may be compiling alongside: their numbers as they are now, this one's added
+  const now = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'))
+  now.numbers ??= {}; now.failed ??= {}
+  if (index.numbers[key]) now.numbers[key] = index.numbers[key]; else delete now.numbers[key]
+  if (index.failed[key]) now.failed[key] = index.failed[key]; else delete now.failed[key]
+  await writeIndex(dir, now)
   note(key, r.ok, 'first', JSON.stringify(g.type), 'measured', second?.measured?.toFixed(3), 'second', JSON.stringify(second?.type), 'leads', JSON.stringify(index.numbers[key]?.leads), JSON.stringify({ generic: index.numbers.generic?.align?.drift?.median, [key]: index.numbers[key]?.align?.drift?.median }))
 }
 
