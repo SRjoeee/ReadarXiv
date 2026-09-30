@@ -160,5 +160,13 @@ check('measured: a jump that lasts is taken a little before it, where the text c
 const frontThenSame = new Map(even.map(u => [u.i, u.i === 0 ? -56 : -51]))
 const kept = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, measured: { drift: frontThenSame, preview: previewHeights, snap: 96, keep: true } })
 check('measured, keep: an offset under the threshold at the first unit is kept through the readings like it', kept.get(3) > 1 + 1e-6 && kept.get(8) > 1 + 1e-6, `${kept.get(3)} ${kept.get(8)}`)
+// `rate`: what is taken back moves a unit's leading at most that far from the window's, however far behind it is, so
+// that no paragraph stands out from its neighbours (Korean 2608.05876: a stretch set a quarter looser than the text
+// around it, where the preview had jumped, and the owner chose the version without it)
+const bigJump = new Map(even.map(u => [u.i, u.i >= 20 ? 240 : 0]))
+const free = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, measured: { drift: bigJump, preview: previewHeights } })
+const paced = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, rate: 0.02, measured: { drift: bigJump, preview: previewHeights } })
+check('rate: without it, a large jump sets the stretch after it at the end of the range', near(free.get(21), 0.95, 1e-9), `${free.get(21)}`)
+check('rate: with it, every unit within that rate of the window\'s leading, and still taking back', [...paced.values()].every(l => l >= 0.98 - 1e-9 && l <= 1 + 1e-9) && near(paced.get(21), 0.98, 1e-9), JSON.stringify([...paced.values()].slice(17, 23)))
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

@@ -5,7 +5,7 @@
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>...   generate
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --reindex   render and index existing PDFs
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --generic   add the generic column to generated papers
-//   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --flow[=<window>[:<horizon>[:<ahead>]]] [--floats] [--phys[=<lines>]] [--local=<lines>] [--keep]   add the flow variant (a window of 50 lines by default; --floats: each float waits for its original's page; --phys: the final corrects the drift the preview measured, where it parts from the heights by more than <lines>; --local: the lead ahead only in that many lines before a jump the preview measured)
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --flow[=<window>[:<horizon>[:<ahead>]]] [--floats] [--phys[=<lines>]] [--local=<lines>] [--keep] [--rate=<percent>]   add the flow variant (a window of 50 lines by default; --floats: each float waits for its original's page; --phys: the final corrects the drift the preview measured, where it parts from the heights by more than <lines>; --local: the lead ahead only in that many lines before a jump the preview measured; --rate: what is taken back moves a unit's leading at most that percentage from the window's)
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs --catalog
 import { execFile, execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -334,7 +334,8 @@ async function addGeneric(lang, id) {
  *  — from the predicted lines for the first compile (the reader's preview), from that compile's measured lines for the
  *  second (the reader's final), its knobs solved again from what the first measured. Two compiles, as the generic
  *  column's. Kept as `key` (numbers and PDF) */
-async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, phys = false, local = 0, keep = false, key }) {
+async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, phys = false, local = 0, keep = false, rate = 0, key }) {
+  const paced = rate ? rate / 100 : Infinity
   const dir = join(OUT, lang, id), work = join(dir, 'work')
   const t0 = Date.now(), note = (...a) => console.log(`[${lang} ${id} ${Math.round((Date.now() - t0) / 1000)}s]`, ...a)
   const index = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'))
@@ -354,7 +355,7 @@ async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, p
   const floatsAt = new Map(floats ? units.map((u, i) => [u, i, om0.marks.get(`${i}s`)]).filter(([u, , m]) => u.kind === 'caption' && m).map(([, i, m]) => [i, { page: m.page + 1, col: om0.twoColumn && m.x >= om0.width / 2 ? 1 : 0 }]) : [])
   const optsOf = (x, leads) => ({ ...genericOpts(x, { strategy, fonts, em, theorems, paper, translated }), leads: factors(leads), floatsAt })
   const spread = leads => { const v = [...leads.values()].sort((a, b) => a - b); return v.length ? { p10: v[Math.floor(v.length * 0.1)], median: v[v.length >> 1], p90: v[Math.floor(v.length * 0.9)] } : null }
-  const t1 = performance.now(), leads1 = flowLeads(g.list, g.script, unitHeights(g.list, g.script, g.type), { window, horizon, ahead }), ms1 = performance.now() - t1
+  const t1 = performance.now(), leads1 = flowLeads(g.list, g.script, unitHeights(g.list, g.script, g.type), { window, horizon, ahead, rate: paced }), ms1 = performance.now() - t1
   const r1 = await compile(work, `${key}-1`, paper, files, lockedFiles(paper, translated, optsOf(g, leads1)), { engine: strategy.engine, rerun: true })
   let second = null
   if (r1.ok) {
@@ -371,7 +372,7 @@ async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, p
     // (`phys` a number of lines: the measure taken only where it parts from the heights' account by more than that)
     const bsMedian = [...got.map(u => u.bs)].sort((a, b) => a - b)[got.length >> 1] ?? 12
     const seen = phys ? { drift: drifts(om0, await marksOf(r1.pdf)), preview: new Map(got.map(u => [u.i, lines.get(u.i).lines * lines.get(u.i).bs])), snap: phys === true ? undefined : phys * bsMedian, local, keep } : null
-    second = { type, script: g.script, sizes: sizes2, measured, leads: flowLeads(got, g.script, heights, { window, horizon, ahead, measured: seen }), ms: performance.now() - t2 }
+    second = { type, script: g.script, sizes: sizes2, measured, leads: flowLeads(got, g.script, heights, { window, horizon, ahead, measured: seen, rate: paced }), ms: performance.now() - t2 }
   }
   const r2 = second ? await compile(work, `${key}-2`, paper, files, lockedFiles(paper, translated, optsOf(second, second.leads)), { engine: strategy.engine, rerun: true }) : null
   const r = r2?.ok ? r2 : r1
@@ -419,9 +420,9 @@ else {
       const [w, hz, ah = 0] = (argv.find(a => a.startsWith('--flow='))?.slice(7) ?? '50').split(':').map(Number)
       const floats = argv.includes('--floats'), physArg = argv.find(a => a === '--phys' || a.startsWith('--phys='))
       const phys = physArg ? (physArg.includes('=') ? Number(physArg.slice(7)) : true) : false
-      const local = Number(argv.find(a => a.startsWith('--local='))?.slice(8) ?? 0), keep = argv.includes('--keep')
-      const key = `${w === 50 ? 'flow' : `flow${w}`}${ah ? `a${ah}` : ''}${floats ? 'f' : ''}${phys ? `p${phys === true ? '' : phys}` : ''}${local ? `l${local}` : ''}${keep ? 'k' : ''}`
-      await addFlow(lang, id, { window: w, horizon: Number.isFinite(hz) ? hz : Math.max(w, 50), ahead: ah, floats, phys, local, keep, key }).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
+      const local = Number(argv.find(a => a.startsWith('--local='))?.slice(8) ?? 0), keep = argv.includes('--keep'), rate = Number(argv.find(a => a.startsWith('--rate='))?.slice(7) ?? 0)
+      const key = `${w === 50 ? 'flow' : `flow${w}`}${ah ? `a${ah}` : ''}${floats ? 'f' : ''}${phys ? `p${phys === true ? '' : phys}` : ''}${local ? `l${local}` : ''}${keep ? 'k' : ''}${rate ? `r${rate}` : ''}`
+      await addFlow(lang, id, { window: w, horizon: Number.isFinite(hz) ? hz : Math.max(w, 50), ahead: ah, floats, phys, local, keep, rate, key }).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
     }
     else await generate(lang, id).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
   }

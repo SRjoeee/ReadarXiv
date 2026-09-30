@@ -78,10 +78,14 @@ export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, D
  * could not break moved on — each unit there set to put the text on a ramp to `ahead` lines ahead by the jump;
  * elsewhere the text keeps level. A lead ahead everywhere cost every unit two lines of drift, and 2608.21180 (Chinese)
  * ran a quarter column ahead.
+ * `rate`: what is taken back — the drift, the measured offset, the lead ahead — moves a unit's leading at most that
+ * fraction from the window's, however far behind the text is, so that no paragraph stands out from its neighbours: a
+ * jump the preview measured, taken back within the horizon, set Korean 2608.05876's paragraphs after it a quarter
+ * looser than the text around them, and the owner preferred the version without it to one nearer the original's places.
  * `heights`: Map(unit index → the translation's height at leading one), from unitHeights or a compile's lines. The
  * leading is × the paper's for CJK, × the size's for an alphabet, as the type's is
  */
-export function flowLeads(units, script, heights, { window = 50, horizon = window, ahead = 0, measured = null } = {}) {
+export function flowLeads(units, script, heights, { window = 50, horizon = window, ahead = 0, measured = null, rate = Infinity } = {}) {
   const design = DESIGN[script]
   const list = units.filter(u => heights.get(u.i) > 0).sort((a, b) => a.i - b.i)
   const bs = [...list.map(u => u.bs)].sort((a, b) => a - b)[list.length >> 1] ?? 12, half = (window * bs) / 2, back = horizon * bs, lead = ahead * bs
@@ -134,7 +138,7 @@ export function flowLeads(units, script, heights, { window = 50, horizon = windo
     const at = drift + offset, near = toJump.get(i)
     const x = near != null
       ? clamp((list[k].lo * list[k].bs - lead * (1 - near / local) - at) / heights.get(i), design.lead)
-      : clamp((o / t) * (back > 0 && back < Infinity ? 1 - (at + (local ? 0 : lead)) / back : 1), design.lead)
+      : clamp((o / t) * clamp(back > 0 && back < Infinity ? 1 - (at + (local ? 0 : lead)) / back : 1, [1 - rate, 1 + rate]), design.lead)
     out.set(i, x)
     drift += heights.get(i) * x - list[k].lo * list[k].bs
   }
