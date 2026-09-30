@@ -108,7 +108,9 @@ export function boundsFromMarks(doc, marks) {
     if (!e) continue
     const a = tokenAtMark(doc, byPage, s, true), b = tokenAtMark(doc, byPage, e, false)
     if (a == null || b == null || b < a) continue
-    if ((s.t !== undefined && cut(s.t, true) !== doc[a].t) || (e.t !== undefined && cut(e.t, false) !== doc[b].t)) continue
+    // a carried word as it was, or as the tokenizer cuts it now (cut): the tokenizer still joins a word a hyphen cuts
+    // at a line's end with the CJK character after it, as the carried word has it (the review of A1, M2)
+    if ((s.t !== undefined && s.t !== doc[a].t && cut(s.t, true) !== doc[a].t) || (e.t !== undefined && e.t !== doc[b].t && cut(e.t, false) !== doc[b].t)) continue
     out.set(id, [a, b])
   }
   return out

@@ -15,4 +15,6 @@ export declare function tokens(s: string): { t: string; at: number; len: number 
 export declare function tokenizeDocument(pages: TextPage[]): DocToken[]
 /** marks (`${id}s` / `${id}e` → where, and the word carried with it) → id → [first token, last token] */
 export declare function boundsFromMarks(doc: DocToken[], marks: Map<string, { page: number; x: number; y: number; t?: string | null }>): Map<string, [number, number]>
+/** each mark with the word it stands by in `doc`, the document the marks were recorded in */
+export declare function markWords(doc: DocToken[], marks: Map<string, { page: number; x: number; y: number }>): Map<string, { page: number; x: number; y: number; t: string | null }>
 export declare function anchorUnits(doc: DocToken[], units: UnitText[], options?: { minCoverage?: number; bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean }): Map<number, Anchor | null>

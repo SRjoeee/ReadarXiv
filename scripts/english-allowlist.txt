@@ -57,7 +57,7 @@ tests/pdf-reader/ui/languages.test.ts 1  # 2026-09-25: the nine languages each n
 tests/pdf-reader/ui/menus.test.ts 2  # 2026-09-25: the menus' items found by their Chinese names
 tests/pdf-reader/ui/reading-options.test.ts 9  # 2026-09-25: the reading options' controls found by their Chinese names; +1, the appearance radio the arrows focus; +2, 2026-09-26: the rows a window under 500 px moves in, found by their words
 tests/pdf-reader/controller.test.ts 1  # 2026-09-25: the contents' titles as a Chinese reader sees them, the expectations
-tests/pdf-reader/anchors.test.ts 12  # 2026-10-01: a translation's text layer and its units, the tokenizer's CJK inputs and expectations
+tests/pdf-reader/anchors.test.ts 14  # 2026-10-01: a translation's text layer and its units, the tokenizer's CJK inputs and expectations
 tests/pdf-reader/mt.test.ts 1  # 2026-10-01: a translation's pieces, the plain text's CJK input
 tests/pdf-reader/ui/outline.test.ts 8  # 2026-09-25: the contents' titles as a Chinese reader sees them, the expectations
 tests/pdf-reader/ui/pane-floats.test.ts 1  # 2026-09-25: the pills' fields found by their Chinese names

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchorUnits, boundsFromMarks, type DocToken, type TextPage, tokenizeDocument, tokens, type UnitText } from '@/pdf-reader/engine/anchors.mjs'
+import { anchorUnits, boundsFromMarks, type DocToken, markWords, type TextPage, tokenizeDocument, tokens, type UnitText } from '@/pdf-reader/engine/anchors.mjs'
 
 // Where each unit sits in a PDF, found from the text layer (anchors.mjs): the page given as PDF.js's text items, the
 // units as the reader passes them. Heights are 10 PDF units, lines 12 apart down from y = 700
@@ -44,6 +44,13 @@ describe('tokens: a run of Latin letters or digits ends where a CJK character be
     const doc = tokenizeDocument([{ page: 1, items: [item('3', 50, 700), item('显示结果', 55, 700, { eol: true })], styles: {} }])
     const marks = new Map([['0s', { page: 1, x: 50, y: 700, t: '3显示结果' }], ['0e', { page: 1, x: 75, y: 700, t: '3显示结果' }]])
     expect(boundsFromMarks(doc, marks).get('0')).toEqual([0, 4])
+  })
+
+  it('a word the tokenizer still joins with a CJK character — a Latin word hyphenated at a line\'s end, CJK on the next — is carried whole, and bounds its unit (the review of A1, M2)', () => {
+    const doc = tokenizeDocument([{ page: 1, items: [item('GPT-', 50, 700, { eol: true }), item('风格的模型', 50, 688, { eol: true })], styles: {} }])
+    expect(doc[0]?.t).toBe('gpt风')
+    const marks = markWords(doc, new Map([['0s', { page: 1, x: 50, y: 700 }], ['0e', { page: 1, x: 75, y: 688 }]]))
+    expect(boundsFromMarks(doc, marks).get('0')).toEqual([0, doc.length - 1])
   })
 })
 
