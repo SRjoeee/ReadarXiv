@@ -161,6 +161,17 @@ describe('P0: the field and what Enter does (the redesign\'s design, §5.4)', ()
     expect(words.main.querySelector('[role="alert"]')).toBeNull()
   })
 
+  // Codex 5c: a greyed address row was said as the action Enter would take, its label and id alone; Enter then did
+  // nothing, and nothing said why
+  it('a pasted address no service can serve is said with its reason, as the note under the row words it; with a service to take over, as before', async () => {
+    const { config, rejected, saved } = fixture('P8b').input
+    const greyed = await drawInput({ ...fixture('P0c').input, config, rejected, saved })
+    expect(greyed.main.querySelector('[role="status"]')!.textContent).toBe(`${S.entry.html} ${S.find.paper('2501.07202v1')} · ${S.note.cannotRun(S.note.llmRejected)}`)
+    await greyed.unmount()
+    const fallback = await drawInput({ ...fixture('P0c').input, config, rejected, saved: fixture('P7b').input.saved })
+    expect(fallback.main.querySelector('[role="status"]')!.textContent).toBe(`${S.entry.html} ${S.find.paper('2501.07202v1')}`)
+  })
+
   // Fix round 1: P0's one purpose is this field; the popup opening on a page that is not a paper should let the reader
   // type at once
   it('the field takes the focus when P0 mounts', async () => {

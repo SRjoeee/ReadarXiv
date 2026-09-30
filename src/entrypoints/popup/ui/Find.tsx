@@ -32,12 +32,13 @@ export function Find({ find, failure, actions }: { find: NonNullable<PopupView['
    * assertive) — the same words the row itself already carries (the sentence, the row's label and id, or the paper's
    * line), so a reader who is not looking at the field still hears what Enter will do as it changes. A hidden mirror,
    * not `role="status"` on `.found` itself: the go rows are buttons, and a role of `status` on a button would replace
-   * its own role rather than add to it. The entries and the note stay out of the echo on purpose — each change
+   * its own role rather than add to it. A paper's entries and their note stay out of the echo on purpose — each change
    * announces the one short line above, not the two buttons or the reason one is greyed, which a reader tabbing to
-   * them meets directly
+   * them meets directly. The address row is the exception: it is what the field's own Enter acts on, so, greyed, its
+   * reason is said with it, in the note's words — else the echo would promise what Enter then does not do (Codex 5c)
    */
   const status = found === null ? `${S.find.enter} · ${S.find.advanced}`
-    : found.kind === 'open' ? `${found.label} ${found.paper}`
+    : found.kind === 'open' ? `${found.label} ${found.paper}${found.href === null && found.note ? ` · ${found.note.text}` : ''}`
       : found.kind === 'search' ? found.label
         : found.kind === 'paper' ? found.paper
           : found.text
