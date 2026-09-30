@@ -79,3 +79,27 @@ describe('anchorUnits: a word the text layer gives in parts is lit whole', () =>
     expect(found.get(0)?.rects.map(r => [r.x0, r.x1])).toEqual([[50, 165], [50, 70]])
   })
 })
+
+describe('anchorUnits: a heading with a formula or a citation in it', () => {
+  // the heading's text as the reader passes it: its placeholders dropped, and where they stood (mt.mjs unitText)
+  const around = (heading: string[], unit: UnitText) => {
+    const pages = [page([['the paragraph before it'], heading, ['the paragraph after it']])]
+    const doc = tokenizeDocument(pages)
+    const after = doc.findIndex((t, k) => k > 3 && t.t === 'the')
+    return { doc, found: anchorUnits(doc, [{ id: 0, text: 'the paragraph before it' }, unit, { id: 2, text: 'the paragraph after it' }], { bounds: new Map([['0', [0, 3]], ['2', [after, after + 3]]]) }) }
+  }
+
+  it('is found with the formula\'s words where the formula stood (2608.02163: Round $n$ and the like)', () => {
+    const { doc, found } = around(['Round', 'n:', 'Results'], { id: 1, text: 'Round : Results', gaps: [6] })
+    expect(found.get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['round', 'n', 'results'])
+  })
+
+  it('in a translation too, one CJK character a word', () => {
+    const { doc, found } = around(['第', 'n', '轮'], { id: 1, text: '第 轮', gaps: [2] })
+    expect(found.get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['第', 'n', '轮'])
+  })
+
+  it('words the text does not have are let in only where a placeholder stood', () => {
+    expect(around(['Round', 'n:', 'Results'], { id: 1, text: 'Round Results' }).found.get(1)).toBeNull()
+  })
+})

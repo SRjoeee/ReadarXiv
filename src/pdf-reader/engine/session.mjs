@@ -36,7 +36,7 @@ import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { hostReady } from './host.mjs'
 import { compilerKeeper, openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
-import { isName, plainSource, WIRE } from './mt.mjs'
+import { isName, plainSource, unitText, WIRE } from './mt.mjs'
 import { verified, VERIFIED } from './scripts.mjs'
 import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { unpackSource } from './tar.mjs'
@@ -1545,10 +1545,12 @@ async function showCached(record, setContext, note = () => {}) {
     note('shown cached')
     if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true })
     headings = record.units.map((u, i) => ({ id: i, src: u.src, depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
-    rightTexts = record.units.map((u, i) => ({ id: i, text: u.tr ?? u.src }))
+    // the translation's texts made again from the pieces the copy keeps (unitText), which say where their placeholders
+    // stood; the source's from its plain text, which does not
+    rightTexts = record.units.map((u, i) => ({ id: i, ...(u.pieces ? unitText(u.pieces) : { text: u.src }) }))
     await Promise.all([
       anchorSide(left, record.units.map((u, i) => ({ id: i, text: u.src })), new Map(record.marks)).then(() => note('cached left anchored')),
-      anchorSide(right, record.units.map((u, i) => ({ id: i, text: u.tr ?? u.src })), record.rightMarks?.length ? new Map(record.rightMarks) : undefined).then(() => note('cached right anchored')),
+      anchorSide(right, rightTexts, record.rightMarks?.length ? new Map(record.rightMarks) : undefined).then(() => note('cached right anchored')),
     ])
   } finally { URL.revokeObjectURL(url) }
   invalidate(); paint(left); paint(right)
@@ -1649,7 +1651,7 @@ async function live() {
     const paperData = openPaper(files), units = paperData.units
     headings = units.map((u, i) => ({ id: i, src: plainSource(u), depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
     total = units.length - paperData.kept.size
-    const src = units.map((u, i) => ({ id: i, text: plainSource(u) }))
+    const src = units.map((u, i) => ({ id: i, ...unitText(u.pieces) }))
     const context = paperContext(units)
     setContext(context)
     // a failure before this read resolved the figures' context with nothing; a run again has it now (Part 4's final

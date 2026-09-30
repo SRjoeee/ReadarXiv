@@ -13,7 +13,7 @@
 import { analyze } from './paper-meta.mjs'
 import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { strategiesFor } from './scripts.mjs'
-import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
+import { nameCells, plainSource, translateUnits, unitText } from './mt.mjs'
 
 /** The TeX log of a compile's last pass. The browser's compiler (poc-site/tex.js) joins each step's log with its terminal
  *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
@@ -229,8 +229,9 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
 
   // 3–5. compiles
   const fonts = await fontsP
-  // each unit's text as that compile has it: translated if it was in the snapshot, the source's otherwise
-  const texts = done => units.map((u, i) => ({ id: i, text: done.has(u) ? plainTranslated(done.get(u)) : plainSource(u) }))
+  // each unit's text as that compile has it: translated if it was in the snapshot, the source's otherwise; with where its
+  // placeholders stood (unitText), for the anchors
+  const texts = done => units.map((u, i) => ({ id: i, ...unitText(done.get(u) ?? u.pieces) }))
   let aux = null, bbl = null, previews = 0, originalP = null
   // the marked original, compiled once: the left side's anchors, and the characters the paper's own compile could not set
   const original = () => (originalP ??= compile({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper) }).then(o => {

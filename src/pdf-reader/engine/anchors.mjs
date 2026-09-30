@@ -221,23 +221,46 @@ function between(doc, owner, self, a, b) {
 }
 
 /** the token indices of `ws` found in a row in doc[lo..hi] (tokens with no text passed over): `last`, the last place
- *  they come; else only if they come exactly once; or null */
-function inRow(doc, ws, lo, hi, last) {
+ *  they come; else only if they come exactly once; or null. Where `gap[j]`, a placeholder stood before `ws[j]`: up to
+ *  FOREIGN words the text does not have may stand there — a formula's, a citation's — and are the unit's */
+function inRow(doc, ws, lo, hi, last, gap) {
   const live = []
   for (let k = Math.max(0, lo); k <= Math.min(doc.length - 1, hi); k++) if (doc[k].t) live.push(k)
+  /** the run of `ws` from live[m] on, as the live indices it takes, or null */
+  const at = m => {
+    let p = m
+    for (let j = 0; j < ws.length; j++, p++) {
+      if (j && gap?.[j]) for (let f = 0; f < FOREIGN && p < live.length && doc[live[p]].t !== ws[j]; f++) p++
+      if (p >= live.length || doc[live[p]].t !== ws[j]) return null
+    }
+    return live.slice(m, p)
+  }
   let found = null
   for (let m = live.length - ws.length; m >= 0; m--) {
-    if (!ws.every((w, j) => doc[live[m + j]].t === w)) continue
-    if (last) return live.slice(m, m + ws.length)
+    const run = at(m)
+    if (!run) continue
+    if (last) return run
     if (found) return null
-    found = live.slice(m, m + ws.length)
+    found = run
   }
   return found
+}
+const FOREIGN = 8
+const SLOT = '\uFFFC'
+/** a unit's words, and before which of them a placeholder stood (`gaps`, offsets in its text: mt.mjs unitText) */
+function unitWords(text = '', gaps) {
+  if (!gaps?.length) return { ws: tokens(text).map(x => x.t), gap: null }
+  let s = text
+  for (let g = gaps.length - 1; g >= 0; g--) s = s.slice(0, gaps[g]) + SLOT + s.slice(gaps[g])
+  const n = s.normalize('NFKC').toLowerCase(), ts = tokens(s), gap = new Uint8Array(ts.length)
+  let from = 0
+  ts.forEach((t, i) => { if (n.slice(from, t.at).includes(SLOT)) gap[i] = 1; from = t.at + t.len })
+  return { ws: ts.map(x => x.t), gap }
 }
 
 /**
  * Every unit's place in the document: { rects: [{ page, x0, y0, x1, y1 }], coverage, tokens, bounded } or null when
- * it was not found. `units` is [{ id, text }] in document order. With `bounds` (boundsFromMarks) a unit's first and
+ * it was not found. `units` is [{ id, text, gaps? }] in document order (`gaps`: mt.mjs unitText). With `bounds` (boundsFromMarks) a unit's first and
  * last token are known and its text is matched inside them only; a unit without marks is searched between its
  * marked neighbours. Without any marks the whole document is searched and a unit needs 60 % of its tokens matched.
  * `floating(id)`: a unit TeX sets away from where the source has it — a caption, with its float; a footnote, at the
@@ -256,8 +279,8 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
   for (let u = 0, e = -1; u < units.length; u++) { before[u] = e; if (inText(u)) e = hard[u][1] }
   for (let u = units.length - 1, a = doc.length; u >= 0; u--) { after[u] = a; if (inText(u)) a = hard[u][0] }
   const found = []
-  units.forEach(({ id, text }, u) => {
-    const ws = tokens(text ?? '').map(x => x.t)
+  units.forEach(({ id, text, gaps }, u) => {
+    const { ws, gap } = unitWords(text, gaps)
     const b = hard[u]
     const [lo, hi] = b ?? (bounds?.size ? [Math.max(0, before[u] + 1 - MARGIN), Math.min(doc.length - 1, after[u] - 1 + MARGIN)] : [0, doc.length - 1])
     // a heading — no marks, in the text between its located neighbours: its words in a row in the gap between them
@@ -265,15 +288,16 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
     // with its words comes before it, and the next section's text is past the gap. By 3-grams it was taken from a
     // paragraph beside it that has the same words (2608.02163 in Chinese: a heading of four characters the text
     // around it keeps using)
-    let m = !b && bounds?.size && ws.length && !floating(id) ? inRow(doc, ws, before[u] + 1, after[u] - 1, true) : null
+    let m = !b && bounds?.size && ws.length && !floating(id) ? inRow(doc, ws, before[u] + 1, after[u] - 1, true, gap) : null
     if (!m && ws.length >= K && lo <= hi) m = locate(doc, index, ws, lo, hi, !!b)
     // a float's text too short for 3-grams (a table's cell of one or two words): the words in a row, once, in the gap
     // between its located neighbours alone
-    if (!m && !b && ws.length && ws.length < K && bounds?.size) m = inRow(doc, ws, before[u] + 1, after[u] - 1, false)
+    if (!m && !b && ws.length && ws.length < K && bounds?.size) m = inRow(doc, ws, before[u] + 1, after[u] - 1, false, gap)
     // a float's text that is not there: its float may stand anywhere, so the whole document, as with no marks at all —
     // the words of a located unit are that unit's (owner, below)
     if (!m && !b && ws.length >= K && bounds?.size && floating(id)) m = locate(doc, index, ws, 0, doc.length - 1, false)
-    const coverage = m ? m.length / ws.length : 0
+    // a run takes a placeholder's words besides the unit's own, which are all there
+    const coverage = m ? Math.min(1, m.length / ws.length) : 0
     if (!b && (!m || coverage < minCoverage)) { found.push(null); return }
     found.push({ m: m ?? [], coverage, bounded: b })
   })

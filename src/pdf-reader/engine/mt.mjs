@@ -241,7 +241,31 @@ export async function translateUnits(units, send, format = 'markers') {
   return { results, how }
 }
 
+/** a text piece as the compiled PDF shows it: a translation's TeX escapes undone, the source's bytes as UTF-8 */
+const shown = p => (p.tr ? p.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1') : utf8(p.s))
+const plain = (pieces, textOf) => pieces.map(p => (p.t === 'text' ? textOf(p) : ' ')).join('').replace(/\s+/g, ' ').trim()
 /** a unit's plain text in the source (placeholders dropped: anchors are found from text alone) */
-export const plainSource = u => u.pieces.map(p => (p.t === 'text' ? utf8(p.s) : ' ')).join('').replace(/\s+/g, ' ').trim()
+export const plainSource = u => plain(u.pieces, p => utf8(p.s))
 /** a unit's plain text in its translation, as the compiled PDF shows it */
-export const plainTranslated = pieces => pieces.map(p => (p.t === 'text' ? (p.tr ? p.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1') : utf8(p.s)) : ' ')).join('').replace(/\s+/g, ' ').trim()
+export const plainTranslated = pieces => plain(pieces, shown)
+const SLOT = '￼'
+/**
+ * A unit's plain text as the PDF shows it (plainTranslated's, which is plainSource's for pieces not translated) and
+ * `gaps`, the offsets in it where a placeholder stood: there the page has words the text does not — a formula's, a
+ * citation's number — which anchors.mjs lets stand in a run of words (a heading, Round $n$: …). Without placeholders,
+ * no `gaps`
+ */
+export function unitText(pieces) {
+  const text = plainTranslated(pieces)
+  if (!pieces.some(p => p.t === 'ph' || p.t === 'nested')) return { text }
+  const slotted = pieces.map(p => (p.t === 'text' ? shown(p) : p.t === 'ph' || p.t === 'nested' ? ` ${SLOT} ` : ' ')).join('').replace(/\s+/g, ' ').trim()
+  let bare = ''
+  const gaps = []
+  for (const c of slotted) {
+    if (c === SLOT) { if (gaps.at(-1) !== bare.length) gaps.push(bare.length) } else if (c !== ' ' || (bare && !bare.endsWith(' '))) bare += c
+  }
+  // the text is plainTranslated's, character for character, or the offsets would name other places: a text holding
+  // the slot character itself gives none
+  if (bare.trimEnd() !== text) return { text }
+  return { text, gaps: gaps.map(g => Math.min(g, text.length)).filter((g, i, a) => a.indexOf(g) === i) }
+}
