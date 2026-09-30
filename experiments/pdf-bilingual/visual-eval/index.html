@@ -51,7 +51,7 @@ aside select { margin: 8px 12px }
 const $ = s => document.querySelector(s)
 const state = { catalog: null, lang: null, paper: null, index: null, page: 0, hidden: new Set(), zoom: false }
 const rate = (n, d) => (d ? `${Math.round((100 * n) / d)}%` : '—')
-const gain = e => (e.today?.units && e.locked?.units ? e.locked.samePage / e.locked.units - e.today.samePage / e.today.units : -Infinity)
+const gain = e => (e.fit?.units && e.lockh?.units ? e.lockh.samePage / e.lockh.units - e.fit.samePage / e.fit.units : -Infinity)
 const flags = () => { try { return JSON.parse(localStorage.getItem('axt-eval-flags') ?? '[]') } catch { return [] } }
 const saveFlags = f => { try { localStorage.setItem('axt-eval-flags', JSON.stringify(f)) } catch {} ; $('#flags-count').textContent = `${f.length} flagged`; $('#clear').disabled = !f.length }
 const base = () => `data/${state.lang}/${state.paper}`
@@ -69,8 +69,8 @@ function renderPapers() {
   if (by !== 'paper') list.sort((a, b) => (by === 'gain' ? gain(b) - gain(a) : gain(a) - gain(b)))
   $('#papers').replaceChildren(...list.map(e => {
     const d = document.createElement('div'); d.className = `paper${e.paper === state.paper ? ' on' : ''}`
-    const pages = Object.entries(e.pages).map(([k, n]) => `${k} ${n ?? '×'}`).join(' · ')
-    d.innerHTML = `<b>${e.paper}</b><small>${e.cls}</small><small>pages ${pages}</small><small>units on their page ${rate(e.today?.samePage, e.today?.units)} → ${rate(e.locked?.samePage, e.locked?.units)}${e.lockh ? ` → ${rate(e.lockh.samePage, e.lockh.units)} H's rules` : ''}${e.fit ? ` · fit ${rate(e.fit.samePage, e.fit.units)}` : ''}</small><small>captions ${e.today?.captionsSamePage ?? '—'}/${e.today?.captions ?? '—'} → ${e.locked?.captionsSamePage ?? '—'}/${e.locked?.captions ?? '—'}</small>`
+    const pages = state.catalog.columns.filter(c => Object.hasOwn(e.pages, c.key)).map(c => `${c.label} ${e.pages[c.key] ?? '×'}`).join(' · ')
+    d.innerHTML = `<b>${e.paper}</b><small>${e.cls}</small><small>pages ${pages}</small><small>units on their page: FIT ${rate(e.fit?.samePage, e.fit?.units)} · H rules ${rate(e.lockh?.samePage, e.lockh?.units)}</small><small>captions: FIT ${e.fit?.captionsSamePage ?? '—'}/${e.fit?.captions ?? '—'} · H rules ${e.lockh?.captionsSamePage ?? '—'}/${e.lockh?.captions ?? '—'}</small>`
     d.onclick = () => openPaper(e.paper)
     return d
   }))
@@ -78,11 +78,15 @@ function renderPapers() {
 async function openPaper(id) {
   state.paper = id; state.page = 0; renderPapers()
   state.index = await (await fetch(`${base()}/index.json`)).json()
+  state.index.columns = state.catalog.columns.flatMap(c => {
+    const stored = state.index.columns.find(x => x.key === c.key)
+    return stored ? [{ ...stored, ...c }] : []
+  })
   renderStrip()
 }
 function head() {
   const i = state.index, h = document.createElement('div'); h.className = 'head'
-  h.innerHTML = `<h2>${i.paper}</h2><span>${i.cls}</span>${i.translation?.untranslated ? `<span>${i.translation.untranslated} units untranslated</span>` : ''}${i.flags?.includes('original-mismatch') ? '<span>our compile of the original differs from arXiv\'s</span>' : ''}${i.lostExtra?.length ? `<span>characters lost only when locked: ${i.lostExtra.join(' ')}</span>` : ''}${i.overfull ? `<span>${i.overfull} overfull boxes when locked</span>` : ''}`
+  h.innerHTML = `<h2>${i.paper}</h2><span>${i.cls}</span>${i.translation?.untranslated ? `<span>${i.translation.untranslated} units untranslated</span>` : ''}${i.flags?.includes('original-mismatch') ? '<span>our compile of the original differs from arXiv\'s</span>' : ''}`
   return h
 }
 function renderStrip() {
@@ -103,7 +107,7 @@ function renderStrip() {
     strip.append(row)
   }
   const sus = document.createElement('div'); sus.className = 'suspicious'
-  for (const s of i.suspicious ?? []) { const a = document.createElement('a'); a.textContent = `page ${s.page} · ${s.kind} · ${s.detail}`; a.onclick = () => { state.page = s.page; renderPage() }; sus.append(a) }
+  for (const c of i.columns) for (const s of i.diagnostics?.[c.key]?.suspicious ?? []) { const a = document.createElement('a'); a.textContent = `${c.label} · page ${s.page} · ${s.kind} · ${s.detail}`; a.onclick = () => { state.page = s.page; renderPage() }; sus.append(a) }
   $('#view').replaceChildren(head(), strip, sus)
 }
 function renderPage() {

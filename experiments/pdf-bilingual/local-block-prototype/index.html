@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Local block replacement prototype</title>
+<style>
+body { margin: 0; color: #242424; background: #efefed; font: 14px/1.5 system-ui; }
+header { padding: 12px 18px; background: white; border-bottom: 1px solid #ddd; }
+h1 { margin: 0; font-size: 18px; }
+p { margin: 5px 0; }
+button, select { font: inherit; margin: 4px 6px 4px 0; }
+.controls { padding: 10px 18px; position: sticky; top: 0; z-index: 4; background: #fff; }
+.status { white-space: pre-wrap; padding: 8px 18px; background: #f8f5e8; }
+.sheets { display: flex; gap: 16px; padding: 18px; overflow: auto; }
+.sheet { flex: none; }
+.page { position: relative; background: white; box-shadow: 0 1px 4px #bbb; }
+.page canvas { display: block; }
+.region { position: absolute; background: white; box-sizing: border-box; contain: layout style; outline: 1px solid #b31b1b; }
+.content { overflow-wrap: anywhere; word-break: normal; hyphens: auto; text-align: justify; }
+.region:not(.active) { visibility: hidden; }
+#results { background: white; padding: 12px 18px; white-space: pre-wrap; font: 12px/1.5 monospace; }
+</style>
+<header><h1>Local block replacement — prototype</h1><p>Can a translation update only its original region? The original PDF stays loaded; fitting is local and bounded.</p><p>Prose and simple emphasis in this first probe. Formula-bearing, table and uncertain regions stay original and count as unsupported. No translated PDF export.</p></header>
+<div class="controls"><select id="case"></select><button id="prev">Previous page</button><span id="page-no"></span><button id="next">Next page</button><select id="unit"></select><button id="replace">Replace block</button><button id="restore">Restore block</button><button id="bench">Measure five cases</button><button id="export">Export measurements</button></div>
+<div id="status" class="status">Loading fixtures…</div>
+<div class="sheets"><div class="sheet"><b>Original</b><div class="page" id="original"><canvas></canvas></div></div><div class="sheet"><b>Local replacement</b><div class="page" id="replacement"><canvas></canvas></div></div></div>
+<pre id="results"></pre>
+<script type="module">
+import { getDocument, GlobalWorkerOptions } from '/pdfjs/build/pdf.mjs'
+import { tokenizeDocument, anchorUnits } from '/engine/anchors.mjs'
+import { boundedFit, percentile, regionOf } from '/prototype/fit.mjs'
+GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
+const $ = s => document.querySelector(s)
+const fixtures = await (await fetch('/fixtures.json')).json()
+let fixture, task, pdf, pageNumber = 1, regions = [], selected = null, current = null, report = []
+let counters = { texCompiles: 0, pdfLoads: 0, pdfRenders: 0, updates: 0 }
+let boot, busy = false, loadedFont = null
+const paintedRegions = new Map()
+const elapsed = t => performance.now() - t
+const frame = () => new Promise(resolve => requestAnimationFrame(resolve))
+const rounded = x => Math.round(x * 100) / 100
+const stats = xs => ({ n: xs.length, p50: rounded(percentile(xs, 0.5)), p95: rounded(percentile(xs, 0.95)), max: rounded(Math.max(...xs)) })
+const status = message => { $('#status').textContent = message }
+const summary = () => { $('#results').textContent = JSON.stringify({ environment: { userAgent: navigator.userAgent, hardwareConcurrency: navigator.hardwareConcurrency, devicePixelRatio, measuredAt: new Date().toISOString(), mode: 'cached translations; local HTTP; reused browser context; no-cache responses; JS heap is not process peak memory' }, counters, boot, page: current?.metrics, latestUpdate: selected?.measurement, report }, null, 2) }
+const controls = off => { for (const e of document.querySelectorAll('button, select')) e.disabled = off }
+
+async function loadCase(i) {
+  fixture = fixtures[i]
+  $('#case').value = String(i)
+  regions = []; selected = null
+  const t0 = performance.now()
+  if (loadedFont) document.fonts.delete(loadedFont)
+  const font = new FontFace(`Probe-${fixture.lang}`, `url("${fixture.font}")`)
+  const fontStart = performance.now()
+  const fontP = font.load().then(f => { document.fonts.add(f); loadedFont = f; return elapsed(fontStart) })
+  if (task) await task.destroy()
+  task = getDocument({ url: `/pdf/${fixture.paper}/arxiv.pdf`, cMapUrl: '/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: '/pdfjs/standard_fonts/' })
+  counters.pdfLoads++
+  pdf = await task.promise
+  const documentMs = elapsed(t0)
+  const fontMs = await fontP
+  boot = { lang: fixture.lang, paper: fixture.paper, sourceCachePrepareMs: rounded(fixture.prepareMs), fontBytes: fixture.fontBytes, documentMs: rounded(documentMs), fontMs: rounded(fontMs), totalMs: rounded(elapsed(t0)), sourceUnits: fixture.units.length, sourceBodyUnits: fixture.units.filter(u => ['para','abstract'].includes(u.kind)).length, supportedBodyCandidates: fixture.units.filter(u => ['para','abstract'].includes(u.kind) && !u.protectedContent && u.text && u.source.length >= 80).length, pages: pdf.numPages }
+  pageNumber = 1
+  await showPage()
+}
+
+async function analyzePage(number) {
+  const t0 = performance.now(), page = await pdf.getPage(number)
+  const text = await page.getTextContent()
+  const extractionMs = elapsed(t0)
+  const start = performance.now()
+  const doc = tokenizeDocument([{ page: number - 1, items: text.items, styles: text.styles }])
+  const anchors = anchorUnits(doc, fixture.units.map(u => ({ id: u.id, text: u.source })), { minCoverage: 0.95 })
+  const viewport = page.getViewport({ scale: 1 })
+  const eligible = [], rejected = {}, seen = []
+  for (const u of fixture.units) {
+    const a = anchors.get(u.id)
+    if (!a) continue
+    seen.push(u.id)
+    let reason = !['para', 'abstract'].includes(u.kind) ? 'non-body' : !u.text ? 'no-cached-translation' : u.protectedContent ? 'protected-or-complex-content' : null
+    const geometry = reason ? null : regionOf(a, doc, number - 1)
+    if (!reason && !geometry) reason = 'uncertain-geometry'
+    if (!reason && u.source.length < 80) reason = 'short-unit'
+    if (!reason && u.text.length > 6000) reason = 'local-text-budget'
+    if (reason) { rejected[reason] = (rejected[reason] ?? 0) + 1; continue }
+    const [x, y] = viewport.convertToViewportPoint(geometry.x0 - 0.6, geometry.y1 + 0.5)
+    const [right, bottom] = viewport.convertToViewportPoint(geometry.x1 + 0.6, geometry.y0 - 0.5)
+    const box = { x, y, width: right - x, height: bottom - y }
+    // A bounding rectangle must not cover any other located unit, even when its prose was not eligible.
+    const hitsOther = [...anchors].some(([id, other]) => id !== u.id && other?.rects.some(r => r.page === number - 1 && Math.min(r.x1, geometry.x1) - Math.max(r.x0, geometry.x0) > 2 && Math.min(r.y1, geometry.y1) - Math.max(r.y0, geometry.y0) > 1))
+    if (hitsOther || box.width > viewport.width * 0.85 || box.width <= 0 || box.height <= 0) { rejected['overlap-or-wide-region'] = (rejected['overlap-or-wide-region'] ?? 0) + 1; continue }
+    eligible.push({ u, geometry, box })
+  }
+  return { page, viewport, eligible, metrics: { page: number, nativeItems: text.items.length, matchedUnits: seen.length, eligible: eligible.length, rejected, extractionMs: rounded(extractionMs), anchoringMs: rounded(elapsed(start)) } }
+}
+
+async function showPage(analyzed) {
+  regions = []; selected = null
+  document.querySelectorAll('.region').forEach(e => e.remove())
+  paintedRegions.clear()
+  current = analyzed ?? await analyzePage(pageNumber)
+  const { page, viewport } = current
+  const t0 = performance.now()
+  const canvas = $('#original canvas'), replacement = $('#replacement canvas')
+  for (const [element, host] of [[canvas, $('#original')], [replacement, $('#replacement')]]) {
+    element.width = Math.ceil(viewport.width * 2); element.height = Math.ceil(viewport.height * 2)
+    element.style.width = `${viewport.width}px`; element.style.height = `${viewport.height}px`
+    host.style.width = `${viewport.width}px`; host.style.height = `${viewport.height}px`
+  }
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport: page.getViewport({ scale: 2 }) }).promise
+  counters.pdfRenders++
+  replacement.getContext('2d').drawImage(canvas, 0, 0)
+  current.metrics.renderMs = rounded(elapsed(t0))
+  regions = current.eligible
+  $('#page-no').textContent = `${fixture.lang} ${fixture.paper} · ${pageNumber}/${pdf.numPages}`
+  $('#unit').replaceChildren(...regions.map((r, i) => { const option = document.createElement('option'); option.value = i; option.textContent = `${r.u.id}: ${r.u.source.slice(0, 65)}`; return option }))
+  status(`${regions.length} eligible prose regions · ${current.metrics.matchedUnits} located units. Unsupported regions remain original.`)
+  summary()
+}
+
+function replacement(region, fit = true) {
+  const t0 = performance.now()
+  const element = document.createElement('div'); element.className = 'region'
+  const { box, geometry, u } = region
+  Object.assign(element.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` })
+  const content = document.createElement('div'); content.className = 'content'; content.lang = fixture.lang
+  for (const run of u.runs) {
+    const span = document.createElement('span'); span.textContent = run.text
+    if (run.bold) span.style.fontWeight = 'bold'
+    if (run.italic) span.style.fontStyle = 'italic'
+    if (run.mono) span.style.fontFamily = 'monospace'
+    content.append(span)
+  }
+  content.style.fontFamily = `"Probe-${fixture.lang}", serif`
+  const leading = ['zh','ja','ko'].includes(fixture.lang) ? Math.max(1.2, geometry.leading) : geometry.leading
+  content.style.lineHeight = String(leading)
+  element.append(content); $('#replacement').append(element)
+  const measure = factor => { content.style.fontSize = `${geometry.size * factor}px`; return content.getBoundingClientRect().height <= box.height + 0.1 && content.scrollWidth <= box.width + 0.5 }
+  const outcome = fit ? boundedFit(measure) : { fits: measure(1), scale: 1, measurements: 1 }
+  const fitMs = elapsed(t0)
+  if (outcome.fits) { element.classList.add('active'); counters.updates++ } else element.remove()
+  return { element, outcome, region, measurement: { fitMs: rounded(fitMs), ...outcome } }
+}
+
+async function updateSelected() {
+  const r = regions[Number($('#unit').value)]
+  if (!r) { status('No supported region on this page. Original content is preserved.'); return }
+  const untouched = [...paintedRegions].filter(([id]) => id !== r.u.id).map(([id, entry]) => ({ id, element: entry.element, text: entry.element.textContent }))
+  paintedRegions.get(r.u.id)?.element.remove()
+  const t0 = performance.now(), before = { ...counters }
+  selected = replacement(r)
+  if (selected.outcome.fits) paintedRegions.set(r.u.id, selected); else paintedRegions.delete(r.u.id)
+  await frame(); await frame()
+  selected.measurement.paintOpportunityMs = rounded(elapsed(t0))
+  selected.measurement.pdfRendersAdded = counters.pdfRenders - before.pdfRenders
+  selected.measurement.untouchedRegions = untouched.length
+  selected.measurement.untouchedRegionsPreserved = untouched.every(x => paintedRegions.get(x.id)?.element === x.element && x.element.isConnected && x.element.textContent === x.text)
+  selected.measurement.pdfLoadsAdded = counters.pdfLoads - before.pdfLoads
+  status(selected.outcome.fits ? `Replaced unit ${r.u.id}. ${selected.measurement.fitMs} ms local fitting; no PDF reload or page render.` : `Unit ${r.u.id} does not fit at the 0.90 readable floor; original retained.`)
+  summary()
+}
+
+async function benchmark() {
+  report = []; controls(true); busy = true
+  try {
+    for (let i = 0; i < fixtures.length; i++) {
+      status(`Measuring ${fixtures[i].lang} ${fixtures[i].paper}…`)
+      const caseStart = performance.now()
+      await loadCase(i)
+      const initialViewReadyMs = elapsed(caseStart)
+      const searchStart = performance.now(), tried = [current.metrics]
+      while (!regions.length && pageNumber < pdf.numPages) {
+        pageNumber++
+        const next = await analyzePage(pageNumber); tried.push(next.metrics)
+        if (next.eligible.length) await showPage(next)
+      }
+      const pageSearchMs = elapsed(searchStart), eligibleViewReadyMs = elapsed(caseStart)
+      const local = [], plain = [], paint = [], scales = [], failures = []
+      const startCounters = { ...counters }
+      let firstMs = null, firstAcceptedMs = null
+      for (const r of regions) {
+        const t0 = performance.now(), result = replacement(r)
+        await frame(); await frame()
+        const ms = elapsed(t0)
+        if (firstMs == null) firstMs = ms
+        if (result.outcome.fits && firstAcceptedMs == null) firstAcceptedMs = ms
+        paint.push(ms); scales.push(result.outcome.scale)
+        if (!result.outcome.fits) failures.push(r.u.id)
+        result.element.remove()
+      }
+      for (let n = 0; n < 30 && regions.length; n++) {
+        const r = regions[n % regions.length]
+        // Alternate the local control and fitted variant. Same translation and rectangle, no PDF reload.
+        const order = n % 2 ? [true, false] : [false, true]
+        for (const fit of order) {
+          const result = replacement(r, fit)
+          ;(fit ? local : plain).push(result.measurement.fitMs)
+          result.element.remove()
+        }
+        await frame()
+      }
+      report.push({ ...boot, initialViewReadyMs: rounded(initialViewReadyMs), eligibleViewReadyMs: regions.length ? rounded(eligibleViewReadyMs) : null, pageSearchMs: rounded(pageSearchMs), pageAnalysis: tried, sampledRegions: regions.length, sampledUnitIds: regions.map(r => r.u.id), firstAcceptedUpdatePaintOpportunityMs: firstAcceptedMs == null ? null : rounded(firstAcceptedMs), failedAtReadableFloor: failures, scales, firstUpdatePaintOpportunityMs: firstMs == null ? null : rounded(firstMs), uniqueUpdatePaintOpportunityMs: paint.length ? stats(paint) : null, warmLocalFitMs: local.length ? stats(local) : null, warmPlainOverlayMs: plain.length ? stats(plain) : null, updateWork: { pdfRenders: counters.pdfRenders - startCounters.pdfRenders, pdfLoads: counters.pdfLoads - startCounters.pdfLoads, texCompiles: 0 }, heapBytes: performance.memory?.usedJSHeapSize ?? null })
+      summary()
+    }
+    status('Five-case probe complete. Timings isolate local typography; unsupported coverage and startup costs are listed, not excluded.')
+    await updateSelected()
+  } catch (e) { status(`Probe stopped: ${e.stack ?? e}`) } finally { busy = false; controls(false); summary() }
+}
+$('#case').replaceChildren(...fixtures.map((f, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${f.lang} · ${f.paper}`; return o }))
+$('#case').onchange = async () => { controls(true); try { await loadCase(Number($('#case').value)) } finally { controls(false) } }
+$('#prev').onclick = async () => { if (!busy && pageNumber > 1) { controls(true); try { pageNumber--; await showPage() } finally { controls(false) } } }
+$('#next').onclick = async () => { if (!busy && pageNumber < pdf.numPages) { controls(true); try { pageNumber++; await showPage() } finally { controls(false) } } }
+$('#replace').onclick = updateSelected
+$('#restore').onclick = () => { const r = regions[Number($('#unit').value)]; const entry = r && paintedRegions.get(r.u.id); entry?.element.remove(); if (r) paintedRegions.delete(r.u.id); selected = null; status('The region is restored. The original PDF was never changed.'); summary() }
+$('#bench').onclick = benchmark
+$('#export').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify({ counters, report }, null, 2)], { type: 'application/json' })); a.download = 'local-block-prototype.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000) }
+controls(true)
+try { await loadCase(0) } catch (e) { status(String(e.stack ?? e)) } finally { controls(false) }
+</script>
+</html>

@@ -4,6 +4,49 @@
 
 ## Purpose
 
+### Active review, 2026-09-30
+
+The owner made FIT the primary experimental layout and retired Today, Today before 09-28 and the original Locked
+from the review page. The active columns are Original, FIT, Locked (H rules), and H where its output is available.
+The catalog, page counts, sorting and keyboard controls use those columns alone. Existing PDFs and flags keep their
+source keys; old outputs remain available as research evidence. This changes the experimental review surface, not
+the extension reader's production default (DESIGN §16).
+
+FIT currently shares one measured fitting algorithm per writing-system family, not one tuned policy per language:
+CJK uses whole-paper leading, tracking and face scale; alphabetic scripts use size and bounded local leading.
+Fonts and language data are already script/language-specific. Refine common content/float/overflow mechanisms first,
+then review Chinese, Korean, Japanese and Russian in that order, with German as the control. Review five papers per
+language before widening the corpus. Evaluate readability, content preservation and local alignment together with
+page counts; page counts alone cannot accept a layout.
+
+### Performance constraint, 2026-09-30
+
+The owner requires real-time block replacement and rejects a quality improvement obtained by sacrificing performance.
+The current FIT generator is an offline visual experiment: 2–3 complete translation compilation jobs, in addition
+to the font probe and original probe. Each job uses latexmk and may run TeX more than once. The H-rule experiment
+also retries complete compilations. Neither algorithm has passed a runtime performance acceptance gate.
+
+The current reader receives translations by unit but `runLive` recompiles the document for a preview; `replaceRight`
+then loads its PDF. This is progressive whole-document recompilation, not local PDF block replacement. Calling it
+block translation does not establish an incremental typesetting implementation. This distinction must remain visible
+in engineering decisions under DESIGN §16.
+
+Runtime acceptance constraints:
+
+- A block update must not trigger whole-document fitting trials or wait for a whole-paper translation to fit.
+- Offline experiments may learn language/font profiles; runtime work must be local and bounded, using the actual
+  block, font metrics and available rectangle rather than assuming one language ratio fits every paper.
+- Unchanged blocks and original graphics must not be reprocessed solely because another block's translation arrived.
+- Compare first translated block latency, translation-return-to-display p50/p95, CPU, peak memory and redraw work on
+  identical cached text and hardware, with cold and warm resources separately. Language/profile refinements need
+  both visual acceptance and no measurable performance regression beyond benchmark noise.
+
+A local PDF replacement architecture is a candidate to prototype and benchmark, not implemented by this document.
+Faster code, caching or language defaults do not by themselves establish that whole-document recompilation meets
+the owner's requirement. The visual outputs remain references, not a license to ship their trial loop.
+
+The sections below describe the original 2026-09-27 experiment and its historical columns.
+
 The owner decided on 2026-09-26 that the geometry lock is worth trying on a branch and is adopted only if every
 language is fine. The numbers so far (pseudo text, 24-paper gate: pages equal 10→22, unit starts on their original page
 69→87 %) say where things land, not whether the pages look better. This evaluation puts the reader's output today and

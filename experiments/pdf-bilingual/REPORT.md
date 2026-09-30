@@ -1962,3 +1962,55 @@ causes, each general:
 Open: the author block (RT-1's Chinese names take 12 lines for the English 8, which H sets smaller into the 8 — the
 lock needs a box for `\maketitle`'s output or a size for its units); 10–15 pt at headings under a top float; RT-1's
 last floats a page late (32 pages for 31).
+
+## Thirtieth addendum, 2026-09-30: FIT as the active baseline
+
+The owner retired Today, Today before 09-28 and the original Locked from the evaluation page. It now shows Original,
+FIT, Locked (H rules), and H where supplied. All five target languages remain available. Retired PDFs retain their
+source names as research evidence; new generation compiles only FIT and the H-rule lock. Catalog metrics, sorting,
+column shortcuts and page bounds follow the active versions. Historical unkeyed Locked diagnostics are not shown
+as defects of another version; new diagnostics carry their column key. The extension reader's default is unchanged.
+
+Code audit: FIT is not individually tuned for each language. Hans/Hant/Jpan/Kore share `cjkType` and `CJK_RANGES`
+(leading 1.2–1.45 times the paper's, tracking 0–0.05 em, CJK face scale 0.92–1); German and Russian share `FIT.alphabet`
+(leading factor 0.95–1.1, unit adjustment within 8%, size floor 0.93). The trial compile measures each paper rather
+than applying a fixed language length ratio. Fonts, encoding, language/hyphenation data and Korean space handling
+already differ. The shared CJK bounds have not been established as appropriate for every CJK language.
+
+Recommended next loop: repair shared content/float/overflow/page-builder mechanisms; refine Chinese, then Korean,
+Japanese and Russian, keeping German as a regression control. Tune language profiles on five representative papers
+and review readability, overflow, figure/table preservation, heading/caption positions and page counts together.
+Preserve a stable common implementation rather than copying a fitting algorithm for each language. This is a
+proposed optimization order, not a claim that these languages have passed a production acceptance gate.
+
+**New owner flags, Japanese and Korean** (the two review JSON files supplied on 2026-09-30). These are user-reported
+symptoms awaiting reproduction; no root cause or repair is claimed here. Repeated notes stay in the source files.
+
+| Priority | Target and paper/page | Reported symptom | Investigation boundary |
+|---|---|---|---|
+| 1 | ja 2608.05876 p5–6 | Table numbers and the final row outside their cells | Cell geometry, font metrics and table fitting before language-wide tuning |
+| 1 | ja 2608.05876 p1 | Untranslated title and corresponding-author label | Extraction, preservation policy, translation cache and rendering must be distinguished |
+| 2 | ja 2608.15761 p11,14,16; ko 2608.21180 p9 | Table rows enlarged, including unchanged Latin technical strings; Korean Table 2 enlarged | Scope of FIT typography and source row dimensions; H-rule output is a comparison, not proof of the cause |
+| 2 | ja 2608.06701 p1; ja/ko 2608.21180 p1 | Author block overflow, extra spacing or missing author-to-abstract space | Front matter geometry separate from body fitting; Japanese author-name preservation versus scaling remains a decision |
+| 3 | ja 2608.18090 p10, 2608.24839 p3; ko 2608.24839 p6 | Excess heading or caption-to-body spacing | Class glue, page stretching, float placement and typography scope |
+
+These reports move common table integrity and translation coverage ahead of the language-profile sequence. A repair
+found in Japanese must be checked in Korean, Chinese and the German control before attributing it to Japanese alone.
+
+## Thirty-first addendum, 2026-09-30: local block performance probe
+
+The owner requires real-time block replacement without per-paper fitting cost. The throwaway native-PDF viewer and
+its [measurement report](local-block-prototype/RESULTS.md) test that direction using existing cached translations,
+PDF.js native text and bounded browser typography. No whole-document compiler is invoked. Three five-language rounds
+showed local fitting p50 of 0.1–0.8 ms, p95 of 0.3–2.0 ms; every update added zero PDF loads and page renders. A
+two-region check retained the untouched region's DOM identity and text; restoring one retained the other.
+
+This is a fast primitive, **not a production acceptance**: only five of nine distinct sampled regions fit at the
+0.90 font floor. Just 72 of 333 body units are content-supported before geometry checks; mixed formulas, citations,
+tables and uncertain regions remain original. Only 17 of 76 pages were searched. Startup is recorded separately,
+and raw CJK fonts are 4.9–7.8 MB. Cold network, live translation, total memory and complete reader performance are
+unmeasured. Source/cache preparation is also a separate server cost. Native PDF export and language-validated
+typography are absent. Existing TeX font assets suffice; no server resource addition is needed for this probe.
+
+Next acceptance work is mixed-content integrity and geometry, fitting failures, font delivery and full-pipeline
+measurement before integration. The earlier Japanese/Korean flags are still pending reproduction and repair.

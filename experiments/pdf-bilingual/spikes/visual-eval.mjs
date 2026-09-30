@@ -1,6 +1,6 @@
 // experiments/pdf-bilingual/spikes/visual-eval.mjs
 // The visual evaluation's generator (plans/2026-09-27-geometry-lock-visual-eval-design.md): for a paper and a language,
-// the translation once through Microsoft's free engine (the reader's wire), today's typesetting and the locked one
+// the translation once through Microsoft's free engine (the reader's wire), FIT and the H-rule lock
 // compiled natively in Docker, every page rendered, the checks, and the paper's index; then the catalog.
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>...   generate
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --reindex   render and index existing PDFs
@@ -10,12 +10,12 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameS
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
-import { keptFor, lostIn, openPaper, probeFiles, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
+import { keptFor, openPaper, probeFiles } from '../../../src/pdf-reader/engine/live.mjs'
 import { latin1, readFontProbe } from '../../../src/pdf-reader/engine/latex-front.mjs'
 import { scriptOf, strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
 import { translateTexts, translateUnits } from '../../../src/pdf-reader/engine/mt.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
-import { cjkType, compare, fitLeads, heights, lockedFiles, withCjkType, marksOf, originalProbeFiles, readColumns, readFloats, readLines, readLockEvents, readTargets, shrinkSizes, theoremEnvs, tightenedLeads } from './lock.mjs'
+import { cjkType, compare, fitLeads, heights, lockedFiles, withCjkType, marksOf, originalProbeFiles, readColumns, readFloats, readLines, readLockEvents, readTargets, shrinkSizes, theoremEnvs } from './lock.mjs'
 import { catalogEntry, COLUMNS, FIT, H_RULES, overfullCount, PARAMS, suspiciousPages } from './visual-eval-lib.mjs'
 
 const run = promisify(execFile)
@@ -75,7 +75,7 @@ async function generate(lang, id) {
   const paper = openPaper(files)
   const { units, meta, project } = paper
   const cls = latin1(files.get(project.main)).match(/\\documentclass\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/)?.[1] ?? '?'
-  const base = { lang, paper: id, cls, numbers: {}, failed: {}, flags: [], lostExtra: [], overfull: 0, suspicious: [] }
+  const base = { lang, paper: id, cls, numbers: {}, failed: {}, flags: [], diagnostics: {} }
 
   // 1. the translation, once: both columns read it. Cached by each unit's kind and source (unitKey), so a front end
   // that cuts the paper differently asks only for the units it has not seen; a nested note is bound again to the unit
@@ -99,31 +99,19 @@ async function generate(lang, id) {
   if (todo.length) writeFileSync(cache, JSON.stringify({ entries: [...byKey].map(([key, pieces]) => ({ key, pieces })) }))
   note('translated', JSON.stringify(base.translation))
 
-  // 2. fonts, the original with probes (the lock's target), today, locked twice
+  // 2. fonts and the original with probes: the target shared by FIT and the H-rule lock
   const fonts = readFontProbe((await compile(work, 'probe', paper, files, probeFiles(paper), { engine: meta.compiler, rerun: false })).log)
   const strategy = strategiesFor(meta, lang)[0]
   const theorems = theoremEnvs(files)
   const o = await compile(work, 'original', paper, files, originalProbeFiles(paper, theorems), { engine: meta.compiler, rerun: true })
-  const today = await compile(work, 'today', paper, files, translationFiles(paper, translated, { strategy, fonts, draft: false }), { engine: strategy.engine, rerun: true })
-  if (today.ok) copyFileSync(today.pdf, join(dir, 'today.pdf')); else base.failed.today = firstError(today.log)
-  note('today', today.ok)
-  if (!o.ok) { base.failed.locked = `the original with probes did not compile: ${firstError(o.log)}`; return writeIndex(dir, base) }
+  if (!o.ok) {
+    for (const key of ['fit', 'lockh']) base.failed[key] = `the original with probes did not compile: ${firstError(o.log)}`
+    return writeIndex(dir, base)
+  }
   const om = await marksOf(o.pdf), orig = heights(units, om, readLines(o.log)), targets = readTargets(o.log)
   if (om.pages !== (await marksOf(join(dir, 'original.pdf'))).pages) base.flags.push('original-mismatch')
-  const { em, min } = PARAMS[lang]
+  const { em } = PARAMS[lang]
   const opts = { strategy, fonts, em, targets, theorems }
-  let locked = await compile(work, 'locked-1', paper, files, lockedFiles(paper, translated, opts), { engine: strategy.engine, rerun: true })
-  let leads = new Map()
-  if (locked.ok) {
-    leads = tightenedLeads(orig, heights(units, await marksOf(locked.pdf), readLines(locked.log)), { em, min })
-    if (leads.size) {
-      const second = await compile(work, 'locked-2', paper, files, lockedFiles(paper, translated, { ...opts, leads }), { engine: strategy.engine, rerun: true })
-      if (second.ok) locked = second; else { base.flags.push('second-pass-failed'); leads = new Map() }
-    }
-  }
-  if (locked.ok) copyFileSync(locked.pdf, join(dir, 'locked.pdf')); else base.failed.locked = firstError(locked.log)
-  note('locked', locked.ok, 'tightened', leads.size)
-
   // 2b. Locked by service H's rules (the owner, 2026-09-28): each block in its original's box — units at the lock's
   // leading with CJK tracked as H does, no unit moved off its original's page, a column ended early filled to its
   // original's height, floats at their original's height (SYNC_TEX), tables held to their original's box, and a unit still taller than its original set
@@ -188,18 +176,18 @@ async function generate(lang, id) {
   note('lockh', !!lockh, 'smaller', sizes.size)
 
   // 3. numbers and checks
-  if (today.ok) base.numbers.today = { ...compare(units, orig, await marksOf(today.pdf)), offPage: undefined }
   if (fit) base.numbers.fit = { ...compare(units, orig, await marksOf(fit.pdf)), offPage: undefined, g: fit.g, held: fit.held, size: fit.size, ...(fit.type ? { type: fit.type } : {}) }
   if (lockh) base.numbers.lockh = { ...compare(units, orig, await marksOf(lockh.pdf)), offPage: undefined, smaller: sizes.size }
-  if (locked.ok) {
-    const lm = await marksOf(locked.pdf), lc = compare(units, orig, lm)
-    base.numbers.locked = { ...lc, offPage: undefined }
-    base.suspicious = suspiciousPages({ events: readLockEvents(locked.log), leads, min, lockedMarks: lm, lockedCompare: lc })
-    base.overfull = overfullCount(locked.log)
-    if (today.ok) { const t = lostIn(today.log), l = lostIn(locked.log); base.lostExtra = [...l].filter(([c, n]) => n > (t.get(c) ?? 0)).map(([c]) => c) }
+  for (const [key, result] of [['fit', fit], ['lockh', lockh]]) {
+    if (!result) continue
+    const marks = await marksOf(result.pdf)
+    base.diagnostics[key] = {
+      overfull: overfullCount(result.log),
+      suspicious: key === 'lockh' ? suspiciousPages({ events: readLockEvents(result.log), leads: new Map(), min: em, lockedMarks: marks, lockedCompare: compare(units, orig, marks) }) : [],
+    }
   }
   const index = await writeIndex(dir, base)
-  note('done', JSON.stringify({ today: index.numbers.today?.samePage, locked: index.numbers.locked?.samePage, units: index.numbers.locked?.units, suspicious: index.suspicious.length }))
+  note('done', JSON.stringify({ fit: index.numbers.fit?.samePage, lockh: index.numbers.lockh?.samePage, units: index.numbers.fit?.units }))
   return index
 }
 
@@ -213,7 +201,7 @@ function catalog() {
     if (!existsSync(join(d)) || lang.endsWith('.json') || (round && !round[lang])) continue
     langs[lang] = readdirSync(d).filter(p => existsSync(join(d, p, 'index.json')) && (!round || round[lang].includes(p))).sort().map(p => catalogEntry(JSON.parse(readFileSync(join(d, p, 'index.json'), 'utf8'))))
   }
-  writeFileSync(join(OUT, 'index.json'), JSON.stringify({ langs }, null, 1))
+  writeFileSync(join(OUT, 'index.json'), JSON.stringify({ columns: COLUMNS, langs }, null, 1))
   console.log('catalog', Object.entries(langs).map(([l, a]) => `${l} ${a.length}`).join(', '))
 }
 

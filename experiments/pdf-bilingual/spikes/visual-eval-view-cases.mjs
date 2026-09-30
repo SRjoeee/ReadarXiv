@@ -8,19 +8,20 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } fro
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
+import { catalogEntry, COLUMNS } from './visual-eval-lib.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
 
-// made-up data: one paper; Original 2 pages, Today 3 (its marks unread: 0 units), Locked failed
+// Existing indexes retain retired outputs: they must not affect the active columns, metrics or page navigation.
 const data = mkdtempSync(join(tmpdir(), 'eval-view-')), dir = join(data, 'zh', 'p1')
 for (const sub of ['pages', 'thumbs']) mkdirSync(join(dir, sub), { recursive: true })
 execFileSync('pdftoppm', ['-jpeg', '-r', '24', '-f', '1', '-l', '1', '-singlefile', join(root, 'data/corpus/2608.15016/arxiv.pdf'), join(data, 'one')])
-for (const [key, n] of [['original', 2], ['today', 3]]) for (let p = 1; p <= n; p++) for (const sub of ['pages', 'thumbs']) copyFileSync(join(data, 'one.jpg'), join(dir, sub, `${key}-${p}.jpg`))
-const index = { lang: 'zh', paper: 'p1', cls: 'article', columns: [{ key: 'original', label: 'Original', pages: 2 }, { key: 'today', label: 'Today', pages: 3 }, { key: 'locked', label: 'Locked', pages: null }], numbers: { today: { pages: 3, units: 0, samePage: 0, captions: 0, captionsSamePage: 0 } }, failed: { locked: '! Undefined control sequence.' }, flags: [], translation: { units: 10, untranslated: 2 }, suspicious: [{ page: 2, kind: 'large gap', detail: '30 pt inserted' }], lostExtra: [], overfull: 0 }
+for (const [key, n] of [['original', 2], ['fit', 3], ['today', 9], ['before', 9]]) for (let p = 1; p <= n; p++) for (const sub of ['pages', 'thumbs']) copyFileSync(join(data, 'one.jpg'), join(dir, sub, `${key}-${p}.jpg`))
+const index = { lang: 'zh', paper: 'p1', cls: 'article', columns: [{ key: 'original', label: 'Original', pages: 2 }, { key: 'today', label: 'Today', pages: 9 }, { key: 'locked', label: 'Locked', pages: null }, { key: 'fit', label: 'Fit', pages: 3 }, { key: 'lockh', label: "Locked, H's rules", pages: null }, { key: 'before', label: 'Today before', pages: 9 }], numbers: { fit: { pages: 3, units: 0, samePage: 0, captions: 0, captionsSamePage: 0 } }, failed: { locked: '! retired error', lockh: '! Undefined control sequence.' }, flags: [], translation: { units: 10, untranslated: 2 }, suspicious: [{ page: 2, kind: 'large gap', detail: '30 pt inserted' }], lostExtra: ['retired character'], overfull: 99 }
 writeFileSync(join(dir, 'index.json'), JSON.stringify(index))
-writeFileSync(join(data, 'index.json'), JSON.stringify({ langs: { zh: [{ paper: 'p1', cls: 'article', pages: { original: 2, today: 3, locked: null }, today: index.numbers.today, locked: null, failed: index.failed, flags: [], untranslated: 2 }] } }))
+writeFileSync(join(data, 'index.json'), JSON.stringify({ columns: COLUMNS, langs: { zh: [catalogEntry(index)] } }))
 
 const server = spawn('node', [join(root, 'spikes/serve-eval.mjs'), '--port=8099', `--data=${data}`], { stdio: 'ignore' })
 for (let i = 0; i < 50; i++) { try { await fetch('http://localhost:8099/'); break } catch { await new Promise(r => setTimeout(r, 100)) } }
@@ -35,16 +36,20 @@ try {
   await item.click()
   await page.locator('.row').first().waitFor() // the paper's index is fetched, then drawn
   check('untranslated shown', (await page.locator('#view').textContent()).includes('2 units untranslated'))
-  check('rows run to their own length', (await page.locator('.row[data-key="today"] img').count()) === 3 && (await page.locator('.row[data-key="original"] img').count()) === 2)
-  check('failed column says why', (await page.locator('.row[data-key="locked"]').textContent()).includes('Undefined control sequence'))
-  check('suspicious page listed', (await page.locator('.suspicious a').first().textContent()).includes('large gap'))
+  check('rows run to their own length', (await page.locator('.row[data-key="fit"] img').count()) === 3 && (await page.locator('.row[data-key="original"] img').count()) === 2)
+  check('failed column says why', (await page.locator('.row[data-key="lockh"]').textContent()).includes('Undefined control sequence'))
+  check('retired diagnostics hidden', await page.locator('.suspicious a').count() === 0 && !(await page.locator('.head').textContent()).includes('99 overfull'))
+  check('active labels only', (await page.locator('.row .label').allTextContents()).join('|') === 'Original|FIT|Locked (H rules)')
+  check('retired metrics hidden', !(await item.textContent()).includes('today') && !(await item.textContent()).includes('Today'))
   await page.locator('.row[data-key="original"] img').first().click()
   const srcs = async () => page.locator('.col img').evaluateAll(els => els.map(e => e.getAttribute('src')))
-  check('page view at page 1', (await srcs()).some(s => s.endsWith('original-1.jpg')) && (await srcs()).some(s => s.endsWith('today-1.jpg')))
+  check('page view at page 1', (await srcs()).some(s => s.endsWith('original-1.jpg')) && (await srcs()).some(s => s.endsWith('fit-1.jpg')))
   await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowRight')
-  check('page 3: today shown, original missing', (await srcs()).some(s => s.endsWith('today-3.jpg')) && (await page.locator('.col[data-key="original"]').textContent()).includes('no page 3'))
+  check('page 3: FIT shown, original missing', (await srcs()).some(s => s.endsWith('fit-3.jpg')) && (await page.locator('.col[data-key="original"]').textContent()).includes('no page 3'))
+  await page.keyboard.press('ArrowRight')
+  check('retired long output does not extend navigation', (await page.locator('.head').nth(1).textContent()).includes('page 3') && !(await page.locator('.head').nth(1).textContent()).includes('page 4'))
   await page.keyboard.press('2')
-  check('column hidden by its number', (await page.locator('.col[data-key="today"]').isHidden()))
+  check('column hidden by its number', (await page.locator('.col[data-key="fit"]').isHidden()))
   await page.locator('#flag').click()
   await page.locator('#flag-note').fill('a test note')
   await page.locator('#flag-save').click()
