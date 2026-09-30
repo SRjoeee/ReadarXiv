@@ -308,6 +308,12 @@ check('in two columns, a float held to its original\'s column', pg(f2, 4) === 0 
 const clearLog = tex('floatclear', MARKS + floatDoc(1).replace(`${para(1)}\n\\begin{table}`, '\\clearpage\n\\leavevmode\\axtmark{9s}After the break.\n\\begin{table}'))
 const fc = await marksOf(join(dir, 'floatclear.pdf'))
 check('\\clearpage sends a held float out before the text after the break', pg(fc, 1) < pg(fc, 9) && !/^! /m.test(clearLog), JSON.stringify([...fc.marks]))
+// a class that sets its own \@floatboxreset inside each float environment (IEEEtran: \def\table{\def\@floatboxreset{…}
+// \@float{table}}): the float is held all the same (2608.06701's tables went a page early)
+const ieeeFloats = String.raw`\makeatletter\def\table{\def\@floatboxreset{\reset@font\footnotesize\@setminipage}\@float{table}}\def\endtable{\end@float}\def\figure{\def\@floatboxreset{\reset@font\normalsize\@setminipage}\@float{figure}}\def\endfigure{\end@float}\makeatother`
+tex('floatieee', MARKS + floatDoc(1).replace('\\begin{document}', `${ieeeFloats}\n\\begin{document}`))
+const fi = await marksOf(join(dir, 'floatieee.pdf'))
+check('held when the class sets its own \\@floatboxreset in each float', pg(fi, 1) === 1, JSON.stringify([...fi.marks]))
 // a caption outside a float (\captionof in a minipage) notes nothing: the float after it goes as LaTeX would
 const capofDoc = `\\documentclass{article}\\usepackage{caption}${FLOAT_TEX}\\makeatletter\\expandafter\\def\\csname axt@fp@5\\endcsname{2 0}\\makeatother
 \\begin{document}\\begin{minipage}{\\linewidth}\\centering\\rule{2cm}{1cm}\\captionof{figure}{\\axtfloatat{5}Not a float.}\\end{minipage}

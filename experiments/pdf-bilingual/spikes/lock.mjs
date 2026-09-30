@@ -85,13 +85,14 @@ export const unitLeadTex = em => engineUnitLeadTex(`${em}\\dimexpr\\f@size pt\\r
  * next, on a page of floats, a double float at a page's top — it asks \@testwrongwidth first; a float not yet at its
  * page and column is reported as not fitting, and LaTeX keeps it deferred, and every later float of its kind behind
  * it, as it keeps their order. Not at a forced break (\newpage's -10000, \FloatBarrier's), not while \clearpage sends
- * every float out, and never more than two pages: a translation that far ahead would pile floats up. The note is
- * cleared as each float's box is reset, so that a box a later float reuses carries none of it, and taken only inside a
- * float's box (\@floatboxreset's group): a \captionof outside one has no float of its own
+ * every float out, and never more than two pages: a translation that far ahead would pile floats up. Taken only inside
+ * a float, where \@xfloat has \@currbox defined for the float's group: a \captionof outside one has none. Not through
+ * \@floatboxreset, which IEEEtran defines anew inside every float (2608.06701's tables went a page early). A box a later
+ * float reuses keeps its note harmlessly: it was freed once its float was placed, at or after the page noted
  */
 export const FLOAT_TEX = String.raw`\makeatletter
-\newif\ifaxt@early\newif\ifaxt@infloat\newcount\axt@pg
-\protected\def\axtfloatat#1{\ifaxt@infloat\ifcsname axt@fp@#1\endcsname\expandafter\xdef\csname axt@fb@\number\@currbox\endcsname{\csname axt@fp@#1\endcsname}\fi\fi}
+\newif\ifaxt@early\newcount\axt@pg
+\protected\def\axtfloatat#1{\ifdefined\@currbox\ifdefined\@captype\ifcsname axt@fp@#1\endcsname\expandafter\xdef\csname axt@fb@\number\@currbox\endcsname{\csname axt@fp@#1\endcsname}\fi\fi\fi}
 \def\axt@early#1{\global\axt@earlyfalse\ifnum\outputpenalty=-\@M\else\ifcsname axt@fb@\number#1\endcsname\expandafter\expandafter\expandafter\axt@earlyat\csname axt@fb@\number#1\endcsname\relax\fi\fi}
 \def\axt@earlyat#1 #2\relax{\axt@pg=\ReadonlyShipoutCounter\advance\axt@pg\@ne
   \ifnum#1>\axt@pg\relax\ifnum#1>\numexpr\axt@pg+2\relax\else\global\axt@earlytrue\fi
@@ -99,7 +100,7 @@ export const FLOAT_TEX = String.raw`\makeatletter
 \def\axt@notearly#1{\global\axt@earlyfalse}
 \AtBeginDocument{\let\axt@testwrongwidth\@testwrongwidth\def\@testwrongwidth#1{\axt@testwrongwidth#1\if@test\else\axt@early#1\ifaxt@early\global\@testtrue\fi\fi}%
   \let\axt@doclearpage\@doclearpage\def\@doclearpage{\let\axt@early\axt@notearly\axt@doclearpage}%
-  \g@addto@macro\@floatboxreset{\axt@infloattrue\expandafter\global\expandafter\let\csname axt@fb@\number\@currbox\endcsname\@undefined}}
+}
 \makeatother
 `
 
