@@ -148,5 +148,12 @@ check('local lead: about the lead gained by the jump, as far as the range allows
 const frontShort = new Map(even.map(u => [u.i, u.i === 0 ? -20 : null]).filter(([, d]) => d != null))
 const front = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, measured: { drift: frontShort, preview: previewHeights, snap: 60 } })
 check('the first measure is taken under the threshold: the units after it set looser to take back the front matter', front.get(0) > 1 + 1e-6, `${front.get(0)}`)
+// one unit read far off and the next back (Korean 2608.06701: a paragraph moved from the foot of the left column to below
+// a figure at the head of the right, read 0.42 column late, the next paragraph level): a reading no unit after it
+// shares is not a drift, and the median of the next five readings leaves it out
+const spike = new Map(even.map(u => [u.i, u.i === 10 ? 225 : 0]))
+const steady = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, measured: { drift: spike, preview: previewHeights, snap: 40 } })
+check('measured: one reading far off, the units around it read level, is left out', [...steady.values()].every(l => near(l, 1, 1e-9)), JSON.stringify([...steady.values()].slice(8, 13)))
+check('measured: a jump that lasts is taken a little before it, where the text can still make way', snapped.get(18) < 1 - 1e-6 || snapped.get(19) < 1 - 1e-6, `${snapped.get(18)} ${snapped.get(19)}`)
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

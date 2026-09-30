@@ -62,19 +62,20 @@ export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, D
  * break (2608.06233: ten points too many before an [H] figure moved it on, and every page after it half a column late);
  * text a little short leaves a little white space. The lead is kept, not grown: it costs no page.
  * `measured`, from a compile already made (the reader's preview): `drift`, Map(unit index → how far behind the original
- * the unit started there, in points, pages and floats and all), and `preview`, Map(unit index → its height there). The
- * drift is then the one measured at each unit, carried forward by what this setting changes against the preview: a
- * float that jumped a column is taken back after it, and after a forced break, where the preview stood level again,
- * a lead ahead is built again. Heights alone saw neither. With `measured.snap` (points), the measure is taken only where
- * it parts from the heights' account by more than that: the preview measures noise too — a paragraph that did not fit
- * at a page's foot went whole to the next, a column ended a little early — and a final that followed it all ran 0.12
- * page ahead on 2212.06817. Under it the heights go on — except at the first unit, before which stands only the front
- * matter: a title a line shorter (2608.21180, Korean, 20 pt) left page 1 room it took by shrinking its glue, until the
- * paper's own \\vspace{-2.8em} set the abstract on the e-mail line. With `measured.local` (lines), the lead ahead is kept only in
- * the stretch of that length before each jump the preview measured — a rise in its drift the heights do not account
- * for, something that could not break moved on — each unit there set to put the text on a ramp to `ahead` lines ahead
- * by the jump; elsewhere the text keeps level. A lead ahead everywhere cost every unit two lines of drift, and
- * 2608.21180 (Chinese) ran a quarter column ahead.
+ * the unit started there, in points, pages and floats and all), and `preview`, Map(unit index → its height there).
+ * What the preview's heights do not account for — a float that jumped, a page break that moved, a title a line shorter —
+ * is read at each unit as its measured drift less its heights' account there, and added to the final's own account:
+ * the median of the next `measured.span` readings (five), so that one unit read far off and the next back is left out
+ * (Korean 2608.06701: a paragraph moved from the foot of the left column to below a figure heading the right read 0.42
+ * column late, the next paragraph level), and a jump that lasts is taken a little before it, where the text can still
+ * make way; under `measured.snap` (points) it is noise and left out (2212.06817: a final that followed every reading
+ * ran 0.12 page ahead) — except at the first unit, before which stands only the front matter (Korean 2608.21180: a title
+ * a line shorter left page 1 room it took by shrinking its glue, until the paper's own \\vspace{-2.8em} set the
+ * abstract on the e-mail line). With `measured.local` (lines), the lead ahead is kept only in the stretch of that
+ * length before each jump the preview measured — a rise in its drift the heights do not account for, something that
+ * could not break moved on — each unit there set to put the text on a ramp to `ahead` lines ahead by the jump;
+ * elsewhere the text keeps level. A lead ahead everywhere cost every unit two lines of drift, and 2608.21180 (Chinese)
+ * ran a quarter column ahead.
  * `heights`: Map(unit index → the translation's height at leading one), from unitHeights or a compile's lines. The
  * leading is × the paper's for CJK, × the size's for an alphabet, as the type's is
  */
@@ -100,22 +101,35 @@ export function flowLeads(units, script, heights, { window = 50, horizon = windo
       if (jumps.has(list[k].i)) jump = start
     }
   }
+  // what the preview measured beyond its heights' account, smoothed, by unit index (see above)
+  const offsetAt = new Map()
+  if (measured) {
+    const readings = []
+    let account = 0
+    for (const u of list) {
+      const m = measured.drift.get(u.i)
+      if (m != null) readings.push({ i: u.i, beyond: m - account })
+      account += (measured.preview.get(u.i) ?? u.lo * u.bs) - u.lo * u.bs
+    }
+    const span = measured.span ?? 5
+    readings.forEach((r, j) => {
+      const next = readings.slice(j, j + span).map(x => x.beyond).sort((a, b) => a - b), med = next[next.length >> 1]
+      offsetAt.set(r.i, j === 0 || !(Math.abs(med) <= measured.snap) ? med : 0)
+    })
+  }
   const out = new Map()
-  let lo = 0, hi = 0, o = 0, t = 0, drift = 0, change = 0
+  let lo = 0, hi = 0, o = 0, t = 0, drift = 0, offset = 0
   for (let k = 0; k < list.length; k++) {
     for (; hi < list.length && mid[hi] <= mid[k] + half; hi++) { o += list[hi].lo * list[hi].bs; t += heights.get(list[hi].i) }
     for (; mid[lo] < mid[k] - half; lo++) { o -= list[lo].lo * list[lo].bs; t -= heights.get(list[lo].i) }
-    const i = list[k].i, seen = measured?.drift.get(i)
-    // (the first unit's measure always: before it stands only the front matter, no page break's noise)
-    if (seen != null && (k === 0 || !(Math.abs(seen + change - drift) <= measured.snap))) drift = seen + change
-    const near = toJump.get(i)
+    const i = list[k].i
+    if (offsetAt.has(i)) offset = offsetAt.get(i)
+    const at = drift + offset, near = toJump.get(i)
     const x = near != null
-      ? clamp((list[k].lo * list[k].bs - lead * (1 - near / local) - drift) / heights.get(i), design.lead)
-      : clamp((o / t) * (back > 0 && back < Infinity ? 1 - (drift + (local ? 0 : lead)) / back : 1), design.lead)
+      ? clamp((list[k].lo * list[k].bs - lead * (1 - near / local) - at) / heights.get(i), design.lead)
+      : clamp((o / t) * (back > 0 && back < Infinity ? 1 - (at + (local ? 0 : lead)) / back : 1), design.lead)
     out.set(i, x)
-    const h = heights.get(i) * x
-    drift += h - list[k].lo * list[k].bs
-    if (measured) change += h - (measured.preview.get(i) ?? h)
+    drift += heights.get(i) * x - list[k].lo * list[k].bs
   }
   return out
 }
