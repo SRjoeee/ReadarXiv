@@ -52,6 +52,18 @@ describe('the settings page\'s sheet', () => {
     expect(ruleOf(all, '.o-narrow', narrow).display).toBe('inline')
   })
 
+  // Codex 4c: a greyed add row read as an available one in forced colours, where ink-3 becomes ButtonText
+  it('greys an add row at its list\'s cap in forced colours as the shared Button\'s disabled state is: GrayText', () => {
+    expect(ruleOf(rules(SHEET), 'button.o-row[aria-disabled="true"] :is(.o-lead, .o-label)', ['@media (forced-colors: active)'])).toEqual({ color: 'GrayText' })
+  })
+
+  // Codex 4c: the styles' heading with Restore greyed and its reason held its line past a 320 px window's column in English
+  it('lets a heading\'s action, a reason before its button, go under the title on the trailing edge rather than hold the heading\'s line', () => {
+    const all = rules(SHEET)
+    expect(ruleOf(all, '.o-heading[data-action]', ['@layer components'])).toMatchObject({ 'flex-wrap': 'wrap' })
+    expect(ruleOf(all, '.o-heading-end', ['@layer components'])).toMatchObject({ 'margin-inline-start': 'auto', flex: '0 1 auto', 'min-width': '0', 'flex-wrap': 'wrap', 'justify-content': 'flex-end' })
+  })
+
   it('draws a search hit in ink on the mark, in a description too: its inherited ink-2 fell under 4.5:1 (Task 101)', () => {
     expect(SHEET).toContain('.o-hit { padding: 0 1px; border-radius: 2px; background: var(--mark); color: var(--ink); }')
   })

@@ -329,6 +329,37 @@ describe('the LLM group, fix round 1 (the review of Task 63)', () => {
     await m.unmount()
   })
 
+  // Codex 4c: the store draws the new prompt's row when it publishes, before the write's answer; the arrival mark set on
+  // the answer came a render after the row
+  it('a new prompt\'s row, drawn by the store before the write\'s answer, arrives marked from its first render; its name field takes the focus once the answer came', async () => {
+    const answer = { promise: Promise.resolve() as Promise<unknown> }
+    function PublishFirst() {
+      const [config, setConfig] = useState(LLM)
+      const data: OptionsData = {
+        config, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
+        // as surface-config.ts: the value published (the row drawn), then the write answered
+        patch: async fn => { const next = fn(config); setConfig(next); await answer.promise; return next },
+        pack: null, checkPack: async () => 'unsupported', fetchPack: async () => undefined,
+        cache: null, cacheError: '', clearCache: async () => undefined, cacheCleared: false,
+      }
+      return h(Llm, { data })
+    }
+    const m = await mountElement(h(PublishFirst))
+    promptsRow(m.container).click()
+    await m.flush()
+    const held = deferred<void>()
+    answer.promise = held.promise
+    button(m.container, O.prompts.create).click()
+    await m.flush()
+    const row = radios(m.container).at(-1)!.closest<HTMLElement>('[data-srow]')!
+    expect(nameOf(radios(m.container).at(-1)!)).toBe(`${O.prompts.newName}${O.prompts.mine}`)
+    expect(row.hasAttribute('data-arriving')).toBe(true)
+    held.resolve()
+    await m.flush()
+    expect(document.activeElement).toBe(nameField(m.container))
+    await m.unmount()
+  })
+
   it('the editor is drawn only while the list is open: a draft is held only while it is, and a prompt renamed elsewhere meanwhile opens with its new name (item 4)', async () => {
     const patches: Config[] = []
     const tab: { set?: (c: Config) => void } = {}

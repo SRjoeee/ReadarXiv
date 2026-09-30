@@ -12,9 +12,14 @@
   .o-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 18px; margin: 22px 14px 8px; }
   .o-heading h2 { margin: 0; font-size: 13px; font-weight: 600; }
   .o-aside { color: var(--ink-2); font-size: 12px; }
-  /* a heading's action with its reason before it (Restore at the styles' cap): the reason 12 px from the button's words,
-     past the text button's own 10 px */
-  .o-heading-end { display: inline-flex; flex: none; align-items: center; gap: 2px; }
+  /* a heading with an action (Restore) and, at the styles' cap, the action's reason before it: where the two do not fit
+     beside the title (English at a 320 px window, at 200 % zoom) they go under it together, on the trailing edge (Codex
+     4c). The reason's words end 12 px before the button's (its 10 px padding and the button's 10 less 8); should even
+     their own line be too narrow, the reason goes above the button, its words ending on the button's */
+  .o-heading[data-action] { flex-wrap: wrap; row-gap: 2px; }
+  .o-heading-end { display: inline-flex; flex: 0 1 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; min-width: 0; margin-inline-start: auto; }
+  .o-heading-end > .o-aside { padding-inline-end: 10px; text-align: end; }
+  .o-heading-end > .o-aside + .btn { margin-inline-start: -8px; }
   .o-title + .o-heading { margin-top: 0; }
   /* a row: at least 48 px, 8 × 10 in, radius 6. The edges, from the card's: controls 14 (its 4 + the row's 10), words 42
      after a leading control (16 + 12), one step of 28 per level; the trailing edge 14. Its end moves under its words
@@ -90,6 +95,9 @@
 }
 /* forced colours (Windows' contrast themes) drop the fills: a hovered row is outlined */
 @media (forced-colors: active) { .o-row[data-press]:hover { outline: 1px solid Highlight; outline-offset: -1px; } }
+/* forced colours turn ink-3 into ButtonText: an add row at its list's cap is greyed there as the shared Button's disabled
+   state is (controls.css) */
+@media (forced-colors: active) { button.o-row[aria-disabled="true"] :is(.o-lead, .o-label) { color: GrayText; } }
 
 /* ---- Task 51: the undo row, the confirm in place, the model field's list ---- */
 @layer components {
@@ -198,7 +206,8 @@
   .o-pick::-webkit-color-swatch { border: 0; opacity: 0; }
   .o-pick[data-pressed]:not(:focus-visible) { outline: 1.5px solid var(--line-strong); outline-offset: 2px; }
   /* no room for a colour of one's own (the list at its cap): the wheel faded as a disabled radio's mark is, its row saying why */
-  .o-pick:disabled { opacity: 0.45; cursor: default; }
+  .o-pick[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+  .o-pick[aria-disabled="true"]:active { scale: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .o-swatch { transition: none; } .o-swatch:active { scale: 1; } }
 
@@ -308,7 +317,7 @@
   }
 }
 
-/* ---- Task 65: a list's note at its foot — a refused deletion's O.saveFailed, the prompts' import ---- */
+/* ---- Task 65: a list's note at its foot — a refused write's O.saveFailed, the prompts' import ---- */
 @layer components {
   /* on its rows' words edge: 38 in a card's list (a row's 10 + 16 + 12), a level more (28) in the prompts' list; drawn
      up 4 px towards the add row above it, 10 px above the card's edge */

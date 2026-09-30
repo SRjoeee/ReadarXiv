@@ -87,14 +87,15 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
   const setPrompts = (fn: (c: PromptsConfig) => PromptsConfig) => writes.attempt(latest => ({ ...latest, prompts: fn(latest.prompts) }))
   // a choice from a list another tab has since changed must not store an id that names nothing (promptExists)
   const choose = (id: string) => void setPrompts(c => (promptExists(c, id) ? { ...c, promptId: id } : c))
-  /** a new prompt or a copy, chosen and so opened by the store; marked as come, its name to be focused, once its write
-   *  has landed, as a style or a service added is (Codex 4) */
+  /**
+   * A new prompt or a copy, chosen and so opened by the store. Marked as come at the press: the store draws its row as it
+   * publishes, before the write's answer, and the mark must be there at that first draw; refused, no row with its id is
+   * ever drawn, so the mark is inert. Its name is focused once the write has landed, as a style's editor opens (Codex 4,
+   * 4c)
+   */
   const add = (p: PromptTemplate) => {
-    void setPrompts(c => ({ patterns: [...c.patterns, p], promptId: p.id })).then(done => {
-      if (!done) return
-      setFresh(p.id)
-      setNaming(p.id)
-    })
+    setFresh(p.id)
+    void setPrompts(c => ({ patterns: [...c.patterns, p], promptId: p.id })).then(done => { if (done) setNaming(p.id) })
   }
   const remove = (p: PromptTemplate) => {
     const g: GonePrompt = { prompt: p, index: prompts.patterns.findIndex(x => x.id === p.id), chosen: prompts.promptId === p.id, focus: !document.documentElement.hasAttribute('data-axt-pointer') }
@@ -154,7 +155,7 @@ function PromptList({ data, open, onDone }: { data: OptionsData; open: boolean; 
       if (file.current) file.current.value = ''
     }
   }
-  /** the list's note: a refused deletion's until a write lands (Task 65), otherwise the import's */
+  /** the list's note: a refused write's until one lands (Task 65; Codex 4), otherwise the import's */
   const line = writes.failed ? { alert: true, words: O.saveFailed } : note
   const builtIns = Object.values(BUILT_IN_PROMPTS)
   const chosenId = selectPrompt(prompts).id

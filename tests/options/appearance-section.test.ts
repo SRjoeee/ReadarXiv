@@ -95,6 +95,8 @@ describe('the appearance section (§6.4)', () => {
 
   // Codex on #306 (Codex 4): 0.4.1 let a reader duplicate bands up to the schema's cap, and the first colour of one's
   // own then added one more, which the store refused, unhandled and unsaid
+  // Codex 4c: greyed as every other unavailable control of the page — aria-disabled, in the tab order, described by its
+  // reason, its press refused so the browser's picker stays shut
   it('at the schema\'s 50 colours with none of one\'s own, Pick a colour is greyed and its row says why; with one\'s own among them it still changes that one', async () => {
     const patches: Config[] = []
     const bands = Array.from({ length: 50 - BUILT_IN_HIGHLIGHTS.length }, (_, i) => ({ id: `hl-band${String(i).padStart(4, '0')}`, name: `Band ${i}`, color: 'oklch(0.7 0.1 30)', opacity: 0.3 }))
@@ -103,13 +105,21 @@ describe('the appearance section (§6.4)', () => {
     expect(appearanceSchema.safeParse({ ...full.appearance, highlights: [...full.appearance.highlights, bands[0]!] }).success).toBe(false)
     const own = (c: HTMLElement) => c.querySelector<HTMLInputElement>('input[type="color"]')!
     const m = await mountElement(h(Harness, { start: full, patches }))
-    expect(own(m.container).disabled).toBe(true)
+    expect([own(m.container).getAttribute('aria-disabled'), own(m.container).disabled]).toEqual(['true', false])
     expect(own(m.container).closest('[data-srow]')!.querySelector('.o-desc')?.textContent).toBe('Up to 50 colours')
+    expect(document.getElementById(own(m.container).getAttribute('aria-describedby') ?? '')?.textContent).toBe('Up to 50 colours')
+    // the press is refused: the picker is its default action, the keys' too (their activation is a click)
+    const press = new MouseEvent('click', { bubbles: true, cancelable: true })
+    own(m.container).dispatchEvent(press)
+    expect(press.defaultPrevented).toBe(true)
+    pick(own(m.container), '#ff0000')
+    await m.flush()
+    expect(patches).toEqual([])
     await m.unmount()
     // one's own among the 50: picking changes it, adds nothing
     const mine = { ...bands.at(-1)!, id: OWN_HIGHLIGHT_ID }
     const n = await mountElement(h(Harness, { start: { ...full, appearance: { ...full.appearance, highlights: [...full.appearance.highlights.slice(0, 49), mine] } }, patches }))
-    expect([own(n.container).disabled, own(n.container).closest('[data-srow]')!.querySelector('.o-desc')]).toEqual([false, null])
+    expect([own(n.container).getAttribute('aria-disabled'), own(n.container).getAttribute('aria-describedby'), own(n.container).closest('[data-srow]')!.querySelector('.o-desc')]).toEqual([null, null, null])
     pick(own(n.container), '#ff0000')
     await n.flush()
     expect(patches.at(-1)!.appearance.highlights).toHaveLength(50)

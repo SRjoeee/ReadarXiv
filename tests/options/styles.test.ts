@@ -8,7 +8,7 @@
 // though the defaults make its change a no-op (round 4)
 import { createElement as h, useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BUILT_IN_STYLES, appearanceSchema, resetBuiltIns } from '@/config/appearance'
+import { BUILT_IN_STYLES, CSS_MAX, appearanceSchema, resetBuiltIns } from '@/config/appearance'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { OptionsData } from '@/entrypoints/options/data'
 import { deferred, mountElement } from '../ui/render-hook'
@@ -393,6 +393,56 @@ describe('the translation styles (§6.4)', () => {
     button(m.container, O.appearance.restore).click()
     await m.flush()
     expect(card(m.container).querySelector('.o-list-note')).toBeNull()
+    await m.unmount()
+  })
+
+  // Codex 4c: the store draws the new row when it publishes, before the write's answer; the arrival mark set on the
+  // answer came a render after the row, and a frame between would show it before its fade
+  it.each([
+    ['New style', (c: HTMLElement) => [...card(c).querySelectorAll<HTMLButtonElement>(':scope > button[data-srow]')].at(-1)!.click()],
+    ['Duplicate', (c: HTMLElement) => button(editor(c)!, O.reading.duplicate).click()],
+  ] as const)('%s: the row the store draws before the write\'s answer arrives marked from its first render; the editor still waits for the answer', async (_, press) => {
+    const answer = { promise: Promise.resolve() as Promise<unknown> }
+    function PublishFirst() {
+      const [config, setConfig] = useState(DEFAULT_CONFIG)
+      const data: OptionsData = {
+        config, fallbackReason: null, reset: async () => DEFAULT_CONFIG, resetFailed: false,
+        // as surface-config.ts: the value published (the row drawn), then the write answered
+        patch: async fn => { const next = fn(config); setConfig(next); await answer.promise; return next },
+        pack: null, checkPack: async () => 'unsupported', fetchPack: async () => undefined,
+        cache: null, cacheError: '', clearCache: async () => undefined, cacheCleared: false,
+      }
+      return h(Appearance, { data })
+    }
+    const m = await mountElement(h(PublishFirst))
+    button(m.container, O.appearance.edit('Green')).click()
+    await m.flush()
+    const held = deferred<void>()
+    answer.promise = held.promise
+    press(m.container)
+    await m.flush()
+    const row = styleRadios(m.container).at(-1)!.closest<HTMLElement>('[data-srow]')!
+    expect(names(m.container)).toHaveLength(BUILT_IN_STYLES.length + 1)
+    expect(row.hasAttribute('data-arriving')).toBe(true)
+    expect(editor(m.container)?.querySelector('input')?.value).toBe('Green')
+    held.resolve()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(200)
+    await m.flush()
+    expect(editor(m.container)?.querySelector('input')?.value).toBe(document.getElementById(styleRadios(m.container).at(-1)!.getAttribute('aria-labelledby')!)!.textContent)
+    await m.unmount()
+  })
+
+  // Codex 4c: over the schema's cap the store refused the declarations and the list's foot said "try again", which could not help
+  it('the declarations\' field holds back what the schema would refuse: its maxLength is the cap the schema reads', async () => {
+    const m = await mountElement(h(Harness, { start: DEFAULT_CONFIG, patches: [] }))
+    button(m.container, O.appearance.edit('Blue')).click()
+    await m.flush()
+    button(editor(m.container)!, O.more).click()
+    await m.flush()
+    expect(editor(m.container)!.querySelector('textarea')!.getAttribute('maxlength')).toBe(String(CSS_MAX))
+    const css = appearanceSchema.shape.styles.element.shape.css
+    expect([css.safeParse('a'.repeat(CSS_MAX)).success, css.safeParse('a'.repeat(CSS_MAX + 1)).success]).toEqual([true, false])
     await m.unmount()
   })
 

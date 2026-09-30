@@ -8,7 +8,7 @@
 // sanitiser, the rest staying in the field with its reason
 import { ChevronRight } from 'lucide'
 import { type ComponentProps, useEffect, useId, useRef, useState } from 'react'
-import { NAME_MAX, PALETTE, type StyleProfile, UNDERLINES } from '@/config/appearance'
+import { CSS_MAX, NAME_MAX, PALETTE, type StyleProfile, UNDERLINES } from '@/config/appearance'
 import { sanitizeCustomCss } from '@/core/renderer'
 import { styleSample } from '@/ui/style-sample'
 import { Button } from '@/ui/controls/Button'
@@ -149,7 +149,8 @@ function CustomCss({ value, onChange }: { value: string; onChange: (css: string)
   const check = sanitizeCustomCss(draft)
   return (
     <Field label={O.appearance.editor.css} error={check.ok ? undefined : O.reading.advancedRejected[check.reason]}>
-      <CssTextarea value={draft} spellCheck={false} autoComplete="off" className="o-css" onChange={e => {
+      {/* held to the schema's cap: a longer block would be refused, and no retry could help (Codex 4c) */}
+      <CssTextarea value={draft} maxLength={CSS_MAX} spellCheck={false} autoComplete="off" className="o-css" onChange={e => {
         const next = e.target.value
         setDraft(next)
         if (!sanitizeCustomCss(next).ok) return

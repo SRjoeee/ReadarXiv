@@ -1,5 +1,5 @@
 // What the settings page's sections share: an undo row back in its row's place, a list's writes and the line a refused
-// deletion leaves, a row focused once it is drawn, a reveal's content kept while it folds away, a popover shut from a
+// write leaves, a row focused once it is drawn, a reveal's content kept while it folds away, a popover shut from a
 // pick, an edited item written back into its list, a small segmented control's width
 import { type CSSProperties, useEffect, useLayoutEffect, useState } from 'react'
 

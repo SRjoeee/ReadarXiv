@@ -66,7 +66,8 @@ export function Card({ children, gap = false, row, role, label, onKeyDown }: {
 /** A group's heading on the words' edge, an aside or a text button at its end */
 export function GroupHeading({ title, aside, action }: { title: string; aside?: string; action?: ReactNode }) {
   return (
-    <div className="o-heading" data-heading="">
+    // an action may go under the title where the two do not fit (settings.css)
+    <div className="o-heading" data-heading="" data-action={action ? '' : undefined}>
       <h2>{title}</h2>
       {aside && <span className="o-aside">{aside}</span>}
       {action}

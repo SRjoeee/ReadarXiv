@@ -71,7 +71,7 @@ export function Appearance({ data }: { data: OptionsData }) {
           trailing={<Switch label={S.rows.highlight} checked={config.reading.sentenceHighlight} onChange={on => void patch(latest => ({ ...latest, reading: { ...latest.reading, sentenceHighlight: on } }))} />} />
         <Reveal open={config.reading.sentenceHighlight}>
           <Row level={1} label={O.appearance.colour} description={ownFull ? O.appearance.coloursLimit(APPEARANCE_LIMITS.highlights) : undefined}
-            trailing={<HighlightSwatches config={config} writes={bandWrites} full={ownFull} />} />
+            trailing={descId => <HighlightSwatches config={config} writes={bandWrites} full={ownFull} describedBy={descId} />} />
           {bandWrites.failed && <p className="o-list-note" role="status"><Status tone="alert">{O.saveFailed}</Status></p>}
         </Reveal>
       </Card>
@@ -82,7 +82,7 @@ export function Appearance({ data }: { data: OptionsData }) {
 /** The highlight's colours (§6.4): its profiles as swatches, as the reader's reading options show them, and one of one's
  *  own — unavailable while the list is `full`, its row saying why. A write refused — another tab filled the list after
  *  this page drew it — puts the line up under the row, as the other lists' do (Codex 4b) */
-function HighlightSwatches({ config, writes, full }: { config: Config; writes: ListWrites<Config>; full: boolean }) {
+function HighlightSwatches({ config, writes, full, describedBy }: { config: Config; writes: ListWrites<Config>; full: boolean; describedBy?: string }) {
   const a = config.appearance
   const choose = (id: string) => void writes.attempt(latest => ({ ...latest, appearance: { ...latest.appearance, activeHighlight: id } }))
   const setOwn = (color: string) => void writes.attempt(latest => {
@@ -99,7 +99,7 @@ function HighlightSwatches({ config, writes, full }: { config: Config; writes: L
         <button key={h.id} type="button" className="swatch o-swatch" aria-label={profileName(h, 'highlights')} title={profileName(h, 'highlights')}
           aria-pressed={h.id === a.activeHighlight} style={{ background: band(h) }} onClick={() => choose(h.id)} />
       ))}
-      <ColourPick label={O.appearance.pickColour} value={own?.color} pressed={a.activeHighlight === OWN_HIGHLIGHT_ID} disabled={full} onPick={setOwn} />
+      <ColourPick label={O.appearance.pickColour} value={own?.color} pressed={a.activeHighlight === OWN_HIGHLIGHT_ID} disabled={full} describedBy={full ? describedBy : undefined} onPick={setOwn} />
     </span>
   )
 }
@@ -130,15 +130,14 @@ function Styles({ data, writes }: { data: OptionsData; writes: ListWrites<Config
   const open = (id: string) => { choose(id); setEditing(id) }
   const close = (id: string) => { setEditing(null); radios.current.get(id)?.focus() }
   /**
-   * A new style or a duplicate, chosen, its editor open — once its write has landed, as a service added is (Task 107):
-   * refused, the editor stays where it was, and the list's foot says so (Codex 4)
+   * A new style or a duplicate, chosen, its editor open once its write has landed, as a service added is (Task 107):
+   * refused, the editor stays where it was, and the list's foot says so (Codex 4). Marked as come at the press: the
+   * store draws its row as it publishes, before the write's answer, and the mark must be there at that first draw;
+   * refused, no row with its id is ever drawn, so the mark is inert (Codex 4c)
    */
   const add = (next: StyleProfile) => {
-    void setLooks(c => ({ ...c, styles: [...c.styles, next], activeStyle: next.id })).then(done => {
-      if (!done) return
-      setFresh(next.id)
-      setEditing(next.id)
-    })
+    setFresh(next.id)
+    void setLooks(c => ({ ...c, styles: [...c.styles, next], activeStyle: next.id })).then(done => { if (done) setEditing(next.id) })
   }
   const remove = (p: StyleProfile) => {
     const index = a.styles.findIndex(s => s.id === p.id)
