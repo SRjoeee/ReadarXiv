@@ -324,11 +324,13 @@ function unitWords(text, gaps) {
  *  from those taken; how far a smaller glyph may stand outside them (a limit, a script); and what counts as the body's
  *  size */
 const FIRST = 3.5, GAP = 1.2, SMALL = 0.4, BODY = 0.95
-/** how far from a word of the unit the part of a display across a page or a column break may begin: 1.6 body heights,
- *  and FLOAT_SKIP points at the most — LaTeX's skip between a float at a page's head or foot and the text is a length
- *  of its own (\textfloatsep, 20 pt less 4 at the most, at every body size), where a display's grows with the body:
- *  1.6 heights of a 12 pt body reached a table's row 17 pt above the text (the re-review of A1, m3). Not less: at a
- *  10 pt body, displays' first lines stand up to 15.7 pt from the unit's word (14.5 lost five on A's ten papers) */
+/** how far from a word of the unit the part of a display across a page or a column break may begin: 1.6 body heights;
+ *  and above the unit's first line on the next page, FLOAT_SKIP points at the most. TeX breaks no page before a display
+ *  (\predisplaypenalty), so what stands there is the unit's own words, a display's rows a break was allowed between, or
+ *  a float, whose skip (\textfloatsep, 20 pt less 4) is a length of its own at every body size: 1.6 heights of a 12 pt
+ *  body reached a table's row 17 pt above the text (the re-review of A1, m3). On the 71 papers whose marks name
+ *  today's units, the first lines taken there stand 14.5 pt away at the most; below a unit's last line on its page,
+ *  where displays do stand, up to 19.1 pt at a 12 pt body, so no bound in points holds there */
 const ACROSS = 1.6, FLOAT_SKIP = 16
 /** a unit's own words at a break: how many of the unit's next words a word is looked for among, and the share of a line's
  *  words that must be found so (inOrder) */
@@ -628,7 +630,7 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
         // with a display: its lines (its letters) or the unit's own words left there — not any word of the paragraph's,
         // which a table's row at the break may share (the re-review of A1, m2)
         const fits = dir => (typeof inner === 'string' ? either(byLetters(doc, inner), inOrder(doc, words, dir)) : inOrder(doc, words, dir))
-        down = walk.take(u, k, 1, ACROSS, fits(1), FLOAT_SKIP); up = walk.take(u, m[n + 1], -1, ACROSS, fits(-1), FLOAT_SKIP)
+        down = walk.take(u, k, 1, ACROSS, fits(1)); up = walk.take(u, m[n + 1], -1, ACROSS, fits(-1), FLOAT_SKIP)
         const last = down.at(-1) ?? k
         idx.push(...down.filter(j => j < m[n + 1]), ...up.filter(j => j > last).reverse())
       }
