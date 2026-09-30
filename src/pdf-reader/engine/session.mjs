@@ -31,6 +31,7 @@ import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
 import { blockOf, hitOf, layoutOf, pageGeometry, runsOf } from './highlight.mjs'
+import { measurePane, pointerPath, pointOn } from './pointer.mjs'
 import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
@@ -306,61 +307,41 @@ function light(id) { if (!config.reading.sentenceHighlight) id = null; if (id ==
 /** a side's highlight geometry: its layout, made now if the idle time after anchoring has not come yet */
 const geoOf = side => side.geo ?? side.makeGeo?.() ?? null
 
-// The pointer's path: its moves remembered, and in the next animation frame — one per frame, however many moves came —
-// the unit under it found and lit, the pointer's place read before anything is written. Nothing there reads the
-// layout: where each pane and each of its pages is was kept when the layout last changed (measure), and the scroll as
-// its event gives it, so that finding the unit is arithmetic (the draft measured one forced layout in 440 moves when
-// the page's position was read there, one PDF.js's drawing had left). A pointer that lights nothing lets go after
-// MISS_HOLD; one that lights something again before then keeps the wash on without a blink
-let pointer = null, pointerFrame = 0, missTimer = 0
-/** what the pointer's last frame found under it (a unit's id, or null), for the probes: a miss is held, so what is lit
- *  does not tell */
-let pointerHit = null
-function pointerMoved(side, e) {
-  pointer = { side, x: e.clientX, y: e.clientY }
-  if (!pointerFrame) pointerFrame = requestAnimationFrame(pointerStep)
-}
-function pointerStep() {
-  pointerFrame = 0
-  const p = pointer
-  if (!p || !config.reading.sentenceHighlight) return
-  const at = pointAt(p.side, p.x, p.y), hit = at && hitOf(geoOf(p.side), at.page, at.x, at.y, PAD / at.scale)
-  pointerHit = hit?.id ?? null
-  if (hit) { clearTimeout(missTimer); missTimer = 0; light(hit.id) } else missed()
-}
-function missed() {
-  if (lit == null || missTimer) return
-  missTimer = setTimeout(() => { missTimer = 0; light(null) }, MISS_HOLD)
-}
-/** where a side's pane and pages are on the screen, read where the layout is known clean: a ResizeObserver's
- *  callback runs after the layout, whenever the pane or its pages change size — the pages laid, a zoom, a pinch's
- *  steps, the window, the display — and a pane moved without a change of size (swapped) is measured in the next frame.
- *  A page's place in its stack is read against the stack's own box, which cancels a follower's transform (glass) and
- *  keeps the fractions offsetTop rounds away: while the stack is transformed it is its pages' offsetParent, and their
- *  offsets were a page's margin short */
+// The pointer's path (pointer.mjs): its moves taken once a frame, the unit under it found and lit, the pointer's place
+// read before anything is written. Nothing there reads the layout: where each pane and each of its pages is was kept
+// when the layout last changed (measure), and the scroll as its event gives it, so that finding the unit is arithmetic
+// (the draft measured one forced layout in 440 moves when the page's position was read there, one PDF.js's drawing had
+// left). A pointer that lights nothing lets go after MISS_HOLD; one that lights something again before then keeps the
+// wash on without a blink
+const pointer = pointerPath({
+  find: ({ where: side, x, y }) => {
+    if (!config.reading.sentenceHighlight) return null
+    const at = pointAt(side, x, y)
+    return (at && hitOf(geoOf(side), at.page, at.x, at.y, PAD / at.scale)?.id) ?? null
+  },
+  light,
+  lit: () => lit != null,
+  hold: MISS_HOLD,
+  frame: requestAnimationFrame,
+  later: setTimeout,
+  cancel: clearTimeout,
+})
+/** where a side's pane and pages are on the screen (pointer.mjs measurePane), read where the layout is known clean: a
+ *  ResizeObserver's callback runs after the layout, whenever the pane or its pages change size — the pages laid, a
+ *  zoom, a pinch's steps, the window, the display — and a pane moved without a change of size (swapped) is measured in
+ *  the next frame */
 function measure(side) {
-  const c = side.container, b = c.getBoundingClientRect(), v = side.viewer.viewer, vb = v.getBoundingClientRect(), pvs = side.viewer._pages ?? []
-  const tops = new Float64Array(pvs.length), lefts = new Float64Array(pvs.length)
-  pvs.forEach((pv, i) => { const r = pv.div.getBoundingClientRect(); tops[i] = r.top - vb.top + v.offsetTop + pv.div.clientTop; lefts[i] = r.left - vb.left + v.offsetLeft + pv.div.clientLeft })
-  side.at = { left: b.left + c.clientLeft, top: b.top + c.clientTop, tops, lefts }
-  side.scrollX = c.scrollLeft; side.scrollY = c.scrollTop
+  side.at = measurePane(side.container, side.viewer.viewer, side.viewer._pages ?? [])
+  side.scrollX = side.container.scrollLeft; side.scrollY = side.container.scrollTop
 }
 const measuredSide = new WeakMap() // a pane's container and page stack → its side, the one coming in too (replaceRight)
 const measured = new ResizeObserver(entries => { for (const s of new Set(entries.map(e => measuredSide.get(e.target)))) if (s) measure(s) })
 new MutationObserver(() => requestAnimationFrame(() => { for (const s of sides) measure(s) })).observe(document.documentElement, { attributeFilter: ['data-axt-swapped'] })
-/** a point of the screen → the page under it and the point in PDF units, from what measure kept; null off the pages */
+/** a point of the screen → the page under it and the point in PDF units, from what measure kept; null off the pages.
+ *  A side that follows on the compositor shows its pages shifted from its scroll (glass) */
 function pointAt(side, clientX, clientY) {
-  const at = side.at
-  if (!at?.tops.length) return null
-  // a side that follows on the compositor shows its pages shifted from its scroll (glass)
   const shift = glass.side === side ? (glass.kind === 'scroll' ? glass.shift(glass.from.scrollY) : glass.shift()) : 0
-  const x = clientX - at.left + side.scrollX, y = clientY - at.top + side.scrollY + shift
-  let lo = 0, hi = at.tops.length - 1
-  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (at.tops[mid] <= y) lo = mid; else hi = mid - 1 }
-  const vp = side.viewer._pages[lo]?.viewport, px = x - at.lefts[lo], py = y - at.tops[lo]
-  if (!vp || px < 0 || py < 0 || px > vp.width || py > vp.height) return null
-  const [X, Y] = vp.convertToPdfPoint(px, py)
-  return { page: lo + 1, x: X, y: Y, scale: vp.scale }
+  return pointOn(side.at, side.viewer._pages ?? [], side.scrollX, side.scrollY + shift, clientX, clientY)
 }
 
 // ---------------------------------------------------------------- figure text
@@ -1336,8 +1317,8 @@ function attach(side) {
     clearTimeout(follow.rest)
     follow.rest = setTimeout(() => { follow.rest = 0; alignTop(side) }, 150)
   }, { passive: true })
-  side.container.addEventListener('mousemove', e => pointerMoved(side, e))
-  side.container.addEventListener('mouseleave', () => { if (pointer?.side === side) pointer = null; missed() })
+  side.container.addEventListener('mousemove', e => pointer.moved(side, e.clientX, e.clientY))
+  side.container.addEventListener('mouseleave', () => pointer.left(side))
   // A click, told apart from a drag that selects text, by the pointer's press and release: PDF.js moves its selection
   // helper (the text layer's endOfContent) under the pointer on the press, and a press whose target moves gets no
   // click event — a second click on a figure did nothing at all
@@ -1626,7 +1607,7 @@ async function marksOfPdf(bytes) {
   try { return markWords(tokenizeDocument(await textPages(doc)), await pdfMarks(doc)) } finally { task.destroy() }
 }
 /** the test harness's hooks (spikes/*): the sides, the anchoring's and the sync's helpers, the cache's; getters stay live */
-const harness = () => ({ left, get right() { return right }, get lit() { return lit }, get pointerHit() { return pointerHit }, pointAt, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
+const harness = () => ({ left, get right() { return right }, get lit() { return lit }, get pointerHit() { return pointer.hit }, pointAt, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
   // the right side replaced by a copy of what it shows, as a new compile replaces it (replaceRight)
   paintsOf: n => paints.get(n) ?? 0,
   paperContext: () => paperCtx,
