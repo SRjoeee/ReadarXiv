@@ -345,6 +345,7 @@ const O = {
     },
     imported: (n: number) => `已导入 ${n} 条`,
     importFailed: { cantRead: '无法读取这个文件', noPrompts: '这个文件里没有可用的提示词' },
+    /** also the style editor's (StyleEditor.tsx): words for any name, so kept free of the prompt */
     nameEmpty: '名称不能为空',
     messageEmpty: '消息不能为空',
   },

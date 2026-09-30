@@ -441,6 +441,52 @@ describe('the translation styles (§6.4)', () => {
     await m.unmount()
   })
 
+  // Codex on #306: the name field wrote every non-empty value as it was typed, so a name cleared letter by letter stored
+  // its first letter, and Done closed the editor on it without a word
+  it('Done with the name emptied keeps the editor open, says a name is needed, marks the field invalid and gives it the focus; a name typed clears that, and Done then closes it (Codex on #306)', async () => {
+    const patches: Config[] = []
+    const m = await mountElement(h(SerialHarness, { start: DEFAULT_CONFIG, patches }))
+    button(m.container, O.appearance.edit('Blue')).click()
+    await m.flush()
+    const field = editor(m.container)!.querySelector('input')!
+    for (const v of ['Blu', 'Bl', 'B', '']) { type(field, v); await m.flush() }
+    button(editor(m.container)!, O.appearance.editor.done).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(200)
+    await m.flush()
+    const e = editor(m.container)!
+    expect(e).not.toBeNull()
+    expect([e.querySelector('.field-error')?.textContent, field.getAttribute('aria-invalid'), document.activeElement === field]).toEqual([O.prompts.nameEmpty, 'true', true])
+    type(field, 'Sky')
+    await m.flush()
+    expect([e.querySelector('.field-error'), field.getAttribute('aria-invalid')]).toEqual([null, null])
+    button(e, O.appearance.editor.done).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(200)
+    await m.flush()
+    expect(editor(m.container)).toBeNull()
+    expect(patches.at(-1)!.appearance.styles.find(x => x.id === 'blue')!.name).toBe('Sky')
+    await m.unmount()
+  })
+
+  it('a name emptied is no name: while the field is empty the style keeps the name it had when the editor opened, so another way of closing leaves that one, never the letter the clearing stopped at (Codex on #306)', async () => {
+    const patches: Config[] = []
+    const m = await mountElement(h(SerialHarness, { start: DEFAULT_CONFIG, patches }))
+    button(m.container, O.appearance.edit('Blue')).click()
+    await m.flush()
+    const field = editor(m.container)!.querySelector('input')!
+    for (const v of ['Blu', 'Bl', 'B', '']) { type(field, v); await m.flush() }
+    const shipped = BUILT_IN_STYLES.find(x => x.id === 'blue')!.name
+    expect(patches.at(-1)!.appearance.styles.find(x => x.id === 'blue')!.name).toBe(shipped)
+    // another row's pencil closes it: the name is the one it opened with, still the interface's word for a shipped one
+    button(m.container, O.appearance.edit('Green')).click()
+    await m.flush()
+    await vi.advanceTimersByTimeAsync(200)
+    await m.flush()
+    expect([patches.at(-1)!.appearance.styles.find(x => x.id === 'blue')!.name, names(m.container)[2]]).toEqual([shipped, 'Blue'])
+    await m.unmount()
+  })
+
   it('the sample sentence is drawn, not read: it is out of the radio\'s description and the search words, and carries its own language (item 7)', async () => {
     const m = await mountElement(h(Harness, { start: DEFAULT_CONFIG, patches: [] }))
     const greenRadio = styleRadios(m.container)[1]!

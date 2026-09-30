@@ -1,8 +1,11 @@
 // A translation style's editor (the redesign's design, §6.4), opened under its row for a built-in as for one of the
 // reader's own: the name, the preview (the original over the translation, in the style), the colour, the strength, the
 // underline with the line's thickness once a line is chosen, and folded under More the blur and the custom
-// declarations; then Done, Duplicate (S-O-48, kept: §11 does not list it) and Delete style. Every control writes at once; the name only when it is not empty (the schema's), and the
-// declarations only when they will survive the sanitiser, the rest staying in the field with its reason
+// declarations; then Done, Duplicate (S-O-48, kept: §11 does not list it) and Delete style. Every control writes at
+// once: the name as it is typed, and while the field is empty the name the editor opened with (the schema's name is
+// never empty, and a name emptied is no name: however the editor closes, it never keeps the letter a clearing stopped
+// at), Done saying a name is needed rather than close (Codex on #306); the declarations only when they will survive the
+// sanitiser, the rest staying in the field with its reason
 import { ChevronRight } from 'lucide'
 import { type ComponentProps, useEffect, useRef, useState } from 'react'
 import { NAME_MAX, PALETTE, type StyleProfile, UNDERLINES } from '@/config/appearance'
@@ -36,16 +39,32 @@ export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: 
 }) {
   const e = O.appearance.editor
   const [name, setName] = useState(() => profileName(value, 'styles'))
+  /** the name as stored when the editor opened: the style's while the field is empty, so that however the editor closes
+   *  it never keeps the letter a clearing stopped at (a shipped name stays the shipped one, which follows the interface) */
+  const [opened] = useState(value.name)
+  const [nameError, setNameError] = useState<string | undefined>()
   const [more, setMore] = useState(value.blur || value.css !== '')
   const nameField = useRef<HTMLInputElement>(null)
   // an opened editor puts the focus on its first field (§9)
   useEffect(() => { nameField.current?.focus({ preventScroll: true }) }, [])
   const set = (over: Partial<StyleProfile>) => void onChange(over)
+  const changeName = (next: string) => {
+    setName(next)
+    const trimmed = next.trim()
+    // an error goes as the field is whole again, not only at the next Done (the prompt editor's rule)
+    if (trimmed) setNameError(undefined)
+    set({ name: trimmed || opened })
+  }
+  // the words are the prompt editor's (O.prompts.nameEmpty): they say what is missing of any name
+  const done = () => {
+    if (name.trim()) return onDone()
+    setNameError(O.prompts.nameEmpty)
+    nameField.current?.focus()
+  }
   return (
     <div className="o-editor">
-      <Field label={e.name}>
-        <TextInput ref={nameField} value={name} maxLength={NAME_MAX} autoComplete="off"
-          onChange={ev => { setName(ev.target.value); if (ev.target.value.trim()) set({ name: ev.target.value.trim() }) }} />
+      <Field label={e.name} error={nameError}>
+        <TextInput ref={nameField} value={name} maxLength={NAME_MAX} autoComplete="off" onChange={ev => changeName(ev.target.value)} />
       </Field>
       <div className="o-preview">
         <div className="o-preview-source">{O.reading.previewSource}</div>
@@ -100,7 +119,7 @@ export function StyleEditor({ value, onChange, onDone, onDuplicate, onDelete }: 
         </div>
       </Reveal>
       <div className="o-formbar">
-        <Button type="button" kind="brand" size="md" onClick={onDone}>{e.done}</Button>
+        <Button type="button" kind="brand" size="md" onClick={done}>{e.done}</Button>
         <Button type="button" kind="text" size="md" onClick={onDuplicate}>{O.reading.duplicate}</Button>
         <Button type="button" kind="text" size="md" onClick={onDelete}>{e.delete}</Button>
       </div>
