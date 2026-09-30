@@ -232,6 +232,13 @@ describe('a translation breaks its lines as its own', () => {
     expect(set).not.toContain('础[\\nobreak ]设')
   })
 
+  it('a line of names breaks between names, never inside one (2608.06701: a katakana name split over two lines)', () => {
+    const set = joined(lineBreaks({ kind: 'author' }, [text('マーティン・ハーゼル、レイハネ・ジャバルヴァンド')]))
+    expect(set).toContain('レ[\\nobreak ]イ')
+    expect(set).not.toContain('、[\\nobreak ]レ')
+    expect(set).not.toContain('axtbalance')
+  })
+
   it('a paragraph keeps its forced breaks; long code and formulas get room to break', () => {
     expect(joined(lineBreaks({ kind: 'paragraph' }, [text('输入：'), ph('\\\\'), text('输出')]))).toBe('输入：[\\\\]输出')
     expect(joined(lineBreaks({ kind: 'paragraph' }, [ph('\\texttt{lib/ansible/plugins/callback/__init\\_\\_.py}')]))).toContain('lib/\\allowbreak{}ansible/\\allowbreak{}')

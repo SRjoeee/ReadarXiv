@@ -823,6 +823,8 @@ function wordsKept(p) {
 }
 export function lineBreaks(u, pieces) {
   if (u.title) pieces = [{ t: 'ph', src: '\\axtbalance ' }, ...pieces.flatMap(wordsKept)]
+  // a line of names too: where it is set as a paragraph (AUTHOR_WIDE), a name kept whole (2608.06701: "レ" over "イハネ")
+  else if (u.kind === 'author') pieces = pieces.flatMap(wordsKept)
   const before = k => { for (let j = k - 1; j >= 0; j--) if (pieces[j].t !== 'text' || /\S/.test(pieces[j].s)) return pieces[j]; return null }
   const after = k => { for (let j = k + 1; j < pieces.length; j++) if (pieces[j].t !== 'text' || /\S/.test(pieces[j].s)) return pieces[j]; return null }
   return pieces.map((p, k) => {
