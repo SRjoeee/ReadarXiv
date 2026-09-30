@@ -168,5 +168,17 @@ const free = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, meas
 const paced = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, rate: 0.02, measured: { drift: bigJump, preview: previewHeights } })
 check('rate: without it, a large jump sets the stretch after it at the end of the range', near(free.get(21), 0.95, 1e-9), `${free.get(21)}`)
 check('rate: with it, every unit within that rate of the window\'s leading, and still taking back', [...paced.values()].every(l => l >= 0.98 - 1e-9 && l <= 1 + 1e-9) && near(paced.get(21), 0.98, 1e-9), JSON.stringify([...paced.values()].slice(17, 23)))
+// a forced break (`measured.breaks`: a \clearpage before an appendix) puts the preview and the final at the top of the
+// same page whatever came before it, so what the final's heights part from the preview's before it reaches no further.
+// The preview's heights run 5 pt a unit past the original's up to the break, which takes the 100 pt; the final sets
+// those units back to their original's height, then sits level after the break as the preview did — not 100 pt early,
+// as the account across the break read it (Korean 2608.05876's appendix, set looser throughout)
+const broken = Array.from({ length: 40 }, (_, i) => ({ lo: 8, bs: 12, cap: 24, i, width: () => 0 }))
+const longBefore = new Map(broken.map(u => [u.i, u.i < 20 ? 101 : 96]))
+const breakDrift = new Map(broken.map(u => [u.i, u.i < 20 ? 5 * u.i : 0]))
+const across = flowLeads(broken, 'Latn', longBefore, { window: 0, horizon: 40, measured: { drift: breakDrift, preview: longBefore, snap: 40 } })
+const anchored = flowLeads(broken, 'Latn', longBefore, { window: 0, horizon: 40, measured: { drift: breakDrift, preview: longBefore, snap: 40, breaks: new Set([20]) } })
+check('breaks: read across a forced break, the units after it are set looser', across.get(22) > 1.05, `${across.get(22)}`)
+check('breaks: re-anchored there, every unit after it at its original\'s height, and the median read before it stops at it', broken.every(u => near(longBefore.get(u.i) * anchored.get(u.i), 96, 1e-6)), JSON.stringify([...anchored.values()].slice(16, 24)))
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

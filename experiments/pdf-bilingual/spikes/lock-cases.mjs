@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { FIT_DEF, latin1Bytes, MARK_DEF, NO_OVERFLOW } from '../../../src/pdf-reader/engine/latex-front.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/live.mjs'
 import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
-import { cjkType, fitLeads, FLOAT_TEX, heights, LINES_TEX, lockedFiles, marksOf, readColumns, readFloats, readLines, readLockEvents, readTargets, shrinkSizes, SIZE_TEX, SYNC_TEX, tightenedLeads, unitLeadTex } from './lock.mjs'
+import { cjkType, fitLeads, FLOAT_TEX, heights, LINES_TEX, lockedFiles, marksOf, readColumns, readFloats, readForced, readLines, readLockEvents, readTargets, shrinkSizes, SIZE_TEX, SYNC_TEX, tightenedLeads, unitLeadTex } from './lock.mjs'
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
@@ -141,6 +141,11 @@ check('CJK type: a translation 10 % short grows by leading and tracking, the sca
 check('CJK type: a translation 10 % long shrinks by leading and scale, no negative tracking', Math.abs(shrink.reached - 0.9) < 1e-9 && shrink.lead < 1.3 && shrink.scale < 1 && shrink.track === 0, JSON.stringify(shrink))
 check('CJK type: past every range, each knob at its end and the rest left', Math.abs(far.lead - 1.45) < 1e-9 && Math.abs(far.track - 0.05) < 1e-9 && far.reached < 1.4, JSON.stringify(far))
 check('lines read with their size', readLines('AXT-LINES 3 4 11.0pt 10.95\n').get(3)?.size === 10.95)
+// a forced break — \\clearpage, \\newpage, a column ended by one in two columns — logged by the output routine, and the
+// unit after it the next whose lines the log gives; LaTeX's own float passes (penalties below -10000) are not breaks
+check('forced breaks read as the unit after each', JSON.stringify([...readForced('AXT-LINES 1 3 11.0pt 10\nAXT-FORCED\nAXT-FORCED\nAXT-LINES 2 1 11.0pt 10\nAXT-LINES 3 2 11.0pt 10\nAXT-FORCED\n')]) === '[2]')
+const forcedLog = tex('forced', `${MARK_DEF}${LINES_TEX}\n\\documentclass[twocolumn]{article}\n\\usepackage{lipsum}\n\\begin{document}\n\\axtlines{1}\\lipsum[1]\n\n\\axtlines{2}\\lipsum[2]\n\n\\clearpage\n\\axtlines{3}\\lipsum[3]\n\n\\begin{figure}[t]\\centering\\rule{2cm}{9cm}\\caption{\\axtlines{4}A float.}\\end{figure}\n\\axtlines{5}\\lipsum[4-8]\n\n\\newpage\n\\axtlines{6}\\lipsum[9]\n\n\\end{document}\n`)
+check('forced breaks in a compile: after \\clearpage and after a column ended by \\newpage, and nowhere a float or a full column took', JSON.stringify([...readForced(forcedLog)]) === '[3,6]', JSON.stringify([...readForced(forcedLog)]))
 // a unit set smaller: its own paragraph at the factor, the size back after it; a caption measured in a box gets none
 const sizes = shrinkSizes(new Map([[0, { hy: 90 }], [1, { hy: 90 }], [2, { hy: 100 }]]), new Map([[0, { hy: 100 }], [1, { hy: 200 }], [2, { hy: 90 }]]), new Map(), { min: 0.9 })
 check('size factors: the square root of how much taller, down to the floor, none for a shorter unit', Math.abs(sizes.get(0) - Math.sqrt(0.9)) < 1e-9 && sizes.get(1) === 0.9 && !sizes.has(2), JSON.stringify([...sizes]))

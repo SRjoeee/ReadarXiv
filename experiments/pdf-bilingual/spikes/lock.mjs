@@ -64,12 +64,15 @@ export const SYNC_TEX = String.raw`\makeatletter
 
 /** a unit's line count and leading at its paragraph's end (PARA_END_TEX), in the log. Through \message: \typeout
  *  reads \prevgraf as 0. A unit whose group closed with no paragraph gives none. No probe from restricted horizontal
- *  mode, where a caption is measured in an \hbox */
+ *  mode, where a caption is measured in an \hbox. And each column the output routine makes at a forced break
+ *  (\outputpenalty -10000: \newpage, \clearpage's, \pagebreak; LaTeX's float passes run below it), as AXT-FORCED:
+ *  where the text starts at a column's top whatever came before (readForced) */
 export const LINES_TEX = PARA_END_TEX + String.raw`\makeatletter
 \def\axt@linescap#1{\expandafter\xdef\csname axt@lg@#1\endcsname{\the\prevgraf\space\the\baselineskip\space\f@size}}
 \def\axt@linesmsg#1{\message{^^JAXT-LINES #1 \csname axt@lg@#1\endcsname^^J}}
 \protected\def\axtlines#1{\ifhmode\ifinner\else\axt@lines{#1}\fi\else\axt@lines{#1}\fi}
 \def\axt@lines#1{\ifdefined\AddToHookNext\axt@whenover{lines#1}{\axt@linescap{#1}}{}{\axt@linesmsg{#1}}\fi}
+\AtBeginDocument{\let\axt@forcedcol\@makecol\def\@makecol{\ifnum\outputpenalty=-\@M\message{^^JAXT-FORCED^^J}\fi\axt@forcedcol}}
 \makeatother
 `
 
@@ -275,6 +278,13 @@ export const readTargets = log => {
     const own = cols.find(x => x.p === at.page && x.c === at.col), next = cols.find(x => x.p > at.page || (x.p === at.page && x.c > at.col))
     return [m[1], own && next && at.total >= own.h - 0.01 ? { page: next.p, col: next.c, total: 0 } : at]
   }))
+}
+/** the units that follow a forced break (LINES_TEX's AXT-FORCED): after each, the next unit whose lines the log gives */
+export const readForced = log => {
+  const out = new Set()
+  let broke = false
+  for (const m of log.matchAll(/^AXT-(?:FORCED|LINES (\d+))/gm)) if (!m[1]) broke = true; else if (broke) { out.add(Number(m[1])); broke = false }
+  return out
 }
 export const readLines = log => new Map([...log.matchAll(/^AXT-LINES (\d+) (\d+) ([\d.]+)pt(?: ([\d.]+))?/gm)].map(m => [Number(m[1]), { lines: Number(m[2]), bs: Number(m[3]), ...(m[4] ? { size: Number(m[4]) } : {}) }]))
 export const readLockEvents = log => ({

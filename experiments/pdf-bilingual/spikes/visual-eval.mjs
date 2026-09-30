@@ -5,7 +5,7 @@
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>...   generate
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --reindex   render and index existing PDFs
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --generic   add the generic column to generated papers
-//   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --flow[=<window>[:<horizon>[:<ahead>]]] [--floats] [--phys[=<lines>]] [--local=<lines>] [--keep] [--rate=<percent>]   add the flow variant (a window of 50 lines by default; --floats: each float waits for its original's page; --phys: the final corrects the drift the preview measured, where it parts from the heights by more than <lines>; --local: the lead ahead only in that many lines before a jump the preview measured; --rate: what is taken back moves a unit's leading at most that percentage from the window's)
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --flow[=<window>[:<horizon>[:<ahead>]]] [--floats] [--phys[=<lines>]] [--local=<lines>] [--keep] [--rate=<percent>] [--breaks]   add the flow variant (a window of 50 lines by default; --floats: each float waits for its original's page; --phys: the final corrects the drift the preview measured, where it parts from the heights by more than <lines>; --local: the lead ahead only in that many lines before a jump the preview measured; --rate: what is taken back moves a unit's leading at most that percentage from the window's; --breaks: the correction starts again after each forced break the preview logged)
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs --catalog
 import { execFile, execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -17,7 +17,7 @@ import { latin1, latin1Bytes, markUnits, readFontProbe } from '../../../src/pdf-
 import { scriptOf, strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
 import { translateTexts, translateUnits } from '../../../src/pdf-reader/engine/mt.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
-import { cjkType, compare, fitLeads, heights, lockedFiles, withCjkType, marksOf, originalProbeFiles, readColumns, readFloats, readLines, readLockEvents, readTargets, shrinkSizes, theoremEnvs } from './lock.mjs'
+import { cjkType, compare, fitLeads, heights, lockedFiles, withCjkType, marksOf, originalProbeFiles, readColumns, readFloats, readForced, readLines, readLockEvents, readTargets, shrinkSizes, theoremEnvs } from './lock.mjs'
 import { catalogEntry, COLUMNS, FIT, H_RULES, overfullCount, PARAMS, suspiciousPages } from './visual-eval-lib.mjs'
 import { citeStyleOf, measureUnits, readSizeProbe, readWidthProbe, SIZE_PROBE, WIDTH_PROBE } from './density.mjs'
 import { correctUnits, DESIGN, flowLeads, solveType, unitHeights, unitLines } from './generic-type.mjs'
@@ -334,7 +334,7 @@ async function addGeneric(lang, id) {
  *  — from the predicted lines for the first compile (the reader's preview), from that compile's measured lines for the
  *  second (the reader's final), its knobs solved again from what the first measured. Two compiles, as the generic
  *  column's. Kept as `key` (numbers and PDF) */
-async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, phys = false, local = 0, keep = false, rate = 0, key }) {
+async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, phys = false, local = 0, keep = false, rate = 0, breaks = false, key }) {
   const paced = rate ? rate / 100 : Infinity
   const dir = join(OUT, lang, id), work = join(dir, 'work')
   const t0 = Date.now(), note = (...a) => console.log(`[${lang} ${id} ${Math.round((Date.now() - t0) / 1000)}s]`, ...a)
@@ -371,8 +371,10 @@ async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, p
     // with `phys`, the drift the preview measured at each unit, pages and floats and all, is what the final corrects
     // (`phys` a number of lines: the measure taken only where it parts from the heights' account by more than that)
     const bsMedian = [...got.map(u => u.bs)].sort((a, b) => a - b)[got.length >> 1] ?? 12
-    const seen = phys ? { drift: drifts(om0, await marksOf(r1.pdf)), preview: new Map(got.map(u => [u.i, lines.get(u.i).lines * lines.get(u.i).bs])), snap: phys === true ? undefined : phys * bsMedian, local, keep } : null
+    const seen = phys ? { drift: drifts(om0, await marksOf(r1.pdf)), preview: new Map(got.map(u => [u.i, lines.get(u.i).lines * lines.get(u.i).bs])), snap: phys === true ? undefined : phys * bsMedian, local, keep, ...(breaks ? { breaks: readForced(r1.log) } : {}) } : null
     second = { type, script: g.script, sizes: sizes2, measured, leads: flowLeads(got, g.script, heights, { window, horizon, ahead, measured: seen, rate: paced }), ms: performance.now() - t2 }
+    // AXT_FLOW_DUMP=<file>: the final's flow inputs, to replay flowLeads outside the compile
+    if (process.env.AXT_FLOW_DUMP) writeFileSync(process.env.AXT_FLOW_DUMP, JSON.stringify({ list: got.map(u => ({ i: u.i, lo: u.lo, bs: u.bs })), heights: [...heights], measured: seen && { ...seen, drift: [...seen.drift], preview: [...seen.preview], breaks: seen.breaks && [...seen.breaks] }, window, horizon, ahead, rate: paced }))
   }
   const r2 = second ? await compile(work, `${key}-2`, paper, files, lockedFiles(paper, translated, optsOf(second, second.leads)), { engine: strategy.engine, rerun: true }) : null
   const r = r2?.ok ? r2 : r1
@@ -420,9 +422,9 @@ else {
       const [w, hz, ah = 0] = (argv.find(a => a.startsWith('--flow='))?.slice(7) ?? '50').split(':').map(Number)
       const floats = argv.includes('--floats'), physArg = argv.find(a => a === '--phys' || a.startsWith('--phys='))
       const phys = physArg ? (physArg.includes('=') ? Number(physArg.slice(7)) : true) : false
-      const local = Number(argv.find(a => a.startsWith('--local='))?.slice(8) ?? 0), keep = argv.includes('--keep'), rate = Number(argv.find(a => a.startsWith('--rate='))?.slice(7) ?? 0)
-      const key = `${w === 50 ? 'flow' : `flow${w}`}${ah ? `a${ah}` : ''}${floats ? 'f' : ''}${phys ? `p${phys === true ? '' : phys}` : ''}${local ? `l${local}` : ''}${keep ? 'k' : ''}${rate ? `r${rate}` : ''}`
-      await addFlow(lang, id, { window: w, horizon: Number.isFinite(hz) ? hz : Math.max(w, 50), ahead: ah, floats, phys, local, keep, rate, key }).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
+      const local = Number(argv.find(a => a.startsWith('--local='))?.slice(8) ?? 0), keep = argv.includes('--keep'), rate = Number(argv.find(a => a.startsWith('--rate='))?.slice(7) ?? 0), breaks = argv.includes('--breaks')
+      const key = `${w === 50 ? 'flow' : `flow${w}`}${ah ? `a${ah}` : ''}${floats ? 'f' : ''}${phys ? `p${phys === true ? '' : phys}` : ''}${local ? `l${local}` : ''}${keep ? 'k' : ''}${rate ? `r${rate}` : ''}${breaks ? 'b' : ''}`
+      await addFlow(lang, id, { window: w, horizon: Number.isFinite(hz) ? hz : Math.max(w, 50), ahead: ah, floats, phys, local, keep, rate, breaks, key }).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
     }
     else await generate(lang, id).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
   }

@@ -78,6 +78,12 @@ export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, D
  * could not break moved on — each unit there set to put the text on a ramp to `ahead` lines ahead by the jump;
  * elsewhere the text keeps level. A lead ahead everywhere cost every unit two lines of drift, and 2608.21180 (Chinese)
  * ran a quarter column ahead.
+ * `measured.breaks`: the units that follow a forced break (a \\clearpage, a \\newpage; readForced), where the preview
+ * and the final both start at the top of a page or column whatever came before: the final's own drift is taken up
+ * again from the preview's account there, and the offset from the first reading after it, as at the paper's start.
+ * Read across it, what the final's heights had parted from the preview's before the break — the final's type a little
+ * tighter, 113 pt over Korean 2608.05876's main text — was read as the appendix running that far early, and the whole
+ * appendix was set looser.
  * `rate`: what is taken back — the drift, the measured offset, the lead ahead — moves a unit's leading at most that
  * fraction from the window's, however far behind the text is, so that no paragraph stands out from its neighbours: a
  * jump the preview measured, taken back within the horizon, set Korean 2608.05876's paragraphs after it a quarter
@@ -108,21 +114,26 @@ export function flowLeads(units, script, heights, { window = 50, horizon = windo
     }
   }
   // what the preview measured beyond its heights' account, smoothed, by unit index (see above)
-  const offsetAt = new Map()
+  const offsetAt = new Map(), accountAt = new Map(), breaks = measured?.breaks ?? new Set()
   if (measured) {
     const readings = []
-    let account = 0
+    let account = 0, broke = false
     for (const u of list) {
       const m = measured.drift.get(u.i)
-      if (m != null) readings.push({ i: u.i, beyond: m - account })
+      broke ||= breaks.has(u.i)
+      if (m != null) { readings.push({ i: u.i, beyond: m - account, anew: broke }); broke = false }
+      accountAt.set(u.i, account)
       account += (measured.preview.get(u.i) ?? u.lo * u.bs) - u.lo * u.bs
     }
-    // the first reading as it is; after it, the offset moves only where the median parts from it by more than the threshold
+    // the first reading as it is, and the first after each forced break; after it, the offset moves only where the
+    // median — of readings up to the next break, not past it — parts from it by more than the threshold
     const span = measured.span ?? 5
     let current = 0, first = 0
     readings.forEach((r, j) => {
-      const next = readings.slice(j, j + span).map(x => x.beyond).sort((a, b) => a - b), med = next[next.length >> 1]
-      if (j === 0) first = current = r.beyond
+      let end = Math.min(readings.length, j + span)
+      for (let k = j + 1; k < end; k++) if (readings[k].anew) end = k
+      const next = readings.slice(j, end).map(x => x.beyond).sort((a, b) => a - b), med = next[next.length >> 1]
+      if (j === 0 || r.anew) first = current = r.beyond
       else if (measured.keep) { if (!(Math.abs(med - current) <= measured.snap)) current = med }
       else current = !(Math.abs(med - first) <= measured.snap) ? med : first
       offsetAt.set(r.i, current)
@@ -134,6 +145,9 @@ export function flowLeads(units, script, heights, { window = 50, horizon = windo
     for (; hi < list.length && mid[hi] <= mid[k] + half; hi++) { o += list[hi].lo * list[hi].bs; t += heights.get(list[hi].i) }
     for (; mid[lo] < mid[k] - half; lo++) { o -= list[lo].lo * list[lo].bs; t -= heights.get(list[lo].i) }
     const i = list[k].i
+    // past a forced break the final starts where the preview did: what its heights parted from the preview's before
+    // it the break took
+    if (breaks.has(i) && accountAt.has(i)) drift = accountAt.get(i)
     if (offsetAt.has(i)) offset = offsetAt.get(i)
     const at = drift + offset, near = toJump.get(i)
     const x = near != null
