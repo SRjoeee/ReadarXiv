@@ -875,7 +875,9 @@ export const EVEN_SPACES = '\\makeatletter\\@ifpackageloaded{microtype}{}{\\usep
  *  width. A translation narrower than its original keeps the original's width, the table in its middle, so that the
  *  paper's own scaling (adjustbox's max width, a \resizebox to the line) scales it as it scaled the original: a
  *  Japanese Table 9 of 2608.15761 narrower than its original escaped the 0.95 that one was scaled by and stood 5.6 %
- *  larger. \axtstar … \axtstarbody around a tabular* (patch) sets it at its columns' width where that is wider than
+ *  larger. The kept width goes into a paragraph as the table itself did (\leavevmode), or \centering has nothing to
+ *  centre: a bare \hbox after a float's \label sat at the left margin, 2608.21180's Table 3 80 pt off its original.
+ *  \axtstar … \axtstarbody around a tabular* (patch) sets it at its columns' width where that is wider than
  *  the width it was given, which \axtfit then scales back: Japanese Table 1 of 2608.05876 ran 38 pt into the next
  *  column. \axtwide{names} (AUTHOR_WIDE), in a box that does not wrap, sets a line wider than the line as a centred
  *  paragraph of the line's width, and anything else as it is. Goes first in the main file */
@@ -893,7 +895,7 @@ export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newsavebox
   \axt@fitht=\dimexpr\ht\axt@fitbox+\dp\axt@fitbox\relax\sbox\axt@fitbox{#1}\axt@fittot=\dimexpr\ht\axt@fitbox+\dp\axt@fitbox\relax
   \ifaxtfitheight\ifdim\axt@fitht>\z@\ifdim\axt@fittot>\axt@fitht\axt@fittot=\dimexpr\wd\axt@fitbox*\axt@fitht/\axt@fittot\relax\ifdim\axt@fittot<\axt@fitmin\wd\axt@fitbox\axt@fittot=\axt@fitmin\wd\axt@fitbox\fi\ifdim\axt@fittot<\axt@fitwd\axt@fitwd=\axt@fittot\fi\fi\fi\fi
   \ifdim\wd\axt@fitbox>\axt@fitwd\ifdefined\resizebox\sbox\axt@fitbox{\resizebox{\axt@fitwd}{!}{\usebox\axt@fitbox}}\fi\fi
-  \ifdim\wd\axt@fitbox<\axt@origwd\hbox to\axt@origwd{\hss\usebox\axt@fitbox\hss}\else\usebox\axt@fitbox\fi}
+  \ifdim\wd\axt@fitbox<\axt@origwd\leavevmode\hbox to\axt@origwd{\hss\usebox\axt@fitbox\hss}\else\usebox\axt@fitbox\fi}
 \long\def\axtstar\begin#1#2#3#4\axtstarbody\end#5{\axt@counters\setbox\z@\hbox{\begin{tabular}{#3}#4\end{tabular}}\axt@countersback\axt@starwd=\wd\z@\ifdim\axt@starwd<#2\relax\axt@starwd=#2\relax\fi\begin{tabular*}{\axt@starwd}{#3}#4\end{tabular*}}
 \protected\long\def\axtwide#1{\let\axt@next\@firstofone\ifhmode\ifinner\let\axt@next\axt@wide\fi\fi\axt@next{#1}}
 \long\def\axt@wide#1{\axt@counters\sbox\axt@widebox{#1}\axt@countersback\ifdim\wd\axt@widebox>\linewidth\expandafter\axt@widepar\else\expandafter\@firstofone\fi{#1}}
@@ -970,9 +972,10 @@ export const markUnits = (units, translated = null) => {
  *  after the last name — inside the braces that hold it: in a box that does not wrap (a table's c column, where
  *  article and IEEEtran set their author blocks) a line the translation made wider than the page is set as a paragraph
  *  of the line's width instead (2608.06701: Japanese names ran 126 pt past the page). Not one that breaks its own lines
- *  or holds a note: \\axtwide sets its argument twice to measure it, and a \\thanks set twice is kept twice */
+ *  or holds a note: \\axtwide sets its argument twice to measure it, and a \\thanks set twice is kept twice; nor one
+ *  that holds \\and, which in article ends the table the names are set in, and cannot be set inside a box */
 const AUTHOR_WIDE = { start: '\\axtwide{', end: '}', whole: true }
-const fitsWide = u => !u.pieces.some(p => p.t === 'nested' || (p.t === 'ph' && /\\(?:\\|newline|linebreak|par|thanks|footnote|footnotemark)(?![A-Za-z@])|^\\\\/.test(p.src ?? '')))
+const fitsWide = u => !u.pieces.some(p => p.t === 'nested' || (p.t === 'ph' && /\\(?:\\|newline|linebreak|par|thanks|footnote|footnotemark|and|And|AND)(?![A-Za-z@])|^\\\\/.test(p.src ?? '')))
 
 /** Goes before \\begin{document} of the original's own compile: the log then says which font families the document set
  *  for its roles, however it set them (its class, a package, a conference style) */

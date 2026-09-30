@@ -247,6 +247,12 @@ const [kw, kow] = kept('width') ?? [], [ks, kos] = kept('scaled') ?? [], [kl, kn
 check('a narrower translation keeps its original\'s width', Math.abs(kw - kow) < 0.01, JSON.stringify([kw, kow]))
 check('scaled by the paper as its original was: adjustbox\'s max width', Math.abs(ks - kos) < 0.01, JSON.stringify([ks, kos]))
 check('and a \\resizebox to the line: no taller than the original would be, far less than the narrow table alone', kl < 0.6 * knl, JSON.stringify([kl, knl]))
+// in a float's vertical list after \centering and a \label (2608.21180's Table 3), the kept width goes into a paragraph
+// as the table did, so that \centering centres it: a bare \hbox there sat at the left margin, 80 pt off its original
+const centredLog = tex('fitcentred', `${FIT_DEF}\\documentclass{article}\\usepackage{graphicx}\\begin{document}\\makeatletter
+\\setbox0\\vbox{\\hsize=300pt\\centering\\axtfit{\\begin{tabular}{l}Narrow\\end{tabular}}{\\begin{tabular}{l}${'A wider original '.repeat(2)}\\end{tabular}}\\message{^^JCENTRED \\ifhmode paragraph\\else vertical\\fi^^J}\\par}
+\\makeatother\\end{document}\n`)
+check('a kept width joins a paragraph, where \\centering centres it', /^CENTRED paragraph/m.test(centredLog), (centredLog.match(/^CENTRED .*/m) ?? [''])[0])
 check('kept widths raise no TeX error', !/^! /m.test(keptLog), (keptLog.match(/^! .*/m) ?? [''])[0])
 // a table set to a width (tabular*) whose translation is wider than that width: set at its natural width and scaled
 // to the width it had, not run past the column (Japanese Table 1 of 2608.05876 ran 38 pt into the next column); one

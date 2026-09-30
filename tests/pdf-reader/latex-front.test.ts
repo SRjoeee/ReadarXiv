@@ -140,6 +140,12 @@ describe('a translated line of names that may not fit its box (2608.06701: Japan
     expect(marked(IEEE.replace('Somewhere\\\\ Elsewhere', 'Somewhere, \\{sl225, reyhaneh\\}@illinois.edu, or write to jatin@us.ibm.com today'))).toContain('\\{sl225, reyhaneh\\}@illinois.edu')
   })
 
+  it('a line that holds \\and is left as it is: article ends a table there, which cannot be set inside a box (2608.21180)', () => {
+    const tex = marked('\\documentclass{article}\\author{Alice Example \\and Bob Example}\\begin{document}\\maketitle\nWords.\\end{document}')
+    expect(tex).not.toContain('\\axtwide')
+    expect(marked('\\documentclass{article}\\author{Alice Example \\And Bob Example}\\begin{document}\\maketitle\nWords.\\end{document}')).not.toContain('\\axtwide')
+  })
+
   it('nothing is wrapped where nothing is translated: the original compiles as the paper does', () => {
     const p = project(IEEE)
     expect(new TextDecoder().decode(patch(p, new Map(), { mark: markUnits(p.units) }).get('main.tex'))).not.toContain('\\axtwide')
