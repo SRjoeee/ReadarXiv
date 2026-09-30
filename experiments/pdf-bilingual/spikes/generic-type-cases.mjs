@@ -124,5 +124,14 @@ check('measured: most of the jump taken back by the end', taken < 20, `${taken}`
 const reset = new Map(even.map(u => [u.i, u.i < 20 ? -24 : 0]))
 const rebuilt = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, ahead: 2, measured: { drift: reset, preview: previewHeights } })
 check('measured: after a break that put it level, the lead ahead is built again', rebuilt.get(20) < 1 - 1e-6 && rebuilt.get(21) < 1 - 1e-6, `${rebuilt.get(20)} ${rebuilt.get(21)}`)
+// the preview measured noise as well as jumps: a paragraph that did not fit at a page's foot went whole to the next
+// page, a column ended a little early (2212.06817: measured 30 pt behind the heights' account at the median, 85 at p90,
+// and the final set tighter throughout ran 0.12 page ahead). With `snap`, the measure is taken only where it parts from
+// the heights by more than that; less, it is noise, and the heights go on
+const noisy = new Map(even.map(u => [u.i, u.i % 2 ? 30 : -20]))
+const calm = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, measured: { drift: noisy, preview: previewHeights, snap: 60 } })
+check('snap: noise under the threshold leaves the heights\' account alone', [...calm.values()].every(l => near(l, 1, 1e-9)), JSON.stringify([...calm.values()].slice(0, 4)))
+const snapped = flowLeads(even, 'Latn', evenHeights, { window: 0, horizon: 40, measured: { drift: jumped, preview: previewHeights, snap: 40 } })
+check('snap: a jump over the threshold is taken', snapped.get(21) < 0.99, `${snapped.get(21)}`)
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

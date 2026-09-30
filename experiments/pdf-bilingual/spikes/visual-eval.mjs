@@ -5,7 +5,7 @@
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>...   generate
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --reindex   render and index existing PDFs
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --generic   add the generic column to generated papers
-//   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --flow[=<window>[:<horizon>[:<ahead>]]] [--floats] [--phys]   add the flow variant (a window of 50 lines by default; --floats: each float waits for its original's page; --phys: the final corrects the drift the preview measured)
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --flow[=<window>[:<horizon>[:<ahead>]]] [--floats] [--phys[=<lines>]]   add the flow variant (a window of 50 lines by default; --floats: each float waits for its original's page; --phys: the final corrects the drift the preview measured, where it parts from the heights by more than <lines>)
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs --catalog
 import { execFile, execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -368,7 +368,9 @@ async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, p
     const before = unitLines(corrected, g.script, g.type), after = unitLines(corrected, g.script, type)
     const heights = new Map(got.map(u => [u.i, ((lines.get(u.i).lines * after.get(u.i)) / before.get(u.i)) * (cjk ? 1 : type.size) * u.bs]))
     // with `phys`, the drift the preview measured at each unit, pages and floats and all, is what the final corrects
-    const seen = phys ? { drift: drifts(om0, await marksOf(r1.pdf)), preview: new Map(got.map(u => [u.i, lines.get(u.i).lines * lines.get(u.i).bs])) } : null
+    // (`phys` a number of lines: the measure taken only where it parts from the heights' account by more than that)
+    const bsMedian = [...got.map(u => u.bs)].sort((a, b) => a - b)[got.length >> 1] ?? 12
+    const seen = phys ? { drift: drifts(om0, await marksOf(r1.pdf)), preview: new Map(got.map(u => [u.i, lines.get(u.i).lines * lines.get(u.i).bs])), snap: phys === true ? undefined : phys * bsMedian } : null
     second = { type, script: g.script, sizes: sizes2, measured, leads: flowLeads(got, g.script, heights, { window, horizon, ahead, measured: seen }), ms: performance.now() - t2 }
   }
   const r2 = second ? await compile(work, `${key}-2`, paper, files, lockedFiles(paper, translated, optsOf(second, second.leads)), { engine: strategy.engine, rerun: true }) : null
@@ -415,8 +417,9 @@ else {
       // --flow[=<window>[:<horizon>[:<ahead>]]]: a window of 50 lines by default, kept as `flow`; another as
       // `flow<window>`, and `a<ahead>` after it when the drift aimed at is ahead of the original
       const [w, hz, ah = 0] = (argv.find(a => a.startsWith('--flow='))?.slice(7) ?? '50').split(':').map(Number)
-      const floats = argv.includes('--floats'), phys = argv.includes('--phys')
-      const key = `${w === 50 ? 'flow' : `flow${w}`}${ah ? `a${ah}` : ''}${floats ? 'f' : ''}${phys ? 'p' : ''}`
+      const floats = argv.includes('--floats'), physArg = argv.find(a => a === '--phys' || a.startsWith('--phys='))
+      const phys = physArg ? (physArg.includes('=') ? Number(physArg.slice(7)) : true) : false
+      const key = `${w === 50 ? 'flow' : `flow${w}`}${ah ? `a${ah}` : ''}${floats ? 'f' : ''}${phys ? `p${phys === true ? '' : phys}` : ''}`
       await addFlow(lang, id, { window: w, horizon: Number.isFinite(hz) ? hz : Math.max(w, 50), ahead: ah, floats, phys, key }).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
     }
     else await generate(lang, id).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))

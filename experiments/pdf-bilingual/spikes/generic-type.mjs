@@ -65,7 +65,10 @@ export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, D
  * the unit started there, in points, pages and floats and all), and `preview`, Map(unit index → its height there). The
  * drift is then the one measured at each unit, carried forward by what this setting changes against the preview: a
  * float that jumped a column is taken back after it, and after a forced break, where the preview stood level again,
- * a lead ahead is built again. Heights alone saw neither.
+ * a lead ahead is built again. Heights alone saw neither. With `measured.snap` (points), the measure is taken only where
+ * it parts from the heights' account by more than that: the preview measures noise too — a paragraph that did not fit
+ * at a page's foot went whole to the next, a column ended a little early — and a final that followed it all ran 0.12
+ * page ahead on 2212.06817. Under it the heights go on.
  * `heights`: Map(unit index → the translation's height at leading one), from unitHeights or a compile's lines. The
  * leading is × the paper's for CJK, × the size's for an alphabet, as the type's is
  */
@@ -81,7 +84,7 @@ export function flowLeads(units, script, heights, { window = 50, horizon = windo
     for (; hi < list.length && mid[hi] <= mid[k] + half; hi++) { o += list[hi].lo * list[hi].bs; t += heights.get(list[hi].i) }
     for (; mid[lo] < mid[k] - half; lo++) { o -= list[lo].lo * list[lo].bs; t -= heights.get(list[lo].i) }
     const i = list[k].i, seen = measured?.drift.get(i)
-    if (seen != null) drift = seen + change
+    if (seen != null && !(Math.abs(seen + change - drift) <= measured.snap)) drift = seen + change
     const x = clamp((o / t) * (back > 0 && back < Infinity ? 1 - (drift + lead) / back : 1), design.lead)
     out.set(i, x)
     const h = heights.get(i) * x
