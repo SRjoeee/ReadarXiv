@@ -19,3 +19,5 @@ export declare function boundsFromMarks(doc: DocToken[], marks: Map<string, { pa
 /** each mark with the word it stands by in `doc`, the document the marks were recorded in */
 export declare function markWords(doc: DocToken[], marks: Map<string, { page: number; x: number; y: number }>): Map<string, { page: number; x: number; y: number; t: string | null }>
 export declare function anchorUnits(doc: DocToken[], units: UnitText[], options?: { minCoverage?: number; bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean }): Map<number, Anchor | null>
+/** tokens → one rectangle per line: same page, baselines within half a line of each other */
+export declare function lineRects(doc: DocToken[], idx: number[]): Rect[]
