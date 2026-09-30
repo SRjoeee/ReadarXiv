@@ -70,14 +70,19 @@ export function decideWrite({ result, cached, units, marks, shown }) {
 
 /**
  * Whether a run whose translation none of the ways could set may leave the untypeset mark under `identity`, the one that
- * would answer now: only when every unit the run has a translation of was made by it. The mark answers the next visit
- * on that identity alone (src/cache/pdf-record.ts stillUntypeset), so it must stand for that service's whole translation,
- * as a copy is current only when every unit is (unitIsCurrent). A run a hand-over or a demotion mixed — the reader's key
- * refused midway and the free service finishing — leaves none, and the next visit asks again: the service that would
- * answer then never translated the whole paper (the final review of Codex 1 on #306). A run with nothing translated
- * leaves none either: its failure was not a translation's
+ * would answer now: only when every unit the run tried came back whole from it, and there is one. The mark answers the
+ * next visit on that identity alone (src/cache/pdf-record.ts stillUntypeset), so it must stand for that service's whole
+ * translation, as a copy is current only when every unit is (unitIsCurrent). The rule errs toward asking again: a retry
+ * wasted is cheaper than a wrong "cannot typeset", which the visits after it would never question.
+ * - A unit left `none` or `lost`, or `partial`, leaves none: the run did not make the whole translation, and another
+ *   try could (Codex 6 on #306). The run's results hold every unit it tried — the mark is left only once translation
+ *   has ended and was not stopped (live.mjs awaits it), so every unit sent has its result.
+ * - A run a hand-over or a demotion mixed — the reader's key refused midway and the free service finishing — leaves
+ *   none: the service that would answer then never translated the whole paper (the final review of Codex 1 on #306).
+ * - A run with nothing tried leaves none: its failure was not a translation's.
+ * - Names kept in the source (nameCells) are never sent (live.mjs `todo`), so they have no result and do not block.
  */
 export function allTranslatedBy(results, identity) {
-  const made = [...results.values()].filter(r => r.pieces)
-  return made.length > 0 && made.every(r => r.by === identity)
+  const tried = [...results.values()]
+  return tried.length > 0 && tried.every(r => r.state === 'whole' && r.by === identity)
 }

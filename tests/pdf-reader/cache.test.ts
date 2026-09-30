@@ -10,8 +10,24 @@ const results = (...rows: { by?: string; state?: string; pieces?: boolean }[]) =
   new Map(rows.map((r, i) => [i, { ...(r.pieces === false ? {} : { pieces: [`t${i}`] }), state: r.state ?? 'whole', ...(r.by !== undefined ? { by: r.by } : {}), tried: 'F' }]))
 
 describe('allTranslatedBy', () => {
-  it('holds when every unit the run has a translation of was made by the identity: a unit lost, with none, does not count', () => {
-    expect(allTranslatedBy(results({ by: 'F' }, { by: 'F', state: 'partial' }, { state: 'lost', pieces: false }), 'F')).toBe(true)
+  it('holds when every unit the run tried came back whole from the identity', () => {
+    expect(allTranslatedBy(results({ by: 'F' }, { by: 'F' }, { by: 'F' }), 'F')).toBe(true)
+  })
+
+  // Codex 6: units never translated were passed over and a partial one counted, so a run that a retry could still have
+  // completed was marked as one that cannot be typeset, and visits after it on that identity asked nothing
+  it.each([
+    ['none', { state: 'none', pieces: false }],
+    ['lost', { state: 'lost', pieces: false }],
+    ['partial', { by: 'F', state: 'partial' }],
+  ] as const)('not beside a unit left %s: the run did not make the whole translation, and the next visit asks again', (_, row) => {
+    expect(allTranslatedBy(results({ by: 'F' }, { by: 'F' }, row), 'F')).toBe(false)
+  })
+
+  it('names kept in the source have no result (live.mjs never sends them): they do not block', () => {
+    // a paper of five units, two of them names kept (nameCells): the run's results hold the three it sent
+    const run = new Map([[0, { pieces: ['t0'], state: 'whole', by: 'F', tried: 'F' }], [2, { pieces: ['t2'], state: 'whole', by: 'F', tried: 'F' }], [4, { pieces: ['t4'], state: 'whole', by: 'F', tried: 'F' }]])
+    expect(allTranslatedBy(run, 'F')).toBe(true)
   })
 
   it('not for a run a hand-over mixed: the reader\'s service refused midway and the free one finishing — for neither identity', () => {
