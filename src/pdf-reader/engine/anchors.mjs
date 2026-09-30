@@ -7,10 +7,13 @@
 //    anchors. Used inside the bounds when there are marks, on its own when there are none.
 
 const CJK = /[㐀-鿿豈-﫿぀-ヿ가-힯]/
-const TOKEN = /[㐀-鿿豈-﫿぀-ヿ가-힯]|[\p{L}\p{N}]+/gu
+const TOKEN = /[㐀-鿿豈-﫿぀-ヿ가-힯]|(?:(?![㐀-鿿豈-﫿぀-ヿ가-힯])[\p{L}\p{N}])+/gu
 const K = 3
 
-/** one token per CJK character, one per run of other letters and digits; lower case, compatibility forms folded */
+/** one token per CJK character, one per run of other letters and digits; lower case, compatibility forms folded. A run
+ *  ends where a CJK character begins: CJK characters are letters too, and a run that took them in (a figure's number
+ *  and the words after it, a name and a heading's words) was one token in a unit's text where the text layer, setting
+ *  the two scripts in two fonts, has several — and a heading, found as a run of words, was never found (2608.08350) */
 export function tokens(s) {
   const out = []
   for (const m of s.normalize('NFKC').toLowerCase().matchAll(TOKEN)) {
@@ -77,6 +80,10 @@ export function markWords(doc, marks) {
   return out
 }
 const pageIndex = d => { const m = new Map(); d.forEach((t, k) => (m.get(t.page) ?? m.set(t.page, []).get(t.page)).push(k)); return m }
+/** a carried word as `tokens` cuts it now: a copy on this machine keeps the words its marks were carried with, and one
+ *  kept when a Latin run still took the CJK characters after it in is the start mark's first part or the end mark's
+ *  last */
+const cut = (t, start) => (t && t.length > 1 && CJK.test(t) ? ((start ? tokens(t)[0] : tokens(t).at(-1))?.t ?? t) : t)
 
 /**
  * Marks → Map id → [first token, last token]. `marks` is Map `${id}s` / `${id}e` → { page, x, y, t? }. A mark that
@@ -92,7 +99,7 @@ export function boundsFromMarks(doc, marks) {
     if (!e) continue
     const a = tokenAtMark(doc, byPage, s, true), b = tokenAtMark(doc, byPage, e, false)
     if (a == null || b == null || b < a) continue
-    if ((s.t !== undefined && s.t !== doc[a].t) || (e.t !== undefined && e.t !== doc[b].t)) continue
+    if ((s.t !== undefined && cut(s.t, true) !== doc[a].t) || (e.t !== undefined && cut(e.t, false) !== doc[b].t)) continue
     out.set(id, [a, b])
   }
   return out
