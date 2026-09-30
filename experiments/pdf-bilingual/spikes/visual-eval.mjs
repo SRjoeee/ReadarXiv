@@ -5,6 +5,7 @@
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>...   generate
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --reindex   render and index existing PDFs
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --generic   add the generic column to generated papers
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --flow[=<window>[:<horizon>[:<ahead>]]]   add the flow variant (a window of 50 lines by default)
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs --catalog
 import { execFile, execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -18,8 +19,8 @@ import { translateTexts, translateUnits } from '../../../src/pdf-reader/engine/m
 import { faithfulDockerArgs } from './faithful.mjs'
 import { cjkType, compare, fitLeads, heights, lockedFiles, withCjkType, marksOf, originalProbeFiles, readColumns, readFloats, readLines, readLockEvents, readTargets, shrinkSizes, theoremEnvs } from './lock.mjs'
 import { catalogEntry, COLUMNS, FIT, H_RULES, overfullCount, PARAMS, suspiciousPages } from './visual-eval-lib.mjs'
-import { citeStyleOf, measureUnits, readWidthProbe, WIDTH_PROBE } from './density.mjs'
-import { DESIGN, solveType } from './generic-type.mjs'
+import { citeStyleOf, measureUnits, readSizeProbe, readWidthProbe, SIZE_PROBE, WIDTH_PROBE } from './density.mjs'
+import { correctUnits, DESIGN, flowLeads, solveType, unitHeights, unitLines } from './generic-type.mjs'
 import { alignment, uniformity } from './alignment.mjs'
 
 const run = promisify(execFile)
@@ -38,17 +39,34 @@ const logIn = (d, stem) => { const f = join(d, `${stem}.log`); return existsSync
 const pdfIn = (d, stem) => { const f = join(d, `${stem}.pdf`); return existsSync(f) ? f : null }
 
 /** the generic type for a translation (plans/2026-09-30-generic-type.md): its units measured against the original's
- *  lines (density.mjs), one type solved for the whole (generic-type.mjs), and how long that took — what the reader
- *  would spend on it, the paper's sources already in memory */
-function genericType({ paper, files, translated, lang, fonts, probe = null, oLog }) {
+ *  lines (density.mjs), one type solved for the whole among the sizes the face has (`sizes`, the size probe's),
+ *  and how long that took — what the reader would spend on it, the paper's sources already in memory */
+function genericType({ paper, files, translated, lang, fonts, probe = null, sizes = null, oLog }) {
   const t0 = performance.now()
   const { units } = paper, script = scriptOf(lang)
   const sources = [...files].filter(([f]) => /\.(tex|sty|cls)$/i.test(f)).map(([, b]) => latin1(b)).join('\n')
   const bbl = [...files].filter(([f]) => /\.bbl$/i.test(f)).map(([, b]) => latin1(b)).join('\n')
   const byIndex = new Map(units.map((u, i) => [i, translated.get(u)]).filter(([, pieces]) => pieces))
   const measured = measureUnits({ units, translated: byIndex, lines: readLines(oLog), fonts, probe, citeStyle: citeStyleOf(sources, bbl), script })
-  const type = solveType(measured, script)
-  return { type, script, units: measured.length, ms: performance.now() - t0 }
+  const type = solveType(measured, script, sizes)
+  return { type, script, sizes, list: measured, units: measured.length, ms: performance.now() - t0 }
+}
+/** a compile's measured height over the original's, on the units the solver used: its line probes, each unit's lines at
+ *  its leading, against the original's lines at the paper's */
+function measuredRatio(list, log) {
+  const lines = readLines(log)
+  let o = 0, t = 0
+  for (const u of list) { const l = lines.get(u.i); if (!l) continue; o += u.lo * u.bs; t += l.lines * l.bs }
+  return o ? t / o : null
+}
+/** the type after one compile at the predicted type: the paper's density as that compile measured it, solved again
+ *  among the sizes its own size probe found in the faces the translation is set in — the reader's preview measures,
+ *  its final compile uses it, and no compile is added (step 4) */
+function correctedType(g, log) {
+  const t0 = performance.now(), measured = measuredRatio(g.list, log)
+  if (measured == null) return null
+  const sizes = readSizeProbe(log) ?? g.sizes
+  return { type: solveType(correctUnits(g.list, g.script, g.type, measured), g.script, sizes), script: g.script, sizes, measured, ms: performance.now() - t0 }
 }
 /** lockedFiles options for a generic type: CJK through the strategy's CJK face and glue (withCjkType), which reach every
  *  role, the leading × the paper's; an alphabet's translated text at the size, then at the leading × the paper's */
@@ -63,7 +81,9 @@ function genericOpts({ type, script }, { strategy, fonts, em, theorems, paper, t
   // pulled the pages after them a third of a column ahead (step 3). The author block keeps the class's
   const marked = markUnits(paper.units), index = new Map(paper.units.map((u, i) => [u, i])), sizes = new Map()
   for (const u of translated.keys()) if (marked(u) || (u.kind === 'figure' && !u.front)) sizes.set(index.get(u), type.size)
-  return { strategy, fonts, em, theorems, sync: false, lead, sizes, ...table }
+  // the compile measures how wide the faces the translation is set in come out at each size, for the next solve
+  const probed = { ...strategy, pre: f => `${strategy.pre(f)}\\AtBeginDocument{${SIZE_PROBE}}\n` }
+  return { strategy: probed, fonts, em, theorems, sync: false, lead, sizes, ...table }
 }
 /** the reader's font probe with the width probe in its body (density.mjs WIDTH_PROBE): the families and the body face's scale */
 function widthProbeFiles(paper) {
@@ -156,7 +176,7 @@ async function generate(lang, id) {
 
   // 2. fonts and the original with probes: the target shared by FIT and the H-rule lock
   const probed = await compile(work, 'probe', paper, files, widthProbeFiles(paper), { engine: meta.compiler, rerun: false })
-  const fonts = readFontProbe(probed.log), widthProbe = readWidthProbe(probed.log)
+  const fonts = readFontProbe(probed.log), widthProbe = readWidthProbe(probed.log), sizeProbe = readSizeProbe(probed.log)
   const strategy = strategiesFor(meta, lang)[0]
   const theorems = theoremEnvs(files)
   const o = await compile(work, 'original', paper, files, originalProbeFiles(paper, theorems), { engine: meta.compiler, rerun: true })
@@ -234,7 +254,7 @@ async function generate(lang, id) {
   // 2d. The generic type (plans/2026-09-30-generic-type.md): one set of type for the whole translation, found from its
   // predicted lines against the original's — no trial, one compile
   let generic = null
-  const g = genericType({ paper, files, translated, lang, fonts, probe: widthProbe, oLog: o.log })
+  const g = genericType({ paper, files, translated, lang, fonts, probe: widthProbe, sizes: sizeProbe, oLog: o.log })
   {
     const r = await compile(work, 'generic', paper, files, lockedFiles(paper, translated, genericOpts(g, { strategy, fonts, em, theorems, paper, translated })), { engine: strategy.engine, rerun: true })
     if (r.ok) { generic = r; copyFileSync(r.pdf, join(dir, 'generic.pdf')) } else base.failed.generic = firstError(r.log)
@@ -272,16 +292,26 @@ async function addGeneric(lang, id) {
   const kept = keptFor(paper, lang), translated = new Map()
   for (const u of units) { if (kept.has(u)) continue; const hit = byKey.get(unitKey(u)); if (hit) translated.set(u, rebind(u, hit)) }
   const stem = stemOf(paper), fonts = readFontProbe(logIn(join(work, 'probe'), stem)), oLog = logIn(join(work, 'original'), stem), oPdf = pdfIn(join(work, 'original'), stem)
-  const probe = readWidthProbe(logIn(join(work, 'width'), stem))
+  const probe = readWidthProbe(logIn(join(work, 'width'), stem)), sizes = readSizeProbe(logIn(join(work, 'width'), stem))
   if (!oLog || !oPdf) { note('no marked original in', work); return }
   const strategy = strategiesFor(meta, lang)[0], theorems = theoremEnvs(files), { em } = PARAMS[lang]
-  const g = genericType({ paper, files, translated, lang, fonts, probe, oLog })
-  const r = await compile(work, 'generic', paper, files, lockedFiles(paper, translated, genericOpts(g, { strategy, fonts, em, theorems, paper, translated })), { engine: strategy.engine, rerun: true })
+  const g = genericType({ paper, files, translated, lang, fonts, probe, sizes, oLog })
+  const optsOf = x => genericOpts(x, { strategy, fonts, em, theorems, paper, translated })
+  // the first compile at the predicted type (the reader's preview), the second at the type its measurement corrects
+  // (the reader's final); the column shows the second, and the numbers keep both
+  const r1 = await compile(work, 'generic-1', paper, files, lockedFiles(paper, translated, optsOf(g)), { engine: strategy.engine, rerun: true })
+  const g2 = r1.ok ? correctedType(g, r1.log) : null
+  const r2 = g2 ? await compile(work, 'generic-2', paper, files, lockedFiles(paper, translated, optsOf(g2)), { engine: strategy.engine, rerun: true }) : null
+  const r = r2?.ok ? r2 : r1
   index.failed ??= {}; index.numbers ??= {}
   delete index.failed.generic
   if (r.ok) copyFileSync(r.pdf, join(dir, 'generic.pdf')); else { index.failed.generic = firstError(r.log); rmSync(join(dir, 'generic.pdf'), { force: true }); delete index.numbers.generic }
   const om = await marksOf(oPdf), orig = heights(units, om, readLines(oLog))
-  if (r.ok) index.numbers.generic = await numbersFor(units, orig, om, r.pdf, r.log, { type: g.type, predicted: g.type.ratio, solveMs: g.ms, measured: g.units })
+  if (r.ok) index.numbers.generic = await numbersFor(units, orig, om, r.pdf, r.log, {
+    type: (r2?.ok ? g2 : g).type, solveMs: g.ms + (g2?.ms ?? 0), measuredUnits: g.units, compiles: r2?.ok ? 2 : 1,
+    first: r1.ok ? { type: g.type, measured: g2?.measured ?? measuredRatio(g.list, r1.log), numbers: await numbersFor(units, orig, om, r1.pdf, r1.log) } : null,
+    second: r2?.ok ? { measured: measuredRatio(g.list, r2.log) } : null,
+  })
   // FIT and the H-rule lock in the same terms, from the PDFs the page shows; their uniformity from the compile that made
   // them, when it is still in the work directory
   for (const key of ['fit', 'lockh']) {
@@ -290,7 +320,60 @@ async function addGeneric(lang, id) {
     Object.assign(index.numbers[key], await numbersFor(units, orig, om, join(dir, `${key}.pdf`), last ? logIn(last, stem) : ''))
   }
   await writeIndex(dir, index)
-  note('generic', r.ok, JSON.stringify(g.type), `solve ${g.ms.toFixed(1)} ms`, JSON.stringify({ fit: index.numbers.fit?.align?.drift?.median, generic: index.numbers.generic?.align?.drift?.median }))
+  note('generic', r.ok, 'first', JSON.stringify(g.type), 'measured', g2?.measured?.toFixed(3), 'second', JSON.stringify(g2?.type), `solve ${(g.ms + (g2?.ms ?? 0)).toFixed(1)} ms`, JSON.stringify({ fit: index.numbers.fit?.align?.drift?.median, generic: index.numbers.generic?.align?.drift?.median }))
+}
+
+/** the flow variant (generic-type.mjs flowLeads) for a paper generated before it: the generic type, each unit's
+ *  leading following the original's flow over `window` of its lines, what the range stopped taken back over `horizon`
+ *  — from the predicted lines for the first compile (the reader's preview), from that compile's measured lines for the
+ *  second (the reader's final), its knobs solved again from what the first measured. Two compiles, as the generic
+ *  column's. Kept as `key` (numbers and PDF) */
+async function addFlow(lang, id, { window, horizon, ahead = 0, key }) {
+  const dir = join(OUT, lang, id), work = join(dir, 'work')
+  const t0 = Date.now(), note = (...a) => console.log(`[${lang} ${id} ${Math.round((Date.now() - t0) / 1000)}s]`, ...a)
+  const index = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'))
+  const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
+  const paper = openPaper(files), { units, meta } = paper
+  const byKey = new Map((existsSync(join(dir, 'translation.json')) ? JSON.parse(readFileSync(join(dir, 'translation.json'), 'utf8')).entries : []).map(e => [e.key, e.pieces]))
+  const kept = keptFor(paper, lang), translated = new Map()
+  for (const u of units) { if (kept.has(u)) continue; const hit = byKey.get(unitKey(u)); if (hit) translated.set(u, rebind(u, hit)) }
+  const stem = stemOf(paper), fonts = readFontProbe(logIn(join(work, 'probe'), stem)), oLog = logIn(join(work, 'original'), stem), oPdf = pdfIn(join(work, 'original'), stem)
+  const widthLog = logIn(join(work, 'width'), stem), probe = readWidthProbe(widthLog), sizes = readSizeProbe(widthLog)
+  if (!oLog || !oPdf) { note('no marked original in', work); return }
+  const strategy = strategiesFor(meta, lang)[0], theorems = theoremEnvs(files), { em } = PARAMS[lang]
+  const g = genericType({ paper, files, translated, lang, fonts, probe, sizes, oLog })
+  const cjk = DESIGN[g.script].cjk, lo = readLines(oLog)
+  // a unit's leading × the paper's (CJK) or × its size's (an alphabet) as \\axtlead@<unit> takes it, × the font size
+  const factors = leads => new Map([...leads].filter(([i]) => lo.get(i)?.size).map(([i, l]) => [i, (l * lo.get(i).bs) / lo.get(i).size]))
+  const optsOf = (x, leads) => ({ ...genericOpts(x, { strategy, fonts, em, theorems, paper, translated }), leads: factors(leads) })
+  const spread = leads => { const v = [...leads.values()].sort((a, b) => a - b); return v.length ? { p10: v[Math.floor(v.length * 0.1)], median: v[v.length >> 1], p90: v[Math.floor(v.length * 0.9)] } : null }
+  const t1 = performance.now(), leads1 = flowLeads(g.list, g.script, unitHeights(g.list, g.script, g.type), { window, horizon, ahead }), ms1 = performance.now() - t1
+  const r1 = await compile(work, `${key}-1`, paper, files, lockedFiles(paper, translated, optsOf(g, leads1)), { engine: strategy.engine, rerun: true })
+  let second = null
+  if (r1.ok) {
+    const t2 = performance.now(), lines = readLines(r1.log), got = g.list.filter(u => lines.get(u.i))
+    // what the first compile measured at the type's own leading, the knobs solved again from it, and each unit's
+    // measured lines carried to the new knobs by the prediction's change (none where only the leading changed)
+    let o = 0, t = 0
+    for (const u of got) { o += u.lo * u.bs; t += lines.get(u.i).lines * g.type.lead * (cjk ? 1 : g.type.size) * u.bs }
+    const measured = o ? t / o : 1, sizes2 = readSizeProbe(r1.log) ?? sizes
+    const corrected = correctUnits(g.list, g.script, g.type, measured), type = solveType(corrected, g.script, sizes2)
+    const before = unitLines(corrected, g.script, g.type), after = unitLines(corrected, g.script, type)
+    const heights = new Map(got.map(u => [u.i, ((lines.get(u.i).lines * after.get(u.i)) / before.get(u.i)) * (cjk ? 1 : type.size) * u.bs]))
+    second = { type, script: g.script, sizes: sizes2, measured, leads: flowLeads(got, g.script, heights, { window, horizon, ahead }), ms: performance.now() - t2 }
+  }
+  const r2 = second ? await compile(work, `${key}-2`, paper, files, lockedFiles(paper, translated, optsOf(second, second.leads)), { engine: strategy.engine, rerun: true }) : null
+  const r = r2?.ok ? r2 : r1
+  index.failed ??= {}; index.numbers ??= {}
+  delete index.failed[key]
+  if (r.ok) copyFileSync(r.pdf, join(dir, `${key}.pdf`)); else { index.failed[key] = firstError(r.log); rmSync(join(dir, `${key}.pdf`), { force: true }); delete index.numbers[key] }
+  const om = await marksOf(oPdf), orig = heights(units, om, lo)
+  if (r.ok) index.numbers[key] = await numbersFor(units, orig, om, r.pdf, r.log, {
+    window, horizon, ahead, type: (r2?.ok ? second : g).type, leads: spread(r2?.ok ? second.leads : leads1), solveMs: g.ms + ms1 + (second?.ms ?? 0), compiles: r2?.ok ? 2 : 1,
+    first: r1.ok ? { type: g.type, leads: spread(leads1), measured: second?.measured, numbers: await numbersFor(units, orig, om, r1.pdf, r1.log) } : null,
+  })
+  await writeIndex(dir, index)
+  note(key, r.ok, 'first', JSON.stringify(g.type), 'measured', second?.measured?.toFixed(3), 'second', JSON.stringify(second?.type), 'leads', JSON.stringify(index.numbers[key]?.leads), JSON.stringify({ generic: index.numbers.generic?.align?.drift?.median, [key]: index.numbers[key]?.align?.drift?.median }))
 }
 
 /** the page lists the round's papers alone when round.json names them ({ lang: [paper] }): a few at a time, the owner
@@ -310,10 +393,17 @@ function catalog() {
 if (argv.includes('--catalog')) catalog()
 else {
   const [lang, ...ids] = argv.filter(a => !a.startsWith('--'))
-  if (!PARAMS[lang] || !ids.length) { console.error('usage: visual-eval.mjs <lang> <paper>... [--reindex | --generic] | --catalog'); process.exit(2) }
+  if (!PARAMS[lang] || !ids.length) { console.error('usage: visual-eval.mjs <lang> <paper>... [--reindex | --generic | --flow[=<window>[:<horizon>[:<ahead>]]]] | --catalog'); process.exit(2) }
   for (const id of ids) {
     if (argv.includes('--reindex')) { const dir = join(OUT, lang, id); await writeIndex(dir, JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'))) }
     else if (argv.includes('--generic')) await addGeneric(lang, id).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
+    else if (argv.some(a => a.startsWith('--flow'))) {
+      // --flow[=<window>[:<horizon>[:<ahead>]]]: a window of 50 lines by default, kept as `flow`; another as
+      // `flow<window>`, and `a<ahead>` after it when the drift aimed at is ahead of the original
+      const [w, hz, ah = 0] = (argv.find(a => a.startsWith('--flow='))?.slice(7) ?? '50').split(':').map(Number)
+      const key = `${w === 50 ? 'flow' : `flow${w}`}${ah ? `a${ah}` : ''}`
+      await addFlow(lang, id, { window: w, horizon: Number.isFinite(hz) ? hz : Math.max(w, 50), ahead: ah, key }).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
+    }
     else await generate(lang, id).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
   }
   catalog()

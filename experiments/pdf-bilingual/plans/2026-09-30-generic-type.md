@@ -73,3 +73,23 @@ Errors are leave-one-paper-out. The text predictor was crude (every non-CJK char
 ## Progress
 
 - 2026-09-30: direction set; density measured on 34 papers (above).
+- 2026-09-30, step 1, the predictor (`spikes/density.mjs`, checked by `density-check.mjs`):
+  - Widths as TeX sets them, measured once per face (`density-faces.json`: CM, Times, Libertine; Cyrillic in cmr and
+    Tempora), xeCJK's rules measured (an em a character, a mark closed up beside another, a quarter em beside Latin
+    letters and digits, spaces dropped between CJK characters and kept in Korean), atoms by kind, citations by the
+    paper's style (natbib's super or numbers, Nature's classes, the \bibliographystyle, else the .bbl's items).
+  - The ruler is the original's own lines, unit by unit; the font probe (compiled anyway) sets a sample of English in
+    the body face at the body size, which scales the tables to the face the paper has (optical sizes, other faces).
+  - Development set (34 papers), no fitting: median error 0.4–1.5 %, max 1.2–5.2 %. Held out (12 papers per
+    language, 14 drawn evenly from the unused corpus, two too small to score): median 1.2–1.7 %, max 2.9–5.8 %,
+    against a language's mean alone 2.2–6.5 % / 5.4–14.4 %. Gate: median met; max met for German and Russian,
+    not for CJK (5.2–5.8 %, short formula-dense papers). The reader's previews can replace the prediction by
+    measured lines for its final compile, at no cost.
+  - Tried and dropped: the text block's width from the probe as the CJK ruler (the probe's \columnwidth is the page's
+    in classes that switch to two columns later: errors to 14 %); half an em of CJK line-end waste (no better).
+- 2026-09-30, step 2, the generic column (`generic-type.mjs`, `visual-eval.mjs --generic`): one compile, the solve in
+  about 20 ms.
+- 2026-09-30, step 3, roles: the size compensates text that flows — paragraphs, captions, notes, a figure's passage.
+  A line that does not flow (a table cell, a heading) is as tall as its type whatever its length: set smaller it came
+  out shorter than the original's and pulled the pages after it ahead (2608.06701). Tables are held to their
+  original's height, never below 0.85 of their width (FIT_DEF's \axt@fitmin).

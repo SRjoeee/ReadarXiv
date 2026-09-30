@@ -15,13 +15,35 @@ const LIBERTINE = /libertine/i
  *  width against the table's gives the face's own scale — Computer Modern's optical sizes (cmr12 is narrower for its
  *  size than cmr10), a face the tables do not have, a sans-serif body. The probe compiles anyway: nothing is added */
 export const WIDTH_SAMPLE = 'The results show that the proposed method improves the accuracy of the model on all benchmarks, while the training cost remains comparable to that of the baseline. We further analyze the effect of each component, and find that attention contributes most of the gain (see Section 4 and Table 2).'
-/** TeX for the font probe's body: the sample's width, the body size and the column's width, in its log */
-export const WIDTH_PROBE = `\\setbox0\\hbox{\\normalfont\\normalsize ${WIDTH_SAMPLE}}\\typeout{AXT-WIDTH \\the\\wd0 \\space\\csname f@size\\endcsname\\space\\the\\columnwidth}\n`
+/** The sizes of the size probe: an alphabet's range, below the body size (generic-type.mjs DESIGN) */
+export const SIZE_GRID = [0.9, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99]
+/**
+ * TeX for how wide the body face sets below its own size. A face with fixed sizes replaces a size between them by its
+ * nearest: Computer Modern has 9, 10, 10.95 and 12 pt and nothing between, so 0.96 of an 11 pt body came out at 10.95 pt,
+ * its full width, and a translation predicted at the height of the original's ran 7 % long (2608.02785). Its smaller
+ * sizes, and Latin Modern's, are drawn wider for their size. So the sample at each size of the grid, its width against
+ * the body's: the lines a size takes. Their height is the size asked, whatever face comes (\\fontsize sets the leading
+ * from it); a face's em is no measure of its size (Latin Modern's 9 pt design has an em of 9.25 pt). The font probe
+ * compiles anyway; a compile of the translation carries it too, in the faces the translation is set in (Russian's T2A)
+ */
+export const SIZE_PROBE = `\\begingroup\\normalfont\\normalsize\\edef\\axtsb{\\csname f@size\\endcsname}\\setbox0\\hbox{${WIDTH_SAMPLE}}\\edef\\axtsw{\\the\\wd0}${SIZE_GRID.map(f => `\\fontsize{\\fpeval{${f}*\\axtsb}}{12pt}\\selectfont\\setbox0\\hbox{${WIDTH_SAMPLE}}\\typeout{AXT-SIZE ${f} \\the\\wd0 \\space\\axtsw}`).join('')}\\endgroup\n`
+/** TeX for the font probe's body: the sample's width, the body size and the column's width, then the sizes (SIZE_PROBE) */
+export const WIDTH_PROBE = `\\setbox0\\hbox{\\normalfont\\normalsize ${WIDTH_SAMPLE}}\\typeout{AXT-WIDTH \\the\\wd0 \\space\\csname f@size\\endcsname\\space\\the\\columnwidth}\n${SIZE_PROBE}`
 /** what WIDTH_PROBE wrote: the sample's width in pt, the body size in pt, the column's width in pt; or null */
 export function readWidthProbe(log) {
   // a box's width then a number: TeX takes the space after the width's last digit as the end of the number
   const m = /^AXT-WIDTH ([\d.]+)pt\s*([\d.]+)\s+([\d.]+)pt/m.exec(log ?? '')
   return m ? { wd: Number(m[1]), size: Number(m[2]), columnwidth: Number(m[3]) } : null
+}
+/** what SIZE_PROBE wrote: each size asked, as { size, h } — the size against the body's and the sample's width against
+ *  the body's — smallest first, the body's own last; or null */
+export function readSizeProbe(log) {
+  const out = []
+  for (const m of (log ?? '').matchAll(/^AXT-SIZE ([\d.]+) ([\d.]+)pt\s*([\d.]+)pt/gm)) {
+    const size = Number(m[1]), h = Number(m[2]) / Number(m[3])
+    if (size > 0 && size < 1 && h > 0) out.push({ size, h })
+  }
+  return out.length ? [...out.sort((a, b) => a.size - b.size), { size: 1, h: 1 }] : null
 }
 
 // a face scaled by k, made once per face and k
@@ -224,7 +246,7 @@ const median = xs => { const s = xs.filter(Number.isFinite).sort((a, b) => a - b
  * `units` the paper's; `translated` Map index → pieces; `lines` readLines of the original's log; `fonts` the probe's;
  * `probe` the width probe's reading (readWidthProbe), when there is one.
  */
-export function measureUnits({ units, translated, lines, fonts, probe = null, citeStyle = 'numeric', script, geometry = true, cjkWaste = 0 }) {
+export function measureUnits({ units, translated, lines, fonts, probe = null, citeStyle = 'numeric', script }) {
   const faces = facesOf(fonts, probe), ctx = { script, citeStyle }
   const out = []
   units.forEach((u, i) => {
@@ -237,14 +259,5 @@ export function measureUnits({ units, translated, lines, fonts, probe = null, ci
   const own = out.map(x => (x.lo >= 3 && x.wo > 0 ? x.wo / (x.lo - 0.5) : null))
   const all = median(own), byKind = new Map()
   for (const kind of new Set(out.map(x => x.kind))) byKind.set(kind, median(out.map((x, k) => (x.kind === kind ? own[k] : null))))
-  // CJK sets a line to the measure, character by character; the English ruler carries what the English model gets wrong
-  // (a citation's width, inline math's), which a translation half as long no longer cancels. So the ruler is set to the
-  // text block: the column's width in em, from the width probe, over the median English capacity of the body's
-  // paragraphs; roles with a measure of their own (captions, lists, notes) keep their ruler's proportion to the body's
-  let f = 1
-  if (geometry && CJK_SCRIPTS.has(script) && probe?.columnwidth && probe?.size) {
-    const body = out.map((x, k) => (x.kind === 'para' ? own[k] : null)).filter(Number.isFinite)
-    if (body.length >= 3) f = Math.min(1.15, Math.max(0.85, probe.columnwidth / probe.size / median(body)))
-  }
-  return out.map((x, k) => ({ ...x, cap: (own[k] ?? byKind.get(x.kind) ?? all) * f - cjkWaste, width: ({ scale = 1, track = 0 } = {}) => x.a * scale + x.g * track + x.c })).filter(x => x.cap > 0)
+  return out.map((x, k) => ({ ...x, cap: own[k] ?? byKind.get(x.kind) ?? all, width: ({ scale = 1, track = 0 } = {}) => x.a * scale + x.g * track + x.c })).filter(x => x.cap)
 }

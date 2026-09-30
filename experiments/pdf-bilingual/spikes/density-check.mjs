@@ -58,8 +58,8 @@ export async function loadPapers(dirs) {
 /** predicted lines of each unit's translation: its width over the capacity of the original's own lines (the unit's
  *  when it has three or more, else the median of its paper's units of its kind, else of all) */
 export function predict(p, { variant = 'full' } = {}) {
-  if (['full', 'tables', 'probe', 'waste'].includes(variant)) {
-    return measureUnits({ units: p.paperUnits, translated: p.byIndex, lines: p.Lo, fonts: p.fonts, probe: variant === 'tables' ? null : p.width, citeStyle: p.citeStyle, script: SCRIPT[p.lang], geometry: variant !== 'probe', cjkWaste: variant === 'waste' ? 0.5 : 0 })
+  if (variant === 'full' || variant === 'tables') {
+    return measureUnits({ units: p.paperUnits, translated: p.byIndex, lines: p.Lo, fonts: p.fonts, probe: variant === 'tables' ? null : p.width, citeStyle: p.citeStyle, script: SCRIPT[p.lang] })
       .filter(x => p.Lt.get(x.i)).map(x => ({ ...x, lt: p.Lt.get(x.i).lines, pred: linesAt(x.width(), x.cap) }))
   }
   const faces = facesOf(p.fonts), ctx = { script: SCRIPT[p.lang], citeStyle: p.citeStyle }

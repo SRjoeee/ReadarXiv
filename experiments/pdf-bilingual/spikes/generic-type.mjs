@@ -6,12 +6,13 @@ import { cjkType } from './lock.mjs'
 import { linesAt } from './density.mjs'
 
 const CJK_DESIGN = (lead, range) => ({ cjk: true, base: { lead, track: 0, scale: 1 }, lead: range, track: [0, 0.05], scale: [0.92, 1] })
-const ALPHABET = { cjk: false, size: [0.93, 1], lead: [0.95, 1.1] }
+const ALPHABET = { cjk: false, size: [0.9, 1], lead: [0.95, 1.1] }
 /**
  * Per writing system, as FIT had them (lock.mjs CJK_RANGES, visual-eval-lib.mjs FIT) so that the generic column
  * differs from FIT only in how it finds the type: CJK — leading × the paper's own (Chinese from its reader's 1.3,
  * Japanese and Korean from the paper's), tracking between CJK characters in em, the CJK face's scale; alphabets — the
- * size of the translated text, then its leading × the paper's.
+ * size of the translated text, then its leading × the paper's. An alphabet's floor is the size a class sets as \\small
+ * below a 10 pt body (9 pt): where a face has fixed sizes, the size below 10 pt is 9, and FIT's 0.93 came out at it.
  */
 export const DESIGN = {
   Hans: CJK_DESIGN(1.3, [1.2, 1.45]),
@@ -26,34 +27,91 @@ export const DESIGN = {
  * The translation's predicted height over the original's, at a type: each unit's predicted lines — its width at the
  * type over its ruler's capacity (an alphabet set smaller takes more to a line) — at its leading, over its original's
  * lines at the paper's. `units`: { lo, bs, cap, width(type) } — the original's lines and leading, the capacity of its
- * lines in em, the translation's width in em (density.mjs).
+ * lines in em, the translation's width in em (density.mjs). An alphabet's type: its size, how wide the face sets there
+ * against the body (`h`, the size probe's; the size itself for a face that only scales), its leading.
  */
 export function heightRatio(units, script, type) {
   const design = DESIGN[script]
   let o = 0, t = 0
-  for (const u of units) {
-    o += u.lo * u.bs
-    t += design.cjk
-      ? linesAt(u.width(type), u.cap) * type.lead * u.bs
-      : linesAt(u.width(type), u.cap / type.size) * type.lead * type.size * u.bs
-  }
+  for (const u of units) { o += u.lo * u.bs; t += heightAt(u, design, type) * type.lead }
   return o ? t / o : 1
 }
+// a unit's predicted height at a type, at leading one: its lines × its size (an alphabet's) × the paper's leading
+const heightAt = (u, design, type) => (design.cjk ? linesAt(u.width(type), u.cap) * u.bs : linesAt(u.width(type) * (type.h ?? type.size), u.cap) * type.size * u.bs)
+/** each unit's predicted height at a type and leading one, by its index: what flowLeads takes from a prediction */
+export const unitHeights = (units, script, type) => new Map(units.map(u => [u.i, heightAt(u, DESIGN[script], type)]))
+/** each unit's predicted lines at a type, by its index */
+export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, DESIGN[script].cjk ? linesAt(u.width(type), u.cap) : linesAt(u.width(type) * (type.h ?? type.size), u.cap)]))
+
+/**
+ * The leading along the paper, unit by unit: the one that makes the translation as tall as the original over the
+ * stretch of `window` of the original's lines around the unit (the unit's middle in the middle), within the design's
+ * range. One type for the whole paper keeps its height, not its places: a translation's density changes along a
+ * paper (a section of related work runs longer than one of proofs), each stretch keeps what the one before it lost,
+ * and at the end of the main text 2608.09038 stood a third of a column late — its references pushed onto a page of
+ * their own, two pages added. Over a window of about a column the translation keeps to the original's flow; over the
+ * whole paper it is one leading again (window Infinity). Neighbours share most of their window, so their leading
+ * differs little. Where the range stops it — Japanese and Korean set no tighter than the paper's own leading — a stretch
+ * that runs long stays long, and the stretch after it, short, would be set looser all the same: 2608.18090's Korean
+ * came out 0.12 column late where one leading for all had kept it within 0.01. So the drift the leading has left so far
+ * is taken back over the next `horizon` lines (the window's own length unless given), and a stretch after one that
+ * could not keep up is set no looser than that allows. A window of 0 is each unit on its own: its original's height
+ * within the range, what the range stopped taken back by the units after it.
+ * `ahead`, in lines: the drift aimed at is that far ahead of the original, not level with it. Text that runs even a
+ * little long pushes what cannot break to the next column — a figure set here ([H]), the last page before a forced
+ * break (2608.06233: ten points too many before an [H] figure moved it on, and every page after it half a column late);
+ * text a little short leaves a little white space. The lead is kept, not grown: it costs no page.
+ * `heights`: Map(unit index → the translation's height at leading one), from unitHeights or a compile's lines. The
+ * leading is × the paper's for CJK, × the size's for an alphabet, as the type's is
+ */
+export function flowLeads(units, script, heights, { window = 50, horizon = window, ahead = 0 } = {}) {
+  const design = DESIGN[script]
+  const list = units.filter(u => heights.get(u.i) > 0).sort((a, b) => a.i - b.i)
+  const bs = [...list.map(u => u.bs)].sort((a, b) => a - b)[list.length >> 1] ?? 12, half = (window * bs) / 2, back = horizon * bs, lead = ahead * bs
+  let at = 0
+  const mid = list.map(u => { const m = at + (u.lo * u.bs) / 2; at += u.lo * u.bs; return m })
+  const out = new Map()
+  let lo = 0, hi = 0, o = 0, t = 0, drift = 0
+  for (let k = 0; k < list.length; k++) {
+    for (; hi < list.length && mid[hi] <= mid[k] + half; hi++) { o += list[hi].lo * list[hi].bs; t += heights.get(list[hi].i) }
+    for (; mid[lo] < mid[k] - half; lo++) { o -= list[lo].lo * list[lo].bs; t -= heights.get(list[lo].i) }
+    const x = clamp((o / t) * (back > 0 && back < Infinity ? 1 - (drift + lead) / back : 1), design.lead)
+    out.set(list[k].i, x)
+    drift += heights.get(list[k].i) * x - list[k].lo * list[k].bs
+  }
+  return out
+}
+
+// a translation that runs long pushes floats and forced page breaks to later pages (2608.09038 gained two pages when
+// its main text ran a third of a column long); one that runs short leaves white space at a column's end. Of two types
+// that miss, the one that runs short
+const LONG = 2
+// a face without a size probe: every size in the range, as wide as its size
+const scalable = ([lo, hi]) => Array.from({ length: Math.round((hi - lo) / 0.005) + 1 }, (_, k) => { const size = Number((lo + k * 0.005).toFixed(4)); return { size, h: size } })
+const clamp = (x, [lo, hi]) => Math.min(hi, Math.max(lo, x))
 
 /**
  * The type for a translation. CJK: the knobs share the change as lock.mjs cjkType shares it, and the share is found by
  * bisection so that the predicted ratio is one — the line breaks each type moves are in the prediction, as FIT's second
- * trial took them up. Alphabets: FIT's order — the size from the ratio at the paper's type, the leading from the ratio
- * at that size — with no per-unit nudge. Out of reach, the knobs stay at their ends; `ratio` says where it lands.
+ * trial took them up. Alphabets: a size the face has (`sizes`, density.mjs readSizeProbe; without it, any), each with
+ * the leading that brings the ratio to one within its range; the size whose ratio comes nearest, a long one counting
+ * LONG times a short one, and of those that reach it the one that keeps the paper's leading — FIT's order, the size
+ * first, where the face allows it. No per-unit nudge. Out of reach, the knobs stay at their ends; `ratio` says where it
+ * lands.
  */
-export function solveType(units, script) {
+export function solveType(units, script, sizes = null) {
   const design = DESIGN[script]
   if (!design.cjk) {
-    const r0 = heightRatio(units, script, { size: 1, lead: 1 })
-    const size = Math.min(design.size[1], Math.max(design.size[0], Math.sqrt(1 / r0)))
-    const r1 = heightRatio(units, script, { size, lead: 1 })
-    const lead = Math.min(design.lead[1], Math.max(design.lead[0], 1 / r1))
-    return { size, lead, ratio: heightRatio(units, script, { size, lead }) }
+    let best = null
+    for (const { size, h } of (sizes ?? scalable(design.size)).filter(p => p.size >= design.size[0] - 1e-9 && p.size <= design.size[1] + 1e-9)) {
+      // the height is proportional to the leading: the one that reaches one, held to its range
+      const lead = clamp(1 / heightRatio(units, script, { size, h, lead: 1 }), design.lead)
+      const ratio = heightRatio(units, script, { size, h, lead })
+      const cost = 10 * (ratio > 1 ? LONG : 1) * Math.abs(Math.log(ratio)) + Math.abs(Math.log(lead))
+      if (!best || cost < best.cost) best = { size, h, lead, ratio, cost }
+    }
+    const { cost, ...type } = best
+    return type
   }
   const ranges = { lead: design.lead, track: design.track, scale: design.scale }
   const at = x => { const t = cjkType(Math.exp(x), design.base, ranges); return { lead: t.lead, track: t.track, scale: t.scale } }
@@ -66,4 +124,17 @@ export function solveType(units, script) {
   for (let k = 0; k < 40 && hi - lo > 1e-6; k++) { const mid = (lo + hi) / 2; if (f(mid) < 1) lo = mid; else hi = mid }
   const type = at((lo + hi) / 2)
   return { ...type, ratio: heightRatio(units, script, type) }
+}
+
+/**
+ * The prediction set right by a measurement (plans/2026-09-30-generic-type.md, step 4): a compile at `type` came out
+ * `measured` times the original's height (the reader's previews compile anyway, and their line probes say it). Every
+ * unit's width is scaled by the one factor that makes the prediction at that type agree — the paper's density as
+ * measured, where the text alone could only estimate it — and solveType on the result gives the final compile's type.
+ */
+export function correctUnits(units, script, type, measured) {
+  const scaled = k => units.map(u => ({ ...u, width: t => k * u.width(t) }))
+  let lo = Math.log(0.5), hi = Math.log(2)
+  for (let n = 0; n < 50 && hi - lo > 1e-9; n++) { const mid = (lo + hi) / 2; if (heightRatio(scaled(Math.exp(mid)), script, type) < measured) lo = mid; else hi = mid }
+  return scaled(Math.exp((lo + hi) / 2))
 }

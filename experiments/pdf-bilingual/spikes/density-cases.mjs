@@ -1,7 +1,7 @@
 // Cases for density.mjs: widths as TeX sets them (measured 2026-09-30 with the faces and xeCJK settings the reader uses:
 // scratch probes under pdfLaTeX T1/T2A and XeLaTeX + xeCJK, 10 pt), atoms, lines. Exits non-zero on a failure.
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/density-cases.mjs
-import { atomWidth, citeStyleOf, facesOf, linesAt, piecesWidth, readWidthProbe, textWidth, WIDTH_PROBE, WIDTH_SAMPLE } from './density.mjs'
+import { atomWidth, citeStyleOf, facesOf, linesAt, piecesWidth, readSizeProbe, readWidthProbe, SIZE_PROBE, textWidth, WIDTH_PROBE, WIDTH_SAMPLE } from './density.mjs'
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
@@ -20,6 +20,15 @@ check('the width probe typesets the sample in the body face at the body size', /
 const narrow = facesOf({ rm: 'cmr' }, { wd: 0.9 * 12 * sample, size: 12 })
 check('a face 10 % narrower than the table: its widths and spaces scaled', near(narrow.latin.w.a, 0.9 * cm.latin.w.a, 1e-6) && near(narrow.latin.space, 0.9 * cm.latin.space, 1e-6) && near(narrow.cyrillic.w['м'], 0.9 * cm.cyrillic.w['м'], 1e-6))
 check('no probe, the table as it is', facesOf({ rm: 'cmr' }, null).latin === cm.latin)
+
+// how wide the body face sets below its own size (SIZE_PROBE): Computer Modern at 10.95 pt has 10 pt below it and nothing
+// between, so 0.9 and 0.93 of the body both come out at 10 pt and 0.96 at the full 10.95; a scalable face as asked
+const fixed = readSizeProbe('AXT-SIZE 0.9 1307.64119pt 1431.86595pt\nAXT-SIZE 0.93 1307.64119pt 1431.86595pt\nAXT-SIZE 0.96 1431.86595pt 1431.86595pt')
+check('size probe: every size asked, with how wide the face set it, and the body\'s own last', fixed?.length === 4 && fixed[0].size === 0.9 && near(fixed[0].h, 10 / 10.95, 1e-4) && near(fixed[1].h, 10 / 10.95, 1e-4) && fixed[2].h === 1 && fixed[3].size === 1 && fixed[3].h === 1, JSON.stringify(fixed))
+const scalable = readSizeProbe('AXT-SIZE 0.95 1118.9558pt 1177.84836pt\nAXT-SIZE 0.9 1060.06334pt 1177.84836pt')
+check('size probe: a scalable face as wide as its size, smallest first', scalable?.length === 3 && scalable[0].size === 0.9 && near(scalable[0].h, 0.9, 1e-4) && near(scalable[1].h, 0.95, 1e-4), JSON.stringify(scalable))
+check('size probe: absent, none', readSizeProbe('x\nAXT-WIDTH 1071.0pt 12 241.0pt') === null)
+check('the size probe sets the sample in the body face at each size it asks', /\\normalfont\\normalsize/.test(SIZE_PROBE) && /\\fontsize\{\\fpeval\{0\.9\*/.test(SIZE_PROBE) && SIZE_PROBE.includes(WIDTH_SAMPLE.slice(0, 20)) && /AXT-SIZE 0\.9 /.test(SIZE_PROBE))
 
 // Latin and Cyrillic: the face's advances and its interword space
 check('Latin text in Times', near(textWidth('abc', times, { script: 'Latn' }), times.latin.w.a + times.latin.w.b + times.latin.w.c))
