@@ -78,6 +78,32 @@ export const LINES_TEX = PARA_END_TEX + String.raw`\makeatletter
 export const unitLeadTex = em => engineUnitLeadTex(`${em}\\dimexpr\\f@size pt\\relax`)
 
 /**
+ * Each float waits for the page and column its original was set on (the owner, 2026-09-30: figures on the pages they
+ * are on in the original, as far as LaTeX's own rules allow). \axtfloatat{unit}, in a caption (the caption unit's mark),
+ * notes for the float being set — its box, \@currbox — the page and column \axt@fp@<unit> gives ({page} {column},
+ * 1-based and 0-based, the original's). Wherever LaTeX places a float — in the column it was met in, at the top of the
+ * next, on a page of floats, a double float at a page's top — it asks \@testwrongwidth first; a float not yet at its
+ * page and column is reported as not fitting, and LaTeX keeps it deferred, and every later float of its kind behind
+ * it, as it keeps their order. Not at a forced break (\newpage's -10000, \FloatBarrier's), not while \clearpage sends
+ * every float out, and never more than two pages: a translation that far ahead would pile floats up. The note is
+ * cleared as each float's box is reset, so that a box a later float reuses carries none of it, and taken only inside a
+ * float's box (\@floatboxreset's group): a \captionof outside one has no float of its own
+ */
+export const FLOAT_TEX = String.raw`\makeatletter
+\newif\ifaxt@early\newif\ifaxt@infloat\newcount\axt@pg
+\protected\def\axtfloatat#1{\ifaxt@infloat\ifcsname axt@fp@#1\endcsname\expandafter\xdef\csname axt@fb@\number\@currbox\endcsname{\csname axt@fp@#1\endcsname}\fi\fi}
+\def\axt@early#1{\global\axt@earlyfalse\ifnum\outputpenalty=-\@M\else\ifcsname axt@fb@\number#1\endcsname\expandafter\expandafter\expandafter\axt@earlyat\csname axt@fb@\number#1\endcsname\relax\fi\fi}
+\def\axt@earlyat#1 #2\relax{\axt@pg=\ReadonlyShipoutCounter\advance\axt@pg\@ne
+  \ifnum#1>\axt@pg\relax\ifnum#1>\numexpr\axt@pg+2\relax\else\global\axt@earlytrue\fi
+  \else\ifnum#1=\axt@pg\relax\if@twocolumn\if@firstcolumn\ifnum#2>\z@\global\axt@earlytrue\fi\fi\fi\fi\fi}
+\def\axt@notearly#1{\global\axt@earlyfalse}
+\AtBeginDocument{\let\axt@testwrongwidth\@testwrongwidth\def\@testwrongwidth#1{\axt@testwrongwidth#1\if@test\else\axt@early#1\ifaxt@early\global\@testtrue\fi\fi}%
+  \let\axt@doclearpage\@doclearpage\def\@doclearpage{\let\axt@early\axt@notearly\axt@doclearpage}%
+  \g@addto@macro\@floatboxreset{\axt@infloattrue\expandafter\global\expandafter\let\csname axt@fb@\number\@currbox\endcsname\@undefined}}
+\makeatother
+`
+
+/**
  * \\axtsizein{<unit>}: a translated table cell, heading or figure text at the same factor, a declaration that its own group —
  * the cell, the heading's — ends, and nothing in a PDF bookmark (plans/2026-09-30-generic-type.md, step 3).
  * A unit set smaller: \\axtsize@<unit>, when defined, scales the font size (and so the unit's leading, which is × the
@@ -193,7 +219,7 @@ export function originalProbeFiles({ project, units }, theorems) {
  *  unit at the leading `leads` gives it, × its size (fitLeads). `h`: service H's rules (SYNC_TEX), with `columns` the
  *  original's column heights (readColumns) and float heights (readFloats), and tables held to their original's height
  *  too (FIT_DEF) */
-export function lockedFiles({ fsys, meta, project, units }, translated, { strategy, fonts, em, leads = new Map(), sizes = new Map(), targets = new Map(), theorems, sync = true, lead = null, h = false, columns = new Map(), floats = new Map(), fitHeight = false, fitMin = 0 }) {
+export function lockedFiles({ fsys, meta, project, units }, translated, { strategy, fonts, em, leads = new Map(), sizes = new Map(), targets = new Map(), theorems, sync = true, lead = null, h = false, columns = new Map(), floats = new Map(), fitHeight = false, fitMin = 0, floatsAt = new Map() }) {
   const index = new Map(units.map((u, i) => [u, i]))
   const base = markUnits(units, translated)
   // a unit with no mark — a table cell, a heading, a figure's text — takes its size, when it has one, as a declaration
@@ -201,7 +227,8 @@ export function lockedFiles({ fsys, meta, project, units }, translated, { strate
   // which is \\noalign and must follow the row's end (2608.06701), so that every role of the translation has one type
   const ROLES = new Set(['cell', 'heading', 'figure'])
   // (a line of names fitted to its box, AUTHOR_WIDE, carries nothing else: the author block keeps the class's type)
-  const mark = u => { const m = base(u), i = index.get(u); if (m?.whole) return m; if (!m) return sizes.has(i) && ROLES.has(u.kind) && !u.front ? { start: `\\axtsizein{${i}}`, end: '' } : m; return { ...m, before: `${sync ? `\\axtsync{${i}}` : ''}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}` } }
+  // a caption's float waits for its original's page and column (FLOAT_TEX), when `floatsAt` gives them
+  const mark = u => { const m = base(u), i = index.get(u); if (m?.whole) return m; if (!m) return sizes.has(i) && ROLES.has(u.kind) && !u.front ? { start: `\\axtsizein{${i}}`, end: '' } : m; return { ...m, before: `${sync ? `\\axtsync{${i}}` : ''}${floatsAt.has(i) ? `\\axtfloatat{${i}}` : ''}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}` } }
   const files = patch(project, new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, lineBreaks(u, pieces)])), { mark })
   let main = latin1(files.get(project.main))
   const at = main.search(/\\begin\s*\{document\}/)
@@ -212,11 +239,12 @@ export function lockedFiles({ fsys, meta, project, units }, translated, { strate
     ...[...targets].map(([i, t]) => `\\expandafter\\def\\csname axt@t@${i}\\endcsname{{${t.page}}{${t.col}}{${t.total}pt}}`),
     ...[...leads].map(([i, f]) => `\\expandafter\\def\\csname axtlead@${i}\\endcsname{${f.toFixed(4)}}`),
     ...[...sizes].map(([i, f]) => `\\expandafter\\def\\csname axtsize@${i}\\endcsname{${f.toFixed(4)}}`),
+    ...[...floatsAt].map(([i, f]) => `\\expandafter\\def\\csname axt@fp@${i}\\endcsname{${f.page} ${f.col}}`),
     // a table no taller than its original, never below fitMin of its width (FIT_DEF): the generic type's rule for tables
     ...(fitHeight && !h ? ['\\axtfitheighttrue', `\\expandafter\\def\\csname axt@fitmin\\endcsname{${fitMin}}`] : []),
     ...(h ? ['\\csname axt@htrue\\endcsname\\axtfitheighttrue\\axtfirstpapertrue', ...[...columns].map(([k, v]) => `\\expandafter\\def\\csname axt@c@${k}\\endcsname{${v}pt}`), ...[...floats].map(([k, v]) => `\\expandafter\\def\\csname axt@fh@${k}\\endcsname{${v}pt}`)] : []),
   ].join('\n')
-  main = MARK_DEF + FIT_DEF + BALANCE_DEF + LINES_TEX + (sync ? SYNC_TEX : '') + (lead ? engineUnitLeadTex(lead) : unitLeadTex(em)) + (sizes.size ? SIZE_TEX : '') + (sync ? `\\axtsyncpoints{${theorems.join(',')}}\n` : '') + table + '\n' + main
+  main = MARK_DEF + FIT_DEF + BALANCE_DEF + LINES_TEX + (sync ? SYNC_TEX : '') + (lead ? engineUnitLeadTex(lead) : unitLeadTex(em)) + (sizes.size ? SIZE_TEX : '') + (floatsAt.size ? FLOAT_TEX : '') + (sync ? `\\axtsyncpoints{${theorems.join(',')}}\n` : '') + table + '\n' + main
   files.set(project.main, latin1Bytes(main))
   if (strategy.xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(files.get(f) ?? fsys.read(f)), s = stripPdftexOption(t); if (s !== t) files.set(f, latin1Bytes(s)) }
   for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(files.get(f) ?? fsys.read(f)), u = localizeNames(t); if (u !== t) files.set(f, latin1Bytes(u)) }

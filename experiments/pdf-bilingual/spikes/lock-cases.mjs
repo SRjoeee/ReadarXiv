@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { FIT_DEF, latin1Bytes, MARK_DEF, NO_OVERFLOW } from '../../../src/pdf-reader/engine/latex-front.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/live.mjs'
 import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
-import { cjkType, fitLeads, heights, LINES_TEX, lockedFiles, marksOf, readColumns, readFloats, readLines, readLockEvents, readTargets, shrinkSizes, SIZE_TEX, SYNC_TEX, tightenedLeads, unitLeadTex } from './lock.mjs'
+import { cjkType, fitLeads, FLOAT_TEX, heights, LINES_TEX, lockedFiles, marksOf, readColumns, readFloats, readLines, readLockEvents, readTargets, shrinkSizes, SIZE_TEX, SYNC_TEX, tightenedLeads, unitLeadTex } from './lock.mjs'
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
@@ -280,5 +280,43 @@ check('a line of names wider than the line, in a box that does not wrap: broken 
 check('a line of names that fits is as it was', Math.abs(ws - wso) < 0.01, JSON.stringify([ws, wso]))
 check('names measured once count once', wideLog.match(/^WIDE counter (\d+)/m)?.[1] === '1', wideLog.match(/^WIDE counter .*/m)?.[0])
 check('wide names raise no TeX error', !/^! /m.test(wideLog), (wideLog.match(/^! .*/m) ?? [''])[0])
+// a float waits for its original's page and column (FLOAT_TEX): a figure the translation reaches a page early is held
+// until the page the original set it on, a column early until that column; one already there goes as LaTeX would;
+// \clearpage still sends every float out, and a float is never held more than two pages
+const para = n => `${'Words of a paragraph that fills the page. '.repeat(40)}\\par\n`.repeat(n)
+const floatDoc = cols => `\\documentclass${cols === 2 ? '[twocolumn]' : ''}{article}\\usepackage[paperheight=6in,paperwidth=5in,margin=0.5in]{geometry}
+${FLOAT_TEX}\\makeatletter\\expandafter\\def\\csname axt@fp@1\\endcsname{2 0}\\expandafter\\def\\csname axt@fp@2\\endcsname{1 0}\\expandafter\\def\\csname axt@fp@3\\endcsname{9 0}\\expandafter\\def\\csname axt@fp@4\\endcsname{${cols === 2 ? '1 1' : '1 0'}}\\makeatother
+\\begin{document}
+Start.
+\\begin{figure}[t]\\centering\\rule{2cm}{1cm}\\caption{\\axtfloatat{1}\\leavevmode\\axtmark{1s}Held to page two.}\\end{figure}
+\\begin{table}[t]\\centering\\rule{2cm}{1cm}\\caption{\\axtfloatat{2}\\leavevmode\\axtmark{2s}Already on its page.}\\end{table}
+${cols === 2 ? '\\begin{table}[t]\\centering\\rule{2cm}{1cm}\\caption{\\axtfloatat{4}\\leavevmode\\axtmark{4s}Held to the right column.}\\end{table}' : ''}
+${para(1)}
+\\begin{table}[t]\\centering\\rule{2cm}{1cm}\\caption{\\axtfloatat{3}\\leavevmode\\axtmark{3s}Far ahead, not held.}\\end{table}
+${para(4)}
+\\end{document}
+`
+const MARKS = `\\protected\\def\\axtmark#1{\\pdfdest name{axt-#1} xyz\\relax}\n`
+const floatPages = async (name, cols) => { tex(name, MARKS + floatDoc(cols)); return marksOf(join(dir, `${name}.pdf`)) }
+const f1 = await floatPages('float1', 1)
+const pg = (m, k) => m.marks.get(`${k}s`)?.page, colOf = (m, k) => (m.marks.get(`${k}s`)?.x >= m.width / 2 ? 1 : 0)
+check('a float held to its original\'s page', pg(f1, 1) === 1, JSON.stringify([...f1.marks]))
+check('a float of another kind already on its page goes as LaTeX would', pg(f1, 2) === 0, JSON.stringify([pg(f1, 2)]))
+check('a float whose page is more than two ahead is not held', pg(f1, 3) <= 1, JSON.stringify([pg(f1, 3)]))
+const f2 = await floatPages('float2', 2)
+check('in two columns, a float held to its original\'s column', pg(f2, 4) === 0 && colOf(f2, 4) === 1 && pg(f2, 1) === 1, JSON.stringify([...f2.marks]))
+const clearLog = tex('floatclear', MARKS + floatDoc(1).replace(`${para(1)}\n\\begin{table}`, '\\clearpage\n\\leavevmode\\axtmark{9s}After the break.\n\\begin{table}'))
+const fc = await marksOf(join(dir, 'floatclear.pdf'))
+check('\\clearpage sends a held float out before the text after the break', pg(fc, 1) < pg(fc, 9) && !/^! /m.test(clearLog), JSON.stringify([...fc.marks]))
+// a caption outside a float (\captionof in a minipage) notes nothing: the float after it goes as LaTeX would
+const capofDoc = `\\documentclass{article}\\usepackage{caption}${FLOAT_TEX}\\makeatletter\\expandafter\\def\\csname axt@fp@5\\endcsname{2 0}\\makeatother
+\\begin{document}\\begin{minipage}{\\linewidth}\\centering\\rule{2cm}{1cm}\\captionof{figure}{\\axtfloatat{5}Not a float.}\\end{minipage}
+\\begin{figure}[t]\\centering\\rule{2cm}{1cm}\\caption{\\leavevmode\\axtmark{6s}A float with no note of its own.}\\end{figure}
+${para(3)}\\end{document}
+`
+const capofLog = tex('capof', MARKS + capofDoc)
+const co = await marksOf(join(dir, 'capof.pdf'))
+check('a caption outside a float holds no float, and raises no TeX error', pg(co, 6) === 0 && !/^! /m.test(capofLog), JSON.stringify([...co.marks, (capofLog.match(/^! .*/m) ?? [''])[0]]))
+check('held floats raise no TeX error', !/^! /m.test(tex('float1', MARKS + floatDoc(1)) + tex('float2', MARKS + floatDoc(2))))
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

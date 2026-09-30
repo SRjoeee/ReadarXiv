@@ -229,6 +229,7 @@ class Builder {
   flush() {
     const u = this.cur; this.cur = null
     if (!u) return
+    u.pieces = keepAddresses(u.pieces)
     // trim placeholders and whitespace at both ends out of the unit: they stay in the source untouched
     const letters = u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
     if ((letters.match(/\p{L}/gu) ?? []).length < 2) return
@@ -237,6 +238,38 @@ class Builder {
     if (this.depth !== undefined) u.depth = this.depth
     this.units.push(u)
   }
+}
+
+// an e-mail address, and the domain after a list of names in braces
+const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, HAS_EMAIL = new RegExp(EMAIL.source)
+const AT_DOMAIN = /^@[\w-]+(?:\.[\w-]+)+/
+/** An address is not prose: an e-mail in a unit's text (jatin@us.ibm.com), and a list of names in escaped braces with
+ *  its domain ({sl225, samand2, reyhaneh}@illinois.edu), each become a placeholder, kept as the paper has it. Sent as
+ *  text, a machine translation spelled one of 2608.06701's names in katakana and joined the list with the ideographic
+ *  comma */
+function keepAddresses(pieces) {
+  const lists = []
+  for (let k = 0; k < pieces.length; k++) {
+    const p = pieces[k], names = pieces[k + 1], shut = pieces[k + 2], after = pieces[k + 3]
+    const domain = after?.t === 'text' && AT_DOMAIN.exec(after.s)?.[0]
+    if (p.t === 'ph' && p.src === '\\{' && names?.t === 'text' && shut?.t === 'ph' && shut.src === '\\}' && domain) {
+      lists.push({ t: 'ph', src: p.src + names.s + shut.src + domain })
+      if (after.s.length > domain.length) lists.push({ ...after, s: after.s.slice(domain.length) })
+      k += 3
+    } else lists.push(p)
+  }
+  return lists.flatMap(p => {
+    if (p.t !== 'text' || !HAS_EMAIL.test(p.s)) return [p]
+    const out = []
+    let at = 0
+    for (const m of p.s.matchAll(EMAIL)) {
+      if (m.index > at) out.push({ ...p, s: p.s.slice(at, m.index) })
+      out.push({ t: 'ph', src: m[0] })
+      at = m.index + m[0].length
+    }
+    if (at < p.s.length) out.push({ ...p, s: p.s.slice(at) })
+    return out
+  })
 }
 
 /**

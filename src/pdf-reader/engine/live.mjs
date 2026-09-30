@@ -149,7 +149,8 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 //    author block's names and places cut into units (latex-front.mjs); the wire spaced after a period (mt.mjs)
 // 4: IEEEtran's blocks of names and of places each a unit; a translated line of names in a box that does not wrap set
 //    as a paragraph of the line's width (\\axtwide); a table narrower than its original kept at the original's width,
-//    and a tabular* measured at its columns' width before it is fitted (latex-front.mjs FIT_DEF, AUTHOR_WIDE)
+//    and a tabular* measured at its columns' width before it is fitted (latex-front.mjs FIT_DEF, AUTHOR_WIDE); an e-mail
+//    address, and a list of names in braces before its domain, a placeholder (keepAddresses)
 export const PIPELINE_VERSION = '4'
 
 /**

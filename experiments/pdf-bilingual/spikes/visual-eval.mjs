@@ -5,7 +5,7 @@
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>...   generate
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --reindex   render and index existing PDFs
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --generic   add the generic column to generated papers
-//   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --flow[=<window>[:<horizon>[:<ahead>]]]   add the flow variant (a window of 50 lines by default)
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --flow[=<window>[:<horizon>[:<ahead>]]] [--floats]   add the flow variant (a window of 50 lines by default; with --floats each float waits for its original's page)
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs --catalog
 import { execFile, execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -328,7 +328,7 @@ async function addGeneric(lang, id) {
  *  — from the predicted lines for the first compile (the reader's preview), from that compile's measured lines for the
  *  second (the reader's final), its knobs solved again from what the first measured. Two compiles, as the generic
  *  column's. Kept as `key` (numbers and PDF) */
-async function addFlow(lang, id, { window, horizon, ahead = 0, key }) {
+async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, key }) {
   const dir = join(OUT, lang, id), work = join(dir, 'work')
   const t0 = Date.now(), note = (...a) => console.log(`[${lang} ${id} ${Math.round((Date.now() - t0) / 1000)}s]`, ...a)
   const index = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'))
@@ -345,7 +345,10 @@ async function addFlow(lang, id, { window, horizon, ahead = 0, key }) {
   const cjk = DESIGN[g.script].cjk, lo = readLines(oLog)
   // a unit's leading × the paper's (CJK) or × its size's (an alphabet) as \\axtlead@<unit> takes it, × the font size
   const factors = leads => new Map([...leads].filter(([i]) => lo.get(i)?.size).map(([i, l]) => [i, (l * lo.get(i).bs) / lo.get(i).size]))
-  const optsOf = (x, leads) => ({ ...genericOpts(x, { strategy, fonts, em, theorems, paper, translated }), leads: factors(leads) })
+  // with `floats`, each caption's float waits for its original's page and column (lock.mjs FLOAT_TEX)
+  const om0 = floats ? await marksOf(oPdf) : null
+  const floatsAt = new Map(om0 ? units.map((u, i) => [u, i, om0.marks.get(`${i}s`)]).filter(([u, , m]) => u.kind === 'caption' && m).map(([, i, m]) => [i, { page: m.page + 1, col: om0.twoColumn && m.x >= om0.width / 2 ? 1 : 0 }]) : [])
+  const optsOf = (x, leads) => ({ ...genericOpts(x, { strategy, fonts, em, theorems, paper, translated }), leads: factors(leads), floatsAt })
   const spread = leads => { const v = [...leads.values()].sort((a, b) => a - b); return v.length ? { p10: v[Math.floor(v.length * 0.1)], median: v[v.length >> 1], p90: v[Math.floor(v.length * 0.9)] } : null }
   const t1 = performance.now(), leads1 = flowLeads(g.list, g.script, unitHeights(g.list, g.script, g.type), { window, horizon, ahead }), ms1 = performance.now() - t1
   const r1 = await compile(work, `${key}-1`, paper, files, lockedFiles(paper, translated, optsOf(g, leads1)), { engine: strategy.engine, rerun: true })
@@ -406,8 +409,9 @@ else {
       // --flow[=<window>[:<horizon>[:<ahead>]]]: a window of 50 lines by default, kept as `flow`; another as
       // `flow<window>`, and `a<ahead>` after it when the drift aimed at is ahead of the original
       const [w, hz, ah = 0] = (argv.find(a => a.startsWith('--flow='))?.slice(7) ?? '50').split(':').map(Number)
-      const key = `${w === 50 ? 'flow' : `flow${w}`}${ah ? `a${ah}` : ''}`
-      await addFlow(lang, id, { window: w, horizon: Number.isFinite(hz) ? hz : Math.max(w, 50), ahead: ah, key }).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
+      const floats = argv.includes('--floats')
+      const key = `${w === 50 ? 'flow' : `flow${w}`}${ah ? `a${ah}` : ''}${floats ? 'f' : ''}`
+      await addFlow(lang, id, { window: w, horizon: Number.isFinite(hz) ? hz : Math.max(w, 50), ahead: ah, floats, key }).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
     }
     else await generate(lang, id).catch(e => console.error(`[${lang} ${id}] failed:`, e?.stack ?? e))
   }

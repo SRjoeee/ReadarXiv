@@ -132,6 +132,14 @@ describe('a translated line of names that may not fit its box (2608.06701: Japan
     expect(marked('\\documentclass{article}\\author{Alice\\thanks{A note.}}\\begin{document}\\maketitle\nWords.\\end{document}')).not.toMatch(/\\axtwide\{[^}]*\\thanks/)
   })
 
+  it('an address is not prose: a list of names in escaped braces before @, and a plain e-mail, stay as they are', () => {
+    const p = project(IEEE.replace('Somewhere\\\\ Elsewhere', 'Somewhere, \\{sl225, reyhaneh\\}@illinois.edu, or write to jatin@us.ibm.com today'))
+    const text = (p.units as Unit[]).map(textOf).join(' | ')
+    expect(text).not.toMatch(/reyhaneh|sl225|jatin|illinois|ibm/)
+    expect(text).toMatch(/Somewhere/)
+    expect(marked(IEEE.replace('Somewhere\\\\ Elsewhere', 'Somewhere, \\{sl225, reyhaneh\\}@illinois.edu, or write to jatin@us.ibm.com today'))).toContain('\\{sl225, reyhaneh\\}@illinois.edu')
+  })
+
   it('nothing is wrapped where nothing is translated: the original compiles as the paper does', () => {
     const p = project(IEEE)
     expect(new TextDecoder().decode(patch(p, new Map(), { mark: markUnits(p.units) }).get('main.tex'))).not.toContain('\\axtwide')
