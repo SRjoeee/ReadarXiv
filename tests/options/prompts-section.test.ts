@@ -385,6 +385,38 @@ describe('the LLM group, fix round 1 (the review of Task 63)', () => {
     await m.unmount()
   })
 
+  // Codex on #306 (the style editor's Codex 3, carried here): a required field cleared letter by letter kept the letter
+  // the clearing stopped at in the store, however the editor was left
+  const PLAIN = { id: 'p-plain', name: 'Plain', systemPrompt: 'Be brief.', prompt: 'Say it' }
+  const stored = (patches: Config[]) => patches.at(-1)!.prompts.patterns.find(p => p.id === PLAIN.id)!
+
+  it('a name cleared letter by letter is no name: the store goes back to the one the editor opened with, so choosing another prompt leaves that, never the last letter (Codex on #306)', async () => {
+    const patches: Config[] = []
+    const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: PLAIN.id, patterns: [PLAIN] } }, patches }))
+    promptsRow(m.container).click()
+    await m.flush()
+    for (const v of ['Plai', 'Pla', 'Pl', 'P', '']) { type(nameField(m.container), v); await m.flush() }
+    expect(stored(patches).name).toBe('Plain')
+    radios(m.container)[0]!.click()
+    await m.flush()
+    expect([patches.at(-1)!.prompts.promptId, stored(patches).name, m.container.querySelector('.o-prompt input')]).toEqual([Object.values(BUILT_IN_PROMPTS)[0]!.id, 'Plain', null])
+    await m.unmount()
+  })
+
+  it('a message cleared letter by letter is no message: the store goes back to the one the editor opened with, so choosing another prompt leaves that (Codex on #306)', async () => {
+    const patches: Config[] = []
+    const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: PLAIN.id, patterns: [PLAIN] } }, patches }))
+    promptsRow(m.container).click()
+    await m.flush()
+    const message = editable(m.container)[1]!
+    for (const v of ['Say i', 'Say ', 'Sa', 'S', '']) { write(message, v); await m.flush() }
+    expect(stored(patches).prompt).toBe('Say it')
+    radios(m.container)[0]!.click()
+    await m.flush()
+    expect([stored(patches).prompt, stored(patches).name]).toEqual(['Say it', 'Plain'])
+    await m.unmount()
+  })
+
   it('the message\'s error is wired to its field, and an error goes once its field is whole again (items 5 and 6)', async () => {
     const m = await mountElement(h(Harness, { start: { ...LLM, prompts: { promptId: MINE.id, patterns: [MINE] } }, patches: [] }))
     promptsRow(m.container).click()

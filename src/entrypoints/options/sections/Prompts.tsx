@@ -222,7 +222,9 @@ function BuiltInPrompt({ prompt, onCopy }: { prompt: PromptTemplate; onCopy: () 
 /**
  * One's own, written in place: each change stored at once while it holds a name and a message; a draft while it does
  * not. A write carries only the fields changed here — the one just changed, and any changed while the prompt was not
- * whole — never the whole record (fix round 1, item 4)
+ * whole — never the whole record (fix round 1, item 4). A required field emptied is no value: once this editor has
+ * written it, the store goes back to the value it opened with, so that however the editor is left it never keeps the
+ * letter a clearing stopped at (Codex on #306, as the style editor's name)
  */
 function OwnPrompt({ prompt, focus, onFocused, onChange, onDone, onDelete }: {
   prompt: PromptTemplate
@@ -244,6 +246,10 @@ function OwnPrompt({ prompt, focus, onFocused, onChange, onDone, onDelete }: {
   const last = useRef<'system' | 'message'>('message')
   /** the fields changed here and not written yet */
   const unwritten = useRef<PromptWords>({})
+  /** the two required fields as stored when the editor opened, and whether this editor has written each since: one it
+   *  has written goes back to its opening value as it is emptied */
+  const [opened] = useState(() => ({ name: prompt.name, prompt: prompt.prompt }))
+  const wrote = useRef({ name: false, prompt: false })
   const whole = name.trim() !== '' && message.trim() !== ''
   useEffect(() => (whole ? undefined : drafts.hold()), [whole])
   useEffect(() => {
@@ -254,9 +260,20 @@ function OwnPrompt({ prompt, focus, onFocused, onChange, onDone, onDelete }: {
   /** `words` changed; `now` the name and the message as they read after it */
   const write = (words: PromptWords, now: { name: string; message: string }) => {
     unwritten.current = { ...unwritten.current, ...words }
-    if (!now.name.trim() || !now.message.trim()) return
+    if (!now.name.trim() || !now.message.trim()) {
+      const back: PromptWords = {}
+      if (words.name !== undefined && !now.name.trim() && wrote.current.name) back.name = opened.name
+      if (words.prompt !== undefined && !now.message.trim() && wrote.current.prompt) back.prompt = opened.prompt
+      if (back.name === undefined && back.prompt === undefined) return
+      if (back.name !== undefined) wrote.current.name = false
+      if (back.prompt !== undefined) wrote.current.prompt = false
+      onChange(back)
+      return
+    }
     const next = unwritten.current
     unwritten.current = {}
+    if (next.name !== undefined) wrote.current.name = true
+    if (next.prompt !== undefined) wrote.current.prompt = true
     onChange(next.name === undefined ? next : { ...next, name: next.name.trim() })
   }
   // an error goes as its field is whole again, not only at the next Done (fix round 1, item 6)
