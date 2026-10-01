@@ -136,7 +136,9 @@
    "blocks": 0.843,
    "floatsPage": 0.98,
    "floatsNear": 0.838,
-   "overfull": 206
+   "overfull": 206,
+   "standing": 19,
+   "measured": 2724
   },
   "unseen": {
    "papers": 13,
@@ -149,7 +151,9 @@
    "blocks": 0.645,
    "floatsPage": 0.967,
    "floatsNear": 0.862,
-   "overfull": 235
+   "overfull": 235,
+   "standing": 11,
+   "measured": 1139
   },
   "newLanguage": {
    "papers": 9,
@@ -162,7 +166,9 @@
    "blocks": 0.8,
    "floatsPage": 0.969,
    "floatsNear": 0.938,
-   "overfull": 18
+   "overfull": 18,
+   "standing": 17,
+   "measured": 704
   },
   "twoLayouts": {
    "papers": 1,
@@ -175,7 +181,9 @@
    "blocks": 0.738,
    "floatsPage": 0.941,
    "floatsNear": 0.765,
-   "overfull": 5
+   "overfull": 5,
+   "standing": 1,
+   "measured": 115
   },
   "fresh": {
    "papers": 40,
@@ -188,7 +196,9 @@
    "blocks": 0.845,
    "floatsPage": 0.888,
    "floatsNear": 0.779,
-   "overfull": 950
+   "overfull": 950,
+   "standing": 29,
+   "measured": 3484
   },
   "aside": {
    "papers": 12,
@@ -201,7 +211,9 @@
    "blocks": 0.809,
    "floatsPage": 0.898,
    "floatsNear": 0.731,
-   "overfull": 0
+   "overfull": 0,
+   "standing": 7,
+   "measured": 1080
   }
  },
  "today": {

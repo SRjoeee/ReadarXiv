@@ -231,7 +231,8 @@ function summary(xs) {
     start: r3(mean(xs.map(x => x.start.median))), startWithin: r3(mean(xs.map(x => x.start.within))), end: r3(mean(xs.map(x => x.end.median))),
     blocks: r3(mean(xs.filter(x => x.blocks.within != null).map(x => x.blocks.within))), floatsPage: r3(fl.n ? fl.page / fl.n : null), floatsNear: r3(fl.n ? fl.near / fl.n : null),
     overfull: xs.reduce((s, x) => s + x.overfull, 0),
-    ...(xs.every(x => x.standing) ? { standing: xs.reduce((s, x) => s + x.standing.n, 0), measured: xs.reduce((s, x) => s + x.standing.of, 0) } : {}),
+    // units standing out where the compiles read their lines (the rule's; today's sets no line probe)
+    ...(xs.every(x => x.standing) && xs.some(x => x.standing.of) ? { standing: xs.reduce((s, x) => s + x.standing.n, 0), measured: xs.reduce((s, x) => s + x.standing.of, 0) } : {}),
   }
 }
 const resultIn = (dir, spec) => { const [lang, id] = spec.split('/'), f = join(dir, lang, `${id}.json`); return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null }
