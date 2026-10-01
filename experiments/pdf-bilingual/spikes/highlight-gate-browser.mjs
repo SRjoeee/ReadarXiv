@@ -9,6 +9,8 @@
 //    pane, after everything that moves a pane or draws it moving: the load, the contents panel opened and closed, a
 //    zoom and back, the panes swapped and back, one pane shown (the translation, the original) and two again, the
 //    pages dimmed and not, the right side replaced (a new compile), the fonts loaded
+//  - the pointer on a unit's words the moment the reader is ready (its sides' layouts, made in the idle time after, not
+//    yet there most times): no layout made in an animation frame; the unit lit once they come, the pointer still
 //  costs, the build against BASE_BUILD, interleaved (both browsers open, runs alternating):
 //  - a sweep of real pointer moves (220 down each pane, zig-zagging, one a frame) over a spread of formulas, of aligned
 //    displays, and a two-column page: per light — a move that changed what is lit — the script of the task that
@@ -138,8 +140,37 @@ const places = page => page.evaluate(() => {
   }
   return out
 })
+/** the pointer on the words of a unit on page 1 the moment the reader is ready; the frames in which a side's layout came
+ *  into being counted (requestAnimationFrame wrapped before the reader's scripts take it) */
+async function early(b, paper) {
+  const page = await b.context.newPage()
+  await page.addInitScript(() => {
+    const raf = window.requestAnimationFrame.bind(window)
+    window.__madeInFrame = 0
+    window.requestAnimationFrame = cb => raf(t => {
+      const d = window.__reader?.debug, before = d ? [!!d.left.geo, !!d.right.geo] : null
+      cb(t)
+      if (before && (!before[0] && d.left.geo || !before[1] && d.right.geo)) window.__madeInFrame++
+    })
+  })
+  await page.goto(b.url({ paper, mode: 'bilingual' }))
+  await page.waitForFunction(() => window.__reader?.ready && window.__reader.debug?.left.anchors.size && window.__reader.debug.right.anchors.size, null, { timeout: 240_000, polling: 10 })
+  const target = await page.evaluate(() => {
+    const d = window.__reader.debug, s = d.left
+    const id = [...s.anchors.keys()].find(i => { const a = s.anchors.get(i); return a && a.rects[0].page === 1 && a.rects.length >= 2 && a.rects[0].x1 - a.rects[0].x0 > 100 })
+    const r = s.anchors.get(id).rects[0], box = d.toPageBox(s, r), pr = d.pageView(s, 1).div.getBoundingClientRect()
+    return { id, x: pr.left + box.left + box.width / 2, y: pr.top + box.top + box.height / 2, geo: [!!d.left.geo, !!d.right.geo] }
+  })
+  await page.mouse.move(target.x, target.y)
+  await page.waitForTimeout(800)
+  const after = await page.evaluate(() => ({ madeInFrame: window.__madeInFrame, lit: window.__reader.debug.lit, hit: window.__reader.debug.pointerHit, geo: [!!window.__reader.debug.left.geo, !!window.__reader.debug.right.geo] }))
+  await page.close()
+  return { id: target.id, geoAtHover: target.geo, ...after }
+}
 async function checks(b) {
   for (const paper of CHECK) {
+    const e = await early(b, paper)
+    check(`${b.label} ${paper}: the pointer at the reader's first moment makes no layout in a frame, and lights once they come`, e.madeInFrame === 0 && e.geo.every(Boolean) && e.hit != null && e.lit != null, JSON.stringify(e))
     const page = await open(b, paper)
     // where the pointer's path keeps the panes and pages, after each of what moves them
     for (const [what, move] of MOVES) {

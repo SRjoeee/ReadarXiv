@@ -105,6 +105,21 @@ describe('pointerPath: the pointer\'s moves once a frame, a miss held', () => {
     expect(r.timers.size).toBe(0)
     expect(r.lights).toEqual([7, 8])
   })
+  it('a still pointer is looked at again when what is under it changes on its pane (its layout came), once a frame', () => {
+    let geo = false
+    const r = rig(() => (geo ? 7 : null))
+    r.path.moved('left', 1, 0); r.frame()
+    expect(r.lit).toBeNull()
+    geo = true
+    r.path.again('right')
+    expect(r.frames.length).toBe(0)
+    r.path.again('left'); r.path.again('left')
+    expect(r.frames.length).toBe(1)
+    r.frame()
+    expect(r.lit).toBe(7)
+    r.path.left('left'); r.path.again('left')
+    expect(r.frames.length).toBe(0)
+  })
   it('leaving the pane is a miss, held; nothing lit, nothing held', () => {
     const r = rig(() => 7)
     r.path.left('left')

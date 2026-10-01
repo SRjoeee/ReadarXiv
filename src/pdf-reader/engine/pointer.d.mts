@@ -22,6 +22,7 @@ export declare function pointOn(at: PaneAt | null | undefined, pages: { viewport
 export interface Pointer<W> { where: W; x: number; y: number }
 export interface PointerPath<W> {
   moved(where: W, x: number, y: number): void
+  again(where: W): void
   left(where: W): void
   readonly hit: number | null
 }

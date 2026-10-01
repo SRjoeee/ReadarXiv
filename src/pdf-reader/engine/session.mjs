@@ -191,9 +191,10 @@ function makeSide(container) {
   // fit: the fit the side was last given (page-width, page-fit, page-actual), kept as its pane's width changes; null at a scale
   // keeper: the overlays PDF.js removes from a page it draws again, put back (overlay.mjs); laid: each page's figures, by
   // the viewport scale they were laid at
-  // geo: the highlight's geometry (highlight.mjs), made after the side is anchored (makeGeo); at, scrollX, scrollY: where its pane and
+  // geo: the highlight's geometry (highlight.mjs), made after the side is anchored (makeGeo; layoutWanted: asked for at
+  // once, wantLayout); at, scrollX, scrollY: where its pane and
   // pages are, kept for the pointer (measure); lit: the highlight's elements painted on it
-  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), geo: null, makeGeo: null, at: null, scrollX: 0, scrollY: 0, lit: [], figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
+  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), geo: null, makeGeo: null, layoutWanted: false, at: null, scrollX: 0, scrollY: 0, lit: [], figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
 }
 const left = makeSide(host.left)
 let right = makeSide(host.right)
@@ -292,7 +293,8 @@ function paint(side) {
   for (const el of side.lit) el.remove()
   side.lit = []
   if (lit == null) return
-  for (const run of runsOf(geoOf(side), lit)) {
+  if (!side.geo) { wantLayout(side); return }
+  for (const run of runsOf(side.geo, lit)) {
     const pv = pageView(side, run.page), layer = layerOf(side, run.page)
     if (!layer) continue
     const s = pv.viewport.scale, el = document.createElement('div')
@@ -304,8 +306,14 @@ function paint(side) {
   }
 }
 function light(id) { if (!config.reading.sentenceHighlight) id = null; if (id === lit) return; lit = id; for (const s of sides) paint(s) }
-/** a side's highlight geometry: its layout, made now if the idle time after anchoring has not come yet */
-const geoOf = side => side.geo ?? side.makeGeo?.() ?? null
+/** a side's layout wanted now, where the pointer, a paint or a click met the side without one: made in a task of its
+ *  own at once, never in the frame or the event that asked (the pointer's frame made both sides' there, 25–48 ms, the
+ *  review of B1); when it lands what is lit is painted on it and the pointer looked at again (makeGeo) */
+function wantLayout(side) {
+  if (!side.makeGeo || side.layoutWanted) return
+  side.layoutWanted = true
+  setTimeout(() => { side.layoutWanted = false; if (sides.includes(side)) side.makeGeo?.() })
+}
 
 // The pointer's path (pointer.mjs): its moves taken once a frame, the unit under it found and lit, the pointer's place
 // read before anything is written. Nothing there reads the layout: where each pane and each of its pages is was kept
@@ -316,8 +324,10 @@ const geoOf = side => side.geo ?? side.makeGeo?.() ?? null
 const pointer = pointerPath({
   find: ({ where: side, x, y }) => {
     if (!config.reading.sentenceHighlight) return null
+    // a side without its layout yet is a miss, its layout asked for
+    if (!side.geo) { wantLayout(side); return null }
     const at = pointAt(side, x, y)
-    return (at && hitOf(geoOf(side), at.page, at.x, at.y, PAD / at.scale)?.id) ?? null
+    return (at && hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale)?.id) ?? null
   },
   light,
   lit: () => lit != null,
@@ -658,7 +668,8 @@ function pointOf(side, event) {
 function hitAt(side, event) {
   const at = pointOf(side, event)
   if (!at) return null
-  const hit = hitOf(geoOf(side), at.page, at.x, at.y, PAD / pageView(side, at.page).viewport.scale)
+  if (!side.geo) { wantLayout(side); return null }
+  const hit = hitOf(side.geo, at.page, at.x, at.y, PAD / pageView(side, at.page).viewport.scale)
   if (!hit) return null
   const { run } = hit
   let line = -1, far = Infinity
@@ -1433,7 +1444,7 @@ async function anchorOne(side, texts, marks) {
   const bounds = boundsFromMarks(doc, side.marks)
   index(side, anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(unitKind.get(id)) }))
   // the highlight's layout, made in the page's idle time once no side is being anchored (makeLayouts), or at once if
-  // the highlight needs it first (geoOf): the sides are anchored and shown without waiting for it
+  // the highlight needs it first (wantLayout): the sides are anchored and shown without waiting for it
   const views = pages.map(p => p.view), anchors = side.anchors
   side.geo = null
   side.makeGeo = () => {
@@ -1442,7 +1453,9 @@ async function anchorOne(side, texts, marks) {
     side.makeGeo = null
     layoutsDue.delete(side)
     timing[side === left ? 'leftLayout' : 'rightLayout'] = performance.now() - t0
-    return side.geo
+    // what is lit on it, and what is under a pointer resting on it, now that it has its blocks
+    if (lit != null) paint(side)
+    pointer.again(side)
   }
   layoutsDue.add(side)
   return bounds.size

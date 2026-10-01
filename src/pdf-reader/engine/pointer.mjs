@@ -70,9 +70,12 @@ export function pointerPath({ find, light, lit, hold, frame, later, cancel }) {
     if (!lit() || timer) return
     timer = later(() => { timer = 0; light(null) }, hold)
   }
+  const ask = () => { if (!pending) pending = frame(step) }
   return {
     /** the pointer moved over a pane (`where`), to (x, y) on the screen */
-    moved(where, x, y) { pointer = { where, x, y }; if (!pending) pending = frame(step) },
+    moved(where, x, y) { pointer = { where, x, y }; ask() },
+    /** what is under a still pointer on a pane changed (its layout came): looked at again in the next frame */
+    again(where) { if (pointer?.where === where) ask() },
     /** the pointer left a pane */
     left(where) { if (pointer?.where === where) pointer = null; missed() },
     /** what the pointer's last frame found under it, for the probes: a miss is held, so what is lit does not tell */
