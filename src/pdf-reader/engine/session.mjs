@@ -1907,7 +1907,8 @@ const htmlVersion = () => Promise.race([
   fetch(htmlUrlOf(paper), { method: 'HEAD', credentials: 'omit' }).then(r => (r.status === 404 || r.status === 410 ? null : translatedHtmlUrlOf(paper)), () => translatedHtmlUrlOf(paper)),
   new Promise(resolve => setTimeout(resolve, 3000, translatedHtmlUrlOf(paper))),
 ])
-const waitFor = (origin, type) => new Promise(r => addEventListener('message', function h(e) { if (e.origin === origin && e.data?.type === type) { removeEventListener('message', h); r(e.data) } }))
+/** a message of `type` from `frame`'s page at `origin`: two TeX frames may be loading at once (the marked original has its own) */
+const waitFor = (origin, type, frame) => new Promise(r => addEventListener('message', function h(e) { if (e.origin === origin && e.source === frame.contentWindow && e.data?.type === type) { removeEventListener('message', h); r(e.data) } }))
 /** a compile's unit marks and each page's columns, as the typesetting rule reads them (typeset/places.mjs marksOf): from
  *  a copy of the bytes, which the reader shows or anchors by too, and PDF.js would take */
 async function typesetMarksOfPdf(bytes) {
@@ -2108,7 +2109,7 @@ async function live() {
   let frameP = null
   const texFrame = () => (frameP ??= (async () => {
     const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
-    const ready = waitFor(site, 'ready')
+    const ready = waitFor(site, 'ready', frame)
     document.body.append(frame)
     const said = await Promise.race([ready, new Promise(r => setTimeout(r, 10000, null))])
     if (!said) {
@@ -2125,24 +2126,27 @@ async function live() {
    * Protocol 2's hints (the S3a report): the engines the visit will use — the paper's own (the font probe, the marked
    * original) and its first strategy's — and the CJK script whose faces that strategy sets, which the page fetches
    * ahead; a page of protocol 1 reads the `endpoint` instead, and nothing else. An init the page reports failed is no
-   * compiler: the frame goes, and the failure is retried as a network down is (the S3a report's duties, a)
+   * compiler: the frame goes, and the failure is retried as a network down is (the S3a report's duties, a). `own`: the
+   * marked original's compiler, which sets the paper as it is, in its own engine alone
    */
-  const openCompiler = async (p, lang) => {
-    const { frame, version } = await texFrame()
+  const openCompiler = async (p, lang, own = false) => {
+    // the frame taken at once: another compiler opening meanwhile loads one of its own
+    const mine = texFrame()
     frameP = null
-    const meta = p.paperData.meta, script = scriptOf(lang)
+    const { frame, version } = await mine
+    const meta = p.paperData.meta, script = scriptOf(lang), engine = meta.compiler === 'latex' ? 'pdflatex' : meta.compiler
     let first = null
-    try { first = strategiesFor(meta, lang)[0] } catch {}
-    const engines = [...new Set([meta.compiler === 'latex' ? 'pdflatex' : meta.compiler, first?.engine].filter(Boolean))]
-    const initDone = waitFor(site, 'init-done')
-    frame.contentWindow.postMessage({ type: 'init', protocol: 2, engines, fonts: CJK[script] ? [script] : [], endpoint }, site)
+    try { if (!own) first = strategiesFor(meta, lang)[0] } catch {}
+    const engines = [...new Set([engine, first?.engine].filter(Boolean))]
+    const initDone = waitFor(site, 'init-done', frame)
+    frame.contentWindow.postMessage({ type: 'init', protocol: 2, engines, fonts: !own && CJK[script] ? [script] : [], endpoint }, site)
     const done = await initDone
     if (done.error) {
       frame.remove()
       throw Object.assign(new Error(`The TeX page could not start: ${String(done.error).slice(0, 200)}`), { event: 'no compiler', kind: 'network' })
     }
     compiledUnder = version
-    note('compiler', { ms: done.ms, version })
+    note('compiler', { ms: done.ms, version, ...(own ? { own } : {}) })
     frame.contentWindow.postMessage({ type: 'project', key: paper, files: [...p.files].map(([path, content]) => ({ path, content })) }, site)
     let seq = 0
     const compile = req => new Promise(resolve => {
@@ -2199,6 +2203,11 @@ async function live() {
     compiler ??= compilerKeeper(() => openCompiler(p, lang))
     try { await compiler.ready() } catch (e) { return fail(e.event ?? 'no compiler', e.message ?? String(e), e.kind) }
     compile = compiler.compile
+    // the marked original in a TeX frame of its own, beside the translation's compiles from the run's start, and closed
+    // once it is in: its full compile is off the final's path (the F2 review's I2, V1'; the browser holds a second
+    // engine meanwhile, 150–450 MB measured)
+    const originalCompiler = compilerKeeper(() => openCompiler(p, lang, true))
+    const compileOriginal = async req => { try { return await originalCompiler.compile(req) } finally { originalCompiler.close() } }
     const { paperData, units, src, context, hashes } = p
     // the author block's names are kept for some languages (live.mjs keptFor): counted by the language now known
     total = units.length - keptFor(paperData, lang).size
@@ -2209,7 +2218,7 @@ async function live() {
     // one replacement at a time, in the order the compiles came in; the final's bytes once compiled
     let swaps = Promise.resolve(), finalPdf = null
     const result = await runLive(paperData, {
-      lang, compile, note,
+      lang, compile, compileOriginal, note,
       // the copy's compile current: its pipeline and its typesetting this reader's, or this visit's final on screen
       seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: (p.sameUnits && cached?.typesetting === TYPESETTING_VERSION) || finalShown,
       // the typesetting rule: the translation set as near its original's places as the rule can (live.mjs)

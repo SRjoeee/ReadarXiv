@@ -12,11 +12,12 @@
 //  5. when every unit is in, the final compile: every pass, the images themselves.
 // With the typesetting rule (typeset/plan.mjs; experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
 // "The compile sequence"), where the reader can read a PDF's marks (`readMarks`): the font probe measures the body face
-// too (1); the original goes right after the first preview, in full with its line probes (4), since every plan is made
-// from it; each later preview is planned on its snapshot (3); the last preview of the whole translation, complete,
-// measures the final — else a draft one-pass of it does — and the final is set from that measure (5). The first
-// preview is set as today: nothing is known to plan it from yet. Where a plan cannot be made, the translation is set as
-// today, and the reason noted
+// too (1); the original, in full with its line probes (4), since every plan is made from it — from the run's start in a
+// compiler of its own where the reader gives one (`compileOriginal`), beside the probe and the first preview, else right
+// after the first preview; each later preview is planned on its snapshot (3); the last preview of the whole translation,
+// complete, measures the final — else a draft one-pass of it does — and the final is set from that measure (5). The
+// first preview is set as today, and never waits for the original: nothing is known to plan it from yet. Where a plan
+// cannot be made, the translation is set as today, and the reason noted
 import { analyze } from './paper-meta.mjs'
 import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
@@ -79,6 +80,8 @@ export function compilerKeeper(open) {
   const get = () => (current ??= open().catch(e => { current = null; throw e }))
   return {
     ready: () => get().then(() => undefined),
+    /** the compiler closed, its frame and worker gone; a compile after it opens a fresh one */
+    close() { const was = current; current = null; void was?.then(c => c.close(), () => {}) },
     async compile(req) {
       const mine = get()
       const r = await (await mine).compile(req)
@@ -210,7 +213,7 @@ export const TYPESETTING_VERSION = '1'
  * marksOf on a PDF.js document of the bytes, which it must not take: the reader shows them too): with it the
  * translation is set by the typesetting rule, without as today.
  */
-export async function runLive(paper, { lang, compile, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, identity = null, pipelineCurrent = false, readMarks = null }) {
+export async function runLive(paper, { lang, compile, compileOriginal = null, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, identity = null, pipelineCurrent = false, readMarks = null }) {
   const { units, meta, project } = paper
   const kept = keptFor(paper, lang)
   // the chain: a compile that gives no PDF moves on to the next strategy, which is tried at once
@@ -245,14 +248,15 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
   // more as it was — in a fresh frame after the page's failure (compilerKeeper) — and the second time the run stops, as
   // for a network that is down or with no compiler: no strategy changed, no aux or bbl taken from it, nothing remembered
   // of it (the S3a report, "what the reader must do", and its fix round's duties a–d)
-  const ask = async req => {
-    let r = await compile(req)
+  const askOf = fn => async req => {
+    let r = await fn(req)
     if (!r.network?.length && !pageFailed(r)) return r
     note('compile again', { network: r.network?.slice(0, 5), error: r.error?.slice(0, 200) })
-    r = await compile(req)
+    r = await fn(req)
     if (!r.network?.length && !pageFailed(r)) return r
     throw Object.assign(new Error(r.network?.length ? `the TeX page could not fetch ${r.network.slice(0, 3).join(', ')}` : `the TeX page failed: ${String(r.error).slice(0, 200)}`), { compilerDown: r.network?.length ? 'network' : 'page' })
   }
+  const ask = askOf(compile)
   // 1. the document's fonts, while the first batch is out; with the rule, how wide its body face sets and at what sizes
   const fontsP = ask({ main: project.main, engine: meta.compiler, rerun: false, bibtex: false, overrides: probeFiles(paper, { width: !!readMarks }) }).then(r => { const fonts = readFontProbe(r.log ?? ''); note('fonts', { fonts, ms: r.ms }); return { fonts, log: r.log ?? '' } })
 
@@ -315,7 +319,6 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
   let previews = 0
   const compiles = async () => {
     // 3–5. compiles
-    const { fonts, log: fontLog } = await fontsP
     // each unit's text as that compile has it: translated if it was in the snapshot, the source's otherwise; with where its
     // placeholders stood, its displays beyond its marks and the sentences of the translation typeset, for the anchors
     const texts = done => textsShown(units, done, pieces => sentencesBy.get(pieces))
@@ -334,7 +337,7 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
     // the marked original, compiled once: the left side's anchors, the characters the paper's own compile could not set,
     // and with the rule every plan's base — so in full, every pass: one pass sets references, citations and the pages they
     // move unsettled, and its readings are another paper's (the review of 2026-10-01, M3)
-    const original = () => (originalP ??= ask({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper, { lines: !!readMarks }) }).then(async o => {
+    const original = () => (originalP ??= askOf(compileOriginal ?? compile)({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper, { lines: !!readMarks }) }).then(async o => {
       note('original', { ok: o.ok, ms: o.ms, error: whyFailed(o) })
       if (o.ok) {
         onOriginal?.({ pdf: o.pdf })
@@ -350,6 +353,10 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
      * Codex on #294)
      */
     const settled = async r => r.ok && !unsettable(r, lostIn(r.log).size ? lostIn((await original()).log) : undefined)
+    // with a compiler of its own, the original from the start, beside the probe and the first preview (the F2 review's
+    // I2): off the final's path when the translation comes quickly. Its failure is met where it is awaited
+    if (readMarks && compileOriginal) original().catch(() => {})
+    const { fonts, log: fontLog } = await fontsP
     // the rule's plans, one per compile, made for the strategy the compile sets: none until the original is read, and
     // none where an input is missing or partial (plan.mjs previewTypesetting) — the translation is set as today then,
     // and the reason noted once
@@ -379,6 +386,9 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
       if (readMarks && previews && !originalP) { await original(); continue }
       // a seeded run shows a preview only once no unit it would show in the source is left
       if (dirty && seed && !complete()) dirty = false
+      // the whole translation after the first preview waits for the original under way in its own compiler: planned, its
+      // preview measures the final, which a draft would have to otherwise (V1', the F2 review's measured proposal)
+      if (dirty && readMarks && compileOriginal && previews && !readings && whole(translated)) await original().catch(() => {})
       if (dirty) {
         dirty = false
         const snapshot = new Map(translated), t0 = Date.now(), plan = planFor(snapshot)
@@ -421,7 +431,7 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
      */
     const finalTypeset = async () => {
       if (!readMarks) return null
-      if (!originalP) await original()
+      await original()
       const read = async r => { try { return await readMarks(r.pdf) } catch (e) { note('typeset', { missing: `a preview's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null } }
       let m = measuring?.strategy === strategy().name && referencesWhole(measuring.r) ? measuring : null
       let fin = m && finalTypesetting(m.plan.state, { log: m.r.log, marks: await read(m.r) }, all)

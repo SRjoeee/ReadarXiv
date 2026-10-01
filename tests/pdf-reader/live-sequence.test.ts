@@ -10,8 +10,9 @@ import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
 // by the rule's own readers
 
 const PARAS = 12
-const SOURCE = `\\documentclass{article}\\begin{document}\n${Array.from({ length: PARAS }, (_, k) => `Paragraph ${k} of the paper, ${'with words that run on for a line or two of prose '.repeat(4)}and an end.\n`).join('\n')}\\end{document}\n`
-const paper = () => openPaper(new Map([['main.tex', new TextEncoder().encode(SOURCE)]]))
+const sourceOf = (paras: number) => `\\documentclass{article}\\begin{document}\n${Array.from({ length: paras }, (_, k) => `Paragraph ${k} of the paper, ${'with words that run on for a line or two of prose '.repeat(4)}and an end.\n`).join('\n')}\\end{document}\n`
+/** a paper of twelve paragraphs, two batches of the service's (the first is small, live.mjs nextBatch); `paras` fewer */
+const paper = (paras = PARAS) => openPaper(new Map([['main.tex', new TextEncoder().encode(sourceOf(paras))]]))
 /** the font probe's log: Computer Modern at 10 pt in a 345 pt column, its sizes below (as typeset-plan.test.ts) */
 const FONT_LOG = `AXT-FONTS rm=cmr;sf=cmss;tt=cmtt;body=10;\nAXT-WIDTH 1300.0pt 10 345.0pt\n${[0.9, 0.95].map(f => `AXT-SIZE ${f} ${(1300 * f).toFixed(1)}pt 1300.0pt`).join('\n')}\n`
 /** a compile's line probes: each unit 4 lines at 12 pt on a 10 pt size, and the end of the document */
@@ -147,6 +148,55 @@ describe('the compile sequence with the typesetting rule', () => {
     const finals = calls.filter(q => q.rerun && q.kind !== 'original').map(kindOf2)
     expect(finals).toEqual(['final+rule', 'final', 'final+rule', 'final'])
     expect(notes.filter(([e]) => e === 'next strategy').length).toBe(1)
+    expect(r.settled).toBe(true)
+  })
+})
+
+// The marked original in a TeX frame of its own (the F2 review's I2, V1'): from the run's start, beside the probe and the
+// first preview, which it never delays; a whole translation after the first preview waits for its readings, so that the
+// preview it compiles is planned and measures the final
+describe('the original in a compiler of its own', () => {
+  const kinds = (calls: { kind: string; ruled: boolean }[]) => calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`)
+  /** a compiler whose answers wait for `gate` (resolved by the test), each call logged in `order` as it is asked */
+  const held = (n: number, order: string[], name: string) => {
+    let open: () => void = () => {}
+    const gate = new Promise<void>(r => { open = r })
+    const c = compiler(n), base = c.compile
+    c.compile = async (q: Req) => { order.push(`${name}:${kindOf(q)}`); await gate; return base(q) }
+    return { ...c, open: () => open() }
+  }
+
+  it('is asked for from the start, the first preview not waiting for it; the whole translation after the first preview waits for its readings, and that preview, planned, measures the final', async () => {
+    const t = translator(), n = paper().units.length, order: string[] = []
+    const own = held(n, order, 'own')
+    const main = compiler(n, { on: k => { order.push(`main:${k}`); if (k === 'preview') t.release() } })
+    // the original answers once the translation is whole and the run has had time to compile it unplanned, if it would
+    const p = paper(), notes: string[] = []
+    const done = runLive(p, {
+      lang: 'zh', compile: main.compile, compileOriginal: own.compile, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(p.units.length),
+      translate: async texts => { const r = await t.translate(texts); if (r.length && notes.includes('translated')) setTimeout(() => own.open(), 50); return r },
+      note: e => notes.push(e),
+    })
+    const r = await done
+    expect(order.slice(0, order.indexOf('main:preview'))).toContain('own:original')
+    expect(kinds(main.calls)).toEqual(['probe', 'preview', 'preview+rule', 'final+rule'])
+    expect(kinds(own.calls)).toEqual(['original'])
+    expect(notes.filter(e => e === 'measure')).toEqual([])
+    expect(r.settled).toBe(true)
+  })
+
+  it('a translation whole by the first preview: that preview is set as today, and the final is measured by a draft once the original is in', async () => {
+    // one batch: the whole translation is in the first preview
+    const t = translator(), p = paper(4), n = p.units.length, order: string[] = []
+    const own = held(n, order, 'own')
+    const main = compiler(n)
+    const r = await runLive(p, {
+      lang: 'zh', compile: main.compile, compileOriginal: own.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(p.units.length),
+      // held until the first preview is on screen: had the run waited for it, it would wait for ever
+      onUpdate: ({ final }) => { if (!final) own.open() },
+    })
+    expect(kinds(main.calls)).toEqual(['probe', 'preview', 'preview+rule', 'final+rule'])
+    expect(main.calls[2]?.rerun).toBe(false)
     expect(r.settled).toBe(true)
   })
 })

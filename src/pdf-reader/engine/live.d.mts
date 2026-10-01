@@ -20,11 +20,13 @@ export interface Compiled { ok: boolean; pdf?: Uint8Array | null; aux?: string |
 /** a compile asked of the TeX page */
 export interface CompileRequest { main: string; engine: string; rerun: boolean; bibtex: boolean | null; overrides: Map<string, Uint8Array> }
 /** the compiler a visit uses, opened when first needed and again after a compile the page failed */
-export declare function compilerKeeper(open: () => Promise<{ compile: (req: CompileRequest) => Promise<Compiled>; close: () => void }>): { ready: () => Promise<void>; compile: (req: CompileRequest) => Promise<Compiled> }
+export declare function compilerKeeper(open: () => Promise<{ compile: (req: CompileRequest) => Promise<Compiled>; close: () => void }>): { ready: () => Promise<void>; compile: (req: CompileRequest) => Promise<Compiled>; close: () => void }
 /** the reader's run: translation as it comes in, the compiles, the final (the options as the reader passes them) */
 export declare function runLive(paper: Paper, options: {
   lang: string
   compile: (req: CompileRequest) => Promise<Compiled>
+  /** a compiler of its own for the marked original, asked from the run's start, beside the probe and the previews */
+  compileOriginal?: ((req: CompileRequest) => Promise<Compiled>) | null
   translate: (texts: string[], cuts?: number[][]) => Promise<({ text: string; by: string | null } | null)[]>
   format?: 'markers' | 'tags' | 'runs'
   rank?: (i: number) => number
