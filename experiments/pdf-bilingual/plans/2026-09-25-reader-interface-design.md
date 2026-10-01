@@ -784,9 +784,12 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   paragraph first.
 - What is lit is drawn again by what replaces it — a new compile's right side, the left anchored again by our marked
   original's marks — and the pointer resting on it is carried to the new side. While its unit's sentences or their fit
-  are on their way there, what was drawn for it stays (the new side shows nothing), never its paragraph; when they
-  land it is drawn anew and the pointer is asked again (the final review: on 2608.02459 and 2608.06701, a pointer
-  resting on either pane, the new right side empty 40–200 ms, the left's sentence held throughout).
+  are on their way there, what was drawn for it stays, never its paragraph; when they land it is drawn anew and the
+  pointer is asked again. A sentence lit at a swap is drawn on the new side at the swap itself: where the idle time has
+  not made the new side's layout and sentences yet they are made before the swap, each in a task of its own and only
+  while a sentence is lit, and the lit unit's fit in the swap's task (under 1 ms) — on 2608.02459 and 2608.06701, a
+  pointer resting on either pane through a swap or a re-anchor, the sentence painted on both sides in every frame,
+  where the new side had been blank for 40–200 ms; the swap 15–40 ms later at the median (2026-10-02).
 - What a run's sentence was drawn as is kept and put back when it is lit again at the same scale (at most 512), and
   let go when a page's floats come.
 

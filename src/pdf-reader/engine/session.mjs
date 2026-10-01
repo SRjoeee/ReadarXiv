@@ -1702,6 +1702,14 @@ function wantSentences(side) {
   })
 }
 let sentencesAsked = false
+/** a side coming in, ready for a sentence lit on it at its swap (replaceRight): its layout, then its sentences, each in
+ *  a task of its own, as the idle time would make them a moment after the swap — made before it, and only while a
+ *  sentence is lit (on 2608.02459 the right's layout 10–11 ms, its sentences 2–3 ms). Not in the swap's own task; the
+ *  yield's continuation ahead of the pages' drawing, which a timeout's waited behind (the swap 60–130 ms later) */
+async function sentenceReady(side) {
+  if (side.makeGeo) { await scheduler.yield(); side.makeGeo?.() }
+  if (side.geo && sentencesDue.has(side)) { await scheduler.yield(); if (sentencesDue.delete(side)) findSentences(side) }
+}
 /** the left anchored again by marks it did not have — our marked original's, when it is compiled (onOriginal) —: what is
  *  lit stays drawn there until its layout and sentences are made again (paint) */
 async function anchorLeft(texts, marks) {
@@ -1842,6 +1850,9 @@ async function replaceRight(url, texts, { draft = false, hold = 0 } = {}) {
     next.viewer.update(); check()
   })
   await Promise.race([Promise.all(next.viewer._getVisiblePages().views.map(v => next.figs.get(v.id))), new Promise(r => setTimeout(r, 1500))])
+  // a sentence lit: the new side's layout and sentences made before the swap, where the idle time has not made them yet
+  // (a new compile drawn at once), so that the sentence is drawn there at the swap itself (sentenceReady)
+  if (lit != null && lit.s >= 0) await sentenceReady(next)
   if (!draft) copies.clear()
   paints.clear()
   bake()
@@ -1866,6 +1877,11 @@ async function replaceRight(url, texts, { draft = false, hold = 0 } = {}) {
   // the left's sentences are the new translation's: found again where its layout is made (else with it); and what is
   // under the pointer looked at again — a sentence lit may be one the new translation has not (the review of B3, 8)
   if (left.geo) findSentences(left)
+  // the sentence lit, worked out on both sides for the new translation now — the fit of its unit alone, its pages'
+  // geometry made where the new side has not drawn them (under 1 ms): a pointer resting on it sees it at the swap
+  // itself, where the new side was blank until a task of its own worked it out (25–217 ms, the re-review of the final
+  // review). The side's layout and sentences are not made in this task (13–20 ms more): sentenceReady made them before
+  if (lit != null && lit.s >= 0) for (const s of sides) { const st = s.geo && s.starts?.get(lit.id); if (st) fits(s, lit.id, st, true) }
   invalidate(); paint(left); paint(right)
   pointer.again()
   // the right is a new viewer: its page and page count, not the old one's

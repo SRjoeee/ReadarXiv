@@ -26,9 +26,9 @@
 //    and after 800 ms in which idle periods come) and through the left anchored again (our marked original's marks):
 //    400 ms after, what is lit is what a move there lights, painted under the pointer (the final review, I1: made to
 //    fail on 346c26fc, the right pane lit nothing until the pointer moved, 2608.02459 and 2608.06701); and every frame
-//    from the event on paints, per side, the sentence or nothing, never the paragraph, and ends with the sentence on
-//    both (I2: on 346c26fc with the harness's hooks, 10 of 12 fail — the paragraph painted on one side or both, for
-//    19–178 ms)
+//    from the event on paints, per side, the sentence, never the paragraph (I2: on 346c26fc with the harness's hooks,
+//    10 of 12 fail — the paragraph painted on one side or both, for 19–178 ms) and never nothing (the re-review: on
+//    2ae0d235 the new side at a swap was blank for 40–200 ms until its fit was worked out)
 //  - each side's tokens let go once its layout is made: on 2608.02459, both layouts and sentences made and the garbage
 //    collected, the tokens the reader holds weakly are gone (the final review, I3: made to fail on 346c26fc with the
 //    weak hold added, both sides' kept, the heap 31.8 MB; 10.5 MB with the fix)
@@ -335,16 +335,17 @@ async function resting(page, pane, event) {
   await page.waitForTimeout(300)
   return { id: target.id, before, after, moved, frames: seen, refs }
 }
-/** whether a resting pointer's frames (resting) painted its sentence, or nothing, on each side and never its paragraph:
- *  every frame lighting the unit by sentence paints, per side, nothing or the sentence as it was before or is after (to
- *  2 %), and no frame lights another unit; the last frame lights the sentence again, painted on both sides */
+/** whether a resting pointer's frames (resting) painted its sentence on each side throughout: every frame lights the
+ *  unit by sentence and paints, per side, the sentence as it was before or is after (to 2 %) — never its paragraph,
+ *  and never nothing (a blank frame: the new side at a swap showed nothing for 25–217 ms until its fit was worked out
+ *  in a task of its own, the re-review of the final review); the last frame lights the sentence again on both sides */
 function restingPainted(r) {
   const near = (a, b) => Math.abs(a - b) <= Math.max(4, 0.02 * b)
   const bad = []
   for (const f of r.frames ?? []) {
-    if (f.lit !== null && f.lit !== r.id) bad.push({ ...f, why: 'another unit' })
-    else if (f.lit === r.id && f.s >= 0) f.area.forEach((a, k) => { if (a && !near(a, r.before.area[k]) && !near(a, r.refs.sentence[k])) bad.push({ ...f, why: near(a, r.refs.whole[k]) ? 'the paragraph' : 'neither' }) })
-    else if (f.lit === r.id) bad.push({ ...f, why: 'lit whole' })
+    if (f.lit !== r.id) bad.push({ ...f, why: f.lit === null ? 'nothing lit' : 'another unit' })
+    else if (f.s >= 0) f.area.forEach((a, k) => { if (!a) bad.push({ ...f, why: 'blank' }); else if (!near(a, r.before.area[k]) && !near(a, r.refs.sentence[k])) bad.push({ ...f, why: near(a, r.refs.whole[k]) ? 'the paragraph' : 'neither' }) })
+    else bad.push({ ...f, why: 'lit whole' })
   }
   const end = r.frames?.at(-1)
   const ok = !!end && end.lit === r.id && end.s === r.before.s && end.area.every((a, k) => a > 0 && near(a, r.refs.sentence[k]))
@@ -486,7 +487,7 @@ async function restingChecks(b) {
       const k = pane === 'L' ? 0 : 1, on = `a pointer resting on the ${pane === 'L' ? 'left' : 'right'} pane through ${what}`
       check(`${b.label} ${paper}: ${on}: what is lit after is what a move there lights, painted under it`, !!r.id && r.before.lit === r.id && r.before.s >= 0 && r.after.lit != null && r.after.lit === r.moved.id && r.after.s === r.moved.s && r.after.under[k], JSON.stringify({ ...r, frames: r.frames?.length }))
       const p = restingPainted(r)
-      check(`${b.label} ${paper}: ${on}: every frame paints its sentence or nothing, never the paragraph, and the sentence again on both sides`, !!r.id && p.ok, JSON.stringify({ id: r.id, s: r.before?.s, before: r.before?.area, refs: r.refs, ...p }))
+      check(`${b.label} ${paper}: ${on}: every frame paints its sentence on both sides, never the paragraph, never nothing`, !!r.id && p.ok, JSON.stringify({ id: r.id, s: r.before?.s, before: r.before?.area, refs: r.refs, ...p }))
       ;((result.resting ??= {})[`${b.label} ${paper} ${pane} ${what}`] = r)
     }
     await page.close()
