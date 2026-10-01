@@ -15,9 +15,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { verifyAlignment } from '../../../src/providers/alignment'
-import { openPaper } from '../../../src/pdf-reader/engine/live.mjs'
 import { plainTranslated, rehydrate, sentencesOf, serialize } from '../../../src/pdf-reader/engine/mt.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { runPaper, samePieces } from './highlight-runs.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const RUNS = process.env.RUNS ?? join(root, 'data/runs/highlight-ten')
@@ -72,7 +72,7 @@ const boundaries = (ls, text) => {
 const total = { units: 0, sent: 0, answered: 0, same: 0, aligned: 0, multi: 0, multiAligned: 0, sentences: 0 }
 for (const id of ids) {
   const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
-  const paper = openPaper(files), units = paper.units
+  const paper = runPaper(id, files), units = paper.units
   const pf = join(RUNS, 'pieces', `${id}.json`), typeset = existsSync(pf) ? JSON.parse(readFileSync(pf, 'utf8')) : {}
   const tf = join(RUNS, id, 'final-texts.json'), finals = existsSync(tf) ? new Map(JSON.parse(readFileSync(tf, 'utf8')).map(t => [t.id, t.text])) : new Map()
   const todo = units.map((u, i) => i).filter(i => !paper.kept.has(units[i]))
@@ -87,7 +87,7 @@ for (const id of ids) {
     let tolerant = false, back = rehydrate(a.text, ser)
     if (back.error) { tolerant = true; back = rehydrate(a.text, ser, true) }
     if (back.error) return
-    const same = typeset[i] ? JSON.stringify(back.pieces) === JSON.stringify(typeset[i]) : finals.get(i) === plainTranslated(back.pieces)
+    const same = typeset[i] ? samePieces(back.pieces, typeset[i]) : finals.get(i) === plainTranslated(back.pieces)
     if (!same) return
     n.same++
     const alignment = a.src && a.tgt ? verifyAlignment({ source: a.src, target: a.tgt }, ser.wire, a.text) : undefined

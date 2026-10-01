@@ -13,9 +13,9 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { markWords, tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
-import { openPaper } from '../../../src/pdf-reader/engine/live.mjs'
 import { displayEdges, plainSource, unitText } from '../../../src/pdf-reader/engine/mt.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { runPaper } from './highlight-runs.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const [out, ...asked] = process.argv.slice(2)
@@ -38,7 +38,7 @@ for (const id of asked.length ? asked : ['2608.02459', '2608.06701', '2608.12502
   const ten = existsSync(join(TEN, id, 'final.pdf')), runs = ten ? TEN : GT, dir = join(runs, id)
   if (!existsSync(dir)) { console.log(id, 'no run'); continue }
   const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
-  const paper = openPaper(files), units = paper.units
+  const paper = runPaper(id, files), units = paper.units
   const pf = join(runs, 'pieces', `${id}.json`), typeset = existsSync(pf) ? JSON.parse(readFileSync(pf, 'utf8')) : {}
   const finals = new Map(JSON.parse(readFileSync(join(dir, 'final-texts.json'), 'utf8')).map(t => [t.id, t.text]))
   const sentences = JSON.parse(readFileSync(join(runs, 'sentences', `${id}.json`), 'utf8'))

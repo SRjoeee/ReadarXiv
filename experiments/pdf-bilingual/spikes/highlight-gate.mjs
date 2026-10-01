@@ -99,6 +99,14 @@
 // sentences (spikes/highlight-sentences.mjs). The ground truth (research/pdf-bilingual/data/runs/highlight-gt, linked
 // from data/runs/highlight-gt): per paper investigator B's four compiles, its units with its starts (b-units.json), the
 // translation's texts, and `sentences/<id>.json` (highlight-sentences.mjs with FROM=en, from B's Microsoft answers).
+// Both are read in the cutting they were made with (highlight-runs.mjs: every unit by its source span), whatever the
+// tree cuts now: a run unit the tree cuts otherwise is judged absent and the baseline's counts of its kind allow for it,
+// and a unit whose wire has no Microsoft answer kept (the wire changed since) is left out of the sentence files' check;
+// both are counted in the report. Since the typesetting rule's merge (2026-10-02): 2608.03063's two cells and a
+// paragraph cut otherwise, 127 units' wires unanswered on the ten runs and 84 on the ground truth (spaces beside a
+// digit, paper macros' arguments as prose), and the baseline recorded again for the units the rule cut anew —
+// 2608.03063's (cells 55 → 53 on the left, a cell's head, its blocks, a paragraph aligned by sentence) and 2608.29181's
+// address footnote (its e-mail now a placeholder: aligned 112 → 111).
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/highlight-gate.mjs [id …]   → out/highlight-gate.json
 //   RUNS=<dir> another set of runs; GT=<dir> another ground truth; ROUNDS=<n> the cost's repeats (default 7)
 import { createHash } from 'node:crypto'
@@ -110,9 +118,9 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
 import { floatHitOf, floatShapes } from '../../../src/pdf-reader/engine/floats.mjs'
 import { blockOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit } from '../../../src/pdf-reader/engine/highlight.mjs'
-import { openPaper } from '../../../src/pdf-reader/engine/live.mjs'
-import { displayEdges, plainTranslated, unitText } from '../../../src/pdf-reader/engine/mt.mjs'
+import { displayEdges, plainTranslated, serialize, unitText } from '../../../src/pdf-reader/engine/mt.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { runPaper, samePieces } from './highlight-runs.mjs'
 import { sentencesThroughEngine } from './sentences-path.mjs'
 
 const root = new URL('..', import.meta.url).pathname
@@ -182,23 +190,36 @@ async function remake(set, runs, from, id, paper, sents) {
   const pf = join(runs, 'pieces', `${id}.json`), typeset = existsSync(pf) ? JSON.parse(readFileSync(pf, 'utf8')) : {}
   const finals = new Map(JSON.parse(readFileSync(join(runs, id, 'final-texts.json'), 'utf8')).map(t => [t.id, t.text]))
   // the very translation the run typeset (its pieces where they are kept, else its final text): as the file was made
-  const keep = (i, pieces) => (typeset[i] ? JSON.stringify(pieces) === JSON.stringify(typeset[i]) : finals.get(i) === plainTranslated(pieces))
-  const r = ((remade[set] ??= {})[id] = { file: Object.keys(sents).length, path: 0, differ: 0, first: [] })
+  const keep = (i, pieces) => (typeset[i] ? samePieces(pieces, typeset[i]) : finals.get(i) === plainTranslated(pieces))
+  const r = ((remade[set] ??= {})[id] = { file: Object.keys(sents).length, path: 0, differ: 0, first: [], unanswered: 0 })
   if (!ANSWERS[from]) { r.differ = r.file; r.first.push(`no Microsoft answers kept (ms-cache-zh-${from}.json)`); return }
-  const got = await sentencesThroughEngine({ units: paper.units.flatMap((u, i) => (paper.kept.has(u) ? [] : [{ u, i }])), cache: ANSWERS[from], keep })
+  const sent = paper.units.flatMap((u, i) => (paper.kept.has(u) || !u.pieces.length ? [] : [{ u, i }]))
+  // a unit whose wire, as the reader sends it now, has no answer kept: the wire changed since the answers were kept (the
+  // typesetting rule's spaces beside a digit, 2026-10-02: 142 units of the twelve papers), and the path cannot be run
+  // on it without asking the service again. Not judged, and counted (`unanswered`); the run's sentences stand for it
+  const unanswered = new Set(sent.filter(({ u }) => !ANSWERS[from].has(serialize(u).wire)).map(({ i }) => String(i)))
+  // and a unit the tree now cuts otherwise (highlight-runs.mjs), sent as no text at all
+  for (const i of paper.cut) unanswered.add(String(i))
+  r.unanswered = unanswered.size
+  const got = await sentencesThroughEngine({ units: sent, cache: ANSWERS[from], keep })
   r.path = Object.keys(got).length
-  for (const k of new Set([...Object.keys(got), ...Object.keys(sents)])) if (JSON.stringify(got[k]) !== JSON.stringify(sents[k])) { r.differ++; if (r.first.length < 5) r.first.push(`#${k}`) }
+  for (const k of new Set([...Object.keys(got), ...Object.keys(sents)])) if (!unanswered.has(k) && JSON.stringify(got[k]) !== JSON.stringify(sents[k])) { r.differ++; if (r.first.length < 5) r.first.push(`#${k}`) }
 }
 /** per paper and side: what the geometry took beyond the anchors, held to the baseline exactly */
 const taken = {}
 /** per paper, side and kind: units anchored and lit, for the baseline */
 const counts = {}
+/** per paper and kind: the runs' units the tree now cuts otherwise (highlight-runs.mjs), judged absent: the baseline's
+ *  counts of their kind allow for them */
+const cutAway = {}
 const count = (key, field, n = 1) => { const t = (tally[key] ??= { n: 0, anchoredL: 0, anchoredR: 0, litL: 0, litR: 0, both: 0, unlitAnchored: 0, points: 0, holes: 0, smaller: 0, inkPoints: 0, inkHoles: 0, pastEdge: 0, unreachable: 0, runs: 0, pageCols: 0, cut: 0, fragmentedDisplays: 0, overlapping: 0 }); t[field] += n }
 const inside = (b, x, y) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1
 
 for (const id of ids) {
   const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
-  const paper = openPaper(files), units = paper.units
+  // the units as the runs cut them (highlight-runs.mjs); those the tree now cuts otherwise, judged absent, counted apart
+  const paper = runPaper(id, files), units = paper.units
+  for (const i of paper.cut) { const k = kindOf(paper, units[i]); ((cutAway[id] ??= {})[k] = (cutAway[id][k] ?? 0) + 1) }
   const kind = new Map(units.map((u, i) => [i, u.kind])), floating = x => FLOATING.has(kind.get(x))
   const pf = join(RUNS, 'pieces', `${id}.json`), typeset = existsSync(pf) ? JSON.parse(readFileSync(pf, 'utf8')) : {}
   const src = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
@@ -449,7 +470,7 @@ async function groundTruth() {
     const dir = join(GT, id)
     if (!existsSync(join(dir, 'O2.pdf'))) { truth[id] = null; continue }
     const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
-    const paper = openPaper(files), units = paper.units
+    const paper = runPaper(id, files), units = paper.units
     const kind = new Map(units.map((u, i) => [i, u.kind])), floating = x => FLOATING.has(kind.get(x))
     const src = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
     const tgt = JSON.parse(readFileSync(join(dir, 'final-texts.json'), 'utf8')).map(t => ({ ...t, ...displayEdges(units[t.id]) }))
@@ -531,7 +552,8 @@ for (const [id, r] of Object.entries(textOnly)) console.log(id.padEnd(12), r.uni
 console.log('\nthe ground truth (report-B\'s compiles): starts after the first of units of more than one sentence; found; with a mark for their sentence; on its line (AXtext: arXiv\'s PDF by its text alone)')
 for (const [id, t] of Object.entries(truth)) if (t) for (const [S, r] of Object.entries(t)) if (S !== 'pair') console.log(id.padEnd(12), S.padEnd(3), r.starts, r.found, r.withTruth, r.sameLine, `${((100 * r.sameLine) / Math.max(1, r.withTruth)).toFixed(1)} %`)
 console.log('\nthe sentence files against the reader\'s path from the Microsoft answers kept (units in the file; the path\'s; differing):')
-for (const [set, ps] of Object.entries(remade)) console.log(set.padEnd(13), Object.entries(ps).map(([id, r]) => `${id} ${r.file}/${r.path}/${r.differ}${r.first.length ? ` (${r.first.join(', ')})` : ''}`).join('; '))
+for (const [set, ps] of Object.entries(remade)) console.log(set.padEnd(13), Object.entries(ps).map(([id, r]) => `${id} ${r.file}/${r.path}/${r.differ}${r.unanswered ? `, ${r.unanswered} not judged (no answer kept for their wire)` : ''}${r.first.length ? ` (${r.first.join(', ')})` : ''}`).join('; '))
+if (Object.keys(cutAway).length) console.log('the runs\' units the tree now cuts otherwise, judged absent (highlight-runs.mjs):', Object.entries(cutAway).map(([id, ks]) => `${id} ${Object.entries(ks).map(([k, n]) => `${n} ${k}`).join(', ')}`).join('; '))
 console.log('units of more than one sentence (with a mark), their starts all found on arXiv\'s PDF and on our translation:', Object.entries(truth).filter(([, t]) => t).map(([id, t]) => `${id} ${t.pair.both}/${t.pair.multi}`).join(', '))
 // the gate: what must be none, and against the baseline what may not fall (or, for cuts, grow)
 const failures = []
@@ -551,7 +573,7 @@ else {
   const base = JSON.parse(readFileSync(BASELINE, 'utf8'))
   for (const id of ids) for (const S of ['L', 'R']) for (const [k, b] of Object.entries(base.counts[id]?.[S] ?? {})) {
     const c = counts[id]?.[S]?.[k] ?? { anchored: 0, lit: 0 }
-    for (const f of ['anchored', 'lit']) if (c[f] < b[f]) failures.push(`${id} ${S} ${k}: ${f} ${c[f]}, the baseline ${b[f]}`)
+    for (const f of ['anchored', 'lit']) if (c[f] + (cutAway[id]?.[k] ?? 0) < b[f]) failures.push(`${id} ${S} ${k}: ${f} ${c[f]}, the baseline ${b[f]}`)
   }
   const known = new Set(base.cuts)
   for (const c of cuts) if (!known.has(c)) failures.push(`a cut not in the baseline: ${c}`)

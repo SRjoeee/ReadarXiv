@@ -314,8 +314,8 @@
      "lit": 7
     },
     "cell": {
-     "anchored": 55,
-     "lit": 55
+     "anchored": 53,
+     "lit": 53
     },
     "TikZ text": {
      "anchored": 5,
@@ -1041,14 +1041,14 @@
      "caption": 18,
      "subsection": 16,
      "paragraph": 24,
-     "cell": 12,
+     "cell": 11,
      "footnote": 1
     },
     "filled": 8,
     "padOverlaps": 18,
     "blocks": {
-     "n": 276,
-     "digest": "da7fd22e47baf64a"
+     "n": 274,
+     "digest": "2cafbabca3a9e106"
     }
    },
    "R": {
@@ -1311,8 +1311,8 @@
    "throughInk": 0
   },
   "2608.03063": {
-   "aligned": 99,
-   "alignedMulti": 84,
+   "aligned": 98,
+   "alignedMulti": 83,
    "throughInk": 2
   },
   "2608.06701": {
@@ -1341,8 +1341,8 @@
    "throughInk": 10
   },
   "2608.29181": {
-   "aligned": 112,
-   "alignedMulti": 82,
+   "aligned": 111,
+   "alignedMulti": 81,
    "throughInk": 0
   }
  },
