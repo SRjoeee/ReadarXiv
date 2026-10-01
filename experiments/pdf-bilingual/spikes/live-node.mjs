@@ -4,11 +4,14 @@
 //   node spikes/live-node.mjs id [lang]
 //   ECHO=1 node spikes/live-node.mjs id — no engine: every text comes back as it went, marked, in the tags format an
 //     LLM gets (the pipeline and the compiles alone, as reader-live's LLM_MOCK checks them in the browser)
+//   TODAY=1 … — without the typesetting rule (no PDF's marks read: the translation set as before it)
 import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { marksOf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { openPaper, runLive } from '../../../src/pdf-reader/engine/live.mjs'
 import { translateTexts } from '../../../src/pdf-reader/engine/mt.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
@@ -19,7 +22,7 @@ const [id, lang = 'zh'] = process.argv.slice(2)
 const echo = t => { let done = false; return t.split(/(<[^>]*>)/).map(part => (done || part.startsWith('<') || !/\p{L}/u.test(part) ? part : ((done = true), part.replace(/\p{L}/u, l => `ECHO ${l}`)))).join('') }
 const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
 const paper = openPaper(files)
-const out = join(root, 'data/runs/live-node', id); rmSync(out, { recursive: true, force: true }); mkdirSync(out, { recursive: true })
+const out = process.env.OUT ?? join(root, 'data/runs/live-node', id); rmSync(out, { recursive: true, force: true }); mkdirSync(out, { recursive: true })
 const t0 = Date.now(), at = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`
 let n = 0
 async function compile({ main, engine, rerun, bibtex, overrides }) {
@@ -36,9 +39,11 @@ async function compile({ main, engine, rerun, bibtex, overrides }) {
   return { ok: !!pdf?.length, pdf, aux: read('aux', 'utf8'), bbl: bibtex ? read('bbl', 'utf8') : null, log: read('log', 'latin1') ?? '', ms: Date.now() - start }
 }
 const asAnswer = text => (text == null ? null : { text, by: null })
+/** a PDF's marks and page columns, as the reader reads them for the typesetting rule (session.mjs typesetMarksOfPdf) */
+const readMarks = async bytes => { const task = getDocument({ data: new Uint8Array(bytes), verbosity: 0 }); try { return await marksOf(await task.promise) } finally { await task.destroy() } }
 const r = await runLive(paper, {
   // translateUnits takes each text as { text, by } (engine.mjs); this engine has no identity of the background's
-  lang, compile, ...(process.env.ECHO ? { format: 'tags', translate: async texts => texts.map(echo).map(asAnswer) } : { translate: texts => translateTexts(texts, lang).then(r => r.map(asAnswer)) }),
+  lang, compile, readMarks: process.env.TODAY ? null : readMarks, ...(process.env.ECHO ? { format: 'tags', translate: async texts => texts.map(echo).map(asAnswer) } : { translate: texts => translateTexts(texts, lang).then(r => r.map(asAnswer)) }),
   onUpdate: ({ pdf, texts, translated, final }) => { const f = join(out, final ? 'final.pdf' : `preview-${translated}.pdf`); writeFileSync(f, pdf); if (final) writeFileSync(join(out, 'final-texts.json'), JSON.stringify(texts)); console.log(at(), final ? 'FINAL' : 'preview', translated, 'units →', f.slice(root.length)) },
   onOriginal: ({ pdf }) => { writeFileSync(join(out, 'original-marked.pdf'), pdf); console.log(at(), 'original with marks') },
   note: (event, data) => console.log(at(), event, JSON.stringify(data)),

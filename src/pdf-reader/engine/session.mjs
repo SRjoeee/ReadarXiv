@@ -41,6 +41,7 @@ import { hostReady } from './host.mjs'
 import { compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
 import { displayEdges, isName, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
 import { verified, VERIFIED } from './scripts.mjs'
+import { marksOf as typesetMarksOf } from './typeset/places.mjs'
 import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { unpackSource } from './tar.mjs'
 
@@ -1904,6 +1905,12 @@ const htmlVersion = () => Promise.race([
   new Promise(resolve => setTimeout(resolve, 3000, translatedHtmlUrlOf(paper))),
 ])
 const waitFor = (origin, type) => new Promise(r => addEventListener('message', function h(e) { if (e.origin === origin && e.data?.type === type) { removeEventListener('message', h); r(e.data) } }))
+/** a compile's unit marks and each page's columns, as the typesetting rule reads them (typeset/places.mjs marksOf): from
+ *  a copy of the bytes, which the reader shows or anchors by too, and PDF.js would take */
+async function typesetMarksOfPdf(bytes) {
+  const task = pdfjsLib.getDocument({ data: bytes.slice(), ...ASSETS })
+  try { return await typesetMarksOf(await task.promise) } finally { task.destroy() }
+}
 /** our compile of the original, with unit marks → each mark with the word it stands by, to carry over to arXiv's PDF */
 async function marksOfPdf(bytes) {
   const task = pdfjsLib.getDocument({ data: bytes, ...ASSETS })
@@ -2168,6 +2175,8 @@ async function live() {
     const result = await runLive(paperData, {
       lang, compile, note,
       seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: p.sameUnits || finalShown,
+      // the typesetting rule: the translation set as near its original's places as the rule can (live.mjs)
+      readMarks: typesetMarksOfPdf,
       marks: leftMarks ? new Map(leftMarks) : knownMarks(cached, p.sameUnits),
       format: engine.format,
       // with the tags path's sentence cuts (mt.mjs cutsOf), which the service marks (B3b)

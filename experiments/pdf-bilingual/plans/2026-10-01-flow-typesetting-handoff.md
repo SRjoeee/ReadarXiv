@@ -43,7 +43,7 @@ where it stands. Reasons and numbers: `records/typesetting.md`, "The engine's co
 | `typeset/density.mjs`, `faces.mjs` | The translation's width as TeX sets it, from the font probe's width and size probes. |
 | `typeset/places.mjs` | Unit marks from a PDF.js document (`marksOf`); drift and alignment against the original. |
 | `typeset/tex.mjs` | The TeX: line probes and forced breaks (`LINES_TEX`), units set smaller (`SIZE_TEX`), floats held to their original's page (`FLOAT_TEX`), the log readers, and `typesetting()`, what a plan adds to a compile. |
-| `live.mjs` | `probeFiles(paper, { width })`, `originalFiles(paper, { lines })`, `translationFiles(…, { typeset })`. Defaults unchanged: nothing calls the rule yet. |
+| `live.mjs` | `probeFiles(paper, { width })`, `originalFiles(paper, { lines })`, `translationFiles(…, { typeset })`; `runLive` calls them where its caller reads a PDF's marks (`readMarks`; the reader since 2026-10-02, F2). |
 | `tests/pdf-reader/typeset-*.test.ts` | The experiment's cases, in vitest. |
 | `experiments/pdf-bilingual/spikes/typeset-tex-cases.mjs` | The rule's TeX under native TeX in Docker: one case per fault a paper of the round hit. The reference for BusyTeX. |
 | `experiments/pdf-bilingual/spikes/typeset-gate.mjs`, `records/typeset-gate.json` | The rule's gate: the three goals, today against the rule, on the round and the holdouts, natively; fails where any paper falls behind its record. `typeset-translate.mjs` makes a paper's translation for it (Microsoft's free engine). |

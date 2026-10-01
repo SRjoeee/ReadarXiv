@@ -14,3 +14,25 @@ export declare function probeFiles(paper: Paper, options?: { width?: boolean }):
 export declare function originalFiles(paper: Paper, options?: { lines?: boolean }): Map<string, Uint8Array>
 /** the units a translation into `lang` leaves as they are */
 export declare function keptFor(paper: Paper, lang: string): Set<SourceUnit>
+/** a compile as the TeX page answers it */
+export interface Compiled { ok: boolean; pdf?: Uint8Array | null; aux?: string | null; bbl?: string | null; log?: string; ms?: number; error?: string; network?: string[] }
+/** a compile asked of the TeX page */
+export interface CompileRequest { main: string; engine: string; rerun: boolean; bibtex: boolean | null; overrides: Map<string, Uint8Array> }
+/** the reader's run: translation as it comes in, the compiles, the final (the options as the reader passes them) */
+export declare function runLive(paper: Paper, options: {
+  lang: string
+  compile: (req: CompileRequest) => Promise<Compiled>
+  translate: (texts: string[], cuts?: number[][]) => Promise<({ text: string; by: string | null } | null)[]>
+  format?: 'markers' | 'tags' | 'runs'
+  rank?: (i: number) => number
+  onUpdate?: (u: { pdf: Uint8Array; texts: unknown[]; translated: number; final: boolean }) => void
+  onOriginal?: (o: { pdf: Uint8Array }) => void
+  note?: (event: string, data?: Record<string, unknown>) => void
+  seed?: Map<number, unknown> | null
+  marks?: Map<string, unknown> | null
+  identity?: string | null
+  pipelineCurrent?: boolean
+  /** a PDF's unit marks and page columns (typeset/places.mjs marksOf on a PDF.js document of the bytes): with it, the
+   *  typesetting rule sets the translation; without, it is set as today */
+  readMarks?: ((pdf: Uint8Array) => Promise<import('./typeset/places.mjs').Marks>) | null
+}): Promise<{ settled: boolean; exhausted: boolean; changed: boolean; results: Map<number, unknown>; previews: number; translated: number; units: number; originalOk?: boolean; stopped?: string | null; missing?: number }>

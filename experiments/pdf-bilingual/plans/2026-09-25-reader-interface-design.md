@@ -717,7 +717,7 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
 - **Found on each side** (`anchors.mjs sentenceStarts`, report-B's option X: no new TeX mark): the page token of each
   sentence's first word, as the unit's own text match inside its marks found it; its second or third word where the
   first was not found; past that, the unit lights whole. arXiv's PDF has marks only once our marked original is compiled
-  — in a live run when the compiler is first idle after a preview — so a unit there found by its text alone takes its
+  — in a live run right after the first preview (the typesetting rule plans every later compile from it, 2026-10-02) — so a unit there found by its text alone takes its
   starts where its match covers 80 % of its words or more (B3c): on the ten papers 625 of 738 units of more than one
   sentence, 1 702 starts, all on the token the marks give; on the ground truth's arXiv PDFs on the mark's line as often
   as with marks (98.6–100 % against 98.9–100 %). In a live open with Microsoft and nothing cached, the first sentence

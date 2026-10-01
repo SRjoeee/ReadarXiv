@@ -874,7 +874,11 @@ is only how it meets the rest of the extension.
   IndexedDB of their own (`src/cache/pdf-store.ts`), capped at 500 MB with the least recently opened going first. The
   settings page counts them and clears them (UI.md S-O-73).
 - **Typesetting** runs in a TeX page outside the extension (BusyTeX, served locally during the experiment). No
-  reader-facing word names it (UI.md §3.5).
+  reader-facing word names it (UI.md §3.5). The translation is set by the Flow rule (`src/pdf-reader/engine/typeset/`;
+  `experiments/pdf-bilingual/records/typesetting.md`): each unit's leading, the paper's type and the floats' pages
+  planned from our marked original's line probes and marks, which is compiled in full right after the first preview;
+  the last preview of the whole translation measures where its text stood, and the final corrects it. Where a plan
+  cannot be made the translation is set as before it.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; headings, captions and cells whole; tables, algorithms and figures whole with their captions (a
