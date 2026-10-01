@@ -126,9 +126,6 @@ describe('atoms, pieces and lines', () => {
   it('gives at least one line, and half a last line on average', () => {
     expect(linesAt(0.3, 24)).toBe(1)
     expect(linesAt(48, 24)).toBeCloseTo(2.5, 9)
-    // text in two segments, a display between them: each segment its own last line, each at least one
-    expect(linesAt(48, 24, 2)).toBeCloseTo(3, 9)
-    expect(linesAt(10, 24, 2)).toBe(2)
   })
 })
 

@@ -94,12 +94,10 @@ export function finalTypesetting(state, preview, translated) {
   const lines = readLines(preview?.log), got = list.filter(u => lines.get(u.i))
   const missing = !completeLog(preview?.log) ? "the preview's log, whole" : !preview?.marks?.marks.size ? "the preview's marks" : !got.length ? 'a unit the preview measured' : null
   if (missing) return { typeset: state.typeset, type, leads: state.leads, faces: new Map(), trace: [], missing }
-  // each unit's height at leading one as the preview set it: its measured lines of text (a display's three out: lift)
-  // at the type's size
-  const text = u => Math.max(0, lines.get(u.i).lines - (u.lift ?? 0))
-  const heights = new Map(got.map(u => [u.i, text(u) * (cjk ? 1 : type.size) * u.bs])), cu = new Map(list.map(u => [u.i, u]))
+  // each unit's height at leading one as the preview set it: its measured lines at the type's size
+  const heights = new Map(got.map(u => [u.i, lines.get(u.i).lines * (cjk ? 1 : type.size) * u.bs])), cu = new Map(list.map(u => [u.i, u]))
   const measured = {
-    drift: drifts(state.original.marks, preview.marks), preview: new Map(got.map(u => [u.i, text(u) * lines.get(u.i).bs])),
+    drift: drifts(state.original.marks, preview.marks), preview: new Map(got.map(u => [u.i, lines.get(u.i).lines * lines.get(u.i).bs])),
     span: FLOW.span, snap: FLOW.snap * (median(got.map(u => u.bs)) ?? 12), breaks: readForced(preview.log),
   }
   const shrink = cjk ? { steps: FLOW.faces, lines: FLOW.faceLines, heightAt: (i, f) => (heights.get(i) * heightAtSize(cu.get(i), design, type, f)) / heightAtSize(cu.get(i), design, type, 1) } : null
@@ -110,10 +108,11 @@ export function finalTypesetting(state, preview, translated) {
 // the plan tex.mjs typesetting takes: each unit's leading as \axtlead@ takes it — × its own size, so its original's
 // leading over its size — and the sizes: an alphabet's type size (CJK's under CJKutf8) on every translated unit that
 // flows (paragraphs, captions and notes through their marks, a figure's text through its group), the faces a CJK flow set.
-// A translated unit the flow could not measure (a display inside it: density.mjs measureUnits) takes the leading the flow
-// set where it stands, the last measured unit's before it: at the paper's type it stood out from its neighbours as the
-// flow moved them — 93 of 4,682 units parted by more than 8 % from the six around them on the gate's 57 papers, 48 so —
-// and ran on where they were set tighter (Chinese 2608.09038, a page)
+// A translated unit the flow does not measure (a display inside it: density.mjs measureUnits) takes the leading the flow
+// set where it stands, the last measured unit's before it, for the page's evenness: at the paper's type it stood out
+// from its neighbours as the flow moved them. On the fresh holdout of 2026-10-01, units parted by more than 8 % from the
+// six around them: 29 of 3,484 so, 47 at the paper's type, 43 with such units measured by their text and set by the
+// flow themselves — which also lost the Chinese holdout a page and 0.04 column of start drift (records/typesetting.md)
 function typesettingOf(state, type, leads, faces) {
   const { units, translated, design, strategy, lo, floatsAt } = state, cjk = design.cjk
   const factors = new Map(), factor = (i, l) => { if (lo.get(i)?.size) factors.set(i, (l * lo.get(i).bs) / lo.get(i).size) }

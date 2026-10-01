@@ -231,49 +231,33 @@ export function piecesWidth(pieces, faces, ctx = {}) {
   return w
 }
 
-/** the lines a text of width `w` takes in a measure of `cap` em, in `parts` stretches (a paragraph a display parts): each
- *  at least one line, and on average half a last line */
-export const linesAt = (w, cap, parts = 1) => Math.max(parts, w / cap + 0.5 * parts)
+/** the lines a text of width `w` takes in a measure of `cap` em: at least one, and on average half a last line */
+export const linesAt = (w, cap) => Math.max(1, w / cap + 0.5)
 
 const DISPLAY = /^(\$\$|\\\[|\\begin\s*\{(equation|align|gather|multline|eqnarray|displaymath|flalign|alignat|dmath))/
-const isDisplay = p => p.t === 'ph' && DISPLAY.test(p.src ?? '')
-/** the stretches of text a unit's displays part it into, each holding something to set */
-const partsOf = pieces => {
-  let n = 0, open = false
-  for (const p of pieces) { if (isDisplay(p)) open = false; else if (!open && (p.t !== 'text' || /\S/.test(p.s ?? ''))) { n++; open = true } }
-  return n
-}
 const median = xs => { const s = xs.filter(Number.isFinite).sort((a, b) => a - b); return s.length ? s[s.length >> 1] : null }
 
 /**
- * A translation's units as the solver takes them (type.mjs): each translated unit whose original the line probes
- * counted, with its original's lines of text and leading, the capacity of the original's lines in em — the ruler: the
- * unit's own when it has three lines or more, else the median of its paper's units of its kind, else of all — and its
- * translation's width at a type. A unit holding a display is measured by its text: \\prevgraf counts each display as
- * three lines (`lift`), which the reading less them leaves; the display is no width, and parts the text into stretches
- * each with its own last line (`parts`). The display itself is the same in either document, set at the paper's leading
- * whatever the unit's: its height falls out of every sum the rule balances. Left out, such units ran long in every
- * setting (1.12 of their originals' height today, 1.13 in the rule's final) while the rest ran short, and papers where
- * they are a quarter of the text drifted twice as far (the review of 2026-10-01, I3).
- * A CJK width is linear in the face's scale and the tracking (wide characters and marks scale, gaps between wide
- * characters track, the rest stays), so three widths give it for every type: a solver's step costs nothing.
+ * A translation's units as the solver takes them (type.mjs): each translated unit whose original the line
+ * probes counted, with no display inside it, with its original's lines and leading, the capacity of the original's
+ * lines in em — the ruler: the unit's own when it has three lines or more, else the median of its paper's units of
+ * its kind, else of all — and its translation's width at a type. A CJK width is linear in the face's scale and the
+ * tracking (wide characters and marks scale, gaps between wide characters track, the rest stays), so three widths
+ * give it for every type: a solver's step costs nothing.
  * `units` the paper's; `translated` Map index → pieces; `lines` readLines of the original's log; `fonts` the probe's;
  * `probe` the width probe's reading (readWidthProbe), when there is one; `glue` whether xeCJK sets CJK (textWidth).
  */
 export function measureUnits({ units, translated, lines, fonts, probe = null, citeStyle = 'numeric', script, glue = true }) {
   const faces = facesOf(fonts, probe), ctx = { script, citeStyle, glue }
-  const text = pieces => pieces.filter(p => !isDisplay(p))
   const out = []
   units.forEach((u, i) => {
     const pieces = translated.get(i), o = lines.get(i)
-    if (!pieces || !o || !pieces.some(p => p.tr)) return
-    const lift = 3 * u.pieces.filter(isDisplay).length, parts = Math.max(1, partsOf(u.pieces)), lo = o.lines - lift
-    if (lo < parts) return
-    const at = cjk => piecesWidth(text(pieces), faces, { ...ctx, cjk })
+    if (!pieces || !o || !pieces.some(p => p.tr) || u.pieces.some(p => p.t === 'ph' && DISPLAY.test(p.src ?? ''))) return
+    const at = cjk => piecesWidth(pieces, faces, { ...ctx, cjk })
     const w10 = at({ scale: 1, track: 0 }), a = at({ scale: 2, track: 0 }) - w10, g = at({ scale: 1, track: 1 }) - w10
-    out.push({ i, kind: u.kind, lo, lift, parts, bs: o.bs, wo: piecesWidth(text(u.pieces), faces, { script: 'Latn', citeStyle }), wt: w10, a, g, c: w10 - a })
+    out.push({ i, kind: u.kind, lo: o.lines, bs: o.bs, wo: piecesWidth(u.pieces, faces, { script: 'Latn', citeStyle }), wt: w10, a, g, c: w10 - a })
   })
-  const own = out.map(x => (x.lo >= 3 && x.wo > 0 && x.lo - 0.5 * x.parts >= 1 ? x.wo / (x.lo - 0.5 * x.parts) : null))
+  const own = out.map(x => (x.lo >= 3 && x.wo > 0 ? x.wo / (x.lo - 0.5) : null))
   const all = median(own), byKind = new Map()
   for (const kind of new Set(out.map(x => x.kind))) byKind.set(kind, median(out.map((x, k) => (x.kind === kind ? own[k] : null))))
   return out.map((x, k) => ({ ...x, cap: own[k] ?? byKind.get(x.kind) ?? all, width: ({ scale = 1, track = 0 } = {}) => x.a * scale + x.g * track + x.c })).filter(x => x.cap)
