@@ -5,9 +5,9 @@
 // From the side's tokens (anchors.mjs tokenizeDocument; their ink's edges, inkEdges) and its anchors: the page's lines;
 // each unit's runs (one page and one column each), and inside a run its rows (lines that overlap merged, so that a
 // display's zig-zag of numerator, denominator, limits, scripts and number is one row); a run's block, across its rows
-// inside the column's text edges. The edges are the document's (per page parity and column, from every page's long
-// lines): a page of displays has too few lines of prose to give its own, and a two-sided class shifts the text between
-// odd and even pages. The document's layout is made once a side is anchored; a page's runs when the page is first
+// inside the column's text edges. The edges are the document's (per page size, parity and column, from every page's
+// long lines): a page of displays has too few lines of prose to give its own, a two-sided class shifts the text between
+// odd and even pages, and a landscape page or one of another size has a measure of its own. The document's layout is made once a side is anchored; a page's runs when the page is first
 // drawn or pointed at, since most pages of a long paper are never looked at in a visit.
 // The look was chosen on a draft (round 1 of the highlight, 2026-10-01): one block per run, padded half the leading
 // above and below and 3 px beside, one outline with 3 px corners.
@@ -25,6 +25,8 @@ const OVERHANG = 6, SNAP = 3
 const OVERLAP = 0.5
 
 const median = xs => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); return s[s.length >> 1] }
+/** the lower quartile */
+const quartile = xs => { const s = [...xs].sort((a, b) => a - b); return s[(s.length - 1) >> 2] }
 /** the first index of a sorted array holding a value ≥ v */
 function lowerBound(xs, v) {
   let lo = 0, hi = xs.length
@@ -35,8 +37,8 @@ function lowerBound(xs, v) {
 /**
  * A side's layout, made once it is anchored: what a page's geometry needs of each token, kept compact (its ink across,
  * its baseline and size, its glyphs' height), and from the units' lines (anchorUnits' rects, a few thousand where the
- * tokens are tens of thousands) each page's columns, the document's column text edges and each page's half leading;
- * the units on each page. `doc` tokenizeDocument's tokens; `views` each page's box, [x0, y0, x1, y1]; `anchors`
+ * tokens are tens of thousands) each page's columns, the document's column text edges and the half leading of each
+ * kind of unit on each page; the units on each page. `doc` tokenizeDocument's tokens; `views` each page's box, [x0, y0, x1, y1]; `anchors`
  * anchorUnits' result; `kindOf(id)` a unit's kind. Nothing of `doc` is kept: its objects, with their words and items,
  * are ten times the copy (2608.02459: 9 and 11.6 MB a side)
  */
@@ -57,13 +59,14 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
   // each page's columns: two where four long lines stand in each half, one where four cross the middle, else as most
   // pages have them; the lines are the units' (running heads, page numbers and floats' texts are no text block's)
   const page = [null]
-  for (let p = 1; p <= pages; p++) { const v = views[p - 1]; page[p] = { mid: (v[0] + v[2]) / 2, width: v[2] - v[0], L: 0, R: 0, F: 0, x0: Infinity, x1: -Infinity, gaps: [] } }
+  // size: the page's, for the edges' pool; gaps: the space between consecutive lines of a unit there, by its kind
+  for (let p = 1; p <= pages; p++) { const v = views[p - 1]; page[p] = { mid: (v[0] + v[2]) / 2, width: v[2] - v[0], size: `${Math.round(v[2] - v[0])}x${Math.round(v[3] - v[1])}`, L: 0, R: 0, F: 0, x0: Infinity, x1: -Infinity, gaps: new Map() } }
   const long = []
   const unitsOn = Array.from({ length: pages + 2 }, () => [])
   const pagesOf = new Map()
   for (const [id, a] of anchors) {
     if (!a?.tokens?.length) continue
-    const ps = []
+    const ps = [], kind = kindOf(id) ?? ''
     a.rects.forEach((r, i) => {
       const P = page[r.page]
       if (!P) return
@@ -72,7 +75,7 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
       if (r.x1 > P.x1) P.x1 = r.x1
       // the leading: the space between a unit's consecutive lines of one size, less than a line apart
       const q = a.rects[i + 1], h = r.y1 - r.y0
-      if (q && q.page === r.page && Math.abs(q.y1 - q.y0 - h) < h * 0.15 && r.y0 > q.y1 && r.y0 - q.y1 < h * 1.2) P.gaps.push(r.y0 - q.y1)
+      if (q && q.page === r.page && Math.abs(q.y1 - q.y0 - h) < h * 0.15 && r.y0 > q.y1 && r.y0 - q.y1 < h * 1.2) (P.gaps.get(kind) ?? P.gaps.set(kind, []).get(kind)).push(r.y0 - q.y1)
       if (r.x1 - r.x0 <= P.width * LONG) return
       long.push(r)
       if (r.x0 < P.mid - 1 && r.x1 > P.mid + 1) P.F++
@@ -92,11 +95,12 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
   // a long line's column for the edges' pool, before the columns' edges are known: the half it is in, both where it
   // crosses the middle
   const halfOf = (P, x0, x1) => (!P.two || (x0 < P.mid - 1 && x1 > P.mid + 1) ? 'F' : x1 <= P.mid + 1 ? 'L' : 'R')
-  // the text block's edges, per page parity and column: the outermost that enough long lines share (justified prose is
-  // flush on both sides; displays, lists and indents stand inside, an equation's number flush right)
+  // the text block's edges, per page size, parity and column: the outermost that enough long lines share (justified
+  // prose is flush on both sides; displays, lists and indents stand inside, an equation's number flush right)
+  const poolOf = (p, col) => `${page[p].size} ${p % 2}${page[p].two ? 'T' : 'O'}${col}`
   const pool = new Map()
   for (const r of long) {
-    const P = page[r.page], key = `${r.page % 2}${P.two ? 'T' : 'O'}${halfOf(P, r.x0, r.x1)}`
+    const P = page[r.page], key = poolOf(r.page, halfOf(P, r.x0, r.x1))
     const q = pool.get(key) ?? pool.set(key, { x0s: [], x1s: [] }).get(key)
     q.x0s.push(r.x0); q.x1s.push(r.x1)
   }
@@ -109,15 +113,24 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
     return best === null ? null : median(xs.filter(x => Math.abs(x - best) <= 1.5))
   }
   const edges = new Map([...pool].map(([key, q]) => [key, { x0: edge(q.x0s, false), x1: edge(q.x1s, true) }]))
-  // each page's columns' edges, where the document gives none the page's own units' extent; its half leading, the
-  // document's where it has too few lines
-  const all = page.flatMap(P => P?.gaps ?? []), docGap = median(all) ?? 2
+  // each page's columns' edges, where the document gives none the page's own units' extent. The half leading of a kind
+  // of unit on a page: its lines' there, else the kind's in the document, else the page's, else the document's — a
+  // footnote set tighter than the body took the body's and overlapped its neighbour by up to 2 units (the review of B1).
+  // The lower quartile of the gaps: the interline space is the least of a unit's gaps, its displays' skips and its
+  // items' separations more. On the ten papers, runs whose pad overlaps another unit's block by over half a unit: 260
+  // with the page's median, 294 with each kind's, 167 with each kind's lower quartile
+  const half = xs => (xs && xs.length >= 3 ? quartile(xs) / 2 : null)
+  const byKind = new Map(), every = []
+  for (let p = 1; p <= pages; p++) for (const [kind, xs] of page[p].gaps) { (byKind.get(kind) ?? byKind.set(kind, []).get(kind)).push(...xs); every.push(...xs) }
+  const kindLead = new Map([...byKind].map(([kind, xs]) => [kind, half(xs)])), docLead = every.length ? quartile(every) / 2 : 1
   for (let p = 1; p <= pages; p++) {
     const P = page[p]
-    const at = col => { const e = edges.get(`${p % 2}${P.two ? 'T' : 'O'}${col}`); return { x0: e?.x0 ?? P.x0, x1: e?.x1 ?? P.x1 } }
+    const at = col => { const e = edges.get(poolOf(p, col)); return { x0: e?.x0 ?? P.x0, x1: e?.x1 ?? P.x1 } }
     P.cols = P.two ? { L: at('L'), R: at('R') } : { F: at('F') }
     if (P.two) P.cols.F = { x0: P.cols.L.x0, x1: P.cols.R.x1 }
-    P.lead = (P.gaps.length >= 3 ? median(P.gaps) : docGap) / 2
+    const own = half([...P.gaps.values()].flat()) ?? docLead
+    P.lead = new Map([...kindLead.keys()].map(kind => [kind, half(P.gaps.get(kind)) ?? kindLead.get(kind) ?? own]))
+    P.lead.set(null, own)
     P.gaps = null
   }
   // a mark set apart after a token on its baseline (tokenizeDocument's `far`) is its ink where it ends at the token's
@@ -252,7 +265,7 @@ function unitRuns(L, p, { k0, lines, lineOf, owner, lineOwner }, id, toks) {
     let start = 0
     for (let r = 1; r <= rows.length; r++) {
       if (r < rows.length && !interrupted(lines, lineOwner, col, id, rows[r - 1], rows[r])) continue
-      runs.push(runOf(id, p, col, rows.slice(start, r), e, P.lead))
+      runs.push(runOf(id, p, col, rows.slice(start, r), e, P.lead.get(L.kindOf(id) ?? '') ?? P.lead.get(null)))
       start = r
     }
   }

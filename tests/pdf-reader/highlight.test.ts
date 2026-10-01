@@ -17,12 +17,12 @@ const VIEW = [0, 0, 600, 800]
 const docOf = (pages: Item[][]) => tokenizeDocument(pages.map((items, i) => ({ page: i + 1, items, styles: {} })))
 /** the layout of `pages` with each unit's tokens; the prose no unit given takes is a unit of its own on each page, as
  *  every paragraph of a paper is (the column edges are the units' lines') */
-function side(pages: Item[][], units: [number, number[]][], kinds = new Map<number, string>()) {
+function side(pages: Item[][], units: [number, number[]][], kinds = new Map<number, string>(), views = pages.map(() => VIEW)) {
   const doc = docOf(pages)
   const used = new Set(units.flatMap(([, ks]) => ks))
   const rest = pages.map((_, i) => [1000 + i, doc.flatMap((t, k) => (t.page === i + 1 && t.t === 'text' && !used.has(k) ? [k] : []))] as [number, number[]]).filter(([, ks]) => ks.length)
   const anchors = new Map<number, Anchor | null>([...units, ...rest].map(([id, tokens]) => [id, { tokens, rects: lineRects(doc, tokens), coverage: 1, bounded: true }]))
-  return layoutOf(doc, pages.map(() => VIEW), anchors, id => kinds.get(id))
+  return layoutOf(doc, views, anchors, id => kinds.get(id))
 }
 const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i)
 const at = (doc: DocToken[], t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
@@ -45,6 +45,15 @@ describe('layoutOf: the document\'s column text edges', () => {
 
   it('an even page\'s unit keeps to the even pages\' edges', () => {
     expect(across(nth(runsOf(side(pages, [[1, range(160, 175)]]), 1)))).toEqual([70, 320])
+  })
+
+  it('a page of another size keeps to its own edges: a landscape page\'s text does not widen a portrait page\'s', () => {
+    // pages 1 and 3 odd, page 3 landscape (800 × 600) with its text from 50 to 750; on page 1 an overfull display
+    const ps = [[...prose(700, 20), item('x = a + b + c', 60, 450, { width: 280 }), ...prose(430, 4)], prose(700, 20), prose(500, 20, 50, 750)]
+    const d = docOf(ps), x = at(d, 'x'), p3 = d.findIndex(t => t.page === 3)
+    const L = side(ps, [[0, range(x - 8, x + 11)], [1, range(p3 + 8, p3 + 23)]], new Map(), [VIEW, VIEW, [0, 0, 800, 600]])
+    expect(across(nth(runsOf(L, 0)))).toEqual([50, 306])
+    expect(across(nth(runsOf(L, 1)))).toEqual([50, 750])
   })
 })
 
@@ -184,6 +193,24 @@ describe('hitOf: the pointer lights what is painted, exactly', () => {
     const p = nth(runsOf(layout, 0)), q = nth(runsOf(layout, 2))
     expect(p.lead).toBeCloseTo(1.15)
     expect(blockOf(p, px).y0).toBeCloseTo(blockOf(q, px).y1)
+  })
+  it('a footnote\'s blocks are padded by half its own lines\' leading; a page of few of them takes the document\'s', () => {
+    // body text 10 high on lines 12 apart (a gap of 2.3); footnotes 8 high on lines 9 apart (7.76 high: a gap of 1.24)
+    const note = (y: number, n: number) => Array.from({ length: n }, (_, i) => item('note note note note note note note note', 50, y - 9 * i, { width: 250, size: 8, eol: true }))
+    const ps = [[...prose(740, 30), ...note(100, 4)], [...prose(740, 30), ...note(100, 2)]]
+    const d = docOf(ps), a = at(d, 'note'), b = at(d, 'note', a + 32)
+    const L = side(ps, [[0, range(a, a + 31)], [1, range(b, b + 15)]], new Map([[0, 'footnote'], [1, 'footnote']]))
+    expect(nth(runsOf(L, 0)).lead).toBeCloseTo(0.62)
+    expect(nth(runsOf(L, 1)).lead).toBeCloseTo(0.62)
+    expect(nth(runsOf(L, 1000)).lead).toBeCloseTo(1.15)
+  })
+  it('a paragraph\'s pads are its interline space\'s, not its displays\' skips', () => {
+    // four lines 12 apart (gaps of 2.3), then lines and displays alternating 15.7 apart (gaps of 6): more skips than spaces
+    const ys = [700, 688, 676, 664, 648.3, 632.6, 616.9, 601.2]
+    const ps = [[...prose(780, 6), ...ys.map(y => line('para para para para para para para para', y)), ...prose(560, 10)]]
+    const d = docOf(ps), a = at(d, 'para')
+    const L = side(ps, [[0, range(a, a + 63)]], new Map([[0, 'para']]))
+    expect(nth(runsOf(L, 0)).lead).toBeCloseTo(1.15)
   })
   it('a page\'s geometry is made once, on its first use', () => {
     expect(pageGeometry(layout, 1)).toBe(pageGeometry(layout, 1))
