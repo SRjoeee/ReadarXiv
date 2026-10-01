@@ -2192,7 +2192,13 @@ async function live() {
     // it (the S3a review, I5 d) — read from the page loaded for the compiles to come
     const mark = !cached && cacheKey ? await pdfCache.untypeset(cacheKey.digest, cacheKey.lang) : undefined
     const page = mark ? await texFrame().then(f => f.version, () => null) : null
-    if (mark && page && stillUntypeset(mark, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page })) return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
+    if (mark && page && stillUntypeset(mark, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page })) {
+      // the frame loaded to read the page's versions goes: nothing will compile in it (the F2 review's M4)
+      const loaded = frameP
+      frameP = null
+      void loaded?.then(f => f.frame.remove(), () => {})
+      return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
+    }
     // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
     if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
     // the decision to translate, the step the controller's phase moves at: a copy on screen is translated again, and
