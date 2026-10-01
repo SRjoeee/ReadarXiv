@@ -188,16 +188,26 @@ describe('a compile the network or the page failed', () => {
     const { calls, notes, r } = await run({ compiler: c, translate: t.translate })
     expect(kinds(calls).filter(k => k.startsWith('final'))).toEqual(['final+rule', 'final+rule'])
     expect(notes.filter(([e]) => e === 'next strategy' || e === 'typeset failed')).toEqual([])
-    expect([r.settled, r.exhausted, r.stopped]).toEqual([false, false, 'network'])
+    expect([r.settled, r.exhausted, r.compiler?.down]).toEqual([false, false, 'network'])
   })
-  it('the page\'s own failure (an error, no log) changes no strategy and leaves no "cannot typeset": the final once more, then what is shown stays', async () => {
+  it('the page\'s own failure (an error, no log) changes no strategy and leaves no "cannot typeset": the final once more, then the run stops, no compiler', async () => {
     const t = translator(), n = paper().units.length
     const c = compiler(n, { on: k => { if (k === 'original') t.release() } }), base = c.compile
     c.compile = async (q: Req) => { if (kindOf(q) !== 'final') return base(q); c.calls.push({ kind: 'final', ruled: ruled(q), rerun: q.rerun }); return { ok: false, error: 'compile before init', network: [] } }
     const { calls, notes, r } = await run({ compiler: c, translate: t.translate })
     expect(kinds(calls).filter(k => k.startsWith('final'))).toEqual(['final+rule', 'final+rule'])
     expect(notes.filter(([e]) => e === 'next strategy' || e === 'typeset failed')).toEqual([])
-    expect([r.settled, r.exhausted]).toEqual([false, false])
+    expect([r.settled, r.exhausted, r.compiler?.down]).toEqual([false, false, 'page'])
+  })
+  it('a preview the page failed once is asked again as it was, and the run goes on', async () => {
+    const t = translator(), n = paper().units.length
+    let failedOnce = false
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() } }), base = c.compile
+    c.compile = async (q: Req) => { if (kindOf(q) === 'preview' && !failedOnce) { failedOnce = true; c.calls.push({ kind: 'preview', ruled: ruled(q), rerun: q.rerun }); return { ok: false, error: 'Error: Compilation timeout', network: [] } } return base(q) }
+    const { calls, notes, r } = await run({ compiler: c, translate: t.translate })
+    expect(kinds(calls)).toEqual(['probe', 'preview', 'preview', 'original', 'preview+rule', 'final+rule'])
+    expect(notes.filter(([e]) => e === 'next strategy')).toEqual([])
+    expect(r.settled).toBe(true)
   })
   it('the page\'s own failure throws its frame away: the next compile opens a fresh one', async () => {
     let opened = 0

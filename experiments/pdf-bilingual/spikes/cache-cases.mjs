@@ -177,12 +177,13 @@ cases.push(['a final that did not answer is tried again with the same strategy, 
   const paper = openPaper(tex(PARAS)), events = []
   const c = slow('ok', 'ok', 'timeout')
   const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: (e, d) => events.push([e, d?.strategy]) })
+  // asked again as it was (live.mjs ask: 'compile again'), the strategy the same
   assert.equal(events.filter(([e]) => e === 'next strategy').length, 0)
-  assert.equal(events.filter(([e]) => e === 'final again').length, 1)
-  assert.equal(new Set(events.filter(([e]) => e === 'final' || e === 'final again').map(([, s]) => s)).size, 1)
+  assert.equal(events.filter(([e]) => e === 'compile again').length, 1)
+  assert.equal(new Set(events.filter(([e]) => e === 'final').map(([, s]) => s)).size, 1)
   assert.equal(r.settled, true)
 }])
-cases.push(['a final that twice did not answer ends the run with what is shown, and writes nothing', async () => {
+cases.push(['a final that twice did not answer ends the run with what is shown, writes nothing, and says the compiler is down', async () => {
   const paper = openPaper(tex(PARAS)), events = []
   const c = slow('ok', 'ok', 'timeout', 'timeout')
   const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate: echo('B'), format: 'markers', marks: new Map(), identity: 'B', note: e => events.push(e) })
@@ -191,6 +192,7 @@ cases.push(['a final that twice did not answer ends the run with what is shown, 
   assert.equal(c.calls.filter(q => q.rerun).length, 2)
   // a slow machine says nothing of the paper: not remembered as one that cannot be typeset
   assert.equal(r.exhausted, false)
+  assert.equal(r.compiler?.down, 'page')
 }])
 /** a compiler that sets the fonts probe and, if `own`, the paper's own source (the marked original: a rerun of a
  *  draft); every compile of the translation stops at a TeX error — answered with its log and no `error`, as the TeX

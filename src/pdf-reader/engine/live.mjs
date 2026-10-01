@@ -238,16 +238,18 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
   const signal = () => { const w = wake; wake = null; w?.() }
   const sleep = () => new Promise(r => { wake = r })
 
-  // a compile whose files did not all arrive (protocol 2's `network`: the TeX page asked each twice) is not the paper's:
-  // asked once more as it was, and the second time the run stops as for a network that is down — no strategy changed,
-  // no aux or bbl taken from it, nothing remembered of it (the S3a report, "what the reader must do"; its review's I5)
+  // a compile whose files did not all arrive (protocol 2's `network`: the TeX page asked each twice), or that the page
+  // itself failed (an `error` and no log: a timeout, an engine it could not bring up), is not the paper's: asked once
+  // more as it was — in a fresh frame after the page's failure (compilerKeeper) — and the second time the run stops, as
+  // for a network that is down or with no compiler: no strategy changed, no aux or bbl taken from it, nothing remembered
+  // of it (the S3a report, "what the reader must do", and its fix round's duties a–d)
   const ask = async req => {
     let r = await compile(req)
-    if (!r.network?.length) return r
-    note('compile again', { network: r.network.slice(0, 5) })
+    if (!r.network?.length && !pageFailed(r)) return r
+    note('compile again', { network: r.network?.slice(0, 5), error: r.error?.slice(0, 200) })
     r = await compile(req)
-    if (!r.network?.length) return r
-    throw Object.assign(new Error(`the TeX page could not fetch ${r.network.slice(0, 3).join(', ')}`), { network: r.network })
+    if (!r.network?.length && !pageFailed(r)) return r
+    throw Object.assign(new Error(r.network?.length ? `the TeX page could not fetch ${r.network.slice(0, 3).join(', ')}` : `the TeX page failed: ${String(r.error).slice(0, 200)}`), { compilerDown: r.network?.length ? 'network' : 'page' })
   }
   // 1. the document's fonts, while the first batch is out; with the rule, how wide its body face sets and at what sizes
   const fontsP = ask({ main: project.main, engine: meta.compiler, rerun: false, bibtex: false, overrides: probeFiles(paper, { width: !!readMarks }) }).then(r => { const fonts = readFontProbe(r.log ?? ''); note('fonts', { fonts, ms: r.ms }); return { fonts, log: r.log ?? '' } })
@@ -389,8 +391,8 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
           previews++
           measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
           onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false })
-        } else if (plan && !r.ok && !pageFailed(r)) { withoutRule(r); dirty = true }
-        else if (!pageFailed(r) && s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
+        } else if (plan && !r.ok) { withoutRule(r); dirty = true }
+        else if (s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
         continue
       }
       if (mtDone) break
@@ -427,8 +429,8 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
         const t1 = Date.now()
         const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bbl, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: true, aux: withCites(aux), bbl, typeset: plan.typeset, note }) })
         note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, error: whyFailed(r) })
-        // TeX's failure under the rule: the final as today (ruling 6); the page's, the plan uncorrected
-        if (!r.ok) { if (pageFailed(r)) return plan.typeset; withoutRule(r); return null }
+        // TeX's failure under the rule: the final as today (ruling 6)
+        if (!r.ok) { withoutRule(r); return null }
         if (r.aux) aux = r.aux
         if (r.bbl) bbl = r.bbl
         m = { plan, r }
@@ -438,16 +440,15 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
       return fin.typeset ?? m.plan.typeset
     }
     let typeset = await finalTypeset()
-    let r, ok, retried = false, exhausted = false
+    let r, ok, exhausted = false
     for (;;) {
       r = await ask({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl, typeset, note }) })
       ok = await settled(r)
       note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, typeset: !!typeset, undefinedCitations: [...new Set([...(r.log ?? '').matchAll(/^(?:LaTeX|Package natbib) Warning: Citation [`']([^']+)' .*undefined/gm)].map(m => m[1]))].slice(0, 8), error: ok ? undefined : whyFailed(r) ?? whyUnset(r) })
       if (ok) break
-      // not answered, or the page failed: once more with the same strategy, then what is shown stays — a slow machine or
-      // the page's own failure is no reason to change how the paper is set (Part 3's checks: a timed-out preview moved
-      // 2608.02163 to a strategy its class refuses)
-      if (pageFailed(r)) { if (retried) break; retried = true; note('final again', { strategy: strategy().name }); continue }
+      // (a compile the page did not answer, or failed, was asked once more by `ask`, and a second failure stops the run:
+      // a slow machine or the page's own failure is no reason to change how the paper is set — Part 3's checks: a
+      // timed-out preview moved 2608.02163 to a strategy its class refuses)
       if (typeset && !r.ok) { withoutRule(r); typeset = null; continue }
       if (s + 1 >= strategies.length) { exhausted = true; break }
       s++; aux = null
@@ -462,13 +463,12 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
     return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing() }
   }
   try { return await compiles() } catch (e) {
-    if (!e?.network) throw e
-    // the TeX page's network down: the run stops as the service's failure stops it, what is shown kept, the retry
-    // offered; the translation in hand is the run's, for the next to go on from
-    note('compile network', { network: e.network.slice(0, 5) })
-    stopped ??= 'network'
-    signal()
-    await mt.catch(() => {})
-    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: false, exhausted: false, stopped, missing: missing() }
+    if (!e?.compilerDown) throw e
+    // the TeX page down, by the network or by itself: no compile more, what is shown kept, and the reader told why
+    // (`compiler`), with the retry; the translation goes on to its end, the run's for the next to go on from — a seed
+    // whole and current is never sent again (cache.mjs reusable), so the retry asks the service for nothing more
+    note('compiler down', { why: e.compilerDown, error: e.message })
+    await mt
+    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: false, exhausted: false, stopped, compiler: { down: e.compilerDown, error: e.message }, missing: missing() }
   }
 }

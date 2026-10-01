@@ -2122,7 +2122,7 @@ async function live() {
    * Protocol 2's hints (the S3a report): the engines the visit will use — the paper's own (the font probe, the marked
    * original) and its first strategy's — and the CJK script whose faces that strategy sets, which the page fetches
    * ahead; a page of protocol 1 reads the `endpoint` instead, and nothing else. An init the page reports failed is no
-   * compiler: the frame goes, and the failure is the network's where the page says so — retried as a network down is
+   * compiler: the frame goes, and the failure is retried as a network down is (the S3a report's duties, a)
    */
   const openCompiler = async (p, lang) => {
     const { frame, version } = await texFrame()
@@ -2136,7 +2136,7 @@ async function live() {
     const done = await initDone
     if (done.error) {
       frame.remove()
-      throw Object.assign(new Error(`The TeX page could not start: ${String(done.error).slice(0, 200)}`), { event: 'no compiler', kind: done.network?.length ? 'network' : 'unknown' })
+      throw Object.assign(new Error(`The TeX page could not start: ${String(done.error).slice(0, 200)}`), { event: 'no compiler', kind: 'network' })
     }
     compiledUnder = version
     note('compiler', { ms: done.ms, version })
@@ -2229,6 +2229,10 @@ async function live() {
     if (result.results) made = result.results
     // the engine's kind kept (engine.mjs EngineError), so that a key refused midway is worded as the popup words it
     if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`, result.kind)
+    // the TeX page down, twice for one compile: by the network (its files), or by itself (an engine it could not bring
+    // up, a compile it gave up on) — no compiler, the retry offered, the network's back retrying by itself (the S3a
+    // report's duties, b); nothing written or marked, and what is shown stays
+    if (result.compiler) { await swaps; return fail('no compiler', `Could not typeset ${paper}: ${result.compiler.error}`, result.compiler.down === 'network' ? 'network' : 'unknown') }
     // the paragraphs the service left in the source, not a sum over batches: a seeded one keeps its old translation
     lost = result.missing ?? lost
     // stopped with nothing on screen translated: the card, with the service's reason (the reader's design, §8)

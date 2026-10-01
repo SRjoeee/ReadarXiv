@@ -880,8 +880,9 @@ is only how it meets the rest of the extension.
   the last preview of the whole translation measures where its text stood, and the final corrects it. Where a plan
   cannot be made the translation is set as before it. The reader speaks the TeX page's protocol 2 and still serves a
   page of protocol 1: it names the engines and the CJK faces the visit will use, so that the page fetches them ahead;
-  a compile whose files did not all arrive is asked once more, then the run stops as for a network that is down; a
-  failure of the page's own (no log) changes no strategy and leaves no mark.
+  a compile whose files did not all arrive, or that the page itself failed (no log: a timeout, an engine it could not
+  bring up), is asked once more, and a second failure stops the compiles with no compiler — no strategy changed, nothing
+  written or marked, the retry offered — while the translation goes on to its end for the retry to reuse.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; headings, captions and cells whole; tables, algorithms and figures whole with their captions (a
