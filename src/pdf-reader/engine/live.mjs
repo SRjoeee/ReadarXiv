@@ -134,7 +134,9 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
  */
 // 2: the front matter's notes are units (latex-front.mjs FRONT_MATTER)
 // 3: a translation's invisible characters dropped before TeX (mt.mjs texEscape) — a mark "cannot typeset" they caused goes
-export const PIPELINE_VERSION = '3'
+// 4: a file \input under another spelling (./sections/a.tex) gets its translation (latex-front.mjs loadProject) — the
+//    copies that set it in English go
+export const PIPELINE_VERSION = '4'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };

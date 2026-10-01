@@ -427,7 +427,10 @@ const listSources = fsys => fsys.list().filter(f => /\.(tex|sty)$/i.test(f))
 export function loadProject(root, main, { tables = false } = {}) {
   const fsys = asFiles(root)
   const sourceText = f => latin1(fsys.read(f))
-  const read = rel => { for (const cand of [rel, `${rel}.tex`]) { const bytes = fsys.read(normalizePath(cand)); if (bytes) return { rel: cand, text: latin1(bytes) } } return null }
+  // a file by the name the source package holds it under, whatever spelling named it (\input{./sections/a.tex}): the
+  // units' file and the translation's key, which must replace that file rather than sit beside it — under
+  // ./sections/a.tex the compile set the English over every unit of 2608.08350 past its abstract (2026-10-02)
+  const read = rel => { for (const cand of [rel, `${rel}.tex`]) { const key = normalizePath(cand), bytes = fsys.read(key); if (bytes) return { rel: key, text: latin1(bytes) } } return null }
   const units = [], files = new Map(), seen = new Set()
   const mainFile = read(main)
   if (!mainFile) throw new Error(`main file ${main} not found`)

@@ -4,6 +4,28 @@ import { inMemory, loadProject, patch } from '@/pdf-reader/engine/latex-front.mj
 // The PDF reader's LaTeX front end: what of a paper's source is prose to translate
 
 type Unit = { kind: string; pieces: { t: string; s?: string }[] }
+
+describe('loadProject: a file \\input under another spelling is the file the source package holds', () => {
+  const enc = (s: string) => new TextEncoder().encode(s)
+  const files = () => inMemory(new Map([
+    ['main.tex', enc('\\documentclass{article}\n\\begin{document}\n\\input{./sections/a.tex}\n\\input{sections/b}\n\\input{sections/../sections/a}\n\\end{document}\n')],
+    ['sections/a.tex', enc('First paragraph of a.\n')],
+    ['sections/b.tex', enc('Second paragraph of b.\n')],
+  ]))
+  it('names \\input{./sections/a.tex} sections/a.tex, so the translation written back replaces that file rather than sitting beside it under ./sections/a.tex, where the compile set the English over it (2608.08350: every unit past the abstract)', () => {
+    const p = loadProject(files(), 'main.tex')
+    const units = p.units as (Unit & { file: string })[]
+    expect([...new Set(units.map(u => u.file))]).toEqual(['sections/a.tex', 'sections/b.tex'])
+    const translated = new Map(units.map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))]))
+    const out = patch(p, translated as Map<(typeof p.units)[number], unknown[]>)
+    expect([...out.keys()].sort()).toEqual(['main.tex', 'sections/a.tex', 'sections/b.tex'])
+    expect(new TextDecoder().decode(out.get('sections/a.tex'))).toContain('<T0>')
+  })
+  it('walks a file once, however many spellings name it', () => {
+    const p = loadProject(files(), 'main.tex')
+    expect((p.units as (Unit & { file: string })[]).filter(u => u.file === 'sections/a.tex')).toHaveLength(1)
+  })
+})
 const project = (tex: string) => loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode(tex)]])), 'main.tex')
 const textOf = (u: Unit) => u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
 /** every unit's words replaced by a mark of its own, and the main file as it is then typeset */
