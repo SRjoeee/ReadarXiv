@@ -8,13 +8,15 @@ import { SIZE_PROBE } from './density.mjs'
  *  reads \prevgraf as 0. A unit whose group closed with no paragraph gives none. No probe from restricted horizontal
  *  mode, where a caption is measured in an \hbox. And each column the output routine makes at a forced break
  *  (\outputpenalty -10000: \newpage, \clearpage's, \pagebreak; LaTeX's float passes run below it), as AXT-FORCED:
- *  where the text starts at a column's top whatever came before (readForced) */
+ *  where the text starts at a column's top whatever came before (readForced). And once the last page is out, AXT-END:
+ *  the readings are the whole paper's (completeLog) */
 export const LINES_TEX = PARA_END_TEX + String.raw`\makeatletter
 \def\axt@linescap#1{\expandafter\xdef\csname axt@lg@#1\endcsname{\the\prevgraf\space\the\baselineskip\space\f@size}}
 \def\axt@linesmsg#1{\message{^^JAXT-LINES #1 \csname axt@lg@#1\endcsname^^J}}
 \protected\def\axtlines#1{\ifhmode\ifinner\else\axt@lines{#1}\fi\else\axt@lines{#1}\fi}
 \def\axt@lines#1{\ifdefined\AddToHookNext\axt@whenover{lines#1}{\axt@linescap{#1}}{}{\axt@linesmsg{#1}}\fi}
 \AtBeginDocument{\let\axt@forcedcol\@makecol\def\@makecol{\ifnum\outputpenalty=-\@M\message{^^JAXT-FORCED^^J}\fi\axt@forcedcol}}
+\ifdefined\AddToHook\AddToHook{enddocument/afterlastpage}{\message{^^JAXT-END^^J}}\fi
 \makeatother
 `
 
@@ -80,6 +82,9 @@ export const readForced = log => {
   for (const m of lastTexLog(log).matchAll(/^AXT-(?:FORCED|LINES (\d+))/gm)) if (!m[1]) broke = true; else if (broke) { out.add(Number(m[1])); broke = false }
   return out
 }
+/** whether a compile's last pass reached the document's end (LINES_TEX's AXT-END): a compile that stopped short gives a
+ *  PDF of what it set and line readings for part of the paper, which the rule takes no plan from (plan.mjs) */
+export const completeLog = log => /^AXT-END$/m.test(lastTexLog(log))
 /** each unit's lines, leading (pt) and size (pt) at its paragraph's end (LINES_TEX), by unit index */
 export const readLines = log => new Map([...lastTexLog(log).matchAll(/^AXT-LINES (\d+) (\d+) ([\d.]+)pt(?: ([\d.]+))?/gm)].map(m => [Number(m[1]), { lines: Number(m[2]), bs: Number(m[3]), ...(m[4] ? { size: Number(m[4]) } : {}) }]))
 

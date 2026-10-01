@@ -12,7 +12,8 @@ import { FIT_DEF, latin1Bytes, MARK_DEF, NO_OVERFLOW, unitLeadTex as engineUnitL
 import { openPaper, translationFiles } from '../../../src/pdf-reader/engine/live.mjs'
 import { strategiesFor } from '../../../src/pdf-reader/engine/scripts.mjs'
 import { marksOf as marksOfPdf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
-import { FLOAT_TEX, LINES_TEX, readForced, readLines, SIZE_TEX, typesetting } from '../../../src/pdf-reader/engine/typeset/tex.mjs'
+import { DESIGN } from '../../../src/pdf-reader/engine/typeset/type.mjs'
+import { completeLog, FLOAT_TEX, LINES_TEX, readForced, readLines, SIZE_TEX, typesetting } from '../../../src/pdf-reader/engine/typeset/tex.mjs'
 
 /** a unit's own leading at `em` times its size, as the rule sets it */
 const unitLeadTex = em => engineUnitLeadTex(`${em}\\dimexpr\\f@size pt\\relax`)
@@ -62,6 +63,11 @@ check('in a box: no TeX error', !/^! /m.test(boxedLog), (boxedLog.match(/^! .*/m
 check('forced breaks read as the unit after each', JSON.stringify([...readForced('AXT-LINES 1 3 11.0pt 10\nAXT-FORCED\nAXT-FORCED\nAXT-LINES 2 1 11.0pt 10\nAXT-LINES 3 2 11.0pt 10\nAXT-FORCED\n')]) === '[2]')
 const forcedLog = tex('forced', `${MARK_DEF}${LINES_TEX}\n\\documentclass[twocolumn]{article}\n\\usepackage{lipsum}\n\\begin{document}\n\\axtlines{1}\\lipsum[1]\n\n\\axtlines{2}\\lipsum[2]\n\n\\clearpage\n\\axtlines{3}\\lipsum[3]\n\n\\begin{figure}[t]\\centering\\rule{2cm}{9cm}\\caption{\\axtlines{4}A float.}\\end{figure}\n\\axtlines{5}\\lipsum[4-8]\n\n\\newpage\n\\axtlines{6}\\lipsum[9]\n\n\\end{document}\n`)
 check('forced breaks in a compile: after \\clearpage and after a column ended by \\newpage, and nowhere a float or a full column took', JSON.stringify([...readForced(forcedLog)]) === '[3,6]', JSON.stringify([...readForced(forcedLog)]))
+// the log of a compile that reached the document's end says so (AXT-END, after the last page), and only it: one that
+// stopped short — an error TeX could not go past — gives a PDF of what it set, and line readings for part of the paper
+// only, which the rule takes no plan from (plan.mjs)
+const stoppedLog = tex('stopped', `${MARK_DEF}${LINES_TEX}\n\\documentclass{article}\n\\begin{document}\n\\axtlines{1}A paragraph.\n\n\\clearpage\\axtlines{2}Another.\\par\\csname @@end\\endcsname\n\\axtlines{3}Never set.\n\\end{document}\n`)
+check('a compile that reached the end logs it; one that stopped before it does not', completeLog(forcedLog) && !completeLog(stoppedLog) && readLines(stoppedLog).has(2), JSON.stringify([completeLog(forcedLog), completeLog(stoppedLog), [...readLines(stoppedLog).keys()]]))
 // a unit set smaller: its own paragraph at the factor, the size back after it; a caption measured in a box gets none
 const sizeLog = tex('size', `\\makeatletter\\expandafter\\def\\csname axtsize@7\\endcsname{0.9}\\expandafter\\def\\csname axtsize@8\\endcsname{0.9}\\makeatother${LINES_TEX}${SIZE_TEX}${unitLeadTex(1.3)}\n\\documentclass{article}\n\\begin{document}\n\\makeatletter\n\\axtsize{7}\\axtlead{7}\\leavevmode A smaller unit with a note.\\footnote{A note.}\\message{^^JSIZE-IN \\f@size^^J}\\par\\message{^^JSIZE-AFTER \\f@size^^J}\n\\sbox0{\\axtsize{7}A caption measured.}\\leavevmode Plain.\\par\\message{^^JSIZE-BOX \\f@size^^J}\n\\axtsize{7}\\leavevmode A unit a list ends.\\begin{itemize}\\item\\message{^^JSIZE-ITEM \\f@size^^J}Item text.\\item\\axtsize{8}\\leavevmode A unit in the list.\\par\\message{^^JSIZE-INLIST \\f@size^^J}\\end{itemize}\\message{^^JSIZE-LIST \\f@size^^J}\n\\end{document}\n`)
 const sz = k => sizeLog.match(new RegExp(`^SIZE-${k} (\\S+)`, 'm'))?.[1]
@@ -150,7 +156,7 @@ First row & one \\
 \end{document}
 `)]]))
 const upper = new Map(tablePaper.units.map(u => [u, u.pieces.map(q => (q.t === 'text' ? { ...q, tr: true, s: q.s.toUpperCase() } : q))]))
-const allSmaller = typesetting(tablePaper.units, { cjk: false, type: { lead: 1.05, size: 0.8 }, leads: new Map(), sizes: new Map(tablePaper.units.map((u, i) => [i, 0.8])), floatsAt: new Map(), tableMin: 0.85 })
+const allSmaller = typesetting(tablePaper.units, { design: DESIGN.Latn, strategy: strategiesFor(tablePaper.meta, 'de')[0].name, type: { lead: 1.05, size: 0.8 }, leads: new Map(), sizes: new Map(tablePaper.units.map((u, i) => [i, 0.8])), floatsAt: new Map(), tableMin: 0.85 })
 const tableFiles = translationFiles(tablePaper, upper, { strategy: strategiesFor(tablePaper.meta, 'de')[0], fonts: null, draft: false, typeset: allSmaller })
 writeFileSync(join(dir, 'table.tex'), tableFiles.get('main.tex'))
 const tableLog = tex('table', readFileSync(join(dir, 'table.tex'), 'latin1'))

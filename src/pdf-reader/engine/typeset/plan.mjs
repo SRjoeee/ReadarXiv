@@ -13,7 +13,7 @@ import { scriptOf } from '../scripts.mjs'
 import { citeStyleOf, measureUnits, readSizeProbe, readWidthProbe } from './density.mjs'
 import { flowType } from './flow.mjs'
 import { columnOf, drifts } from './places.mjs'
-import { readForced, readLines, typesetting } from './tex.mjs'
+import { completeLog, readForced, readLines, typesetting } from './tex.mjs'
 import { correctUnits, designFor, heightAtSize, solveType, unitHeights, unitLines } from './type.mjs'
 
 /** The rule's parameters, each as the round of 34 chose it (records/typesetting.md) */
@@ -38,31 +38,52 @@ const median = xs => [...xs].sort((a, b) => a - b)[xs.length >> 1]
  * `fonts` readFontProbe of the font probe's log; `fontLog` that log, the font probe compiled with its width and size
  * probes (live.mjs probeFiles `{ width: true }`); `original` { log, marks }: the original compiled with its line probes
  * (originalFiles `{ lines: true }`) and its marks (places.mjs marksOf). Returns `typeset` for the preview's
- * translationFiles, and `state`, which finalTypesetting takes.
+ * translationFiles, and `state`, which finalTypesetting takes — or, where an input the plan needs is missing or partial,
+ * `typeset` null and what was `missing`: the translation is then set as it is today (translationFiles without one),
+ * never from a part of its measures. Each input, and how it is told whole:
+ *   a design for the target's script under the strategy (type.mjs designFor): there are knobs to set;
+ *   the original's log: its last pass reached the document's end (tex.mjs completeLog) — a compile that stopped short
+ *     reads lines for part of the paper — and the original's marks: there are unit marks, and every page's columns;
+ *   the font probe's width probe (density.mjs readWidthProbe), which the density is measured by; for a face of fixed
+ *     sizes, its size probe (readSizeProbe), which the type is chosen among;
+ *   a translated unit whose original the line probes measured: of none, the type solved is the design's smallest.
+ * The translation itself may be part of the paper: a progressive preview plans what it has.
  */
 export function previewTypesetting({ paper, translated, lang, strategy, fonts, fontLog, original }) {
   const { units, fsys } = paper, script = scriptOf(lang), design = designFor(script, strategy)
   const read = re => fsys.list().filter(f => re.test(f)).map(f => latin1(fsys.read(f))).join('\n')
   const byIndex = new Map(units.map((u, i) => [i, translated.get(u)]).filter(([, pieces]) => pieces))
-  const lo = readLines(original.log), sizes = readSizeProbe(fontLog)
-  const list = measureUnits({ units, translated: byIndex, lines: lo, fonts, probe: readWidthProbe(fontLog), citeStyle: citeStyleOf(read(/\.(tex|sty|cls)$/i), read(/\.bbl$/i)), script })
+  const lo = readLines(original?.log), sizes = readSizeProbe(fontLog), probe = readWidthProbe(fontLog)
+  const list = design && probe ? measureUnits({ units, translated: byIndex, lines: lo, fonts, probe, citeStyle: citeStyleOf(read(/\.(tex|sty|cls)$/i), read(/\.bbl$/i)), script }) : []
+  const missing = !design ? `a design for ${script}` : !completeLog(original?.log) ? "the original's log, whole" : !whole(original?.marks) ? "the original's marks, every page's columns read"
+    : !probe ? 'the width probe' : !design.cjk && !design.scalable && !sizes ? 'the size probe' : !list.length ? 'a translated unit the original measured' : null
+  if (missing) return { typeset: null, type: null, state: null, missing }
   const type = solveType(list, design, sizes)
   const leads = flowType(list, design, unitHeights(list, design, type), { window: FLOW.window, horizon: FLOW.horizon, rate: FLOW.rate }).leads
   // each caption's float waits for its original's page and column (tex.mjs FLOAT_TEX)
   const om = original.marks, floatsAt = new Map()
   units.forEach((u, i) => { const m = om.marks.get(`${i}s`); if (u.kind === 'caption' && m) floatsAt.set(i, { page: m.page + 1, col: columnOf(om, m) }) })
-  const state = { units, translated, design, strategy: strategy.name, type, sizes, list, lo, floatsAt, original }
-  return { typeset: typesettingOf(state, type, leads, new Map()), type, state }
+  const state = { units, translated, design, strategy: strategy.name, type, sizes, list, lo, floatsAt, original, leads }
+  state.typeset = typesettingOf(state, type, leads, new Map())
+  return { typeset: state.typeset, type, state, missing: null }
 }
+/** a compile's marks with something to read: unit marks, and every page's columns (places.mjs marksOf) */
+const whole = m => !!m?.marks.size && m.columns.length === m.pages && m.columns.every(c => c > 0)
 
 /**
  * The final's typesetting, from the preview `state` and what the preview compile gave: `preview` { log, marks } — its
  * log (line probes, forced breaks, size probe) and its marks (places.mjs marksOf). Returns `typeset` for the final's
- * translationFiles; the type, each unit's leading and face, and the flow's trace (flow.mjs flowType).
+ * translationFiles; the type, each unit's leading and face, and the flow's trace (flow.mjs flowType). Where the preview's
+ * measurement is missing or partial — its log not whole (tex.mjs completeLog), its marks or a page's columns unread, no
+ * unit it measured — the final is set as the preview was, uncorrected (`missing` says why): that plan had every input it
+ * needs. With no plan (`state` null), none.
  */
 export function finalTypesetting(state, preview) {
+  if (!state) return { typeset: null, type: null, leads: new Map(), faces: new Map(), trace: [], missing: 'a plan' }
   const { design, type, list } = state, cjk = design.cjk
-  const lines = readLines(preview.log), got = list.filter(u => lines.get(u.i))
+  const lines = readLines(preview?.log), got = list.filter(u => lines.get(u.i))
+  const missing = !completeLog(preview?.log) ? "the preview's log, whole" : !whole(preview?.marks) ? "the preview's marks, every page's columns read" : !got.length ? 'a unit the preview measured' : null
+  if (missing) return { typeset: state.typeset, type, leads: state.leads, faces: new Map(), trace: [], missing }
   // the preview's measured height over the original's, at the preview's type: the paper's density as measured
   let o = 0, t = 0
   for (const u of got) { o += u.lo * u.bs; t += lines.get(u.i).lines * type.lead * (cjk ? 1 : type.size) * u.bs }
@@ -76,7 +97,7 @@ export function finalTypesetting(state, preview) {
   }
   const shrink = cjk ? { steps: FLOW.faces, lines: FLOW.faceLines, heightAt: (i, f) => (heights.get(i) * heightAtSize(cu.get(i), design, next, f)) / heightAtSize(cu.get(i), design, next, 1) } : null
   const flow = flowType(got, design, heights, { window: FLOW.window, horizon: FLOW.horizon, measured, rate: FLOW.rate, shrink })
-  return { typeset: typesettingOf(state, next, flow.leads, flow.sizes), type: next, leads: flow.leads, faces: flow.sizes, trace: flow.trace }
+  return { typeset: typesettingOf(state, next, flow.leads, flow.sizes), type: next, leads: flow.leads, faces: flow.sizes, trace: flow.trace, missing: null }
 }
 
 // the plan tex.mjs typesetting takes: each unit's leading as \axtlead@ takes it — × its own size, so its original's

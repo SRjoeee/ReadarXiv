@@ -6,6 +6,8 @@ import type { AlphabetDesign, CjkDesign, Type } from './type.mjs'
 export declare const LINES_TEX: string
 export declare const FLOAT_TEX: string
 export declare const SIZE_TEX: string
+/** whether a compile's last pass reached the document's end (LINES_TEX's AXT-END) */
+export declare const completeLog: (log: string | null | undefined) => boolean
 export declare const readForced: (log: string | null | undefined) => Set<number>
 export declare const readLines: (log: string | null | undefined) => Map<number, { lines: number; bs: number; size?: number }>
 export interface TypesetPlan { design: CjkDesign | AlphabetDesign; strategy: string; type: Type; leads: Map<number, number>; sizes: Map<number, number>; floatsAt: Map<number, { page: number; col: number }>; tableMin: number }

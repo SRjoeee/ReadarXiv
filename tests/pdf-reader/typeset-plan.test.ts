@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { openPaper, translationFiles } from '@/pdf-reader/engine/live.mjs'
 import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
 import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
-import { previewTypesetting } from '@/pdf-reader/engine/typeset/plan.mjs'
+import { finalTypesetting, previewTypesetting } from '@/pdf-reader/engine/typeset/plan.mjs'
 
 // The rule's two steps on a small paper and the logs and marks its compiles would give: what goes in, what comes out.
 // The numbers the rule reaches on real papers are the gate's (experiments/pdf-bilingual/spikes/typeset-gate.mjs)
@@ -14,7 +14,7 @@ const SOURCE = `\\documentclass{article}\\begin{document}\n${Array.from({ length
 const paper = () => openPaper(new Map([['main.tex', new TextEncoder().encode(SOURCE)]]))
 /** every unit translated: Chinese at about two characters a word, or German a fifth longer than the English */
 function translate(units: Unit[], lang: 'zh' | 'de') {
-  const text = (s: string) => (lang === 'zh' ? '论文的一段'.repeat(Math.round(s.length / 12)) : `${s} ${s.slice(0, Math.round(s.length / 5))}`)
+  const text = (s: string) => (lang === 'zh' ? '\u8bba\u6587\u7684\u4e00\u6bb5'.repeat(Math.round(s.length / 12)) : `${s} ${s.slice(0, Math.round(s.length / 5))}`)
   return new Map(units.map(u => [u, u.pieces.map(p => (p.t === 'text' ? { ...p, tr: true, s: text(p.s ?? '') } : p))]))
 }
 /** the original's log: each unit 4 lines at 12 pt on a 10 pt size, and the end of the document */
@@ -52,5 +52,63 @@ describe('a plan for the strategy that sets it', () => {
     expect(tex(translationFiles(zhUtf8.paper, zhUtf8.translated, { strategy: cjkutf8, fonts: null, draft: false, typeset: viaUtf8.typeset }))).toContain('\\axtsize{')
     expect(tex(translationFiles(zhXe.paper, zhXe.translated, { strategy: xe, fonts: null, draft: false, typeset: viaXe.typeset }))).not.toContain('\\axtsize{')
     expect(() => viaXe.typeset?.strategy(cjkutf8)).toThrow()
+  })
+})
+
+describe('the rule sets nothing where an input it needs is missing or partial: the translation is set as today', () => {
+  const de = () => inputs('de')
+  const none = (r: ReturnType<typeof previewTypesetting>) => [r.typeset, r.state]
+
+  it('plans with every input whole', () => {
+    const r = previewTypesetting(de())
+    expect(r.typeset).not.toBeNull()
+    expect(r.missing).toBeNull()
+  })
+  it('sets nothing when the original\'s log has no line readings, or stops before the document\'s end', () => {
+    const empty = de(), cut = de()
+    empty.original.log = ''
+    cut.original.log = cut.original.log.replace('AXT-END\n', '')
+    expect(none(previewTypesetting(empty))).toEqual([null, null])
+    expect(previewTypesetting(cut).missing).toMatch(/original's log/)
+    expect(none(previewTypesetting(cut))).toEqual([null, null])
+  })
+  it('sets nothing when the original\'s marks are missing, or a page has no reading of its columns', () => {
+    const lost = de(), unread = de()
+    lost.original.marks = { ...lost.original.marks, marks: new Map() }
+    unread.original.marks = { ...unread.original.marks, columns: [1, 0] }
+    expect(previewTypesetting(lost).missing).toMatch(/original's marks/)
+    expect(previewTypesetting(unread).missing).toMatch(/original's marks/)
+  })
+  it('sets nothing without the width probe, or an alphabet without the size probe a face of fixed sizes needs', () => {
+    const noWidth = de(), noSizes = de(), zhNoSizes = inputs('zh')
+    noWidth.fontLog = noWidth.fontLog.replace(/^AXT-WIDTH.*$/m, '')
+    noSizes.fontLog = noSizes.fontLog.replace(/^AXT-SIZE.*$/gm, '')
+    zhNoSizes.fontLog = noSizes.fontLog
+    expect(previewTypesetting(noWidth).missing).toMatch(/width probe/)
+    expect(previewTypesetting(noSizes).missing).toMatch(/size probe/)
+    expect(previewTypesetting(zhNoSizes).typeset).not.toBeNull()
+  })
+  it('sets nothing when no translated unit is one the original measured: never the smallest type of no units', () => {
+    const untranslated = de(), unmeasured = de()
+    untranslated.translated = new Map()
+    unmeasured.original.log = 'AXT-END\n'
+    expect(previewTypesetting(untranslated).missing).toMatch(/translated unit/)
+    expect(previewTypesetting(unmeasured).missing).toMatch(/translated unit/)
+  })
+  it('sets nothing for a script it has no design for', () => {
+    const ar = { ...de(), lang: 'ar' }
+    expect(previewTypesetting(ar).missing).toMatch(/design/)
+  })
+  it('keeps the preview\'s own plan for the final where the preview\'s measurement is missing or partial', () => {
+    const plan = previewTypesetting(de())
+    const units = de().paper.units.length
+    const whole = { log: originalLog(units), marks: originalMarks(units) }
+    expect(finalTypesetting(plan.state, whole).typeset).not.toBe(plan.typeset)
+    for (const preview of [{ ...whole, log: '' }, { ...whole, log: whole.log.replace('AXT-END\n', '') }, { ...whole, marks: { ...whole.marks, columns: [0, 0] } }]) {
+      const fin = finalTypesetting(plan.state, preview)
+      expect(fin.typeset).toBe(plan.typeset)
+      expect(fin.missing).toMatch(/preview/)
+    }
+    expect(finalTypesetting(null, whole).typeset).toBeNull()
   })
 })
