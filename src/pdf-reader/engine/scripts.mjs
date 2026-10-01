@@ -172,15 +172,51 @@ const TU_AGAIN = String.raw`\makeatletter
 \makeatother
 `
 
-/** the strategies to try for a paper, in order: { name, engine, xe, pre(fonts) → the preamble's addition, leading —
- *  the factor on the paper's spacing inside translated units, absent for 1 } */
+/**
+ * A paper that loads CJK or CJKutf8 itself — a name or an abstract in a CJK script — cannot be set under xeCJK as it
+ * stands: xeCJK refuses to follow them ("Package ctexhook Error: Package `CJKutf8' can not be loaded with `xeCJK'":
+ * 2608.06007, 10322, 13505, 29778 into every CJK language; the investigation of XeLaTeX under BusyTeX, 2026-10-01, cause
+ * A). Before \documentclass (a strategy's `front`, live.mjs translationFiles) the packages are kept from loading, as the
+ * kernel lets a package be; after xeCJK their environments are plain groups, whose text xeCJK sets as it sets the
+ * rest, and their commands the papers use do nothing
+ */
+const CJK_FRONT = String.raw`\makeatletter
+\ifdefined\disable@package@load\disable@package@load{CJK}{}\disable@package@load{CJKutf8}{}\disable@package@load{CJKpunct}{}\disable@package@load{CJKulem}{}\disable@package@load{CJKvert}{}\fi
+\makeatother
+`
+const CJK_GROUPS = String.raw`\makeatletter\@ifundefined{CJK}{\newenvironment{CJK}[2]{}{}\newenvironment{CJK*}[2]{}{}}{}\providecommand\CJKtilde{}\providecommand\CJKindent{}\makeatother
+`
+/**
+ * xeCJK's microtype patch (\__xeCJK_get_ambiguous_slot:, since xeCJK 3.8.5) sets microtype's \MT@char but leaves
+ * \MT@char@ at -1, so microtype's XeTeX code measures \XeTeXglyph 1: an error on an 8-bit font — "! Cannot use
+ * \XeTeXglyph with tcrm1000; not a native platform font", textcomp's or gensymb's symbols under acmart's Libertine
+ * (2608.06007, 25210; cause E) — and silently wrong protrusion on an OpenType one. Set again after xeCJK, as the fix
+ * reported upstream sets it (CTeX-org/ctex-kit#1104, 2026-10-01): verified natively, microtype's own values (the
+ * period centred of TS1 cmr, lp 83 and rp 111). Only microtype's patched code calls it
+ */
+const MT_SLOT = String.raw`\makeatletter\ExplSyntaxOn
+\cs_set_protected:Npn \__xeCJK_get_ambiguous_slot:
+  {
+    \prop_get:NeNT \g__xeCJK_ambiguous_slot_prop
+      { \MT@encoding - \tex_the:D \MT@toks } \l__xeCJK_tmp_tl
+      {
+        \cs_set_eq:NN \MT@char  \l__xeCJK_tmp_tl
+        \cs_set_eq:NN \MT@char@ \l__xeCJK_tmp_tl
+      }
+  }
+\ExplSyntaxOff\makeatother
+`
+
+/** the strategies to try for a paper, in order: { name, engine, xe, pre(fonts) → the preamble's addition, front → what
+ *  goes before \documentclass (absent for nothing), leading — the factor on the paper's spacing inside translated units,
+ *  absent for 1 } */
 export function strategiesFor(meta, lang) {
   const script = scriptOf(lang)
   const cjk = CJK[script]
   if (cjk) {
-    const xeCJK = `${NO_MATH}\\usepackage{xeCJK}\n${OWN_FEATURES}${cjk.spaced ? '\\xeCJKsetup{CJKspace=true}\n' : ''}\\setCJKmainfont${cjk.font}\n`
+    const xeCJK = `${NO_MATH}\\usepackage{xeCJK}\n${CJK_GROUPS}${MT_SLOT}${OWN_FEATURES}${cjk.spaced ? '\\xeCJKsetup{CJKspace=true}\n' : ''}\\setCJKmainfont${cjk.font}\n`
     const lead = cjk.leading === 1 ? {} : { leading: cjk.leading }
-    const out = [{ name: 'XeLaTeX + xeCJK', engine: 'xelatex', xe: true, ...lead, pre: fonts => xeCJK + latinFontsFor(fonts) + TU_AGAIN + babel(lang, 'english') }]
+    const out = [{ name: 'XeLaTeX + xeCJK', engine: 'xelatex', xe: true, ...lead, front: CJK_FRONT, pre: fonts => xeCJK + latinFontsFor(fonts) + TU_AGAIN + babel(lang, 'english') }]
     if (EIGHT_BIT.has(meta.compiler)) {
       // the floats still held at \\end{document} are set inside the CJK environment, before it closes: set after it, a
       // translated table held to the end had every character "not set up for use with LaTeX" (2608.25210)

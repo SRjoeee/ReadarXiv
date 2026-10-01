@@ -45,7 +45,8 @@ const OUT = join(root, `out/lang-gate${tag}.json`)
 const BASELINE = join(root, 'out/lang-gate-baseline.json')
 const ORIGINALS = join(root, 'out/lang-gate-orig.json')
 const PDFS = join(root, `out/lang-gate${tag}`)
-const WORK = join(root, 'data/runs/lang-gate')
+// the compiles' folders: the experiment's data unless WORK names another (a worktree reading a shared data folder)
+const WORK = process.env.WORK ?? join(root, 'data/runs/lang-gate')
 
 /** the letters that show a language's text reached the page: its script's, or for a Latin one the letters beyond ASCII */
 const LETTERS = {
@@ -66,7 +67,11 @@ const lettersIn = (text, lang) => (text.normalize('NFKC').match(LETTERS[scriptOf
 const FAITHFUL = faithfulDockerArgs(root)
 const sh = (cmd, args) => { try { return execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] }) } catch { return null } }
 /** a compile in TeX Live 2026 (Docker), as the browser's BusyTeX can run it (faithful.mjs): the source, the pipeline's
- *  files over it, latexmk to the end or one pass */
+ *  files over it, latexmk to the end or one pass — and halting on TeX's first error, as BusyTeX runs every pass
+ *  (--halt-on-error) and now judges it by the pass's own exit status (busytex/research.diff, the TeX page of 2026-10-02):
+ *  nonstopmode and latexmk -f made a PDF past an error, and the gate passed papers the browser fails (acmart's
+ *  \baselinestretch guard, a picture that cannot load; the investigation of XeLaTeX under BusyTeX, 2026-10-01). A
+ *  compile is ok when TeX's last command exits 0 and a PDF is there */
 async function compile(files, dir, { main, engine, rerun, bibtex, overrides }) {
   rmSync(dir, { recursive: true, force: true })
   for (const [p, b] of files) { const f = join(dir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
@@ -74,10 +79,11 @@ async function compile(files, dir, { main, engine, rerun, bibtex, overrides }) {
   // TeX writes its output where it runs, the project's root, whatever directory the main file is in
   const stem = main.split('/').pop().replace(/\.[^./]+$/, ''), t0 = Date.now()
   const docker = cmd => run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', ...FAITHFUL, '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
-  if (rerun) await docker(['latexmk', { xelatex: '-xelatex', lualatex: '-lualatex' }[engine] ?? '-pdf', ...(bibtex === false ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main])
-  else await docker([engine, '-interaction=nonstopmode', main])
+  const done = rerun
+    ? await docker(['latexmk', { xelatex: '-xelatex', lualatex: '-lualatex' }[engine] ?? '-pdf', ...(bibtex === false ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-latexoption=-halt-on-error', main])
+    : await docker([engine, '-interaction=nonstopmode', '-halt-on-error', main])
   const pdf = join(dir, `${stem}.pdf`), logFile = join(dir, `${stem}.log`)
-  return { ok: existsSync(pdf) && statSync(pdf).size > 0, pdf, log: existsSync(logFile) ? readFileSync(logFile, 'utf8') : '', ms: Date.now() - t0 }
+  return { ok: done !== null && existsSync(pdf) && statSync(pdf).size > 0, pdf, log: existsSync(logFile) ? readFileSync(logFile, 'utf8') : '', ms: Date.now() - t0 }
 }
 const pdfText = pdf => (sh('pdftotext', ['-q', pdf, '-']) ?? '').replace(/-\n/g, '')
 const pagesOf = pdf => Number(sh('pdfinfo', [pdf])?.match(/^Pages:\s+(\d+)/m)?.[1]) || null
