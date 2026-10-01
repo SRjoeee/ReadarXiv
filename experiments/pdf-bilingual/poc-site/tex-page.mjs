@@ -352,7 +352,9 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
     } finally { runner.worker.removeEventListener('message', failures) }
     const steps = r.logs ?? []
     const tex = steps.filter(l => !/^(bibtex|biber|makeindex|xdvipdfmx)/.test(l.cmd ?? '')).at(-1)
-    const bib = steps.filter(l => /^bibtex/.test(l.cmd ?? '')).at(-1)
+    // the bibliography a compile made, BibTeX's or biber's (biblatex): the next draft reads it, its citations set rather
+    // than each shown as its key, and BibTeX or biber is not run again
+    const bib = steps.filter(l => /^(?:bibtex|biber)/.test(l.cmd ?? '')).at(-1)
     // an empty PDF is no PDF: BusyTeX returns one after a fatal error (a font whose metrics it cannot find)
     const pdf = r.pdf?.byteLength ? r.pdf.slice().buffer : null
     return [{ type: 'compiled', id: msg.id, ok: !!pdf, ms: Math.round(now() - t0), pdf, aux: tex?.aux ?? null, bbl: bib?.aux ?? null, log: String(r.log ?? ''), network: [...new Set(network)] }, pdf ? [pdf] : []]

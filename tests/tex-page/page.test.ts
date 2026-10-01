@@ -79,6 +79,7 @@ function cacheStorage(names: string[] = [], { refuse = false } = {}) {
 function busytex() {
   const made: { config: Record<string, unknown>; registered: unknown[]; worker: { sent: unknown[] }; terminated: boolean; compiles: unknown[] }[] = []
   let failures: string[] = []
+  let steps: Record<string, unknown>[] | null = null
   let startFails = false
   class Runner {
     rec: (typeof made)[number]
@@ -104,11 +105,13 @@ function busytex() {
       const f = failures
       failures = []
       if (f.length) for (const l of this.listeners) l({ data: { axt_network: f } })
-      return { pdf: new Uint8Array([37, 80, 68, 70]), log: 'log', logs: [{ cmd: 'pdflatex x', aux: 'AUX', log: '' }] }
+      const logs = steps ?? [{ cmd: 'pdflatex x', aux: 'AUX', log: '' }]
+      steps = null
+      return { pdf: new Uint8Array([37, 80, 68, 70]), log: 'log', logs }
     }
   }
   const engine = (name: string) => class { runner: Runner; constructor(r: Runner) { this.runner = r } compile(o: Record<string, unknown>) { return this.runner.compile({ ...o, engine: name }) } }
-  return { made, Runner, Engines: { PdfLatex: engine('pdflatex'), XeLatex: engine('xelatex'), LuaLatex: engine('lualatex') }, failNext: (names: string[]) => { failures = names }, failStart: () => { startFails = true } }
+  return { made, Runner, Engines: { PdfLatex: engine('pdflatex'), XeLatex: engine('xelatex'), LuaLatex: engine('lualatex') }, failNext: (names: string[]) => { failures = names }, failStart: () => { startFails = true }, stepsNext: (s: Record<string, unknown>[]) => { steps = s } }
 }
 
 const digest = async (bytes: Uint8Array) => createHash('sha256').update(bytes).digest()
@@ -294,6 +297,17 @@ describe('compile', () => {
     expect(r?.pdf).toBeInstanceOf(ArrayBuffer)
     expect(t.bt.made[0]?.compiles[0]).toMatchObject({ input: new Uint8Array([1]), mainTexPath: 'main.tex', additionalFiles: [{ path: 'fig.pdf', content: new Uint8Array([2]) }], engine: 'pdflatex' })
     expect(t.bt.made[0]?.compiles[0]).not.toHaveProperty('remoteEndpoint', expect.anything())
+  })
+
+  it('answers with the bibliography BibTeX made, or biber for biblatex (2608.08872: every draft set each citation as its key)', async () => {
+    for (const [cmd, bbl] of [['bibtex8 --8bit main.aux', 'BBL-BIBTEX'], ['biber main.bcf', 'BBL-BIBER']]) {
+      const t = page()
+      await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
+      await t.send({ type: 'project', key: 'p', files: [{ path: 'main.tex', content: new Uint8Array([0]) }] })
+      t.bt.stepsNext([{ cmd: 'pdflatex x', aux: 'AUX', log: '' }, { cmd, aux: bbl, log: '' }])
+      await t.send({ ...compile, bibtex: true })
+      expect(t.sent.find(m => m.type === 'compiled')).toMatchObject({ ok: true, aux: 'AUX', bbl })
+    }
   })
 
   it('reports the files a compile could not fetch for a network reason', async () => {
