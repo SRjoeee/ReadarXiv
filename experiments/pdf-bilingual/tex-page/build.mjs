@@ -1,6 +1,7 @@
 // Stage 3 (S3a): the TeX page's static site, built into out/tex-site — what a CDN would serve, in its versioned layout:
 //   tex.html                the entry (short-lived), loading the page's version
-//   c/<cv>/                 the page: tex.js, tex-page.mjs, texlyre-busytex's runner (lib/), build.json
+//   c/<cv>/                 the page: tex.js, tex-page.mjs, texlyre-busytex's runner (lib/), build.json; legal/: the
+//                           licences, and the source the AGPL asks for (NOTICE.txt says what is where)
 //   e/<eid>/                the engine: BusyTeX with our patches (busytex/research.diff, busytex/tree.diff), its worker
 //                           (poc-site/tex-worker.js after poc-site/tex-tree.mjs), and the preloaded tier split by engine
 //                           into tl-common, tl-pdftex, tl-xetex, tl-rest (Emscripten's file packager, no LZ4: served
@@ -232,7 +233,39 @@ mkdirSync(bundleDir, { recursive: true })
   }
 }
 for (const f of ['tex.js', 'tex-page.mjs']) copyFileSync(join(EXP, 'poc-site', f), join(pageDir, f))
-copyFileSync(join(EXP, 'node_modules/texlyre-busytex/dist/index.js'), join(pageDir, 'lib/index.js'))
+// the licences and the offer of the source, with the page they cover (c/<cv>/legal/, linked from tex.html): BusyTeX
+// is under the GNU AGPL, version 3 or later (texlyre-busytex), our page, worker and patches under the GNU GPL, version
+// 3 (this repository's), and the two run as one program, so its source is offered as the AGPL asks: ours here as it
+// was built, BusyTeX's and TeX Live's at the addresses NOTICE.txt gives. The tree under t/ is under TeX Live's terms
+// (LICENSE.TL, LICENSE.CTAN) and each package's own
+{
+  const legal = join(pageDir, 'legal')
+  const SOURCE = ['package.json', 'setup.mjs', 'poc-site/tex.js', 'poc-site/tex-page.mjs', 'poc-site/tex-worker.js', 'poc-site/tex-tree.mjs', 'busytex/research.diff', 'busytex/tree.diff', 'tex-page/build.mjs', 'tex-page/tree.mjs', 'tex-page/kpathsea.mjs', 'tex-page/manifest.mjs', 'tex-page/sizes.mjs', 'tex-page/measured.json']
+  for (const f of SOURCE) { mkdirSync(dirname(join(legal, 'source', f)), { recursive: true }); copyFileSync(join(EXP, f), join(legal, 'source', f)) }
+  copyFileSync(join(EXP, 'node_modules/texlyre-busytex/LICENSE'), join(legal, 'AGPL-3.0.txt'))
+  copyFileSync(join(EXP, '../../LICENSE'), join(legal, 'GPL-3.0.txt'))
+  for (const f of ['LICENSE.TL', 'LICENSE.CTAN']) copyFileSync(join(dirname(TREE), f), join(legal, f))
+  copyFileSync(join(BUSYTEX, 'versions.txt'), join(legal, 'busytex-versions.txt'))
+  const busytex = JSON.parse(readFileSync(join(EXP, 'node_modules/texlyre-busytex/package.json'), 'utf8')).version
+  writeFileSync(join(legal, 'NOTICE.txt'), `The TeX page of Read arXiv: TeX in the browser, for the reader's bilingual PDFs.
+
+The engine under /e/ is BusyTeX as texlyre-busytex ${busytex} publishes it, with our patches: free software under the
+GNU Affero General Public License, version 3 or later (AGPL-3.0.txt). This page (tex.js, tex-page.mjs), its worker
+(tex-worker.js, tex-tree.mjs) and the patches are Read arXiv's, under the GNU General Public License, version 3
+(GPL-3.0.txt; https://github.com/SRjoeee/ReadarXiv). They run with BusyTeX as one program, whose complete corresponding
+source is offered here:
+  - this page's and its worker's, our patches to BusyTeX, and the build that made this site: source/ (setup.mjs
+    fetches BusyTeX's published files and applies source/busytex/research.diff; tex-page/build.mjs builds the site,
+    applying source/busytex/tree.diff);
+  - BusyTeX's: https://github.com/TeXlyre/texlyre-busytex/tree/v${busytex}, its published files
+    https://github.com/TeXlyre/texlyre-busytex/releases/tag/assets-v${busytex}, and the sources those were built from
+    (busytex-versions.txt: TeX Live 2026, expat, fontconfig, Emscripten).
+
+The TeX Live tree under /t/ is TeX Live 2026's texmf-dist, unmodified, under TeX Live's terms (LICENSE.TL) and CTAN's
+(LICENSE.CTAN), each package under its own licence (its files in the tree say which); TeX Live's sources:
+https://tug.org/texlive/ .
+`)
+}
 const EXTRA = join(EXP, 'data/pk-flat')
 const extra = existsSync(EXTRA) ? readdirSync(EXTRA) : []
 if (extra.length) { mkdirSync(join(pageDir, 'extra')); for (const f of extra) copyFileSync(join(EXTRA, f), join(pageDir, 'extra', f)) }
@@ -260,7 +293,7 @@ place(engineDir, join(OUT, 'e', eid))
 place(bundleDir, join(OUT, 'b'))
 mkdirSync(join(OUT, 't', tid), { recursive: true })
 writeFileSync(join(OUT, 't', tid, INDEX), text)
-writeFileSync(join(OUT, 'tex.html'), `<!doctype html><meta charset="utf-8"><title>TeX</title><script type="module" src="/c/${cv}/tex.js"></script>\n`)
+writeFileSync(join(OUT, 'tex.html'), `<!doctype html><meta charset="utf-8"><title>TeX</title><link rel="license" href="/c/${cv}/legal/NOTICE.txt"><script type="module" src="/c/${cv}/tex.js"></script>\n`)
 writeFileSync(join(OUT, 'tree.json'), JSON.stringify({ tid, index: INDEX, root: TREE }))
 
 const BR = join(EXP, 'out/tex-br')
