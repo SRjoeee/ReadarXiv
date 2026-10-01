@@ -13,12 +13,26 @@
 // measured from it. A compile is kept by what it was given (the TeX image, the engine, every file beyond the paper's
 // own): a run after a change to the rule compiles only what the change changed.
 //
-// The check, paper by paper against `papers` in records/typeset-gate.json: no page further from the original's; start
-// and end drift at most 0.03 column past the record; no float off its original's page that was on it, at most one
-// more beyond 30 pt; blocks within 15 % at most 5 points fewer; the measuring compile likewise for pages and start
-// drift. The sets' means are printed — display-heavy papers (a quarter or more of their prose units hold a display)
-// apart — and each paper further from its original's pages than today. Results of another TeX image or of another
-// rule than the one checked (its files' hash) are refused as stale.
+// The check, paper by paper against `papers` in records/typeset-gate.json: its pages no further from the original's,
+// and a count that moved only nearer (a page short now a page long fails); start and end drift at most 0.03 column past
+// the record; no float off its original's page that was on it, at most one more beyond 30 pt; blocks within 15 % at
+// most 5 points fewer; the measuring compile likewise for pages and start drift; and under DRAFT=1 the final measured
+// from a draft — the one the reader ships — as the final. And set by set, where the whole set was run, its means
+// against the record's `baseline`: pages equal no fewer, start and end drift at most 0.005 column more, the shares
+// (within 0.1 column, blocks, floats on their page and within 30 pt) at most a point fewer, units standing out — a
+// unit's leading, against its original's, parted by more than 8 % from the median of the three before and the three
+// after it (the reader sees a paragraph set looser) — at most a quarter point of the set's measured units more. A
+// shift of every paper by less than its own slack fails there. The sets' means are printed — display-heavy papers (a
+// quarter or more of their prose units hold a display) apart — and each paper further from its original's pages than
+// today. Results of another TeX image or of another rule than the one checked (its files' hash) are refused as stale.
+//
+// The record changes only with a change that is adopted. Run the whole gate (ASIDE=1 DRAFT=1), judge the change on the
+// fresh holdout — the round and the Chinese unseen must hold their sets too — and write the record (--baseline) in the
+// commit that adopts it, whose message gives the sets' numbers before and after and each paper past its record, and
+// why. Most real changes move a few papers past their record, CJK ones first (a leading 0.25 % looser on every unit
+// sent 4 papers past theirs while 8 came nearer by more than 0.01 column): a paper past its record is a question, not a
+// verdict, and a change is adopted when its sets hold and each such paper is answered. A change not adopted leaves the
+// record as it was; the aside set judges once, at the end of a round, and is then spent.
 //
 // Data (AXT_DATA, the experiment's data folder, outside git): corpus/<id>/source.gz, each paper's translation at
 // runs/visual-eval/<lang>/<id>/translation.json (spikes/typeset-translate.mjs makes one), metafont/ (the LH metrics
@@ -47,6 +61,7 @@ import { promisify } from 'node:util'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { originalFiles as originalHere } from '../../../src/pdf-reader/engine/live.mjs'
 import { alignment, columnOf, marksOf } from '../../../src/pdf-reader/engine/typeset/places.mjs'
+import { readLines } from '../../../src/pdf-reader/engine/typeset/tex.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
 
 const run = promisify(execFile)
@@ -77,6 +92,9 @@ const SETS = Object.fromEntries(Object.entries(record.sets).filter(([set]) => AS
 // what a paper may lose against its record before the gate fails (I1 of the review of 2026-10-01: set means alone let
 // one paper's drift triple and a float hold switched off pass)
 const SLACK = { drift: 0.03, near: 1, blocks: 0.05 }
+// what a set's means may lose against the record's baseline (the re-review of 2026-10-02, N1: every paper 0.029 later
+// passed the paper's slack, and moved fresh's mean start drift 0.059 → 0.088)
+const SET_SLACK = { drift: 0.005, share: 0.01, standing: 0.0025 }
 // a paper is display-heavy when a quarter or more of its prose units hold a display (the review, I3)
 const DISPLAY = /^(\$\$|\\\[|\\begin\s*\{(equation|align|gather|multline|eqnarray|displaymath|flalign|alignat|dmath))/
 const HEAVY = 0.25
@@ -133,7 +151,17 @@ function translationOf(lang, id, paper) {
 
 // ---- the three goals of one compile against the original
 const r3 = x => (x == null ? null : Number(x.toFixed(3)))
-function goals(om, tm, units, log) {
+const med = xs => { const s = [...xs].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 }
+/** units standing out: each unit the compile's line probes read, its leading over its size against its original's,
+ *  parted by more than 8 % from the median of the three before it and the three after it — what the owner saw as a
+ *  paragraph set looser than its neighbours (records/typesetting.md, Metrics) */
+function standingOut(log, olines) {
+  const v = [...readLines(log)].filter(([i, x]) => x.size && olines.get(i)?.size).sort((a, b) => a[0] - b[0]).map(([i, x]) => x.bs / x.size / (olines.get(i).bs / olines.get(i).size))
+  let n = 0
+  v.forEach((x, j) => { const around = [...v.slice(Math.max(0, j - 3), j), ...v.slice(j + 1, j + 4)]; if (around.length && Math.abs(x / med(around) - 1) > 0.08) n++ })
+  return { n, of: v.length }
+}
+function goals(om, tm, units, log, olines) {
   const a = alignment(om, tm)
   const floats = { n: 0, page: 0, near: 0 }
   units.forEach((u, i) => {
@@ -146,7 +174,7 @@ function goals(om, tm, units, log) {
   })
   return {
     pages: a.pages, start: { median: r3(a.drift.median), p90: r3(a.drift.p90), within: r3(a.drift.within) }, end: { median: r3(a.end.median), within: r3(a.end.within) },
-    blocks: { n: a.size.values.length, within: r3(a.size.within) }, floats,
+    blocks: { n: a.size.values.length, within: r3(a.size.within) }, floats, standing: standingOut(log, olines),
     overfull: [...log.matchAll(/^Overfull \\hbox \(([\d.]+)pt too wide\) in paragraph/gm)].filter(m => Number(m[1]) > 5).length,
   }
 }
@@ -169,8 +197,8 @@ async function evaluate(lang, id) {
     OTHER ? null : compile(id, sources, translationFiles(paper, translated, { strategy, fonts, draft: false }), full(strategy.engine)),
   ])
   if (!original.ok || (here && !here.ok) || (today && !today.ok)) return { lang, id, failed: !original.ok || (here && !here.ok) ? 'original' : 'today' }
-  const om = await marksIn((here ?? original).pdf)
-  const out = { lang, id, image, rule: ruleHash, strategy: strategy.name, units: paper.units.length, translated: translated.size, displayShare, origPages: om.pages, columns: om.columns.join(''), pdfs: { original: (here ?? original).pdf, ...(today ? { today: today.pdf } : {}) }, ...(today ? { today: goals(om, await marksIn(today.pdf), paper.units, today.log) } : {}) }
+  const om = await marksIn((here ?? original).pdf), olines = readLines((here ?? original).log)
+  const out = { lang, id, image, rule: ruleHash, strategy: strategy.name, units: paper.units.length, translated: translated.size, displayShare, origPages: om.pages, columns: om.columns.join(''), pdfs: { original: (here ?? original).pdf, ...(today ? { today: today.pdf } : {}) }, ...(today ? { today: goals(om, await marksIn(today.pdf), paper.units, today.log, olines) } : {}) }
   const plan = previewTypesetting({ paper, translated, lang, strategy, fonts, fontLog: probe.log, original: { log: original.log, marks: await marksIn(original.pdf, engineMarks) } })
   if (!plan.typeset) return { ...out, missing: plan.missing, preview: out.today, final: out.today, s: Math.round((Date.now() - t0) / 1000) }
   const preview = await compile(id, sources, translationFiles(paper, translated, { strategy, fonts, draft: false, typeset: plan.typeset }), full(strategy.engine))
@@ -181,7 +209,7 @@ async function evaluate(lang, id) {
   const faces = [...fin.faces.values()]
   const result = {
     ...out, pdfs: { ...out.pdfs, preview: preview.pdf, final: final.pdf }, type: plan.type, faces: faces.length ? { n: faces.length, min: Math.min(...faces) } : null, finalMissing: fin.missing,
-    preview: goals(om, await marksIn(preview.pdf), paper.units, preview.log), final: goals(om, await marksIn(final.pdf), paper.units, final.log),
+    preview: goals(om, await marksIn(preview.pdf), paper.units, preview.log, olines), final: goals(om, await marksIn(final.pdf), paper.units, final.log, olines),
   }
   // the measuring compile as the reader may make it — one pass, images as frames, today's references — and the final
   // measured from it
@@ -189,7 +217,7 @@ async function evaluate(lang, id) {
     const draft = await compile(id, sources, translationFiles(paper, translated, { strategy, fonts, draft: true, aux: today.aux, bbl: meta.bbl ? null : today.bbl, typeset: plan.typeset }), { main: project.main, engine: strategy.engine, rerun: false })
     const finD = draft.ok ? finalTypesetting(plan.state, { log: draft.log, marks: await marksIn(draft.pdf, engineMarks) }, translated) : null
     const finalD = finD && (await compile(id, sources, translationFiles(paper, translated, { strategy, fonts, draft: false, typeset: finD.typeset }), full(strategy.engine)))
-    if (finalD?.ok) result.finalD = goals(om, await marksIn(finalD.pdf), paper.units, finalD.log)
+    if (finalD?.ok) result.finalD = goals(om, await marksIn(finalD.pdf), paper.units, finalD.log, olines)
   }
   return { ...result, s: Math.round((Date.now() - t0) / 1000) }
 }
@@ -203,6 +231,7 @@ function summary(xs) {
     start: r3(mean(xs.map(x => x.start.median))), startWithin: r3(mean(xs.map(x => x.start.within))), end: r3(mean(xs.map(x => x.end.median))),
     blocks: r3(mean(xs.filter(x => x.blocks.within != null).map(x => x.blocks.within))), floatsPage: r3(fl.n ? fl.page / fl.n : null), floatsNear: r3(fl.n ? fl.near / fl.n : null),
     overfull: xs.reduce((s, x) => s + x.overfull, 0),
+    ...(xs.every(x => x.standing) ? { standing: xs.reduce((s, x) => s + x.standing.n, 0), measured: xs.reduce((s, x) => s + x.standing.of, 0) } : {}),
   }
 }
 const resultIn = (dir, spec) => { const [lang, id] = spec.split('/'), f = join(dir, lang, `${id}.json`); return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null }
@@ -226,28 +255,49 @@ function tables() {
   }
   return out
 }
-const line = (k, s) => `  ${k.padEnd(14)} pages =/+/- ${s.equal}/${s.more}/${s.fewer}  start ${s.start} (≤0.1 ${Math.round(100 * s.startWithin)} %)  end ${s.end}  blocks ≤15 % ${Math.round(100 * s.blocks)} %  floats on page ${Math.round(100 * s.floatsPage)} %, ≤30 pt ${Math.round(100 * s.floatsNear)} %  overfull ${s.overfull}`
-/** a paper's result against its record: what it lost past the slack */
+const line = (k, s) => `  ${k.padEnd(14)} pages =/+/- ${s.equal}/${s.more}/${s.fewer}  start ${s.start} (≤0.1 ${Math.round(100 * s.startWithin)} %)  end ${s.end}  blocks ≤15 % ${Math.round(100 * s.blocks)} %  floats on page ${Math.round(100 * s.floatsPage)} %, ≤30 pt ${Math.round(100 * s.floatsNear)} %  overfull ${s.overfull}${s.measured ? `  standing out ${s.standing} of ${s.measured}` : ''}`
+/** a page count that moved, and not nearer the original's: further, or as far on the other side (−1 → +1) */
+const pagesLost = (now, was) => now !== was && Math.abs(now) >= Math.abs(was)
+/** a paper's result against its record: what it lost past the slack — the final, the final measured from a draft where
+ *  the run made one (DRAFT=1), and the measuring compile */
 function lossesOf(spec, r, was) {
-  const out = [], f = r.final, p = r.preview
-  if (Math.abs(f.pages) > Math.abs(was.pages)) out.push(`pages ${f.pages}, record ${was.pages}`)
-  for (const k of ['start', 'end']) if (f[k].median > was[k] + SLACK.drift) out.push(`${k} drift ${f[k].median}, record ${was[k]}`)
-  if (f.floats.page < was.floats.page) out.push(`floats on their page ${f.floats.page}, record ${was.floats.page}`)
-  if (f.floats.near < was.floats.near - SLACK.near) out.push(`floats within 30 pt ${f.floats.near}, record ${was.floats.near}`)
-  if (was.blocks != null && f.blocks.within != null && f.blocks.within < was.blocks - SLACK.blocks) out.push(`blocks ${f.blocks.within}, record ${was.blocks}`)
-  if (Math.abs(p.pages) > Math.abs(was.preview.pages)) out.push(`the measuring compile's pages ${p.pages}, record ${was.preview.pages}`)
+  const out = [], p = r.preview
+  for (const [what, f] of [['', r.final], ["the draft-measured final's ", r.finalD]]) {
+    if (!f) continue
+    if (pagesLost(f.pages, was.pages)) out.push(`${what}pages ${f.pages}, record ${was.pages}`)
+    for (const k of ['start', 'end']) if (f[k].median > was[k] + SLACK.drift) out.push(`${what}${k} drift ${f[k].median}, record ${was[k]}`)
+    if (f.floats.page < was.floats.page) out.push(`${what}floats on their page ${f.floats.page}, record ${was.floats.page}`)
+    if (f.floats.near < was.floats.near - SLACK.near) out.push(`${what}floats within 30 pt ${f.floats.near}, record ${was.floats.near}`)
+    if (was.blocks != null && f.blocks.within != null && f.blocks.within < was.blocks - SLACK.blocks) out.push(`${what}blocks ${f.blocks.within}, record ${was.blocks}`)
+  }
+  if (pagesLost(p.pages, was.preview.pages)) out.push(`the measuring compile's pages ${p.pages}, record ${was.preview.pages}`)
   if (p.start.median > was.preview.start + SLACK.drift) out.push(`the measuring compile's start drift ${p.start.median}, record ${was.preview.start}`)
   return out.map(x => `${spec}: ${x}`)
+}
+/** a set's means against the record's baseline: what the set lost past SET_SLACK */
+function setLosses(name, s, base) {
+  const out = []
+  if (s.equal < base.equal) out.push(`pages equal ${s.equal}, baseline ${base.equal}`)
+  for (const k of ['start', 'end']) if (s[k] > base[k] + SET_SLACK.drift) out.push(`${k} drift ${s[k]}, baseline ${base[k]}`)
+  for (const k of ['startWithin', 'blocks', 'floatsPage', 'floatsNear']) if (base[k] != null && s[k] != null && s[k] < base[k] - SET_SLACK.share) out.push(`${k} ${s[k]}, baseline ${base[k]}`)
+  if (base.measured && s.measured && s.standing / s.measured > base.standing / base.measured + SET_SLACK.standing) out.push(`units standing out ${s.standing} of ${s.measured}, baseline ${base.standing} of ${base.measured}`)
+  return out.map(x => `${name}: ${x}`)
 }
 function check(only = []) {
   const now = tables(), problems = []
   for (const [set, t] of Object.entries(now)) {
-    const specs = SETS[set].filter(s => !only.length || only.includes(s))
+    const specs = SETS[set].filter(s => !only.length || only.includes(s)), whole = specs.length === SETS[set].length
     if (!specs.length) continue
     if (!only.length && t.lost.length) { problems.push(`${set}: no result for ${t.lost.join(', ')}`); continue }
-    if (!only.length) {
+    // the whole set run: its means, and against the record's baseline
+    if (whole && !t.lost.length) {
       console.log(`${set} (${t.rule.papers} papers)\n${line('today', t.today)}\n${line('preview', t.preview)}\n${line('rule', t.rule)}${t.draft ? `\n${line('draft-measured', t.draft)}` : ''}`)
       if (t.heavy) console.log(`${line(`heavy ${t.heavy.rule.papers} today`, t.heavy.today)}\n${line(`heavy ${t.heavy.rule.papers} rule`, t.heavy.rule)}${t.light ? `\n${line(`light ${t.light.rule.papers} rule`, t.light.rule)}` : ''}`)
+      const base = record.baseline?.[set]
+      if (!base) console.log(`  ${set}: no baseline`)
+      else problems.push(...setLosses(set, t.rule, base), ...(t.draft ? setLosses(`${set}, the draft-measured final`, t.draft, base) : []))
+      const drafted = specs.filter(s => resultOf(s)?.finalD)
+      if (drafted.length && drafted.length < specs.length) problems.push(`${set}: a draft-measured final for ${drafted.length} of ${specs.length} papers: run it again with DRAFT=1`)
     }
     for (const spec of specs) {
       const r = resultOf(spec), was = record.papers?.[spec], today = r && todayOf(spec, r)
@@ -261,7 +311,7 @@ function check(only = []) {
     }
   }
   for (const p of problems) console.log(`FAIL ${p}`)
-  console.log(problems.length ? `${problems.length} failed` : 'every paper holds its record')
+  console.log(problems.length ? `${problems.length} failed` : 'every paper and every set holds its record')
   return problems.length
 }
 
