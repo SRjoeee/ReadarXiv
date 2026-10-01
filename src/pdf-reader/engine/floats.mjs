@@ -448,6 +448,26 @@ export function floatOf(L, id) {
 }
 
 /**
+ * A page's floats on a side (`L`) agree on their kind with the other side's (`O`, its layout): a caption's float that is
+ * a figure on either side is one on both. A drawing's text located on one side only (TikZ words translated past
+ * finding, say) leaves the other side too little drawn outside its text to tell, and a float outlined on one side and
+ * washed on the other reads as two things (the review of B4's fix round). Asked on whichever side's page comes second
+ * (the first finds nothing on the other yet); the floats whose kind changed, on either side, are returned — to be
+ * painted again where lit, their shapes made again
+ */
+export function floatsAgree(L, p, O) {
+  const changed = []
+  for (const f of L?.floats?.get(p) ?? []) {
+    const g = floatOf(O, f.id)
+    if (g?.id !== f.id || g.kind === f.kind) continue
+    changed.push(f.kind === 'figure' ? g : f)
+    f.kind = g.kind = 'figure'
+    f.shapes = g.shapes = null
+  }
+  return changed
+}
+
+/**
  * What a float paints (PDF units): a table one wash over it and its caption, padded as a block is (`padX` beside, half
  * the caption's leading above and below); a figure its outline (`frame`) and its caption's blocks — a wash multiplied
  * into a figure would change its colours. [{ page, x0, y0, x1, y1, frame }], kept for the pad last asked (the pointer

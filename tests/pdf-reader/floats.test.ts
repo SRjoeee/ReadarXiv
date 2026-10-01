@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { type Anchor, type DocToken, lineRects, tokenizeDocument } from '@/pdf-reader/engine/anchors.mjs'
-import { type Box, captionFor, floatHitOf, floatOf, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from '@/pdf-reader/engine/floats.mjs'
+import { type Box, captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from '@/pdf-reader/engine/floats.mjs'
 import { blockOf, hitOf, layoutOf, runsOf } from '@/pdf-reader/engine/highlight.mjs'
 
 // A page's floats (floats.mjs): tables, algorithms and figures lit whole with their captions. Pages as PDF.js's text
@@ -16,9 +16,10 @@ const prose = (y: number, n: number, x0 = 50, x1 = 300) => Array.from({ length: 
 const row = (y: number, a: string, b: string, c: string) => [item(a, 60, y), item(b, 160, y), item(c, 240, y, { eol: true })]
 const VIEW = [0, 0, 600, 800]
 const docOf = (pages: Item[][]) => tokenizeDocument(pages.map((items, i) => ({ page: i + 1, items, styles: {} })))
-function side(pages: Item[][], units: [number, number[]][], kinds: Record<number, string> = {}) {
+/** a side's layout: `units` the units anchored, the prose the rest; `free` words no unit's (a unit not located there) */
+function side(pages: Item[][], units: [number, number[]][], kinds: Record<number, string> = {}, free: number[] = []) {
   const doc = docOf(pages)
-  const used = new Set(units.flatMap(([, ks]) => ks))
+  const used = new Set([...units.flatMap(([, ks]) => ks), ...free])
   const rest = pages.map((_, i) => [1000 + i, doc.flatMap((t, k) => (t.page === i + 1 && t.t === 'text' && !used.has(k) ? [k] : []))] as [number, number[]]).filter(([, ks]) => ks.length)
   const anchors = new Map<number, Anchor | null>([...units, ...rest].map(([id, tokens]) => [id, { tokens, rects: lineRects(doc, tokens), coverage: 1, bounded: true }]))
   return layoutOf(doc, pages.map(() => VIEW), anchors, id => kinds[id])
@@ -255,6 +256,32 @@ describe('pageFloats: figures', () => {
     const heads = [{ x0: 136, y0: 653, x1: 140, y1: 657 }, { x0: 216, y0: 653, x1: 220, y1: 657 }]
     const fs = pageFloats(layout, 1, [], { rules: [hrule(120, 140, 655), hrule(200, 220, 655)], marks: [...boxes, ...heads] })
     expect(fs.map(f => [f.id, f.kind, ...r1(f.region), [...f.members]])).toEqual([[0, 'figure', 60, 640, 280, 670, [5]]])
+  })
+
+  it('a float\'s kind is its caption\'s on both sides: a drawing whose text is located on one side only is a figure on both (floatsAgree)', () => {
+    // probe F's diagram on both sides; on the right its text was not located (its words no unit's): alone, a table there
+    const ps = [[...prose(780, 4), item('input', 70, 652), item('model', 150, 652), item('output', 230, 652, { eol: true }), line('Figure 2: the pipeline', 620, 100, 250), ...prose(590, 10)]]
+    const dd = docOf(ps), text = words(dd, 'input', 'output'), caption = words(dd, 'figure', 'pipeline')
+    const boxes = [{ x0: 60, y0: 640, x1: 120, y1: 670 }, { x0: 140, y0: 640, x1: 200, y1: 670 }, { x0: 220, y0: 640, x1: 280, y1: 670 }]
+    const paths = { rules: [hrule(120, 140, 655), hrule(200, 220, 655)], marks: [...boxes, { x0: 136, y0: 653, x1: 140, y1: 657 }, { x0: 216, y0: 653, x1: 220, y1: 657 }] }
+    const kinds = (L: ReturnType<typeof side>) => [floatOf(L, 0)?.kind, floatShapes(L, floatOf(L, 0)!, 2).map(s => s.frame)]
+    for (const rightFirst of [true, false]) {
+      const L = side(ps, [[0, caption], [5, text]], { 0: 'caption', 5: 'figure' }), R = side(ps, [[0, caption]], { 0: 'caption' }, text)
+      const [a, b] = rightFirst ? [R, L] : [L, R]
+      pageFloats(a, 1, [], paths)
+      // the side made first agrees with nothing yet (the other's page not drawn); its shapes made (the pointer asked)
+      expect(floatsAgree(a, 1, b)).toEqual([])
+      expect(kinds(a)).toEqual(rightFirst ? ['table', [false]] : ['figure', [true, false]])
+      pageFloats(b, 1, [], paths)
+      // the side made second: the right's float takes the figure's kind, its shapes made again (outlined, its caption washed)
+      expect(floatsAgree(b, 1, a)).toEqual([floatOf(R, 0)])
+      expect([kinds(L), kinds(R)]).toEqual([['figure', [true, false]], ['figure', [true, false]]])
+    }
+    // a table on both sides stays one; a side without the float changes nothing
+    const T = [[...prose(780, 4), line('Table 1: the scores', 690, 100, 250), ...row(670, 'one', 'two', 'six'), ...row(658, 'ten', 'red', 'tan'), ...prose(630, 10)]]
+    const dt = docOf(T), A = side(T, [[0, words(dt, 'table', 'scores')]], { 0: 'caption' }), B = side(T, [[0, words(dt, 'table', 'scores')]], { 0: 'caption' }), C = side(T, [], {})
+    for (const X of [A, B, C]) pageFloats(X, 1)
+    expect([floatsAgree(A, 1, B), floatsAgree(A, 1, C), floatOf(A, 0)?.kind, floatOf(B, 0)?.kind]).toEqual([[], [], 'table', 'table'])
   })
 
   it('a running head over a float at the page\'s top is no part of it: nothing outside the text block is', () => {

@@ -18,6 +18,9 @@
 //  - running text keeps its own: points of a running-text unit's block where hitOf finds that unit but a float takes
 //    the point (a float's shape winning over the unit's block)
 //  - each float's kind and extent, by its caption, held to the baseline exactly (a change meant is recorded again)
+//  - kinds agreed: the floats whose kind changed when the two sides' were made to agree (floats.mjs floatsAgree: a
+//    caption's float a figure on either side is one on both, as the reader makes it once both pages are drawn); the
+//    measures above are of the floats agreed
 //  - cost: a page's floats made from its operator list (pathsOf and pageFloats), the main thread's part of the page's
 //    first drawing, median of the gate's rounds
 // It fails on a hole, running text inside a float, floats overlapping, a held cell lighting anything but its float, a
@@ -31,7 +34,7 @@
 // dropped, PANELS 0, GAP 3 (floats' extents moved against the baseline).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { floatHitOf, floatShapes, pageFloats, pathsOf, wantsFloats } from '../../../src/pdf-reader/engine/floats.mjs'
+import { floatHitOf, floatsAgree, floatShapes, pageFloats, pathsOf, wantsFloats } from '../../../src/pdf-reader/engine/floats.mjs'
 import { figureRegions } from '../../../src/pdf-reader/engine/figures.mjs'
 import { blockOf, hitOf, layoutOf, pageGeometry, runsOf } from '../../../src/pdf-reader/engine/highlight.mjs'
 
@@ -87,7 +90,8 @@ const papers = new Map()
  * units first is the units' alone), and their cost on fresh layouts, `rounds` times
  */
 export async function floatsOfPaper({ id, paper, units, kind, sides, files, rounds, pad, step, cmaps, fonts }) {
-  const out = { sides: {}, cost: {}, envs: new Map(units.flatMap((u, i) => (u.kind === 'caption' ? [[i, envOf(paper, u)]] : []))) }
+  const out = { sides: {}, cost: {}, agreed: 0, envs: new Map(units.flatMap((u, i) => (u.kind === 'caption' ? [[i, envOf(paper, u)]] : []))) }
+  const made = {}
   for (const S of ['L', 'R']) {
     const { anchors, doc, layout } = sides[S], { drawn, views } = await drawnOf(files[S], { cmaps, fonts })
     const per = []
@@ -95,8 +99,11 @@ export async function floatsOfPaper({ id, paper, units, kind, sides, files, roun
     const page = per[0].map((_, k) => median(per.map(r => r[k]))), paths = drawn.slice(1).map(d => d.pathsMs)
     out.cost[S] = { pages: page.length, floatMs: page.length ? +median(page).toFixed(3) : null, floatMaxMs: page.length ? +Math.max(...page).toFixed(3) : null, pathsMs: +median(paths).toFixed(3), pathsMaxMs: +Math.max(...paths).toFixed(3) }
     makeFloats(layout, drawn)
-    out.sides[S] = measureSide({ L: layout, doc, anchors, units, paper, kind, pad, step, drawn })
+    made[S] = drawn
   }
+  // each caption's float one kind on both sides, as the reader has them once both pages are drawn (floatsAgree)
+  for (const p of sides.L.layout.floats?.keys() ?? []) out.agreed += floatsAgree(sides.L.layout, p, sides.R.layout).length
+  for (const S of ['L', 'R']) { const { anchors, doc, layout } = sides[S]; out.sides[S] = measureSide({ L: layout, doc, anchors, units, paper, kind, pad, step, drawn: made[S] }) }
   papers.set(id, out)
 }
 
@@ -117,6 +124,7 @@ export function floatsVerdict({ ids, write, ten }) {
   for (const id of ids) for (const S of ['L', 'R']) for (const [env, e] of Object.entries(counts[id][S])) { const t = (envSum[env] ??= { capL: 0, capR: 0, L: 0, R: 0, both: 0, misL: 0, misR: 0 }); t[`cap${S}`] += e.captions; t[S] += e.found; t[`mis${S}`] += e.mismatched }
   for (const id of ids) for (const [env, n] of Object.entries(counts[id].both)) envSum[env].both += n
   for (const [env, t] of Object.entries(envSum)) console.log(env.padEnd(10), `captions ${t.capL} / ${t.capR}`, `floats ${t.L} / ${t.R}`, `both ${t.both}`, `mismatched ${t.misL} / ${t.misR}`)
+  console.log('kinds agreed across the sides (a figure on one side made one on the other):', ids.reduce((n, id) => n + papers.get(id).agreed, 0), ids.filter(id => papers.get(id).agreed).map(id => `${id} ${papers.get(id).agreed}`).join(', '))
   const sum = { holes: 0, smaller: 0, points: 0, cells: 0, padsMeet: 0, lost: 0 }, fail = { intruders: [], overlaps: [], cellsOff: [] }
   for (const id of ids) for (const S of ['L', 'R']) { const m = papers.get(id).sides[S]; for (const k of Object.keys(sum)) sum[k] += m[k]; for (const k of Object.keys(fail)) fail[k].push(...m[k].map(x => `${id} ${S} ${x}`)) }
   console.log(`points in floats' shapes ${sum.points}: holes ${sum.holes}, a smaller unit ${sum.smaller}; cells held ${sum.cells}, lighting another ${fail.cellsOff.length}; points of running text taken by a float ${sum.lost}`)

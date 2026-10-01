@@ -36,7 +36,7 @@ import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFr
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
-import { captionFor, floatHitOf, floatOf, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
+import { captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
 import { hostReady } from './host.mjs'
 import { compilerKeeper, openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
 import { displayEdges, isName, plainSource, unitText, WIRE } from './mt.mjs'
@@ -434,8 +434,11 @@ function floatsFor(side, p) {
     // the main thread's cost, for the probes: reading the page's paths, making its floats (and the page's geometry, for
     // a page drawn before the side's layout came)
     ;(timing.floats ??= []).push({ paths: t1 - t0, floats: performance.now() - t1, ops: list.fnArray.length, marks: paths.marks.length })
+    // a float's kind its caption's on both sides, where the other side's is made (floatsAgree)
+    const other = side === left ? right : left, changed = floatsAgree(L, p, other.geo)
     // what is lit there, and what is under a pointer resting on it, now that the page has its floats
     if (lit != null && floatOf(L, litId())?.page === p) paint(side)
+    if (lit != null && changed.includes(floatOf(other.geo, litId()))) paint(other)
     pointer.again(side)
   }).catch(e => {
     // asked again at the page's next drawing; a drawing cancelled is no fault, anything else is told
