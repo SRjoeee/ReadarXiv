@@ -45,11 +45,12 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
   const { l, r } = inkEdges(doc)
   const tok = { l, r, y: new Float32Array(n), h: new Float32Array(n), top: new Float32Array(n), bottom: new Float32Array(n) }
   // tokens are in page order: page p's are [pageStart[p], pageStart[p + 1])
-  const pageStart = new Int32Array(pages + 2).fill(n)
+  const pageStart = new Int32Array(pages + 2).fill(n), far = []
   for (let k = 0, last = 0; k < n; k++) {
     const w = doc[k]
     tok.y[k] = w.y; tok.h[k] = w.h; tok.top[k] = w.top; tok.bottom[k] = w.bottom
     if (w.page !== last) { pageStart[w.page] = k; last = w.page }
+    if (w.far > r[k]) far.push(k)
   }
   for (let p = pages; p >= 1; p--) if (pageStart[p] > pageStart[p + 1]) pageStart[p] = pageStart[p + 1]
 
@@ -118,6 +119,12 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
     if (P.two) P.cols.F = { x0: P.cols.L.x0, x1: P.cols.R.x1 }
     P.lead = (P.gaps.length >= 3 ? median(P.gaps) : docGap) / 2
     P.gaps = null
+  }
+  // a mark set apart after a token on its baseline (tokenizeDocument's `far`) is its ink where it ends at the token's
+  // column's text edge: a proof's box set flush right
+  for (const k of far) {
+    const w = doc[k], P = page[w.page], e = P && (P.cols[colOf(P, w.x, w.x + w.w)] ?? P.cols.F)
+    if (e && Math.abs(w.far - e.x1) < SNAP) r[k] = w.far
   }
   return { tok, pageStart, page, anchors, kindOf, unitsOn, pagesOf, cache: new Map() }
 }

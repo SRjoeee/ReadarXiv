@@ -124,6 +124,14 @@ describe('runsOf: a unit\'s runs, one per page and column, and their rows', () =
     expect(across(nth(runsOf(side(pages, [[0, [h, h + 1]]], new Map([[0, 'heading']])), 0)))).toEqual([50, 75])
   })
 
+  it('a proof\'s box set apart to the column\'s edge is its last word\'s ink; a row of cells reaching the edge is not', () => {
+    // a one-line proof, its box flush right at the edge (300); a cell, then three cells of a dash, the last at the edge
+    const pages = [[...prose(740, 20), item('Trivial.', 50, 480), item('∎', 292, 480, { width: 8, eol: true }), item('cell', 50, 456), item('–', 150, 456), item('–', 220, 456), item('–', 292, 456, { width: 8, eol: true }), ...prose(432, 10)]]
+    const d = docOf(pages), t = at(d, 'trivial'), c = at(d, 'cell')
+    expect(across(nth(runsOf(side(pages, [[0, [t]]]), 0)))).toEqual([50, 300])
+    expect(across(nth(runsOf(side(pages, [[0, [c]]], new Map([[0, 'cell']])), 0)))).toEqual([50, 70])
+  })
+
   it('a theorem\'s head before its first word, which is no unit\'s, is in its block', () => {
     const pages = [[...prose(740, 20), item('Theorem 1.', 50, 480), item('Every word here is the theorem\'s own', 110, 480, { width: 190, eol: true }), ...prose(468, 10)]]
     const t = at(docOf(pages), 'every')

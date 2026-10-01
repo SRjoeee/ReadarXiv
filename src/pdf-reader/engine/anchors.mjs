@@ -83,8 +83,9 @@ export function tokenizeDocument(pages) {
   const doc = []
   const WORD_END = /[\p{L}\p{N}]$/u, WORD_START = /^[\p{L}\p{N}]/u
   for (const { page, items, styles } of pages) {
-    // carry: the token the next one joins; last: the token holding the last word's text; prev: the last item's end
-    let carry = null, last = null, prev = null
+    // carry: the token the next one joins; last: the token holding the last word's text; prev: the last item's end;
+    // inkOpen, inkEnd: whether an item of marks alone may still carry the last token's ink on, and from where
+    let carry = null, last = null, prev = null, inkOpen = false, inkEnd = 0
     for (const it of items) {
       if (!it.str) continue
       const [a, b, c, d, x, y] = it.transform
@@ -96,18 +97,27 @@ export function tokenizeDocument(pages) {
       const flat = b === 0 && c === 0
       if (!carry && prev?.word && flat && prev.flat && Math.abs(y - prev.y) < 0.3 * Math.max(size, prev.size) && x - prev.end > -0.3 * size && x - prev.end < 0.12 * size && WORD_START.test(it.str) && !CJK.test(it.str[0])) carry = last
       for (const tk of toks) {
-        // `item`: the text item the token was read from, for its ink (inkEdges); `sym`: where an item of marks alone after
-        // it ends. Nothing more is worked out here: the reader tokenizes a paper once, cold, and each test a token took
-        // here cost a heavy paper's first tokenizing a third more (2608.02459, 38 → 52 ms)
-        const w = { t: tk.t, page, x: x + perChar * tk.at, y, w: perChar * tk.len, h: size, top: y + asc * size, bottom: y + desc * size, item: it, sym: null }
+        // `item`: the text item the token was read from, for its ink (inkEdges); `sym`: where the items of marks alone
+        // right after it end; `far`: where one set apart after it ends (NaN: more than one). Nothing more is worked out
+        // here: the reader tokenizes a paper once, cold, and each test a token took here cost a heavy paper's first
+        // tokenizing a third more (2608.02459, 38 → 52 ms)
+        const w = { t: tk.t, page, x: x + perChar * tk.at, y, w: perChar * tk.len, h: size, top: y + asc * size, bottom: y + desc * size, item: it, sym: null, far: null }
         if (carry) { carry.t += w.t; w.t = ''; last = carry; carry = null } else last = w
         doc.push(w)
       }
-      // an item of marks alone — a formula's closing bracket and full stop in a font of their own, a proof's box — on
-      // the last word's baseline and after it carries that word's ink to its end
-      if (!toks.length && doc.length && (it.str.length > 1 || it.str.charCodeAt(0) > 32)) {
+      // an item of marks alone — a formula's closing bracket and full stop in a font of their own — on the last word's
+      // baseline and right after it carries that word's ink to its end, and the next one on from there; a space or a
+      // gap of over half an em ends the carry (a cell's word lit over three cells of a dash, 2608.02163). One set apart
+      // is kept aside (`far`) for the layout, which takes it where it ends at the column's text edge (a proof's box set
+      // flush right, highlight.mjs); a second one there is a row of cells, and neither is taken
+      if (toks.length) { inkOpen = true; inkEnd = x + it.width }
+      else if (doc.length) {
         const t = doc[doc.length - 1]
-        if (t.page === page && Math.abs(y - t.y) < 0.5 * t.h && x + it.width > t.x && /\S/.test(it.str)) t.sym = Math.max(t.sym ?? -Infinity, x + it.width)
+        if (t.page === page && Math.abs(y - t.y) < 0.5 * t.h && x + it.width > t.x) {
+          if (!/\S/.test(it.str)) inkOpen = false
+          else if (inkOpen && x - inkEnd <= 0.5 * t.h) { t.sym = Math.max(t.sym ?? -Infinity, x + it.width); inkEnd = x + it.width }
+          else { inkOpen = false; t.far = t.far === null ? x + it.width : Number.NaN }
+        }
       }
       const tail = it.str.trimEnd()
       carry = it.hasEOL && /[-­]$/.test(tail) && toks.length && !CJK.test(tail.at(-2) ?? '') ? last : null

@@ -1,7 +1,7 @@
 // anchors.mjs's types (JavaScript until the engine's port), for the reader's tests
 /** a token of the document: its text (empty for the rest of a word given in parts), page and box in PDF units, the text
  *  item it was read from, and where an item of marks alone after it on its baseline ends (inkEdges) */
-export interface DocToken { t: string; page: number; x: number; y: number; w: number; h: number; top: number; bottom: number; item?: unknown; sym?: number | null }
+export interface DocToken { t: string; page: number; x: number; y: number; w: number; h: number; top: number; bottom: number; item?: unknown; sym?: number | null; far?: number | null }
 /** a page's text as getTextContent gives it */
 export interface TextPage { page: number; items: unknown[]; styles?: Record<string, unknown> }
 export interface Rect { page: number; x0: number; y0: number; x1: number; y1: number }

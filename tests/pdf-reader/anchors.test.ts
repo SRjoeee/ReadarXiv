@@ -124,6 +124,17 @@ describe('inkEdges: a token\'s ink reaches over the marks that touch it', () => 
       ['x', 50, 5, 50, 55],
     ])
   })
+
+  it('the carry stops at a gap over half an em or a space: a table\'s cells of dashes beside a word are not its ink', () => {
+    // a cell's word, then three cells holding a dash 30 units apart (2608.02163: a cell lit over its neighbours); a word,
+    // a space, a bracket
+    expect(edges([item('准确性', 50, 700, { width: 30 }), item('–', 110, 700), item('–', 140, 700), item('–', 170, 700), item('ab', 50, 688), item(' ', 60, 688, { width: 3 }), item(')', 63, 688, { eol: true })])).toEqual([
+      ['准', 50, 10, 50, 60],
+      ['确', 60, 10, 60, 70],
+      ['性', 70, 10, 70, 80],
+      ['ab', 50, 10, 50, 60],
+    ])
+  })
 })
 
 describe('anchorUnits: a word the text layer gives in parts is lit whole', () => {
