@@ -346,12 +346,13 @@ function floatsFor(side, p) {
   Promise.all([figures, ops]).then(([regions, list]) => {
     if (side.geo !== L) return
     // the page's geometry first (made on its drawing, but for a page drawn before the layout came), then its floats
-    const t0 = performance.now(), geometry = pageGeometry(L, p) && performance.now() - t0
+    const t0 = performance.now()
+    pageGeometry(L, p)
     const t1 = performance.now(), paths = pathsOf(list, pdfjsLib.OPS), t2 = performance.now()
     pageFloats(L, p, regions, paths)
     // the main thread's cost, for the probes: the page's geometry where it was not made yet, reading the page's paths,
     // making its floats
-    ;(timing.floats ??= []).push({ geometry, paths: t2 - t1, floats: performance.now() - t2, ops: list.fnArray.length, marks: paths.marks.length })
+    ;(timing.floats ??= []).push({ geometry: t1 - t0, paths: t2 - t1, floats: performance.now() - t2, ops: list.fnArray.length, marks: paths.marks.length })
     // what is lit there, and what is under a pointer resting on it, now that the page has its floats
     if (lit != null && floatOf(L, lit)?.page === p) paint(side)
     pointer.again(side)
