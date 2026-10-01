@@ -26,8 +26,10 @@ const rows = file => readFileSync(join(RUN, file), 'utf8').trim().split('\n').fi
 /** the job names' scripts (jobs.mjs SCRIPT): a translation's; the probe and the marked original are the paper's own */
 const SCRIPT = { de: 'Latn', ru: 'Cyrl', zh: 'Hans', zhc: 'Hans', zht: 'Hant', ja: 'Jpan', ko: 'Kore' }
 const FALLBACK = new Set(['zhc'])
-const jobs = rows('jobs.jsonl').filter(j => !j.skipped && j.engine)
-const papers = rows('papers.jsonl').filter(p => p.compiler)
+/** the engine BusyTeX runs: classic LaTeX is compiled by pdfLaTeX (tex-page.mjs engineOf) */
+const ENGINE = { latex: 'pdflatex' }
+const jobs = rows('jobs.jsonl').filter(j => !j.skipped && j.engine).map(j => ({ ...j, engine: ENGINE[j.engine] ?? j.engine }))
+const papers = rows('papers.jsonl').filter(p => p.compiler).map(p => ({ ...p, compiler: ENGINE[p.compiler] ?? p.compiler }))
 const opened = new Map(rows('opened.jsonl').map(o => [o.tag, o.files]))
 /** the preloaded tier's files the compiles opened (not its directories) */
 const allBasic = new Set([...opened.values()].flat().filter(f => f.startsWith('/') && existsSync(join(BASIC, f)) && statSync(join(BASIC, f)).isFile()))
