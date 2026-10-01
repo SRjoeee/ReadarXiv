@@ -341,7 +341,36 @@ const floatsOf = page => page.evaluate(() => {
   }
   return out
 })
+/** a page whose operator list fails its floats at its first drawing — a list the floats' code throws on (a drawing
+ *  cancelled rejects it before, the same way out) — gets them at its next drawing (a zoom): the page is not left marked
+ *  as asked (the review of B4) */
+async function floatRetry(b, paper) {
+  const page = await open(b, paper, { sync: 'off' })
+  const r = await page.evaluate(async () => {
+    const d = window.__reader.debug, s = d.left
+    const wants = p => (s.geo.unitsOn[p] ?? []).some(id => d.unitKind.get(id) === 'caption')
+    let p = 0
+    for (let n = 1; n <= s.doc.numPages && !p; n++) if (wants(n) && d.pageView(s, n).renderingState === 0 && !d.floatsOn(s, n)) p = n
+    if (!p) return { p }
+    // the floats' own request for the page's list (the first made for it) answered with one their code throws on
+    const proto = Object.getPrototypeOf(await s.doc.getPage(p)), real = proto.getOperatorList
+    let spoiled = 0
+    proto.getOperatorList = function (...a) { if (this.pageNumber === p && !spoiled) { spoiled++; return Promise.resolve({ fnArray: null, argsArray: null }) } return real.apply(this, a) }
+    const wait = async ok => { for (let t = 0; t < 120 && !ok(); t++) await new Promise(r => setTimeout(r, 50)) }
+    s.viewer.currentPageNumber = p
+    await wait(() => d.pageView(s, p).renderingState === 3)
+    await new Promise(r => setTimeout(r, 500))
+    const first = !!d.floatsOn(s, p)
+    proto.getOperatorList = real
+    window.__reader.controller.zoomBy(1.1)
+    await wait(() => d.floatsOn(s, p))
+    return { p, spoiled, first, after: !!d.floatsOn(s, p) }
+  })
+  check(`${b.label} ${paper}: a page whose operator list failed its floats at its first drawing gets them at its next`, r.p > 0 && r.spoiled === 1 && !r.first && r.after, JSON.stringify(r))
+  await page.close()
+}
 async function floatChecks(b) {
+  if (FLOAT_CHECK.length) await floatRetry(b, FLOAT_CHECK[0])
   for (const paper of FLOAT_CHECK) {
     // the sync off: each side stands where it is put (a settle's glide moved the pane under the pointer's grid)
     const page = await open(b, paper, { sync: 'off' })

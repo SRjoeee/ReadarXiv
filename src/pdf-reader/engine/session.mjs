@@ -359,7 +359,11 @@ function floatsFor(side, p) {
     // what is lit there, and what is under a pointer resting on it, now that the page has its floats
     if (lit != null && floatOf(L, litId())?.page === p) paint(side)
     pointer.again(side)
-  }, () => asked.delete(p))
+  }).catch(e => {
+    // asked again at the page's next drawing; a drawing cancelled is no fault, anything else is told
+    asked.delete(p)
+    if (!/abort|cancel|destroy/i.test(`${e?.name} ${e?.message}`)) console.warn('[floats]', e)
+  })
 }
 /** a side's layout wanted now, where the pointer, a paint or a click met the side without one: made in a task of its
  *  own at once, never in the frame or the event that asked (the pointer's frame made both sides' there, 25–48 ms, the
