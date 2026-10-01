@@ -92,6 +92,7 @@ export function tokenizeDocument(pages) {
       const size = Math.hypot(a, b) || it.height || Math.abs(d)
       if (prev && Math.abs(x - prev.x) < 0.1 * size && Math.abs(y - prev.y) < 0.05 * size && it.str === prev.str) continue
       const st = styles?.[it.fontName], asc = st?.ascent > 0 ? st.ascent : 0.75, desc = st?.descent < 0 ? st.descent : -0.22
+      if (st?.fontFamily === 'monospace') MONO.add(it)
       const perChar = it.str.length ? it.width / it.str.length : 0
       const toks = tokens(it.str)
       const flat = b === 0 && c === 0
@@ -138,24 +139,34 @@ export function tokenizeDocument(pages) {
  */
 export function inkEdges(doc) {
   const n = doc.length, l = new Float32Array(n), r = new Float32Array(n)
-  let item = null, s = '', perChar = 0, x0 = 0
+  let item = null, s = '', perChar = 0, x0 = 0, cum = null, scale = 0, raw = null
+  // where the item's text has passed `i` characters: their widths in a proportional face, scaled to the item's width
+  const pos = i => x0 + cum[i] * scale
+  // how much of a mark's width is not ink: half of a full-width one's (a CJK full stop inks its left half, an opening
+  // bracket its right), told by the item's own character where folding kept the places, else by the word (B1's rule)
+  const blank = (i, at, len) => (raw ? (wide(raw.charCodeAt(i)) ? 0.5 : 0) : halfOf(s, at, len))
   for (let k = 0; k < n; k++) {
     const w = doc[k], it = w.item
     let left = w.x, right = w.x + w.w
-    if (it && it !== item) { item = it; s = it.str.normalize('NFKC').toLowerCase(); perChar = it.str.length ? it.width / it.str.length : 0; x0 = it.transform[4] }
+    if (it && it !== item) {
+      item = it; s = it.str.normalize('NFKC').toLowerCase(); perChar = it.str.length ? it.width / it.str.length : 0; x0 = it.transform[4]
+      cum = shares(it.str, s.length, MONO.has(it)); scale = cum[cum.length - 1] ? it.width / cum[cum.length - 1] : 0
+      raw = it.str.length === s.length ? it.str : null
+    }
     if (it && perChar > 0) {
       // the token's place in its item's text, as tokenizeDocument placed it: x = the item's x + perChar × its offset
       const at = Math.round((w.x - x0) / perChar), end = at + Math.round(w.w / perChar)
+      left = pos(at); right = pos(end)
       // most words have a space or nothing on either side: only those that do not are scanned
       if (at > 0 && opens(s.charCodeAt(at - 1))) {
         let from = at - 1
         while (from > 0 && opens(s.charCodeAt(from - 1))) from--
-        left = w.x - (at - from - halfOf(s, at, end - at)) * perChar
+        left = pos(from) + blank(from, at, end - at) * (pos(from + 1) - pos(from))
       }
       if (end < s.length && !stopsMarks(s, end)) {
         let to = end + 1
         while (to < s.length && !stopsMarks(s, to)) to++
-        right = w.x + (to - at - halfOf(s, at, end - at)) * perChar
+        right = pos(to) - blank(to - 1, at, end - at) * (pos(to) - pos(to - 1))
       }
     }
     if (w.sym != null && w.sym > right) right = w.sym
@@ -163,6 +174,28 @@ export function inkEdges(doc) {
   }
   return { l, r }
 }
+
+/** a character's width in a proportional face, in thousandths of an em: Times-Roman's (its AFM) for printable ASCII, a
+ *  full em for a CJK character, CJK punctuation and a full-width form, half an em for anything else */
+const TIMES = [250, 333, 408, 500, 500, 833, 778, 180, 333, 333, 500, 564, 250, 333, 250, 278, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 278, 278, 564, 564, 564, 444, 921, 722, 667, 667, 722, 611, 556, 722, 722, 333, 389, 722, 611, 889, 722, 722, 556, 722, 667, 556, 611, 722, 722, 944, 722, 722, 611, 333, 278, 333, 469, 500, 333, 444, 500, 444, 500, 444, 333, 500, 500, 278, 278, 500, 278, 778, 500, 500, 500, 500, 333, 389, 278, 500, 500, 722, 500, 500, 444, 480, 200, 480, 541]
+/** CJK punctuation and the full-width forms, set in a full em */
+const wide = c => (c >= 0x3000 && c <= 0x303f) || (c >= 0xff00 && c <= 0xffef)
+const widthOf = c => (c >= 32 && c < 127 ? TIMES[c - 32] : isCJKCode(c) || wide(c) ? 1000 : 500)
+/**
+ * The widths of an item's characters before each place, cumulated: what the text layer does not give — only the item's
+ * width — estimated by a proportional face's widths (TIMES), where an even share put the boundary between two English
+ * sentences inside the next one's first letter (on the canvas, 61 of 166 boundaries on four papers' first pages: "T|his",
+ * "W|e"), and a Latin word set among CJK characters, a full em each, wide of its place. Even for a monospaced item, and
+ * where folding the text (NFKC) changed its length (the places are the folded text's)
+ */
+function shares(str, len, mono) {
+  const cum = new Float64Array(len + 1)
+  if (mono || str.length !== len) { for (let i = 1; i <= len; i++) cum[i] = i; return cum }
+  for (let i = 0; i < len; i++) cum[i + 1] = cum[i] + widthOf(str.charCodeAt(i))
+  return cum
+}
+/** the text items set in a monospaced face (getTextContent's styles), whose characters share its width evenly */
+const MONO = new WeakSet()
 
 // ---------------------------------------------------------------- marks
 /** the token a mark sits right after, on the mark's baseline: for a start mark the word whose box is nearest it, for

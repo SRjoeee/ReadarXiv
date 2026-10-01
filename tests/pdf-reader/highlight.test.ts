@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { type Anchor, type DocToken, lineRects, tokenizeDocument } from '@/pdf-reader/engine/anchors.mjs'
+import { type Anchor, type DocToken, inkEdges, lineRects, tokenizeDocument } from '@/pdf-reader/engine/anchors.mjs'
 import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit, shapePath } from '@/pdf-reader/engine/highlight.mjs'
 
 // What a unit paints on a side and where the pointer lights it (highlight.mjs): the pages given as PDF.js's text items,
@@ -172,7 +172,8 @@ describe('runsOf: a unit\'s runs, one per page and column, and their rows', () =
     expect(across(nth(nth(runsOf(own, 0)).rows))).toEqual([50, 300])
     // after another unit's words on the line, only what follows them: a run-in heading is its own
     const after = side(pages, [[0, range(t, t + 7 + 16)], [1, [t - 2]]])
-    expect(across(nth(nth(runsOf(after, 0)).rows))).toEqual([90, 300])
+    // (the 1 where a proportional face's widths put it in its item: inkEdges)
+    expect(across(nth(nth(runsOf(after, 0)).rows))).toEqual([r2(inkEdges(docOf(pages)).l[t - 1]!), 300])
     // the page's geometry says whose head it took (for the gate); a paragraph that starts its line takes none
     expect([pageGeometry(own, 1).heads, pageGeometry(after, 1).heads]).toEqual([[0], [0]])
     const next = at(docOf(pages), 'text', t)
@@ -288,7 +289,7 @@ describe('sentenceOf, and hitOf with sentences: the sentence shape, and the sent
   const startsOf = (id: number) => (id === 0 ? starts : null)
   const b = [blockOf(run, px).y1, ...run.mids, blockOf(run, px).y0]
   // the middle of the space between the first line's third and fourth words, as their ink has them
-  const gap = (d[162]!.x + d[162]!.w + d[163]!.x) / 2
+  const ink = inkEdges(d), gap = (ink.r[162]! + ink.l[163]!) / 2
 
   it('the first row from the sentence\'s start, the rows between across the run, the last row to its end with its full stop', () => {
     expect(sentenceOf(layout, run, starts, 0, px).map(r => [r2(r.x0), r2(r.x1), r2(r.y0), r2(r.y1)])).toEqual([[L, r2(gap), r2(b[1]!), r2(b[0]!)]])
@@ -330,7 +331,7 @@ describe('sentenceOf, and hitOf with sentences: the sentence shape, and the sent
     const own = side(ps, [[0, range(t, t + 7 + 16)]])
     expect(r2(nth(sentenceOf(own, nth(runsOf(own, 0)), st, 0, px)).x0)).toBe(L)
     const after = side(ps, [[0, range(t, t + 7 + 16)], [1, [t - 2]]])
-    expect(r2(nth(sentenceOf(after, nth(runsOf(after, 0)), st, 0, px)).x0)).toBe(90 - px)
+    expect(nth(sentenceOf(after, nth(runsOf(after, 0)), st, 0, px)).x0).toBeCloseTo(inkEdges(docOf(ps)).l[t - 1]! - px)
   })
 
   it('a display inside a sentence is its full rows', () => {

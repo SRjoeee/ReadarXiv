@@ -100,12 +100,29 @@ describe('inkEdges: a token\'s ink reaches over the marks that touch it', () => 
   })
 
   it('a plain word and the words a hyphen joins keep their box, the hyphen after the word it follows', () => {
-    expect(edges([item('plain', 50, 700), item('state-of-art', 80, 700, { eol: true })])).toEqual([
-      ['plain', 50, 25, 50, 75],
-      ['state', 80, 25, 80, 110],
-      ['of', 110, 10, 110, 125],
-      ['art', 125, 15, 125, 140],
-    ])
+    // their ink where a proportional face's widths put them in the item (Times-Roman's: state- 2166, of- 1166, art 1055
+    // thousandths of an em, over its 60 units), their boxes an even share as anchoring reads them
+    const got = edges([item('plain', 50, 700), item('state-of-art', 80, 700, { eol: true })])
+    expect(got.map(([t, x, w]) => [t, x, w])).toEqual([['plain', 50, 25], ['state', 80, 25], ['of', 110, 10], ['art', 125, 15]])
+    const at = (n: number) => 80 + (60 * n) / 4387
+    expect(got.map(([, , , l, r]) => [l, r].map(v => Math.round(Number(v) * 1000) / 1000))).toEqual([[50, 75], [80, at(2166)], [at(2166), at(3332)], [at(3332), 140]].map(p => p.map(v => Math.round(v * 1000) / 1000)))
+  })
+
+  it('an item\'s characters take a proportional face\'s widths, not an even share: the next sentence\'s first word after a wide one\'s full stop, a Latin word among CJK characters; a monospaced item\'s an even share', () => {
+    // "mmm. iii": an even share put the i's at 5/8 of the item, inside the m's ink (2608.06701 on the canvas: "T|his")
+    const [m, i] = edges([item('mmm. iii', 50, 700, { width: 80, eol: true })])
+    const em = 80 / (3 * 778 + 250 + 250 + 3 * 278)
+    expect(m![4]).toBeCloseTo(50 + em * (3 * 778 + 250), 3)
+    expect(i![3]).toBeCloseTo(50 + em * (3 * 778 + 500), 3)
+    // "用GPU。图": CJK characters a full em, the Latin letters Times-Roman's; the stop inks its left half
+    const cjk = edges([item('用GPU。图', 50, 680, { width: 60, eol: true })])
+    const u = 60 / (1000 + 722 + 556 + 722 + 1000 + 1000)
+    expect(cjk.map(([t]) => t)).toEqual(['用', 'gpu', '图'])
+    expect(cjk[1]![4]).toBeCloseTo(50 + u * (1000 + 722 + 556 + 722 + 500), 3)
+    expect(cjk[2]![3]).toBeCloseTo(50 + u * (1000 + 722 + 556 + 722 + 1000), 3)
+    // a monospaced face (getTextContent's styles say so): an even share, as the face sets it
+    const doc = tokenizeDocument([{ page: 1, items: [{ ...item('mmm. iii', 50, 700, { width: 80, eol: true }), fontName: 'tt' }], styles: { tt: { fontFamily: 'monospace' } } }])
+    expect(inkEdges(doc).l[1]).toBeCloseTo(50 + 50, 3)
   })
 
   it('a CJK closing mark inks half its em: the full stop after a character, and a bracket then a stop', () => {
