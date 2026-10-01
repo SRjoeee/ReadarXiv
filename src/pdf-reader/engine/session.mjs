@@ -1809,6 +1809,10 @@ async function replaceRight(url, texts, { draft = false } = {}) {
   right = next; sides[1] = next
   next.fit = old.fit; refit.unobserve(old.container); refit.observe(next.container)
   if (driver === old) driver = next
+  // a pointer resting on the old pane is on the new one, for the highlight and for the sync's column: else it was
+  // looked for on a pane gone, and lit nothing until it moved (the final review of the highlight, I1)
+  pointer.rebind(old, next)
+  if (pointerX?.side === old) pointerX = { ...pointerX, side: next }
   container.classList.remove('axt-incoming')
   old.keeper.disconnect()
   measured.unobserve(old.container); measured.unobserve(old.viewer.viewer)

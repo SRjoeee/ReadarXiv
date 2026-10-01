@@ -130,6 +130,33 @@ describe('pointerPath: the pointer\'s moves once a frame, a miss held', () => {
     r.frame()
     expect(r.lights).toEqual([7, 8])
   })
+  it('a pane put in another\'s place carries a pointer resting on the old one, looked at again there (the final review, I1)', () => {
+    const found: string[] = []
+    let lit: number | null = null
+    const frames: (() => void)[] = []
+    const path = pointerPath<{ name: string }>({
+      find: p => { found.push(p.where.name); return p.where.name === 'new' ? 9 : null },
+      light: v => { lit = v },
+      lit: () => lit != null,
+      hold: 120,
+      frame: f => { frames.push(f); return frames.length },
+      later: () => 1,
+      cancel: () => {},
+    })
+    const old = { name: 'old' }, next = { name: 'new' }, other = { name: 'left' }
+    path.moved(old, 1, 0); for (const f of frames.splice(0)) f()
+    // another pane's replacement leaves it where it is
+    path.rebind(other, next)
+    expect(frames.length).toBe(0)
+    path.rebind(old, next)
+    expect(frames.length).toBe(1)
+    for (const f of frames.splice(0)) f()
+    expect(found).toEqual(['old', 'new'])
+    expect(lit).toBe(9)
+    // and the new pane is the one it leaves
+    path.left(old); path.again(next)
+    expect(frames.length).toBe(1)
+  })
   it('leaving the pane is a miss, held; nothing lit, nothing held', () => {
     const r = rig(() => 7)
     r.path.left('left')

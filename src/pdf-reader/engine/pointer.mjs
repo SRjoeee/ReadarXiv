@@ -79,6 +79,10 @@ export function pointerPath({ find, light, lit, hold, frame, later, cancel }) {
     again(where) { if (pointer && (where === undefined || pointer.where === where)) ask() },
     /** the pointer left a pane */
     left(where) { if (pointer?.where === where) pointer = null; missed() },
+    /** a pane put in another's place (a new compile replacing the right side): a pointer resting on the old one is on
+     *  the new one, looked at again in the next frame — else it was found on a pane gone, and lit nothing until it
+     *  moved (the final review of the highlight, I1) */
+    rebind(from, to) { if (pointer?.where === from) { pointer = { ...pointer, where: to }; ask() } },
     /** what the pointer's last frame found under it, for the probes: a miss is held, so what is lit does not tell */
     get hit() { return hit },
   }

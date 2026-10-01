@@ -20,6 +20,9 @@
 //    first (B3's re-review: made to fail on 61619404, the paragraph first in 4 of 6 opens)
 //  - the pointer moving over the left pane from the first moment of the load: every side's sentences found, as with the
 //    pointer still (B3's review, C1: made to fail on af6fce33, 06701 0 lit by sentence against 41)
+//  - a pointer resting on a sentence of a unit over two pages, on each pane, through the right side replaced: 400 ms
+//    after, what is lit is what a move there lights, painted under the pointer (the final review, I1: made to fail on
+//    346c26fc, the right pane lit nothing until the pointer moved, 2608.02459 and 2608.06701)
 //  - sentences (B3): where a unit lights by sentence on both sides, what it paints is its sentences' shapes (the first,
 //    a middle and the last, debug.litRects), and the grid and the pads above are the pointer's sentence's
 //    (debug.pointerSentence), 1.5 px past a shape's sides not; round 1's measure of their boundaries on the page's own
@@ -49,7 +52,8 @@
 // into a copy of each build, as extension.mjs does with poc-reader/papers; their units carry the sentences
 // spikes/highlight-sentences.mjs made (`sentences` beside `src` and `tr`): spikes/highlight-papers.mjs makes them, into
 // out/highlight/papers.
-//   node experiments/pdf-bilingual/spikes/highlight-gate-browser.mjs [checks|costs|all]
+//   node experiments/pdf-bilingual/spikes/highlight-gate-browser.mjs [checks|costs|all|floats|resting]   (floats, resting: those
+//   checks alone)
 //   BUILD=<dir> the build under test (default .output/chrome-mv3), LABEL its name in the output; BASE_BUILD=<dir> the one
 //   to compare with (costs);
 //   PAPERS=<dir> the demo papers (default out/highlight/papers); CHECK=<ids> the papers checked (default 2608.02459, the
@@ -250,6 +254,53 @@ async function sentencesAtLoad(b, paper, moving) {
   await page.close()
   return got
 }
+/**
+ * A pointer resting on a sentence through the right side replaced (a new compile, replaceRight), on each pane (the final
+ * review of the highlight, I1: after the swap the pointer was looked for on the pane gone, and a pointer resting on the
+ * right lit nothing until it moved). The unit runs over two pages on both sides, the panes scrolled to its later page
+ * (the sync off) and the pointer on its last line there; the earlier page is above the view, so the new side has not
+ * drawn it. 400 ms after the swap — past the miss's hold, no move —: what is lit is what a move there lights, and what is
+ * painted on the pointer's pane holds the pointer. `event` replaces what the highlight is drawn by, in the page
+ */
+async function resting(page, pane, event) {
+  const target = await page.evaluate(async pane => {
+    const d = window.__reader.debug, sides = { L: d.left, R: d.right }
+    const pagesOf = (s, id) => [...new Set(s.anchors.get(id)?.rects.map(r => r.page) ?? [])]
+    for (const [id, a] of d.left.anchors) {
+      if (!a || !d.sentenced(id) || pagesOf(d.left, id).length !== 2 || pagesOf(d.right, id).length !== 2) continue
+      const later = s => pagesOf(s, id)[1]
+      if ([d.left, d.right].some(s => s.anchors.get(id).rects.filter(r => r.page === later(s)).length < 2)) continue
+      for (const s of [d.left, d.right]) s.container.scrollTop = d.pageTop(s, later(s)) + 30
+      await new Promise(r => setTimeout(r, 1500))
+      const s = sides[pane], r = s.anchors.get(id).rects.filter(q => q.page === later(s)).at(-1)
+      const box = d.toPageBox(s, r), pr = d.pageView(s, r.page).div.getBoundingClientRect(), cr = s.container.getBoundingClientRect()
+      const y = pr.top + d.pageView(s, r.page).div.clientTop + box.top + box.height / 2
+      if (y < cr.top + 40 || y > cr.bottom - 40) continue
+      return { id, x: pr.left + d.pageView(s, r.page).div.clientLeft + box.left + Math.min(box.width / 2, 40), y }
+    }
+    return null
+  }, pane)
+  if (!target) return { target }
+  await page.mouse.move(target.x, target.y)
+  await page.waitForTimeout(1200)
+  const state = () => page.evaluate(({ x, y }) => {
+    const d = window.__reader.debug, rects = d.litRects()
+    const under = rects.map(rs => rs.some(r => x >= r.x0 - 1 && x <= r.x1 + 1 && y >= r.y0 - 1 && y <= r.y1 + 1))
+    return { lit: d.lit, s: d.litSentence, under, painted: rects.map(rs => rs.length) }
+  }, target)
+  const before = await state()
+  await page.evaluate(event)
+  await page.waitForTimeout(400)
+  const after = await state()
+  // what a move there lights
+  await page.mouse.move(target.x + 1, target.y)
+  await frames(page)
+  const moved = await page.evaluate(() => ({ id: window.__reader.debug.pointerHit, s: window.__reader.debug.pointerSentence }))
+  await page.mouse.move(5, 5)
+  await page.waitForTimeout(300)
+  return { id: target.id, before, after, moved }
+}
+const SWAP = () => window.__reader.debug.swapRight()
 /** what is painted for a unit, as the pointer lights it: its sentences' shapes where it lights by sentence (B3: the
  *  first, a middle one and the last), else its blocks — each a list of rectangles in the window by side, lit by the
  *  harness and let go */
@@ -356,7 +407,21 @@ function demoSentences(paper) {
   }
   return r
 }
+/** a pointer resting on each pane through the right side replaced (resting) */
+async function restingChecks(b) {
+  for (const paper of CHECK) {
+    const page = await open(b, paper, { sync: 'off' })
+    for (const pane of ['L', 'R']) {
+      const r = await resting(page, pane, SWAP)
+      const k = pane === 'L' ? 0 : 1
+      check(`${b.label} ${paper}: a pointer resting on the ${pane === 'L' ? 'left' : 'right'} pane through the right side replaced: what is lit after is what a move there lights, painted under it`, !!r.id && r.before.lit === r.id && r.before.s >= 0 && r.after.lit != null && r.after.lit === r.moved.id && r.after.s === r.moved.s && r.after.under[k], JSON.stringify(r))
+      ;((result.resting ??= {})[`${b.label} ${paper} ${pane}`] = r)
+    }
+    await page.close()
+  }
+}
 async function checks(b) {
+  await restingChecks(b)
   for (const paper of CHECK) {
     const ds = demoSentences(paper)
     check(`${b.label} ${paper}: the demo's sentences are the file's the Node gate makes again by the reader's path`, ds.file && ds.units > 0 && ds.differ === 0, JSON.stringify(ds))
@@ -735,6 +800,7 @@ const head = await launch(BUILD, process.env.LABEL ?? 'head')
 const base = BASE && (what === 'costs' || what === 'all') ? await launch(BASE, 'base') : null
 try {
   if (what === 'checks' || what === 'all') await checks(head)
+  if (what === 'resting') await restingChecks(head)
   if (what === 'checks' || what === 'all' || what === 'floats') await floatChecks(head)
   if (what === 'costs' || what === 'all') await costs(base ? [base, head] : [head])
 } finally {

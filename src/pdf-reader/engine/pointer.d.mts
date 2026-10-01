@@ -24,6 +24,7 @@ export interface PointerPath<W> {
   moved(where: W, x: number, y: number): void
   again(where?: W): void
   left(where: W): void
+  rebind(from: W, to: W): void
   readonly hit: number | null
 }
 export declare function pointerPath<W>(o: {
