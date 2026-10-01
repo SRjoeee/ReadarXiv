@@ -206,5 +206,7 @@ and writes numbers only.
   `spikes/inspect-places.mjs` (where a paper's units landed), `spikes/inspect-flow.mjs` (a final's flow replayed).
 - Numbers: `round-34.json` — 34 papers (Chinese 5, German 5, Japanese 8, Korean 8, Russian 8) × the columns
   Today, FIT, Locked (H rules), Generic, Flow, first, Flow, Flow, even, Flow, even (A).
-- Kept outside git (`../data/`): the papers' translations (they cost a model's tokens to make again) and the
-  evaluation's indexes. Everything else there — compiles, PDFs, page images — is made again from the code.
+- Kept outside git (`../data/`, 144 MB after the 2026-10-01 clean-up of 12.9 GB): every paper's translation (a
+  model's tokens to make again), each evaluated paper's index (its numbers and the owner's flagged pages), the round's
+  `round.json`, and service H's output PDFs, translation stores and request log (`runs/visual-eval-h/`). Compiles,
+  PDFs and page images went: `visual-eval.mjs` makes them again from the translations, with no model call.
