@@ -268,6 +268,7 @@ does not ship, made by TeX Live's own METAFONT (mktextfm) from the LH fonts' sou
 (the LaTeX Project Public License; source/spikes/make-metafont.mjs makes them).
 `)
 }
+copyFileSync(join(EXP, 'node_modules/texlyre-busytex/dist/index.js'), join(pageDir, 'lib/index.js'))
 const EXTRA = join(EXP, 'data/pk-flat')
 const extra = existsSync(EXTRA) ? readdirSync(EXTRA) : []
 if (extra.length) { mkdirSync(join(pageDir, 'extra')); for (const f of extra) copyFileSync(join(EXTRA, f), join(pageDir, 'extra', f)) }
