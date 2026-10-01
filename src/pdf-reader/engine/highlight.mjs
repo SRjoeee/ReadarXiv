@@ -653,16 +653,17 @@ function outline(rects, a, b, radius) {
 
 /**
  * What a click at a point of a page (PDF units) levels the two sides by (session.mjs alignClick): the unit lit there
- * (hitOf) and its line at the click's height in the block's column — the line whose band holds the height, else the
- * nearest — with how far down that line, 0 to 1. So a click anywhere in what is painted is the unit's: in a block's
- * pads, in the white space beside a display or between two of its lines, and on a float set inside a paragraph's
- * block (a wrapfigure) — levelled by the unit, where before the blocks (B1) they went by what is around them
- * (placeAt). Null where nothing is painted. A float's wash or outline (floats.mjs) is no unit's block: a click on it, off
- * its cells' and its caption's, goes by what is around it (placeAt: a figure by its twin, a table by its distance from
- * its caption), finer than levelling the float by its caption
+ * (hitOf, by the side's sentence starts `startsOf` as the pointer's) and its line at the click's height in the block's
+ * column — the line whose band holds the height, else the nearest — with how far down that line, 0 to 1. So a click
+ * anywhere in what is painted is the unit's: in a block's pads, in the white space beside a display or between two of
+ * its lines, on a float set inside a paragraph's block (a wrapfigure), and in a sentence's rows where they reach past
+ * the block to the unit's text edge (the final review of the highlight, M4) — levelled by the unit, where before the
+ * blocks (B1) they went by what is around them (placeAt). Null where nothing is painted. A float's wash or outline
+ * (floats.mjs) is no unit's block: a click on it, off its cells' and its caption's, goes by what is around it (placeAt:
+ * a figure by its twin, a table by its distance from its caption), finer than levelling the float by its caption
  */
-export function clickOf(L, p, x, y, padX) {
-  const hit = hitOf(L, p, x, y, padX)
+export function clickOf(L, p, x, y, padX, startsOf = () => null) {
+  const hit = hitOf(L, p, x, y, padX, startsOf)
   if (!hit) return null
   const { run } = hit, rects = L.anchors.get(hit.id)?.rects ?? []
   let line = -1, far = Infinity

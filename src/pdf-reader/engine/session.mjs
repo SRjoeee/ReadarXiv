@@ -841,12 +841,13 @@ function pointOf(side, event) {
   return { page, x, y }
 }
 /** the unit a click is on and the line of it at the click's height (highlight.mjs clickOf: anywhere in what is painted,
- *  its pads and a display's white space too); null off what is painted, or before the side's layout is made */
+ *  its pads, a display's white space and a sentence's rows too); null off what is painted, or before the side's layout
+ *  is made */
 function hitAt(side, event) {
   const at = pointOf(side, event)
   if (!at) return null
   if (!side.geo) { wantLayout(side); return null }
-  return clickOf(side.geo, at.page, at.x, at.y, PAD / pageView(side, at.page).viewport.scale)
+  return clickOf(side.geo, at.page, at.x, at.y, PAD / pageView(side, at.page).viewport.scale, side.startsOf)
 }
 
 // ---------------------------------------------------------------- scroll sync

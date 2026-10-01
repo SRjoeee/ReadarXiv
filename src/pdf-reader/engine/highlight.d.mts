@@ -28,4 +28,4 @@ export declare function sentencesFit(layout: Layout, id: number, starts: Int32Ar
 export declare function pageSentences(layout: Layout, page: number, startsOf: (id: number) => Int32Array | null | undefined): void
 /** one rounded outline of rectangles stacked from the top (CSS px, y down), as an SVG path */
 export declare function shapePath(rects: { x0: number; x1: number; y0: number; y1: number }[], radius: number): string
-export declare function clickOf(layout: Layout | null | undefined, page: number, x: number, y: number, padX: number): { id: number; line: number; f: number } | null
+export declare function clickOf(layout: Layout | null | undefined, page: number, x: number, y: number, padX: number, startsOf?: (id: number) => Int32Array | null | undefined): { id: number; line: number; f: number } | null

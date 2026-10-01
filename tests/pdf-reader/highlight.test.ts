@@ -441,6 +441,23 @@ describe('a sentence that goes on over a column or a page break: there, it reach
     expect([tiles(layout, 0, starts, 1), tiles(layout, 0, starts, 2)]).toEqual([[], []])
   })
 
+  it('a click anywhere a sentence paints is its unit\'s: beside a display, where its rows reach past the block (the final review, M4)', () => {
+    // the second sentence goes on to page 2 through a display at its head, then ends on a short line: the run there is
+    // as wide as its ink, its sentence's rows across the column
+    const ps = [
+      [...prose(760, 20), line('alpha beta gamma delta and words go on', 496), line('a sentence begins here and goes', 484), item('x = y', 150, 466, { eol: true })],
+      [item('i = a', 150, 760, { eol: true }), line('then the end now', 748, 50, 120), ...prose(700, 20)],
+    ]
+    const d = docOf(ps), layout = side(ps, [[0, range(at(d, 'alpha'), at(d, 'now'))]])
+    const starts = Int32Array.from([at(d, 'begins')]), startsOf = (i: number) => (i === 0 ? starts : null)
+    const b = nth(runsOf(layout, 0), 1)
+    expect([b.page, blockOf(b, px).x1 < 280]).toEqual([2, true])
+    expect(hitOf(layout, 2, 280, 762, px, startsOf)).toMatchObject({ id: 0, s: 1 })
+    // the click there is the display's line, as the pointer lights it; a unit lit whole paints its block alone
+    expect(clickOf(layout, 2, 280, 762, px, startsOf)).toMatchObject({ id: 0, line: 3 })
+    expect(clickOf(layout, 2, 280, 762, px)).toBeNull()
+  })
+
   it('an indented unit (a list\'s item) reaches its own text edge, not the column\'s', () => {
     const ps = pages(70), d = docOf(ps), layout = side(ps, [[0, range(at(d, 'alpha'), at(d, 'now'))]])
     const starts = Int32Array.from([at(d, 'begins'), at(d, 'more')])
