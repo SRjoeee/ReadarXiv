@@ -172,9 +172,11 @@ export function pageFloats(L, p, regions = [], { rules = [], marks = [] } = {}) 
   regions.forEach((r, k) => items.push({ x0: r.x0, x1: r.x1, y0: r.y0, y1: r.y1, lo: r.y0, hi: r.y1, what: 'figure', fig: k }))
   for (const m of marks) items.push({ ...m, lo: m.y0, hi: m.y1, what: 'mark' })
   for (const r of rules) if (!r.v) items.push({ ...r, lo: r.y0, hi: r.y1, what: 'rule' })
-  // nothing outside the text block is a float's: a running head, a page number
+  // nothing outside the text block is a float's — a running head, a page number — but a rule: a float at the page's
+  // head has its top rule just over the block's top (the review of B4: 2608.02163's table 7, 06701's algorithm 1 lost
+  // theirs); a rule a float takes is bounded by its lines anyway (TRAIL)
   const frame = frameOf(L, p)
-  for (let i = items.length - 1; i >= 0; i--) if (items[i].y0 > frame.y1 + 1 || items[i].y1 < frame.y0 - 1) items.splice(i, 1)
+  for (let i = items.length - 1; i >= 0; i--) if (items[i].what !== 'rule' && (items[i].y0 > frame.y1 + 1 || items[i].y1 < frame.y0 - 1)) items.splice(i, 1)
   // in the order the walks meet them: down from the top, up from the foot
   const byTop = [...items].sort((a, b) => b.y1 - a.y1), byFoot = [...items].sort((a, b) => a.y0 - b.y0)
   // each caption's own figures, and its box: a main caption takes the subcaptions over (or under) it with their panels
@@ -332,15 +334,18 @@ function walk(c, dir, { byTop, byFoot, figOf, figsOf, boxOf, at, capsOn, tokens 
       end = down ? q.y0 : q.y1
     }
   }
-  // the rules beyond the caption, against it: an algorithm's rule over its caption
-  let end = down ? c.box.y1 : c.box.y0
-  const back = down ? byFoot : byTop
-  for (let k = down ? firstAt(byFoot, q => q.y0 >= c.box.y1 - 1) : firstAt(byTop, q => q.y1 <= c.box.y0 + 1); k < back.length; k++) {
-    const q = back[k]
-    if (q.caps?.includes(c.id) || overlapX(q, c.box) <= 0) continue
-    if (q.what !== 'rule' || (down ? q.y0 - end : end - q.y1) > TRAIL * h) break
-    rules.push(q)
-    end = down ? q.y1 : q.y0
+  // the rules over a caption that heads its float, against it and as wide as it: an algorithm's rule over its caption —
+  // not a rule under a caption under its float (the footnotes' rule tight under a figure's caption at the page's foot,
+  // the review of B4)
+  if (down) {
+    let end = c.box.y1
+    for (let k = firstAt(byFoot, q => q.y0 >= c.box.y1 - 1); k < byFoot.length; k++) {
+      const q = byFoot[k]
+      if (q.caps?.includes(c.id) || overlapX(q, c.box) <= 0) continue
+      if (q.what !== 'rule' || q.y0 - end > TRAIL * h || overlapX(q, c.box) < 0.8 * (c.box.x1 - c.box.x0)) break
+      rules.push(q)
+      end = q.y1
+    }
   }
   // the caption's neighbour in the stream: the line of the first token past it, on this side, that is not its own
   const { k0, lineOf, owner } = at, n = owner.length

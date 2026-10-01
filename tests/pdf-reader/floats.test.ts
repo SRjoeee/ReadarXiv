@@ -326,3 +326,23 @@ describe('pageFloats: figures side by side, subfigures (the review of B4)', () =
     expect(captionFor({ x0: 60, y0: 617, x1: 170, y1: 720 }, [cap(0, 200, 290, 614), cap(1, 70, 160, 600)])?.id).toBe(1)
   })
 })
+
+describe('pageFloats: at a page\'s head and foot (the review of B4)', () => {
+  it('an algorithm at the page\'s top keeps its rule over its caption, just over the text block\'s top', () => {
+    // four pages whose first lines' tops are at 747.5; on the last, the algorithm's top rule at 750, its caption at 738,
+    // a rule, its lines, its bottom rule, prose
+    const ps = [prose(740, 30), prose(740, 30), prose(740, 30), [line('Algorithm 1 the loop', 738, 60, 200), line('repeat the steps', 720, 60, 200), line('until it is done', 708, 60, 200), ...prose(670, 20)]]
+    const dd = docOf(ps)
+    const layout = side(ps, [[0, words(dd, 'algorithm', 'loop')]], { 0: 'caption' })
+    const fs = pageFloats(layout, 4, [], { rules: [hrule(55, 295, 750), hrule(55, 295, 734), hrule(55, 295, 703)] })
+    expect(fs.map(f => [f.kind, ...r1(f.region)])).toEqual([['table', 55, 702.8, 295, 750.2]])
+  })
+
+  it('a figure at the page\'s foot, its caption under it and the footnotes\' rule just under that: the rule is not the figure\'s', () => {
+    const ps = [[...prose(740, 20), line('Figure 2: the plot', 288, 100, 250), item('1 A footnote here', 50, 268, { size: 8, eol: true, width: 120 })]]
+    const dd = docOf(ps)
+    const layout = side(ps, [[0, words(dd, 'figure', 'plot')], [7, words(dd, 'a', 'here', at(dd, 'footnote') - 1)]], { 0: 'caption', 7: 'footnote' })
+    const fs = pageFloats(layout, 1, [{ x0: 80, y0: 300, x1: 280, y1: 420 }], { rules: [hrule(50, 150, 278.5)] })
+    expect(fs.map(f => [f.kind, ...r1(f.region)])).toEqual([['figure', 80, 300, 280, 420]])
+  })
+})
