@@ -105,7 +105,7 @@ not a total-memory acceptance result.
 
 ## Reproducible local evidence and verdict
 
-Under `../data/runs/local-block-prototype/` (ignored scratch, preserved locally): `mixed-run-{1,2,3}.json`,
+The raw files below were deleted on 2026-10-01 in the data clean-up, by mistake; the tables in this file are what remains. They cost no model call and no compile to make again: run the prototype and use the viewer's measure buttons, then Export. They were, under `../data/runs/local-block-prototype/` (ignored scratch): `mixed-run-{1,2,3}.json`,
 `mixed-survey.json`, `prose-v2-control.json`, `opaque-integrity-controls.json`, `mixed-zh-{view.png,evidence.json}`,
 `mixed-inline-math{.png,-evidence.json}`, `mixed-two-region{.png,-evidence.json}`, `mixed-navigation-evidence.json`
 and `mixed-restore-evidence.json`. Earlier faulty-display and pre-index measurements live in labelled subdirectories;

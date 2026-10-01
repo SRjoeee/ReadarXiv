@@ -35,7 +35,7 @@ updates and 30 native-size overlay controls per language. Those are repeated che
 the production BusyTeX pipeline. No network-cold, live translation, concurrent-reader or process-memory benchmark
 was performed. Two requestAnimationFrame callbacks mark a paint opportunity, not verified compositor presentation.
 
-Raw local evidence (ignored scratch data, preserved on this machine):
+Raw local evidence (ignored scratch data). The raw files below were deleted on 2026-10-01 in the data clean-up, by mistake; the tables in this file are what remains. They cost no model call and no compile to make again: run the prototype and use the viewer's measure buttons, then Export.
 
 - `../data/runs/local-block-prototype/run-{1,2,3}.json`: final five-case rounds, all failures and page rejection reasons.
 - `../data/runs/local-block-prototype/two-block-evidence.json`: the second update retained the first region's node
