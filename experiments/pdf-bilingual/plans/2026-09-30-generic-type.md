@@ -298,3 +298,19 @@ Errors are leave-one-paper-out. The text predictor was crude (every non-CJK char
     model allows — 95 lines against 75 in all, twice as often under 1 % (8 against 3.8), 1.4 times at 1–3 %, 1.1 at
     3–5 % — so the final, which counted on the model, came out early. Japanese types already at their smallest face
     (0.92) went to 0.87 in places.
+- 2026-10-01, the owner's coarse option A (on the page as "Flow, even (A)"): the flow runs once at the full face; where
+  it leaves the text late at a segment's end — before a forced break, or at the paper's end — by more than three
+  lines, its leading at the floor, the stretch that ran late before that end is set at one face (97.5 % over as few of
+  its last units as take the lateness back, else 95 %), and the flow runs again over those heights.
+
+  | CJK, 21 papers | Pages equal (more / fewer) | Drift median / p90 | Within 0.1 column | Units standing out |
+  |---|---|---|---|---|
+  | Flow, even | 18 (3 / 0) | 0.042 / 0.317 | 78 % | 7 |
+  | Coarse option A | 19 (2 / 0) | 0.039 / 0.266 | 80 % | 8 |
+
+  None worse; Japanese 2608.18090 has its pages again (units 80–209, pages 5–15, at 95 % and 97.5 %), Chinese 2608.09038
+  (0.133 → 0.095 column, pages 3–9 at 95 %) and Japanese 2608.24839 (0.127 → 0.089, pages 2–6 at 97.5 %) nearer;
+  faces in five papers only, each a run of whole pages. Korean 2608.18090 keeps its page more: its preview stood level
+  at the forced break (−3 pt) and the final flow foresaw 16 pt, but the final came out 98 pt late — a paragraph moved
+  whole to the next page where the preview's had not, which no prediction from the preview sees. The re-solved type
+  is not it: the line model foresaw the final's line changes from the type well (21 papers: 71 lines against 96).
