@@ -126,6 +126,12 @@ describe('runsOf: a unit\'s runs, one per page and column, and their rows', () =
     expect(across(nth(runsOf(side(pages, [[0, range(s, at(d, 'y') + 3)]]), 0)))).toEqual([50, 306])
   })
 
+  it('a table wider than the measure: a cell past the column\'s edge keeps its own ink (a float is not clamped)', () => {
+    const pages = [[...prose(740, 20), item('cell', 320, 480, { eol: true }), ...prose(460, 10)]]
+    const c = at(docOf(pages), 'cell')
+    expect(across(nth(runsOf(side(pages, [[0, [c]]], new Map([[0, 'cell']])), 0)))).toEqual([320, 340])
+  })
+
   it('a unit ends after its closing mark: a CJK full stop inks half its em', () => {
     // a heading of a translation, two characters and a full stop in a 30-unit item
     const pages = [[...prose(740, 20), item('引言。', 50, 480, { width: 30, eol: true }), ...prose(460, 10)]]

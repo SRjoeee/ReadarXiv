@@ -16,6 +16,9 @@ import { inkEdges } from './anchors.mjs'
 
 /** kinds of unit that are no running text: what lies among their words is their float's, not theirs */
 const NOT_RUNNING = new Set(['caption', 'heading', 'cell', 'figure'])
+/** kinds of unit a float holds, which may be wider than the measure (a table, a figure and its caption): their blocks
+ *  keep their ink past the column's edge, where a cell past it was clamped to nothing (the review of B1's gate) */
+const FLOATS = new Set(['caption', 'cell', 'figure'])
 /** a text line is long when it spans a quarter of the page; a page has two columns when four long lines stand in
  *  each half; a column's edge is the outermost x that three long lines (and 5 % of them) share, to a unit */
 const LONG = 0.25, COLUMN_LINES = 4, EDGE_LINES = 3, EDGE_SHARE = 0.05
@@ -265,7 +268,7 @@ function unitRuns(L, p, { k0, lines, lineOf, owner, lineOwner }, id, toks) {
     let start = 0
     for (let r = 1; r <= rows.length; r++) {
       if (r < rows.length && !interrupted(lines, lineOwner, col, id, rows[r - 1], rows[r])) continue
-      runs.push(runOf(id, p, col, rows.slice(start, r), e, P.lead.get(L.kindOf(id) ?? '') ?? P.lead.get(null)))
+      runs.push(runOf(id, p, col, rows.slice(start, r), e, P.lead.get(L.kindOf(id) ?? '') ?? P.lead.get(null), !FLOATS.has(L.kindOf(id))))
       start = r
     }
   }
@@ -286,12 +289,12 @@ function interrupted(lines, lineOwner, col, id, above, below) {
   return false
 }
 
-/** a run: its rows' extent across, inside the column's text edges — up to OVERHANG past them, and within SNAP of them
- *  on them — and down; the boundaries between its rows halfway between them, never rising */
-function runOf(id, page, col, rows, e, lead) {
+/** a run: its rows' extent across, inside the column's text edges — up to OVERHANG past them (`clamp`: running text),
+ *  and within SNAP of them on them — and down; the boundaries between its rows halfway between them, never rising */
+function runOf(id, page, col, rows, e, lead, clamp) {
   let x0 = Infinity, x1 = -Infinity
   for (const r of rows) { if (r.x0 < x0) x0 = r.x0; if (r.x1 > x1) x1 = r.x1 }
-  x0 = Math.max(x0, e.x0 - OVERHANG); x1 = Math.min(x1, e.x1 + OVERHANG)
+  if (clamp) { x0 = Math.max(x0, e.x0 - OVERHANG); x1 = Math.min(x1, e.x1 + OVERHANG) }
   if (Math.abs(x0 - e.x0) < SNAP) x0 = e.x0
   if (Math.abs(x1 - e.x1) < SNAP) x1 = e.x1
   const mids = []
