@@ -399,6 +399,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     const referencesWhole = r => !/^(?:LaTeX|Package natbib) Warning: Citation .*undefined/m.test(lastTexLog(r.log)) && bibcites(r.aux) === bibcites(readings?.cites)
     /** the preview that can measure the final: the last of the whole translation, planned, shown */
     let measuring = null
+    // a preview of part of the translation held once for the last batch (below), as long as the last preview took
+    let held = false, previewMs = 0
     while (true) {
       // with the rule, the original right after the first preview: every plan after it is made from it
       if (readMarks && previews && !originalP) { await original(); continue }
@@ -407,12 +409,19 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       // the whole translation after the first preview waits for the original under way in its own compiler: planned, its
       // preview measures the final, which a draft would have to otherwise (V1', the F2 review's measured proposal)
       if (dirty && readMarks && compileOriginal && previews && !readings && whole(translated)) await original().catch(() => {})
+      // every unit sent and the last batch still out: a preview of part of the translation waits for it, once and as long
+      // as the last preview took — the whole translation's preview would replace it within that time, and only the whole
+      // one measures the final; begun, it held the whole one back by up to a preview (zh 2608.02163 on the protocol-2
+      // page: the last batch came 0.13 s after a preview of 200 of its 337 units began, the final 2.1 s later for it)
+      if (dirty && previews && !held && !todo.size && !mtDone && !whole(translated)) { held = true; await Promise.race([sleep(), new Promise(r => setTimeout(r, previewMs))]); continue }
       if (dirty) {
         dirty = false
         const snapshot = new Map(translated), t0 = Date.now(), plan = planFor(snapshot)
         const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bbl, overrides: translationFiles(paper, snapshot, { strategy: strategy(), fonts, draft: true, aux: withCites(aux), bbl, typeset: plan?.typeset ?? null, note }) })
         if (r.aux) aux = r.aux
         if (r.bbl) bbl = r.bbl
+        held = false
+        previewMs = r.ms ?? 0
         // shown only when it set every letter: a translation with letters missing is not one (Devin on #294); the note says
         // ok for what is shown, and with no strategy left the reader keeps what it has
         const shown = await settled(r)

@@ -310,3 +310,45 @@ describe('the original\'s readings, kept', () => {
     expect(r.original).toEqual(r1.original)
   })
 })
+
+// Every unit sent and the last batch still out: a preview of part of the translation waits for it, once, as long as the
+// last preview took — the whole translation's would replace it within that time, and only the whole one measures the
+// final (zh 2608.02163 on the protocol-2 page: the last batch came 0.13 s after a preview of 200 of its 337 units began,
+// and the final was 2.1 s later for it)
+describe('a preview of part of the translation, the last batch out', () => {
+  /** three batches (live.mjs nextBatch: the first small): the second given back once the first preview is shown, the
+   *  third `lag` ms after the second */
+  const batches = (lag: number) => {
+    let n = 0, second: () => void = () => {}, third: () => void = () => {}
+    const g2 = new Promise<void>(r => { second = r }), g3 = new Promise<void>(r => { third = r })
+    const translate = async (texts: string[]) => {
+      const k = n++
+      if (k === 1) { await g2; setTimeout(third, lag) }
+      if (k === 2) await g3
+      return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '论文'), by: 'B' }))
+    }
+    return { translate, release: () => second() }
+  }
+  const go = async (lag: number) => {
+    const p = paper(70), n = p.units.length, t = batches(lag), shown: number[] = []
+    const c = compiler(n), base = c.compile
+    // a preview takes 50 ms
+    c.compile = async (q: Req) => { const r = await base(q); if (kindOf(q) === 'preview') { await new Promise(res => setTimeout(res, 50)); return { ...r, ms: 50 } } return r }
+    const known = (await runLive(paper(4), { lang: 'zh', compile: compiler(paper(4).units.length).compile, translate: async texts => texts.map(text => ({ text, by: 'B' })), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })).original
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map([['0s', {}]]), original: { ...known!, log: linesLog(n), marks: MARKS(n) }, identity: 'B', readMarks: async () => MARKS(n), onUpdate: ({ translated, final }) => { if (!final) { shown.push(translated); t.release() } } })
+    return { r, shown, n: n - p.kept.size }
+  }
+
+  it('waits for it when it comes within a preview\'s time: the next preview is of the whole translation', async () => {
+    const { r, shown, n } = await go(10)
+    expect(shown.length).toBe(2)
+    expect(shown.at(-1)).toBe(n)
+    expect(r.settled).toBe(true)
+  })
+
+  it('and no longer: a batch later than that, the preview of part is compiled', async () => {
+    const { shown, n } = await go(400)
+    expect(shown.length).toBe(3)
+    expect(shown[1]).toBeLessThan(n)
+  })
+})
