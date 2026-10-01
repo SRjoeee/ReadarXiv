@@ -81,15 +81,18 @@ export async function serveTexSite({ port = 0, tls = false, today = false, link 
   }
   // the link's clock: the time its last reserved byte is through
   let free = 0
+  // in slices that wait for the connection to drain: an HTTP/2 session refuses new streams once it holds more than its
+  // memory allows, and a 90 MB body written at once is more
   async function send(res, body) {
-    if (!link?.mbit) return res.end(body)
-    const rate = (link.mbit * 1e6) / 8 / 1000 // bytes per ms
-    const slice = Math.max(16384, Math.round(rate * 5))
+    const rate = link?.mbit ? (link.mbit * 1e6) / 8 / 1000 : 0 // bytes per ms
+    const slice = Math.max(65536, Math.round(rate * 5))
     for (let at = 0; at < body.length; at += slice) {
       const piece = body.subarray(at, at + slice)
-      free = Math.max(performance.now(), free) + piece.length / rate
-      const wait = free - performance.now()
-      if (wait > 1) await sleep(wait)
+      if (rate) {
+        free = Math.max(performance.now(), free) + piece.length / rate
+        const wait = free - performance.now()
+        if (wait > 1) await sleep(wait)
+      }
       if (!res.write(piece)) await new Promise(r => res.once('drain', r))
     }
     res.end()
@@ -120,7 +123,7 @@ export async function serveTexSite({ port = 0, tls = false, today = false, link 
       res.end(String(e?.stack ?? e))
     }
   }
-  const server = tls ? createSecureServer({ ...certificate(), allowHTTP1: true }, handler) : createServer(handler)
+  const server = tls ? createSecureServer({ ...certificate(), allowHTTP1: true, maxSessionMemory: 256 }, handler) : createServer(handler)
   await new Promise((r, reject) => { server.on('error', reject); server.listen(port, '127.0.0.1', r) })
   return server
 }
