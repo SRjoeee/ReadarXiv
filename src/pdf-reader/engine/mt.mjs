@@ -15,8 +15,13 @@ export const escape = s => s.replace(/@/g, '@@').replace(/&/g, '&amp;').replace(
 export const decode = s => s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (m, b) => b[0] === '#' ? String.fromCodePoint(b[1].toLowerCase() === 'x' ? parseInt(b.slice(2), 16) : parseInt(b.slice(1), 10)) : { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }[b.toLowerCase()])
 /** source text is read byte for byte (latin1); its characters are UTF-8 */
 export const utf8 = s => new TextDecoder().decode(latin1Bytes(s))
-// the engine's text is plain text: TeX's special characters in it (a % for "percent", a # for "number") are escaped
-export const texEscape = s => s.replace(/[\\#$%&_{}~^]/g, c => ({ '\\': '\\textbackslash{}', '~': '\\textasciitilde{}', '^': '\\textasciicircum{}' })[c] ?? `\\${c}`)
+// the engine's text is plain text: TeX's special characters in it (a % for "percent", a # for "number") are escaped,
+// and the characters Unicode marks default ignorable, invisible by definition (a zero width space, a soft hyphen, a
+// direction mark, a variation selector), are dropped: no font of ours holds a glyph for one, and TeX's "Missing
+// character" for it reads as a letter lost (live.mjs unsettable) — two zero width spaces Google put inside a word failed
+// every way of setting 2608.02785 (2026-10-02). The scripts whose shaping needs a joiner (ZWJ, ZWNJ) are not typeset
+const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu
+export const texEscape = s => s.replace(INVISIBLE, '').replace(/[\\#$%&_{}~^]/g, c => ({ '\\': '\\textbackslash{}', '~': '\\textasciitilde{}', '^': '\\textasciicircum{}' })[c] ?? `\\${c}`)
 
 /** a unit → the wire text, the table from marker id back to the original piece, and the markers the wire set apart
  *  from a full stop (`stops`), whose space rehydrate takes off again */

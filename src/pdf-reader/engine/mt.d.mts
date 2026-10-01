@@ -6,6 +6,8 @@ export declare function plainSource(u: { pieces: Piece[] }): string
 export declare function plainTranslated(pieces: Piece[]): string
 /** a unit's plain text (the translation's where the pieces are translated) and the offsets in it where a placeholder stood */
 export declare function unitText(pieces: Piece[]): { text: string; gaps?: number[] }
+/** an engine's plain text as TeX sets it: its invisible characters dropped, TeX's special characters escaped */
+export declare function texEscape(s: string): string
 /** a unit → the wire text of the markers format, and the table from marker id back to the original piece */
 export declare function serialize(u: { pieces: Piece[] }): { wire: string; slots: Piece[]; lead: string; trail: string; stops?: Set<number> }
 /** the translation → pieces, or why it cannot be used */

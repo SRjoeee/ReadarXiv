@@ -133,7 +133,8 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
  * cutting, kinds and texts, paperContext(), the marks). A record of another version is translated again
  */
 // 2: the front matter's notes are units (latex-front.mjs FRONT_MATTER)
-export const PIPELINE_VERSION = '2'
+// 3: a translation's invisible characters dropped before TeX (mt.mjs texEscape) — a mark "cannot typeset" they caused goes
+export const PIPELINE_VERSION = '3'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };

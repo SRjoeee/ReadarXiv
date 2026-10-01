@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { cutsOf, plainSource, plainTranslated, rehydrate, rehydrateTags, sentencesKept, sentencesOf, serialize, serializeTags, textsShown, translateUnits, unitText } from '@/pdf-reader/engine/mt.mjs'
+import { cutsOf, plainSource, plainTranslated, rehydrate, rehydrateTags, sentencesKept, sentencesOf, serialize, serializeTags, texEscape, textsShown, translateUnits, unitText } from '@/pdf-reader/engine/mt.mjs'
 
 // A unit's plain text as the PDF shows it, which the reader locates it by (anchors.mjs)
+
+describe('texEscape: an engine\'s text as TeX sets it', () => {
+  it('drops the zero width spaces an engine put inside a word: no font has a glyph for one, and its "Missing character" failed every way of setting 2608.02785 under Google (2026-10-02)', () => {
+    expect(texEscape('theo\u200b\u200brem')).toBe('theorem')
+  })
+  it('drops every character Unicode marks default ignorable, invisible by definition: a soft hyphen, a word joiner, a byte order mark, direction marks and embeddings, a variation selector', () => {
+    expect(texEscape('a\u00adb\u2060c\ufeffd\u200ee\u202af\u202cg\ufe0fh')).toBe('abcdefgh')
+  })
+  it('escapes TeX\'s special characters as before', () => {
+    expect(texEscape('50% #1 a_b {x} & $ ~ ^ \\')).toBe('50\\% \\#1 a\\_b \\{x\\} \\& \\$ \\textasciitilde{} \\textasciicircum{} \\textbackslash{}')
+  })
+})
 
 describe('unitText: the plain text, and where its placeholders stood', () => {
   it('the text is plainSource\'s, the offsets where a formula or a citation was', () => {
