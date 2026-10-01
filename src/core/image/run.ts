@@ -154,9 +154,16 @@ async function defaultFetchBytes(url: string, signal?: AbortSignal): Promise<Ima
   return readImageResponse(res)
 }
 
-/** ArrayBuffer → base64, in chunks to stay under the argument limit of String.fromCharCode */
+/**
+ * ArrayBuffer → base64. The browser's own encoder where it has one (`Uint8Array.prototype.toBase64`, newer than the
+ * extension's floor): the script one held the page's main thread 52 ms for a 2.6 MB PNG and 133 ms for 5.9 MB, the
+ * browser's 0.5 and 1.1 ms (measured 2026-09-25, the PDF reader's Part 1). Below it, in script, in chunks to stay under
+ * the argument limit of String.fromCharCode
+ */
 export function toBase64(bytes: ArrayBuffer): string {
   const view = new Uint8Array(bytes)
+  const native = (view as Uint8Array & { toBase64?: () => string }).toBase64
+  if (typeof native === 'function') return native.call(view)
   let binary = ''
   for (let i = 0; i < view.length; i += 0x8000) binary += String.fromCharCode(...view.subarray(i, i + 0x8000))
   return btoa(binary)

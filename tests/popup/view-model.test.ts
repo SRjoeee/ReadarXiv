@@ -399,7 +399,7 @@ describe('the redesign\'s popup (its design, §5)', () => {
       // hand-over, and the one `engine.demoted` alone would show
       engine: { id: 'google-web', demoted: { id: 'microsoft', kind: 'rate-limit' as const, message: '429' } },
       // both hand-overs still in force: the key's refusal is no longer the latest, but it never healed on its own
-      demotions: [{ id, kind: 'auth' as const }, { id: 'microsoft', kind: 'rate-limit' as const }],
+      demotions: [{ id, kind: 'auth' as const, status: 401 }, { id: 'microsoft', kind: 'rate-limit' as const }],
     }
     const v = derivePopupView({ ...input('P6b'), session: twoHandovers })
     expect(v.primary).toEqual({ label: '重新翻译', action: 'retranslate', disabled: false, shortcut: '⌥T' })

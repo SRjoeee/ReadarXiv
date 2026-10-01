@@ -66,10 +66,12 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
           <ServiceMenu controller={controller} />
         </div>
         <div className="sep narrow-only" />
-        <div className="row">
+        {/* a switch's row is a label, its words a target too, as the popup's are (the interface review) */}
+        {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
+        <label className="row">
           {S.rows.highlight}
           <Switch label={S.rows.highlight} checked={config.reading.sentenceHighlight} onChange={on => controller.patchSettings(c => ({ ...c, reading: { ...c.reading, sentenceHighlight: on } }))} />
-        </div>
+        </label>
         <div className="row">
           {R.options.color}
           <span className="flex gap-2">
@@ -80,10 +82,11 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
           </span>
         </div>
         <div className="sep" />
-        <div className="row">
+        {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
+        <label className="row">
           {S.rows.images}
           <Switch label={S.rows.images} checked={config.image.enabled} onChange={on => controller.patchSettings(c => ({ ...c, image: { ...c.image, enabled: on } }))} />
-        </div>
+        </label>
         <div className="sep" />
         <div className="row">
           {R.options.appearance}
@@ -95,10 +98,11 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
             ))}
           </div>
         </div>
-        <div className="row">
+        {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
+        <label className="row">
           {R.options.dim}
           <Switch label={R.options.dim} checked={config.pdfReader.dimPages} onChange={on => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, dimPages: on } }))} />
-        </div>
+        </label>
       </Popover>
     </>
   )

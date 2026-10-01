@@ -78,8 +78,8 @@ const S: Locale['S'] = {
   // an abstract or PDF page's two entries, the reader's to choose (S-P-50b; the reader's design, §2, §15)
   entry: { html: 'Translate HTML', pdf: 'Translate PDF' },
   primary: {
-    // The popup's button on an abstract or PDF page: it opens the paper's bilingual version, it does not
-    // translate the page in front of the reader (UI.md S-P-50b). The same words as the entry on the page itself
+    // The large button (S-P-50…53): the full text's, and the PDF reader's while it shows the original (S-P-03c). An
+    // abstract or PDF page draws the two entries instead (S-P-50b)
     translate: 'Translate this page',
     restore: 'Show original',
     // S-P-52: one word, to hold its half of the pair (144 px) with its shortcut label at the large buttons' 15 px / 600 —

@@ -3,7 +3,7 @@
 // Met 2026-09-04: the content side imported @/cache/index by mistake and bundled Dexie, which uses "￿" as a key-range upper bound.
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join, sep } from 'node:path'
 
 const OUT = '.output/chrome-mv3'
 const CONTENT_DIR = join(OUT, 'content-scripts')
@@ -74,8 +74,12 @@ const MODELS = {
 }
 const filesUnder = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => (entry.isDirectory() ? filesUnder(join(dir, entry.name)) : [join(dir, entry.name)]))
 // The PDF reader's data files (`pdf-reader/`, copied by wxt.config.ts: PDF.js's WebAssembly decoders among them) are the
-// reader's, not the recogniser's, and are not counted by the recogniser's rules below
-const built = filesUnder(OUT).filter(path => !path.startsWith(join(OUT, 'pdf-reader')))
+// reader's, not the recogniser's, and are not counted by the recogniser's rules below. The directory, separator and
+// all: its page, `pdf-reader.html`, and any file whose name begins so are the build's own
+const READER_DATA = join(OUT, 'pdf-reader') + sep
+const built = filesUnder(OUT).filter(path => !path.startsWith(READER_DATA))
+// a build without the directory is reported by the checks below (✗ pdf-reader/pdfjs/ is incomplete), not a stack trace
+const readerData = existsSync(join(OUT, 'pdf-reader')) ? filesUnder(join(OUT, 'pdf-reader')) : []
 const wasm = built.filter(path => path.endsWith('.wasm'))
 const carriers = built.filter(path => path.endsWith('.js') && readFileSync(path, 'utf8').includes('ort-wasm-simd-threaded'))
 for (const [what, ok, detail] of [
@@ -84,6 +88,9 @@ for (const [what, ok, detail] of [
   ['only the recogniser\'s worker carries the runtime', carriers.length === 1 && /assets[\\/]worker-/.test(carriers[0]), carriers.join(', ') || 'none'],
   ['the PDF reader\'s page is built', existsSync(join(OUT, 'pdf-reader.html')), 'pdf-reader.html is missing'],
   ['PDF.js\'s character maps, fonts and decoders are in the build', ['pdfjs/cmaps/78-EUC-H.bcmap', 'pdfjs/standard_fonts/FoxitSerif.pfb', 'pdfjs/standard_fonts/LICENSE_FOXIT', 'pdfjs/wasm/openjpeg.wasm'].every(file => existsSync(join(OUT, 'pdf-reader', file))), 'pdf-reader/pdfjs/ is incomplete'],
+  // only PDF.js's scripting sandbox loads QuickJS, and the reader loads no sandbox (it runs no script a PDF carries):
+  // its two files are 468 KB of every install for nothing (#299, Part 1)
+  ['PDF.js\'s scripting engine is not shipped', !readerData.some(path => basename(path).startsWith('quickjs')), readerData.filter(path => basename(path).startsWith('quickjs')).join(', ')],
   ...Object.entries(MODELS).map(([file, sha256]) => {
     const path = join(OUT, file)
     const found = existsSync(path) ? createHash('sha256').update(readFileSync(path)).digest('hex') : 'missing'

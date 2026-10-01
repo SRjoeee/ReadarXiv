@@ -134,6 +134,26 @@ describe('the background\'s handlers', () => {
         expect(answer).toEqual({ ok: false, error })
       }
     })
+
+    it('a record write that fails leaves the test\'s answer as the service gave it: the record is kept beside the answer, never instead of it (#299, row 28; Codex on #306)', async () => {
+      const answering = (answer: unknown) => ({ router: { forCall: vi.fn(async () => ({ translate: vi.fn(async () => answer) })) } as unknown as HandlerDeps['router'] })
+      const refusing = () => ({ reject: vi.fn(async () => { throw new Error('storage refused') }), clear: vi.fn(async () => { throw new Error('storage refused') }) })
+      const stored = vi.fn(async () => ({ ...DEFAULT_CONFIG, services: [SVC] }))
+      const named = { ...CALL, type: 'axt:translate' as const, providerId: SVC.id }
+      const good = { ok: true, result: { segments: [], provider: SVC.id }, cached: 0 }
+      const refusal = { ok: false, error: { kind: 'auth', message: 'bad key', isolatable: false, status: 401 } }
+
+      // a success whose clear fails, the stored service's and a candidate's with the stored key: still a success
+      const cleared = harness({ ...answering(good), health: refusing(), getConfig: stored })
+      await expect(cleared.send(named)).resolves.toEqual(good)
+      await expect(cleared.send({ ...named, candidate: SVC })).resolves.toEqual(good)
+      // a refusal whose mark fails: still that refusal, not a failure before any request
+      const marked = harness({ ...answering(refusal), health: refusing(), getConfig: stored })
+      await expect(marked.send(named)).resolves.toEqual(refusal)
+      // and the log says the record was not written, with nothing of the key
+      expect(cleared.lines.map(([, line]) => line)).toEqual([expect.stringContaining('record'), expect.stringContaining('record')])
+      expect(marked.lines.map(([, line]) => line)).toEqual([expect.stringContaining('record')])
+    })
   })
 
   it('axt:cancel-scope answers how many requests were withdrawn, and 0 when the withdrawal itself fails', async () => {

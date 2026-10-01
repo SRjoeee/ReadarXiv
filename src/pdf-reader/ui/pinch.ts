@@ -22,9 +22,12 @@ export function usePinch(controller: ReaderController, doc: RefObject<HTMLElemen
       side = pane.dataset.side as Side
       frame ||= requestAnimationFrame(() => {
         frame = 0
+        // under half a percent the frame sends nothing and keeps it: a slow pinch's steps add up until they count
+        // rather than being dropped, which left a slow pinch zooming not at all (#299, Part 3's M4)
+        if (Math.abs(factor - 1) < 0.005) return
         const f = factor
         factor = 1
-        if (Math.abs(f - 1) >= 0.005) controller.pinch(side, f, origin)
+        controller.pinch(side, f, origin)
       })
     }
     const onKey = (e: KeyboardEvent) => {

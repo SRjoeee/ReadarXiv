@@ -425,12 +425,11 @@ export function derivePopupView(input: PopupInput): PopupView {
   const canRun = runnable(config, pack, rejected)
   const demoted = on ? session?.engine.demoted : undefined
   // The retranslate cue (the branch's final review): the page runs on the free service since its chosen one's key was
-  // refused, and that key has been made good — the record holds the service no more, and the chain a start would run on
-  // runs it again. The saved chain is the test: a 403 is `auth` too and never recorded (background/health-guard.ts marks
-  // a 401 alone), and while the chain in force
-  // still passes the service over, a start would meet the same refusal. The page is offered its way back as P13 offers
-  // it (the design gives the cue no words of its own: P13's pair, as it is), and P6's note, whose reason no longer
-  // holds, goes. The toggle asks the same (shared/page-action.ts keyMadeGood): the key, the context menu and the
+  // refused (a 401: a 403 is `auth` too, not the key's, and never recorded — background/health-guard.ts), and that key
+  // has been made good — the record holds the service no more, and the chain a start would run on runs it again: while
+  // the chain in force still passes the service over, a start would meet the same refusal. The page is offered its way
+  // back as P13 offers it (the design gives the cue no words of its own: P13's pair, as it is), and P6's note, whose
+  // reason no longer holds, goes. The toggle asks the same (shared/page-action.ts keyMadeGood): the key, the context menu and the
   // floating button retranslate there as this button does.
   // `session.engine.demoted` is only the most recent hand-over (transport.ts): a transient failure of the free engine
   // that took over — one more hand-over, on top of the key's — would hide the key's refusal here, and the cue would

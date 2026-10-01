@@ -165,6 +165,18 @@ describe('createPdfStore', () => {
     expect(await s.usage()).toEqual({ count: 0, bytes: 0 })
   })
 
+  it('usage counts papers, as the settings page\'s line says, not records: a paper kept in two languages and two versions is one (#299, Part 5\'s M12)', async () => {
+    const s = createPdfStore({ db: dbOf() })
+    await s.put({ ...body('d1', { paper: '2608.02163' }), pdf: pdfOf(100) }, now)
+    await s.put({ ...body('d1', { paper: '2608.02163', lang: 'jpn' }), pdf: pdfOf(100) }, now)
+    await s.put({ ...body('d2', { paper: '2608.02163v2' }), pdf: pdfOf(100) }, now)
+    await s.put({ ...body('d3', { paper: 'hep-th/9711200v1' }), pdf: pdfOf(100) }, now)
+    const usage = await s.usage()
+    expect(usage.count).toBe(2)
+    // the bytes are every record's
+    expect(usage.bytes).toBeGreaterThan(4 * 100)
+  })
+
   it('a figures patch touches no PDF: the ciphertext has a table of its own (final review)', async () => {
     const db = dbOf()
     const s = createPdfStore({ db })

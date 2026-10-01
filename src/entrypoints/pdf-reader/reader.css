@@ -129,6 +129,8 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   /* below 900 px the language and service menus leave the toolbar for the reading options' first rows (§5); as specific
      as the rows and separators they are, and after them, so that they stay hidden above it */
   .pop .narrow-only, .pop .narrowest-only { display: none; }
+  /* a switch's row is a label (ReadingOptions): a press on its words turns the switch, and the pointer says so */
+  .pop label.row { cursor: pointer; }
   /* the contents (§6.3): `toc`, since Tailwind's `contents` is display: contents */
   .toc { position: fixed; z-index: 15; inset: var(--bar) auto 0 0; width: var(--side); display: flex; flex-direction: column; background: var(--chrome); box-shadow: 0.5px 0 0 var(--chrome-line); translate: -100% 0; visibility: hidden; transition: translate 200ms var(--ease), visibility 0s linear 200ms; }
   html[data-axt-contents] .toc { translate: 0 0; visibility: visible; transition: translate 200ms var(--ease), visibility 0s; }
@@ -146,7 +148,10 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   [data-level="2"] > .entry { padding-inline-start: 14px; }
   [data-level="3"] > .entry { padding-inline-start: 28px; }
   :is([data-level="2"], [data-level="3"]) .t { font-size: 12px; font-weight: 400; color: var(--ink-2); }
-  .fold { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; color: var(--ink-3); }
+  .fold { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; color: var(--ink-3); }
+  /* its target 24 × 24 (WCAG 2.5.8), its drawing 18: grown up, down and away from its link, never toward it (#299;
+     Part 6's interface review). A leaf's is hidden with it */
+  .fold::before { content: ""; position: absolute; inset: -3px 0 -3px -6px; }
   .fold svg { transition: rotate 150ms ease-out; }
   .fold[aria-expanded="true"] svg { rotate: 90deg; }
   .fold.leaf { visibility: hidden; }
@@ -172,7 +177,8 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   @media (hover: hover) { .indicator:hover i { width: 7px; background: color-mix(in oklab, var(--ink) 45%, transparent); cursor: grab; } }
   .indicator[data-drag] i { cursor: grabbing; }
   /* the progress line (§6.6): along the toolbar's foot, 2 px of quiet ink, its length the share done, grown by a
-     transform; it fades in and out, at the length it reached (ProgressLine) */
+     transform; it fades in and out, at the length it reached (ProgressLine). 80 % of ink-3, 2.67:1 on the chrome: the
+     maintainer kept the quieter line over a graphic's 3:1 after trying both (2026-10-02) */
   .progress-line { position: absolute; inset: auto 0 0 0; height: 2px; background: color-mix(in oklab, var(--ink-3) 80%, transparent); transform-origin: 0 50%; scale: var(--p, 0) 1; opacity: 0; pointer-events: none; transition: scale 400ms var(--ease), opacity 240ms ease-out; }
   .progress-line[data-on] { opacity: 1; }
   @media (prefers-reduced-motion: reduce) { .progress-line { transition: opacity 240ms ease-out; } }
@@ -182,6 +188,8 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .capsule { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 8px; min-height: 34px; max-width: calc(100% - 24px); padding: 0 6px 0 12px; overflow: hidden; border-radius: 999px; pointer-events: auto;
     background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); color: var(--ink); font-size: 12.5px; animation: capsule-in 240ms var(--ease); }
   .capsule[data-alone] { padding-inline-end: 14px; }
+  /* the capsule that leaves by itself is a stop of its own (StatusCapsule): the keyboard's ring, as the chrome's controls */
+  .capsule:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .capsule[data-out] { animation: capsule-out 160ms ease-out forwards; pointer-events: none; }
   .capsule svg { color: var(--ink-2); }
   /* one line wherever it fits; in a window too narrow for it the words wrap, balanced, and the icon and the actions keep
@@ -229,12 +237,12 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
 /* the rest of the chrome's movements, each a fade or nothing when the reader asks for less motion (§4.2; Part 6's
    accessibility audit): the contents slide in at once, the capsule does not travel with them, the link's arrow does
    not nudge, the disclosure does not turn, the switch's knob and the indicator's thumb do not glide or widen, the
-   card's button is not pressed in */
+   card's button and the capsule's chip are not pressed in */
 @media (prefers-reduced-motion: reduce) {
   .toc, html[data-axt-contents] .toc { transition: visibility 0s; }
   .capsule-slot { transition: none; }
   .arxiv-id svg { translate: none; transition: opacity 150ms; }
   .fold svg { transition: none; }
   .indicator i { transition: background-color 150ms; }
-  .card button, .card button:active { transition: none; scale: 1; }
+  .card button, .card button:active, .capsule .chip, .capsule .chip:active { transition: none; scale: 1; }
 }

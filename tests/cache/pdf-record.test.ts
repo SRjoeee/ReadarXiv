@@ -46,6 +46,21 @@ describe('atLeastAsGood', () => {
     expect(atLeastAsGood(record(current.units, { marks: [] }), current, now)).toBe(false)
     expect(atLeastAsGood(record(current.units), current, now)).toBe(true)
   })
+  // each of the last tiers alone, every tier before it tied (#299: "lost" above is decided by "whole" first)
+  it('with as many units current and whole, more units partly translated', () => {
+    // both current (tried under B), neither whole: a partial translation beats the source settled
+    const partial = record([unit({ state: 'partial', by: 'A' })])
+    const settled = record([unit({ state: 'none', by: undefined })])
+    expect(atLeastAsGood(settled, partial, now)).toBe(false)
+    expect(atLeastAsGood(partial, settled, now)).toBe(true)
+  })
+  it('with as many units current, whole and partial, fewer lost', () => {
+    // neither current (tried under A), none whole or partial: settled under another identity beats lost
+    const triedElsewhere = record([unit({ state: 'none', by: undefined, tried: 'A' })])
+    const lost = record([unit({ state: 'lost' })])
+    expect(atLeastAsGood(lost, triedElsewhere, now)).toBe(false)
+    expect(atLeastAsGood(triedElsewhere, lost, now)).toBe(true)
+  })
   it('kept names are not counted', () => {
     const withKept = record([...current.units, unit({ state: 'kept', by: undefined, tried: undefined })])
     expect(atLeastAsGood(withKept, current, now)).toBe(true)
