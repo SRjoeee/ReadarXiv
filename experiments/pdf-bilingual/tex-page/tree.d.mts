@@ -6,5 +6,5 @@ export declare function programDependent(index: import('../poc-site/tex-tree.mjs
 export declare function versionOf(...parts: (string | Uint8Array)[]): string
 export declare function treeVersion(files: [path: string, hash: string][]): string
 export declare function indexName(text: string): string
-export declare function hashTree(root: string, paths: string[], cache: string): Map<string, string>
+export declare function hashTree(root: string, paths: string[], cache: string, options?: { rehash?: boolean }): Map<string, string>
 export declare function treeIndex(root: string, cnf: string): { paths: string[]; text: string }

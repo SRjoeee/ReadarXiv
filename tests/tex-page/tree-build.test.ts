@@ -1,6 +1,6 @@
 // Building the TeX page's index and the tree's version (experiments/pdf-bilingual/tex-page/tree.mjs): every file of
 // the tree in ls-R's order, which kpathsea's choice among files of one name follows
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -86,6 +86,36 @@ describe('the tree\'s version and the index\'s', () => {
       expect(first.get('a.sty')).toMatch(/^[0-9a-f]{64}$/)
       writeFileSync(join(root, 'a.sty'), 'two')
       expect(hashTree(root, ['a.sty'], cache).get('a.sty')).not.toBe(first.get('a.sty'))
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  })
+
+  it('a file replaced with one of the same size and time (cp -p, rsync -a) is hashed again: its change time and inode say so', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hash-'))
+    try {
+      writeFileSync(join(root, 'a.sty'), 'one')
+      utimesSync(join(root, 'a.sty'), 1767225600, 1767225600)
+      const cache = join(root, 'cache.json')
+      const first = hashTree(root, ['a.sty'], cache).get('a.sty')
+      const before = statSync(join(root, 'a.sty'))
+      writeFileSync(join(root, 'b.sty'), 'two')
+      utimesSync(join(root, 'b.sty'), 1767225600, 1767225600)
+      renameSync(join(root, 'b.sty'), join(root, 'a.sty'))
+      const after = statSync(join(root, 'a.sty'))
+      expect([after.size, after.mtimeMs]).toEqual([before.size, before.mtimeMs])
+      expect(hashTree(root, ['a.sty'], cache).get('a.sty')).not.toBe(first)
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  })
+
+  it('hashes every file again when asked (a build for publishing)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'hash-'))
+    try {
+      writeFileSync(join(root, 'a.sty'), 'one')
+      const cache = join(root, 'cache.json')
+      const first = hashTree(root, ['a.sty'], cache).get('a.sty')
+      const st = statSync(join(root, 'a.sty'))
+      writeFileSync(cache, JSON.stringify({ 'a.sty': [st.size, st.mtimeMs, st.ctimeMs, st.ino, 'stale'] }))
+      expect(hashTree(root, ['a.sty'], cache).get('a.sty')).toBe('stale')
+      expect(hashTree(root, ['a.sty'], cache, { rehash: true }).get('a.sty')).toBe(first)
     } finally { rmSync(root, { recursive: true, force: true }) }
   })
 })

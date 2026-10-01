@@ -17,7 +17,7 @@
 // beside the corpus), tex-page/measured.json (derive.mjs: which preloaded files each engine's compiles open, and the
 // manifest's keys), Emscripten's file packager (tools/file_packager.py of the version BusyTeX was built with, fetched
 // into out/ once; Python 3).
-//   node experiments/pdf-bilingual/tex-page/build.mjs
+//   [REHASH=1] node experiments/pdf-bilingual/tex-page/build.mjs     (REHASH: hash the whole tree again, for publishing)
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -124,7 +124,8 @@ for (const f of basic) {
 const { paths, text } = treeIndex(TREE, readFileSync(join(BUSYTEX, 'texmf.cnf'), 'utf8'))
 // the tree's version is its files alone (paths and contents): every file stays at t/<tid>/<path> for good, and a change
 // of the index's rules is a new index file beside them (index-<iid>.txt), named in the page's build.json
-const tid = treeVersion([...hashTree(TREE, paths, join(WORK, 'tree-hashes.json'))])
+// REHASH=1: every file hashed again, as a build for publishing must be (33 s)
+const tid = treeVersion([...hashTree(TREE, paths, join(WORK, 'tree-hashes.json'), { rehash: !!process.env.REHASH })])
 const INDEX = indexName(text)
 const index = parseIndex(text)
 say(`the tree: ${paths.length} files, ${index.names.size} basenames (${[...index.names.values()].filter(p => p.length > 1).length} held more than once, ${index.dependent.size} answered by program), ${inBasic.size} as the preloaded tier holds them; tid ${tid}, ${INDEX}`)

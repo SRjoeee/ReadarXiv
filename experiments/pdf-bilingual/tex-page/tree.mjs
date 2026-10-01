@@ -87,17 +87,20 @@ export function treeVersion(files) {
 /** the index's file name, versioned by its own content: an index of other rules is another small file */
 export const indexName = text => `index-${versionOf(text)}.txt`
 
-/** each file's SHA-256 (`paths` under `root`) → Map path → hex; kept in `cache` by size and time, so that a build
- *  hashes again only what changed */
-export function hashTree(root, paths, cache) {
+/** each file's SHA-256 (`paths` under `root`) → Map path → hex; kept in `cache` by size, modification and change
+ *  time and inode, so that a build hashes again only what changed — a file replaced by one of the same size and
+ *  modification time (cp -p, rsync -a) has another change time or inode. `rehash`: every file hashed again (a build
+ *  for publishing: the tree's version is an immutable address) */
+export function hashTree(root, paths, cache, { rehash = false } = {}) {
   const known = existsSync(cache) ? JSON.parse(readFileSync(cache, 'utf8')) : {}
   const out = new Map()
   for (const p of paths) {
     const st = statSync(join(root, p))
+    const key = [st.size, st.mtimeMs, st.ctimeMs, st.ino]
     const k = known[p]
-    if (k && k[0] === st.size && k[1] === st.mtimeMs) { out.set(p, k[2]); continue }
+    if (!rehash && k?.length === 5 && key.every((v, i) => k[i] === v)) { out.set(p, k[4]); continue }
     const hash = createHash('sha256').update(readFileSync(join(root, p))).digest('hex')
-    known[p] = [st.size, st.mtimeMs, hash]
+    known[p] = [...key, hash]
     out.set(p, hash)
   }
   mkdirSync(dirname(cache), { recursive: true })
