@@ -168,7 +168,7 @@ export function texPage({ build, Runner, Engines, fetch, caches, progressEvery =
     const engineProgress = reporter(reply, 'engine')
     const engineP = cached(engineAssets(packages), engineCache, engineProgress, false).then(() => engineProgress.end())
     shared = {
-      index: fetch(`${build.tree}index.txt`).then(r => { if (!r.ok) throw new Error(`the tree's index: HTTP ${r.status}`); return r.text() }),
+      index: fetch(`${build.tree}${build.index}`).then(r => { if (!r.ok) throw new Error(`the tree's index: HTTP ${r.status}`); return r.text() }),
       files: commonFiles(engines, scripts, reporter(reply, 'files')),
       extra: Promise.all((build.extra ?? []).map(async path => ({ path, content: (await get(`${build.page}extra/${path}`)).bytes }))),
     }

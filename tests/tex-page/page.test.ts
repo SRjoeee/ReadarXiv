@@ -10,7 +10,7 @@ type Msg = Record<string, unknown> & { type?: string }
 
 const BUILD: Build = {
   cv: 'c1', eid: 'e1', tid: 't1',
-  engine: '/e/e1/', tree: '/t/t1/',
+  engine: '/e/e1/', tree: '/t/t1/', index: 'index-i1.txt',
   packages: { common: 100, pdftex: 200, xetex: 300, rest: 400 },
   wasm: 1000,
   engines: { pdflatex: ['common', 'pdftex'], xelatex: ['common', 'xetex'] },
@@ -26,7 +26,7 @@ function network(sizes: Record<string, number> = {}, failing: string[] = []) {
   const fetch = async (url: string) => {
     asked.push(url)
     if (failing.includes(url)) throw new TypeError('Failed to fetch')
-    if (url.endsWith('/index.txt')) return new Response('tex/latex/base/\narticle.cls')
+    if (url === '/t/t1/index-i1.txt') return new Response('tex/latex/base/\narticle.cls')
     if (url.endsWith('/extra/list.json')) return new Response('[]')
     const n = sizes[url] ?? 5
     return new Response(new Uint8Array(n), { headers: { 'content-type': url.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream' } })

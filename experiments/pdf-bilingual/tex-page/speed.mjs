@@ -132,7 +132,7 @@ for (const profile of PROFILES) {
           const load = loadavg()[0]
           const v = await visit(b.tab, page, vid, init).catch(e => ({ error: String(e?.message ?? e).slice(0, 300) }))
           const mine = served.slice()
-          const during = (from, to) => mine.filter(r => r.t >= from && r.t <= to && (r.path.startsWith('/tl/') || /^\/t\/[^/]+\/(?!index\.txt)/.test(r.path)))
+          const during = (from, to) => mine.filter(r => r.t >= from && r.t <= to && (r.path.startsWith('/tl/') || /^\/t\/[^/]+\/(?!index-[0-9a-f]+\.txt$)/.test(r.path)))
           const preview = v.compiles?.at(-1)
           record({
             page, profile: profile.name, paper: id, lang, visit: which, load: +load.toFixed(1), error: v.error ?? v.init?.error,

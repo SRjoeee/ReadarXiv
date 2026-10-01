@@ -5,8 +5,9 @@
 //                           (poc-site/tex-worker.js after poc-site/tex-tree.mjs), and the preloaded tier split by engine
 //                           into tl-common, tl-pdftex, tl-xetex, tl-rest (Emscripten's file packager, no LZ4: served
 //                           with brotli)
-//   t/<tid>/index.txt       the tree's file index (poc-site/tex-tree.mjs); the tree's files under t/<tid>/ are served
-//                           from TEXLIVE_TREE by tex-page/serve.mjs (tree.json says where)
+//   t/<tid>/                the TeX Live tree (served from TEXLIVE_TREE by tex-page/serve.mjs; tree.json says where):
+//                           <tid> is its files' paths and contents alone; its file index (poc-site/tex-tree.mjs)
+//                           beside them as index-<iid>.txt, <iid> the index's own content, named in build.json
 // Every version is a content address of what it holds. A brotli copy (quality 11) of every file under c/, e/ and of
 // the index sits beside it (.br), and of every file the manifest names in out/tex-br/; serve.mjs sends them.
 //
@@ -22,7 +23,7 @@ import { dirname, join, relative } from 'node:path'
 import { indexText, parseIndex, resolve } from '../poc-site/tex-tree.mjs'
 import { buildManifest, REFERENCE, scannedOnly, slimSets, worth } from './manifest.mjs'
 import { brotliSizes, brotliTo } from './sizes.mjs'
-import { chooseIndex, versionOf, walk } from './tree.mjs'
+import { chooseIndex, hashTree, indexName, treeVersion, versionOf, walk } from './tree.mjs'
 
 const HERE = new URL('.', import.meta.url).pathname
 const EXP = join(HERE, '..')
@@ -118,9 +119,12 @@ for (const f of basic) {
 }
 const paths = walk(TREE)
 const text = indexText(chooseIndex(paths, p => inBasic.has(p)))
-const tid = versionOf(text, paths.map(p => `${p} ${statSync(join(TREE, p)).size}`).join("\n"))
+// the tree's version is its files alone (paths and contents): every file stays at t/<tid>/<path> for good, and a change
+// of the index's rules is a new index file beside them (index-<iid>.txt), named in the page's build.json
+const tid = treeVersion([...hashTree(TREE, paths, join(WORK, 'tree-hashes.json'))])
+const INDEX = indexName(text)
 const index = parseIndex(text)
-say(`the tree: ${paths.length} files, ${index.size} basenames, ${inBasic.size} as the preloaded tier holds them; tid ${tid}`)
+say(`the tree: ${paths.length} files, ${index.size} basenames, ${inBasic.size} as the preloaded tier holds them; tid ${tid}, ${INDEX}`)
 
 // ---------------------------------------------------------------- 3. the preloaded tier split by engine
 
@@ -200,7 +204,7 @@ if (extra.length) { mkdirSync(join(pageDir, 'extra')); for (const f of extra) co
 const size = f => statSync(join(engineDir, f)).size
 const build = {
   eid, tid,
-  engine: `/e/${eid}/`, tree: `/t/${tid}/`,
+  engine: `/e/${eid}/`, tree: `/t/${tid}/`, index: INDEX,
   packages: Object.fromEntries(Object.keys(parts).map(p => [p, size(`tl-${p}.data`)])),
   wasm: size('busytex.wasm'),
   engines: { pdflatex: ['common', 'pdftex'], xelatex: ['common', 'xetex'] },
@@ -216,9 +220,9 @@ const place = (from, to) => { mkdirSync(dirname(to), { recursive: true }); execF
 place(pageDir, join(OUT, 'c', cv))
 place(engineDir, join(OUT, 'e', eid))
 mkdirSync(join(OUT, 't', tid), { recursive: true })
-writeFileSync(join(OUT, 't', tid, 'index.txt'), text)
+writeFileSync(join(OUT, 't', tid, INDEX), text)
 writeFileSync(join(OUT, 'tex.html'), `<!doctype html><meta charset="utf-8"><title>TeX</title><script type="module" src="/c/${cv}/tex.js"></script>\n`)
-writeFileSync(join(OUT, 'tree.json'), JSON.stringify({ tid, root: TREE }))
+writeFileSync(join(OUT, 'tree.json'), JSON.stringify({ tid, index: INDEX, root: TREE }))
 
 const BR = join(EXP, 'out/tex-br')
 const site = readdirSync(OUT, { recursive: true }).map(f => join(OUT, f)).filter(f => statSync(f).isFile() && /\/(c|e|t)\//.test(f))
@@ -231,5 +235,5 @@ const sum = files => files.reduce((n, f) => n + statSync(f).size, 0)
 const mb = n => `${(n / 1e6).toFixed(2)} MB`
 for (const p of Object.keys(parts)) say(`tl-${p}: ${parts[p].length} files, ${mb(size(`tl-${p}.data`))} raw, ${mb(statSync(join(OUT, 'e', eid, `tl-${p}.data.br`)).size)} brotli`)
 for (const [k, list] of [...Object.entries(manifest.engines), ...Object.entries(manifest.fonts)]) say(`manifest ${k}: ${list.length} entries, ${new Set(list.map(e => e[2])).size} files, ${mb(sum([...new Set(list.map(e => e[2]))].map(p => join(TREE, p))))} raw, ${mb(sum([...new Set(list.map(e => e[2]))].map(p => join(BR, 't', tid, `${p}.br`))))} brotli`)
-say(`index: ${mb(statSync(join(OUT, 't', tid, 'index.txt')).size)} raw, ${mb(statSync(join(OUT, 't', tid, 'index.txt.br')).size)} brotli`)
+say(`index: ${mb(statSync(join(OUT, 't', tid, INDEX)).size)} raw, ${mb(statSync(join(OUT, 't', tid, `${INDEX}.br`)).size)} brotli`)
 say(`built: c/${cv} e/${eid} t/${tid} in ${relative(process.cwd(), OUT)}`)

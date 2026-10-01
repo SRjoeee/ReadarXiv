@@ -1,8 +1,8 @@
 // The TeX Live tree as the TeX page reaches it: its file list, walked as the local file server walked it, and the index
 // the page ships (poc-site/tex-tree.mjs reads it). Node only; build.mjs runs it.
 import { createHash } from 'node:crypto'
-import { opendirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, opendirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 
 /**
  * The tree's files under `root`, relative, in the order of a top-down walk: a directory's files in the order the file
@@ -47,4 +47,33 @@ export function versionOf(...parts) {
   const h = createHash('sha256')
   for (const p of parts) h.update(p).update('\0')
   return h.digest('hex').slice(0, 12)
+}
+
+/**
+ * The tree's version: its files' paths and contents (`files`: [path, content hash]), in any order — nothing else, so
+ * that every file of the tree lives at t/<tid>/<path> for good, and a change of the index's rules moves no file
+ */
+export function treeVersion(files) {
+  return versionOf([...files].map(([path, hash]) => `${path} ${hash}`).sort().join('\n'))
+}
+
+/** the index's file name, versioned by its own content: an index of other rules is another small file */
+export const indexName = text => `index-${versionOf(text)}.txt`
+
+/** each file's SHA-256 (`paths` under `root`) → Map path → hex; kept in `cache` by size and time, so that a build
+ *  hashes again only what changed */
+export function hashTree(root, paths, cache) {
+  const known = existsSync(cache) ? JSON.parse(readFileSync(cache, 'utf8')) : {}
+  const out = new Map()
+  for (const p of paths) {
+    const st = statSync(join(root, p))
+    const k = known[p]
+    if (k && k[0] === st.size && k[1] === st.mtimeMs) { out.set(p, k[2]); continue }
+    const hash = createHash('sha256').update(readFileSync(join(root, p))).digest('hex')
+    known[p] = [st.size, st.mtimeMs, hash]
+    out.set(p, hash)
+  }
+  mkdirSync(dirname(cache), { recursive: true })
+  writeFileSync(cache, JSON.stringify(known))
+  return out
 }

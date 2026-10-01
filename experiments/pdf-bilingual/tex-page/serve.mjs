@@ -47,7 +47,7 @@ export function certificateSpki() {
 export async function serveTexSite({ port = 0, tls = false, today = false, link = null, log = null } = {}) {
   const tree = JSON.parse(readFileSync(join(SITE, 'tree.json'), 'utf8'))
   let index = null
-  const treeIndex = () => (index ??= parseIndex(readFileSync(join(SITE, 't', tree.tid, 'index.txt'), 'utf8')))
+  const treeIndex = () => (index ??= parseIndex(readFileSync(join(SITE, 't', tree.tid, tree.index), 'utf8')))
   const todayDir = join(EXP, 'out/tex-today')
   /** a request's path → { file, br (its brotli copy's path, made on demand when null), type, immutable } or null */
   function locate(path) {

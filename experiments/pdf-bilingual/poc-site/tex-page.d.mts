@@ -7,6 +7,8 @@ export interface Build {
   tid: string
   engine: string
   tree: string
+  /** the index's file name in the tree's directory, versioned on its own */
+  index: string
   page?: string
   packages: Record<string, number>
   wasm: number

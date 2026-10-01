@@ -16,7 +16,7 @@ const jobs = run => new Map(readFileSync(join(OUT, run, 'jobs.jsonl'), 'utf8').t
 const pages = (run, tag) => { try { return Number(/Pages:\s+(\d+)/.exec(execFileSync('pdfinfo', [join(OUT, run, 'pdf', `${tag.replace('~', '__')}.pdf`)], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }))?.[1]) } catch { return null } }
 const SITE = new URL('../out/tex-site', import.meta.url).pathname
 const tree = JSON.parse(readFileSync(join(SITE, 'tree.json'), 'utf8'))
-const index = parseIndex(readFileSync(join(SITE, 't', tree.tid, 'index.txt'), 'utf8'))
+const index = parseIndex(readFileSync(join(SITE, 't', tree.tid, tree.index), 'utf8'))
 const requests = new Map()
 const logged = join(OUT, OLD, 'requests.jsonl')
 if (existsSync(logged)) for (const l of readFileSync(logged, 'utf8').trim().split('\n')) { const r = JSON.parse(l); requests.set(`${r.fmt}/${r.name}`, r) }
