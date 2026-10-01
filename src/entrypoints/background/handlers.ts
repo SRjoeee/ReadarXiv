@@ -58,22 +58,28 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
         // A call naming one of the reader's services is the settings page asking whether it answers: its answer is the
         // record's (the redesign's design, §4). Any success clears it; a refused key — a 401, for a service still
         // stored — marks it (./health-guard.ts). The call was built from the stored configuration, so that is both the
-        // configuration it used and the one in force; one that cannot be read marks nothing and leaves the answer be
+        // configuration it used and the one in force; one that cannot be read marks nothing and leaves the answer be.
+        // The record is kept beside the answer, never instead of it: a write storage refuses is a line in the log, and
+        // the page still gets what the service said (#299, row 28; Codex on #306)
         const id = message.providerId
         if (id && SERVICE_ID_RE.test(id)) {
-          if (message.candidate) {
-            // A candidate: a service as the settings page would save it, tested before it is (ruling 16). Its success
-            // clears the mark only when it tested the stored key and address; another key is cleared by the watcher once
-            // the save lands (idsToClear). Its failure touches nothing: it says nothing of the key stored. The page itself
-            // never writes the record (ruling 17)
-            if (response.ok) {
+          try {
+            if (message.candidate) {
+              // A candidate: a service as the settings page would save it, tested before it is (ruling 16). Its success
+              // clears the mark only when it tested the stored key and address; another key is cleared by the watcher
+              // once the save lands (idsToClear). Its failure touches nothing: it says nothing of the key stored. The
+              // page itself never writes the record (ruling 17)
+              if (response.ok) {
+                const stored = await deps.getConfig().catch(() => null)
+                if (stored && testsStoredKey(message.candidate, stored)) await deps.health.clear(id)
+              }
+            } else if (response.ok) await deps.health.clear(id)
+            else if (isRefusal({ id, ...response.error })) {
               const stored = await deps.getConfig().catch(() => null)
-              if (stored && testsStoredKey(message.candidate, stored)) await deps.health.clear(id)
+              if (stored && shouldMarkRefusal({ id, ...response.error }, stored, stored)) await deps.health.reject(id)
             }
-          } else if (response.ok) await deps.health.clear(id)
-          else if (isRefusal({ id, ...response.error })) {
-            const stored = await deps.getConfig().catch(() => null)
-            if (stored && shouldMarkRefusal({ id, ...response.error }, stored, stored)) await deps.health.reject(id)
+          } catch {
+            diag('[axt] a connection test\'s answer could not be recorded: the service health record could not be written')
           }
         }
         return response
