@@ -23,13 +23,15 @@ function buildRef(): string {
 /**
  * The files PDF.js reads by address rather than by import (the reader's design, §11.2): its character maps, the standard
  * fonts with their licences, and its WebAssembly decoders, copied from the pinned package as they are into
- * `pdf-reader/pdfjs/`. The library and its worker are bundled (src/pdf-reader/pdfjs.ts)
+ * `pdf-reader/pdfjs/`. The library and its worker are bundled (src/pdf-reader/pdfjs.ts). Not QuickJS (`quickjs-eval.*`,
+ * 468 KB): only PDF.js's scripting sandbox loads it, and the reader's viewer has no scripting manager — it runs no script
+ * a PDF carries (scripts/check-output.mjs holds it out)
  */
 const PDFJS = fileURLToPath(new URL('./node_modules/pdfjs-dist', import.meta.url))
 function pdfjsFiles(): { absoluteSrc: string; relativeDest: string }[] {
   return ['cmaps', 'standard_fonts', 'wasm'].flatMap(dir =>
     readdirSync(join(PDFJS, dir))
-      .filter(name => statSync(join(PDFJS, dir, name)).isFile())
+      .filter(name => statSync(join(PDFJS, dir, name)).isFile() && !name.startsWith('quickjs'))
       .map(name => ({ absoluteSrc: join(PDFJS, dir, name), relativeDest: `pdf-reader/pdfjs/${dir}/${name}` })),
   )
 }
