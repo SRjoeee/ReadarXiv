@@ -1532,12 +1532,11 @@ async function anchorOne(side, texts, marks) {
     side.makeGeo = null
     layoutsDue.delete(side)
     timing[side === left ? 'leftLayout' : 'rightLayout'] = performance.now() - t0
+    // the floats of the pages drawn before it came
+    for (const pv of side.viewer._pages ?? []) if (pv.renderingState === 3) floatsFor(side, pv.id)
     // what is lit on it, and what is under a pointer resting on it, now that it has its blocks
     if (lit != null) paint(side)
     pointer.again(side)
-
-    // the floats of the pages drawn before it came
-    for (const pv of side.viewer._pages ?? []) if (pv.renderingState === 3) floatsFor(side, pv.id)
   }
   layoutsDue.add(side)
   return bounds.size

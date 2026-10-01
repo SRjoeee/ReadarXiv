@@ -49,13 +49,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import { floatsOfPaper, floatsVerdict } from './highlight-gate-floats.mjs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
 import { blockOf, hitOf, layoutOf, pageGeometry, runsOf } from '../../../src/pdf-reader/engine/highlight.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/live.mjs'
 import { displayEdges, unitText } from '../../../src/pdf-reader/engine/mt.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
-import { floatsOfPaper, floatsVerdict } from './highlight-gate-floats.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const RUNS = process.env.RUNS ?? join(root, 'data/runs/highlight-ten')
