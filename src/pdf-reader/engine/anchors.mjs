@@ -703,12 +703,11 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
       // explain. Anything else of the unit's size a float's skip away would be taken — a table
       else if (f.bounded && (A.page !== B.page || B.y > A.y + A.h * 0.6)) {
         const inner = units[u].inner
-        let down, up
         const words = wordsBetween(f, m[n], m[n + 1])
         // with a display: its lines (its letters) or the unit's own words left there — not any word of the paragraph's,
         // which a table's row at the break may share (the re-review of A1, m2)
         const fits = dir => (typeof inner === 'string' ? either(byLetters(doc, inner), inOrder(doc, words, dir)) : inOrder(doc, words, dir))
-        down = walk.take(u, k, 1, ACROSS, fits(1)); up = walk.take(u, m[n + 1], -1, ACROSS, fits(-1), FLOAT_SKIP)
+        const down = walk.take(u, k, 1, ACROSS, fits(1)), up = walk.take(u, m[n + 1], -1, ACROSS, fits(-1), FLOAT_SKIP)
         const last = down.at(-1) ?? k
         idx.push(...down.filter(j => j < m[n + 1]), ...up.filter(j => j > last).reverse())
       }
