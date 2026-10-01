@@ -63,7 +63,8 @@ export function previewTypesetting({ paper, translated, lang, strategy, fonts, f
   // each caption's float waits for its original's page and column (tex.mjs FLOAT_TEX)
   const om = original.marks, floatsAt = new Map()
   units.forEach((u, i) => { const m = om.marks.get(`${i}s`); if (u.kind === 'caption' && m) floatsAt.set(i, { page: m.page + 1, col: columnOf(om, m) }) })
-  const state = { units, translated, design, strategy: strategy.name, type, list, lo, floatsAt, original, leads }
+  // the translation the plan was made on, its own copy: the caller's map goes on filling
+  const state = { units, translated: new Map(translated), design, strategy: strategy.name, type, list, lo, floatsAt, original, leads }
   state.typeset = typesettingOf(state, type, leads, new Map())
   return { typeset: state.typeset, type, state, missing: null }
 }
@@ -80,10 +81,15 @@ const whole = m => !!m?.marks.size && m.columns.length === m.pages && m.columns.
  * and start drift 0.136 against 12 and 0.105 kept). Returns `typeset` for the final's translationFiles; the type, each
  * unit's leading and face, and the flow's trace (flow.mjs flowType). Where the preview's measurement is missing or
  * partial — its log not whole (tex.mjs completeLog), its marks missing, no unit it measured — the final is set as the
- * preview was, uncorrected (`missing` says why): that plan had every input it needs. With no plan (`state` null), none.
+ * preview was, uncorrected (`missing` says why): that plan had every input it needs. With no plan (`state` null), or a
+ * plan made on other than `translated`, the whole translation the final sets, none: the measuring compile must hold the
+ * whole translation.
  */
-export function finalTypesetting(state, preview) {
+export function finalTypesetting(state, preview, translated) {
   if (!state) return { typeset: null, type: null, leads: new Map(), faces: new Map(), trace: [], missing: 'a plan' }
+  // a plan of part of the translation — a progressive preview's — solved a type and a flow for the part: the final
+  // would carry them to the whole uncorrected where the preview lacked units. Set as today
+  if (!translated || translated.size !== state.translated.size || [...translated].some(([u, pieces]) => state.translated.get(u) !== pieces)) return { typeset: null, type: null, leads: new Map(), faces: new Map(), trace: [], missing: 'a plan of the whole translation' }
   const { design, type, list } = state, cjk = design.cjk
   const lines = readLines(preview?.log), got = list.filter(u => lines.get(u.i))
   const missing = !completeLog(preview?.log) ? "the preview's log, whole" : !preview?.marks?.marks.size ? "the preview's marks" : !got.length ? 'a unit the preview measured' : null

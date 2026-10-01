@@ -103,11 +103,15 @@ describe('a typeset plan in the compile', () => {
     expect(fallback.pre(null)).toBe(cjkutf8.pre(null))
     expect(text(translationFiles(p, translate(units) as never, { strategy: cjkutf8, fonts: null, draft: false, aux: null, bbl: null, typeset }))).toContain(`\\axtsize{${para}}`)
   })
-  it('sets only the strategy it was solved for: another one is planned again', () => {
+  it('sets only the strategy it was solved for; another is set as today, and the refusal noted', () => {
     const [xe, cjkutf8] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
     if (!xe || !cjkutf8) throw new Error('no strategies')
-    expect(() => plan(true).strategy(cjkutf8)).toThrow(/XeLaTeX \+ xeCJK/)
     expect(plan(true).strategy(xe).leading).toBe(1.35)
+    expect(plan(true).strategy(cjkutf8)).toBe(cjkutf8)
+    const notes: unknown[][] = [], translated = translate(units)
+    const refused = text(translationFiles(p, translated as never, { strategy: cjkutf8, fonts: null, draft: false, aux: null, bbl: null, typeset: plan(true), note: (...a: unknown[]) => notes.push(a) }))
+    expect(refused).toBe(text(translationFiles(p, translated as never, { strategy: cjkutf8, fonts: null, draft: false, aux: null, bbl: null })))
+    expect(notes).toEqual([['typeset refused', { plan: xe.name, strategy: cjkutf8.name }]])
   })
   it('marks only translated units: their float, line probe, size and leading, in that order', () => {
     const typeset = plan(false, { sizes: new Map([[para, 0.95], [heading, 0.95]]), floatsAt: new Map([[caption, { page: 1, col: 0 }]]) })

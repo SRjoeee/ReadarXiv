@@ -107,8 +107,10 @@ export function originalFiles({ fsys, project }, { lines = false } = {}) {
 /** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs); a strategy's `leading` sets the
  *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex).
  *  `typeset`, the typesetting rule's (typeset/plan.mjs previewTypesetting, finalTypesetting): the strategy it sets the
- *  type of, its TeX, each translated unit's macros */
-export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl, typeset = null }) {
+ *  type of, its TeX, each translated unit's macros — for the strategy it was made for: with another the translation is
+ *  set as today, and `note('typeset refused', …)` says so */
+export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl, typeset = null, note = () => {} }) {
+  if (typeset && typeset.for !== strategy.name) { note('typeset refused', { plan: typeset.for, strategy: strategy.name }); typeset = null }
   if (typeset) strategy = typeset.strategy(strategy)
   const xe = strategy.xe
   translated = new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, lineBreaks(u, pieces)]))

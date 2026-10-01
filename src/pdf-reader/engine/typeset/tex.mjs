@@ -100,9 +100,10 @@ const def = (name, i, v) => `\\expandafter\\def\\csname ${name}${i}\\endcsname{$
  * the TeX before everything (the line probes, the sizes, the
  * floats held, each unit's factors, tables no taller than their original's), and each translated unit's macros before
  * its start mark: its float's page and column, its line probe, its size, its leading. Another strategy — the chain
- * moved on — is refused: its design is another, and the plan is made again for it (plan.mjs previewTypesetting).
- * `plan`: { design, strategy (its name), type, leads: Map(unit index → leading × its size), sizes: Map(unit index →
- * size factor), floatsAt: Map(unit index → { page, col }), tableMin }.
+ * moved on, its design another — gets nothing of the plan: `strategy(s)` gives it back as it is, and live.mjs
+ * translationFiles sets the translation as today and notes the refusal; the plan is made again for it (plan.mjs
+ * previewTypesetting). `plan`: { design, strategy (its name), type, leads: Map(unit index → leading × its size),
+ * sizes: Map(unit index → size factor), floatsAt: Map(unit index → { page, col }), tableMin }.
  */
 export function typesetting(units, plan) {
   const { design, type, leads, sizes, floatsAt, tableMin } = plan
@@ -116,8 +117,9 @@ export function typesetting(units, plan) {
   ].join('\n')
   return {
     head,
+    for: plan.strategy,
     strategy: s => {
-      if (s.name !== plan.strategy) throw new Error(`a typesetting plan for ${plan.strategy}, not ${s.name}`)
+      if (s.name !== plan.strategy) return s
       if (design.cjk) return { ...s, leading: type.lead, pre: fonts => s.pre(fonts).replace('\\setCJKmainfont[', `\\setCJKmainfont[Scale=${type.scale.toFixed(4)},`) + (type.track > 0.0005 ? `\\xeCJKsetup{CJKglue={\\hskip ${type.track.toFixed(4)}em plus 0.08\\baselineskip}}\n` : '') }
       return { ...s, leading: type.lead }
     },

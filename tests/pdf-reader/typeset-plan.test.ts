@@ -54,7 +54,7 @@ describe('a plan for the strategy that sets it', () => {
     expect(viaUtf8.typeset?.strategy(cjkutf8).pre(null)).toBe(cjkutf8.pre(null))
     expect(tex(translationFiles(zhUtf8.paper, zhUtf8.translated, { strategy: cjkutf8, fonts: null, draft: false, typeset: viaUtf8.typeset }))).toContain('\\axtsize{')
     expect(tex(translationFiles(zhXe.paper, zhXe.translated, { strategy: xe, fonts: null, draft: false, typeset: viaXe.typeset }))).not.toContain('\\axtsize{')
-    expect(() => viaXe.typeset?.strategy(cjkutf8)).toThrow()
+    expect(viaXe.typeset?.strategy(cjkutf8)).toBe(cjkutf8)
   })
 })
 
@@ -75,12 +75,29 @@ describe('a unit holding a display', () => {
   it('gets its own leading from the flow, and the final reads its text from the preview as the solve did', () => {
     const given = inputs('de'), plan = previewTypesetting(given), n = given.paper.units.length
     expect(plan.typeset?.head).toMatch(new RegExp(`axtlead@${DISPLAY_UNIT}\\\\endcsname`))
-    const fin = finalTypesetting(plan.state, { log: originalLog(n), marks: originalMarks(n) })
+    const fin = finalTypesetting(plan.state, { log: originalLog(n), marks: originalMarks(n) }, given.translated)
     // the unit moves the text by what its text does, as every other unit: read with its display's three lines it would
     // stand 3 × 12 pt long
     const end = new Map(fin.trace.map(s => [s.i, s.end])), step = (i: number) => (end.get(i) ?? Number.NaN) - (end.get(i - 1) ?? Number.NaN)
     expect(Math.abs(step(DISPLAY_UNIT))).toBeLessThan(2)
     expect(Math.abs(step(DISPLAY_UNIT) - step(DISPLAY_UNIT - 1))).toBeLessThan(1)
+  })
+})
+
+describe('a plan of the whole translation', () => {
+  it('is what the final corrects; a plan of part of it — a progressive preview\'s — the final refuses, and sets the translation as today', () => {
+    const given = inputs('de'), n = given.paper.units.length, measured = { log: originalLog(n), marks: originalMarks(n) }
+    const whole = previewTypesetting(given)
+    expect(finalTypesetting(whole.state, measured, given.translated).typeset).not.toBeNull()
+    const first = [...given.translated].slice(0, 6), part = previewTypesetting({ ...given, translated: new Map(first) })
+    const refused = finalTypesetting(part.state, measured, given.translated)
+    expect([refused.typeset, refused.missing]).toEqual([null, 'a plan of the whole translation'])
+    expect(finalTypesetting(whole.state, measured, undefined as never).typeset).toBeNull()
+  })
+  it('keeps its own copy of the translation it was made on', () => {
+    const given = inputs('de'), n = given.paper.units.length, plan = previewTypesetting(given)
+    given.translated.delete([...given.translated.keys()][0] as never)
+    expect(finalTypesetting(plan.state, { log: originalLog(n), marks: originalMarks(n) }, given.translated).missing).toBe('a plan of the whole translation')
   })
 })
 
@@ -90,7 +107,7 @@ describe('the final from the measuring compile', () => {
       const given = inputs(lang), plan = previewTypesetting(given)
       // the preview measured every unit a line shorter than its original: the leading takes it, the type stays
       const measured = { log: originalLog(given.paper.units.length).replace(/AXT-LINES (\d+) 4 /g, 'AXT-LINES $1 3 '), marks: originalMarks(given.paper.units.length) }
-      const fin = finalTypesetting(plan.state, measured)
+      const fin = finalTypesetting(plan.state, measured, given.translated)
       expect(fin.type).toEqual(plan.type)
       expect(fin.missing).toBeNull()
       expect(fin.typeset).not.toBe(plan.typeset)
@@ -143,15 +160,15 @@ describe('the rule sets nothing where an input it needs is missing or partial: t
     expect(previewTypesetting(ar).missing).toMatch(/design/)
   })
   it('keeps the preview\'s own plan for the final where the preview\'s measurement is missing or partial', () => {
-    const plan = previewTypesetting(de())
-    const units = de().paper.units.length
+    const given = de(), plan = previewTypesetting(given)
+    const units = given.paper.units.length
     const whole = { log: originalLog(units), marks: originalMarks(units) }
-    expect(finalTypesetting(plan.state, whole).typeset).not.toBe(plan.typeset)
+    expect(finalTypesetting(plan.state, whole, given.translated).typeset).not.toBe(plan.typeset)
     for (const preview of [{ ...whole, log: '' }, { ...whole, log: whole.log.replace('AXT-END\n', '') }, { ...whole, marks: { ...whole.marks, marks: new Map() } }]) {
-      const fin = finalTypesetting(plan.state, preview)
+      const fin = finalTypesetting(plan.state, preview, given.translated)
       expect(fin.typeset).toBe(plan.typeset)
       expect(fin.missing).toMatch(/preview/)
     }
-    expect(finalTypesetting(null, whole).typeset).toBeNull()
+    expect(finalTypesetting(null, whole, given.translated).typeset).toBeNull()
   })
 })

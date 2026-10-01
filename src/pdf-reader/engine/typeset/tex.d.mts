@@ -14,6 +14,8 @@ export interface TypesetPlan { design: CjkDesign | AlphabetDesign; strategy: str
 /** what a typeset plan adds to a compile of the translation (live.mjs translationFiles' `typeset`) */
 export interface Typeset {
   head: string
+  /** the name of the strategy the plan was made for */
+  for: string
   strategy(s: Strategy): Strategy
   mark(base: (u: SourceUnit) => UnitMark, translated: Map<SourceUnit, unknown[]>): (u: SourceUnit) => UnitMark
 }

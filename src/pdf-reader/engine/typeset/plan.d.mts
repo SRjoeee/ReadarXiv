@@ -13,4 +13,4 @@ export interface TypesetState { readonly strategy: string }
 /** a compile's log and marks */
 export interface Compiled { log: string; marks: Marks }
 export declare function previewTypesetting(options: { paper: Paper & { fsys: unknown }; translated: Map<SourceUnit, unknown[]>; lang: string; strategy: Strategy; fonts: unknown; fontLog: string; original: Compiled }): { typeset: Typeset; type: Type; state: TypesetState; missing: null } | { typeset: null; type: null; state: null; missing: string }
-export declare function finalTypesetting(state: TypesetState | null, preview: Compiled | null): { typeset: Typeset | null; type: Type | null; leads: Map<number, number>; faces: Map<number, number>; trace: FlowStep[]; missing: string | null }
+export declare function finalTypesetting(state: TypesetState | null, preview: Compiled | null, translated: Map<SourceUnit, unknown[]>): { typeset: Typeset | null; type: Type | null; leads: Map<number, number>; faces: Map<number, number>; trace: FlowStep[]; missing: string | null }

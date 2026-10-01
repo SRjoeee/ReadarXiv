@@ -148,7 +148,7 @@ async function evaluate(lang, id) {
   const preview = await compile(id, files, translationFiles(paper, translated, { strategy, fonts, draft: false, typeset: plan.typeset }), full(strategy.engine))
   if (!preview.ok) return { ...out, failed: 'preview' }
   const pm = await marksOfFile(preview.pdf)
-  const fin = finalTypesetting(plan.state, { log: preview.log, marks: pm })
+  const fin = finalTypesetting(plan.state, { log: preview.log, marks: pm }, translated)
   const final = await compile(id, files, translationFiles(paper, translated, { strategy, fonts, draft: false, typeset: fin.typeset }), full(strategy.engine))
   if (!final.ok) return { ...out, failed: 'final' }
   const faces = [...fin.faces.values()]
