@@ -188,15 +188,25 @@ const widthOf = c => (c < 127 ? (c >= 32 ? TIMES[c - 32] : 500) : (c >= 0x3000 &
  * The widths of an item's characters before each place, cumulated: what the text layer does not give — only the item's
  * width — estimated by a proportional face's widths (TIMES), where an even share put the boundary between two English
  * sentences inside the next one's first letter (on the canvas, 61 of 166 boundaries on four papers' first pages: "T|his",
- * "W|e"), and a Latin word set among CJK characters, a full em each, wide of its place. Even for a monospaced item, and
- * where folding the text (NFKC) changed its length (the places are the folded text's)
+ * "W|e"), and a Latin word set among CJK characters, a full em each, wide of its place. In an item mostly of CJK
+ * characters the general punctuation's dashes, ellipsis and quotation marks (U+2010–206F) a full em too, as a CJK font
+ * sets them (the review of B3: "——" half an em put the character after it up to 0.97 em off). Even for a monospaced
+ * item, and where folding the text (NFKC) changed its length (the places are the folded text's)
  */
 function shares(str, len, mono) {
   // one buffer for every item, each item's tokens being worked out before the next item's: no array an item
   if (shared.length <= len) shared = new Float64Array(Math.max(len + 1, shared.length * 2))
   const cum = shared
   if (mono || str.length !== len) { for (let i = 1; i <= len; i++) cum[i] = i; return cum }
-  for (let i = 0, acc = 0; i < len; i++) { acc += widthOf(str.charCodeAt(i)); cum[i + 1] = acc }
+  let cjk = 0, punct = false
+  for (let i = 0, acc = 0; i < len; i++) {
+    const c = str.charCodeAt(i), w = widthOf(c)
+    if (w === 1000) cjk++
+    else if (c >= 0x2010 && c <= 0x206f) punct = true
+    acc += w; cum[i + 1] = acc
+  }
+  // the item's general punctuation again, a full em, where most of it is CJK: rare, and only then a second pass
+  if (punct && 2 * cjk > len) for (let i = 0, acc = 0; i < len; i++) { const c = str.charCodeAt(i); acc += c >= 0x2010 && c <= 0x206f ? 1000 : widthOf(c); cum[i + 1] = acc }
   return cum
 }
 let shared = new Float64Array(256)

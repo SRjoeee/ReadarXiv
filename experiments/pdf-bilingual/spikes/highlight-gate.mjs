@@ -13,6 +13,7 @@
 //  - runs: a unit's blocks (one per run) and its pages-and-columns; where a page and column holds more than one of its
 //    runs, a line cut them (a float set inside a paragraph, a full-width display), listed; the units with a display so
 //    cut (fragmented displays); one unit's blocks overlapping on a page (the wash doubled)
+//  - every block's extent, per paper and side, as one digest (to a hundredth of a unit)
 //  - what the geometry takes beyond the anchors, per paper and side (pageGeometry): the units whose head it takes, by
 //    kind (a heading's number, a theorem's head); the words it fills in; the cells whose ink reaches more than 3 em
 //    past a word's box (the marks' carry); and the runs whose pad overlaps another unit's block by over half a unit
@@ -22,7 +23,8 @@
 // It fails (exit 1) on: an anchored unit not lit; a hole; an ink hole; an unreachable unit; a fragmented display; one
 // unit's blocks overlapping; a cut not in the baseline; more words past the edge than the baseline's; against the
 // baseline (highlight-gate.baseline.json, per paper, side and kind), fewer units anchored or lit, and any change in
-// what the geometry takes (heads, fills, cells' ink, pads' overlaps: a change meant is recorded again); and when
+// what the geometry takes (heads, fills, cells' ink, pads' overlaps: a change meant is recorded again), and any block's
+// extent moved (the same); and when
 // PDF.js's character maps or standard fonts are not beside its module, which left a side's text half read and the
 // gate printing ok (the review of B1: anchors on the right 1 906 → 538).
 // Each was made to fail once (B1's first round of review, a copy of the tree each): a baseline count raised by one
@@ -73,7 +75,8 @@
 // 2608.02785, 2 of 138 on 2608.04322; and 14 holes, a defect it found: 9d449c59), the rows' order rule dropped (616
 // holes, 452 another sentence), the words' fit dropped (15 words outside). In B3's first round of review (I1): the
 // sentence that began in a run before or goes on into a run after taken as beginning or ending in the run (28 pieces
-// short of the edge on 2608.02785 and 2608.29181).
+// short of the edge on 2608.02785 and 2608.29181). The blocks' digest (B3's review, minor 1): the overhang 6.5 units for 6
+// (2608.02785 both sides, 2608.12502's right: moved).
 // WRITE_BASELINE=1 records the run as the baseline (counts only).
 // Counts only, no paper text. Pad beside a block: 3 CSS px at 100 % (2.25 PDF units). The browser's half — the pointer,
 // the paint, their costs against another build — is highlight-gate-browser.mjs.
@@ -86,6 +89,7 @@
 // translation's texts, and `sentences/<id>.json` (highlight-sentences.mjs with FROM=en, from B's Microsoft answers).
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/highlight-gate.mjs [id …]   → out/highlight-gate.json
 //   RUNS=<dir> another set of runs; GT=<dir> another ground truth; ROUNDS=<n> the cost's repeats (default 7)
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -344,8 +348,13 @@ for (const id of ids) {
   for (const S of ['L', 'R']) {
     const { layout } = sides[S], t = ((taken[id] ??= {})[S] ??= {})
     t.cells3em ??= 0; t.heads = {}; t.filled = 0; t.padOverlaps = 0
+    // every block's extent, to a hundredth of a unit, as one digest: what moves a block moves it (the review of B3: the
+    // ink's widths moved 36 runs' blocks by up to 4.3 units, which the counts did not see)
+    const digest = createHash('sha256')
+    let nBlocks = 0
     for (let p = 1; p < layout.page.length; p++) {
       const g = pageGeometry(layout, p), blocks = g.runs.map(r => blockOf(r, PAD))
+      g.runs.forEach((r, a) => { const b = blocks[a]; nBlocks++; digest.update(`${p} ${r.id} ${b.x0.toFixed(2)} ${b.x1.toFixed(2)} ${b.y0.toFixed(2)} ${b.y1.toFixed(2)}\n`) })
       for (const h of g.heads) { const kk = kindOf(paper, units[h]); t.heads[kk] = (t.heads[kk] ?? 0) + 1 }
       t.filled += g.filled
       g.runs.forEach((r, a) => {
@@ -360,6 +369,7 @@ for (const id of ids) {
         if (worst > 0.5) t.padOverlaps++
       })
     }
+    t.blocks = { n: nBlocks, digest: digest.digest('hex').slice(0, 16) }
   }
   console.error(id, 'done')
 }
@@ -499,6 +509,7 @@ else {
     const now = taken[id]?.[S], was = base.taken?.[id]?.[S]
     if (!was) { failures.push(`${id} ${S}: no baseline of what the geometry takes`); continue }
     for (const f of ['filled', 'cells3em', 'padOverlaps']) if (now[f] !== was[f]) failures.push(`${id} ${S} ${f} ${now[f]}, the baseline ${was[f]}`)
+    if (now.blocks.digest !== was.blocks?.digest) failures.push(`${id} ${S}: the blocks' extents moved (${now.blocks.n} blocks, the baseline ${was.blocks?.n ?? 'none'})`)
     for (const kk of new Set([...Object.keys(now.heads), ...Object.keys(was.heads)])) if ((now.heads[kk] ?? 0) !== (was.heads[kk] ?? 0)) failures.push(`${id} ${S} heads of ${kk} ${now.heads[kk] ?? 0}, the baseline ${was.heads[kk] ?? 0}`)
   }
   // sentences: no fewer units aligned, no more boundaries through a word; on the ground truth no fewer starts on its line

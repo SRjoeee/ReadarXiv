@@ -99,7 +99,7 @@ describe('inkEdges: a token\'s ink reaches over the marks that touch it', () => 
     ])
   })
 
-  it('a plain word and the words a hyphen joins keep their box, the hyphen after the word it follows', () => {
+  it('the words a hyphen joins: their boxes, which anchoring reads, an even share of the item; their ink a proportional face\'s widths, the hyphen with the word it follows', () => {
     // their ink where a proportional face's widths put them in the item (Times-Roman's: state- 2166, of- 1166, art 1055
     // thousandths of an em, over its 60 units), their boxes an even share as anchoring reads them
     const got = edges([item('plain', 50, 700), item('state-of-art', 80, 700, { eol: true })])
@@ -123,6 +123,17 @@ describe('inkEdges: a token\'s ink reaches over the marks that touch it', () => 
     // a monospaced face (getTextContent's styles say so): an even share, as the face sets it
     const doc = tokenizeDocument([{ page: 1, items: [{ ...item('mmm. iii', 50, 700, { width: 80, eol: true }), fontName: 'tt' }], styles: { tt: { fontFamily: 'monospace' } } }])
     expect(inkEdges(doc).l[1]).toBeCloseTo(50 + 50, 3)
+  })
+
+  it('in an item mostly of CJK characters, a dash or a quotation mark of the general punctuation is set in a full em too', () => {
+    // "模型——图": the CJK font sets the two em dashes a full em each, as its characters (the review of B3: 39 such items
+    // a CJK font's text layer classed serif, the dashes half an em, the next character up to 0.97 em off)
+    const [, , tu] = edges([item('模型——图', 50, 700, { width: 50, eol: true })])
+    expect(tu![0]).toBe('图')
+    expect(tu![3]).toBeCloseTo(90, 3)
+    // among Latin letters, a dash keeps its half em
+    const [, w] = edges([item('a—b', 50, 680, { width: 30, eol: true })])
+    expect(w![3]).toBeCloseTo(50 + (30 * (444 + 500)) / (444 + 500 + 500), 3)
   })
 
   it('a CJK closing mark inks half its em: the full stop after a character, and a bracket then a stop', () => {

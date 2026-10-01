@@ -933,7 +933,11 @@
      "paragraph": 10
     },
     "filled": 0,
-    "padOverlaps": 20
+    "padOverlaps": 20,
+    "blocks": {
+     "n": 250,
+     "digest": "3853dabe5a0195a2"
+    }
    },
    "R": {
     "cells3em": 0,
@@ -942,7 +946,11 @@
      "cell": 45
     },
     "filled": 0,
-    "padOverlaps": 22
+    "padOverlaps": 22,
+    "blocks": {
+     "n": 261,
+     "digest": "4b9e6bb7503e7302"
+    }
    }
   },
   "2608.02785": {
@@ -957,7 +965,11 @@
      "footnote": 1
     },
     "filled": 82,
-    "padOverlaps": 13
+    "padOverlaps": 13,
+    "blocks": {
+     "n": 96,
+     "digest": "7f74d458508ffcc0"
+    }
    },
    "R": {
     "cells3em": 0,
@@ -971,7 +983,11 @@
      "footnote": 1
     },
     "filled": 53,
-    "padOverlaps": 4
+    "padOverlaps": 4,
+    "blocks": {
+     "n": 96,
+     "digest": "75f828d536bf1ac5"
+    }
    }
   },
   "2608.02991": {
@@ -989,7 +1005,11 @@
      "cell": 6
     },
     "filled": 2,
-    "padOverlaps": 6
+    "padOverlaps": 6,
+    "blocks": {
+     "n": 212,
+     "digest": "6c832350430961c0"
+    }
    },
    "R": {
     "cells3em": 0,
@@ -1005,7 +1025,11 @@
      "subsubsection": 7
     },
     "filled": 3,
-    "padOverlaps": 2
+    "padOverlaps": 2,
+    "blocks": {
+     "n": 212,
+     "digest": "6717b2f3da633030"
+    }
    }
   },
   "2608.03063": {
@@ -1021,7 +1045,11 @@
      "footnote": 1
     },
     "filled": 8,
-    "padOverlaps": 18
+    "padOverlaps": 18,
+    "blocks": {
+     "n": 276,
+     "digest": "da7fd22e47baf64a"
+    }
    },
    "R": {
     "cells3em": 0,
@@ -1035,7 +1063,11 @@
      "TikZ text": 1
     },
     "filled": 3,
-    "padOverlaps": 14
+    "padOverlaps": 14,
+    "blocks": {
+     "n": 266,
+     "digest": "2656a0dcd43a5d57"
+    }
    }
   },
   "2608.06701": {
@@ -1051,7 +1083,11 @@
      "subsubsection": 8
     },
     "filled": 0,
-    "padOverlaps": 10
+    "padOverlaps": 10,
+    "blocks": {
+     "n": 125,
+     "digest": "df3e83853e7ad5bb"
+    }
    },
    "R": {
     "cells3em": 0,
@@ -1066,7 +1102,11 @@
      "cell": 2
     },
     "filled": 0,
-    "padOverlaps": 11
+    "padOverlaps": 11,
+    "blocks": {
+     "n": 134,
+     "digest": "a4a48dfb5b430aec"
+    }
    }
   },
   "2608.07683": {
@@ -1079,7 +1119,11 @@
      "theorem-like body": 23
     },
     "filled": 39,
-    "padOverlaps": 14
+    "padOverlaps": 14,
+    "blocks": {
+     "n": 160,
+     "digest": "2c815c3825f04a5d"
+    }
    },
    "R": {
     "cells3em": 0,
@@ -1090,7 +1134,11 @@
      "theorem-like body": 23
     },
     "filled": 30,
-    "padOverlaps": 6
+    "padOverlaps": 6,
+    "blocks": {
+     "n": 159,
+     "digest": "6824afc1b564a514"
+    }
    }
   },
   "2608.08350": {
@@ -1106,7 +1154,11 @@
      "paragraph": 2
     },
     "filled": 109,
-    "padOverlaps": 19
+    "padOverlaps": 19,
+    "blocks": {
+     "n": 364,
+     "digest": "3039bb66b7768f19"
+    }
    },
    "R": {
     "cells3em": 0,
@@ -1119,7 +1171,11 @@
      "paragraph with a display": 5
     },
     "filled": 136,
-    "padOverlaps": 13
+    "padOverlaps": 13,
+    "blocks": {
+     "n": 359,
+     "digest": "e438dc9605565b68"
+    }
    }
   },
   "2608.09746": {
@@ -1133,7 +1189,11 @@
      "theorem with a display": 6
     },
     "filled": 49,
-    "padOverlaps": 0
+    "padOverlaps": 0,
+    "blocks": {
+     "n": 137,
+     "digest": "cb8618a142b40a29"
+    }
    },
    "R": {
     "cells3em": 0,
@@ -1145,7 +1205,11 @@
      "theorem with a display": 6
     },
     "filled": 55,
-    "padOverlaps": 0
+    "padOverlaps": 0,
+    "blocks": {
+     "n": 138,
+     "digest": "f58a57e3e98ee0ec"
+    }
    }
   },
   "2608.12502": {
@@ -1162,7 +1226,11 @@
      "cell": 6
     },
     "filled": 4,
-    "padOverlaps": 3
+    "padOverlaps": 3,
+    "blocks": {
+     "n": 222,
+     "digest": "f6fae06f198916fd"
+    }
    },
    "R": {
     "cells3em": 0,
@@ -1178,7 +1246,11 @@
      "TikZ text": 1
     },
     "filled": 0,
-    "padOverlaps": 16
+    "padOverlaps": 16,
+    "blocks": {
+     "n": 236,
+     "digest": "2f86d51ef439e283"
+    }
    }
   },
   "2608.29181": {
@@ -1195,7 +1267,11 @@
      "subsubsection": 2
     },
     "filled": 232,
-    "padOverlaps": 4
+    "padOverlaps": 4,
+    "blocks": {
+     "n": 177,
+     "digest": "b2a55bd6c1d048d6"
+    }
    },
    "R": {
     "cells3em": 0,
@@ -1210,7 +1286,11 @@
      "subsubsection": 2
     },
     "filled": 178,
-    "padOverlaps": 6
+    "padOverlaps": 6,
+    "blocks": {
+     "n": 170,
+     "digest": "f30eb902d85407c3"
+    }
    }
   }
  },
@@ -1261,8 +1341,8 @@
    "throughInk": 10
   },
   "2608.29181": {
-   "aligned": 109,
-   "alignedMulti": 79,
+   "aligned": 110,
+   "alignedMulti": 80,
    "throughInk": 0
   }
  },
