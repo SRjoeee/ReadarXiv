@@ -202,7 +202,7 @@ async function early(b, paper) {
  *  first, a middle one and the last), else its blocks — each a list of rectangles in the window by side, lit by the
  *  harness and let go */
 const shapesOf = (page, id) => page.evaluate(id => {
-  const d = window.__reader.debug, starts = d.left.startsOf(id), n = starts ? starts.length + 1 : 0
+  const d = window.__reader.debug, starts = d.sentenced(id), n = starts ? starts.length + 1 : 0
   const out = []
   for (const s of n ? [...new Set([0, n >> 1, n - 1])] : [-1]) {
     d.light(id, s)
@@ -258,7 +258,7 @@ async function inkCuts(page, ids) {
   for (const id of ids) {
     await at(page, id)
     const cuts = await page.evaluate(id => {
-      const d = window.__reader.debug, starts = d.left.startsOf(id)
+      const d = window.__reader.debug, starts = d.sentenced(id)
       if (!starts) return []
       const shapes = []
       for (let s = 0; s <= starts.length; s++) { d.light(id, s); shapes.push(d.litRects()) }
@@ -325,7 +325,7 @@ async function checks(b) {
         check(`${b.label} ${paper}: both sides painted`, r.bothSides === which.length, `${r.bothSides} of ${which.length}`)
         // the units lit by sentence among them, and their boundaries on the canvas: round 1 measured 3 of 72 edges
         // through ink (two edges a boundary: the one's end and the next one's start)
-        const lit = await page.evaluate(ids => ids.filter(id => window.__reader.debug.left.startsOf(id)), ids)
+        const lit = await page.evaluate(ids => ids.filter(id => window.__reader.debug.sentenced(id)), ids)
         const k = await inkCuts(page, lit)
         const edges = k.L.edges + k.R.edges, ink = k.L.ink + k.R.ink
         check(`${b.label} ${paper}: units lit by sentence among those checked`, lit.length > 0, `${lit.length} of ${ids.length}`)

@@ -340,7 +340,7 @@ async function groundTruth() {
     // arXiv's PDF by our original's marks carried, as the reader anchors it; its truth, the sentence marks carried alike
     const carried = markWords(docs.O1, O1.marks)
     const carriedTruth = markWords(docs.O2, new Map([...O2.sentences].map(([k, v]) => [`${k}s`, v])))
-    const out = (truth[id] = {})
+    const out = (truth[id] = {}), foundOn = {}
     for (const [S, doc, marks, texts, on, truthDoc, truthMarks] of [['O', docs.O1, O1.marks, src, 'src', docs.O2, O2.sentences], ['T', docs.T1, T1.marks, tgt, 'tr', docs.T2, T2.sentences], ['AX', docs.AX, carried, src, 'src', docs.AX, null]]) {
       const anchors = anchorUnits(doc, texts, { bounds: boundsFromMarks(doc, marks), floating })
       const textOf = new Map(texts.map(t => [t.id, t.text])), r = (out[S] = { starts: 0, found: 0, withTruth: 0, sameLine: 0 })
@@ -353,6 +353,7 @@ async function groundTruth() {
         r.starts += offs.length
         const st = sentenceStarts(anchors.get(+i), textOf.get(+i) ?? '', offs)
         if (!st) continue
+        ;(foundOn[S] ??= new Set()).add(+i)
         offs.forEach((o, j) => {
           r.found++
           // the mark of the same sentence: B's start counted in B's tokens where this one's first word is
@@ -371,6 +372,9 @@ async function groundTruth() {
         })
       }
     }
+    // the reader's pair, arXiv's PDF and our translation: units of more than one sentence found on both
+    const multi = Object.entries(sents).filter(([i, s]) => s.src.length && b.get(+i)?.srcStarts?.length && !WHOLE.has(kind.get(+i))).map(([i]) => +i)
+    out.pair = { multi: multi.length, both: multi.filter(i => foundOn.AX?.has(i) && foundOn.T?.has(i)).length }
     console.error(id, 'ground truth done')
   }
 }
@@ -400,7 +404,8 @@ if (sentenceHoles.length) console.log('holes inside sentences:', sentenceHoles.s
 if (wordsOutside.length) console.log('words outside their sentences:', wordsOutside.slice(0, 12).join('; '))
 if (inkCuts.length) console.log('boundaries through a word:', inkCuts.join('; '))
 console.log('\nthe ground truth (report-B\'s compiles): starts after the first of units of more than one sentence; found; with a mark for their sentence; on its line')
-for (const [id, t] of Object.entries(truth)) if (t) for (const [S, r] of Object.entries(t)) console.log(id.padEnd(12), S.padEnd(3), r.starts, r.found, r.withTruth, r.sameLine, `${((100 * r.sameLine) / Math.max(1, r.withTruth)).toFixed(1)} %`)
+for (const [id, t] of Object.entries(truth)) if (t) for (const [S, r] of Object.entries(t)) if (S !== 'pair') console.log(id.padEnd(12), S.padEnd(3), r.starts, r.found, r.withTruth, r.sameLine, `${((100 * r.sameLine) / Math.max(1, r.withTruth)).toFixed(1)} %`)
+console.log('units of more than one sentence (with a mark), their starts all found on arXiv\'s PDF and on our translation:', Object.entries(truth).filter(([, t]) => t).map(([id, t]) => `${id} ${t.pair.both}/${t.pair.multi}`).join(', '))
 // the gate: what must be none, and against the baseline what may not fall (or, for cuts, grow)
 const failures = []
 for (const c of ['unlitAnchored', 'holes', 'inkHoles', 'unreachable', 'fragmentedDisplays', 'overlapping']) if (sum[c] > 0) failures.push(`${c} ${sum[c]}`)
@@ -409,7 +414,7 @@ if (!Object.keys(truth).length) failures.push(`no ground truth at ${GT}`)
 if (process.env.WRITE_BASELINE) {
   if (ids.length !== TEN.length || RUNS !== join(root, 'data/runs/highlight-ten')) failures.push('a baseline is recorded on the ten papers\' runs only')
   const sentencesBase = Object.fromEntries(Object.entries(sentences).map(([id, s]) => [id, { aligned: s.aligned, alignedMulti: s.alignedMulti, throughInk: s.throughInk }]))
-  const truthBase = Object.fromEntries(Object.entries(truth).map(([id, t]) => [id, t && Object.fromEntries(Object.entries(t).map(([S, r]) => [S, { withTruth: r.withTruth, sameLine: r.sameLine }]))]))
+  const truthBase = Object.fromEntries(Object.entries(truth).map(([id, t]) => [id, t && Object.fromEntries(Object.entries(t).filter(([S]) => S !== 'pair').map(([S, r]) => [S, { withTruth: r.withTruth, sameLine: r.sameLine }]))]))
   if (!failures.length) writeFileSync(BASELINE, `${JSON.stringify({ note: 'highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors; per paper, the units aligned by sentence and the boundaries through a word; on the ground truth, per paper and side, the starts with a mark and those on its line. Counts only', counts, cuts, pastEdge: sum.pastEdge, taken, sentences: sentencesBase, truth: truthBase }, null, 1)}\n`)
   console.log(failures.length ? '\nno baseline written: the run fails' : `\nbaseline written: ${BASELINE}`)
 } else if (!existsSync(BASELINE)) failures.push('no baseline (WRITE_BASELINE=1 records one)')
