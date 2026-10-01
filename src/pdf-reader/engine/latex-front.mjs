@@ -76,6 +76,14 @@ const ASSIGNMENT = new RegExp(String.raw`^[ \t]*(?:[=<>][ \t]*(?:${DIMEN}|\\[A-Z
 // \hrule height 0.9pt, \vrule width .4pt depth 2pt: a rule's own keywords and sizes
 const RULE_SPEC = new RegExp(String.raw`^(?:[ \t]*(?:height|depth|width)[ \t]*${DIMEN})+(?![A-Za-z])`)
 const TABLE_ENVS = /^(tabular|tabularx|tabular\*|longtable|tabu|tabulary|supertabular|xtabular)\*?$/
+/** tabularray's tables, \\begin{tblr}[outer]{inner}, and the paper's own (\\NewTblrEnviron): their cells are math where
+ *  the table says so — mode = math, imath or dmath, for the cells, a column, a row or one cell, in the table's own
+ *  specifications or in \\SetTblrInner for every table. Such a table is math throughout, as an array is: nothing in it
+ *  is prose. Walked as prose, its formulas went to the translator, which wrote their parentheses full-width, and a
+ *  \\left before one stopped TeX (2608.29181: every way of setting it failed, biber's "bcf is malformed" all it said) */
+const TBLR_ENVS = ['tblr', 'longtblr', 'talltblr']
+const TBLR_MATH = /\bmode\s*=\s*[id]?math\b/
+const uncommented = text => text.replace(/(^|[^\\])%.*$/gm, '$1')
 
 // ---------------------------------------------------------------- scanning primitives
 const isLetter = c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c === '@'
@@ -481,6 +489,7 @@ function walk(s, from, to, b, ctx) {
       // a TikZ picture: only its texts are prose (tikzText); the drawing stays as it is
       if (env === 'tikzpicture') { tikzText(s, afterBegin, bodyEnd, b, ctx); i = afterEnd; continue }
       if (SKIP_ENVS.test(env) || ctx.skipEnvs.has(env)) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
+      if (ctx.tblrEnvs.has(env) && (ctx.tblrMath || argsAfter(s, afterBegin, 2).args.some(a => TBLR_MATH.test(uncommented(s.slice(a.start, a.end)))))) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
       if (TABLE_ENVS.test(env)) {
         if (!ctx.tables) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
         // a table: each cell is a unit of its own; & and \\ end it. The column specification and width stay as they are
@@ -627,6 +636,15 @@ function walk(s, from, to, b, ctx) {
 // ---------------------------------------------------------------- project
 const listSources = fsys => fsys.list().filter(f => /\.(tex|sty)$/i.test(f))
 
+/** the package's tabularray tables (TBLR_ENVS and the names \\NewTblrEnviron gives), and whether \\SetTblrInner makes
+ *  every table's cells math; comments taken out first */
+const tblrOf = texts => {
+  const text = texts.map(uncommented).join('\n')
+  const named = [...text.matchAll(/\\NewTblrEnviron\s*\{\s*([^}\s]+)\s*\}/g)].map(m => m[1])
+  const inner = [...text.matchAll(/\\SetTblrInner\s*(?:\[[^\]]*\])?\s*\{/g)].map(m => { const e = matchGroup(text, m.index + m[0].length - 1); return e > 0 ? text.slice(m.index, e) : '' })
+  return { tblrEnvs: new Set([...TBLR_ENVS, ...named]), tblrMath: inner.some(t => TBLR_MATH.test(t)) }
+}
+
 /** `root`: a directory (Node) or a file system (folder, inMemory) */
 export function loadProject(root, main, { tables = false } = {}) {
   const fsys = asFiles(root)
@@ -651,7 +669,7 @@ export function loadProject(root, main, { tables = false } = {}) {
   }
   // the paper's macros twice over, each for its own reader: `macros`, how a call takes its arguments and which it sets
   // as prose (paperMacros, the walker's); `bodies`, what each expands to (macroBodies, a display's letters)
-  const ctx = { tables, theorems, fits: [], macros: paperMacros(sources.map(sourceText)), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim())), skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)) }
+  const ctx = { tables, theorems, fits: [], macros: paperMacros(sources.map(sourceText)), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim())), skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), ...tblrOf(sources.map(sourceText)) }
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first */
   function visit(rel, dirs = []) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return

@@ -183,7 +183,9 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 //    paper's units are new; the merge's, the two branches' 3s and 4s together, and the wire's spaces beside a digit
 //    taken back (mt.mjs rehydrate)
 // 6: the two 5s together
-export const PIPELINE_VERSION = '6'
+// 7: a tabularray table whose cells are math is math, no unit (latex-front.mjs TBLR_MATH) — 2608.29181's two tables
+//    were units, their formulas sent to the service
+export const PIPELINE_VERSION = '7'
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 export const TYPESETTING_VERSION = '1'

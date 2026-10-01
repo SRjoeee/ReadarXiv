@@ -332,3 +332,31 @@ describe('a display outside a unit\'s marks (the reader\'s anchors take it from 
       ['opens', false, false], ['and', false, false], ['This', false, false]])
   })
 })
+
+describe('a tabularray table whose cells are math is math (2608.29181: every way of setting it failed)', () => {
+  const doc = (pre: string, body: string) => project(`\\documentclass{article}\\usepackage{tabularray}\n${pre}\n\\begin{document}\nBefore the table.\n${body}\nAfter the table.\n\\end{document}`)
+  const rows = '\\toprule & \\| \\Phi_{t}(x(t))\\| & h(x_{t}) - h(x^{*}) \\\\\n\\midrule \\delta>1 & \\mathcal{O} \\left(\\frac{1}{t}\\right) & \\text{--} \\\\\n\\bottomrule'
+  const around = ['Before the table.', 'After the table.']
+  const texts = (p: ReturnType<typeof project>) => (p.units as Unit[]).map(u => textOf(u).trim())
+
+  it('cells = {mode = math}: no unit in it, its source as it stands; the paragraphs around it are units', () => {
+    const p = doc('', `\\begin{tblr}{\n  colspec = {Q[c,m] X[c,m] X[c,m]},\n  cells = {\n    mode = math,\n  },\n}\n${rows}\n\\end{tblr}`)
+    expect(texts(p)).toEqual(around)
+    expect(patched(p)).toContain(`}\n${rows}\n\\end{tblr}`)
+  })
+
+  it('math by a column, in a longtblr\'s inner specifications after its outer ones, or in dmath', () => {
+    expect(texts(doc('', `\\begin{tblr}{colspec = {Q[c,mode=math] Q[c,mode=math]}}\n x(t) & y(t) \\\\\n\\end{tblr}`))).toEqual(around)
+    expect(texts(doc('', `\\begin{longtblr}[caption = {A caption}]{colspec = {cc}, cell{2-Z}{1-Z} = {mode=dmath}}\n x(t) & y(t) \\\\\n\\end{longtblr}`))).toEqual(around)
+  })
+
+  it('for every table, by \\SetTblrInner in the preamble, and in a table of the paper\'s own (\\NewTblrEnviron)', () => {
+    expect(texts(doc('\\SetTblrInner{cells = {mode = imath}}', `\\begin{tblr}{cc}\n x(t) & y(t) \\\\\n\\end{tblr}`))).toEqual(around)
+    expect(texts(doc('\\NewTblrEnviron{mytblr}', `\\begin{mytblr}{colspec = {cc}, cells = {mode = math}}\n x(t) & y(t) \\\\\n\\end{mytblr}`))).toEqual(around)
+  })
+
+  it('a table of text is walked as before, and a commented-out math mode is no math mode', () => {
+    const p = doc('% \\SetTblrInner{cells = {mode = math}}', '\\begin{tblr}{colspec = {ll}, % cells = {mode = math}\n}\nFrozen profile & Prompting only \\\\\n\\end{tblr}')
+    expect(texts(p).join('|')).toContain('Frozen profile')
+  })
+})
