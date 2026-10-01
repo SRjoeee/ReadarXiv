@@ -300,7 +300,7 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
 - A 34 px capsule on the floating surface. It enters by rising 10 px and fading in with a slight scale (240 ms) and
   leaves lighter (160 ms); a new state of the same kind changes its words in place — the words fade in, the capsule's
   width eases to theirs (200 ms) — instead of leaving and coming again.
-- **Progress** is a line along the toolbar's foot, not the capsule's: 2 px of quiet ink (`--ink-3`, 3.64 / 3.39:1 on the chrome — a graphic's 3:1; at 80 % it was 2.67:1, #299), its length
+- **Progress** is a line along the toolbar's foot, not the capsule's: 2 px of quiet ink (`--ink-3` at 80 %, 2.67:1 on the chrome — the maintainer kept it over a graphic's 3:1 after trying both, 2026-10-02), its length
   the share done — the PDF's download while the reader loads, the paragraphs translated while a translation runs. It
   grows by a transform and fades out at the length it reached; each stage is a line of its own, so that the
   translation's starts afresh rather than the download's shrinking back. It is all that shows a load or a translation
