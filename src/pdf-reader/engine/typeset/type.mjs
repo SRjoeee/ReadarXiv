@@ -65,8 +65,6 @@ export function heightRatio(units, design, type) {
 export const heightAtSize = (u, design, type, f = 1) => heightAt(u, design, type, f)
 /** each unit's predicted height at a type and leading one, by its index: what flowType takes from a prediction */
 export const unitHeights = (units, design, type) => new Map(units.map(u => [u.i, heightAt(u, design, type)]))
-/** each unit's predicted lines at a type, by its index */
-export const unitLines = (units, design, type) => new Map(units.map(u => [u.i, linesOf(u, design, type)]))
 
 /**
  * CJK's three knobs at a change of height `a` (the original's height over the translation's at `base`): each moves, in
@@ -133,17 +131,4 @@ export function solveType(units, design, sizes = null) {
   for (let k = 0; k < 40 && hi - lo > 1e-6; k++) { const mid = (lo + hi) / 2; if (f(mid) < 1) lo = mid; else hi = mid }
   const type = at((lo + hi) / 2)
   return { ...type, ratio: heightRatio(units, design, type) }
-}
-
-/**
- * The prediction set right by a measurement: a compile at `type` came out `measured` times the original's height (the
- * preview's line probes say it). Every unit's width is scaled by the one factor that makes the prediction at that type
- * agree — the paper's density as measured, where the text alone could only estimate it — and solveType on the result
- * gives the final compile's type.
- */
-export function correctUnits(units, design, type, measured) {
-  const scaled = k => units.map(u => ({ ...u, width: t => k * u.width(t) }))
-  let lo = Math.log(0.5), hi = Math.log(2)
-  for (let n = 0; n < 50 && hi - lo > 1e-9; n++) { const mid = (lo + hi) / 2; if (heightRatio(scaled(Math.exp(mid)), design, type) < measured) lo = mid; else hi = mid }
-  return scaled(Math.exp((lo + hi) / 2))
 }

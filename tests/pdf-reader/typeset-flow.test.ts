@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { flowType } from '@/pdf-reader/engine/typeset/flow.mjs'
-import { correctUnits, DESIGN, type Design, designFor, heightAtSize, heightRatio, solveType, unitHeights } from '@/pdf-reader/engine/typeset/type.mjs'
+import { DESIGN, type Design, designFor, heightAtSize, heightRatio, solveType, unitHeights } from '@/pdf-reader/engine/typeset/type.mjs'
 
 // The typesetting rule's type and flow (records/typesetting.md in experiments/pdf-bilingual), on synthetic units: no TeX
 
@@ -63,13 +63,6 @@ describe('the type for a paper', () => {
     const keep = solveType(units(40, i => unit(i, 8, 24, 0, 7.5 * 24)), DESIGN.Latn)
     expect(keep.size).toBeCloseTo(1, 1)
     expect(Math.abs(keep.lead - 1)).toBeLessThanOrEqual(0.02)
-  })
-  it('agrees with a preview\'s measurement once corrected, and the type solved again reaches one', () => {
-    const corrected = correctUnits(zhShort, DESIGN.Hans, zh, 1.04)
-    expect(Math.abs(heightRatio(corrected, DESIGN.Hans, zh) - 1.04)).toBeLessThanOrEqual(0.002)
-    const again = solveType(corrected, DESIGN.Hans)
-    expect(heightRatio(corrected, DESIGN.Hans, again)).toBeCloseTo(1, 2)
-    expect(again.lead).toBeLessThanOrEqual(zh.lead + 1e-9)
   })
   it('designs the type a strategy can set: CJK under CJKutf8 a size and a leading, as an alphabet\'s', () => {
     const xeCJK = { name: 'XeLaTeX + xeCJK', xe: true }, cjkutf8 = { name: 'pdfLaTeX + CJKutf8', xe: false }

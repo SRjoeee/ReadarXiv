@@ -3,9 +3,9 @@
 // experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md):
 //   previewTypesetting — from the original's probes and the translation's text: one type for the paper, each unit's
 //     leading along the original's flow, each float held to its original's page; the preview compile is set with it;
-//   finalTypesetting — from what that preview measured: the type solved again, the leading corrected where the
-//     preview's text stood, again after each forced break, and for CJK a late stretch at a smaller face; the final
-//     compile is set with it.
+//   finalTypesetting — from what that preview measured: the preview's type kept, each unit's leading set again from its
+//     measured height and corrected where the preview's text stood, again after each forced break, and for CJK a late
+//     stretch at a smaller face; the final compile is set with it.
 // Pure: no compile, no file, no clock. Each returns `typeset`, which live.mjs translationFiles takes with the strategy
 // the plan was made for (type.mjs designFor: a strategy sets the knobs it has; the chain moving on makes the plan again).
 import { latin1 } from '../latex-front.mjs'
@@ -14,7 +14,7 @@ import { citeStyleOf, measureUnits, readSizeProbe, readWidthProbe } from './dens
 import { flowType } from './flow.mjs'
 import { columnOf, drifts } from './places.mjs'
 import { completeLog, readForced, readLines, typesetting } from './tex.mjs'
-import { correctUnits, designFor, heightAtSize, solveType, unitHeights, unitLines } from './type.mjs'
+import { designFor, heightAtSize, solveType, unitHeights } from './type.mjs'
 
 /** The rule's parameters, each as the round of 34 chose it (records/typesetting.md) */
 export const FLOW = {
@@ -63,7 +63,7 @@ export function previewTypesetting({ paper, translated, lang, strategy, fonts, f
   // each caption's float waits for its original's page and column (tex.mjs FLOAT_TEX)
   const om = original.marks, floatsAt = new Map()
   units.forEach((u, i) => { const m = om.marks.get(`${i}s`); if (u.kind === 'caption' && m) floatsAt.set(i, { page: m.page + 1, col: columnOf(om, m) }) })
-  const state = { units, translated, design, strategy: strategy.name, type, sizes, list, lo, floatsAt, original, leads }
+  const state = { units, translated, design, strategy: strategy.name, type, list, lo, floatsAt, original, leads }
   state.typeset = typesettingOf(state, type, leads, new Map())
   return { typeset: state.typeset, type, state, missing: null }
 }
@@ -73,11 +73,14 @@ const whole = m => !!m?.marks.size && m.columns.length === m.pages && m.columns.
 
 /**
  * The final's typesetting, from the preview `state` and what the preview compile gave: `preview` { log, marks } — its
- * log (line probes, forced breaks, size probe) and its marks (places.mjs marksOf). Returns `typeset` for the final's
- * translationFiles; the type, each unit's leading and face, and the flow's trace (flow.mjs flowType). Where the preview's
- * measurement is missing or partial — its log not whole (tex.mjs completeLog), its marks missing, no unit it measured
- * (its places are read on the original's columns: places.mjs) — the final is set as the preview was, uncorrected (`missing` says why): that plan had every input it
- * needs. With no plan (`state` null), none.
+ * log (line probes, forced breaks) and its marks (places.mjs marksOf). The type stays the preview's: each unit's height
+ * is what the preview measured, and only its leading moves, which breaks no line again. Solved again from the preview's
+ * measured density, a type that changed the size, the glue or the face broke lines no prediction could follow (Korean
+ * 2608.18090 a page more, Chinese 2608.23586 a page fewer; on the papers the rule was not tuned on, 11 of 13 pages equal
+ * and start drift 0.136 against 12 and 0.105 kept). Returns `typeset` for the final's translationFiles; the type, each
+ * unit's leading and face, and the flow's trace (flow.mjs flowType). Where the preview's measurement is missing or
+ * partial — its log not whole (tex.mjs completeLog), its marks missing, no unit it measured — the final is set as the
+ * preview was, uncorrected (`missing` says why): that plan had every input it needs. With no plan (`state` null), none.
  */
 export function finalTypesetting(state, preview) {
   if (!state) return { typeset: null, type: null, leads: new Map(), faces: new Map(), trace: [], missing: 'a plan' }
@@ -85,20 +88,15 @@ export function finalTypesetting(state, preview) {
   const lines = readLines(preview?.log), got = list.filter(u => lines.get(u.i))
   const missing = !completeLog(preview?.log) ? "the preview's log, whole" : !preview?.marks?.marks.size ? "the preview's marks" : !got.length ? 'a unit the preview measured' : null
   if (missing) return { typeset: state.typeset, type, leads: state.leads, faces: new Map(), trace: [], missing }
-  // the preview's measured height over the original's, at the preview's type: the paper's density as measured
-  let o = 0, t = 0
-  for (const u of got) { o += u.lo * u.bs; t += lines.get(u.i).lines * type.lead * (cjk ? 1 : type.size) * u.bs }
-  const corrected = correctUnits(list, design, type, o ? t / o : 1), next = solveType(corrected, design, readSizeProbe(preview.log) ?? state.sizes)
-  // each unit's measured lines carried to the new type by the prediction's change (none where only the leading changed)
-  const before = unitLines(corrected, design, type), after = unitLines(corrected, design, next), cu = new Map(corrected.map(u => [u.i, u]))
-  const heights = new Map(got.map(u => [u.i, ((lines.get(u.i).lines * after.get(u.i)) / before.get(u.i)) * (cjk ? 1 : next.size) * u.bs]))
+  // each unit's height at leading one as the preview set it: its measured lines at the type's size
+  const heights = new Map(got.map(u => [u.i, lines.get(u.i).lines * (cjk ? 1 : type.size) * u.bs])), cu = new Map(list.map(u => [u.i, u]))
   const measured = {
     drift: drifts(state.original.marks, preview.marks), preview: new Map(got.map(u => [u.i, lines.get(u.i).lines * lines.get(u.i).bs])),
     span: FLOW.span, snap: FLOW.snap * (median(got.map(u => u.bs)) ?? 12), breaks: readForced(preview.log),
   }
-  const shrink = cjk ? { steps: FLOW.faces, lines: FLOW.faceLines, heightAt: (i, f) => (heights.get(i) * heightAtSize(cu.get(i), design, next, f)) / heightAtSize(cu.get(i), design, next, 1) } : null
+  const shrink = cjk ? { steps: FLOW.faces, lines: FLOW.faceLines, heightAt: (i, f) => (heights.get(i) * heightAtSize(cu.get(i), design, type, f)) / heightAtSize(cu.get(i), design, type, 1) } : null
   const flow = flowType(got, design, heights, { window: FLOW.window, horizon: FLOW.horizon, measured, rate: FLOW.rate, shrink })
-  return { typeset: typesettingOf(state, next, flow.leads, flow.sizes), type: next, leads: flow.leads, faces: flow.sizes, trace: flow.trace, missing: null }
+  return { typeset: typesettingOf(state, type, flow.leads, flow.sizes), type, leads: flow.leads, faces: flow.sizes, trace: flow.trace, missing: null }
 }
 
 // the plan tex.mjs typesetting takes: each unit's leading as \axtlead@ takes it — × its own size, so its original's

@@ -24,7 +24,7 @@ export const SIZE_GRID = [0.9, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97, 0.98, 0
  * sizes, and Latin Modern's, are drawn wider for their size. So the sample at each size of the grid, its width against
  * the body's: the lines a size takes. Their height is the size asked, whatever face comes (\\fontsize sets the leading
  * from it); a face's em is no measure of its size (Latin Modern's 9 pt design has an em of 9.25 pt). The font probe
- * compiles anyway; a compile of the translation carries it too, in the faces the translation is set in (Russian's T2A)
+ * compiles anyway (WIDTH_PROBE)
  */
 export const SIZE_PROBE = `\\begingroup\\normalfont\\normalsize\\edef\\axtsb{\\csname f@size\\endcsname}\\setbox0\\hbox{${WIDTH_SAMPLE}}\\edef\\axtsw{\\the\\wd0}${SIZE_GRID.map(f => `\\fontsize{\\fpeval{${f}*\\axtsb}}{12pt}\\selectfont\\setbox0\\hbox{${WIDTH_SAMPLE}}\\typeout{AXT-SIZE ${f} \\the\\wd0 \\space\\axtsw}`).join('')}\\endgroup\n`
 /** TeX for the font probe's body: the sample's width, the body size and the column's width, then the sizes (SIZE_PROBE) */

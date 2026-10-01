@@ -16,7 +16,5 @@ export declare function designFor(script: string, strategy: { name?: string; xe?
 export declare function heightRatio(units: TypeUnit[], design: Design, type: Type): number
 export declare function heightAtSize(u: TypeUnit, design: Design, type: Type, f?: number): number
 export declare function unitHeights(units: TypeUnit[], design: Design, type: Type): Map<number, number>
-export declare function unitLines(units: TypeUnit[], design: Design, type: Type): Map<number, number>
 export declare function cjkType(a: number, base: CjkDesign['base'], ranges: { lead: Range; track: Range; scale: Range }): { lead: number; track: number; scale: number; reached: number }
 export declare function solveType<U extends TypeUnit>(units: U[], design: Design, sizes?: SizeStep[] | null): Type
-export declare function correctUnits<U extends TypeUnit>(units: U[], design: Design, type: Type, measured: number): U[]

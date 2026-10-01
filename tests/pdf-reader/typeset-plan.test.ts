@@ -55,6 +55,20 @@ describe('a plan for the strategy that sets it', () => {
   })
 })
 
+describe('the final from the measuring compile', () => {
+  it('keeps the preview\'s type — its size, glue and face — and moves only the leading, which breaks no line again', () => {
+    for (const lang of ['de', 'zh'] as const) {
+      const given = inputs(lang), plan = previewTypesetting(given)
+      // the preview measured every unit a line shorter than its original: the leading takes it, the type stays
+      const measured = { log: originalLog(given.paper.units.length).replace(/AXT-LINES (\d+) 4 /g, 'AXT-LINES $1 3 '), marks: originalMarks(given.paper.units.length) }
+      const fin = finalTypesetting(plan.state, measured)
+      expect(fin.type).toEqual(plan.type)
+      expect(fin.missing).toBeNull()
+      expect(fin.typeset).not.toBe(plan.typeset)
+    }
+  })
+})
+
 describe('the rule sets nothing where an input it needs is missing or partial: the translation is set as today', () => {
   const de = () => inputs('de')
   const none = (r: ReturnType<typeof previewTypesetting>) => [r.typeset, r.state]

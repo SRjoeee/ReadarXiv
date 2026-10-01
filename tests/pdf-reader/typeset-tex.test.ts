@@ -83,7 +83,7 @@ describe('a typeset plan in the compile', () => {
     expect(full).toContain(`axtsize@${para}\\endcsname{0.9500}`)
     expect(full).toContain(`axt@fp@${caption}\\endcsname{2 1}`)
   })
-  it('sets a CJK type on the face and the glue, and an alphabet\'s with the size probe', () => {
+  it('sets a CJK type on the face and the glue, and an alphabet\'s leading alone (its size on the units)', () => {
     const base = first('zh')
     const zh = plan(true).strategy(base)
     expect(zh.leading).toBe(1.35)
@@ -91,7 +91,7 @@ describe('a typeset plan in the compile', () => {
     expect(zh.pre(null)).toContain('CJKglue={\\hskip 0.0200em')
     const de = plan(false).strategy(first('de'))
     expect(de.leading).toBe(1.02)
-    expect(de.pre(null)).toContain('\\AtBeginDocument{\\begingroup\\normalfont\\normalsize')
+    expect(de.pre(null)).toBe(first('de').pre(null))
   })
   it('sets a CJK type under the pdfLaTeX fallback, CJKutf8, as its design has it: the leading, and a size on the units', () => {
     const [, cjkutf8] = strategiesFor({ compiler: 'pdflatex' }, 'zh')

@@ -2,7 +2,6 @@
 // compile reports each unit's lines with, a unit set at a smaller size or face, a float held to its original's page, and
 // what a typeset plan adds to a compile of the translation (live.mjs translationFiles' `typeset`).
 import { lastTexLog, PARA_END_TEX } from '../latex-front.mjs'
-import { SIZE_PROBE } from './density.mjs'
 
 /** a unit's line count and leading at its paragraph's end (PARA_END_TEX), in the log. Through \message: \typeout
  *  reads \prevgraf as 0. A unit whose group closed with no paragraph gives none. No probe from restricted horizontal
@@ -97,8 +96,8 @@ const def = (name, i, v) => `\\expandafter\\def\\csname ${name}${i}\\endcsname{$
 /**
  * What a typeset plan (plan.mjs) adds to a compile of the translation, for live.mjs translationFiles: the strategy it
  * sets the type of, the one it was solved for (CJK under xeCJK: the leading, the tracking as xeCJK's glue and the scale
- * on the CJK face; an alphabet, or CJK under CJKutf8: its leading, and with a face of fixed sizes the size probe, which
- * the final's type is solved among — type.mjs designFor), the TeX before everything (the line probes, the sizes, the
+ * on the CJK face; an alphabet, or CJK under CJKutf8: its leading, its size going on the units — type.mjs designFor),
+ * the TeX before everything (the line probes, the sizes, the
  * floats held, each unit's factors, tables no taller than their original's), and each translated unit's macros before
  * its start mark: its float's page and column, its line probe, its size, its leading. Another strategy — the chain
  * moved on — is refused: its design is another, and the plan is made again for it (plan.mjs previewTypesetting).
@@ -120,7 +119,7 @@ export function typesetting(units, plan) {
     strategy: s => {
       if (s.name !== plan.strategy) throw new Error(`a typesetting plan for ${plan.strategy}, not ${s.name}`)
       if (design.cjk) return { ...s, leading: type.lead, pre: fonts => s.pre(fonts).replace('\\setCJKmainfont[', `\\setCJKmainfont[Scale=${type.scale.toFixed(4)},`) + (type.track > 0.0005 ? `\\xeCJKsetup{CJKglue={\\hskip ${type.track.toFixed(4)}em plus 0.08\\baselineskip}}\n` : '') }
-      return { ...s, leading: type.lead, pre: design.scalable ? s.pre : fonts => `${s.pre(fonts)}\\AtBeginDocument{${SIZE_PROBE}}\n` }
+      return { ...s, leading: type.lead }
     },
     mark: (base, translated) => u => {
       const m = base(u), i = index.get(u)
