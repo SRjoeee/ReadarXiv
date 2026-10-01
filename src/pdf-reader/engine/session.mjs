@@ -1263,6 +1263,8 @@ function stopGlide() { if (gliding) cancelAnimationFrame(gliding); gliding = 0 }
  * What a click is on is what the highlight paints (hitAt): a click in a block's pads, in the white space beside a
  * display, or on a float set inside a paragraph's block (a wrapfigure) is the unit's, and levelled by it.
  * A click on no paragraph linked on both sides — a heading, a figure, a formula, a table — goes by what is around it (placeAt).
+ * A table or figure lit whole (floats.mjs) is levelled so too where the click is off its cells and caption: by its twin
+ * or its distance from its caption, finer than by the caption alone.
  */
 let lastAlign = null // how the last click was levelled, for the test harness
 async function alignClick(from, event) {

@@ -350,7 +350,9 @@ export function hitOf(L, p, x, y, padX) {
  * nearest — with how far down that line, 0 to 1. So a click anywhere in what is painted is the unit's: in a block's
  * pads, in the white space beside a display or between two of its lines, and on a float set inside a paragraph's
  * block (a wrapfigure) — levelled by the unit, where before the blocks (B1) they went by what is around them
- * (placeAt). Null where nothing is painted
+ * (placeAt). Null where nothing is painted. A float's wash or outline (floats.mjs) is no unit's block: a click on it, off
+ * its cells' and its caption's, goes by what is around it (placeAt: a figure by its twin, a table by its distance from
+ * its caption), finer than levelling the float by its caption
  */
 export function clickOf(L, p, x, y, padX) {
   const hit = hitOf(L, p, x, y, padX)
