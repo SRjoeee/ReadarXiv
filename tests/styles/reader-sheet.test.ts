@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { resolve } from '@/shared/tokens'
 import { contrast, over, parseOklch } from '../shared/wcag'
-import { rules } from './css-rules'
+import { type Rule, rules, sheet } from './css-rules'
 
 /** the reader's sheet and the shared sheets it imports: the tokens (the redesign's design, §2.2) and the controls. A sheet renamed or gone fails here */
 const SHEET = ['../../src/entrypoints/pdf-reader/reader.css', '../../src/styles/tokens.css', '../../src/styles/controls.css']
@@ -51,6 +51,16 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
     const itemRing = all.filter(r => r.selector.includes('.search:focus-visible') && r.selector.includes('.item[data-active]'))
     expect(itemRing.length).toBeGreaterThan(0)
     expect(itemRing.every(r => r.selector.includes(':not([data-axt-pointer])'))).toBe(true)
+  })
+
+  it('presses nothing in by a scale under reduced motion: each press that scales has its rule there, as the toolbar\'s and the card\'s (#299, Part 6; §4.2: a motion is a fade or nothing)', () => {
+    const own = rules(sheet('../../src/entrypoints/pdf-reader/reader.css'))
+    const reduced = (r: Rule) => r.within.some(a => /prefers-reduced-motion:\s*reduce/.test(a))
+    const still = (r: Rule) => ['1', 'none'].includes(/(?:^|;)\s*scale:\s*([^;]+)/.exec(r.body)?.[1]?.trim() ?? '')
+    const pressed = own.filter(r => !reduced(r) && r.selector.includes(':active') && /(?:^|;)\s*scale:/.test(r.body) && !still(r))
+    expect(pressed.length).toBeGreaterThan(0)
+    const held = own.filter(r => reduced(r) && still(r)).flatMap(r => r.selector.split(',').map(x => x.trim()))
+    expect(pressed.map(r => r.selector).filter(selector => !held.includes(selector))).toEqual([])
   })
 
   it('draws the progress line at 3:1 on the chrome in both themes: it is all a sighted reader is shown of a load or a run (#299, Part 6\'s interface review; WCAG 1.4.11)', () => {

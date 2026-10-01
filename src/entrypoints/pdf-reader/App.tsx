@@ -21,7 +21,7 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   const right = useRef<HTMLDivElement>(null)
   // what the page itself shows; each part below takes its own (use-reader.ts)
   const state = useReader(controller, s => ({ appearance: s.settings?.theme, dimPages: s.settings?.pdfReader.dimPages, swapped: s.settings?.pdfReader.swapped ?? false, title: s.paper.title, card: cardOf(s) !== null }))
-  const doc = useRef<HTMLDivElement>(null)
+  const doc = useRef<HTMLElement>(null)
   usePinch(controller, doc)
   // a document area under 840 px shows the translation alone in side by side (the design, §5); the session applies it
   useEffect(() => {
@@ -67,10 +67,12 @@ export function App({ controller, embedded }: { controller: ReaderController; em
     <>
       <Toolbar controller={controller} embedded={embedded} contents={contents} onContents={() => setContents(open => !open)} />
       <Outline controller={controller} open={contents} />
-      <div className="doc" ref={doc}>
+      {/* the page's main landmark, beside the toolbar's banner and the contents' complementary region (Part 6's
+          accessibility audit); its layout is the class's */}
+      <main className="doc" ref={doc}>
         <Pane controller={controller} side="left" scroller={left} />
         <Pane controller={controller} side="right" scroller={right} card={state.card} />
-      </div>
+      </main>
       <StatusCapsule controller={controller} onChooseLanguage={chooseLanguage} />
     </>
   )

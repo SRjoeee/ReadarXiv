@@ -28,6 +28,18 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
+describe('the page\'s landmarks', () => {
+  it('the toolbar is the banner, the contents a complementary region, and the document area the main one, both panes in it (#299, Part 6\'s accessibility audit)', async () => {
+    const { controller } = fakeController()
+    const m = await mountElement(createElement(App, { controller, embedded: true }))
+    const main = m.container.querySelectorAll('main')
+    expect(main.length).toBe(1)
+    expect([...main[0]!.querySelectorAll('.pane')].map(p => (p as HTMLElement).dataset.side)).toEqual(['left', 'right'])
+    expect(main[0]!.classList.contains('doc')).toBe(true)
+    expect([m.container.querySelector(':scope > header')?.tagName, m.container.querySelector('aside#axt-contents')?.tagName]).toEqual(['HEADER', 'ASIDE'])
+  })
+})
+
 describe('the contents\' slide (the reader\'s design, §5)', () => {
   it('under StrictMode, nothing slides as the page mounts; each press of the contents slides the document area once', async () => {
     const { controller } = fakeController()
