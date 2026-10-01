@@ -29,6 +29,11 @@
 //    from the event on paints, per side, the sentence, never the paragraph (I2: on 346c26fc with the harness's hooks,
 //    10 of 12 fail — the paragraph painted on one side or both, for 19–178 ms) and never nothing (the re-review: on
 //    2ae0d235 the new side at a swap was blank for 40–200 ms until its fit was worked out)
+//  - the same pointer, resting, through what resizes the pages or the panes with no move sent: a zoom, the zoom back to
+//    the width (a fit), the contents opened (the panes narrowed, the width fitted again) and closed: 400 ms after, what
+//    is lit is what a move there lights, painted under the pointer (Codex on #308: the pointer looked again on the
+//    scroll's frame, before the new sizes were measured, and not after; made to fail on 7ae01b8f, three runs: 2608.02459's
+//    right pane lit nothing through the zoom and the zoom back where a move lights unit 23)
 //  - each side's tokens let go once its layout is made: on 2608.02459, both layouts and sentences made and the garbage
 //    collected, the tokens the reader holds weakly are gone (the final review, I3: made to fail on 346c26fc with the
 //    weak hold added, both sides' kept, the heap 31.8 MB; 10.5 MB with the fix)
@@ -272,26 +277,11 @@ async function sentencesAtLoad(b, paper, moving) {
  * it, and the sentences' fit waits for that page's geometry. What is lit and what each side paints, every frame from
  * the event to 1.5 s after it is done (`frames`: a change each, the area painted per side); what is lit 400 ms after — past the
  * miss's hold, no move — (`after`) and what a move there lights (`moved`); the sentence's paint and the whole unit's,
- * lit by the harness at the end (`refs`). `event` runs in the page
+ * lit by the harness at the end (`refs`). `event` runs in the page; `pick` where the pointer rests (in the page, given
+ * the pane and `at`)
  */
-async function resting(page, pane, event) {
-  const target = await page.evaluate(async pane => {
-    const d = window.__reader.debug, sides = { L: d.left, R: d.right }
-    const pagesOf = (s, id) => [...new Set(s.anchors.get(id)?.rects.map(r => r.page) ?? [])]
-    for (const [id, a] of d.left.anchors) {
-      if (!a || !d.sentenced(id) || pagesOf(d.left, id).length !== 2 || pagesOf(d.right, id).length !== 2) continue
-      const later = s => pagesOf(s, id)[1]
-      if ([d.left, d.right].some(s => s.anchors.get(id).rects.filter(r => r.page === later(s)).length < 2)) continue
-      for (const s of [d.left, d.right]) s.container.scrollTop = d.pageTop(s, later(s)) + 30
-      await new Promise(r => setTimeout(r, 1500))
-      const s = sides[pane], r = s.anchors.get(id).rects.filter(q => q.page === later(s)).at(-1)
-      const box = d.toPageBox(s, r), pr = d.pageView(s, r.page).div.getBoundingClientRect(), cr = s.container.getBoundingClientRect()
-      const y = pr.top + d.pageView(s, r.page).div.clientTop + box.top + box.height / 2
-      if (y < cr.top + 40 || y > cr.bottom - 40) continue
-      return { id, x: pr.left + d.pageView(s, r.page).div.clientLeft + box.left + Math.min(box.width / 2, 40), y }
-    }
-    return null
-  }, pane)
+async function resting(page, pane, event, pick = OVER_TWO_PAGES, at = 0) {
+  const target = await page.evaluate(pick, { pane, at })
   if (!target) return { target }
   await page.mouse.move(target.x, target.y)
   await page.waitForTimeout(1200)
@@ -351,9 +341,56 @@ function restingPainted(r) {
   const ok = !!end && end.lit === r.id && end.s === r.before.s && end.area.every((a, k) => a > 0 && near(a, r.refs.sentence[k]))
   return { ok: ok && bad.length === 0, bad: bad.slice(0, 4), end }
 }
+/** the pointer on the last line, on the later page, of a unit lit by sentence over two pages on both sides; both panes
+ *  at that page */
+const OVER_TWO_PAGES = async ({ pane }) => {
+  const d = window.__reader.debug, sides = { L: d.left, R: d.right }
+  const pagesOf = (s, id) => [...new Set(s.anchors.get(id)?.rects.map(r => r.page) ?? [])]
+  for (const [id, a] of d.left.anchors) {
+    if (!a || !d.sentenced(id) || pagesOf(d.left, id).length !== 2 || pagesOf(d.right, id).length !== 2) continue
+    const later = s => pagesOf(s, id)[1]
+    if ([d.left, d.right].some(s => s.anchors.get(id).rects.filter(r => r.page === later(s)).length < 2)) continue
+    for (const s of [d.left, d.right]) s.container.scrollTop = d.pageTop(s, later(s)) + 30
+    await new Promise(r => setTimeout(r, 1500))
+    const s = sides[pane], r = s.anchors.get(id).rects.filter(q => q.page === later(s)).at(-1)
+    const box = d.toPageBox(s, r), pr = d.pageView(s, r.page).div.getBoundingClientRect(), cr = s.container.getBoundingClientRect()
+    const y = pr.top + d.pageView(s, r.page).div.clientTop + box.top + box.height / 2
+    if (y < cr.top + 40 || y > cr.bottom - 40) continue
+    return { id, x: pr.left + d.pageView(s, r.page).div.clientLeft + box.left + Math.min(box.width / 2, 40), y }
+  }
+  return null
+}
+/** the pointer on the middle line of a unit lit by sentence, a dozen lines or more on one page of the pane's side, that
+ *  line a third of the way down the pane, at `at` of the line's width: what resizes the pages, keeping the view's top
+ *  left (PDF.js), moves what is under the pointer by a few lines, so that a unit is under it after (a pointer left over
+ *  nothing, null equal to null, would tell nothing) */
+const MID_UNIT = async ({ pane, at }) => {
+  const d = window.__reader.debug, s = pane === 'L' ? d.left : d.right
+  for (const [id, a] of s.anchors) {
+    if (!a || !d.sentenced(id) || !d.left.anchors.get(id) || !d.right.anchors.get(id)) continue
+    const lines = a.rects.filter(r => r.page === a.rects[0].page)
+    if (lines.length < 12) continue
+    const r = lines[lines.length >> 1], pv = d.pageView(s, r.page)
+    s.container.scrollTop = d.pageTop(s, r.page) + d.toPageBox(s, r).top - s.container.clientHeight / 3
+    await new Promise(r => setTimeout(r, 1500))
+    const box = d.toPageBox(s, r), pr = pv.div.getBoundingClientRect()
+    return { id, x: pr.left + pv.div.clientLeft + box.left + box.width * at, y: pr.top + pv.div.clientTop + box.top + box.height / 2 }
+  }
+  return null
+}
 const SWAP = () => window.__reader.debug.swapRight()
 const SWAP_HELD = () => window.__reader.debug.swapRight(800)
 const REANCHOR = () => window.__reader.debug.reanchorLeft()
+/** what resizes the pages or the panes, and where on a line the pointer rests through it on each pane (MID_UNIT): the
+ *  contents panel moves the left pane's pages to the right by its width as it opens and back as it closes, the right
+ *  pane's by half that, the pages narrowed or widened — the pointer stands where the line is still under it after.
+ *  The contents button clicked where the pointer is not: a click by the mouse would move it off the pane */
+const RESIZES = [
+  ['a zoom', () => window.__reader.controller.zoomBy(1.1), { L: 0.5, R: 0.5 }],
+  ['the zoom back to the width', () => window.__reader.controller.zoomTo('page-width'), { L: 0.5, R: 0.5 }],
+  ['the contents opened', () => document.querySelector('button[aria-controls="axt-contents"]').click(), { L: 0.8, R: 0.5 }],
+  ['the contents closed', () => document.querySelector('button[aria-controls="axt-contents"]').click(), { L: 0.25, R: 0.5 }],
+]
 /** what is painted for a unit, as the pointer lights it: its sentences' shapes where it lights by sentence (B3: the
  *  first, a middle one and the last), else its blocks — each a list of rectangles in the window by side, lit by the
  *  harness and let go */
@@ -477,17 +514,26 @@ async function tokensLetGo(b, paper) {
   check(`${b.label} ${paper}: each side's tokens let go once its layout is made`, kept.every(k => k === false), JSON.stringify(r))
   ;((result.checks ??= {})[`${b.label} ${paper}`] ??= {}).tokens = r
 }
-/** a pointer resting on each pane through the right side replaced and the left anchored again (resting) */
+/** a pointer resting on each pane through the right side replaced and the left anchored again, and through what resizes
+ *  the pages or the panes (resting) */
 async function restingChecks(b) {
   const EVENTS = [['the right side replaced', SWAP], ['the right side replaced after a wait', SWAP_HELD], ['the left anchored again', REANCHOR]]
+  const litAfter = (r, k) => !!r.id && r.before.lit === r.id && r.before.s >= 0 && r.after.lit != null && r.after.lit === r.moved.id && r.after.s === r.moved.s && r.after.under[k]
   for (const paper of CHECK) {
     const page = await open(b, paper, { sync: 'off' })
     for (const pane of ['L', 'R']) for (const [what, event] of EVENTS) {
       const r = await resting(page, pane, event)
       const k = pane === 'L' ? 0 : 1, on = `a pointer resting on the ${pane === 'L' ? 'left' : 'right'} pane through ${what}`
-      check(`${b.label} ${paper}: ${on}: what is lit after is what a move there lights, painted under it`, !!r.id && r.before.lit === r.id && r.before.s >= 0 && r.after.lit != null && r.after.lit === r.moved.id && r.after.s === r.moved.s && r.after.under[k], JSON.stringify({ ...r, frames: r.frames?.length }))
+      check(`${b.label} ${paper}: ${on}: what is lit after is what a move there lights, painted under it`, litAfter(r, k), JSON.stringify({ ...r, frames: r.frames?.length }))
       const p = restingPainted(r)
       check(`${b.label} ${paper}: ${on}: every frame paints its sentence on both sides, never the paragraph, never nothing`, !!r.id && p.ok, JSON.stringify({ id: r.id, s: r.before?.s, before: r.before?.area, refs: r.refs, ...p }))
+      ;((result.resting ??= {})[`${b.label} ${paper} ${pane} ${what}`] = r)
+    }
+    // a resize brings another unit under the pointer, or the same one elsewhere: what is lit after is what is under it
+    for (const pane of ['L', 'R']) for (const [what, event, at] of RESIZES) {
+      const r = await resting(page, pane, event, MID_UNIT, at[pane])
+      const k = pane === 'L' ? 0 : 1
+      check(`${b.label} ${paper}: a pointer resting on the ${pane === 'L' ? 'left' : 'right'} pane through ${what}: what is lit after is what a move there lights, painted under it`, litAfter(r, k), JSON.stringify({ id: r.id, before: r.before, after: r.after, moved: r.moved }))
       ;((result.resting ??= {})[`${b.label} ${paper} ${pane} ${what}`] = r)
     }
     await page.close()
