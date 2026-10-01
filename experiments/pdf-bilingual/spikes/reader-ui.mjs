@@ -83,6 +83,8 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
       page: Array.isArray(pv.pdfPage?.view) && pv.pdfPage.view.length === 4 && pv.div instanceof HTMLElement && pv.id === 1,
       viewport: typeof pv.viewport?.convertToPdfPoint === 'function' && pv.viewport.scale > 0,
       scale: getComputedStyle(pv.div).getPropertyValue('--total-scale-factor').trim() !== '',
+      // the operator list a drawn page was drawn by, held on its proxy (the floats read it, session.mjs drawnList)
+      drawnList: [...(pv.pdfPage?._intentStates?.values() ?? [])].some(st => st.displayReadyCapability && st.operatorList?.lastChunk && Array.isArray(st.operatorList.fnArray) && st.operatorList.fnArray.length > 0),
     }
   })
   check('the PDF.js internals the engine reads are there', Object.values(internals).every(Boolean), JSON.stringify(internals))

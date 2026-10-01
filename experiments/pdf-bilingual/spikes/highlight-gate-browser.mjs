@@ -70,6 +70,11 @@ const list = (v, d) => (v === 'none' ? [] : (v ?? d).split(','))
 const SWEEP = list(process.env.SWEEP, '2608.08350:139,2608.29181:30,2608.06701:17').map(s => s.split(':')).map(([id, unit]) => [id, Number(unit)])
 const OPEN = list(process.env.OPEN, '2608.02459,2608.04322')
 const ROUNDS = Number(process.env.ROUNDS ?? 3)
+/** the papers whose floats are checked (B4), and the floats each must have on both sides at least, per kind (the demo
+ *  papers: 2608.06701 two columns, tables, figures, an algorithm; 2608.12502 two columns, grids of images; 2608.02163
+ *  tables with their cells located, a long table) — as the Node gate finds them */
+const FLOAT_CHECK = list(process.env.FLOAT_CHECK, '2608.06701,2608.12502,2608.02163')
+const FLOATS_AT_LEAST = { '2608.06701': { figure: 11, table: 9 }, '2608.12502': { figure: 6, table: 12 }, '2608.02163': { figure: 6, table: 11 } }
 const result = {}
 let failed = 0
 const check = (what, ok, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}${detail ? ` — ${detail}` : ''}`); if (!ok) failed++ }
@@ -89,10 +94,10 @@ async function launch(build, label) {
   const id = new URL(worker.url()).host
   return { label, context, url: q => `chrome-extension://${id}/pdf-reader.html?${new URLSearchParams(q)}` }
 }
-async function open(b, paper) {
+async function open(b, paper, extra = {}) {
   const page = await b.context.newPage()
   page.on('pageerror', e => check(`${b.label} ${paper}: no page error`, false, e.message))
-  await page.goto(b.url({ paper, mode: 'bilingual' }))
+  await page.goto(b.url({ paper, mode: 'bilingual', ...extra }))
   await page.waitForFunction(() => window.__reader?.ready && window.__reader.debug, null, { timeout: 240_000, polling: 200 })
   await page.waitForTimeout(1500)
   return page
@@ -412,6 +417,182 @@ async function checks(b) {
   }
 }
 
+// ---------------------------------------------------------------- floats (B4)
+// The floats (B4: tables, algorithms and figures lit whole with their captions), checked by `checks` (or alone,
+// `floats`) on FLOAT_CHECK's papers (`none`: none), the sync off; FLOATS_N the floats the pointer goes over in each:
+//  - every page with a caption has its floats once drawn (all pages of both sides brought into view)
+//  - the floats on both sides, per kind, no fewer than the Node gate finds (FLOATS_AT_LEAST)
+//  - the real pointer on a grid inside each element a float paints (a dozen floats) lights the float (or a smaller unit
+//    painted there); both sides paint it, a figure with its outline and its caption washed on both
+//  - a table's cell (one the side located) lights its table, cells being found to try
+//  - a page whose drawing failed has its floats from the list the worker is asked for, not from the one it was drawn
+//    by (stopped short where its stream failed); drawn without a fault, from the drawn one, the worker not asked
+//  - a page's floats' cost on the main thread at its first drawing (timing.floats: paths read, floats made), reported
+//  Each made to fail once (B4, a build each): the pointer's frame without floatHitOf (147 of 240 points lit nothing, the
+//  cell lit itself); no floats made (20 pages without, none on both sides); figures washed, not outlined (0 of 4
+//  outlined); after the review of B4: figures' captions not washed (a build), no cell to try (FLOATS_N=0), the floats'
+//  failure left the page asked (ad6036f7's build, the figures' stand-in throwing)
+/** every page of both sides brought into view, until each page with a caption has its floats (the reader makes them on a
+ *  page's first drawing); the pages that got none in 4 s */
+const drawAll = page => page.evaluate(async () => {
+  const d = window.__reader.debug, missing = []
+  const wants = (s, p) => (s.geo.unitsOn[p] ?? []).some(id => d.unitKind.get(id) === 'caption')
+  for (const s of [d.left, d.right]) for (let p = 1; p <= s.doc.numPages; p++) {
+    s.viewer.currentPageNumber = p
+    const t0 = performance.now()
+    while (performance.now() - t0 < 4000 && (d.pageView(s, p).renderingState !== 3 || (wants(s, p) && !d.floatsOn(s, p)))) await new Promise(r => setTimeout(r, 30))
+    if (wants(s, p) && !d.floatsOn(s, p)) missing.push([s === d.left ? 'L' : 'R', p])
+  }
+  return missing
+})
+/** the floats each side has, by caption: { L: { id: { page, kind, members } }, R } */
+const floatsOf = page => page.evaluate(() => {
+  const d = window.__reader.debug, out = {}
+  for (const [k, s] of [['L', d.left], ['R', d.right]]) {
+    out[k] = {}
+    for (let p = 1; p <= s.doc.numPages; p++) for (const f of d.floatsOn(s, p) ?? []) out[k][f.id] = { page: p, kind: f.kind, members: [...f.members].filter(id => d.unitKind.get(id) === 'cell') }
+  }
+  return out
+})
+/** a page whose floats fail at its first drawing — what they are given there making their code throw (a drawing
+ *  cancelled rejects its list, the same way out) — gets them at its next drawing (a zoom): the page is not left marked
+ *  as asked (the review of B4). The figures the floats read come from the side's draft frames where it has them: a
+ *  stand-in there that is no list of figures makes their code throw once */
+async function floatRetry(b, paper) {
+  const page = await open(b, paper, { sync: 'off' })
+  const r = await page.evaluate(async () => {
+    const d = window.__reader.debug, s = d.left
+    const wants = p => (s.geo.unitsOn[p] ?? []).some(id => d.unitKind.get(id) === 'caption')
+    let p = 0
+    for (let n = 1; n <= s.doc.numPages && !p; n++) if (wants(n) && d.pageView(s, n).renderingState === 0 && !d.floatsOn(s, n)) p = n
+    if (!p) return { p }
+    let spoiled = 0
+    s.frames = Promise.resolve({ get: n => { if (n === p) spoiled++; return {} } })
+    const wait = async ok => { for (let t = 0; t < 120 && !ok(); t++) await new Promise(r => setTimeout(r, 50)) }
+    s.viewer.currentPageNumber = p
+    await wait(() => d.pageView(s, p).renderingState === 3)
+    await new Promise(r => setTimeout(r, 500))
+    const first = !!d.floatsOn(s, p)
+    s.frames = null
+    window.__reader.controller.zoomBy(1.1)
+    await wait(() => d.floatsOn(s, p))
+    return { p, spoiled, first, after: !!d.floatsOn(s, p) }
+  })
+  check(`${b.label} ${paper}: a page whose floats failed at its first drawing gets them at its next`, r.p > 0 && r.spoiled > 0 && !r.first && r.after, JSON.stringify(r))
+  await page.close()
+}
+/** a page drawn with an error (pagerendered's `error`): the list it was drawn by may have stopped short — PDF.js marks a
+ *  list whose stream failed complete — so its floats come from the list the worker is asked for (the review of B4's
+ *  fix round, minor 7a). The page's first drawing held back from the floats, its drawn list cut to its first operation
+ *  and the page's drawing reported failed: the worker is asked, and the floats are those of the page drawn again
+ *  without a fault, which read the drawn list and ask nothing */
+async function floatDrawError(b, paper) {
+  const page = await open(b, paper, { sync: 'off' })
+  const r = await page.evaluate(async () => {
+    const d = window.__reader.debug, s = d.left
+    const wants = p => (s.geo.unitsOn[p] ?? []).some(id => d.unitKind.get(id) === 'caption')
+    let p = 0
+    for (let n = 1; n <= s.doc.numPages && !p; n++) if (wants(n) && d.pageView(s, n).renderingState === 0 && !d.floatsOn(s, n)) p = n
+    if (!p) return { p }
+    const wait = async ok => { for (let t = 0; t < 120 && !ok(); t++) await new Promise(r => setTimeout(r, 50)) }
+    const asked = (s.geo.floatsAsked ??= new Set())
+    asked.add(p)
+    s.viewer.currentPageNumber = p
+    await wait(() => d.pageView(s, p).renderingState === 3)
+    await new Promise(r => setTimeout(r, 300))
+    const pv = d.pageView(s, p), pg = pv.pdfPage
+    let st = null
+    for (const x of pg._intentStates.values()) if (x.displayReadyCapability && x.operatorList?.lastChunk) st = x
+    if (!st) return { p, held: false }
+    let calls = 0
+    const getOperatorList = pg.getOperatorList
+    pg.getOperatorList = function (...a) { calls++; return getOperatorList.apply(this, a) }
+    const show = fs => JSON.stringify((fs ?? []).map(f => [f.id, f.kind, ...['x0', 'y0', 'x1', 'y1'].map(k => Math.round(f.region[k] * 10) / 10)]))
+    const full = st.operatorList
+    st.operatorList = { ...full, fnArray: full.fnArray.slice(0, 1), argsArray: full.argsArray.slice(0, 1), lastChunk: true }
+    asked.delete(p)
+    s.eventBus.dispatch('pagerendered', { source: pv, pageNumber: p, cssTransform: false, timestamp: performance.now(), error: new Error('the operator list\'s stream failed') })
+    st.operatorList = full
+    await wait(() => d.floatsOn(s, p))
+    const got = show(d.floatsOn(s, p)), askedOnError = calls
+    calls = 0
+    s.geo.floats.delete(p)
+    asked.delete(p)
+    s.eventBus.dispatch('pagerendered', { source: pv, pageNumber: p, cssTransform: false, timestamp: performance.now() })
+    await wait(() => d.floatsOn(s, p))
+    const want = show(d.floatsOn(s, p))
+    pg.getOperatorList = getOperatorList
+    return { p, held: true, askedOnError, askedDrawn: calls, got, want }
+  })
+  check(`${b.label} ${paper}: a page whose drawing failed has its floats from the worker's list, a page drawn whole from its drawn one`, r.held && r.askedOnError > 0 && r.askedDrawn === 0 && r.got === r.want && r.want !== '[]', JSON.stringify(r))
+  await page.close()
+}
+async function floatChecks(b) {
+  if (FLOAT_CHECK.length) await floatRetry(b, FLOAT_CHECK[0])
+  if (FLOAT_CHECK.length) await floatDrawError(b, FLOAT_CHECK[0])
+  for (const paper of FLOAT_CHECK) {
+    // the sync off: each side stands where it is put (a settle's glide moved the pane under the pointer's grid)
+    const page = await open(b, paper, { sync: 'off' })
+    const missing = await drawAll(page)
+    check(`${b.label} ${paper}: every page with a caption has its floats once drawn`, missing.length === 0, JSON.stringify(missing))
+    const fl = await floatsOf(page)
+    const both = Object.keys(fl.L).filter(id => fl.R[id])
+    const kinds = {}
+    for (const id of both) kinds[fl.L[id].kind] = (kinds[fl.L[id].kind] ?? 0) + 1
+    const want = FLOATS_AT_LEAST[paper] ?? {}
+    check(`${b.label} ${paper}: floats on both sides, per kind, no fewer than ${JSON.stringify(want)}`, Object.entries(want).every(([k, n]) => (kinds[k] ?? 0) >= n), JSON.stringify(kinds))
+    // the real pointer: a grid inside each element a float paints lights the float (or a smaller unit painted there);
+    // a held cell's middle lights its float; both sides paint it, a figure with its outline
+    const r = { floats: 0, points: 0, holes: 0, other: 0, others: [], bothSides: 0, frames: 0, washed: 0, figures: 0, cells: 0, cellsOff: [], bad: [] }
+    const hitAt = async (x, y) => { await page.mouse.move(x, y); await frames(page); return page.evaluate(() => window.__reader.debug.pointerHit) }
+    for (const id of both.slice(0, Number(process.env.FLOATS_N ?? 12)).map(Number)) {
+      await page.evaluate(async ({ id, pl, pr }) => {
+        const d = window.__reader.debug
+        for (const [s, p] of [[d.left, pl], [d.right, pr]]) { s.container.scrollTop = d.pageTop(s, p) - 20; await new Promise(r => setTimeout(r, 400)) }
+        for (const [s, p] of [[d.left, pl], [d.right, pr]]) for (let t = 0; t < 80 && !d.floatsOn(s, p); t++) await new Promise(r => setTimeout(r, 50))
+        void id
+      }, { id, pl: fl.L[id].page, pr: fl.R[id].page })
+      const bands = await page.evaluate(id => {
+        const d = window.__reader.debug
+        d.light(id)
+        const out = [...document.querySelectorAll('.axt-hl')].map(e => { const b = e.getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height, frame: e.classList.contains('axt-hl-frame'), side: e.closest('#left') ? 'L' : 'R' } }).filter(b => b.w > 0)
+        d.light(null)
+        return out
+      }, id)
+      r.floats++
+      if (new Set(bands.map(x => x.side)).size === 2) r.bothSides++
+      if (fl.L[id].kind === 'figure') {
+        r.figures++
+        if (bands.some(x => x.frame && x.side === 'L') && bands.some(x => x.frame && x.side === 'R')) r.frames++
+        // its caption washed on both sides
+        if (bands.some(x => !x.frame && x.side === 'L') && bands.some(x => !x.frame && x.side === 'R')) r.washed++
+      }
+      for (const band of bands) {
+        if (band.y < 60 || band.y + band.h > 985) continue
+        for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) {
+          const hit = await hitAt(band.x + 2 + ((band.w - 4) * (i + 0.5)) / 4, band.y + 2 + ((band.h - 4) * (j + 0.5)) / 3)
+          r.points++
+          if (hit === null) { r.holes++; if (r.bad.length < 3) r.bad.push({ id, side: band.side }) } else if (hit !== id) { r.other++; if (r.others.length < 3) r.others.push({ id, hit, side: band.side }) }
+        }
+      }
+      for (const cell of fl.L[id].members.slice(0, 2)) {
+        const at = await page.evaluate(cell => { const d = window.__reader.debug, s = d.left, a = s.anchors.get(cell), q = a.rects[0], pv = d.pageView(s, q.page), pr = pv.div.getBoundingClientRect(), [x, y] = pv.viewport.convertToViewportPoint((q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2); return { x: pr.left + pv.div.clientLeft + x, y: pr.top + pv.div.clientTop + y } }, cell)
+        if (at.y < 60 || at.y > 985) continue
+        r.cells++
+        const hit = await hitAt(at.x, at.y)
+        if (hit !== id) r.cellsOff.push({ cell, hit, float: id })
+      }
+    }
+    check(`${b.label} ${paper}: the pointer anywhere a float paints lights it, both sides painted, a figure outlined and its caption washed on both`, r.points > 0 && r.holes === 0 && r.bothSides === r.floats && r.frames === r.figures && r.washed === r.figures, JSON.stringify({ ...r, cellsOff: undefined }))
+    check(`${b.label} ${paper}: a table's cell lights its table`, r.cells > 0 && r.cellsOff.length === 0, JSON.stringify({ cells: r.cells, off: r.cellsOff.slice(0, 3) }))
+    // what a page's floats cost the main thread at its first drawing (paths read, floats made)
+    const ms = (await page.evaluate(() => window.__reader.timing.floats ?? [])).map(x => x.paths + x.floats)
+    ;((result.floats ??= {})[`${b.label} ${paper}`] = { kinds, both: both.length, L: Object.keys(fl.L).length, R: Object.keys(fl.R).length, ...r, pageMs: stats(ms) })
+    console.log(`  ${paper}: floats L ${Object.keys(fl.L).length}, R ${Object.keys(fl.R).length}, both ${both.length} ${JSON.stringify(kinds)}; a page's floats, ms ${JSON.stringify(stats(ms))}`)
+    await page.close()
+  }
+}
+
 // ---------------------------------------------------------------- costs
 /** the sweep's path: 220 points down a pane's whole height, zig-zagging across it every 20 points */
 const path = (page, side) => page.evaluate(side => {
@@ -523,6 +704,7 @@ const head = await launch(BUILD, process.env.LABEL ?? 'head')
 const base = BASE && (what === 'costs' || what === 'all') ? await launch(BASE, 'base') : null
 try {
   if (what === 'checks' || what === 'all') await checks(head)
+  if (what === 'checks' || what === 'all' || what === 'floats') await floatChecks(head)
   if (what === 'costs' || what === 'all') await costs(base ? [base, head] : [head])
 } finally {
   await head.context.close()

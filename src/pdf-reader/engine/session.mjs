@@ -36,6 +36,7 @@ import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFr
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
+import { captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
 import { hostReady } from './host.mjs'
 import { compilerKeeper, openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
 import { displayEdges, isName, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
@@ -334,6 +335,7 @@ function paint(side) {
   for (const el of side.lit) el.remove()
   side.lit = []
   if (lit == null) return
+  if (paintFloat(side)) return
   if (!side.geo) { wantLayout(side); return }
   const starts = lit.s >= 0 ? side.startsOf(lit.id) : null
   for (const run of runsOf(side.geo, lit.id)) {
@@ -394,9 +396,9 @@ const pointer = pointerPath({
     if (!config.reading.sentenceHighlight) return null
     // a side without its layout yet is a miss, its layout asked for
     if (!side.geo) { wantLayout(side); return null }
-    const at = pointAt(side, x, y), hit = at && hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale, side.startsOf)
-    // a unit whose sentences are not yet worked out on both sides: a miss, until they are (wantFit)
-    return hit && !fitsWanted.has(hit.id) ? { id: hit.id, s: hit.s } : null
+    const at = pointAt(side, x, y), hit = at && withFloats(side, at, hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale, side.startsOf))
+    // a unit whose sentences are not yet worked out on both sides: a miss, until they are (wantFit); a float lights whole
+    return hit && !fitsWanted.has(hit.id) ? { id: hit.id, s: hit.s ?? -1 } : null
   },
   light,
   lit: () => lit != null,
@@ -437,6 +439,84 @@ new MutationObserver(remeasure).observe(document.documentElement, { attributeFil
 function pointAt(side, clientX, clientY) {
   const shift = glass.side === side ? (glass.kind === 'scroll' ? glass.shift(glass.from.scrollY) : glass.shift()) : 0
   return pointOn(side.at, side.viewer._pages ?? [], side.scrollX, side.scrollY + shift, clientX, clientY)
+}
+
+// ---------------------------------------------------------------- floats
+// Tables, algorithms and figures light whole with their captions, on both sides (floats.mjs): a table one wash over it
+// and its caption, a figure outlined and its caption washed — a wash multiplied into a figure would change its colours.
+// A float lights by its caption's id, which both sides share; on a side where the float is not found the caption lights
+// alone, and a cell there alone
+/** the id of what is lit, whatever shape it has (a unit's id; { id, s } where a unit lights by sentence) */
+const litId = () => (lit !== null && typeof lit === 'object' ? lit.id : lit)
+/** the lit unit's float on a side — its caption's, or the one holding it (a cell) — painted; false where it is none's,
+ *  or where the side has no layout yet */
+function paintFloat(side) {
+  const f = side.geo && floatOf(side.geo, litId())
+  if (!f) return false
+  const pv = pageView(side, f.page), layer = layerOf(side, f.page)
+  if (!layer) return true
+  const s = pv.viewport.scale
+  for (const shape of floatShapes(side.geo, f, PAD / s)) {
+    const el = document.createElement('div')
+    el.className = shape.frame ? 'axt-hl axt-hl-frame' : 'axt-hl'
+    const box = toPageBox(side, shape)
+    Object.assign(el.style, pinned(box, s))
+    drawn.set(el, { width: box.width, local: [{ x0: 0, x1: box.width, y0: 0, y1: box.height }] })
+    layer.append(el)
+    side.lit.push(el)
+  }
+  return true
+}
+/**
+ * The operator list a page was just drawn by, where PDF.js still holds it: the display intent's on the page's proxy
+ * (PDF.js 6.3.289's PDFPageProxy._intentStates; tests/pdf-reader/pdfjs-pin.test.ts pins the version). Asking the worker
+ * for the list again had it evaluate the page a second time, and the next page's drawing waited behind it: 130–180 ms
+ * more on 2608.06701's pages 7–8, the review of B4. The floats are the same from either list (the display one is
+ * optimised) on the ten papers' 123 pages with captions. Null where PDF.js has let it go: then it is asked for
+ */
+function drawnList(side, p) {
+  for (const st of pageView(side, p)?.pdfPage?._intentStates?.values() ?? []) if (st.displayReadyCapability && st.operatorList?.lastChunk) return st.operatorList
+  return null
+}
+/** what the pointer lights at a point of a page (pointOn's), floats included: `hit` hitOf's there, or a float whose
+ *  painted shape holds the point (floats.mjs floatHitOf: over its caption and its cells, and over a larger block) */
+const withFloats = (side, at, hit) => floatHitOf(side.geo, at.page, at.x, at.y, PAD / at.scale, hit)
+/**
+ * A page's floats, made on its first drawing from what PDF.js draws it by (its figures, its rules and marks), once a
+ * layout; never on the pointer's path. A page without a caption asks for nothing. A drawing cancelled before the page's
+ * operator list came rejects it: the page is asked again at its next drawing (round 1: 2608.06701's page 3 on the left,
+ * at 2x, never got its floats). `error` the drawing's, where it failed (pagerendered's)
+ */
+function floatsFor(side, p, error = null) {
+  const L = side.geo
+  if (!L || !wantsFloats(L, p) || floatsOn(L, p)) return
+  const asked = (L.floatsAsked ??= new Set())
+  if (asked.has(p)) return
+  asked.add(p)
+  // the list the page was just drawn by, else asked for — asked for where its drawing failed (pagerendered's `error`):
+  // PDF.js marks a list whose stream failed complete, and it may have stopped short (the review of B4's fix round); a
+  // draft preview's figures are the frames set where its images go (paintFigures)
+  const shown = error ? null : drawnList(side, p)
+  const ops = shown ? Promise.resolve(shown) : side.doc.getPage(p).then(page => page.getOperatorList({ annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS }))
+  const figures = side.frames ? side.frames.then(f => f.get(p) ?? []) : shown ? ops.then(list => figureRegions(list, pdfjsLib.OPS)) : regionsOf(side, p)
+  Promise.all([figures, ops]).then(([regions, list]) => {
+    if (side.geo !== L) return
+    const t0 = performance.now(), paths = pathsOf(list, pdfjsLib.OPS), t1 = performance.now()
+    pageFloats(L, p, regions, paths)
+    // the main thread's cost, for the probes: reading the page's paths, making its floats (and the page's geometry, for
+    // a page drawn before the side's layout came)
+    ;(timing.floats ??= []).push({ paths: t1 - t0, floats: performance.now() - t1, ops: list.fnArray.length, marks: paths.marks.length })
+    // a float's kind its caption's on both sides, where the other side's is made (floatsAgree)
+    const other = side === left ? right : left, changed = floatsAgree(L, p, other.geo)
+    // what is lit there, and what is under a pointer resting on it, now that the page has its floats
+    if (lit != null && floatOf(L, litId())?.page === p) paint(side)
+    if (lit != null && changed.includes(floatOf(other.geo, litId()))) paint(other)
+    pointer.again(side)
+  }).catch(e => {
+    // asked again at the page's next drawing; a drawing cancelled is no fault, anything else is told
+    asked.delete(p)
+    if (!/abort|cancel|destroy/i.test(`${e?.name} ${e?.message}`)) console.warn('[floats]', e)
+  })
 }
 
 // ---------------------------------------------------------------- figure text
@@ -483,7 +563,12 @@ function perDoc(make) {
     let m = byDoc.get(side.doc)
     if (!m) byDoc.set(side.doc, (m = new Map()))
     const key = args.join(':')
-    if (!m.has(key)) m.set(key, make(side, ...args))
+    if (!m.has(key)) {
+      const made = make(side, ...args)
+      m.set(key, made)
+      // a failure is not kept: a page whose drawing was cancelled rejects its operator list, and is asked again
+      made?.catch?.(() => { if (m.get(key) === made) m.delete(key) })
+    }
     return m.get(key)
   }
 }
@@ -589,20 +674,19 @@ async function translateBoxes(boxes) {
 // A figure on a translation page — in arXiv's PDF shown there until the first preview, in a preview, in the final — is
 // one of arXiv's (the left's): its text is read and translated once, there, and every translation shows the same
 // overlay. A draft preview sets a frame where an image goes (live.mjs DRAFT), and the left's figure is drawn over it.
-const overlaps = (a, b) => Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0)
 /** the caption next to a figure's rectangle on a side's page (PDF units): a caption located there whose first line lies
  *  just below the rectangle, else whose last line lies just above it, across its column; the nearest, or null */
 function captionNear(side, page, r) {
-  const col = columnOf(side, page, r)
-  let below = null, above = null
+  // the highlight's floats' rule (floats.mjs captionFor): of captions in a row, the one over the figure (a subfigure's
+  // subcaption, the right one of two minipages' figures), else the nearest
+  const caps = []
   for (const [id, a] of side.anchors) {
     if (!a || unitKind.get(id) !== 'caption') continue
-    const first = a.rects[0], last = a.rects.at(-1), near = 3 * (first.y1 - first.y0) + 24
-    const down = first.page === page && overlaps(first, col) ? r.y0 - first.y1 : NaN, up = last.page === page && overlaps(last, col) ? last.y0 - r.y1 : NaN
-    if (down > -2 && down < near && !(below?.gap <= down)) below = { id, gap: down }
-    if (up > -2 && up < near && !(above?.gap <= up)) above = { id, gap: up }
+    const first = a.rects[0], last = a.rects.at(-1), on = a.rects.filter(q => q.page === page)
+    if (!on.length) continue
+    caps.push({ id, x0: Math.min(...on.map(q => q.x0)), x1: Math.max(...on.map(q => q.x1)), top: first.page === page ? first.y1 : Number.NaN, bottom: last.page === page ? last.y0 : Number.NaN, h: first.y1 - first.y0, col: columnOf(side, page, on[0]) })
   }
-  return (below ?? above)?.id ?? null
+  return captionFor(r, caps)?.id ?? null
 }
 /** rectangles' indices in reading order: rows from the top, each from the left; a rectangle is in a row when it shares
  *  half its height with the row's first */
@@ -1269,6 +1353,8 @@ function stopGlide() { if (gliding) cancelAnimationFrame(gliding); gliding = 0 }
  * What a click is on is what the highlight paints (hitAt): a click in a block's pads, in the white space beside a
  * display, or on a float set inside a paragraph's block (a wrapfigure) is the unit's, and levelled by it.
  * A click on no paragraph linked on both sides — a heading, a figure, a formula, a table — goes by what is around it (placeAt).
+ * A table or figure lit whole (floats.mjs) is levelled so too where the click is off its cells and caption: by its twin
+ * or its distance from its caption, finer than by the caption alone.
  */
 let lastAlign = null // how the last click was levelled, for the test harness
 async function alignClick(from, event) {
@@ -1420,7 +1506,7 @@ function attach(side) {
     void alignClick(side, e)
   })
   // PDF.js re-renders a page's div on zoom and as pages come into view: the highlight and the figures are laid again there
-  side.eventBus.on('pagerendered', ({ pageNumber }) => {
+  side.eventBus.on('pagerendered', ({ pageNumber, error }) => {
     if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start
     paint(side)
     // the page's highlight geometry and its sentences, on its first drawing (a page never drawn never needs it)
@@ -1429,6 +1515,8 @@ function attach(side) {
     // copies of the left's figures are bitmaps drawn for one scale, and are drawn again at another
     const at = side.laid.get(pageNumber)
     if (side !== left && (at === undefined || (side.frames && at !== pageView(side, pageNumber).viewport.scale))) side.figs.set(pageNumber, paintFigures(side, pageNumber).catch(e => console.warn('[figures]', e)))
+    // its tables and figures, on its first drawing (floatsFor)
+    floatsFor(side, pageNumber, error)
   })
   // the overlays outlive a page drawn again (overlay.mjs keepOverlays): each page's div watched from the start
   side.eventBus.on('pagesinit', () => { for (const pv of side.viewer._pages) side.keeper.observe(pv.div) })
@@ -1523,6 +1611,8 @@ async function anchorOne(side, texts, marks) {
     side.makeGeo = null
     layoutsDue.delete(side)
     timing[side === left ? 'leftLayout' : 'rightLayout'] = performance.now() - t0
+    // the floats of the pages drawn before it came
+    for (const pv of side.viewer._pages ?? []) if (pv.renderingState === 3) floatsFor(side, pv.id)
     // what is lit on it, and what is under a pointer resting on it, now that it has its blocks
     if (lit != null) paint(side)
     pointer.again(side)
@@ -1767,6 +1857,8 @@ const harness = () => ({ left, get right() { return right },
   pointAt, unitTop, unitDocTop, toPageBox, pageView, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
   // the right side replaced by a copy of what it shows, as a new compile replaces it (replaceRight)
   paintsOf: n => paints.get(n) ?? 0,
+  // a side's floats on a page, once made (floats.mjs)
+  floatsOn: (side, n) => floatsOn(side.geo, n) ?? null,
   paperContext: () => paperCtx,
   swapRight: async () => {
     const url = URL.createObjectURL(new Blob([await right.doc.getData()], { type: 'application/pdf' }))

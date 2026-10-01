@@ -24,3 +24,7 @@
 .axt-fig > div, .axt-fig > canvas, .axt-fig img { position: absolute; inset: 0; width: 100%; height: 100%; }
 .axt-fig img { opacity: 0; }
 .axt-fig .axt-img > span { pointer-events: auto; }
+/* a figure lit: an outline in the band's colour, three times its wash's strength (a wash multiplied into a figure would
+   change its colours); drawn inside the figure's padded box */
+.axt-hl.axt-hl-frame { box-sizing: border-box; background: none;
+  border: 1.5px solid color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) min(100%, calc(var(--axt-hl-mix, 22%) * 3)), transparent); }

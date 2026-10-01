@@ -94,6 +94,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import { floatsOfPaper, floatsVerdict } from './highlight-gate-floats.mjs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
 import { blockOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit } from '../../../src/pdf-reader/engine/highlight.mjs'
@@ -372,6 +373,8 @@ for (const id of ids) {
     }
     t.blocks = { n: nBlocks, digest: digest.digest('hex').slice(0, 16) }
   }
+  // the floats (B4: tables, algorithms and figures lit whole), on the sides as anchored (highlight-gate-floats.mjs)
+  await floatsOfPaper({ id, paper, units, kind, sides, files: { L: join(root, 'data/corpus', id, 'arxiv.pdf'), R: join(RUNS, id, 'final.pdf') }, rounds: ROUNDS, pad: PAD, step: STEP, cmaps: CMAPS, fonts: FONTS })
   console.error(id, 'done')
 }
 
@@ -529,3 +532,5 @@ mkdirSync(join(root, 'out'), { recursive: true })
 writeFileSync(join(root, 'out/highlight-gate.json'), JSON.stringify({ ids, tally, cost, cuts, inkHoles, overlaps, unreachable, counts, taken, sentences, truth }, null, 1))
 console.log(failures.length ? `\nFAIL: ${failures.slice(0, 20).join('; ')}${failures.length > 20 ? ` (and ${failures.length - 20} more)` : ''}` : '\nok: every anchored unit lit and reachable, no hole, no ink hole, no fragmented display, no unit\'s blocks overlapping, the baseline met')
 process.exitCode = failures.length ? 1 : 0
+// the floats' report and verdict, held to their own baseline (highlight-gate-floats.mjs)
+if (floatsVerdict({ ids, write: !!process.env.WRITE_BASELINE, ten: ids.length === TEN.length && RUNS === join(root, 'data/runs/highlight-ten') })) process.exitCode = 1
