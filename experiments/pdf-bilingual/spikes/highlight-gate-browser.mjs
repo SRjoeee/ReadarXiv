@@ -46,12 +46,13 @@
 //  BASE's; the open's time to ready and its anchoring, p50, within 3 % and 10 ms of BASE's. Made to fail once (B1's
 //  first round of review): a build whose pointer frame waits 1 ms (script p50 over the limit)
 // The demo papers (made on this machine, never in the repository: arXiv's papers may not be redistributed) are staged
-// into a copy of each build, as extension.mjs does with poc-reader/papers; for the sentences, their units carry the
-// `sentences` spikes/highlight-sentences.mjs makes (a demo's units.json, `sentences` beside `src` and `tr`).
+// into a copy of each build, as extension.mjs does with poc-reader/papers; their units carry the sentences
+// spikes/highlight-sentences.mjs made (`sentences` beside `src` and `tr`): spikes/highlight-papers.mjs makes them, into
+// out/highlight/papers.
 //   node experiments/pdf-bilingual/spikes/highlight-gate-browser.mjs [checks|costs|all]
 //   BUILD=<dir> the build under test (default .output/chrome-mv3), LABEL its name in the output; BASE_BUILD=<dir> the one
 //   to compare with (costs);
-//   PAPERS=<dir> the demo papers (default poc-reader/papers); CHECK=<ids> the papers checked (default 2608.02459, the
+//   PAPERS=<dir> the demo papers (default out/highlight/papers); CHECK=<ids> the papers checked (default 2608.02459, the
 //   heaviest, whose layouts are not made yet when the reader is ready, and 2608.06701, two columns);
 //   SWEEP=<id:unit,…> the sweeps' papers and the unit each starts at; OPEN=<ids> the papers opened (either `none`);
 //   ROUNDS=<n>
@@ -66,7 +67,7 @@ const root = new URL('..', import.meta.url).pathname
 const { chromium } = createRequire(REPO)('playwright')
 const what = process.argv[2] ?? 'all'
 const BUILD = process.env.BUILD ?? join(REPO, '.output/chrome-mv3'), BASE = process.env.BASE_BUILD
-const PAPERS = process.env.PAPERS ?? join(root, 'poc-reader/papers')
+const PAPERS = process.env.PAPERS ?? join(root, 'out/highlight/papers')
 const CHECK = (process.env.CHECK ?? '2608.02459,2608.06701').split(',')
 const list = (v, d) => (v === 'none' ? [] : (v ?? d).split(','))
 const SWEEP = list(process.env.SWEEP, '2608.08350:139,2608.29181:30,2608.06701:17').map(s => s.split(':')).map(([id, unit]) => [id, Number(unit)])
