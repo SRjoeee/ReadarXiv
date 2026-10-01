@@ -53,8 +53,9 @@
 //  - words outside their unit's sentences: a word of a unit lit by sentence whose ink's centre none of its shapes holds;
 //    and the head before its first word (a theorem's, a list's label: no unit's word) outside its first sentence
 //  - rows two sentences share: the one's end and the next's start, no gap and no overlap between them; and the
-//    boundaries that pass through a word's ink (its box as the text layer gives it: a Latin word's an even share of its
-//    item, so a reading, against round 1's 3 of 72 measured on the canvas)
+//    boundaries that pass through a word's ink as inkEdges estimates it — the estimate the boundaries are placed by,
+//    so a check of the geometry against itself, which cannot see the estimate's own error (the review of B3, minor 7);
+//    what the page shows is the browser gate's canvas measure, against round 1's 3 of 72 boundaries
 //  - the pieces of a sentence that goes on over a column or a page break: the one before the break reaching its unit's
 //    text edge on the right there (the furthest the unit's lines reach in the column, inside the column's text edge),
 //    the one after it on the left; short of it where another unit's word stands between them, counted apart
@@ -468,14 +469,14 @@ console.log('what the geometry took beyond the anchors, left:', JSON.stringify(t
 console.log('\ncost, ms (median of', ROUNDS, 'rounds): layout at anchoring; every page\'s geometry; per page; the slowest page; every unit\'s sentences\' starts')
 for (const [k, c] of Object.entries(cost)) console.log(k.padEnd(14), `${c.pages} pp, ${c.tokens} tokens`, `layout ${c.layoutMs}`, `pages ${c.allPagesMs}`, `per page ${c.perPageMs}`, `max ${c.pageMaxMs}`, `starts ${c.startsMs}`)
 const SC = ['units', 'multi', 'foundL', 'foundR', 'unfit', 'aligned', 'alignedMulti', 'sentences', 'points', 'holes', 'otherSentence', 'smaller', 'words', 'wordsOutside', 'heads', 'headsOutside', 'shapes', 'sharedRows', 'gaps', 'overlaps', 'throughInk', 'goesOn', 'goesOnShort', 'goesOnBeside']
-console.log('\nsentences (running text with the engine\'s sentences): units, more than one; starts found on the left, the right; found on both but shapes that do not hold their words (lit whole); aligned (both), of more than one; sentences; grid points inside their shapes, holes, another sentence of the unit, a smaller unit; words, outside their sentences; heads before a unit\'s first word, outside its first sentence; shapes; rows two sentences share, gaps, overlaps, boundaries through a word; pieces of a sentence that goes on over a column or a page break, short of the unit\'s text edge there, beside another unit\'s word')
+console.log('\nsentences (running text with the engine\'s sentences): units, more than one; starts found on the left, the right; found on both but shapes that do not hold their words (lit whole); aligned (both), of more than one; sentences; grid points inside their shapes, holes, another sentence of the unit, a smaller unit; words, outside their sentences; heads before a unit\'s first word, outside its first sentence; shapes; rows two sentences share, gaps, overlaps, boundaries through a word\'s estimated ink (the geometry against itself); pieces of a sentence that goes on over a column or a page break, short of the unit\'s text edge there, beside another unit\'s word')
 console.log(['paper'.padEnd(12), ...SC].join('\t'))
 const ssum = Object.fromEntries(SC.map(c => [c, 0]))
 for (const [id, s] of Object.entries(sentences)) { console.log([id.padEnd(12), ...SC.map(c => s[c])].join('\t')); for (const c of SC) ssum[c] += s[c] }
 console.log(['all'.padEnd(12), ...SC.map(c => ssum[c])].join('\t'))
 if (sentenceHoles.length) console.log('holes inside sentences:', sentenceHoles.slice(0, 12).join('; '))
 if (wordsOutside.length) console.log('words outside their sentences:', wordsOutside.slice(0, 12).join('; '))
-if (inkCuts.length) console.log('boundaries through a word:', inkCuts.join('; '))
+if (inkCuts.length) console.log('boundaries through a word\'s estimated ink (inkEdges, the geometry against itself; the page\'s is the browser gate\'s):', inkCuts.join('; '))
 if (goesOnShort.length) console.log('pieces short of the edge over a break:', goesOnShort.join('; '))
 console.log('\nthe ground truth (report-B\'s compiles): starts after the first of units of more than one sentence; found; with a mark for their sentence; on its line')
 for (const [id, t] of Object.entries(truth)) if (t) for (const [S, r] of Object.entries(t)) if (S !== 'pair') console.log(id.padEnd(12), S.padEnd(3), r.starts, r.found, r.withTruth, r.sameLine, `${((100 * r.sameLine) / Math.max(1, r.withTruth)).toFixed(1)} %`)
@@ -492,7 +493,7 @@ if (process.env.WRITE_BASELINE) {
   if (ids.length !== TEN.length || RUNS !== join(root, 'data/runs/highlight-ten')) failures.push('a baseline is recorded on the ten papers\' runs only')
   const sentencesBase = Object.fromEntries(Object.entries(sentences).map(([id, s]) => [id, { aligned: s.aligned, alignedMulti: s.alignedMulti, throughInk: s.throughInk }]))
   const truthBase = Object.fromEntries(Object.entries(truth).map(([id, t]) => [id, t && Object.fromEntries(Object.entries(t).filter(([S]) => S !== 'pair').map(([S, r]) => [S, { withTruth: r.withTruth, sameLine: r.sameLine }]))]))
-  if (!failures.length) writeFileSync(BASELINE, `${JSON.stringify({ note: 'highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors; per paper, the units aligned by sentence and the boundaries through a word; on the ground truth, per paper and side, the starts with a mark and those on its line. Counts only', counts, cuts, pastEdge: sum.pastEdge, taken, sentences: sentencesBase, truth: truthBase }, null, 1)}\n`)
+  if (!failures.length) writeFileSync(BASELINE, `${JSON.stringify({ note: 'highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors; per paper, the units aligned by sentence and the boundaries through a word\'s estimated ink; on the ground truth, per paper and side, the starts with a mark and those on its line. Counts only', counts, cuts, pastEdge: sum.pastEdge, taken, sentences: sentencesBase, truth: truthBase }, null, 1)}\n`)
   console.log(failures.length ? '\nno baseline written: the run fails' : `\nbaseline written: ${BASELINE}`)
 } else if (!existsSync(BASELINE)) failures.push('no baseline (WRITE_BASELINE=1 records one)')
 else {

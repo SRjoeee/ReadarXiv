@@ -1,5 +1,5 @@
 {
- "note": "highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors; per paper, the units aligned by sentence and the boundaries through a word; on the ground truth, per paper and side, the starts with a mark and those on its line. Counts only",
+ "note": "highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors; per paper, the units aligned by sentence and the boundaries through a word's estimated ink; on the ground truth, per paper and side, the starts with a mark and those on its line. Counts only",
  "counts": {
   "2608.02163": {
    "L": {
