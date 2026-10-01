@@ -7,7 +7,7 @@ export interface TextPage { page: number; items: unknown[]; styles?: Record<stri
 export interface Rect { page: number; x0: number; y0: number; x1: number; y1: number }
 /** a unit's place: its line rectangles and the document tokens they are made of; with marks, the page token each word of
  *  its text was matched to, or -1 */
-export interface Anchor { rects: Rect[]; coverage: number; tokens: number[]; bounded: boolean; words?: Int32Array }
+export interface Anchor { rects: Rect[]; coverage: number; tokens: number[]; bounded: boolean; pairs?: Map<number, number> }
 /** a unit as the reader passes it: its text as that PDF has it, the offsets in it where a placeholder stood, and the
  *  letters of the displays it sets before its first words, after its last and between them (latex-front's
  *  displayOutside) */

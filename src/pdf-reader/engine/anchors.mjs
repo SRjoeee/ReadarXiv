@@ -83,6 +83,8 @@ export function tokenizeDocument(pages) {
   const doc = []
   const WORD_END = /[\p{L}\p{N}]$/u, WORD_START = /^[\p{L}\p{N}]/u
   for (const { page, items, styles } of pages) {
+    // the page's monospaced faces (inkEdges: their items an even share), by name, a page's styles at once
+    for (const name in styles) if (styles[name]?.fontFamily === 'monospace') { const m = monospaced.get(doc) ?? monospaced.set(doc, new Set()).get(doc); m.add(name) }
     // carry: the token the next one joins; last: the token holding the last word's text; prev: the last item's end;
     // inkOpen, inkEnd: whether an item of marks alone may still carry the last token's ink on, and from where
     let carry = null, last = null, prev = null, inkOpen = false, inkEnd = 0
@@ -92,7 +94,6 @@ export function tokenizeDocument(pages) {
       const size = Math.hypot(a, b) || it.height || Math.abs(d)
       if (prev && Math.abs(x - prev.x) < 0.1 * size && Math.abs(y - prev.y) < 0.05 * size && it.str === prev.str) continue
       const st = styles?.[it.fontName], asc = st?.ascent > 0 ? st.ascent : 0.75, desc = st?.descent < 0 ? st.descent : -0.22
-      if (st?.fontFamily === 'monospace') (doc.mono ??= new WeakSet()).add(it)
       const perChar = it.str.length ? it.width / it.str.length : 0
       const toks = tokens(it.str)
       const flat = b === 0 && c === 0
@@ -128,6 +129,9 @@ export function tokenizeDocument(pages) {
   return doc
 }
 
+/** a document's monospaced faces by name (getTextContent's fontName: one name a face, in every page's styles) */
+const monospaced = new WeakMap()
+
 /**
  * Each token's ink across, { l, r }: its box widened over the marks its item sets against the word — the brackets and
  * quotes that open before it, the stops, commas and brackets that close after it, in its item — and to the end of an
@@ -140,7 +144,7 @@ export function tokenizeDocument(pages) {
 export function inkEdges(doc) {
   const n = doc.length, l = new Float32Array(n), r = new Float32Array(n)
   let item = null, s = '', perChar = 0, x0 = 0, cum = null, scale = 0, raw = null
-  const mono = doc.mono
+  const mono = monospaced.get(doc)
   // where the item's text has passed `i` characters: their widths in a proportional face, scaled to the item's width
   const pos = i => x0 + cum[i] * scale
   // how much of a mark's width is not ink: half of a full-width one's (a CJK full stop inks its left half, an opening
@@ -151,7 +155,7 @@ export function inkEdges(doc) {
     let left = w.x, right = w.x + w.w
     if (it && it !== item) {
       item = it; s = it.str.normalize('NFKC').toLowerCase(); perChar = it.str.length ? it.width / it.str.length : 0; x0 = it.transform[4]
-      cum = shares(it.str, s.length, !!mono?.has(it)); scale = cum[s.length] ? it.width / cum[s.length] : 0
+      cum = shares(it.str, s.length, !!mono?.has(it.fontName)); scale = cum[s.length] ? it.width / cum[s.length] : 0
       raw = it.str.length === s.length ? it.str : null
     }
     if (it && perChar > 0) {
@@ -765,12 +769,11 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
       }
     }
     const all = beyond[u]?.length ? [...new Set([...idx, ...beyond[u]])].sort((x, y) => x - y) : idx
-    // a unit with marks keeps where each of its text's words was matched on the page (`words`: the page token of each, or
-    // -1), so that its sentences can be found there whenever they are known (sentenceStarts): on the left, a translation
-    // that comes in after the side was anchored gives them
-    let words
-    if (f.pairs) { const ws = (words = new Int32Array(f.ws.length).fill(-1)); f.pairs.forEach((k, w) => { ws[w] = k }) }
-    out.set(id, { rects: lineRects(doc, all), coverage: +f.coverage.toFixed(3), tokens: all, bounded: !!f.bounded, ...(words ? { words } : {}) })
+    // a unit with marks keeps where its text's words were matched on the page (`pairs`: a word's place in its text → the
+    // page token), so that its sentences can be found there whenever they are known (sentenceStarts): on the left, a
+    // translation that comes in after the side was anchored gives them. The match's own map, kept: an array of them
+    // made for every unit cost a heavy paper's anchoring 2.7 ms, cold (the review of B3, minor 2: 2608.02459)
+    out.set(id, { rects: lineRects(doc, all), coverage: +f.coverage.toFixed(3), tokens: all, bounded: !!f.bounded, ...(f.pairs ? { pairs: f.pairs } : {}) })
   })
   return out
 }
@@ -784,16 +787,17 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
  * for a unit of one sentence; null where a sentence's start is not found — the unit is lit whole then, on both sides
  */
 export function sentenceStarts(anchor, text, offsets) {
-  const words = anchor?.words
-  if (!words || !offsets) return null
+  const pairs = anchor?.pairs
+  if (!pairs || !offsets) return null
   const at = offsets.map(o => tokens(text.slice(0, o)).length), ts = anchor.tokens, out = new Int32Array(offsets.length)
   const has = k => { let lo = 0, hi = ts.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] < k) lo = m + 1; else hi = m } return ts[lo] === k }
   for (let j = 0; j < at.length; j++) {
-    const end = j + 1 < at.length ? at[j + 1] : words.length
+    const end = j + 1 < at.length ? at[j + 1] : tokens(text).length
     let k = -1
-    for (let i = at[j]; i < end && k < 0; i++) if (words[i] >= 0 && has(words[i])) k = words[i]
+    for (let i = at[j]; i < end && k < 0; i++) { const t = pairs.get(i); if (t !== undefined && has(t)) k = t }
     if (k < 0 || k <= (j ? out[j - 1] : ts[0])) return null
     out[j] = k
   }
   return out
 }
+
