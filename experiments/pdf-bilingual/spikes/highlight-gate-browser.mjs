@@ -16,6 +16,8 @@
 //    yet there most times): no layout made in an animation frame; the unit lit once they come, the pointer still
 //  - the demo's sentences are those of the sentence file they were taken from, which the Node gate makes again by the
 //    reader's path from the Microsoft answers kept (B3's review, I2)
+//  - a pointer resting from the first moment on a unit of more than one sentence lights its sentence, never the paragraph
+//    first (B3's re-review: made to fail on 61619404, the paragraph first in 4 of 6 opens)
 //  - the pointer moving over the left pane from the first moment of the load: every side's sentences found, as with the
 //    pointer still (B3's review, C1: made to fail on af6fce33, 06701 0 lit by sentence against 41)
 //  - sentences (B3): where a unit lights by sentence on both sides, what it paints is its sentences' shapes (the first,
@@ -207,6 +209,30 @@ async function early(b, paper) {
   await page.close()
   return { id: target.id, geoAtHover: target.geo, ...after }
 }
+/** the pointer resting from the reader's first moment on a unit of more than one sentence on page 1 (its second line):
+ *  what it lights, in order, for 3 s (the re-review of B3: the sentences found one idle period after the layout, the
+ *  paragraph was lit first, then the sentence — 4 of 6 opens of 02459 and 06701 on 61619404) */
+async function firstLight(b, paper) {
+  const page = await b.context.newPage()
+  await page.goto(b.url({ paper, mode: 'bilingual' }))
+  await page.waitForFunction(() => window.__reader?.ready && window.__reader.debug?.left.anchors.size && window.__reader.debug.right.anchors.size, null, { timeout: 240_000, polling: 10 })
+  const target = await page.evaluate(() => {
+    const d = window.__reader.debug, s = d.left
+    const id = [...s.anchors.keys()].find(i => { const a = s.anchors.get(i); return a?.rects.length >= 3 && a.rects[1].page === 1 && d.right.units.get(i)?.sentences?.src.length > 0 })
+    if (id === undefined) return null
+    const r = s.anchors.get(id).rects[1], box = d.toPageBox(s, r), pr = d.pageView(s, 1).div.getBoundingClientRect()
+    window.__lights = []
+    let last = ''
+    const tick = () => { const k = `${d.lit}/${d.litSentence}`; if (k !== last) { last = k; window.__lights.push([d.lit, d.litSentence]) } if (window.__lights.length < 40) requestAnimationFrame(tick) }
+    tick()
+    return { id, x: pr.left + box.left + box.width / 2, y: pr.top + box.top + box.height / 2 }
+  })
+  if (target) await page.mouse.move(target.x, target.y)
+  await page.waitForTimeout(3000)
+  const lights = await page.evaluate(() => window.__lights ?? [])
+  await page.close()
+  return { id: target?.id ?? null, lights }
+}
 /** the pointer moving over the left pane from the first moment of the load (a reader's hand on the mouse), or still,
  *  until ready, then 3 s: the units each side found the sentences of, and those lit by sentence (the review of B3, C1:
  *  the left's layout asked for by the pointer while the right was reading its text found no sentence) */
@@ -335,6 +361,10 @@ async function checks(b) {
     check(`${b.label} ${paper}: the demo's sentences are the file's the Node gate makes again by the reader's path`, ds.file && ds.units > 0 && ds.differ === 0, JSON.stringify(ds))
     const atRest = await sentencesAtLoad(b, paper, false), moving = await sentencesAtLoad(b, paper, true)
     check(`${b.label} ${paper}: the pointer moving from the first moment of the load: every side's sentences found, as with it still`, atRest.lit > 0 && JSON.stringify(atRest) === JSON.stringify(moving), JSON.stringify({ still: atRest, moving }))
+    const firsts = []
+    for (let r = 0; r < 3; r++) firsts.push(await firstLight(b, paper))
+    const whole = firsts.filter(f => f.lights.some(([i, s]) => i === f.id && s === -1)), bySentence = firsts.filter(f => (f.lights.at(-1)?.[1] ?? -1) >= 0)
+    check(`${b.label} ${paper}: a pointer resting from the first moment lights the sentence, never the paragraph first (3 opens)`, whole.length === 0 && bySentence.length === firsts.length, JSON.stringify(firsts))
     const e = await early(b, paper)
     check(`${b.label} ${paper}: the pointer at the reader's first moment makes no layout in a frame, and lights once they come`, e.madeInFrame === 0 && e.geo.every(Boolean) && e.hit != null && e.lit != null, JSON.stringify(e))
     const page = await open(b, paper)

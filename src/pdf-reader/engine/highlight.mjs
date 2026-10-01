@@ -20,6 +20,8 @@ import { inkEdges } from './anchors.mjs'
 
 /** kinds of unit that are no running text: what lies among their words is their float's, not theirs */
 const NOT_RUNNING = new Set(['caption', 'heading', 'cell', 'figure'])
+/** whether a kind of unit may light by sentence: running text (hitOf, sentencesFit) */
+export const bySentence = kind => !NOT_RUNNING.has(kind)
 /** kinds of unit a float holds, which may be wider than the measure (a table, a figure and its caption): their blocks
  *  keep their ink past the column's edge, where a cell past it was clamped to nothing (the review of B1's gate) */
 const FLOATS = new Set(['caption', 'cell', 'figure'])

@@ -2,13 +2,15 @@
 import type { Anchor, DocToken } from './anchors.mjs'
 
 /** a run's row: lines merged where they overlap, and the unit's reach across them (PDF units); lo, hi: its glyphs' */
-export interface Row { y0: number; y1: number; x0: number; x1: number; lo: number; hi: number }
+export interface Row { y0: number; y1: number; x0: number; x1: number; lo: number; hi: number; r0: number | null; r1: number | null }
 /** a unit's run: one page and one column of it, its extent inside the column's text edges, its rows, the boundaries
  *  between them, and the page's half leading; its tokens, the row each is on, and where the unit's head begins on it */
-export interface Run { id: number; page: number; col: 'F' | 'L' | 'R'; x0: number; x1: number; top: number; bottom: number; hi: number; lo: number; lead: number; rows: Row[]; mids: number[]; toks: number[]; rowOf: number[]; head: number | null }
+export interface Run { id: number; page: number; col: 'F' | 'L' | 'R'; x0: number; x1: number; top: number; bottom: number; hi: number; lo: number; lead: number; rows: Row[]; mids: number[]; toks: number[]; rowOf: number[]; head: number | null; sx0: number; sx1: number }
 /** a side's layout (layoutOf): opaque to its callers */
 export interface Layout { readonly pagesOf: Map<number, number[]> }
 
+/** whether a kind of unit may light by sentence: running text */
+export declare function bySentence(kind: string | undefined): boolean
 export declare function layoutOf(doc: DocToken[], views: number[][], anchors: Map<number, Anchor | null>, kindOf?: (id: number) => string | undefined): Layout
 /** a page's runs; the units whose head it took and the words it filled in (for the gate) */
 export declare function pageGeometry(layout: Layout, page: number): { runs: Run[]; byId: Map<number, Run[]>; heads: number[]; filled: number }

@@ -30,7 +30,7 @@ import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
-import { blockOf, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
+import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
 import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
@@ -397,8 +397,10 @@ const pointer = pointerPath({
     // a side without its layout yet is a miss, its layout asked for
     if (!side.geo) { wantLayout(side); return null }
     const at = pointAt(side, x, y), hit = at && withFloats(side, at, hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale, side.startsOf))
-    // a unit whose sentences are not yet worked out on both sides: a miss, until they are (wantFit); a float lights whole
-    return hit && !fitsWanted.has(hit.id) ? { id: hit.id, s: hit.s ?? -1 } : null
+    // a unit whose sentences are not yet worked out on both sides: a miss, until they are (wantFit); and one whose
+    // sentences are known but not yet found while the finding is on its way (sentencesPending); a float lights whole
+    if (!hit || fitsWanted.has(hit.id) || (hit.s === -1 && !hit.float && sentencesPending(hit.id))) return null
+    return { id: hit.id, s: hit.s ?? -1 }
   },
   light,
   lit: () => lit != null,
@@ -1645,6 +1647,11 @@ function findSentences(side) {
  *  the sentences and the drawn pages' made in one task took 17.6 ms a side on 2608.02459): the left's again after the
  *  right's, whose units it reads, where the left's layout is made */
 const sentencesDue = new Set()
+/** whether a unit of running text has sentences (the translation's) not yet found on both sides while what finds them
+ *  is on its way — a side's anchoring, its layout, its sentences' idle period: the pointer is a miss on it meanwhile, as
+ *  on an unfinished fit (the re-review of B3: a pointer resting from the load lit the paragraph, then the sentence, in
+ *  4 of 6 opens of 02459 and 06701). Where nothing is on its way, the unit is lit whole */
+const sentencesPending = id => !!right.units.get(id)?.sentences && bySentence(unitKind.get(id)) && (sentencesDue.size > 0 || ((!left.starts || !right.starts) && (anchoring > 0 || layoutsDue.size > 0)))
 function wantSentences(side) {
   sentencesDue.add(side)
   if (side !== left && left.geo) sentencesDue.add(left)
