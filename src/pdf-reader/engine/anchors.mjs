@@ -673,8 +673,9 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
     // a run takes a placeholder's words besides the unit's own, which are all there
     const coverage = m ? Math.min(1, m.length / ws.length) : 0
     if (!b && (!m || coverage < minCoverage)) { found.push(null); return }
-    // a unit with marks keeps its words and which of them were matched where, for a break (wordsBetween)
-    found.push(b ? { m: m ?? [], coverage, bounded: b, ws, pairs } : { m: m ?? [], coverage, bounded: b })
+    // a unit with marks keeps its words and which of them were matched where, for a break (wordsBetween); one found by
+    // its text alone keeps the match's map too, for its sentences' starts before any marks come (sentenceStarts, B3c)
+    found.push(b ? { m: m ?? [], coverage, bounded: b, ws, pairs } : { m: m ?? [], coverage, bounded: b, textPairs: pairs })
   })
   // who owns each token: a marked unit its whole range, the innermost range winning (a footnote inside a paragraph
   // is the footnote's); an unmarked unit its matched words
@@ -769,11 +770,13 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
       }
     }
     const all = beyond[u]?.length ? [...new Set([...idx, ...beyond[u]])].sort((x, y) => x - y) : idx
-    // a unit with marks keeps where its text's words were matched on the page (`pairs`: a word's place in its text → the
-    // page token), so that its sentences can be found there whenever they are known (sentenceStarts): on the left, a
+    // a unit keeps where its text's words were matched on the page (`pairs`: a word's place in its text → the page
+    // token; with marks, or by its text alone, B3c), so that its sentences can be found there whenever they are known
+    // (sentenceStarts): on the left, a
     // translation that comes in after the side was anchored gives them. The match's own map, kept: an array of them
     // made for every unit cost a heavy paper's anchoring 2.7 ms, cold (the review of B3, minor 2: 2608.02459)
-    out.set(id, { rects: lineRects(doc, all), coverage: +f.coverage.toFixed(3), tokens: all, bounded: !!f.bounded, ...(f.pairs ? { pairs: f.pairs } : {}) })
+    const pairs = f.pairs ?? f.textPairs
+    out.set(id, { rects: lineRects(doc, all), coverage: +f.coverage.toFixed(3), tokens: all, bounded: !!f.bounded, ...(pairs ? { pairs } : {}) })
   })
   return out
 }
@@ -786,12 +789,18 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
  * `src` on the left, `tr` on the right). An Int32Array rising, each start after the unit's first token and among its
  * tokens; empty for a unit of one sentence; null where a sentence's start is not found — nor among its next two words
  * (on the ten papers 9 of 4 230 starts were found late, six by two words and one by eight: a start so late puts the
- * words before it in the sentence before; the review of B3, minor 6) — the unit is lit whole then, on both sides
+ * words before it in the sentence before; the review of B3, minor 6) — the unit is lit whole then, on both sides.
+ * A unit found by its text alone (arXiv's PDF before our marked original's marks are carried to it, B3c: the
+ * sentences then come with the first preview, not near the end of a live run) has its starts where its match covers
+ * TEXT_ONLY of its words or more, and none below: on the ten papers' arXiv PDFs, 1 702 starts found so all on the token
+ * the marks give, 19 of 23 below; on the ground truth's, on the mark's line as often as with marks (98.6–100 %
+ * against 98.9–100 %)
  */
 export function sentenceStarts(anchor, text, offsets) {
   const pairs = anchor?.pairs
+  if (!pairs || (!anchor.bounded && anchor.coverage < TEXT_ONLY)) return null
   // offsets of their shape, whole numbers rising inside the text: a copy's record is read as stored (mt.mjs sentencesKept)
-  if (!pairs || !Array.isArray(offsets) || !offsets.every((o, j) => Number.isInteger(o) && o > (j ? offsets[j - 1] : 0) && o < text.length)) return null
+  if (!Array.isArray(offsets) || !offsets.every((o, j) => Number.isInteger(o) && o > (j ? offsets[j - 1] : 0) && o < text.length)) return null
   const at = offsets.map(o => tokens(text.slice(0, o)).length), ts = anchor.tokens, out = new Int32Array(offsets.length)
   const has = k => { let lo = 0, hi = ts.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] < k) lo = m + 1; else hi = m } return ts[lo] === k }
   for (let j = 0; j < at.length; j++) {
@@ -805,3 +814,5 @@ export function sentenceStarts(anchor, text, offsets) {
 }
 /** how many words after a sentence's first its start may be found at */
 const LATE = 2
+/** the share of a unit's words its text match must cover for its starts, where it has no marks */
+const TEXT_ONLY = 0.8

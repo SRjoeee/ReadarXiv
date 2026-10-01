@@ -1326,8 +1326,8 @@
    "throughInk": 5
   },
   "2608.08350": {
-   "aligned": 137,
-   "alignedMulti": 86,
+   "aligned": 139,
+   "alignedMulti": 88,
    "throughInk": 0
   },
   "2608.09746": {
@@ -1341,8 +1341,8 @@
    "throughInk": 10
   },
   "2608.29181": {
-   "aligned": 109,
-   "alignedMulti": 79,
+   "aligned": 112,
+   "alignedMulti": 82,
    "throughInk": 0
   }
  },
@@ -1359,6 +1359,10 @@
    "AX": {
     "withTruth": 168,
     "sameLine": 167
+   },
+   "AXtext": {
+    "withTruth": 142,
+    "sameLine": 141
    }
   },
   "2608.04322": {
@@ -1373,6 +1377,10 @@
    "AX": {
     "withTruth": 138,
     "sameLine": 138
+   },
+   "AXtext": {
+    "withTruth": 129,
+    "sameLine": 129
    }
   },
   "2608.02163": {
@@ -1387,6 +1395,10 @@
    "AX": {
     "withTruth": 174,
     "sameLine": 172
+   },
+   "AXtext": {
+    "withTruth": 147,
+    "sameLine": 145
    }
   },
   "2608.02459": {
@@ -1395,12 +1407,16 @@
     "sameLine": 649
    },
    "T": {
-    "withTruth": 651,
-    "sameLine": 651
+    "withTruth": 663,
+    "sameLine": 663
    },
    "AX": {
     "withTruth": 646,
     "sameLine": 641
+   },
+   "AXtext": {
+    "withTruth": 518,
+    "sameLine": 517
    }
   }
  }

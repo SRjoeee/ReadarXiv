@@ -59,6 +59,9 @@
 //  - the pieces of a sentence that goes on over a column or a page break: the one before the break reaching its unit's
 //    text edge on the right there (the furthest the unit's lines reach in the column, inside the column's text edge),
 //    the one after it on the left; short of it where another unit's word stands between them, counted apart
+//  - the left's starts by its text alone, no marks (B3c: arXiv's PDF before our marked original's marks come), against
+//    those found with the marks: units both found, by one alone, the starts on the marks' token and line; and on the
+//    ground truth, arXiv's PDF by its text alone (AXtext) beside it with the marks (AX)
 //  - with the floats made (highlight-gate-floats.mjs), each sentence's rows over a float's painted shape (a figure's
 //    outline, a table's wash), and the points of them where the pointer finds the float: painted as the sentence, lit as
 //    the float (a row past its ink keeps from under a float, highlight.mjs reachAt)
@@ -70,7 +73,8 @@
 // where its word is there — on the same line or not.
 // Fails besides on: a hole inside a sentence's shape, or another sentence lit there; a word outside its unit's
 // sentences but past the column's edge, a head outside its first sentence; a gap or an overlap between two sentences on
-// a row; a piece short of its unit's text edge over a break; a point of a sentence the pointer finds a float at; a
+// a row; a piece short of its unit's text edge over a break; a point of a sentence the pointer finds a float at; a start
+// by the text alone off the marks' line; a
 // sentence file not what the reader's path makes; against
 // the baseline, fewer units aligned per paper, more boundaries through ink, and fewer starts on the
 // ground truth's line. Each made to fail once (B3, in the tree, put back
@@ -163,6 +167,8 @@ const median = xs => { const s = [...xs].sort((a, b) => a - b); return s[s.lengt
 const tally = {}, cost = {}, cuts = [], inkHoles = [], overlaps = [], pastEdge = [], unreachable = []
 /** per paper: the sentences' counts (B3); the holes and words outside listed */
 const sentences = {}, sentenceHoles = [], wordsOutside = [], inkCuts = [], goesOnShort = [], floatTaken = []
+/** per paper: the left's starts by its text alone against the marks' (B3c) */
+const textOnly = {}
 /** the sentence files against the reader's path from the Microsoft answers kept (sentences-path.mjs): per set of runs
  *  and paper, the units in the file, those the path gives, and those that differ (either has it and the other not, or
  *  not the same) */
@@ -225,6 +231,19 @@ for (const id of ids) {
     }
     cost[`${id} ${S}`] = { pages: pdf.views.length, tokens: doc.length, layoutMs: +median(layoutMs).toFixed(2), allPagesMs: +median(pagesMs).toFixed(2), perPageMs: +(median(pagesMs) / pdf.views.length).toFixed(3), pageMaxMs: +median(pageMax).toFixed(2), startsMs: +median(startsMs).toFixed(2) }
     sides[S] = { anchors, doc, layout: layoutOf(doc, pdf.views, anchors, kinds), starts }
+  }
+  // the left's starts by its text alone (B3c: arXiv's PDF before our marked original's marks are carried to it) against
+  // those found with the marks: units both found, the starts on the marks' token and line, units found by one alone
+  {
+    const { doc } = sides.L, plain = anchorUnits(doc, src, { bounds: new Map(), floating }), textOf = new Map(src.map(t => [t.id, t.text]))
+    const r = (textOnly[id] = { units: 0, both: 0, onlyText: 0, onlyMarks: 0, starts: 0, sameToken: 0, sameLine: 0 })
+    for (const [i, s] of Object.entries(sents)) {
+      if (!s.src.length || WHOLE.has(kind.get(+i))) continue
+      r.units++
+      const X = sentenceStarts(plain.get(+i), textOf.get(+i) ?? '', s.src), M = sides.L.starts.get(+i)
+      if (X && M) { r.both++; X.forEach((k, j) => { r.starts++; if (k === M[j]) r.sameToken++; if (doc[k].page === doc[M[j]].page && Math.abs(doc[k].y - doc[M[j]].y) < Math.min(doc[k].h, doc[M[j]].h) * 0.5) r.sameLine++ }) } else if (X) r.onlyText++
+      else if (M) r.onlyMarks++
+    }
   }
   // a unit is lit by sentence where both sides found every start and its shapes hold its words on both (sentencesFit),
   // and it is running text
@@ -443,7 +462,7 @@ async function groundTruth() {
     const carried = markWords(docs.O1, O1.marks)
     const carriedTruth = markWords(docs.O2, new Map([...O2.sentences].map(([k, v]) => [`${k}s`, v])))
     const out = (truth[id] = {}), foundOn = {}
-    for (const [S, doc, marks, texts, on, truthDoc, truthMarks] of [['O', docs.O1, O1.marks, src, 'src', docs.O2, O2.sentences], ['T', docs.T1, T1.marks, tgt, 'tr', docs.T2, T2.sentences], ['AX', docs.AX, carried, src, 'src', docs.AX, null]]) {
+    for (const [S, doc, marks, texts, on, truthDoc, truthMarks] of [['O', docs.O1, O1.marks, src, 'src', docs.O2, O2.sentences], ['T', docs.T1, T1.marks, tgt, 'tr', docs.T2, T2.sentences], ['AX', docs.AX, carried, src, 'src', docs.AX, null], ['AXtext', docs.AX, new Map(), src, 'src', docs.AX, null]]) {
       const anchors = anchorUnits(doc, texts, { bounds: boundsFromMarks(doc, marks), floating })
       const textOf = new Map(texts.map(t => [t.id, t.text])), r = (out[S] = { starts: 0, found: 0, withTruth: 0, sameLine: 0 })
       // on our compiles the marked and unmarked documents have the same words where the marks moved none (originals:
@@ -507,7 +526,9 @@ if (wordsOutside.length) console.log('words outside their sentences:', wordsOuts
 if (inkCuts.length) console.log('boundaries through a word\'s estimated ink (inkEdges, the geometry against itself; the page\'s is the browser gate\'s):', inkCuts.join('; '))
 if (goesOnShort.length) console.log('pieces short of the edge over a break:', goesOnShort.join('; '))
 if (floatTaken.length) console.log('sentences lit as a float where painted:', floatTaken.join('; '))
-console.log('\nthe ground truth (report-B\'s compiles): starts after the first of units of more than one sentence; found; with a mark for their sentence; on its line')
+console.log('\nthe left\'s starts by its text alone (B3c), against those with the marks: units of more than one sentence; both found; by the text alone; by the marks alone; starts both found, on the marks\' token, on their line')
+for (const [id, r] of Object.entries(textOnly)) console.log(id.padEnd(12), r.units, r.both, r.onlyText, r.onlyMarks, r.starts, r.sameToken, r.sameLine)
+console.log('\nthe ground truth (report-B\'s compiles): starts after the first of units of more than one sentence; found; with a mark for their sentence; on its line (AXtext: arXiv\'s PDF by its text alone)')
 for (const [id, t] of Object.entries(truth)) if (t) for (const [S, r] of Object.entries(t)) if (S !== 'pair') console.log(id.padEnd(12), S.padEnd(3), r.starts, r.found, r.withTruth, r.sameLine, `${((100 * r.sameLine) / Math.max(1, r.withTruth)).toFixed(1)} %`)
 console.log('\nthe sentence files against the reader\'s path from the Microsoft answers kept (units in the file; the path\'s; differing):')
 for (const [set, ps] of Object.entries(remade)) console.log(set.padEnd(13), Object.entries(ps).map(([id, r]) => `${id} ${r.file}/${r.path}/${r.differ}${r.first.length ? ` (${r.first.join(', ')})` : ''}`).join('; '))
@@ -517,6 +538,7 @@ const failures = []
 for (const c of ['unlitAnchored', 'holes', 'inkHoles', 'unreachable', 'fragmentedDisplays', 'overlapping']) if (sum[c] > 0) failures.push(`${c} ${sum[c]}`)
 for (const c of ['holes', 'otherSentence', 'wordsOutside', 'headsOutside', 'gaps', 'overlaps', 'goesOnShort', 'takenByFloat']) if (ssum[c] > 0) failures.push(`sentences: ${c} ${ssum[c]}`)
 if (!Object.keys(truth).length) failures.push(`no ground truth at ${GT}`)
+for (const [id, r] of Object.entries(textOnly)) if (r.sameLine < r.starts) failures.push(`${id}: ${r.starts - r.sameLine} of the left's starts by its text alone off the marks' line`)
 for (const [set, ps] of Object.entries(remade)) for (const [id, r] of Object.entries(ps)) if (r.differ) failures.push(`${set} ${id}: ${r.differ} units' sentences not what the reader's path makes from the answers kept${r.first.length ? ` (${r.first.join(', ')})` : ''}`)
 if (process.env.WRITE_BASELINE) {
   if (ids.length !== TEN.length || RUNS !== join(root, 'data/runs/highlight-ten')) failures.push('a baseline is recorded on the ten papers\' runs only')
@@ -555,7 +577,7 @@ else {
   }
 }
 mkdirSync(join(root, 'out'), { recursive: true })
-writeFileSync(join(root, 'out/highlight-gate.json'), JSON.stringify({ ids, tally, cost, cuts, inkHoles, overlaps, unreachable, counts, taken, sentences, truth }, null, 1))
+writeFileSync(join(root, 'out/highlight-gate.json'), JSON.stringify({ ids, tally, cost, cuts, inkHoles, overlaps, unreachable, counts, taken, sentences, truth, textOnly }, null, 1))
 console.log(failures.length ? `\nFAIL: ${failures.slice(0, 20).join('; ')}${failures.length > 20 ? ` (and ${failures.length - 20} more)` : ''}` : '\nok: every anchored unit lit and reachable, no hole, no ink hole, no fragmented display, no unit\'s blocks overlapping, the baseline met')
 process.exitCode = failures.length ? 1 : 0
 // the floats' report and verdict, held to their own baseline (highlight-gate-floats.mjs)

@@ -503,9 +503,17 @@ describe('sentenceStarts: where each sentence after the first begins on the page
     expect(sentenceStarts(three.found.get(0), text, [text.indexOf('Delta'), text.indexOf('Theta')])).toBeNull()
   })
 
-  it('a unit without marks, offsets that do not rise inside the text, or no offsets: none', () => {
-    const { found } = anchors(lines(), [{ id: 0, text }], [])
-    expect(sentenceStarts(found.get(0), text, [text.indexOf('Delta')])).toBeNull()
+  it('a unit found by its text alone (arXiv\'s PDF before our marked original is compiled, B3c): its starts where the match covers 0.8 of its words or more, as with marks; below, none', () => {
+    const plain = anchors(lines(), [{ id: 0, text }], [])
+    expect(plain.found.get(0)?.bounded).toBe(false)
+    expect([...(sentenceStarts(plain.found.get(0), text, [text.indexOf('Delta'), text.indexOf('Theta')]) ?? [])].map(k => plain.doc[k]?.t)).toEqual(['delta', 'theta'])
+    // seven of its ten words on the page: located (0.7 of them), its starts not taken
+    const thin = anchors([page([['Alpha', 'beta', 'gamma.', 'Delta', 'epsilonx'], ['zetax', 'eta.', 'Theta', 'iota', 'kappax']])], [{ id: 0, text }], [])
+    expect(thin.found.get(0)?.coverage).toBe(0.7)
+    expect(sentenceStarts(thin.found.get(0), text, [text.indexOf('Delta'), text.indexOf('Theta')])).toBeNull()
+  })
+
+  it('offsets that do not rise inside the text, or no offsets: none', () => {
     const marked = anchors(lines(), [{ id: 0, text }], [[0, 0, 9]]).found.get(0)
     expect(sentenceStarts(marked, text, [text.indexOf('Theta'), text.indexOf('Delta')])).toBeNull()
     expect(sentenceStarts(marked, text, [text.length + 5])).toBeNull()
