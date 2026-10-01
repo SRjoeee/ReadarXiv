@@ -6,7 +6,7 @@
 // that URL runs in it; the viewer itself is a separate `chrome-extension://` frame and is never touched. A
 // `position: fixed` element appended to the host document draws above the viewer (measured 2026-09-18, Chromium 153).
 
-import { AUTO_TRANSLATE_HASH } from '@/core/abstract/link'
+import { AUTO_TRANSLATE_HASH, startsTranslation } from '@/core/abstract/link'
 import { paperIdFrom } from '@/core/paper-id'
 
 /** The paper id in a `/pdf/…` path, or null; the shapes live in `core/paper-id.ts`, which the abstract page reads too */
@@ -41,10 +41,11 @@ export function sourceKindOf(contentType: string | null): 'source' | 'pdf-only' 
 
 /**
  * Whether the PDF page opens the reader (the reader's design, §2): the setting on, or the address asking for it with
- * `#readarxiv` — an explicit request, which also asks for a translation
+ * `#readarxiv` — an explicit request, which also asks for a translation. The hash is read as the HTML page reads it
+ * (`startsTranslation`: any capitalisation)
  */
 export function readerWanted({ enabled, hash }: { enabled: boolean; hash: string }): { open: boolean; translate: boolean } {
-  const asked = hash === AUTO_TRANSLATE_HASH
+  const asked = startsTranslation(hash)
   return { open: enabled || asked, translate: asked }
 }
 
