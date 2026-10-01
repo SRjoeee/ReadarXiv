@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { type Anchor, type DocToken, lineRects, tokenizeDocument } from '@/pdf-reader/engine/anchors.mjs'
 import { type Box, captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from '@/pdf-reader/engine/floats.mjs'
-import { blockOf, hitOf, layoutOf, runsOf } from '@/pdf-reader/engine/highlight.mjs'
+import { inkEdges } from '@/pdf-reader/engine/anchors.mjs'
+import { blockOf, hitOf, layoutOf, runsOf, sentenceOf } from '@/pdf-reader/engine/highlight.mjs'
 
 // A page's floats (floats.mjs): tables, algorithms and figures lit whole with their captions. Pages as PDF.js's text
 // items, as highlight.test.ts has them: 600 × 800, body text 10 high on lines 12 apart, its glyphs from 2.2 under the
@@ -393,5 +394,38 @@ describe('pageFloats: at a page\'s head and foot (the review of B4)', () => {
     const layout = side(ps, [[0, words(dd, 'figure', 'plot')], [7, words(dd, 'a', 'here', at(dd, 'footnote') - 1)]], { 0: 'caption', 7: 'footnote' })
     const fs = pageFloats(layout, 1, [{ x0: 80, y0: 300, x1: 280, y1: 420 }], { rules: [hrule(50, 150, 278.5)] })
     expect(fs.map(f => [f.kind, ...r1(f.region)])).toEqual([['figure', 80, 300, 280, 420]])
+  })
+})
+
+describe('sentences beside a float: a row that goes on reaches its unit\'s text edge, but not under a float', () => {
+  it('a display beside a figure at the head of a page, inside a sentence from the page before: the row keeps to its ink there, and the figure lights the figure', () => {
+    // the paragraph's sentence goes on from page 1 through a display at the head of page 2 (x 60–85) beside a figure
+    // (160–300) whose caption is under it; then the paragraph goes on under the caption
+    const ps = [
+      [...prose(780, 20), line('alpha beta gamma delta and words go on', 496), line('a sentence begins here and goes', 484), item('x = y', 150, 466, { eol: true })],
+      [item('i = a', 60, 760, { eol: true }), line('Figure 1: the chart', 733, 160, 300), line('then the end. More words go here', 715), line('and here the unit ends now', 703), ...prose(680, 20)],
+    ]
+    const d = docOf(ps), at2 = (t: string) => at(d, t, d.findIndex(w => w.page === 2))
+    const unit = [...range(at(d, 'alpha'), at2('a')), ...range(at2('then'), at2('now'))]
+    const layout = side(ps, [[0, unit], [1, range(at2('figure'), at2('chart'))]], { 1: 'caption' })
+    const fig = pageFloats(layout, 2, [{ x0: 160, y0: 745, x1: 300, y1: 790 }])
+    expect(fig.map(f => [f.id, f.kind])).toEqual([[1, 'figure']])
+    const starts = Int32Array.from([at(d, 'begins'), at2('more')]), startsOf = (i: number) => (i === 0 ? starts : null), px = 2
+    const display = runsOf(layout, 0).find(r => r.page === 2 && r.rows.length === 1)!
+    // to the column's left edge, where nothing stands; on the right only to its ink, the figure beside it
+    const [row] = sentenceOf(layout, display, starts, 1, px)
+    expect(row!.x0).toBeCloseTo(50 - px)
+    expect(row!.x1).toBeCloseTo(inkEdges(d).r[at2('a')]! + px)
+    // what is painted lights what is painted: the sentence on its row, the figure beside it
+    const lights = (x: number, y: number) => floatHitOf(layout, 2, x, y, px, hitOf(layout, 2, x, y, px, startsOf))
+    expect(lights(200, 762)).toMatchObject({ id: 1, s: -1 })
+    const shapes = [0, 1, 2].map(s => runsOf(layout, 0).filter(r => r.page === 2).flatMap(r => sentenceOf(layout, r, starts, s, px)))
+    const bad: string[] = []
+    for (let x = 40.25; x < 320; x += 1.5) for (let y = 690.25; y < 790; y += 1.5) {
+      const ins = shapes.flatMap((rs, s) => (rs.some(r => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) ? [s] : []))
+      const h = lights(x, y), mine = h?.id === 0 ? h.s : null
+      if (ins.length > 1 || (ins.length ? mine !== ins[0] : mine !== null)) bad.push(`${x},${y}: ${ins} ${JSON.stringify(h && { id: h.id, s: h.s })}`)
+    }
+    expect(bad.slice(0, 5)).toEqual([])
   })
 })

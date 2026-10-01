@@ -17,6 +17,8 @@
 // shapes.
 
 import { inkEdges } from './anchors.mjs'
+// floats.mjs imports this module's geometry; its shapes are read here only when a sentence is drawn (reachAt)
+import { floatShapes } from './floats.mjs'
 
 /** kinds of unit that are no running text: what lies among their words is their float's, not theirs */
 const NOT_RUNNING = new Set(['caption', 'heading', 'cell', 'figure'])
@@ -442,7 +444,7 @@ export function hitOf(L, p, x, y, padX, startsOf = () => null) {
       // its row (the boundaries between rows are its mids), and the sentence whose span there holds the point
       let i = 0
       while (i < run.mids.length && y < run.mids[i]) i++
-      s = sentenceAt(segsOf(L, run, starts), run, i, x, padX)
+      s = sentenceAt(L, segsOf(L, run, starts), run, i, x, padX)
       if (s < 0) continue
     }
     area = a; best = { id: run.id, run, s }
@@ -507,7 +509,7 @@ function segsOf(L, run, starts) {
   // whole then (sentencesFit). Two sentences' ink may overlap a little on a row — a Latin word's box is an even share
   // of its text item, a CJK full stop's half em too — and the boundary halfway between still divides their words
   {
-    const ys = edgesOf(run, 0), spans = rows.map((_, i) => spansOf(out, run, i, 0)), { top, bottom } = L.tok
+    const ys = edgesOf(run, 0), spans = rows.map((_, i) => spansOf(null, out, run, i, 0)), { top, bottom } = L.tok
     for (let n = 0; n < run.toks.length && out.fits; n++) {
       const k = run.toks[n], x = (l[k] + r[k]) / 2, y = (top[k] + bottom[k]) / 2
       let i = 0
@@ -544,27 +546,46 @@ export function pageSentences(L, p, startsOf) {
  * a sentence's own start or end at neither is padded `padX` beyond its ink, or is the edge within SNAP of it. The row's
  * reach (reachOf): where another unit's words stand on the row on that side, its own ink (the review of B3, I1: a
  * sentence over a page break was drawn as ending at the display that closed the page and beginning again at the one
- * that opened the next, and the run's extent, widened by an overfull display, left a 6-unit notch at a row's end)
+ * that opened the next, and the run's extent, widened by an overfull display, left a 6-unit notch at a row's end); and
+ * where a float's painted shape would be under the part past its ink, its own ink too (reachAt). `L` null: no float
  */
-function spansOf(g, run, i, padX) {
-  return g.rows[i].map((q, t) => ({ s: q.s, x0: spanStart(g, run, i, t, padX), x1: spanEnd(g, run, i, t, padX) }))
+function spansOf(L, g, run, i, padX) {
+  return g.rows[i].map((q, t) => ({ s: q.s, x0: spanStart(L, g, run, i, t, padX), x1: spanEnd(L, g, run, i, t, padX) }))
 }
-function spanStart(g, run, i, t, padX) {
-  const row = g.rows[i], q = row[t], e = run.rows[i].r0
+function spanStart(L, g, run, i, t, padX) {
+  const row = g.rows[i], q = row[t]
   if (t > 0) return (row[t - 1].x1 + q.x0) / 2
+  const e = reachAt(L, run, i, 0, q.x0, padX)
   if (i > g.first[q.s] || q.s === g.from) return Math.min(e ?? q.x0, q.x0) - padX
   return e != null && q.x0 - e < SNAP ? Math.min(e, q.x0) - padX : q.x0 - padX
 }
-function spanEnd(g, run, i, t, padX) {
-  const row = g.rows[i], q = row[t], e = run.rows[i].r1
+function spanEnd(L, g, run, i, t, padX) {
+  const row = g.rows[i], q = row[t]
   if (t < row.length - 1) return (q.x1 + row[t + 1].x0) / 2
+  const e = reachAt(L, run, i, 1, q.x1, padX)
   if (i < g.last[q.s] || q.s === g.on) return Math.max(e ?? q.x1, q.x1) + padX
   return e != null && e - q.x1 < SNAP ? Math.max(e, q.x1) + padX : q.x1 + padX
 }
+/**
+ * A row's reach on its left (`right` 0) or its right (1), past its ink at `ink`: reachOf's, or null where a float's
+ * painted shape (floats.mjs floatShapes: a figure's outline, a table's wash with its caption) stands in the part past
+ * the ink, across the row's band — the pointer lights the float there, and a sentence widened under it would be painted
+ * where it is not lit (B3's follow-up: none on the ten papers; a figure beside a display that opens a page). The page's
+ * floats come with its first drawing: until then none is seen, and the reader paints again when they come
+ */
+function reachAt(L, run, i, right, ink, padX) {
+  const e = right ? run.rows[i].r1 : run.rows[i].r0
+  const fs = e == null || (right ? e <= ink : e >= ink) ? null : L?.floats?.get(run.page)
+  if (!fs?.length) return e
+  const b = blockOf(run, padX), y1 = i === 0 ? b.y1 : run.mids[i - 1], y0 = i === run.rows.length - 1 ? b.y0 : run.mids[i]
+  const x0 = right ? ink : e - padX, x1 = right ? e + padX : ink
+  for (const f of fs) for (const s of floatShapes(L, f, padX)) if (s.x0 < x1 && s.x1 > x0 && s.y0 < y1 && s.y1 > y0) return null
+  return e
+}
 /** the sentence whose span on row `i` holds x, or -1: spansOf's, with nothing made (the pointer's frame) */
-function sentenceAt(g, run, i, x, padX) {
+function sentenceAt(L, g, run, i, x, padX) {
   const row = g.rows[i]
-  for (let t = 0; t < row.length; t++) if (x <= spanEnd(g, run, i, t, padX)) return x >= spanStart(g, run, i, t, padX) ? row[t].s : -1
+  for (let t = 0; t < row.length; t++) if (x <= spanEnd(L, g, run, i, t, padX)) return x >= spanStart(L, g, run, i, t, padX) ? row[t].s : -1
   return -1
 }
 
@@ -579,7 +600,7 @@ export function sentenceOf(L, run, starts, s, padX) {
   if (fa === undefined) return []
   const ys = edgesOf(run, padX), out = []
   for (let i = fa; i <= la; i++) {
-    const span = spansOf(g, run, i, padX).find(q => q.s === s) ?? { x0: run.x0 - padX, x1: run.x1 + padX }
+    const span = spansOf(L, g, run, i, padX).find(q => q.s === s) ?? { x0: run.x0 - padX, x1: run.x1 + padX }
     const prev = out.at(-1)
     if (prev && Math.abs(prev.x0 - span.x0) < 0.01 && Math.abs(prev.x1 - span.x1) < 0.01) prev.y0 = ys[i + 1]
     else out.push({ page: run.page, x0: span.x0, x1: span.x1, y0: ys[i + 1], y1: ys[i] })

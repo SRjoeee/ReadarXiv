@@ -510,10 +510,15 @@ function floatsFor(side, p, error = null) {
     ;(timing.floats ??= []).push({ paths: t1 - t0, floats: performance.now() - t1, ops: list.fnArray.length, marks: paths.marks.length })
     // a float's kind its caption's on both sides, where the other side's is made (floatsAgree)
     const other = side === left ? right : left, changed = floatsAgree(L, p, other.geo)
-    // what is lit there, and what is under a pointer resting on it, now that the page has its floats
-    if (lit != null && floatOf(L, litId())?.page === p) paint(side)
-    if (lit != null && changed.includes(floatOf(other.geo, litId()))) paint(other)
-    pointer.again(side)
+    // what is lit there, and what is under a pointer resting on it, now that the page has its floats; a sentence drawn
+    // before they came may reach under one (highlight.mjs reachAt): what was drawn is let go, a lit sentence drawn again
+    drawnFor = new WeakMap(); drawnKept = 0
+    if (lit != null && lit.s >= 0) for (const s of sides) paint(s)
+    else {
+      if (lit != null && floatOf(L, litId())?.page === p) paint(side)
+      if (lit != null && changed.includes(floatOf(other.geo, litId()))) paint(other)
+    }
+    pointer.again()
   }).catch(e => {
     // asked again at the page's next drawing; a drawing cancelled is no fault, anything else is told
     asked.delete(p)

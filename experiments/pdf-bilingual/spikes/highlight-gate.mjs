@@ -59,6 +59,9 @@
 //  - the pieces of a sentence that goes on over a column or a page break: the one before the break reaching its unit's
 //    text edge on the right there (the furthest the unit's lines reach in the column, inside the column's text edge),
 //    the one after it on the left; short of it where another unit's word stands between them, counted apart
+//  - with the floats made (highlight-gate-floats.mjs), each sentence's rows over a float's painted shape (a figure's
+//    outline, a table's wash), and the points of them where the pointer finds the float: painted as the sentence, lit as
+//    the float (a row past its ink keeps from under a float, highlight.mjs reachAt)
 //  - the starts' cost on each side (findSentences: every unit's, as the reader does with the layout)
 // and on investigator B's ground truth (report-B §2(c, d): data/runs/highlight-gt, the four papers compiled with a
 // named destination at every sentence's start, O2 and T2, and without, O1 and T1), each start found on O1, T1 and
@@ -67,7 +70,8 @@
 // where its word is there — on the same line or not.
 // Fails besides on: a hole inside a sentence's shape, or another sentence lit there; a word outside its unit's
 // sentences but past the column's edge, a head outside its first sentence; a gap or an overlap between two sentences on
-// a row; a piece short of its unit's text edge over a break; a sentence file not what the reader's path makes; against
+// a row; a piece short of its unit's text edge over a break; a point of a sentence the pointer finds a float at; a
+// sentence file not what the reader's path makes; against
 // the baseline, fewer units aligned per paper, more boundaries through ink, and fewer starts on the
 // ground truth's line. Each made to fail once (B3, in the tree, put back
 // after): the head left out of the first sentence (486 heads outside), the boundary at the next word's start instead of
@@ -77,7 +81,10 @@
 // holes, 452 another sentence), the words' fit dropped (15 words outside). In B3's first round of review (I1): the
 // sentence that began in a run before or goes on into a run after taken as beginning or ending in the run (28 pieces
 // short of the edge on 2608.02785 and 2608.29181). The blocks' digest (B3's review, minor 1): the overhang 6.5 units for 6
-// (2608.02785 both sides, 2608.12502's right: moved).
+// (2608.02785 both sides, 2608.12502's right: moved). The sentences against the floats (B3's follow-up): a float winning
+// over every block (100 points of 2608.06701 #227's second sentence, a word on a table's caption line, lit as the
+// table; on the ten papers no row past its ink comes under a float, so the guard itself is held by
+// tests/pdf-reader/floats.test.ts).
 // WRITE_BASELINE=1 records the run as the baseline (counts only).
 // Counts only, no paper text. Pad beside a block: 3 CSS px at 100 % (2.25 PDF units). The browser's half — the pointer,
 // the paint, their costs against another build — is highlight-gate-browser.mjs.
@@ -97,6 +104,7 @@ import { dirname, join } from 'node:path'
 import { floatsOfPaper, floatsVerdict } from './highlight-gate-floats.mjs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
+import { floatHitOf, floatShapes } from '../../../src/pdf-reader/engine/floats.mjs'
 import { blockOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit } from '../../../src/pdf-reader/engine/highlight.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/live.mjs'
 import { displayEdges, plainTranslated, unitText } from '../../../src/pdf-reader/engine/mt.mjs'
@@ -154,7 +162,7 @@ function kindOf(paper, u) {
 const median = xs => { const s = [...xs].sort((a, b) => a - b); return s[s.length >> 1] ?? null }
 const tally = {}, cost = {}, cuts = [], inkHoles = [], overlaps = [], pastEdge = [], unreachable = []
 /** per paper: the sentences' counts (B3); the holes and words outside listed */
-const sentences = {}, sentenceHoles = [], wordsOutside = [], inkCuts = [], goesOnShort = []
+const sentences = {}, sentenceHoles = [], wordsOutside = [], inkCuts = [], goesOnShort = [], floatTaken = []
 /** the sentence files against the reader's path from the Microsoft answers kept (sentences-path.mjs): per set of runs
  *  and paper, the units in the file, those the path gives, and those that differ (either has it and the other not, or
  *  not the same) */
@@ -228,7 +236,7 @@ for (const id of ids) {
     if (sentencesFit(sides.L.layout, i, a) && sentencesFit(sides.R.layout, i, b)) both.set(i, a.length); else { unfit++; if (process.env.UNFIT) console.error(`unfit ${id}#${i} L ${sentencesFit(sides.L.layout, i, a)} R ${sentencesFit(sides.R.layout, i, b)}`) }
   }
   const running = Object.entries(sents).filter(([i]) => !WHOLE.has(kind.get(+i)))
-  const sc = (sentences[id] = { units: running.length, multi: running.filter(([, s]) => s.src.length).length, foundL: running.filter(([i]) => sides.L.starts.has(+i)).length, foundR: running.filter(([i]) => sides.R.starts.has(+i)).length, unfit, aligned: both.size, alignedMulti: [...both.values()].filter(n => n > 0).length, sentences: [...both.values()].reduce((a, n) => a + n + 1, 0), points: 0, holes: 0, otherSentence: 0, smaller: 0, words: 0, wordsOutside: 0, heads: 0, headsOutside: 0, shapes: 0, sharedRows: 0, gaps: 0, overlaps: 0, throughInk: 0, goesOn: 0, goesOnShort: 0, goesOnBeside: 0 })
+  const sc = (sentences[id] = { units: running.length, multi: running.filter(([, s]) => s.src.length).length, foundL: running.filter(([i]) => sides.L.starts.has(+i)).length, foundR: running.filter(([i]) => sides.R.starts.has(+i)).length, unfit, aligned: both.size, alignedMulti: [...both.values()].filter(n => n > 0).length, sentences: [...both.values()].reduce((a, n) => a + n + 1, 0), points: 0, holes: 0, otherSentence: 0, smaller: 0, words: 0, wordsOutside: 0, heads: 0, headsOutside: 0, shapes: 0, sharedRows: 0, gaps: 0, overlaps: 0, throughInk: 0, goesOn: 0, goesOnShort: 0, goesOnBeside: 0, underFloat: 0, takenByFloat: 0 })
   units.forEach((u, i) => {
     const k = kindOf(paper, u)
     count(k, 'n')
@@ -375,6 +383,23 @@ for (const id of ids) {
   }
   // the floats (B4: tables, algorithms and figures lit whole), on the sides as anchored (highlight-gate-floats.mjs)
   await floatsOfPaper({ id, paper, units, kind, sides, files: { L: join(root, 'data/corpus', id, 'arxiv.pdf'), R: join(RUNS, id, 'final.pdf') }, rounds: ROUNDS, pad: PAD, step: STEP, cmaps: CMAPS, fonts: FONTS })
+  // the sentences against the floats, now made (B3's follow-up): a sentence's shape over a float's painted one, and the
+  // points of it where the pointer finds the float — painted as the sentence, lit as the float
+  const area = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0))
+  for (const S of ['L', 'R']) {
+    const { layout, starts } = sides[S], startsOf = i => (both.has(i) ? starts.get(i) : null)
+    for (const [i, n] of both) for (const run of runsOf(layout, i)) {
+      const shapes = (layout.floats?.get(run.page) ?? []).flatMap(f => floatShapes(layout, f, PAD))
+      if (!shapes.length) continue
+      for (let s = 0; s <= n; s++) for (const r of sentenceOf(layout, run, starts.get(i), s, PAD)) {
+        if (!shapes.some(f => area(r, f) > 0.25)) continue
+        sc.underFloat++
+        let taken = 0
+        for (let x = r.x0 + STEP / 2; x < r.x1; x += STEP) for (let y = r.y0 + STEP / 2; y < r.y1; y += STEP) { const h = floatHitOf(layout, run.page, x, y, PAD, hitOf(layout, run.page, x, y, PAD, startsOf)); if (h?.float && h.id !== i) taken++ }
+        if (taken) { sc.takenByFloat += taken; if (floatTaken.length < 20) floatTaken.push(`${id}#${i}.${s} ${S} p${run.page} ×${taken}`) }
+      }
+    }
+  }
   console.error(id, 'done')
 }
 
@@ -471,8 +496,8 @@ const takenSum = side => { const o = { heads: {}, filled: 0, cells3em: 0, padOve
 console.log('what the geometry took beyond the anchors, left:', JSON.stringify(takenSum('L')), 'right:', JSON.stringify(takenSum('R')))
 console.log('\ncost, ms (median of', ROUNDS, 'rounds): layout at anchoring; every page\'s geometry; per page; the slowest page; every unit\'s sentences\' starts')
 for (const [k, c] of Object.entries(cost)) console.log(k.padEnd(14), `${c.pages} pp, ${c.tokens} tokens`, `layout ${c.layoutMs}`, `pages ${c.allPagesMs}`, `per page ${c.perPageMs}`, `max ${c.pageMaxMs}`, `starts ${c.startsMs}`)
-const SC = ['units', 'multi', 'foundL', 'foundR', 'unfit', 'aligned', 'alignedMulti', 'sentences', 'points', 'holes', 'otherSentence', 'smaller', 'words', 'wordsOutside', 'heads', 'headsOutside', 'shapes', 'sharedRows', 'gaps', 'overlaps', 'throughInk', 'goesOn', 'goesOnShort', 'goesOnBeside']
-console.log('\nsentences (running text with the engine\'s sentences): units, more than one; starts found on the left, the right; found on both but shapes that do not hold their words (lit whole); aligned (both), of more than one; sentences; grid points inside their shapes, holes, another sentence of the unit, a smaller unit; words, outside their sentences; heads before a unit\'s first word, outside its first sentence; shapes; rows two sentences share, gaps, overlaps, boundaries through a word\'s estimated ink (the geometry against itself); pieces of a sentence that goes on over a column or a page break, short of the unit\'s text edge there, beside another unit\'s word')
+const SC = ['units', 'multi', 'foundL', 'foundR', 'unfit', 'aligned', 'alignedMulti', 'sentences', 'points', 'holes', 'otherSentence', 'smaller', 'words', 'wordsOutside', 'heads', 'headsOutside', 'shapes', 'sharedRows', 'gaps', 'overlaps', 'throughInk', 'goesOn', 'goesOnShort', 'goesOnBeside', 'underFloat', 'takenByFloat']
+console.log('\nsentences (running text with the engine\'s sentences): units, more than one; starts found on the left, the right; found on both but shapes that do not hold their words (lit whole); aligned (both), of more than one; sentences; grid points inside their shapes, holes, another sentence of the unit, a smaller unit; words, outside their sentences; heads before a unit\'s first word, outside its first sentence; shapes; rows two sentences share, gaps, overlaps, boundaries through a word\'s estimated ink (the geometry against itself); pieces of a sentence that goes on over a column or a page break, short of the unit\'s text edge there, beside another unit\'s word; sentence rows over a float\'s shape, points of them the pointer finds the float at')
 console.log(['paper'.padEnd(12), ...SC].join('\t'))
 const ssum = Object.fromEntries(SC.map(c => [c, 0]))
 for (const [id, s] of Object.entries(sentences)) { console.log([id.padEnd(12), ...SC.map(c => s[c])].join('\t')); for (const c of SC) ssum[c] += s[c] }
@@ -481,6 +506,7 @@ if (sentenceHoles.length) console.log('holes inside sentences:', sentenceHoles.s
 if (wordsOutside.length) console.log('words outside their sentences:', wordsOutside.slice(0, 12).join('; '))
 if (inkCuts.length) console.log('boundaries through a word\'s estimated ink (inkEdges, the geometry against itself; the page\'s is the browser gate\'s):', inkCuts.join('; '))
 if (goesOnShort.length) console.log('pieces short of the edge over a break:', goesOnShort.join('; '))
+if (floatTaken.length) console.log('sentences lit as a float where painted:', floatTaken.join('; '))
 console.log('\nthe ground truth (report-B\'s compiles): starts after the first of units of more than one sentence; found; with a mark for their sentence; on its line')
 for (const [id, t] of Object.entries(truth)) if (t) for (const [S, r] of Object.entries(t)) if (S !== 'pair') console.log(id.padEnd(12), S.padEnd(3), r.starts, r.found, r.withTruth, r.sameLine, `${((100 * r.sameLine) / Math.max(1, r.withTruth)).toFixed(1)} %`)
 console.log('\nthe sentence files against the reader\'s path from the Microsoft answers kept (units in the file; the path\'s; differing):')
@@ -489,7 +515,7 @@ console.log('units of more than one sentence (with a mark), their starts all fou
 // the gate: what must be none, and against the baseline what may not fall (or, for cuts, grow)
 const failures = []
 for (const c of ['unlitAnchored', 'holes', 'inkHoles', 'unreachable', 'fragmentedDisplays', 'overlapping']) if (sum[c] > 0) failures.push(`${c} ${sum[c]}`)
-for (const c of ['holes', 'otherSentence', 'wordsOutside', 'headsOutside', 'gaps', 'overlaps', 'goesOnShort']) if (ssum[c] > 0) failures.push(`sentences: ${c} ${ssum[c]}`)
+for (const c of ['holes', 'otherSentence', 'wordsOutside', 'headsOutside', 'gaps', 'overlaps', 'goesOnShort', 'takenByFloat']) if (ssum[c] > 0) failures.push(`sentences: ${c} ${ssum[c]}`)
 if (!Object.keys(truth).length) failures.push(`no ground truth at ${GT}`)
 for (const [set, ps] of Object.entries(remade)) for (const [id, r] of Object.entries(ps)) if (r.differ) failures.push(`${set} ${id}: ${r.differ} units' sentences not what the reader's path makes from the answers kept${r.first.length ? ` (${r.first.join(', ')})` : ''}`)
 if (process.env.WRITE_BASELINE) {
