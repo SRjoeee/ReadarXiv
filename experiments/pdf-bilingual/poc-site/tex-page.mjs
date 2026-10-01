@@ -25,6 +25,11 @@
 // the tree lacks costs no request. BusyTeX, its preloads and the fonts are kept in Cache Storage under their
 // versions, and the caches of other versions are deleted; everything else is left to the browser's HTTP cache.
 // Compiles run one at a time, in the order they were asked for.
+//
+// The page's own downloads: each is tried twice (after the server's Retry-After, at most 10 s, when it asks for one),
+// given up after 30 s without a byte, and its length checked against the build's — the index's bytes against its
+// name — before it is used or kept. The engine's files stream into Cache Storage as they come; a cache that cannot be
+// written (a full disk) fails nothing, since the bytes in hand go on.
 
 export const PROTOCOL = 2
 const DEFAULT_ENGINES = ['pdflatex', 'xelatex']
@@ -34,13 +39,26 @@ const engineOf = name => ENGINE_OF[name] ?? 'pdflatex'
 const ENGINE_CLASS = { pdflatex: 'PdfLatex', xelatex: 'XeLatex', lualatex: 'LuaLatex' }
 const CACHE_PREFIX = 'tex-'
 
+/** a download that failed for a network reason — no answer, a stall, a server's error, the wrong bytes: `what` is
+ *  the file, for the answer's `network` */
+class NetworkFailure extends Error {
+  constructor(what, why) {
+    super(`${what}: ${why}`)
+    this.what = what
+  }
+}
+const nameOf = url => decodeURIComponent(url.slice(url.lastIndexOf('/') + 1))
+/** a Cache Storage entry's type, by the file's extension: the wasm must be application/wasm, whatever the server said */
+const typeOf = url => (url.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream')
+
 /**
- * `build`: the build's description (build.json: versions, addresses, package sizes, manifest); `Runner`, `Engines`:
- * texlyre-busytex's BusyTexRunner and { PdfLatex, XeLatex, LuaLatex }; `fetch`, `caches`: the browser's.
+ * `build`: the build's description (build.json: versions, addresses, sizes, manifest); `Runner`, `Engines`:
+ * texlyre-busytex's BusyTexRunner and { PdfLatex, XeLatex, LuaLatex }; `fetch`, `caches`, `digest` (SHA-256 of bytes):
+ * the browser's. `stallMs`: a download with no byte for that long is given up (and tried once more).
  * → { ready, receive(msg, reply) }: `reply(data, transfer)` answers the sender; receive's promise settles once the
  * message is answered
  */
-export function texPage({ build, Runner, Engines, fetch, caches, progressEvery = 250, now = () => performance.now() }) {
+export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes => crypto.subtle.digest('SHA-256', bytes), progressEvery = 250, stallMs = 30000, sleep = ms => new Promise(r => setTimeout(r, ms)), now = () => performance.now() }) {
   const engineCache = `${CACHE_PREFIX}engine-${build.eid}`
   const fontCache = `${CACHE_PREFIX}fonts-${build.tid}`
   const order = Object.keys(build.packages)
@@ -68,55 +86,116 @@ export function texPage({ build, Runner, Engines, fetch, caches, progressEvery =
     }
     return {
       expect: n => { total += n },
-      add: n => { loaded += n; say(false) },
+      add: n => { loaded += n; if (n > 0) say(false) },
       // the whole, once a download was long enough to be said at all (a revisit's caches answer at once)
       end: () => { if (said) { loaded = total; say(true) } },
     }
   }
 
-  const readAll = async (response, progress) => {
-    const reader = response.body.getReader()
-    const chunks = []
-    let n = 0
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      chunks.push(value)
-      n += value.length
-      progress?.add(value.length)
+  /**
+   * One try of a download: the body read with `progress`, given up after stallMs without a byte, its decoded length
+   * checked against `size` and its bytes by `check` → the bytes, or nothing when `sink` (a Cache Storage entry) takes the
+   * body as it comes: then the bytes are never held whole here, and the entry is deleted again if they were wrong
+   */
+  async function once(url, { size, progress, check, sink }) {
+    const controller = new AbortController()
+    let timer = null
+    const arm = () => { clearTimeout(timer); timer = setTimeout(() => controller.abort(new Error(`no data for ${Math.round(stallMs / 1000)} s`)), stallMs) }
+    arm()
+    let counted = 0
+    try {
+      const r = await fetch(url, { signal: controller.signal, ...(sink ? { cache: 'no-store' } : {}) })
+      if (!r.ok) {
+        const e = new Error(`HTTP ${r.status}`)
+        const after = Number(r.headers.get('retry-after'))
+        if ((r.status === 429 || r.status === 503) && Number.isFinite(after) && after >= 0) e.retryAfter = after * 1000
+        throw e
+      }
+      let body = r.body, stored = null
+      if (sink) {
+        const [a, b] = body.tee()
+        body = b
+        stored = sink.cache.put(url, new Response(a, { headers: { 'content-type': typeOf(url) } })).catch(() => {})
+      }
+      const reader = body.getReader()
+      const chunks = []
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        arm()
+        counted += value.length
+        progress?.add(value.length)
+        if (!sink) chunks.push(value)
+      }
+      await stored
+      if (size != null && counted !== size) {
+        if (sink) await sink.cache.delete(url).catch(() => {})
+        throw new Error(`${counted} bytes, not the ${size} the build says`)
+      }
+      if (sink) return null
+      const bytes = new Uint8Array(counted)
+      let at = 0
+      for (const c of chunks) { bytes.set(c, at); at += c.length }
+      if (check && !(await check(bytes))) throw new Error('not the bytes its name says')
+      return bytes
+    } catch (e) {
+      progress?.add(-counted)
+      throw controller.signal.aborted && controller.signal.reason ? controller.signal.reason : e
+    } finally { clearTimeout(timer) }
+  }
+  /** a download, tried twice (after the server's Retry-After, at most 10 s, when it asks); throws NetworkFailure */
+  async function download(url, options = {}) {
+    let failure = null
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { return await once(url, options) } catch (e) {
+        failure = e
+        if (attempt === 0 && e?.retryAfter) await sleep(Math.min(e.retryAfter, 10000))
+      }
     }
-    const out = new Uint8Array(n)
-    let at = 0
-    for (const c of chunks) { out.set(c, at); at += c.length }
-    return out
+    throw new NetworkFailure(nameOf(url), failure?.message ?? String(failure))
   }
-  const get = async (url, progress) => {
-    const r = await fetch(url).catch(e => { throw new Error(`${url}: ${e?.message ?? e}`) })
-    if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`)
-    return { bytes: await readAll(r, progress), type: r.headers.get('content-type') ?? 'application/octet-stream' }
-  }
-  /** each [url, size] in Cache Storage `name`, fetched when missing; → Map url → bytes when `keep` */
-  const cached = async (items, name, progress, keep) => {
+
+  /** each [url, size] in Cache Storage `name`: what it holds answers, the rest is downloaded into it (and kept in
+   *  memory as well when `keep`) → Map url → bytes when `keep`. An entry that cannot be written is no failure: the
+   *  bytes in hand go on, and the worker's own fetch falls back to the network */
+  async function cached(items, name, progress, keep) {
     const out = new Map()
     if (!items.length) return out
-    const cache = await caches.open(name)
+    const cache = await caches.open(name).catch(() => null)
+    // no Cache Storage: what is not kept here is left to the worker's own fetch (and the HTTP cache)
+    if (!cache && !keep) return out
     const missing = []
     await Promise.all(items.map(async ([url, size]) => {
-      const hit = await cache.match(url)
+      const hit = cache ? await cache.match(url).catch(() => undefined) : undefined
       if (hit) { if (keep) out.set(url, new Uint8Array(await hit.arrayBuffer())); return }
-      missing.push(url)
+      missing.push([url, size])
       progress.expect(size)
     }))
-    await Promise.all(missing.map(async url => {
-      const { bytes, type } = await get(url, progress)
-      await cache.put(url, new Response(bytes, { headers: { 'content-type': type } }))
-      if (keep) out.set(url, bytes)
+    await Promise.all(missing.map(async ([url, size]) => {
+      if (keep || !cache) {
+        const bytes = await download(url, { size, progress })
+        if (cache) await cache.put(url, new Response(bytes, { headers: { 'content-type': typeOf(url) } })).catch(() => {})
+        if (keep) out.set(url, bytes)
+      } else await download(url, { size, progress, sink: { cache } })
     }))
     return out
   }
 
   const dropOldCaches = async () => {
     for (const name of await caches.keys()) if (name.startsWith(CACHE_PREFIX) && name !== engineCache && name !== fontCache) await caches.delete(name)
+  }
+
+  /** the index's text, checked against its name (index-<the first 12 hex digits of SHA-256 of its text and a NUL>) */
+  const indexText = async () => {
+    const expected = /^index-([0-9a-f]{12})\.txt$/.exec(build.index)?.[1]
+    const check = async bytes => {
+      if (!expected) return true
+      const withNul = new Uint8Array(bytes.length + 1)
+      withNul.set(bytes)
+      const hex = [...new Uint8Array(await digest(withNul))].map(b => b.toString(16).padStart(2, '0')).join('')
+      return hex.slice(0, 12) === expected
+    }
+    return new TextDecoder().decode(await download(`${build.tree}${build.index}`, { check }))
   }
 
   /** the manifest's entries for these engines and scripts, fetched in parallel → [{ name, format, content }]; an entry
@@ -131,7 +210,7 @@ export function texPage({ build, Runner, Engines, fetch, caches, progressEvery =
     const fontsP = cached(fontUrls, fontCache, progress, true).then(m => { for (const [u, b] of m) bytes.set(u, b) }, () => {})
     const plainUrls = [...new Map(plain.map(([, , path, size]) => [url(path), size])).entries()].filter(([u]) => !fontUrls.some(([f]) => f === u))
     for (const [, size] of plainUrls) progress.expect(size)
-    await Promise.all([fontsP, ...plainUrls.map(([u]) => get(u, progress).then(r => { bytes.set(u, r.bytes) }, () => {}))])
+    await Promise.all([fontsP, ...plainUrls.map(([u, size]) => download(u, { size, progress }).then(b => { bytes.set(u, b) }, () => {}))])
     progress.end()
     const out = []
     for (const [format, name, path] of [...plain, ...fonts]) {
@@ -168,9 +247,9 @@ export function texPage({ build, Runner, Engines, fetch, caches, progressEvery =
     const engineProgress = reporter(reply, 'engine')
     const engineP = cached(engineAssets(packages), engineCache, engineProgress, false).then(() => engineProgress.end())
     shared = {
-      index: fetch(`${build.tree}${build.index}`).then(r => { if (!r.ok) throw new Error(`the tree's index: HTTP ${r.status}`); return r.text() }),
+      index: indexText(),
       files: commonFiles(engines, scripts, reporter(reply, 'files')),
-      extra: Promise.all((build.extra ?? []).map(async path => ({ path, content: (await get(`${build.page}extra/${path}`)).bytes }))),
+      extra: Promise.all((build.extra ?? []).map(async path => ({ path, content: await download(`${build.page}extra/${path}`) }))),
     }
     shared.index.catch(() => {})
     shared.extra.catch(() => {})

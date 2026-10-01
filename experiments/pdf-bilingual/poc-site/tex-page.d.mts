@@ -22,10 +22,14 @@ export declare function texPage(options: {
   Runner: any
   // biome-ignore lint/suspicious/noExplicitAny: as above
   Engines: Record<string, any>
-  fetch: (url: string) => Promise<Response>
+  fetch: (url: string, init?: { signal?: AbortSignal; cache?: string }) => Promise<Response>
+  /** SHA-256 of bytes (the browser's crypto.subtle.digest by default) */
+  digest?: (bytes: Uint8Array) => Promise<ArrayBuffer | Uint8Array>
   // biome-ignore lint/suspicious/noExplicitAny: Cache Storage, or a fake of the part the page uses
   caches: any
   progressEvery?: number
+  stallMs?: number
+  sleep?: (ms: number) => Promise<void>
   now?: () => number
 }): {
   ready: { type: 'ready'; protocol: number; cv: string; eid: string; tid: string }
