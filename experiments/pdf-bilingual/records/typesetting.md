@@ -70,6 +70,12 @@ units standing out are counted over 2,531 units):
 | Flow | 30 (4 / 0) | 0.043 / 0.259 | 78 % | 84 % | 83 % | 53 |
 | **The rule chosen** | **31 (3 / 0)** | **0.040 / 0.220** | **80 %** | **85 %** | **84 %** | **10** |
 
+In the engine (`exp/flow-typesetting`, `spikes/typeset-check.mjs`, 2026-10-01), the same rule on the same
+translations: 32 of 34 papers as above; German and Korean 2608.15761 not (German one page fewer, drift 0.061 against
+0.085; Korean 0.108 against 0.086), and the experiment's own code, run again, gives what the engine gives, plan and
+TeX alike. Those two cells of `round-34.json` are not reproducible; the engine's run is the baseline: pages equal 30
+(3 more / 1 fewer), drift 0.040, within 0.1 column 80 %.
+
 Option A set a face in five papers, each over a run of whole pages: Japanese 2608.18090 (33 units at 95 % or
 97.5 %, its page back), 2608.24839 (40 at 97.5 %), 2608.05876 (24, its appendix), 2608.15761 (16), Chinese
 2608.09038 (17 at 95 %); against Flow, even, three papers better and none worse. The pages still off: Chinese
@@ -208,5 +214,7 @@ and writes numbers only.
   Today, FIT, Locked (H rules), Generic, Flow, first, Flow, Flow, even, Flow, even (A).
 - Kept outside git (`../data/`, 144 MB after the 2026-10-01 clean-up of 12.9 GB): every paper's translation (a
   model's tokens to make again), each evaluated paper's index (its numbers and the owner's flagged pages), the round's
-  `round.json`, and service H's output PDFs, translation stores and request log (`runs/visual-eval-h/`). Compiles,
-  PDFs and page images went: `visual-eval.mjs` makes them again from the translations, with no model call.
+  `round.json`, service H's output PDFs, translation stores and request log (`runs/visual-eval-h/`), and `metafont/`
+  (1.2 MB: the LH fonts' metrics TeX Live does not ship, which every Russian compile under pdfLaTeX needs; deleted by
+  mistake in the clean-up and made again with `spikes/make-metafont.mjs`, which takes about a quarter of an hour).
+  Compiles, PDFs and page images went: `visual-eval.mjs` makes them again from the translations, with no model call.
