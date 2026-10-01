@@ -323,6 +323,8 @@ describe('sentenceOf, and hitOf with sentences: the sentence shape, and the sent
   it('a heading, a caption, a cell light whole, whatever sentences they have', () => {
     const cap = side(pages, [[0, range(160, 180)]], new Map([[0, 'caption']]))
     expect(hitOf(cap, 1, 100, 498, px, startsOf)).toMatchObject({ id: 0, s: -1 })
+    // and say so to whoever paints them (the reader's paint asks sentencesFit, through makeSide's startsOf)
+    expect([sentencesFit(cap, 0, starts), sentencesFit(layout, 0, starts)]).toEqual([false, true])
   })
 
   it('the first sentence begins where its unit\'s first line does: a theorem\'s head is in it; after a run-in heading, what follows it', () => {

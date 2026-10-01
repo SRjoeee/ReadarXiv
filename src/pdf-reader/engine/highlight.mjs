@@ -433,9 +433,10 @@ function segsOf(L, run, starts) {
 }
 /** how far a word's ink's centre may stand past its sentence's span (PDF units) */
 const FIT = 0.5
-/** whether a unit's sentences can be drawn on a side: every run's rows divide between them and hold their words */
+/** whether a unit is lit by sentence on a side: running text (headings, captions, cells and a figure's text light
+ *  whole), and every run's shapes hold their words */
 export function sentencesFit(L, id, starts) {
-  return runsOf(L, id).every(run => segsOf(L, run, starts).fits)
+  return !NOT_RUNNING.has(L.kindOf(id)) && runsOf(L, id).every(run => segsOf(L, run, starts).fits)
 }
 /**
  * What each sentence on row `i` of a run paints across (PDF units), tiling the row: two sentences meet halfway through

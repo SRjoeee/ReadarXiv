@@ -334,7 +334,7 @@ function paint(side) {
     }
     // scaled with the page while a pinch lasts (overlay.mjs pinned)
     Object.assign(el.style, pinned(box, s))
-    drawn.set(el, local)
+    drawn.set(el, { width: box.width, local })
     layer.append(el)
     side.lit.push(el)
   }
@@ -1694,7 +1694,12 @@ const harness = () => ({ left, get right() { return right },
   /** a unit, or one of its sentences, lit as the pointer would light it */
   light: (id, s = -1) => light(id == null ? null : { id, s }),
   /** what is painted, as rectangles in the window's CSS pixels, by side: a shape's rows, a block's one */
-  litRects: () => sides.map(sd => sd.lit.flatMap(el => { const b = el.getBoundingClientRect(); return (drawn.get(el) ?? []).map(r => ({ x0: b.left + r.x0, x1: b.left + r.x1, y0: b.top + r.y0, y1: b.top + r.y1 })) })),
+  litRects: () => sides.map(sd => sd.lit.flatMap(el => {
+    const b = el.getBoundingClientRect(), d = drawn.get(el)
+    // scaled with its page while a zoom or a pinch is drawn (overlay.mjs pinned)
+    const k = d ? b.width / d.width : 1
+    return (d?.local ?? []).map(r => ({ x0: b.left + r.x0 * k, x1: b.left + r.x1 * k, y0: b.top + r.y0 * k, y1: b.top + r.y1 * k }))
+  })),
   pointAt, unitTop, unitDocTop, toPageBox, pageView, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
   // the right side replaced by a copy of what it shows, as a new compile replaces it (replaceRight)
   paintsOf: n => paints.get(n) ?? 0,
