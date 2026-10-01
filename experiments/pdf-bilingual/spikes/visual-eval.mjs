@@ -379,8 +379,9 @@ async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, p
     const seen = phys ? { drift: drifts(om0, await marksOf(r1.pdf)), preview: new Map(got.map(u => [u.i, lines.get(u.i).lines * lines.get(u.i).bs])), snap: phys === true ? undefined : phys * bsMedian, local, keep, ...(breaks ? { breaks: readForced(r1.log) } : {}) } : null
     const flow2 = flowType(got, g.script, heights, { window, horizon, ahead, measured: seen, rate: paced, shrink: faceSteps.length ? { steps: faceSteps, lines: 3, heightAt: (i, f) => (heights.get(i) * heightAtSize(cu.get(i), g.script, type, f)) / heightAtSize(cu.get(i), g.script, type, 1) } : null })
     second = { type, script: g.script, sizes: sizes2, measured, leads: flow2.leads, faces: flow2.sizes, ms: performance.now() - t2 }
-    // AXT_FLOW_DUMP=<file>: the final's flow inputs, to replay flowType outside the compile
-    if (process.env.AXT_FLOW_DUMP) writeFileSync(process.env.AXT_FLOW_DUMP, JSON.stringify({ list: got.map(u => ({ i: u.i, lo: u.lo, bs: u.bs })), heights: [...heights], measured: seen && { ...seen, drift: [...seen.drift], preview: [...seen.preview], breaks: seen.breaks && [...seen.breaks] }, window, horizon, ahead, rate: paced }))
+    // AXT_FLOW_DUMP=<file>: the final's flow inputs, each unit's height at every face step among them, to replay
+    // flowType outside the compile (inspect-flow.mjs)
+    if (process.env.AXT_FLOW_DUMP) writeFileSync(process.env.AXT_FLOW_DUMP, JSON.stringify({ script: g.script, list: got.map(u => ({ i: u.i, lo: u.lo, bs: u.bs })), heights: [...heights], measured: seen && { ...seen, drift: [...seen.drift], preview: [...seen.preview], breaks: seen.breaks && [...seen.breaks] }, window, horizon, ahead, rate: paced, faces: faceSteps.length ? { steps: faceSteps, lines: 3, heights: Object.fromEntries(faceSteps.map(f => [f, got.map(u => [u.i, (heights.get(u.i) * heightAtSize(cu.get(u.i), g.script, type, f)) / heightAtSize(cu.get(u.i), g.script, type, 1)])])) } : null }))
   }
   const r2 = second ? await compile(work, `${key}-2`, paper, files, lockedFiles(paper, translated, optsOf(second, second.leads, second.faces)), { engine: strategy.engine, rerun: true }) : null
   const r = r2?.ok ? r2 : r1

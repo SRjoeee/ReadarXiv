@@ -92,8 +92,10 @@ export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, l
  * fraction from the window's, however far behind the text is, so that no paragraph stands out from its neighbours: a
  * jump the preview measured, taken back within the horizon, set Korean 2608.05876's paragraphs after it a quarter
  * looser than the text around them, and the owner preferred the version without it to one nearer the original's places.
- * `shrink` ({ steps, lines, heightAt(i, f) }): where the text is left late at the end of a segment — before a forced
- * break, or at the paper's end — by more than `lines` of its lines, its leading stopped by the floor of the range
+ * `shrink` ({ steps, lines, heightAt(i, f) }): where a segment — up to a forced break, or the paper's end — runs late
+ * itself by more than `lines` of its lines (from level for the paper's first segment, from where the preview started
+ * it for one after a break: a segment that began a page late because the one before ran over the break leaves that
+ * to the one before), its leading stopped by the floor of the range
  * (Japanese and Korean set no tighter than the paper's own), the stretch that ran late before that end is set at one
  * face `f` times the type's (heightAt: a unit's height at leading one at that face): the first of `steps` that takes
  * the lateness back over as few of the stretch's last units as it needs, the strongest over all of them where none
@@ -101,7 +103,8 @@ export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, l
  * page long at the floor, its references started a page later and its checklist took a page more. Set unit by unit
  * where each wanted it, a third of the CJK units came out a little smaller, most by under 3 %, and a face that much
  * smaller saves a whole line more often than the line model allows, twice as often under 1 %: five papers ran early.
- * The face's factor by unit is flowType's `sizes`.
+ * The face's factor by unit is flowType's `sizes`; its `trace`, unit by unit, where the final pass put the text at the
+ * unit's start (`at`) and its end (`end`), in points behind the original, and the leading it set (`x`).
  * `heights`: Map(unit index → the translation's height at leading one), from unitHeights or a compile's lines. The
  * leading is × the paper's for CJK, × the size's for an alphabet, as the type's is
  */
@@ -177,14 +180,16 @@ export function flowType(units, script, heights, { window = 50, horizon = window
     return { leads, trace }
   }
   const first = pass(heights), sizes = new Map()
-  if (!shrink) return { leads: first.leads, sizes }
+  if (!shrink) return { leads: first.leads, sizes, trace: first.trace }
   // each segment's last unit — before a forced break, at the paper's end — and, where the text is left late there by
   // more than shrink.lines, its late stretch at one face: the first step that takes the lateness back over as few of
   // its last units as it needs, the strongest over all of them where none does
   let from = 0
   for (let e = 0; e < list.length; e++) {
     if (e < list.length - 1 && !breaks.has(list[e + 1].i)) continue
-    const late = first.trace[e].end
+    // what the segment ran late itself: from level for the paper's first, from where the preview started it for one
+    // after a forced break — a page late where the segment before ran over the break, which that one answers for
+    const base = from === 0 ? 0 : first.trace[from].at, late = first.trace[e].end - base
     if (late > shrink.lines * bs) {
       let chosen = null
       for (const f of shrink.steps) {
@@ -194,7 +199,7 @@ export function flowType(units, script, heights, { window = 50, horizon = window
           const { i, at, x } = first.trace[k]
           run.push(i)
           saved += (heights.get(i) - shrink.heightAt(i, f)) * x
-          if (saved >= late || at <= 0) break
+          if (saved >= late || at <= base) break
         }
         chosen = { f, run }
         if (saved >= late) break
@@ -203,8 +208,9 @@ export function flowType(units, script, heights, { window = 50, horizon = window
     }
     from = e + 1
   }
-  if (!sizes.size) return { leads: first.leads, sizes }
-  return { leads: pass(new Map([...heights].map(([i, h]) => [i, sizes.has(i) ? shrink.heightAt(i, sizes.get(i)) : h]))).leads, sizes }
+  if (!sizes.size) return { leads: first.leads, sizes, trace: first.trace }
+  const second = pass(new Map([...heights].map(([i, h]) => [i, sizes.has(i) ? shrink.heightAt(i, sizes.get(i)) : h])))
+  return { leads: second.leads, sizes, trace: second.trace }
 }
 /** flowType's leading alone: each unit's leading by its index */
 export const flowLeads = (units, script, heights, options) => flowType(units, script, heights, options).leads

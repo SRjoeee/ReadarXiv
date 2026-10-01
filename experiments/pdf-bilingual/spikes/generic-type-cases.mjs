@@ -203,9 +203,18 @@ const preBreak = new Map(longKo.map(u => [u.i, u.i >= 10 && u.i < 20 ? 104 : 96]
 const beforeDrift = new Map(longKo.map(u => [u.i, u.i < 20 ? Math.max(0, u.i - 10) * 8 : 0]))
 const segmented = flowType(longKo, 'Kore', preBreak, { window: 0, horizon: 40, shrink: stepped(preBreak), measured: { drift: beforeDrift, preview: preBreak, snap: 40, breaks: new Set([20]) } })
 check('shrink: a segment late at its forced break takes it back before the break, the next segment untouched', run(segmented.sizes) && segmented.sizes.has(19) && Math.max(...segmented.sizes.keys()) === 19 && Math.min(...segmented.sizes.keys()) >= 10, JSON.stringify([...segmented.sizes]))
+// a segment after a forced break answers for what it ran late itself, not for where it started: the preview's
+// segment before the break ran over it and the next started a page late (Japanese 2608.18090's checklist, set at 95 %
+// though the faces before the break took the page back)
+const inherit = new Map(longKo.map(u => [u.i, u.i >= 20 ? 600 : Math.max(0, u.i - 10) * 8]))
+const inherited = flowType(longKo, 'Kore', preBreak, { window: 0, horizon: 40, shrink: stepped(preBreak), measured: { drift: inherit, preview: preBreak, snap: 40, breaks: new Set([20]) } })
+check('shrink: a segment that starts a page late and runs no later is left alone, the one before the break taken back', inherited.sizes.size > 0 && Math.max(...inherited.sizes.keys()) <= 19, JSON.stringify([...inherited.sizes]))
 const onHeight = new Map(longKo.map(u => [u.i, 96]))
 const floatMid = flowType(longKo, 'Kore', onHeight, { window: 0, horizon: 40, shrink: stepped(onHeight), measured: { drift: new Map(longKo.map(u => [u.i, u.i >= 20 && u.i < 26 ? 200 : 0])), preview: onHeight, snap: 40 } })
 check('shrink: a float the preview moved mid-way, level again by the end, nothing smaller', floatMid.sizes.size === 0, JSON.stringify([...floatMid.sizes]))
+// the flow's trace — each unit's place at its start and its end and its leading, as the final pass set them — to
+// inspect a paper's flow (inspect-flow.mjs): the tail's end where the faces left it, and every unit in order
+check('trace: every unit in order, its leading the flow\'s, the end of the last where the faces left the text', tailShrunk.trace.length === 40 && tailShrunk.trace.every((r, k) => r.i === k && r.x === tailShrunk.leads.get(r.i)) && Math.abs(tailShrunk.trace[39].end) < 12, JSON.stringify(tailShrunk.trace.at(-1)))
 // a unit's predicted height at a face `f` times the type's, at leading one: more to a line, each line closer
 const wide = { lo: 10, bs: 12, cap: 30, i: 0, width: () => 285 }
 check('height at a size: a CJK unit at 0.95 takes the lines its width × 0.95 fills, each 0.95 as tall', near(heightAtSize(wide, 'Kore', { lead: 1, track: 0, scale: 1 }, 0.95), (285 * 0.95 / 30 + 0.5) * 12 * 0.95, 1e-9) && near(heightAtSize(wide, 'Kore', { lead: 1, track: 0, scale: 1 }, 1), unitHeights([wide], 'Kore', { lead: 1, track: 0, scale: 1 }).get(0), 1e-9))
