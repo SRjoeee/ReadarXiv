@@ -50,6 +50,32 @@ function setup(overrides: Partial<ImageRunOptions> = {}) {
   return { doc, targets, run, ocr, translate, rendered, progress }
 }
 
+describe('toBase64', () => {
+  type Native = { toBase64?: (this: Uint8Array) => string }
+  const bytes = new Uint8Array([0, 1, 2, 250, 255, 128, 64]).buffer
+
+  it('takes the browser\'s own encoder where it has one: the script one held the main thread 52 ms for a 2.6 MB image, the browser\'s 0.5 ms (#299, Part 1)', () => {
+    const proto = Uint8Array.prototype as Native
+    const own = proto.toBase64
+    const native = vi.fn(function (this: Uint8Array) { return Buffer.from(this).toString('base64') })
+    proto.toBase64 = native
+    try {
+      expect(toBase64(bytes)).toBe('AAEC+v+AQA==')
+      expect(native).toHaveBeenCalledTimes(1)
+    } finally {
+      proto.toBase64 = own
+    }
+  })
+
+  it('encodes in script below the Chrome that has it (the extension\'s floor is older), to the same text', () => {
+    expect((Uint8Array.prototype as Native).toBase64).toBeUndefined()
+    expect(toBase64(bytes)).toBe('AAEC+v+AQA==')
+    // past the chunk the script path splits at, so a large image is whole
+    const large = new Uint8Array(0x8000 * 2 + 7).map((_, i) => i % 251)
+    expect(toBase64(large.buffer)).toBe(Buffer.from(large).toString('base64'))
+  })
+})
+
 describe('startImageTranslation', () => {
   it('waiting() names the targets never requested, and none once each has been', async () => {
     const { targets, run } = setup()
