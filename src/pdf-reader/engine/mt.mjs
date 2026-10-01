@@ -3,6 +3,7 @@
 // the engine's slips are forgiven where they are unambiguous, and what still fails goes as runs — each stretch of text
 // between opaque pieces on its own — so that nothing is left untranslated.
 import { tokens } from './anchors.mjs'
+import { bySentence } from './highlight.mjs'
 import { latin1Bytes } from './latex-front.mjs'
 import { MIXED } from '@/cache/pdf-record'
 import { fromAlpha, TAG_RE, toAlpha } from '@/core/protector/tokens'
@@ -336,8 +337,9 @@ export function cutsOf(u, ser = serializeTags(u)) {
 
 /**
  * Units → Map unit → translated pieces. `send(texts, cuts)` returns the translations of a list of wire texts in `format`
- * (WIRE), `{ text, by, alignment? }` (engine.mjs); on the tags path each whole unit's sentence cuts go with it
- * (cutsOf: the service marks them and reads the translation's sentences back, DESIGN §8.6), on the others none. What the placeholders cannot bring back, even tolerantly where the format has a tolerant reading, goes again
+ * (WIRE), `{ text, by, alignment? }` (engine.mjs); on the tags path the sentence cuts of each whole unit that may light
+ * by sentence go with it (cutsOf: the service marks them and reads the translation's sentences back, DESIGN §8.6), on
+ * the others none. What the placeholders cannot bring back, even tolerantly where the format has a tolerant reading, goes again
  * as runs; a unit none of whose runs came back is left out (it stays in the source language). `how` counts each way.
  */
 export async function translateUnits(units, send, format = 'markers') {
@@ -358,7 +360,10 @@ export async function translateUnits(units, send, format = 'markers') {
   }
   if (wire.serialize) {
     const sers = units.map(wire.serialize)
-    const { texts, lost } = await ask(sers.map(s => s.wire), format === 'tags' ? units.map((u, i) => cutsOf(u, sers[i])) : undefined)
+    // the cuts of the units that may light by sentence: on Google each marked sentence is translated apart (B3b: the
+    // wording changed in 79 of 85 units), so a unit lit whole (a heading, a caption, a cell) goes as it would unmarked
+    const cuts = format === 'tags' ? units.map((u, i) => (bySentence(u.kind) ? cutsOf(u, sers[i]) : undefined)) : undefined
+    const { texts, lost } = await ask(sers.map(s => s.wire), cuts)
     units.forEach((u, i) => {
       if (lost?.has(i)) { how.lost++; results.set(u, { state: 'lost' }); return }
       const got = texts[i]

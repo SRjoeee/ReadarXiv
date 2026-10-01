@@ -195,8 +195,10 @@ describe('the tags path (Google, an LLM): the sentence cuts sent, and the senten
       calls.push(cuts ?? [])
       return texts.map(t => (t.startsWith('We') ? { text: reply, by: 'g', alignment: cut(['We study flows <x id="1"/>. ', 'They converge when <x id="2"/> grows.'], ['Wir untersuchen Flüsse <x id="1"/>. ', 'Sie konvergieren, wenn <x id="2"/> wächst.']) } : { text: 'Eine zweite Einheit, ein Satz.', by: 'g', alignment: { source: [t.length], target: [30] } }))
     }
-    const { results } = await translateUnits([u, v], send, 'tags')
-    expect(calls).toEqual([[[ser.wire.indexOf('They')], []]])
+    // a heading, lit whole whatever its sentences: none sent, so the engine translates it as it would without markers
+    const h = { kind: 'heading', pieces: [{ t: 'text', s: 'Results. More results.' }] }
+    const { results } = await translateUnits([u, v, h], send, 'tags')
+    expect(calls).toEqual([[[ser.wire.indexOf('They')], [], undefined]])
     expect(results.get(u)).toMatchObject({ state: 'whole', sentences: { src: [17] } })
     expect(results.get(v)).toMatchObject({ state: 'whole', sentences: { src: [], tr: [] } })
     // the markers path (Microsoft, which reports its own sentences): no cuts sent
