@@ -24,9 +24,10 @@ const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu
 export const texEscape = s => s.replace(INVISIBLE, '').replace(/[\\#$%&_{}~^]/g, c => ({ '\\': '\\textbackslash{}', '~': '\\textasciitilde{}', '^': '\\textasciicircum{}' })[c] ?? `\\${c}`)
 
 /** a unit → the wire text, the table from marker id back to the original piece, and the markers the wire set apart
- *  from a full stop (`stops`), whose space rehydrate takes off again */
+ *  from a full stop before them (`stops`), from a digit before them (`numbers`) and from one after them
+ *  (`numbersAfter`), whose spaces rehydrate takes off again */
 export function serialize(u) {
-  const slots = [], stops = new Set()
+  const slots = [], stops = new Set(), numbers = new Set(), numbersAfter = new Set()
   let wire = ''
   const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
   const trail = u.pieces.at(-1)?.t === 'text' ? u.pieces.at(-1).s.match(/\s*$/)[0] : ''
@@ -42,11 +43,13 @@ export function serialize(u) {
     // "speed." in English
     const before = /[\p{L}\p{N}\p{M}.]$/u.test(wire) ? ' ' : ''
     if (wire.endsWith('.')) stops.add(slots.length)
+    if (/\p{N}$/u.test(wire)) numbers.add(slots.length)
     const nextText = u.pieces[k + 1]?.t === 'text' ? u.pieces[k + 1].s : ''
     const after = /^[\p{L}\p{N}\p{M}]/u.test(utf8(nextText)) ? ' ' : ''
+    if (/^\p{N}/u.test(utf8(nextText))) numbersAfter.add(slots.length)
     wire += before + m + after
   })
-  return { wire, slots, lead, trail, stops }
+  return { wire, slots, lead, trail, stops, numbers, numbersAfter }
 }
 
 /** the translation → pieces, or why it cannot be used. The space the wire set after a full stop before a marker is the
@@ -58,12 +61,24 @@ export function serialize(u) {
  *  pieces set apart after a full stop, Microsoft's German, French, Spanish and Chinese left a space and no stop before
  *  34, 38, 49 and 12 of them: a tie, a control space or a group's end every one, a citation never */
 const STOP_SPACE = /(?<=[.\u3002\uff0e\u0964\u0965\u06d4\u0589\u1362\u104b\u0f0d])[ \t\n\f\r]+$/, SPACE = /[ \t\n\f\r]+$/
+/** The space the wire set beside a digit (a percent after a number, `95\%`; a times between two, `3$\times$10`) is the
+ *  wire's too, taken off as the full stop's is: before the marker while the text there still ends in a digit, after it
+ *  while the text there still begins with one. Kept, 95\% came back as "95 %" in 20 of 53 Chinese units with a percent
+ *  after a number (the evaluation of the typesetting rule, 2026-10-01). A word's space (#254) stays the engine's — a
+ *  letter, or a combining mark ending a word, before a marker: the common case, whose space was always kept */
+const NUMBER_SPACE = /(?<=\p{N})[ \t\n\f\r]+$/u, NUMBER_LEAD = /^[ \t\n\f\r]+(?=\p{N})/u
 /** a piece a space never goes before: one that is a space itself (a tie, a control space, a kern), a group's end */
 const SPACING = /^(?:~|\\[ ,;:]|\\(?:q?quad|enspace|thinspace|nobreakspace)(?![A-Za-z])|\\hspace\*?\{|\}$)/
-export function rehydrate(text, { slots, lead, trail, stops }, tolerant = false) {
+export function rehydrate(text, { slots, lead, trail, stops, numbers, numbersAfter }, tolerant = false) {
   const pieces = [], seen = new Map()
-  let last = 0
-  const pushText = s => { if (s) pieces.push({ t: 'text', tr: true, s: texEscape(s) }) }
+  let last = 0, afterNumber = false
+  // a text between two markers, the wire's spaces off it: after the one before it, before the one after it (`before`)
+  const pushText = (s, before = null) => {
+    if (before) s = s.replace(before, '')
+    s = decode(s)
+    if (afterNumber) s = s.replace(NUMBER_LEAD, '')
+    if (s) pieces.push({ t: 'text', tr: true, s: texEscape(s) })
+  }
   // tolerant: the engine sometimes drops the closing # before a CJK character or punctuation (@b形, @g。). A lone @ can only
   // be a marker's remains, because a literal @ went out as @@; accepted only when no letter follows, never inside a word
   const L = toAlpha(Math.max(1, slots.length)).length
@@ -75,11 +90,12 @@ export function rehydrate(text, { slots, lead, trail, stops }, tolerant = false)
     const id = fromAlpha(m[1] ?? m[2])
     if (!slots[id - 1]) return { error: 'unknown marker' }
     if (seen.has(id)) return { error: 'duplicated marker' }
-    const wires = stops?.has(id) && (SPACING.test(slots[id - 1].src ?? '') ? SPACE : STOP_SPACE)
-    pushText(decode(wires ? buf.replace(wires, '') : buf)); buf = ''
+    const wires = stops?.has(id) ? STOP_SPACE : numbers?.has(id) ? NUMBER_SPACE : null
+    pushText(buf, wires && (SPACING.test(slots[id - 1].src ?? '') ? SPACE : wires)); buf = ''
     seen.set(id, pieces.length); pieces.push(slots[id - 1])
+    afterNumber = !!numbersAfter?.has(id)
   }
-  buf += text.slice(last); pushText(decode(buf))
+  buf += text.slice(last); pushText(buf)
   if (seen.size !== slots.length) return { error: 'lost marker' }
   // the two ends of a formatting group must stay in order and properly nested, or the braces stop balancing
   const stack = []

@@ -159,7 +159,7 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 //   original kept at the original's width, and a tabular* measured at its columns' width before it is fitted
 //   (latex-front.mjs FIT_DEF, AUTHOR_WIDE); an e-mail address, and a list of names in braces before its domain, a
 //   placeholder (keepAddresses); a name kept whole in a line of names (lineBreaks)
-// 5: the two together
+// 5: the two together, and the wire's spaces beside a digit taken back (mt.mjs rehydrate)
 export const PIPELINE_VERSION = '5'
 
 /**
