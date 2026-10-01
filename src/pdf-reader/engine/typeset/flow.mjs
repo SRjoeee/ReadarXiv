@@ -23,9 +23,10 @@ const clamp = (x, [lo, hi]) => Math.min(hi, Math.max(lo, x))
  * it (Korean 2608.21180: a title a line shorter left page 1 51 pt ahead). A later median within `measured.snap` (points)
  * of it is noise and reads as it (2212.06817: a final that followed every reading ran 0.12 page ahead); one past it
  * holds while it lasts.
- * `measured.breaks`: the units that follow a forced break (a \clearpage, a \newpage; tex.mjs readForced), where the
- * preview and the final both start at the top of a page or column whatever came before: the final's own drift is taken
- * up again from the preview's account there, and the offset from the first reading after it, as at the paper's start.
+ * `measured.breaks`: the units that follow a forced break (a \clearpage, a \newpage; tex.mjs readForced), each taken at
+ * the first unit at or after it that the flow sets, where the preview and the final both start at the top of a page or
+ * column whatever came before: the final's own drift is taken up again from the preview's account there, and the offset
+ * from the first reading after it, as at the paper's start.
  * Read across it, what the final's heights had parted from the preview's before the break (113 pt over Korean
  * 2608.05876's main text) was read as the appendix running that far early, and the whole appendix was set looser.
  * `rate`: what is taken back — the drift, the measured offset — moves a unit's leading at most that fraction from the
@@ -54,8 +55,12 @@ export function flowType(units, design, heights, { window = 50, horizon = window
   const bs = [...list.map(u => u.bs)].sort((a, b) => a - b)[list.length >> 1] ?? 12, half = (window * bs) / 2, back = horizon * bs
   let at = 0
   const mid = list.map(u => { const m = at + (u.lo * u.bs) / 2; at += u.lo * u.bs; return m })
-  // what the preview measured beyond its heights' account, smoothed, by unit index (see above)
-  const offsetAt = new Map(), accountAt = new Map(), breaks = measured?.breaks ?? new Set()
+  // what the preview measured beyond its heights' account, smoothed, by unit index (see above); each forced break at the
+  // first unit after it that the flow sets: the unit right after one may be one it does not measure — a paragraph
+  // holding a display, a unit left untranslated — and the break would be lost (Chinese 2608.09038's \clearpage before
+  // unit 72 left its whole paper one segment; the re-review of 2026-10-02, N4)
+  const offsetAt = new Map(), accountAt = new Map()
+  const breaks = new Set([...(measured?.breaks ?? [])].map(b => list.find(u => u.i >= b)?.i).filter(i => i != null))
   if (measured) {
     const readings = []
     let account = 0, broke = false

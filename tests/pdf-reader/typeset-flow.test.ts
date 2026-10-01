@@ -190,6 +190,15 @@ describe('the preview\'s places', () => {
     const anchored = leadsOf(even, DESIGN.Latn, longBefore, { window: 0, horizon: 40, measured: { drift, preview: longBefore, snap: 40, breaks: new Set([20]) } })
     expect(even.every(u => near((longBefore.get(u.i) ?? 0) * (anchored.get(u.i) ?? 0), 96, 1e-6))).toBe(true)
   })
+  it('takes a forced break before a unit it does not measure at the next unit it does (Chinese 2608.09038: a \\clearpage before a paragraph holding a display)', () => {
+    const longBefore = new Map(even.map(u => [u.i, u.i < 20 ? 101 : 96]))
+    const drift = new Map(even.map(u => [u.i, u.i < 20 ? 5 * u.i : 0]))
+    const flowed = even.filter(u => u.i !== 20)
+    const at = (breaks: Set<number>) => leadsOf(flowed, DESIGN.Latn, longBefore, { window: 0, horizon: 40, measured: { drift, preview: longBefore, snap: 40, breaks } })
+    expect([...at(new Set([20]))]).toEqual([...at(new Set([21]))])
+    expect([...at(new Set([20]))]).not.toEqual([...at(new Set())])
+    expect(flowed.every(u => near((longBefore.get(u.i) ?? 0) * (at(new Set([20])).get(u.i) ?? 0), 96, 1e-6))).toBe(true)
+  })
 })
 
 describe('a stretch at the floor set at a smaller face (option A in steps)', () => {
