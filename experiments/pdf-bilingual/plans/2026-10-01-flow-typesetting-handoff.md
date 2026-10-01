@@ -69,7 +69,12 @@ final        fin = finalTypesetting(plan.state, preview, translated)
    readings are another paper's (the review of 2026-10-01, M3); `previewTypesetting` cannot tell.
 3. **The measuring compile must hold the whole translation.** `previewTypesetting` solves the type and the flow for the
    units it is given, and `finalTypesetting` corrects where this compile put them; it refuses (no typeset, `missing`:
-   "a plan of the whole translation") a plan made on another translation than the one it is given to set. Today's
+   "a plan of the whole translation") a plan made on another translation than the one it is given to set. **The same
+   translation** is the same units, each with the same pieces in the same order, field for field — a note's piece by
+   its own unit, not by that unit's text — whether in the same arrays or made again: `runLive` replaces the array of
+   every unit a batch answers whole, changed or not, and a seeded run sends every unit again, so arrays made anew with
+   equal pieces are the same translation. A unit more or less, a text changed (in a new array or in place: the plan
+   keeps its own copy of every piece), a placeholder moved, is another, and the final is set as today. Today's
    progressive previews can stay as they are, or use `previewTypesetting(…).typeset` on the snapshot (pure,
    milliseconds) so they look closer to the final — but plan again once every unit is in, and measure that. The last
    preview, once every unit is translated, can be the measuring compile, and is worth showing.

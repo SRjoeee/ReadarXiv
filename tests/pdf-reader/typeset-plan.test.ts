@@ -77,10 +77,22 @@ describe('a plan of the whole translation', () => {
     expect([refused.typeset, refused.missing]).toEqual([null, 'a plan of the whole translation'])
     expect(finalTypesetting(whole.state, measured, undefined as never).typeset).toBeNull()
   })
-  it('keeps its own copy of the translation it was made on', () => {
-    const given = inputs('de'), n = given.paper.units.length, plan = previewTypesetting(given)
+  it('is the same translation made again in new arrays — a batch answered whole, a seeded run sent again: the final sets it; a changed text it refuses', () => {
+    const given = inputs('de'), n = given.paper.units.length, measured = { log: originalLog(n), marks: originalMarks(n) }, plan = previewTypesetting(given)
+    const again = new Map([...given.translated].map(([u, pieces]) => [u, (pieces as Piece[]).map(p => ({ ...p }))]))
+    expect(finalTypesetting(plan.state, measured, again as never).typeset).not.toBeNull()
+    const [unit, pieces] = [...again].find(([, ps]) => (ps as Piece[]).some(p => p.t === 'text')) ?? []
+    const changed = new Map(again).set(unit as never, (pieces as Piece[]).map(p => (p.t === 'text' ? { ...p, s: `${p.s} and more` } : p)))
+    expect(finalTypesetting(plan.state, measured, changed as never).missing).toBe('a plan of the whole translation')
+  })
+  it('keeps its own copy of the translation it was made on: a unit dropped, or a text changed inside the same array, is another', () => {
+    const given = inputs('de'), n = given.paper.units.length, plan = previewTypesetting(given), measured = { log: originalLog(n), marks: originalMarks(n) }
+    const inPlace = inputs('de'), planned = previewTypesetting(inPlace)
     given.translated.delete([...given.translated.keys()][0] as never)
-    expect(finalTypesetting(plan.state, { log: originalLog(n), marks: originalMarks(n) }, given.translated).missing).toBe('a plan of the whole translation')
+    expect(finalTypesetting(plan.state, measured, given.translated).missing).toBe('a plan of the whole translation')
+    const text = [...inPlace.translated.values()].flatMap(ps => ps as Piece[]).find(p => p.t === 'text')
+    if (text) text.s = `${text.s} and more`
+    expect(finalTypesetting(planned.state, measured, inPlace.translated).missing).toBe('a plan of the whole translation')
   })
 })
 

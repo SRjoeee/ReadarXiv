@@ -63,11 +63,20 @@ export function previewTypesetting({ paper, translated, lang, strategy, fonts, f
   // each caption's float waits for its original's page and column (tex.mjs FLOAT_TEX)
   const om = original.marks, floatsAt = new Map()
   units.forEach((u, i) => { const m = om.marks.get(`${i}s`); if (u.kind === 'caption' && m) floatsAt.set(i, { page: m.page + 1, col: columnOf(om, m) }) })
-  // the translation the plan was made on, its own copy: the caller's map goes on filling
-  const state = { units, translated: new Map(translated), design, strategy: strategy.name, type, list, lo, floatsAt, original, leads }
+  // the translation the plan was made on, its own copy down to each piece: the caller's map goes on filling, and an
+  // array changed where it is would change the plan's too
+  const state = { units, translated: new Map([...translated].map(([u, pieces]) => [u, pieces.map(p => ({ ...p }))])), design, strategy: strategy.name, type, list, lo, floatsAt, original, leads }
   state.typeset = typesettingOf(state, type, leads, new Map())
   return { typeset: state.typeset, type, state, missing: null }
 }
+/** a unit's translation the same as the one the plan was made on: the same pieces in the same order, field for field —
+ *  a note's piece by its own unit, not by that unit's text — in the same arrays or made again: runLive replaces the
+ *  array of every unit a batch answers whole, changed or not, and a seeded run sends every unit again (the re-review of
+ *  2026-10-02, R1). A text changed, a piece more or less, is another translation */
+const samePieces = (a, b) => a === b || (!!a && !!b && a.length === b.length && a.every((p, k) => {
+  const q = b[k], fields = Object.keys(p)
+  return fields.length === Object.keys(q).length && fields.every(f => p[f] === q[f])
+}))
 /** the original's marks with something to read: unit marks, and every page's columns, which both documents' places are
  *  read on (places.mjs) */
 const whole = m => !!m?.marks.size && m.columns.length === m.pages && m.columns.every(c => c > 0)
@@ -82,14 +91,14 @@ const whole = m => !!m?.marks.size && m.columns.length === m.pages && m.columns.
  * unit's leading and face, and the flow's trace (flow.mjs flowType). Where the preview's measurement is missing or
  * partial — its log not whole (tex.mjs completeLog), its marks missing, no unit it measured — the final is set as the
  * preview was, uncorrected (`missing` says why): that plan had every input it needs. With no plan (`state` null), or a
- * plan made on other than `translated`, the whole translation the final sets, none: the measuring compile must hold the
- * whole translation.
+ * plan made on another translation than `translated`, the whole translation the final sets — other units, or a unit's
+ * pieces other in content (samePieces) — none: the measuring compile must hold the whole translation.
  */
 export function finalTypesetting(state, preview, translated) {
   if (!state) return { typeset: null, type: null, leads: new Map(), faces: new Map(), trace: [], missing: 'a plan' }
   // a plan of part of the translation — a progressive preview's — solved a type and a flow for the part: the final
   // would carry them to the whole uncorrected where the preview lacked units. Set as today
-  if (!translated || translated.size !== state.translated.size || [...translated].some(([u, pieces]) => state.translated.get(u) !== pieces)) return { typeset: null, type: null, leads: new Map(), faces: new Map(), trace: [], missing: 'a plan of the whole translation' }
+  if (!translated || translated.size !== state.translated.size || [...translated].some(([u, pieces]) => !samePieces(state.translated.get(u), pieces))) return { typeset: null, type: null, leads: new Map(), faces: new Map(), trace: [], missing: 'a plan of the whole translation' }
   const { design, type, list } = state, cjk = design.cjk
   const lines = readLines(preview?.log), got = list.filter(u => lines.get(u.i))
   const missing = !completeLog(preview?.log) ? "the preview's log, whole" : !preview?.marks?.marks.size ? "the preview's marks" : !got.length ? 'a unit the preview measured' : null
