@@ -23,24 +23,24 @@ export function startsTranslation(hash: string): boolean {
   return asked === AUTO_TRANSLATE_HASH || asked === LEGACY_AUTO_TRANSLATE_HASH
 }
 
+/** Whether the abstract page offers the paper's source, which a bilingual PDF is made from (the reader's design, §2) */
+export const sourceOn = (doc: Document): boolean => doc.querySelector(SOURCE_LINK) !== null
+
+/**
+ * Where arXiv says this paper's HTML full text is, plus the hash that starts the translation; null when the paper
+ * has no HTML version. The popup asks the page for this rather than building a URL: the href carries the version.
+ */
+export function htmlHrefOn(doc: Document): string | null {
+  const html = doc.querySelector<HTMLAnchorElement>(HTML_LINK)
+  return html ? `${html.href}${AUTO_TRANSLATE_HASH}` : null
+}
+
 /**
  * Insert the bilingual entry; returns whether it was inserted.
  *
  * Nothing happens in three cases: this is not an abstract page, the paper has no HTML version (`HTML_LINK` absent), or it was inserted already.
  * Idempotent because it is cheap: arXiv's abstract page does not re-render, but an assumption that only holds under one DOM shape is not worth relying on.
  */
-/**
- * Where arXiv says this paper's HTML full text is, plus the hash that starts the translation; null when the paper
- * has no HTML version. The popup asks the page for this rather than building a URL: the href carries the version.
- */
-/** Whether the abstract page offers the paper's source, which a bilingual PDF is made from (the reader's design, §2) */
-export const sourceOn = (doc: Document): boolean => doc.querySelector(SOURCE_LINK) !== null
-
-export function htmlHrefOn(doc: Document): string | null {
-  const html = doc.querySelector<HTMLAnchorElement>(HTML_LINK)
-  return html ? `${html.href}${AUTO_TRANSLATE_HASH}` : null
-}
-
 export function injectBilingualLink(doc: Document, label: string, options: { newTab?: boolean } = {}): boolean {
   const html = doc.querySelector<HTMLAnchorElement>(HTML_LINK)
   if (!html) return false

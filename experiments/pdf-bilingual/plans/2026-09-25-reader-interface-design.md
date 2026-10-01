@@ -160,7 +160,10 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
   2026-09-26). When the
   document area is narrower than 840 px, two pages side by side are too small to read: 对照 stays chosen, the translation
   is shown alone, and the capsule says so once, 窗口较窄，暂只显示译文 — the HTML page's rule and wording (S-P-74, 窗口较窄，
-  暂按上下显示). The widths are to be checked by reading at them while building.
+  暂按上下显示). The words stay 5 s of being read: the time stands while the pointer is over the capsule or it holds the
+  focus, and the rest of it runs once neither does (the maintainer, 2026-10-01); holding no action, the capsule is a
+  stop of its own for the keyboard while it is shown (Codex and Devin on #307). The widths are to be checked by
+  reading at them while building.
 
 ## 6. Components
 
@@ -297,7 +300,7 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
 - A 34 px capsule on the floating surface. It enters by rising 10 px and fading in with a slight scale (240 ms) and
   leaves lighter (160 ms); a new state of the same kind changes its words in place — the words fade in, the capsule's
   width eases to theirs (200 ms) — instead of leaving and coming again.
-- **Progress** is a line along the toolbar's foot, not the capsule's: 2 px of quiet ink (`--ink-3` at 80 %), its length
+- **Progress** is a line along the toolbar's foot, not the capsule's: 2 px of quiet ink (`--ink-3`, 3.64 / 3.39:1 on the chrome — a graphic's 3:1; at 80 % it was 2.67:1, #299), its length
   the share done — the PDF's download while the reader loads, the paragraphs translated while a translation runs. It
   grows by a transform and fades out at the length it reached; each stage is a line of its own, so that the
   translation's starts afresh rather than the download's shrinking back. It is all that shows a load or a translation

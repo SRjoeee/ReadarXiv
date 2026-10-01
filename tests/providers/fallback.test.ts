@@ -85,8 +85,37 @@ describe('createFallbackService', () => {
     const back = await service.translate(call)
     expect(back.ok && back.result.provider).toBe('llm')
     expect(service.status().activeId).toBe('llm')
-    // Success clears the record: demoted only remains as the most recent reason for display
-    expect(service.status().demoted?.kind).toBe('network')
+    // Success clears the record, and a recovered engine is no longer reported as put aside (#304)
+    expect(service.status().demoted).toBeUndefined()
+  })
+
+  it('reports as put aside the most recent hand-over still in force: an engine whose cool-down ended and that answers again is not named, the refused key under it is (#304)', async () => {
+    let clock = 0
+    const first = step('svc-abcd1234', [fail('auth', 'bad key')])
+    const second = step('microsoft', [fail('network', 'reset'), ok('microsoft')])
+    const third = step('google-web', [ok('google-web')])
+    const service = createFallbackService([first, second, third], { cooldownMs: 1000, now: () => clock })
+    await service.translate(call)
+    expect(service.status()).toMatchObject({ activeId: 'google-web', demoted: { id: 'microsoft', kind: 'network' } })
+    // the cool-down over, Microsoft answers again and serves: the reason shown is the key's, which still holds
+    clock = 1000
+    const back = await service.translate(call)
+    expect(back.ok && back.result.provider).toBe('microsoft')
+    expect(service.status()).toMatchObject({ activeId: 'microsoft', demoted: { id: 'svc-abcd1234', kind: 'auth' } })
+    // an expired cool-down, not yet tried again, is not reported either
+    const lapsed = createFallbackService([step('llm', [fail('network', 'reset')]), step('google-web', [ok('google-web')])], { cooldownMs: 1000, now: () => clock })
+    await lapsed.translate(call)
+    clock = 2000
+    expect(lapsed.status().demoted).toBeUndefined()
+  })
+
+  it('a hand-over keeps the failure\'s HTTP status: a refused key (401) is told from a refusal that is not the key\'s (403) (#299, row 75)', async () => {
+    const refusal = (status: number): TranslateMessageResponse => ({ ok: false, error: { kind: 'auth', message: `HTTP ${status}`, isolatable: true, status } })
+    for (const status of [401, 403]) {
+      const service = createFallbackService([step('svc-abcd1234', [refusal(status)]), step('microsoft', [ok('microsoft')])])
+      await service.translate(call)
+      expect(service.status().demotions).toEqual([{ id: 'svc-abcd1234', kind: 'auth', message: `HTTP ${status}`, status }])
+    }
   })
 
   it('aborted neither demotes nor switches engines: a session cancellation is not the engine\'s fault', async () => {

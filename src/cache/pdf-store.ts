@@ -73,6 +73,7 @@ export interface PdfStore {
   /** These two reject on a failure: the settings page reports a store it cannot read or empty, rather than show it empty.
    *  Clearing forgets the untypeset papers too: a way to have them tried again */
   clear(): Promise<void>
+  /** how many papers (their versions and languages one), and the bytes every record takes */
   usage(): Promise<{ count: number; bytes: number }>
 }
 
@@ -245,7 +246,10 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
 
     async usage() {
       const entries = await db.entries.toArray()
-      return { count: entries.length, bytes: entries.reduce((sum, e) => sum + e.bytes, 0) }
+      // papers, as the settings page's line says (UI.md S-O-73), not records: a paper is kept once per version and
+      // language, and its versions are one paper (#299, Part 5's M12)
+      const papers = new Set(entries.map(e => e.paper.replace(/v\d+$/, '')))
+      return { count: papers.size, bytes: entries.reduce((sum, e) => sum + e.bytes, 0) }
     },
   }
 }

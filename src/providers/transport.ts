@@ -55,9 +55,10 @@ export interface ProviderStatus {
    * Every hand-over still in force, by engine. The page uses it to ask about **the engine its own
    * session started on**: `engine.demoted` is only the most recent one, so an intermediate free
    * engine failing transiently would hide the permanent one that displaced the reader's service
-   * (Codex on #157)
+   * (Codex on #157). `status` is the failure's HTTP status where it had one: `auth` is a 401 or a 403, and the
+   * retranslate cue reads a refused key by the 401 (shared/page-action.ts keyMadeGood)
    */
-  demotions: { id: string; kind: ProviderErrorKind }[]
+  demotions: { id: string; kind: ProviderErrorKind; status?: number }[]
   /**
    * The identity (cache/key.ts translationIdentity) of the engine that would answer now: the first choice, or its
    * fallback while it cannot. The PDF reader's cached copies are current by it
@@ -144,7 +145,8 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       ...(deps.cacheReadBudgetMs !== undefined ? { cacheReadBudgetMs: deps.cacheReadBudgetMs } : {}),
     }),
   }))
-  const seeded = chain.filter(engine => deps.rejected?.has(engine.id)).map(engine => ({ id: engine.id, kind: 'auth' as const, message: 'the endpoint refused this key before' }))
+  // the record holds a 401 alone (background/health-guard.ts), and its hand-over says so
+  const seeded = chain.filter(engine => deps.rejected?.has(engine.id)).map(engine => ({ id: engine.id, kind: 'auth' as const, message: 'the endpoint refused this key before', status: 401 }))
   const service = createFallbackService(steps, {
     ...(deps.warn ? { warn: deps.warn } : {}),
     ...(seeded.length ? { demoted: seeded } : {}),
@@ -244,7 +246,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       targetLanguage: config.targetLanguage,
       promptId: config.prompts.promptId,
       chain: chain.map(engine => engine.id),
-      demotions: live.demotions.map(d => ({ id: d.id, kind: d.kind })),
+      demotions: live.demotions.map(d => ({ id: d.id, kind: d.kind, ...(d.status !== undefined ? { status: d.status } : {}) })),
       identity,
       engine: {
         id: active.id,

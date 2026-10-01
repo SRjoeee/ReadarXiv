@@ -69,8 +69,8 @@ const abs = (paper: string, over: Partial<NonNullable<PopupInput['entry']>> = {}
 /** The reader's service put aside for a refused key, and a page running on the free service since (P6, P6b) */
 const REFUSED = { id: SVC.id, kind: 'auth' as const, message: 'User not found.' }
 // The hand-over still in force, by engine (transport.ts `demotions`): the key's refusal, alongside `engine.demoted`
-// (the most recent hand-over — the same one here, until a later test adds a second)
-const p6: PopupInput = { ...base, config: llm, page: page({ state: 'on', requested: 20, done: 11 }, { running: { provider: SVC.id, target: 'cmn', engine: 'google-web', revision: 'r1' } }), saved: llmProvider(), session: llmProvider({ engine: { id: 'google-web', demoted: REFUSED }, demotions: [{ id: SVC.id, kind: 'auth' }] }) }
+// (the most recent hand-over still in force — the same one here, until a later test adds a second)
+const p6: PopupInput = { ...base, config: llm, page: page({ state: 'on', requested: 20, done: 11 }, { running: { provider: SVC.id, target: 'cmn', engine: 'google-web', revision: 'r1' } }), saved: llmProvider(), session: llmProvider({ engine: { id: 'google-web', demoted: REFUSED }, demotions: [{ id: SVC.id, kind: 'auth', status: 401 }] }) }
 
 export const POPUP_FIXTURES: PopupFixture[] = [
   { id: 'PW', name: 'Before the first answer', when: 'tab === null', input: { ...base, page: null, tab: null } },
@@ -91,7 +91,7 @@ export const POPUP_FIXTURES: PopupFixture[] = [
   // the key refused: the record holds the service, and the chain in force passes it over as the page's did
   { id: 'P6', name: 'Switched to another service', when: 'on ∧ engine.demoted', input: { ...p6, rejected: [SVC.id], saved: llmProvider({ available: false, engine: { id: 'google-web', demoted: REFUSED } }) } },
   // the key made good since (a connection that succeeded cleared the record): a start would run on the service again
-  { id: 'P6b', name: 'The key made good, the page still on the free service', when: 'on ∧ engine.demoted(auth) ∧ !rejected ∧ saved.engine = demoted', input: p6 },
+  { id: 'P6b', name: 'The key made good, the page still on the free service', when: 'on ∧ demotions(auth, 401) ∧ !rejected ∧ saved.engine = demoted', input: p6 },
   { id: 'P7', name: 'LLM not configured, a fallback available', when: 'idle ∧ !runnable ∧ fallback', input: { ...base, config: llmNoKey, saved: llmProvider({ available: false, fallback: { id: 'microsoft' } }) } },
   { id: 'P7b', name: 'A refused key, a fallback available', when: 'idle ∧ rejected ∧ fallback', input: { ...base, config: llm, rejected: [SVC.id], saved: llmProvider({ available: false, fallback: { id: 'microsoft' } }) } },
   { id: 'P8', name: 'LLM not configured, no fallback', when: 'idle ∧ !runnable ∧ !fallback', input: { ...base, config: { ...llmNoKey, fallback: { enabled: false } }, saved: llmProvider({ available: false, chain: ['openai-compat'] }) } },
