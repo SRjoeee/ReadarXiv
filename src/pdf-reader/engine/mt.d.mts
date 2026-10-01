@@ -15,6 +15,8 @@ export type Sentences = { src: number[]; tr: number[] }
 /** a unit's sentences from its engine's sentence lengths for the wire it was sent (the segment's `alignment`), or null */
 export declare function sentencesOf(u: { pieces: Piece[] }, ser: ReturnType<typeof serialize>, text: string, alignment: { source: number[]; target: number[] } | undefined, pieces: Piece[], tolerant?: boolean): Sentences | null
 /** each unit's text as a compile has it: translated where `done` has its pieces, with the sentences of those pieces */
+/** a record's sentences where they are of their shape, else null */
+export declare function sentencesKept(s: unknown, src: string, tr: string): Sentences | null
 export declare function textsShown<U extends { pieces: Piece[] }>(units: U[], done: Map<U, Piece[]>, sentencesOf: (pieces: Piece[]) => Sentences | undefined): ({ id: number; text: string; gaps?: number[]; lead?: string; trail?: string; inner?: string; sentences?: Sentences })[]
 type Sent = { text: string; by: string | null; alignment?: { source: number[]; target: number[] } } | null
 /** units → their translations, by unit: pieces, how they came back, the identity that answered, and a whole unit's sentences */

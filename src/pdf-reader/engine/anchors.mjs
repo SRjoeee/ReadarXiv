@@ -790,7 +790,8 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
  */
 export function sentenceStarts(anchor, text, offsets) {
   const pairs = anchor?.pairs
-  if (!pairs || !offsets) return null
+  // offsets of their shape, whole numbers rising inside the text: a copy's record is read as stored (mt.mjs sentencesKept)
+  if (!pairs || !Array.isArray(offsets) || !offsets.every((o, j) => Number.isInteger(o) && o > (j ? offsets[j - 1] : 0) && o < text.length)) return null
   const at = offsets.map(o => tokens(text.slice(0, o)).length), ts = anchor.tokens, out = new Int32Array(offsets.length)
   const has = k => { let lo = 0, hi = ts.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] < k) lo = m + 1; else hi = m } return ts[lo] === k }
   for (let j = 0; j < at.length; j++) {

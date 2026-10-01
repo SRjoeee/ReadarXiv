@@ -510,5 +510,7 @@ describe('sentenceStarts: where each sentence after the first begins on the page
     expect(sentenceStarts(marked, text, [text.indexOf('Theta'), text.indexOf('Delta')])).toBeNull()
     expect(sentenceStarts(marked, text, [text.length + 5])).toBeNull()
     expect(sentenceStarts(marked, text, undefined)).toBeNull()
+    // offsets of another shape (a malformed record's): none, nothing thrown
+    for (const o of ['5', [1.5], [0], [null], { length: 1 }]) expect(sentenceStarts(marked, text, o as never)).toBeNull()
   })
 })

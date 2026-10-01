@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { plainSource, plainTranslated, rehydrate, sentencesOf, serialize, textsShown, translateUnits, unitText } from '@/pdf-reader/engine/mt.mjs'
+import { plainSource, plainTranslated, rehydrate, sentencesKept, sentencesOf, serialize, textsShown, translateUnits, unitText } from '@/pdf-reader/engine/mt.mjs'
 
 // A unit's plain text as the PDF shows it, which the reader locates it by (anchors.mjs)
 
@@ -156,6 +156,19 @@ describe('sentencesOf: the engine\'s sentences, where each begins in the plain t
     expect(sentencesOf(u, ser, reply, { source: [20, 29], target: [22] }, back.pieces as never)).toBeNull()
     // pieces that are not the reply's
     expect(sentencesOf(u, ser, reply, cut(['We study flows @a#. ', 'They converge when @b# grows.'], ['我们研究流@a#。', '当@b#增长时，它们收敛。']), [{ t: 'text', tr: true, s: '别的' }] as never)).toBeNull()
+  })
+})
+
+describe('sentencesKept: a record\'s sentences used only when they are of their shape (the review of B3, minor 5)', () => {
+  const src = 'One two. Three four. Five.', tr = 'Eins zwei. Drei vier. Fünf.'
+  it('as many starts on each side, rising inside each side\'s text', () => {
+    const s = { src: [9, 21], tr: [11, 22] }
+    expect(sentencesKept(s, src, tr)).toBe(s)
+    expect(sentencesKept({ src: [], tr: [] }, src, tr)).toEqual({ src: [], tr: [] })
+  })
+  it('anything else none: the unit lit whole, nothing thrown', () => {
+    for (const s of [null, 5, 'x', {}, { src: [9] }, { src: [9, 21], tr: [11] }, { src: [21, 9], tr: [11, 22] }, { src: [0], tr: [11] }, { src: [9.5], tr: [11] }, { src: [9], tr: [tr.length] }, { src: ['9'], tr: [11] }, { src: [9, 9], tr: [11, 22] }])
+      expect(sentencesKept(s, src, tr), JSON.stringify(s)).toBeNull()
   })
 })
 

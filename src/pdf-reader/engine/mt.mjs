@@ -134,7 +134,11 @@ const sameBut = (withSentinels, b) => {
  * inside the closing marker at a unit's end (`…@g|#`), and rarely inside one in the middle (report-B §2(a)) — and one
  * that then begins no sentence on either side (at the end, after its neighbour, or before a sentence with no word: a
  * formula alone) is dropped on both sides together, the two sentences around it read as one. Null where the lengths do
- * not partition both texts, or the reply's sentences cannot be read back as `pieces`: the unit is lit whole
+ * not partition both texts, or the reply's sentences cannot be read back as `pieces`: the unit is lit whole.
+ * What a copy keeps (CachedUnit.sentences) is these offsets, and their meaning is three functions': plainSource and
+ * plainTranslated, the texts they count in, and anchors.mjs tokens, which turns an offset into the word a side finds
+ * (sentenceStarts). Those three are the record's contract: a change to any of them changes what a kept copy's offsets
+ * name, and is a change of the record (live.mjs PIPELINE_VERSION)
  */
 export function sentencesOf(u, ser, text, alignment, pieces, tolerant = false) {
   const { source, target } = alignment ?? {}
@@ -166,6 +170,17 @@ export function sentencesOf(u, ser, text, alignment, pieces, tolerant = false) {
     out.src.push(at[0]); out.tr.push(at[1]); before = k
   })
   return out
+}
+
+/**
+ * A record's sentences (CachedUnit.sentences), where they are of their shape: as many starts on each side, each side's
+ * whole numbers rising inside its text — `src` and `tr`, the texts each side is anchored by —; else null, and the unit
+ * is lit whole (the review of B3, minor 5: a malformed field threw where the reader worked out the starts, and the
+ * side had no highlight)
+ */
+export function sentencesKept(s, src, tr) {
+  const ok = (xs, text) => Array.isArray(xs) && xs.every((o, j) => Number.isInteger(o) && o > (j ? xs[j - 1] : 0) && o < text.length)
+  return s && typeof s === 'object' && ok(s.src, src) && ok(s.tr, tr) && s.src.length === s.tr.length ? s : null
 }
 
 // ---------------------------------------------------------------- tags wire format (DESIGN §6: LLMs)

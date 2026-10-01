@@ -38,7 +38,7 @@ import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { hostReady } from './host.mjs'
 import { compilerKeeper, openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
-import { displayEdges, isName, plainSource, unitText, WIRE } from './mt.mjs'
+import { displayEdges, isName, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
 import { verified, VERIFIED } from './scripts.mjs'
 import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { unpackSource } from './tar.mjs'
@@ -1795,8 +1795,13 @@ async function showCached(record, setContext, note = () => {}) {
     headings = record.units.map((u, i) => ({ id: i, src: u.src, depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
     // the translation's texts made again from the pieces the copy keeps (unitText), which say where their placeholders
     // stood; the source's from its plain text, which does not. A copy made before its units kept their displays beyond
-    // their marks (displayEdges) is anchored as it was then, and one made before they kept their sentences is lit whole
-    rightTexts = record.units.map((u, i) => ({ id: i, ...(u.pieces ? unitText(u.pieces) : { text: u.src }), ...displayEdges(u), ...(u.pieces && u.sentences ? { sentences: u.sentences } : {}) }))
+    // their marks (displayEdges) is anchored as it was then, and one made before they kept their sentences is lit whole;
+    // their sentences only where of their shape and the text made again is the one they were counted in (the review of
+    // B3, minor 5: a malformed field took the highlight off a side)
+    rightTexts = record.units.map((u, i) => {
+      const t = u.pieces ? unitText(u.pieces) : { text: u.src }, s = u.pieces && u.tr === t.text ? sentencesKept(u.sentences, u.src, t.text) : null
+      return { id: i, ...t, ...displayEdges(u), ...(s ? { sentences: s } : {}) }
+    })
     await Promise.all([
       anchorSide(left, record.units.map((u, i) => ({ id: i, text: u.src, ...displayEdges(u) })), new Map(record.marks)).then(() => note('cached left anchored')),
       anchorSide(right, rightTexts, record.rightMarks?.length ? new Map(record.rightMarks) : undefined).then(() => note('cached right anchored')),
@@ -2104,7 +2109,7 @@ async function demo() {
   // the text each unit has on the right: translated in the stages that have it, the original before
   // with the displays beyond each unit's marks (displayEdges), where the demo's units carry their letters, and a
   // translated unit's sentences where the demo's units carry them (spikes/highlight-sentences.mjs)
-  const textsAt = translated => units.map(u => ({ id: u.i, text: u.i < translated ? u.tr : u.src, ...displayEdges(u), ...(u.i < translated && u.sentences ? { sentences: u.sentences } : {}) }))
+  const textsAt = translated => units.map(u => { const s = u.i < translated && sentencesKept(u.sentences, u.src, u.tr); return { id: u.i, text: u.i < translated ? u.tr : u.src, ...displayEdges(u), ...(s ? { sentences: s } : {}) } })
   // the marks: the translation's own destinations; for arXiv's PDF, those of our compile of the original with the word
   // each follows, so that only the ones that land on the same word are used
   prose = units.map(u => u.src).join('\n')
