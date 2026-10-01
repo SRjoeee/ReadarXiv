@@ -10,7 +10,10 @@
 // odd and even pages, and a landscape page or one of another size has a measure of its own. The document's layout is made once a side is anchored; a page's runs when the page is first
 // drawn or pointed at, since most pages of a long paper are never looked at in a visit.
 // The look was chosen on a draft (round 1 of the highlight, 2026-10-01): one block per run, padded half the leading
-// above and below and 3 px beside, one outline with 3 px corners.
+// above and below and 3 px beside, one outline with 3 px corners. Where a unit's sentences are known on both sides
+// (anchors.mjs sentenceStarts), a sentence instead: its first row from its start, the rows between across the run, its
+// last row to its end with its punctuation, two sentences on one row meeting halfway through the space between them —
+// one outline per run, the hit test the same shapes.
 
 import { inkEdges } from './anchors.mjs'
 
@@ -245,21 +248,22 @@ function unitRuns(L, p, at, id, toks) {
       else head = Math.min(head ?? Infinity, inkL[k])
     }
   }
-  // by column, the unit's lines and each one's reach across (the unit's tokens on it)
+  // by column, the unit's lines and each one's reach across (the unit's tokens on it), and the tokens on each
   const byCol = new Map()
   for (const k of ks) {
     const ln = line(k), col = lines[ln].col
     const m = byCol.get(col) ?? byCol.set(col, new Map()).get(col)
     const x = m.get(ln)
-    if (x) { if (inkL[k] < x.x0) x.x0 = inkL[k]; if (inkR[k] > x.x1) x.x1 = inkR[k] } else m.set(ln, { x0: inkL[k], x1: inkR[k] })
+    if (x) { if (inkL[k] < x.x0) x.x0 = inkL[k]; if (inkR[k] > x.x1) x.x1 = inkR[k]; x.ks.push(k) } else m.set(ln, { x0: inkL[k], x1: inkR[k], ks: [k] })
   }
-  if (head !== null) { const x = byCol.get(lines[line(first)].col)?.get(line(first)); if (x && head < x.x0) { x.x0 = head; at.heads.push(id) } }
+  let headAt = null
+  if (head !== null) { const x = byCol.get(lines[line(first)].col)?.get(line(first)); if (x && head < x.x0) { x.x0 = head; at.heads.push(id); headAt = line(first) } }
   const runs = []
   for (const [col, m] of byCol) {
     const e = P.cols[col] ?? P.cols.F
     // rows: the lines from the top, merged where they overlap
     const ls = [...m.keys()].sort((a, b) => lines[b].y1 - lines[a].y1)
-    const rows = []
+    const rows = [], rowOf = new Map()
     for (const i of ls) {
       const l = lines[i], x = m.get(i), row = rows.at(-1)
       if (row && l.y1 > row.y0 + OVERLAP) {
@@ -270,6 +274,7 @@ function unitRuns(L, p, at, id, toks) {
         if (l.lo < row.lo) row.lo = l.lo
         if (l.hi > row.hi) row.hi = l.hi
       } else rows.push({ y0: l.y0, y1: l.y1, x0: x.x0, x1: x.x1, lo: l.lo, hi: l.hi })
+      rowOf.set(i, rows.length - 1)
     }
     // runs: the rows cut where another unit's line stands between two of them in the column (a float set inside a
     // paragraph, a footnote), and in a column of two where a line across both does, the unit's own too (a paragraph
@@ -278,7 +283,14 @@ function unitRuns(L, p, at, id, toks) {
     let start = 0
     for (let r = 1; r <= rows.length; r++) {
       if (r < rows.length && !interrupted(lines, lineOwner, col, id, rows[r - 1], rows[r])) continue
-      runs.push(runOf(id, p, col, rows.slice(start, r), e, P.lead.get(L.kindOf(id) ?? '') ?? P.lead.get(null), !FLOATS.has(L.kindOf(id))))
+      const run = runOf(id, p, col, rows.slice(start, r), e, P.lead.get(L.kindOf(id) ?? '') ?? P.lead.get(null), !FLOATS.has(L.kindOf(id)))
+      // its tokens in the stream's order and the row each is on, and where its head begins: its sentences' rows (segsOf)
+      const ts = []
+      for (const [ln, x] of m) { const w = rowOf.get(ln); if (w >= start && w < r) for (const k of x.ks) ts.push([k, w - start]) }
+      ts.sort((a, b) => a[0] - b[0])
+      run.toks = Int32Array.from(ts, t => t[0]); run.rowOf = Int32Array.from(ts, t => t[1])
+      run.head = headAt !== null && rowOf.get(headAt) >= start && rowOf.get(headAt) < r ? head : null
+      runs.push(run)
       start = r
     }
   }
@@ -327,20 +339,128 @@ export function blockOf(run, padX) {
 }
 
 /**
- * The unit a point of a page (PDF units) lights: the one whose painted block holds it, the smallest where blocks
- * overlap (a heading run into its paragraph's first line), with the run it is in; null where nothing is painted.
- * Arithmetic over the page's runs alone
+ * What a point of a page (PDF units) lights: the unit whose painted block holds it, the smallest where blocks overlap
+ * (a heading run into its paragraph's first line), with the run it is in; null where nothing is painted. Where the
+ * unit's sentences are known on both sides (`startsOf(id)`, anchors.mjs sentenceStarts; and its kind running text —
+ * headings, captions, cells and a figure's text light whole), what it paints is its sentences, and the point lights the
+ * one whose shape holds it (`s`; sentenceOf), or nothing of the unit where none does — before its first line, after its
+ * last sentence's end. `s` -1: the whole unit. Arithmetic over the page's runs alone
  */
-export function hitOf(L, p, x, y, padX) {
+export function hitOf(L, p, x, y, padX, startsOf = () => null) {
   if (!L?.page[p]) return null
   let best = null, area = Infinity
   for (const run of pageGeometry(L, p).runs) {
     const b = blockOf(run, padX)
     if (x < b.x0 || x > b.x1 || y < b.y0 || y > b.y1) continue
     const a = (b.x1 - b.x0) * (b.y1 - b.y0)
-    if (a < area) { area = a; best = run }
+    if (a >= area) continue
+    const starts = NOT_RUNNING.has(L.kindOf(run.id)) ? null : startsOf(run.id)
+    let s = -1
+    if (starts) {
+      const ys = edgesOf(run, padX)
+      let i = 0
+      while (i < run.rows.length - 1 && y < ys[i + 1]) i++
+      const span = spansOf(segsOf(L, run, starts), run, i, padX).find(q => x >= q.x0 && x <= q.x1)
+      if (!span) continue
+      s = span.s
+    }
+    area = a; best = { id: run.id, run, s }
   }
-  return best && { id: best.id, run: best }
+  return best
+}
+
+/** a run's row boundaries, from the top (PDF y, falling): its block's top, the midpoints between its rows, its block's foot */
+const edgesOf = (run, padX) => { const b = blockOf(run, padX); return [b.y1, ...run.mids, b.y0] }
+/** each run's sentences' segments, kept for the starts they were made with */
+const segsMade = new WeakMap()
+/**
+ * A run's sentences row by row (`starts`: the page tokens where its unit's sentences after the first begin): on each row
+ * each sentence's ink across, from its tokens there — the head before the unit's first word in the first sentence —
+ * kept inside the run's extent; and each sentence's first and last row in the run
+ */
+function segsOf(L, run, starts) {
+  const made = segsMade.get(run)
+  if (made?.starts === starts) return made
+  const { l, r } = L.tok, rows = run.rows.map(() => []), first = [], last = []
+  let s = 0
+  while (s < starts.length && starts[s] <= run.toks[0]) s++
+  for (let n = 0; n < run.toks.length; n++) {
+    const k = run.toks[n], w = run.rowOf[n]
+    while (s < starts.length && starts[s] <= k) s++
+    const row = rows[w], g = row.find(q => q.s === s)
+    if (g) { if (l[k] < g.x0) g.x0 = l[k]; if (r[k] > g.x1) g.x1 = r[k] } else row.push({ s, x0: l[k], x1: r[k] })
+    if (first[s] === undefined) first[s] = w
+    last[s] = w
+  }
+  if (run.head !== null) { const g = rows[run.rowOf[0]].find(q => q.s === 0); if (g && run.head < g.x0) g.x0 = run.head }
+  for (const row of rows) { row.sort((a, b) => a.s - b.s); for (const g of row) { g.x0 = Math.max(g.x0, run.x0); g.x1 = Math.min(g.x1, run.x1) } }
+  const out = { starts, rows, first, last }
+  segsMade.set(run, out)
+  return out
+}
+/**
+ * What each sentence on row `i` of a run paints across (PDF units), tiling the row: two sentences meet halfway through
+ * the space between them; one that goes on from the row before begins at the run's left edge and one that goes on to
+ * the row after ends at its right — padded `padX` beyond the column's text —; a sentence's own start or end at neither
+ * is padded `padX` beyond its ink, or is the run's edge within SNAP of it
+ */
+function spansOf(g, run, i, padX) {
+  const row = g.rows[i], L = run.x0 - padX, R = run.x1 + padX
+  return row.map((q, t) => ({
+    s: q.s,
+    x0: t > 0 ? (row[t - 1].x1 + q.x0) / 2 : i > g.first[q.s] || q.x0 - run.x0 < SNAP ? L : q.x0 - padX,
+    x1: t < row.length - 1 ? (q.x1 + row[t + 1].x0) / 2 : i < g.last[q.s] || run.x1 - q.x1 < SNAP ? R : q.x1 + padX,
+  }))
+}
+
+/**
+ * What sentence `s` of a run's unit paints in the run (PDF units): a rectangle per row it is on, from the top — its
+ * first row from its start, the rows between across the run (a display in the sentence among them), its last row to its
+ * end, its final punctuation and closing marks in its ink (anchors.mjs inkEdges) — rows of the same reach as one; none
+ * where the sentence is not in the run. `starts` as hitOf's
+ */
+export function sentenceOf(L, run, starts, s, padX) {
+  const g = segsOf(L, run, starts), fa = g.first[s], la = g.last[s]
+  if (fa === undefined) return []
+  const ys = edgesOf(run, padX), out = []
+  for (let i = fa; i <= la; i++) {
+    const span = spansOf(g, run, i, padX).find(q => q.s === s) ?? { x0: run.x0 - padX, x1: run.x1 + padX }
+    const prev = out.at(-1)
+    if (prev && Math.abs(prev.x0 - span.x0) < 0.01 && Math.abs(prev.x1 - span.x1) < 0.01) prev.y0 = ys[i + 1]
+    else out.push({ page: run.page, x0: span.x0, x1: span.x1, y0: ys[i + 1], y1: ys[i] })
+  }
+  return out
+}
+
+/**
+ * One outline of a shape's rectangles stacked from the top (CSS pixels, y down): an SVG path, every corner rounded to
+ * `radius` (or half its shorter side), the inner ones too — round 1's join; rectangles that do not meet across by more
+ * than two radii are outlines of their own in the one path (a sentence's first row right of its last)
+ */
+export function shapePath(rects, radius) {
+  const pieces = [[rects[0]]]
+  for (let i = 1; i < rects.length; i++) { const a = rects[i - 1], b = rects[i]; if (Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 2 * radius) pieces.at(-1).push(b); else pieces.push([b]) }
+  const f = v => +v.toFixed(2)
+  let d = ''
+  for (const p of pieces) {
+    // the corners, clockwise from the top left: down the right side, then up the left
+    const pts = [[p[0].x0, p[0].y0], [p[0].x1, p[0].y0]]
+    for (let i = 0; i < p.length; i++) { pts.push([p[i].x1, p[i].y1]); if (p[i + 1]) pts.push([p[i + 1].x1, p[i].y1]) }
+    pts.push([p.at(-1).x0, p.at(-1).y1])
+    for (let i = p.length - 1; i > 0; i--) { pts.push([p[i].x0, p[i].y0]); pts.push([p[i - 1].x0, p[i].y0]) }
+    // repeated and collinear points dropped: where two rows share an edge there is no corner
+    const q = []
+    for (const pt of pts) if (!q.length || Math.hypot(pt[0] - q.at(-1)[0], pt[1] - q.at(-1)[1]) > 0.01) q.push(pt)
+    if (q.length > 1 && Math.hypot(q[0][0] - q.at(-1)[0], q[0][1] - q.at(-1)[1]) < 0.01) q.pop()
+    const c = q.filter((pt, i) => { const a = q[(i - 1 + q.length) % q.length], b = q[(i + 1) % q.length]; return Math.abs((pt[0] - a[0]) * (b[1] - pt[1]) - (pt[1] - a[1]) * (b[0] - pt[0])) > 0.001 })
+    c.forEach((P, i) => {
+      const A = c[(i - 1 + c.length) % c.length], B = c[(i + 1) % c.length]
+      const la = Math.hypot(A[0] - P[0], A[1] - P[1]), lb = Math.hypot(B[0] - P[0], B[1] - P[1]), r = Math.min(radius, la / 2, lb / 2)
+      d += `${i ? 'L' : 'M'}${f(P[0] + ((A[0] - P[0]) * r) / la)} ${f(P[1] + ((A[1] - P[1]) * r) / la)}Q${f(P[0])} ${f(P[1])} ${f(P[0] + ((B[0] - P[0]) * r) / lb)} ${f(P[1] + ((B[1] - P[1]) * r) / lb)}`
+    })
+    d += 'Z'
+  }
+  return d
 }
 
 /**

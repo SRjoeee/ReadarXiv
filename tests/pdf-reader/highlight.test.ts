@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { type Anchor, type DocToken, lineRects, tokenizeDocument } from '@/pdf-reader/engine/anchors.mjs'
-import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf } from '@/pdf-reader/engine/highlight.mjs'
+import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, shapePath } from '@/pdf-reader/engine/highlight.mjs'
 
 // What a unit paints on a side and where the pointer lights it (highlight.mjs): the pages given as PDF.js's text items,
 // each unit's tokens as anchorUnits would give them. A page is 600 wide; body text is 10 high on lines 12 apart, its
@@ -272,5 +272,92 @@ describe('clickOf: what a click levels the two sides by (session.mjs alignClick)
   })
   it('nothing outside what is painted: the click goes by what is around it', () => {
     expect(clickOf(layout, 1, 20, 480, px)).toBeNull()
+  })
+})
+
+// Sentence level (B3): a sentence's shape inside its unit's run — its first row from its start, the rows between across
+// the run, its last row to its end with its punctuation — and the pointer's sentence, the same shapes (round 1's look)
+describe('sentenceOf, and hitOf with sentences: the sentence shape, and the sentences tile what they paint', () => {
+  // a paragraph of three lines, the last short, ending with a full stop at 150; sentences begin at the first line's
+  // fourth word and at the third line's first
+  const pages = [[...prose(740, 20), ...prose(496, 2), line('then a short last line.', 472, 50, 150), ...prose(448, 10)]]
+  const d = docOf(pages)
+  const layout = side(pages, [[0, range(160, 180)]])
+  const run = nth(runsOf(layout, 0)), px = 2, L = 50 - px, R = 300 + px
+  const starts = Int32Array.from([163, 176])
+  const startsOf = (id: number) => (id === 0 ? starts : null)
+  const b = [blockOf(run, px).y1, ...run.mids, blockOf(run, px).y0]
+  // the middle of the space between the first line's third and fourth words, as their ink has them
+  const gap = (d[162]!.x + d[162]!.w + d[163]!.x) / 2
+
+  it('the first row from the sentence\'s start, the rows between across the run, the last row to its end with its full stop', () => {
+    expect(sentenceOf(layout, run, starts, 0, px).map(r => [r2(r.x0), r2(r.x1), r2(r.y0), r2(r.y1)])).toEqual([[L, r2(gap), r2(b[1]!), r2(b[0]!)]])
+    expect(sentenceOf(layout, run, starts, 1, px).map(r => [r2(r.x0), r2(r.x1), r2(r.y0), r2(r.y1)])).toEqual([[r2(gap), R, r2(b[1]!), r2(b[0]!)], [L, R, r2(b[2]!), r2(b[1]!)]])
+    expect(sentenceOf(layout, run, starts, 2, px).map(r => [r2(r.x0), r2(r.x1), r2(r.y0), r2(r.y1)])).toEqual([[L, 150 + px, r2(b[3]!), r2(b[2]!)]])
+    expect(sentenceOf(layout, run, starts, 3, px)).toEqual([])
+  })
+
+  it('the pointer\'s sentence is the one whose shape holds it; where no sentence is painted, nothing', () => {
+    expect([hitOf(layout, 1, 100, 498, px, startsOf), hitOf(layout, 1, 200, 498, px, startsOf), hitOf(layout, 1, 200, 486, px, startsOf), hitOf(layout, 1, 100, 474, px, startsOf)].map(h => [h?.id, h?.s])).toEqual([[0, 0], [0, 1], [0, 1], [0, 2]])
+    expect(hitOf(layout, 1, 250, 474, px, startsOf)).toBeNull()
+    // the paragraph's block where the unit has no sentences: the whole unit
+    expect(hitOf(layout, 1, 250, 474, px)).toMatchObject({ id: 0, s: -1 })
+  })
+
+  it('no hole, no gap, no overlap: every point of the run\'s block is in one sentence\'s shape at most, and lights that one', () => {
+    const shapes = [0, 1, 2].map(s => sentenceOf(layout, run, starts, s, px))
+    const blk = blockOf(run, px)
+    let painted = 0
+    for (let x = blk.x0 + 0.25; x < blk.x1; x += 1.5) for (let y = blk.y0 + 0.25; y < blk.y1; y += 1.5) {
+      const ins = shapes.flatMap((rs, s) => (rs.some(r => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) ? [s] : []))
+      expect(ins.length, `${x}, ${y}: ${ins}`).toBeLessThanOrEqual(1)
+      const hit = hitOf(layout, 1, x, y, px, startsOf)
+      if (ins.length) { painted++; expect(hit?.s, `${x}, ${y}`).toBe(ins[0]) } else expect(hit).toBeNull()
+    }
+    expect(painted).toBeGreaterThan(500)
+    // two sentences on one row meet in the middle of the space between them
+    expect(nth(shapes[0]!).x1).toBe(nth(shapes[1]!).x0)
+  })
+
+  it('a heading, a caption, a cell light whole, whatever sentences they have', () => {
+    const cap = side(pages, [[0, range(160, 180)]], new Map([[0, 'caption']]))
+    expect(hitOf(cap, 1, 100, 498, px, startsOf)).toMatchObject({ id: 0, s: -1 })
+  })
+
+  it('the first sentence begins where its unit\'s first line does: a theorem\'s head is in it; after a run-in heading, what follows it', () => {
+    const ps = [[...prose(740, 20), item('Theorem 1.', 50, 480), item('Every word here is the theorem\'s own', 110, 480, { width: 190, eol: true }), ...prose(468, 10)]]
+    const t = at(docOf(ps), 'every'), st = Int32Array.from([t + 7 + 3])
+    const own = side(ps, [[0, range(t, t + 7 + 16)]])
+    expect(r2(nth(sentenceOf(own, nth(runsOf(own, 0)), st, 0, px)).x0)).toBe(L)
+    const after = side(ps, [[0, range(t, t + 7 + 16)], [1, [t - 2]]])
+    expect(r2(nth(sentenceOf(after, nth(runsOf(after, 0)), st, 0, px)).x0)).toBe(90 - px)
+  })
+
+  it('a display inside a sentence is its full rows', () => {
+    // four lines, a display (a fraction beside f =, its number, a limit), two lines; the sentence from the third line's
+    // second word to the last line's second
+    const ps = [[...prose(760, 4), ...prose(700, 4), item('1', 140, 647, { size: 7 }), item('f =', 120, 640), item('n', 140, 633.5, { size: 7 }), item('(3)', 285, 640, { width: 15 }), item('i', 160, 630, { size: 5 }), ...prose(616, 2), ...prose(560, 20)]]
+    const lay = side(ps, [[0, range(32, 84)]]), rn = nth(runsOf(lay, 0)), st = Int32Array.from([32 + 17, 32 + 32 + 5 + 9])
+    const rows = sentenceOf(lay, rn, st, 1, px)
+    // its first row from its start, then across the run to its last row, the display's among them: one rectangle
+    expect(rows.map(r => [r2(r.x0) > L, r2(r.x1)])).toEqual([[true, R], [false, R], [false, r2(rows[2]!.x1)]])
+    expect(rows[1]!.y1).toBeCloseTo(rn.mids[2]!)
+    expect(rows[1]!.y0).toBeCloseTo(rn.mids[5]!)
+  })
+})
+
+describe('shapePath: one outline for a shape, its corners rounded, inner ones too', () => {
+  const count = (d: string, c: string) => d.split(c).length - 1
+  it('a rectangle: four corners', () => {
+    const d = shapePath([{ x0: 0, x1: 100, y0: 0, y1: 20 }], 3)
+    expect([d[0], count(d, 'Q'), count(d, 'Z')]).toEqual(['M', 4, 1])
+  })
+  it('a sentence\'s first row from its start over the rows below: one outline of six corners', () => {
+    expect(count(shapePath([{ x0: 60, x1: 100, y0: 0, y1: 20 }, { x0: 0, x1: 100, y0: 20, y1: 60 }], 3), 'Q')).toBe(6)
+    // and from its start to its end on the last row: eight
+    expect(count(shapePath([{ x0: 60, x1: 100, y0: 0, y1: 20 }, { x0: 0, x1: 100, y0: 20, y1: 40 }, { x0: 0, x1: 40, y0: 40, y1: 60 }], 3), 'Q')).toBe(8)
+  })
+  it('two rows that do not meet across: two outlines in the one path', () => {
+    expect(count(shapePath([{ x0: 60, x1: 100, y0: 0, y1: 20 }, { x0: 0, x1: 40, y0: 20, y1: 40 }], 3), 'Z')).toBe(2)
   })
 })
