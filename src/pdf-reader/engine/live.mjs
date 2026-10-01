@@ -63,6 +63,9 @@ const beginDocument = text => text.search(/\\begin\s*\{document\}/)
  *  (protocol 2's `error`, no log: an engine it could not bring up, a compile before an init that failed). It says
  *  nothing of the paper or of the strategy (the S3a review, I5 b) */
 const pageFailed = r => !r.ok && !!r.error
+/** BusyTeX's 180 s given up: the machine slow, neither the page down nor the paper. Not asked again but for the final,
+ *  and the run goes on to its final, as before the page's protocol 2 (the F2 review's M5) */
+const timedOut = r => pageFailed(r) && /Compilation timeout/.test(r.error)
 /** why a compile gave no PDF: the first TeX error, or what the compiler said */
 const whyFailed = r => (r.ok ? undefined : ((r.log ?? '').match(/^(?:\S+:\d+: .*|! .*)$/m)?.[0] ?? r.error ?? (r.log ?? '').slice(-300)).slice(0, 300))
 /** the lines of a compile's last TeX pass that the run and the rule read: each unit's lines, the forced breaks and the
@@ -258,13 +261,14 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
   const sleep = () => new Promise(r => { wake = r })
 
   // a compile whose files did not all arrive (protocol 2's `network`: the TeX page asked each twice), or that the page
-  // itself failed (an `error` and no log: a timeout, an engine it could not bring up), is not the paper's: asked once
-  // more as it was — in a fresh frame after the page's failure (compilerKeeper) — and the second time the run stops, as
-  // for a network that is down or with no compiler: no strategy changed, no aux or bbl taken from it, nothing remembered
-  // of it (the S3a report, "what the reader must do", and its fix round's duties a–d)
+  // itself failed (an `error` and no log: an engine it could not bring up), is not the paper's: asked once more as it
+  // was — in a fresh frame after the page's failure (compilerKeeper) — and the second time the run stops, as for a
+  // network that is down or with no compiler: no strategy changed, no aux or bbl taken from it, nothing remembered of it
+  // (the S3a report, "what the reader must do", and its fix round's duties a–d). One BusyTeX gave up on (timedOut) is
+  // given back as it is, its frame gone all the same: what each compile does with it is its own
   const askOf = fn => async req => {
     let r = await fn(req)
-    if (!r.network?.length && !pageFailed(r)) return r
+    if (timedOut(r) || (!r.network?.length && !pageFailed(r))) return r
     note('compile again', { network: r.network?.slice(0, 5), error: r.error?.slice(0, 200) })
     r = await fn(req)
     if (!r.network?.length && !pageFailed(r)) return r
@@ -366,7 +370,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
         onOriginal?.({ pdf: o.pdf })
         originalCites = citesOf(o.aux)
         if (readMarks) readings = await readMarks(o.pdf).then(m => readingsOf(o, m), e => { passing = true; note('typeset', { missing: `the original's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null })
-      }
+      } else if (timedOut(o)) passing = true
       return o
     }))
     /**
@@ -435,6 +439,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           previews++
           measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
           onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false })
+        } else if (timedOut(r)) {
+          // the machine slow: nothing changed, the next batch or the final goes on
         } else if (plan && !r.ok) { withoutRule(r); dirty = true }
         else if (s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
         continue
@@ -473,6 +479,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
         const t1 = Date.now()
         const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bbl, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: true, aux: withCites(aux), bbl, typeset: plan.typeset, note }) })
         note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, error: whyFailed(r) })
+        // BusyTeX gave up: the final from the plan uncorrected, which every input but the measure was there for
+        if (timedOut(r)) { passing = true; return plan.typeset }
         // TeX's failure under the rule: the final as today (ruling 6)
         if (!r.ok) { withoutRule(r); return null }
         if (r.aux) aux = r.aux
@@ -484,7 +492,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       return fin.typeset ?? m.plan.typeset
     }
     let typeset = await finalTypeset()
-    let r, ok, exhausted = false
+    let r, ok, exhausted = false, finalAgain = false
     for (;;) {
       r = await ask({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl, typeset, note }) })
       ok = await settled(r)
@@ -492,7 +500,9 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       if (ok) break
       // (a compile the page did not answer, or failed, was asked once more by `ask`, and a second failure stops the run:
       // a slow machine or the page's own failure is no reason to change how the paper is set — Part 3's checks: a
-      // timed-out preview moved 2608.02163 to a strategy its class refuses)
+      // timed-out preview moved 2608.02163 to a strategy its class refuses.) One BusyTeX gave up on: once more as it
+      // was, then what is shown stays
+      if (timedOut(r)) { if (finalAgain) break; finalAgain = true; note('final again', { strategy: strategy().name }); continue }
       if (typeset && !r.ok) { withoutRule(r); typeset = null; continue }
       if (s + 1 >= strategies.length) { exhausted = true; break }
       s++; aux = null

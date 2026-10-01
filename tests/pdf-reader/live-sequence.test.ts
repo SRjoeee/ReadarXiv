@@ -253,7 +253,7 @@ describe('a compile the network or the page failed', () => {
     const t = translator(), n = paper().units.length
     let failedOnce = false
     const c = compiler(n, { on: k => { if (k === 'original') t.release() } }), base = c.compile
-    c.compile = async (q: Req) => { if (kindOf(q) === 'preview' && !failedOnce) { failedOnce = true; c.calls.push({ kind: 'preview', ruled: ruled(q), rerun: q.rerun }); return { ok: false, error: 'Error: Compilation timeout', network: [] } } return base(q) }
+    c.compile = async (q: Req) => { if (kindOf(q) === 'preview' && !failedOnce) { failedOnce = true; c.calls.push({ kind: 'preview', ruled: ruled(q), rerun: q.rerun }); return { ok: false, error: 'compile before init', network: [] } } return base(q) }
     const { calls, notes, r } = await run({ compiler: c, translate: t.translate })
     expect(kinds(calls)).toEqual(['probe', 'preview', 'preview', 'original', 'preview+rule', 'final+rule'])
     expect(notes.filter(([e]) => e === 'next strategy')).toEqual([])
@@ -402,5 +402,67 @@ describe('a final set short of the rule for a passing reason', () => {
     expect((await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })).passing).toBe(false)
     const short = compiler(n, { log: k => (k === 'original' ? linesLog(n).replace('AXT-END\n', '') : null) })
     expect((await runLive(p, { lang: 'zh', compile: short.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })).passing).toBe(false)
+  })
+})
+
+// BusyTeX's 180 s given up: the machine slow, not the page down nor the paper (the F2 review's M5) — a preview, a measure
+// or the original that timed out is not asked again, the run going on to its final as before the page's protocol 2; the
+// final is asked once more, and twice timed out the run ends with what is shown
+describe('a compile BusyTeX gave up on', () => {
+  const kinds = (calls: { kind: string; ruled: boolean }[]) => calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`)
+  const TIMEOUT = { ok: false, error: 'Error: Compilation timeout\n    at busytex', network: [] }
+  /** a compiler whose compiles `which` (by kind and count) time out */
+  const timing = (n: number, which: (kind: string, k: number, q: Req) => boolean, on?: (kind: string) => void) => {
+    const c = compiler(n), base = c.compile, seen = new Map<string, number>()
+    c.compile = async (q: Req) => {
+      const kind = kindOf(q), k = (seen.get(kind) ?? 0) + 1
+      seen.set(kind, k)
+      on?.(kind)
+      if (which(kind, k, q)) { c.calls.push({ kind, ruled: ruled(q), rerun: q.rerun }); return TIMEOUT }
+      return base(q)
+    }
+    return c
+  }
+
+  it('a preview: not asked again, not shown, no strategy changed; the run goes on to its final', async () => {
+    const t = translator(), n = paper().units.length
+    const c = timing(n, (kind, k) => kind === 'preview' && k === 1, k => { if (k === 'preview') t.release() })
+    const notes: string[] = []
+    const r = await runLive(paper(), { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: e => notes.push(e) })
+    // the second preview, of the batch come since, is the first shown
+    expect(kinds(c.calls).slice(0, 3)).toEqual(['probe', 'preview', 'preview'])
+    expect(notes.filter(e => e === 'next strategy' || e === 'compile again' || e === 'typeset failed')).toEqual([])
+    expect([r.settled, r.compiler]).toEqual([true, undefined])
+  })
+
+  it('the final: asked once more; twice, the run ends with what is shown — no strategy changed, nothing exhausted, no compiler down', async () => {
+    const p = paper(4), n = p.units.length, t = translator()
+    t.release()
+    const once = timing(n, (kind, k) => kind === 'final' && k === 1)
+    expect((await runLive(p, { lang: 'zh', compile: once.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })).settled).toBe(true)
+    const twice = timing(n, kind => kind === 'final')
+    const notes: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: twice.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), note: e => notes.push(e) })
+    expect(kinds(twice.calls).filter(k => k.startsWith('final'))).toEqual(['final+rule', 'final+rule'])
+    expect(notes.filter(e => e === 'next strategy' || e === 'typeset failed')).toEqual([])
+    expect([r.settled, r.exhausted, r.compiler]).toEqual([false, false, undefined])
+  })
+
+  it('the original: today\'s setting, a passing failure', async () => {
+    const p = paper(4), n = p.units.length, t = translator()
+    t.release()
+    const c = timing(n, kind => kind === 'original')
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    expect([r.settled, r.passing, c.calls.some(q => q.ruled)]).toEqual([true, true, false])
+  })
+
+  it('the measure: the final from the plan uncorrected, a passing failure', async () => {
+    const p = paper(4), n = p.units.length, t = translator()
+    t.release()
+    // the second preview-kind compile, ruled, is the draft that measures the final (the first preview is set as today)
+    const c = timing(n, (kind, k, q) => kind === 'preview' && ruled(q))
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    expect(kinds(c.calls)).toEqual(['probe', 'preview', 'original', 'preview+rule', 'final+rule'])
+    expect([r.settled, r.passing]).toEqual([true, true])
   })
 })

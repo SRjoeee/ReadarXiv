@@ -880,9 +880,12 @@ is only how it meets the rest of the extension.
   the last preview of the whole translation measures where its text stood, and the final corrects it. Where a plan
   cannot be made the translation is set as before it. The reader speaks the TeX page's protocol 2 and still serves a
   page of protocol 1: it names the engines and the CJK faces the visit will use, so that the page fetches them ahead;
-  a compile whose files did not all arrive, or that the page itself failed (no log: a timeout, an engine it could not
-  bring up), is asked once more, and a second failure stops the compiles with no compiler — no strategy changed, nothing
-  written or marked, the retry offered — while the translation goes on to its end for the retry to reuse.
+  a compile whose files did not all arrive, or that the page itself failed (no log: an engine it could not bring up), is
+  asked once more, and a second failure stops the compiles with no compiler — no strategy changed, nothing written or
+  marked, the retry offered — while the translation goes on to its end for the retry to reuse. A compile BusyTeX gave
+  up on (its 180 s: the machine slow) changes nothing either, but is not the page down: a preview, a measure or the
+  marked original is not asked again and the run goes on to its final, which is asked once more and, timed out
+  again, leaves what is shown.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; headings, captions and cells whole; tables, algorithms and figures whole with their captions (a
