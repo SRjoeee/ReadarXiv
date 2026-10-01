@@ -1,7 +1,7 @@
 // Brotli copies (quality 11) of the TeX page's files, made once and kept by content in out/tex-br: what a file costs
 // on the wire. Shared by build.mjs (the site's copies) and derive.mjs (the sizes the fetch-ahead rule weighs).
 import { createHash } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { brotliCompress, constants } from 'node:zlib'
@@ -16,7 +16,10 @@ export async function brotliCopy(file) {
   const copy = join(BR, `${createHash('sha256').update(bytes).digest('hex')}.br`)
   if (!existsSync(copy)) {
     mkdirSync(BR, { recursive: true })
-    writeFileSync(copy, await brotli(bytes, { params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length } }))
+    // written whole under another name first: a build stopped half-way leaves no short copy under the content's name
+    const part = `${copy}.${process.pid}.part`
+    writeFileSync(part, await brotli(bytes, { params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length } }))
+    renameSync(part, copy)
   }
   return copy
 }

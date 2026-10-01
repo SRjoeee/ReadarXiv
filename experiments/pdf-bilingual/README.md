@@ -36,8 +36,11 @@ Rules and techniques here are expected to change; what settles is to be refactor
 5. Optional: 600 dpi PK files for METAFONT-only fonts (for example `bbm10`, `bbm7`) generated natively with `mktexpk`,
    in `data/pk-flat` — without them, papers that use such fonts do not compile in the browser (`upstream/`, issue E).
 6. Here: `node tex-page/build.mjs` — the TeX page's site in `out/tex-site`, from the tree of step 4 (`TEXLIVE_TREE`,
-   by default the one beside the corpus). Needs Python 3 and git (it fetches Emscripten's file packager once) and
-   takes about ten minutes the first time (brotli copies, kept in `out/tex-br`).
+   by default the one beside the corpus), and its upload list in `out/tex-upload/<cv>.tsv` (every object, the file to
+   store and its headers; `tex-page/verify.mjs` checks a bucket against it through the CDN). Needs Python 3 and git (it
+   fetches Emscripten's file packager once) and takes about half an hour the first time (the brotli copy of every file
+   of the tree, kept by content in `out/tex-br`), under a minute after. For a build to publish: `REHASH=1` (the tree
+   hashed again) and `FRAMERS=<origins>` (the extension and web app origins that may drive the page).
 
 Run:
 1. `node spikes/serve-live.mjs` here, for our site's TeX page and its tree (Setup's step 6; the file server of step 4

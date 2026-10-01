@@ -11,6 +11,8 @@
 //                           beside them as index-<iid>.txt, <iid> the index's own content, named in build.json
 //   b/<bid>.bin             the manifest's files of the engines, in bundles (both engines', each engine's own): one
 //                           object for each, its version its content's
+// and out/tex-upload/<cv>.tsv, the upload list: every object with the local file to store and its headers
+// (upload.mjs; the first build makes the brotli copy of every file of the tree, about 30 minutes, kept by content)
 // Every version is a content address of what it holds. A brotli copy (quality 11) of every file under b/, c/, e/ and
 // of the index sits beside it (.br), and of every file the manifest names in out/tex-br/; serve.mjs sends them.
 //
@@ -27,6 +29,7 @@ import { dirname, join, relative } from 'node:path'
 import { parseIndex, resolve } from '../poc-site/tex-tree.mjs'
 import { buildManifest, REFERENCE, scannedOnly, slimSets, worth } from './manifest.mjs'
 import { brotliSizes, brotliTo } from './sizes.mjs'
+import { writeUploadList } from './upload.mjs'
 import { hashTree, indexName, treeIndex, treeVersion, versionOf } from './tree.mjs'
 
 const HERE = new URL('.', import.meta.url).pathname
@@ -127,7 +130,8 @@ const { paths, text } = treeIndex(TREE, readFileSync(join(BUSYTEX, 'texmf.cnf'),
 // the tree's version is its files alone (paths and contents): every file stays at t/<tid>/<path> for good, and a change
 // of the index's rules is a new index file beside them (index-<iid>.txt), named in the page's build.json
 // REHASH=1: every file hashed again, as a build for publishing must be (33 s)
-const tid = treeVersion([...hashTree(TREE, paths, join(WORK, 'tree-hashes.json'), { rehash: !!process.env.REHASH })])
+const hashes = hashTree(TREE, paths, join(WORK, 'tree-hashes.json'), { rehash: !!process.env.REHASH })
+const tid = treeVersion([...hashes])
 const INDEX = indexName(text)
 const index = parseIndex(text)
 say(`the tree: ${paths.length} files, ${index.names.size} basenames (${[...index.names.values()].filter(p => p.length > 1).length} held more than once, ${index.dependent.size} answered by program), ${inBasic.size} as the preloaded tier holds them; tid ${tid}, ${INDEX}`)
@@ -312,4 +316,14 @@ for (const p of Object.keys(parts)) say(`tl-${p}: ${parts[p].length} files, ${mb
 for (const [k, list] of [...Object.entries(manifest.engines), ...Object.entries(manifest.fonts)]) say(`manifest ${k}: ${list.length} entries, ${new Set(list.map(e => e[2])).size} files, ${mb(sum([...new Set(list.map(e => e[2]))].map(p => join(TREE, p))))} raw, ${mb(sum([...new Set(list.map(e => e[2]))].map(p => join(BR, 't', tid, `${p}.br`))))} brotli`)
 for (const [k, b] of Object.entries(manifest.bundles)) say(`bundle ${k} (${b.url}): ${b.files.length} files, ${mb(b.size)} raw, ${mb(statSync(join(OUT, `${b.url.slice(1)}.br`)).size)} brotli`)
 say(`index: ${mb(statSync(join(OUT, 't', tid, INDEX)).size)} raw, ${mb(statSync(join(OUT, 't', tid, `${INDEX}.br`)).size)} brotli`)
+
+// ---------------------------------------------------------------- 7. the upload list (upload.mjs; verify.mjs checks the bucket)
+
+const LIST = join(EXP, 'out/tex-upload', `${cv}.tsv`)
+const rows = await writeUploadList({ site: OUT, tree: TREE, tid, hashes, out: LIST, say })
+for (const top of ['b', 'c', 'e', 't', 'tex.html']) {
+  const of = rows.filter(r => r.key === top || r.key.startsWith(`${top}/`))
+  say(`upload ${top}: ${of.length} objects, ${of.filter(r => r.encoding).length} as brotli, ${mb(of.reduce((n, r) => n + r.bytes, 0))} stored`)
+}
+say(`upload list: ${relative(process.cwd(), LIST)}`)
 say(`built: c/${cv} e/${eid} t/${tid} in ${relative(process.cwd(), OUT)}`)
