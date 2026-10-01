@@ -37,21 +37,51 @@
 // hole, 13 words past the edge). The old column rule and the widetext cut dropped change nothing it measures on the
 // ten papers (no widetext there, no run of a two-column page the old rule makes otherwise);
 // tests/pdf-reader/highlight.test.ts fails on both.
+// Sentences (B3: plans/2026-10-01-pdf-highlight.md), from each run's sentences (spikes/highlight-sentences.mjs:
+// Microsoft's sentence lengths for the very wires the reader sends, cut as mt.mjs sentencesOf cuts them), each side's
+// starts found as the reader finds them (anchors.mjs sentenceStarts) and a unit lit by sentence where both found all
+// of its (running text only), per paper:
+//  - units with sentences, more than one, and found on the left, on the right, on both (aligned)
+//  - holes inside sentence shapes: points on the grid inside each sentence's shape (highlight.mjs sentenceOf) where the
+//    hit test (hitOf with the sentences) lights nothing, or another sentence of the unit; a smaller unit is counted apart
+//  - words outside their unit's sentences: a word of a unit lit by sentence whose ink's centre none of its shapes holds;
+//    and the head before its first word (a theorem's, a list's label: no unit's word) outside its first sentence
+//  - rows two sentences share: the one's end and the next's start, no gap and no overlap between them; and the
+//    boundaries that pass through a word's ink (its box as the text layer gives it: a Latin word's an even share of its
+//    item, so a reading, against round 1's 3 of 72 measured on the canvas)
+//  - the starts' cost on each side (findSentences: every unit's, as the reader does with the layout)
+// and on investigator B's ground truth (report-B §2(c, d): data/runs/highlight-gt, the four papers compiled with a
+// named destination at every sentence's start, O2 and T2, and without, O1 and T1), each start found on O1, T1 and
+// arXiv's PDF (anchored by O1's marks carried, as the reader does) against the mark for the same sentence — on our
+// compiles where the two have the same words, the mark's word in the marked compile; on arXiv's PDF the mark carried
+// where its word is there — on the same line or not.
+// Fails besides on: a hole inside a sentence's shape, or another sentence lit there; a word outside its unit's
+// sentences but past the column's edge, a head outside its first sentence; a gap or an overlap between two sentences on
+// a row; against the baseline, fewer units aligned per paper, more boundaries through ink, and fewer starts on the
+// ground truth's line. Each made to fail once (B3, in the tree, put back
+// after): the head left out of the first sentence (486 heads outside), the boundary at the next word's start instead of
+// the middle of the space (3 498 gaps), a sentence's last row taken across the run (1.8 M holes, 4 M points lighting
+// another sentence, 2 097 overlaps), each start taken at its sentence's last word (the ground truth's lines 23 of 167 on
+// 2608.02785, 2 of 138 on 2608.04322; and 14 holes, a defect it found: 9d449c59), the rows' order rule dropped (616
+// holes, 452 another sentence), the words' fit dropped (15 words outside).
 // WRITE_BASELINE=1 records the run as the baseline (counts only).
 // Counts only, no paper text. Pad beside a block: 3 CSS px at 100 % (2.25 PDF units). The browser's half — the pointer,
 // the paint, their costs against another build — is highlight-gate-browser.mjs.
 // The data (papers may not be redistributed; research/pdf-bilingual/data/runs/highlight-ten, linked from
 // data/runs/highlight-ten): per paper arXiv's PDF (data/corpus/<id>/arxiv.pdf), the run's `original-marked.pdf`,
 // `final.pdf` and `final-texts.json` (spikes/live-node.mjs, Microsoft → Chinese), and `pieces/<id>.json`, the pieces
-// the translation was typeset from (for the placeholders' places in its headings).
+// the translation was typeset from (for the placeholders' places in its headings); `sentences/<id>.json`, the units'
+// sentences (spikes/highlight-sentences.mjs). The ground truth (research/pdf-bilingual/data/runs/highlight-gt, linked
+// from data/runs/highlight-gt): per paper investigator B's four compiles, its units with its starts (b-units.json), the
+// translation's texts, and `sentences/<id>.json` (highlight-sentences.mjs with FROM=en, from B's Microsoft answers).
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/highlight-gate.mjs [id …]   → out/highlight-gate.json
-//   RUNS=<dir> another set of runs; ROUNDS=<n> the cost's repeats (default 7)
+//   RUNS=<dir> another set of runs; GT=<dir> another ground truth; ROUNDS=<n> the cost's repeats (default 7)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
-import { blockOf, hitOf, layoutOf, pageGeometry, runsOf } from '../../../src/pdf-reader/engine/highlight.mjs'
+import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
+import { blockOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit } from '../../../src/pdf-reader/engine/highlight.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/live.mjs'
 import { displayEdges, unitText } from '../../../src/pdf-reader/engine/mt.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
@@ -64,21 +94,30 @@ const ids = process.argv.slice(2).length ? process.argv.slice(2) : TEN
 /** the units TeX sets away from where the source has them (session.mjs FLOATING) */
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
 const PAD = 3 / (96 / 72), STEP = 1.5, OVERHANG = 6 // highlight.mjs OVERHANG
+/** the kinds lit whole, whatever sentences they have (highlight.mjs NOT_RUNNING) */
+const WHOLE = new Set(['caption', 'heading', 'cell', 'figure'])
+const GT = process.env.GT ?? join(root, 'data/runs/highlight-gt')
+const GT_IDS = ['2608.02785', '2608.04322', '2608.02163', '2608.02459']
 const BASELINE = new URL('highlight-gate.baseline.json', import.meta.url).pathname
 // PDF.js's character maps and fonts, from the module imported above: without them a CJK PDF's text is half read
 const PDFJS = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
 const CMAPS = process.env.CMAPS ?? join(PDFJS, 'cmaps/'), FONTS = join(PDFJS, 'standard_fonts/')
 for (const file of [join(CMAPS, 'UniGB-UCS2-H.bcmap'), join(FONTS, 'FoxitFixed.pfb')]) if (!existsSync(file)) { console.log(`FAIL: no ${file} — PDF.js would read the text without it`); process.exit(1) }
 
-async function loadPdf(file) {
+async function loadPdf(file, sentenceMarks) {
   const task = getDocument({ data: new Uint8Array(readFileSync(file)), verbosity: 0, cMapUrl: CMAPS, cMapPacked: true, standardFontDataUrl: FONTS })
   const pdf = await task.promise
   const pages = [], views = []
   for (let p = 1; p <= pdf.numPages; p++) { const pg = await pdf.getPage(p), tc = await pg.getTextContent(); pages.push({ page: p, items: tc.items, styles: tc.styles }); views.push(pg.view) }
-  const marks = new Map()
-  for (const [name, d] of await pdf.getDestinations()) if (/^axt-\d+[se]$/.test(name) && d) marks.set(name.slice(4), { page: (await pdf.getPageIndex(d[0])) + 1, x: d[2], y: d[3] })
+  const marks = new Map(), sentences = new Map()
+  for (const [name, d] of await pdf.getDestinations()) {
+    if (!d) continue
+    if (/^axt-\d+[se]$/.test(name)) marks.set(name.slice(4), { page: (await pdf.getPageIndex(d[0])) + 1, x: d[2], y: d[3] })
+    // the ground truth's sentence marks, axt-<unit>.<j>b where its sentence j begins (report-B's compiles)
+    else if (sentenceMarks && /^axt-\d+\.\d+b$/.test(name)) sentences.set(name.slice(4, -1), { page: (await pdf.getPageIndex(d[0])) + 1, x: d[2], y: d[3] })
+  }
   await task.destroy()
-  return { pages, views, marks }
+  return { pages, views, marks, sentences }
 }
 
 const DISPLAY = /^\\begin\s*\{(equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations)\*?\}|^\\\[|^\$\$/
@@ -97,6 +136,8 @@ function kindOf(paper, u) {
 
 const median = xs => { const s = [...xs].sort((a, b) => a - b); return s[s.length >> 1] ?? null }
 const tally = {}, cost = {}, cuts = [], inkHoles = [], overlaps = [], pastEdge = [], unreachable = []
+/** per paper: the sentences' counts (B3); the holes and words outside listed */
+const sentences = {}, sentenceHoles = [], wordsOutside = [], inkCuts = []
 /** per paper and side: what the geometry took beyond the anchors, held to the baseline exactly */
 const taken = {}
 /** per paper, side and kind: units anchored and lit, for the baseline */
@@ -112,6 +153,7 @@ for (const id of ids) {
   const src = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
   const texts = JSON.parse(readFileSync(join(RUNS, id, 'final-texts.json'), 'utf8')).map(t => ({ ...(typeset[t.id] ? unitText(typeset[t.id]) : paper.kept.has(units[t.id]) ? unitText(units[t.id].pieces) : t), id: t.id, ...displayEdges(units[t.id]) }))
   const OM = await loadPdf(join(RUNS, id, 'original-marked.pdf'))
+  const sf = join(RUNS, 'sentences', `${id}.json`), sents = existsSync(sf) ? JSON.parse(readFileSync(sf, 'utf8')) : {}
   const sides = {}
   for (const [S, file, T] of [['L', join(root, 'data/corpus', id, 'arxiv.pdf'), src], ['R', join(RUNS, id, 'final.pdf'), texts]]) {
     const pdf = await loadPdf(file), doc = tokenizeDocument(pdf.pages)
@@ -126,9 +168,29 @@ for (const id of ids) {
       for (let p = 1; p <= pdf.views.length; p++) { const a = performance.now(); pageGeometry(L, p); max = Math.max(max, performance.now() - a) }
       layoutMs.push(t1 - t0); pagesMs.push(performance.now() - t1); pageMax.push(max)
     }
-    cost[`${id} ${S}`] = { pages: pdf.views.length, tokens: doc.length, layoutMs: +median(layoutMs).toFixed(2), allPagesMs: +median(pagesMs).toFixed(2), perPageMs: +(median(pagesMs) / pdf.views.length).toFixed(3), pageMaxMs: +median(pageMax).toFixed(2) }
-    sides[S] = { anchors, doc, layout: layoutOf(doc, pdf.views, anchors, kinds) }
+    // each unit's sentences' starts on the side, as findSentences finds them with the layout
+    const textOf = new Map(T.map(t => [t.id, t.text])), startsMs = []
+    let starts
+    for (let r = 0; r < ROUNDS; r++) {
+      const t0 = performance.now()
+      starts = new Map()
+      for (const [i, s] of Object.entries(sents)) { const st = sentenceStarts(anchors.get(+i), textOf.get(+i) ?? '', S === 'L' ? s.src : s.tr); if (st) starts.set(+i, st) }
+      startsMs.push(performance.now() - t0)
+    }
+    cost[`${id} ${S}`] = { pages: pdf.views.length, tokens: doc.length, layoutMs: +median(layoutMs).toFixed(2), allPagesMs: +median(pagesMs).toFixed(2), perPageMs: +(median(pagesMs) / pdf.views.length).toFixed(3), pageMaxMs: +median(pageMax).toFixed(2), startsMs: +median(startsMs).toFixed(2) }
+    sides[S] = { anchors, doc, layout: layoutOf(doc, pdf.views, anchors, kinds), starts }
   }
+  // a unit is lit by sentence where both sides found every start and its shapes hold its words on both (sentencesFit),
+  // and it is running text
+  const both = new Map()
+  let unfit = 0
+  for (const [i, a] of sides.L.starts) {
+    const b = sides.R.starts.get(i)
+    if (!b || a.length !== b.length || WHOLE.has(kind.get(i))) continue
+    if (sentencesFit(sides.L.layout, i, a) && sentencesFit(sides.R.layout, i, b)) both.set(i, a.length); else { unfit++; if (process.env.UNFIT) console.error(`unfit ${id}#${i} L ${sentencesFit(sides.L.layout, i, a)} R ${sentencesFit(sides.R.layout, i, b)}`) }
+  }
+  const running = Object.entries(sents).filter(([i]) => !WHOLE.has(kind.get(+i)))
+  const sc = (sentences[id] = { units: running.length, multi: running.filter(([, s]) => s.src.length).length, foundL: running.filter(([i]) => sides.L.starts.has(+i)).length, foundR: running.filter(([i]) => sides.R.starts.has(+i)).length, unfit, aligned: both.size, alignedMulti: [...both.values()].filter(n => n > 0).length, sentences: [...both.values()].reduce((a, n) => a + n + 1, 0), points: 0, holes: 0, otherSentence: 0, smaller: 0, words: 0, wordsOutside: 0, heads: 0, headsOutside: 0, shapes: 0, sharedRows: 0, gaps: 0, overlaps: 0, throughInk: 0 })
   units.forEach((u, i) => {
     const k = kindOf(paper, u)
     count(k, 'n')
@@ -176,6 +238,46 @@ for (const id of ids) {
     }
     if (lit === 2) count(k, 'both')
   })
+  // sentences: holes inside their shapes, words outside them, the rows two share
+  for (const S of ['L', 'R']) {
+    const { anchors, doc, layout, starts } = sides[S], startsOf = i => (both.has(i) ? starts.get(i) : null), { tok } = layout
+    for (const [i, n] of both) {
+      const st = starts.get(i), runs = runsOf(layout, i), shapes = []
+      for (let s = 0; s <= n; s++) for (const run of runs) {
+        const rects = sentenceOf(layout, run, st, s, PAD)
+        if (!rects.length) continue
+        sc.shapes++
+        // the head before the unit's first word (a theorem's, a list's label) in its first sentence
+        if (s === 0 && run.head !== null) { sc.heads++; if (rects[0].x0 > run.head) sc.headsOutside++ }
+        shapes.push(...rects)
+        for (const r of rects) for (let x = r.x0 + STEP / 2; x < r.x1; x += STEP) for (let y = r.y0 + STEP / 2; y < r.y1; y += STEP) {
+          const hit = hitOf(layout, run.page, x, y, PAD, startsOf)
+          sc.points++
+          if (!hit) { sc.holes++; if (sentenceHoles.length < 30) sentenceHoles.push(`${id}#${i}.${s} ${S} p${run.page} ${x.toFixed(1)},${y.toFixed(1)}`) }
+          else if (hit.id === i && hit.s !== s) sc.otherSentence++
+          else if (hit.id !== i) sc.smaller++
+        }
+        // the row it shares with the next sentence: its end the next one's start, and whether that passes through a word
+        const next = s < n ? sentenceOf(layout, run, st, s + 1, PAD) : []
+        const a = rects.at(-1), b = next[0]
+        if (b && Math.abs(a.y0 - b.y0) < 0.01 && Math.abs(a.y1 - b.y1) < 0.01) {
+          sc.sharedRows++
+          if (b.x0 - a.x1 > 0.01) sc.gaps++
+          if (a.x1 - b.x0 > 0.01) sc.overlaps++
+          for (let k = 0; k < run.toks.length; k++) { const t = run.toks[k], y = doc[t].y; if (y > b.y0 && y < b.y1 && tok.l[t] < a.x1 - 0.1 && tok.r[t] > a.x1 + 0.1) { sc.throughInk++; inkCuts.push(`${id}#${i}.${s}|${s + 1} ${S} p${run.page} through ${doc[t].t || '(rest of a word)'} ${tok.l[t].toFixed(1)}–${tok.r[t].toFixed(1)} at ${a.x1.toFixed(1)}`); break } }
+        }
+      }
+      // every word of the unit in one of its sentences' shapes, but past the column's edge (the clamp's)
+      for (const t of anchors.get(i).tokens) {
+        const page = doc[t].page, x = (tok.l[t] + tok.r[t]) / 2, y = (tok.top[t] + tok.bottom[t]) / 2
+        sc.words++
+        if (shapes.some(r => r.page === page && inside(r, x, y))) continue
+        if (Object.values(layout.page[page].cols).every(e => x < e.x0 - OVERHANG || x > e.x1 + OVERHANG)) continue
+        sc.wordsOutside++
+        if (wordsOutside.length < 30) wordsOutside.push(`${id}#${i} ${S} p${page}`)
+      }
+    }
+  }
   // what the geometry took beyond the anchors, page by page: heads by kind, words filled in; the pads' overlaps
   for (const S of ['L', 'R']) {
     const { layout } = sides[S], t = ((taken[id] ??= {})[S] ??= {})
@@ -200,6 +302,80 @@ for (const id of ids) {
   console.error(id, 'done')
 }
 
+// ---------------------------------------------------------------- the ground truth (report-B §2(c, d))
+/** investigator B's tokenizer, which its starts were counted in (before A1: a Latin run took the CJK characters after it
+ *  in; the compatibility range ran on from U+8C48) */
+const oldTokens = s => [...s.normalize('NFKC').toLowerCase().matchAll(/[\u3400-\u9fff\u8c48-\ufaff\u3040-\u30ff\uac00-\ud7af]|[\p{L}\p{N}]+/gu)].length
+/** the token a start mark stands before (anchors.mjs tokenAtMark's rule for a start mark) */
+const pagesOf = new WeakMap()
+function tokenAt(doc, mk) {
+  let byPage = pagesOf.get(doc)
+  if (!byPage) { byPage = new Map(); doc.forEach((t, k) => (byPage.get(t.page) ?? byPage.set(t.page, []).get(t.page)).push(k)); pagesOf.set(doc, byPage) }
+  let best = null
+  for (const k of byPage.get(mk.page) ?? []) {
+    const t = doc[k]
+    if (Math.abs(t.y - mk.y) > t.h * 0.4) continue
+    const d = mk.x < t.x ? t.x - mk.x : mk.x > t.x + t.w ? mk.x - t.x - t.w : 0
+    if (d < 8 && (!best || d < best.d)) best = { k, d }
+  }
+  return best?.k ?? null
+}
+const lineOf = (a, b) => a.page === b.page && Math.abs(a.y - b.y) < Math.min(a.h, b.h) * 0.5
+/** per paper and side (O: our original, T: our translation, AX: arXiv's PDF): starts found, with a mark for their
+ *  sentence, on the mark's line */
+const truth = {}
+async function groundTruth() {
+  for (const id of GT_IDS) {
+    const dir = join(GT, id)
+    if (!existsSync(join(dir, 'O2.pdf'))) { truth[id] = null; continue }
+    const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
+    const units = openPaper(files).units
+    const kind = new Map(units.map((u, i) => [i, u.kind])), floating = x => FLOATING.has(kind.get(x))
+    const src = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
+    const tgt = JSON.parse(readFileSync(join(dir, 'final-texts.json'), 'utf8')).map(t => ({ ...t, ...displayEdges(units[t.id]) }))
+    const sents = JSON.parse(readFileSync(join(GT, 'sentences', `${id}.json`), 'utf8'))
+    const b = new Map(JSON.parse(readFileSync(join(dir, 'b-units.json'), 'utf8')).map(u => [u.i, u]))
+    const [O1, O2, T1, T2, AX] = await Promise.all([loadPdf(join(dir, 'O1.pdf')), loadPdf(join(dir, 'O2.pdf'), true), loadPdf(join(dir, 'T1.pdf')), loadPdf(join(dir, 'T2.pdf'), true), loadPdf(join(root, 'data/corpus', id, 'arxiv.pdf'))])
+    const docs = Object.fromEntries(Object.entries({ O1, O2, T1, T2, AX }).map(([k, v]) => [k, tokenizeDocument(v.pages)]))
+    // arXiv's PDF by our original's marks carried, as the reader anchors it; its truth, the sentence marks carried alike
+    const carried = markWords(docs.O1, O1.marks)
+    const carriedTruth = markWords(docs.O2, new Map([...O2.sentences].map(([k, v]) => [`${k}s`, v])))
+    const out = (truth[id] = {})
+    for (const [S, doc, marks, texts, on, truthDoc, truthMarks] of [['O', docs.O1, O1.marks, src, 'src', docs.O2, O2.sentences], ['T', docs.T1, T1.marks, tgt, 'tr', docs.T2, T2.sentences], ['AX', docs.AX, carried, src, 'src', docs.AX, null]]) {
+      const anchors = anchorUnits(doc, texts, { bounds: boundsFromMarks(doc, marks), floating })
+      const textOf = new Map(texts.map(t => [t.id, t.text])), r = (out[S] = { starts: 0, found: 0, withTruth: 0, sameLine: 0 })
+      // on our compiles the marked and unmarked documents have the same words where the marks moved none (originals:
+      // all; translations: most), and a start is compared by its word's place in the marked one
+      const same = truthDoc !== doc && truthDoc.length === doc.length
+      for (const [i, s] of Object.entries(sents)) {
+        const offs = s[on], bu = b.get(+i), bs = bu?.[S === 'T' ? 'tgtStarts' : 'srcStarts']
+        if (!offs.length || !bs?.length || WHOLE.has(kind.get(+i))) continue
+        r.starts += offs.length
+        const st = sentenceStarts(anchors.get(+i), textOf.get(+i) ?? '', offs)
+        if (!st) continue
+        offs.forEach((o, j) => {
+          r.found++
+          // the mark of the same sentence: B's start counted in B's tokens where this one's first word is
+          const jb = bs.indexOf(oldTokens(textOf.get(+i).slice(0, o)))
+          if (jb < 0) return
+          const name = `${i}.${jb + 1}`
+          let m = null
+          if (truthMarks) { const mk = truthMarks.get(name); if (mk) m = tokenAt(truthDoc, mk) } else {
+            const mk = carriedTruth.get(`${name}s`)
+            if (mk) { const k = tokenAt(doc, mk); if (k != null && mk.t != null && doc[k].t === mk.t) m = k }
+          }
+          if (m == null) return
+          r.withTruth++
+          const x = same ? truthDoc[st[j]] : doc[st[j]]
+          if (lineOf(x, truthDoc[m])) r.sameLine++
+        })
+      }
+    }
+    console.error(id, 'ground truth done')
+  }
+}
+if (existsSync(GT)) await groundTruth()
+
 const cols = ['n', 'anchoredL', 'litL', 'anchoredR', 'litR', 'both', 'unlitAnchored', 'holes', 'smaller', 'points', 'unreachable', 'inkHoles', 'pastEdge', 'inkPoints', 'runs', 'pageCols', 'cut', 'fragmentedDisplays', 'overlapping']
 console.log(['kind'.padEnd(26), ...cols].join('\t'))
 const sum = Object.fromEntries(cols.map(c => [c, 0]))
@@ -212,14 +388,29 @@ console.log('words past the column\'s edge + the overhang:', pastEdge.length, pa
 console.log('units painted where nothing lights them:', unreachable.length, unreachable.slice(0, 12).join('; '))
 const takenSum = side => { const o = { heads: {}, filled: 0, cells3em: 0, padOverlaps: 0 }; for (const t of Object.values(taken)) { const x = t[side]; if (!x) continue; for (const [kk, n] of Object.entries(x.heads)) o.heads[kk] = (o.heads[kk] ?? 0) + n; o.filled += x.filled; o.cells3em += x.cells3em; o.padOverlaps += x.padOverlaps } return o }
 console.log('what the geometry took beyond the anchors, left:', JSON.stringify(takenSum('L')), 'right:', JSON.stringify(takenSum('R')))
-console.log('\ncost, ms (median of', ROUNDS, 'rounds): layout at anchoring; every page\'s geometry; per page; the slowest page')
-for (const [k, c] of Object.entries(cost)) console.log(k.padEnd(14), `${c.pages} pp, ${c.tokens} tokens`, `layout ${c.layoutMs}`, `pages ${c.allPagesMs}`, `per page ${c.perPageMs}`, `max ${c.pageMaxMs}`)
+console.log('\ncost, ms (median of', ROUNDS, 'rounds): layout at anchoring; every page\'s geometry; per page; the slowest page; every unit\'s sentences\' starts')
+for (const [k, c] of Object.entries(cost)) console.log(k.padEnd(14), `${c.pages} pp, ${c.tokens} tokens`, `layout ${c.layoutMs}`, `pages ${c.allPagesMs}`, `per page ${c.perPageMs}`, `max ${c.pageMaxMs}`, `starts ${c.startsMs}`)
+const SC = ['units', 'multi', 'foundL', 'foundR', 'unfit', 'aligned', 'alignedMulti', 'sentences', 'points', 'holes', 'otherSentence', 'smaller', 'words', 'wordsOutside', 'heads', 'headsOutside', 'shapes', 'sharedRows', 'gaps', 'overlaps', 'throughInk']
+console.log('\nsentences (running text with the engine\'s sentences): units, more than one; starts found on the left, the right; found on both but shapes that do not hold their words (lit whole); aligned (both), of more than one; sentences; grid points inside their shapes, holes, another sentence of the unit, a smaller unit; words, outside their sentences; heads before a unit\'s first word, outside its first sentence; shapes; rows two sentences share, gaps, overlaps, boundaries through a word')
+console.log(['paper'.padEnd(12), ...SC].join('\t'))
+const ssum = Object.fromEntries(SC.map(c => [c, 0]))
+for (const [id, s] of Object.entries(sentences)) { console.log([id.padEnd(12), ...SC.map(c => s[c])].join('\t')); for (const c of SC) ssum[c] += s[c] }
+console.log(['all'.padEnd(12), ...SC.map(c => ssum[c])].join('\t'))
+if (sentenceHoles.length) console.log('holes inside sentences:', sentenceHoles.slice(0, 12).join('; '))
+if (wordsOutside.length) console.log('words outside their sentences:', wordsOutside.slice(0, 12).join('; '))
+if (inkCuts.length) console.log('boundaries through a word:', inkCuts.join('; '))
+console.log('\nthe ground truth (report-B\'s compiles): starts after the first of units of more than one sentence; found; with a mark for their sentence; on its line')
+for (const [id, t] of Object.entries(truth)) if (t) for (const [S, r] of Object.entries(t)) console.log(id.padEnd(12), S.padEnd(3), r.starts, r.found, r.withTruth, r.sameLine, `${((100 * r.sameLine) / Math.max(1, r.withTruth)).toFixed(1)} %`)
 // the gate: what must be none, and against the baseline what may not fall (or, for cuts, grow)
 const failures = []
 for (const c of ['unlitAnchored', 'holes', 'inkHoles', 'unreachable', 'fragmentedDisplays', 'overlapping']) if (sum[c] > 0) failures.push(`${c} ${sum[c]}`)
+for (const c of ['holes', 'otherSentence', 'wordsOutside', 'headsOutside', 'gaps', 'overlaps']) if (ssum[c] > 0) failures.push(`sentences: ${c} ${ssum[c]}`)
+if (!Object.keys(truth).length) failures.push(`no ground truth at ${GT}`)
 if (process.env.WRITE_BASELINE) {
   if (ids.length !== TEN.length || RUNS !== join(root, 'data/runs/highlight-ten')) failures.push('a baseline is recorded on the ten papers\' runs only')
-  if (!failures.length) writeFileSync(BASELINE, `${JSON.stringify({ note: 'highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors. Counts only', counts, cuts, pastEdge: sum.pastEdge, taken }, null, 1)}\n`)
+  const sentencesBase = Object.fromEntries(Object.entries(sentences).map(([id, s]) => [id, { aligned: s.aligned, alignedMulti: s.alignedMulti, throughInk: s.throughInk }]))
+  const truthBase = Object.fromEntries(Object.entries(truth).map(([id, t]) => [id, t && Object.fromEntries(Object.entries(t).map(([S, r]) => [S, { withTruth: r.withTruth, sameLine: r.sameLine }]))]))
+  if (!failures.length) writeFileSync(BASELINE, `${JSON.stringify({ note: 'highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors; per paper, the units aligned by sentence and the boundaries through a word; on the ground truth, per paper and side, the starts with a mark and those on its line. Counts only', counts, cuts, pastEdge: sum.pastEdge, taken, sentences: sentencesBase, truth: truthBase }, null, 1)}\n`)
   console.log(failures.length ? '\nno baseline written: the run fails' : `\nbaseline written: ${BASELINE}`)
 } else if (!existsSync(BASELINE)) failures.push('no baseline (WRITE_BASELINE=1 records one)')
 else {
@@ -238,8 +429,19 @@ else {
     for (const f of ['filled', 'cells3em', 'padOverlaps']) if (now[f] !== was[f]) failures.push(`${id} ${S} ${f} ${now[f]}, the baseline ${was[f]}`)
     for (const kk of new Set([...Object.keys(now.heads), ...Object.keys(was.heads)])) if ((now.heads[kk] ?? 0) !== (was.heads[kk] ?? 0)) failures.push(`${id} ${S} heads of ${kk} ${now.heads[kk] ?? 0}, the baseline ${was.heads[kk] ?? 0}`)
   }
+  // sentences: no fewer units aligned, no more boundaries through a word; on the ground truth no fewer starts on its line
+  for (const id of ids) {
+    const now = sentences[id], was = base.sentences?.[id]
+    if (!was) { failures.push(`${id}: no baseline of its sentences`); continue }
+    for (const f of ['aligned', 'alignedMulti']) if (now[f] < was[f]) failures.push(`${id} sentences ${f} ${now[f]}, the baseline ${was[f]}`)
+    if (now.throughInk > was.throughInk) failures.push(`${id} sentences' boundaries through a word ${now.throughInk}, the baseline ${was.throughInk}`)
+  }
+  for (const [id, t] of Object.entries(base.truth ?? {})) for (const [S, b] of Object.entries(t ?? {})) {
+    const r = truth[id]?.[S]
+    if (!r || r.sameLine < b.sameLine) failures.push(`${id} ${S} starts on the ground truth's line ${r?.sameLine ?? 'none'}, the baseline ${b.sameLine}`)
+  }
 }
 mkdirSync(join(root, 'out'), { recursive: true })
-writeFileSync(join(root, 'out/highlight-gate.json'), JSON.stringify({ ids, tally, cost, cuts, inkHoles, overlaps, unreachable, counts, taken }, null, 1))
+writeFileSync(join(root, 'out/highlight-gate.json'), JSON.stringify({ ids, tally, cost, cuts, inkHoles, overlaps, unreachable, counts, taken, sentences, truth }, null, 1))
 console.log(failures.length ? `\nFAIL: ${failures.slice(0, 20).join('; ')}${failures.length > 20 ? ` (and ${failures.length - 20} more)` : ''}` : '\nok: every anchored unit lit and reachable, no hole, no ink hole, no fragmented display, no unit\'s blocks overlapping, the baseline met')
 process.exitCode = failures.length ? 1 : 0

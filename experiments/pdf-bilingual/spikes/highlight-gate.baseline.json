@@ -1,5 +1,5 @@
 {
- "note": "highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors. Counts only",
+ "note": "highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors; per paper, the units aligned by sentence and the boundaries through a word; on the ground truth, per paper and side, the starts with a mark and those on its line. Counts only",
  "counts": {
   "2608.02163": {
    "L": {
@@ -1211,6 +1211,116 @@
     },
     "filled": 178,
     "padOverlaps": 6
+   }
+  }
+ },
+ "sentences": {
+  "2608.02163": {
+   "aligned": 80,
+   "alignedMulti": 51,
+   "throughInk": 0
+  },
+  "2608.02785": {
+   "aligned": 83,
+   "alignedMulti": 56,
+   "throughInk": 2
+  },
+  "2608.02991": {
+   "aligned": 99,
+   "alignedMulti": 80,
+   "throughInk": 0
+  },
+  "2608.03063": {
+   "aligned": 99,
+   "alignedMulti": 84,
+   "throughInk": 2
+  },
+  "2608.06701": {
+   "aligned": 41,
+   "alignedMulti": 32,
+   "throughInk": 1
+  },
+  "2608.07683": {
+   "aligned": 119,
+   "alignedMulti": 91,
+   "throughInk": 5
+  },
+  "2608.08350": {
+   "aligned": 137,
+   "alignedMulti": 86,
+   "throughInk": 0
+  },
+  "2608.09746": {
+   "aligned": 105,
+   "alignedMulti": 68,
+   "throughInk": 2
+  },
+  "2608.12502": {
+   "aligned": 88,
+   "alignedMulti": 75,
+   "throughInk": 10
+  },
+  "2608.29181": {
+   "aligned": 109,
+   "alignedMulti": 79,
+   "throughInk": 0
+  }
+ },
+ "truth": {
+  "2608.02785": {
+   "O": {
+    "withTruth": 168,
+    "sameLine": 167
+   },
+   "T": {
+    "withTruth": 168,
+    "sameLine": 168
+   },
+   "AX": {
+    "withTruth": 168,
+    "sameLine": 167
+   }
+  },
+  "2608.04322": {
+   "O": {
+    "withTruth": 138,
+    "sameLine": 138
+   },
+   "T": {
+    "withTruth": 135,
+    "sameLine": 135
+   },
+   "AX": {
+    "withTruth": 138,
+    "sameLine": 138
+   }
+  },
+  "2608.02163": {
+   "O": {
+    "withTruth": 175,
+    "sameLine": 173
+   },
+   "T": {
+    "withTruth": 175,
+    "sameLine": 175
+   },
+   "AX": {
+    "withTruth": 174,
+    "sameLine": 172
+   }
+  },
+  "2608.02459": {
+   "O": {
+    "withTruth": 655,
+    "sameLine": 650
+   },
+   "T": {
+    "withTruth": 655,
+    "sameLine": 653
+   },
+   "AX": {
+    "withTruth": 654,
+    "sameLine": 647
    }
   }
  }
