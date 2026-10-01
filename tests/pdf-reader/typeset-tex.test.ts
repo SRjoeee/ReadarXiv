@@ -4,6 +4,7 @@ import { openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-re
 import { readSizeProbe, readWidthProbe } from '@/pdf-reader/engine/typeset/density.mjs'
 import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
 import { FLOAT_TEX, LINES_TEX, readForced, readLines, SIZE_TEX, typesetting } from '@/pdf-reader/engine/typeset/tex.mjs'
+import { DESIGN, designFor } from '@/pdf-reader/engine/typeset/type.mjs'
 
 // What the typesetting rule writes into a compile and reads back from its log. The macros' behaviour under TeX is checked
 // natively by experiments/pdf-bilingual/spikes/typeset-check.mjs; here, what goes where
@@ -60,8 +61,9 @@ describe('the log the rule reads', () => {
 describe('a typeset plan in the compile', () => {
   const p = paper(), units = p.units as Unit[]
   const para = units.findIndex(u => u.kind === 'para'), caption = units.findIndex(u => u.kind === 'caption'), heading = units.findIndex(u => u.kind === 'heading')
+  /** a plan solved for the first strategy of a CJK target (xeCJK) or of an alphabet's (the paper's own engine) */
   const plan = (cjk: boolean, extra: Partial<Parameters<typeof typesetting>[1]> = {}) => typesetting(p.units, {
-    cjk, type: cjk ? { lead: 1.35, track: 0.02, scale: 0.97 } : { lead: 1.02, size: 0.95 },
+    design: cjk ? DESIGN.Hans : DESIGN.Latn, strategy: first(cjk ? 'zh' : 'de').name, type: cjk ? { lead: 1.35, track: 0.02, scale: 0.97 } : { lead: 1.02, size: 0.95 },
     leads: new Map([[para, 1.1]]), sizes: new Map(), floatsAt: new Map(), tableMin: 0.85, ...extra,
   })
 
@@ -91,13 +93,21 @@ describe('a typeset plan in the compile', () => {
     expect(de.leading).toBe(1.02)
     expect(de.pre(null)).toContain('\\AtBeginDocument{\\begingroup\\normalfont\\normalsize')
   })
-  it('leaves the CJK face and glue to xeCJK: the pdfLaTeX fallback, CJKutf8, has neither', () => {
+  it('sets a CJK type under the pdfLaTeX fallback, CJKutf8, as its design has it: the leading, and a size on the units', () => {
     const [, cjkutf8] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
-    if (!cjkutf8) throw new Error('no fallback strategy')
-    const fallback = plan(true).strategy(cjkutf8)
+    const design = cjkutf8 && designFor('Hans', cjkutf8)
+    if (!cjkutf8 || !design) throw new Error('no fallback strategy')
+    const typeset = typesetting(p.units, { design, strategy: cjkutf8.name, type: { lead: 1.35, size: 0.96, h: 0.96 }, leads: new Map([[para, 1.1]]), sizes: new Map([[para, 0.96]]), floatsAt: new Map(), tableMin: 0.85 })
+    const fallback = typeset.strategy(cjkutf8)
     expect(fallback.leading).toBe(1.35)
-    expect(fallback.pre(null)).not.toContain('xeCJKsetup')
     expect(fallback.pre(null)).toBe(cjkutf8.pre(null))
+    expect(text(translationFiles(p, translate(units) as never, { strategy: cjkutf8, fonts: null, draft: false, aux: null, bbl: null, typeset }))).toContain(`\\axtsize{${para}}`)
+  })
+  it('sets only the strategy it was solved for: another one is planned again', () => {
+    const [xe, cjkutf8] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
+    if (!xe || !cjkutf8) throw new Error('no strategies')
+    expect(() => plan(true).strategy(cjkutf8)).toThrow(/XeLaTeX \+ xeCJK/)
+    expect(plan(true).strategy(xe).leading).toBe(1.35)
   })
   it('marks only translated units: their float, line probe, size and leading, in that order', () => {
     const typeset = plan(false, { sizes: new Map([[para, 0.95], [heading, 0.95]]), floatsAt: new Map([[caption, { page: 1, col: 0 }]]) })

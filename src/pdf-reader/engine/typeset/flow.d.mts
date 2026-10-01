@@ -1,5 +1,5 @@
 // flow.mjs's types (JavaScript until the engine's port), for the reader's tests
-import type { TypeUnit } from './type.mjs'
+import type { Design, TypeUnit } from './type.mjs'
 
 export interface FlowOptions {
   window?: number
@@ -10,4 +10,4 @@ export interface FlowOptions {
 }
 /** where the final pass put the text at a unit's start and end, in points behind the original, and the leading it set */
 export interface FlowStep { i: number; at: number; end: number; x: number }
-export declare function flowType(units: TypeUnit[], script: string, heights: Map<number, number>, options?: FlowOptions): { leads: Map<number, number>; sizes: Map<number, number>; trace: FlowStep[] }
+export declare function flowType(units: TypeUnit[], design: Design, heights: Map<number, number>, options?: FlowOptions): { leads: Map<number, number>; sizes: Map<number, number>; trace: FlowStep[] }

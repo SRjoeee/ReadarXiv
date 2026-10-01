@@ -64,7 +64,7 @@ async function check(lang, id) {
   const original = await compile(join(dir, 'original'), files, originalFiles(paper, { lines: true }), { main: project.main, engine: meta.compiler, rerun: true, bbl: meta.bbl })
   if (!original.ok) return { lang, id, failed: 'original' }
   const om = await marksOfFile(original.pdf), fonts = readFontProbe(probe.log)
-  const plan = previewTypesetting({ paper, translated, lang, fonts, fontLog: probe.log, original: { log: original.log, marks: om } })
+  const plan = previewTypesetting({ paper, translated, lang, strategy, fonts, fontLog: probe.log, original: { log: original.log, marks: om } })
   const preview = await compile(join(dir, 'preview'), files, translationFiles(paper, translated, { strategy, fonts, draft: false, typeset: plan.typeset }), { main: project.main, engine: strategy.engine, rerun: true, bbl: meta.bbl })
   if (!preview.ok) return { lang, id, failed: 'preview' }
   const fin = finalTypesetting(plan.state, { log: preview.log, marks: await marksOfFile(preview.pdf) })

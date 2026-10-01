@@ -5,12 +5,12 @@
 import { linesAt } from './density.mjs'
 
 const CJK_DESIGN = (lead, range) => ({ cjk: true, base: { lead, track: 0, scale: 1 }, lead: range, track: [0, 0.05], scale: [0.92, 1] })
-const ALPHABET = { cjk: false, size: [0.9, 1], lead: [0.95, 1.1] }
+const ALPHABET = { cjk: false, base: 1, size: [0.9, 1], lead: [0.95, 1.1] }
 /**
- * Per writing system. CJK: leading × the paper's own (Chinese from its reader's 1.3, Japanese and Korean from the
- * paper's), tracking between CJK characters in em, the CJK face's scale. Alphabets: the size of the translated text,
- * then its leading × the paper's; the floor is the size a class sets as \small below a 10 pt body (9 pt) — where a face
- * has fixed sizes, the size below 10 pt is 9.
+ * Per writing system, under the strategy that can set every knob (designFor). CJK, under xeCJK: leading × the paper's
+ * own (Chinese from its reader's 1.3, Japanese and Korean from the paper's), tracking between CJK characters in em, the
+ * CJK face's scale. Alphabets: the size of the translated text, then its leading × the paper's from `base`; the floor
+ * is the size a class sets as \small below a 10 pt body (9 pt) — where a face has fixed sizes, the size below 10 pt is 9.
  */
 export const DESIGN = {
   Hans: CJK_DESIGN(1.3, [1.2, 1.45]),
@@ -21,11 +21,26 @@ export const DESIGN = {
   Cyrl: ALPHABET,
 }
 
+/**
+ * The design a strategy can set (scripts.mjs strategiesFor): its script's, but for CJK under pdfLaTeX's CJKutf8, which
+ * has no xeCJK — no glue between CJK characters, no scale of the CJK face apart from the rest. There the type is what
+ * an alphabet's is: a size for every translated unit (tex.mjs SIZE_TEX; the CJK face follows it, typeset-tex-cases.mjs)
+ * down to the CJK face's floor, and the leading in its script's range from its script's base. Every size there is as
+ * wide as it is (`scalable`): the CJK face scales, and the size probe measures the Latin face. A type solved with
+ * xeCJK's knobs and set with the leading alone is one the prediction does not describe (the 2026-10-01 evaluation).
+ * Null for a script with no design: the rule sets nothing (plan.mjs)
+ */
+export function designFor(script, strategy) {
+  const design = DESIGN[script]
+  if (!design?.cjk || strategy?.xe) return design ?? null
+  return { cjk: false, scalable: true, base: design.base.lead, size: design.scale, lead: design.lead }
+}
+
 // a translation that runs long pushes floats and forced page breaks to later pages (2608.09038 gained two pages when
 // its main text ran a third of a column long); one that runs short leaves white space at a column's end. Of two types
 // that miss, the one that runs short
 const LONG = 2
-// a face without a size probe: every size in the range, as wide as its size
+// a face without a size probe, or one that scales: every size in the range, as wide as its size
 const scalable = ([lo, hi]) => Array.from({ length: Math.round((hi - lo) / 0.005) + 1 }, (_, k) => { const size = Number((lo + k * 0.005).toFixed(4)); return { size, h: size } })
 const clamp = (x, [lo, hi]) => Math.min(hi, Math.max(lo, x))
 
@@ -41,18 +56,17 @@ const heightAt = (u, design, type, f = 1) => linesOf(u, design, type, f) * (desi
  * lines in em, the translation's width in em (density.mjs measureUnits). An alphabet's type: its size, how wide the
  * face sets there against the body (`h`, the size probe's; the size itself for a face that only scales), its leading.
  */
-export function heightRatio(units, script, type) {
-  const design = DESIGN[script]
+export function heightRatio(units, design, type) {
   let o = 0, t = 0
   for (const u of units) { o += u.lo * u.bs; t += heightAt(u, design, type) * type.lead }
   return o ? t / o : 1
 }
 /** a unit's predicted height at a type and leading one, its face `f` times the type's own (flow.mjs's shrink) */
-export const heightAtSize = (u, script, type, f = 1) => heightAt(u, DESIGN[script], type, f)
+export const heightAtSize = (u, design, type, f = 1) => heightAt(u, design, type, f)
 /** each unit's predicted height at a type and leading one, by its index: what flowType takes from a prediction */
-export const unitHeights = (units, script, type) => new Map(units.map(u => [u.i, heightAt(u, DESIGN[script], type)]))
+export const unitHeights = (units, design, type) => new Map(units.map(u => [u.i, heightAt(u, design, type)]))
 /** each unit's predicted lines at a type, by its index */
-export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, linesOf(u, DESIGN[script], type)]))
+export const unitLines = (units, design, type) => new Map(units.map(u => [u.i, linesOf(u, design, type)]))
 
 /**
  * CJK's three knobs at a change of height `a` (the original's height over the translation's at `base`): each moves, in
@@ -90,19 +104,19 @@ export function cjkType(a, base, ranges) {
 /**
  * The type for a translation. CJK: the knobs share the change as cjkType shares it, and the share is found by bisection
  * so that the predicted ratio is one — the line breaks each type moves are in the prediction. Alphabets: a size the
- * face has (`sizes`, density.mjs readSizeProbe; without it, any), each with the leading that brings the ratio to one
- * within its range; the size whose ratio comes nearest, a long one counting LONG times a short one, and of those that
- * reach it the one that keeps the paper's leading. Out of reach, the knobs stay at their ends; `ratio` says where it lands.
+ * face has (`sizes`, density.mjs readSizeProbe; without it, or where the design's face scales, any), each with the
+ * leading that brings the ratio to one within its range; the size whose ratio comes nearest, a long one counting LONG
+ * times a short one, and of those that reach it the one that keeps the design's base leading. Out of reach, the knobs
+ * stay at their ends; `ratio` says where it lands. `design` DESIGN's or designFor's.
  */
-export function solveType(units, script, sizes = null) {
-  const design = DESIGN[script]
+export function solveType(units, design, sizes = null) {
   if (!design.cjk) {
     let best = null
-    for (const { size, h } of (sizes ?? scalable(design.size)).filter(p => p.size >= design.size[0] - 1e-9 && p.size <= design.size[1] + 1e-9)) {
+    for (const { size, h } of (design.scalable || !sizes ? scalable(design.size) : sizes).filter(p => p.size >= design.size[0] - 1e-9 && p.size <= design.size[1] + 1e-9)) {
       // the height is proportional to the leading: the one that reaches one, held to its range
-      const lead = clamp(1 / heightRatio(units, script, { size, h, lead: 1 }), design.lead)
-      const ratio = heightRatio(units, script, { size, h, lead })
-      const cost = 10 * (ratio > 1 ? LONG : 1) * Math.abs(Math.log(ratio)) + Math.abs(Math.log(lead))
+      const lead = clamp(1 / heightRatio(units, design, { size, h, lead: 1 }), design.lead)
+      const ratio = heightRatio(units, design, { size, h, lead })
+      const cost = 10 * (ratio > 1 ? LONG : 1) * Math.abs(Math.log(ratio)) + Math.abs(Math.log(lead / design.base))
       if (!best || cost < best.cost) best = { size, h, lead, ratio, cost }
     }
     const { cost, ...type } = best
@@ -110,7 +124,7 @@ export function solveType(units, script, sizes = null) {
   }
   const ranges = { lead: design.lead, track: design.track, scale: design.scale }
   const at = x => { const t = cjkType(Math.exp(x), design.base, ranges); return { lead: t.lead, track: t.track, scale: t.scale } }
-  const f = x => heightRatio(units, script, at(x))
+  const f = x => heightRatio(units, design, at(x))
   const r0 = f(0)
   // the ratio grows with x; one either side of the base type brackets what the ranges allow
   let lo = r0 < 1 ? 0 : -1, hi = r0 < 1 ? 1 : 0
@@ -118,7 +132,7 @@ export function solveType(units, script, sizes = null) {
   else if (f(lo) > 1) hi = lo
   for (let k = 0; k < 40 && hi - lo > 1e-6; k++) { const mid = (lo + hi) / 2; if (f(mid) < 1) lo = mid; else hi = mid }
   const type = at((lo + hi) / 2)
-  return { ...type, ratio: heightRatio(units, script, type) }
+  return { ...type, ratio: heightRatio(units, design, type) }
 }
 
 /**
@@ -127,9 +141,9 @@ export function solveType(units, script, sizes = null) {
  * agree — the paper's density as measured, where the text alone could only estimate it — and solveType on the result
  * gives the final compile's type.
  */
-export function correctUnits(units, script, type, measured) {
+export function correctUnits(units, design, type, measured) {
   const scaled = k => units.map(u => ({ ...u, width: t => k * u.width(t) }))
   let lo = Math.log(0.5), hi = Math.log(2)
-  for (let n = 0; n < 50 && hi - lo > 1e-9; n++) { const mid = (lo + hi) / 2; if (heightRatio(scaled(Math.exp(mid)), script, type) < measured) lo = mid; else hi = mid }
+  for (let n = 0; n < 50 && hi - lo > 1e-9; n++) { const mid = (lo + hi) / 2; if (heightRatio(scaled(Math.exp(mid)), design, type) < measured) lo = mid; else hi = mid }
   return scaled(Math.exp((lo + hi) / 2))
 }

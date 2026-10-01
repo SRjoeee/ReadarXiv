@@ -5,7 +5,7 @@ import type { Typeset } from './typeset/tex.mjs'
 
 export interface Paper { meta: { main?: string; compiler?: string }; units: SourceUnit[]; kept: Set<SourceUnit> }
 /** a paper's files (path → bytes) → what the pipeline works on */
-export declare function openPaper(files: Map<string, Uint8Array>): Paper
+export declare function openPaper(files: Map<string, Uint8Array>): Paper & { fsys: { list(): string[]; read(path: string): Uint8Array | null } }
 /** the translation so far, with unit marks, set by one of strategiesFor: the files that differ from the paper's */
 export declare function translationFiles(paper: Paper, translated: Map<SourceUnit, unknown[]>, options: { strategy: Strategy; fonts: unknown; draft: boolean; aux?: string | null; bbl?: string | null; typeset?: Typeset | null }): Map<string, Uint8Array>
 /** the font probe; with `width`, the width and size probes the typesetting rule measures the face by */

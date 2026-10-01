@@ -91,15 +91,17 @@ const def = (name, i, v) => `\\expandafter\\def\\csname ${name}${i}\\endcsname{$
 
 /**
  * What a typeset plan (plan.mjs) adds to a compile of the translation, for live.mjs translationFiles: the strategy it
- * sets the type of (CJK: the leading, and under xeCJK the tracking as its glue and the scale on the CJK face; an alphabet: its
- * leading, and the size probe, which the final's type is solved among), the TeX before everything (the line probes,
- * the sizes, the floats held, each unit's factors, tables no taller than their original's), and each translated
- * unit's macros before its start mark: its float's page and column, its line probe, its size, its leading.
- * `plan`: { cjk, type, leads: Map(unit index → leading × its size), sizes: Map(unit index → size factor),
- * floatsAt: Map(unit index → { page, col }), tableMin }.
+ * sets the type of, the one it was solved for (CJK under xeCJK: the leading, the tracking as xeCJK's glue and the scale
+ * on the CJK face; an alphabet, or CJK under CJKutf8: its leading, and with a face of fixed sizes the size probe, which
+ * the final's type is solved among — type.mjs designFor), the TeX before everything (the line probes, the sizes, the
+ * floats held, each unit's factors, tables no taller than their original's), and each translated unit's macros before
+ * its start mark: its float's page and column, its line probe, its size, its leading. Another strategy — the chain
+ * moved on — is refused: its design is another, and the plan is made again for it (plan.mjs previewTypesetting).
+ * `plan`: { design, strategy (its name), type, leads: Map(unit index → leading × its size), sizes: Map(unit index →
+ * size factor), floatsAt: Map(unit index → { page, col }), tableMin }.
  */
 export function typesetting(units, plan) {
-  const { cjk, type, leads, sizes, floatsAt, tableMin } = plan
+  const { design, type, leads, sizes, floatsAt, tableMin } = plan
   const index = new Map(units.map((u, i) => [u, i]))
   const head = [
     LINES_TEX, sizes.size ? SIZE_TEX : '', floatsAt.size ? FLOAT_TEX : '',
@@ -110,11 +112,11 @@ export function typesetting(units, plan) {
   ].join('\n')
   return {
     head,
-    // the CJK face's scale and the glue between its characters are xeCJK's; the pdfLaTeX fallback (CJKutf8) takes the
-    // leading alone
-    strategy: s => (cjk
-      ? { ...s, leading: type.lead, pre: s.xe ? fonts => s.pre(fonts).replace('\\setCJKmainfont[', `\\setCJKmainfont[Scale=${type.scale.toFixed(4)},`) + (type.track > 0.0005 ? `\\xeCJKsetup{CJKglue={\\hskip ${type.track.toFixed(4)}em plus 0.08\\baselineskip}}\n` : '') : s.pre }
-      : { ...s, leading: type.lead, pre: fonts => `${s.pre(fonts)}\\AtBeginDocument{${SIZE_PROBE}}\n` }),
+    strategy: s => {
+      if (s.name !== plan.strategy) throw new Error(`a typesetting plan for ${plan.strategy}, not ${s.name}`)
+      if (design.cjk) return { ...s, leading: type.lead, pre: fonts => s.pre(fonts).replace('\\setCJKmainfont[', `\\setCJKmainfont[Scale=${type.scale.toFixed(4)},`) + (type.track > 0.0005 ? `\\xeCJKsetup{CJKglue={\\hskip ${type.track.toFixed(4)}em plus 0.08\\baselineskip}}\n` : '') }
+      return { ...s, leading: type.lead, pre: design.scalable ? s.pre : fonts => `${s.pre(fonts)}\\AtBeginDocument{${SIZE_PROBE}}\n` }
+    },
     mark: (base, translated) => u => {
       const m = base(u), i = index.get(u)
       if (m?.whole || !translated.has(u)) return m

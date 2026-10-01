@@ -1,7 +1,5 @@
 // Each translated unit's leading along the paper, and where a stretch at the leading's floor still runs long, its face
 // (records/typesetting.md in experiments/pdf-bilingual: the rule chosen on 2026-10-01).
-import { DESIGN } from './type.mjs'
-
 const clamp = (x, [lo, hi]) => Math.min(hi, Math.max(lo, x))
 
 /**
@@ -45,13 +43,13 @@ const clamp = (x, [lo, hi]) => Math.min(hi, Math.max(lo, x))
  * it, a third of the CJK units came out a little smaller, most by under 3 %, and a face that much smaller saves a whole
  * line more often than the line model allows, twice as often under 1 %: five papers ran early.
  * `heights`: Map(unit index → the translation's height at leading one), from type.mjs unitHeights or a compile's lines.
- * The leading is × the paper's for CJK, × the size's for an alphabet, as the type's is.
+ * The leading is × the paper's for CJK, × the size's for an alphabet, as the type's is; its range the `design`'s
+ * (type.mjs DESIGN, designFor).
  * Returns each unit's leading (`leads`), the face of each unit set smaller (`sizes`), and the `trace`: unit by unit, where
  * the final pass put the text at the unit's start (`at`) and its end (`end`), in points behind the original, and the
  * leading it set (`x`).
  */
-export function flowType(units, script, heights, { window = 50, horizon = window, measured = null, rate = Infinity, shrink = null } = {}) {
-  const design = DESIGN[script]
+export function flowType(units, design, heights, { window = 50, horizon = window, measured = null, rate = Infinity, shrink = null } = {}) {
   const list = units.filter(u => heights.get(u.i) > 0).sort((a, b) => a.i - b.i)
   const bs = [...list.map(u => u.bs)].sort((a, b) => a - b)[list.length >> 1] ?? 12, half = (window * bs) / 2, back = horizon * bs
   let at = 0
