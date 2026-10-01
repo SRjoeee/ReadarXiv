@@ -145,12 +145,15 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
   return { tok, pageStart, page, anchors, kindOf, unitsOn, pagesOf, cache: new Map() }
 }
 
-/** a line's column on a page: on two columns, both only where it reaches into both columns' text by more than the
- *  overhang (a full-width display, a float across the page); else the one its middle stands in, so that an overfull
- *  display stays in its column, clamped (a display passing the middle made a block over both, doubling the wash) */
+/** a line's column on a page: on two columns, both where it reaches into both columns' text by more than the
+ *  overhang (a full-width display, a float across the page), and where it crosses the page's middle reaching into
+ *  neither (a short heading centred on the gutter, which the left column's clamp cut at its edge + 6, the re-review of
+ *  B1); else the one its middle stands in, so that an overfull display stays in its column, clamped (a display passing
+ *  the middle made a block over both, doubling the wash) */
 function colOf(P, x0, x1) {
   if (!P.two) return 'F'
-  if (x0 < P.cols.L.x1 - OVERHANG && x1 > P.cols.R.x0 + OVERHANG) return 'F'
+  const inL = x0 < P.cols.L.x1 - OVERHANG, inR = x1 > P.cols.R.x0 + OVERHANG
+  if (inL === inR && x0 < P.mid && x1 > P.mid) return 'F'
   return (x0 + x1) / 2 <= P.mid ? 'L' : 'R'
 }
 

@@ -94,6 +94,15 @@ describe('runsOf: a unit\'s runs, one per page and column, and their rows', () =
     expect(runs.map(r => [r.col, ...across(r)])).toEqual([['L', 50, 296]])
   })
 
+  it('two columns: a short line centred on the gutter, in neither column\'s text, is the page\'s: not clamped into the left column', () => {
+    // a heading of 32 units at 284–316 (the review of B1's fix round: a run of 284–296), and one of 60 at 270–330
+    const pages = (x0: number, x1: number) => [[...prose(740, 20, 50, 290), ...prose(740, 20, 310, 550), item('Results', x0, 480, { width: x1 - x0, eol: true }), ...prose(460, 20, 50, 290), ...prose(460, 20, 310, 550)]]
+    for (const [x0, x1] of [[284, 316], [270, 330]] as const) {
+      const ps = pages(x0, x1), h = at(docOf(ps), 'results')
+      expect(runsOf(side(ps, [[0, [h]]], new Map([[0, 'heading']])), 0).map(r => [r.col, ...across(r)])).toEqual([['F', x0, x1]])
+    }
+  })
+
   it('two columns: a paragraph around a full-width display (revtex widetext) is cut by it, its own, in each column', () => {
     // left above, right above, the display across both columns, left below: four runs, none overlapping another
     const pages = [[...prose(740, 4, 50, 290), line('words above on the left of it', 692, 50, 290), line('more words above it on the left', 680, 50, 290), ...prose(740, 4, 310, 550), line('words above on the right of it', 692, 310, 550), line('more words above on the right', 680, 310, 550),
