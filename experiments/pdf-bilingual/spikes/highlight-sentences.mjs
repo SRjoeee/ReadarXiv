@@ -9,7 +9,9 @@
 //   ground-truth compiles); MAX_REQUESTS=<n> caps the requests a run may make (default 200; 0 for the caches alone)
 // Answers are kept in out/highlight/B3/ms-cache-zh-<from>.json (git-ignored; the auto one seeded from the draft round's,
 // A2's, and the English one read with investigator B's, out/highlight/B/ms-cache-zh.json); only a wire neither has is
-// asked, two requests at a time. Counts only, no paper text, are printed.
+// asked, two requests at a time. Counts only, no paper text, are printed. The highlight's gate makes the files again
+// from those answers by the reader's own path (sentences-path.mjs: the extension's provider, engine.mjs, translateUnits)
+// and fails where one differs.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { verifyAlignment } from '../../../src/providers/alignment'

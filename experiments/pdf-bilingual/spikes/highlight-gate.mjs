@@ -40,7 +40,11 @@
 // Sentences (B3: plans/2026-10-01-pdf-highlight.md), from each run's sentences (spikes/highlight-sentences.mjs:
 // Microsoft's sentence lengths for the very wires the reader sends, cut as mt.mjs sentencesOf cuts them), each side's
 // starts found as the reader finds them (anchors.mjs sentenceStarts) and a unit lit by sentence where both found all
-// of its (running text only), per paper:
+// of its (running text only). The files are first made again by the reader's own path (sentences-path.mjs: the
+// Microsoft answers kept, out/highlight/B3/ms-cache-zh-<auto|en>.json, through the extension's Microsoft provider, the
+// service's check, engine.mjs and mt.mjs translateUnits, no request made), and any unit whose sentences differ fails
+// the gate: a change to that path meant is recorded by making the files again (highlight-sentences.mjs,
+// MAX_REQUESTS=0). Per paper:
 //  - units with sentences, more than one, and found on the left, on the right, on both (aligned)
 //  - holes inside sentence shapes: points on the grid inside each sentence's shape (highlight.mjs sentenceOf) where the
 //    hit test (hitOf with the sentences) lights nothing, or another sentence of the unit; a smaller unit is counted apart
@@ -60,7 +64,8 @@
 // where its word is there — on the same line or not.
 // Fails besides on: a hole inside a sentence's shape, or another sentence lit there; a word outside its unit's
 // sentences but past the column's edge, a head outside its first sentence; a gap or an overlap between two sentences on
-// a row; a piece short of its unit's text edge over a break; against the baseline, fewer units aligned per paper, more boundaries through ink, and fewer starts on the
+// a row; a piece short of its unit's text edge over a break; a sentence file not what the reader's path makes; against
+// the baseline, fewer units aligned per paper, more boundaries through ink, and fewer starts on the
 // ground truth's line. Each made to fail once (B3, in the tree, put back
 // after): the head left out of the first sentence (486 heads outside), the boundary at the next word's start instead of
 // the middle of the space (3 498 gaps), a sentence's last row taken across the run (1.8 M holes, 4 M points lighting
@@ -88,8 +93,9 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from '../../../src/pdf-reader/engine/anchors.mjs'
 import { blockOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit } from '../../../src/pdf-reader/engine/highlight.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/live.mjs'
-import { displayEdges, unitText } from '../../../src/pdf-reader/engine/mt.mjs'
+import { displayEdges, plainTranslated, unitText } from '../../../src/pdf-reader/engine/mt.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/tar.mjs'
+import { sentencesThroughEngine } from './sentences-path.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const RUNS = process.env.RUNS ?? join(root, 'data/runs/highlight-ten')
@@ -143,6 +149,26 @@ const median = xs => { const s = [...xs].sort((a, b) => a - b); return s[s.lengt
 const tally = {}, cost = {}, cuts = [], inkHoles = [], overlaps = [], pastEdge = [], unreachable = []
 /** per paper: the sentences' counts (B3); the holes and words outside listed */
 const sentences = {}, sentenceHoles = [], wordsOutside = [], inkCuts = [], goesOnShort = []
+/** the sentence files against the reader's path from the Microsoft answers kept (sentences-path.mjs): per set of runs
+ *  and paper, the units in the file, those the path gives, and those that differ (either has it and the other not, or
+ *  not the same) */
+const remade = {}
+const answersOf = from => {
+  const f = join(root, `out/highlight/B3/ms-cache-zh-${from}.json`)
+  return existsSync(f) ? new Map(Object.entries(JSON.parse(readFileSync(f, 'utf8')))) : null
+}
+const ANSWERS = { auto: answersOf('auto'), en: answersOf('en') }
+async function remake(set, runs, from, id, paper, sents) {
+  const pf = join(runs, 'pieces', `${id}.json`), typeset = existsSync(pf) ? JSON.parse(readFileSync(pf, 'utf8')) : {}
+  const finals = new Map(JSON.parse(readFileSync(join(runs, id, 'final-texts.json'), 'utf8')).map(t => [t.id, t.text]))
+  // the very translation the run typeset (its pieces where they are kept, else its final text): as the file was made
+  const keep = (i, pieces) => (typeset[i] ? JSON.stringify(pieces) === JSON.stringify(typeset[i]) : finals.get(i) === plainTranslated(pieces))
+  const r = ((remade[set] ??= {})[id] = { file: Object.keys(sents).length, path: 0, differ: 0, first: [] })
+  if (!ANSWERS[from]) { r.differ = r.file; r.first.push(`no Microsoft answers kept (ms-cache-zh-${from}.json)`); return }
+  const got = await sentencesThroughEngine({ units: paper.units.flatMap((u, i) => (paper.kept.has(u) ? [] : [{ u, i }])), cache: ANSWERS[from], keep })
+  r.path = Object.keys(got).length
+  for (const k of new Set([...Object.keys(got), ...Object.keys(sents)])) if (JSON.stringify(got[k]) !== JSON.stringify(sents[k])) { r.differ++; if (r.first.length < 5) r.first.push(`#${k}`) }
+}
 /** per paper and side: what the geometry took beyond the anchors, held to the baseline exactly */
 const taken = {}
 /** per paper, side and kind: units anchored and lit, for the baseline */
@@ -159,6 +185,7 @@ for (const id of ids) {
   const texts = JSON.parse(readFileSync(join(RUNS, id, 'final-texts.json'), 'utf8')).map(t => ({ ...(typeset[t.id] ? unitText(typeset[t.id]) : paper.kept.has(units[t.id]) ? unitText(units[t.id].pieces) : t), id: t.id, ...displayEdges(units[t.id]) }))
   const OM = await loadPdf(join(RUNS, id, 'original-marked.pdf'))
   const sf = join(RUNS, 'sentences', `${id}.json`), sents = existsSync(sf) ? JSON.parse(readFileSync(sf, 'utf8')) : {}
+  await remake('ten', RUNS, 'auto', id, paper, sents)
   const sides = {}
   for (const [S, file, T] of [['L', join(root, 'data/corpus', id, 'arxiv.pdf'), src], ['R', join(RUNS, id, 'final.pdf'), texts]]) {
     const pdf = await loadPdf(file), doc = tokenizeDocument(pdf.pages)
@@ -364,11 +391,12 @@ async function groundTruth() {
     const dir = join(GT, id)
     if (!existsSync(join(dir, 'O2.pdf'))) { truth[id] = null; continue }
     const { files } = await unpackSource(new Uint8Array(readFileSync(join(root, 'data/corpus', id, 'source.gz'))))
-    const units = openPaper(files).units
+    const paper = openPaper(files), units = paper.units
     const kind = new Map(units.map((u, i) => [i, u.kind])), floating = x => FLOATING.has(kind.get(x))
     const src = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
     const tgt = JSON.parse(readFileSync(join(dir, 'final-texts.json'), 'utf8')).map(t => ({ ...t, ...displayEdges(units[t.id]) }))
     const sents = JSON.parse(readFileSync(join(GT, 'sentences', `${id}.json`), 'utf8'))
+    await remake('ground truth', GT, 'en', id, paper, sents)
     const b = new Map(JSON.parse(readFileSync(join(dir, 'b-units.json'), 'utf8')).map(u => [u.i, u]))
     const [O1, O2, T1, T2, AX] = await Promise.all([loadPdf(join(dir, 'O1.pdf')), loadPdf(join(dir, 'O2.pdf'), true), loadPdf(join(dir, 'T1.pdf')), loadPdf(join(dir, 'T2.pdf'), true), loadPdf(join(root, 'data/corpus', id, 'arxiv.pdf'))])
     const docs = Object.fromEntries(Object.entries({ O1, O2, T1, T2, AX }).map(([k, v]) => [k, tokenizeDocument(v.pages)]))
@@ -441,12 +469,15 @@ if (inkCuts.length) console.log('boundaries through a word:', inkCuts.join('; ')
 if (goesOnShort.length) console.log('pieces short of the edge over a break:', goesOnShort.join('; '))
 console.log('\nthe ground truth (report-B\'s compiles): starts after the first of units of more than one sentence; found; with a mark for their sentence; on its line')
 for (const [id, t] of Object.entries(truth)) if (t) for (const [S, r] of Object.entries(t)) if (S !== 'pair') console.log(id.padEnd(12), S.padEnd(3), r.starts, r.found, r.withTruth, r.sameLine, `${((100 * r.sameLine) / Math.max(1, r.withTruth)).toFixed(1)} %`)
+console.log('\nthe sentence files against the reader\'s path from the Microsoft answers kept (units in the file; the path\'s; differing):')
+for (const [set, ps] of Object.entries(remade)) console.log(set.padEnd(13), Object.entries(ps).map(([id, r]) => `${id} ${r.file}/${r.path}/${r.differ}${r.first.length ? ` (${r.first.join(', ')})` : ''}`).join('; '))
 console.log('units of more than one sentence (with a mark), their starts all found on arXiv\'s PDF and on our translation:', Object.entries(truth).filter(([, t]) => t).map(([id, t]) => `${id} ${t.pair.both}/${t.pair.multi}`).join(', '))
 // the gate: what must be none, and against the baseline what may not fall (or, for cuts, grow)
 const failures = []
 for (const c of ['unlitAnchored', 'holes', 'inkHoles', 'unreachable', 'fragmentedDisplays', 'overlapping']) if (sum[c] > 0) failures.push(`${c} ${sum[c]}`)
 for (const c of ['holes', 'otherSentence', 'wordsOutside', 'headsOutside', 'gaps', 'overlaps', 'goesOnShort']) if (ssum[c] > 0) failures.push(`sentences: ${c} ${ssum[c]}`)
 if (!Object.keys(truth).length) failures.push(`no ground truth at ${GT}`)
+for (const [set, ps] of Object.entries(remade)) for (const [id, r] of Object.entries(ps)) if (r.differ) failures.push(`${set} ${id}: ${r.differ} units' sentences not what the reader's path makes from the answers kept${r.first.length ? ` (${r.first.join(', ')})` : ''}`)
 if (process.env.WRITE_BASELINE) {
   if (ids.length !== TEN.length || RUNS !== join(root, 'data/runs/highlight-ten')) failures.push('a baseline is recorded on the ten papers\' runs only')
   const sentencesBase = Object.fromEntries(Object.entries(sentences).map(([id, s]) => [id, { aligned: s.aligned, alignedMulti: s.alignedMulti, throughInk: s.throughInk }]))

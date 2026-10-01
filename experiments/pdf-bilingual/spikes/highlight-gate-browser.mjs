@@ -14,6 +14,8 @@
 //  - a wheel turned under a still pointer (no move sent): what is lit after is what a move there would light
 //  - the pointer on a unit's words the moment the reader is ready (its sides' layouts, made in the idle time after, not
 //    yet there most times): no layout made in an animation frame; the unit lit once they come, the pointer still
+//  - the demo's sentences are those of the sentence file they were taken from, which the Node gate makes again by the
+//    reader's path from the Microsoft answers kept (B3's review, I2)
 //  - the pointer moving over the left pane from the first moment of the load: every side's sentences found, as with the
 //    pointer still (B3's review, C1: made to fail on af6fce33, 06701 0 lit by sentence against 41)
 //  - sentences (B3): where a unit lights by sentence on both sides, what it paints is its sentences' shapes (the first,
@@ -52,7 +54,7 @@
 //   SWEEP=<id:unit,…> the sweeps' papers and the unit each starts at; OPEN=<ids> the papers opened (either `none`);
 //   ROUNDS=<n>
 //   → out/highlight-gate-browser.json
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -308,8 +310,24 @@ async function inkCuts(page, ids) {
   }
   return r
 }
+/** a demo paper's units' sentences against the sentence file they were taken from, which the Node gate makes again by
+ *  the reader's path from the Microsoft answers kept (highlight-gate.mjs, sentences-path.mjs; the review of B3, I2):
+ *  units whose sentences differ, and those the file has that the demo leaves out (its source text not the file's) */
+function demoSentences(paper) {
+  const file = [join(root, 'data/runs/highlight-ten/sentences', `${paper}.json`), join(root, 'data/runs/highlight-gt/sentences', `${paper}.json`)].find(existsSync)
+  if (!file) return { file: null }
+  const want = JSON.parse(readFileSync(file, 'utf8')), demo = JSON.parse(readFileSync(join(PAPERS, paper, 'units.json'), 'utf8'))
+  const r = { file: file.split('/').slice(-3).join('/'), units: 0, differ: 0, left: 0, first: [] }
+  for (const u of demo) {
+    if (u.sentences) r.units++
+    if (u.sentences ? JSON.stringify(u.sentences) !== JSON.stringify(want[u.i]) : want[u.i]) { if (u.sentences) { r.differ++; if (r.first.length < 5) r.first.push(u.i) } else r.left++ }
+  }
+  return r
+}
 async function checks(b) {
   for (const paper of CHECK) {
+    const ds = demoSentences(paper)
+    check(`${b.label} ${paper}: the demo's sentences are the file's the Node gate makes again by the reader's path`, ds.file && ds.units > 0 && ds.differ === 0, JSON.stringify(ds))
     const atRest = await sentencesAtLoad(b, paper, false), moving = await sentencesAtLoad(b, paper, true)
     check(`${b.label} ${paper}: the pointer moving from the first moment of the load: every side's sentences found, as with it still`, atRest.lit > 0 && JSON.stringify(atRest) === JSON.stringify(moving), JSON.stringify({ still: atRest, moving }))
     const e = await early(b, paper)
