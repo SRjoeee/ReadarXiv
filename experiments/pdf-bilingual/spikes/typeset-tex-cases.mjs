@@ -281,6 +281,12 @@ const colsArticle = await colsOf('cols-article', switching), colsXe = await cols
 check('each page\'s columns: \\twocolumn, \\onecolumn and back, under pdfLaTeX and XeTeX', colsArticle === '22112' && /^2+1+2+$/.test(colsXe), JSON.stringify([colsArticle, colsXe]))
 const colsGrid = await colsOf('cols-revtex', '\\documentclass[aps,prl,twocolumn]{revtex4-2}\\usepackage{lipsum}\\begin{document}\\title{T}\\maketitle\\lipsum[1-14]\\clearpage\\onecolumngrid\\lipsum[1-6]\\end{document}\n')
 check('each page\'s columns: revtex\'s two-column grid and its one-column grid', /^2+1+$/.test(colsGrid), colsGrid)
+// revtex's grid closed at \\end{document} (\\close@column@grid) before its last page goes out: a page is read where its
+// units were set too, the grid in force at each mark (the review of 2026-10-01: every revtex and aastex last page read one
+// column)
+const marked = n => Array.from({ length: n }, (_, k) => `\\leavevmode\\axtmark{${k}s}\\lipsum[${k + 1}]\\par`).join('\n')
+const colsLast = await colsOf('cols-revtex-last', `\\documentclass[aps,prl,twocolumn]{revtex4-2}\\usepackage{lipsum}\\begin{document}\\title{T}\\maketitle ${marked(18)}\\end{document}\n`)
+check('each page\'s columns: revtex\'s last page, set in two columns, read so', /^2+$/.test(colsLast), colsLast)
 const colsMulti = await colsOf('cols-multicol', '\\documentclass{article}\\usepackage{lipsum,multicol}\\begin{document}\\lipsum[1-3]\\clearpage\\begin{multicols}{2}\\lipsum[1-10]\\end{multicols}\\clearpage\\lipsum[1-3]\\end{document}\n')
 check('each page\'s columns: multicol\'s columns, and one column around them', /^12+1+$/.test(colsMulti), colsMulti)
 console.log(failed ? `${failed} failed` : 'all passed')

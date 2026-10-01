@@ -123,8 +123,10 @@ describe('a typeset plan in the compile', () => {
 })
 
 describe('the probes the rule needs', () => {
-  it('marks every page with the columns its compile set it in, whichever way the class sets them', () => {
-    expect(MARK_DEF).toContain('\\AddToHook{shipout/background}{\\put(0,0){\\axtmark{c')
+  it('marks every page with the columns its units were set in, whichever way the class sets them', () => {
+    // the most columns at any mark since the last page went out, or as this one goes out
+    expect(MARK_DEF).toContain('\\protected\\def\\axtmark#1{\\axt@colseen\\axt@dest{#1}}')
+    expect(MARK_DEF).toContain('\\AddToHook{shipout/background}{\\axt@colseen\\put(0,0){\\axt@dest{c\\axt@colmax-')
     for (const flag of ['\\pagegrid@col', '\\col@number', '\\if@twocolumn']) expect(MARK_DEF).toContain(flag)
     expect(text(originalFiles(paper()))).toContain(MARK_DEF)
   })
