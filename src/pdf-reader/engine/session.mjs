@@ -31,6 +31,7 @@ import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
 import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf } from './highlight.mjs'
+import { floatHitOf, floatOf, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
 import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
@@ -294,6 +295,7 @@ function paint(side) {
   side.lit = []
   if (lit == null) return
   if (!side.geo) { wantLayout(side); return }
+  if (paintFloat(side)) return
   for (const run of runsOf(side.geo, lit)) {
     const pv = pageView(side, run.page), layer = layerOf(side, run.page)
     if (!layer) continue
@@ -306,6 +308,52 @@ function paint(side) {
   }
 }
 function light(id) { if (!config.reading.sentenceHighlight) id = null; if (id === lit) return; lit = id; for (const s of sides) paint(s) }
+// Tables, algorithms and figures light whole with their captions, on both sides (floats.mjs): a table one wash over it
+// and its caption, a figure outlined and its caption washed — a wash multiplied into a figure would change its colours.
+// A float lights by its caption's id, which both sides share; on a side where the float is not found the caption lights
+// alone, and a cell there alone
+/** the lit unit's float on a side — its caption's, or the one holding it (a cell) — painted; false where it is none's */
+function paintFloat(side) {
+  const f = floatOf(side.geo, lit)
+  if (!f) return false
+  const pv = pageView(side, f.page), layer = layerOf(side, f.page)
+  if (!layer) return true
+  const s = pv.viewport.scale
+  for (const shape of floatShapes(side.geo, f, PAD / s)) {
+    const el = document.createElement('div')
+    el.className = shape.frame ? 'axt-hl axt-hl-frame' : 'axt-hl'
+    Object.assign(el.style, pinned(toPageBox(side, shape), s))
+    layer.append(el)
+    side.lit.push(el)
+  }
+  return true
+}
+/**
+ * A page's floats, made on its first drawing from what PDF.js draws it by (its figures, its rules and marks), once a
+ * layout; never on the pointer's path. A page without a caption asks for nothing. A drawing cancelled before the page's
+ * operator list came rejects it: the page is asked again at its next drawing (round 1: 2608.06701's page 3 on the left,
+ * at 2x, never got its floats)
+ */
+function floatsFor(side, p) {
+  const L = side.geo
+  if (!L || !wantsFloats(L, p) || floatsOn(L, p)) return
+  const asked = (L.floatsAsked ??= new Set())
+  if (asked.has(p)) return
+  asked.add(p)
+  const ops = side.doc.getPage(p).then(page => page.getOperatorList({ annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS }))
+  // a draft preview's figures are the frames set where its images go (paintFigures)
+  const figures = side.frames ? side.frames.then(f => f.get(p) ?? []) : regionsOf(side, p)
+  Promise.all([figures, ops]).then(([regions, list]) => {
+    if (side.geo !== L) return
+    const t0 = performance.now(), paths = pathsOf(list, pdfjsLib.OPS), t1 = performance.now()
+    pageFloats(L, p, regions, paths)
+    // the main thread's cost, for the probes: reading the page's paths, making its floats
+    ;(timing.floats ??= []).push({ paths: t1 - t0, floats: performance.now() - t1, ops: list.fnArray.length, marks: paths.marks.length })
+    // what is lit there, and what is under a pointer resting on it, now that the page has its floats
+    if (lit != null && floatOf(L, lit)?.page === p) paint(side)
+    pointer.again(side)
+  }, () => asked.delete(p))
+}
 /** a side's layout wanted now, where the pointer, a paint or a click met the side without one: made in a task of its
  *  own at once, never in the frame or the event that asked (the pointer's frame made both sides' there, 25–48 ms, the
  *  review of B1); when it lands what is lit is painted on it and the pointer looked at again (makeGeo) */
@@ -327,7 +375,9 @@ const pointer = pointerPath({
     // a side without its layout yet is a miss, its layout asked for
     if (!side.geo) { wantLayout(side); return null }
     const at = pointAt(side, x, y)
-    return (at && hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale)?.id) ?? null
+    if (!at) return null
+    const pad = PAD / at.scale
+    return floatHitOf(side.geo, at.page, at.x, at.y, pad, hitOf(side.geo, at.page, at.x, at.y, pad))?.id ?? null
   },
   light,
   lit: () => lit != null,
@@ -414,7 +464,12 @@ function perDoc(make) {
     let m = byDoc.get(side.doc)
     if (!m) byDoc.set(side.doc, (m = new Map()))
     const key = args.join(':')
-    if (!m.has(key)) m.set(key, make(side, ...args))
+    if (!m.has(key)) {
+      const made = make(side, ...args)
+      m.set(key, made)
+      // a failure is not kept: a page whose drawing was cancelled rejects its operator list, and is asked again
+      made?.catch?.(() => { if (m.get(key) === made) m.delete(key) })
+    }
     return m.get(key)
   }
 }
@@ -1354,8 +1409,8 @@ function attach(side) {
   side.eventBus.on('pagerendered', ({ pageNumber }) => {
     if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start
     paint(side)
-    // the page's highlight geometry, on its first drawing (a page never drawn never needs it)
-    if (side.geo) pageGeometry(side.geo, pageNumber)
+    // the page's highlight geometry, on its first drawing (a page never drawn never needs it), and its floats
+    if (side.geo) { pageGeometry(side.geo, pageNumber); floatsFor(side, pageNumber) }
     // figures laid once per page: kept through a redraw (keepOverlays), scaled with it (pinned); a draft preview's
     // copies of the left's figures are bitmaps drawn for one scale, and are drawn again at another
     const at = side.laid.get(pageNumber)
@@ -1446,9 +1501,11 @@ async function anchorOne(side, texts, marks) {
     side.makeGeo = null
     layoutsDue.delete(side)
     timing[side === left ? 'leftLayout' : 'rightLayout'] = performance.now() - t0
-    // what is lit on it, and what is under a pointer resting on it, now that it has its blocks
+    // what is lit on it, and what is under a pointer resting on it, now that it has its blocks; the floats of the pages
+    // drawn before it came
     if (lit != null) paint(side)
     pointer.again(side)
+    for (const pv of side.viewer._pages ?? []) if (pv.renderingState === 3) floatsFor(side, pv.id)
   }
   layoutsDue.add(side)
   return bounds.size
@@ -1632,6 +1689,8 @@ async function marksOfPdf(bytes) {
 const harness = () => ({ left, get right() { return right }, get lit() { return lit }, get pointerHit() { return pointer.hit }, pointAt, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
   // the right side replaced by a copy of what it shows, as a new compile replaces it (replaceRight)
   paintsOf: n => paints.get(n) ?? 0,
+  // a side's floats on a page, once made (floats.mjs)
+  floatsOn: (side, n) => floatsOn(side.geo, n) ?? null,
   paperContext: () => paperCtx,
   swapRight: async () => {
     const url = URL.createObjectURL(new Blob([await right.doc.getData()], { type: 'application/pdf' }))

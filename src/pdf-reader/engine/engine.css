@@ -13,6 +13,10 @@
 .axt-hl-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 .axt-hl { position: absolute; border-radius: 3px; mix-blend-mode: multiply;
   background: color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) var(--axt-hl-mix, 22%), transparent); }
+/* a figure lit: an outline in the band's colour, three times its wash's strength (a wash multiplied into a figure would
+   change its colours); drawn inside the figure's padded box */
+.axt-hl.axt-hl-frame { box-sizing: border-box; background: none;
+  border: 1.5px solid color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) min(100%, calc(var(--axt-hl-mix, 22%) * 3)), transparent); }
 /* a newer compile being laid out and drawn under the one in view */
 .viewerContainer.axt-incoming { visibility: hidden; }
 /* a figure's place on a translation page, holding the empty <img> the extension's image overlay is anchored to and, over
