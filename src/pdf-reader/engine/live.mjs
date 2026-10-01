@@ -14,6 +14,8 @@ import { analyze } from './paper-meta.mjs'
 import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
+import { WIDTH_PROBE } from './typeset/density.mjs'
+import { LINES_TEX } from './typeset/tex.mjs'
 
 /** The TeX log of a compile's last pass. The browser's compiler (poc-site/tex.js) joins each step's log with its terminal
  *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
@@ -93,29 +95,36 @@ export function openPaper(files) {
   return { fsys, meta, project, units: project.units, kept: nameCells(project.units) }
 }
 
-/** the preamble alone, closed at once: its log names the document's font families */
-export function probeFiles({ fsys, project }) {
+/** the preamble alone, closed at once: its log names the document's font families; with `width`, also how wide the
+ *  body face sets and at what sizes (typeset/density.mjs WIDTH_PROBE), which the typesetting rule measures text by */
+export function probeFiles({ fsys, project }, { width = false } = {}) {
   const text = latin1(fsys.read(project.main))
   const at = beginDocument(text)
-  return new Map([[project.main, latin1Bytes(text.slice(0, at) + FONT_PROBE + '\\begin{document}\\end{document}\n')]])
+  return new Map([[project.main, latin1Bytes(`${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}\\end{document}\n`)]])
 }
 
-/** the original with unit marks, as its own engine sets it (images as frames change no place on the page) */
-export function originalFiles({ fsys, project }) {
-  const out = patch(project, new Map(), { mark: markUnits(project.units) })
+/** the original with unit marks, as its own engine sets it (images as frames change no place on the page); with
+ *  `lines`, each unit's lines and the forced breaks in its log (typeset/tex.mjs LINES_TEX), which the typesetting rule
+ *  takes the original's flow from */
+export function originalFiles({ fsys, project }, { lines = false } = {}) {
+  const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
+  const out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base })
   const main = latin1(out.get(project.main))
-  out.set(project.main, latin1Bytes(DRAFT + MARK_DEF + main))
+  out.set(project.main, latin1Bytes(DRAFT + MARK_DEF + (lines ? LINES_TEX : '') + main))
   return out
 }
 
 /** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs); a strategy's `leading` sets the
- *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex) */
-export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl }) {
+ *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex).
+ *  `typeset`, the typesetting rule's (typeset/plan.mjs previewTypesetting, finalTypesetting): the strategy it sets the
+ *  type of, its TeX, each translated unit's macros */
+export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl, typeset = null }) {
+  if (typeset) strategy = typeset.strategy(strategy)
   const xe = strategy.xe
   translated = new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, lineBreaks(u, pieces)]))
   const base = markUnits(project.units, translated)
   const index = new Map(project.units.map((u, i) => [u, i]))
-  const mark = strategy.leading ? u => { const m = base(u); return m && !m.whole && translated.has(u) ? { ...m, before: `\\axtlead{${index.get(u)}}` } : m } : base
+  const mark = typeset ? typeset.mark(base, translated) : strategy.leading ? u => { const m = base(u); return m && !m.whole && translated.has(u) ? { ...m, before: `\\axtlead{${index.get(u)}}` } : m } : base
   const out = patch(project, translated, { mark })
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
@@ -123,7 +132,7 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   if (xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
-  main = (draft ? DRAFT : '') + MARK_DEF + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + main
+  main = (draft ? DRAFT : '') + MARK_DEF + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + main
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
   for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = localizeNames(t); if (u !== t) out.set(f, latin1Bytes(u)) }

@@ -1,0 +1,113 @@
+import { describe, expect, it } from 'vitest'
+import { openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-reader/engine/live.mjs'
+import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
+import { FLOAT_TEX, LINES_TEX, readForced, readLines, SIZE_TEX, typesetting } from '@/pdf-reader/engine/typeset/tex.mjs'
+
+// What the typesetting rule writes into a compile and reads back from its log. The macros' behaviour under TeX is checked
+// natively by experiments/pdf-bilingual/spikes/typeset-check.mjs; here, what goes where
+
+type Piece = { t: string; s?: string; tr?: boolean }
+type Unit = { kind: string; pieces: Piece[]; front?: boolean }
+const SOURCE = '\\documentclass{article}\\begin{document}\n\\section{Method}\nThe first paragraph of prose.\n\nThe second paragraph of prose.\n\\begin{figure}\\caption{A caption.}\\end{figure}\n\\end{document}\n'
+const paper = () => openPaper(new Map([['main.tex', new TextEncoder().encode(SOURCE)]]))
+const text = (files: Map<string, Uint8Array>) => new TextDecoder().decode(files.get('main.tex'))
+/** every unit but the ones `skip` names translated, its words a mark of its own */
+const translate = (units: Unit[], skip = new Set<number>()) => new Map(units.flatMap((u, i) => (skip.has(i) ? [] : [[u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))]])))
+/** the first strategy strategiesFor offers, the one tried first */
+function first(lang: string) {
+  const [strategy] = strategiesFor({ compiler: 'pdflatex' }, lang)
+  if (!strategy) throw new Error(`no strategy for ${lang}`)
+  return strategy
+}
+const kindsOf = (units: Unit[]) => units.map((u, i) => [u.kind, i] as const)
+
+describe('the log the rule reads', () => {
+  it('reads each unit\'s lines, leading and size', () => {
+    const lines = readLines('x\nAXT-LINES 3 5 13.6pt 10.95\nAXT-LINES 7 1 12.0pt\n')
+    expect(lines.get(3)).toEqual({ lines: 5, bs: 13.6, size: 10.95 })
+    expect(lines.get(7)).toEqual({ lines: 1, bs: 12 })
+    expect(readLines(null).size).toBe(0)
+  })
+  it('takes the unit after each forced break, the next one whose lines the log gives', () => {
+    expect([...readForced('AXT-LINES 1 2 12pt\nAXT-FORCED\nAXT-FORCED\nAXT-LINES 4 2 12pt\nAXT-LINES 5 2 12pt\nAXT-FORCED\n')]).toEqual([4])
+    expect(readForced('').size).toBe(0)
+  })
+  it('reports a column made at a forced break, and lines through \\message (\\typeout reads \\prevgraf as 0)', () => {
+    expect(LINES_TEX).toContain('\\ifnum\\outputpenalty=-\\@M\\message{^^JAXT-FORCED^^J}')
+    expect(LINES_TEX).toContain('\\message{^^JAXT-LINES #1')
+  })
+  it('restores a unit\'s size from a snapshot, the leading before it noted for the unit\'s own', () => {
+    expect(SIZE_TEX).toContain('\\let\\axt@szset\\@empty')
+    expect(SIZE_TEX).toContain('\\edef\\axt@leadbefore{\\the\\baselineskip}')
+  })
+})
+
+describe('a typeset plan in the compile', () => {
+  const p = paper(), units = p.units as Unit[]
+  const para = units.findIndex(u => u.kind === 'para'), caption = units.findIndex(u => u.kind === 'caption'), heading = units.findIndex(u => u.kind === 'heading')
+  const plan = (cjk: boolean, extra: Partial<Parameters<typeof typesetting>[1]> = {}) => typesetting(p.units, {
+    cjk, type: cjk ? { lead: 1.35, track: 0.02, scale: 0.97 } : { lead: 1.02, size: 0.95 },
+    leads: new Map([[para, 1.1]]), sizes: new Map(), floatsAt: new Map(), tableMin: 0.85, ...extra,
+  })
+
+  it('has the units found that the cases rely on', () => {
+    expect(kindsOf(units).map(([k]) => k)).toEqual(expect.arrayContaining(['heading', 'para', 'caption']))
+  })
+  it('defines each unit\'s leading, size and float page, the line probes always, sizes and floats only when used', () => {
+    const bare = plan(false).head
+    expect(bare).toContain(LINES_TEX)
+    expect(bare).not.toContain(SIZE_TEX)
+    expect(bare).not.toContain(FLOAT_TEX)
+    expect(bare).toContain(`\\expandafter\\def\\csname axtlead@${para}\\endcsname{1.1000}`)
+    expect(bare).toContain('\\axtfitheighttrue')
+    const full = plan(true, { sizes: new Map([[para, 0.95]]), floatsAt: new Map([[caption, { page: 2, col: 1 }]]) }).head
+    expect(full).toContain(SIZE_TEX)
+    expect(full).toContain(FLOAT_TEX)
+    expect(full).toContain(`axtsize@${para}\\endcsname{0.9500}`)
+    expect(full).toContain(`axt@fp@${caption}\\endcsname{2 1}`)
+  })
+  it('sets a CJK type on the face and the glue, and an alphabet\'s with the size probe', () => {
+    const base = first('zh')
+    const zh = plan(true).strategy(base)
+    expect(zh.leading).toBe(1.35)
+    expect(zh.pre(null)).toContain('Scale=0.9700,')
+    expect(zh.pre(null)).toContain('CJKglue={\\hskip 0.0200em')
+    const de = plan(false).strategy(first('de'))
+    expect(de.leading).toBe(1.02)
+    expect(de.pre(null)).toContain('\\AtBeginDocument{\\begingroup\\normalfont\\normalsize')
+  })
+  it('leaves the CJK face and glue to xeCJK: the pdfLaTeX fallback, CJKutf8, has neither', () => {
+    const [, cjkutf8] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
+    if (!cjkutf8) throw new Error('no fallback strategy')
+    const fallback = plan(true).strategy(cjkutf8)
+    expect(fallback.leading).toBe(1.35)
+    expect(fallback.pre(null)).not.toContain('xeCJKsetup')
+    expect(fallback.pre(null)).toBe(cjkutf8.pre(null))
+  })
+  it('marks only translated units: their float, line probe, size and leading, in that order', () => {
+    const typeset = plan(false, { sizes: new Map([[para, 0.95], [heading, 0.95]]), floatsAt: new Map([[caption, { page: 1, col: 0 }]]) })
+    const translated = translate(units)
+    const tex = text(translationFiles(p, translated as never, { strategy: first('de'), fonts: null, draft: false, aux: null, bbl: null, typeset }))
+    expect(tex).toContain(`\\axtlines{${para}}\\axtsize{${para}}\\axtlead{${para}}`)
+    expect(tex).toContain(`\\axtfloatat{${caption}}\\axtlines{${caption}}`)
+    expect(tex).toContain(`\\axtsizein{${heading}}`)
+    expect(tex.indexOf('\\axtfitheighttrue')).toBeLessThan(tex.indexOf('\\documentclass'))
+    const untranslated = text(translationFiles(p, translate(units, new Set([para])) as never, { strategy: first('de'), fonts: null, draft: false, aux: null, bbl: null, typeset }))
+    expect(untranslated).not.toContain(`\\axtlines{${para}}`)
+  })
+})
+
+describe('the probes the rule needs', () => {
+  it('adds the width and size probes to the font probe when asked', () => {
+    expect(text(probeFiles(paper()))).not.toContain('AXT-WIDTH')
+    expect(text(probeFiles(paper(), { width: true }))).toContain('AXT-WIDTH')
+    expect(text(probeFiles(paper(), { width: true }))).toContain('AXT-SIZE')
+  })
+  it('gives the original a line probe before every unit mark when asked', () => {
+    const p = paper(), para = (p.units as Unit[]).findIndex(u => u.kind === 'para')
+    expect(text(originalFiles(p))).not.toContain('\\axtlines')
+    const lined = text(originalFiles(p, { lines: true }))
+    expect(lined).toContain(LINES_TEX)
+    expect(lined).toContain(`\\axtlines{${para}}`)
+  })
+})
