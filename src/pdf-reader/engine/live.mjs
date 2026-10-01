@@ -137,7 +137,8 @@ export const PIPELINE_VERSION = '2'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
- * `translate(texts)` → translations of wire texts in `format` (mt.mjs WIRE: the chain's renderPath); `rank(i)` → how
+ * `translate(texts, cuts)` → translations of wire texts in `format` (mt.mjs WIRE: the chain's renderPath; `cuts` each text's
+ * sentence cuts on the tags path, mt.mjs translateUnits); `rank(i)` → how
  * far unit i is from the reader's place (lower comes first);
  * `onUpdate({ pdf,
  * texts, translated, final })` gets each compiled translation; `onOriginal({ pdf })` the marked original; `note(event,

@@ -80,13 +80,14 @@ export async function openEngine({ paper }) {
    * where it reported them, null where one did not come back: a text the engine could not
    * take. A failure not of the texts' making is thrown once every batch has answered (EngineError's `lost`)
    */
-  async function translate(texts, context = {}) {
+  async function translate(texts, context = {}, cuts) {
     // an empty context is left out, not sent as {}: it enters the cache key (src/core/run/call.ts)
     const withContext = Object.keys(context).length ? { context } : {}
     const out = new Array(texts.length).fill(null), lost = new Set()
     let failure = null
     const call = async idx => {
-      const segments = idx.map(i => ({ id: String(i), text: texts[i] }))
+      // each text's sentence cuts where given (the tags path: the service marks them, DESIGN §8.6; they enter the cache key)
+      const segments = idx.map(i => ({ id: String(i), text: texts[i], ...(cuts?.[i] ? { cuts: cuts[i] } : {}) }))
       const res = await transport.translate({ request: { segments, source: 'en', target, ...withContext }, cache, scope })
       // the engine's sentence lengths where it reported them and the service verified them (Microsoft's sentLen,
       // DESIGN §8.6), from a translation made now or one the extension's cache kept with them: the highlight's sentences

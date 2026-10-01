@@ -2107,7 +2107,8 @@ async function live() {
       seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: p.sameUnits || finalShown,
       marks: leftMarks ? new Map(leftMarks) : knownMarks(cached, p.sameUnits),
       format: engine.format,
-      translate: texts => engine.translate(texts, context),
+      // with the tags path's sentence cuts (mt.mjs cutsOf), which the service marks (B3b)
+      translate: (texts, cuts) => engine.translate(texts, context, cuts),
       // nearest the reading line on the page first, what lies ahead before what lies behind; on the side in view, since
       // the other one, out of the display, does not move with the reader (Codex on #297)
       rank: i => {

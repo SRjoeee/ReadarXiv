@@ -15,6 +15,6 @@ export declare function openEngine(options: { paper: string }): Promise<{
   readonly engine: string
   identity: string
   now(): Promise<string>
-  translate(texts: string[], context?: { paperTitle?: string; abstract?: string }): Promise<Translated[]>
+  translate(texts: string[], context?: { paperTitle?: string; abstract?: string }, cuts?: (number[] | undefined)[]): Promise<Translated[]>
   close(): Promise<unknown>
 }>

@@ -6,7 +6,9 @@ let status: Partial<ProviderStatus>
 const cancel = vi.fn(async () => {})
 // the background's answer to a translate call; each test sets what it needs
 let answer: unknown
-vi.mock('@/shared/transport', () => ({ createMessageTransport: () => ({ status: async () => status, cancel, translate: vi.fn(async () => answer) }) }))
+// the translate calls the background was sent
+const sent: { request: { segments: { id: string; text: string; cuts?: number[] }[] } }[] = []
+vi.mock('@/shared/transport', () => ({ createMessageTransport: () => ({ status: async () => status, cancel, translate: vi.fn(async (call: (typeof sent)[number]) => { sent.push(call); return answer }) }) }))
 const { openEngine } = await import('@/pdf-reader/engine/engine.mjs')
 
 const unavailable = (over: Partial<ProviderStatus>): Partial<ProviderStatus> => ({ available: false, providerId: 'my-llm', chosen: 'my-llm', demotions: [], ...over })
@@ -38,5 +40,14 @@ describe('openEngine: translate keeps what the background answered of each text'
     answer = { ok: true, result: { provider: 'microsoft', segments: [{ id: '0', text: '甲乙丙丁戊己庚', identity: 'ms', alignment }, { id: '1', text: '辛', identity: 'ms' }] } }
     const engine = await openEngine({ paper: '2608.02163' })
     expect(await engine.translate(['Aaaaaaaaa. Bbbb.', 'C'])).toEqual([{ text: '甲乙丙丁戊己庚', by: 'ms', alignment }, { text: '辛', by: 'ms' }])
+  })
+
+  it('the sentence cuts of a text sent with it, where given (the tags path: the service marks them, B3b)', async () => {
+    status = { available: true, providerId: 'google-web', chosen: 'google-web', targetLanguage: 'deu', renderPath: 'tags', maxBatchChars: 1000, maxBatchItems: 10, identity: 'g' } as Partial<ProviderStatus>
+    answer = { ok: true, result: { provider: 'google-web', segments: [{ id: '0', text: 'Aa. Bb.', identity: 'g', alignment: { source: [4, 3], target: [4, 3] } }, { id: '1', text: 'C', identity: 'g' }] } }
+    const engine = await openEngine({ paper: '2608.02163' })
+    sent.length = 0
+    expect(await engine.translate(['Aa. Bb.', 'C'], {}, [[4], undefined])).toEqual([{ text: 'Aa. Bb.', by: 'g', alignment: { source: [4, 3], target: [4, 3] } }, { text: 'C', by: 'g' }])
+    expect(sent.at(-1)?.request.segments).toEqual([{ id: '0', text: 'Aa. Bb.', cuts: [4] }, { id: '1', text: 'C' }])
   })
 })

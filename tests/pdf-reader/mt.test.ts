@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { plainSource, plainTranslated, rehydrate, sentencesKept, sentencesOf, serialize, textsShown, translateUnits, unitText } from '@/pdf-reader/engine/mt.mjs'
+import { cutsOf, plainSource, plainTranslated, rehydrate, rehydrateTags, sentencesKept, sentencesOf, serialize, serializeTags, textsShown, translateUnits, unitText } from '@/pdf-reader/engine/mt.mjs'
 
 // A unit's plain text as the PDF shows it, which the reader locates it by (anchors.mjs)
 
@@ -156,6 +156,53 @@ describe('sentencesOf: the engine\'s sentences, where each begins in the plain t
     expect(sentencesOf(u, ser, reply, { source: [20, 29], target: [22] }, back.pieces as never)).toBeNull()
     // pieces that are not the reply's
     expect(sentencesOf(u, ser, reply, cut(['We study flows @a#. ', 'They converge when @b# grows.'], ['我们研究流@a#。', '当@b#增长时，它们收敛。']), [{ t: 'text', tr: true, s: '别的' }] as never)).toBeNull()
+  })
+})
+
+describe('the tags path (Google, an LLM): the sentence cuts sent, and the sentences read back as on the markers path (B3b)', () => {
+  const u = { pieces: [{ t: 'text', s: 'We study flows ' }, { t: 'ph', src: '\\cite{a}' }, { t: 'text', s: '. They converge when ' }, { t: 'ph', src: '$n$' }, { t: 'text', s: ' grows.' }] }
+  const ser = serializeTags(u)
+  const reply = 'Wir untersuchen Flüsse <x id="1"/>. Sie konvergieren, wenn <x id="2"/> wächst.'
+
+  it('the cuts on the wire: a citation annotates the sentence before it, a formula is a word of its own', () => {
+    expect(ser.wire).toBe('We study flows <x id="1"/>. They converge when <x id="2"/> grows.')
+    expect(cutsOf(u, ser)).toEqual([ser.wire.indexOf('They')])
+    // one sentence: none; a sentence opening on a citation of its subject (\citet) keeps its start; the period of an
+    // abbreviation ends none
+    expect(cutsOf({ pieces: [{ t: 'text', s: 'One sentence alone.' }] })).toEqual([])
+    const v = { pieces: [{ t: 'text', s: 'It holds, e.g. for flows. ' }, { t: 'ph', src: '\\citet{b}' }, { t: 'text', s: ' show more.' }] }
+    expect(cutsOf(v)).toEqual([serializeTags(v).wire.indexOf('<x id="1"/>')])
+  })
+
+  it('each sentence after the first, as the offset of its first word on either side; a boundary inside a tag goes to its end', () => {
+    const back = rehydrateTags(reply, ser) as { pieces: unknown[] }
+    const s = sentencesOf(u, ser, reply, cut(['We study flows <x id="1"/>. ', 'They converge when <x id="2"/> grows.'], ['Wir untersuchen Flüsse <x id="1"/>. ', 'Sie konvergieren, wenn <x id="2"/> wächst.']), back.pieces as never, false, 'tags')
+    expect(wordsAt(plainSource(u), s!.src)).toEqual(['They'])
+    expect(wordsAt(plainTranslated(back.pieces as never), s!.tr)).toEqual(['Sie'])
+    // the engine cutting inside the citation's tag on the reply: to its end, the same sentences
+    expect(sentencesOf(u, ser, reply, cut(['We study flows <x id="1"/>. ', 'They converge when <x id="2"/> grows.'], ['Wir untersuchen Flüsse <x id="', '1"/>. Sie konvergieren, wenn <x id="2"/> wächst.']), back.pieces as never, false, 'tags')).toEqual(s)
+    const w = { pieces: [{ t: 'text', s: 'A & B hold. Then ' }, { t: 'ph', src: '$x$' }, { t: 'text', s: ' too.' }] }, sw = serializeTags(w), rw = 'A &amp; B gelten. Dann <x id="1"/> auch.'
+    const bw = rehydrateTags(rw, sw) as { pieces: unknown[] }
+    expect(sw.wire).toBe('A &amp; B hold. Then <x id="1"/> too.')
+    const sx = sentencesOf(w, sw, rw, cut(['A &amp; B hold. ', 'Then <x id="1"/> too.'], ['A &amp; B gelten. ', 'Dann <x id="1"/> auch.']), bw.pieces as never, false, 'tags')
+    expect([wordsAt(plainSource(w), sx!.src), wordsAt(plainTranslated(bw.pieces as never), sx!.tr)]).toEqual([['Then'], ['Dann']])
+  })
+
+  it('translateUnits sends each unit\'s cuts on the tags path, none on the markers path, and keeps the sentences the alignment gives', async () => {
+    const v = { pieces: [{ t: 'text', s: 'A second unit, one sentence.' }] }
+    const calls: (number[] | undefined)[][] = []
+    const send = async (texts: string[], cuts?: (number[] | undefined)[]) => {
+      calls.push(cuts ?? [])
+      return texts.map(t => (t.startsWith('We') ? { text: reply, by: 'g', alignment: cut(['We study flows <x id="1"/>. ', 'They converge when <x id="2"/> grows.'], ['Wir untersuchen Flüsse <x id="1"/>. ', 'Sie konvergieren, wenn <x id="2"/> wächst.']) } : { text: 'Eine zweite Einheit, ein Satz.', by: 'g', alignment: { source: [t.length], target: [30] } }))
+    }
+    const { results } = await translateUnits([u, v], send, 'tags')
+    expect(calls).toEqual([[[ser.wire.indexOf('They')], []]])
+    expect(results.get(u)).toMatchObject({ state: 'whole', sentences: { src: [17] } })
+    expect(results.get(v)).toMatchObject({ state: 'whole', sentences: { src: [], tr: [] } })
+    // the markers path (Microsoft, which reports its own sentences): no cuts sent
+    const told: unknown[] = []
+    await translateUnits([u], async (texts: string[], cuts?: unknown) => { told.push(cuts); return texts.map(() => ({ text: 'Wir untersuchen Flüsse @a#. Sie konvergieren, wenn @b# wächst.', by: 'ms' })) })
+    expect(told).toEqual([undefined])
   })
 })
 
