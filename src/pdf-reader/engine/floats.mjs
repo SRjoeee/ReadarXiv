@@ -230,7 +230,10 @@ export function pageFloats(L, p, regions = [], { rules = [], marks = [] } = {}) 
     // what it holds: the cells and a drawing's text inside it
     const members = new Set()
     for (const [id, runs] of g.byId) if (HELD.has(L.kindOf(id)) && runs.every(r => inside((r.x0 + r.x1) / 2, (r.top + r.bottom) / 2, region))) members.add(id)
-    out.push({ id: c.id, page: p, kind: floatKind(w, region), region, members, parts: w.parts, lead: c.lead })
+    // a float holding a drawing's text (TikZ, set on the page with no form) is a figure: its boxes round its words and
+    // its arrows (rules) leave too little drawn outside the text to tell (the review of B4, I3)
+    const drawing = [...members].some(id => L.kindOf(id) === 'figure')
+    out.push({ id: c.id, page: p, kind: drawing ? 'figure' : floatKind(w, region), region, members, parts: w.parts, lead: c.lead })
   }
   known.set(p, out)
   return out

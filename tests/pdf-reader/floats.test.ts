@@ -224,6 +224,17 @@ describe('pageFloats: figures', () => {
     expect(pageFloats(layout, 1, [], { marks }).map(f => [f.kind, ...r1(f.region)])).toEqual([['figure', 90, 637.8, 220, 720]])
   })
 
+  it('a diagram of boxes round its text, drawn on the page (TikZ), arrows between: a figure, its text a drawing\'s (the review of B4, probe F)', () => {
+    // three boxes with a word in each (the drawing's text, a unit of its own), arrows (thin) between them, the caption under
+    const ps = [[...prose(780, 4), item('input', 70, 652), item('model', 150, 652), item('output', 230, 652, { eol: true }), line('Figure 2: the pipeline', 620, 100, 250), ...prose(590, 10)]]
+    const dd = docOf(ps)
+    const layout = side(ps, [[0, words(dd, 'figure', 'pipeline')], [5, words(dd, 'input', 'output')]], { 0: 'caption', 5: 'figure' })
+    const boxes = [{ x0: 60, y0: 640, x1: 120, y1: 670 }, { x0: 140, y0: 640, x1: 200, y1: 670 }, { x0: 220, y0: 640, x1: 280, y1: 670 }]
+    const heads = [{ x0: 136, y0: 653, x1: 140, y1: 657 }, { x0: 216, y0: 653, x1: 220, y1: 657 }]
+    const fs = pageFloats(layout, 1, [], { rules: [hrule(120, 140, 655), hrule(200, 220, 655)], marks: [...boxes, ...heads] })
+    expect(fs.map(f => [f.id, f.kind, ...r1(f.region), [...f.members]])).toEqual([[0, 'figure', 60, 640, 280, 670, [5]]])
+  })
+
   it('a running head over a float at the page\'s top is no part of it: nothing outside the text block is', () => {
     // four pages of prose to 747.5 at the top; on the last, a running head at 770 and a figure at the top of the block
     const head = item('Running head of the paper', 100, 770, { eol: true })
