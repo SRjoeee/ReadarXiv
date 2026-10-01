@@ -336,6 +336,9 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
    *  be read. Known from a run before only with the left side's marks, which only a compile of it gives otherwise */
   const known = marks && knownReadings
   let readings = known ?? null
+  // a passing failure kept the rule from the final — a PDF's marks that could not be read —: the final is not this
+  // typesetting's, and the record says so, so that the next visit sets it again (the F2 review's M3)
+  let passing = false
   const compiles = async () => {
     // 3–5. compiles
     // each unit's text as that compile has it: translated if the strategy set it from the snapshot, the source's otherwise
@@ -362,7 +365,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       if (o.ok) {
         onOriginal?.({ pdf: o.pdf })
         originalCites = citesOf(o.aux)
-        if (readMarks) readings = await readMarks(o.pdf).then(m => readingsOf(o, m), e => { note('typeset', { missing: `the original's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null })
+        if (readMarks) readings = await readMarks(o.pdf).then(m => readingsOf(o, m), e => { passing = true; note('typeset', { missing: `the original's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null })
       }
       return o
     }))
@@ -443,13 +446,13 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     await mt
     // nothing to show: nothing compiled, not even the marked original; the reader says why (the reader's design, §10.3)
-    if (stopped && !translated.size) return { previews, translated: 0, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), original: readings }
+    if (stopped && !translated.size) return { previews, translated: 0, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), original: readings, passing }
     // a seeded run that changed nothing typeset, on the same pipeline: nothing to compile but the marked original, for a
     // copy that has no marks — else they would never come (Devin on #298)
     if (seed && !changed && pipelineCurrent) {
       if (!marks) await original()
       note('unchanged')
-      return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), original: readings }
+      return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), original: readings, passing }
     }
     const all = new Map(translated), t0 = Date.now()
     /**
@@ -461,7 +464,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     const finalTypeset = async () => {
       if (!readMarks) return null
       await original()
-      const read = async r => { try { return await readMarks(r.pdf) } catch (e) { note('typeset', { missing: `a preview's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null } }
+      const read = async r => { try { return await readMarks(r.pdf) } catch (e) { passing = true; note('typeset', { missing: `a preview's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null } }
       let m = measuring?.strategy === strategy().name && referencesWhole(measuring.r) ? measuring : null
       let fin = m && finalTypesetting(m.plan.state, { log: m.r.log, marks: await read(m.r) }, all)
       if (!fin?.typeset || fin.missing === 'a plan of the whole translation') {
@@ -506,7 +509,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     // marks known come only from a compile of the paper's own source that set (onOriginal)
     const own = marks && !originalP ? null : await original()
-    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), original: readings }
+    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), original: readings, passing }
   }
   try { return await compiles() } catch (e) {
     if (!e?.compilerDown) throw e
@@ -515,6 +518,6 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     // whole and current is never sent again (cache.mjs reusable), so the retry asks the service for nothing more
     note('compiler down', { why: e.compilerDown, error: e.message })
     await mt
-    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: false, exhausted: false, stopped, compiler: { down: e.compilerDown, error: e.message }, missing: missing(), original: readings }
+    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: false, exhausted: false, stopped, compiler: { down: e.compilerDown, error: e.message }, missing: missing(), original: readings, passing }
   }
 }

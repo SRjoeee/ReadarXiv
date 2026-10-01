@@ -3,7 +3,7 @@
 // so it is written only for a translation that one identity made whole — as a copy is current only when every unit is
 // (the final review of Codex 1 on #306)
 import { describe, expect, it } from 'vitest'
-import { allTranslatedBy, knownOriginal, originalRow, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
+import { allTranslatedBy, knownOriginal, labelOf, originalRow, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
 
 /** a run's results as live.mjs keeps them: index → { pieces, state, by, tried } */
 const results = (...rows: { by?: string; state?: string; pieces?: boolean }[]) =>
@@ -136,5 +136,20 @@ describe('the original\'s readings as stored', () => {
     for (const now of [{ ...made, pipeline: '8' }, { ...made, typesetting: '2' }, { ...made, page: '1' }]) expect(knownOriginal(row, now)).toBeNull()
     expect(knownOriginal(originalRow(readings, [], made), made)).toBeNull()
     expect(knownOriginal(undefined, made)).toBeNull()
+  })
+})
+
+// The versions a write labels its record with (the F2 review's M3): "current" claimed only for a final this typesetting
+// made, and a copy's PDF kept under the versions that set it
+describe('labelOf', () => {
+  const now = { pipeline: '7', typesetting: '2' }
+  it('a full write: this run\'s versions; no typesetting where a passing failure kept the rule from its final, set again', () => {
+    expect(labelOf('full', { ...now, passing: false, cached: undefined })).toEqual({ pipeline: '7', typesetting: '2' })
+    expect(labelOf('full', { ...now, passing: true, cached: undefined })).toEqual({ pipeline: '7', typesetting: undefined })
+  })
+  it('a provenance write: the copy\'s PDF with the copy\'s typesetting, and none on another pipeline, whose units are not these', () => {
+    expect(labelOf('provenance', { ...now, passing: false, cached: { pipeline: '7', typesetting: '1' } })).toEqual({ pipeline: '7', typesetting: '1' })
+    expect(labelOf('provenance', { ...now, passing: false, cached: { pipeline: '6', typesetting: '2' } })).toBeNull()
+    expect(labelOf(null, { ...now, passing: false, cached: { pipeline: '7', typesetting: '2' } })).toBeNull()
   })
 })

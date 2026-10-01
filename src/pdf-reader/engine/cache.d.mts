@@ -15,6 +15,8 @@ export declare function sourceHash(u: SourceUnit): Promise<string>
 /** whether every unit a run tried came back whole from `identity`, and there is one: when the untypeset mark may be left */
 export declare function allTranslatedBy(results: Map<number, { pieces?: unknown; state?: string; by?: string }>, identity: string): boolean
 
+/** the versions a write labels its record with, or null where it writes nothing */
+export declare function labelOf(how: 'full' | 'provenance' | null, options: { pipeline: string; typesetting: string; passing: boolean; cached?: { pipeline: string; typesetting?: string } | null }): { pipeline: string; typesetting: string | undefined } | null
 /** the marked original's readings as a run gives them (live.mjs readingsOf) */
 export interface Readings { log: string; cites: string; marks: import('./typeset/places.mjs').Marks }
 /** the readings as the store keeps them, one per paper, with the left side's marks and the versions that made them */

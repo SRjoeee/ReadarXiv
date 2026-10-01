@@ -374,3 +374,33 @@ describe('the author block a strategy sets as the paper has it', () => {
     expect((r.results.get(author + 1) as { inSource?: boolean }).inSource).toBeUndefined()
   })
 })
+
+// A final the rule did not set for a passing reason — a PDF's marks that could not be read — is not this typesetting's:
+// the run says so, and the record is labelled with no typesetting, set again on the next visit (the F2 review's M3)
+describe('a final set short of the rule for a passing reason', () => {
+  it('the original\'s marks not read: today\'s setting, and the run says it was a passing failure', async () => {
+    const t = translator(), p = paper(4), n = p.units.length
+    t.release()
+    const c = compiler(n)
+    let reads = 0
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => { if (++reads === 1) throw new Error('the worker went away'); return MARKS(n) } })
+    expect([r.settled, r.passing, c.calls.some(q => q.ruled)]).toEqual([true, true, false])
+  })
+
+  it('a preview\'s marks not read for the measure: the final from the plan uncorrected, a passing failure', async () => {
+    const t = translator(), p = paper(4), n = p.units.length
+    t.release()
+    const c = compiler(n)
+    let reads = 0
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => { if (++reads > 1) throw new Error('the worker went away'); return MARKS(n) } })
+    expect([r.settled, r.passing, c.calls.at(-1)?.ruled]).toEqual([true, true, true])
+  })
+
+  it('a final the rule set, or one no plan could be made for whatever is tried, is no passing failure', async () => {
+    const t = translator(), p = paper(4), n = p.units.length
+    t.release()
+    expect((await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })).passing).toBe(false)
+    const short = compiler(n, { log: k => (k === 'original' ? linesLog(n).replace('AXT-END\n', '') : null) })
+    expect((await runLive(p, { lang: 'zh', compile: short.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })).passing).toBe(false)
+  })
+})

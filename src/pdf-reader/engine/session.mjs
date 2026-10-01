@@ -32,7 +32,7 @@ import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
 import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
-import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, knownOriginal, originalRow, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
@@ -2285,7 +2285,10 @@ async function live() {
     if (cacheKey) {
       const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, context, units: unitsOf(units, keptFor(paperData, lang), hashes, result.results), marks: leftMarks ?? (p.sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
       const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: finalShown })
-      const pdf = how === 'full' ? finalPdf : how === 'provenance' ? cached.pdf : null
+      // labelled by what set its PDF: this run's final, or the copy's own (cache.mjs labelOf)
+      const label = labelOf(how, { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, passing: !!result.passing, cached })
+      Object.assign(record, label)
+      const pdf = !label ? null : how === 'full' ? finalPdf : cached.pdf
       // the right side's marks, as its PDF names them: the final's once it is on screen, else the copy's own
       record.rightMarks = how === 'full' ? [...(right.marks ?? [])] : (cached?.rightMarks ?? [])
       if (pdf) {

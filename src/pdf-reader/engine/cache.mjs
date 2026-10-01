@@ -111,6 +111,18 @@ export function decideWrite({ result, cached, units, marks, shown }) {
 }
 
 /**
+ * The versions a write labels its record with (`how`, decideWrite's), or null where it writes nothing (the F2 review's
+ * M3): a full write this run's — with no typesetting where a passing failure kept the rule from its final (live.mjs
+ * runLive `passing`), so that the next visit sets it again, asking the service nothing —; a provenance write keeps the
+ * copy's PDF, and so the copy's typesetting, and is made only on the copy's own pipeline, whose units these are
+ */
+export function labelOf(how, { pipeline, typesetting, passing, cached }) {
+  if (how === 'full') return { pipeline, typesetting: passing ? undefined : typesetting }
+  if (how === 'provenance' && cached?.pipeline === pipeline) return { pipeline, typesetting: cached.typesetting }
+  return null
+}
+
+/**
  * Whether a run whose translation none of the ways could set may leave the untypeset mark under `identity`, the one that
  * would answer now: only when every unit the run tried came back whole from it, and there is one. The mark answers the
  * next visit on that identity alone (src/cache/pdf-record.ts stillUntypeset), so it must stand for that service's whole
