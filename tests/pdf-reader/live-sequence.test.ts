@@ -25,7 +25,7 @@ const MARKS = (n: number): Marks => {
 type Req = { main: string; engine: string; rerun: boolean; bibtex: boolean | null; overrides: Map<string, Uint8Array> }
 const main = (q: Req) => new TextDecoder('latin1').decode(q.overrides.get(q.main))
 /** what a compile is, by what it was given */
-const kindOf = (q: Req) => (main(q).includes('AXT-FONTS') ? 'probe' : main(q).includes('\\setCJKmainfont') ? (q.rerun ? 'final' : 'preview') : 'original')
+const kindOf = (q: Req) => (main(q).includes('AXT-FONTS') ? 'probe' : /xeCJK|CJKutf8/.test(main(q)) ? (q.rerun ? 'final' : 'preview') : 'original')
 /** the rule's TeX in a compile of the translation: its unit leadings */
 const ruled = (q: Req) => /\\csname axtlead@\d+\\endcsname/.test(main(q))
 
@@ -43,7 +43,8 @@ function translator() {
 }
 
 /** a compiler that answers as TeX would, and calls `on` with each compile's kind before it answers */
-function compiler(n: number, { on = (_k: string) => {}, log = (_k: string, _q: Req) => null as string | null, fail = (_k: string, _q: Req) => false } = {}) {
+type Answering = { on?: (kind: string) => void; log?: (kind: string, q: Req) => string | null; fail?: (kind: string, q: Req) => boolean }
+function compiler(n: number, { on = () => {}, log = () => null, fail = () => false }: Answering = {}) {
   const calls: { kind: string; ruled: boolean; rerun: boolean }[] = []
   const compile = async (q: Req): Promise<Compiled> => {
     const kind = kindOf(q)
@@ -126,5 +127,26 @@ describe('the compile sequence with the typesetting rule', () => {
     const { calls, notes } = await run({ compiler: c, translate: t.translate })
     expect(calls.some(q => q.ruled)).toBe(false)
     expect(notes.filter(([e]) => e === 'typeset').map(([, d]) => d.missing)).toEqual(["the original's log, whole"])
+  })
+
+  it('a TeX failure under the rule tries the same engine without it before the next strategy (ruling 6): a preview', async () => {
+    const t = translator(), n = paper().units.length
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() }, fail: (k, q) => k === 'preview' && ruled(q) })
+    const { calls, notes } = await run({ compiler: c, translate: t.translate })
+    expect(calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`)).toEqual(['probe', 'preview', 'original', 'preview+rule', 'preview', 'final'])
+    expect(notes.filter(([e]) => e === 'next strategy')).toEqual([])
+    expect(notes.filter(([e]) => e === 'typeset failed').map(([, d]) => d.strategy)).toEqual(['XeLaTeX + xeCJK'])
+  })
+
+  it('and the final: once without the rule on the same engine, then the next strategy, planned again', async () => {
+    const t = translator(), n = paper().units.length
+    // the paper's own engine is pdfLaTeX: xeCJK first, CJKutf8 next; every final of xeCJK fails, and CJKutf8's with the rule
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() }, fail: (k, q) => k === 'final' && (main(q).includes('xeCJK') || ruled(q)) })
+    const kindOf2 = (q: { kind: string; ruled: boolean; rerun: boolean }) => `${q.kind}${q.ruled ? '+rule' : ''}`
+    const { calls, notes, r } = await run({ compiler: c, translate: t.translate })
+    const finals = calls.filter(q => q.rerun && q.kind !== 'original').map(kindOf2)
+    expect(finals).toEqual(['final+rule', 'final', 'final+rule', 'final'])
+    expect(notes.filter(([e]) => e === 'next strategy').length).toBe(1)
+    expect(r.settled).toBe(true)
   })
 })

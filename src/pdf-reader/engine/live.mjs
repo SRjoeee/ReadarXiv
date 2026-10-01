@@ -312,8 +312,13 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
   // none where an input is missing or partial (plan.mjs previewTypesetting) — the translation is set as today then,
   // and the reason noted once
   let toldMissing = null
+  // the strategies a compile with the rule failed under, TeX's failure: each tried again as today, the rule left out,
+  // before the chain moves on — the rule's TeX is one more thing that can fail, the strategy may well set the paper
+  // (the evaluation's ruling 6, 2026-10-01); and set as today from then on
+  const ruleFailed = new Set()
+  const withoutRule = r => { ruleFailed.add(strategy().name); note('typeset failed', { strategy: strategy().name, error: whyFailed(r) }) }
   const planFor = snapshot => {
-    if (!readings) return null
+    if (!readings || ruleFailed.has(strategy().name)) return null
     const plan = previewTypesetting({ paper, translated: snapshot, lang, strategy: strategy(), fonts, fontLog, original: readings })
     if (!plan.typeset && toldMissing !== plan.missing) { toldMissing = plan.missing; note('typeset', { missing: plan.missing }) }
     return plan.typeset ? plan : null
@@ -346,7 +351,8 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
         previews++
         measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
         onUpdate?.({ pdf: r.pdf, texts: texts(snapshot), translated: snapshot.size, final: false })
-      } else if (!timedOut(r) && s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
+      } else if (plan && !r.ok && !timedOut(r)) { withoutRule(r); dirty = true }
+      else if (!timedOut(r) && s + 1 < strategies.length) { s++; aux = null; dirty = true; note('next strategy', { strategy: strategy().name }) }
       continue
     }
     if (mtDone) break
@@ -383,7 +389,8 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
       const t1 = Date.now()
       const r = await compile({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bbl, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: true, aux: withCites(aux), bbl, typeset: plan.typeset, note }) })
       note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, error: whyFailed(r) })
-      if (!r.ok) return plan.typeset
+      // TeX's failure under the rule: the final as today (ruling 6); the page's, the plan uncorrected
+      if (!r.ok) { if (timedOut(r)) return plan.typeset; withoutRule(r); return null }
       if (r.aux) aux = r.aux
       if (r.bbl) bbl = r.bbl
       m = { plan, r }
@@ -402,6 +409,7 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
     // not answered: once more with the same strategy, then what is shown stays — a slow machine is no reason to change
     // how the paper is set (Part 3's checks: a timed-out preview moved 2608.02163 to a strategy its class refuses)
     if (timedOut(r)) { if (retried) break; retried = true; note('final again', { strategy: strategy().name }); continue }
+    if (typeset && !r.ok) { withoutRule(r); typeset = null; continue }
     if (s + 1 >= strategies.length) { exhausted = true; break }
     s++; aux = null
     note('next strategy', { strategy: strategy().name })
