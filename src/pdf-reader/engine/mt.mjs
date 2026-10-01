@@ -377,6 +377,16 @@ export function unitText(pieces) {
   if (bare.trimEnd() !== text) return { text }
   return { text, gaps: gaps.map(g => Math.min(g, text.length)).filter((g, i, a) => a.indexOf(g) === i) }
 }
+/**
+ * Each unit's text as a compile has it, for the anchors: translated where `done` has its pieces, the source's otherwise;
+ * with where its placeholders stood (unitText), its displays beyond its marks (displayEdges) and the sentences of the
+ * translation typeset (`sentencesOf(pieces)`: kept by the pieces they belong to, so that a translation come in since does
+ * not lend its sentences to the one shown)
+ */
+export const textsShown = (units, done, sentencesOf) => units.map((u, i) => {
+  const pieces = done.get(u), sentences = pieces && sentencesOf(pieces)
+  return { id: i, ...unitText(pieces ?? u.pieces), ...displayEdges(u), ...(sentences ? { sentences } : {}) }
+})
 /** the unit's displays beyond its marks and between its words, their letters as latex-front found them (displayOutside)
  *  or a copy keeps them: for the anchors. A copy made when they were a bare `true` gives none */
 export const displayEdges = u => Object.fromEntries(['lead', 'trail', 'inner'].filter(k => typeof u[k] === 'string').map(k => [k, u[k]]))

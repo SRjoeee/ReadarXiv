@@ -13,7 +13,7 @@ export const sourceHash = async u => hex(await crypto.subtle.digest('SHA-256', n
 export const figureKeyOf = texts => JSON.stringify(texts)
 
 /**
- * The seed for this paper's units from a record: index → { pieces, by, tried, state } for each unit whose source the
+ * The seed for this paper's units from a record: index → { pieces, by, tried, state, sentences? } for each unit whose source the
  * record has a translation of, matched by hash. A unit cut differently since has none. Repeated paragraphs (table
  * cells, often) share a hash, and each takes the best translation of their source: whole before partial (Devin on
  * #298). The hashes are kept for the record
@@ -26,7 +26,7 @@ export async function seedFrom(record, units) {
   const seed = new Map()
   hashes.forEach((h, i) => {
     const u = byHash.get(h)
-    if (u) seed.set(i, { pieces: u.pieces, by: u.by, tried: u.tried, state: u.state })
+    if (u) seed.set(i, { pieces: u.pieces, by: u.by, tried: u.tried, state: u.state, ...(u.sentences ? { sentences: u.sentences } : {}) })
   })
   return { seed, hashes }
 }
@@ -43,7 +43,8 @@ export function unitsOf(units, kept, hashes, results) {
     if (kept.has(u)) return { ...base, state: 'kept' }
     const r = results.get(i)
     if (!r) return { ...base, state: 'none' }
-    return { ...base, ...(r.pieces ? { pieces: r.pieces, tr: plainTranslated(r.pieces) } : {}), ...(r.by !== undefined ? { by: r.by } : {}), tried: r.tried, state: r.state }
+    // the sentences of the translation kept, which say where each sentence begins in `src` and `tr`
+    return { ...base, ...(r.pieces ? { pieces: r.pieces, tr: plainTranslated(r.pieces), ...(r.sentences ? { sentences: r.sentences } : {}) } : {}), ...(r.by !== undefined ? { by: r.by } : {}), tried: r.tried, state: r.state }
   })
 }
 

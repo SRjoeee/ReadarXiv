@@ -14,6 +14,8 @@ export declare function rehydrate(text: string, ser: ReturnType<typeof serialize
 export type Sentences = { src: number[]; tr: number[] }
 /** a unit's sentences from its engine's sentence lengths for the wire it was sent (the segment's `alignment`), or null */
 export declare function sentencesOf(u: { pieces: Piece[] }, ser: ReturnType<typeof serialize>, text: string, alignment: { source: number[]; target: number[] } | undefined, pieces: Piece[], tolerant?: boolean): Sentences | null
+/** each unit's text as a compile has it: translated where `done` has its pieces, with the sentences of those pieces */
+export declare function textsShown<U extends { pieces: Piece[] }>(units: U[], done: Map<U, Piece[]>, sentencesOf: (pieces: Piece[]) => Sentences | undefined): ({ id: number; text: string; gaps?: number[]; lead?: string; trail?: string; inner?: string; sentences?: Sentences })[]
 type Sent = { text: string; by: string | null; alignment?: { source: number[]; target: number[] } } | null
 /** units → their translations, by unit: pieces, how they came back, the identity that answered, and a whole unit's sentences */
 export declare function translateUnits<U extends { pieces: Piece[] }>(units: U[], send: (texts: string[]) => Promise<Sent[]>, format?: 'markers' | 'tags' | 'runs'): Promise<{ results: Map<U, { pieces?: Piece[]; state: string; by?: string; sentences?: Sentences }>; how: Record<string, number> }>

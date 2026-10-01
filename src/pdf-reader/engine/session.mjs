@@ -1660,8 +1660,8 @@ async function showCached(record, setContext, note = () => {}) {
     headings = record.units.map((u, i) => ({ id: i, src: u.src, depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
     // the translation's texts made again from the pieces the copy keeps (unitText), which say where their placeholders
     // stood; the source's from its plain text, which does not. A copy made before its units kept their displays beyond
-    // their marks (displayEdges) is anchored as it was then
-    rightTexts = record.units.map((u, i) => ({ id: i, ...(u.pieces ? unitText(u.pieces) : { text: u.src }), ...displayEdges(u) }))
+    // their marks (displayEdges) is anchored as it was then, and one made before they kept their sentences is lit whole
+    rightTexts = record.units.map((u, i) => ({ id: i, ...(u.pieces ? unitText(u.pieces) : { text: u.src }), ...displayEdges(u), ...(u.pieces && u.sentences ? { sentences: u.sentences } : {}) }))
     await Promise.all([
       anchorSide(left, record.units.map((u, i) => ({ id: i, text: u.src, ...displayEdges(u) })), new Map(record.marks)).then(() => note('cached left anchored')),
       anchorSide(right, rightTexts, record.rightMarks?.length ? new Map(record.rightMarks) : undefined).then(() => note('cached right anchored')),
@@ -1967,8 +1967,9 @@ async function demo() {
   timing.opened = performance.now() - timing.start
   const t1 = performance.now()
   // the text each unit has on the right: translated in the stages that have it, the original before
-  // with the displays beyond each unit's marks (displayEdges), where the demo's units carry their letters
-  const textsAt = translated => units.map(u => ({ id: u.i, text: u.i < translated ? u.tr : u.src, ...displayEdges(u) }))
+  // with the displays beyond each unit's marks (displayEdges), where the demo's units carry their letters, and a
+  // translated unit's sentences where the demo's units carry them (spikes/highlight-sentences.mjs)
+  const textsAt = translated => units.map(u => ({ id: u.i, text: u.i < translated ? u.tr : u.src, ...displayEdges(u), ...(u.i < translated && u.sentences ? { sentences: u.sentences } : {}) }))
   // the marks: the translation's own destinations; for arXiv's PDF, those of our compile of the original with the word
   // each follows, so that only the ones that land on the same word are used
   prose = units.map(u => u.src).join('\n')

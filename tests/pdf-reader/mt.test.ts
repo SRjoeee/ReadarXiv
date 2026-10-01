@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { plainSource, plainTranslated, rehydrate, sentencesOf, serialize, translateUnits, unitText } from '@/pdf-reader/engine/mt.mjs'
+import { plainSource, plainTranslated, rehydrate, sentencesOf, serialize, textsShown, translateUnits, unitText } from '@/pdf-reader/engine/mt.mjs'
 
 // A unit's plain text as the PDF shows it, which the reader locates it by (anchors.mjs)
 
@@ -174,5 +174,14 @@ describe('translateUnits keeps a whole unit\'s sentences; the runs path and a un
     const send = async (texts: string[]) => texts.map(t => ({ text: `译${t}`, by: 'g', alignment: { source: [t.length], target: [t.length + 1] } }))
     const { results } = await translateUnits([u], send, 'runs')
     expect(results.get(u)).not.toHaveProperty('sentences')
+  })
+})
+
+describe('textsShown: each unit\'s text as a compile has it, with the sentences of the translation it typeset', () => {
+  it('a translated unit its translation\'s text and sentences; one shown in the source its source, and no sentences', () => {
+    const a = { pieces: [{ t: 'text', s: 'One. Two.' }] }, b = { pieces: [{ t: 'text', s: 'Three.' }] }
+    const pa = [{ t: 'text', tr: true, s: 'Eins. Zwei.' }]
+    const sentences = new WeakMap<object, { src: number[]; tr: number[] }>([[pa, { src: [5], tr: [6] }]])
+    expect(textsShown([a, b], new Map([[a, pa]]), p => sentences.get(p))).toEqual([{ id: 0, text: 'Eins. Zwei.', sentences: { src: [5], tr: [6] } }, { id: 1, text: 'Three.' }])
   })
 })
