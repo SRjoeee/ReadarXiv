@@ -7,7 +7,7 @@ const cancel = vi.fn(async () => {})
 // the background's answer to a translate call; each test sets what it needs
 let answer: unknown
 // the translate calls the background was sent
-const sent: { request: { segments: { id: string; text: string; cuts?: number[] }[] } }[] = []
+const sent: { request: { segments: { id: string; text: string; cuts?: number[] }[] }; keepContext?: boolean }[] = []
 vi.mock('@/shared/transport', () => ({ createMessageTransport: () => ({ status: async () => status, cancel, translate: vi.fn(async (call: (typeof sent)[number]) => { sent.push(call); return answer }) }) }))
 const { openEngine } = await import('@/pdf-reader/engine/engine.mjs')
 
@@ -49,5 +49,8 @@ describe('openEngine: translate keeps what the background answered of each text'
     sent.length = 0
     expect(await engine.translate(['Aa. Bb.', 'C'], {}, [[4], undefined])).toEqual([{ text: 'Aa. Bb.', by: 'g', alignment: { source: [4, 3], target: [4, 3] } }, { text: 'C', by: 'g' }])
     expect(sent.at(-1)?.request.segments).toEqual([{ id: '0', text: 'Aa. Bb.', cuts: [4] }, { id: '1', text: 'C' }])
+    // asking the service to keep the translation's context: no markers on an engine that would translate each sentence
+    // apart (Google), so its translation is lit by paragraph; Microsoft's own lengths and an LLM's markers stand
+    expect(sent.at(-1)).toMatchObject({ keepContext: true })
   })
 })

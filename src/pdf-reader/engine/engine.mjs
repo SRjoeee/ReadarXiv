@@ -88,7 +88,9 @@ export async function openEngine({ paper }) {
     const call = async idx => {
       // each text's sentence cuts where given (the tags path: the service marks them, DESIGN §8.6; they enter the cache key)
       const segments = idx.map(i => ({ id: String(i), text: texts[i], ...(cuts?.[i] ? { cuts: cuts[i] } : {}) }))
-      const res = await transport.translate({ request: { segments, source: 'en', target, ...withContext }, cache, scope })
+      // the translation's context kept before its sentences: no markers on an engine that would translate each sentence
+      // apart (Google's: its translation lit by paragraph), Microsoft's own lengths and an LLM's markers kept (B3b)
+      const res = await transport.translate({ request: { segments, source: 'en', target, ...withContext }, cache, scope, keepContext: true })
       // the engine's sentence lengths where it reported them and the service verified them (Microsoft's sentLen,
       // DESIGN §8.6), from a translation made now or one the extension's cache kept with them: the highlight's sentences
       // (mt.mjs sentencesOf)

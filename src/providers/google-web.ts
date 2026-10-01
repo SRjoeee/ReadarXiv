@@ -75,6 +75,8 @@ export function createGoogleWebProvider(deps: GoogleWebDeps = {}): TranslationPr
     // keeps both, it stays on the chain as the fallback when Microsoft is chosen (the intersection negotiation of §8.5)
     wireFormats: WIRE_FORMATS['google-web'],
     // The endpoint takes many items at once; large batches, a low rate — a free endpoint cannot take the default 8/s (DESIGN §8.3)
+    // the text between two sentence markers is translated apart (types.ts markersSplitContext)
+    markersSplitContext: true,
     maxBatchChars: 8000,
     maxBatchItems: 100,
     // This was p-queue's concurrency: 2 (2 in flight, no rate limit). Porting RequestQueue on 2026-09-05 wrote
