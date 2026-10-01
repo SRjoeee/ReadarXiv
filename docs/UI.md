@@ -184,7 +184,7 @@ every control writes as it changes; forms and editors open in place, under the r
 | S-O-70 | Data · cache | 已缓存的译文 / {n} 段 · {size} MB · 换了服务、模型或提示词会自动分开存，通常不用清 | |
 | S-O-71 | Read failed | 没能读取缓存 | Never shown as a count of 0 |
 | S-O-72 | Clear | 清空… → 确认清空 → 已清空 | A neutral button; a press arms it with a trash icon, its words `danger` on `button-danger`; back after 3 s untouched, not while the pointer rests on it; done, 已清空 with the success icon |
-| S-O-73 | Data · PDF translations | 已缓存的 PDF 译文 / {n} 篇 · {size} MB | The papers the PDF reader keeps on this machine (the reader's design, §9.3), read from its store on the page's own origin; cleared as S-O-72, reported as S-O-71 when the store cannot be read |
+| S-O-73 | Data · PDF translations | 已缓存的 PDF 译文 / {n} 篇 · {size} MB | The papers the PDF reader keeps on this machine (the reader's design, §9.3) — a paper once, whatever versions and languages it is kept in — read from its store on the page's own origin; cleared as S-O-72, reported as S-O-71 when the store cannot be read |
 | S-O-74 | Diagnostics | 诊断日志 / 最近几百条运行记录：请求失败、服务切换、页面事件。不含 API Key 与论文正文，可随问题反馈一并附上 · 导出 · 没能导出 | Issue #156: a neutral 导出 downloads the log; the words as the pack has them (its description says API Key, the pack's one term for it) |
 
 Retired 2026-09-27 (the redesign's §10, §11): S-O-13 (the empty list), S-O-16 (the address hint),
