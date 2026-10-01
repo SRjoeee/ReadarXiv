@@ -18,5 +18,7 @@ export interface Typeset {
   for: string
   strategy(s: Strategy): Strategy
   mark(base: (u: SourceUnit) => UnitMark, translated: Map<SourceUnit, unknown[]>): (u: SourceUnit) => UnitMark
+  /** the same for the final: no line probes, which nothing reads there */
+  final?: Typeset
 }
-export declare function typesetting(units: SourceUnit[], plan: TypesetPlan): Typeset
+export declare function typesetting(units: SourceUnit[], plan: TypesetPlan): Typeset & { final: Typeset }

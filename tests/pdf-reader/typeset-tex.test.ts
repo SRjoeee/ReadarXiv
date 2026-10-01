@@ -123,6 +123,10 @@ describe('a typeset plan in the compile', () => {
     expect(tex.indexOf('\\axtfitheighttrue')).toBeLessThan(tex.indexOf('\\documentclass'))
     const untranslated = text(translationFiles(p, translate(units, new Set([para])) as never, { strategy: first('de'), fonts: null, draft: false, aux: null, bbl: null, typeset }))
     expect(untranslated).not.toContain(`\\axtlines{${para}}`)
+    // the reader's final: the same but the line probes, which nothing reads there (the F2 review's M7)
+    const final = text(translationFiles(p, translated as never, { strategy: first('de'), fonts: null, draft: false, aux: null, bbl: null, typeset: typeset.final }))
+    expect(final).toContain(`\\axtfloatat{${caption}}`)
+    expect([final.includes(`\\axtsize{${para}}\\axtlead{${para}}`), final.includes('\\axtlines{'), final.includes('AXT-LINES')]).toEqual([true, false, false])
   })
 })
 

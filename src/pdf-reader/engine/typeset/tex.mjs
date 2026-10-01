@@ -108,26 +108,29 @@ const def = (name, i, v) => `\\expandafter\\def\\csname ${name}${i}\\endcsname{$
 export function typesetting(units, plan) {
   const { design, type, leads, sizes, floatsAt, tableMin } = plan
   const index = new Map(units.map((u, i) => [u, i]))
-  const head = [
-    LINES_TEX, sizes.size ? SIZE_TEX : '', floatsAt.size ? FLOAT_TEX : '',
-    ...[...leads].map(([i, f]) => def('axtlead@', i, f.toFixed(4))),
-    ...[...sizes].map(([i, f]) => def('axtsize@', i, f.toFixed(4))),
-    ...[...floatsAt].map(([i, f]) => def('axt@fp@', i, `${f.page} ${f.col}`)),
-    '\\axtfitheighttrue', def('axt@fitmin', '', tableMin), '',
-  ].join('\n')
-  return {
-    head,
+  const strategy = s => {
+    if (s.name !== plan.strategy) return s
+    if (design.cjk) return { ...s, leading: type.lead, pre: fonts => s.pre(fonts).replace('\\setCJKmainfont[', `\\setCJKmainfont[Scale=${type.scale.toFixed(4)},`) + (type.track > 0.0005 ? `\\xeCJKsetup{CJKglue={\\hskip ${type.track.toFixed(4)}em plus 0.08\\baselineskip}}\n` : '') }
+    return { ...s, leading: type.lead }
+  }
+  /** with each unit's line probe (LINES_TEX) where a compile is read, the previews and the measures; without, the final,
+   *  whose lines nothing reads (the F2 review's M7) */
+  const of = lines => ({
+    head: [
+      lines ? LINES_TEX : '', sizes.size ? SIZE_TEX : '', floatsAt.size ? FLOAT_TEX : '',
+      ...[...leads].map(([i, f]) => def('axtlead@', i, f.toFixed(4))),
+      ...[...sizes].map(([i, f]) => def('axtsize@', i, f.toFixed(4))),
+      ...[...floatsAt].map(([i, f]) => def('axt@fp@', i, `${f.page} ${f.col}`)),
+      '\\axtfitheighttrue', def('axt@fitmin', '', tableMin), '',
+    ].join('\n'),
     for: plan.strategy,
-    strategy: s => {
-      if (s.name !== plan.strategy) return s
-      if (design.cjk) return { ...s, leading: type.lead, pre: fonts => s.pre(fonts).replace('\\setCJKmainfont[', `\\setCJKmainfont[Scale=${type.scale.toFixed(4)},`) + (type.track > 0.0005 ? `\\xeCJKsetup{CJKglue={\\hskip ${type.track.toFixed(4)}em plus 0.08\\baselineskip}}\n` : '') }
-      return { ...s, leading: type.lead }
-    },
+    strategy,
     mark: (base, translated) => u => {
       const m = base(u), i = index.get(u)
       if (m?.whole || !translated.has(u)) return m
       if (!m) return sizes.has(i) && ROLES.has(u.kind) && !u.front ? { start: `\\axtsizein{${i}}`, end: '' } : m
-      return { ...m, before: `${floatsAt.has(i) ? `\\axtfloatat{${i}}` : ''}\\axtlines{${i}}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}` }
+      return { ...m, before: `${floatsAt.has(i) ? `\\axtfloatat{${i}}` : ''}${lines ? `\\axtlines{${i}}` : ''}${sizes.has(i) ? `\\axtsize{${i}}` : ''}\\axtlead{${i}}` }
     },
-  }
+  })
+  return { ...of(true), final: of(false) }
 }

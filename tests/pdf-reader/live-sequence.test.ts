@@ -466,3 +466,16 @@ describe('a compile BusyTeX gave up on', () => {
     expect([r.settled, r.passing]).toEqual([true, true])
   })
 })
+
+// The final carries no line probes: nothing reads its lines (the F2 review's M7)
+describe('the final\'s TeX', () => {
+  it('has the rule\'s leadings and no line probes; a preview has both', async () => {
+    const t = translator(), n = paper().units.length, given: Req[] = []
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() } }), base = c.compile
+    c.compile = async (q: Req) => { given.push(q); return base(q) }
+    await run({ compiler: c, translate: t.translate })
+    const final = main(given.find(q => kindOf(q) === 'final' && ruled(q)) as Req), preview = main(given.find(q => kindOf(q) === 'preview' && ruled(q)) as Req)
+    expect([/\\axtlines\{\d/.test(final), final.includes('AXT-LINES'), /\\axtlead\{\d/.test(final)]).toEqual([false, false, true])
+    expect([/\\axtlines\{\d/.test(preview), preview.includes('AXT-LINES')]).toEqual([true, true])
+  })
+})

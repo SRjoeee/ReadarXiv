@@ -494,7 +494,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     let typeset = await finalTypeset()
     let r, ok, exhausted = false, finalAgain = false
     for (;;) {
-      r = await ask({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl, typeset, note }) })
+      // the final's lines are read by nothing: its TeX without the line probes (tex.mjs typesetting's `final`)
+      r = await ask({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl, typeset: typeset?.final ?? typeset, note }) })
       ok = await settled(r)
       note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, typeset: !!typeset, undefinedCitations: [...new Set([...(r.log ?? '').matchAll(/^(?:LaTeX|Package natbib) Warning: Citation [`']([^']+)' .*undefined/gm)].map(m => m[1]))].slice(0, 8), error: ok ? undefined : whyFailed(r) ?? whyUnset(r) })
       if (ok) break
