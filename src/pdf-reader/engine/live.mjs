@@ -18,7 +18,7 @@
 // preview is set as today: nothing is known to plan it from yet. Where a plan cannot be made, the translation is set as
 // today, and the reason noted
 import { analyze } from './paper-meta.mjs'
-import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
@@ -58,9 +58,6 @@ const DRAFT = [
   '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
 ].join('\n') + '\n'
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
-/** the name TeX gives a compile's .aux and .bbl: it runs in the project's root (BusyTeX's FS.chdir(project_dir)) and
- *  writes and reads them there, whatever folder the main file is in */
-const stemOf = main => main.split('/').pop().replace(/\.[^.]+$/, '')
 /** a compile the TeX page failed, not TeX: BusyTeX's 180 s given up (the machine was slow), or the page's own failure
  *  (protocol 2's `error`, no log: an engine it could not bring up, a compile before an init that failed). It says
  *  nothing of the paper or of the strategy (the S3a review, I5 b) */
@@ -142,9 +139,11 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
   for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = localizeNames(t); if (u !== t) out.set(f, latin1Bytes(u)) }
-  const stem = stemOf(project.main)
-  if (aux) out.set(`${stem}.aux`, new TextEncoder().encode(aux))
-  if (bbl && !meta.bbl) out.set(`${stem}.bbl`, new TextEncoder().encode(bbl))
+  // where TeX reads them, in the root under the job's name (2608.12333's latex/arxiv.tex: arxiv.aux, not
+  // latex/arxiv.aux, where no preview had the run's references or bibliography)
+  const job = jobName(project.main)
+  if (aux) out.set(`${job}.aux`, new TextEncoder().encode(aux))
+  if (bbl && !meta.bbl) out.set(`${job}.bbl`, new TextEncoder().encode(bbl))
   return out
 }
 
@@ -177,8 +176,12 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 //   original kept at the original's width, and a tabular* measured at its columns' width before it is fitted
 //   (latex-front.mjs FIT_DEF, AUTHOR_WIDE); an e-mail address, and a list of names in braces before its domain, a
 //   placeholder (keepAddresses); a name kept whole in a line of names (lineBreaks)
-// 5: the two together, and the wire's spaces beside a digit taken back (mt.mjs rehydrate)
-export const PIPELINE_VERSION = '5'
+// 5, on each branch again: the highlight's, a file named through import.sty (\import, \subimport) or subfiles is walked,
+//    found as TeX finds it (latex-front.mjs loadProject), and a package's names are TeX's (tar.mjs untar) — such a
+//    paper's units are new; the merge's, the two branches' 3s and 4s together, and the wire's spaces beside a digit
+//    taken back (mt.mjs rehydrate)
+// 6: the two 5s together
+export const PIPELINE_VERSION = '6'
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 export const TYPESETTING_VERSION = '1'

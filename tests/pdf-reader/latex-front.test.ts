@@ -26,6 +26,28 @@ describe('loadProject: a file \\input under another spelling is the file the sou
     expect((p.units as (Unit & { file: string })[]).filter(u => u.file === 'sections/a.tex')).toHaveLength(1)
   })
 })
+
+describe('loadProject: a file named through import.sty or subfiles is the one TeX reads', () => {
+  const enc = (s: string) => new TextEncoder().encode(s)
+  const fileOf = (u: Unit) => (u as Unit & { file: string }).file
+  const filesOf = (main: string, rest: [string, string][]) => [...new Set((loadProject(inMemory(new Map([['main.tex', enc(`\\documentclass{article}\n\\begin{document}\n${main}\n\\end{document}\n`)], ...rest.map(([f, t]) => [f, enc(t)] as [string, Uint8Array])])), 'main.tex').units as Unit[]).map(fileOf))]
+  it('\\import{dir/}{file} is dir/file; an \\input in it looks in dir/ before the root (import.sty puts dir/ first on \\input@path), a \\subimport goes on from dir/', () => {
+    expect(filesOf('\\import{chapters/}{one}\n\\inputfrom{./chapters}{two.tex}', [
+      ['chapters/one.tex', 'Prose of one.\n\n\\input{fig}\n\n\\subimport{deep/}{three}\n\n\\input{root}\n'],
+      ['chapters/fig.tex', 'Prose of the chapter\'s figure.\n'],
+      ['fig.tex', 'Prose of the root\'s figure, which TeX does not read here.\n'],
+      ['chapters/deep/three.tex', 'Prose of three.\n'],
+      ['root.tex', 'Prose found at the root, the directory having none.\n'],
+      ['chapters/two.tex', 'Prose of two.\n'],
+    ])).toEqual(['chapters/one.tex', 'chapters/fig.tex', 'chapters/deep/three.tex', 'root.tex', 'chapters/two.tex'])
+  })
+  it('\\subfile{chapters/ch1} is chapters/ch1.tex, and an \\input in it looks in chapters/ first (subfiles loads it by \\subimport)', () => {
+    expect(filesOf('\\subfile{./chapters/ch1}', [
+      ['chapters/ch1.tex', '\\documentclass[../main.tex]{subfiles}\n\\begin{document}\nProse of the chapter.\n\n\\input{table}\n\\end{document}\n'],
+      ['chapters/table.tex', 'Prose of the chapter\'s table.\n'],
+    ])).toEqual(['chapters/ch1.tex', 'chapters/table.tex'])
+  })
+})
 const project = (tex: string) => loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode(tex)]])), 'main.tex')
 const textOf = (u: Unit) => u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
 /** every unit's words replaced by a mark of its own, and the main file as it is then typeset */

@@ -18,8 +18,13 @@ export function folder(dir) {
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
 const asFiles = root => (typeof root === 'string' ? folder(root) : root)
-/** a/./b/../c → a/c */
+/** a/./b/../c → a/c: a file as the package holds it (tar.mjs untar names each so) and as TeX's file system has it,
+ *  whatever spelling named it — one name for one file, so that a file written back replaces it rather than sitting
+ *  beside it (2608.08350's \input{./sections/a.tex}: the compile set the English over the translation) */
 export const normalizePath = p => { const out = []; for (const seg of p.split('/')) { if (!seg || seg === '.') continue; if (seg === '..') out.pop(); else out.push(seg) } return out.join('/') }
+/** the name TeX gives what it writes for a main file, its .aux and .bbl: the file's own name without its extension, in
+ *  the package's root, where TeX runs whatever directory the main file is in (arXiv's compile, the TeX page's) */
+export const jobName = main => main.slice(main.lastIndexOf('/') + 1).replace(/\.[^.]*$/, '')
 /** bytes as a string of the same code units (latin1, byte for byte): the scanner's view of a source */
 export const latin1 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return s }
 export const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return b }
@@ -45,6 +50,8 @@ const FRONT_PROSE = new Set(['IEEEauthorblockN', 'IEEEauthorblockA', 'institutio
 /** IEEEtran's blocks, each a group of lines the class sets on its own in a cell of a table: a unit each, so that a
  *  line of names is fitted to its box alone (AUTHOR_WIDE), apart from the places' block and its line breaks */
 const FRONT_LINES = new Set(['IEEEauthorblockN', 'IEEEauthorblockA'])
+/** import.sty's commands that read a file from a directory, {dir}{file}: whether the directory is the one imported last's */
+const IMPORTS = new Map([['import', false], ['inputfrom', false], ['includefrom', false], ['subimport', true], ['subinputfrom', true], ['subincludefrom', true]])
 const INLINE_TEXT = new Set(['textbf', 'textit', 'emph', 'textsl', 'textsc', 'underline', 'textup', 'textrm', 'textsf', 'textmd', 'uline'])
 // commands whose last required argument is typeset as it stands — a scaled table, a boxed or coloured phrase, a TikZ
 // picture fitted to the column — by how many required arguments they take, that one included. The others (a width,
@@ -498,9 +505,15 @@ function walk(s, from, to, b, ctx) {
     }
     if (name === 'end') { endText(); b.flush(); const m = s.slice(end).match(/^\s*\{[^}]+\}/); i = end + (m ? m[0].length : 0); continue }
     if (name === 'item') { endText(); b.flush(); const { args, end: e } = argsAfter(s, end, 1); i = args.length && args[0].kind === 'opt' ? e : end; continue }
-    if (name === 'input' || name === 'include' || name === 'subfile') {
-      endText(); b.flush(); const { args, end: e } = argsAfter(s, end, 1)
-      if (args[0]) ctx.visit(s.slice(args[0].start + 1, args[0].end - 1).trim())
+    if (name === 'input' || name === 'include' || name === 'subfile' || IMPORTS.has(name)) {
+      endText(); b.flush(); const { args, end: e } = argsAfter(s, end, IMPORTS.has(name) ? 2 : 1)
+      const [a, f] = args.map(x => s.slice(x.start + 1, x.end - 1).trim())
+      // import.sty: \import{dir}{file} reads dir/file and puts dir first on the path an \input in it is looked for on,
+      // \subimport the same from the directory imported last; subfiles loads \subfile{dir/file} by \subimport{dir}{file}
+      const imported = (dir, file) => ctx.visit(file, [normalizePath(dir), ...ctx.dirs])
+      if (IMPORTS.has(name)) { if (f !== undefined) imported(IMPORTS.get(name) ? `${ctx.dirs[0] ?? ''}/${a}` : a, f) }
+      else if (name === 'subfile') { if (a) imported(`${ctx.dirs[0] ?? ''}/${a.slice(0, a.lastIndexOf('/') + 1)}`, a.slice(a.lastIndexOf('/') + 1)) }
+      else if (a) ctx.visit(a, ctx.dirs)
       i = e; continue
     }
     if (HEADINGS.has(name) || OWN_UNIT_ARG.has(name)) {
@@ -618,10 +631,11 @@ const listSources = fsys => fsys.list().filter(f => /\.(tex|sty)$/i.test(f))
 export function loadProject(root, main, { tables = false } = {}) {
   const fsys = asFiles(root)
   const sourceText = f => latin1(fsys.read(f))
-  // a file by the name the source package holds it under, whatever spelling named it (\input{./sections/a.tex}): the
-  // units' file and the translation's key, which must replace that file rather than sit beside it — under
-  // ./sections/a.tex the compile set the English over every unit of 2608.08350 past its abstract (2026-10-02)
-  const read = rel => { for (const cand of [rel, `${rel}.tex`]) { const key = normalizePath(cand), bytes = fsys.read(key); if (bytes) return { rel: key, text: latin1(bytes) } } return null }
+  // a file as TeX finds it — in the directories import.sty puts on its path (`dirs`, the last imported first), then from
+  // the package's root, where TeX runs — and by the name the package holds it under, whatever spelling named it
+  // (\input{./sections/a.tex}): the units' file and the translation's key, which must replace that file rather than
+  // sit beside it — under ./sections/a.tex the compile set the English over every unit of 2608.08350 past its abstract
+  const read = (rel, dirs = []) => { for (const dir of [...dirs, '']) for (const cand of [rel, `${rel}.tex`]) { const key = normalizePath(`${dir}/${cand}`), bytes = fsys.read(key); if (bytes) return { rel: key, text: latin1(bytes) } } return null }
   const units = [], files = new Map(), seen = new Set()
   const mainFile = read(main)
   if (!mainFile) throw new Error(`main file ${main} not found`)
@@ -637,11 +651,13 @@ export function loadProject(root, main, { tables = false } = {}) {
   }
   // the paper's macros twice over, each for its own reader: `macros`, how a call takes its arguments and which it sets
   // as prose (paperMacros, the walker's); `bodies`, what each expands to (macroBodies, a display's letters)
-  const ctx = { tables, theorems, fits: [], macros: paperMacros(sources.map(sourceText)), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim())), skipped, visit: rel => visit(rel), bodies: macroBodies(sources.map(sourceText)) }
-  function visit(rel) {
-    const f = read(rel); if (!f || seen.has(f.rel)) return
+  const ctx = { tables, theorems, fits: [], macros: paperMacros(sources.map(sourceText)), envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim())), skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)) }
+  /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first */
+  function visit(rel, dirs = []) {
+    const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)
-    const b = new Builder(f.rel, units, f.text, ctx.bodies)
+    const b = new Builder(f.rel, units, f.text, ctx.bodies), outer = ctx.dirs
+    ctx.dirs = dirs
     let from = 0, to = f.text.length
     if (f.rel === mainFile.rel) {
       const m = f.text.match(/\\begin\s*\{document\}/)
@@ -658,6 +674,7 @@ export function loadProject(root, main, { tables = false } = {}) {
       const e = f.text.match(/\\end\s*\{document\}/); to = e ? e.index : to
     }
     walk(f.text, from, to, b, ctx); b.flush()
+    ctx.dirs = outer
   }
   visit(mainFile.rel)
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters

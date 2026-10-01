@@ -1,5 +1,6 @@
 // An arXiv source package → its files. arXiv's /src/<id> sends a gzipped tar, or a single gzipped TeX file, or (for a
 // paper without source) a PDF. Runs in Node and in the browser: DecompressionStream and Uint8Array only.
+import { normalizePath } from './latex-front.mjs'
 
 const text = (b, from, to) => { let s = ''; for (let i = from; i < to && b[i]; i++) s += String.fromCharCode(b[i]); return s }
 const octal = (b, from, to) => parseInt(text(b, from, to).trim() || '0', 8)
@@ -9,7 +10,9 @@ export async function gunzip(bytes) {
   return new Uint8Array(await new Response(stream).arrayBuffer())
 }
 
-/** a tar archive → Map of path → bytes (regular files only; GNU long names and pax paths honoured) */
+/** a tar archive → Map of path → bytes (regular files only; GNU long names and pax paths honoured), each path as TeX's
+ *  file system has it (normalizePath: ./main.tex, an archive of a directory's contents, is main.tex), the one name the
+ *  engine knows the file by */
 export function untar(b) {
   const files = new Map()
   let at = 0, longName = null, paxPath = null
@@ -24,8 +27,8 @@ export function untar(b) {
     const prefix = text(header, 345, 500), name = longName ?? paxPath ?? (prefix ? `${prefix}/${text(header, 0, 100)}` : text(header, 0, 100))
     longName = paxPath = null
     if (type !== '0' && type !== '\0' && type !== '7') continue
-    const path = name.replace(/^(\.\/)+/, '')
-    if (path && !path.endsWith('/')) files.set(path, data.slice())
+    const path = normalizePath(name)
+    if (path && !name.endsWith('/')) files.set(path, data.slice())
   }
   return files
 }

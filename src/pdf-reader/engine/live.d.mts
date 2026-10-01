@@ -1,13 +1,14 @@
 // live.mjs's types (JavaScript until the engine's port), for the reader's tests
-import type { SourceUnit } from './latex-front.mjs'
+import type { inMemory, SourceUnit } from './latex-front.mjs'
+import type { analyze } from './paper-meta.mjs'
 import type { Strategy } from './scripts.mjs'
 import type { Typeset } from './typeset/tex.mjs'
 
-export interface Paper { meta: { main?: string; compiler?: string; bbl?: boolean }; units: SourceUnit[]; kept: Set<SourceUnit> }
 /** a paper's files (path → bytes) → what the pipeline works on */
-export declare function openPaper(files: Map<string, Uint8Array>): Paper & { fsys: { list(): string[]; read(path: string): Uint8Array | null } }
+export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typeof analyze>; project: { main: string; units: SourceUnit[] }; units: SourceUnit[]; kept: Set<SourceUnit> }
+export declare function openPaper(files: Map<string, Uint8Array>): Paper
 /** the translation so far, with unit marks, set by one of strategiesFor: the files that differ from the paper's */
-export declare function translationFiles(paper: Paper, translated: Map<SourceUnit, unknown[]>, options: { strategy: Strategy; fonts: unknown; draft: boolean; aux?: string | null; bbl?: string | null; typeset?: Typeset | null; note?: (event: string, data: unknown) => void }): Map<string, Uint8Array>
+export declare function translationFiles(paper: Paper, translated: Map<SourceUnit, unknown[]>, options: { strategy: Pick<Strategy, 'engine' | 'pre'> & Partial<Strategy>; fonts: unknown; draft?: boolean; aux?: string | null; bbl?: string | null; typeset?: Typeset | null; note?: (event: string, data: unknown) => void }): Map<string, Uint8Array>
 /** the font probe; with `width`, the width and size probes the typesetting rule measures the face by */
 export declare function probeFiles(paper: Paper, options?: { width?: boolean }): Map<string, Uint8Array>
 /** the original with unit marks; with `lines`, each unit's lines and the forced breaks in its log */

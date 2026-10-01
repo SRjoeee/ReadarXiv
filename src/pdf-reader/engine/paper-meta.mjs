@@ -3,7 +3,7 @@
 // arXiv's preflight, in simplified form.
 // Runs in Node and in the browser alike: `dir` is a directory (Node) or a file system of latex-front.mjs (folder,
 // inMemory).
-import { folder, latin1 } from './latex-front.mjs'
+import { folder, jobName, latin1, normalizePath } from './latex-front.mjs'
 
 const uncomment = s => s.replace(/(^|[^\\])%.*$/gm, '$1')
 const basename = p => p.slice(p.lastIndexOf('/') + 1)
@@ -24,20 +24,25 @@ export function analyze(dir) {
     try {
       const r = JSON.parse(utf8(fsys.read(readmeJson)))
       meta.readme = 'json'
-      meta.main = r.sources?.find(s => s.usage === 'toplevel')?.filename
+      const main = r.sources?.find(s => s.usage === 'toplevel')?.filename
+      // the file the package holds (latex-front.mjs normalizePath), whatever spelling named it
+      meta.main = main && normalizePath(main)
       meta.compiler = r.process?.compiler
       meta.tlVersion = r.texlive_version ?? null
     } catch { meta.readme = 'json-unreadable' }
   } else if (files.find(f => /^00README(\.XXX)?$/i.test(f))) {
     meta.readme = 'legacy'
     const r = utf8(fsys.read(files.find(f => /^00README(\.XXX)?$/i.test(f))))
-    meta.main = r.match(/^(\S+)\s+toplevelfile/m)?.[1]
+    const main = r.match(/^(\S+)\s+toplevelfile/m)?.[1]
+    meta.main = main && normalizePath(main)
   }
   const withClass = tex.filter(f => /\\document(class|style)\b/.test(bodies[f]))
   if (!meta.main || !files.includes(meta.main)) {
     meta.mainGuessed = true
     const included = new Set()
-    for (const f of tex) for (const m of bodies[f].matchAll(/\\(?:input|include|subfile)\s*\{([^}]+)\}/g)) { const n = m[1].trim(); included.add(n); included.add(`${n}.tex`) }
+    // a part is no main: each file named by \input, \include or \subfile, or import.sty's {dir}{file}, by the name the
+    // package holds it under (\subfile{./chapters/ch1}: chapters/ch1.tex, a subfile's own \documentclass and all)
+    for (const f of tex) for (const m of bodies[f].matchAll(/\\(input|include|subfile|(?:sub)?(?:import|inputfrom|includefrom))\s*\*?\s*\{([^}]+)\}(?:\s*\{([^}]+)\})?/g)) { const n = normalizePath(/^(input|include|subfile)$/.test(m[1]) || m[3] === undefined ? m[2].trim() : `${m[2].trim()}/${m[3].trim()}`); included.add(n); included.add(`${n}.tex`) }
     let cands = withClass.filter(f => !included.has(f) && !included.has(f.replace(/\.tex$/, '')))
     if (!cands.length) cands = withClass
     cands.sort((a, b) => (/^(main|ms|paper|manuscript|arxiv)\.tex$/i.test(basename(b)) - /^(main|ms|paper|manuscript|arxiv)\.tex$/i.test(basename(a))) || bodies[b].length - bodies[a].length)
@@ -53,10 +58,8 @@ export function analyze(dir) {
   meta.localCls = files.filter(f => f.endsWith('.cls')).length
   meta.localSty = files.filter(f => f.endsWith('.sty')).length
   meta.inputs = (all.match(/\\(?:input|include|subfile)\s*\{/g) ?? []).length
-  // TeX runs in the package's root, whatever folder the main file is in, and reads <stem>.bbl there (BusyTeX and arXiv
-  // alike; live.mjs stemOf)
-  const stem = basename(meta.main).replace(/\.[^.]+$/, '')
-  meta.bbl = files.includes(`${stem}.bbl`)
+  // the bibliography TeX reads, in the root under the job's name (a main file in a directory: latex/arxiv.tex → arxiv.bbl)
+  meta.bbl = files.includes(`${jobName(meta.main)}.bbl`)
   meta.bib = files.some(f => f.endsWith('.bib'))
   meta.biblatex = /\\usepackage\s*(\[[^\]]*\])?\s*\{[^}]*\bbiblatex\b/.test(all)
   const exts = files.map(f => extname(f).toLowerCase())
