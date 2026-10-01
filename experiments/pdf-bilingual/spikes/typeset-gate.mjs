@@ -252,7 +252,9 @@ function check(only = []) {
     for (const spec of specs) {
       const r = resultOf(spec), was = record.papers?.[spec], today = r && todayOf(spec, r)
       if (!r || r.failed || !today) { problems.push(`${spec}: no result`); continue }
-      if (r.image !== image || (r.rule !== ruleHash && !OTHER)) { problems.push(`${spec}: a stale result (${r.image !== image ? 'another TeX image' : 'another rule'}): run it again`); continue }
+      // a code change tried under TAG, or another version (ENGINE), is checked as it was run; the rule as it stands, and
+      // its parameters varied (VARY), only on results of the files as they are now
+      if (r.image !== image || (r.rule !== ruleHash && !process.env.TAG && !OTHER)) { problems.push(`${spec}: a stale result (${r.image !== image ? 'another TeX image' : 'another rule'}): run it again`); continue }
       if (Math.abs(r.final.pages) > Math.abs(today.pages)) console.log(`  further from the original's pages than today: ${spec}, the rule ${r.final.pages}, today ${today.pages}`)
       if (was) problems.push(...lossesOf(spec, r, was))
       else console.log(`  ${spec}: no record`)
