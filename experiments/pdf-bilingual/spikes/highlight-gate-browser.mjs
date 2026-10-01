@@ -20,9 +20,13 @@
 //    first (B3's re-review: made to fail on 61619404, the paragraph first in 4 of 6 opens)
 //  - the pointer moving over the left pane from the first moment of the load: every side's sentences found, as with the
 //    pointer still (B3's review, C1: made to fail on af6fce33, 06701 0 lit by sentence against 41)
-//  - a pointer resting on a sentence of a unit over two pages, on each pane, through the right side replaced: 400 ms
-//    after, what is lit is what a move there lights, painted under the pointer (the final review, I1: made to fail on
-//    346c26fc, the right pane lit nothing until the pointer moved, 2608.02459 and 2608.06701)
+//  - a pointer resting on a sentence of a unit over two pages, on each pane, through the right side replaced (at once,
+//    and after 800 ms in which idle periods come) and through the left anchored again (our marked original's marks):
+//    400 ms after, what is lit is what a move there lights, painted under the pointer (the final review, I1: made to
+//    fail on 346c26fc, the right pane lit nothing until the pointer moved, 2608.02459 and 2608.06701); and every frame
+//    from the event on paints, per side, the sentence or nothing, never the paragraph, and ends with the sentence on
+//    both (I2: on 346c26fc with the harness's hooks, 10 of 12 fail — the paragraph painted on one side or both, for
+//    19–178 ms)
 //  - sentences (B3): where a unit lights by sentence on both sides, what it paints is its sentences' shapes (the first,
 //    a middle and the last, debug.litRects), and the grid and the pads above are the pointer's sentence's
 //    (debug.pointerSentence), 1.5 px past a shape's sides not; round 1's measure of their boundaries on the page's own
@@ -255,12 +259,15 @@ async function sentencesAtLoad(b, paper, moving) {
   return got
 }
 /**
- * A pointer resting on a sentence through the right side replaced (a new compile, replaceRight), on each pane (the final
- * review of the highlight, I1: after the swap the pointer was looked for on the pane gone, and a pointer resting on the
- * right lit nothing until it moved). The unit runs over two pages on both sides, the panes scrolled to its later page
- * (the sync off) and the pointer on its last line there; the earlier page is above the view, so the new side has not
- * drawn it. 400 ms after the swap — past the miss's hold, no move —: what is lit is what a move there lights, and what is
- * painted on the pointer's pane holds the pointer. `event` replaces what the highlight is drawn by, in the page
+ * A pointer resting on a sentence through what the highlight is drawn by being made again, on each pane (the final
+ * review of the highlight): the right side replaced (a new compile, replaceRight: at once, and held a while as a swap
+ * waiting for its figures is, the idle periods coming before it), and the left anchored again (our marked original's
+ * marks arriving, onOriginal). The unit runs over two pages on both sides, the panes scrolled to its later page (the
+ * sync off) and the pointer on its last line there; the earlier page is above the view, so a new side has not drawn
+ * it, and the sentences' fit waits for that page's geometry. What is lit and what each side paints, every frame from
+ * the event to 1.5 s after it is done (`frames`: a change each, the area painted per side); what is lit 400 ms after — past the
+ * miss's hold, no move — (`after`) and what a move there lights (`moved`); the sentence's paint and the whole unit's,
+ * lit by the harness at the end (`refs`). `event` runs in the page
  */
 async function resting(page, pane, event) {
   const target = await page.evaluate(async pane => {
@@ -286,21 +293,61 @@ async function resting(page, pane, event) {
   const state = () => page.evaluate(({ x, y }) => {
     const d = window.__reader.debug, rects = d.litRects()
     const under = rects.map(rs => rs.some(r => x >= r.x0 - 1 && x <= r.x1 + 1 && y >= r.y0 - 1 && y <= r.y1 + 1))
-    return { lit: d.lit, s: d.litSentence, under, painted: rects.map(rs => rs.length) }
+    return { lit: d.lit, s: d.litSentence, under, area: rects.map(rs => Math.round(rs.reduce((a, r) => a + (r.x1 - r.x0) * (r.y1 - r.y0), 0))) }
   }, target)
   const before = await state()
+  // every frame from the event on, what is lit and painted where it changes
+  await page.evaluate(() => {
+    const d = window.__reader.debug, t0 = performance.now(), out = (window.__frames = [])
+    let last = ''
+    window.__stop = false
+    const tick = () => {
+      const area = d.litRects().map(rs => Math.round(rs.reduce((a, r) => a + (r.x1 - r.x0) * (r.y1 - r.y0), 0)))
+      const k = `${d.lit}/${d.litSentence} ${area}`
+      if (k !== last) { last = k; out.push({ t: Math.round(performance.now() - t0), lit: d.lit, s: d.litSentence, area }) }
+      if (!window.__stop) requestAnimationFrame(tick)
+    }
+    tick()
+  })
   await page.evaluate(event)
   await page.waitForTimeout(400)
   const after = await state()
+  await page.waitForTimeout(1100)
+  const seen = await page.evaluate(() => { window.__stop = true; return window.__frames })
   // what a move there lights
   await page.mouse.move(target.x + 1, target.y)
   await frames(page)
   const moved = await page.evaluate(() => ({ id: window.__reader.debug.pointerHit, s: window.__reader.debug.pointerSentence }))
+  // the sentence's paint and the whole unit's, as the harness lights them
+  const refs = await page.evaluate(({ id, s }) => {
+    const d = window.__reader.debug, area = () => d.litRects().map(rs => Math.round(rs.reduce((a, r) => a + (r.x1 - r.x0) * (r.y1 - r.y0), 0)))
+    d.light(null); d.light(id, s); const sentence = area()
+    d.light(null); d.light(id, -1); const whole = area()
+    d.light(null)
+    return { sentence, whole }
+  }, { id: target.id, s: before.s })
   await page.mouse.move(5, 5)
   await page.waitForTimeout(300)
-  return { id: target.id, before, after, moved }
+  return { id: target.id, before, after, moved, frames: seen, refs }
+}
+/** whether a resting pointer's frames (resting) painted its sentence, or nothing, on each side and never its paragraph:
+ *  every frame lighting the unit by sentence paints, per side, nothing or the sentence as it was before or is after (to
+ *  2 %), and no frame lights another unit; the last frame lights the sentence again, painted on both sides */
+function restingPainted(r) {
+  const near = (a, b) => Math.abs(a - b) <= Math.max(4, 0.02 * b)
+  const bad = []
+  for (const f of r.frames ?? []) {
+    if (f.lit !== null && f.lit !== r.id) bad.push({ ...f, why: 'another unit' })
+    else if (f.lit === r.id && f.s >= 0) f.area.forEach((a, k) => { if (a && !near(a, r.before.area[k]) && !near(a, r.refs.sentence[k])) bad.push({ ...f, why: near(a, r.refs.whole[k]) ? 'the paragraph' : 'neither' }) })
+    else if (f.lit === r.id) bad.push({ ...f, why: 'lit whole' })
+  }
+  const end = r.frames?.at(-1)
+  const ok = !!end && end.lit === r.id && end.s === r.before.s && end.area.every((a, k) => a > 0 && near(a, r.refs.sentence[k]))
+  return { ok: ok && bad.length === 0, bad: bad.slice(0, 4), end }
 }
 const SWAP = () => window.__reader.debug.swapRight()
+const SWAP_HELD = () => window.__reader.debug.swapRight(800)
+const REANCHOR = () => window.__reader.debug.reanchorLeft()
 /** what is painted for a unit, as the pointer lights it: its sentences' shapes where it lights by sentence (B3: the
  *  first, a middle one and the last), else its blocks — each a list of rectangles in the window by side, lit by the
  *  harness and let go */
@@ -407,15 +454,18 @@ function demoSentences(paper) {
   }
   return r
 }
-/** a pointer resting on each pane through the right side replaced (resting) */
+/** a pointer resting on each pane through the right side replaced and the left anchored again (resting) */
 async function restingChecks(b) {
+  const EVENTS = [['the right side replaced', SWAP], ['the right side replaced after a wait', SWAP_HELD], ['the left anchored again', REANCHOR]]
   for (const paper of CHECK) {
     const page = await open(b, paper, { sync: 'off' })
-    for (const pane of ['L', 'R']) {
-      const r = await resting(page, pane, SWAP)
-      const k = pane === 'L' ? 0 : 1
-      check(`${b.label} ${paper}: a pointer resting on the ${pane === 'L' ? 'left' : 'right'} pane through the right side replaced: what is lit after is what a move there lights, painted under it`, !!r.id && r.before.lit === r.id && r.before.s >= 0 && r.after.lit != null && r.after.lit === r.moved.id && r.after.s === r.moved.s && r.after.under[k], JSON.stringify(r))
-      ;((result.resting ??= {})[`${b.label} ${paper} ${pane}`] = r)
+    for (const pane of ['L', 'R']) for (const [what, event] of EVENTS) {
+      const r = await resting(page, pane, event)
+      const k = pane === 'L' ? 0 : 1, on = `a pointer resting on the ${pane === 'L' ? 'left' : 'right'} pane through ${what}`
+      check(`${b.label} ${paper}: ${on}: what is lit after is what a move there lights, painted under it`, !!r.id && r.before.lit === r.id && r.before.s >= 0 && r.after.lit != null && r.after.lit === r.moved.id && r.after.s === r.moved.s && r.after.under[k], JSON.stringify({ ...r, frames: r.frames?.length }))
+      const p = restingPainted(r)
+      check(`${b.label} ${paper}: ${on}: every frame paints its sentence or nothing, never the paragraph, and the sentence again on both sides`, !!r.id && p.ok, JSON.stringify({ id: r.id, s: r.before?.s, before: r.before?.area, refs: r.refs, ...p }))
+      ;((result.resting ??= {})[`${b.label} ${paper} ${pane} ${what}`] = r)
     }
     await page.close()
   }

@@ -195,8 +195,9 @@ function makeSide(container) {
   // geo: the highlight's geometry (highlight.mjs), made after the side is anchored (makeGeo; layoutWanted: asked for at
   // once, wantLayout); units: each unit's text as the side was anchored by it (id → { text, sentences? }); starts: where
   // each unit's sentences after the first begin on it, made with the geometry (findSentences); at, scrollX, scrollY:
-  // where its pane and pages are, kept for the pointer (measure); lit: the highlight's elements painted on it
-  const side = { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), units: new Map(), geo: null, makeGeo: null, layoutWanted: false, starts: null, at: null, scrollX: 0, scrollY: 0, lit: [], figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
+  // where its pane and pages are, kept for the pointer (measure); lit: the highlight's elements painted on it, and shows
+  // what they were painted for (what was lit then, paint); startsFor: the units its starts were found from (findSentences)
+  const side = { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), units: new Map(), geo: null, makeGeo: null, layoutWanted: false, starts: null, startsFor: null, at: null, scrollX: 0, scrollY: 0, lit: [], shows: null, figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
   // a unit's sentences' starts on this side where they are known on both and its shapes hold its words on both
   // (highlight.mjs sentencesFit), for the hit test and the paint: else it is lit whole on both (a translation coming in,
   // laid out out of sight, is the right side's to the left)
@@ -227,7 +228,10 @@ function wantFit(id) {
   if (fitsWanted.size > 1) return
   setTimeout(() => {
     for (const u of fitsWanted) for (const s of sides) { const st = s.starts?.get(u); if (st) fits(s, u, st, true) }
+    // what is lit drawn by them before the pointer is asked again: the pointer lighting the same leaves it as it is
+    const drawn = lit != null && fitsWanted.has(lit.id)
     fitsWanted.clear()
+    if (drawn) for (const s of sides) paint(s)
     pointer.again()
   })
 }
@@ -332,12 +336,22 @@ const drawn = new WeakMap()
  *  and the pages' viewports. One element a run: a block, or a sentence's single row, as a box with rounded corners; a
  *  sentence over rows of different reach as one outline (an SVG path) */
 function paint(side) {
+  // a sentence lit whose unit's sentences are not known on both sides now: while what makes them is on its way — the
+  // side's layout, a side's sentences, their fit (a new compile's side, our marked original's marks anchoring the left
+  // again) — what is drawn for it stays, and it is drawn anew when they land (wantFit, wantSentences, makeGeo); else
+  // nothing is drawn for it, and the pointer, asked again, lights what is there. Never the whole paragraph: it was drawn
+  // so, and kept until the pointer moved (the final review of the highlight, I2)
+  const starts = lit != null && lit.s >= 0 && side.geo ? side.startsOf(lit.id) : null
+  const waiting = lit != null && (side.geo ? lit.s >= 0 && !starts && sentencesWaited(lit.id) : !!side.makeGeo)
+  if (waiting && same(side.shows, lit)) return
   for (const el of side.lit) el.remove()
   side.lit = []
+  side.shows = null
   if (lit == null) return
-  if (paintFloat(side)) return
+  if (paintFloat(side)) { side.shows = lit; return }
   if (!side.geo) { wantLayout(side); return }
-  const starts = lit.s >= 0 ? side.startsOf(lit.id) : null
+  if (lit.s >= 0 && !starts) return
+  side.shows = lit
   for (const run of runsOf(side.geo, lit.id)) {
     const pv = pageView(side, run.page), layer = layerOf(side, run.page)
     if (!layer) continue
@@ -398,8 +412,11 @@ const pointer = pointerPath({
     if (!side.geo) { wantLayout(side); return null }
     const at = pointAt(side, x, y), hit = at && withFloats(side, at, hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale, side.startsOf))
     // a unit whose sentences are not yet worked out on both sides: a miss, until they are (wantFit); and one whose
-    // sentences are known but not yet found while the finding is on its way (sentencesPending); a float lights whole
-    if (!hit || fitsWanted.has(hit.id) || (hit.s === -1 && !hit.float && sentencesPending(hit.id))) return null
+    // sentences are known but not yet found while the finding is on its way (sentencesPending); a float lights whole.
+    // The unit lit stays lit as it is drawn meanwhile (paint): a pointer resting on it through a new compile or the
+    // left's marks arriving does not let go after the miss's hold
+    if (!hit) return null
+    if (fitsWanted.has(hit.id) || (hit.s === -1 && !hit.float && sentencesPending(hit.id))) return lit?.id === hit.id ? lit : null
     return { id: hit.id, s: hit.s ?? -1 }
   },
   light,
@@ -1618,13 +1635,14 @@ async function anchorOne(side, texts, marks) {
     side.makeGeo = null
     layoutsDue.delete(side)
     timing[side === left ? 'leftLayout' : 'rightLayout'] = performance.now() - t0
+    // its sentences in an idle period of their own, and the left's again when this is the right; asked for first, so
+    // that a sentence lit is waited for until they come, not drawn as its paragraph (paint)
+    wantSentences(side)
     // the floats of the pages drawn before it came
     for (const pv of side.viewer._pages ?? []) if (pv.renderingState === 3) floatsFor(side, pv.id)
     // what is lit on it, and what is under a pointer resting on it, now that it has its blocks
     if (lit != null) paint(side)
     pointer.again(side)
-    // its sentences in an idle period of their own, and the left's again when this is the right (or the right to be)
-    wantSentences(side)
   }
   layoutsDue.add(side)
   return bounds.size
@@ -1637,13 +1655,14 @@ async function anchorOne(side, texts, marks) {
  * found all its starts (makeSide's startsOf)
  */
 function findSentences(side) {
-  const t0 = performance.now(), on = side === left ? 'src' : 'tr', starts = new Map()
-  for (const [id, u] of (side === left ? right : side).units) {
+  const t0 = performance.now(), on = side === left ? 'src' : 'tr', starts = new Map(), from = (side === left ? right : side).units
+  for (const [id, u] of from) {
     if (!u.sentences) continue
     const st = sentenceStarts(side.anchors.get(id), side.units.get(id)?.text ?? '', u.sentences[on])
     if (st) starts.set(id, st)
   }
   side.starts = starts
+  side.startsFor = from
   // the sentences of the pages already drawn (the rest as each is drawn)
   if (side.geo) for (const p of side.geo.cache.keys()) pageSentences(side.geo, p, side.ownStarts)
   timing[side === left ? 'leftSentences' : 'rightSentences'] = performance.now() - t0
@@ -1657,9 +1676,14 @@ const sentencesDue = new Set()
  *  on an unfinished fit (the re-review of B3: a pointer resting from the load lit the paragraph, then the sentence, in
  *  4 of 6 opens of 02459 and 06701). Where nothing is on its way, the unit is lit whole */
 const sentencesPending = id => !!right.units.get(id)?.sentences && bySentence(unitKind.get(id)) && (sentencesDue.size > 0 || ((!left.starts || !right.starts) && (anchoring > 0 || layoutsDue.size > 0)))
+/** whether a unit's sentences on both sides, or their fit, are on their way: what a sentence lit is drawn by (paint) */
+const sentencesWaited = id => fitsWanted.has(id) || sentencesPending(id)
+/** a side's sentences found in an idle period after its layout's; the left's again after the right's, whose units it
+ *  reads — the right shown, not a compile still coming in (replaceRight finds the left's at its swap), and not where the
+ *  left's were found from those units already */
 function wantSentences(side) {
   sentencesDue.add(side)
-  if (side !== left && left.geo) sentencesDue.add(left)
+  if (side === right && left.geo && left.startsFor !== right.units) sentencesDue.add(left)
   if (sentencesAsked) return
   sentencesAsked = true
   requestIdleCallback(() => {
@@ -1671,6 +1695,13 @@ function wantSentences(side) {
   })
 }
 let sentencesAsked = false
+/** the left anchored again by marks it did not have — our marked original's, when it is compiled (onOriginal) —: what is
+ *  lit stays drawn there until its layout and sentences are made again (paint) */
+async function anchorLeft(texts, marks) {
+  const n = await anchorSide(left, texts, marks)
+  invalidate(); paint(left)
+  return n
+}
 /** the sides' layouts still to make, one an idle period, none while a side is being anchored: an idle period comes
  *  while the other side's text is still on its way from PDF.js's worker, and a layout made there held the worker's
  *  answer back (2608.02459: 7.7 ms a side, cold) */
@@ -1773,7 +1804,7 @@ export function goToUnit(id) {
   }
   reportHeading()
 }
-async function replaceRight(url, texts, { draft = false } = {}) {
+async function replaceRight(url, texts, { draft = false, hold = 0 } = {}) {
   const t0 = performance.now()
   bake()
   rightTexts = texts
@@ -1791,6 +1822,8 @@ async function replaceRight(url, texts, { draft = false } = {}) {
   if (draft) next.frames = opened.then(pdfFrames).catch(() => new Map())
   next.anchored = opened.then(() => inited).then(() => anchorSide(next, texts))
   await next.anchored
+  // the test harness's: the swap held back a while, as one waiting for its figures is, the idle periods coming meanwhile
+  if (hold) await new Promise(r => setTimeout(r, hold))
   const top = scrollFor(next, place)
   if (top != null) next.container.scrollTop = top - (offset ?? 0)
   else next.container.scrollTop = right.container.scrollTop
@@ -1876,10 +1909,12 @@ const harness = () => ({ left, get right() { return right },
   // a side's floats on a page, once made (floats.mjs)
   floatsOn: (side, n) => floatsOn(side.geo, n) ?? null,
   paperContext: () => paperCtx,
-  swapRight: async () => {
+  swapRight: async (hold = 0) => {
     const url = URL.createObjectURL(new Blob([await right.doc.getData()], { type: 'application/pdf' }))
-    try { return await replaceRight(url, rightTexts ?? []) } finally { URL.revokeObjectURL(url) }
+    try { return await replaceRight(url, rightTexts ?? [], { hold }) } finally { URL.revokeObjectURL(url) }
   },
+  // the left anchored again by the marks it has, as our marked original's marks anchor it when they come (onOriginal)
+  reanchorLeft: () => anchorLeft([...left.units.values()], left.marks),
 })
 /**
  * A copy from this machine shown (REPORT, eighteenth addendum): the paper's state from the record rather than the
@@ -2122,7 +2157,7 @@ async function live() {
         return d >= -c.clientHeight * 0.3 ? Math.abs(d) : 2 * Math.abs(d)
       },
       onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!p.leftCurrent) { p.adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); p.leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); if (final) finalShown = true; note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
-      onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorSide(left, src, marks); invalidate(); paint(left); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
+      onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorLeft(src, marks); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
     }).catch(e => ({ error: e.message ?? String(e), kind: e?.kind }))
     if (result.results) made = result.results
     // the engine's kind kept (engine.mjs EngineError), so that a key refused midway is worded as the popup words it

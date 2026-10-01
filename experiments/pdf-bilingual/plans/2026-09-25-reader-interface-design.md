@@ -770,6 +770,11 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   pointer's frame. A unit whose sentences are known but not yet found, or whose fit is not yet worked out, is a miss
   meanwhile (25–125 ms after the pointer comes to rest on an open, 2026-10-01), then lights its sentence — never the
   paragraph first.
+- What is lit is drawn again by what replaces it — a new compile's right side, the left anchored again by our marked
+  original's marks — and the pointer resting on it is carried to the new side. While its unit's sentences or their fit
+  are on their way there, what was drawn for it stays (the new side shows nothing), never its paragraph; when they
+  land it is drawn anew and the pointer is asked again (the final review: on 2608.02459 and 2608.06701, a pointer
+  resting on either pane, the new right side empty 40–200 ms, the left's sentence held throughout).
 - What a run's sentence was drawn as is kept and put back when it is lit again at the same scale (at most 512), and
   let go when a page's floats come.
 
