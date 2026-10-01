@@ -189,6 +189,8 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   .capsule { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 8px; min-height: 34px; max-width: calc(100% - 24px); padding: 0 6px 0 12px; overflow: hidden; border-radius: 999px; pointer-events: auto;
     background: var(--float-bg); backdrop-filter: blur(16px) saturate(1.5); box-shadow: var(--float-shadow); color: var(--ink); font-size: 12.5px; animation: capsule-in 240ms var(--ease); }
   .capsule[data-alone] { padding-inline-end: 14px; }
+  /* the capsule that leaves by itself is a stop of its own (StatusCapsule): the keyboard's ring, as the chrome's controls */
+  .capsule:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .capsule[data-out] { animation: capsule-out 160ms ease-out forwards; pointer-events: none; }
   .capsule svg { color: var(--ink-2); }
   /* one line wherever it fits; in a window too narrow for it the words wrap, balanced, and the icon and the actions keep

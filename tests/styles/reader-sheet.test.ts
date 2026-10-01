@@ -53,6 +53,11 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
     expect(itemRing.every(r => r.selector.includes(':not([data-axt-pointer])'))).toBe(true)
   })
 
+  it('rings the capsule that is a stop of its own as the chrome\'s controls are rung (Codex and Devin on #307)', () => {
+    const ring = (selector: string) => all.find(r => r.selector.split(',').map(x => x.trim()).includes(selector))?.body.match(/outline:[^;]+/)?.[0]
+    expect(ring('.capsule:focus-visible')).toBe(ring('.chrome :focus-visible'))
+  })
+
   it('shows the pointer over a switch\'s row, which a press on its words turns as a press on the switch does (#299 review; the popup\'s .toggle)', () => {
     const row = all.find(r => r.selector.split(',').map(x => x.trim()).includes('.pop label.row'))
     expect(row?.body).toMatch(/cursor:\s*pointer/)

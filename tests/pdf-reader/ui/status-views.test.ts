@@ -83,6 +83,26 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
       expect(capsule()).toBeNull()
     })
 
+    it('is reached by Tab while it is shown, named by its words, and a keyboard\'s focus holds it as the pointer does (Codex and Devin on #307)', async () => {
+      const { capsule, wait } = await narrow()
+      const el = capsule()!
+      // in the tab order, as a group its words name; no other capsule is a stop of its own (theirs are their actions)
+      expect([el.tabIndex, el.getAttribute('role'), document.getElementById(el.getAttribute('aria-labelledby') ?? '')?.textContent]).toEqual([0, 'group', R.status.narrow])
+      await wait(3000)
+      await act(async () => { el.focus() })
+      expect(document.activeElement).toBe(el)
+      await wait(10000)
+      expect(capsule()).not.toBeNull()
+      await act(async () => { el.blur() })
+      await wait(1999)
+      expect(capsule()).not.toBeNull()
+      await wait(1)
+      expect(capsule()).toBeNull()
+      // on its way out it is no stop
+      const out = document.querySelector('.capsule[data-kind="narrow"][data-out]')
+      expect([out !== null, out?.hasAttribute('tabindex')]).toEqual([true, false])
+    })
+
     it('waits while it holds the focus, and runs out the rest once the focus goes', async () => {
       const { capsule, wait, focus } = await narrow()
       await wait(3000)
@@ -105,6 +125,8 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     expect([container.querySelector('.capsule .words')?.textContent, link()?.textContent, link()?.getAttribute('href'), link()?.target, link()?.rel]).toEqual(['这篇论文暂不支持 PDF 翻译', '改用 HTML 翻译', href, '_blank', 'noopener'])
     expect(container.querySelector('.capsule .close')).toBeNull()
     expect(container.querySelector('.capsule')!.hasAttribute('data-alone')).toBe(false)
+    // reached by its link, not a stop of its own: only the capsule that leaves by itself is one
+    expect(container.querySelector('.capsule')!.hasAttribute('tabindex')).toBe(false)
     // this tab: the reader's own, or the PDF page it lies over
     await act(async () => fake.set({ settings: { ...DEFAULT_CONFIG, reading: { ...DEFAULT_CONFIG.reading, openIn: 'same-tab' } } }))
     expect(link()?.target).toBe('_top')

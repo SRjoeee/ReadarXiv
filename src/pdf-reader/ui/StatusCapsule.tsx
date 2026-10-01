@@ -8,7 +8,7 @@
 // or this one, the reader's own or the PDF page it lies over (`_top`; a click lets a frame navigate its page). A
 // failure never takes the focus; the card's reason is said in this region
 import { Info, X } from 'lucide'
-import { type FocusEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type FocusEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { R, S } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { Icon } from '@/ui/controls/Icon'
@@ -54,14 +54,19 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
   const capsule = now ?? leaving
   // words alone, no chip at the end: padded there as at the start (reader.css)
   const alone = capsule?.kind === 'narrow' || (capsule?.kind === 'unavailable' && !capsule.href)
+  // the capsule that leaves by itself holds nothing a keyboard can reach, so it is a stop of its own while it is shown: a
+  // group its words name, whose focus holds it as the pointer does (Codex and Devin on #307). The others are reached by
+  // their actions
+  const words = useId()
+  const timed = capsule?.kind === 'narrow' && now !== null ? { tabIndex: 0, role: 'group', 'aria-labelledby': words } : {}
   return (
     <div role="status" className="capsule-slot">
       {card && <span className="sr-only">{card.reason}</span>}
       {spoken && <span className="sr-only">{spoken}</span>}
       {capsule && (
-        <div ref={box} key={capsule.kind} className="chrome capsule" data-kind={capsule.kind} data-alone={alone ? '' : undefined} data-out={now ? undefined : ''} {...linger}>
+        <div ref={box} key={capsule.kind} className="chrome capsule" data-kind={capsule.kind} data-alone={alone ? '' : undefined} data-out={now ? undefined : ''} {...timed} {...linger}>
           <Icon node={Info} size={15} />
-          <span key={capsule.text} className="words">{capsule.text}</span>
+          <span key={capsule.text} id={words} className="words">{capsule.text}</span>
           {capsule.kind === 'notice' && (
             <>
               <button type="button" data-action className="chip" onClick={controller.retry}>{S.failed.retry}</button>

@@ -251,7 +251,7 @@ The bilingual PDF reader's own words (the reader's design, `experiments/pdf-bili
 | S-R-11 | Page pills | 原文页码 · 译文页码 · 上一页 · 下一页 | |
 | S-R-12 | A load or a translation under way | 正在加载 · 正在翻译 · 正在按当前设置重新翻译 | Said to screen readers in the status region, not shown: the 2 px line along the toolbar's foot shows how far it has come (the maintainer, 2026-09-25) |
 | S-R-13 | Language not supported | PDF 对照暂不支持{语言} · 选择语言 | The action opens the language menu: the toolbar's, or below 900 px the one the reading options hold, opened in them |
-| S-R-14 | Narrow window | 窗口较窄，暂只显示译文 | Once, when 对照 shows the translation alone (after S-P-74), for 5 s of being read: the time stands while the pointer is over it or it holds the focus, and the rest runs once neither does (the maintainer, 2026-10-01) |
+| S-R-14 | Narrow window | 窗口较窄，暂只显示译文 | Once, when 对照 shows the translation alone (after S-P-74), for 5 s of being read: the time stands while the pointer is over it or it holds the focus, and the rest runs once neither does (the maintainer, 2026-10-01). Holding no action, it is a stop of its own for the keyboard while shown, a group its words name, rung as the chrome's controls are (Codex and Devin on #307) |
 | S-R-15 | A notice's close button | 关闭 | |
 | S-R-16 | The card · too many requests | 请求过于频繁 | The reader's own words for S-E's rate limit: S-E's 稍后自动重试 is the HTML page's chain retrying by itself, and a stopped run here does not — the reader retries (Part 6's interface review) |
 | S-R-17 | Cannot be had | 这篇论文暂不支持 PDF 翻译 | The paper has no source, or none of the ways of setting it worked: the original shown, 对照 and 译文 greyed. It says that, never why (the section's rule), and has no close: nothing else can be done here (the maintainer, 2026-09-26) |
