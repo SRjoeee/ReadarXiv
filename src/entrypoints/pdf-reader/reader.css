@@ -148,7 +148,10 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   [data-level="2"] > .entry { padding-inline-start: 14px; }
   [data-level="3"] > .entry { padding-inline-start: 28px; }
   :is([data-level="2"], [data-level="3"]) .t { font-size: 12px; font-weight: 400; color: var(--ink-2); }
-  .fold { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; color: var(--ink-3); }
+  .fold { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; color: var(--ink-3); }
+  /* its target 24 × 24 (WCAG 2.5.8), its drawing 18: grown up, down and away from its link, never toward it (#299;
+     Part 6's interface review). A leaf's is hidden with it */
+  .fold::before { content: ""; position: absolute; inset: -3px 0 -3px -6px; }
   .fold svg { transition: rotate 150ms ease-out; }
   .fold[aria-expanded="true"] svg { rotate: 90deg; }
   .fold.leaf { visibility: hidden; }
