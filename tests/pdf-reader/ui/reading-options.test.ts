@@ -83,8 +83,8 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
       const row = [...container.querySelectorAll<HTMLElement>('.row')].find(r => r.textContent === words && r.querySelector('[role="switch"]'))!
       expect(row.tagName).toBe('LABEL')
       const before = controller.patchSettings.mock.calls.length
-      // the words themselves: the row's own text, not the switch
-      await act(async () => { row.firstChild!.parentElement!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+      // the row, its words: not the switch inside it
+      await act(async () => { row.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
       expect(controller.patchSettings.mock.calls.length).toBe(before + 1)
       expect(read(written())).toBe(false)
     }
