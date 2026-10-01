@@ -38,13 +38,17 @@ export function spokenOf(state: ReaderState): string {
 
 /**
  * The progress line under the toolbar, all that shows a load or a translation under way (the maintainer, 2026-09-25):
- * the PDF's download while the reader loads, the share of paragraphs translated while a translation runs. A stage is a
- * line of its own: the translation's starts afresh rather than the download's shrinking back
+ * one line over the whole process, which never starts again (the maintainer asked why it ran twice, 2026-10-02) — the
+ * PDF's download its first stretch when a translation follows it (all of it when the original alone is shown), then
+ * the paragraphs translated, and the final's compile its last stretch: every paragraph translated is not yet the end
  */
-export interface Line { on: boolean; stage: 'load' | 'run'; value: number }
+export interface Line { on: boolean; value: number }
+/** the line's share for the download where a translation follows it, and the final's at the end of the translation's */
+const DOWNLOAD = 0.15, FINAL = 0.15
 export function lineOf(state: ReaderState): Line {
-  if (state.phase === 'loading') return { on: true, stage: 'load', value: state.loaded }
-  return { on: running(state), stage: 'run', value: state.progress }
+  if (state.phase === 'loading') return { on: true, value: state.loaded * (state.display === 'original' ? 1 : DOWNLOAD) }
+  const run = state.shown === 'final' ? 1 : (1 - FINAL) * state.progress
+  return { on: running(state), value: DOWNLOAD + (1 - DOWNLOAD) * run }
 }
 
 export function cardOf(state: ReaderState): Card | null {

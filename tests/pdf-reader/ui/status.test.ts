@@ -26,10 +26,18 @@ describe('the states (the reader\'s design, §8)', () => {
     expect(capsuleOf(at({ phase: 'translating', narrow: true }), none)).toMatchObject({ kind: 'narrow' })
   })
 
-  it('the line: the PDF\'s download while it loads, the paragraphs translated while a translation runs, nothing while reading', () => {
-    expect(lineOf(at({ phase: 'loading', loaded: 0.3, progress: 0.9 }))).toEqual({ on: true, stage: 'load', value: 0.3 })
-    expect(lineOf(at({ phase: 'translating', loaded: 1, progress: 0.4 }))).toEqual({ on: true, stage: 'run', value: 0.4 })
-    expect(lineOf(at({ phase: 'retranslating', progress: 0.1 }))).toEqual({ on: true, stage: 'run', value: 0.1 })
+  it('the line: one over the whole process — the PDF\'s download, the paragraphs translated, the final — never starting again (the maintainer asked why it ran twice, 2026-10-02)', () => {
+    const v = (over: Partial<ReaderState>) => lineOf(at(over)).value
+    // the download is the first stretch when a translation follows it, all of it when the original alone is shown
+    expect(lineOf(at({ phase: 'loading', loaded: 0.3, progress: 0.9 })).on).toBe(true)
+    expect(v({ phase: 'loading', loaded: 1 })).toBeCloseTo(v({ phase: 'translating', progress: 0 }))
+    expect(v({ phase: 'loading', loaded: 1, display: 'original' })).toBe(1)
+    // the paragraphs translated after it, and the final last: all translated is not the end
+    const steps = [v({ phase: 'loading', loaded: 0.5 }), v({ phase: 'translating', progress: 0 }), v({ phase: 'translating', progress: 0.5 }), v({ phase: 'translating', progress: 1 }), v({ phase: 'translating', progress: 1, shown: 'final' })]
+    for (let k = 1; k < steps.length; k++) expect(steps[k]).toBeGreaterThan(steps[k - 1] as number)
+    expect(steps.at(-2)).toBeLessThan(1)
+    expect(steps.at(-1)).toBe(1)
+    expect(lineOf(at({ phase: 'retranslating', progress: 0.1 })).on).toBe(true)
     expect(lineOf(at({ phase: 'ready', progress: 1 })).on).toBe(false)
     expect(lineOf(at({ phase: 'failed' })).on).toBe(false)
   })
