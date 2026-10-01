@@ -99,3 +99,82 @@ Then the whole-branch review (local), the maintainer's hand check on a build, an
 - The LLM path's sentences, measured with a key first.
 - Today's end marks shift some Chinese last lines 2–14 pt (report-B side finding): for the Flow rules' check when they
   arrive from the other session.
+
+## Record
+
+Branch `exp/pdf-highlight` from `a7a2a056`; every number measured 2026-10-01 on the ten papers of the investigation
+(`data/runs/highlight-ten`), investigator B's four ground-truth papers (`data/runs/highlight-gt`) and the demo papers
+(`spikes/highlight-papers.mjs`), by `spikes/highlight-gate.mjs` and `spikes/highlight-gate-browser.mjs`. The work's
+ledger, briefs, reports and reviews: `.superpowers/sdd/2026-09-30-pdf-highlight/`.
+
+### What was done
+
+- **A1 — anchoring that changes no look**: `039961ca`, `1322a934`, `726b9b85`, `54b0570d`, `15be0c86`, `27a39d04`,
+  `d6cd5807`, `7027af26`, `87f75832`; review rounds `018b7067`, `8374fc47`, `cdba354f`, `2b135a55`, `14b9b805`,
+  `a260974a`, `3e628673`, `824fb35b`, `b0db539c`, `e644c7f1`, `3af08e89`, `5957a4be`, `49077969`, `6a135e0d`.
+  Headings found 331 → 333 of 333 on arXiv's PDF and 260 → 333 on ours; cells on both sides 155 → 158; a drawing's text
+  10 → 13; displays outside a unit's marks reached (56/59 → 135/136 on the left); English words glued to a marker at a
+  full stop 295 → 42; anchoring on 02459 +7–9 % (about 2 ms an open), accepted.
+- **B1 — geometry, the block, the hit test, the paint**: `010b277f`, `f7f2df86`, `119ec57f`, `f2521e81`, `72362750`,
+  `5a941afb`, `0b7e279e`, `133ae1d1`; review round `77bbb2f6`, `5ffa4728`, `a5235251`, `6b537119`, `4155212c`,
+  `af20ff36`, `f155ddbb`, `477f308c`, `ed2eb24a`, `f5009001`, `c1a87bf5`. Points inside a painted shape lighting
+  nothing or a neighbour 7–16 % → 0 (0 of 37.5 M); fragmented displays → one block per page-and-column run; every
+  anchored unit lit (1 829 of 2 553 on both sides); per light p50 script 0.15–0.17 ms against 0.14–0.19, no layout on
+  the pointer's path; words lighting nothing or a neighbour 22 → 6.
+- **The batch before B2**: `6ae2008c` (a short line on the gutter is the page's), `8f4dcb05`, `555d7f7a` (lead walks'
+  gaps measured: no 16 pt bound), `b0c7949e` (the Node gate fails on a unit painted where nothing lights it and on any
+  move of what the geometry takes).
+- **B2 — the pin**: dropped before any code (`174b5896`).
+- **B3 — sentence level**: `3d0ed44f`, `5110d375`, `d4d83892`, `c1fef197`, `225856ac`, `851487eb`, `9d449c59`,
+  `244f37e8`, `64f3f167`, `945058b4`, `0496a10d`, `b39e64f7`, `32bb84bf`, `89a731b0`, `ef5d2709`, `6e6bffd6`,
+  `af6fce33`, `173e2013`; review round `9afe85d6`, `b38dc708`, `23f00046`, `3981c638`, `2bf624f6`, `755b5691`,
+  `70ee4313`, `b76d9f18`. Running-text units lit by sentence on both sides 0 → 965 on the ten papers (707 of more than one
+  sentence); starts on the ground truth's line 98.9–100 % (original), 100 % (translation), 98.9–100 % (arXiv's PDF);
+  English sentence boundaries through a letter on the canvas 61 of 166 → 3 (proportional widths); the record +20.7 KB on
+  02459 (2.7 %).
+- **B4 — tables and figures whole** (on `exp/pdf-highlight-floats`, merged `61619404`): `87213ef4`, `14c5ec12`,
+  `5c1db708`, `bf04b9e7`, `95f0e5dd`, `ad6036f7`; review round `98c6ce63`, `1da5ef2a`, `46952db0`, `aa3602a5`,
+  `031dc701`, `17e5bd22`, `1a5de30b`, `991d0d64`, `b7ef80da`, `046c5643`, `42cc2af9`; `d2b2b3af`, `75784f58`,
+  `ae8efd7d`, `27a3f8c6`. Figures 0 → 46 of 47, tables 0 → 52 of 52, algorithms 0 → 2 of 2; table I bounded by its own
+  rule; the floats read from the operator list the page was drawn by (asking the worker again had made pages 7–8 of
+  06701 take 326–387 ms to draw against the base's 198–224; now p50/p95 106.2/217.7 against 107.8/224.1).
+- **After the merge**: `8b0d8742` (a resting pointer lights the sentence, never the paragraph first: 4 of 6 opens → 0
+  of 8), `09878659` (a row reaches past its ink only where no float is painted: 0 points of sentences lit as a float).
+- **B3b — Google and an LLM**: `6a2cab89`, `6c13014d`, `2d6ce8f5`. Google (zh) 1 239 of 1 239 markers back in order,
+  507 of 507 units of more than one sentence aligned on the four papers.
+- **The shared splitter**: `a1331b63` — 16 of 8 015 cuts removed, each false ("Oregon v.", "Mt.", "Tab." before its
+  number …), none added.
+- **B3c — sentences from the first preview**: `2ec2ddca`. The first sentence lit after the first preview, live with
+  Microsoft: 12.6 s → 155 ms (02785), 20.1 s → 173 ms (06701); text-only starts 1 702, all on the marks' token.
+- **B5 — the documents**: `944087c5` (the reader's design §17), `c277343a` (DESIGN §16), `683dc20f` (CHANGELOG),
+  `57fe8ce4` (the gates as commands, the demo papers' maker), and this record.
+
+### Declined or dropped, and why
+
+- **The pin** (round 1's click that held its target): dropped by the maintainer on 2026-10-01 after B1's test build —
+  hover alone lights; a click levels the panes.
+- **Google by paragraph** (`69506d95`, reverted in `d6fc7b02`): with markers Google translates each sentence apart, and
+  its wording changed in 77 of 83 units; of eight pairs read two were better, three worse. The maintainer judged it about
+  even and kept Google by sentence (2026-10-01).
+- **Sentence marks in TeX**: they moved 1.9–6.6 % of the Chinese translation's words (xeCJK's glue) — the starts are
+  found by text inside the unit marks instead. **Finer than a sentence**: no signal from the free engine.
+- **A rule for the lone equation number** (2608.09746 #27) and **a 16 pt bound on lead walks** (the n-f-g table): no
+  general rule tells them apart (the maintainer's rule: general methods only); recorded as known limits.
+- **Merging a small row into the row above** to hold a hanging glyph: measured, fixed neither case and put 31 more
+  boundaries through a word; the unit is lit whole instead (13 units).
+- **Real glyph widths** from PDF.js's font data: not worth it now; the proportional estimate holds 3 of 166.
+- **06701's per-light cost** (a sweep lights three times as many shapes): left, near its limit.
+
+### Later (for #299 or a plan of its own)
+
+- The LLM path measured with a key in a test build (`spikes/highlight-sentences-tags.mjs`, ENGINE=llm); 6.3 % of units
+  over its batch cap go unmarked.
+- A1's protector half of the full-stop space (`128a0d30` on `a1/protector-stop-space`, from `next`): a small pull
+  request into `next` with the maintainer's yes.
+- The live run's order (our original right after the first preview) and one progress line over the whole run: the Flow
+  integration (F2); the highlight works either way.
+- Today's end marks shift some Chinese last lines 2–14 pt (report-B): for the Flow rules' check.
+- A quiet-machine run of the open's costs (the loaded runs' paired rounds differ by −395 to +336 ms).
+- The known limits of the reader's design §17.7: grids with subcaptions over their panels, one-sided floats, the lone
+  equation number, the table after a page-ending display, units matched under 80 % before the marks, older copies.
+- The HTML page sends Google the same markers; its wording cost was raised with the maintainer, who kept it.
