@@ -429,10 +429,13 @@ const pointer = pointerPath({
 /** where a side's pane and pages are on the screen (pointer.mjs measurePane: the pane's place as its layout has it,
  *  whatever transform draws it moving), read where the layout is known clean: a ResizeObserver's callback runs after
  *  the layout, whenever the pane or its pages change size — the pages laid, a zoom, a pinch's steps, the window, the
- *  contents panel, a display of one pane or two */
+ *  contents panel, a display of one pane or two. A pointer resting on the pane is looked at again in the next frame, by
+ *  what is kept now: a zoom's or a fit's scroll asked in its own frame, which runs before the new sizes are measured,
+ *  and what it found stayed lit until the pointer moved (Codex on #308) */
 function measure(side) {
   side.at = measurePane(side.container, side.viewer.viewer, side.viewer._pages ?? [])
   side.scrollX = side.container.scrollLeft; side.scrollY = side.container.scrollTop
+  pointer.again(side)
 }
 const measuredSide = new WeakMap() // a pane's container and page stack → its side, the one coming in too (replaceRight)
 const measured = new ResizeObserver(entries => { for (const s of new Set(entries.map(e => measuredSide.get(e.target)))) if (s) measure(s) })
