@@ -44,8 +44,8 @@ const heightAt = (u, design, type, f = 1) => linesOf(u, design, type, f) * (desi
 export const heightAtSize = (u, script, type, f = 1) => heightAt(u, DESIGN[script], type, f)
 /** each unit's predicted height at a type and leading one, by its index: what flowLeads takes from a prediction */
 export const unitHeights = (units, script, type) => new Map(units.map(u => [u.i, heightAt(u, DESIGN[script], type)]))
-/** each unit's predicted lines at a type, by its index; with `sizes`, each at its own face (flowType's) */
-export const unitLines = (units, script, type, sizes = null) => new Map(units.map(u => [u.i, linesOf(u, DESIGN[script], type, sizes?.get(u.i) ?? 1)]))
+/** each unit's predicted lines at a type, by its index */
+export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, linesOf(u, DESIGN[script], type)]))
 
 /**
  * The leading along the paper, unit by unit: the one that makes the translation as tall as the original over the
@@ -92,14 +92,15 @@ export const unitLines = (units, script, type, sizes = null) => new Map(units.ma
  * fraction from the window's, however far behind the text is, so that no paragraph stands out from its neighbours: a
  * jump the preview measured, taken back within the horizon, set Korean 2608.05876's paragraphs after it a quarter
  * looser than the text around them, and the owner preferred the version without it to one nearer the original's places.
- * `shrink` ({ min, heightAt(i, f) }): a unit whose stretch runs long past the floor of the range — the window's
- * leading below it; Japanese and Korean set no tighter than the paper's own, and such a stretch stays long — is set at
- * a face `f` times the type's, as little smaller as brings it to the height the window's leading would give it
- * (heightAt: its height at leading one at that face), never below `min`, its leading the floor (the owner, 2026-10-01:
- * Korean 2608.18090's sections 7 and 8 ran 0.16 page long at the floor, its references started a page later, and the
- * checklist after them took a page more). Only what the stretch runs long: the drift taken back moves the leading
- * alone — taken back by the face as well, a preview late where a float had moved set Korean 2608.24839's next stretch
- * at 0.95, and its final came out a page short. The face's factor by unit is flowType's `sizes`.
+ * `shrink` ({ min, heightAt(i, f) }): where the units run long past the floor of the range — Japanese and Korean set
+ * no tighter than the paper's own — a unit is set at a face `f` times the type's, as little smaller as brings it to the
+ * height the leading it wants would give it (heightAt: its height at leading one at that face), never below `min`, its
+ * leading the floor (the owner, 2026-10-01: Korean 2608.18090's sections 7 and 8 ran 0.16 page long at the floor, its
+ * references started a page later, and the checklist after them took a page more). What it wants is the flow of the
+ * units' own heights alone — the window's leading, what the floor has left so far taken back, started again at a
+ * forced break — never where the preview's text stood: taken back by the face too, a preview late where a float had
+ * moved set Korean 2608.24839's next stretch at 0.95, and its final came out a page short. The face's factor by unit is
+ * flowType's `sizes`.
  * `heights`: Map(unit index → the translation's height at leading one), from unitHeights or a compile's lines. The
  * leading is × the paper's for CJK, × the size's for an alphabet, as the type's is
  */
@@ -152,30 +153,35 @@ export function flowType(units, script, heights, { window = 50, horizon = window
     })
   }
   const out = new Map(), sizes = new Map()
-  let lo = 0, hi = 0, o = 0, t = 0, drift = 0, offset = 0
+  const take = d => clamp(back > 0 && back < Infinity ? 1 - d / back : 1, [1 - rate, 1 + rate])
+  // `own`: the flow the units' own heights give, the measured places left out — where shrink takes its face from
+  let lo = 0, hi = 0, o = 0, t = 0, drift = 0, offset = 0, own = 0
   for (let k = 0; k < list.length; k++) {
     for (; hi < list.length && mid[hi] <= mid[k] + half; hi++) { o += list[hi].lo * list[hi].bs; t += heights.get(list[hi].i) }
     for (; mid[lo] < mid[k] - half; lo++) { o -= list[lo].lo * list[lo].bs; t -= heights.get(list[lo].i) }
     const i = list[k].i
     // past a forced break the final starts where the preview did: what its heights parted from the preview's before
     // it the break took
-    if (breaks.has(i) && accountAt.has(i)) drift = accountAt.get(i)
+    if (breaks.has(i) && accountAt.has(i)) { drift = accountAt.get(i); own = 0 }
     if (offsetAt.has(i)) offset = offsetAt.get(i)
     const at = drift + offset, near = toJump.get(i), ratio = o / t
     const x = near != null
       ? clamp((list[k].lo * list[k].bs - lead * (1 - near / local) - at) / heights.get(i), design.lead)
-      : clamp(ratio * clamp(back > 0 && back < Infinity ? 1 - (at + (local ? 0 : lead)) / back : 1, [1 - rate, 1 + rate]), design.lead)
-    // where the stretch itself runs long past the floor of the leading: the face as little smaller as brings the unit
-    // to the height the stretch's leading would give it (the drift taken back moves the leading alone)
+      : clamp(ratio * take(at + (local ? 0 : lead)), design.lead)
+    // where the units run long past the floor of the leading — the stretch's own leading below it, or what the floor
+    // has left of it so far — the face as little smaller as brings the unit to the height that leading would give it;
+    // where the preview's text stood moves the leading alone
+    const mine = ratio * take(own)
     let h = heights.get(i)
-    if (shrink && ratio < design.lead[0]) {
-      const goal = (h * ratio) / design.lead[0]
+    if (shrink && mine < design.lead[0]) {
+      const goal = (h * mine) / design.lead[0]
       let f = 1
       while (f - SHRINK_STEP >= shrink.min - 1e-9 && shrink.heightAt(i, f) > goal) f = Math.round((f - SHRINK_STEP) * 1e6) / 1e6
       if (f < 1) { sizes.set(i, f); h = shrink.heightAt(i, f) }
     }
     out.set(i, x)
     drift += h * x - list[k].lo * list[k].bs
+    own += h * clamp(mine, design.lead) - list[k].lo * list[k].bs
   }
   return { leads: out, sizes }
 }

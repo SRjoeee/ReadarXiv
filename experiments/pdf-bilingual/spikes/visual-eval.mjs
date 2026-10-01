@@ -348,8 +348,9 @@ async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, p
   const strategy = strategiesFor(meta, lang)[0], theorems = theoremEnvs(files), { em } = PARAMS[lang]
   const g = genericType({ paper, files, translated, lang, fonts, probe, sizes, oLog })
   const cjk = DESIGN[g.script].cjk, lo = readLines(oLog)
-  // with `shrink` (CJK), a unit the floor of the leading cannot bring back set at a face down to that percentage
-  const faceMin = cjk && shrink ? shrink / 100 : 0, byIndex = new Map(g.list.map(u => [u.i, u]))
+  // with `shrink` (CJK), the final sets a unit the floor of the leading cannot bring back at a face down to that
+  // percentage; the preview keeps the full face, so that its lines are each unit's own at it
+  const faceMin = cjk && shrink ? shrink / 100 : 0
   const faceStats = faces => (faces?.size ? { n: faces.size, min: Math.min(...faces.values()) } : null)
   // a unit's leading × the paper's (CJK) or × its size's (an alphabet) as \\axtlead@<unit> takes it, × the font size
   const factors = leads => new Map([...leads].filter(([i]) => lo.get(i)?.size).map(([i, l]) => [i, (l * lo.get(i).bs) / lo.get(i).size]))
@@ -358,23 +359,19 @@ async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, p
   const floatsAt = new Map(floats ? units.map((u, i) => [u, i, om0.marks.get(`${i}s`)]).filter(([u, , m]) => u.kind === 'caption' && m).map(([, i, m]) => [i, { page: m.page + 1, col: om0.twoColumn && m.x >= om0.width / 2 ? 1 : 0 }]) : [])
   const optsOf = (x, leads, faces) => ({ ...genericOpts(x, { strategy, fonts, em, theorems, paper, translated }), leads: factors(leads), floatsAt, ...(faces?.size ? { sizes: faces } : {}) })
   const spread = leads => { const v = [...leads.values()].sort((a, b) => a - b); return v.length ? { p10: v[Math.floor(v.length * 0.1)], median: v[v.length >> 1], p90: v[Math.floor(v.length * 0.9)] } : null }
-  const t1 = performance.now(), flow1 = flowType(g.list, g.script, unitHeights(g.list, g.script, g.type), { window, horizon, ahead, rate: paced, shrink: faceMin ? { min: faceMin, heightAt: (i, f) => heightAtSize(byIndex.get(i), g.script, g.type, f) } : null })
-  const leads1 = flow1.leads, faces1 = flow1.sizes, ms1 = performance.now() - t1
-  const r1 = await compile(work, `${key}-1`, paper, files, lockedFiles(paper, translated, optsOf(g, leads1, faces1)), { engine: strategy.engine, rerun: true })
+  const t1 = performance.now(), leads1 = flowType(g.list, g.script, unitHeights(g.list, g.script, g.type), { window, horizon, ahead, rate: paced }).leads, ms1 = performance.now() - t1
+  const r1 = await compile(work, `${key}-1`, paper, files, lockedFiles(paper, translated, optsOf(g, leads1)), { engine: strategy.engine, rerun: true })
   let second = null
   if (r1.ok) {
     const t2 = performance.now(), lines = readLines(r1.log), got = g.list.filter(u => lines.get(u.i))
     // what the first compile measured at the type's own leading, the knobs solved again from it, and each unit's
     // measured lines carried to the new knobs by the prediction's change (none where only the leading changed)
-    // (a unit the preview set at a smaller face: its lines as the full face would have taken them, by the prediction)
-    const plain = unitLines(g.list, g.script, g.type), sized = unitLines(g.list, g.script, g.type, faces1)
-    const full = u => (lines.get(u.i).lines * plain.get(u.i)) / sized.get(u.i)
     let o = 0, t = 0
-    for (const u of got) { o += u.lo * u.bs; t += full(u) * g.type.lead * (cjk ? 1 : g.type.size) * u.bs }
+    for (const u of got) { o += u.lo * u.bs; t += lines.get(u.i).lines * g.type.lead * (cjk ? 1 : g.type.size) * u.bs }
     const measured = o ? t / o : 1, sizes2 = readSizeProbe(r1.log) ?? sizes
     const corrected = correctUnits(g.list, g.script, g.type, measured), type = solveType(corrected, g.script, sizes2)
     const before = unitLines(corrected, g.script, g.type), after = unitLines(corrected, g.script, type)
-    const heights = new Map(got.map(u => [u.i, ((full(u) * after.get(u.i)) / before.get(u.i)) * (cjk ? 1 : type.size) * u.bs])), cu = new Map(corrected.map(u => [u.i, u]))
+    const heights = new Map(got.map(u => [u.i, ((lines.get(u.i).lines * after.get(u.i)) / before.get(u.i)) * (cjk ? 1 : type.size) * u.bs])), cu = new Map(corrected.map(u => [u.i, u]))
     // with `phys`, the drift the preview measured at each unit, pages and floats and all, is what the final corrects
     // (`phys` a number of lines: the measure taken only where it parts from the heights' account by more than that)
     const bsMedian = [...got.map(u => u.bs)].sort((a, b) => a - b)[got.length >> 1] ?? 12
@@ -391,8 +388,8 @@ async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, p
   if (r.ok) copyFileSync(r.pdf, join(dir, `${key}.pdf`)); else { index.failed[key] = firstError(r.log); rmSync(join(dir, `${key}.pdf`), { force: true }); delete index.numbers[key] }
   const om = await marksOf(oPdf), orig = heights(units, om, lo)
   if (r.ok) index.numbers[key] = await numbersFor(units, orig, om, r.pdf, r.log, {
-    window, horizon, ahead, type: (r2?.ok ? second : g).type, leads: spread(r2?.ok ? second.leads : leads1), faces: faceStats(r2?.ok ? second.faces : faces1), solveMs: g.ms + ms1 + (second?.ms ?? 0), compiles: r2?.ok ? 2 : 1,
-    first: r1.ok ? { type: g.type, leads: spread(leads1), faces: faceStats(faces1), measured: second?.measured, numbers: await numbersFor(units, orig, om, r1.pdf, r1.log) } : null,
+    window, horizon, ahead, type: (r2?.ok ? second : g).type, leads: spread(r2?.ok ? second.leads : leads1), faces: faceStats(r2?.ok ? second.faces : null), solveMs: g.ms + ms1 + (second?.ms ?? 0), compiles: r2?.ok ? 2 : 1,
+    first: r1.ok ? { type: g.type, leads: spread(leads1), measured: second?.measured, numbers: await numbersFor(units, orig, om, r1.pdf, r1.log) } : null,
   })
   // other variants of the same paper may be compiling alongside: their numbers as they are now, this one's added
   const now = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'))
