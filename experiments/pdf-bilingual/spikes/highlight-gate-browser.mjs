@@ -315,6 +315,8 @@ async function checks(b) {
 //  - the real pointer on a grid inside each element a float paints (a dozen floats) lights the float (or a smaller unit
 //    painted there); both sides paint it, a figure with its outline and its caption washed on both
 //  - a table's cell (one the side located) lights its table, cells being found to try
+//  - a page whose drawing failed has its floats from the list the worker is asked for, not from the one it was drawn
+//    by (stopped short where its stream failed); drawn without a fault, from the drawn one, the worker not asked
 //  - a page's floats' cost on the main thread at its first drawing (timing.floats: paths read, floats made), reported
 //  Each made to fail once (B4, a build each): the pointer's frame without floatHitOf (147 of 240 points lit nothing, the
 //  cell lit itself); no floats made (20 pages without, none on both sides); figures washed, not outlined (0 of 4
@@ -369,8 +371,55 @@ async function floatRetry(b, paper) {
   check(`${b.label} ${paper}: a page whose floats failed at its first drawing gets them at its next`, r.p > 0 && r.spoiled > 0 && !r.first && r.after, JSON.stringify(r))
   await page.close()
 }
+/** a page drawn with an error (pagerendered's `error`): the list it was drawn by may have stopped short — PDF.js marks a
+ *  list whose stream failed complete — so its floats come from the list the worker is asked for (the review of B4's
+ *  fix round, minor 7a). The page's first drawing held back from the floats, its drawn list cut to its first operation
+ *  and the page's drawing reported failed: the worker is asked, and the floats are those of the page drawn again
+ *  without a fault, which read the drawn list and ask nothing */
+async function floatDrawError(b, paper) {
+  const page = await open(b, paper, { sync: 'off' })
+  const r = await page.evaluate(async () => {
+    const d = window.__reader.debug, s = d.left
+    const wants = p => (s.geo.unitsOn[p] ?? []).some(id => d.unitKind.get(id) === 'caption')
+    let p = 0
+    for (let n = 1; n <= s.doc.numPages && !p; n++) if (wants(n) && d.pageView(s, n).renderingState === 0 && !d.floatsOn(s, n)) p = n
+    if (!p) return { p }
+    const wait = async ok => { for (let t = 0; t < 120 && !ok(); t++) await new Promise(r => setTimeout(r, 50)) }
+    const asked = (s.geo.floatsAsked ??= new Set())
+    asked.add(p)
+    s.viewer.currentPageNumber = p
+    await wait(() => d.pageView(s, p).renderingState === 3)
+    await new Promise(r => setTimeout(r, 300))
+    const pv = d.pageView(s, p), pg = pv.pdfPage
+    let st = null
+    for (const x of pg._intentStates.values()) if (x.displayReadyCapability && x.operatorList?.lastChunk) st = x
+    if (!st) return { p, held: false }
+    let calls = 0
+    const getOperatorList = pg.getOperatorList
+    pg.getOperatorList = function (...a) { calls++; return getOperatorList.apply(this, a) }
+    const show = fs => JSON.stringify((fs ?? []).map(f => [f.id, f.kind, ...['x0', 'y0', 'x1', 'y1'].map(k => Math.round(f.region[k] * 10) / 10)]))
+    const full = st.operatorList
+    st.operatorList = { ...full, fnArray: full.fnArray.slice(0, 1), argsArray: full.argsArray.slice(0, 1), lastChunk: true }
+    asked.delete(p)
+    s.eventBus.dispatch('pagerendered', { source: pv, pageNumber: p, cssTransform: false, timestamp: performance.now(), error: new Error('the operator list\'s stream failed') })
+    st.operatorList = full
+    await wait(() => d.floatsOn(s, p))
+    const got = show(d.floatsOn(s, p)), askedOnError = calls
+    calls = 0
+    s.geo.floats.delete(p)
+    asked.delete(p)
+    s.eventBus.dispatch('pagerendered', { source: pv, pageNumber: p, cssTransform: false, timestamp: performance.now() })
+    await wait(() => d.floatsOn(s, p))
+    const want = show(d.floatsOn(s, p))
+    pg.getOperatorList = getOperatorList
+    return { p, held: true, askedOnError, askedDrawn: calls, got, want }
+  })
+  check(`${b.label} ${paper}: a page whose drawing failed has its floats from the worker's list, a page drawn whole from its drawn one`, r.held && r.askedOnError > 0 && r.askedDrawn === 0 && r.got === r.want && r.want !== '[]', JSON.stringify(r))
+  await page.close()
+}
 async function floatChecks(b) {
   if (FLOAT_CHECK.length) await floatRetry(b, FLOAT_CHECK[0])
+  if (FLOAT_CHECK.length) await floatDrawError(b, FLOAT_CHECK[0])
   for (const paper of FLOAT_CHECK) {
     // the sync off: each side stands where it is put (a settle's glide moved the pane under the pointer's grid)
     const page = await open(b, paper, { sync: 'off' })

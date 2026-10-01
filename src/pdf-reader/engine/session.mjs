@@ -414,17 +414,18 @@ const withFloats = (side, at, hit) => floatHitOf(side.geo, at.page, at.x, at.y, 
  * A page's floats, made on its first drawing from what PDF.js draws it by (its figures, its rules and marks), once a
  * layout; never on the pointer's path. A page without a caption asks for nothing. A drawing cancelled before the page's
  * operator list came rejects it: the page is asked again at its next drawing (round 1: 2608.06701's page 3 on the left,
- * at 2x, never got its floats)
+ * at 2x, never got its floats). `error` the drawing's, where it failed (pagerendered's)
  */
-function floatsFor(side, p) {
+function floatsFor(side, p, error = null) {
   const L = side.geo
   if (!L || !wantsFloats(L, p) || floatsOn(L, p)) return
   const asked = (L.floatsAsked ??= new Set())
   if (asked.has(p)) return
   asked.add(p)
-  // the list the page was just drawn by, else asked for; a draft preview's figures are the frames set where its images
-  // go (paintFigures)
-  const shown = drawnList(side, p)
+  // the list the page was just drawn by, else asked for — asked for where its drawing failed (pagerendered's `error`):
+  // PDF.js marks a list whose stream failed complete, and it may have stopped short (the review of B4's fix round); a
+  // draft preview's figures are the frames set where its images go (paintFigures)
+  const shown = error ? null : drawnList(side, p)
   const ops = shown ? Promise.resolve(shown) : side.doc.getPage(p).then(page => page.getOperatorList({ annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS }))
   const figures = side.frames ? side.frames.then(f => f.get(p) ?? []) : shown ? ops.then(list => figureRegions(list, pdfjsLib.OPS)) : regionsOf(side, p)
   Promise.all([figures, ops]).then(([regions, list]) => {
@@ -1434,7 +1435,7 @@ function attach(side) {
     void alignClick(side, e)
   })
   // PDF.js re-renders a page's div on zoom and as pages come into view: the highlight and the figures are laid again there
-  side.eventBus.on('pagerendered', ({ pageNumber }) => {
+  side.eventBus.on('pagerendered', ({ pageNumber, error }) => {
     if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start
     paint(side)
     // the page's highlight geometry, on its first drawing (a page never drawn never needs it)
@@ -1444,7 +1445,7 @@ function attach(side) {
     const at = side.laid.get(pageNumber)
     if (side !== left && (at === undefined || (side.frames && at !== pageView(side, pageNumber).viewport.scale))) side.figs.set(pageNumber, paintFigures(side, pageNumber).catch(e => console.warn('[figures]', e)))
     // its tables and figures, on its first drawing (floatsFor)
-    floatsFor(side, pageNumber)
+    floatsFor(side, pageNumber, error)
   })
   // the overlays outlive a page drawn again (overlay.mjs keepOverlays): each page's div watched from the start
   side.eventBus.on('pagesinit', () => { for (const pv of side.viewer._pages) side.keeper.observe(pv.div) })
