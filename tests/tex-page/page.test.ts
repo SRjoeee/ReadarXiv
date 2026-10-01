@@ -1,7 +1,7 @@
 // The TeX page's protocol (experiments/pdf-bilingual/poc-site/tex-page.mjs), version 2 beside version 1: the reader of
 // today (session.mjs openCompiler) sends { init, endpoint }, a project and compiles, and waits for init-done and
 // compiled; version 2 adds `ready`'s versions, init's hints, progress during first downloads, and the network failures
-// a compile met; the page's own downloads are retried, timed out and checked. BusyTeX's runner, the network and Cache Storage are fakes here; the
+// a compile met — the page's own downloads' too, which are retried, timed out and checked. BusyTeX's runner, the network and Cache Storage are fakes here; the
 // page itself runs in a browser in tex-page/measure.mjs and network-check.mjs
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
@@ -69,10 +69,12 @@ function cacheStorage(names: string[] = [], { refuse = false } = {}) {
   return { stores, caches: { open, keys: async () => [...stores.keys()], delete: async (name: string) => stores.delete(name) } }
 }
 
-/** a fake BusyTeX: the runner and its engines; `failNext` the names its next compile reports as failed */
+/** a fake BusyTeX: the runner and its engines; `failNext` the names its next compile reports as failed, `failStart`
+ *  makes the next runner's initialize throw */
 function busytex() {
   const made: { config: Record<string, unknown>; registered: unknown[]; worker: { sent: unknown[] }; terminated: boolean; compiles: unknown[] }[] = []
   let failures: string[] = []
+  let startFails = false
   class Runner {
     rec: (typeof made)[number]
     listeners: ((e: { data: unknown }) => void)[] = []
@@ -89,7 +91,7 @@ function busytex() {
         removeEventListener: (_t, f) => { this.listeners = this.listeners.filter(g => g !== f) },
       }
     }
-    async initialize() {}
+    async initialize() { if (startFails) { startFails = false; throw new Error('the worker did not start') } }
     async writeTexliveRemoteFiles(files: unknown[]) { this.rec.registered.push(...files) }
     terminate() { this.rec.terminated = true }
     async compile(options: Record<string, unknown>) {
@@ -101,7 +103,7 @@ function busytex() {
     }
   }
   const engine = (name: string) => class { runner: Runner; constructor(r: Runner) { this.runner = r } compile(o: Record<string, unknown>) { return this.runner.compile({ ...o, engine: name }) } }
-  return { made, Runner, Engines: { PdfLatex: engine('pdflatex'), XeLatex: engine('xelatex'), LuaLatex: engine('lualatex') }, failNext: (names: string[]) => { failures = names } }
+  return { made, Runner, Engines: { PdfLatex: engine('pdflatex'), XeLatex: engine('xelatex'), LuaLatex: engine('lualatex') }, failNext: (names: string[]) => { failures = names }, failStart: () => { startFails = true } }
 }
 
 const digest = async (bytes: Uint8Array) => createHash('sha256').update(bytes).digest()
@@ -223,10 +225,11 @@ describe('init', () => {
     expect(t.bt.made[0]?.registered).toContainEqual({ name: 'FandolSong-Regular.otf', format: 47, content: zeros(30) })
   })
 
-  it('an engine file of the wrong length is not kept, tried again, and then fails the init', async () => {
+  it('an engine file of the wrong length is not kept, tried again, and then fails the init as the network\'s', async () => {
     const store = cacheStorage()
     const t = page({ caches: store, script: { '/e/e1/busytex.wasm': [{ length: 7 }, { length: 7 }] } })
     await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
+    expect(t.sent.find(m => m.type === 'init-done')).toMatchObject({ type: 'init-done', network: ['busytex.wasm'] })
     expect(t.sent.find(m => m.type === 'init-done')?.error).toContain('busytex.wasm: 7 bytes, not the 1000 the build says')
     expect(store.stores.get('tex-engine-e1')?.has('/e/e1/busytex.wasm')).toBe(false)
   })
@@ -238,10 +241,19 @@ describe('init', () => {
     expect(t.store.stores.get('tex-fonts-t1')?.size ?? 0).toBe(0)
   })
 
-  it('an index whose bytes are not the ones its name says fails the init', async () => {
+  it('an index whose bytes are not the ones its name says fails the init as the network\'s', async () => {
     const t = page({ build: { ...BUILD, index: 'index-000000000000.txt' } })
     await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
-    expect(t.sent.find(m => m.type === 'init-done')?.error).toContain('index-000000000000.txt: not the bytes its name says')
+    expect(t.sent.find(m => m.type === 'init-done')).toMatchObject({ type: 'init-done', network: ['index-000000000000.txt'] })
+  })
+
+  it('a BusyTeX that does not start fails the init, not as the network\'s', async () => {
+    const t = page()
+    t.bt.failStart()
+    await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
+    expect(t.sent.find(m => m.type === 'init-done')).toMatchObject({ type: 'init-done', network: [] })
+    expect(t.sent.find(m => m.type === 'init-done')?.error).toContain('the worker did not start')
+    expect(t.bt.made[0]?.terminated).toBe(true)
   })
 })
 
@@ -269,16 +281,53 @@ describe('compile', () => {
     expect(t.sent.find(m => m.type === 'compiled')?.network).toEqual(['cmr10'])
   })
 
-  it('an engine whose preload was not hinted brings the page up again with it, the common files handed over again', async () => {
+  it('an engine whose preload was not hinted: a new BusyTeX with its part and its common files, said in progress, before the old one goes', async () => {
     const t = page()
     await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
     await t.send({ type: 'project', key: 'p', files: [] })
+    const said = t.sent.length
     await t.send({ ...compile, engine: 'xelatex' })
     expect(t.bt.made).toHaveLength(2)
     expect(t.bt.made[0]?.terminated).toBe(true)
     expect(t.bt.made[1]?.config.preloadDataPackages).toEqual(['/e/e1/tl-common.js', '/e/e1/tl-pdftex.js', '/e/e1/tl-xetex.js'])
-    expect(t.bt.made[1]?.registered).toContainEqual({ name: 'article.cls', format: 26, content: zeros(10) })
+    expect(t.bt.made[1]?.registered).toEqual(expect.arrayContaining([{ name: 'article.cls', format: 26, content: zeros(10) }, { name: 'fontspec.sty', format: 26, content: zeros(20) }]))
+    expect(t.net.urls()).toContain('/t/t1/tex/latex/fontspec/fontspec.sty')
+    expect(t.sent.slice(said).some(m => m.type === 'progress' && m.phase === 'engine')).toBe(true)
     expect(t.bt.made[1]?.compiles[0]).toMatchObject({ engine: 'xelatex' })
+  })
+
+  it('an engine that cannot be brought up is the network\'s failure, and the running one stays for the next compile', async () => {
+    const t = page({ script: { '/e/e1/tl-xetex.data': ['drop', 'drop'] } })
+    await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
+    await t.send({ type: 'project', key: 'p', files: [] })
+    await t.send({ ...compile, engine: 'xelatex' })
+    expect(t.sent.find(m => m.type === 'compiled')).toMatchObject({ id: 1, ok: false, network: ['tl-xetex.data'] })
+    expect(t.bt.made[0]?.terminated).toBe(false)
+    await t.send({ ...compile, id: 2 })
+    expect(t.sent.find(m => m.type === 'compiled' && m.id === 2)).toMatchObject({ ok: true })
+  })
+
+  it('a new BusyTeX that does not start is let go, and the running one stays', async () => {
+    const t = page()
+    await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
+    await t.send({ type: 'project', key: 'p', files: [] })
+    t.bt.failStart()
+    await t.send({ ...compile, engine: 'xelatex' })
+    expect(t.sent.find(m => m.type === 'compiled')).toMatchObject({ id: 1, ok: false, network: [] })
+    expect(t.bt.made.map(r => r.terminated)).toEqual([false, true])
+    await t.send({ ...compile, id: 2 })
+    expect(t.sent.find(m => m.type === 'compiled' && m.id === 2)).toMatchObject({ ok: true })
+    expect(t.bt.made[0]?.compiles).toHaveLength(1)
+  })
+
+  it('after an init that failed, a compile tries the init again with its hints', async () => {
+    const t = page({ script: { '/e/e1/busytex.wasm': ['drop', 'drop'] } })
+    await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
+    expect(t.sent.find(m => m.type === 'init-done')).toMatchObject({ network: ['busytex.wasm'] })
+    await t.send({ type: 'project', key: 'p', files: [] })
+    await t.send(compile)
+    expect(t.sent.find(m => m.type === 'compiled')).toMatchObject({ ok: true })
+    expect(t.bt.made.at(-1)?.config.preloadDataPackages).toEqual(['/e/e1/tl-common.js', '/e/e1/tl-pdftex.js'])
   })
 
   it('an engine with no slim preload (LuaLaTeX) gets every package: the whole of the preloaded tier', async () => {

@@ -6,15 +6,24 @@
 //   → { type: 'init', protocol: 2, engines, fonts }     hints: the engines the visit will use (pdflatex, xelatex,
 //                                                       lualatex; default the first two) and the scripts whose CJK
 //                                                       faces it will set (Hans, Hant, Jpan, Kore; default none)
-//   ← { type: 'progress', phase, loaded, total }        during downloads: 'engine' (BusyTeX and its preloads),
-//                                                       'files' (the common files, and the fonts hinted); bytes
-//   ← { type: 'init-done', protocol: 2, ms } | { type: 'init-done', error }
+//   ← { type: 'progress', phase, loaded, total }        during downloads, an engine switch's too: 'engine' (BusyTeX
+//                                                       and its preloads), 'files' (the common files, and the fonts
+//                                                       hinted); bytes
+//   ← { type: 'init-done', protocol: 2, ms } | { type: 'init-done', error, network }
+//                                                       error: no compiler. network: the page's own downloads that
+//                                                       failed for a network reason, by file name (empty: the failure
+//                                                       is not the network's)
 //   → { type: 'project', key, files: [{ path, content }] }   the package's files, kept for every compile of it
 //   → { type: 'compile', id, key, main, engine, rerun, bibtex, overrides: [{ path, content }] }
-//   ← { type: 'compiled', id, ok, ms, pdf (transferred), aux, bbl, log, network }
-//                                                       network: the files the compile could not fetch for a network
+//   ← { type: 'compiled', id, ok, ms, pdf (transferred), aux, bbl, log, network } | { type: 'compiled', id, ok: false,
+//     error, network }                                  network: the files the compile could not fetch for a network
 //                                                       reason (no answer, a timeout, a server's error), each asked
-//                                                       twice; never a file the tree does not have
+//                                                       twice; never a file the tree does not have. error: the page
+//                                                       failed, not TeX — no log; network as init-done's (an engine
+//                                                       switch's downloads)
+//   A compile after an init that failed brings BusyTeX up first, with that init's hints. An engine switch brings up a
+//   new BusyTeX with the added engine's preload and common files before the running one goes, which stays when the new
+//   one cannot be brought up.
 // Protocol 1 (the reader of 2026-10-01) is answered too: its init's `endpoint` is ignored — the page reaches its own
 // tree — and it reads none of the new fields.
 //
@@ -64,9 +73,11 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
   const order = Object.keys(build.packages)
   const projects = new Map()
   let queue = Promise.resolve()
-  /** the running BusyTeX: { runner, packages }, and what every start hands it: the index's text, the common files */
+  /** the running BusyTeX: { runner, packages }; what every start hands it: the index's text, the common files */
   let state = null
   let shared = null
+  /** the last init's hints, for an init that failed and is tried again by the next compile */
+  let hints = null
 
   const packagesFor = engines => {
     const want = new Set()
@@ -200,7 +211,7 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
 
   /** the manifest's entries for these engines and scripts, fetched in parallel → [{ name, format, content }]; an entry
    *  whose file cannot be fetched is left out: the compile asks for it if it needs it */
-  const commonFiles = async (engines, scripts, progress) => {
+  const manifestFiles = async (engines, scripts, progress) => {
     const plain = [], fonts = []
     for (const e of new Set(engines.map(engineOf))) plain.push(...(build.manifest.engines[e] ?? []))
     for (const s of scripts) fonts.push(...(build.manifest.fonts[s] ?? []))
@@ -220,58 +231,88 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
     return out
   }
 
-  /** BusyTeX with these packages, its index and common files handed over */
+  /** BusyTeX with these packages, its index and common files handed over; one that fails to come up is let go */
   const start = async packages => {
     const runner = new Runner({ busytexBasePath: build.engine.replace(/\/$/, ''), preloadDataPackages: packages.map(p => `${build.engine}tl-${p}.js`) })
-    await runner.initialize(true)
-    const index = await shared.index
-    await new Promise(resolve => {
-      const ack = e => { if (e.data?.axt_tree_ready) { runner.worker.removeEventListener('message', ack); resolve() } }
-      runner.worker.addEventListener('message', ack)
-      runner.worker.postMessage({ axt_tree: { base: build.tree, index } })
-    })
-    const files = await shared.files
-    if (files.length) await runner.writeTexliveRemoteFiles(files)
-    return { runner, packages }
+    try {
+      await runner.initialize(true)
+      const index = await shared.index
+      await new Promise(resolve => {
+        const ack = e => { if (e.data?.axt_tree_ready) { runner.worker.removeEventListener('message', ack); resolve() } }
+        runner.worker.addEventListener('message', ack)
+        runner.worker.postMessage({ axt_tree: { base: build.tree, index } })
+      })
+      const files = await shared.files
+      if (files.length) await runner.writeTexliveRemoteFiles(files)
+      return { runner, packages }
+    } catch (e) {
+      runner.terminate()
+      throw e
+    }
   }
   const engineAssets = packages => [[`${build.engine}busytex.wasm`, build.wasm], ...packages.map(p => [`${build.engine}tl-${p}.data`, build.packages[p]])]
 
-  async function init(msg, reply) {
-    if (state) return { type: 'init-done', protocol: PROTOCOL, ms: 0 }
-    const t0 = now()
-    const v2 = msg.protocol >= 2
-    const engines = v2 && Array.isArray(msg.engines) && msg.engines.length ? msg.engines : DEFAULT_ENGINES
-    const scripts = v2 && Array.isArray(msg.fonts) ? msg.fonts : []
+  /** BusyTeX brought up for these hints: its engine and preloads, the index and the common files, in parallel */
+  async function bringUp({ engines, scripts }, reply) {
     const packages = packagesFor(engines)
     const dropped = dropOldCaches().catch(() => {})
     const engineProgress = reporter(reply, 'engine')
     const engineP = cached(engineAssets(packages), engineCache, engineProgress, false).then(() => engineProgress.end())
     shared = {
       index: indexText(),
-      files: commonFiles(engines, scripts, reporter(reply, 'files')),
+      files: manifestFiles(engines, scripts, reporter(reply, 'files')),
       extra: Promise.all((build.extra ?? []).map(async path => ({ path, content: await download(`${build.page}extra/${path}`) }))),
+      engines: new Set(engines.map(engineOf)),
     }
     shared.index.catch(() => {})
     shared.extra.catch(() => {})
-    await engineP
-    state = await start(packages)
+    try {
+      await engineP
+      await shared.index
+      state = await start(packages)
+    } catch (e) {
+      shared = null
+      throw e
+    }
     await dropped
+  }
+
+  async function init(msg, reply) {
+    if (state) return { type: 'init-done', protocol: PROTOCOL, ms: 0 }
+    const t0 = now()
+    const v2 = msg.protocol >= 2
+    hints = {
+      engines: v2 && Array.isArray(msg.engines) && msg.engines.length ? msg.engines : DEFAULT_ENGINES,
+      scripts: v2 && Array.isArray(msg.fonts) ? msg.fonts : [],
+    }
+    await bringUp(hints, reply)
     return { type: 'init-done', protocol: PROTOCOL, ms: Math.round(now() - t0) }
   }
 
-  /** the running BusyTeX has the engine's packages, or is started again with them added */
-  async function ensureEngine(engine) {
+  /** the running BusyTeX has the engine's packages, or a new one is brought up with them added — and with the added
+   *  engine's common files — before the old one goes: a failure leaves the old one running */
+  async function ensureEngine(engine, reply) {
     const need = packagesFor([engine])
     if (need.every(p => state.packages.includes(p))) return
     const packages = order.filter(p => need.includes(p) || state.packages.includes(p))
-    await cached(engineAssets(packages), engineCache, reporter(() => {}, 'engine'), false)
+    const engineProgress = reporter(reply, 'engine')
+    await cached(engineAssets(packages), engineCache, engineProgress, false)
+    engineProgress.end()
+    if (!shared.engines.has(engineOf(engine))) {
+      const before = await shared.files
+      const added = await manifestFiles([engine], [], reporter(reply, 'files'))
+      shared.files = Promise.resolve([...before, ...added.filter(f => !before.some(g => g.name === f.name && g.format === f.format))])
+      shared.engines.add(engineOf(engine))
+    }
+    const next = await start(packages)
     state.runner.terminate()
-    state = await start(packages)
+    state = next
   }
 
-  async function compile(msg) {
-    if (!state) throw new Error('compile before init')
-    await ensureEngine(msg.engine)
+  async function compile(msg, reply) {
+    // an init that failed is tried again, with its hints, before the compile
+    if (!state) await bringUp(hints ?? { engines: DEFAULT_ENGINES, scripts: [] }, reply)
+    await ensureEngine(msg.engine, reply)
     const t0 = now()
     const files = new Map(projects.get(msg.key) ?? [])
     for (const o of msg.overrides ?? []) files.set(o.path, o.content)
@@ -296,12 +337,14 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
   }
 
   const error = e => String(e?.stack ?? e).slice(0, 400)
+  /** a page-side failure in protocol 2's terms: what failed for a network reason, in `network` */
+  const failed = e => ({ error: error(e), network: e instanceof NetworkFailure ? [e.what] : [] })
   return {
     ready: { type: 'ready', protocol: PROTOCOL, cv: build.cv, eid: build.eid, tid: build.tid },
     receive(msg, reply) {
       if (msg?.type === 'project') { projects.set(msg.key, new Map(msg.files.map(f => [f.path, f.content]))); return Promise.resolve() }
-      if (msg?.type === 'init') return (queue = queue.then(() => init(msg, reply)).then(d => reply(d), e => reply({ type: 'init-done', error: error(e) })))
-      if (msg?.type === 'compile') return (queue = queue.then(() => compile(msg)).then(([d, t]) => reply(d, t), e => reply({ type: 'compiled', id: msg.id, ok: false, error: error(e), network: [] })))
+      if (msg?.type === 'init') return (queue = queue.then(() => init(msg, reply)).then(d => reply(d), e => reply({ type: 'init-done', ...failed(e) })))
+      if (msg?.type === 'compile') return (queue = queue.then(() => compile(msg, reply)).then(([d, t]) => reply(d, t), e => reply({ type: 'compiled', id: msg.id, ok: false, ...failed(e) })))
       return Promise.resolve()
     },
   }
