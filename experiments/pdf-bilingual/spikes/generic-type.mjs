@@ -92,12 +92,14 @@ export const unitLines = (units, script, type, sizes = null) => new Map(units.ma
  * fraction from the window's, however far behind the text is, so that no paragraph stands out from its neighbours: a
  * jump the preview measured, taken back within the horizon, set Korean 2608.05876's paragraphs after it a quarter
  * looser than the text around them, and the owner preferred the version without it to one nearer the original's places.
- * `shrink` ({ min, heightAt(i, f) }): a unit that wants a leading below the floor of the range — Japanese and Korean set
- * no tighter than the paper's own, and a stretch that runs long stays long — is set at a face `f` times the type's,
- * as little smaller as brings it to the height it wants (heightAt: its height at leading one at that face), never
- * below `min`, its leading the floor (the owner, 2026-10-01: Korean 2608.18090's sections 7 and 8 ran 0.16 page long
- * at the floor, its references started a page later, and the checklist after them took a page more). The face's
- * factor by unit is flowType's `sizes`; what is left after it is taken back as any drift.
+ * `shrink` ({ min, heightAt(i, f) }): a unit whose stretch runs long past the floor of the range — the window's
+ * leading below it; Japanese and Korean set no tighter than the paper's own, and such a stretch stays long — is set at
+ * a face `f` times the type's, as little smaller as brings it to the height the window's leading would give it
+ * (heightAt: its height at leading one at that face), never below `min`, its leading the floor (the owner, 2026-10-01:
+ * Korean 2608.18090's sections 7 and 8 ran 0.16 page long at the floor, its references started a page later, and the
+ * checklist after them took a page more). Only what the stretch runs long: the drift taken back moves the leading
+ * alone — taken back by the face as well, a preview late where a float had moved set Korean 2608.24839's next stretch
+ * at 0.95, and its final came out a page short. The face's factor by unit is flowType's `sizes`.
  * `heights`: Map(unit index → the translation's height at leading one), from unitHeights or a compile's lines. The
  * leading is × the paper's for CJK, × the size's for an alphabet, as the type's is
  */
@@ -159,15 +161,15 @@ export function flowType(units, script, heights, { window = 50, horizon = window
     // it the break took
     if (breaks.has(i) && accountAt.has(i)) drift = accountAt.get(i)
     if (offsetAt.has(i)) offset = offsetAt.get(i)
-    const at = drift + offset, near = toJump.get(i)
-    const want = near != null
-      ? (list[k].lo * list[k].bs - lead * (1 - near / local) - at) / heights.get(i)
-      : (o / t) * clamp(back > 0 && back < Infinity ? 1 - (at + (local ? 0 : lead)) / back : 1, [1 - rate, 1 + rate])
-    const x = clamp(want, design.lead)
-    // below the floor of the leading: the face as little smaller as brings the unit to the height it wants there
+    const at = drift + offset, near = toJump.get(i), ratio = o / t
+    const x = near != null
+      ? clamp((list[k].lo * list[k].bs - lead * (1 - near / local) - at) / heights.get(i), design.lead)
+      : clamp(ratio * clamp(back > 0 && back < Infinity ? 1 - (at + (local ? 0 : lead)) / back : 1, [1 - rate, 1 + rate]), design.lead)
+    // where the stretch itself runs long past the floor of the leading: the face as little smaller as brings the unit
+    // to the height the stretch's leading would give it (the drift taken back moves the leading alone)
     let h = heights.get(i)
-    if (shrink && want < design.lead[0]) {
-      const goal = (h * want) / design.lead[0]
+    if (shrink && ratio < design.lead[0]) {
+      const goal = (h * ratio) / design.lead[0]
       let f = 1
       while (f - SHRINK_STEP >= shrink.min - 1e-9 && shrink.heightAt(i, f) > goal) f = Math.round((f - SHRINK_STEP) * 1e6) / 1e6
       if (f < 1) { sizes.set(i, f); h = shrink.heightAt(i, f) }

@@ -193,6 +193,10 @@ const lateBy = r => longKo.reduce((d, u) => d + koHeights.get(u.i) * (r.sizes.ge
 check('shrink: without it, the long stretch at the floor and nothing smaller', atFloor.sizes.size === 0 && near(atFloor.leads.get(15), 1, 1e-9) && flowLeads(longKo, 'Kore', koHeights, { window: 0, horizon: 40 }).get(15) === atFloor.leads.get(15))
 check('shrink: with it, the long stretch smaller down to 0.95, never below, its leading the floor; a unit on its height untouched', near(shrunk.sizes.get(15), 0.95, 1e-9) && [...shrunk.sizes.values()].every(f => f >= 0.95 - 1e-9 && f < 1) && near(shrunk.leads.get(15), 1, 1e-9) && !shrunk.sizes.has(5), JSON.stringify([...shrunk.sizes].slice(0, 4)))
 check('shrink: less left late by the end', lateBy(shrunk) < lateBy(atFloor) - 100, `${lateBy(shrunk)} ${lateBy(atFloor)}`)
+// only what the stretch itself runs long, not the drift taken back: a unit on its original's height after the long
+// stretch, the text late, keeps its face (Korean 2608.24839: a preview late where a float had moved, taken back by a
+// stretch at 0.95, and the final a page short)
+check('shrink: the drift taken back sets no unit smaller', !shrunk.sizes.has(35) && !shrunk.sizes.has(31), JSON.stringify([...shrunk.sizes].filter(([i]) => i >= 30)))
 const slight = new Map(longKo.map(u => [u.i, u.i === 5 ? 100 : 96]))
 const nudged = flowType(longKo, 'Kore', slight, { window: 0, horizon: Infinity, shrink: squared(slight) })
 check('shrink: as little smaller as reaches the original\'s height', nudged.sizes.size === 1 && nudged.sizes.get(5) > 0.97 && nudged.sizes.get(5) <= 0.98, JSON.stringify([...nudged.sizes]))
