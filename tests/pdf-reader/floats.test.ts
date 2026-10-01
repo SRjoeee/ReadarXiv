@@ -131,6 +131,28 @@ describe('pageFloats: a table from its caption to its rules', () => {
   })
 })
 
+describe('pageFloats: a table without rules (the review of B4, probe G)', () => {
+  it('its first column further left than its narrow caption, its cells on two lines: the cells of a row are one table\'s', () => {
+    const ps = [[...prose(780, 4), line('Table 2: notes', 690, 140, 220),
+      item('first part', 60, 672, { eol: true }), item('of the row', 60, 662, { eol: true }), item('value one', 160, 672, { eol: true }),
+      item('second part', 60, 646, { eol: true }), item('of the row', 60, 636, { eol: true }), item('value two', 160, 646, { eol: true }),
+      ...prose(610, 10)]]
+    const dd = docOf(ps)
+    const layout = side(ps, [[0, words(dd, 'table', 'notes')]], { 0: 'caption' })
+    expect(pageFloats(layout, 1).map(f => [f.kind, ...r1(f.region)])).toEqual([['table', 60, 633.8, 205, 679.5]])
+  })
+})
+
+describe('pageFloats: two tables without rules side by side', () => {
+  it('each with its caption under it, TeX setting the left whole before the right: a row\'s lines across the two are not one table\'s', () => {
+    const ps = [[...prose(780, 4), item('one', 60, 700), item('two', 110, 700, { eol: true }), item('ten', 60, 688), item('six', 110, 688, { eol: true }), line('Table 3: left', 670, 60, 160),
+      item('red', 180, 700), item('tan', 240, 700, { eol: true }), item('sun', 180, 688), item('fog', 240, 688, { eol: true }), line('Table 4: right', 670, 180, 290), ...prose(640, 10)]]
+    const dd = docOf(ps)
+    const layout = side(ps, [[0, words(dd, 'table', 'left')], [1, words(dd, 'table', 'right', at(dd, 'left'))]], { 0: 'caption', 1: 'caption' })
+    expect(pageFloats(layout, 1).map(f => [f.id, ...r1(f.region)]).sort()).toEqual([[0, 60, 685.8, 125, 707.5], [1, 180, 685.8, 255, 707.5]])
+  })
+})
+
 describe('pageFloats: which side of a caption its float is on', () => {
   it('tables under their captions\' feet (caption below): each takes the rows the stream sets before it', () => {
     // table 1, its caption, table 2, its caption — the stream in that order; the second table nearer the first caption

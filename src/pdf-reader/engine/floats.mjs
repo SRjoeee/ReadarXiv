@@ -183,7 +183,7 @@ export function pageFloats(L, p, regions = [], { rules = [], marks = [] } = {}) 
   const figsOf = new Map()
   for (const [k, id] of figOf) (figsOf.get(id) ?? figsOf.set(id, []).get(id)).push(regions[k])
   const boxOf = new Map(caps.map(c => [c.id, c.box]))
-  const ctx = { byTop, byFoot, figOf, figsOf, boxOf, at: { k0, lineOf, owner }, capsOn, tokens: id => L.anchors.get(id)?.tokens ?? [] }
+  const ctx = { byTop, byFoot, lines, lineItems: items.filter(q => q.what === 'line'), bound: new Set(items.filter(q => q.what === 'stop').map(q => q.i)), figOf, figsOf, boxOf, at: { k0, lineOf, owner }, capsOn, tokens: id => L.anchors.get(id)?.tokens ?? [] }
   // each caption's walks, best first: toward its own figures where it has some; else the one holding its neighbour in
   // the page's stream (TeX sets a float's caption and its body in the order the source has them); else, the stream
   // setting it between two (a caption between two tables, or under a listing), the one under it — a table's caption
@@ -275,9 +275,9 @@ const enough = w => w.got.some(q => q.what === 'figure') || w.got.filter(q => q.
  * neighbour in the page's stream on its side (the line set just after the caption for the walk down, just before it
  * for the walk up)
  */
-function walk(c, dir, { byTop, byFoot, figOf, figsOf, boxOf, at, capsOn, tokens }, skip = null, limit = null) {
+function walk(c, dir, { byTop, byFoot, lines, lineItems, bound, figOf, figsOf, boxOf, at, capsOn, tokens }, skip = null, limit = null) {
   const h = c.h, down = dir < 0, order = down ? byTop : byFoot
-  const got = [], rules = [], range = { x0: c.box.x0, x1: c.box.x1 }, parts = new Set()
+  const got = [], rules = [], range = { x0: c.box.x0, x1: c.box.x1 }, parts = new Set(), taken = new Set()
   // subcaptions in a row, each of its own figures and set between this caption and them (subfigures over their
   // subcaptions, the main caption under them): this caption's parts, where this caption has no figure of its own and the
   // walk meets them first, and goes on meeting rows of them (a grid of subfigures). A single caption so met is the next
@@ -289,37 +289,47 @@ function walk(c, dir, { byTop, byFoot, figOf, figsOf, boxOf, at, capsOn, tokens 
   const from = down ? firstAt(byTop, q => q.y1 <= c.box.y0 + 1) : firstAt(byFoot, q => q.y0 >= c.box.y1 - 1)
   let pending = [], edge = down ? c.box.y0 : c.box.y1, stop = null, wall = null, reach = FIRST * h, fig = null
   const widen = q => { if (q.x0 < range.x0) range.x0 = q.x0; if (q.x1 > range.x1) range.x1 = q.x1 }
+  // on a page of two columns, a line or a mark reaching past what the walk has into the other column's text is not a
+  // column float's (a title block across the page over a column's figure, 2608.06701's first page); a rule may (a
+  // float across the page of two parts, each with its caption, 2608.02163's tables 3 and 4)
+  const across = q => (q.what === 'line' || q.what === 'mark') && (c.side === 'L' ? q.x1 > range.x1 + 1 && q.x1 > c.other.x0 + SPILL : c.side === 'R' ? q.x0 < range.x0 - 1 && q.x0 < c.other.x1 - SPILL : false)
+  const take = q => { got.push(q); taken.add(q); widen(q); edge = down ? Math.min(edge, q.y0) : Math.max(edge, q.y1) }
   for (let k = from; k < order.length; k++) {
     const q = order[k]
-    if (q.caps?.includes(c.id) || overlapX(q, range) <= 0) continue
+    if (taken.has(q) || q.caps?.includes(c.id) || overlapX(q, range) <= 0) continue
     // at a figure's edge, as far as a quarter of its height: the space between a grid's rows of images
     const far = fig && (down ? edge >= fig.y0 - 1 : edge <= fig.y1 + 1) ? Math.max(reach, (fig.y1 - fig.y0) * PANELS) : reach
     if ((down ? edge - q.y1 : q.y0 - edge) > far || (limit !== null && (down ? q.y0 < limit : q.y1 > limit))) break
     const theirs = q.what === 'figure' && figOf.has(q.fig) && figOf.get(q.fig) !== c.id && !parts.has(figOf.get(q.fig))
     if (q.what === 'stop' && q.caps && !q.running && (parts.size || !got.length) && q.caps.every(id => parts.has(id) || (partOf(id) && inRow(id)))) {
       for (const id of q.caps) parts.add(id)
-      got.push(q); widen(q)
-      edge = down ? Math.min(edge, q.y0) : Math.max(edge, q.y1)
+      take(q)
       continue
     }
-    // on a page of two columns, a line or a mark reaching past what the walk has into the other column's text is not a
-    // column float's (a title block across the page over a column's figure, 2608.06701's first page); a rule may (a
-    // float across the page of two parts, each with its caption, 2608.02163's tables 3 and 4)
-    const across = (q.what === 'line' || q.what === 'mark') && (c.side === 'L' ? q.x1 > range.x1 + 1 && q.x1 > c.other.x0 + SPILL : c.side === 'R' ? q.x0 < range.x0 - 1 && q.x0 < c.other.x1 - SPILL : false)
-    if (q.what === 'stop' || theirs || across || skip?.has(q)) {
+    if (q.what === 'stop' || theirs || across(q) || skip?.has(q)) {
       stop = q.cap ?? (theirs ? figOf.get(q.fig) : null)
       // another float's: its caption, its figure, what it has taken
       if (q.cap != null || theirs || skip?.has(q)) wall = q
       break
     }
-    if (q.what === 'rule') pending.push(q)
-    else {
-      rules.push(...pending); pending = []; got.push(q)
-      reach = GAP * h
-      if (q.what === 'figure') fig = q
+    if (q.what === 'rule') { pending.push(q); widen(q); edge = down ? Math.min(edge, q.y0) : Math.max(edge, q.y1); continue }
+    rules.push(...pending); pending = []
+    take(q)
+    reach = GAP * h
+    if (q.what === 'figure') fig = q
+    // the other lines of its row, however far across, that TeX set with it (a table without rules whose cells stand past
+    // its caption, the review of B4, probe G): the walk widens to them — not to a row beside it set apart in the stream
+    // (two tables side by side, each with its caption, 2608.02163's tables 3 and 4): every line the stream sets between
+    // the two is free and stands in their row, a line above or below (a cell's next line)
+    if (q.what === 'line') for (const m of lineItems) {
+      if (taken.has(m) || skip?.has(m) || across(m) || Math.min(m.y1, q.y1) - Math.max(m.y0, q.y0) < 0.5 * Math.min(m.y1 - m.y0, q.y1 - q.y0)) continue
+      const lo = Math.min(m.y0, q.y0) - h, hi = Math.max(m.y1, q.y1) + h
+      let together = true
+      for (let j = Math.min(m.i, q.i) + 1; j < Math.max(m.i, q.i) && together; j++) together = !bound.has(j) && lines[j].y1 > lo && lines[j].y0 < hi
+      if (!together) continue
+      if (limit !== null && (down ? m.y0 < limit : m.y1 > limit)) continue
+      take(m)
     }
-    widen(q)
-    edge = down ? Math.min(edge, q.y0) : Math.max(edge, q.y1)
   }
   // the rules past the last item: each within TRAIL of it, or of the rule before, and nearer to it than to another
   // float's that stopped the walk (two floats a float's skip apart: the rule between is the nearer one's; a table's note
