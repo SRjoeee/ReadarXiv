@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchorUnits, boundsFromMarks, type DocToken, inkEdges, markWords, type TextPage, tokenizeDocument, tokens, type UnitText } from '@/pdf-reader/engine/anchors.mjs'
+import { anchorUnits, boundsFromMarks, type DocToken, inkEdges, markWords, sentenceStarts, type TextPage, tokenizeDocument, tokens, type UnitText } from '@/pdf-reader/engine/anchors.mjs'
 
 // Where each unit sits in a PDF, found from the text layer (anchors.mjs): the page given as PDF.js's text items, the
 // units as the reader passes them. Heights are 10 PDF units, lines 12 apart down from y = 700
@@ -439,5 +439,38 @@ describe('anchorUnits: a unit\'s display across a page break', () => {
     const bounds = new Map<string, [number, number]>([['0', [0, 3]], ['1', [4, at(doc, 'page')]], ['2', [at(doc, 'footnote') - 1, at(doc, 'smaller')]], ['3', [at(doc, 'another'), at(doc, 'after')]]])
     const found = anchorUnits(doc, units, { bounds, floating: id => id === 2 })
     expect(found.get(1)?.tokens.map(k => doc[k]?.t)).toEqual(['a', 'paragraph', 'whose', 'display', 'x', 'y', 'i', '1', 'x', 'y', 'i', '1', 'goes', 'on', 'over', 'the', 'page'])
+  })
+})
+
+// Sentence level (B3, report-B option X): each sentence's first word found inside the unit's marks by the unit's own
+// text match, the unit's tokens to the page's
+describe('sentenceStarts: where each sentence after the first begins on the page', () => {
+  const text = 'Alpha beta gamma. Delta epsilon zeta eta. Theta iota kappa.'
+  const lines = (delta = 'Delta') => [page([['Alpha', 'beta', 'gamma.', delta, 'epsilon'], ['zeta', 'eta.', 'Theta', 'iota', 'kappa.']])]
+
+  it('the page token of each sentence\'s first word, from offsets in the text the side was anchored by', () => {
+    const { doc, found } = anchors(lines(), [{ id: 0, text }], [[0, 0, 9]])
+    const s = sentenceStarts(found.get(0), text, [text.indexOf('Delta'), text.indexOf('Theta')])
+    expect([...(s ?? [])].map(k => doc[k]?.t)).toEqual(['delta', 'theta'])
+  })
+
+  it('one sentence: none begins after the first', () => {
+    const { found } = anchors(lines(), [{ id: 0, text }], [[0, 0, 9]])
+    expect([...(sentenceStarts(found.get(0), text, []) ?? [1])]).toEqual([])
+  })
+
+  it('a first word the text match did not find: the sentence\'s next word it found; none in the sentence, no sentences', () => {
+    const { doc, found } = anchors(lines('Deltas'), [{ id: 0, text }], [[0, 0, 9]])
+    expect([...(sentenceStarts(found.get(0), text, [text.indexOf('Delta'), text.indexOf('Theta')]) ?? [])].map(k => doc[k]?.t)).toEqual(['epsilon', 'theta'])
+    expect(sentenceStarts(found.get(0), text, [text.indexOf('Delta'), text.indexOf('epsilon')])).toBeNull()
+  })
+
+  it('a unit without marks, offsets that do not rise inside the text, or no offsets: none', () => {
+    const { found } = anchors(lines(), [{ id: 0, text }], [])
+    expect(sentenceStarts(found.get(0), text, [text.indexOf('Delta')])).toBeNull()
+    const marked = anchors(lines(), [{ id: 0, text }], [[0, 0, 9]]).found.get(0)
+    expect(sentenceStarts(marked, text, [text.indexOf('Theta'), text.indexOf('Delta')])).toBeNull()
+    expect(sentenceStarts(marked, text, [text.length + 5])).toBeNull()
+    expect(sentenceStarts(marked, text, undefined)).toBeNull()
   })
 })

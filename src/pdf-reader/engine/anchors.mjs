@@ -717,7 +717,35 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
       }
     }
     const all = beyond[u]?.length ? [...new Set([...idx, ...beyond[u]])].sort((x, y) => x - y) : idx
-    out.set(id, { rects: lineRects(doc, all), coverage: +f.coverage.toFixed(3), tokens: all, bounded: !!f.bounded })
+    // a unit with marks keeps where each of its text's words was matched on the page (`words`: the page token of each, or
+    // -1), so that its sentences can be found there whenever they are known (sentenceStarts): on the left, a translation
+    // that comes in after the side was anchored gives them
+    let words
+    if (f.pairs) { words = new Int32Array(f.ws.length).fill(-1); for (const [w, k] of f.pairs) words[w] = k }
+    out.set(id, { rects: lineRects(doc, all), coverage: +f.coverage.toFixed(3), tokens: all, bounded: !!f.bounded, ...(words ? { words } : {}) })
   })
+  return out
+}
+
+/**
+ * Where each of a unit's sentences after the first begins on the page (report-B option X): the page token of its first
+ * word, as the unit's own text match inside its marks found it — the sentence's next word it found where it did not find
+ * the first, never a word of the next sentence. `anchor` the unit's place (anchorUnits: a unit with marks), `text` the
+ * text it was anchored by, `offsets` where each sentence after the first begins in it (mt.mjs sentencesOf: `src` on the
+ * left, `tr` on the right). An Int32Array rising, each start after the unit's first token and among its tokens; empty
+ * for a unit of one sentence; null where a sentence's start is not found — the unit is lit whole then, on both sides
+ */
+export function sentenceStarts(anchor, text, offsets) {
+  const words = anchor?.words
+  if (!words || !offsets) return null
+  const at = offsets.map(o => tokens(text.slice(0, o)).length), ts = anchor.tokens, out = new Int32Array(offsets.length)
+  const has = k => { let lo = 0, hi = ts.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] < k) lo = m + 1; else hi = m } return ts[lo] === k }
+  for (let j = 0; j < at.length; j++) {
+    const end = j + 1 < at.length ? at[j + 1] : words.length
+    let k = -1
+    for (let i = at[j]; i < end && k < 0; i++) if (words[i] >= 0 && has(words[i])) k = words[i]
+    if (k < 0 || k <= (j ? out[j - 1] : ts[0])) return null
+    out[j] = k
+  }
   return out
 }

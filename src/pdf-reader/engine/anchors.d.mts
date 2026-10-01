@@ -5,8 +5,9 @@ export interface DocToken { t: string; page: number; x: number; y: number; w: nu
 /** a page's text as getTextContent gives it */
 export interface TextPage { page: number; items: unknown[]; styles?: Record<string, unknown> }
 export interface Rect { page: number; x0: number; y0: number; x1: number; y1: number }
-/** a unit's place: its line rectangles and the document tokens they are made of */
-export interface Anchor { rects: Rect[]; coverage: number; tokens: number[]; bounded: boolean }
+/** a unit's place: its line rectangles and the document tokens they are made of; with marks, the page token each word of
+ *  its text was matched to, or -1 */
+export interface Anchor { rects: Rect[]; coverage: number; tokens: number[]; bounded: boolean; words?: Int32Array }
 /** a unit as the reader passes it: its text as that PDF has it, the offsets in it where a placeholder stood, and the
  *  letters of the displays it sets before its first words, after its last and between them (latex-front's
  *  displayOutside) */
@@ -19,6 +20,8 @@ export declare function boundsFromMarks(doc: DocToken[], marks: Map<string, { pa
 /** each mark with the word it stands by in `doc`, the document the marks were recorded in */
 export declare function markWords(doc: DocToken[], marks: Map<string, { page: number; x: number; y: number }>): Map<string, { page: number; x: number; y: number; t: string | null }>
 export declare function anchorUnits(doc: DocToken[], units: UnitText[], options?: { minCoverage?: number; bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean }): Map<number, Anchor | null>
+/** where each of a unit's sentences after the first begins on the page: the page token of its first word found, rising */
+export declare function sentenceStarts(anchor: Anchor | null | undefined, text: string, offsets: number[] | undefined): Int32Array | null
 /** each token's ink across, its box widened over the marks its item sets against it (a full stop, a bracket) */
 export declare function inkEdges(doc: DocToken[]): { l: Float32Array; r: Float32Array }
 /** tokens → one rectangle per line: same page, baselines within half a line of each other */
