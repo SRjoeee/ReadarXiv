@@ -910,7 +910,9 @@ export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newsavebox
  *  \\if@twocolumn false) — which places.mjs counts columns by, page by page (a two-column body and a one-column
  *  appendix, Chinese 2608.02163). The most columns in force at any mark made since the last page went out, or as the
  *  page goes out: ltxgrid closes its grid at \\end{document} before the last page goes out (\\close@column@grid), and
- *  read then alone every revtex and aastex paper's last page was one column (the review of 2026-10-01) */
+ *  read then alone every revtex and aastex paper's last page was one column (the review of 2026-10-01). And as
+ *  \\end{document} begins, before the grid closes: a last page with no unit mark on it — the references alone — was
+ *  read one column too (2608.20847's page 9, aastex 2608.12606's page 20; the re-review of 2026-10-02) */
 export const MARK_DEF = [
   '\\makeatletter\\ifdefined\\XeTeXrevision\\def\\axt@dest#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}',
   '\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\special{dvipdfmx:config C 0x0010}}\\fi',
@@ -920,7 +922,7 @@ export const MARK_DEF = [
   '\\def\\axt@colsnow{\\ifdefined\\pagegrid@col\\ifnum\\pagegrid@col>\\@ne 2\\else 1\\fi\\else\\ifnum\\ifdefined\\col@number\\col@number\\else\\@ne\\fi>\\@ne 2\\else\\if@twocolumn 2\\else 1\\fi\\fi\\fi}\\gdef\\axt@colmax{1}',
   '\\def\\axt@colseen{\\ifnum\\axt@colsnow>\\axt@colmax\\relax\\xdef\\axt@colmax{\\axt@colsnow}\\fi}',
   '\\protected\\def\\axtmark#1{\\axt@colseen\\axt@dest{#1}}',
-  '\\ifdefined\\AddToHook\\AddToHook{shipout/background}{\\axt@colseen\\put(0,0){\\axt@dest{c\\axt@colmax-\\the\\ReadonlyShipoutCounter}}\\gdef\\axt@colmax{1}}\\fi\\makeatother',
+  '\\ifdefined\\AddToHook\\AddToHook{shipout/background}{\\axt@colseen\\put(0,0){\\axt@dest{c\\axt@colmax-\\the\\ReadonlyShipoutCounter}}\\gdef\\axt@colmax{1}}\\AddToHook{enddocument}{\\axt@colseen}\\fi\\makeatother',
   ...END_MARK,
 ].join('\n') + '\n'
 /**

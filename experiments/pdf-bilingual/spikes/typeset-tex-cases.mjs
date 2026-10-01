@@ -284,9 +284,20 @@ check('each page\'s columns: revtex\'s two-column grid and its one-column grid',
 // revtex's grid closed at \\end{document} (\\close@column@grid) before its last page goes out: a page is read where its
 // units were set too, the grid in force at each mark (the review of 2026-10-01: every revtex and aastex last page read one
 // column)
-const marked = n => Array.from({ length: n }, (_, k) => `\\leavevmode\\axtmark{${k}s}\\lipsum[${k + 1}]\\par`).join('\n')
+const marked = (n, from = 0) => Array.from({ length: n }, (_, j) => j + from).map(k => `\\leavevmode\\axtmark{${k}s}\\lipsum[${k + 1}]\\par`).join('\n')
 const colsLast = await colsOf('cols-revtex-last', `\\documentclass[aps,prl,twocolumn]{revtex4-2}\\usepackage{lipsum}\\begin{document}\\title{T}\\maketitle ${marked(18)}\\end{document}\n`)
 check('each page\'s columns: revtex\'s last page, set in two columns, read so', /^2+$/.test(colsLast), colsLast)
+// a page with no unit mark after the grid closes — the references alone on the last page, or on the last two — is read
+// in the grid it was set in, sampled as \\end{document} begins (the re-review of 2026-10-02, N2: 2608.20847's page 9 and
+// aastex 2608.12606's page 20 read one column); a document that ends in one column still ends in one
+const bib = n => `\\begin{thebibliography}{99}${Array.from({ length: n }, (_, k) => `\\bibitem{b${k}} A. Author${k}, B. Writer, and C. Someone, A title of a paper that runs on for a while, Journal ${k} (2020) ${100 + k}.`).join('\n')}\\end{thebibliography}`
+const refsLast = refs => `\\documentclass[aps,prb,twocolumn]{revtex4-2}\\usepackage{lipsum}\\begin{document}\\title{T}\\maketitle ${marked(14)}${bib(refs)}\\end{document}\n`
+const oneEnd = `\\documentclass[twocolumn]{article}\\usepackage{lipsum}\\begin{document}${marked(14)}\\onecolumn ${marked(4, 20)}${bib(40)}\\end{document}\n`
+for (const engine of ['pdflatex', 'xelatex']) {
+  const one = await colsOf(`cols-refs-${engine}`, refsLast(90), engine), two = await colsOf(`cols-refs2-${engine}`, refsLast(260), engine), end = await colsOf(`cols-end1-${engine}`, oneEnd, engine)
+  check(`each page's columns under ${engine}: the references alone on revtex's last page, or its last two, read two`, /^2{3,}$/.test(one) && /^2{4,}$/.test(two), JSON.stringify([one, two]))
+  check(`each page's columns under ${engine}: a document that ends in one column ends in one`, /^2+1+$/.test(end), end)
+}
 const colsMulti = await colsOf('cols-multicol', '\\documentclass{article}\\usepackage{lipsum,multicol}\\begin{document}\\lipsum[1-3]\\clearpage\\begin{multicols}{2}\\lipsum[1-10]\\end{multicols}\\clearpage\\lipsum[1-3]\\end{document}\n')
 check('each page\'s columns: multicol\'s columns, and one column around them', /^12+1+$/.test(colsMulti), colsMulti)
 console.log(failed ? `${failed} failed` : 'all passed')
