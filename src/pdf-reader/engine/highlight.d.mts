@@ -1,11 +1,11 @@
 // highlight.mjs's types (JavaScript until the engine's port), for the reader's tests
 import type { Anchor, DocToken } from './anchors.mjs'
 
-/** a run's row: lines merged where they overlap, and the unit's reach across them (PDF units) */
-export interface Row { y0: number; y1: number; x0: number; x1: number }
+/** a run's row: lines merged where they overlap, and the unit's reach across them (PDF units); lo, hi: its glyphs' */
+export interface Row { y0: number; y1: number; x0: number; x1: number; lo: number; hi: number }
 /** a unit's run: one page and one column of it, its extent inside the column's text edges, its rows, the boundaries
  *  between them, and the page's half leading */
-export interface Run { id: number; page: number; col: 'F' | 'L' | 'R'; x0: number; x1: number; top: number; bottom: number; lead: number; rows: Row[]; mids: number[] }
+export interface Run { id: number; page: number; col: 'F' | 'L' | 'R'; x0: number; x1: number; top: number; bottom: number; hi: number; lo: number; lead: number; rows: Row[]; mids: number[] }
 /** a side's layout (layoutOf): opaque to its callers */
 export interface Layout { readonly pagesOf: Map<number, number[]> }
 

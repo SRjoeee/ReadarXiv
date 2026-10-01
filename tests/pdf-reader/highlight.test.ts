@@ -132,6 +132,15 @@ describe('runsOf: a unit\'s runs, one per page and column, and their rows', () =
     expect(across(nth(runsOf(side(pages, [[0, [c]]], new Map([[0, 'cell']])), 0)))).toEqual([320, 340])
   })
 
+  it('a fraction\'s denominator hanging under a paragraph\'s last line is inside its block', () => {
+    // the last line's inline fraction: numerator and denominator 7 high, 4 over and 4 under its baseline
+    const pages = [[...prose(740, 20), ...prose(500, 2), item('last words', 50, 476, { width: 100 }), item('a', 160, 480, { size: 7 }), item('b', 160, 472, { size: 7, eol: true }), ...prose(440, 10)]]
+    const d = docOf(pages), s = at(d, 'text', 160), b = at(d, 'b')
+    const run = nth(runsOf(side(pages, [[0, range(s, b)]]), 0))
+    expect(blockOf(run, 2).y0).toBeLessThanOrEqual(472 - 0.22 * 7)
+    expect(blockOf(run, 2).y1).toBeCloseTo(500 + 7.5 + run.lead)
+  })
+
   it('a unit ends after its closing mark: a CJK full stop inks half its em', () => {
     // a heading of a translation, two characters and a full stop in a 30-unit item
     const pages = [[...prose(740, 20), item('引言。', 50, 480, { width: 30, eol: true }), ...prose(460, 10)]]

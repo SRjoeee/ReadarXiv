@@ -164,18 +164,21 @@ export function pageGeometry(L, p) {
   if (g) return g
   const { tok } = L, P = L.page[p], k0 = L.pageStart[p], k1 = L.pageStart[p + 1]
   // the page's lines, as anchors.mjs lineRects has them: baselines within half a line of the first's, the line's
-  // height its body text's (a script or a limit does not stretch it), its reach the ink of all its tokens
+  // height its body text's (a script or a limit does not stretch it), its reach the ink of all its tokens; lo, hi:
+  // the glyphs of all its tokens, a script's and an inline fraction's too
   const lines = [], lineOf = new Int32Array(k1 - k0)
   let cur = null
   for (let k = k0; k < k1; k++) {
-    const l = tok.l[k], r = tok.r[k], y = tok.y[k]
+    const l = tok.l[k], r = tok.r[k], y = tok.y[k], bottom = tok.bottom[k], top = tok.top[k]
     if (!cur || Math.abs(y - cur.base) > cur.h * 0.5 || r < cur.x0 - cur.h * 30) {
-      cur = { x0: l, x1: r, y0: tok.bottom[k], y1: tok.top[k], base: y, h: tok.h[k], k0: k, col: 'F' }
+      cur = { x0: l, x1: r, y0: bottom, y1: top, lo: bottom, hi: top, base: y, h: tok.h[k], k0: k, col: 'F' }
       lines.push(cur)
     } else {
       if (l < cur.x0) cur.x0 = l
       if (r > cur.x1) cur.x1 = r
-      if (Math.abs(y - cur.base) < cur.h * 0.2) { if (tok.bottom[k] < cur.y0) cur.y0 = tok.bottom[k]; if (tok.top[k] > cur.y1) cur.y1 = tok.top[k] }
+      if (Math.abs(y - cur.base) < cur.h * 0.2) { if (bottom < cur.y0) cur.y0 = bottom; if (top > cur.y1) cur.y1 = top }
+      if (bottom < cur.lo) cur.lo = bottom
+      if (top > cur.hi) cur.hi = top
     }
     lineOf[k - k0] = lines.length - 1
   }
@@ -259,7 +262,9 @@ function unitRuns(L, p, { k0, lines, lineOf, owner, lineOwner }, id, toks) {
         if (l.y1 > row.y1) row.y1 = l.y1
         if (x.x0 < row.x0) row.x0 = x.x0
         if (x.x1 > row.x1) row.x1 = x.x1
-      } else rows.push({ y0: l.y0, y1: l.y1, x0: x.x0, x1: x.x1 })
+        if (l.lo < row.lo) row.lo = l.lo
+        if (l.hi > row.hi) row.hi = l.hi
+      } else rows.push({ y0: l.y0, y1: l.y1, x0: x.x0, x1: x.x1, lo: l.lo, hi: l.hi })
     }
     // runs: the rows cut where another unit's line stands between two of them in the column (a float set inside a
     // paragraph, a footnote), and in a column of two where a line across both does, the unit's own too (a paragraph
@@ -299,7 +304,7 @@ function runOf(id, page, col, rows, e, lead, clamp) {
   if (Math.abs(x1 - e.x1) < SNAP) x1 = e.x1
   const mids = []
   for (let i = 1; i < rows.length; i++) mids.push(Math.min((rows[i - 1].y0 + rows[i].y1) / 2, i > 1 ? mids[i - 2] : Infinity))
-  return { id, page, col, x0, x1, top: rows[0].y1, bottom: rows.at(-1).y0, lead, rows, mids }
+  return { id, page, col, x0, x1, top: rows[0].y1, bottom: rows.at(-1).y0, hi: rows[0].hi, lo: rows.at(-1).lo, lead, rows, mids }
 }
 
 /** a unit's runs on a side, page by page (each page's geometry made on its first use) */
@@ -309,9 +314,11 @@ export function runsOf(L, id) {
   return out
 }
 
-/** what a run paints (PDF units): its extent padded `padX` beside and half the leading above and below */
+/** what a run paints (PDF units): its extent padded `padX` beside and half the leading above and below — and over
+ *  what hangs past its first and last lines, a script or an inline fraction's denominator, which lit nothing (the
+ *  review of B1's gate: a theorem's last fraction, 0.5–0.9 units under its block) */
 export function blockOf(run, padX) {
-  return { page: run.page, x0: run.x0 - padX, x1: run.x1 + padX, y0: run.bottom - run.lead, y1: run.top + run.lead }
+  return { page: run.page, x0: run.x0 - padX, x1: run.x1 + padX, y0: Math.min(run.bottom - run.lead, run.lo), y1: Math.max(run.top + run.lead, run.hi) }
 }
 
 /**
