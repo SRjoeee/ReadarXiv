@@ -17,10 +17,19 @@ On the evaluation round of 34 papers (Chinese 5, German 5, Japanese 8, Korean 8,
 |---|---|---|---|---|---|
 | Today, the reader's default | 11 (14 / 9) | 0.763 / 1.456 | 16 % | 47 % | 27 % |
 | The rule, as the experiment recorded it | 31 (3 / 0) | 0.040 / 0.220 | 80 % | 85 % | 84 % |
-| **The rule, in the engine (`typeset-check.mjs`, 2026-10-01)** | **30 (3 / 1)** | **0.040** (mean of medians) | **80 %** | — | — |
+| The rule, in the engine as handed over (2026-10-01) | 30 (3 / 1) | 0.040 (mean of medians) | 80 % | 85 % | 84 % |
+| **The rule, corrected (`typeset-gate.mjs`, 2026-10-01, below)** | **32 (1 / 1)** | **0.041** | **81 %** | **84 %** | **84 %** |
 
-Same page count in 30 of 34 papers, and a unit typically starts within a twenty-fifth of a column of where the
-original starts it. The engine's run differs from the record on one paper, 2608.15761 (below, Acceptance).
+Same page count in 32 of 34 papers, and a unit typically starts within a twenty-fifth of a column of where the
+original starts it. On papers the rule was not tuned on (13 Chinese papers it never saw, 9 of the round's papers in a
+language they were not evaluated in): 12 of 13 and 8 of 9 pages equal, start drift 0.100 and 0.043 (today's: 5 and 2,
+0.703 and 0.679).
+
+**Corrected before wiring (`exp/flow-integration`, after an independent evaluation):** each page's columns read from
+TeX and both documents' places read on the original's; no plan from a missing or partial input (the translation set as
+today); one type design per strategy (CJKutf8's a size and a leading); the rule's log lines read in the last TeX pass;
+the final keeps the preview's type and moves the leading alone; a unit the flow cannot measure takes the leading set
+where it stands. Reasons and numbers: `records/typesetting.md`, "The engine's corrections".
 
 ## What is on this branch
 
@@ -37,7 +46,7 @@ original starts it. The engine's run differs from the record on one paper, 2608.
 | `live.mjs` | `probeFiles(paper, { width })`, `originalFiles(paper, { lines })`, `translationFiles(…, { typeset })`. Defaults unchanged: nothing calls the rule yet. |
 | `tests/pdf-reader/typeset-*.test.ts` | The experiment's cases, in vitest. |
 | `experiments/pdf-bilingual/spikes/typeset-tex-cases.mjs` | The rule's TeX under native TeX in Docker: one case per fault a paper of the round hit. The reference for BusyTeX. |
-| `experiments/pdf-bilingual/spikes/typeset-check.mjs` | The equivalence check: the engine's modules on the round, compiled natively, against `round-34.json`. |
+| `experiments/pdf-bilingual/spikes/typeset-gate.mjs`, `records/typeset-gate.json` | The rule's gate: the three goals, today against the rule, on the round and the holdout, natively; fails where the rule falls behind its stored baseline. |
 
 ## The compile sequence the rule needs
 
@@ -45,7 +54,7 @@ original starts it. The engine's run differs from the record on one paper, 2608.
 font probe   probeFiles(paper, { width: true })                     → fontLog (readFontProbe(fontLog) → fonts)
 original     originalFiles(paper, { lines: true }), full compile   → original = { log, marks: await marksOf(pdfjsDoc) }
              (translation runs meanwhile)
-measure      plan = previewTypesetting({ paper, translated, lang, fonts, fontLog, original })
+measure      plan = previewTypesetting({ paper, translated, lang, strategy, fonts, fontLog, original })
              translationFiles(paper, translated, { strategy, fonts, draft, aux, bbl, typeset: plan.typeset })
                                                                     → preview = { log, marks }
 final        fin = finalTypesetting(plan.state, preview)
@@ -63,15 +72,26 @@ final        fin = finalTypesetting(plan.state, preview)
    final. The last preview, once every unit is translated, can be the measuring compile, and is worth showing: it is
    already much nearer the original than today's final.
 4. **The final** takes `finalTypesetting(plan.state, preview)`. `plan.state` holds the original's readings and the
-   measured units; keep it from the measuring compile to the final.
-5. **Strategy fallback**: `typeset.strategy(s)` wraps whichever strategy is current, so a move to the next strategy
-   needs nothing new. Under the pdfLaTeX fallback (CJKutf8), CJK takes the leading only; the face scale and glue are
-   xeCJK's.
-6. **`PIPELINE_VERSION` 4 → 5** when the rule is wired: it changes every compile's output.
+   measured units; keep it from the measuring compile to the final. It keeps the preview's type and moves the leading
+   alone; where the preview's measurement is missing or partial it returns the preview's own plan (`missing` says why).
+5. **No plan**: `previewTypesetting` returns `typeset: null` and what was `missing` where an input it needs is missing
+   or partial (no design for the script, the original's log not whole or its marks or a page's columns unread, no width
+   probe, an alphabet without its size probe, no translated unit the original measured): compile the translation as
+   today, without `typeset`. Note it; it is not an error.
+6. **Strategy fallback**: a plan is made for one strategy (`previewTypesetting`'s `strategy`) — under CJKutf8 CJK is
+   solved with a size and a leading, under xeCJK with leading, glue and face — and `typeset.strategy(s)` throws for
+   another. When the chain moves on, make the plan again for the new strategy (pure, milliseconds); its final cannot
+   use a preview measured under the old one: take the new plan's `typeset` uncorrected, or measure again.
+7. **`PIPELINE_VERSION` 4 → 5** when the rule is wired: it changes every compile's output. `MARK_DEF` now also names
+   each page's columns (`axt-c<n>-<k>`), which the rule reads from the original's marks; a record of version 4 lacks
+   them, and the rule would make no plan from it.
 
 The experiment compiled the measuring and final compiles in full (`latexmk`, every pass, images in), as
-`typeset-check.mjs` does. Draft mode (images as frames) should change no place on the page, and one pass changes only
-reference widths; both are worth checking with `typeset-check.mjs` before relying on them.
+`typeset-gate.mjs` does. Draft mode (images as frames) should change no place on the page, and one pass changes only
+reference widths; both are worth checking with the gate before relying on them. Showing the nearer of the measuring
+compile and the final (fewer pages off, then the smaller start drift) would add about a point (the gate prints it:
+round 33 pages equal, start 0.039; unseen 0.085), at the cost of a full measuring compile, or of a further full compile
+whenever a draft one is the nearer; not done in the engine.
 
 ## Cost
 
@@ -85,8 +105,9 @@ milliseconds (above). A third compile when the final still has more pages than t
 the owner declined it for now (performance).
 
 What to cache with a paper's record, so that a revisit or a new language compiles nothing extra:
-- the original's line readings (`readLines`), forced breaks (`readForced`) and marks (`marksOf`). They depend on the
-  source and the pipeline version, not the language, so one per paper.
+- the original's line readings (`readLines`), forced breaks (`readForced`), whether its log is whole (`completeLog`)
+  and marks with each page's columns (`marksOf`). They depend on the source and the pipeline version, not the language,
+  so one per paper.
 - the font probe's log (or `fonts`, `readWidthProbe` and `readSizeProbe` of it), likewise per paper.
 
 ## BusyTeX
@@ -96,7 +117,9 @@ The rule was measured under native TeX Live. In the reader, before relying on it
    `adjustbox`, `caption`, `hyperref`, `xeCJK` with FandolSong) and compare the logged values. Every case states the
    value native TeX gives.
 2. Check that the log lines the rule reads reach the reader: `AXT-LINES`, `AXT-FORCED` (written with `\message`, not
-   `\typeout`: `\typeout` reads `\prevgraf` as 0), `AXT-WIDTH`, `AXT-SIZE`.
+   `\typeout`: `\typeout` reads `\prevgraf` as 0), `AXT-END`, `AXT-WIDTH`, `AXT-SIZE` — the readers take the last TeX
+   pass of the browser compiler's joined log (`lastTexLog`; read whole, the terminal's echo invented forced breaks) —
+   and that the page destinations `axt-c<n>-<k>` reach the PDF under xdvipdfmx (`MARK_DEF` keeps unreferenced ones).
 3. `\AddToHookNext` (LaTeX 2020-10 and later) is required by the unit leading and size macros; they do nothing without it.
 4. Russian under pdfLaTeX needs the LH fonts' metrics, which TeX Live does not ship and BusyTeX cannot make
    (`spikes/make-metafont.mjs`, `data/metafont/`).
@@ -105,26 +128,25 @@ The rule was measured under native TeX Live. In the reader, before relying on it
 
 - `pnpm typecheck && pnpm lint && pnpm test && pnpm build`.
 - `pnpm exec tsx experiments/pdf-bilingual/spikes/typeset-tex-cases.mjs`: all passed (native).
-- `AXT_DATA=<data folder> pnpm exec tsx experiments/pdf-bilingual/spikes/typeset-check.mjs <lang> <paper>…`, then
-  `--summary`: every paper as the experiment (pages equal to the experiment's, drift median within 0.02 column). The
-  data folder is the experiment's, kept outside git: each paper's source (`corpus/<id>/source.gz`), its translation
-  (`runs/visual-eval/<lang>/<id>/translation.json`), `runs/visual-eval/round.json` and `metafont/`.
-  On 2026-10-01 32 of 34 papers were as the experiment. The two that were not, German and Korean 2608.15761 (German
-  one page fewer, drift 0.061 against 0.085; Korean drift 0.108 against 0.086), are the experiment's own code's
-  result today too: on the same inputs the original, the preview's plan, the preview's TeX (but for the fallback
-  leading's printed precision, which no unit with its own factor uses), and the final's plan are identical unit by
-  unit, and the experiment's TeX compiled today sets exactly what the engine's does. `round-34.json`'s two numbers
-  are not reproduced by the code they were recorded with; the engine's run, in `data/runs/typeset-check/`, is the
-  baseline from now on.
-- Once wired, the same papers in the reader: the round's numbers within noise of the table above, and no compile
-  slower than today's by more than the one measuring compile.
+- `AXT_DATA=<data folder> pnpm exec tsx experiments/pdf-bilingual/spikes/typeset-gate.mjs`: the rule holds its
+  baseline (`records/typeset-gate.json`). The data folder is the experiment's, kept outside git: each paper's source
+  (`corpus/<id>/source.gz`), its translation (`runs/visual-eval/<lang>/<id>/translation.json`) and `metafont/`. The
+  gate's header says how to run part of it, a parameter (`VARY`) or a change (`TAG`) against the baseline. (The
+  handed-over equivalence check against `round-34.json`, `typeset-check.mjs`, is superseded by it: 32 of 34 papers
+  matched the experiment's record then; German and Korean 2608.15761 were the experiment's own code's result too.)
+- Once wired, the same papers in the reader: the gate's numbers within noise, and no compile slower than today's by
+  more than the one measuring compile.
 
 ## Limits known
 
-- Three papers keep a page more: Chinese 2608.09038 (+2) and Russian 2608.06233 (+1), each a few lines before
-  something that cannot break (a `\clearpage`, an `[H]` figure); Korean 2608.18090 (+1), a paragraph that moved whole
-  in the final alone.
-- German 2608.15761 comes out one page short.
+- One paper keeps a page more, and is the one further from its original's pages than today: Chinese 2608.09038 (+1,
+  today 0): its main text ends about a third of a column late, and the references before a `\clearpage` spill onto a
+  page of their own. (Korean 2608.18090 and Russian 2608.06233 are level since the final keeps the preview's type.)
+- One page short: German 2608.15761; and, as today, Chinese 2608.12606 and 2608.24839.
+- Under CJKutf8 the density model is xeCJK's (its glue beside Latin, its punctuation); the final, keeping the preview's
+  type, no longer re-solves it from the measured density, and Japanese 2608.06701 there ends at start drift 0.223
+  (today 0.436; solved again, 0.040). A width model for CJKutf8 would close it.
+- A page whose layout changes mid-page (revtex's and aastex's grids) is read in the layout it went out in.
 - A short abstract can be set too tall (Japanese and Korean 2608.15761): the front matter takes its neighbours' leading.
 - The macros go on translated units only. A unit left in English keeps the paper's own setting; the flow counts it
   at its original's height.

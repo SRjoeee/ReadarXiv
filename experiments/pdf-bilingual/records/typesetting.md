@@ -37,15 +37,17 @@ On the evaluation page: "Flow, even" (key `flow46fp8r5b`) for German and Russian
    the range stops is taken back over the next 50 lines. Floats wait for their original's page and column
    (`FLOAT_TEX`, never more than two pages, not at a forced break).
 5. **Measure the preview**: its lines, marks and forced breaks.
-6. **Final**: the type solved again from the preview's measured height (`correctUnits`); the flow again from the
-   preview's lines, now correcting where the preview's text stood:
+6. **Final**: the preview's type kept (until the corrections below, the type was solved again from the preview's
+   measured height); the flow again from the preview's lines, each unit at its measured height, now correcting where
+   the preview's text stood:
    - a reading is the median of the next five; it is taken only where it parts from the heights' account by more
      than eight lines; the first reading, before which stands only the front matter, stands for the rest;
    - after a forced break the correction starts again from where the preview put the text there;
    - what is taken back moves a unit's leading at most 5 % from the window's (`rate`);
    - CJK: where a segment (up to a forced break, or the paper's end) runs late by itself by more than three lines,
      its leading at the floor, its late stretch is set at one face — 97.5 % over as few of its last units as take
-     the lateness back, else 95 % — and the flow runs again (`shrink`).
+     the lateness back, else 95 % — and the flow runs again (`shrink`);
+   - a unit the flow cannot measure (a display inside it) takes the leading of the last measured unit before it.
 7. **Final compile.**
 
 | Knob | Chinese | Japanese, Korean | German, Russian |
@@ -70,16 +72,79 @@ units standing out are counted over 2,531 units):
 | Flow | 30 (4 / 0) | 0.043 / 0.259 | 78 % | 84 % | 83 % | 53 |
 | **The rule chosen** | **31 (3 / 0)** | **0.040 / 0.220** | **80 %** | **85 %** | **84 %** | **10** |
 
-In the engine (`exp/flow-typesetting`, `spikes/typeset-check.mjs`, 2026-10-01), the same rule on the same
-translations: 32 of 34 papers as above; German and Korean 2608.15761 not (German one page fewer, drift 0.061 against
-0.085; Korean 0.108 against 0.086), and the experiment's own code, run again, gives what the engine gives, plan and
-TeX alike. Those two cells of `round-34.json` are not reproducible; the engine's run is the baseline: pages equal 30
-(3 more / 1 fewer), drift 0.040, within 0.1 column 80 %.
+In the engine (`exp/flow-typesetting`, `spikes/typeset-check.mjs`, since replaced by the gate, 2026-10-01), the same
+rule on the same translations: 32 of 34 papers as above; German and Korean 2608.15761 not (German one page fewer, drift
+0.061 against 0.085; Korean 0.108 against 0.086), and the experiment's own code, run again, gives what the engine gives,
+plan and TeX alike. Those two cells of `round-34.json` are not reproducible; the engine's run is the baseline: pages
+equal 30 (3 more / 1 fewer), drift 0.040, within 0.1 column 80 %.
 
 Option A set a face in five papers, each over a run of whole pages: Japanese 2608.18090 (33 units at 95 % or
 97.5 %, its page back), 2608.24839 (40 at 97.5 %), 2608.05876 (24, its appendix), 2608.15761 (16), Chinese
 2608.09038 (17 at 95 %); against Flow, even, three papers better and none worse. The pages still off: Chinese
 2608.09038 (+2), Korean 2608.18090 (+1) and Russian 2608.06233 (+1), each at something that cannot break (below).
+
+## The engine's corrections (2026-10-01, before the rule is wired)
+
+An independent evaluation of the engine modules (round of 34, and a holdout of 22 the rule was not tuned on: 13
+Chinese papers it never saw, 9 of the round's papers in a language they were not evaluated in) found six problems;
+the engine modules were corrected before wiring, each measured on the gate (`spikes/typeset-gate.mjs`, natively in
+Docker, the holdout judging):
+
+- **Columns, page by page, from TeX, on the original's grid.** `marksOf` decided two columns once per document, from a
+  fifth of the starts in the right half; Chinese 2608.02163 (a two-column body, a one-column appendix) fell under it in
+  its original and over it in the rule's compiles, and every place after the body read 18.75 columns apart. Each page
+  now carries its columns as its compile set it (`MARK_DEF`'s `axt-c<n>-<k>`: LaTeX's `\if@twocolumn`, multicol's and
+  the kernel's `\col@number`, revtex's grid `\pagegrid@col`), and both documents are read on the original's, page by
+  page — a unit on its original's page at its height is level, whatever the translation's compile set that page in
+  (aastex's 2608.12606 began its one-column appendix a page early, mid-page). Judging columns from the marks fails both
+  ways on these papers: run-in labels and centred captions put starts in the right half of one-column pages (2608.02991,
+  seven pages), a right column of floats or of one paragraph puts none there.
+- **No plan from a missing or partial input**: the translation is then set as today. With no line readings,
+  `solveType([])` had given the smallest type. Guarded: a design for the script under the strategy, the original's log
+  whole (`AXT-END` after the last page), its marks and every page's columns, the width probe, an alphabet's size probe,
+  a translated unit the original measured. A final without a whole measurement keeps the preview's plan.
+- **One design per strategy**: under the pdfLaTeX fallback (CJKutf8), which has neither xeCJK's glue nor a face scale of
+  its own, CJK is solved as an alphabet is — a size on every unit (the CJK face follows it) and the leading.
+- **The last TeX pass** of the browser compiler's joined log is read: the terminal's echo invented forced breaks.
+- **The final keeps the preview's type**: re-solved from the preview's measured density, a type a few per cent
+  different in size, glue or face broke lines no prediction followed (Korean 2608.18090 a page more in the final alone,
+  Chinese 2608.23586 a page fewer). Only the leading moves now, which breaks no line again.
+
+The gate's numbers, the rule as it stands (the final compile; start and end drift the mean of the papers' medians):
+
+| | Pages equal (more / fewer) | Start drift | End drift | Within 0.1 column | Blocks within 15 % | Floats on their page / within 30 pt |
+|---|---|---|---|---|---|---|
+| Round of 34, today | 11 (14 / 9) | 0.731 | 0.746 | 20 % | 54 % | 55 % / 34 % |
+| Round of 34, the rule as handed over | 30 (3 / 1) | 0.040 | 0.044 | 80 % | 85 % | 98 % / 84 % |
+| **Round of 34, the rule corrected** | **32 (1 / 1)** | **0.041** | **0.045** | **81 %** | **84 %** | **98 % / 84 %** |
+| 13 unseen Chinese papers, today | 5 (0 / 8) | 0.703 | 0.720 | 11 % | 48 % | 33 % / 20 % |
+| 13 unseen, as handed over | 11 (0 / 2) | 0.136 | 0.136 | 55 % | 64 % | 97 % / 84 % |
+| **13 unseen, corrected** | **12 (0 / 1)** | **0.100** | **0.101** | **64 %** | **65 %** | **97 % / 86 %** |
+| 9 in a new language, today | 2 (4 / 3) | 0.679 | 0.696 | 15 % | 49 % | 49 % / 24 % |
+| 9 in a new language, as handed over | 8 (0 / 1) | 0.052 | 0.060 | 77 % | 79 % | 97 % / 94 % |
+| **9 in a new language, corrected** | **8 (0 / 1)** | **0.043** | **0.049** | **76 %** | **80 %** | **97 % / 94 %** |
+| Chinese 2608.02163: today / as handed over / corrected | 0 / 0 / 0 | 0.266 / 18.75 / 0.215 | 0.271 / — / 0.218 | 12 / — / 44 % | 63 / — / 74 % | 82 / — / 94 % on page |
+
+("As handed over" for 2608.02163 is the evaluation's: the per-document column flag read every place after the body 18.75
+columns off. The other "as handed over" rows are the gate's own run of items one to four, which left the rule's choices
+as they were.) Units standing out — leading parted by more than 8 % from the six around it, measured in the final's log
+over all 57 papers — 93 before the last correction, 48 after. One paper is further from its original's page count than
+today: Chinese 2608.09038, +1 (today 0; +2 as handed over). Under CJKutf8 (`STRATEGY=1`): Japanese 2608.06701 today +1
+page, drift 0.436, the rule 0 and 0.223 (as handed over +1, 0.412); Chinese 2608.21180 today −1, 0.641, the rule 0,
+0.272 (as handed over the same); Japanese 2608.18090 today +1, 0.753, the rule +1, 0.040 (0.584).
+
+Tried and not taken, on the same gate:
+
+- **The CJK knobs in turn, the leading first** (instead of equal shares in log terms; twenty lines fewer): unseen 11 →
+  10 pages equal, start 0.136 → 0.159; new language 8 → 7, 0.052 → 0.062. The equal shares stay.
+- **Option A off**: no change on the holdout, which has no Japanese or Korean paper; on the round 30 → 29 pages equal
+  (Japanese 2608.18090), 0.040 → 0.043, three papers worse and none better. Kept: its effect is on scripts the holdout
+  cannot judge.
+- **The nearer of the measuring compile and the final** (fewer pages off, then the smaller drift): about a point
+  (round 33 pages equal, 0.039; unseen 0.085), for a full measuring compile or a further one whenever a draft is the
+  nearer. Left to the wiring.
+- The window and the take-back as one constant (50 lines both) was not run: 46 against 50 lines is within the
+  window's own reach, and the gate is the place to try it (`VARY='FLOW.window=50'`).
 
 ## The rules tried
 
@@ -169,8 +234,9 @@ change.
 
 ## Metrics
 
-`spikes/round-metrics.mjs` computes them from the PDFs — each unit's start and end marks against the original's —
-and writes numbers only.
+`spikes/round-metrics.mjs` computed them for the experiment; the engine's gate, `spikes/typeset-gate.mjs`, computes
+them from the PDFs with `places.mjs` — each unit's start and end marks against the original's, both documents read on
+the original's columns page by page — and writes numbers only (`records/typeset-gate.json`).
 
 - **Pages**: the translation's pages less the original's. Equal pages are necessary, not sufficient.
 - **Drift**: each unit's start against its original's, in columns (page, column, height in the column): median, p90,
@@ -185,11 +251,14 @@ and writes numbers only.
 
 ## Open problems, and experiments worth running again
 
-- **A page more that only the final shows** (Korean 2608.18090): a paragraph moved whole in the final alone. A third
-  compile when the final has more pages than the original would catch it; not taken for now (performance).
-- **Pages after a `\clearpage` or an [H] figure** (Chinese 2608.09038 two pages more, Russian 2608.06233 one): a few
-  lines before what cannot break. A lead kept ahead only before such a point (`measured.local`) helped on six papers,
-  not tried on the round of 34.
+- **Pages after a `\clearpage`** (Chinese 2608.09038, one page more where today has none): the main text ends about a
+  third of a column late, at the floor of its leading with the take-back held to 5 %, and the references before a
+  `\clearpage` spill onto a page of their own. A lead kept ahead only before such a point (`measured.local`) helped on
+  six papers in the experiment, not tried on the gate. (Korean 2608.18090 and Russian 2608.06233 are level since the
+  final keeps the preview's type.)
+- **CJKutf8's widths**: the density model is xeCJK's; under the pdfLaTeX fallback, with the type no longer solved
+  again from the measured density, Japanese 2608.06701 ends at 0.223 (0.040 solved again). A width model per strategy.
+- **Pages whose layout changes mid-page** (revtex's and aastex's grids) read in the layout they went out in.
 - **A short abstract set too tall** (Korean and Japanese 2608.15761): the window's leading, raised by shorter
   neighbours, set the 21-line abstract 8 % taller than the original's 23 lines and pushed the keywords off page 1.
   The front matter may want its own ratio rather than the window's.
@@ -197,16 +266,17 @@ and writes numbers only.
   the round's own data; the final's foresight of a face, a tracking change or a type re-solve would improve with it.
 - **Parameters tuned before later fixes**: the eight-line threshold and the median of five were set before floats
   were held and before the restart at forced breaks; the window of 46 and the 5 % rate were picked from two or three
-  values; option A's three lines from one. Each is cheap to try again on the round of 34.
+  values; option A's three lines from one. Each is cheap to try again on the gate (`VARY`), the holdout judging.
 - **The density predictor's worst cases**: CJK's maximum error 5.2–5.8 % against a 5 % gate.
 
 ## Where things are
 
 - In the engine (branch `exp/flow-typesetting`): `src/pdf-reader/engine/typeset/` — the rule as pure modules
   (`plan.mjs`, `type.mjs`, `flow.mjs`, `density.mjs`, `places.mjs`, `tex.mjs`); its cases in
-  `tests/pdf-reader/typeset-*.test.ts` and `spikes/typeset-tex-cases.mjs`; the check against this round in
-  `spikes/typeset-check.mjs`; the engineers' notes in `../plans/2026-10-01-flow-typesetting-handoff.md`. The paths
-  below are the experiment's, on the local branch `exp/geometry-lock`.
+  `tests/pdf-reader/typeset-*.test.ts` and `spikes/typeset-tex-cases.mjs`; the gate on the round and the holdout in
+  `spikes/typeset-gate.mjs`, its papers and baseline in `typeset-gate.json`; the engineers' notes in
+  `../plans/2026-10-01-flow-typesetting-handoff.md`. The paths below are the experiment's, on the local branch
+  `exp/geometry-lock`.
 - Rules: `spikes/generic-type.mjs` (design table, type, flow, option A), `spikes/lock.mjs` (TeX of the unit
   macros, floats held, probes, readers), `spikes/density.mjs` (width and size probes, density),
   `spikes/alignment.mjs` (places), `src/pdf-reader/engine/latex-front.mjs` (unit leading, marks).
