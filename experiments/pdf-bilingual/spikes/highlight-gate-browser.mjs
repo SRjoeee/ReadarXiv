@@ -27,6 +27,9 @@
 //    from the event on paints, per side, the sentence or nothing, never the paragraph, and ends with the sentence on
 //    both (I2: on 346c26fc with the harness's hooks, 10 of 12 fail — the paragraph painted on one side or both, for
 //    19–178 ms)
+//  - each side's tokens let go once its layout is made: on 2608.02459, both layouts and sentences made and the garbage
+//    collected, the tokens the reader holds weakly are gone (the final review, I3: made to fail on 346c26fc with the
+//    weak hold added, both sides' kept, the heap 31.8 MB; 10.5 MB with the fix)
 //  - sentences (B3): where a unit lights by sentence on both sides, what it paints is its sentences' shapes (the first,
 //    a middle and the last, debug.litRects), and the grid and the pads above are the pointer's sentence's
 //    (debug.pointerSentence), 1.5 px past a shape's sides not; round 1's measure of their boundaries on the page's own
@@ -56,8 +59,8 @@
 // into a copy of each build, as extension.mjs does with poc-reader/papers; their units carry the sentences
 // spikes/highlight-sentences.mjs made (`sentences` beside `src` and `tr`): spikes/highlight-papers.mjs makes them, into
 // out/highlight/papers.
-//   node experiments/pdf-bilingual/spikes/highlight-gate-browser.mjs [checks|costs|all|floats|resting]   (floats, resting: those
-//   checks alone)
+//   node experiments/pdf-bilingual/spikes/highlight-gate-browser.mjs [checks|costs|all|floats|resting|tokens]   (the last
+//   three: those checks alone)
 //   BUILD=<dir> the build under test (default .output/chrome-mv3), LABEL its name in the output; BASE_BUILD=<dir> the one
 //   to compare with (costs);
 //   PAPERS=<dir> the demo papers (default out/highlight/papers); CHECK=<ids> the papers checked (default 2608.02459, the
@@ -454,6 +457,23 @@ function demoSentences(paper) {
   }
   return r
 }
+/** each side's tokens let go once its layout is made (the final review, I3: an arrow the layout keeps kept the scope of
+ *  the anchoring that made it, and the side's tokens with it — 2608.02459's heap 31.7 MB against 10.5): both layouts
+ *  and both sides' sentences made, the garbage collected twice, each side's tokens — which the reader holds weakly for
+ *  this check (anchorOne) — gone; the heap after it reported */
+async function tokensLetGo(b, paper) {
+  const page = await open(b, paper)
+  await page.waitForFunction(() => { const d = window.__reader.debug; return d.left.geo && d.right.geo && d.left.starts && d.right.starts }, null, { timeout: 30_000, polling: 100 })
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('HeapProfiler.enable')
+  for (let i = 0; i < 2; i++) await cdp.send('HeapProfiler.collectGarbage')
+  const { usedSize } = await cdp.send('Runtime.getHeapUsage')
+  const kept = await page.evaluate(() => [window.__reader.debug.left, window.__reader.debug.right].map(s => (s.tokens ? s.tokens.deref() !== undefined : null)))
+  await page.close()
+  const r = { kept, heapMB: +(usedSize / 1048576).toFixed(1) }
+  check(`${b.label} ${paper}: each side's tokens let go once its layout is made`, kept.every(k => k === false), JSON.stringify(r))
+  ;((result.checks ??= {})[`${b.label} ${paper}`] ??= {}).tokens = r
+}
 /** a pointer resting on each pane through the right side replaced and the left anchored again (resting) */
 async function restingChecks(b) {
   const EVENTS = [['the right side replaced', SWAP], ['the right side replaced after a wait', SWAP_HELD], ['the left anchored again', REANCHOR]]
@@ -471,6 +491,7 @@ async function restingChecks(b) {
   }
 }
 async function checks(b) {
+  await tokensLetGo(b, CHECK[0])
   await restingChecks(b)
   for (const paper of CHECK) {
     const ds = demoSentences(paper)
@@ -851,6 +872,7 @@ const base = BASE && (what === 'costs' || what === 'all') ? await launch(BASE, '
 try {
   if (what === 'checks' || what === 'all') await checks(head)
   if (what === 'resting') await restingChecks(head)
+  if (what === 'tokens') await tokensLetGo(head, CHECK[0])
   if (what === 'checks' || what === 'all' || what === 'floats') await floatChecks(head)
   if (what === 'costs' || what === 'all') await costs(base ? [base, head] : [head])
 } finally {

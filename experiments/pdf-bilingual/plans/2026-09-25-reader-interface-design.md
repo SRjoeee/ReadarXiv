@@ -803,6 +803,10 @@ open within noise.
   2.4 ms; a page's geometry at its first drawing 0.03–0.17 ms in the browser (B1), the rows' reach adding 6–12 % since;
   a page's floats 0.3–0.8 ms p50 (up to about 4 ms on a side's first pages), from the operator list it was drawn by —
   asking the worker for it again had made pages 7–8 of 06701 take 326–387 ms to draw, against 198–224.
+- Memory: a side's layout keeps what a page's geometry needs of its tokens, not the tokens — on 2608.02459, both
+  layouts and sentences made and the garbage collected, the heap 10.5 MB; 31.8 MB while an arrow the layout kept held
+  the anchoring's scope and both sides' tokens with it (the final review, 2026-10-01; the browser gate checks the
+  tokens are let go).
 
 ### 17.7 Known limits
 

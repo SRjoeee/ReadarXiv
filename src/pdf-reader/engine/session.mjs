@@ -1615,9 +1615,15 @@ async function anchorSide(side, texts, marks) {
   anchoring++
   try { return await anchorOne(side, texts, marks) } finally { anchoring--; makeLayouts() }
 }
+/** a unit's kind, for a side's layout, which keeps it: a function of the module's, so that the layout keeps nothing of
+ *  the anchoring that made it — an arrow made there kept that scope, and with it the side's tokens, for the visit
+ *  (2608.02459: the heap 31.7 MB against 10.5 once the layouts are made, the final review of the highlight, I3) */
+const kindOfUnit = id => unitKind.get(id)
 async function anchorOne(side, texts, marks) {
   const pages = await textPages(side.doc)
   const doc = tokenizeDocument(pages)
+  // the side's tokens, held weakly for the gate (spikes/highlight-gate-browser.mjs): they are let go once its layout is made
+  side.tokens = new WeakRef(doc)
   // the marks it went by, kept on the side: a cached copy keeps the right side's, which cost a second to read from its PDF
   side.marks = marks ?? (await pdfMarks(side.doc))
   const bounds = boundsFromMarks(doc, side.marks)
@@ -1629,7 +1635,7 @@ async function anchorOne(side, texts, marks) {
   side.starts = null
   side.makeGeo = () => {
     const t0 = performance.now()
-    side.geo = layoutOf(doc, views, anchors, id => unitKind.get(id))
+    side.geo = layoutOf(doc, views, anchors, kindOfUnit)
     // the pages drawn before the layout was made: their geometry now, not in the pointer's frame (the review of B3, 4)
     for (const pv of side.viewer._pages ?? []) if (pv.renderingState === 3) pageSentences(side.geo, pv.id, side.ownStarts)
     side.makeGeo = null
