@@ -70,7 +70,8 @@ export function unitsOf(units, kept, hashes, results) {
     const r = results.get(i)
     if (!r) return { ...base, state: 'none' }
     // the sentences of the translation kept, which say where each sentence begins in `src` and `tr`
-    return { ...base, ...(r.pieces ? { pieces: r.pieces, tr: plainTranslated(r.pieces), ...(r.sentences ? { sentences: r.sentences } : {}) } : {}), ...(r.by !== undefined ? { by: r.by } : {}), tried: r.tried, state: r.state }
+    // and a translation the final set in the source (the author block under CJKutf8): kept, but not what the right side shows
+    return { ...base, ...(r.pieces ? { pieces: r.pieces, tr: plainTranslated(r.pieces), ...(r.sentences ? { sentences: r.sentences } : {}) } : {}), ...(r.by !== undefined ? { by: r.by } : {}), tried: r.tried, state: r.state, ...(r.inSource ? { inSource: true } : {}) }
   })
 }
 

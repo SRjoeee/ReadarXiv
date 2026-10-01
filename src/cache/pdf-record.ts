@@ -37,6 +37,9 @@ export interface CachedUnit {
    * before they were kept — the unit is lit whole then (the reader's highlight, sentence level)
    */
   sentences?: { src: number[]; tr: number[] }
+  /** translated, but the final set it in the source — the author block under a strategy that sets it as the paper has
+   *  it (CJKutf8): its translation seeds the next run, and the right side is anchored by the source */
+  inSource?: true
 }
 
 /**

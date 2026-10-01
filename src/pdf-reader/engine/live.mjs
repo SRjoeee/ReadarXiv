@@ -338,9 +338,11 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
   let readings = known ?? null
   const compiles = async () => {
     // 3–5. compiles
-    // each unit's text as that compile has it: translated if it was in the snapshot, the source's otherwise; with where its
-    // placeholders stood, its displays beyond its marks and the sentences of the translation typeset, for the anchors
-    const texts = done => textsShown(units, done, pieces => sentencesBy.get(pieces))
+    // each unit's text as that compile has it: translated if the strategy set it from the snapshot, the source's otherwise
+    // — the author block under one that sets it as the paper has it (scripts.mjs typesetBy; the F2 review's M2) —; with
+    // where its placeholders stood, its displays beyond its marks and the sentences of the translation typeset, for the
+    // anchors
+    const texts = done => textsShown(units, typesetBy(done, strategy()), pieces => sentencesBy.get(pieces))
     let aux = null, bbl = null
     // known, the original is what it was: nothing compiled
     let originalP = known ? Promise.resolve({ ok: true, log: known.log, aux: known.cites }) : null
@@ -496,7 +498,12 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       // (the handoff, 6)
       typeset = planFor(all)?.typeset ?? null
     }
-    if (ok) onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
+    if (ok) {
+      onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
+      // the units the final set in the source though translated, for the record: their translation stays the next run's
+      const set = typesetBy(all, strategy())
+      units.forEach((u, i) => { if (all.has(u) && !set.has(u) && results.has(i)) results.set(i, { ...results.get(i), inSource: true }) })
+    }
     // marks known come only from a compile of the paper's own source that set (onOriginal)
     const own = marks && !originalP ? null : await original()
     return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), original: readings }

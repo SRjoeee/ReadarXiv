@@ -352,3 +352,25 @@ describe('a preview of part of the translation, the last batch out', () => {
     expect(shown[1]).toBeLessThan(n)
   })
 })
+
+// A strategy that sets the author block as the paper has it (CJKutf8, scripts.mjs `authors: false`): the right side's
+// texts and the record say the author unit is in the source there, though it was translated and is kept for the next
+// run (the F2 review's M2: ja 2608.18090's right side read the byline in Japanese where the PDF set it in English)
+describe('the author block a strategy sets as the paper has it', () => {
+  it('is the source in the texts shown, and marked set in the source in the run\'s results, its translation kept', async () => {
+    const src = `\\documentclass{article}\\title{A Title of the Paper}\\author{Yousef Radwan\\\\King Abdullah University}\\begin{document}\\maketitle\n${Array.from({ length: 3 }, (_, k) => `Paragraph ${k} of the paper, with words that run on for a line.\n`).join('\n')}\\end{document}\n`
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(src)]])), n = p.units.length
+    const author = p.units.findIndex(u => u.kind === 'author'), t = translator()
+    t.release()
+    // xeCJK fails every compile: CJKutf8 sets the translation
+    const c = compiler(n, { fail: (k, q) => k !== 'original' && k !== 'probe' && main(q).includes('xeCJK') })
+    const shown: { final: boolean; texts: { id: number; text: string }[] }[] = []
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n), onUpdate: ({ final, texts }) => shown.push({ final, texts: texts as { id: number; text: string }[] }) })
+    expect(r.settled).toBe(true)
+    const authorText = (s: (typeof shown)[number]) => s.texts.find(x => x.id === author)?.text
+    for (const s of shown) expect(authorText(s)).toContain('Yousef Radwan')
+    const result = r.results.get(author) as { pieces?: unknown[]; inSource?: boolean; state: string }
+    expect([!!result.pieces, result.state, result.inSource]).toEqual([true, 'whole', true])
+    expect((r.results.get(author + 1) as { inSource?: boolean }).inSource).toBeUndefined()
+  })
+})

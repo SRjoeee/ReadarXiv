@@ -1976,7 +1976,7 @@ async function showCached(record, setContext, note = () => {}) {
     // their sentences only where of their shape and the text made again is the one they were counted in (the review of
     // B3, minor 5: a malformed field took the highlight off a side)
     rightTexts = record.units.map((u, i) => {
-      const t = u.pieces ? unitText(u.pieces) : { text: u.src }, s = u.pieces && u.tr === t.text ? sentencesKept(u.sentences, u.src, t.text) : null
+      const t = u.pieces && !u.inSource ? unitText(u.pieces) : { text: u.src }, s = u.pieces && u.tr === t.text ? sentencesKept(u.sentences, u.src, t.text) : null
       return { id: i, ...t, ...displayEdges(u), ...(s ? { sentences: s } : {}) }
     })
     await Promise.all([

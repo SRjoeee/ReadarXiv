@@ -44,6 +44,14 @@ describe('allTranslatedBy', () => {
 
 // Sentence level (B3): a copy keeps each unit's sentences with the translation they belong to, additive and optional —
 // a copy made before has none, and its units are lit whole
+describe('a unit the final set in the source', () => {
+  it('unitsOf: keeps its translation for the next run, and says the final set it in the source (the F2 review\'s M2)', async () => {
+    const units = [{ kind: 'author', pieces: [{ t: 'text', s: 'Ada Lovelace' }] }] as never[]
+    const [u] = unitsOf(units, new Set(), ['h'], new Map([[0, { pieces: [{ t: 'text', s: 'tr', tr: true }], state: 'whole', by: 'B', tried: 'B', inSource: true }]]))
+    expect([u?.state, !!(u as { pieces?: unknown }).pieces, (u as { inSource?: boolean }).inSource]).toEqual(['whole', true, true])
+  })
+})
+
 describe('the record keeps the sentences of the translation it keeps', () => {
   const units = [{ kind: 'para', pieces: [{ t: 'text', s: 'One. Two.' }] }, { kind: 'para', pieces: [{ t: 'text', s: 'Three.' }] }, { kind: 'heading', pieces: [{ t: 'text', s: 'Four' }] }]
   const tr = (s: string) => [{ t: 'text', tr: true, s }]
