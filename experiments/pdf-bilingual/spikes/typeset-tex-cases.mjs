@@ -261,5 +261,16 @@ const capofLog = tex('capof', MARKS + capofDoc)
 const co = await marksOf(join(dir, 'capof.pdf'))
 check('a caption outside a float holds no float, and raises no TeX error', pg(co, 6) === 0 && !/^! /m.test(capofLog), JSON.stringify([...co.marks, (capofLog.match(/^! .*/m) ?? [''])[0]]))
 check('held floats raise no TeX error', !/^! /m.test(tex('float1', MARKS + floatDoc(1)) + tex('float2', MARKS + floatDoc(2))))
+// each page's columns as its compile set it (MARK_DEF's axt-c<n>-<k>, places.mjs marksOf): LaTeX's \twocolumn and
+// \onecolumn, under pdfLaTeX and XeTeX; revtex's grid (ltxgrid, under which \if@twocolumn stays false: 2608.06233,
+// 2608.20847, aastex's 2608.12606); multicol. A one-column appendix after a two-column body is Chinese 2608.02163
+const colsOf = async (name, src, engine) => { tex(name, `${MARK_DEF}${src}`, engine); return (await marksOf(join(dir, `${name}.pdf`))).columns.join('') }
+const switching = '\\documentclass[twocolumn]{article}\\usepackage{lipsum}\\begin{document}\\lipsum[1-12]\\onecolumn\\lipsum[1-8]\\twocolumn\\lipsum[1-6]\\end{document}\n'
+const colsArticle = await colsOf('cols-article', switching), colsXe = await colsOf('cols-xe', switching, 'xelatex')
+check('each page\'s columns: \\twocolumn, \\onecolumn and back, under pdfLaTeX and XeTeX', colsArticle === '22112' && /^2+1+2+$/.test(colsXe), JSON.stringify([colsArticle, colsXe]))
+const colsGrid = await colsOf('cols-revtex', '\\documentclass[aps,prl,twocolumn]{revtex4-2}\\usepackage{lipsum}\\begin{document}\\title{T}\\maketitle\\lipsum[1-14]\\clearpage\\onecolumngrid\\lipsum[1-6]\\end{document}\n')
+check('each page\'s columns: revtex\'s two-column grid and its one-column grid', /^2+1+$/.test(colsGrid), colsGrid)
+const colsMulti = await colsOf('cols-multicol', '\\documentclass{article}\\usepackage{lipsum,multicol}\\begin{document}\\lipsum[1-3]\\clearpage\\begin{multicols}{2}\\lipsum[1-10]\\end{multicols}\\clearpage\\lipsum[1-3]\\end{document}\n')
+check('each page\'s columns: multicol\'s columns, and one column around them', /^12+1+$/.test(colsMulti), colsMulti)
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

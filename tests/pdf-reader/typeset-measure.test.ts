@@ -126,7 +126,7 @@ describe('atoms, pieces and lines', () => {
 describe('places against the original', () => {
   type Place = { page: number; x: number; y: number }
   // two-column pages 792 pt high whose text runs from 700 pt down to 100 pt; a unit from (page, x, y) to (page, x, y)
-  const marks = (pages: number, list: [number, Place, Place][]) => ({ pages, width: 612, height: 792, twoColumn: true, marks: new Map(list.flatMap(([i, s, e]) => [[`${i}s`, s], [`${i}e`, e]] as [string, Place][])) })
+  const marks = (pages: number, list: [number, Place, Place][]) => ({ pages, width: 612, height: 792, columns: Array(pages).fill(2), marks: new Map(list.flatMap(([i, s, e]) => [[`${i}s`, s], [`${i}e`, e]] as [string, Place][])) })
   const p = (page: number, x: number, y: number) => ({ page, x, y })
   const orig = marks(2, [[0, p(0, 60, 700), p(0, 60, 600)], [1, p(0, 60, 580), p(0, 60, 100)], [2, p(0, 320, 700), p(0, 320, 100)], [3, p(1, 60, 700), p(1, 60, 650)], [4, p(1, 320, 400), p(1, 320, 100)]])
   // unit 0 60 pt lower, unit 1 at the right column's top instead of low in the left, unit 2 halfway down the left,
@@ -154,7 +154,7 @@ describe('places against the original', () => {
     expect([a.drift.within, a.size.within]).toEqual([0.25, 0.25])
   })
   it('gives each unit\'s signed drift in points of the original\'s text block, a unit the compile lacks left out', () => {
-    const mk = (list: [string, Place][]) => ({ pages: 2, width: 600, height: 800, twoColumn: true, marks: new Map(list) })
+    const mk = (list: [string, Place][]) => ({ pages: 2, width: 600, height: 800, columns: [2, 2], marks: new Map(list) })
     const om = mk([['0s', p(0, 50, 700)], ['1s', p(0, 50, 100)], ['2s', p(0, 350, 400)], ['9s', p(0, 350, 700)]])
     const tm = mk([['0s', p(0, 50, 700)], ['1s', p(0, 350, 100)], ['2s', p(0, 350, 550)]])
     const d = drifts(om, tm), block = ((700 - 100) * 72.27) / 72
@@ -164,9 +164,29 @@ describe('places against the original', () => {
     expect(d.has(9)).toBe(false)
   })
   it('reads a start above the original\'s highest mark on its page as ahead, not level (Korean 2608.21180\'s abstract)', () => {
-    const mk = (list: [string, Place][]) => ({ pages: 2, width: 600, height: 800, twoColumn: false, marks: new Map(list) })
+    const mk = (list: [string, Place][]) => ({ pages: 2, width: 600, height: 800, columns: [1, 1], marks: new Map(list) })
     const om = mk([['3s', p(0, 50, 480)], ['3e', p(0, 50, 200)]])
     const tm = mk([['3s', p(0, 50, 536)], ['3e', p(0, 50, 250)]])
     expect(drifts(om, tm).get(3)).toBeCloseTo((-56 * 72.27) / 72, 6)
+  })
+  it('counts each page\'s columns as its own compile read them: a two-column body and a one-column appendix (Chinese 2608.02163)', () => {
+    // the original: the body over pages 0–1 in two columns, the appendix over pages 2–5 in one; the translation the
+    // same a page shorter. Read with one flag per document — the original's a fifth of its starts in the right half,
+    // the translation's past it — every place after the body differed by the pages before it, 18.75 columns
+    const unit = (i: number, s: Place): [string, Place][] => [[`${i}s`, s], [`${i}e`, { ...s, y: s.y - 50 }]]
+    const om = { pages: 6, width: 612, height: 792, columns: [2, 2, 1, 1, 1, 1], marks: new Map([...unit(0, p(0, 60, 700)), ...unit(1, p(1, 330, 400)), ...unit(2, p(2, 60, 700)), ...unit(3, p(4, 60, 100)), ...unit(4, p(5, 60, 700))]) }
+    const tm = { pages: 5, width: 612, height: 792, columns: [2, 2, 1, 1, 1], marks: new Map([...unit(0, p(0, 60, 700)), ...unit(1, p(1, 330, 400)), ...unit(2, p(2, 60, 700)), ...unit(3, p(3, 60, 100)), ...unit(4, p(4, 60, 400))]) }
+    const a = alignment(om, tm)
+    expect(a.pages).toBe(-1)
+    expect(a.drift.values.slice(0, 3)).toEqual([0, 0, 0])
+    // a unit a page early in the appendix is a column early, a page there being one column (no page here has a block
+    // tall enough to measure in: each is the page's whole height)
+    expect(a.drift.values[3]).toBeCloseTo(1, 6)
+    expect(a.drift.values[4]).toBeCloseTo(1 - 300 / 792, 6)
+    expect(drifts(om, tm).get(1)).toBeCloseTo(0, 9)
+  })
+  it('reads the right half of a one-column page as the same column: a run-in label, a centred caption', () => {
+    const om = { pages: 1, width: 612, height: 792, columns: [1], marks: new Map<string, Place>([['0s', p(0, 60, 700)], ['1s', p(0, 400, 400)], ['2s', p(0, 60, 100)]]) }
+    expect(drifts(om, { ...om, marks: new Map([...om.marks, ['1s', p(0, 60, 400)]]) }).get(1)).toBeCloseTo(0, 9)
   })
 })

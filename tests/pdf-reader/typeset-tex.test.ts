@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lastTexLog } from '@/pdf-reader/engine/latex-front.mjs'
+import { lastTexLog, MARK_DEF } from '@/pdf-reader/engine/latex-front.mjs'
 import { openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-reader/engine/live.mjs'
 import { readSizeProbe, readWidthProbe } from '@/pdf-reader/engine/typeset/density.mjs'
 import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
@@ -113,6 +113,11 @@ describe('a typeset plan in the compile', () => {
 })
 
 describe('the probes the rule needs', () => {
+  it('marks every page with the columns its compile set it in, whichever way the class sets them', () => {
+    expect(MARK_DEF).toContain('\\AddToHook{shipout/background}{\\put(0,0){\\axtmark{c')
+    for (const flag of ['\\pagegrid@col', '\\col@number', '\\if@twocolumn']) expect(MARK_DEF).toContain(flag)
+    expect(text(originalFiles(paper()))).toContain(MARK_DEF)
+  })
   it('adds the width and size probes to the font probe when asked', () => {
     expect(text(probeFiles(paper()))).not.toContain('AXT-WIDTH')
     expect(text(probeFiles(paper(), { width: true }))).toContain('AXT-WIDTH')

@@ -11,7 +11,7 @@ import { latin1 } from '../latex-front.mjs'
 import { scriptOf } from '../scripts.mjs'
 import { citeStyleOf, measureUnits, readSizeProbe, readWidthProbe } from './density.mjs'
 import { flowType } from './flow.mjs'
-import { drifts } from './places.mjs'
+import { columnOf, drifts } from './places.mjs'
 import { readForced, readLines, typesetting } from './tex.mjs'
 import { correctUnits, DESIGN, heightAtSize, solveType, unitHeights, unitLines } from './type.mjs'
 
@@ -48,7 +48,7 @@ export function previewTypesetting({ paper, translated, lang, fonts, fontLog, or
   const leads = flowType(list, script, unitHeights(list, script, type), { window: FLOW.window, horizon: FLOW.horizon, rate: FLOW.rate }).leads
   // each caption's float waits for its original's page and column (tex.mjs FLOAT_TEX)
   const om = original.marks, floatsAt = new Map()
-  units.forEach((u, i) => { const m = om.marks.get(`${i}s`); if (u.kind === 'caption' && m) floatsAt.set(i, { page: m.page + 1, col: om.twoColumn && m.x >= om.width / 2 ? 1 : 0 }) })
+  units.forEach((u, i) => { const m = om.marks.get(`${i}s`); if (u.kind === 'caption' && m) floatsAt.set(i, { page: m.page + 1, col: columnOf(om, m) }) })
   const state = { units, translated, script, cjk, type, sizes, list, lo, floatsAt, original }
   return { typeset: typesettingOf(state, type, leads, new Map()), type, state }
 }

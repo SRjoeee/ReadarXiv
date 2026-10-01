@@ -904,12 +904,18 @@ export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newsavebox
 \makeatother
 `
 
+/** \\axtmark{name}: a named destination axt-<name> where it stands (a unit's start and end, axt-<n>s and axt-<n>e). And on
+ *  every page, axt-c<columns>-<k>: the columns its compile set it in, 1 or 2, as the page goes out — LaTeX's
+ *  \\if@twocolumn (\\twocolumn, \\onecolumn), multicol's and the kernel's \\col@number, revtex's grid (ltxgrid's
+ *  \\pagegrid@col: it keeps \\if@twocolumn false) — which places.mjs counts columns by, page by page (a two-column body
+ *  and a one-column appendix, Chinese 2608.02163) */
 export const MARK_DEF = [
   '\\ifdefined\\XeTeXrevision\\protected\\def\\axtmark#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}',
   '\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\special{dvipdfmx:config C 0x0010}}\\fi',
   '\\else\\ifdefined\\pdfextension\\protected\\def\\axtmark#1{\\pdfextension dest name{axt-#1} xyz\\relax}',
   '\\else\\ifdefined\\pdfdest\\protected\\def\\axtmark#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} xyz\\relax\\fi}',
   '\\else\\protected\\def\\axtmark#1{}\\fi\\fi\\fi',
+  '\\makeatletter\\ifdefined\\AddToHook\\AddToHook{shipout/background}{\\put(0,0){\\axtmark{c\\ifdefined\\pagegrid@col\\ifnum\\pagegrid@col>\\@ne 2\\else 1\\fi\\else\\ifnum\\ifdefined\\col@number\\col@number\\else\\@ne\\fi>\\@ne 2\\else\\if@twocolumn 2\\else 1\\fi\\fi\\fi-\\the\\ReadonlyShipoutCounter}}}\\fi\\makeatother',
   ...END_MARK,
 ].join('\n') + '\n'
 /**

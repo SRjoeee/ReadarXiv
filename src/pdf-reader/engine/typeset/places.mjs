@@ -2,9 +2,17 @@
 // pages; drift — where each unit starts in reading order, as page, column and height down the text block, against
 // where the original starts it, in columns (one column is half a page in two columns, a page in one); block size — a
 // unit's height over its original's, where both lie within one column. From unit marks (marksOf). A unit the original
-// has and the compile lacks is counted as missing, not dropped.
+// has and the compile lacks is counted as missing, not dropped. Each page's columns are what its own compile set it in
+// (marksOf), so a paper whose body is in two columns and its appendix in one is read page by page in either document.
 const q = (xs, p) => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); return s[Math.round(p * (s.length - 1))] }
-const column = (m, at) => (m.twoColumn && at.x >= m.width / 2 ? 1 : 0)
+/** the column a place is in on its page: the right one of a page set in two columns, past the page's middle */
+export const columnOf = (m, at) => (m.columns[at.page] === 2 && at.x >= m.width / 2 ? 1 : 0)
+// the columns before each page, a page with no reading counted as one
+const firsts = new WeakMap()
+const columnsBefore = m => {
+  if (!firsts.has(m)) { let n = 0; firsts.set(m, Array.from({ length: m.pages + 1 }, (_, p) => { const at = n; n += m.columns[p] === 2 ? 2 : 1; return at })) }
+  return firsts.get(m)
+}
 /** each page's text block, from the original's marks: its highest and its lowest; a page with too few marks to tell, or
  *  one the original does not have, takes the median block. Heights are measured in it, so that a column's foot and the
  *  next column's top stand next to each other, as a reader meets them, whatever the margins and a title block take */
@@ -17,7 +25,7 @@ function blocks(om) {
 }
 /** a place in reading order, in columns: the columns before it, and its height down its text block — held within the
  *  block for the metric, as it may not be for a correction (drifts) */
-const place = (m, at, block, held = true) => { const b = block(at.page), f = (b.top - at.y) / (b.top - b.bottom); return at.page * (m.twoColumn ? 2 : 1) + column(m, at) + (held ? Math.min(1, Math.max(0, f)) : f) }
+const place = (m, at, block, held = true) => { const b = block(at.page), f = (b.top - at.y) / (b.top - b.bottom); return columnsBefore(m)[at.page] + columnOf(m, at) + (held ? Math.min(1, Math.max(0, f)) : f) }
 
 export function alignment(om, tm) {
   const block = blocks(om)
@@ -30,7 +38,7 @@ export function alignment(om, tm) {
     matched++
     drift.push(Math.abs(place(tm, t, block) - place(om, o, block)))
     const oe = om.marks.get(k.replace(/s$/, 'e')), te = tm.marks.get(k.replace(/s$/, 'e'))
-    if (!oe || !te || o.page !== oe.page || t.page !== te.page || column(om, o) !== column(om, oe) || column(tm, t) !== column(tm, te)) continue
+    if (!oe || !te || o.page !== oe.page || t.page !== te.page || columnOf(om, o) !== columnOf(om, oe) || columnOf(tm, t) !== columnOf(tm, te)) continue
     const ho = o.y - oe.y, ht = t.y - te.y
     if (ho >= 20 && ht > 0) size.push(ht / ho)
   }
@@ -61,15 +69,21 @@ export function drifts(om, tm) {
 
 /**
  * Every unit's start and end mark — the axt-<n>s / axt-<n>e destinations MARK_DEF writes (page 0-based, PDF points) —
- * from a PDF.js document, the reader's or pdfjs-dist's; the page's width and height; and whether units start in two
- * columns (a fifth of them or more in the right half)
+ * from a PDF.js document, the reader's or pdfjs-dist's; the page's width and height; and each page's columns, 1 or 2,
+ * as MARK_DEF's axt-c<n>-<k> on the page says its compile set it, 0 where the page has none (a compile without
+ * LaTeX's shipout hooks: places.mjs then counts the page as one column, and the rule takes no plan from it, plan.mjs).
+ * Read from TeX, not judged from the marks: a page's starts in its right half are no measure of its columns — a run-in
+ * label or a centred caption puts a start there on a one-column page (Chinese 2608.02991, three of six starts on nine
+ * pages), and a right column of one paragraph or one float puts none there (2608.06233's fifth page)
  */
 export async function marksOf(pdf) {
   const dests = await pdf.getDestinations()
-  const marks = new Map()
-  for (const [name, d] of dests instanceof Map ? dests : Object.entries(dests)) if (/^axt-\d+[se]$/.test(name) && d) marks.set(name.slice(4), { page: await pdf.getPageIndex(d[0]), x: d[2], y: d[3] })
+  const marks = new Map(), columns = new Array(pdf.numPages).fill(0)
+  for (const [name, d] of dests instanceof Map ? dests : Object.entries(dests)) {
+    if (!d) continue
+    if (/^axt-\d+[se]$/.test(name)) marks.set(name.slice(4), { page: await pdf.getPageIndex(d[0]), x: d[2], y: d[3] })
+    else { const c = /^axt-c([12])-\d+$/.exec(name); if (c) columns[await pdf.getPageIndex(d[0])] = Number(c[1]) }
+  }
   const [x0, y0, x1, y1] = (await pdf.getPage(1)).view
-  const width = x1 - x0, height = y1 - y0
-  const starts = [...marks].filter(([k]) => k.endsWith('s'))
-  return { pages: pdf.numPages, width, height, twoColumn: starts.length > 0 && starts.filter(([, s]) => s.x >= width / 2).length >= 0.2 * starts.length, marks }
+  return { pages: pdf.numPages, width: x1 - x0, height: y1 - y0, columns, marks }
 }
