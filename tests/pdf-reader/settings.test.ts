@@ -32,7 +32,8 @@ describe('withDisplay: what a display chosen in the reader writes', () => {
   it('changes nothing else', () => {
     const before = with_({ mode: 'side', targetLanguage: 'jpn' })
     const after = withDisplay(before, 'translation')
-    expect({ ...after, mode: before.mode, pdfReader: before.pdfReader }).toEqual(before)
+    // the original's mark alone of the reader's own (#299, Part 2: the whole of pdfReader was put back before)
+    expect({ ...after, mode: before.mode, pdfReader: { ...after.pdfReader, original: before.pdfReader.original } }).toEqual(before)
   })
 })
 
