@@ -11,7 +11,7 @@
 //     or after the final compile: the translation comes first;
 //  5. when every unit is in, the final compile: every pass, the images themselves.
 import { analyze } from './paper-meta.mjs'
-import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { strategiesFor } from './scripts.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
 
@@ -58,7 +58,6 @@ const DRAFT = [
   '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
 ].join('\n') + '\n'
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
-const stemOf = main => main.replace(/\.[^./]+$/, '')
 /** a compile the TeX page gave up on (BusyTeX's 180 s): the machine was slow, not the strategy wrong */
 const timedOut = r => !r.ok && /Compilation timeout/.test(r.error ?? '')
 /** why a compile gave no PDF: the first TeX error, or what the compiler said */
@@ -121,9 +120,11 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   main = (draft ? DRAFT : '') + MARK_DEF + main
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
-  const stem = stemOf(project.main)
-  if (aux) out.set(`${stem}.aux`, new TextEncoder().encode(aux))
-  if (bbl && !meta.bbl) out.set(`${stem}.bbl`, new TextEncoder().encode(bbl))
+  // where TeX reads them, in the root under the job's name (2608.12333's latex/arxiv.tex: arxiv.aux, not
+  // latex/arxiv.aux, where no preview had the run's references or bibliography)
+  const job = jobName(project.main)
+  if (aux) out.set(`${job}.aux`, new TextEncoder().encode(aux))
+  if (bbl && !meta.bbl) out.set(`${job}.bbl`, new TextEncoder().encode(bbl))
   return out
 }
 
@@ -136,7 +137,9 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
 // 3: a translation's invisible characters dropped before TeX (mt.mjs texEscape) — a mark "cannot typeset" they caused goes
 // 4: a file \input under another spelling (./sections/a.tex) gets its translation (latex-front.mjs loadProject) — the
 //    copies that set it in English go
-export const PIPELINE_VERSION = '4'
+// 5: a file named through import.sty (\import, \subimport) or subfiles is walked, found as TeX finds it (latex-front.mjs
+//    loadProject), and a package's names are TeX's (tar.mjs untar) — such a paper's units are new
+export const PIPELINE_VERSION = '5'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
