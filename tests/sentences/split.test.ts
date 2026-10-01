@@ -163,6 +163,30 @@ describe('sentence splitting (#105)', () => {
     expect(parts('The run took 21.6 h. The observations followed.')).toEqual(['The run took 21.6 h. ', 'The observations followed.'])
   })
 
+  it('lets a sentence end on a formula whose letter looks like an abbreviation (the final review of the highlight, m1)', () => {
+    // the letter before the full stop is the formula's own text, not a word: "… neighbour of v. Then", "graph G. Then"
+    expect(parts('Take any neighbour of <x id="2"/>. Then the path closes.', 'tags', { textOf: () => 'v' }))
+      .toEqual(['Take any neighbour of <x id="2"/>. ', 'Then the path closes.'])
+    expect(parts('Colour the graph <x id="1"/>. Then count its edges.', 'tags', { textOf: () => 'G' }))
+      .toEqual(['Colour the graph <x id="1"/>. ', 'Then count its edges.'])
+    expect(parts('Take any neighbour of @a#. Then the path closes.', 'markers', { textOf: () => 'v' }))
+      .toEqual(['Take any neighbour of @a#. ', 'Then the path closes.'])
+    // an initial or a case's v. written as text keeps its full stop inside the sentence
+    expect(sentenceCuts('By <x id="1"/> A. Turing, as in Roe v. Wade.', 'tags', { textOf: () => 'Smith' })).toEqual([])
+  })
+
+  it('takes v. as a case\'s only after a capitalised name, a month only before its number, a label only before its number (m1)', () => {
+    expect(parts('We pick a vertex v. Then we stop.')).toEqual(['We pick a vertex v. ', 'Then we stop.'])
+    expect(parts('We thank Jan. The rest helped too.')).toEqual(['We thank Jan. ', 'The rest helped too.'])
+    expect(sentenceCuts('Accessed Jan. 15 and Sept. 2025 here.')).toEqual([])
+    expect(parts('We built our iOS App. It runs offline.')).toEqual(['We built our iOS App. ', 'It runs offline.'])
+    expect(sentenceCuts('See App. B, Tab. IV, Sect. 2.3 and Ex. (4) for details.')).toEqual([])
+    // a short capitalised word before an enumerator ends its sentence: "2)", "2." open the next one
+    expect(parts('1) we train with Adam. 2) We evaluate it.')).toEqual(['1) we train with Adam. ', '2) We evaluate it.'])
+    expect(parts('We train with Adam. 2. We evaluate it.')[0]).toBe('We train with Adam. ')
+    expect(sentenceCuts('Compare Exer. 5 with Supp. 2.6 here.')).toEqual([])
+  })
+
   it('lets an abbreviation that really ends a sentence do so', () => {
     // `etc.` and `al.` can genuinely close a sentence; the rest of the list — numbers, examples,
     // journal names — cannot, so only these two consult what follows (Codex on #126). Restricted

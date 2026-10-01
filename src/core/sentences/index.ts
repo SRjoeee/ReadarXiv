@@ -29,19 +29,32 @@ import { fromAlpha, type WireFormat } from '@/core/protector'
  * abbreviations that actually appear in arXiv prose and bibliographies.
  *
  * Extended 2026-10-01 (the PDF reader's units, B3b: Google translated "Oregon v. Mitchell" and "Mt.
- * Rushmore" broken where they were cut), by the same method: over the fixture corpus (1528 blocks
- * with cuts) and the PDF reader's LaTeX units of thirteen papers (1568), every cut the larger list
- * removes was read — 16 of 8015, each after a period that ends no sentence (`Oregon v.` ×5, `Mt.`,
- * `(Alg.`, `w.r.t.`, a table cell's `Tab.` before its number ×8) — and it adds none; two of them on
- * the HTML page's fixtures. A case's `v.`; places, titles and
- * people (`Mt.`, `Mr.`, `Jr.`); the labels of numbered parts (`Ch.`, `Sect.`, `Eqn.`, `Tab.`,
- * `App.`, `Alg.`, `Ex.`, `Rem.`, `Obs.`, `Conj.`, `Prob.`); Latin and dated ones (`viz.`,
- * `w.r.t.`, `a.k.a.`, `Jan.`, `Sept.`); institutions (`Univ.`, `Dept.`, `Inst.`). No single
- * lowercase letter but `v`: a unit or a subfigure's letter ends its sentence (`21.6 h. The …`,
- * `Fig. 4 b. On …`, both in the corpus).
+ * Rushmore" broken where they were cut), by the same method, over the fixture corpus and the PDF
+ * reader's LaTeX units: places, titles and people (`Mt.`, `Mr.`, `Jr.`); Latin ones (`viz.`,
+ * `w.r.t.`, `a.k.a.`); institutions (`Univ.`, `Dept.`, `Inst.`) — words that end no sentence. A
+ * case's `v.`, the labels of numbered parts and the months are words a sentence may end on (`a
+ * vertex v.`, `our App.`, `We thank Jan.`, the final review of the highlight), and end none only
+ * in their own context: `CASE_V`, `NUMBERED_PART`, `MONTH`. No single lowercase letter: a unit or a
+ * subfigure's letter ends its sentence (`21.6 h. The …`, `Fig. 4 b. On …`, both in the corpus).
+ * Measured against the list before 2026-10-01, with the placeholder rule in `sentenceCuts`, over the
+ * twelve fixtures and the reader's units of twelve papers: the HTML page's blocks gain 148 cuts in
+ * 116 of 1566, each after a sentence ending on a formula, and lose 2 (`(Alg.`, `w.r.t.`); the
+ * reader's units lose 6 (`Oregon v.` ×5, `Mt.`) and gain none — every change read.
  */
 export const ABBR =
-  /\b(?:[A-Z]|v|Fig|Figs|Eq|Eqs|Eqn|Eqns|Sec|Secs|Sect|Sects|Ch|Chap|Chaps|Tab|Tabs|App|Apps|Alg|Algs|Ex|Exs|Ref|Refs|Thm|Thms|Def|Defs|Lem|Lems|Prop|Props|Cor|Cors|Rem|Rems|Conj|Obs|Prob|Probs|Rev|Phys|Lett|Nucl|Astron|Astrophys|Mon|Not|Proc|Conf|Int|J|vs|etc|cf|al|approx|resp|viz|ca|c|Dr|Mr|Mrs|Ms|Prof|St|Mt|Jr|No|Nos|Vol|Vols|pp|Ed|Eds|Sci|Rep|Univ|Dept|Inst|Inc|Ltd|Corp|Co|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|e\.g|i\.e|w\.r\.t|a\.k\.a|i\.i\.d|a\.e)\.$/
+  /\b(?:[A-Z]|Fig|Figs|Eq|Eqs|Sec|Secs|Ref|Refs|Thm|Def|Lem|Prop|Cor|Rev|Phys|Lett|Nucl|Astron|Astrophys|Mon|Not|Proc|Conf|Int|J|vs|etc|cf|al|approx|resp|viz|ca|c|Dr|Mr|Mrs|Ms|Prof|St|Mt|Jr|No|Vol|pp|Ed|Eds|Sci|Rep|Univ|Dept|Inst|Inc|Ltd|Corp|Co|e\.g|i\.e|w\.r\.t|a\.k\.a|i\.i\.d|a\.e)\.$/
+/** A case's `v.` — after a capitalised name: `Oregon v. Mitchell`, `Roe v. Wade`; `a vertex v.` ends its sentence */
+const CASE_V = /\b[A-Z][\w'\u2019-]*\s+v\.$/
+/**
+ * The label of a numbered part, plural or not, ends no sentence before its number: a digit, a
+ * bracket, a single capital (`App. B`, `App. A.2`) or a roman numeral (`Tab. IV`) — `our iOS App.
+ * It runs` ends one. A month before its day or year (`Jan. 15`, `Sept. 2025`); `We thank Jan. The`
+ * ends one
+ */
+const NUMBERED_PART = /\b(?:Eqn|Eqns|Sect|Sects|Ch|Chap|Chaps|Tab|Tabs|App|Apps|Alg|Algs|Ex|Exs|Thms|Defs|Lems|Props|Cors|Rem|Rems|Conj|Obs|Prob|Probs|Nos|Vols)\.$/
+const ITS_NUMBER = /^\s*(?:\(?\d|[A-Z](?:\.?\d|(?!\w))|[IVX]+\b)/
+const MONTH = /\b(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.$/
+const ITS_DATE = /^\s*\d/
 
 /**
  * Sentence lengths, in order, summing exactly to `text.length`.
@@ -86,12 +99,13 @@ const OPENING = /^<t(?:\s+id="\d+")?>$/
  *  corpus), a company's name, a generation's `Jr.`, and `ca.`, `c.` before a year */
 export const TERMINAL_ABBR = /\b(?:etc|al|a\.e|i\.i\.d|Inc|Ltd|Corp|Co|Jr|ca|c)\.$/
 /**
- * A short capitalised label before its number ends no sentence there — `Exer. 5`, `Supp. 2`, listed
- * or not — where a sentence closing on a short capitalised word ("… made in Rome. The …") is followed
- * by a capital. A merge can only lose a boundary, never put one inside a sentence
+ * A short capitalised label before its number ends no sentence there — `Exer. 5`, `Supp. 2.6`,
+ * listed or not — where a sentence closing on a short capitalised word ("… made in Rome. The …") is
+ * followed by a capital. Not before an enumerator, `2)` or `2.`, which opens the next sentence ("…
+ * with Adam. 2) We …"). A merge can only lose a boundary, never put one inside a sentence
  */
 const LABEL = /\b[A-Z][a-z]{1,4}\.$/
-const NUMBERED = /^\s*\d/
+const NUMBERED = /^\s*\d+(?:\.\d+)*(?![\d)]|\.(?!\d))/
 /**
  * A continuation rather than a new sentence. Lowercase, a number, or an opening bracket: an
  * abbreviation after `etc.` or `al.` opens the next sentence rather than proving the first was
@@ -238,12 +252,18 @@ function project(text: string, format: WireFormat, context: SplitContext): { vis
   return { visible, toWire, openEnds, tokens }
 }
 
+/** Whether a projected character comes from a placeholder's own text */
+const inToken = (tokens: Token[], at: number): boolean => tokens.some(t => at >= t.from && at < t.to)
+
 /** Cut points inside the text, i.e. the boundaries between sentences, excluding 0 and `length`. */
 export function sentenceCuts(text: string, format: WireFormat = 'tags', context: SplitContext = {}): number[] {
   if (text.length === 0) return []
   const { visible, toWire, openEnds, tokens } = project(text, format, context)
   const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
   const pieces: string[] = []
+  // where the last piece begins in the projection
+  let last = 0
+  let consumed = 0
   for (const { segment } of segmenter.segment(visible)) {
     const prev = pieces[pieces.length - 1]
     const tail = prev?.trimEnd() ?? ''
@@ -251,9 +271,23 @@ export function sentenceCuts(text: string, format: WireFormat = 'tags', context:
     // spurious — except for the few that really can end a sentence, where what follows decides.
     // Measured over 2330 fixture blocks: restricted this way it adds exactly one cut, the
     // `… Lie algebras, etc. We refer to …` that prompted it, and no wrong ones (Codex on #126).
-    const merge = prev !== undefined && ((ABBR.test(tail) && (!TERMINAL_ABBR.test(tail) || CONTINUES.test(segment))) || (LABEL.test(tail) && NUMBERED.test(segment)))
+    // **Not where the letter before the full stop is a placeholder's**: a formula's own text
+    // (`… neighbour of v. Then`, `graph G. Then`) is no abbreviation and no initial, and the
+    // sentence ends there (the final review of the highlight)
+    const merge =
+      prev !== undefined &&
+      ((ABBR.test(tail) && (!TERMINAL_ABBR.test(tail) || CONTINUES.test(segment))) ||
+        CASE_V.test(tail) ||
+        (NUMBERED_PART.test(tail) && ITS_NUMBER.test(segment)) ||
+        (MONTH.test(tail) && ITS_DATE.test(segment)) ||
+        (LABEL.test(tail) && NUMBERED.test(segment))) &&
+      !inToken(tokens, last + tail.length - 2)
     if (merge) pieces[pieces.length - 1] = prev + segment
-    else pieces.push(segment)
+    else {
+      pieces.push(segment)
+      last = consumed
+    }
+    consumed += segment.length
   }
   const cuts: number[] = []
   let at = 0

@@ -19,7 +19,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 - The PDF reader's highlight follows the sentence you read: point at one and it lights on both sides, the original and its translation, from the moment the first pages of the translation appear. A paragraph whose sentences cannot be matched on both sides lights whole on both; headings, captions and table cells always light whole.
 - In the PDF reader, tables, algorithms and figures light whole with their captions, on both sides: a table to its rules, a figure outlined so its colours stay true. Pointing at a panel of a figure lights it with its own caption, and its main caption lights them all.
 - The PDF reader's highlight covers what it lights cleanly: one shape over a paragraph's formulas, inline or set on lines of their own, nothing lit beside it and no gap inside it, from a theorem's or a list's label to the paragraph's last full stop, and a sentence that runs on to the next column or page reaches across to it.
-- A sentence with an abbreviation in it — "v.", "Mt.", "Ch.", "Eq." and the like — is no longer taken for two: the hover highlight covers it whole, and with Google or your own service it is translated whole.
+- A sentence with an abbreviation in it — "Oregon v. Mitchell", "Mt.", "Ch. 3", "Eqn. 5", "Sect. 2" and the like — is no longer taken for two, and one that ends on a formula is no longer joined to the next: the hover highlight covers each sentence, and with Google or your own service each is translated as one.
 
 ## 0.4.1 — 2026-09-21
 
