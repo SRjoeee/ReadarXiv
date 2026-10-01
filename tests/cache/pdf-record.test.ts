@@ -25,6 +25,12 @@ describe('isCurrent', () => {
     expect(isCurrent(record([unit({})], { pipeline: '1' }), now)).toBe(false)
     expect(isCurrent(record([unit({}), unit({ by: 'A' })]), now)).toBe(false)
   })
+  it('and the current typesetting: a copy set by another is compiled again — its translation taken as it is (live.mjs)', () => {
+    const at = { ...now, typesetting: '2' }
+    expect(isCurrent(record([unit({})], { typesetting: '2' }), at)).toBe(true)
+    expect(isCurrent(record([unit({})], { typesetting: '1' }), at)).toBe(false)
+    expect(isCurrent(record([unit({})]), at)).toBe(false)
+  })
 })
 
 describe('atLeastAsGood', () => {
@@ -32,6 +38,11 @@ describe('atLeastAsGood', () => {
   it('the current pipeline first', () => {
     expect(atLeastAsGood(record([unit({})], { pipeline: '1' }), current, now)).toBe(false)
     expect(atLeastAsGood(current, record([unit({}), unit({})], { pipeline: '1' }), now)).toBe(true)
+  })
+  it('then the current typesetting', () => {
+    const at = { ...now, typesetting: '2' }
+    expect(atLeastAsGood(record(current.units, { typesetting: '1' }), record(current.units, { typesetting: '2' }), at)).toBe(false)
+    expect(atLeastAsGood(record([unit({})], { typesetting: '2' }), record(current.units, { typesetting: '1' }), at)).toBe(true)
   })
   it('then more units current', () => expect(atLeastAsGood(record([unit({}), unit({ by: 'A' })]), current, now)).toBe(false))
   it('then more units whole, translation beating the source', () => {
@@ -75,6 +86,12 @@ describe('stillUntypeset', () => {
   it('holds under the same pipeline and the same identity', () => expect(stillUntypeset({ pipeline: '2', identity: 'B' }, now)).toBe(true))
   it('not under another identity: another service, model or prompt is asked', () => expect(stillUntypeset({ pipeline: '2', identity: 'A' }, now)).toBe(false))
   it('not under another pipeline: a new one tries once more', () => expect(stillUntypeset({ pipeline: '1', identity: 'B' }, now)).toBe(false))
+  it('not under another typesetting: it may set what the last could not', () => {
+    const at = { ...now, typesetting: '2' }
+    expect(stillUntypeset({ pipeline: '2', identity: 'B', typesetting: '2' }, at)).toBe(true)
+    expect(stillUntypeset({ pipeline: '2', identity: 'B', typesetting: '1' }, at)).toBe(false)
+    expect(stillUntypeset({ pipeline: '2', identity: 'B' }, at)).toBe(false)
+  })
   it('not for a mark written before the identity was kept, nor for none', () => {
     expect(stillUntypeset({ pipeline: '2' }, now)).toBe(false)
     expect(stillUntypeset(undefined, now)).toBe(false)

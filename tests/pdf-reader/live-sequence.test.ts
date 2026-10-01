@@ -150,3 +150,17 @@ describe('the compile sequence with the typesetting rule', () => {
     expect(r.settled).toBe(true)
   })
 })
+
+describe('a seed taken as it is (ruling 4: a typesetting change never asks the service again)', () => {
+  it('a current seed is not sent, is in the run\'s results as it was, and the final is compiled on the typesetting changed', async () => {
+    const p = paper(), n = p.units.length, c = compiler(n), sent: string[] = []
+    const pieces = (i: number) => (p.units[i]?.pieces ?? []).map(q => (q as { t: string }).t === 'text' ? { ...(q as object), tr: true } : q)
+    // every unit but the last seeded current; the last a seed of another identity
+    const seed = new Map(p.units.map((_, i) => [i, { pieces: pieces(i), state: 'whole', by: i < n - 1 ? 'B' : 'A', tried: 'B', current: i < n - 1 }]))
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: async texts => { sent.push(...texts); return texts.map(text => ({ text, by: 'B' })) }, format: 'markers', marks: new Map(), identity: 'B', seed, pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toHaveLength(1)
+    expect([...r.results.keys()].sort((a, b) => a - b)).toEqual(p.units.map((_, i) => i))
+    expect([...r.results.values()].every(x => (x as { state: string; by: string }).state === 'whole' && (x as { by: string }).by === 'B')).toBe(true)
+    expect(c.calls.some(q => q.kind === 'final')).toBe(true)
+  })
+})

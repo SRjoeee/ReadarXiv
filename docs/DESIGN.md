@@ -894,13 +894,18 @@ is only how it meets the rest of the extension.
   of time: a slow machine says nothing of the paper) — shows the original with the side-by-side and translation
   displays greyed and a capsule that says so, without why, offering the HTML version where arXiv has one (UI.md
   S-R-17/18). The failure to set it is kept in the store beside the records, by paper version, language,
-  `PIPELINE_VERSION` and the identity whose translation it was (the one a copy is judged by), when the paper's own
+  `PIPELINE_VERSION`, `TYPESETTING_VERSION` and the identity whose translation it was (the one a copy is judged by), when the paper's own
   source set on this machine — otherwise the compiler or its files may have been down, and the next visit tries again
   — and when that one identity made every paragraph it translated: a run a hand-over mixed (a key refused midway, the
   free service finishing) is not kept, since the service that would answer next never translated the whole paper, as a
   copy is current only when every paragraph is. A visit again, once the extension has said which service would
   translate, asks that service and the TeX page for nothing if it is the same one; another service, model or prompt, a
-  new pipeline, or a mark kept before the identity was (2026-09-30) tries once more — the failure is the translated
-  text's, which they may not repeat (Codex on #306) —, and the settings page's clear forgets it.
+  new pipeline or typesetting, or a mark kept before the identity was (2026-09-30) tries once more — the failure is the
+  translated text's, which they may not repeat (Codex on #306) —, and the settings page's clear forgets it.
+- **Two versions** (`live.mjs`): `PIPELINE_VERSION` for what a unit is and what is sent for it, `TYPESETTING_VERSION`
+  for how a compile sets it. A copy of another typesetting is compiled again from its own translation: a unit whole,
+  made by the identity that would answer now, of the wire sent now (the same pipeline and wire format) is never sent
+  again (`cache.mjs reusable`); the evaluation of 2026-10-01 measured a third of a paper's characters sent again when
+  the two were one version.
 - **Browsers**: PDF.js's modern build needs built-ins newer than the extension's floor. Where they are missing
   (`src/pdf-reader/support.ts`) the reader is not offered, and the browser's viewer keeps the PDF.

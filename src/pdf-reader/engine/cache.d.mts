@@ -7,6 +7,8 @@ export declare function unitsOf(units: SourceUnit[], kept: Set<SourceUnit>, hash
 export declare function seedFrom(record: { units: unknown[] }, units: SourceUnit[]): Promise<{ seed: Map<number, { pieces: unknown[]; by?: string; tried?: string; state: string; sentences?: { src: number[]; tr: number[] } }>; hashes: string[] }>
 /** a run again's seed: the copy's, with what the visit's last run made (its results) over it, sentences included */
 export declare function seedAgain(seed: Map<number, unknown> | null | undefined, made: Map<number, { pieces?: unknown[]; by?: string; tried?: string; state?: string; sentences?: { src: number[]; tr: number[] } }> | null | undefined): Map<number, { pieces: unknown[]; by?: string; tried?: string; state: string; sentences?: { src: number[]; tr: number[] } }>
+/** the seeds a run takes as they are (`current`): whole, by `identity`, of the wire sent now — the visit's last run's, or the copy's when `copyWire` */
+export declare function reusable<S extends { pieces?: unknown[]; state?: string; by?: string }>(seed: Map<number, S> | null | undefined, options: { identity: string; copyWire: boolean; made?: Map<number, { pieces?: unknown[] }> | null }): Map<number, S & { current: boolean }>
 /** SHA-256 hex of a unit's source pieces */
 export declare function sourceHash(u: SourceUnit): Promise<string>
 

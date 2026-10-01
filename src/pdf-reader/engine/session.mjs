@@ -32,13 +32,13 @@ import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
 import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
-import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedAgain, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
 import { hostReady } from './host.mjs'
-import { compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
+import { compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive, TYPESETTING_VERSION } from './live.mjs'
 import { displayEdges, isName, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
 import { verified, VERIFIED } from './scripts.mjs'
 import { marksOf as typesetMarksOf } from './typeset/places.mjs'
@@ -2038,7 +2038,7 @@ async function live() {
   cacheKey = digest && lang0 ? { digest, lang: lang0 } : null
   cached = cacheKey ? await pdfCache.get(digest, lang0) : undefined
   if (cached) {
-    note('cache hit', { engine: cached.engine, pipeline: cached.pipeline })
+    note('cache hit', { engine: cached.engine, pipeline: cached.pipeline, typesetting: cached.typesetting })
     // opened, whatever follows: the least recently opened go first (a run that writes nothing would not say so)
     void pdfCache.touch(digest, lang0)
     try { await showCached(cached, setContext, note) } catch (e) {
@@ -2139,7 +2139,7 @@ async function live() {
     }
     const lang = engine.lang
     note('engine', { lang, format: engine.format, engine: engine.engine })
-    if (!retrying && cached && isCurrent(cached, { identity: engine.identity, pipeline: PIPELINE_VERSION })) {
+    if (!retrying && cached && isCurrent(cached, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION })) {
       status(`${paper}, this machine's copy · translated into ${lang} by ${cached.engine}`)
       note('cache current')
       L.done = true
@@ -2149,7 +2149,7 @@ async function live() {
     // asked for nothing; a new pipeline tries once more (the maintainer, 2026-09-26). Only once the extension has said
     // which service would translate, and only for the same one: the failure was its translation's, which another
     // service, model or prompt may not repeat (Codex on #306)
-    if (!cached && cacheKey && stillUntypeset(await pdfCache.untypeset(cacheKey.digest, cacheKey.lang), { identity: engine.identity, pipeline: PIPELINE_VERSION })) return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
+    if (!cached && cacheKey && stillUntypeset(await pdfCache.untypeset(cacheKey.digest, cacheKey.lang), { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION })) return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
     // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
     if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
     // the decision to translate, the step the controller's phase moves at: a copy on screen is translated again, and
@@ -2167,14 +2167,16 @@ async function live() {
     const { paperData, units, src, context, hashes } = p
     // the author block's names are kept for some languages (live.mjs keptFor): counted by the language now known
     total = units.length - keptFor(paperData, lang).size
-    // a run again: what the visit's last run made seeds it, over the copy's, so that only the missing are asked again —
-    // the rest, sent too, the background's cache answers (cache.mjs seedAgain: with their sentences)
-    const seed = seedAgain(p.seed, made)
+    // a run again: what the visit's last run made seeds it, over the copy's (cache.mjs seedAgain: with their sentences);
+    // a seed whole, by the identity that answers now and of the wire sent now is taken as it is, never sent again — the
+    // copy's when it was made by this pipeline in this wire format (cache.mjs reusable) — and the rest are asked again
+    const seed = reusable(seedAgain(p.seed, made), { identity: engine.identity, copyWire: p.sameUnits && cached?.format === engine.format, made })
     // one replacement at a time, in the order the compiles came in; the final's bytes once compiled
     let swaps = Promise.resolve(), finalPdf = null
     const result = await runLive(paperData, {
       lang, compile, note,
-      seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: p.sameUnits || finalShown,
+      // the copy's compile current: its pipeline and its typesetting this reader's, or this visit's final on screen
+      seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: (p.sameUnits && cached?.typesetting === TYPESETTING_VERSION) || finalShown,
       // the typesetting rule: the translation set as near its original's places as the rule can (live.mjs)
       readMarks: typesetMarksOfPdf,
       marks: leftMarks ? new Map(leftMarks) : knownMarks(cached, p.sameUnits),
@@ -2210,7 +2212,7 @@ async function live() {
     if (result.exhausted && !result.stopped && !compiledOnce && !cached) {
       if (cacheKey && result.originalOk) {
         const identity = await engine.now().catch(() => engine.identity)
-        if (allTranslatedBy(result.results, identity)) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity, pipeline: PIPELINE_VERSION })
+        if (allTranslatedBy(result.results, identity)) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION })
       }
       note('done', result)
       return fail('cannot typeset', `None of the ways of typesetting ${paper} into ${lang} worked: the right side shows the original`)
@@ -2218,13 +2220,13 @@ async function live() {
     // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
     // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
     if (cacheKey) {
-      const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, context, units: unitsOf(units, keptFor(paperData, lang), hashes, result.results), marks: leftMarks ?? (p.sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
+      const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, context, units: unitsOf(units, keptFor(paperData, lang), hashes, result.results), marks: leftMarks ?? (p.sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
       const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: finalShown })
       const pdf = how === 'full' ? finalPdf : how === 'provenance' ? cached.pdf : null
       // the right side's marks, as its PDF names them: the final's once it is on screen, else the copy's own
       record.rightMarks = how === 'full' ? [...(right.marks ?? [])] : (cached?.rightMarks ?? [])
       if (pdf) {
-        const now = { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION }
+        const now = { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION }
         const written = await pdfCache.put({ ...record, pdf }, now)
         note('cache write', { how, written })
         // what this visit wrote is the copy a run again compares with

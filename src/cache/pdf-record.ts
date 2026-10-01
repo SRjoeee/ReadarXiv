@@ -61,7 +61,11 @@ export interface PdfRecordBody {
   engine: string
   /** the wire format of the run that made it */
   format: string
+  /** the reader's translation pipeline (live.mjs PIPELINE_VERSION): what its units are and what was sent for them */
   pipeline: string
+  /** the reader's typesetting (live.mjs TYPESETTING_VERSION): how its PDF was set from the translation; absent in a copy
+   *  made before the two were apart (2026-10-02), which is set again */
+  typesetting?: string
   context: { paperTitle?: string; abstract?: string }
   units: CachedUnit[]
   /** the left side's mark words: the entries of the Map marksOfPdf gives */
@@ -81,10 +85,12 @@ export interface PdfRecord extends PdfRecordBody {
   openedAt: number
 }
 
-/** What a copy is judged against: the identity that would answer now, and the reader's PIPELINE_VERSION */
+/** What a copy is judged against: the identity that would answer now, and the reader's PIPELINE_VERSION and
+ *  TYPESETTING_VERSION */
 export interface Now {
   identity: string
   pipeline: string
+  typesetting?: string
 }
 
 /** A unit to translate is current when its translation was made, or it was settled, under the identity that would answer now */
@@ -94,9 +100,11 @@ export function unitIsCurrent(u: CachedUnit, identity: string): boolean {
   return false
 }
 
-/** A copy is current with the current pipeline and every unit to translate current; the kept names are none to translate */
+/** A copy is current with the current pipeline and typesetting and every unit to translate current; the kept names are
+ *  none to translate. A copy of another typesetting alone is set again from its translation, which asks the service
+ *  nothing (pdf-reader/engine/cache.mjs reusable) */
 export function isCurrent(record: PdfRecordBody, now: Now): boolean {
-  return record.pipeline === now.pipeline && record.units.every(u => u.state === 'kept' || unitIsCurrent(u, now.identity))
+  return record.pipeline === now.pipeline && record.typesetting === now.typesetting && record.units.every(u => u.state === 'kept' || unitIsCurrent(u, now.identity))
 }
 
 /**
@@ -106,6 +114,8 @@ export function isCurrent(record: PdfRecordBody, now: Now): boolean {
 export interface UntypesetMark {
   pipeline: string
   identity?: string
+  /** the typesetting that could not set it; absent in a mark made before the two versions were apart */
+  typesetting?: string
 }
 
 /**
@@ -116,15 +126,17 @@ export interface UntypesetMark {
  * reader leaves a mark only for one identity's whole translation (pdf-reader/engine/cache.mjs allTranslatedBy)
  */
 export function stillUntypeset(mark: UntypesetMark | undefined, now: Now): boolean {
-  return mark !== undefined && mark.pipeline === now.pipeline && mark.identity !== undefined && mark.identity === now.identity
+  return mark !== undefined && mark.pipeline === now.pipeline && mark.typesetting === now.typesetting && mark.identity !== undefined && mark.identity === now.identity
 }
 
-/** What a copy is worth, in the order copies are compared: pipeline, units current, whole, partial, lost (fewer), marks */
+/** What a copy is worth, in the order copies are compared: pipeline, typesetting, units current, whole, partial, lost
+ *  (fewer), marks */
 function worth(record: PdfRecordBody, now: Now): number[] {
   const units = record.units.filter(u => u.state !== 'kept')
   const count = (f: (u: CachedUnit) => boolean) => units.filter(f).length
   return [
     record.pipeline === now.pipeline ? 1 : 0,
+    record.typesetting === now.typesetting ? 1 : 0,
     count(u => unitIsCurrent(u, now.identity)),
     count(u => u.state === 'whole'),
     count(u => u.state === 'partial'),

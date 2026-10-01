@@ -149,10 +149,16 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
 export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : new Set([...paper.kept, ...paper.units.filter(u => u.kind === 'author')]))
 
 /**
- * The reader's pipeline version (REPORT, eighteenth addendum): raised with any change to what a compile puts out
- * (latex-front, mt, the fonts, the scripts' strategies, the TeX tree) or to what a cached record holds (the units'
- * cutting, kinds and texts, paperContext(), the marks). A record of another version is compiled again, its
- * translations reused wherever a unit's source matches (session.mjs seedFrom)
+ * The reader's versions (REPORT, eighteenth addendum), apart since 2026-10-02 so that a change to the typesetting never
+ * asks the service again (the evaluation's ruling 4):
+ * - PIPELINE_VERSION, the translation's: raised with any change to what a unit is or what is sent for it and made of
+ *   the answer — the units' cutting, kinds and texts (latex-front), the wire and its reading back (mt), paperContext(),
+ *   the left side's marks. A record of another version is translated again, its translations shown meanwhile (session.mjs
+ *   seedFrom); one of this version gives its whole units by the identity that would answer now as they are (cache.mjs
+ *   reusable).
+ * - TYPESETTING_VERSION: raised with any change to how a compile sets a translation it is given — latex-front's TeX,
+ *   the scripts' strategies, the fonts, the typesetting rule (typeset/), the TeX tree. A record of another version is
+ *   compiled again from its translation; a paper none of the ways could set is tried again.
  */
 // 2: the front matter's notes are units (latex-front.mjs FRONT_MATTER)
 // 3, 4: two branches each raised it twice, and their 3s and 4s are other pipelines —
@@ -169,6 +175,8 @@ export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : 
 //   placeholder (keepAddresses); a name kept whole in a line of names (lineBreaks)
 // 5: the two together, and the wire's spaces beside a digit taken back (mt.mjs rehydrate)
 export const PIPELINE_VERSION = '5'
+// 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart
+export const TYPESETTING_VERSION = '1'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
@@ -178,7 +186,8 @@ export const PIPELINE_VERSION = '5'
  * `onUpdate({ pdf,
  * texts, translated, final })` gets each compiled translation; `onOriginal({ pdf })` the marked original; `note(event,
  * data)` every step, for the timeline. A translation made again from a cached copy (REPORT, eighteenth addendum):
- * `seed`, index → the old translation { pieces, by, tried, state }, fills the run at the start; `marks`, the left
+ * `seed`, index → the old translation { pieces, by, tried, state, current }, fills the run at the start, and one
+ * `current` (cache.mjs reusable) is not sent again; `marks`, the left
  * side's marks when known, skips the marked original; `identity` is what each unit is tried under; `pipelineCurrent`,
  * whether the seed's pipeline is this one. Resolves when the final compile is in, with `results` (index → { pieces,
  * state, by, tried, sentences? }), `changed` (anything typeset changed), `settled` (a final that set every letter), `exhausted`
@@ -204,6 +213,10 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
   const keep = (pieces, sentences) => { if (sentences) sentencesBy.set(pieces, sentences) }
   const seeded = old => (old ? { pieces: old.pieces, by: old.by, ...(old.sentences ? { sentences: old.sentences } : {}) } : {})
   if (seed) for (const [i, s] of seed) { translated.set(units[i], s.pieces); keep(s.pieces, s.sentences) }
+  // a seed taken as it is (cache.mjs reusable: whole, by this identity, of the wire sent now) is not sent again: a change
+  // to the typesetting alone asks the service for nothing (the evaluation's ruling 4)
+  const taken = new Set([...(seed ?? [])].filter(([, s]) => s.current).map(([i]) => i))
+  for (const i of taken) results.set(i, { ...seeded(seed.get(i)), state: 'whole', tried: identity })
   let changed = false
   // why the run stopped short: the service's failure (engine.mjs's kinds), after which nothing more is sent (§10.3)
   let stopped = null
@@ -218,7 +231,8 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
   const fontsP = compile({ main: project.main, engine: meta.compiler, rerun: false, bibtex: false, overrides: probeFiles(paper, { width: !!readMarks }) }).then(r => { const fonts = readFontProbe(r.log ?? ''); note('fonts', { fonts, ms: r.ms }); return { fonts, log: r.log ?? '' } })
 
   // 2. translation nearest the reader first, asked afresh for every batch: the reader may have moved
-  const todo = new Set(units.map((u, i) => i).filter(i => !kept.has(units[i])))
+  const todo = new Set(units.map((u, i) => i).filter(i => !kept.has(units[i]) && !taken.has(i)))
+  if (taken.size) note('translated', { units: 0, taken: taken.size, total: translated.size })
   const nextBatch = maxChars => {
     const order = [...todo].map(i => [i, rank(i)]).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(([i]) => i)
     const batch = []

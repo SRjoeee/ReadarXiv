@@ -221,7 +221,8 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
       try {
         const row = await db.untypeset.get([digest, lang])
         if (!row) return undefined
-        return row.identity === undefined ? { pipeline: row.pipeline } : { pipeline: row.pipeline, identity: row.identity }
+        const { digest: _d, lang: _l, ...mark } = row
+        return mark
       } catch {
         return undefined
       }
@@ -229,7 +230,7 @@ export function createPdfStore(options: { db?: PdfDatabase; maxBytes?: number; c
 
     async markUntypeset(digest, lang, mark) {
       try {
-        await db.untypeset.put({ digest, lang, pipeline: mark.pipeline, identity: mark.identity })
+        await db.untypeset.put({ digest, lang, ...mark })
       } catch (e) {
         warn(`[axt-pdf] untypeset mark failed: ${(e as Error).message}`)
       }

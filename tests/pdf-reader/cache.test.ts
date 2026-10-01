@@ -3,7 +3,7 @@
 // so it is written only for a translation that one identity made whole — as a copy is current only when every unit is
 // (the final review of Codex 1 on #306)
 import { describe, expect, it } from 'vitest'
-import { allTranslatedBy, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
+import { allTranslatedBy, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
 
 /** a run's results as live.mjs keeps them: index → { pieces, state, by, tried } */
 const results = (...rows: { by?: string; state?: string; pieces?: boolean }[]) =>
@@ -83,5 +83,30 @@ describe('the record keeps the sentences of the translation it keeps', () => {
     // a unit the last run did not translate keeps the copy's seed
     expect(seed.get(2)).toMatchObject({ pieces: tr('Vier'), by: 'g' })
     expect(seedAgain(null, null).size).toBe(0)
+  })
+})
+
+// A typesetting change never asks the service again (the evaluation's ruling 4, 2026-10-01): a seed is taken as it is
+// when it is whole, made by the identity that would answer now, and of the wire the unit is sent as now — this visit's
+// last run's, or the copy's when the copy was made by this translation pipeline in this wire format
+describe('reusable: the seeds a run takes as they are', () => {
+  const seed = () => new Map([
+    [0, { pieces: ['a'], state: 'whole', by: 'F', tried: 'F' }],
+    [1, { pieces: ['b'], state: 'partial', by: 'F', tried: 'F' }],
+    [2, { pieces: ['c'], state: 'whole', by: 'G', tried: 'G' }],
+  ])
+  const current = (m: Map<number, { current?: boolean }>) => [...m].filter(([, s]) => s.current).map(([i]) => i)
+  it('the copy\'s, whole and by the identity now, when its pipeline and wire format are this run\'s', () => {
+    expect(current(reusable(seed(), { identity: 'F', copyWire: true }))).toEqual([0])
+  })
+  it('none of the copy\'s on another pipeline or format: the wire it was sent may not be the one sent now', () => {
+    expect(current(reusable(seed(), { identity: 'F', copyWire: false }))).toEqual([])
+  })
+  it('the visit\'s own last run\'s whatever the copy was: its wire is this run\'s', () => {
+    const made = new Map([[2, { pieces: ['c2'], state: 'whole', by: 'F', tried: 'F' }]])
+    expect(current(reusable(seedAgain(seed(), made), { identity: 'F', copyWire: false, made }))).toEqual([2])
+  })
+  it('never one made by another identity: another service, model or prompt is asked', () => {
+    expect(current(reusable(seed(), { identity: 'G', copyWire: true }))).toEqual([2])
   })
 })

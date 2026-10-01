@@ -44,6 +44,20 @@ export function seedAgain(seed, made) {
 }
 
 /**
+ * The seeds a run takes as they are, never asking the service again (`current`; the evaluation's ruling 4,
+ * 2026-10-01: a change to the typesetting alone sent about a third of a paper's characters again, answered only where the
+ * background's 30-day cache still held them). A seed is taken when it is whole, made by the identity that would answer
+ * now, and of the wire the unit is sent as now: the visit's own last run's (`made`), or the copy's when the copy was
+ * made by this translation pipeline in this wire format (`copyWire`) — the same pipeline cuts the same units and writes
+ * the same wire for the same source, which its hash matched. Any other seed is sent again, its translation shown meanwhile
+ */
+export function reusable(seed, { identity, copyWire, made = null }) {
+  const out = new Map()
+  for (const [i, s] of seed ?? []) out.set(i, { ...s, current: s.state === 'whole' && !!s.pieces && s.by === identity && (copyWire || !!made?.get(i)?.pieces) })
+  return out
+}
+
+/**
  * The units a record keeps (src/cache/pdf-record.ts CachedUnit), from a run's results by index: a name kept in the
  * source is `kept`; a unit with no result was not tried, and is `none` with no `tried`, so never current
  */
