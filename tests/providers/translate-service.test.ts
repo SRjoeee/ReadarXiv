@@ -760,7 +760,7 @@ describe('sentence markers: inserted by the service layer when the engine report
     const service = build({
       getProvider: async () => provider(async ({ segments }) => {
         calls.push(segments.map(s => s.text))
-        return { segments: segments.map(s => ({ id: s.id, text: s.text.replace(/x+\. /, '甲。').replace(/y+\./, '乙。').replace('One sentence here. ', '一。').replace('Two sentences here.', '二。') })), provider: 'mock' }
+        return { segments: segments.map(s => ({ id: s.id, text: s.text.replace(/x+\. /, 'A.').replace(/y+\./, 'B.').replace('One sentence here. ', 'P.').replace('Two sentences here.', 'Q.') })), provider: 'mock' }
       }, 'mock', { maxBatchChars: long.length + 5 }),
     })
     const res = await service.translate({
@@ -784,7 +784,7 @@ describe('sentence markers: inserted by the service layer when the engine report
     const long = `${'x'.repeat(40)}. ${'y'.repeat(40)}.`, short = 'One sentence here. Two sentences here.'
     const identity = { providerId: 'mock', model: '', promptKey: '', target: 'zh-CN', renderPath: 'tags' as RenderPath }
     const before = { long: await cacheKeyFor({ ...identity, text: long, cuts: [42] }), short: await cacheKeyFor({ ...identity, text: short, cuts: [19] }), whole: await cacheKeyFor({ ...identity, text: long, cuts: [] }) }
-    const { port, reads, writes } = fakePort({ [before.long]: '旧的整段译文' })
+    const { port, reads, writes } = fakePort({ [before.long]: 'the old translation, whole' })
     const service = build({ getProvider: async () => echoing(t => t, { maxBatchChars: long.length + 5 }), cache: port })
     const res = await service.translate({
       // c: the same text taken as one sentence — nothing is inserted there, and its request is as it was
