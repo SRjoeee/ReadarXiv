@@ -31,12 +31,12 @@ import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
 import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf } from './highlight.mjs'
-import { captionFor, floatHitOf, floatOf, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
 import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
+import { captionFor, floatHitOf, floatOf, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
 import { hostReady } from './host.mjs'
 import { compilerKeeper, openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
 import { displayEdges, isName, plainSource, unitText, WIRE } from './mt.mjs'
@@ -294,8 +294,8 @@ function paint(side) {
   for (const el of side.lit) el.remove()
   side.lit = []
   if (lit == null) return
-  if (!side.geo) { wantLayout(side); return }
   if (paintFloat(side)) return
+  if (!side.geo) { wantLayout(side); return }
   for (const run of runsOf(side.geo, lit)) {
     const pv = pageView(side, run.page), layer = layerOf(side, run.page)
     if (!layer) continue
@@ -312,9 +312,12 @@ function light(id) { if (!config.reading.sentenceHighlight) id = null; if (id ==
 // and its caption, a figure outlined and its caption washed — a wash multiplied into a figure would change its colours.
 // A float lights by its caption's id, which both sides share; on a side where the float is not found the caption lights
 // alone, and a cell there alone
-/** the lit unit's float on a side — its caption's, or the one holding it (a cell) — painted; false where it is none's */
+/** the id of what is lit, whatever shape it has (a unit's id; { id, s } where a unit lights by sentence) */
+const litId = () => (lit !== null && typeof lit === 'object' ? lit.id : lit)
+/** the lit unit's float on a side — its caption's, or the one holding it (a cell) — painted; false where it is none's,
+ *  or where the side has no layout yet */
 function paintFloat(side) {
-  const f = floatOf(side.geo, lit)
+  const f = side.geo && floatOf(side.geo, litId())
   if (!f) return false
   const pv = pageView(side, f.page), layer = layerOf(side, f.page)
   if (!layer) return true
@@ -328,6 +331,9 @@ function paintFloat(side) {
   }
   return true
 }
+/** what the pointer lights at a point of a page (pointOn's), floats included: `hit` hitOf's there, or a float whose
+ *  painted shape holds the point (floats.mjs floatHitOf: over its caption and its cells, and over a larger block) */
+const withFloats = (side, at, hit) => floatHitOf(side.geo, at.page, at.x, at.y, PAD / at.scale, hit)
 /**
  * A page's floats, made on its first drawing from what PDF.js draws it by (its figures, its rules and marks), once a
  * layout; never on the pointer's path. A page without a caption asks for nothing. A drawing cancelled before the page's
@@ -345,16 +351,13 @@ function floatsFor(side, p) {
   const figures = side.frames ? side.frames.then(f => f.get(p) ?? []) : regionsOf(side, p)
   Promise.all([figures, ops]).then(([regions, list]) => {
     if (side.geo !== L) return
-    // the page's geometry first (made on its drawing, but for a page drawn before the layout came), then its floats
-    const t0 = performance.now()
-    pageGeometry(L, p)
-    const t1 = performance.now(), paths = pathsOf(list, pdfjsLib.OPS), t2 = performance.now()
+    const t0 = performance.now(), paths = pathsOf(list, pdfjsLib.OPS), t1 = performance.now()
     pageFloats(L, p, regions, paths)
-    // the main thread's cost, for the probes: the page's geometry where it was not made yet, reading the page's paths,
-    // making its floats
-    ;(timing.floats ??= []).push({ geometry: t1 - t0, paths: t2 - t1, floats: performance.now() - t2, ops: list.fnArray.length, marks: paths.marks.length })
+    // the main thread's cost, for the probes: reading the page's paths, making its floats (and the page's geometry, for
+    // a page drawn before the side's layout came)
+    ;(timing.floats ??= []).push({ paths: t1 - t0, floats: performance.now() - t1, ops: list.fnArray.length, marks: paths.marks.length })
     // what is lit there, and what is under a pointer resting on it, now that the page has its floats
-    if (lit != null && floatOf(L, lit)?.page === p) paint(side)
+    if (lit != null && floatOf(L, litId())?.page === p) paint(side)
     pointer.again(side)
   }, () => asked.delete(p))
 }
@@ -379,9 +382,7 @@ const pointer = pointerPath({
     // a side without its layout yet is a miss, its layout asked for
     if (!side.geo) { wantLayout(side); return null }
     const at = pointAt(side, x, y)
-    if (!at) return null
-    const pad = PAD / at.scale
-    return floatHitOf(side.geo, at.page, at.x, at.y, pad, hitOf(side.geo, at.page, at.x, at.y, pad))?.id ?? null
+    return (at && withFloats(side, at, hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale))?.id) ?? null
   },
   light,
   lit: () => lit != null,
@@ -1412,12 +1413,14 @@ function attach(side) {
   side.eventBus.on('pagerendered', ({ pageNumber }) => {
     if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start
     paint(side)
-    // the page's highlight geometry, on its first drawing (a page never drawn never needs it), and its floats
-    if (side.geo) { pageGeometry(side.geo, pageNumber); floatsFor(side, pageNumber) }
+    // the page's highlight geometry, on its first drawing (a page never drawn never needs it)
+    if (side.geo) pageGeometry(side.geo, pageNumber)
     // figures laid once per page: kept through a redraw (keepOverlays), scaled with it (pinned); a draft preview's
     // copies of the left's figures are bitmaps drawn for one scale, and are drawn again at another
     const at = side.laid.get(pageNumber)
     if (side !== left && (at === undefined || (side.frames && at !== pageView(side, pageNumber).viewport.scale))) side.figs.set(pageNumber, paintFigures(side, pageNumber).catch(e => console.warn('[figures]', e)))
+    // its tables and figures, on its first drawing (floatsFor)
+    floatsFor(side, pageNumber)
   })
   // the overlays outlive a page drawn again (overlay.mjs keepOverlays): each page's div watched from the start
   side.eventBus.on('pagesinit', () => { for (const pv of side.viewer._pages) side.keeper.observe(pv.div) })
@@ -1504,10 +1507,11 @@ async function anchorOne(side, texts, marks) {
     side.makeGeo = null
     layoutsDue.delete(side)
     timing[side === left ? 'leftLayout' : 'rightLayout'] = performance.now() - t0
-    // what is lit on it, and what is under a pointer resting on it, now that it has its blocks; the floats of the pages
-    // drawn before it came
+    // what is lit on it, and what is under a pointer resting on it, now that it has its blocks
     if (lit != null) paint(side)
     pointer.again(side)
+
+    // the floats of the pages drawn before it came
     for (const pv of side.viewer._pages ?? []) if (pv.renderingState === 3) floatsFor(side, pv.id)
   }
   layoutsDue.add(side)

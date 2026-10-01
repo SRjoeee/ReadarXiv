@@ -469,7 +469,7 @@ function shapesOf(L, f, padX) {
 /**
  * What a point of a page (PDF units) lights, floats included: `hit` the unit hitOf found there; a float whose painted
  * shape holds the point takes it — over its own caption and what it holds (a cell lights its table), and over another
- * unit's block where its shape is the smaller. { id, float } for a float, else `hit`
+ * unit's block where its shape is the smaller. { id, s: -1, float } for a float (lit whole: no sentence), else `hit`
  */
 export function floatHitOf(L, p, x, y, padX, hit) {
   const fs = L?.floats?.get(p)
@@ -485,5 +485,5 @@ export function floatHitOf(L, p, x, y, padX, hit) {
     const b = blockOf(hit.run, padX)
     if ((b.x1 - b.x0) * (b.y1 - b.y0) < area) return hit
   }
-  return { id: best.id, float: best }
+  return { id: best.id, s: -1, float: best }
 }

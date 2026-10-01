@@ -22,4 +22,4 @@ export declare function pageFloats(layout: Layout, page: number, regions?: Box[]
 export declare function floatsOn(layout: Layout | null | undefined, page: number): Float[] | undefined
 export declare function floatOf(layout: Layout | null | undefined, id: number): Float | null
 export declare function floatShapes(layout: Layout, float: Float, padX: number): Shape[]
-export declare function floatHitOf<H extends { id: number }>(layout: Layout | null | undefined, page: number, x: number, y: number, padX: number, hit: H | null): H | { id: number; float: Float } | null
+export declare function floatHitOf<H extends { id: number }>(layout: Layout | null | undefined, page: number, x: number, y: number, padX: number, hit: H | null): H | { id: number; s: -1; float: Float } | null
