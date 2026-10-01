@@ -11,7 +11,9 @@
 //    pane, after everything that moves a pane or draws it moving: the load, the contents panel opened and closed, a
 //    zoom and back, the panes swapped and back, one pane shown (the translation, the original) and two again, the
 //    pages dimmed and not, the right side replaced (a new compile), the fonts loaded
-//  - a wheel turned under a still pointer (no move sent): what is lit after is what a move there would light
+//  - a wheel turned under a still pointer (no move sent): what is lit after is what a move there would light, and is
+//    some unit — turned on a little more, still without a move, where the wheel left the pointer over none (the final
+//    review, M1: on 346c26fc both papers' wheels ended over nothing, and null equal to null passed)
 //  - the pointer on a unit's words the moment the reader is ready (its sides' layouts, made in the idle time after, not
 //    yet there most times): no layout made in an animation frame; the unit lit once they come, the pointer still
 //  - the demo's sentences are those of the sentence file they were taken from, which the Node gate makes again by the
@@ -563,18 +565,25 @@ async function checks(b) {
     await page.waitForTimeout(200)
     const at250 = await page.evaluate(() => document.querySelectorAll('.axt-hl').length)
     check(`${b.label} ${paper}: a miss keeps the wash 50 ms and lets it go by 250 ms`, at50 > 0 && at250 === 0, JSON.stringify({ at50, at250, waited: Date.now() - t0 }))
-    // a wheel under a still pointer: what is lit is what is under it, as a move there finds
+    // a wheel under a still pointer: what is lit is what is under it, as a move there finds — something, not nothing:
+    // where the wheel leaves the pointer over no unit (a gap, a margin; on both papers before the final review, M1, which
+    // let null equal null pass), it turns on a little, still without a move, until a unit other than the first is lit
     await at(page, ids[0])
     await page.mouse.move(band.x, band.y)
     await frames(page)
     const before = await page.evaluate(() => window.__reader.debug.lit)
     for (let i = 0; i < 5; i++) { await page.mouse.wheel(0, 300); await page.waitForTimeout(40) }
     await page.waitForTimeout(800)
-    const still = await page.evaluate(() => window.__reader.debug.lit)
+    let still = await page.evaluate(() => window.__reader.debug.lit), turns = 0
+    for (; (still == null || still === before) && turns < 20; turns++) {
+      await page.mouse.wheel(0, 60)
+      await page.waitForTimeout(400)
+      still = await page.evaluate(() => window.__reader.debug.lit)
+    }
     await page.mouse.move(band.x + 1, band.y)
     await frames(page)
     const moved = await page.evaluate(() => window.__reader.debug.pointerHit)
-    check(`${b.label} ${paper}: a wheel under a still pointer lights what comes under it`, still === moved && still !== before, JSON.stringify({ before, still, moved }))
+    check(`${b.label} ${paper}: a wheel under a still pointer lights what comes under it`, still != null && still === moved && still !== before, JSON.stringify({ before, still, moved, turns }))
     // the pointer's frames read no layout: a sweep over the first unit's pages
     await at(page, ids[0])
     const s = await sweep(page)
