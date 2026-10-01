@@ -2,7 +2,7 @@ import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { ReadingOptions } from '@/pdf-reader/ui/ReadingOptions'
-import { setLocale } from '@/ui/strings'
+import { R, S, setLocale } from '@/ui/strings'
 import { mountElement } from '../../ui/render-hook'
 import { fakeController } from './fake-controller'
 import { stubPopovers } from './popover-stub'
@@ -75,5 +75,18 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
     expect(written().theme).toBe('dark')
     container.querySelector<HTMLElement>('[role="switch"][aria-label="深色时调暗页面"]')!.click()
     expect(written().pdfReader.dimPages).toBe(false)
+  })
+
+  it('a switch\'s row is its target, words and all, as the popup\'s are: a press on the words turns it (#299, Part 6\'s interface review)', async () => {
+    const { container, controller, written } = await open()
+    for (const [words, read] of [[S.rows.highlight, (c: Config) => c.reading.sentenceHighlight], [S.rows.images, (c: Config) => c.image.enabled], [R.options.dim, (c: Config) => c.pdfReader.dimPages]] as const) {
+      const row = [...container.querySelectorAll<HTMLElement>('.row')].find(r => r.textContent === words && r.querySelector('[role="switch"]'))!
+      expect(row.tagName).toBe('LABEL')
+      const before = controller.patchSettings.mock.calls.length
+      // the words themselves: the row's own text, not the switch
+      await act(async () => { row.firstChild!.parentElement!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+      expect(controller.patchSettings.mock.calls.length).toBe(before + 1)
+      expect(read(written())).toBe(false)
+    }
   })
 })
