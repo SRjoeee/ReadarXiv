@@ -8,11 +8,14 @@
    in it (a highlight or figure layer inserted) put two paragraphs levelled by a click a few to tens of pixels apart */
 .viewerContainer { position: absolute; inset: 0; overflow: auto; overflow-anchor: none; }
 /* the highlight layer sits over the text layer, never catches the pointer. Its blocks are the HTML page's band: one wash
-   per run of a paragraph's lines, multiplied into the page, so the paper stays white under nothing and the letters
-   stay their own colour, as a band behind the text looks on an HTML page (session.mjs, blocksOf) */
+   per run of a unit, one page and one column of it (highlight.mjs), multiplied into the page, so the paper stays white
+   under nothing and the letters stay their own colour, as a band behind the text looks on an HTML page */
 .axt-hl-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 .axt-hl { position: absolute; border-radius: 3px; mix-blend-mode: multiply;
   background: color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) var(--axt-hl-mix, 22%), transparent); }
+/* a sentence over rows of different reach: one outline, its path filled with the band's wash (highlight.mjs shapePath) */
+.axt-hl-shape { background: none; border-radius: 0; overflow: visible; }
+.axt-hl-shape > path { fill: color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) var(--axt-hl-mix, 22%), transparent); }
 /* a newer compile being laid out and drawn under the one in view */
 .viewerContainer.axt-incoming { visibility: hidden; }
 /* a figure's place on a translation page, holding the empty <img> the extension's image overlay is anchored to and, over
@@ -21,3 +24,7 @@
 .axt-fig > div, .axt-fig > canvas, .axt-fig img { position: absolute; inset: 0; width: 100%; height: 100%; }
 .axt-fig img { opacity: 0; }
 .axt-fig .axt-img > span { pointer-events: auto; }
+/* a figure lit: an outline in the band's colour, three times its wash's strength (a wash multiplied into a figure would
+   change its colours); drawn inside the figure's padded box */
+.axt-hl.axt-hl-frame { box-sizing: border-box; background: none;
+  border: 1.5px solid color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) min(100%, calc(var(--axt-hl-mix, 22%) * 3)), transparent); }

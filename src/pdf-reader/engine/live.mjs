@@ -11,9 +11,9 @@
 //     or after the final compile: the translation comes first;
 //  5. when every unit is in, the final compile: every pass, the images themselves.
 import { analyze } from './paper-meta.mjs'
-import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, jobName, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
 import { strategiesFor } from './scripts.mjs'
-import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
+import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
 
 /** The TeX log of a compile's last pass. The browser's compiler (poc-site/tex.js) joins each step's log with its terminal
  *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
@@ -58,7 +58,6 @@ const DRAFT = [
   '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
 ].join('\n') + '\n'
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
-const stemOf = main => main.replace(/\.[^./]+$/, '')
 /** a compile the TeX page gave up on (BusyTeX's 180 s): the machine was slow, not the strategy wrong */
 const timedOut = r => !r.ok && /Compilation timeout/.test(r.error ?? '')
 /** why a compile gave no PDF: the first TeX error, or what the compiler said */
@@ -121,9 +120,11 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   main = (draft ? DRAFT : '') + MARK_DEF + main
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
-  const stem = stemOf(project.main)
-  if (aux) out.set(`${stem}.aux`, new TextEncoder().encode(aux))
-  if (bbl && !meta.bbl) out.set(`${stem}.bbl`, new TextEncoder().encode(bbl))
+  // where TeX reads them, in the root under the job's name (2608.12333's latex/arxiv.tex: arxiv.aux, not
+  // latex/arxiv.aux, where no preview had the run's references or bibliography)
+  const job = jobName(project.main)
+  if (aux) out.set(`${job}.aux`, new TextEncoder().encode(aux))
+  if (bbl && !meta.bbl) out.set(`${job}.bbl`, new TextEncoder().encode(bbl))
   return out
 }
 
@@ -133,11 +134,17 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
  * cutting, kinds and texts, paperContext(), the marks). A record of another version is translated again
  */
 // 2: the front matter's notes are units (latex-front.mjs FRONT_MATTER)
-export const PIPELINE_VERSION = '2'
+// 3: a translation's invisible characters dropped before TeX (mt.mjs texEscape) — a mark "cannot typeset" they caused goes
+// 4: a file \input under another spelling (./sections/a.tex) gets its translation (latex-front.mjs loadProject) — the
+//    copies that set it in English go
+// 5: a file named through import.sty (\import, \subimport) or subfiles is walked, found as TeX finds it (latex-front.mjs
+//    loadProject), and a package's names are TeX's (tar.mjs untar) — such a paper's units are new
+export const PIPELINE_VERSION = '5'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
- * `translate(texts)` → translations of wire texts in `format` (mt.mjs WIRE: the chain's renderPath); `rank(i)` → how
+ * `translate(texts, cuts)` → translations of wire texts in `format` (mt.mjs WIRE: the chain's renderPath; `cuts` each text's
+ * sentence cuts on the tags path, mt.mjs translateUnits); `rank(i)` → how
  * far unit i is from the reader's place (lower comes first);
  * `onUpdate({ pdf,
  * texts, translated, final })` gets each compiled translation; `onOriginal({ pdf })` the marked original; `note(event,
@@ -145,7 +152,7 @@ export const PIPELINE_VERSION = '2'
  * `seed`, index → the old translation { pieces, by, tried, state }, fills the run at the start; `marks`, the left
  * side's marks when known, skips the marked original; `identity` is what each unit is tried under; `pipelineCurrent`,
  * whether the seed's pipeline is this one. Resolves when the final compile is in, with `results` (index → { pieces,
- * state, by, tried }), `changed` (anything typeset changed), `settled` (a final that set every letter), `exhausted`
+ * state, by, tried, sentences? }), `changed` (anything typeset changed), `settled` (a final that set every letter), `exhausted`
  * (every strategy failed to set the final, none for want of time: the paper cannot be had this way) and, with it,
  * `originalOk` (the paper's own source set here, or before: only then is it the translation that cannot be set, rather
  * than the compiler or its files that were down).
@@ -157,9 +164,14 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
   let s = 0
   const strategy = () => strategies[s]
   const translated = new Map()
-  // index → { pieces, state, by, tried }: what the run made of each unit, for the record (cache.mjs unitsOf)
+  // index → { pieces, state, by, tried, sentences? }: what the run made of each unit, for the record (cache.mjs unitsOf)
   const results = new Map()
-  if (seed) for (const [i, s] of seed) translated.set(units[i], s.pieces)
+  // each translation's sentences (mt.mjs sentencesOf), by its pieces: a compile's texts carry those of the pieces it
+  // typeset, not of a translation come in while it compiled
+  const sentencesBy = new WeakMap()
+  const keep = (pieces, sentences) => { if (sentences) sentencesBy.set(pieces, sentences) }
+  const seeded = old => (old ? { pieces: old.pieces, by: old.by, ...(old.sentences ? { sentences: old.sentences } : {}) } : {})
+  if (seed) for (const [i, s] of seed) { translated.set(units[i], s.pieces); keep(s.pieces, s.sentences) }
   let changed = false
   // why the run stopped short: the service's failure (engine.mjs's kinds), after which nothing more is sent (§10.3)
   let stopped = null
@@ -205,8 +217,9 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
         if (r.state === 'whole' || (!old && r.pieces)) {
           if (!old || JSON.stringify(old.pieces) !== JSON.stringify(r.pieces)) changed = fresh = true
           translated.set(units[i], r.pieces)
-          results.set(i, { pieces: r.pieces, state: r.state, by: r.by, tried: identity })
-        } else results.set(i, { ...(old ? { pieces: old.pieces, by: old.by } : {}), state: r.state, tried: identity })
+          keep(r.pieces, r.sentences)
+          results.set(i, { pieces: r.pieces, state: r.state, by: r.by, tried: identity, ...(r.sentences ? { sentences: r.sentences } : {}) })
+        } else results.set(i, { ...seeded(old), state: r.state, tried: identity })
       }
       note('translated', { units: batch.length, how, ms: Date.now() - t0, total: translated.size })
       // a failure of the service, not of these texts (engine.mjs EngineError's lost): the batches after it would fail
@@ -216,7 +229,7 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
     }
     // stopped short: what was not sent is lost to the service, a seed's translation kept on screen
     if (stopped) {
-      for (const i of todo) { const old = seed?.get(i); results.set(i, { ...(old ? { pieces: old.pieces, by: old.by } : {}), state: 'lost', tried: identity }) }
+      for (const i of todo) results.set(i, { ...seeded(seed?.get(i)), state: 'lost', tried: identity })
       note('stopped', { kind: stopped, untried: todo.size })
       todo.clear()
     }
@@ -229,8 +242,9 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
 
   // 3–5. compiles
   const fonts = await fontsP
-  // each unit's text as that compile has it: translated if it was in the snapshot, the source's otherwise
-  const texts = done => units.map((u, i) => ({ id: i, text: done.has(u) ? plainTranslated(done.get(u)) : plainSource(u) }))
+  // each unit's text as that compile has it: translated if it was in the snapshot, the source's otherwise; with where its
+  // placeholders stood, its displays beyond its marks and the sentences of the translation typeset, for the anchors
+  const texts = done => textsShown(units, done, pieces => sentencesBy.get(pieces))
   let aux = null, bbl = null, previews = 0, originalP = null
   // the marked original, compiled once: the left side's anchors, and the characters the paper's own compile could not set
   const original = () => (originalP ??= compile({ main: project.main, engine: meta.compiler, rerun: true, bibtex: meta.bbl ? false : null, overrides: originalFiles(paper) }).then(o => {

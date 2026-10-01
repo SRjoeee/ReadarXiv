@@ -26,6 +26,15 @@ describe('createPdfStore', () => {
     expect(got?.units[0]?.by).toBe('B')
   })
 
+  it("a unit's sentences come back as written, and a copy made before them reads as before: additive, no new version (the highlight's sentence level)", async () => {
+    const s = createPdfStore({ db: dbOf() })
+    const unit = { kind: 'para', src: 'One. Two.', hash: 'h', tr: 'Eins. Zwei.', pieces: [], state: 'whole' as const, by: 'B', tried: 'B', sentences: { src: [5], tr: [6] } }
+    await s.put({ ...body('d', { units: [unit] }), pdf: pdfOf(100) }, now)
+    expect((await s.get('d', 'zh-CN'))?.units[0]?.sentences).toEqual({ src: [5], tr: [6] })
+    await s.put({ ...body('e'), pdf: pdfOf(100) }, now)
+    expect((await s.get('e', 'zh-CN'))?.units[0]).not.toHaveProperty('sentences')
+  })
+
   it('what is stored is not the PDF', async () => {
     const db = dbOf()
     const s = createPdfStore({ db })

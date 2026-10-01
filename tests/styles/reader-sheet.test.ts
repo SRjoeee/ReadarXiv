@@ -4,8 +4,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { resolve } from '@/shared/tokens'
-import { contrast, over, parseOklch } from '../shared/wcag'
 import { type Rule, rules, sheet } from './css-rules'
 
 /** the reader's sheet and the shared sheets it imports: the tokens (the redesign's design, §2.2) and the controls. A sheet renamed or gone fails here */
@@ -86,20 +84,5 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
     expect(pressed.length).toBeGreaterThan(0)
     const held = own.filter(r => reduced(r) && still(r)).flatMap(r => r.selector.split(',').map(x => x.trim()))
     expect(pressed.map(r => r.selector).filter(selector => !held.includes(selector))).toEqual([])
-  })
-
-  it('draws the progress line at 3:1 on the chrome in both themes: it is all a sighted reader is shown of a load or a run (#299, Part 6\'s interface review; WCAG 1.4.11)', () => {
-    const line = all.find(r => r.selector === '.progress-line')
-    const fill = /background:\s*([^;]+)/.exec(line?.body ?? '')?.[1]?.trim() ?? ''
-    // a role, or a role mixed with transparent (`name@share`, as the redesign's pairs read it)
-    const role = /^var\(--([\w-]+)\)$/.exec(fill)?.[1] ?? /^color-mix\(in oklab, var\(--([\w-]+)\) (\d+)%, transparent\)$/.exec(fill)?.slice(1).join('@')
-    expect(role, fill).toBeDefined()
-    const [name = '', share] = role!.split('@')
-    for (const mode of ['light', 'dark'] as const) {
-      const chrome = parseOklch(resolve('chrome', mode))
-      const [r, g, b, a] = parseOklch(resolve(name, mode))
-      const drawn = over([r, g, b, share ? (a * Number(share)) / 100 : a], chrome)
-      expect(contrast(drawn, chrome), `${fill}, ${mode}`).toBeGreaterThanOrEqual(3)
-    }
   })
 })

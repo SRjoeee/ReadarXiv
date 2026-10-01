@@ -1,4 +1,4 @@
-// The cache key (DESIGN §9): sha256(CACHE_KEY_VERSION | providerId | model | PROMPT_VERSION | promptKey | context | RULES_VERSION | target | renderPath | normalizedText | cuts).
+// The cache key (DESIGN §9): sha256(CACHE_KEY_VERSION | providerId | model | PROMPT_VERSION | promptKey | context | RULES_VERSION | target | renderPath | normalizedText | cuts [| marked-over-cap]).
 // The prompt and the context enter the payload as **structured source text**, not squeezed into a 32-bit hash first:
 // a DJB2 collision cannot be told apart by the outer SHA-256 (Codex on #28 gave the instance: the titles
 // 19k04n01vcr73f and 1efm0uaep90s9 share a DJB2). After FluentRead: identity is a structured, deterministic
@@ -53,6 +53,15 @@ export interface CacheIdentity {
    * and cannot catch this) (Codex on #137). A call that cuts no sentences omits the field, and the key is as before
    */
   cuts?: readonly number[]
+  /**
+   * Set for a segment cut into sentences whose marked text is over its engine's batch cap. Until 2026-10-02 such a
+   * segment was sent unmarked — the cap was taken for a request limit, which it is not: `BatchQueue` sends a task over
+   * it as a batch of its own — and the entries those requests left, under the key its marked request has now, hold a
+   * translation with no sentences. The field sets the marked request's key apart from them (the request changed:
+   * hard rule 4) and leaves every other key as it was. It ties these keys to the engine's cap: a cap that changes
+   * moves the keys of the segments between the two values, which are translated again once
+   */
+  markedOverCap?: boolean
 }
 
 /**
@@ -90,6 +99,8 @@ export async function buildCacheKey(identity: CacheIdentity): Promise<string> {
     identity.renderPath,
     normalizeText(identity.text),
     identity.cuts ?? null,
+    // appended only where set: every other key's payload is byte for byte what it was
+    ...(identity.markedOverCap ? ['marked-over-cap'] : []),
   ])
   return sha256Hex(payload)
 }

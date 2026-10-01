@@ -3,7 +3,7 @@
 // so it is written only for a translation that one identity made whole — as a copy is current only when every unit is
 // (the final review of Codex 1 on #306)
 import { describe, expect, it } from 'vitest'
-import { allTranslatedBy } from '@/pdf-reader/engine/cache.mjs'
+import { allTranslatedBy, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
 
 /** a run's results as live.mjs keeps them: index → { pieces, state, by, tried } */
 const results = (...rows: { by?: string; state?: string; pieces?: boolean }[]) =>
@@ -39,5 +39,49 @@ describe('allTranslatedBy', () => {
     expect(allTranslatedBy(results({ by: 'F' }, { by: 'mixed' }), 'F')).toBe(false)
     expect(allTranslatedBy(results({ state: 'lost', pieces: false }), 'F')).toBe(false)
     expect(allTranslatedBy(new Map(), 'F')).toBe(false)
+  })
+})
+
+// Sentence level (B3): a copy keeps each unit's sentences with the translation they belong to, additive and optional —
+// a copy made before has none, and its units are lit whole
+describe('the record keeps the sentences of the translation it keeps', () => {
+  const units = [{ kind: 'para', pieces: [{ t: 'text', s: 'One. Two.' }] }, { kind: 'para', pieces: [{ t: 'text', s: 'Three.' }] }, { kind: 'heading', pieces: [{ t: 'text', s: 'Four' }] }]
+  const tr = (s: string) => [{ t: 'text', tr: true, s }]
+
+  it('unitsOf: a result\'s sentences with its pieces; none where the result has none, or no pieces', () => {
+    const results = new Map<number, unknown>([
+      [0, { pieces: tr('Eins. Zwei.'), state: 'whole', by: 'ms', tried: 'ms', sentences: { src: [5], tr: [6] } }],
+      [1, { pieces: tr('Drei.'), state: 'whole', by: 'ms', tried: 'ms' }],
+      [2, { state: 'lost', tried: 'ms', sentences: { src: [], tr: [] } }],
+    ])
+    const out = unitsOf(units as never, new Set(), ['a', 'b', 'c'], results)
+    expect(out[0]).toMatchObject({ tr: 'Eins. Zwei.', sentences: { src: [5], tr: [6] } })
+    expect(out[1]).not.toHaveProperty('sentences')
+    expect(out[2]).not.toHaveProperty('sentences')
+  })
+
+  it('seedFrom: a seed carries the sentences of the translation it seeds; a copy made before carries none', async () => {
+    const record = { units: [
+      { kind: 'para', src: 'One. Two.', hash: await sourceHash(units[0] as never), pieces: tr('Eins. Zwei.'), by: 'ms', tried: 'ms', state: 'whole', sentences: { src: [5], tr: [6] } },
+      { kind: 'para', src: 'Three.', hash: await sourceHash(units[1] as never), pieces: tr('Drei.'), by: 'ms', tried: 'ms', state: 'whole' },
+    ] }
+    const { seed } = await seedFrom(record as never, units as never)
+    expect(seed.get(0)).toMatchObject({ sentences: { src: [5], tr: [6] } })
+    expect(seed.get(1)).not.toHaveProperty('sentences')
+  })
+
+  it('seedAgain: a run again seeds each unit the last run made with its sentences, over the copy\'s (the final review, m3)', () => {
+    const copy = new Map<number, unknown>([[0, { pieces: tr('Alt.'), by: 'g', tried: 'g', state: 'whole', sentences: { src: [1], tr: [1] } }], [2, { pieces: tr('Vier'), by: 'g', tried: 'g', state: 'whole' }]])
+    const made = new Map<number, unknown>([
+      [0, { pieces: tr('Eins. Zwei.'), state: 'whole', by: 'ms', tried: 'ms', sentences: { src: [5], tr: [6] } }],
+      [1, { pieces: tr('Drei.'), state: 'whole', by: 'ms', tried: 'ms' }],
+      [2, { state: 'lost', tried: 'ms' }],
+    ])
+    const seed = seedAgain(copy as never, made as never)
+    expect(seed.get(0)).toEqual({ pieces: tr('Eins. Zwei.'), by: 'ms', tried: 'ms', state: 'whole', sentences: { src: [5], tr: [6] } })
+    expect(seed.get(1)).not.toHaveProperty('sentences')
+    // a unit the last run did not translate keeps the copy's seed
+    expect(seed.get(2)).toMatchObject({ pieces: tr('Vier'), by: 'g' })
+    expect(seedAgain(null, null).size).toBe(0)
   })
 })

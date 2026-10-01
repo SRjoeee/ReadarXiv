@@ -18,8 +18,13 @@ export function folder(dir) {
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
 const asFiles = root => (typeof root === 'string' ? folder(root) : root)
-/** a/./b/../c → a/c */
+/** a/./b/../c → a/c: a file as the package holds it (tar.mjs untar names each so) and as TeX's file system has it,
+ *  whatever spelling named it — one name for one file, so that a file written back replaces it rather than sitting
+ *  beside it (2608.08350's \input{./sections/a.tex}: the compile set the English over the translation) */
 export const normalizePath = p => { const out = []; for (const seg of p.split('/')) { if (!seg || seg === '.') continue; if (seg === '..') out.pop(); else out.push(seg) } return out.join('/') }
+/** the name TeX gives what it writes for a main file, its .aux and .bbl: the file's own name without its extension, in
+ *  the package's root, where TeX runs whatever directory the main file is in (arXiv's compile, the TeX page's) */
+export const jobName = main => main.slice(main.lastIndexOf('/') + 1).replace(/\.[^.]*$/, '')
 /** bytes as a string of the same code units (latin1, byte for byte): the scanner's view of a source */
 export const latin1 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return s }
 export const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return b }
@@ -38,6 +43,8 @@ const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox'])
  *  a footnote of its own; the names, marks and spacing stay as the author wrote them (1706.03762's author block: its
  *  footnotes stayed in English, the whole block one opaque command) */
 const FRONT_MATTER = new Set(['author', 'affil', 'affiliation', 'institute', 'address'])
+/** import.sty's commands that read a file from a directory, {dir}{file}: whether the directory is the one imported last's */
+const IMPORTS = new Map([['import', false], ['inputfrom', false], ['includefrom', false], ['subimport', true], ['subinputfrom', true], ['subincludefrom', true]])
 const INLINE_TEXT = new Set(['textbf', 'textit', 'emph', 'textsl', 'textsc', 'underline', 'textup', 'textrm', 'textsf', 'textmd', 'uline'])
 // commands whose last required argument is typeset as it stands — a scaled table, a boxed or coloured phrase, a TikZ
 // picture fitted to the column — by how many required arguments they take, that one included. The others (a width,
@@ -118,11 +125,56 @@ function mathEnd(s, i) { // s[i] is '$' or starts \( \[ ; returns index after th
 }
 
 // ---------------------------------------------------------------- units
+/** the kinds set in the running text, which a display standing alone after them belongs to */
+const IN_TEXT = new Set(['para', 'theorem', 'abstract'])
+/** a display environment: a math environment but the inline one */
+const displayEnv = env => MATH_ENVS.test(env) && !/^math\*?$/.test(env)
+/**
+ * A display's letters as the page sets them, for telling its lines from a float's (anchors.mjs): the source's letters,
+ * the paper's own macros put in (`macros`, name → body: `\\rmx` is `\\mathbf{x}`, `\\E` is `\\mathbb{E}`) and the commands
+ * left out, run together — a subscript runs on with its letter, `N_{\\text{out}}` → `nout` — then the commands' names,
+ * which some set as words (`\\log`, `\\softmax`)
+ */
+export function displayLetters(src, macros = new Map()) {
+  let s = src
+  for (let depth = 0; depth < 3 && macros.size; depth++) {
+    const t = s.replace(/\\([A-Za-z@]+)/g, (m, name) => (macros.has(name) ? ` ${macros.get(name)} ` : m))
+    if (t === s || t.length > 20000) break
+    s = t
+  }
+  // the commands that set a Latin letter (ℓ reads as l)
+  s = s.replace(/\\(ell|imath|jmath)(?![A-Za-z@])/g, (m, c) => ({ ell: 'l', imath: 'i', jmath: 'j' })[c]).normalize('NFKC').toLowerCase()
+  return `${s.replace(/\\[a-z@]+/g, '').replace(/[^\p{L}]/gu, '')} ${[...new Set([...s.matchAll(/\\([a-z]+)/g)].map(m => m[1]))].join(' ')}`
+}
+/** the bodies of the macros a paper defines in its sources (\\newcommand, \\def, \\DeclareMathOperator), by name */
+function macroBodies(texts) {
+  const out = new Map()
+  for (const t of texts) {
+    for (const m of t.matchAll(/\\(?:(?:re|provide)?newcommand\*?\s*\{?\s*\\([A-Za-z@]+)\s*\}?\s*(?:\[\d\]\s*)?(?:\[[^\]]*\]\s*)?|def\s*\\([A-Za-z@]+)\s*(?:#\d\s*)*|DeclareMathOperator\*?\s*\{\s*\\([A-Za-z@]+)\s*\}\s*)(?=\{)/g)) {
+      const at = m.index + m[0].length, e = matchGroup(t, at)
+      if (e > 0) out.set(m[1] ?? m[2] ?? m[3], t.slice(at + 1, e - 1))
+    }
+  }
+  return out
+}
+/**
+ * The displays a unit sets before its first words (`lead`) or after its last (`trail`), outside its marks, which stand
+ * in running text (patch: the start mark before the first word or inline formula, the end mark after the last word),
+ * and between them (`inner`): their letters (displayLetters), or null — the reader's anchors take a display beyond the
+ * marks, or across a page break inside them, only on lines its letters explain. Nothing typeset depends on it
+ */
+function displayOutside(pieces, displays, macros) {
+  const first = pieces.findIndex(p => (p.t === 'text' && /[^ \t\r\n]/.test(p.s)) || (p.t === 'ph' && INLINE.test(p.src)))
+  const last = pieces.findLastIndex(p => p.t === 'text' && /[^ \t\r\n]/.test(p.s))
+  const letters = ps => { const ds = ps.filter(p => displays.has(p)); return ds.length ? ds.map(p => displayLetters(p.src, macros)).join(' ') : null }
+  return { lead: first > 0 ? letters(pieces.slice(0, first)) : null, trail: last >= 0 ? letters(pieces.slice(last + 1)) : null, inner: first >= 0 && last > first ? letters(pieces.slice(first + 1, last)) : null }
+}
 // A unit: { file, kind, start, end, pieces: [{t:'text', s} | {t:'ph', src} | {t:'open', id, src} | {t:'close', id, src}] }
 class Builder {
-  constructor(file, units) { this.file = file; this.units = units; this.cur = null; this.pairId = 0 }
+  constructor(file, units, src = '', macros = new Map()) { this.file = file; this.units = units; this.src = src; this.macros = macros; this.cur = null; this.pairId = 0; this.displays = new WeakSet() }
   text(s, start, end) { if (!this.cur) { if (!s.trim()) return; this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] } } this.cur.pieces.push({ t: 'text', s }); this.cur.end = end }
-  ph(src, start, end) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; this.cur.pieces.push({ t: 'ph', src }); this.cur.end = end; return true }
+  /** `display`: a formula set on lines of its own (displayOutside) */
+  ph(src, start, end, display = false) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; const p = { t: 'ph', src }; if (display) this.displays.add(p); this.cur.pieces.push(p); this.cur.end = end; return true }
   open(src, start) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end: start, pieces: [] }; const id = ++this.pairId; this.cur.pieces.push({ t: 'open', id, src }); return id }
   close(id, src, end) { if (this.cur) { this.cur.pieces.push({ t: 'close', id, src }); this.cur.end = end } }
   flush() {
@@ -130,7 +182,17 @@ class Builder {
     if (!u) return
     // trim placeholders and whitespace at both ends out of the unit: they stay in the source untouched
     const letters = u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
-    if ((letters.match(/\p{L}/gu) ?? []).length < 2) return
+    if ((letters.match(/\p{L}/gu) ?? []).length < 2) {
+      // a display standing alone between blank lines is read with the paragraph it follows, nothing but white space
+      // and comments between them
+      const prev = this.units.at(-1), shown = u.pieces.filter(p => this.displays.has(p)).map(p => displayLetters(p.src, this.macros))
+      if (shown.length && prev?.file === u.file && IN_TEXT.has(prev.kind) && !this.src.slice(prev.end, u.start).replace(/(^|[^\\])%.*$/gm, '$1').trim()) prev.trail = [prev.trail, ...shown].filter(Boolean).join(' ')
+      return
+    }
+    const { lead, trail, inner } = displayOutside(u.pieces, this.displays, this.macros)
+    if (lead) u.lead = lead
+    if (trail) u.trail = trail
+    if (inner) u.inner = inner
     // the paper's title, which goes with every batch to an LLM as the HTML page's does (DESIGN §8.2)
     if (this.title) u.title = true
     if (this.depth !== undefined) u.depth = this.depth
@@ -224,7 +286,7 @@ function walk(s, from, to, b, ctx) {
       if (s[k] === '\n') { endText(); b.flush(); i = k + 1; continue }
       startText(); i++; continue
     }
-    if (c === '$') { const e = mathEnd(s, i); if (e < 0 || e > to) { i++; continue } endText(); if (!b.ph(s.slice(i, e), i, e)) { /* display math alone: nothing to do */ } i = e; continue }
+    if (c === '$') { const e = mathEnd(s, i); if (e < 0 || e > to) { i++; continue } endText(); b.ph(s.slice(i, e), i, e, s.startsWith('$$', i)); i = e; continue }
     if (c === '~') { endText(); b.ph('~', i, i + 1); i++; continue }
     if (c === '{') {
       const e = matchGroup(s, i); if (e < 0 || e > to) { i++; continue }
@@ -241,7 +303,7 @@ function walk(s, from, to, b, ctx) {
       const stop = branchEnd(s, end, to, ctx.ifs)
       if (stop > 0) { endText(); b.flush(); ctx.skipped[name] = (ctx.skipped[name] ?? 0) + 1; i = stop; continue }
     }
-    if (name === '(' || name === '[') { const e = mathEnd(s, i); if (e > 0 && e <= to) { endText(); b.ph(s.slice(i, e), i, e); i = e; continue } }
+    if (name === '(' || name === '[') { const e = mathEnd(s, i); if (e > 0 && e <= to) { endText(); b.ph(s.slice(i, e), i, e, name === '['); i = e; continue } }
     const shorthand = ctx.envMacros.get(name)
     if (shorthand?.side === 'begin' && (MATH_ENVS.test(shorthand.env) || SKIP_ENVS.test(shorthand.env))) {
       // the block ends at the partner macro or at a literal \end{env}
@@ -250,13 +312,13 @@ function walk(s, from, to, b, ctx) {
       re.lastIndex = end
       const m = re.exec(s)
       const stop = m && m.index < to ? m.index + m[0].length : end
-      endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue
+      endText(); b.ph(s.slice(i, stop), i, stop, displayEnv(shorthand.env)); i = stop; continue
     }
     if (name === 'begin') {
       const m = s.slice(end).match(/^\s*\{([^}]+)\}/); if (!m) { i = end; continue }
       const env = m[1].trim(), afterBegin = end + m[0].length
       const [bodyEnd, afterEnd] = endOfEnv(s, afterBegin, env)
-      if (MATH_ENVS.test(env)) { endText(); if (!b.ph(s.slice(i, afterEnd), i, afterEnd)) b.flush(); i = afterEnd; continue }
+      if (MATH_ENVS.test(env)) { endText(); b.ph(s.slice(i, afterEnd), i, afterEnd, displayEnv(env)); i = afterEnd; continue }
       endText(); b.flush()
       // a TikZ picture: only its texts are prose (tikzText); the drawing stays as it is
       if (env === 'tikzpicture') { tikzText(s, afterBegin, bodyEnd, b, ctx); i = afterEnd; continue }
@@ -277,9 +339,15 @@ function walk(s, from, to, b, ctx) {
     }
     if (name === 'end') { endText(); b.flush(); const m = s.slice(end).match(/^\s*\{[^}]+\}/); i = end + (m ? m[0].length : 0); continue }
     if (name === 'item') { endText(); b.flush(); const { args, end: e } = argsAfter(s, end, 1); i = args.length && args[0].kind === 'opt' ? e : end; continue }
-    if (name === 'input' || name === 'include' || name === 'subfile') {
-      endText(); b.flush(); const { args, end: e } = argsAfter(s, end, 1)
-      if (args[0]) ctx.visit(s.slice(args[0].start + 1, args[0].end - 1).trim())
+    if (name === 'input' || name === 'include' || name === 'subfile' || IMPORTS.has(name)) {
+      endText(); b.flush(); const { args, end: e } = argsAfter(s, end, IMPORTS.has(name) ? 2 : 1)
+      const [a, f] = args.map(x => s.slice(x.start + 1, x.end - 1).trim())
+      // import.sty: \import{dir}{file} reads dir/file and puts dir first on the path an \input in it is looked for on,
+      // \subimport the same from the directory imported last; subfiles loads \subfile{dir/file} by \subimport{dir}{file}
+      const imported = (dir, file) => ctx.visit(file, [normalizePath(dir), ...ctx.dirs])
+      if (IMPORTS.has(name)) { if (f !== undefined) imported(IMPORTS.get(name) ? `${ctx.dirs[0] ?? ''}/${a}` : a, f) }
+      else if (name === 'subfile') { if (a) imported(`${ctx.dirs[0] ?? ''}/${a.slice(0, a.lastIndexOf('/') + 1)}`, a.slice(a.lastIndexOf('/') + 1)) }
+      else if (a) ctx.visit(a, ctx.dirs)
       i = e; continue
     }
     if (HEADINGS.has(name) || OWN_UNIT_ARG.has(name)) {
@@ -372,7 +440,11 @@ const listSources = fsys => fsys.list().filter(f => /\.(tex|sty)$/i.test(f))
 export function loadProject(root, main, { tables = false } = {}) {
   const fsys = asFiles(root)
   const sourceText = f => latin1(fsys.read(f))
-  const read = rel => { for (const cand of [rel, `${rel}.tex`]) { const bytes = fsys.read(normalizePath(cand)); if (bytes) return { rel: cand, text: latin1(bytes) } } return null }
+  // a file as TeX finds it — in the directories import.sty puts on its path (`dirs`, the last imported first), then from
+  // the package's root, where TeX runs — and by the name the package holds it under, whatever spelling named it
+  // (\input{./sections/a.tex}): the units' file and the translation's key, which must replace that file rather than
+  // sit beside it — under ./sections/a.tex the compile set the English over every unit of 2608.08350 past its abstract
+  const read = (rel, dirs = []) => { for (const dir of [...dirs, '']) for (const cand of [rel, `${rel}.tex`]) { const key = normalizePath(`${dir}/${cand}`), bytes = fsys.read(key); if (bytes) return { rel: key, text: latin1(bytes) } } return null }
   const units = [], files = new Map(), seen = new Set()
   const mainFile = read(main)
   if (!mainFile) throw new Error(`main file ${main} not found`)
@@ -387,11 +459,13 @@ export function loadProject(root, main, { tables = false } = {}) {
     const t = sourceText(f)
     for (const m of t.matchAll(/\\(?:(?:re|provide)?newcommand\*?\s*\{?\\([A-Za-z@]+)\}?|def\\([A-Za-z@]+))\s*\{\s*\\(begin|end)\s*\{([^}]+)\}\s*\}/g)) envMacros.set(m[1] ?? m[2], { side: m[3], env: m[4].trim() })
   }
-  const ctx = { tables, theorems, macroArgs, envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim())), skipped, visit: rel => visit(rel) }
-  function visit(rel) {
-    const f = read(rel); if (!f || seen.has(f.rel)) return
+  const ctx = { tables, theorems, macroArgs, envMacros, ifs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1])), skipEnvs: new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim())), skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], macros: macroBodies(sources.map(sourceText)) }
+  /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first */
+  function visit(rel, dirs = []) {
+    const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)
-    const b = new Builder(f.rel, units)
+    const b = new Builder(f.rel, units, f.text, ctx.macros), outer = ctx.dirs
+    ctx.dirs = dirs
     let from = 0, to = f.text.length
     if (f.rel === mainFile.rel) {
       const m = f.text.match(/\\begin\s*\{document\}/)
@@ -408,6 +482,7 @@ export function loadProject(root, main, { tables = false } = {}) {
       const e = f.text.match(/\\end\s*\{document\}/); to = e ? e.index : to
     }
     walk(f.text, from, to, b, ctx); b.flush()
+    ctx.dirs = outer
   }
   visit(mainFile.rel)
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters

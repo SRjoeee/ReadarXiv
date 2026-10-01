@@ -24,6 +24,19 @@ export interface CachedUnit {
   /** the identity the unit was last tried under */
   tried?: string
   state: UnitState
+  /** the displays the unit sets before its first words, or after its last — outside its marks, which the reader's
+   *  anchors take them from beyond — as their letters (latex-front's displayOutside); absent in a copy made before they
+   *  did, anchored as then */
+  lead?: string
+  trail?: string
+  /** the displays between its words, as their letters: the reader's anchors fill a page break inside the unit with them */
+  inner?: string
+  /**
+   * where each of its sentences after the first begins, as its engine cut them (Microsoft's sentence lengths): offsets of
+   * its first word in `src` and in `tr`, one pair per sentence; absent where the engine reported none, or in a copy made
+   * before they were kept — the unit is lit whole then (the reader's highlight, sentence level)
+   */
+  sentences?: { src: number[]; tr: number[] }
 }
 
 /**

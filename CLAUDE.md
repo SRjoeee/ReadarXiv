@@ -18,7 +18,7 @@ Each is a product promise, a legal requirement, or a contract with something out
 1. **DOM invariants** (DESIGN §7.1, guarded by tests): a translation node is inserted only as the next sibling of its original block; an original node gains `data-axt-*` attributes and nothing else; global state lives only on `<html>`; after restore the DOM equals the pre-translation DOM node by node.
 2. **Prefixes**: every injected class, data attribute and CSS variable starts with `axt-` / `data-axt-` / `--axt-`.
 3. **Free and built-in translation APIs are unreliable by assumption**: their failure must be recoverable and must trigger the fallback chain; it must never take the extension down.
-4. **Cache key** carries every input that changes a translation — today `CACHE_KEY_VERSION | providerId | model | PROMPT_VERSION | promptKey | context | RULES_VERSION | target | renderPath | normalizedText | cuts` (`src/cache/key.ts`); bump the matching version whenever a prompt, a rule or the request shape changes meaning.
+4. **Cache key** carries every input that changes a translation — today `CACHE_KEY_VERSION | providerId | model | PROMPT_VERSION | promptKey | context | RULES_VERSION | target | renderPath | normalizedText | cuts`, and `marked-over-cap` for a segment marked over its engine's batch cap (`src/cache/key.ts`, DESIGN §9); bump the matching version whenever a prompt, a rule or the request shape changes meaning.
 5. **Secrets**: API keys live only in WXT storage — never in logs, cache keys, fixtures or git. A third party's public client constant (the Google web translator's key in `providers/google-web.ts`) is not a secret.
 6. **Attribution**: code ported from the reference projects (KISS Translator, Read Frog, FluentRead — GPL-3.0) keeps the header `// Ported from reference/<repo>/<path>@<commit> (GPL-3.0), <YYYY-MM-DD>, modified` and an entry in `docs/THIRD_PARTY.md`.
 7. **External contracts** get migration or compatibility handling, never silent replacement: the saved configuration schema (`CONFIG_VERSION` and a migration, DESIGN §9), and whatever a reader's machine or another program holds that a new version must still meet.
@@ -69,6 +69,9 @@ pnpm fixtures:fetch      # download and verify the fixtures the repository may n
 pnpm fixtures:stats      # rule coverage audit over the fixtures
 pnpm zip                 # the store archive; pnpm icons regenerates the icons
 pnpm tokens              # src/styles/tokens.css from src/shared/tokens.ts; a test fails while the two differ
+pnpm exec tsx experiments/pdf-bilingual/spikes/highlight-gate.mjs     # the PDF reader's highlight in Node, on this machine's data (never in the repository): the ten papers' runs and the ground truth (data/runs/highlight-ten, highlight-gt), their sources and arXiv's PDFs (data/corpus), and the Microsoft answers their sentences are made again from (out/highlight/B3/ms-cache-zh-auto.json, ms-cache-zh-en.json; a set missing fails the gate); WRITE_BASELINE=1 records a change meant
+pnpm exec tsx experiments/pdf-bilingual/spikes/highlight-papers.mjs experiments/pdf-bilingual/out/highlight/papers   # the browser gate's demo papers, their units carrying their sentences
+node experiments/pdf-bilingual/spikes/highlight-gate-browser.mjs checks  # the highlight in a real browser (pnpm build first; PAPERS defaults to those demo papers); floats, resting, tokens: those checks alone; costs: BASE_BUILD=<a build to compare with>
 AXT_MEASURE=1 pnpm vitest run tests/perf       # the cost measurements (readings, not assertions)
 AXT_CHROME=<binary> pnpm e2e                   # the e2e suite on a chosen Chrome; probes live in tests/e2e/probes/
 ```

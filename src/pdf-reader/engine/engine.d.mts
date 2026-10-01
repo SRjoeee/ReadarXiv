@@ -2,7 +2,7 @@
 import type { RenderPath } from '@/cache/key'
 import type { ProviderErrorKind } from '@/providers/types'
 
-type Translated = { text: string; by: string | null } | null
+type Translated = { text: string; by: string | null; alignment?: { source: number[]; target: number[] } } | null
 export declare class EngineError extends Error {
   kind: ProviderErrorKind
   partial?: Translated[]
@@ -15,6 +15,6 @@ export declare function openEngine(options: { paper: string }): Promise<{
   readonly engine: string
   identity: string
   now(): Promise<string>
-  translate(texts: string[], context?: { paperTitle?: string; abstract?: string }): Promise<Translated[]>
+  translate(texts: string[], context?: { paperTitle?: string; abstract?: string }, cuts?: (number[] | undefined)[]): Promise<Translated[]>
   close(): Promise<unknown>
 }>

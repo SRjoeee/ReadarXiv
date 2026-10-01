@@ -2,7 +2,7 @@
 // again starts from, the units a record keeps, when a run writes, the figures' keys. The store itself is the
 // extension's (src/cache/pdf-store.ts). Pure but for the hash, so that experiments/pdf-bilingual/spikes/cache-cases.mjs
 // runs it in Node.
-import { plainSource, plainTranslated } from './mt.mjs'
+import { displayEdges, plainSource, plainTranslated } from './mt.mjs'
 
 const hex = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('')
 /** SHA-256 hex of bytes: arXiv's PDF, the key of its record */
@@ -13,7 +13,7 @@ export const sourceHash = async u => hex(await crypto.subtle.digest('SHA-256', n
 export const figureKeyOf = texts => JSON.stringify(texts)
 
 /**
- * The seed for this paper's units from a record: index → { pieces, by, tried, state } for each unit whose source the
+ * The seed for this paper's units from a record: index → { pieces, by, tried, state, sentences? } for each unit whose source the
  * record has a translation of, matched by hash. A unit cut differently since has none. Repeated paragraphs (table
  * cells, often) share a hash, and each takes the best translation of their source: whole before partial (Devin on
  * #298). The hashes are kept for the record
@@ -26,9 +26,21 @@ export async function seedFrom(record, units) {
   const seed = new Map()
   hashes.forEach((h, i) => {
     const u = byHash.get(h)
-    if (u) seed.set(i, { pieces: u.pieces, by: u.by, tried: u.tried, state: u.state })
+    if (u) seed.set(i, { pieces: u.pieces, by: u.by, tried: u.tried, state: u.state, ...(u.sentences ? { sentences: u.sentences } : {}) })
   })
   return { seed, hashes }
+}
+
+/**
+ * A run again's seed: the copy's (seedFrom), with what the visit's last run made over it (runLive's results), so that
+ * only the units still missing are asked again — each with its pieces, its provenance and its sentences, which the run
+ * passes on to what it shows and to the record (a seeded unit without them lit whole, the final review of the
+ * highlight, m3)
+ */
+export function seedAgain(seed, made) {
+  const out = new Map(seed ?? [])
+  for (const [i, r] of made ?? []) if (r.pieces) out.set(i, { pieces: r.pieces, by: r.by, tried: r.tried, state: r.state, ...(r.sentences ? { sentences: r.sentences } : {}) })
+  return out
 }
 
 /**
@@ -38,11 +50,13 @@ export async function seedFrom(record, units) {
 export function unitsOf(units, kept, hashes, results) {
   return units.map((u, i) => {
     // a heading's depth, and whether it is the title, for the contents a stored copy lists (outline.ts)
-    const base = { kind: u.kind, src: plainSource(u), hash: hashes[i], ...(u.title ? { title: true } : {}), ...(u.depth !== undefined ? { depth: u.depth } : {}) }
+    // and its displays beyond its marks, which the anchors take on either side (displayEdges)
+    const base = { kind: u.kind, src: plainSource(u), hash: hashes[i], ...(u.title ? { title: true } : {}), ...(u.depth !== undefined ? { depth: u.depth } : {}), ...displayEdges(u) }
     if (kept.has(u)) return { ...base, state: 'kept' }
     const r = results.get(i)
     if (!r) return { ...base, state: 'none' }
-    return { ...base, ...(r.pieces ? { pieces: r.pieces, tr: plainTranslated(r.pieces) } : {}), ...(r.by !== undefined ? { by: r.by } : {}), tried: r.tried, state: r.state }
+    // the sentences of the translation kept, which say where each sentence begins in `src` and `tr`
+    return { ...base, ...(r.pieces ? { pieces: r.pieces, tr: plainTranslated(r.pieces), ...(r.sentences ? { sentences: r.sentences } : {}) } : {}), ...(r.by !== undefined ? { by: r.by } : {}), tried: r.tried, state: r.state }
   })
 }
 
