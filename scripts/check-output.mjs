@@ -78,7 +78,8 @@ const filesUnder = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entr
 // all: its page, `pdf-reader.html`, and any file whose name begins so are the build's own
 const READER_DATA = join(OUT, 'pdf-reader') + sep
 const built = filesUnder(OUT).filter(path => !path.startsWith(READER_DATA))
-const readerData = filesUnder(join(OUT, 'pdf-reader'))
+// a build without the directory is reported by the checks below (✗ pdf-reader/pdfjs/ is incomplete), not a stack trace
+const readerData = existsSync(join(OUT, 'pdf-reader')) ? filesUnder(join(OUT, 'pdf-reader')) : []
 const wasm = built.filter(path => path.endsWith('.wasm'))
 const carriers = built.filter(path => path.endsWith('.js') && readFileSync(path, 'utf8').includes('ort-wasm-simd-threaded'))
 for (const [what, ok, detail] of [
