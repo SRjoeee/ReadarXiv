@@ -248,17 +248,19 @@ function unitRuns(L, p, at, id, toks) {
       else head = Math.min(head ?? Infinity, inkL[k])
     }
   }
-  // by column, the unit's lines and each one's reach across (the unit's tokens on it), and the tokens on each
+  // by column, the unit's lines and each one's reach across (the unit's tokens on it)
   const byCol = new Map()
   for (const k of ks) {
     const ln = line(k), col = lines[ln].col
     const m = byCol.get(col) ?? byCol.set(col, new Map()).get(col)
     const x = m.get(ln)
-    if (x) { if (inkL[k] < x.x0) x.x0 = inkL[k]; if (inkR[k] > x.x1) x.x1 = inkR[k]; x.ks.push(k) } else m.set(ln, { x0: inkL[k], x1: inkR[k], ks: [k] })
+    if (x) { if (inkL[k] < x.x0) x.x0 = inkL[k]; if (inkR[k] > x.x1) x.x1 = inkR[k] } else m.set(ln, { x0: inkL[k], x1: inkR[k] })
   }
   let headAt = null
   if (head !== null) { const x = byCol.get(lines[line(first)].col)?.get(line(first)); if (x && head < x.x0) { x.x0 = head; at.heads.push(id); headAt = line(first) } }
   const runs = []
+  // each line's run and row in it, for the run's tokens (below)
+  const lineAt = new Map()
   for (const [col, m] of byCol) {
     const e = P.cols[col] ?? P.cols.F
     // rows: the lines from the top, merged where they overlap
@@ -284,16 +286,16 @@ function unitRuns(L, p, at, id, toks) {
     for (let r = 1; r <= rows.length; r++) {
       if (r < rows.length && !interrupted(lines, lineOwner, col, id, rows[r - 1], rows[r])) continue
       const run = runOf(id, p, col, rows.slice(start, r), e, P.lead.get(L.kindOf(id) ?? '') ?? P.lead.get(null), !FLOATS.has(L.kindOf(id)))
-      // its tokens in the stream's order and the row each is on, and where its head begins: its sentences' rows (segsOf)
-      const ts = []
-      for (const [ln, x] of m) { const w = rowOf.get(ln); if (w >= start && w < r) for (const k of x.ks) ts.push([k, w - start]) }
-      ts.sort((a, b) => a[0] - b[0])
-      run.toks = Int32Array.from(ts, t => t[0]); run.rowOf = Int32Array.from(ts, t => t[1])
+      // where its unit's head begins on it, and (below) its tokens and the row each is on: its sentences' rows (segsOf)
       run.head = headAt !== null && rowOf.get(headAt) >= start && rowOf.get(headAt) < r ? head : null
+      run.toks = []; run.rowOf = []
+      for (const ln of m.keys()) { const w = rowOf.get(ln); if (w >= start && w < r) lineAt.set(ln, { run, w: w - start }) }
       runs.push(run)
       start = r
     }
   }
+  // the tokens in the stream's order, each to its line's run
+  for (const k of ks) { const a = lineAt.get(line(k)); a.run.toks.push(k); a.run.rowOf.push(a.w) }
   // in the order the unit's words come: a column's runs from the top, the columns as the stream meets them
   return runs
 }
