@@ -108,3 +108,15 @@ describe('a strategy that cannot take the author block sets it as the paper has 
     expect(main(cjkutf8)).toContain('\\author{Alice Smith}')
   })
 })
+
+describe('the last compile\'s references, given to the next', () => {
+  it('go where TeX reads them, the project\'s root, whatever folder the main file is in (2608.12333\'s latex/arxiv.tex)', () => {
+    // TeX runs in the project's root (BusyTeX: FS.chdir(project_dir); latexmk likewise) and reads <stem>.aux and
+    // <stem>.bbl there; beside a main file in a folder, a one-pass compile set every reference as ?? and no bibliography
+    const p = openPaper(new Map([['latex/arxiv.tex', new TextEncoder().encode(SOURCE)]]))
+    expect(p.meta.main).toBe('latex/arxiv.tex')
+    const files = translationFiles(p, new Map(), { strategy: first({ ...META, ...p.meta }, 'de'), fonts: null, draft: true, aux: '\\relax\n', bbl: '\\begin{thebibliography}{1}\\end{thebibliography}\n' })
+    expect(['arxiv.aux', 'arxiv.bbl'].filter(f => files.has(f))).toEqual(['arxiv.aux', 'arxiv.bbl'])
+    expect([...files.keys()].filter(f => /\.(aux|bbl)$/.test(f))).toEqual(['arxiv.aux', 'arxiv.bbl'])
+  })
+})

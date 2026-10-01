@@ -50,7 +50,9 @@ const DRAFT = [
   '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
 ].join('\n') + '\n'
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
-const stemOf = main => main.replace(/\.[^./]+$/, '')
+/** the name TeX gives a compile's .aux and .bbl: it runs in the project's root (BusyTeX's FS.chdir(project_dir)) and
+ *  writes and reads them there, whatever folder the main file is in */
+const stemOf = main => main.split('/').pop().replace(/\.[^.]+$/, '')
 /** a compile the TeX page gave up on (BusyTeX's 180 s): the machine was slow, not the strategy wrong */
 const timedOut = r => !r.ok && /Compilation timeout/.test(r.error ?? '')
 /** why a compile gave no PDF: the first TeX error, or what the compiler said */
