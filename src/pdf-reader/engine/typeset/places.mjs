@@ -1,6 +1,7 @@
 // Where a compile sets each unit against where the original does (records/typesetting.md in experiments/pdf-bilingual):
 // pages; drift — where each unit starts in reading order, as page, column and height down the text block, against
-// where the original starts it, in columns (one column is half a page in two columns, a page in one); block size — a
+// where the original starts it, in columns (one column is half a page in two columns, a page in one), and where it ends
+// against where the original ends it; block size — a
 // unit's height over its original's, where both lie within one column. From unit marks (marksOf). A unit the original
 // has and the compile lacks is counted as missing, not dropped. Both documents are read on the original's columns,
 // page by page, as its compile set each page (marksOf): a reader holding the two side by side finds a unit level with
@@ -38,7 +39,7 @@ const place = (om, at, block, held = true) => { const b = block(at.page), f = (b
 export function alignment(om, tm) {
   const block = blocks(om)
   const starts = [...om.marks.keys()].filter(k => k.endsWith('s'))
-  const drift = [], size = []
+  const drift = [], end = [], size = []
   let matched = 0
   for (const k of starts) {
     const o = om.marks.get(k), t = tm.marks.get(k)
@@ -46,6 +47,7 @@ export function alignment(om, tm) {
     matched++
     drift.push(Math.abs(place(om, t, block) - place(om, o, block)))
     const oe = om.marks.get(k.replace(/s$/, 'e')), te = tm.marks.get(k.replace(/s$/, 'e'))
+    if (oe && te) end.push(Math.abs(place(om, te, block) - place(om, oe, block)))
     if (!oe || !te || o.page !== oe.page || t.page !== te.page || columnOf(om, o) !== columnOf(om, oe) || columnOf(om, t) !== columnOf(om, te)) continue
     const ho = o.y - oe.y, ht = t.y - te.y
     if (ho >= 20 && ht > 0) size.push(ht / ho)
@@ -54,6 +56,7 @@ export function alignment(om, tm) {
   return {
     pages: tm.pages - om.pages, matched, missing: starts.length - matched,
     drift: { values: drift, median: q(drift, 0.5), p90: q(drift, 0.9), within: share(drift, d => d <= 0.1 + 1e-9) },
+    end: { values: end, median: q(end, 0.5), p90: q(end, 0.9), within: share(end, d => d <= 0.1 + 1e-9) },
     size: { values: size, median: q(size, 0.5), p10: q(size, 0.1), p90: q(size, 0.9), within: share(size, r => Math.abs(r - 1) <= 0.15 + 1e-9) },
   }
 }

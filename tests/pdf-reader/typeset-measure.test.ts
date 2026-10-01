@@ -148,6 +148,14 @@ describe('places against the original', () => {
     expect(v[2]).toBeCloseTo(0.5, 6)
     expect(v[3]).toBeCloseTo(2, 6)
   })
+  it('measures where each unit ends against its original\'s end, in columns as its start is', () => {
+    const e = alignment(orig, tr).end.values
+    expect(e).toHaveLength(4)
+    expect(e[0]).toBeCloseTo(50 / 600, 6)
+    expect(e[1]).toBeCloseTo(1 + (700 - 340) / 600 - 1, 6)
+    expect(e[3]).toBeCloseTo(2 + 10 / 600, 6)
+    expect(alignment(orig, orig).end.median).toBe(0)
+  })
   it('measures each block\'s height over its original\'s, and the shares within a tenth of a column and 15 %', () => {
     const a = alignment(orig, tr)
     expect(a.size.values.slice(0, 4).map((x: number) => Number(x.toFixed(6)))).toEqual([0.9, 0.75, 0.5, 1.2])
