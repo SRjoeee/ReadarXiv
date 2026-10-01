@@ -53,6 +53,11 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
     expect(itemRing.every(r => r.selector.includes(':not([data-axt-pointer])'))).toBe(true)
   })
 
+  it('shows the pointer over a switch\'s row, which a press on its words turns as a press on the switch does (#299 review; the popup\'s .toggle)', () => {
+    const row = all.find(r => r.selector.split(',').map(x => x.trim()).includes('.pop label.row'))
+    expect(row?.body).toMatch(/cursor:\s*pointer/)
+  })
+
   it('presses nothing in by a scale under reduced motion: each press that scales has its rule there, as the toolbar\'s and the card\'s (#299, Part 6; §4.2: a motion is a fade or nothing)', () => {
     const own = rules(sheet('../../src/entrypoints/pdf-reader/reader.css'))
     const reduced = (r: Rule) => r.within.some(a => /prefers-reduced-motion:\s*reduce/.test(a))

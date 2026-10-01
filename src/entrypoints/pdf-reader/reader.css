@@ -129,6 +129,8 @@ html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
   /* below 900 px the language and service menus leave the toolbar for the reading options' first rows (§5); as specific
      as the rows and separators they are, and after them, so that they stay hidden above it */
   .pop .narrow-only, .pop .narrowest-only { display: none; }
+  /* a switch's row is a label (ReadingOptions): a press on its words turns the switch, and the pointer says so */
+  .pop label.row { cursor: pointer; }
   /* the contents (§6.3): `toc`, since Tailwind's `contents` is display: contents */
   .toc { position: fixed; z-index: 15; inset: var(--bar) auto 0 0; width: var(--side); display: flex; flex-direction: column; background: var(--chrome); box-shadow: 0.5px 0 0 var(--chrome-line); translate: -100% 0; visibility: hidden; transition: translate 200ms var(--ease), visibility 0s linear 200ms; }
   html[data-axt-contents] .toc { translate: 0 0; visibility: visible; transition: translate 200ms var(--ease), visibility 0s; }
