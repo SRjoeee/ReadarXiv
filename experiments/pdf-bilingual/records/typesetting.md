@@ -143,8 +143,74 @@ Tried and not taken, on the same gate:
 - **The nearer of the measuring compile and the final** (fewer pages off, then the smaller drift): about a point
   (round 33 pages equal, 0.039; unseen 0.085), for a full measuring compile or a further one whenever a draft is the
   nearer. Left to the wiring.
-- The window and the take-back as one constant (50 lines both) was not run: 46 against 50 lines is within the
-  window's own reach, and the gate is the place to try it (`VARY='FLOW.window=50'`).
+- The window and the take-back as one constant (50 lines both): tried in the fix round, below.
+
+### The review's fix round (2026-10-02)
+
+A second review found the corrections sound and asked for three things: paragraphs holding a display modelled in
+general, a holdout in the languages the rule serves, and a gate that checks each paper rather than the sets' means.
+
+- **A fresh holdout.** Ten of the thirteen unseen papers translated once into Japanese, Korean, German and Russian with
+  Microsoft's free engine on the reader's markers wire (`spikes/typeset-translate.mjs`; no model asked): 40
+  paper-languages (`fresh`) that judge every change from here on. The other three papers in the same languages (12,
+  `aside`) were run once, at the end. A paper is display-heavy when a quarter or more of its prose units hold a
+  display; such papers drift further (unseen Chinese 0.142 against 0.051 column, fresh 0.077 against 0.046) and are
+  counted apart.
+- **The gate checks each paper against its record** (`papers` in `typeset-gate.json`): no page further from the
+  original's; start and end drift at most 0.03 column past the record; no float off its page that was on it, at most
+  one more beyond 30 pt; blocks within 15 % at most 5 points fewer; the measuring compile's pages and drift likewise.
+  Set means alone had let one paper's drift triple and the float hold be switched off; both fail now (Japanese
+  2608.24839's drift 0.089 → 0.267; with no float held, Chinese 2608.25750's start drift 0.026 → 0.065 and floats
+  within 30 pt 20 → 18). Results of another TeX image or of other rule files are refused as stale. `DRAFT=1` makes the
+  measuring compile as the reader may (one pass, images as frames, today's references) and the final from it: on the
+  fresh holdout the same final as a full measuring compile gives, on all 40, once the references went where TeX reads
+  them (a main file in a folder, 2608.12333's, had none in any one-pass compile).
+- **A page's columns are read where its units were set**, not only as the page goes out: revtex's and aastex's grid
+  closes at `\end{document}` before the last page goes out, and every such last page read one column. A page now reads
+  the most columns of any mark on it and of the page as it went out (a native revtex case). Today's drift moved (round
+  0.731 → 0.738, new language 0.679 → 0.685); the rule's did not.
+- **A plan sets only what it was made for.** `finalTypesetting` refuses a plan made on another translation than the
+  one it sets (the measuring compile must hold the whole translation); a plan given another strategy sets the
+  translation as today, and the wiring is told (`note('typeset refused')`). Neither throws.
+
+Tried and not taken:
+
+- **Units holding a display measured by their text**, in the type, the flow and the final. `\prevgraf` counts a display
+  as three lines, so the line probe's reading less three a display is the unit's text, which the type and the flow can
+  balance with the rest, the display falling out of every sum. On the fresh holdout under a point (pages equal 34 and
+  34, start drift 0.062 → 0.058, display-heavy 0.077 → 0.072), with units standing out 29 → 43; on the Chinese unseen a
+  page and 0.037 column lost (12 → 11 pages equal, 0.100 → 0.137, display-heavy 0.142 → 0.208); on the round a page (32
+  → 31). Short Chinese sits at its leading's ceiling, and set tight to their own text the display units left it
+  short; a unit that opens with a display, or holds two paragraphs, reads its lines too loosely to correct by. In the
+  final alone: 31 of 40 pages equal.
+- **The final's type solved again** from the measured density (as handed over), on the fresh holdout: 35 of 40 pages
+  equal, start drift 0.062 → 0.076. The final keeps the preview's type.
+- **No xeCJK glue in the width model under CJKutf8**: Japanese 2608.18090 0.040 → 0.144, 2608.06701 0.223 → 0.232,
+  Chinese 2608.21180 level. The translation's own spaces beside Latin, which CJKutf8 sets as spaces, are about what
+  the glue stood for.
+- **The window and the take-back as one length, 50 lines** (46 and 50): on the fresh holdout level (pages equal 34 and
+  34, start drift 0.062 → 0.066, floats on their page 88.8 → 90.4 % and within 30 pt 77.9 → 80.2 %), on the round
+  Chinese 2608.09038 a page further (+1 → +2, today 0). Kept at 46 and 50.
+
+The gate after the fix round (the final; drift the mean of the papers' medians):
+
+| | Pages equal (more / fewer) | Start drift | display-heavy / the rest | End drift | Within 0.1 column | Floats on their page / within 30 pt |
+|---|---|---|---|---|---|---|
+| Round of 34, today | 11 (14 / 9) | 0.738 | 1.074 / 0.680 | 0.760 | 20 % | 55 % / 34 % |
+| Round of 34, the rule | 32 (1 / 1) | 0.041 | 0.062 / 0.038 | 0.045 | 81 % | 98 % / 84 % |
+| 13 unseen Chinese, today | 5 (0 / 8) | 0.703 | 0.708 / 0.697 | 0.720 | 11 % | 33 % / 20 % |
+| 13 unseen Chinese, the rule | 12 (0 / 1) | 0.100 | 0.142 / 0.051 | 0.101 | 64 % | 97 % / 86 % |
+| Fresh 40, today | 9 (20 / 11) | 0.771 | 0.891 / 0.652 | 0.791 | 16 % | 25 % / 15 % |
+| Fresh 40, as handed over | 36 (2 / 2) | 0.066 | 0.093 / 0.038 | 0.070 | 68 % | 90 % / 81 % |
+| **Fresh 40, the rule** | **34 (6 / 0)** | **0.062** | **0.077 / 0.046** | **0.064** | **69 %** | **89 % / 78 %** |
+| Aside 12, today | 5 (7 / 0) | 0.736 | 0.486 / 1.236 | 0.790 | 12 % | 46 % / 19 % |
+| Aside 12, as handed over | 9 (3 / 0) | 0.157 | 0.174 / 0.122 | 0.156 | 53 % | 87 % / 70 % |
+| **Aside 12, the rule** | **10 (1 / 1)** | **0.148** | **0.194 / 0.054** | **0.145** | **57 %** | **90 % / 73 %** |
+
+Papers further from their original's page count than today: Chinese 2608.09038 (+1, today 0), Korean 2608.15016 (+1,
+today 0), Japanese 2608.09746 (+1, today 0; +1 as handed over). 2608.15016 is a page long in all four fresh languages
+(level as handed over): its measuring compile sends a table a page late, and the final's leading alone does not bring
+it back; the type solved again brought one of the four back (Japanese).
 
 ## The rules tried
 
@@ -257,8 +323,10 @@ the original's columns page by page — and writes numbers only (`records/typese
   six papers in the experiment, not tried on the gate. (Korean 2608.18090 and Russian 2608.06233 are level since the
   final keeps the preview's type.)
 - **CJKutf8's widths**: the density model is xeCJK's; under the pdfLaTeX fallback, with the type no longer solved
-  again from the measured density, Japanese 2608.06701 ends at 0.223 (0.040 solved again). A width model per strategy.
-- **Pages whose layout changes mid-page** (revtex's and aastex's grids) read in the layout they went out in.
+  again from the measured density, Japanese 2608.06701 ends at 0.223 (0.040 solved again). Taking xeCJK's glue out of
+  the model made it worse (fix round); a width model of CJKutf8's own.
+- **Pages whose layout changes mid-page** (revtex's and aastex's grids) read in the most columns any of their marks
+  or their shipout saw: a one-column stretch on a two-column page reads as two.
 - **A short abstract set too tall** (Korean and Japanese 2608.15761): the window's leading, raised by shorter
   neighbours, set the 21-line abstract 8 % taller than the original's 23 lines and pushed the keywords off page 1.
   The front matter may want its own ratio rather than the window's.
@@ -266,15 +334,21 @@ the original's columns page by page — and writes numbers only (`records/typese
   the round's own data; the final's foresight of a face, a tracking change or a type re-solve would improve with it.
 - **Parameters tuned before later fixes**: the eight-line threshold and the median of five were set before floats
   were held and before the restart at forced breaks; the window of 46 and the 5 % rate were picked from two or three
-  values; option A's three lines from one. Each is cheap to try again on the gate (`VARY`), the holdout judging.
+  values (a window of 50, the take-back's own length, was level on the fresh holdout and cost 2608.09038 a page);
+  option A's three lines from one. Each is cheap to try again on the gate (`VARY`), the holdout judging.
+- **Paragraphs holding a display**: display-heavy papers drift further (fresh 0.077 against 0.046 column, aside 0.194
+  against 0.054, unseen Chinese 0.142 against 0.051). Measuring such units by their text (fix round) did not close it.
+- **A float a page late in the measuring compile** (2608.15016, every fresh language a page long; level as handed
+  over): the final's leading alone does not bring it back.
 - **The density predictor's worst cases**: CJK's maximum error 5.2–5.8 % against a 5 % gate.
 
 ## Where things are
 
 - In the engine (branch `exp/flow-typesetting`): `src/pdf-reader/engine/typeset/` — the rule as pure modules
   (`plan.mjs`, `type.mjs`, `flow.mjs`, `density.mjs`, `places.mjs`, `tex.mjs`); its cases in
-  `tests/pdf-reader/typeset-*.test.ts` and `spikes/typeset-tex-cases.mjs`; the gate on the round and the holdout in
-  `spikes/typeset-gate.mjs`, its papers and baseline in `typeset-gate.json`; the engineers' notes in
+  `tests/pdf-reader/typeset-*.test.ts` and `spikes/typeset-tex-cases.mjs`; the gate on the round and the holdouts in
+  `spikes/typeset-gate.mjs`, its papers and each one's record in `typeset-gate.json`, the holdouts' translations made
+  by `spikes/typeset-translate.mjs`; the engineers' notes in
   `../plans/2026-10-01-flow-typesetting-handoff.md`. The paths below are the experiment's, on the local branch
   `exp/geometry-lock`.
 - Rules: `spikes/generic-type.mjs` (design table, type, flow, option A), `spikes/lock.mjs` (TeX of the unit

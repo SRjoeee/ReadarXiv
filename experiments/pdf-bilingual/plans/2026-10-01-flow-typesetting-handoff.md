@@ -46,7 +46,7 @@ where it stands. Reasons and numbers: `records/typesetting.md`, "The engine's co
 | `live.mjs` | `probeFiles(paper, { width })`, `originalFiles(paper, { lines })`, `translationFiles(…, { typeset })`. Defaults unchanged: nothing calls the rule yet. |
 | `tests/pdf-reader/typeset-*.test.ts` | The experiment's cases, in vitest. |
 | `experiments/pdf-bilingual/spikes/typeset-tex-cases.mjs` | The rule's TeX under native TeX in Docker: one case per fault a paper of the round hit. The reference for BusyTeX. |
-| `experiments/pdf-bilingual/spikes/typeset-gate.mjs`, `records/typeset-gate.json` | The rule's gate: the three goals, today against the rule, on the round and the holdout, natively; fails where the rule falls behind its stored baseline. |
+| `experiments/pdf-bilingual/spikes/typeset-gate.mjs`, `records/typeset-gate.json` | The rule's gate: the three goals, today against the rule, on the round and the holdouts, natively; fails where any paper falls behind its record. `typeset-translate.mjs` makes a paper's translation for it (Microsoft's free engine). |
 
 ## The compile sequence the rule needs
 
@@ -57,41 +57,48 @@ original     originalFiles(paper, { lines: true }), full compile   → original 
 measure      plan = previewTypesetting({ paper, translated, lang, strategy, fonts, fontLog, original })
              translationFiles(paper, translated, { strategy, fonts, draft, aux, bbl, typeset: plan.typeset })
                                                                     → preview = { log, marks }
-final        fin = finalTypesetting(plan.state, preview)
+final        fin = finalTypesetting(plan.state, preview, translated)
              translationFiles(…, { typeset: fin.typeset }), full compile → shown
 ```
 
 1. **Font probe**: pass `{ width: true }`. It adds the width and size probes to the same compile; no extra compile.
-2. **The original moves forward.** Today `runLive` compiles the marked original after the previews, and skips it when
-   a cached record has marks. The rule needs the original's log (lines, leading, forced breaks) and marks before the
-   measuring compile. Compile it with `{ lines: true }` (the experiment's marks came from this compile) right after the
-   font probe, alongside translation.
-3. **The measuring compile** must hold the whole translation: `previewTypesetting` and `finalTypesetting` correct
-   where this compile put the text, so units it lacks are left uncorrected. Today's progressive previews can stay as
-   they are, or use `previewTypesetting(…).typeset` on the snapshot (pure, milliseconds) so they look closer to the
-   final. The last preview, once every unit is translated, can be the measuring compile, and is worth showing: it is
-   already much nearer the original than today's final.
-4. **The final** takes `finalTypesetting(plan.state, preview)`. `plan.state` holds the original's readings and the
-   measured units; keep it from the measuring compile to the final. It keeps the preview's type and moves the leading
-   alone; where the preview's measurement is missing or partial it returns the preview's own plan (`missing` says why).
+2. **The original moves forward, a full compile.** Today `runLive` compiles the marked original after the previews,
+   and skips it when a cached record has marks. The rule needs the original's log (lines, leading, forced breaks) and
+   marks before the measuring compile. Compile it with `{ lines: true }` right after the font probe, alongside
+   translation — in full, every pass: one pass sets references, citations and the pages they move unsettled, and its
+   readings are another paper's (the review of 2026-10-01, M3); `previewTypesetting` cannot tell.
+3. **The measuring compile must hold the whole translation.** `previewTypesetting` solves the type and the flow for the
+   units it is given, and `finalTypesetting` corrects where this compile put them; it refuses (no typeset, `missing`:
+   "a plan of the whole translation") a plan made on another translation than the one it is given to set. Today's
+   progressive previews can stay as they are, or use `previewTypesetting(…).typeset` on the snapshot (pure,
+   milliseconds) so they look closer to the final — but plan again once every unit is in, and measure that. The last
+   preview, once every unit is translated, can be the measuring compile, and is worth showing.
+4. **The final** takes `finalTypesetting(plan.state, preview, translated)`, `translated` the whole translation it sets.
+   `plan.state` holds the original's readings, the measured units and its own copy of the translation it was made on;
+   keep it from the measuring compile to the final. It keeps the preview's type and moves the leading alone; where the
+   preview's measurement is missing or partial it returns the preview's own plan (`missing` says why).
 5. **No plan**: `previewTypesetting` returns `typeset: null` and what was `missing` where an input it needs is missing
    or partial (no design for the script, the original's log not whole or its marks or a page's columns unread, no width
    probe, an alphabet without its size probe, no translated unit the original measured): compile the translation as
    today, without `typeset`. Note it; it is not an error.
 6. **Strategy fallback**: a plan is made for one strategy (`previewTypesetting`'s `strategy`) — under CJKutf8 CJK is
-   solved with a size and a leading, under xeCJK with leading, glue and face — and `typeset.strategy(s)` throws for
-   another. When the chain moves on, make the plan again for the new strategy (pure, milliseconds); its final cannot
-   use a preview measured under the old one: take the new plan's `typeset` uncorrected, or measure again.
+   solved with a size and a leading, under xeCJK with leading, glue and face — and given another, `translationFiles`
+   sets the translation as today and calls `note('typeset refused', …)`. When the chain moves on, make the plan again
+   for the new strategy (pure, milliseconds); its final cannot use a preview measured under the old one: take the new
+   plan's `typeset` uncorrected, or measure again.
 7. **`PIPELINE_VERSION` 4 → 5** when the rule is wired: it changes every compile's output. `MARK_DEF` now also names
    each page's columns (`axt-c<n>-<k>`), which the rule reads from the original's marks; a record of version 4 lacks
    them, and the rule would make no plan from it.
 
 The experiment compiled the measuring and final compiles in full (`latexmk`, every pass, images in), as
-`typeset-gate.mjs` does. Draft mode (images as frames) should change no place on the page, and one pass changes only
-reference widths; both are worth checking with the gate before relying on them. Showing the nearer of the measuring
-compile and the final (fewer pages off, then the smaller start drift) would add about a point (the gate prints it:
-round 33 pages equal, start 0.039; unseen 0.085), at the cost of a full measuring compile, or of a further full compile
-whenever a draft one is the nearer; not done in the engine.
+`typeset-gate.mjs` does. **The measuring compile can be a draft**: one pass, images as frames, with the references
+(`aux`, `bbl`) of an earlier compile of the translation — the gate gave it today's final's (the reader's would be its
+last preview's, not measured). On the fresh holdout (`DRAFT=1`, 40 paper-languages) the final measured from such
+a compile was the final measured from a full one on all 40: the same leading on every unit, the same PDF. (The run
+found that `translationFiles` put those references beside a main file in a folder, where TeX does not read them; fixed.)
+Showing the nearer of the measuring compile and the final (fewer pages off, then the smaller start drift) added about
+a point on F1's gate (round 33 pages equal, start 0.039; unseen 0.085), at the cost of a full measuring compile, or of
+a further full compile whenever a draft one is the nearer; not done.
 
 ## Cost
 
@@ -100,7 +107,7 @@ Natively (Docker, two CPUs), the four compiles of a paper — font probe, origin
 for the preview's plan and 1–4 ms for the final's (German 2608.02785, 96 units).
 
 One compile more than today: font probe, original, measuring compile, final, plus whatever progressive previews the
-reader shows. The original was already compiled once per paper. The rule's own computation is pure JavaScript, a few
+reader shows — and the measuring compile can be the last preview, a draft (above). The original was already compiled once per paper. The rule's own computation is pure JavaScript, a few
 milliseconds (above). A third compile when the final still has more pages than the original would recover Korean 2608.18090;
 the owner declined it for now (performance).
 
