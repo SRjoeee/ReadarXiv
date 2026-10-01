@@ -11,20 +11,12 @@
 //     or after the final compile: the translation comes first;
 //  5. when every unit is in, the final compile: every pass, the images themselves.
 import { analyze } from './paper-meta.mjs'
-import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
-import { strategiesFor } from './scripts.mjs'
+import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { nameCells, plainSource, textsShown, translateUnits } from './mt.mjs'
+import { WIDTH_PROBE } from './typeset/density.mjs'
+import { LINES_TEX } from './typeset/tex.mjs'
 
-/** The TeX log of a compile's last pass. The browser's compiler (poc-site/tex.js) joins each step's log with its terminal
- *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
- *  log is taken, as the one that made the PDF, whatever the earlier passes' logs hold (BusyTeX's pipeline empties them
- *  today, Devin and Codex on #294). bibtex, biber, makeindex and xdvipdfmx are no TeX passes. A native compile's .log is
- *  the last pass's already */
-const lastTexLog = log => {
-  if (!(log ?? '').includes('\n==\nSTDOUT:')) return log ?? ''
-  const steps = [...log.matchAll(/^\$ (\S+)[^\n]*\n[\s\S]*?^LOG:\n([\s\S]*?)\n==\nSTDOUT:/gm)]
-  return steps.filter(m => !/^(?:bibtex|biber|makeindex|xdvipdfmx)/.test(m[1])).at(-1)?.[2] ?? ''
-}
 /** The characters a compile could not set, as its log names them: a glyph a font lacks (TeX logs it and goes on) or a
  *  letter no encoding holds (LaTeX's error; pdfTeX goes on without it). By code point where the log gives one, so that
  *  either message about a character is the same loss, each with the number of times it was lost. Counted in the TeX
@@ -58,7 +50,9 @@ const DRAFT = [
   '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
 ].join('\n') + '\n'
 const beginDocument = text => text.search(/\\begin\s*\{document\}/)
-const stemOf = main => main.replace(/\.[^./]+$/, '')
+/** the name TeX gives a compile's .aux and .bbl: it runs in the project's root (BusyTeX's FS.chdir(project_dir)) and
+ *  writes and reads them there, whatever folder the main file is in */
+const stemOf = main => main.split('/').pop().replace(/\.[^.]+$/, '')
 /** a compile the TeX page gave up on (BusyTeX's 180 s): the machine was slow, not the strategy wrong */
 const timedOut = r => !r.ok && /Compilation timeout/.test(r.error ?? '')
 /** why a compile gave no PDF: the first TeX error, or what the compiler said */
@@ -93,50 +87,80 @@ export function openPaper(files) {
   return { fsys, meta, project, units: project.units, kept: nameCells(project.units) }
 }
 
-/** the preamble alone, closed at once: its log names the document's font families */
-export function probeFiles({ fsys, project }) {
+/** the preamble alone, closed at once: its log names the document's font families; with `width`, also how wide the
+ *  body face sets and at what sizes (typeset/density.mjs WIDTH_PROBE), which the typesetting rule measures text by */
+export function probeFiles({ fsys, project }, { width = false } = {}) {
   const text = latin1(fsys.read(project.main))
   const at = beginDocument(text)
-  return new Map([[project.main, latin1Bytes(text.slice(0, at) + FONT_PROBE + '\\begin{document}\\end{document}\n')]])
+  return new Map([[project.main, latin1Bytes(`${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}\\end{document}\n`)]])
 }
 
-/** the original with unit marks, as its own engine sets it (images as frames change no place on the page) */
-export function originalFiles({ fsys, project }) {
-  const out = patch(project, new Map(), { mark: markUnits(project.units) })
+/** the original with unit marks, as its own engine sets it (images as frames change no place on the page); with
+ *  `lines`, each unit's lines and the forced breaks in its log (typeset/tex.mjs LINES_TEX), which the typesetting rule
+ *  takes the original's flow from */
+export function originalFiles({ fsys, project }, { lines = false } = {}) {
+  const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
+  const out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base })
   const main = latin1(out.get(project.main))
-  out.set(project.main, latin1Bytes(DRAFT + MARK_DEF + main))
+  out.set(project.main, latin1Bytes(DRAFT + MARK_DEF + (lines ? LINES_TEX : '') + main))
   return out
 }
 
-/** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs) */
-export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl }) {
+/** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs); a strategy's `leading` sets the
+ *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex).
+ *  `typeset`, the typesetting rule's (typeset/plan.mjs previewTypesetting, finalTypesetting): the strategy it sets the
+ *  type of, its TeX, each translated unit's macros — for the strategy it was made for: with another the translation is
+ *  set as today, and `note('typeset refused', …)` says so */
+export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl, typeset = null, note = () => {} }) {
+  if (typeset && typeset.for !== strategy.name) { note('typeset refused', { plan: typeset.for, strategy: strategy.name }); typeset = null }
+  if (typeset) strategy = typeset.strategy(strategy)
   const xe = strategy.xe
-  const out = patch(project, translated, { mark: markUnits(project.units) })
+  translated = new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, lineBreaks(u, pieces)]))
+  const base = markUnits(project.units, translated)
+  const index = new Map(project.units.map((u, i) => [u, i]))
+  const mark = typeset ? typeset.mark(base, translated) : strategy.leading ? u => { const m = base(u); return m && !m.whole && translated.has(u) ? { ...m, before: `\\axtlead{${index.get(u)}}` } : m } : base
+  const out = patch(project, translated, { mark })
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
-  main = main.slice(0, at) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + main.slice(at)
+  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe ? '' : EVEN_SPACES) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   if (xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
-  main = (draft ? DRAFT : '') + MARK_DEF + main
+  main = (draft ? DRAFT : '') + MARK_DEF + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + main
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
+  for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = localizeNames(t); if (u !== t) out.set(f, latin1Bytes(u)) }
   const stem = stemOf(project.main)
   if (aux) out.set(`${stem}.aux`, new TextEncoder().encode(aux))
   if (bbl && !meta.bbl) out.set(`${stem}.bbl`, new TextEncoder().encode(bbl))
   return out
 }
 
+/** the units a translation into `lang` leaves as they are: the names a table holds (nameCells), and the author block's
+ *  names and places where the target writes them as the paper does (scripts.mjs authorsTranslated) */
+export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : new Set([...paper.kept, ...paper.units.filter(u => u.kind === 'author')]))
+
 /**
  * The reader's pipeline version (REPORT, eighteenth addendum): raised with any change to what a compile puts out
  * (latex-front, mt, the fonts, the scripts' strategies, the TeX tree) or to what a cached record holds (the units'
- * cutting, kinds and texts, paperContext(), the marks). A record of another version is translated again
+ * cutting, kinds and texts, paperContext(), the marks). A record of another version is compiled again, its
+ * translations reused wherever a unit's source matches (session.mjs seedFrom)
  */
 // 2: the front matter's notes are units (latex-front.mjs FRONT_MATTER)
-// 3: a translation's invisible characters dropped before TeX (mt.mjs texEscape) — a mark "cannot typeset" they caused goes
-// 4: a file \input under another spelling (./sections/a.tex) gets its translation (latex-front.mjs loadProject) — the
-//    copies that set it in English go
-export const PIPELINE_VERSION = '4'
+// 3, 4: two branches each raised it twice, and their 3s and 4s are other pipelines —
+//   the highlight's (exp/pdf-highlight): 3, a translation's invisible characters dropped before TeX (mt.mjs texEscape) —
+//   a mark "cannot typeset" they caused goes; 4, a file \input under another spelling (./sections/a.tex) gets its
+//   translation (latex-front.mjs loadProject) — the copies that set it in English go;
+//   the typesetting rule's (exp/flow-integration): 3, CJK leading inside translated units alone, their displays at the
+//   paper's, and English hyphenation under a CJK target (scripts.mjs, latex-front.mjs unitLeadTex); the paper's own
+//   macros, argument-less declarations and the author block's names and places cut into units (latex-front.mjs); the
+//   wire spaced after a period (mt.mjs); 4, IEEEtran's blocks of names and of places each a unit; a translated line of
+//   names in a box that does not wrap set as a paragraph of the line's width (\\axtwide); a table narrower than its
+//   original kept at the original's width, and a tabular* measured at its columns' width before it is fitted
+//   (latex-front.mjs FIT_DEF, AUTHOR_WIDE); an e-mail address, and a list of names in braces before its domain, a
+//   placeholder (keepAddresses); a name kept whole in a line of names (lineBreaks)
+// 5: the two together
+export const PIPELINE_VERSION = '5'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
@@ -155,7 +179,8 @@ export const PIPELINE_VERSION = '4'
  * than the compiler or its files that were down).
  */
 export async function runLive(paper, { lang, compile, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, identity = null, pipelineCurrent = false }) {
-  const { units, kept, meta, project } = paper
+  const { units, meta, project } = paper
+  const kept = keptFor(paper, lang)
   // the chain: a compile that gives no PDF moves on to the next strategy, which is tried at once
   const strategies = strategiesFor(meta, lang)
   let s = 0

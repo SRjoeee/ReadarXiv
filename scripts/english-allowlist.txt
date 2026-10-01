@@ -16,7 +16,7 @@ experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign.md 21  # 2026-0
 experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part4-popup.md 81  # 2026-09-27: the popup's words its code puts into the locale packs (the design's §10.1, UI.md's ids), and the controls its tests and browser checks find by their Chinese names, quoted; +2, 2026-09-27: the pre-flight scan, the download row found by its Chinese name in a test; +3, 2026-09-27, Part 4's record quotes the popup's words the parts after it carry
 experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part5-settings.md 311  # 2026-09-27: the settings page's words its code puts into the locale packs (the design's §10.2 and the derived words ruled with it), the map of today's controls by their Chinese names, and the controls its tests and browser checks find by those names, quoted; 2026-09-27: Part 5's record
 experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-part7-finish.md 110  # 2026-09-27: the redesign's last part: the product copy its document tasks move into UI.md, and the controls its checks find by their Chinese names, quoted; 2026-09-27: Task 90's amendments; 2026-09-28: the pre-flight scan's amendments; 2026-09-28: Task 103b, the maintainer's asks in their words; 2026-09-28: Task 103c, the maintainer's words on G
-src/pdf-reader/engine/latex-front.mjs 4  # 2026-09-22: the pseudo-translation's zh, zh-Hant and ja sample text (+1, zh-Hant, #32); a control word glued to a CJK character, quoted
+src/pdf-reader/engine/latex-front.mjs 5  # 2026-09-22: the pseudo-translation's zh, zh-Hant and ja sample text (+1, zh-Hant, #32); a control word glued to a CJK character, quoted; 2026-09-28: a title's forced break as the engine carried it into Chinese, quoted as evidence
 src/pdf-reader/engine/mt.mjs 3  # 2026-09-22: engine outputs quoted as evidence
 src/pdf-reader/engine/session.mjs 3  # 2026-09-22: engine outputs quoted as evidence
 experiments/pdf-bilingual/spikes/anchors-cases.mjs 2  # 2026-09-23: a Chinese heading and the paragraphs around it, the input of a case
@@ -51,6 +51,8 @@ src/providers/chrome-builtin.ts 2
 src/providers/glossary.ts 3
 src/providers/microsoft.ts 1
 src/ui/strings.ts 3
+tests/pdf-reader/latex-front.test.ts 11  # 2026-09-28: Chinese titles and paragraphs as a translation's pieces, the inputs and expectations of its line breaks and its title's words; 2026-09-30: a Japanese line of names, the input and expectations of its breaks (+2)
+tests/pdf-reader/typeset-measure.test.ts 7  # 2026-10-01: Chinese, Korean and Cyrillic text as the inputs of the width model (density.mjs), each with the width xeCJK and the T2A faces set it at
 tests/pdf-reader/ui/copy.test.ts 4  # 2026-09-25: the reader's words, zh-CN expectations and the technical terms checked in Chinese
 tests/pdf-reader/ui/display-switch.test.ts 3  # 2026-09-25: the display switch's choices found by their Chinese names
 tests/pdf-reader/ui/languages.test.ts 1  # 2026-09-25: the nine languages each named in its own language, the expectation

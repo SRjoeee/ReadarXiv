@@ -53,7 +53,9 @@ export function analyze(dir) {
   meta.localCls = files.filter(f => f.endsWith('.cls')).length
   meta.localSty = files.filter(f => f.endsWith('.sty')).length
   meta.inputs = (all.match(/\\(?:input|include|subfile)\s*\{/g) ?? []).length
-  const stem = meta.main.replace(/\.[^.]+$/, '')
+  // TeX runs in the package's root, whatever folder the main file is in, and reads <stem>.bbl there (BusyTeX and arXiv
+  // alike; live.mjs stemOf)
+  const stem = basename(meta.main).replace(/\.[^.]+$/, '')
   meta.bbl = files.includes(`${stem}.bbl`)
   meta.bib = files.some(f => f.endsWith('.bib'))
   meta.biblatex = /\\usepackage\s*(\[[^\]]*\])?\s*\{[^}]*\bbiblatex\b/.test(all)
