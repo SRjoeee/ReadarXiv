@@ -81,9 +81,10 @@ const LIGATURES = [[/---/g, '—'], [/--/g, '–'], [/``|''/g, '"']]
  * A text's width in em. `script` the text's (the ISO 15924 code scripts.mjs uses); `cjk` the scale of the CJK face
  * and the tracking between CJK characters (xeCJK's CJKglue), as a fit sets them. Between CJK characters a space is
  * dropped (Korean keeps it: CJKspace); beside Latin text or a digit it gives way to xeCJK's glue, a quarter em, which
- * is there without a space too.
+ * is there without a space too. With `glue` false — no xeCJK: pdfLaTeX's CJKutf8 — a space beside Latin is a space,
+ * and there is nothing where the text has none (the review of 2026-10-01, M5).
  */
-export function textWidth(s, faces, { script = 'Latn', cjk = {} } = {}) {
+export function textWidth(s, faces, { script = 'Latn', cjk = {}, glue = true } = {}) {
   const { scale = 1, track = 0 } = cjk
   const east = CJK_SCRIPTS.has(script), spaced = script === 'Kore'
   const letters = script === 'Cyrl' ? faces.cyrillic : faces.latin
@@ -99,14 +100,14 @@ export function textWidth(s, faces, { script = 'Latn', cjk = {} } = {}) {
     const c = chars[k], now = kind(c)
     if (now === 'space') { space = true; continue }
     if (now === 'wide') {
-      if (prev === 'latin') w += alnum(last) ? 0.25 : space ? letters.space : 0
+      if (prev === 'latin') w += glue && alnum(last) ? 0.25 : space ? letters.space : 0
       else if (prev === 'wide') w += space && spaced ? letters.space : track
       w += scale
     } else if (now === 'punct') {
       const next = chars.slice(k + 1).find(x => kind(x) !== 'space')
       w += (prev === 'punct' || kind(next) === 'punct' ? 0.75 : 1) * scale
     } else {
-      if (prev === 'wide') w += alnum(c) ? 0.25 : space && spaced ? letters.space : 0
+      if (prev === 'wide') w += glue && alnum(c) ? 0.25 : space && (spaced || !glue) ? letters.space : 0
       else if ((prev === 'latin' || prev === null) && space && k > 0) w += letters.space
       w += (script === 'Cyrl' ? letters.w[c] : undefined) ?? other(c)
     }
@@ -218,13 +219,13 @@ export function citeStyleOf(text, bbl = '') {
 
 /** a unit's width in em, as the original or a translation has its pieces: text (a translated piece in the target's
  *  script, a kept one in the paper's), atoms, and for a nested note only its mark. Beside CJK text an atom also gets
- *  xeCJK's glue, a quarter em each side */
+ *  xeCJK's glue, a quarter em each side, where there is xeCJK (`ctx.glue`) */
 export function piecesWidth(pieces, faces, ctx = {}) {
   const east = CJK_SCRIPTS.has(ctx.script ?? 'Latn')
   let w = 0
   for (const p of pieces) {
     if (p.t === 'text') w += textWidth(p.tr ? p.s : utf8(p.s), faces, p.tr ? ctx : { script: 'Latn' })
-    else if (p.t === 'ph') { const a = atomWidth(p.src, faces, ctx); w += a + (east && a > 0 ? 0.4 : 0) }
+    else if (p.t === 'ph') { const a = atomWidth(p.src, faces, ctx); w += a + (east && ctx.glue !== false && a > 0 ? 0.4 : 0) }
     else if (p.t === 'nested') w += 0.3
   }
   return w
@@ -257,10 +258,10 @@ const median = xs => { const s = xs.filter(Number.isFinite).sort((a, b) => a - b
  * A CJK width is linear in the face's scale and the tracking (wide characters and marks scale, gaps between wide
  * characters track, the rest stays), so three widths give it for every type: a solver's step costs nothing.
  * `units` the paper's; `translated` Map index → pieces; `lines` readLines of the original's log; `fonts` the probe's;
- * `probe` the width probe's reading (readWidthProbe), when there is one.
+ * `probe` the width probe's reading (readWidthProbe), when there is one; `glue` whether xeCJK sets CJK (textWidth).
  */
-export function measureUnits({ units, translated, lines, fonts, probe = null, citeStyle = 'numeric', script }) {
-  const faces = facesOf(fonts, probe), ctx = { script, citeStyle }
+export function measureUnits({ units, translated, lines, fonts, probe = null, citeStyle = 'numeric', script, glue = true }) {
+  const faces = facesOf(fonts, probe), ctx = { script, citeStyle, glue }
   const text = pieces => pieces.filter(p => !isDisplay(p))
   const out = []
   units.forEach((u, i) => {

@@ -78,6 +78,12 @@ describe('the width of text', () => {
   ])('sets CJK as xeCJK does: %s (%s)', (_, s, script, em) => {
     expect(near(w(s, script), em)).toBe(true)
   })
+  it('sets no glue beside Latin where xeCJK is not there (pdfLaTeX\'s CJKutf8): a space where the text has one', () => {
+    expect(textWidth('\u4e2d\u6587ABC\u4e2d\u6587', times, { script: 'Hans', glue: false })).toBeCloseTo(w('\u4e2d\u6587ABC\u4e2d\u6587', 'Hans') - 0.5, 3)
+    expect(textWidth('\u4e2d\u6587 ABC \u4e2d\u6587', times, { script: 'Hans', glue: false })).toBeCloseTo(4 + adv(times.latin, 'ABC') + 2 * times.latin.space, 3)
+    const atom = [{ t: 'text', s: '\u4e2d\u6587', tr: true }, { t: 'ph', src: '$x$' }]
+    expect(piecesWidth(atom, times, { script: 'Hans' }) - piecesWidth(atom, times, { script: 'Hans', glue: false })).toBeCloseTo(0.4, 6)
+  })
   it('scales and tracks the CJK face', () => {
     expect(w('中文中文', 'Hans', times, { scale: 0.95, track: 0.05 })).toBeCloseTo(4 * 0.95 + 3 * 0.05, 3)
   })

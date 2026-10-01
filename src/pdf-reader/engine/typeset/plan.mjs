@@ -54,7 +54,7 @@ export function previewTypesetting({ paper, translated, lang, strategy, fonts, f
   const read = re => fsys.list().filter(f => re.test(f)).map(f => latin1(fsys.read(f))).join('\n')
   const byIndex = new Map(units.map((u, i) => [i, translated.get(u)]).filter(([, pieces]) => pieces))
   const lo = readLines(original?.log), sizes = readSizeProbe(fontLog), probe = readWidthProbe(fontLog)
-  const list = design && probe ? measureUnits({ units, translated: byIndex, lines: lo, fonts, probe, citeStyle: citeStyleOf(read(/\.(tex|sty|cls)$/i), read(/\.bbl$/i)), script }) : []
+  const list = design && probe ? measureUnits({ units, translated: byIndex, lines: lo, fonts, probe, citeStyle: citeStyleOf(read(/\.(tex|sty|cls)$/i), read(/\.bbl$/i)), script, glue: !!strategy.xe }) : []
   const missing = !design ? `a design for ${script}` : !completeLog(original?.log) ? "the original's log, whole" : !whole(original?.marks) ? "the original's marks, every page's columns read"
     : !probe ? 'the width probe' : !design.cjk && !design.scalable && !sizes ? 'the size probe' : !list.length ? 'a translated unit the original measured' : null
   if (missing) return { typeset: null, type: null, state: null, missing }
