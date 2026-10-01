@@ -208,9 +208,18 @@ The gate after the fix round (the final; drift the mean of the papers' medians):
 | **Aside 12, the rule** | **10 (1 / 1)** | **0.148** | **0.194 / 0.054** | **0.145** | **57 %** | **90 % / 73 %** |
 
 Papers further from their original's page count than today: Chinese 2608.09038 (+1, today 0), Korean 2608.15016 (+1,
-today 0), Japanese 2608.09746 (+1, today 0; +1 as handed over). 2608.15016 is a page long in all four fresh languages
-(level as handed over): its measuring compile sends a table a page late, and the final's leading alone does not bring
-it back; the type solved again brought one of the four back (Japanese).
+today 0), Japanese 2608.09746 (+1, today 0; +1 as handed over). In each the page is the bibliography spilling: it is
+neither translated nor measured nor flowed, and follows the main text onto a page the original left nearly full
+(the room left there, the original's lowest text line against the document's: about 6 pt in 2608.15016, 45 pt in
+2608.09038 and 2608.09746; the re-review of 2026-10-02). 2608.15016 is a page long in all four fresh languages (level
+as handed over), two ways. In Korean and Japanese its tables keep their pages, and the main text ends 27–30 pt late at
+that full page — under the face step's three lines, and the flow's account even had Korean 79 pt early — so one
+reference spills onto page 7. In German and Russian the main text ends early (49 and 36 pt), but the table at the top
+of the original's page 5 goes to page 6 in the measuring compile and the final alike, and takes the room on the last
+page. Its bibliography is the original's length in all four (85 lines). The type solved again in the final brought
+the Japanese back. In 2608.09038 and 2608.09746 the main text ends about 190 pt late against 45 pt of room: the face
+step set 25 and 19 units at 0.95 and still left it late, for it reaches only the units the flow measures (39 and 50 %
+of the translated units; the paragraphs holding a display are 61 and 47 % of the prose).
 
 ## The rules tried
 
@@ -338,8 +347,15 @@ the original's columns page by page — and writes numbers only (`records/typese
   option A's three lines from one. Each is cheap to try again on the gate (`VARY`), the holdout judging.
 - **Paragraphs holding a display**: display-heavy papers drift further (fresh 0.077 against 0.046 column, aside 0.194
   against 0.054, unseen Chinese 0.142 against 0.051). Measuring such units by their text (fix round) did not close it.
-- **A float a page late in the measuring compile** (2608.15016, every fresh language a page long; level as handed
-  over): the final's leading alone does not bring it back.
+- **A segment's end held to the room its original left** (2608.15016, 2608.09038, 2608.09746; above): at a forced
+  break or the document's end, the room the original left on that page as the tolerance, every translated unit of the
+  late stretch acting, display units included, and floats kept from going early. Two cheaper pieces: a unit the flow
+  does not measure takes the face the flow set where it stands (measured by the re-review on the gate's 24 CJK finals
+  that set a face: 2608.09038 +1 → 0 pages, start 0.199 → 0.027; Japanese 2608.09746 +1 → 0, 0.244 → 0.164; the other
+  22 unchanged in pages; mean start 0.086 → 0.076; but 2608.20847, display-heavy, past its record: Chinese end drift
+  0.294 → 0.344, Korean 0.027 → 0.058, Japanese and Korean floats within 30 pt 5 → 3); and the face step's threshold set
+  by that room rather than three lines (Korean and Japanese 2608.15016). A float sent a page late (German and Russian
+  2608.15016) is a separate trigger.
 - **The density predictor's worst cases**: CJK's maximum error 5.2–5.8 % against a 5 % gate.
 
 ## Where things are

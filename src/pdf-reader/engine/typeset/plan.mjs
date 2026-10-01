@@ -120,8 +120,10 @@ export function finalTypesetting(state, preview, translated) {
 // A translated unit the flow does not measure (a display inside it: density.mjs measureUnits) takes the leading the flow
 // set where it stands, the last measured unit's before it, for the page's evenness: at the paper's type it stood out
 // from its neighbours as the flow moved them. On the fresh holdout of 2026-10-01, units parted by more than 8 % from the
-// six around them: 29 of 3,484 so, 47 at the paper's type, 43 with such units measured by their text and set by the
-// flow themselves — which also lost the Chinese holdout a page and 0.04 column of start drift (records/typesetting.md)
+// six around them: 29 of 3,484 so, 56 at the paper's type — where it also cost 2 papers their page count and 0.006
+// column of start drift (34 → 32 pages equal, 0.062 → 0.068; the re-review of 2026-10-02): it holds places too — and 43
+// with such units measured by their text and set by the flow themselves, which lost the Chinese holdout a page and
+// 0.04 column (records/typesetting.md)
 function typesettingOf(state, type, leads, faces) {
   const { units, translated, design, strategy, lo, floatsAt } = state, cjk = design.cjk
   const factors = new Map(), factor = (i, l) => { if (lo.get(i)?.size) factors.set(i, (l * lo.get(i).bs) / lo.get(i).size) }
