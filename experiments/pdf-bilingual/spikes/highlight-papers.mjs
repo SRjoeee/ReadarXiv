@@ -6,7 +6,8 @@
 // ground truth's four (data/runs/highlight-gt: T1.pdf, final-texts.json, O1.pdf). Papers stay on this machine: arXiv's
 // may not be redistributed.
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/highlight-papers.mjs <out dir> [id …]   (default: the gate's papers —
-//   checked 2608.02459 and 2608.06701, swept 2608.08350 and 2608.29181, opened 2608.04322)
+//   checked 2608.02459 and 2608.06701, their floats 2608.12502 and 2608.02163 too, swept 2608.08350 and 2608.29181,
+//   opened 2608.04322)
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -32,7 +33,7 @@ async function marksOf(file) {
   return markWords(tokenizeDocument(pages), marks)
 }
 
-for (const id of asked.length ? asked : ['2608.02459', '2608.06701', '2608.08350', '2608.29181', '2608.04322']) {
+for (const id of asked.length ? asked : ['2608.02459', '2608.06701', '2608.12502', '2608.02163', '2608.08350', '2608.29181', '2608.04322']) {
   // the ten runs first, the ground truth's otherwise
   const ten = existsSync(join(TEN, id, 'final.pdf')), runs = ten ? TEN : GT, dir = join(runs, id)
   if (!existsSync(dir)) { console.log(id, 'no run'); continue }
