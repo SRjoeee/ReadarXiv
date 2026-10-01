@@ -107,8 +107,9 @@ export function createFallbackService(
     return alive.length > 0 ? alive : [steps[steps.length - 1]!]
   }
 
-  const demote = (step: FallbackStep, error: { kind: ProviderErrorKind; message: string }): void => {
-    const info: DemotedInfo = { id: step.provider.id, kind: error.kind, message: error.message }
+  const demote = (step: FallbackStep, error: { kind: ProviderErrorKind; message: string; status?: number }): void => {
+    // the status kept: `auth` is a 401 or a 403, and only a 401 is about the key (the retranslate cue, page-action.ts)
+    const info: DemotedInfo = { id: step.provider.id, kind: error.kind, message: error.message, ...(error.status !== undefined ? { status: error.status } : {}) }
     // taken out first, so that setting it again makes it the most recent
     demotions.delete(step.provider.id)
     demotions.set(step.provider.id, {

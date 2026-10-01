@@ -109,6 +109,15 @@ describe('createFallbackService', () => {
     expect(lapsed.status().demoted).toBeUndefined()
   })
 
+  it('a hand-over keeps the failure\'s HTTP status: a refused key (401) is told from a refusal that is not the key\'s (403) (#299, row 75)', async () => {
+    const refusal = (status: number): TranslateMessageResponse => ({ ok: false, error: { kind: 'auth', message: `HTTP ${status}`, isolatable: true, status } })
+    for (const status of [401, 403]) {
+      const service = createFallbackService([step('svc-abcd1234', [refusal(status)]), step('microsoft', [ok('microsoft')])])
+      await service.translate(call)
+      expect(service.status().demotions).toEqual([{ id: 'svc-abcd1234', kind: 'auth', message: `HTTP ${status}`, status }])
+    }
+  })
+
   it('aborted neither demotes nor switches engines: a session cancellation is not the engine\'s fault', async () => {
     const first = step('llm', [fail('aborted', 'cancelled (scope: s1)')])
     const second = step('google-web', [ok('google-web')])

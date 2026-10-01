@@ -89,12 +89,12 @@ describe('what the settings and the record decide', () => {
 })
 
 describe('keyMadeGood', () => {
-  const session = { providerId: 'svc-a', demotions: [{ id: 'svc-a', kind: 'auth' as const }] }
+  const session = { providerId: 'svc-a', demotions: [{ id: 'svc-a', kind: 'auth' as const, status: 401 }] }
   const back = { engine: { id: 'svc-a' } }
 
   it('the session left its own service for a refused key, the record no longer holds it, and the chain a start would run on runs it again', () => {
     expect(keyMadeGood(session, [], back)).toBe(true)
-    expect(keyMadeGood({ ...session, demotions: [{ id: 'svc-a', kind: 'auth' as const }, { id: 'microsoft', kind: 'rate-limit' as const }] }, new Set<string>(), back)).toBe(true)
+    expect(keyMadeGood({ ...session, demotions: [{ id: 'svc-a', kind: 'auth' as const, status: 401 }, { id: 'microsoft', kind: 'rate-limit' as const }] }, new Set<string>(), back)).toBe(true)
   })
 
   it('no cue while the record holds the service, while the chain in force still passes it over, for a hand-over that was not the key\'s, or without a session', () => {
@@ -102,6 +102,12 @@ describe('keyMadeGood', () => {
     expect(keyMadeGood(session, [], { engine: { id: 'google-web', demoted: { id: 'svc-a', kind: 'auth' as const, message: '403' } } })).toBe(false)
     expect(keyMadeGood({ ...session, demotions: [{ id: 'svc-a', kind: 'rate-limit' as const }] }, [], back)).toBe(false)
     expect(keyMadeGood(null, [], back)).toBe(false)
+  })
+
+  it('no cue for a refusal that was not the key\'s — a 403, or an `auth` with no status — even once a rebuilt chain runs the service again: the record never held it, and a start meets the same refusal (#299, row 75)', () => {
+    for (const refused of [{ id: 'svc-a', kind: 'auth' as const, status: 403 }, { id: 'svc-a', kind: 'auth' as const }]) {
+      expect(keyMadeGood({ ...session, demotions: [refused] }, [], back)).toBe(false)
+    }
   })
 })
 

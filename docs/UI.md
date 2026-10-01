@@ -284,7 +284,7 @@ lines. The rows open at any time.
 | P4 | Translating | on | value | — | — | 显示原文 | — |
 | P5 | Translating, with failures | on ∧ failed > 0 ∧ !fatal | value | — | S-P-60 + 重试 | 显示原文 | — |
 | P6 | Switched to another service | on ∧ `engine.demoted` | the new service's name, the old struck through | S-P-30 + 设置 | per failed | 显示原文 | — |
-| P6b | The key made good, the page still on the free service | `on ∧ engine.demoted(auth) ∧ !rejected ∧ saved.engine = demoted` | the new service's name, the old struck through | — (P6's note goes: its reason no longer holds) | per failed | 重新翻译 (brand, the shortcut label) | 显示原文 (neutral), beside it |
+| P6b | The key made good, the page still on the free service | `on ∧ demotions(auth, 401) ∧ !rejected ∧ saved.engine = demoted` | the new service's name, the old struck through | — (P6's note goes: its reason no longer holds) | per failed | 重新翻译 (brand, the shortcut label) | 显示原文 (neutral), beside it |
 | P7 | The chosen service cannot run, a fallback available | idle ∧ !runnable ∧ fallback | value | S-P-31 + 设置 | — | 翻译本页 | — |
 | P7b | A refused key, a fallback available | `idle ∧ rejected ∧ fallback` | value | S-P-31 (S-P-32e) + 设置 | — | 翻译本页 | — |
 | P8 | The chosen service cannot run, no fallback | idle ∧ !runnable ∧ !fallback | value | S-P-32 + 设置 | — | 翻译本页 **disabled** | — |
