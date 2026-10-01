@@ -14,3 +14,4 @@ export declare function pageGeometry(layout: Layout, page: number): { runs: Run[
 export declare function runsOf(layout: Layout | null | undefined, id: number): Run[]
 export declare function blockOf(run: Run, padX: number): { page: number; x0: number; y0: number; x1: number; y1: number }
 export declare function hitOf(layout: Layout | null | undefined, page: number, x: number, y: number, padX: number): { id: number; run: Run } | null
+export declare function clickOf(layout: Layout | null | undefined, page: number, x: number, y: number, padX: number): { id: number; line: number; f: number } | null

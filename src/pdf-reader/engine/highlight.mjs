@@ -327,3 +327,26 @@ export function hitOf(L, p, x, y, padX) {
   }
   return best && { id: best.id, run: best }
 }
+
+/**
+ * What a click at a point of a page (PDF units) levels the two sides by (session.mjs alignClick): the unit lit there
+ * (hitOf) and its line at the click's height in the block's column — the line whose band holds the height, else the
+ * nearest — with how far down that line, 0 to 1. So a click anywhere in what is painted is the unit's: in a block's
+ * pads, in the white space beside a display or between two of its lines, and on a float set inside a paragraph's
+ * block (a wrapfigure) — levelled by the unit, where before the blocks (B1) they went by what is around them
+ * (placeAt). Null where nothing is painted
+ */
+export function clickOf(L, p, x, y, padX) {
+  const hit = hitOf(L, p, x, y, padX)
+  if (!hit) return null
+  const { run } = hit, rects = L.anchors.get(hit.id)?.rects ?? []
+  let line = -1, far = Infinity
+  rects.forEach((r, k) => {
+    if (r.page !== p || r.x1 < run.x0 || r.x0 > run.x1) return
+    const d = y > r.y1 ? y - r.y1 : y < r.y0 ? r.y0 - y : 0
+    if (d < far) { far = d; line = k }
+  })
+  if (line < 0) return null
+  const r = rects[line]
+  return { id: hit.id, line, f: Math.min(1, Math.max(0, (r.y1 - y) / Math.max(1, r.y1 - r.y0))) }
+}

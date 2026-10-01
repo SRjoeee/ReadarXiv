@@ -30,7 +30,7 @@ import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
-import { blockOf, hitOf, layoutOf, pageGeometry, runsOf } from './highlight.mjs'
+import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
 import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
@@ -663,24 +663,13 @@ function pointOf(side, event) {
   const [x, y] = pv.viewport.convertToPdfPoint(event.clientX - box.left - pageDiv.clientLeft, event.clientY - box.top - pageDiv.clientTop)
   return { page, x, y }
 }
-/** the unit a click is on — the one lit there (hitOf) —, the line of it (its rect's index: the one at the click's
- *  height in the block's column, else the nearest there) and how far down that line */
+/** the unit a click is on and the line of it at the click's height (highlight.mjs clickOf: anywhere in what is painted,
+ *  its pads and a display's white space too); null off what is painted, or before the side's layout is made */
 function hitAt(side, event) {
   const at = pointOf(side, event)
   if (!at) return null
   if (!side.geo) { wantLayout(side); return null }
-  const hit = hitOf(side.geo, at.page, at.x, at.y, PAD / pageView(side, at.page).viewport.scale)
-  if (!hit) return null
-  const { run } = hit
-  let line = -1, far = Infinity
-  side.anchors.get(hit.id)?.rects.forEach((r, k) => {
-    if (r.page !== at.page || r.x1 < run.x0 || r.x0 > run.x1) return
-    const d = at.y > r.y1 ? at.y - r.y1 : at.y < r.y0 ? r.y0 - at.y : 0
-    if (d < far) { far = d; line = k }
-  })
-  if (line < 0) return null
-  const r = side.anchors.get(hit.id).rects[line]
-  return { id: hit.id, line, f: Math.min(1, Math.max(0, (r.y1 - at.y) / Math.max(1, r.y1 - r.y0))) }
+  return clickOf(side.geo, at.page, at.x, at.y, PAD / pageView(side, at.page).viewport.scale)
 }
 
 // ---------------------------------------------------------------- scroll sync
@@ -1208,6 +1197,8 @@ function stopGlide() { if (gliding) cancelAnimationFrame(gliding); gliding = 0 }
  * first line on one horizontal line with its counterpart's (the owner, 2026-09-22 — brought to the reading line, the
  * counterpart stood at a quarter down whatever the height of the paragraph clicked). With the first line above the
  * view — a long paragraph clicked far down — the clicked line is levelled, at its place within the other paragraph.
+ * What a click is on is what the highlight paints (hitAt): a click in a block's pads, in the white space beside a
+ * display, or on a float set inside a paragraph's block (a wrapfigure) is the unit's, and levelled by it.
  * A click on no paragraph linked on both sides — a heading, a figure, a formula, a table — goes by what is around it (placeAt).
  */
 let lastAlign = null // how the last click was levelled, for the test harness

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { type Anchor, type DocToken, lineRects, tokenizeDocument } from '@/pdf-reader/engine/anchors.mjs'
-import { blockOf, hitOf, layoutOf, pageGeometry, runsOf } from '@/pdf-reader/engine/highlight.mjs'
+import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf } from '@/pdf-reader/engine/highlight.mjs'
 
 // What a unit paints on a side and where the pointer lights it (highlight.mjs): the pages given as PDF.js's text items,
 // each unit's tokens as anchorUnits would give them. A page is 600 wide; body text is 10 high on lines 12 apart, its
@@ -214,5 +214,26 @@ describe('hitOf: the pointer lights what is painted, exactly', () => {
   })
   it('a page\'s geometry is made once, on its first use', () => {
     expect(pageGeometry(layout, 1)).toBe(pageGeometry(layout, 1))
+  })
+})
+
+describe('clickOf: what a click levels the two sides by (session.mjs alignClick)', () => {
+  // a paragraph: three lines, a display set in the middle of the measure, two lines
+  const pages = [[...prose(740, 20), ...prose(496, 3), item('x = y', 150, 456), ...prose(436, 2), ...prose(400, 10)]]
+  const layout = side(pages, [[0, range(160, 201)]])
+  const px = 2
+  it('a click in the pad above the first line is the unit\'s first line, at its top', () => {
+    expect(clickOf(layout, 1, 100, 504.2, px)).toEqual({ id: 0, line: 0, f: 0 })
+  })
+  it('a click in the white space beside a display is the display\'s line, as far down it as the click', () => {
+    const c = clickOf(layout, 1, 60, 458, px)
+    expect([c?.id, c?.line]).toEqual([0, 3])
+    expect(c?.f).toBeCloseTo((463.5 - 458) / 9.7)
+  })
+  it('a click between two of its lines is the nearer one\'s', () => {
+    expect(clickOf(layout, 1, 100, 448, px)).toMatchObject({ id: 0, line: 4, f: 0 })
+  })
+  it('nothing outside what is painted: the click goes by what is around it', () => {
+    expect(clickOf(layout, 1, 20, 480, px)).toBeNull()
   })
 })
