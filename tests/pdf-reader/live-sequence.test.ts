@@ -325,7 +325,7 @@ describe('a preview of part of the translation, the last batch out', () => {
       const k = n++
       if (k === 1) { await g2; setTimeout(third, lag) }
       if (k === 2) await g3
-      return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '论文'), by: 'B' }))
+      return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' }))
     }
     return { translate, release: () => second() }
   }
