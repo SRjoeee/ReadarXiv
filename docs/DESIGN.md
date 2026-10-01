@@ -870,11 +870,22 @@ is only how it meets the rest of the extension.
 - **Translation** goes through the background's chain (§8.0), whose segment cache answers what it already knows. The
   figures' text goes through the same image pipeline and recogniser (§15). A vector figure's labels are read from
   PDF.js's text rather than recognised.
-- **Its store**: the compiled translations, one record per paper version and target language, encrypted, in an
+- **Its store**: the compiled translations (with each unit's sentences, where its engine gave them), one record per paper version and target language, encrypted, in an
   IndexedDB of their own (`src/cache/pdf-store.ts`), capped at 500 MB with the least recently opened going first. The
   settings page counts them and clears them (UI.md S-O-73).
 - **Typesetting** runs in a TeX page outside the extension (BusyTeX, served locally during the experiment). No
   reader-facing word names it (UI.md §3.5).
+- **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
+  it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
+  both sides together; headings, captions and cells whole; tables, algorithms and figures whole with their captions (a
+  table washed to its rules, a figure outlined). The sentences come from the same two mechanisms as the HTML page's
+  (§8.6): Microsoft's own lengths, which the engine passes on from the service; Google's and an LLM's markers, at cuts
+  the reader makes on its own wire with the shared splitter and a split context that reads LaTeX placeholders (units
+  that light whole are sent without cuts). Each sentence's first word is found on the page inside the unit's marks, or
+  — on arXiv's PDF before our marked original's marks come — by a text match covering 80 % of the unit's words. The
+  record keeps each unit's sentences beside its translation, additively; an older copy lights by paragraph until
+  translated again. The geometry, the pointer's path, the costs and the known limits:
+  `experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md` §17 (2026-10-01).
 - **A paper that cannot be had** — no source, or none of the ways of setting it worked (every one tried, none for want
   of time: a slow machine says nothing of the paper) — shows the original with the side-by-side and translation
   displays greyed and a capsule that says so, without why, offering the HTML version where arXiv has one (UI.md
