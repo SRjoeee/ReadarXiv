@@ -119,4 +119,10 @@ describe('the last compile\'s references, given to the next', () => {
     expect(['arxiv.aux', 'arxiv.bbl'].filter(f => files.has(f))).toEqual(['arxiv.aux', 'arxiv.bbl'])
     expect([...files.keys()].filter(f => /\.(aux|bbl)$/.test(f))).toEqual(['arxiv.aux', 'arxiv.bbl'])
   })
+  it('come from the paper itself only when it brings <stem>.bbl where TeX reads it, the root (the re-review of 2026-10-02, N3)', () => {
+    const bbl = new TextEncoder().encode('\\begin{thebibliography}{1}\\end{thebibliography}\n')
+    const brings = (at: string) => openPaper(new Map([['latex/arxiv.tex', new TextEncoder().encode(SOURCE)], [at, bbl]])).meta.bbl
+    expect(brings('arxiv.bbl')).toBe(true)
+    expect(brings('latex/arxiv.bbl')).toBe(false)
+  })
 })

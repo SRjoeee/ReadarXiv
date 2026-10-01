@@ -3,7 +3,7 @@ import type { SourceUnit } from './latex-front.mjs'
 import type { Strategy } from './scripts.mjs'
 import type { Typeset } from './typeset/tex.mjs'
 
-export interface Paper { meta: { main?: string; compiler?: string }; units: SourceUnit[]; kept: Set<SourceUnit> }
+export interface Paper { meta: { main?: string; compiler?: string; bbl?: boolean }; units: SourceUnit[]; kept: Set<SourceUnit> }
 /** a paper's files (path → bytes) → what the pipeline works on */
 export declare function openPaper(files: Map<string, Uint8Array>): Paper & { fsys: { list(): string[]; read(path: string): Uint8Array | null } }
 /** the translation so far, with unit marks, set by one of strategiesFor: the files that differ from the paper's */
