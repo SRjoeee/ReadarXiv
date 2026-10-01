@@ -1,5 +1,5 @@
 {
- "note": "highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors. Counts only",
+ "note": "highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors; per paper, side and float environment, captions and floats found, kinds mismatched, and floats on both sides. Counts only",
  "counts": {
   "2608.02163": {
    "L": {
@@ -1211,6 +1211,247 @@
     },
     "filled": 178,
     "padOverlaps": 6
+   }
+  }
+ },
+ "floats": {
+  "2608.02163": {
+   "L": {
+    "figure": {
+     "captions": 6,
+     "found": 6,
+     "mismatched": 0
+    },
+    "table": {
+     "captions": 11,
+     "found": 11,
+     "mismatched": 0
+    }
+   },
+   "R": {
+    "figure": {
+     "captions": 6,
+     "found": 6,
+     "mismatched": 0
+    },
+    "table": {
+     "captions": 11,
+     "found": 11,
+     "mismatched": 0
+    }
+   },
+   "both": {
+    "figure": 6,
+    "table": 11
+   }
+  },
+  "2608.02785": {
+   "L": {
+    "figure": {
+     "captions": 2,
+     "found": 2,
+     "mismatched": 0
+    }
+   },
+   "R": {
+    "figure": {
+     "captions": 2,
+     "found": 2,
+     "mismatched": 0
+    }
+   },
+   "both": {
+    "figure": 2
+   }
+  },
+  "2608.02991": {
+   "L": {
+    "table": {
+     "captions": 6,
+     "found": 6,
+     "mismatched": 0
+    },
+    "figure": {
+     "captions": 3,
+     "found": 3,
+     "mismatched": 0
+    }
+   },
+   "R": {
+    "table": {
+     "captions": 6,
+     "found": 6,
+     "mismatched": 0
+    },
+    "figure": {
+     "captions": 3,
+     "found": 3,
+     "mismatched": 0
+    }
+   },
+   "both": {
+    "table": 6,
+    "figure": 3
+   }
+  },
+  "2608.03063": {
+   "L": {
+    "figure": {
+     "captions": 3,
+     "found": 3,
+     "mismatched": 0
+    },
+    "table": {
+     "captions": 15,
+     "found": 15,
+     "mismatched": 0
+    }
+   },
+   "R": {
+    "figure": {
+     "captions": 3,
+     "found": 3,
+     "mismatched": 0
+    },
+    "table": {
+     "captions": 15,
+     "found": 15,
+     "mismatched": 0
+    }
+   },
+   "both": {
+    "figure": 3,
+    "table": 15
+   }
+  },
+  "2608.06701": {
+   "L": {
+    "figure": {
+     "captions": 12,
+     "found": 11,
+     "mismatched": 0
+    },
+    "table": {
+     "captions": 8,
+     "found": 8,
+     "mismatched": 0
+    },
+    "algorithm": {
+     "captions": 1,
+     "found": 1,
+     "mismatched": 0
+    }
+   },
+   "R": {
+    "figure": {
+     "captions": 12,
+     "found": 11,
+     "mismatched": 0
+    },
+    "table": {
+     "captions": 8,
+     "found": 8,
+     "mismatched": 0
+    },
+    "algorithm": {
+     "captions": 1,
+     "found": 1,
+     "mismatched": 0
+    }
+   },
+   "both": {
+    "figure": 11,
+    "table": 8,
+    "algorithm": 1
+   }
+  },
+  "2608.07683": {
+   "L": {},
+   "R": {},
+   "both": {}
+  },
+  "2608.08350": {
+   "L": {
+    "figure": {
+     "captions": 11,
+     "found": 11,
+     "mismatched": 0
+    }
+   },
+   "R": {
+    "figure": {
+     "captions": 11,
+     "found": 11,
+     "mismatched": 0
+    }
+   },
+   "both": {
+    "figure": 11
+   }
+  },
+  "2608.09746": {
+   "L": {},
+   "R": {},
+   "both": {}
+  },
+  "2608.12502": {
+   "L": {
+    "figure": {
+     "captions": 6,
+     "found": 6,
+     "mismatched": 0
+    },
+    "table": {
+     "captions": 12,
+     "found": 12,
+     "mismatched": 0
+    }
+   },
+   "R": {
+    "figure": {
+     "captions": 6,
+     "found": 6,
+     "mismatched": 0
+    },
+    "table": {
+     "captions": 12,
+     "found": 12,
+     "mismatched": 0
+    }
+   },
+   "both": {
+    "figure": 6,
+    "table": 12
+   }
+  },
+  "2608.29181": {
+   "L": {
+    "algorithm": {
+     "captions": 1,
+     "found": 1,
+     "mismatched": 0
+    },
+    "figure": {
+     "captions": 4,
+     "found": 4,
+     "mismatched": 0
+    }
+   },
+   "R": {
+    "algorithm": {
+     "captions": 1,
+     "found": 1,
+     "mismatched": 0
+    },
+    "figure": {
+     "captions": 4,
+     "found": 4,
+     "mismatched": 0
+    }
+   },
+   "both": {
+    "algorithm": 1,
+    "figure": 4
    }
   }
  }
