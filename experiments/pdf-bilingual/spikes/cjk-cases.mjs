@@ -6,7 +6,7 @@
 // failure.
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/cjk-cases.mjs
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -21,23 +21,25 @@ let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
 /** a document through translationFiles under `strategy` (nothing translated: the preamble is what is checked), compiled
  *  once by xelatex halting on the first error → { ok: TeX's exit status, log, text: the PDF's text } */
-async function compile(name, source, strategy) {
+async function compile(name, source, strategy, sub = '') {
   const paper = openPaper(new Map([['main.tex', new TextEncoder().encode(source)]]))
   const main = translationFiles(paper, new Map(), { strategy, fonts: null, draft: false }).get('main.tex')
-  writeFileSync(join(dir, `${name}.tex`), main)
+  const at = join(dir, sub)
+  mkdirSync(at, { recursive: true })
+  writeFileSync(join(at, `${name}.tex`), main)
   let ok = true
-  try { execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'xelatex', '-interaction=nonstopmode', '-halt-on-error', `${name}.tex`], { stdio: 'ignore' }) } catch { ok = false }
-  const log = existsSync(join(dir, `${name}.log`)) ? readFileSync(join(dir, `${name}.log`), 'latin1') : ''
+  try { execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${at}:/work`, '-w', '/work', 'texlive/texlive:latest', 'xelatex', '-interaction=nonstopmode', '-halt-on-error', `${name}.tex`], { stdio: 'ignore' }) } catch { ok = false }
+  const log = existsSync(join(at, `${name}.log`)) ? readFileSync(join(at, `${name}.log`), 'latin1') : ''
   let text = ''
-  if (ok && existsSync(join(dir, `${name}.pdf`))) {
-    const doc = await getDocument({ data: new Uint8Array(readFileSync(join(dir, `${name}.pdf`))), verbosity: 0, cMapUrl: join(PDFJS, 'cmaps/'), cMapPacked: true }).promise
+  if (ok && existsSync(join(at, `${name}.pdf`))) {
+    const doc = await getDocument({ data: new Uint8Array(readFileSync(join(at, `${name}.pdf`))), verbosity: 0, cMapUrl: join(PDFJS, 'cmaps/'), cMapPacked: true }).promise
     for (let p = 1; p <= doc.numPages; p++) text += (await (await doc.getPage(p)).getTextContent()).items.map(i => i.str).join('')
   }
   return { ok, log, text, error: log.match(/^! .*$/m)?.[0] ?? '' }
 }
 const [xe] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
 /** the strategy without one of its additions: what the papers met */
-const without = (s, what) => ({ ...s, ...(what === 'front' ? { front: '' } : { pre: f => s.pre(f).replace(/\\makeatletter\\ExplSyntaxOn\n\\cs_set_protected:Npn \\__xeCJK_get_ambiguous_slot:[\s\S]*?\\ExplSyntaxOff\\makeatother\n/, '') }) })
+const without = (s, what) => ({ ...s, ...(what === 'front' ? { front: '' } : { pre: f => s.pre(f).replace(/\\makeatletter\\ExplSyntaxOn\n\\cs_if_exist:NT \\__xeCJK_get_ambiguous_slot:[\s\S]*?\\ExplSyntaxOff\\makeatother\n/, '') }) })
 
 // A: a paper that loads CJKutf8 itself and sets a name in its CJK environment (2608.06007, 10322, 13505, 29778)
 const A = '\\documentclass{article}\n\\usepackage{CJKutf8}\n\\begin{document}\nA paragraph with a name, \\begin{CJK*}{UTF8}{gbsn}\u5f20\u4e09\\end{CJK*}, in it.\n\\end{document}\n'
@@ -54,5 +56,16 @@ const E = '\\documentclass{article}\n\\usepackage{microtype}\n\\begin{document}\
   check('E: microtype measures a TS1 symbol after xeCJK, with its own values (lp 83, rp 111)', fixed.ok && /AXT-SLOT lp=83, rp=111/.test(fixed.log), fixed.error || (fixed.log.match(/AXT-SLOT.*$/m)?.[0] ?? 'no reading'))
   check('E: without the slot set again, xeCJK\'s patch has microtype ask \\XeTeXglyph of an 8-bit font', !bare.ok && /Cannot use \\?XeTeXglyph with tcrm/.test(bare.log), bare.error)
 }
+// E again under the xeCJK the TeX page's tree holds (TeX Live 2026's release, which BusyTeX compiles with), whose
+// function keeps its slots under another name than the image's newer one: XECJK_2026=<its xeCJK.sty>, put beside the
+// document so that TeX takes it (research/pdf-bilingual/data/tl2026/2026/texmf-dist/tex/xelatex/xecjk/xeCJK.sty)
+if (process.env.XECJK_2026) {
+  mkdirSync(join(dir, 'tl2026'), { recursive: true })
+  copyFileSync(process.env.XECJK_2026, join(dir, 'tl2026', 'xeCJK.sty'))
+  const fixed = await compile('e-fixed', E, xe, 'tl2026'), bare = await compile('e-bare', E, without(xe, 'slot'), 'tl2026')
+  const version = fixed.log.match(/^Package: xeCJK (\S+ v[\d.]+)/m)?.[1] ?? '?'
+  check(`E under the tree's xeCJK (${version}): microtype's own values`, fixed.ok && /AXT-SLOT lp=83, rp=111/.test(fixed.log), fixed.error || (fixed.log.match(/AXT-SLOT.*$/m)?.[0] ?? 'no reading'))
+  check('E under the tree\'s xeCJK, without the fix: \\XeTeXglyph of an 8-bit font', !bare.ok && /Cannot use \\?XeTeXglyph with tcrm/.test(bare.log), bare.error)
+} else console.log('skip E under the tree\'s xeCJK: XECJK_2026 names no file')
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

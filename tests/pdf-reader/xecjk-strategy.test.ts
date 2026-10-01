@@ -29,11 +29,16 @@ describe('A: a paper that loads CJK or CJKutf8 itself, under xeCJK', () => {
 })
 
 describe('E: xeCJK\'s microtype patch, set right after xeCJK', () => {
-  it('sets microtype\'s \\MT@char@ with \\MT@char, which xeCJK leaves at -1 (CTeX-org/ctex-kit#1104)', () => {
+  it('sets microtype\'s \\MT@char@ wherever xeCJK sets \\MT@char, which it leaves at -1 (CTeX-org/ctex-kit#1104)', () => {
     const pre = strategiesFor({ compiler: 'pdflatex' }, 'ja')[0]?.pre(null) ?? ''
     const at = pre.indexOf('\\cs_set_protected:Npn \\__xeCJK_get_ambiguous_slot:')
     expect(at).toBeGreaterThan(pre.indexOf('\\usepackage{xeCJK}'))
-    expect(pre.slice(at)).toContain('\\cs_set_eq:NN \\MT@char@ \\l__xeCJK_tmp_tl')
+    expect(pre.slice(at)).toContain('\\cs_set_eq:NN \\MT@char@ \\MT@char')
+  })
+  it('by wrapping xeCJK\'s own function, whatever it names its slots: the TeX page\'s xeCJK has \\c__xeCJK_ambiguous_slot_prop, a newer one \\g__… (2026-10-02)', () => {
+    const pre = strategiesFor({ compiler: 'pdflatex' }, 'zh')[0]?.pre(null) ?? ''
+    expect(pre).toContain('\\cs_new_eq:NN \\__axt_xeCJK_get_ambiguous_slot: \\__xeCJK_get_ambiguous_slot:')
+    expect(pre).not.toMatch(/ambiguous_slot_prop/)
   })
   it('not where no xeCJK is loaded', () => {
     for (const s of strategiesFor({ compiler: 'pdflatex' }, 'ru')) expect(s.pre(null)).not.toContain('__xeCJK_get_ambiguous_slot')

@@ -190,18 +190,23 @@ const CJK_GROUPS = String.raw`\makeatletter\@ifundefined{CJK}{\newenvironment{CJ
  * xeCJK's microtype patch (\__xeCJK_get_ambiguous_slot:, since xeCJK 3.8.5) sets microtype's \MT@char but leaves
  * \MT@char@ at -1, so microtype's XeTeX code measures \XeTeXglyph 1: an error on an 8-bit font — "! Cannot use
  * \XeTeXglyph with tcrm1000; not a native platform font", textcomp's or gensymb's symbols under acmart's Libertine
- * (2608.06007, 25210; cause E) — and silently wrong protrusion on an OpenType one. Set again after xeCJK, as the fix
- * reported upstream sets it (CTeX-org/ctex-kit#1104, 2026-10-01): verified natively, microtype's own values (the
- * period centred of TS1 cmr, lp 83 and rp 111). Only microtype's patched code calls it
+ * (2608.06007, 25210; cause E) — and silently wrong protrusion on an OpenType one. After xeCJK, the function is wrapped
+ * to set \MT@char@ wherever it set \MT@char, as the fix reported upstream does (CTeX-org/ctex-kit#1104, 2026-10-01):
+ * verified natively, microtype's own values (the period centred of TS1 cmr, lp 83 and rp 111). Wrapped, not written
+ * anew, so that it holds for every xeCJK that has the function: the one the TeX page's tree holds keeps its slots in
+ * \c__xeCJK_ambiguous_slot_prop, the newer one in \g__…, and the fix written with the newer's name stopped every xeCJK
+ * compile of a paper with microtype in the browser ("Undefined control sequence", 2608.06007 and 18090, 2026-10-02).
+ * Only microtype's patched code calls it
  */
 const MT_SLOT = String.raw`\makeatletter\ExplSyntaxOn
-\cs_set_protected:Npn \__xeCJK_get_ambiguous_slot:
+\cs_if_exist:NT \__xeCJK_get_ambiguous_slot:
   {
-    \prop_get:NeNT \g__xeCJK_ambiguous_slot_prop
-      { \MT@encoding - \tex_the:D \MT@toks } \l__xeCJK_tmp_tl
+    \cs_new_eq:NN \__axt_xeCJK_get_ambiguous_slot: \__xeCJK_get_ambiguous_slot:
+    \cs_set_protected:Npn \__xeCJK_get_ambiguous_slot:
       {
-        \cs_set_eq:NN \MT@char  \l__xeCJK_tmp_tl
-        \cs_set_eq:NN \MT@char@ \l__xeCJK_tmp_tl
+        \cs_set_eq:NN \l__axt_mt_char_tl \MT@char
+        \__axt_xeCJK_get_ambiguous_slot:
+        \cs_if_eq:NNF \l__axt_mt_char_tl \MT@char { \cs_set_eq:NN \MT@char@ \MT@char }
       }
   }
 \ExplSyntaxOff\makeatother
