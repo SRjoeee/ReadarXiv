@@ -5,7 +5,7 @@
 // side and its page count where there is a PDF (pdfinfo, from poppler, when installed).
 //   node experiments/pdf-bilingual/tex-page/compare.mjs [--old=record-old] [--new=identity-new]
 import { execFileSync } from 'node:child_process'
-import { readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseIndex, resolve } from '../poc-site/tex-tree.mjs'
 
@@ -18,7 +18,8 @@ const SITE = new URL('../out/tex-site', import.meta.url).pathname
 const tree = JSON.parse(readFileSync(join(SITE, 'tree.json'), 'utf8'))
 const index = parseIndex(readFileSync(join(SITE, 't', tree.tid, 'index.txt'), 'utf8'))
 const requests = new Map()
-for (const l of readFileSync(join(OUT, OLD, 'requests.jsonl'), 'utf8').trim().split('\n')) { const r = JSON.parse(l); requests.set(`${r.fmt}/${r.name}`, r) }
+const logged = join(OUT, OLD, 'requests.jsonl')
+if (existsSync(logged)) for (const l of readFileSync(logged, 'utf8').trim().split('\n')) { const r = JSON.parse(l); requests.set(`${r.fmt}/${r.name}`, r) }
 const wrong = [...requests.values()].filter(r => {
   const p = resolve(index, r.fmt, r.name)
   return (p ? 200 : 404) !== r.status || (p && (p.split('/').pop() !== r.fileid || statSync(join(tree.root, p)).size !== r.bytes))

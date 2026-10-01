@@ -268,7 +268,8 @@ async function identityPaper(tab, id, index) {
 
 const t0 = Date.now()
 const queue = chosen.map((id, i) => [id, all.indexOf(id)]).filter(([id]) => !done.has(id))
-const tabs = await Promise.all([0, 1].map(async () => { const t = await context.newPage(); await t.goto(hostUrl); return t }))
+// --tabs=1: one tab, in front (a background tab's renderer gets less of a loaded machine's CPU)
+const tabs = await Promise.all(Array.from({ length: Number(arg('tabs', '2')) }, async () => { const t = await context.newPage(); await t.goto(hostUrl); return t }))
 await Promise.all(tabs.map(async tab => {
   while (queue.length) {
     const [id, index] = queue.shift()
