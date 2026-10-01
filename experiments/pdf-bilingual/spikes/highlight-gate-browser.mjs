@@ -14,10 +14,18 @@
 //  - a wheel turned under a still pointer (no move sent): what is lit after is what a move there would light
 //  - the pointer on a unit's words the moment the reader is ready (its sides' layouts, made in the idle time after, not
 //    yet there most times): no layout made in an animation frame; the unit lit once they come, the pointer still
+//  - sentences (B3): where a unit lights by sentence on both sides, what it paints is its sentences' shapes (the first,
+//    a middle and the last, debug.litRects), and the grid and the pads above are the pointer's sentence's
+//    (debug.pointerSentence), 1.5 px past a shape's sides not; round 1's measure of their boundaries on the page's own
+//    canvas — the 1-px column at each boundary between two sentences sharing a row, across the row's band, holding ink
+//    (darker than 150 of 255) or not — no more than round 1's share, 3 of 72 edges
 //  Each made to fail once (B1's first round of review): the kept places, the first moment and the wheel on 133ae1d1
 //  (113 of 113 points off after the contents panel opened; a layout made in the pointer's frame; the unit the wheel
 //  left behind still lit); the pads on a build whose pointer takes no pad (104 of 156 pad points lit nothing); the
-//  holes and the miss hold on BASE 5957a4be (46 of 672 points; the wash gone at 50 ms)
+//  holes and the miss hold on BASE 5957a4be (46 of 672 points; the wash gone at 50 ms). B3's: the ink on 225856ac,
+//  before ink edges took a proportional face's widths (2608.06701's left 7 of 17 boundaries, 2608.02459's 3 of 9); the
+//  sentences' grid with the harness painting a caption by sentence, which the pointer lights whole (168 points another
+//  sentence); the pads with what each shape draws read unscaled while a zoom was drawn (2 pads read as the next sentence)
 //  costs, the build against BASE_BUILD, interleaved (both browsers open, runs alternating):
 //  - a sweep of real pointer moves (220 down each pane, zig-zagging, one a frame) over a spread of formulas, of aligned
 //    displays, and a two-column page: per light — a move that changed what is lit — the script of the task that
@@ -32,7 +40,8 @@
 //  BASE's; the open's time to ready and its anchoring, p50, within 3 % and 10 ms of BASE's. Made to fail once (B1's
 //  first round of review): a build whose pointer frame waits 1 ms (script p50 over the limit)
 // The demo papers (made on this machine, never in the repository: arXiv's papers may not be redistributed) are staged
-// into a copy of each build, as extension.mjs does with poc-reader/papers.
+// into a copy of each build, as extension.mjs does with poc-reader/papers; for the sentences, their units carry the
+// `sentences` spikes/highlight-sentences.mjs makes (a demo's units.json, `sentences` beside `src` and `tr`).
 //   node experiments/pdf-bilingual/spikes/highlight-gate-browser.mjs [checks|costs|all]
 //   BUILD=<dir> the build under test (default .output/chrome-mv3), LABEL its name in the output; BASE_BUILD=<dir> the one
 //   to compare with (costs);
@@ -189,42 +198,92 @@ async function early(b, paper) {
   await page.close()
   return { id: target.id, geoAtHover: target.geo, ...after }
 }
-/** for each unit: both sides scrolled to it and its bands painted (by the harness, then let go); the real pointer on a
- *  6 × 4 grid inside each band shown, 1 px inside its four sides' middles and two of its corners (the pads), and 1.5 px
- *  outside its left and right sides; what the pointer's frame found there (debug.pointerHit: a miss is held, so what is
- *  lit does not tell) */
+/** what is painted for a unit, as the pointer lights it: its sentences' shapes where it lights by sentence (B3: the
+ *  first, a middle one and the last), else its blocks — each a list of rectangles in the window by side, lit by the
+ *  harness and let go */
+const shapesOf = (page, id) => page.evaluate(id => {
+  const d = window.__reader.debug, starts = d.left.startsOf(id), n = starts ? starts.length + 1 : 0
+  const out = []
+  for (const s of n ? [...new Set([0, n >> 1, n - 1])] : [-1]) {
+    d.light(id, s)
+    d.litRects().forEach((rs, k) => { for (const r of rs) if (r.x1 - r.x0 > 0) out.push({ s, side: k ? 'R' : 'L', x: r.x0, y: r.y0, w: r.x1 - r.x0, h: r.y1 - r.y0 }) })
+  }
+  d.light(null)
+  return out
+}, id)
+/** for each unit: both sides scrolled to it and what it paints (shapesOf); the real pointer on a 6 × 4 grid inside each
+ *  rectangle shown, 1 px inside its four sides' middles and two of its corners (the pads), and 1.5 px outside its left
+ *  and right sides; what the pointer's frame found there (debug.pointerHit and pointerSentence: a miss is held, so what
+ *  is lit does not tell) — its unit and, by sentence, its sentence; a smaller unit painted over it counted apart */
 async function painted(page, ids) {
-  const r = { points: 0, holes: 0, other: 0, pads: 0, padHoles: 0, outside: 0, outsideOwn: 0, bothSides: 0, bad: [] }
-  const hitAt = async (x, y) => { await page.mouse.move(x, y); await frames(page); return page.evaluate(() => window.__reader.debug.pointerHit) }
+  const r = { points: 0, holes: 0, other: 0, otherSentence: 0, sentences: 0, pads: 0, padHoles: 0, outside: 0, outsideOwn: 0, bothSides: 0, bad: [] }
+  const hitAt = async (x, y) => { await page.mouse.move(x, y); await frames(page); return page.evaluate(() => ({ id: window.__reader.debug.pointerHit, s: window.__reader.debug.pointerSentence })) }
   for (const id of ids) {
     await at(page, id)
-    const bands = await page.evaluate(id => {
-      const d = window.__reader.debug
-      d.light(id)
-      const out = [...document.querySelectorAll('.axt-hl')].map(e => { const b = e.getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height, side: e.closest('#left') ? 'L' : 'R' } }).filter(b => b.w > 0)
-      d.light(null)
-      return out
-    }, id)
+    const bands = await shapesOf(page, id)
     if (new Set(bands.map(x => x.side)).size === 2) r.bothSides++
+    r.sentences += new Set(bands.filter(b => b.s >= 0).map(b => b.s)).size
+    const own = (hit, s) => hit.id === id && (s < 0 || hit.s === s)
     for (const band of bands) {
       if (band.y < 60 || band.y + band.h > 985) continue
       for (let i = 0; i < 6; i++) for (let j = 0; j < 4; j++) {
         const hit = await hitAt(band.x + 1 + ((band.w - 2) * (i + 0.5)) / 6, band.y + 1 + ((band.h - 2) * (j + 0.5)) / 4)
         r.points++
-        if (hit === null) r.holes++
-        else if (hit !== id) r.other++
+        if (hit.id === null) r.holes++
+        else if (hit.id !== id) r.other++
+        else if (!own(hit, band.s)) { r.otherSentence++; if (r.bad.length < 8) r.bad.push({ id, s: band.s, side: band.side, lit: hit.s }) }
       }
       const { x, y, w, h } = band
       for (const [px, py] of [[x + 1, y + h / 2], [x + w - 1, y + h / 2], [x + w / 2, y + 1], [x + w / 2, y + h - 1], [x + 1, y + 1], [x + w - 1, y + h - 1]]) {
         const hit = await hitAt(px, py)
         r.pads++
-        if (hit === null) { r.padHoles++; r.bad.push({ id, side: band.side, at: [+(px - x).toFixed(1), +(py - y).toFixed(1)], band: [+w.toFixed(1), +h.toFixed(1)] }) }
+        if (hit.id === null || (hit.id === id && !own(hit, band.s))) { r.padHoles++; r.bad.push({ id, s: band.s, side: band.side, at: [+(px - x).toFixed(1), +(py - y).toFixed(1)], band: [+w.toFixed(1), +h.toFixed(1)], lit: hit }) }
       }
       for (const px of [x - 1.5, x + w + 1.5]) {
         r.outside++
-        if ((await hitAt(px, y + h / 2)) === id) r.outsideOwn++
+        if (own(await hitAt(px, y + h / 2), band.s)) r.outsideOwn++
       }
     }
+  }
+  return r
+}
+/**
+ * Round 1's measure of a sentence's edges (B3), on the page's own canvas, where the text is alone (the wash is a layer
+ * of its own): for each pair of sentences of a unit that share a row, on each side, the boundary between them — the one's
+ * end and the next one's start, at one x — and whether the 1-px column there, across the row's band less a pixel at its
+ * top and foot, holds ink (a pixel darker than 150 of 255). Counted per side
+ */
+async function inkCuts(page, ids) {
+  const r = { L: { edges: 0, ink: 0 }, R: { edges: 0, ink: 0 }, bad: [] }
+  for (const id of ids) {
+    await at(page, id)
+    const cuts = await page.evaluate(id => {
+      const d = window.__reader.debug, starts = d.left.startsOf(id)
+      if (!starts) return []
+      const shapes = []
+      for (let s = 0; s <= starts.length; s++) { d.light(id, s); shapes.push(d.litRects()) }
+      d.light(null)
+      const out = []
+      for (let s = 0; s < starts.length; s++) for (const k of [0, 1]) {
+        const a = shapes[s][k], b = shapes[s + 1][k]
+        for (const p of a) for (const q of b) {
+          if (Math.abs(p.y0 - q.y0) > 0.5 || Math.abs(p.y1 - q.y1) > 0.5 || Math.abs(p.x1 - q.x0) > 0.5) continue
+          // the canvas under the boundary's middle: its pixel column there
+          const x = p.x1, ym = (p.y0 + p.y1) / 2
+          const canvas = document.elementsFromPoint(x, ym).map(e => e.closest?.('.page')?.querySelector('canvas')).find(Boolean)
+          if (!canvas) continue
+          const cb = canvas.getBoundingClientRect(), sx = canvas.width / cb.width, sy = canvas.height / cb.height
+          const cx = Math.floor((x - cb.left) * sx), c0 = Math.ceil((p.y0 + 1 - cb.top) * sy), c1 = Math.floor((p.y1 - 1 - cb.top) * sy)
+          if (cx < 0 || cx >= canvas.width || c1 <= c0) continue
+          const px = canvas.getContext('2d').getImageData(cx, c0, 1, c1 - c0).data
+          let ink = false
+          for (let i = 0; i < px.length; i += 4) if (px[i] < 150 && px[i + 1] < 150 && px[i + 2] < 150 && px[i + 3] > 0) { ink = true; break }
+          out.push({ side: k ? 'R' : 'L', s, ink, x: Math.round(x), y: Math.round(ym) })
+        }
+      }
+      return out
+    }, id)
+    for (const c of cuts) { r[c.side].edges++; if (c.ink) { r[c.side].ink++; if (r.bad.length < 10) r.bad.push({ id, ...c }) } }
   }
   return r
 }
@@ -260,9 +319,19 @@ async function checks(b) {
       await enter()
       await page.waitForTimeout(900)
       const r = await painted(page, which)
-      check(`${b.label} ${paper}: no hole inside what is painted, ${state}`, r.holes === 0 && r.points > 0, `${r.holes} of ${r.points} points on ${which.length} units' bands lit nothing; ${r.other} lit a smaller unit painted over them`)
+      check(`${b.label} ${paper}: no hole inside what is painted, ${state}`, r.holes === 0 && r.otherSentence === 0 && r.points > 0, `${r.holes} of ${r.points} points on ${which.length} units' shapes (${r.sentences} sentences) lit nothing, ${r.otherSentence} another sentence of the unit; ${r.other} lit a smaller unit painted over them`)
       check(`${b.label} ${paper}: the pads light their unit, and 1.5 px past its sides does not, ${state}`, r.padHoles === 0 && r.outsideOwn === 0 && r.pads > 0, JSON.stringify({ pads: r.pads, padHoles: r.padHoles, outside: r.outside, outsideOwn: r.outsideOwn, first: r.bad[0] }))
-      if (state === 'at the load') check(`${b.label} ${paper}: both sides painted`, r.bothSides === which.length, `${r.bothSides} of ${which.length}`)
+      if (state === 'at the load') {
+        check(`${b.label} ${paper}: both sides painted`, r.bothSides === which.length, `${r.bothSides} of ${which.length}`)
+        // the units lit by sentence among them, and their boundaries on the canvas: round 1 measured 3 of 72 edges
+        // through ink (two edges a boundary: the one's end and the next one's start)
+        const lit = await page.evaluate(ids => ids.filter(id => window.__reader.debug.left.startsOf(id)), ids)
+        const k = await inkCuts(page, lit)
+        const edges = k.L.edges + k.R.edges, ink = k.L.ink + k.R.ink
+        check(`${b.label} ${paper}: units lit by sentence among those checked`, lit.length > 0, `${lit.length} of ${ids.length}`)
+        check(`${b.label} ${paper}: sentences' boundaries through ink no more than round 1's share (3 of 72 edges)`, edges > 0 && (2 * ink) / (2 * edges) <= 3 / 72, JSON.stringify({ L: k.L, R: k.R, first: k.bad.slice(0, 4) }))
+        ;((result.checks ??= {})[`${b.label} ${paper}`] ??= {}).inkCuts = k
+      }
       ;((result.checks ??= {})[`${b.label} ${paper}`] ??= {})[state] = { units: which.length, ...r, bad: r.bad.slice(0, 5) }
     }
     await page.evaluate(() => window.__reader.controller.setDisplay('bilingual'))
@@ -361,7 +430,7 @@ async function opening(b, paper) {
   await page.waitForFunction(() => window.__reader?.ready, null, { timeout: 240_000, polling: 50 })
   const ready = await page.evaluate(() => performance.now())
   await page.waitForTimeout(3000)
-  const r = await page.evaluate(ready => { const t = window.__reader.timing; return { ready, opened: t.opened, anchors: t.anchors, leftLayout: t.leftLayout ?? null, rightLayout: t.rightLayout ?? null, longTasks: window.__lt.filter(x => x.at < ready + 3000) } }, ready)
+  const r = await page.evaluate(ready => { const t = window.__reader.timing; return { ready, opened: t.opened, anchors: t.anchors, leftLayout: t.leftLayout ?? null, rightLayout: t.rightLayout ?? null, leftSentences: t.leftSentences ?? null, rightSentences: t.rightSentences ?? null, longTasks: window.__lt.filter(x => x.at < ready + 3000) } }, ready)
   await page.close()
   return { ...r, longTasks: { n: r.longTasks.length, total: +r.longTasks.reduce((a, x) => a + x.ms, 0).toFixed(1) } }
 }
@@ -388,7 +457,7 @@ async function costs(builds) {
     result.summary[`sweep ${key}`] = { lights: runs.map(r => r.lights), script: stats(runs.flatMap(r => r.raw.script)), styleLayout: stats(runs.flatMap(r => r.raw.after)), forced: runs.map(r => r.forcedLayouts), longTasks: runs.map(r => r.longTasks), fastScroll: runs.map(r => r.fastScroll) }
     for (const r of runs) delete r.raw
   }
-  for (const [key, runs] of Object.entries(result.open ?? {})) result.summary[`open ${key}`] = { readyMs: stats(runs.map(r => r.ready)), anchorsMs: stats(runs.map(r => r.anchors)), layoutMs: stats(runs.flatMap(r => [r.leftLayout, r.rightLayout].filter(x => x != null))), longTasks: runs.map(r => r.longTasks) }
+  for (const [key, runs] of Object.entries(result.open ?? {})) result.summary[`open ${key}`] = { readyMs: stats(runs.map(r => r.ready)), anchorsMs: stats(runs.map(r => r.anchors)), layoutMs: stats(runs.flatMap(r => [r.leftLayout, r.rightLayout].filter(x => x != null))), sentencesMs: stats(runs.flatMap(r => [r.leftSentences, r.rightSentences].filter(x => x != null))), longTasks: runs.map(r => r.longTasks) }
   for (const [key, v] of Object.entries(result.summary)) console.log(key, JSON.stringify(v))
   if (builds.length < 2) return
   // the limits against BASE
