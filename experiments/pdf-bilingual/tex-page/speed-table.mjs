@@ -7,7 +7,13 @@ import { join } from 'node:path'
 
 const arg = (name, fallback) => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback
 const rows = readFileSync(join(new URL('../out/tex-measure', import.meta.url).pathname, arg('run', 'speed'), 'speed.jsonl'), 'utf8').trim().split('\n').map(l => JSON.parse(l))
-const median = xs => { const s = xs.filter(x => x != null).sort((a, b) => a - b); return s.length ? s[Math.floor((s.length - 1) / 2)] : null }
+/** the median: the middle value, or the mean of the two middle values of an even count */
+const median = xs => {
+  const s = xs.filter(x => x != null).sort((a, b) => a - b)
+  if (!s.length) return null
+  const m = s.length >> 1
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
+}
 const s = ms => (ms == null ? '-' : (ms / 1000).toFixed(1))
 console.log('| link (Mbit/s / ms) | visit | lang | first preview, today → new (s) | MB sent | requests waited for | probe + preview compile (s) |')
 console.log('|---|---|---|---|---|---|---|')
