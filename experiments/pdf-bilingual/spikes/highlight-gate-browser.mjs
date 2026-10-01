@@ -18,17 +18,6 @@
 //  (113 of 113 points off after the contents panel opened; a layout made in the pointer's frame; the unit the wheel
 //  left behind still lit); the pads on a build whose pointer takes no pad (104 of 156 pad points lit nothing); the
 //  holes and the miss hold on BASE 5957a4be (46 of 672 points; the wash gone at 50 ms)
-//  floats (B4: tables, algorithms and figures lit whole with their captions), on FLOAT_CHECK's papers, the sync off:
-//  - every page with a caption has its floats once drawn (all pages of both sides brought into view)
-//  - the floats on both sides, per kind, no fewer than the Node gate finds (FLOATS_AT_LEAST)
-//  - the real pointer on a grid inside each element a float paints (a dozen floats) lights the float (or a smaller unit
-//    painted there); both sides paint it, a figure with its outline and its caption washed on both
-//  - a table's cell (one the side located) lights its table, cells being found to try
-//  - a page's floats' cost on the main thread at its first drawing (timing.floats: paths read, floats made), reported
-//  Each made to fail once (B4, a build each): the pointer's frame without floatHitOf (147 of 240 points lit nothing, the
-//  cell lit itself); no floats made (20 pages without, none on both sides); figures washed, not outlined (0 of 4
-//  outlined); after the review of B4: figures' captions not washed (a build), no cell to try (FLOATS_N=0), the floats'
-//  failure left the page asked (ad6036f7's build, the figures' stand-in throwing)
 //  costs, the build against BASE_BUILD, interleaved (both browsers open, runs alternating):
 //  - a sweep of real pointer moves (220 down each pane, zig-zagging, one a frame) over a spread of formulas, of aligned
 //    displays, and a two-column page: per light — a move that changed what is lit — the script of the task that
@@ -44,13 +33,12 @@
 //  first round of review): a build whose pointer frame waits 1 ms (script p50 over the limit)
 // The demo papers (made on this machine, never in the repository: arXiv's papers may not be redistributed) are staged
 // into a copy of each build, as extension.mjs does with poc-reader/papers.
-//   node experiments/pdf-bilingual/spikes/highlight-gate-browser.mjs [checks|floats|costs|all]   (checks runs floats too)
+//   node experiments/pdf-bilingual/spikes/highlight-gate-browser.mjs [checks|costs|all]
 //   BUILD=<dir> the build under test (default .output/chrome-mv3), LABEL its name in the output; BASE_BUILD=<dir> the one
 //   to compare with (costs);
 //   PAPERS=<dir> the demo papers (default poc-reader/papers); CHECK=<ids> the papers checked (default 2608.02459, the
 //   heaviest, whose layouts are not made yet when the reader is ready, and 2608.06701, two columns);
 //   SWEEP=<id:unit,…> the sweeps' papers and the unit each starts at; OPEN=<ids> the papers opened (either `none`);
-//   FLOAT_CHECK=<ids> the papers whose floats are checked (`none`), FLOATS_N the floats the pointer goes over in each;
 //   ROUNDS=<n>
 //   → out/highlight-gate-browser.json
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -320,6 +308,18 @@ async function checks(b) {
 }
 
 // ---------------------------------------------------------------- floats (B4)
+// The floats (B4: tables, algorithms and figures lit whole with their captions), checked by `checks` (or alone,
+// `floats`) on FLOAT_CHECK's papers (`none`: none), the sync off; FLOATS_N the floats the pointer goes over in each:
+//  - every page with a caption has its floats once drawn (all pages of both sides brought into view)
+//  - the floats on both sides, per kind, no fewer than the Node gate finds (FLOATS_AT_LEAST)
+//  - the real pointer on a grid inside each element a float paints (a dozen floats) lights the float (or a smaller unit
+//    painted there); both sides paint it, a figure with its outline and its caption washed on both
+//  - a table's cell (one the side located) lights its table, cells being found to try
+//  - a page's floats' cost on the main thread at its first drawing (timing.floats: paths read, floats made), reported
+//  Each made to fail once (B4, a build each): the pointer's frame without floatHitOf (147 of 240 points lit nothing, the
+//  cell lit itself); no floats made (20 pages without, none on both sides); figures washed, not outlined (0 of 4
+//  outlined); after the review of B4: figures' captions not washed (a build), no cell to try (FLOATS_N=0), the floats'
+//  failure left the page asked (ad6036f7's build, the figures' stand-in throwing)
 /** every page of both sides brought into view, until each page with a caption has its floats (the reader makes them on a
  *  page's first drawing); the pages that got none in 4 s */
 const drawAll = page => page.evaluate(async () => {

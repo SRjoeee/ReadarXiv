@@ -1,6 +1,8 @@
-// The highlight gate's floats (plans/2026-10-01-pdf-highlight.md, B4; highlight-gate.mjs imports it): on each side,
-// each page's floats as the reader makes them on the page's first drawing (src/pdf-reader/engine/floats.mjs, from the
-// page's operator list), measured against the source's floats:
+// The highlight gate's floats (plans/2026-10-01-pdf-highlight.md, B4): highlight-gate.mjs calls it for each paper
+// (floatsOfPaper, with the sides it anchored) and at its end (floatsVerdict, which prints and holds the floats to their
+// own baseline, highlight-gate-floats.baseline.json; WRITE_BASELINE=1 records it with the gate's). On each side, each
+// page's floats as the reader makes them on the page's first drawing (src/pdf-reader/engine/floats.mjs, from the
+// page's operator list, read here again from the PDF), measured against the source's floats:
 //  - found: per paper, side and float environment (figure, table, algorithm; a caption in none is `other`), the
 //    captions anchored there and those with a float; on both sides; the floats whose kind is not their environment's (a
 //    figure found as a table: washed, not outlined)
@@ -21,9 +23,19 @@
 // It fails on a hole, running text inside a float, floats overlapping, a held cell lighting anything but its float, a
 // point of running text taken by a float, and against the baseline on fewer floats found (per paper, side and
 // environment, and on both sides), more kinds mismatched, or any float's kind or extent moved.
+// Each check made to fail once (B4, floats.mjs changed in place each time and put back): the hit test ignoring floats
+// (5 082 716 holes, 410 cells lighting themselves); the running-text limit dropped (47 words of 2608.06701's #65 inside
+// figure 5's box); a rule past a table's last line taken within 3 lines (16 floats sharing a rule with the next, tables
+// found 11 → 9 on 02163); held cells not taken by their table (410); every float a table (figures' kinds mismatched).
+// After the review of B4: floats winning over every block (350 points of running text taken); the text block's filter
+// dropped, PANELS 0, GAP 3 (floats' extents moved against the baseline).
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { floatHitOf, floatShapes, pageFloats, pathsOf, wantsFloats } from '../../../src/pdf-reader/engine/floats.mjs'
 import { figureRegions } from '../../../src/pdf-reader/engine/figures.mjs'
-import { blockOf, hitOf, pageGeometry, runsOf } from '../../../src/pdf-reader/engine/highlight.mjs'
+import { blockOf, hitOf, layoutOf, pageGeometry, runsOf } from '../../../src/pdf-reader/engine/highlight.mjs'
+
+const BASELINE = new URL('highlight-gate-floats.baseline.json', import.meta.url).pathname
 
 const ENVS = /\\(begin|end)\s*\{(figure\*?|table\*?|algorithm\*?|wrapfigure|wraptable|SCfigure|SCtable|sidewaysfigure|sidewaystable|longtable|subfigure|subtable)\}/g
 /** the float environment a unit's source sits in: figure, table or algorithm (the outermost), else other */
@@ -35,21 +47,25 @@ export function envOf(paper, u) {
   return /figure/i.test(outer) ? 'figure' : /algorithm/.test(outer) ? 'algorithm' : 'table'
 }
 
-/** each page's figures and paths, from the operator list PDF.js draws the page by (the reader's annotation mode), and
- *  the time reading the paths took (ms, once) */
-export async function drawnOf(pdf, pdfjs) {
-  const out = [null]
-  for (let p = 1; p <= pdf.numPages; p++) {
-    const ops = await (await pdf.getPage(p)).getOperatorList({ annotationMode: pdfjs.AnnotationMode.ENABLE_FORMS })
-    const t0 = performance.now(), paths = pathsOf(ops, pdfjs.OPS)
-    out.push({ regions: figureRegions(ops, pdfjs.OPS), paths, pathsMs: performance.now() - t0 })
-  }
-  return out
+/** a PDF's page boxes, and each page's figures and paths from the operator list PDF.js draws it by (the reader's
+ *  annotation mode), with the time reading the paths took (ms, once) */
+async function drawnOf(file, { cmaps, fonts }) {
+  const task = pdfjs.getDocument({ data: new Uint8Array(readFileSync(file)), verbosity: 0, cMapUrl: cmaps, cMapPacked: true, standardFontDataUrl: fonts })
+  const pdf = await task.promise, out = [null], views = []
+  try {
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const pg = await pdf.getPage(p), ops = await pg.getOperatorList({ annotationMode: pdfjs.AnnotationMode.ENABLE_FORMS })
+      views.push(pg.view)
+      const t0 = performance.now(), paths = pathsOf(ops, pdfjs.OPS)
+      out.push({ regions: figureRegions(ops, pdfjs.OPS), paths, pathsMs: performance.now() - t0 })
+    }
+  } finally { await task.destroy() }
+  return { drawn: out, views }
 }
 
 /** a side's floats made as the reader makes them, page by page, each page's geometry first: the time each page with
  *  captions took (ms) */
-export function makeFloats(L, drawn) {
+function makeFloats(L, drawn) {
   const ms = []
   for (let p = 1; p < drawn.length; p++) {
     if (!wantsFloats(L, p)) continue
@@ -59,6 +75,85 @@ export function makeFloats(L, drawn) {
     ms.push(performance.now() - t0)
   }
   return ms
+}
+
+const median = xs => { const s = [...xs].sort((a, b) => a - b); return s[s.length >> 1] ?? null }
+/** per paper: each side's measures (measureSide), its floats' cost, and each caption's environment */
+const papers = new Map()
+
+/**
+ * A paper's floats on both sides (highlight-gate.mjs, in its loop): `sides` { L, R } as it anchored them ({ anchors,
+ * doc, layout }), `files` { L, R } their PDFs; the floats made on each side's layout (what the gate measured of the
+ * units first is the units' alone), and their cost on fresh layouts, `rounds` times
+ */
+export async function floatsOfPaper({ id, paper, units, kind, sides, files, rounds, pad, step, cmaps, fonts }) {
+  const out = { sides: {}, cost: {}, envs: new Map(units.flatMap((u, i) => (u.kind === 'caption' ? [[i, envOf(paper, u)]] : []))) }
+  for (const S of ['L', 'R']) {
+    const { anchors, doc, layout } = sides[S], { drawn, views } = await drawnOf(files[S], { cmaps, fonts })
+    const per = []
+    for (let r = 0; r < rounds; r++) per.push(makeFloats(layoutOf(doc, views, anchors, i => kind.get(i)), drawn))
+    const page = per[0].map((_, k) => median(per.map(r => r[k]))), paths = drawn.slice(1).map(d => d.pathsMs)
+    out.cost[S] = { pages: page.length, floatMs: page.length ? +median(page).toFixed(3) : null, floatMaxMs: page.length ? +Math.max(...page).toFixed(3) : null, pathsMs: +median(paths).toFixed(3), pathsMaxMs: +Math.max(...paths).toFixed(3) }
+    makeFloats(layout, drawn)
+    out.sides[S] = measureSide({ L: layout, doc, anchors, units, paper, kind, pad, step, drawn })
+  }
+  papers.set(id, out)
+}
+
+/**
+ * The floats' report and verdict (highlight-gate.mjs, at its end): printed; with `write` the baseline recorded (on the
+ * ten papers' runs only, `ten`), else held to it. Whether it failed
+ */
+export function floatsVerdict({ ids, write, ten }) {
+  const counts = {}, regions = {}
+  for (const id of ids) {
+    const { sides, envs } = papers.get(id), both = {}
+    for (const [i] of sides.L.ids) if (sides.R.ids.has(i)) { const env = envs.get(i) ?? 'other'; both[env] = (both[env] ?? 0) + 1 }
+    counts[id] = { L: sides.L.found, R: sides.R.found, both }
+    regions[id] = { L: sides.L.regions, R: sides.R.regions }
+  }
+  console.log('\nfloats per environment: captions anchored L / R, with a float L / R, on both sides; kinds mismatched L / R')
+  const envSum = {}
+  for (const id of ids) for (const S of ['L', 'R']) for (const [env, e] of Object.entries(counts[id][S])) { const t = (envSum[env] ??= { capL: 0, capR: 0, L: 0, R: 0, both: 0, misL: 0, misR: 0 }); t[`cap${S}`] += e.captions; t[S] += e.found; t[`mis${S}`] += e.mismatched }
+  for (const id of ids) for (const [env, n] of Object.entries(counts[id].both)) envSum[env].both += n
+  for (const [env, t] of Object.entries(envSum)) console.log(env.padEnd(10), `captions ${t.capL} / ${t.capR}`, `floats ${t.L} / ${t.R}`, `both ${t.both}`, `mismatched ${t.misL} / ${t.misR}`)
+  const sum = { holes: 0, smaller: 0, points: 0, cells: 0, padsMeet: 0, lost: 0 }, fail = { intruders: [], overlaps: [], cellsOff: [] }
+  for (const id of ids) for (const S of ['L', 'R']) { const m = papers.get(id).sides[S]; for (const k of Object.keys(sum)) sum[k] += m[k]; for (const k of Object.keys(fail)) fail[k].push(...m[k].map(x => `${id} ${S} ${x}`)) }
+  console.log(`points in floats' shapes ${sum.points}: holes ${sum.holes}, a smaller unit ${sum.smaller}; cells held ${sum.cells}, lighting another ${fail.cellsOff.length}; points of running text taken by a float ${sum.lost}`)
+  console.log('running text inside a float:', fail.intruders.length, fail.intruders.slice(0, 8).join('; '))
+  console.log('floats overlapping:', fail.overlaps.length, fail.overlaps.slice(0, 8).join('; '), `(their pads meeting: ${sum.padsMeet})`)
+  console.log('a page\'s floats, ms: paths read (median, max) and floats made (median, slowest page), per paper and side')
+  for (const id of ids) for (const S of ['L', 'R']) { const c = papers.get(id).cost[S]; if (c.pages) console.log(`${id} ${S}`.padEnd(14), `${c.pages} pages with captions`, `paths ${c.pathsMs} / ${c.pathsMaxMs}`, `floats ${c.floatMs} / ${c.floatMaxMs}`) }
+  const failures = []
+  if (sum.holes) failures.push(`holes in floats ${sum.holes}`)
+  if (sum.lost) failures.push(`points of running text taken by a float ${sum.lost}`)
+  for (const k of Object.keys(fail)) if (fail[k].length) failures.push(`floats' ${k} ${fail[k].length}: ${fail[k][0]}`)
+  if (write) {
+    if (!ten) failures.push('a baseline is recorded on the ten papers\' runs only')
+    if (!failures.length) writeFileSync(BASELINE, `${JSON.stringify({ note: 'highlight-gate-floats.mjs: per paper, side and float environment, captions and floats found, kinds mismatched, and floats on both sides; each float, its kind and extent. Counts and boxes only', floats: counts, floatRegions: regions }, null, 1)}\n`)
+    console.log(failures.length ? 'floats: no baseline written' : `floats: baseline written: ${BASELINE}`)
+  } else if (!existsSync(BASELINE)) failures.push('no floats baseline (WRITE_BASELINE=1 records one)')
+  else {
+    const base = JSON.parse(readFileSync(BASELINE, 'utf8'))
+    for (const id of ids) {
+      const was = base.floats?.[id]
+      if (!was) { failures.push(`${id}: no baseline of the floats`); continue }
+      // the floats found may not fall, nor the kinds mismatched grow
+      for (const S of ['L', 'R']) for (const [env, b] of Object.entries(was[S])) {
+        const c = counts[id][S][env] ?? { found: 0, mismatched: 0 }
+        if (c.found < b.found) failures.push(`${id} ${S} ${env}: floats ${c.found}, the baseline ${b.found}`)
+        if (c.mismatched > b.mismatched) failures.push(`${id} ${S} ${env}: kinds mismatched ${c.mismatched}, the baseline ${b.mismatched}`)
+      }
+      for (const [env, n] of Object.entries(was.both)) if ((counts[id].both[env] ?? 0) < n) failures.push(`${id} ${env}: floats on both sides ${counts[id].both[env] ?? 0}, the baseline ${n}`)
+      // each float's kind and extent as recorded
+      for (const S of ['L', 'R']) {
+        const now = regions[id][S], had = base.floatRegions?.[id]?.[S] ?? {}
+        for (const c of new Set([...Object.keys(now), ...Object.keys(had)])) if ((now[c] ?? null) !== (had[c] ?? null)) failures.push(`${id} ${S} float #${c}: ${now[c] ?? 'none'}, the baseline ${had[c] ?? 'none'}`)
+      }
+    }
+  }
+  console.log(failures.length ? `\nFAIL (floats): ${failures.slice(0, 20).join('; ')}${failures.length > 20 ? ` (and ${failures.length - 20} more)` : ''}` : '\nok (floats): no hole, no running text inside or taken, none overlapping, their cells lighting them; the baseline met')
+  return failures.length > 0
 }
 
 const inside = (b, x, y) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1
