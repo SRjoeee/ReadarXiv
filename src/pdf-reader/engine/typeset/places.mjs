@@ -2,16 +2,24 @@
 // pages; drift — where each unit starts in reading order, as page, column and height down the text block, against
 // where the original starts it, in columns (one column is half a page in two columns, a page in one); block size — a
 // unit's height over its original's, where both lie within one column. From unit marks (marksOf). A unit the original
-// has and the compile lacks is counted as missing, not dropped. Each page's columns are what its own compile set it in
-// (marksOf), so a paper whose body is in two columns and its appendix in one is read page by page in either document.
+// has and the compile lacks is counted as missing, not dropped. Both documents are read on the original's columns,
+// page by page, as its compile set each page (marksOf): a reader holding the two side by side finds a unit level with
+// its original when it stands on the same page at the same height, whatever the translation's own compile set that
+// page in. Read on its own columns, aastex's 2608.12606, whose translation began its one-column appendix a page early,
+// mid-page, read every unit after it a column early on the very page its original was on; read with one flag per
+// document, Chinese 2608.02163 (a two-column body, a one-column appendix) read 18.75 columns apart.
 const q = (xs, p) => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); return s[Math.round(p * (s.length - 1))] }
-/** the column a place is in on its page: the right one of a page set in two columns, past the page's middle */
-export const columnOf = (m, at) => (m.columns[at.page] === 2 && at.x >= m.width / 2 ? 1 : 0)
-// the columns before each page, a page with no reading counted as one
+// the original's columns on a page, a page past its last as its last, a page it could not read as one
+const columnsOn = (om, page) => (om.columns[Math.min(page, om.pages - 1)] === 2 ? 2 : 1)
+/** the column a place in either document is in on its page, on the original's columns (`om`): the right one of a page the
+ *  original set in two columns, past the page's middle */
+export const columnOf = (om, at) => (columnsOn(om, at.page) === 2 && at.x >= om.width / 2 ? 1 : 0)
+// the columns before each page, on the original's columns
 const firsts = new WeakMap()
-const columnsBefore = m => {
-  if (!firsts.has(m)) { let n = 0; firsts.set(m, Array.from({ length: m.pages + 1 }, (_, p) => { const at = n; n += m.columns[p] === 2 ? 2 : 1; return at })) }
-  return firsts.get(m)
+const columnsBefore = (om, page) => {
+  if (!firsts.has(om)) { let n = 0; firsts.set(om, Array.from({ length: om.pages }, (_, p) => { const at = n; n += columnsOn(om, p); return at })) }
+  const before = firsts.get(om), last = om.pages - 1
+  return page <= last ? before[page] : before[last] + (page - last) * columnsOn(om, last)
 }
 /** each page's text block, from the original's marks: its highest and its lowest; a page with too few marks to tell, or
  *  one the original does not have, takes the median block. Heights are measured in it, so that a column's foot and the
@@ -23,9 +31,9 @@ function blocks(om) {
   const fallback = tall.length ? { top: q(tall.map(b => b.top), 0.5), bottom: q(tall.map(b => b.bottom), 0.5) } : { top: om.height, bottom: 0 }
   return page => { const b = byPage.get(page); return b && b.top - b.bottom >= 100 ? b : fallback }
 }
-/** a place in reading order, in columns: the columns before it, and its height down its text block — held within the
- *  block for the metric, as it may not be for a correction (drifts) */
-const place = (m, at, block, held = true) => { const b = block(at.page), f = (b.top - at.y) / (b.top - b.bottom); return columnsBefore(m)[at.page] + columnOf(m, at) + (held ? Math.min(1, Math.max(0, f)) : f) }
+/** a place in reading order, in the original's columns (`om`): the columns before it, and its height down its text
+ *  block — held within the block for the metric, as it may not be for a correction (drifts) */
+const place = (om, at, block, held = true) => { const b = block(at.page), f = (b.top - at.y) / (b.top - b.bottom); return columnsBefore(om, at.page) + columnOf(om, at) + (held ? Math.min(1, Math.max(0, f)) : f) }
 
 export function alignment(om, tm) {
   const block = blocks(om)
@@ -36,9 +44,9 @@ export function alignment(om, tm) {
     const o = om.marks.get(k), t = tm.marks.get(k)
     if (!t) continue
     matched++
-    drift.push(Math.abs(place(tm, t, block) - place(om, o, block)))
+    drift.push(Math.abs(place(om, t, block) - place(om, o, block)))
     const oe = om.marks.get(k.replace(/s$/, 'e')), te = tm.marks.get(k.replace(/s$/, 'e'))
-    if (!oe || !te || o.page !== oe.page || t.page !== te.page || columnOf(om, o) !== columnOf(om, oe) || columnOf(tm, t) !== columnOf(tm, te)) continue
+    if (!oe || !te || o.page !== oe.page || t.page !== te.page || columnOf(om, o) !== columnOf(om, oe) || columnOf(om, t) !== columnOf(om, te)) continue
     const ho = o.y - oe.y, ht = t.y - te.y
     if (ho >= 20 && ht > 0) size.push(ht / ho)
   }
@@ -62,7 +70,7 @@ export function drifts(om, tm) {
     const t = tm.marks.get(k)
     if (!t) continue
     const b = block(o.page)
-    out.set(Number(k.slice(0, -1)), ((place(tm, t, block, false) - place(om, o, block, false)) * (b.top - b.bottom) * 72.27) / 72)
+    out.set(Number(k.slice(0, -1)), ((place(om, t, block, false) - place(om, o, block, false)) * (b.top - b.bottom) * 72.27) / 72)
   }
   return out
 }
@@ -71,7 +79,8 @@ export function drifts(om, tm) {
  * Every unit's start and end mark — the axt-<n>s / axt-<n>e destinations MARK_DEF writes (page 0-based, PDF points) —
  * from a PDF.js document, the reader's or pdfjs-dist's; the page's width and height; and each page's columns, 1 or 2,
  * as MARK_DEF's axt-c<n>-<k> on the page says its compile set it, 0 where the page has none (a compile without
- * LaTeX's shipout hooks: places.mjs then counts the page as one column, and the rule takes no plan from it, plan.mjs).
+ * LaTeX's shipout hooks: counted as one column; the rule takes no plan from an original with such a page, plan.mjs).
+ * The original's are what both documents' places are read on.
  * Read from TeX, not judged from the marks: a page's starts in its right half are no measure of its columns — a run-in
  * label or a centred caption puts a start there on a one-column page (Chinese 2608.02991, three of six starts on nine
  * pages), and a right column of one paragraph or one float puts none there (2608.06233's fifth page)

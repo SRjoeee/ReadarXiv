@@ -104,7 +104,7 @@ describe('the rule sets nothing where an input it needs is missing or partial: t
     const units = de().paper.units.length
     const whole = { log: originalLog(units), marks: originalMarks(units) }
     expect(finalTypesetting(plan.state, whole).typeset).not.toBe(plan.typeset)
-    for (const preview of [{ ...whole, log: '' }, { ...whole, log: whole.log.replace('AXT-END\n', '') }, { ...whole, marks: { ...whole.marks, columns: [0, 0] } }]) {
+    for (const preview of [{ ...whole, log: '' }, { ...whole, log: whole.log.replace('AXT-END\n', '') }, { ...whole, marks: { ...whole.marks, marks: new Map() } }]) {
       const fin = finalTypesetting(plan.state, preview)
       expect(fin.typeset).toBe(plan.typeset)
       expect(fin.missing).toMatch(/preview/)

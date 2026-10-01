@@ -67,22 +67,23 @@ export function previewTypesetting({ paper, translated, lang, strategy, fonts, f
   state.typeset = typesettingOf(state, type, leads, new Map())
   return { typeset: state.typeset, type, state, missing: null }
 }
-/** a compile's marks with something to read: unit marks, and every page's columns (places.mjs marksOf) */
+/** the original's marks with something to read: unit marks, and every page's columns, which both documents' places are
+ *  read on (places.mjs) */
 const whole = m => !!m?.marks.size && m.columns.length === m.pages && m.columns.every(c => c > 0)
 
 /**
  * The final's typesetting, from the preview `state` and what the preview compile gave: `preview` { log, marks } — its
  * log (line probes, forced breaks, size probe) and its marks (places.mjs marksOf). Returns `typeset` for the final's
  * translationFiles; the type, each unit's leading and face, and the flow's trace (flow.mjs flowType). Where the preview's
- * measurement is missing or partial — its log not whole (tex.mjs completeLog), its marks or a page's columns unread, no
- * unit it measured — the final is set as the preview was, uncorrected (`missing` says why): that plan had every input it
+ * measurement is missing or partial — its log not whole (tex.mjs completeLog), its marks missing, no unit it measured
+ * (its places are read on the original's columns: places.mjs) — the final is set as the preview was, uncorrected (`missing` says why): that plan had every input it
  * needs. With no plan (`state` null), none.
  */
 export function finalTypesetting(state, preview) {
   if (!state) return { typeset: null, type: null, leads: new Map(), faces: new Map(), trace: [], missing: 'a plan' }
   const { design, type, list } = state, cjk = design.cjk
   const lines = readLines(preview?.log), got = list.filter(u => lines.get(u.i))
-  const missing = !completeLog(preview?.log) ? "the preview's log, whole" : !whole(preview?.marks) ? "the preview's marks, every page's columns read" : !got.length ? 'a unit the preview measured' : null
+  const missing = !completeLog(preview?.log) ? "the preview's log, whole" : !preview?.marks?.marks.size ? "the preview's marks" : !got.length ? 'a unit the preview measured' : null
   if (missing) return { typeset: state.typeset, type, leads: state.leads, faces: new Map(), trace: [], missing }
   // the preview's measured height over the original's, at the preview's type: the paper's density as measured
   let o = 0, t = 0

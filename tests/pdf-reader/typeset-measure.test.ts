@@ -169,10 +169,10 @@ describe('places against the original', () => {
     const tm = mk([['3s', p(0, 50, 536)], ['3e', p(0, 50, 250)]])
     expect(drifts(om, tm).get(3)).toBeCloseTo((-56 * 72.27) / 72, 6)
   })
-  it('counts each page\'s columns as its own compile read them: a two-column body and a one-column appendix (Chinese 2608.02163)', () => {
-    // the original: the body over pages 0–1 in two columns, the appendix over pages 2–5 in one; the translation the
-    // same a page shorter. Read with one flag per document — the original's a fifth of its starts in the right half,
-    // the translation's past it — every place after the body differed by the pages before it, 18.75 columns
+  it('reads both documents on the original\'s columns, page by page: a two-column body and a one-column appendix (Chinese 2608.02163)', () => {
+    // the original: the body over pages 0–1 in two columns, the appendix over pages 2–5 in one; the translation a page
+    // shorter. Read with one flag per document — the original's a fifth of its starts in the right half, the
+    // translation's past it — every place after the body differed by the pages before it, 18.75 columns
     const unit = (i: number, s: Place): [string, Place][] => [[`${i}s`, s], [`${i}e`, { ...s, y: s.y - 50 }]]
     const om = { pages: 6, width: 612, height: 792, columns: [2, 2, 1, 1, 1, 1], marks: new Map([...unit(0, p(0, 60, 700)), ...unit(1, p(1, 330, 400)), ...unit(2, p(2, 60, 700)), ...unit(3, p(4, 60, 100)), ...unit(4, p(5, 60, 700))]) }
     const tm = { pages: 5, width: 612, height: 792, columns: [2, 2, 1, 1, 1], marks: new Map([...unit(0, p(0, 60, 700)), ...unit(1, p(1, 330, 400)), ...unit(2, p(2, 60, 700)), ...unit(3, p(3, 60, 100)), ...unit(4, p(4, 60, 400))]) }
@@ -184,6 +184,16 @@ describe('places against the original', () => {
     expect(a.drift.values[3]).toBeCloseTo(1, 6)
     expect(a.drift.values[4]).toBeCloseTo(1 - 300 / 792, 6)
     expect(drifts(om, tm).get(1)).toBeCloseTo(0, 9)
+  })
+  it('reads a unit on its original\'s page and height as level, whatever its own compile set the page in (aastex 2608.12606)', () => {
+    // the translation's two-column body ends a page early, its one-column appendix starting there mid-page: on the
+    // original's page 3, a unit at the original's height is where a reader looking at both pages finds it
+    const om = { pages: 4, width: 612, height: 792, columns: [2, 2, 2, 1], marks: new Map<string, Place>([['0s', p(0, 60, 700)], ['1s', p(3, 60, 600)], ['2s', p(3, 60, 100)]]) }
+    const tm = { pages: 4, width: 612, height: 792, columns: [2, 2, 1, 1], marks: new Map<string, Place>([['0s', p(0, 60, 700)], ['1s', p(3, 60, 600)], ['2s', p(3, 60, 100)]]) }
+    expect(alignment(om, tm).drift.values).toEqual([0, 0, 0])
+    // a page past the original's last is set as its last
+    const longer = { ...tm, pages: 5, marks: new Map([...tm.marks, ['2s', p(4, 60, 100)]]) }
+    expect(alignment(om, longer).drift.values[2]).toBeCloseTo(1, 6)
   })
   it('reads the right half of a one-column page as the same column: a run-in label, a centred caption', () => {
     const om = { pages: 1, width: 612, height: 792, columns: [1], marks: new Map<string, Place>([['0s', p(0, 60, 700)], ['1s', p(0, 400, 400)], ['2s', p(0, 60, 100)]]) }
