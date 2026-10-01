@@ -308,6 +308,71 @@ function paint(side) {
   }
 }
 function light(id) { if (!config.reading.sentenceHighlight) id = null; if (id === lit) return; lit = id; for (const s of sides) paint(s) }
+/** a side's layout wanted now, where the pointer, a paint or a click met the side without one: made in a task of its
+ *  own at once, never in the frame or the event that asked (the pointer's frame made both sides' there, 25–48 ms, the
+ *  review of B1); when it lands what is lit is painted on it and the pointer looked at again (makeGeo) */
+function wantLayout(side) {
+  if (!side.makeGeo || side.layoutWanted) return
+  side.layoutWanted = true
+  setTimeout(() => { side.layoutWanted = false; if (sides.includes(side)) side.makeGeo?.() })
+}
+
+// The pointer's path (pointer.mjs): its moves taken once a frame, the unit under it found and lit, the pointer's place
+// read before anything is written. Nothing there reads the layout: where each pane and each of its pages is was kept
+// when the layout last changed (measure), and the scroll as its event gives it, so that finding the unit is arithmetic
+// (the draft measured one forced layout in 440 moves when the page's position was read there, one PDF.js's drawing had
+// left). A pointer that lights nothing lets go after MISS_HOLD; one that lights something again before then keeps the
+// wash on without a blink
+const pointer = pointerPath({
+  find: ({ where: side, x, y }) => {
+    if (!config.reading.sentenceHighlight) return null
+    // a side without its layout yet is a miss, its layout asked for
+    if (!side.geo) { wantLayout(side); return null }
+    const at = pointAt(side, x, y)
+    return (at && withFloats(side, at, hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale))?.id) ?? null
+  },
+  light,
+  lit: () => lit != null,
+  hold: MISS_HOLD,
+  frame: requestAnimationFrame,
+  later: setTimeout,
+  cancel: clearTimeout,
+})
+/** where a side's pane and pages are on the screen (pointer.mjs measurePane: the pane's place as its layout has it,
+ *  whatever transform draws it moving), read where the layout is known clean: a ResizeObserver's callback runs after
+ *  the layout, whenever the pane or its pages change size — the pages laid, a zoom, a pinch's steps, the window, the
+ *  contents panel, a display of one pane or two */
+function measure(side) {
+  side.at = measurePane(side.container, side.viewer.viewer, side.viewer._pages ?? [])
+  side.scrollX = side.container.scrollLeft; side.scrollY = side.container.scrollTop
+}
+const measuredSide = new WeakMap() // a pane's container and page stack → its side, the one coming in too (replaceRight)
+const measured = new ResizeObserver(entries => { for (const s of new Set(entries.map(e => measuredSide.get(e.target)))) if (s) measure(s) })
+/** What moves a pane, or draws it moving, is on <html>: the panes swapped (their places, not their sizes), the contents
+ *  panel (the document area slid in by a translation, App.tsx), the display of one pane or two, a narrow window's. On
+ *  any of them both sides are measured in the next frame, and again as a slide of a pane's box ends, when its box on
+ *  the screen gives the fraction of a pixel the offsets round away (measurePane). What else was looked at moves no
+ *  pane: the dimmed pages (a filter, drawn in by a view transition over a layout that stays), the fonts coming in (the
+ *  panes are in a fixed box under a toolbar of fixed height), a zoom (PDF.js resizes the pages: the ResizeObserver);
+ *  the browser gate checks the kept places after each */
+function remeasure() {
+  requestAnimationFrame(() => {
+    for (const s of sides) measure(s)
+    for (const a of document.getAnimations()) {
+      const el = a.effect?.target
+      if (el && !a.effect.pseudoElement && sides.some(s => el.contains(s.container))) a.finished.then(() => { for (const s of sides) measure(s) }, () => {})
+    }
+  })
+}
+new MutationObserver(remeasure).observe(document.documentElement, { attributeFilter: ['data-axt-swapped', 'data-axt-contents', 'data-axt-pdf-mode', 'data-axt-narrow'] })
+/** a point of the screen → the page under it and the point in PDF units, from what measure kept; null off the pages.
+ *  A side that follows on the compositor shows its pages shifted from its scroll (glass) */
+function pointAt(side, clientX, clientY) {
+  const shift = glass.side === side ? (glass.kind === 'scroll' ? glass.shift(glass.from.scrollY) : glass.shift()) : 0
+  return pointOn(side.at, side.viewer._pages ?? [], side.scrollX, side.scrollY + shift, clientX, clientY)
+}
+
+// ---------------------------------------------------------------- floats
 // Tables, algorithms and figures light whole with their captions, on both sides (floats.mjs): a table one wash over it
 // and its caption, a figure outlined and its caption washed — a wash multiplied into a figure would change its colours.
 // A float lights by its caption's id, which both sides share; on a side where the float is not found the caption lights
@@ -377,69 +442,6 @@ function floatsFor(side, p) {
     asked.delete(p)
     if (!/abort|cancel|destroy/i.test(`${e?.name} ${e?.message}`)) console.warn('[floats]', e)
   })
-}
-/** a side's layout wanted now, where the pointer, a paint or a click met the side without one: made in a task of its
- *  own at once, never in the frame or the event that asked (the pointer's frame made both sides' there, 25–48 ms, the
- *  review of B1); when it lands what is lit is painted on it and the pointer looked at again (makeGeo) */
-function wantLayout(side) {
-  if (!side.makeGeo || side.layoutWanted) return
-  side.layoutWanted = true
-  setTimeout(() => { side.layoutWanted = false; if (sides.includes(side)) side.makeGeo?.() })
-}
-
-// The pointer's path (pointer.mjs): its moves taken once a frame, the unit under it found and lit, the pointer's place
-// read before anything is written. Nothing there reads the layout: where each pane and each of its pages is was kept
-// when the layout last changed (measure), and the scroll as its event gives it, so that finding the unit is arithmetic
-// (the draft measured one forced layout in 440 moves when the page's position was read there, one PDF.js's drawing had
-// left). A pointer that lights nothing lets go after MISS_HOLD; one that lights something again before then keeps the
-// wash on without a blink
-const pointer = pointerPath({
-  find: ({ where: side, x, y }) => {
-    if (!config.reading.sentenceHighlight) return null
-    // a side without its layout yet is a miss, its layout asked for
-    if (!side.geo) { wantLayout(side); return null }
-    const at = pointAt(side, x, y)
-    return (at && withFloats(side, at, hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale))?.id) ?? null
-  },
-  light,
-  lit: () => lit != null,
-  hold: MISS_HOLD,
-  frame: requestAnimationFrame,
-  later: setTimeout,
-  cancel: clearTimeout,
-})
-/** where a side's pane and pages are on the screen (pointer.mjs measurePane: the pane's place as its layout has it,
- *  whatever transform draws it moving), read where the layout is known clean: a ResizeObserver's callback runs after
- *  the layout, whenever the pane or its pages change size — the pages laid, a zoom, a pinch's steps, the window, the
- *  contents panel, a display of one pane or two */
-function measure(side) {
-  side.at = measurePane(side.container, side.viewer.viewer, side.viewer._pages ?? [])
-  side.scrollX = side.container.scrollLeft; side.scrollY = side.container.scrollTop
-}
-const measuredSide = new WeakMap() // a pane's container and page stack → its side, the one coming in too (replaceRight)
-const measured = new ResizeObserver(entries => { for (const s of new Set(entries.map(e => measuredSide.get(e.target)))) if (s) measure(s) })
-/** What moves a pane, or draws it moving, is on <html>: the panes swapped (their places, not their sizes), the contents
- *  panel (the document area slid in by a translation, App.tsx), the display of one pane or two, a narrow window's. On
- *  any of them both sides are measured in the next frame, and again as a slide of a pane's box ends, when its box on
- *  the screen gives the fraction of a pixel the offsets round away (measurePane). What else was looked at moves no
- *  pane: the dimmed pages (a filter, drawn in by a view transition over a layout that stays), the fonts coming in (the
- *  panes are in a fixed box under a toolbar of fixed height), a zoom (PDF.js resizes the pages: the ResizeObserver);
- *  the browser gate checks the kept places after each */
-function remeasure() {
-  requestAnimationFrame(() => {
-    for (const s of sides) measure(s)
-    for (const a of document.getAnimations()) {
-      const el = a.effect?.target
-      if (el && !a.effect.pseudoElement && sides.some(s => el.contains(s.container))) a.finished.then(() => { for (const s of sides) measure(s) }, () => {})
-    }
-  })
-}
-new MutationObserver(remeasure).observe(document.documentElement, { attributeFilter: ['data-axt-swapped', 'data-axt-contents', 'data-axt-pdf-mode', 'data-axt-narrow'] })
-/** a point of the screen → the page under it and the point in PDF units, from what measure kept; null off the pages.
- *  A side that follows on the compositor shows its pages shifted from its scroll (glass) */
-function pointAt(side, clientX, clientY) {
-  const shift = glass.side === side ? (glass.kind === 'scroll' ? glass.shift(glass.from.scrollY) : glass.shift()) : 0
-  return pointOn(side.at, side.viewer._pages ?? [], side.scrollX, side.scrollY + shift, clientX, clientY)
 }
 
 // ---------------------------------------------------------------- figure text
