@@ -21,7 +21,9 @@
 // pipeline served in place of the build's: a variant measured, as nohalt.mjs's).
 // Compiles: at most 2 at a time, 1 while the machine's load is above 12. Output: out/tex-measure/<name>/ (jobs.jsonl,
 // papers.jsonl, requests.jsonl, opened.jsonl, pdf/). Needs: `node setup.mjs`, texlive-server on :8070 (record, and
-// identity of the old page), `node tex-page/build.mjs` (the new page), Playwright's Chromium.
+// identity of the old page), `node tex-page/build.mjs` (the new page), Playwright's Chromium, git (today's page is
+// a7a2a056's). The translations' fonts come from the record run when there is one (--fonts=<run>), else from each
+// paper's probe compiled first on the page measured.
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -225,7 +227,10 @@ async function visit(tab, vid, init) {
 const done = new Set(flag('resume') && existsSync(join(OUT, 'papers.jsonl')) ? readFileSync(join(OUT, 'papers.jsonl'), 'utf8').trim().split('\n').map(l => JSON.parse(l).id) : [])
 const all = corpus()
 const chosen = TAGS ? [...tagsOf.keys()] : arg('papers', '') ? arg('papers', '').split(',') : all.slice(0, Number(arg('limit', all.length)))
-const recorded = MODE === 'identity' ? new Map(readFileSync(join(EXP, 'out/tex-measure', arg('fonts', 'record-old'), 'papers.jsonl'), 'utf8').trim().split('\n').map(l => JSON.parse(l)).map(p => [p.id, p.fonts])) : null
+// the probes' fonts the translations need: the record run's (--fonts=<run>), or, without one (a clean checkout), each
+// paper's probe compiled first on the page measured, in a visit of its own
+const FONTS = join(EXP, 'out/tex-measure', arg('fonts', 'record-old'), 'papers.jsonl')
+const recorded = MODE === 'identity' && existsSync(FONTS) ? new Map(readFileSync(FONTS, 'utf8').trim().split('\n').map(l => JSON.parse(l)).filter(p => p.fonts).map(p => [p.id, p.fonts])) : new Map()
 
 const initFor = (meta, names) => (PAGE === 'old' ? { type: 'init', endpoint: FILESERVER } : hintsFor(meta, names))
 
@@ -265,9 +270,23 @@ async function identityPaper(tab, id, index) {
   return identityVisit(tab, id, names)
 }
 
+/** a paper's probe fonts: the record run's, or its probe compiled on the page measured */
+async function fontsOf(tab, id) {
+  if (recorded.has(id)) return recorded.get(id)
+  const p = await paperJobs(id, ['probe'], null)
+  if (!p) return null
+  const vid = `${id}-fonts`
+  visits.set(vid, { files: p.files, compiles: p.jobs })
+  const v = await visit(tab, vid, initFor(p.meta, ['probe'])).catch(() => ({ results: [] }))
+  visits.delete(vid)
+  const fonts = readFontProbe(v.results[0]?.log ?? '')
+  recorded.set(id, fonts)
+  return fonts
+}
+
 async function identityVisit(tab, id, names) {
-  if (!recorded.has(id)) { log('papers.jsonl', { id, skipped: 'not in the record run' }); return }
-  const p = await paperJobs(id, names, recorded.get(id))
+  const fonts = names.some(n => n !== 'probe') ? await fontsOf(tab, id) : null
+  const p = await paperJobs(id, names, fonts)
   if (!p) { log('papers.jsonl', { id, skipped: 'no LaTeX source' }); return }
   const vid = id
   visits.set(vid, { files: p.files, compiles: p.jobs })

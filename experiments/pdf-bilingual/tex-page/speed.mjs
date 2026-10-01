@@ -9,14 +9,16 @@
 // for (the tree's files asked for while a compile ran: synchronous, so each costs a round trip).
 //   pnpm exec tsx experiments/pdf-bilingual/tex-page/speed.mjs [--papers=2608.02163,2608.18090] [--langs=de,zh]
 //     [--profiles=300/10,50/30,10/60,20/200] [--pages=old,new] [--out=name]
-// Needs: tex-page/build.mjs's site, tex-page/measure.mjs's record run (the probes' fonts), Playwright's Chromium.
+// Needs: tex-page/build.mjs's site, Playwright's Chromium, git (today's page is a7a2a056's); the probes' fonts from
+// tex-page/measure.mjs's record run when there is one (--fonts=<run>), else each paper's probe compiled first.
 // Compiles one at a time. Output: out/tex-measure/<name>/speed.jsonl
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
 import { loadavg, tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { readFontProbe } from '../../../src/pdf-reader/engine/latex-front.mjs'
 import { hintsFor, paperJobs, TODAY } from './jobs.mjs'
 import { certificateSpki, serveTexSite } from './serve.mjs'
 
@@ -30,7 +32,9 @@ const PROFILES = arg('profiles', '300/10,50/30,10/60,20/200').split(',').map(p =
 const PAGES = arg('pages', 'old,new').split(',')
 const OUT = join(EXP, 'out/tex-measure', arg('out', 'speed'))
 mkdirSync(OUT, { recursive: true })
-const fontsOf = new Map(readFileSync(join(EXP, 'out/tex-measure', arg('fonts', 'record-old'), 'papers.jsonl'), 'utf8').trim().split('\n').map(l => JSON.parse(l)).map(p => [p.id, p.fonts]))
+// the probes' fonts the previews need: the record run's (--fonts=<run>), or each paper's probe compiled on a page first
+const FONTS = join(EXP, 'out/tex-measure', arg('fonts', 'record-old'), 'papers.jsonl')
+const fontsOf = new Map(existsSync(FONTS) ? readFileSync(FONTS, 'utf8').trim().split('\n').map(l => JSON.parse(l)).filter(p => p.fonts).map(p => [p.id, p.fonts]) : [])
 
 // today's page as it was at TODAY
 mkdirSync(join(EXP, 'out/tex-today'), { recursive: true })
@@ -91,7 +95,7 @@ async function visit(tab, page, vid, init) {
       const at = Date.now()
       h.send({ type: 'compile', id: i + 1, key: vid, main: c.main, engine: c.engine, rerun: c.rerun, bibtex: c.bibtex, overrides: c.overrides })
       const r = await h.wait(d => d?.type === 'compiled' && d.id === i + 1, 900000)
-      out.push({ tag: c.tag, ok: r.ok, ms: r.ms, at, end: Date.now(), network: r.network })
+      out.push({ tag: c.tag, ok: r.ok, ms: r.ms, at, end: Date.now(), network: r.network, log: c.tag.endsWith('~probe') ? String(r.log ?? '') : undefined })
     }
     const progress = h.seen.filter(s => s.type === 'progress').length
     h.close()
@@ -104,6 +108,16 @@ const record = row => { results.push(row); appendFileSync(join(OUT, 'speed.jsonl
 const jobsFor = async (id, lang) => {
   const p = await paperJobs(id, ['probe', `${lang}-prev`], fontsOf.get(id))
   return { p, names: ['probe', `${lang}-prev`] }
+}
+
+// not measured: each paper's probe fonts when no record run gives them, on the first page measured
+for (const id of PAPERS.filter(id => !fontsOf.has(id))) {
+  const b = await browser()
+  const p = await paperJobs(id, ['probe'], null)
+  visits.set('fonts', { files: p.files, compiles: p.jobs })
+  const v = await visit(b.tab, PAGES[0], 'fonts', PAGES[0] === 'old' ? { type: 'init', endpoint: `${origin('old')}/tl` } : hintsFor(p.meta, ['probe']))
+  fontsOf.set(id, readFontProbe(v.compiles?.[0]?.log ?? ''))
+  await b.close()
 }
 
 // warm-up, not measured: the new page's brotli copies of the tree's files these visits fetch (made on demand)
