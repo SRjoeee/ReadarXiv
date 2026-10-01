@@ -873,12 +873,19 @@ is only how it meets the rest of the extension.
 - **Its store**: the compiled translations (with each unit's sentences, where its engine gave them), one record per paper version and target language, encrypted, in an
   IndexedDB of their own (`src/cache/pdf-store.ts`), capped at 500 MB with the least recently opened going first. The
   settings page counts them and clears them (UI.md S-O-73).
-- **Typesetting** runs in a TeX page outside the extension (BusyTeX, served locally during the experiment). No
+- **Typesetting** runs in a TeX page outside the extension (BusyTeX): our site's, `https://tex.readarxiv.org`, in a
+  production build, and one on this machine in development (`addresses.mjs` `TEX_PAGE`, a build setting). No
   reader-facing word names it (UI.md §3.5). The translation is set by the Flow rule (`src/pdf-reader/engine/typeset/`;
   `experiments/pdf-bilingual/records/typesetting.md`): each unit's leading, the paper's type and the floats' pages
-  planned from our marked original's line probes and marks, which is compiled in full right after the first preview;
-  the last preview of the whole translation measures where its text stood, and the final corrects it. Where a plan
-  cannot be made the translation is set as before it. The reader speaks the TeX page's protocol 2 and still serves a
+  planned from our marked original's line probes and marks. The original is compiled in full in a TeX frame of its
+  own from the run's start, beside the probe and the first preview, which never waits for it, and the frame goes once
+  it is in (150–450 MB more meanwhile); what the rule reads of it is kept for the visit and, with the left side's
+  marks, per paper version in the store, so that a run again, a revisit or another language compiles no original. The
+  last preview of the whole translation measures where its text stood, and the final corrects it: a whole
+  translation after the first preview waits for the original's readings, and once every unit is sent a preview of
+  part of it waits a preview's time for the last batch, so that the whole one is next. Where a plan cannot be made
+  the translation is set as before it; where that was for a passing reason (a PDF's marks unread, a compile timed
+  out) the record carries no typesetting and the next visit sets it again. The reader speaks the TeX page's protocol 2 and still serves a
   page of protocol 1: it names the engines and the CJK faces the visit will use, so that the page fetches them ahead;
   a compile whose files did not all arrive, or that the page itself failed (no log: an engine it could not bring up), is
   asked once more, and a second failure stops the compiles with no compiler — no strategy changed, nothing written or
