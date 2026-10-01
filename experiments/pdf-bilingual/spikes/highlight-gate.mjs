@@ -44,7 +44,8 @@
 // ignoring floats (5 082 716 holes, 410 cells lighting themselves); the running-text limit dropped (47 words of
 // 2608.06701's #65 inside figure 5's box); a rule past a table's last line taken within 3 lines (16 floats sharing a rule
 // with the next, tables found 11 → 9 on 02163); held cells not taken by their table (410); every float a table (figures'
-// kinds mismatched against the baseline).
+// kinds mismatched against the baseline). After the review of B4: floats winning over every block (350 points of
+// running text taken); the text block's filter dropped, PANELS 0, GAP 3 (floats' extents moved against the baseline).
 // WRITE_BASELINE=1 records the run as the baseline (counts only).
 // Counts only, no paper text. Pad beside a block: 3 CSS px at 100 % (2.25 PDF units). The browser's half — the pointer,
 // the paint, their costs against another build — is highlight-gate-browser.mjs.
@@ -245,20 +246,21 @@ console.log('what the geometry took beyond the anchors, left:', JSON.stringify(t
 console.log('\ncost, ms (median of', ROUNDS, 'rounds): layout at anchoring; every page\'s geometry; per page; the slowest page')
 for (const [k, c] of Object.entries(cost)) console.log(k.padEnd(14), `${c.pages} pp, ${c.tokens} tokens`, `layout ${c.layoutMs}`, `pages ${c.allPagesMs}`, `per page ${c.perPageMs}`, `max ${c.pageMaxMs}`)
 // the floats (B4): per environment, captions and floats on each side and on both; then what must be none
-const floatCounts = {}
+const floatCounts = {}, floatRegions = {}
 for (const id of ids) {
   const both = {}
   for (const [i, k] of floatsBy[id].L.ids) if (floatsBy[id].R.ids.has(i)) { const env = envOfUnit(id, i); both[env] = (both[env] ?? 0) + 1; void k }
   floatCounts[id] = { L: floatsBy[id].L.found, R: floatsBy[id].R.found, both }
+  floatRegions[id] = { L: floatsBy[id].L.regions, R: floatsBy[id].R.regions }
 }
 console.log('\nfloats per environment, the ten papers: captions anchored L / R, with a float L / R, on both sides; kinds mismatched L / R')
 const envSum = {}
 for (const id of ids) for (const S of ['L', 'R']) for (const [env, e] of Object.entries(floatCounts[id][S])) { const t = (envSum[env] ??= { capL: 0, capR: 0, L: 0, R: 0, both: 0, misL: 0, misR: 0 }); t[`cap${S}`] += e.captions; t[S] += e.found; t[`mis${S}`] += e.mismatched }
 for (const id of ids) for (const [env, n] of Object.entries(floatCounts[id].both)) envSum[env].both += n
 for (const [env, t] of Object.entries(envSum)) console.log(env.padEnd(10), `captions ${t.capL} / ${t.capR}`, `floats ${t.L} / ${t.R}`, `both ${t.both}`, `mismatched ${t.misL} / ${t.misR}`)
-const fsum = { holes: 0, smaller: 0, points: 0, cells: 0, padsMeet: 0 }, fail = { intruders: [], overlaps: [], cellsOff: [] }
+const fsum = { holes: 0, smaller: 0, points: 0, cells: 0, padsMeet: 0, lost: 0 }, fail = { intruders: [], overlaps: [], cellsOff: [] }
 for (const id of ids) for (const S of ['L', 'R']) { const m = floatsBy[id][S]; for (const k of Object.keys(fsum)) fsum[k] += m[k]; for (const k of Object.keys(fail)) fail[k].push(...m[k].map(x => `${id} ${S} ${x}`)) }
-console.log(`points in floats' shapes ${fsum.points}: holes ${fsum.holes}, a smaller unit ${fsum.smaller}; cells held ${fsum.cells}, lighting another ${fail.cellsOff.length}`)
+console.log(`points in floats' shapes ${fsum.points}: holes ${fsum.holes}, a smaller unit ${fsum.smaller}; cells held ${fsum.cells}, lighting another ${fail.cellsOff.length}; points of running text taken by a float ${fsum.lost}`)
 console.log('running text inside a float:', fail.intruders.length, fail.intruders.slice(0, 8).join('; '))
 console.log('floats overlapping:', fail.overlaps.length, fail.overlaps.slice(0, 8).join('; '), `(their pads meeting: ${fsum.padsMeet})`)
 console.log('a page\'s floats, ms: paths read (median, max) and floats made (median, slowest page), per paper and side')
@@ -267,10 +269,11 @@ for (const [k, c] of Object.entries(cost)) if (c.floatPages) console.log(k.padEn
 const failures = []
 for (const c of ['unlitAnchored', 'holes', 'inkHoles', 'unreachable', 'fragmentedDisplays', 'overlapping']) if (sum[c] > 0) failures.push(`${c} ${sum[c]}`)
 if (fsum.holes) failures.push(`holes in floats ${fsum.holes}`)
+if (fsum.lost) failures.push(`points of running text taken by a float ${fsum.lost}`)
 for (const k of Object.keys(fail)) if (fail[k].length) failures.push(`floats' ${k} ${fail[k].length}: ${fail[k][0]}`)
 if (process.env.WRITE_BASELINE) {
   if (ids.length !== TEN.length || RUNS !== join(root, 'data/runs/highlight-ten')) failures.push('a baseline is recorded on the ten papers\' runs only')
-  if (!failures.length) writeFileSync(BASELINE, `${JSON.stringify({ note: 'highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors; per paper, side and float environment, captions and floats found, kinds mismatched, and floats on both sides. Counts only', counts, cuts, pastEdge: sum.pastEdge, taken, floats: floatCounts }, null, 1)}\n`)
+  if (!failures.length) writeFileSync(BASELINE, `${JSON.stringify({ note: 'highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors; per paper, side and float environment, captions and floats found, kinds mismatched, and floats on both sides; each float, its kind and extent. Counts and boxes only', counts, cuts, pastEdge: sum.pastEdge, taken, floats: floatCounts, floatRegions }, null, 1)}\n`)
   console.log(failures.length ? '\nno baseline written: the run fails' : `\nbaseline written: ${BASELINE}`)
 } else if (!existsSync(BASELINE)) failures.push('no baseline (WRITE_BASELINE=1 records one)')
 else {
@@ -299,6 +302,11 @@ else {
       if (c.mismatched > b.mismatched) failures.push(`${id} ${S} ${env}: kinds mismatched ${c.mismatched}, the baseline ${b.mismatched}`)
     }
     for (const [env, n] of Object.entries(was.both)) if ((floatCounts[id].both[env] ?? 0) < n) failures.push(`${id} ${env}: floats on both sides ${floatCounts[id].both[env] ?? 0}, the baseline ${n}`)
+    // each float's kind and extent as recorded
+    for (const S of ['L', 'R']) {
+      const now = floatRegions[id][S], had = base.floatRegions?.[id]?.[S] ?? {}
+      for (const c of new Set([...Object.keys(now), ...Object.keys(had)])) if (JSON.stringify(now[c] ?? null) !== JSON.stringify(had[c] ?? null)) failures.push(`${id} ${S} float #${c}: ${JSON.stringify(now[c] ?? null)}, the baseline ${JSON.stringify(had[c] ?? null)}`)
+    }
   }
 }
 mkdirSync(join(root, 'out'), { recursive: true })

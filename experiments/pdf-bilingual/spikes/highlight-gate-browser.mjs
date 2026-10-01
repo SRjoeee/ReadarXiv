@@ -22,12 +22,13 @@
 //  - every page with a caption has its floats once drawn (all pages of both sides brought into view)
 //  - the floats on both sides, per kind, no fewer than the Node gate finds (FLOATS_AT_LEAST)
 //  - the real pointer on a grid inside each element a float paints (a dozen floats) lights the float (or a smaller unit
-//    painted there); both sides paint it, a figure with its outline on both
-//  - a table's cell (one the side located) lights its table
+//    painted there); both sides paint it, a figure with its outline and its caption washed on both
+//  - a table's cell (one the side located) lights its table, cells being found to try
 //  - a page's floats' cost on the main thread at its first drawing (timing.floats: paths read, floats made), reported
 //  Each made to fail once (B4, a build each): the pointer's frame without floatHitOf (147 of 240 points lit nothing, the
 //  cell lit itself); no floats made (20 pages without, none on both sides); figures washed, not outlined (0 of 4
-//  outlined)
+//  outlined); after the review of B4: figures' captions not washed (a build), no cell to try (FLOATS_N=0), the floats'
+//  failure left the page asked (ad6036f7's build)
 //  costs, the build against BASE_BUILD, interleaved (both browsers open, runs alternating):
 //  - a sweep of real pointer moves (220 down each pane, zig-zagging, one a frame) over a spread of formulas, of aligned
 //    displays, and a two-column page: per light — a move that changed what is lit — the script of the task that
@@ -384,7 +385,7 @@ async function floatChecks(b) {
     check(`${b.label} ${paper}: floats on both sides, per kind, no fewer than ${JSON.stringify(want)}`, Object.entries(want).every(([k, n]) => (kinds[k] ?? 0) >= n), JSON.stringify(kinds))
     // the real pointer: a grid inside each element a float paints lights the float (or a smaller unit painted there);
     // a held cell's middle lights its float; both sides paint it, a figure with its outline
-    const r = { floats: 0, points: 0, holes: 0, other: 0, others: [], bothSides: 0, frames: 0, figures: 0, cells: 0, cellsOff: [], bad: [] }
+    const r = { floats: 0, points: 0, holes: 0, other: 0, others: [], bothSides: 0, frames: 0, washed: 0, figures: 0, cells: 0, cellsOff: [], bad: [] }
     const hitAt = async (x, y) => { await page.mouse.move(x, y); await frames(page); return page.evaluate(() => window.__reader.debug.pointerHit) }
     for (const id of both.slice(0, Number(process.env.FLOATS_N ?? 12)).map(Number)) {
       await page.evaluate(async ({ id, pl, pr }) => {
@@ -402,7 +403,12 @@ async function floatChecks(b) {
       }, id)
       r.floats++
       if (new Set(bands.map(x => x.side)).size === 2) r.bothSides++
-      if (fl.L[id].kind === 'figure') { r.figures++; if (bands.some(x => x.frame && x.side === 'L') && bands.some(x => x.frame && x.side === 'R')) r.frames++ }
+      if (fl.L[id].kind === 'figure') {
+        r.figures++
+        if (bands.some(x => x.frame && x.side === 'L') && bands.some(x => x.frame && x.side === 'R')) r.frames++
+        // its caption washed on both sides
+        if (bands.some(x => !x.frame && x.side === 'L') && bands.some(x => !x.frame && x.side === 'R')) r.washed++
+      }
       for (const band of bands) {
         if (band.y < 60 || band.y + band.h > 985) continue
         for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) {
@@ -419,8 +425,8 @@ async function floatChecks(b) {
         if (hit !== id) r.cellsOff.push({ cell, hit, float: id })
       }
     }
-    check(`${b.label} ${paper}: the pointer anywhere a float paints lights it, both sides painted, a figure outlined on both`, r.points > 0 && r.holes === 0 && r.bothSides === r.floats && r.frames === r.figures, JSON.stringify({ ...r, cellsOff: undefined }))
-    check(`${b.label} ${paper}: a table's cell lights its table`, r.cellsOff.length === 0, JSON.stringify({ cells: r.cells, off: r.cellsOff.slice(0, 3) }))
+    check(`${b.label} ${paper}: the pointer anywhere a float paints lights it, both sides painted, a figure outlined and its caption washed on both`, r.points > 0 && r.holes === 0 && r.bothSides === r.floats && r.frames === r.figures && r.washed === r.figures, JSON.stringify({ ...r, cellsOff: undefined }))
+    check(`${b.label} ${paper}: a table's cell lights its table`, r.cells > 0 && r.cellsOff.length === 0, JSON.stringify({ cells: r.cells, off: r.cellsOff.slice(0, 3) }))
     // what a page's floats cost the main thread at its first drawing (paths read, floats made)
     const ms = (await page.evaluate(() => window.__reader.timing.floats ?? [])).map(x => x.paths + x.floats)
     ;((result.floats ??= {})[`${b.label} ${paper}`] = { kinds, both: both.length, L: Object.keys(fl.L).length, R: Object.keys(fl.R).length, ...r, pageMs: stats(ms) })
