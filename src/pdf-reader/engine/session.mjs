@@ -35,7 +35,7 @@ import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
 import { hostReady } from './host.mjs'
-import { compilerKeeper, openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
+import { compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive } from './live.mjs'
 import { isName, plainSource, WIRE } from './mt.mjs'
 import { verified, VERIFIED } from './scripts.mjs'
 import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
@@ -1736,6 +1736,8 @@ async function live() {
     try { await compiler.ready() } catch (e) { return fail(e.event ?? 'no compiler', e.message ?? String(e), e.kind) }
     compile = compiler.compile
     const { paperData, units, src, context, hashes } = p
+    // the author block's names are kept for some languages (live.mjs keptFor): counted by the language now known
+    total = units.length - keptFor(paperData, lang).size
     // a run again: what the visit's last run made seeds it, over the copy's, so that only the missing are asked again —
     // the rest, sent too, the background's cache answers
     const seed = new Map(p.seed ?? [])
@@ -1785,7 +1787,7 @@ async function live() {
     // this machine's copy: the whole record for a final that settled; the units' provenance alone when nothing typeset
     // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
     if (cacheKey) {
-      const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, context, units: unitsOf(units, paperData.kept, hashes, result.results), marks: leftMarks ?? (p.sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
+      const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, context, units: unitsOf(units, keptFor(paperData, lang), hashes, result.results), marks: leftMarks ?? (p.sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
       const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: finalShown })
       const pdf = how === 'full' ? finalPdf : how === 'provenance' ? cached.pdf : null
       // the right side's marks, as its PDF names them: the final's once it is on screen, else the copy's own

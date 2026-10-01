@@ -25,10 +25,13 @@ export function serialize(u) {
     if (p.t === 'text') { let s = utf8(p.s).replace(/\s+/g, ' '); if (k === 0) s = s.trimStart(); if (k === u.pieces.length - 1) s = s.trimEnd(); wire += escape(s); return }
     slots.push(p)
     const m = `@${toAlpha(slots.length)}#`
-    // a marker touching a letter is read as part of the word by the engine (#254): a space of ours around it
-    const before = /\p{L}$/u.test(wire) ? ' ' : ''
+    // a marker touching a word is read as part of it by the engine (#254): a space of ours around it. So is one right
+    // after a period: of nine marks of punctuation before a closing marker only the period kept the word before it in
+    // English, 6 of 6 labels as sent and 0 of 6 spaced (Microsoft, 2026-09-28): RT-1's run-in labels came back with
+    // "tokenization." and "speed." in English
+    const before = /[\p{L}\p{N}\p{M}.]$/u.test(wire) ? ' ' : ''
     const nextText = u.pieces[k + 1]?.t === 'text' ? u.pieces[k + 1].s : ''
-    const after = /^\p{L}/u.test(utf8(nextText)) ? ' ' : ''
+    const after = /^[\p{L}\p{N}\p{M}]/u.test(utf8(nextText)) ? ' ' : ''
     wire += before + m + after
   })
   return { wire, slots, lead, trail }

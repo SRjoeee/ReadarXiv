@@ -11,8 +11,8 @@
 //     or after the final compile: the translation comes first;
 //  5. when every unit is in, the final compile: every pass, the images themselves.
 import { analyze } from './paper-meta.mjs'
-import { FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, readFontProbe, stripPdftexOption, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
-import { strategiesFor } from './scripts.mjs'
+import { BALANCE_DEF, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from './latex-front.mjs'
+import { authorsTranslated, strategiesFor, typesetBy } from './scripts.mjs'
 import { nameCells, plainSource, plainTranslated, translateUnits } from './mt.mjs'
 
 /** The TeX log of a compile's last pass. The browser's compiler (poc-site/tex.js) joins each step's log with its terminal
@@ -108,32 +108,51 @@ export function originalFiles({ fsys, project }) {
   return out
 }
 
-/** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs) */
+/** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs); a strategy's `leading` sets the
+ *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex) */
 export function translationFiles({ fsys, project, meta }, translated, { strategy, fonts, draft, aux, bbl }) {
   const xe = strategy.xe
-  const out = patch(project, translated, { mark: markUnits(project.units) })
+  translated = new Map([...typesetBy(translated, strategy)].map(([u, pieces]) => [u, lineBreaks(u, pieces)]))
+  const base = markUnits(project.units, translated)
+  const index = new Map(project.units.map((u, i) => [u, i]))
+  const mark = strategy.leading ? u => { const m = base(u); return m && !m.whole && translated.has(u) ? { ...m, before: `\\axtlead{${index.get(u)}}` } : m } : base
+  const out = patch(project, translated, { mark })
   let main = latin1(out.get(project.main))
   const at = beginDocument(main)
-  main = main.slice(0, at) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + main.slice(at)
+  main = localizeNames(main.slice(0, at)) + FORBIDDEN_TO_WARNING + strategy.pre(fonts) + NO_OVERFLOW + (xe ? '' : EVEN_SPACES) + main.slice(at)
   // the translation is UTF-8, and a Latin-1 source was transcoded to UTF-8 on the way out: say so
   if (project.inputenc) main = main.replace(/(\\usepackage\s*\[)([^\]]*)(\]\s*\{inputenc\})/, (m, a1, opts, a3) => a1 + opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',') + a3)
   if (xe && strategy.engine !== meta.compiler) main = XETEX_SHIM + XETEX_SHIM_R1 + stripPdftexOption(main)
-  main = (draft ? DRAFT : '') + MARK_DEF + main
+  main = (draft ? DRAFT : '') + MARK_DEF + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + main
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
+  for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = localizeNames(t); if (u !== t) out.set(f, latin1Bytes(u)) }
   const stem = stemOf(project.main)
   if (aux) out.set(`${stem}.aux`, new TextEncoder().encode(aux))
   if (bbl && !meta.bbl) out.set(`${stem}.bbl`, new TextEncoder().encode(bbl))
   return out
 }
 
+/** the units a translation into `lang` leaves as they are: the names a table holds (nameCells), and the author block's
+ *  names and places where the target writes them as the paper does (scripts.mjs authorsTranslated) */
+export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : new Set([...paper.kept, ...paper.units.filter(u => u.kind === 'author')]))
+
 /**
  * The reader's pipeline version (REPORT, eighteenth addendum): raised with any change to what a compile puts out
  * (latex-front, mt, the fonts, the scripts' strategies, the TeX tree) or to what a cached record holds (the units'
- * cutting, kinds and texts, paperContext(), the marks). A record of another version is translated again
+ * cutting, kinds and texts, paperContext(), the marks). A record of another version is compiled again, its
+ * translations reused wherever a unit's source matches (session.mjs seedFrom)
  */
 // 2: the front matter's notes are units (latex-front.mjs FRONT_MATTER)
-export const PIPELINE_VERSION = '2'
+// 3: CJK leading inside translated units alone, their displays at the paper's, and English hyphenation under a CJK
+//    target (scripts.mjs, latex-front.mjs unitLeadTex); the paper's own macros, argument-less declarations and the
+//    author block's names and places cut into units (latex-front.mjs); the wire spaced after a period (mt.mjs)
+// 4: IEEEtran's blocks of names and of places each a unit; a translated line of names in a box that does not wrap set
+//    as a paragraph of the line's width (\\axtwide); a table narrower than its original kept at the original's width,
+//    and a tabular* measured at its columns' width before it is fitted (latex-front.mjs FIT_DEF, AUTHOR_WIDE); an e-mail
+//    address, and a list of names in braces before its domain, a placeholder (keepAddresses); a name kept whole in a
+//    line of names (lineBreaks)
+export const PIPELINE_VERSION = '4'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
@@ -151,7 +170,8 @@ export const PIPELINE_VERSION = '2'
  * than the compiler or its files that were down).
  */
 export async function runLive(paper, { lang, compile, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, identity = null, pipelineCurrent = false }) {
-  const { units, kept, meta, project } = paper
+  const { units, meta, project } = paper
+  const kept = keptFor(paper, lang)
   // the chain: a compile that gives no PDF moves on to the next strategy, which is tried at once
   const strategies = strategiesFor(meta, lang)
   let s = 0
