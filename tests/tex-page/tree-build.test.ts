@@ -22,6 +22,15 @@ describe('chooseIndex', () => {
 })
 
 describe('walk', () => {
+  it('leaves out the operating systems\' own files: they are not TeX Live\'s, and a Finder visit must not change the tree\'s version', () => {
+    const root = mkdtempSync(join(tmpdir(), 'walk-'))
+    try {
+      mkdirSync(join(root, 'tex/latex/base'), { recursive: true })
+      for (const f of ['.DS_Store', 'tex/.DS_Store', 'tex/latex/base/._article.cls', 'tex/Thumbs.db', 'tex/desktop.ini', 'tex/latex/base/article.cls']) writeFileSync(join(root, f), '')
+      expect(walk(root)).toEqual(['tex/latex/base/article.cls'])
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  })
+
   it('lists a directory\'s files before its subdirectories\' files, relative to the root', () => {
     const root = mkdtempSync(join(tmpdir(), 'walk-'))
     try {

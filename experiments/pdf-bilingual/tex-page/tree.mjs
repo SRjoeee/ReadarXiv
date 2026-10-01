@@ -4,10 +4,14 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, opendirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
+/** the operating systems' own files — Finder's, AppleDouble's, Windows Explorer's — which are not TeX Live's: a visit
+ *  with Finder must not change the tree's version, nor put them on the site */
+export const OS_METADATA = /^(\.DS_Store|\._.*|Thumbs\.db|desktop\.ini)$/
+
 /**
  * The tree's files under `root`, relative, in the order of a top-down walk: a directory's files in the order the file
- * system lists them, then its subdirectories, each in turn (Python's os.walk, which the local file server walked its
- * tree with: so the first file of a basename here is the one it served). A link to a directory is not followed
+ * system lists them, then its subdirectories, each in turn. A link to a directory is not followed; the operating
+ * systems' own files are left out
  */
 export function walk(root) {
   const out = []
@@ -15,6 +19,7 @@ export function walk(root) {
     const dirs = []
     const dir = opendirSync(join(root, rel))
     for (let e = dir.readSync(); e; e = dir.readSync()) {
+      if (OS_METADATA.test(e.name)) continue
       const path = rel ? `${rel}/${e.name}` : e.name
       if (e.isDirectory()) dirs.push(path)
       else if (e.isSymbolicLink()) { try { if (!statSync(join(root, path)).isDirectory()) out.push(path) } catch { /* a dangling link */ } }
