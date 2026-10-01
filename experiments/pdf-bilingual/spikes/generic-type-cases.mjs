@@ -180,30 +180,32 @@ const across = flowLeads(broken, 'Latn', longBefore, { window: 0, horizon: 40, m
 const anchored = flowLeads(broken, 'Latn', longBefore, { window: 0, horizon: 40, measured: { drift: breakDrift, preview: longBefore, snap: 40, breaks: new Set([20]) } })
 check('breaks: read across a forced break, the units after it are set looser', across.get(22) > 1.05, `${across.get(22)}`)
 check('breaks: re-anchored there, every unit after it at its original\'s height, and the median read before it stops at it', broken.every(u => near(longBefore.get(u.i) * anchored.get(u.i), 96, 1e-6)), JSON.stringify([...anchored.values()].slice(16, 24)))
-// `shrink` (the owner, 2026-10-01): a unit the floor of the leading cannot bring back to its original's height —
-// Japanese and Korean set no tighter than the paper's own — set at a face a little smaller, as little as reaches it and
-// no smaller than `min`, its leading the floor. Korean 2608.18090's sections 7 and 8 ran 0.16 page long at the floor,
-// its references started a page later and its checklist took a page more
+// `shrink` (the owner, 2026-10-01, option A in steps): where the flow is left late at the end of a segment — before a
+// forced break, or at the paper's end — by more than `lines` lines, its leading at the floor (Japanese and Korean set
+// no tighter than the paper's own), the stretch that ran late before that end is set at one face, the first of
+// `steps` that takes the lateness back over as few of its last units as it needs, the strongest over all of them
+// where none does. Korean 2608.18090's last sections ran 0.16 page long at the floor, its references started a page
+// later and its checklist took a page more
 const longKo = Array.from({ length: 40 }, (_, i) => ({ lo: 8, bs: 12, cap: 24, i, width: () => 0 }))
-const koHeights = new Map(longKo.map(u => [u.i, u.i >= 10 && u.i < 30 ? 120 : 96]))
-const squared = hs => ({ min: 0.95, heightAt: (i, f) => hs.get(i) * f * f })
-const atFloor = flowType(longKo, 'Kore', koHeights, { window: 0, horizon: 40 })
-const shrunk = flowType(longKo, 'Kore', koHeights, { window: 0, horizon: 40, shrink: squared(koHeights) })
-const lateBy = r => longKo.reduce((d, u) => d + koHeights.get(u.i) * (r.sizes.get(u.i) ?? 1) ** 2 * r.leads.get(u.i) - 96, 0)
-check('shrink: without it, the long stretch at the floor and nothing smaller', atFloor.sizes.size === 0 && near(atFloor.leads.get(15), 1, 1e-9) && flowLeads(longKo, 'Kore', koHeights, { window: 0, horizon: 40 }).get(15) === atFloor.leads.get(15))
-check('shrink: with it, the long stretch smaller down to 0.95, never below, its leading the floor; a unit on its height untouched', near(shrunk.sizes.get(15), 0.95, 1e-9) && [...shrunk.sizes.values()].every(f => f >= 0.95 - 1e-9 && f < 1) && near(shrunk.leads.get(15), 1, 1e-9) && !shrunk.sizes.has(5), JSON.stringify([...shrunk.sizes].slice(0, 4)))
-check('shrink: less left late by the end', lateBy(shrunk) < lateBy(atFloor) - 100, `${lateBy(shrunk)} ${lateBy(atFloor)}`)
-// what the units themselves run long — the stretch's own leading below the floor, and what the floor left of it — not
-// where the preview's text stood: what the floor left after the long stretch is taken back by the face after it, a
-// float the preview moved by none (Korean 2608.24839: a preview late where a float had moved, taken back by a stretch
-// at 0.95, and the final a page short)
-check('shrink: what the floor left after the stretch is taken back by the face', shrunk.sizes.has(31) && shrunk.sizes.get(31) < 1, JSON.stringify([...shrunk.sizes].filter(([i]) => i >= 30)))
+const stepped = hs => ({ steps: [0.975, 0.95], lines: 3, heightAt: (i, f) => hs.get(i) * f * f })
+const lateAt = (hs, r) => longKo.reduce((d, u) => d + hs.get(u.i) * (r.sizes.get(u.i) ?? 1) ** 2 * r.leads.get(u.i) - 96, 0)
+const run = sizes => { const ids = [...sizes.keys()].sort((a, b) => a - b); return ids.length && ids.every((i, k) => k === 0 || i === ids[k - 1] + 1) && new Set(sizes.values()).size === 1 }
+const tail = new Map(longKo.map(u => [u.i, u.i >= 25 ? 104 : 96]))
+const tailFloor = flowType(longKo, 'Kore', tail, { window: 0, horizon: 40 })
+const tailShrunk = flowType(longKo, 'Kore', tail, { window: 0, horizon: 40, shrink: stepped(tail) })
+check('shrink: without it, a long tail at the floor ends 120 pt late, nothing smaller', tailFloor.sizes.size === 0 && near(lateAt(tail, tailFloor), 120, 1e-6) && flowLeads(longKo, 'Kore', tail, { window: 0, horizon: 40 }).get(30) === tailFloor.leads.get(30), `${lateAt(tail, tailFloor)}`)
+check('shrink: with it, the tail\'s last units at one face, a run to the end, none before the tail, and the end within a line of level', run(tailShrunk.sizes) && tailShrunk.sizes.has(39) && Math.min(...tailShrunk.sizes.keys()) >= 25 && Math.abs(lateAt(tail, tailShrunk)) < 12, `${JSON.stringify([...tailShrunk.sizes])} ${lateAt(tail, tailShrunk)}`)
+const short = new Map(longKo.map(u => [u.i, u.i >= 35 ? 100 : 96]))
+check('shrink: an end late by less than the threshold, nothing smaller', flowType(longKo, 'Kore', short, { window: 0, horizon: 40, shrink: stepped(short) }).sizes.size === 0)
+const middle = new Map(longKo.map(u => [u.i, u.i >= 10 && u.i < 20 ? 104 : u.i >= 20 ? 90 : 96]))
+check('shrink: a long stretch the units after it take back before the end, nothing smaller', flowType(longKo, 'Kore', middle, { window: 0, horizon: 40, shrink: stepped(middle) }).sizes.size === 0)
+const preBreak = new Map(longKo.map(u => [u.i, u.i >= 10 && u.i < 20 ? 104 : 96]))
+const beforeDrift = new Map(longKo.map(u => [u.i, u.i < 20 ? Math.max(0, u.i - 10) * 8 : 0]))
+const segmented = flowType(longKo, 'Kore', preBreak, { window: 0, horizon: 40, shrink: stepped(preBreak), measured: { drift: beforeDrift, preview: preBreak, snap: 40, breaks: new Set([20]) } })
+check('shrink: a segment late at its forced break takes it back before the break, the next segment untouched', run(segmented.sizes) && segmented.sizes.has(19) && Math.max(...segmented.sizes.keys()) === 19 && Math.min(...segmented.sizes.keys()) >= 10, JSON.stringify([...segmented.sizes]))
 const onHeight = new Map(longKo.map(u => [u.i, 96]))
-const floatLate = flowType(longKo, 'Kore', onHeight, { window: 0, horizon: 40, shrink: squared(onHeight), measured: { drift: new Map(longKo.map(u => [u.i, u.i >= 20 ? 200 : 0])), preview: onHeight, snap: 40 } })
-check('shrink: a preview late beyond its own heights — a float moved — sets no unit smaller', floatLate.sizes.size === 0, JSON.stringify([...floatLate.sizes]))
-const slight = new Map(longKo.map(u => [u.i, u.i === 5 ? 100 : 96]))
-const nudged = flowType(longKo, 'Kore', slight, { window: 0, horizon: Infinity, shrink: squared(slight) })
-check('shrink: as little smaller as reaches the original\'s height', nudged.sizes.size === 1 && nudged.sizes.get(5) > 0.97 && nudged.sizes.get(5) <= 0.98, JSON.stringify([...nudged.sizes]))
+const floatMid = flowType(longKo, 'Kore', onHeight, { window: 0, horizon: 40, shrink: stepped(onHeight), measured: { drift: new Map(longKo.map(u => [u.i, u.i >= 20 && u.i < 26 ? 200 : 0])), preview: onHeight, snap: 40 } })
+check('shrink: a float the preview moved mid-way, level again by the end, nothing smaller', floatMid.sizes.size === 0, JSON.stringify([...floatMid.sizes]))
 // a unit's predicted height at a face `f` times the type's, at leading one: more to a line, each line closer
 const wide = { lo: 10, bs: 12, cap: 30, i: 0, width: () => 285 }
 check('height at a size: a CJK unit at 0.95 takes the lines its width × 0.95 fills, each 0.95 as tall', near(heightAtSize(wide, 'Kore', { lead: 1, track: 0, scale: 1 }, 0.95), (285 * 0.95 / 30 + 0.5) * 12 * 0.95, 1e-9) && near(heightAtSize(wide, 'Kore', { lead: 1, track: 0, scale: 1 }, 1), unitHeights([wide], 'Kore', { lead: 1, track: 0, scale: 1 }).get(0), 1e-9))

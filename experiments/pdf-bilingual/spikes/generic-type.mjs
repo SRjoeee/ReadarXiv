@@ -92,15 +92,16 @@ export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, l
  * fraction from the window's, however far behind the text is, so that no paragraph stands out from its neighbours: a
  * jump the preview measured, taken back within the horizon, set Korean 2608.05876's paragraphs after it a quarter
  * looser than the text around them, and the owner preferred the version without it to one nearer the original's places.
- * `shrink` ({ min, heightAt(i, f) }): where the units run long past the floor of the range — Japanese and Korean set
- * no tighter than the paper's own — a unit is set at a face `f` times the type's, as little smaller as brings it to the
- * height the leading it wants would give it (heightAt: its height at leading one at that face), never below `min`, its
- * leading the floor (the owner, 2026-10-01: Korean 2608.18090's sections 7 and 8 ran 0.16 page long at the floor, its
- * references started a page later, and the checklist after them took a page more). What it wants is the flow of the
- * units' own heights alone — the window's leading, what the floor has left so far taken back, started again at a
- * forced break — never where the preview's text stood: taken back by the face too, a preview late where a float had
- * moved set Korean 2608.24839's next stretch at 0.95, and its final came out a page short. The face's factor by unit is
- * flowType's `sizes`.
+ * `shrink` ({ steps, lines, heightAt(i, f) }): where the text is left late at the end of a segment — before a forced
+ * break, or at the paper's end — by more than `lines` of its lines, its leading stopped by the floor of the range
+ * (Japanese and Korean set no tighter than the paper's own), the stretch that ran late before that end is set at one
+ * face `f` times the type's (heightAt: a unit's height at leading one at that face): the first of `steps` that takes
+ * the lateness back over as few of the stretch's last units as it needs, the strongest over all of them where none
+ * does; then the flow again over those heights. The owner, 2026-10-01: Korean 2608.18090's last sections ran 0.16
+ * page long at the floor, its references started a page later and its checklist took a page more. Set unit by unit
+ * where each wanted it, a third of the CJK units came out a little smaller, most by under 3 %, and a face that much
+ * smaller saves a whole line more often than the line model allows, twice as often under 1 %: five papers ran early.
+ * The face's factor by unit is flowType's `sizes`.
  * `heights`: Map(unit index → the translation's height at leading one), from unitHeights or a compile's lines. The
  * leading is × the paper's for CJK, × the size's for an alphabet, as the type's is
  */
@@ -152,41 +153,59 @@ export function flowType(units, script, heights, { window = 50, horizon = window
       offsetAt.set(r.i, current)
     })
   }
-  const out = new Map(), sizes = new Map()
   const take = d => clamp(back > 0 && back < Infinity ? 1 - d / back : 1, [1 - rate, 1 + rate])
-  // `own`: the flow the units' own heights give, the measured places left out — where shrink takes its face from
-  let lo = 0, hi = 0, o = 0, t = 0, drift = 0, offset = 0, own = 0
-  for (let k = 0; k < list.length; k++) {
-    for (; hi < list.length && mid[hi] <= mid[k] + half; hi++) { o += list[hi].lo * list[hi].bs; t += heights.get(list[hi].i) }
-    for (; mid[lo] < mid[k] - half; lo++) { o -= list[lo].lo * list[lo].bs; t -= heights.get(list[lo].i) }
-    const i = list[k].i
-    // past a forced break the final starts where the preview did: what its heights parted from the preview's before
-    // it the break took
-    if (breaks.has(i) && accountAt.has(i)) { drift = accountAt.get(i); own = 0 }
-    if (offsetAt.has(i)) offset = offsetAt.get(i)
-    const at = drift + offset, near = toJump.get(i), ratio = o / t
-    const x = near != null
-      ? clamp((list[k].lo * list[k].bs - lead * (1 - near / local) - at) / heights.get(i), design.lead)
-      : clamp(ratio * take(at + (local ? 0 : lead)), design.lead)
-    // where the units run long past the floor of the leading — the stretch's own leading below it, or what the floor
-    // has left of it so far — the face as little smaller as brings the unit to the height that leading would give it;
-    // where the preview's text stood moves the leading alone
-    const mine = ratio * take(own)
-    let h = heights.get(i)
-    if (shrink && mine < design.lead[0]) {
-      const goal = (h * mine) / design.lead[0]
-      let f = 1
-      while (f - SHRINK_STEP >= shrink.min - 1e-9 && shrink.heightAt(i, f) > goal) f = Math.round((f - SHRINK_STEP) * 1e6) / 1e6
-      if (f < 1) { sizes.set(i, f); h = shrink.heightAt(i, f) }
+  // the flow over the units' heights `hs`: each unit's leading, and where the text stands at its start and its end
+  const pass = hs => {
+    const leads = new Map(), trace = []
+    let lo = 0, hi = 0, o = 0, t = 0, drift = 0, offset = 0
+    for (let k = 0; k < list.length; k++) {
+      for (; hi < list.length && mid[hi] <= mid[k] + half; hi++) { o += list[hi].lo * list[hi].bs; t += hs.get(list[hi].i) }
+      for (; mid[lo] < mid[k] - half; lo++) { o -= list[lo].lo * list[lo].bs; t -= hs.get(list[lo].i) }
+      const i = list[k].i
+      // past a forced break the final starts where the preview did: what its heights parted from the preview's before
+      // it the break took
+      if (breaks.has(i) && accountAt.has(i)) drift = accountAt.get(i)
+      if (offsetAt.has(i)) offset = offsetAt.get(i)
+      const at = drift + offset, near = toJump.get(i)
+      const x = near != null
+        ? clamp((list[k].lo * list[k].bs - lead * (1 - near / local) - at) / hs.get(i), design.lead)
+        : clamp((o / t) * take(at + (local ? 0 : lead)), design.lead)
+      leads.set(i, x)
+      drift += hs.get(i) * x - list[k].lo * list[k].bs
+      trace.push({ i, at, end: drift + offset, x })
     }
-    out.set(i, x)
-    drift += h * x - list[k].lo * list[k].bs
-    own += h * clamp(mine, design.lead) - list[k].lo * list[k].bs
+    return { leads, trace }
   }
-  return { leads: out, sizes }
+  const first = pass(heights), sizes = new Map()
+  if (!shrink) return { leads: first.leads, sizes }
+  // each segment's last unit — before a forced break, at the paper's end — and, where the text is left late there by
+  // more than shrink.lines, its late stretch at one face: the first step that takes the lateness back over as few of
+  // its last units as it needs, the strongest over all of them where none does
+  let from = 0
+  for (let e = 0; e < list.length; e++) {
+    if (e < list.length - 1 && !breaks.has(list[e + 1].i)) continue
+    const late = first.trace[e].end
+    if (late > shrink.lines * bs) {
+      let chosen = null
+      for (const f of shrink.steps) {
+        const run = []
+        let saved = 0
+        for (let k = e; k >= from; k--) {
+          const { i, at, x } = first.trace[k]
+          run.push(i)
+          saved += (heights.get(i) - shrink.heightAt(i, f)) * x
+          if (saved >= late || at <= 0) break
+        }
+        chosen = { f, run }
+        if (saved >= late) break
+      }
+      for (const i of chosen.run) sizes.set(i, chosen.f)
+    }
+    from = e + 1
+  }
+  if (!sizes.size) return { leads: first.leads, sizes }
+  return { leads: pass(new Map([...heights].map(([i, h]) => [i, sizes.has(i) ? shrink.heightAt(i, sizes.get(i)) : h]))).leads, sizes }
 }
-// the steps a unit's face is made smaller by (flowType's shrink): a quarter of a size probe's step
-const SHRINK_STEP = 0.0025
 /** flowType's leading alone: each unit's leading by its index */
 export const flowLeads = (units, script, heights, options) => flowType(units, script, heights, options).leads
 

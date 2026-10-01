@@ -5,7 +5,7 @@
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>...   generate
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --reindex   render and index existing PDFs
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --generic   add the generic column to generated papers
-//   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --flow[=<window>[:<horizon>[:<ahead>]]] [--floats] [--phys[=<lines>]] [--local=<lines>] [--keep] [--rate=<percent>] [--breaks] [--shrink=<percent>]   add the flow variant (a window of 50 lines by default; --floats: each float waits for its original's page; --phys: the final corrects the drift the preview measured, where it parts from the heights by more than <lines>; --local: the lead ahead only in that many lines before a jump the preview measured; --rate: what is taken back moves a unit's leading at most that percentage from the window's; --breaks: the correction starts again after each forced break the preview logged; --shrink: a CJK unit the floor of the leading cannot bring back set at a face down to that percentage)
+//   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs <lang> <paper>... --flow[=<window>[:<horizon>[:<ahead>]]] [--floats] [--phys[=<lines>]] [--local=<lines>] [--keep] [--rate=<percent>] [--breaks] [--shrink=<percent>]   add the flow variant (a window of 50 lines by default; --floats: each float waits for its original's page; --phys: the final corrects the drift the preview measured, where it parts from the heights by more than <lines>; --local: the lead ahead only in that many lines before a jump the preview measured; --rate: what is taken back moves a unit's leading at most that percentage from the window's; --breaks: the correction starts again after each forced break the preview logged; --shrink: where the final's CJK text ends a segment late at the floor, its late stretch at one face, in steps of 2.5 % down to that percentage)
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/visual-eval.mjs --catalog
 import { execFile, execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -348,9 +348,10 @@ async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, p
   const strategy = strategiesFor(meta, lang)[0], theorems = theoremEnvs(files), { em } = PARAMS[lang]
   const g = genericType({ paper, files, translated, lang, fonts, probe, sizes, oLog })
   const cjk = DESIGN[g.script].cjk, lo = readLines(oLog)
-  // with `shrink` (CJK), the final sets a unit the floor of the leading cannot bring back at a face down to that
-  // percentage; the preview keeps the full face, so that its lines are each unit's own at it
-  const faceMin = cjk && shrink ? shrink / 100 : 0
+  // with `shrink` (CJK), where the final's text is left late at a segment's end by more than three lines, its leading
+  // at the floor, the late stretch at one face, in steps of 2.5 % down to that percentage (generic-type.mjs flowType);
+  // the preview keeps the full face, so that its lines are each unit's own at it
+  const faceSteps = cjk && shrink ? Array.from({ length: Math.floor((100 - shrink) / 2.5 + 1e-9) }, (_, k) => 1 - (k + 1) * 0.025) : []
   const faceStats = faces => (faces?.size ? { n: faces.size, min: Math.min(...faces.values()) } : null)
   // a unit's leading × the paper's (CJK) or × its size's (an alphabet) as \\axtlead@<unit> takes it, × the font size
   const factors = leads => new Map([...leads].filter(([i]) => lo.get(i)?.size).map(([i, l]) => [i, (l * lo.get(i).bs) / lo.get(i).size]))
@@ -376,7 +377,7 @@ async function addFlow(lang, id, { window, horizon, ahead = 0, floats = false, p
     // (`phys` a number of lines: the measure taken only where it parts from the heights' account by more than that)
     const bsMedian = [...got.map(u => u.bs)].sort((a, b) => a - b)[got.length >> 1] ?? 12
     const seen = phys ? { drift: drifts(om0, await marksOf(r1.pdf)), preview: new Map(got.map(u => [u.i, lines.get(u.i).lines * lines.get(u.i).bs])), snap: phys === true ? undefined : phys * bsMedian, local, keep, ...(breaks ? { breaks: readForced(r1.log) } : {}) } : null
-    const flow2 = flowType(got, g.script, heights, { window, horizon, ahead, measured: seen, rate: paced, shrink: faceMin ? { min: faceMin, heightAt: (i, f) => (heights.get(i) * heightAtSize(cu.get(i), g.script, type, f)) / heightAtSize(cu.get(i), g.script, type, 1) } : null })
+    const flow2 = flowType(got, g.script, heights, { window, horizon, ahead, measured: seen, rate: paced, shrink: faceSteps.length ? { steps: faceSteps, lines: 3, heightAt: (i, f) => (heights.get(i) * heightAtSize(cu.get(i), g.script, type, f)) / heightAtSize(cu.get(i), g.script, type, 1) } : null })
     second = { type, script: g.script, sizes: sizes2, measured, leads: flow2.leads, faces: flow2.sizes, ms: performance.now() - t2 }
     // AXT_FLOW_DUMP=<file>: the final's flow inputs, to replay flowType outside the compile
     if (process.env.AXT_FLOW_DUMP) writeFileSync(process.env.AXT_FLOW_DUMP, JSON.stringify({ list: got.map(u => ({ i: u.i, lo: u.lo, bs: u.bs })), heights: [...heights], measured: seen && { ...seen, drift: [...seen.drift], preview: [...seen.preview], breaks: seen.breaks && [...seen.breaks] }, window, horizon, ahead, rate: paced }))
