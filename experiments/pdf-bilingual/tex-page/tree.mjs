@@ -3,6 +3,8 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, opendirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { parseIndex, resolve } from '../poc-site/tex-tree.mjs'
+import { lsrCompare, PROGRAMS, parseCnf, searchPaths } from './kpathsea.mjs'
 
 /** the operating systems' own files — Finder's, AppleDouble's, Windows Explorer's — which are not TeX Live's: a visit
  *  with Finder must not change the tree's version, nor put them on the site */
@@ -33,18 +35,38 @@ export function walk(root) {
 }
 
 /**
- * The path the index keeps for each lowercase basename, in the walk's order: `preferred(path)` true for a path that wins
- * over the walk's order — the files today's preloaded tier holds, which kpathsea found there before it asked the file
- * server, so that a file a slim preload leaves out comes back as the preload had it. → the chosen paths
+ * The index's text (poc-site/tex-tree.mjs reads it): '#axt-index 2', the search paths (`searchPaths`: { format:
+ * { program: [elements] } }), the basenames whose answer depends on the program asking (`dependent`), then every file of
+ * the tree grouped by directory, the directories in ls-R's order (as kpathsea's database lists a name's directories,
+ * which decides among files of one name) and each one's files sorted
  */
-export function chooseIndex(paths, preferred = () => false) {
-  const chosen = new Map()
+export function indexText(paths, searchPaths, dependent = []) {
+  const dirs = new Map()
   for (const p of paths) {
-    const key = p.slice(p.lastIndexOf('/') + 1).toLowerCase()
-    const had = chosen.get(key)
-    if (had === undefined || (preferred(p) && !preferred(had))) chosen.set(key, p)
+    const at = p.lastIndexOf('/')
+    const dir = at < 0 ? '' : p.slice(0, at)
+    if (!dirs.has(dir)) dirs.set(dir, [])
+    dirs.get(dir).push(p.slice(at + 1))
   }
-  return [...chosen.values()]
+  const lines = ['#axt-index 2', `#paths ${JSON.stringify(searchPaths)}`]
+  if (dependent.length) lines.push(`#dependent ${JSON.stringify(dependent)}`)
+  for (const dir of [...dirs.keys()].sort(lsrCompare)) lines.push(`${dir || '.'}/`, ...dirs.get(dir).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)))
+  return lines.join('\n')
+}
+
+/**
+ * The lowercase basenames held more than once whose answer, for some format, depends on the program asking: BusyTeX
+ * keeps a fetched file under its format and name for every program, so the worker keeps these per program
+ */
+export function programDependent(index, programs) {
+  const out = []
+  for (const [key, ps] of index.names) {
+    if (ps.length < 2) continue
+    const names = new Set(ps.map(p => p.slice(p.lastIndexOf('/') + 1)))
+    const formats = Object.keys(index.paths).map(Number)
+    if ([...names].some(name => formats.some(format => new Set(programs.map(program => resolve(index, format, name, program))).size > 1))) out.push(key)
+  }
+  return out.sort()
 }
 
 /** a short content address for a version: the first 12 hex digits of a SHA-256 over the given strings or bytes */
@@ -81,4 +103,12 @@ export function hashTree(root, paths, cache) {
   mkdirSync(dirname(cache), { recursive: true })
   writeFileSync(cache, JSON.stringify(known))
   return out
+}
+
+/** the tree under `root` and its index: { paths, text }, the search paths from texmf.cnf's text `cnf` */
+export function treeIndex(root, cnf) {
+  const paths = walk(root)
+  const searches = searchPaths(parseCnf(cnf))
+  const dependent = programDependent(parseIndex(indexText(paths, searches)), Object.keys(PROGRAMS))
+  return { paths, text: indexText(paths, searches, dependent) }
 }

@@ -6,13 +6,14 @@
 // Also says what preloads and a manifest made from the other papers would have done for each paper (leave-one-out):
 // the files left for its compiles to ask for before its first preview, and the bytes fetched ahead.
 //   node experiments/pdf-bilingual/tex-page/derive.mjs [--run=record-old]
-// Needs out/tex-build/basic (build.mjs unpacks the preloaded tier there) and the TeX Live tree (TEXLIVE_TREE).
+// Needs out/tex-build/basic (build.mjs unpacks the preloaded tier there), BusyTeX's texmf.cnf (data/busytex-site) and
+// the TeX Live tree (TEXLIVE_TREE).
 import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { indexText, parseIndex, resolve } from '../poc-site/tex-tree.mjs'
+import { parseIndex, resolve } from '../poc-site/tex-tree.mjs'
 import { buildManifest, REFERENCE, scannedOnly, sharesOf, worth } from './manifest.mjs'
 import { brotliSizes } from './sizes.mjs'
-import { chooseIndex, walk } from './tree.mjs'
+import { treeIndex } from './tree.mjs'
 
 const HERE = new URL('.', import.meta.url).pathname
 const EXP = join(HERE, '..')
@@ -72,8 +73,10 @@ const measure = list => {
 const counted = list => list.filter(j => j.ok || j.job === 'probe')
 const measured = measure(counted(jobs))
 
-// the sizes on the wire the rule weighs: the preloaded tier's files, and the tree's files the requests named
-const index = parseIndex(indexText(chooseIndex(walk(TREE))))
+// the sizes on the wire the rule weighs: the preloaded tier's files, and the tree's files the requests named — by the
+// page's own index (build.mjs builds the same), the file any program would be given (the record run's requests do not
+// say which program asked; the few names whose file depends on it are small)
+const index = parseIndex(treeIndex(TREE, readFileSync(join(EXP, 'data/busytex-site/busytex/texmf.cnf'), 'utf8')).text)
 const pathOf = key => { const at = key.indexOf('/'); return resolve(index, Number(key.slice(0, at)), key.slice(at + 1)) }
 const allKeys = new Set([...fetched.values()].flatMap(s => [...s]))
 const sizes = await brotliSizes([...[...allBasic].map(f => join(BASIC, f)), ...[...allKeys].map(pathOf).filter(Boolean).map(p => join(TREE, p))])

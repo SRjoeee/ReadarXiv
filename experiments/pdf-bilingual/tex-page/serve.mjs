@@ -1,7 +1,8 @@
 // The TeX page's static site on this machine, as a CDN would serve it: out/tex-site (build.mjs) and the TeX Live tree
 // under t/<tid>/, every file with its brotli copy when the browser takes brotli (HTTPS only, in Chrome), the versioned
 // files immutable. `today: true` serves today's page instead (poc-site at measure.mjs TODAY, BusyTeX's full preloaded
-// tier, and the tree as texlive-server answers, GET /tl/<format>/<name>, resolved by the same index): the comparison.
+// tier, and the tree as texlive-server answers, GET /tl/<format>/<name>, resolved by the same index — kpathsea's choice
+// among files of one name, where texlive-server took another for two small files): the comparison.
 // `link: { rtt, mbit }` makes the server a slow link: every response waits one round trip before its first byte, and
 // all bodies share the link's rate. `tls: true` serves HTTP/2 over TLS with a self-signed certificate (the browser
 // must accept it), as a CDN does.

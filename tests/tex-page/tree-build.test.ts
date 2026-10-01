@@ -1,23 +1,25 @@
-// Building the TeX page's index (experiments/pdf-bilingual/tex-page/tree.mjs): one path for each lowercase basename,
-// the walk's first unless a preferred path (a file today's preloaded tier holds) has the same basename
+// Building the TeX page's index and the tree's version (experiments/pdf-bilingual/tex-page/tree.mjs): every file of
+// the tree in ls-R's order, which kpathsea's choice among files of one name follows
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { chooseIndex, hashTree, indexName, treeVersion, versionOf, walk } from '../../experiments/pdf-bilingual/tex-page/tree.mjs'
+import { parseIndex } from '../../experiments/pdf-bilingual/poc-site/tex-tree.mjs'
+import { hashTree, indexName, indexText, programDependent, treeVersion, versionOf, walk } from '../../experiments/pdf-bilingual/tex-page/tree.mjs'
 
-describe('chooseIndex', () => {
-  it('keeps the first path of each lowercase basename, in the walk\'s order', () => {
-    expect(chooseIndex(['tex/latex/mmap/t1.cmap', 'tex/latex/cmap/t1.cmap', 'tex/latex/base/article.cls'])).toEqual(['tex/latex/mmap/t1.cmap', 'tex/latex/base/article.cls'])
+describe('indexText', () => {
+  it('lists every file, the directories in ls-R\'s order and each one\'s files sorted, after its search paths', () => {
+    const text = indexText(['tex/latex/mmap/t1.cmap', 'tex/latex-dev/base/a.sty', 'tex/latex/cmap/t1.cmap', 'ls-R', 'tex/latex/cmap/b.sty'], { 26: { '*': ['tex//'] } })
+    expect(text.split('\n')).toEqual(['#axt-index 2', '#paths {"26":{"*":["tex//"]}}', './', 'ls-R', 'tex/latex/cmap/', 'b.sty', 't1.cmap', 'tex/latex/mmap/', 't1.cmap', 'tex/latex-dev/base/', 'a.sty'])
   })
+})
 
-  it('folds case: README and readme are one basename', () => {
-    expect(chooseIndex(['a/README', 'b/readme'])).toEqual(['a/README'])
-  })
-
-  it('a preferred path wins over the walk\'s order, and the first preferred one over a later one', () => {
-    const basic = new Set(['tex/latex/cmap/t1.cmap', 'tex/latex/other/t1.cmap'])
-    expect(chooseIndex(['tex/latex/mmap/t1.cmap', 'tex/latex/cmap/t1.cmap', 'tex/latex/other/t1.cmap'], p => basic.has(p))).toEqual(['tex/latex/cmap/t1.cmap'])
+describe('programDependent', () => {
+  it('names the basenames whose answer depends on the program asking, and only those', () => {
+    const paths = { 26: { '*': ['tex/latex//', 'tex//'], xelatex: ['tex/xelatex//', 'tex/latex//', 'tex//'] } }
+    const index = parseIndex(indexText(['tex/latex/t/thesis.cls', 'tex/xelatex/t/thesis.cls', 'tex/latex/a/same.sty', 'tex/generic/a/same.sty', 'tex/latex/b/one.sty'], paths))
+    expect(programDependent(index, ['pdflatex', 'xelatex'])).toEqual(['thesis.cls'])
+    expect(indexText(['a/x'], paths, ['thesis.cls']).split('\n')[2]).toBe('#dependent ["thesis.cls"]')
   })
 })
 

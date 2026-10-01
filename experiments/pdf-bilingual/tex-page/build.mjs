@@ -20,10 +20,10 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
-import { indexText, parseIndex, resolve } from '../poc-site/tex-tree.mjs'
+import { parseIndex, resolve } from '../poc-site/tex-tree.mjs'
 import { buildManifest, REFERENCE, scannedOnly, slimSets, worth } from './manifest.mjs'
 import { brotliSizes, brotliTo } from './sizes.mjs'
-import { chooseIndex, hashTree, indexName, treeVersion, versionOf, walk } from './tree.mjs'
+import { hashTree, indexName, treeIndex, treeVersion, versionOf } from './tree.mjs'
 
 const HERE = new URL('.', import.meta.url).pathname
 const EXP = join(HERE, '..')
@@ -117,14 +117,15 @@ for (const f of basic) {
   const rel = f.slice(DIST.length), t = join(TREE, rel)
   if (existsSync(t) && statSync(t).size === statSync(join(BASIC, f)).size && sha(bytesOf(t)) === sha(bytesOf(join(BASIC, f)))) inBasic.add(rel)
 }
-const paths = walk(TREE)
-const text = indexText(chooseIndex(paths, p => inBasic.has(p)))
+// the index: every file of the tree, the search paths of BusyTeX's texmf.cnf (TeX Live 2026's), kpathsea's order among
+// files of one name (poc-site/tex-tree.mjs; tex-page/kpathsea-check.mjs holds it against TeX Live's kpsewhich)
+const { paths, text } = treeIndex(TREE, readFileSync(join(BUSYTEX, 'texmf.cnf'), 'utf8'))
 // the tree's version is its files alone (paths and contents): every file stays at t/<tid>/<path> for good, and a change
 // of the index's rules is a new index file beside them (index-<iid>.txt), named in the page's build.json
 const tid = treeVersion([...hashTree(TREE, paths, join(WORK, 'tree-hashes.json'))])
 const INDEX = indexName(text)
 const index = parseIndex(text)
-say(`the tree: ${paths.length} files, ${index.size} basenames, ${inBasic.size} as the preloaded tier holds them; tid ${tid}, ${INDEX}`)
+say(`the tree: ${paths.length} files, ${index.names.size} basenames (${[...index.names.values()].filter(p => p.length > 1).length} held more than once, ${index.dependent.size} answered by program), ${inBasic.size} as the preloaded tier holds them; tid ${tid}, ${INDEX}`)
 
 // ---------------------------------------------------------------- 3. the preloaded tier split by engine
 
@@ -181,7 +182,15 @@ const eid = versionOf(...engineFiles.flatMap(f => [f, readFileSync(join(engineDi
 
 // ---------------------------------------------------------------- 5. the page, its build.json
 
-const pathOf = key => { const at = key.indexOf('/'); return resolve(index, Number(key.slice(0, at)), key.slice(at + 1)) }
+/** the programs of an engine's compiles: a key of its manifest is handed to all of them */
+const PROGRAMS_OF = { pdflatex: ['pdflatex', 'bibtex8', 'makeindex'], xelatex: ['xelatex', 'xdvipdfmx', 'bibtex8', 'makeindex'] }
+/** a manifest key's file: the one every program of the engine (all, for a script's) would fetch; null when they differ,
+ *  and the key is left to the compile, which asks for it as the program it is */
+const pathOf = (key, engine) => {
+  const at = key.indexOf('/'), format = Number(key.slice(0, at)), name = key.slice(at + 1)
+  const answers = new Set((PROGRAMS_OF[engine] ?? Object.keys(PROGRAMS_OF).flatMap(e => PROGRAMS_OF[e])).map(program => resolve(index, format, name, program)))
+  return answers.size === 1 ? [...answers][0] : null
+}
 const candidates = [...new Set([...Object.values(measured.fetched.groups), ...Object.values(measured.fetched.pooled)].flatMap(d => Object.keys(d.shares)))]
 const treeSizes = await brotliSizes(candidates.map(pathOf).filter(Boolean).map(p => join(TREE, p)))
 const keys = buildManifest(measured.fetched, (key, share) => { const p = pathOf(key); return !!p && keep(treeSizes.get(join(TREE, p)), share) })

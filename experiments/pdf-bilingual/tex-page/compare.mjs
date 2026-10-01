@@ -1,6 +1,7 @@
 // Stage 3 (S3a): the identity check. First the index: every distinct request today's page made of texlive-server in
 // the record run, resolved by the new page's index (tex-tree.mjs) — the same answer (found or not), the same file,
-// the same size. Then every compile of the new page's run against today's (measure.mjs): the same outcome and the same
+// the same size. Where the tree holds several files of a name, the index chooses as kpathsea does and texlive-server
+// did not (fix round 1: cmap's t1.cmap and ot1.cmap, not mmap's): those are listed apart, by name. Then every compile of the new page's run against today's (measure.mjs): the same outcome and the same
 // PDF, byte for byte (both runs fix the PDFs' dates). Lists every compile that differs, with its first error on each
 // side and its page count where there is a PDF (pdfinfo, from poppler, when installed).
 //   node experiments/pdf-bilingual/tex-page/compare.mjs [--old=record-old] [--new=identity-new]
@@ -24,8 +25,11 @@ const wrong = [...requests.values()].filter(r => {
   const p = resolve(index, r.fmt, r.name)
   return (p ? 200 : 404) !== r.status || (p && (p.split('/').pop() !== r.fileid || statSync(join(tree.root, p)).size !== r.bytes))
 })
-console.log(`the index: ${requests.size} distinct requests of today's page, ${requests.size - wrong.length} answered as texlive-server did (found or not, the file, its size), ${wrong.length} not`)
-for (const r of wrong.slice(0, 20)) console.log(JSON.stringify(r))
+/** another file of the same name: kpathsea's choice where texlive-server took another */
+const chosen = r => { const p = resolve(index, r.fmt, r.name); return !!p && r.status === 200 && p.split('/').pop() === r.fileid && (index.names.get(r.fileid.toLowerCase())?.length ?? 0) > 1 }
+const reordered = wrong.filter(chosen), other = wrong.filter(r => !chosen(r))
+console.log(`the index: ${requests.size} distinct requests of today's page, ${requests.size - wrong.length} answered as texlive-server did (found or not, the file, its size), ${reordered.length} with another file of the name (kpathsea's order: ${[...new Set(reordered.map(r => r.fileid))].sort().join(', ') || 'none'}), ${other.length} otherwise`)
+for (const r of other.slice(0, 20)) console.log(JSON.stringify(r))
 
 const before = jobs(OLD), after = jobs(NEW)
 const kinds = new Map()
