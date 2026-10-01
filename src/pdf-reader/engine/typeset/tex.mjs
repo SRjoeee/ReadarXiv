@@ -1,7 +1,7 @@
 // The TeX of the rule chosen on 2026-10-01 (records/typesetting.md in experiments/pdf-bilingual): the line probes a
 // compile reports each unit's lines with, a unit set at a smaller size or face, a float held to its original's page, and
 // what a typeset plan adds to a compile of the translation (live.mjs translationFiles' `typeset`).
-import { PARA_END_TEX } from '../latex-front.mjs'
+import { lastTexLog, PARA_END_TEX } from '../latex-front.mjs'
 import { SIZE_PROBE } from './density.mjs'
 
 /** a unit's line count and leading at its paragraph's end (PARA_END_TEX), in the log. Through \message: \typeout
@@ -72,15 +72,16 @@ export const SIZE_TEX = PARA_END_TEX + String.raw`\makeatletter
 \makeatother
 `
 
-/** the units that follow a forced break (LINES_TEX's AXT-FORCED): after each, the next unit whose lines the log gives */
+/** the units that follow a forced break (LINES_TEX's AXT-FORCED): after each, the next unit whose lines the log gives.
+ *  Read in the last TeX pass (lastTexLog), as every reader of a compile's log here */
 export const readForced = log => {
   const out = new Set()
   let broke = false
-  for (const m of (log ?? '').matchAll(/^AXT-(?:FORCED|LINES (\d+))/gm)) if (!m[1]) broke = true; else if (broke) { out.add(Number(m[1])); broke = false }
+  for (const m of lastTexLog(log).matchAll(/^AXT-(?:FORCED|LINES (\d+))/gm)) if (!m[1]) broke = true; else if (broke) { out.add(Number(m[1])); broke = false }
   return out
 }
 /** each unit's lines, leading (pt) and size (pt) at its paragraph's end (LINES_TEX), by unit index */
-export const readLines = log => new Map([...(log ?? '').matchAll(/^AXT-LINES (\d+) (\d+) ([\d.]+)pt(?: ([\d.]+))?/gm)].map(m => [Number(m[1]), { lines: Number(m[2]), bs: Number(m[3]), ...(m[4] ? { size: Number(m[4]) } : {}) }]))
+export const readLines = log => new Map([...lastTexLog(log).matchAll(/^AXT-LINES (\d+) (\d+) ([\d.]+)pt(?: ([\d.]+))?/gm)].map(m => [Number(m[1]), { lines: Number(m[2]), bs: Number(m[3]), ...(m[4] ? { size: Number(m[4]) } : {}) }]))
 
 // the units with no mark that a size still reaches, as a declaration inside their own group: a table cell, a heading, a
 // figure's text — after whatever opens it, a row's \toprule among them, which is \noalign and must follow the row's end

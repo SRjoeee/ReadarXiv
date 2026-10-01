@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { lastTexLog } from '@/pdf-reader/engine/latex-front.mjs'
 import { openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-reader/engine/live.mjs'
+import { readSizeProbe, readWidthProbe } from '@/pdf-reader/engine/typeset/density.mjs'
 import { strategiesFor } from '@/pdf-reader/engine/scripts.mjs'
 import { FLOAT_TEX, LINES_TEX, readForced, readLines, SIZE_TEX, typesetting } from '@/pdf-reader/engine/typeset/tex.mjs'
 
@@ -35,6 +37,19 @@ describe('the log the rule reads', () => {
   it('reports a column made at a forced break, and lines through \\message (\\typeout reads \\prevgraf as 0)', () => {
     expect(LINES_TEX).toContain('\\ifnum\\outputpenalty=-\\@M\\message{^^JAXT-FORCED^^J}')
     expect(LINES_TEX).toContain('\\message{^^JAXT-LINES #1')
+  })
+  it('reads the last TeX pass of the browser compiler\'s joined log, not its earlier passes or the terminal\'s echo', () => {
+    // one step as BusyTeX's pipeline writes it (poc-site/tex.js): the step's log, then the terminal's output, which
+    // repeats every \message — a forced break at one pass's end read before the next pass's first unit invents a break
+    const step = (cmd: string, log: string, echo = log) => [`$ ${cmd}`, 'EXITCODE: 0', '', 'TEXMFLOG:', '', '==', 'MISSFONTLOG:', '', '==', 'LOG:', log, '==', 'STDOUT:', echo, '==', 'STDERR:', '', '======'].join('\n')
+    const pass = (bs: string) => `AXT-WIDTH 1071.0pt 12 241.0pt\nAXT-SIZE 0.9 900.0pt 1000.0pt\nAXT-LINES 1 2 ${bs}pt 10\nAXT-LINES 2 3 ${bs}pt 10\nAXT-FORCED\n`
+    const joined = [step('pdflatex x.tex', pass('11.0')), step('bibtex x', ''), step('pdflatex x.tex', pass('12.0'), `noise\n${pass('12.0')}`), step('xdvipdfmx x.xdv', 'AXT-LINES 9 9 99pt')].join('\n\n')
+    expect([...readLines(joined)]).toEqual([...readLines(pass('12.0'))])
+    expect([...readForced(joined)]).toEqual([])
+    expect(readWidthProbe(joined)).toEqual(readWidthProbe(pass('12.0')))
+    expect(readSizeProbe(joined)).toEqual(readSizeProbe(pass('12.0')))
+    expect(lastTexLog(joined)).toBe(pass('12.0'))
+    expect(lastTexLog(pass('12.0'))).toBe(pass('12.0'))
   })
   it('restores a unit\'s size from a snapshot, the leading before it noted for the unit\'s own', () => {
     expect(SIZE_TEX).toContain('\\let\\axt@szset\\@empty')

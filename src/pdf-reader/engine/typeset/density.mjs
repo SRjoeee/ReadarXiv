@@ -4,6 +4,7 @@
 // punctuation, spaces and the glue beside Latin (measured under XeLaTeX with the reader's Fandol, IPAex and UnBatang).
 // Atoms — inline math, citations, references, a paper's name macros — are the same in the original and the
 // translation, so only roughly. No compile, no font file: tables and arithmetic.
+import { lastTexLog } from '../latex-front.mjs'
 import { utf8 } from '../mt.mjs'
 import { FACES } from './faces.mjs'
 
@@ -31,14 +32,14 @@ export const WIDTH_PROBE = `\\setbox0\\hbox{\\normalfont\\normalsize ${WIDTH_SAM
 /** what WIDTH_PROBE wrote: the sample's width in pt, the body size in pt, the column's width in pt; or null */
 export function readWidthProbe(log) {
   // a box's width then a number: TeX takes the space after the width's last digit as the end of the number
-  const m = /^AXT-WIDTH ([\d.]+)pt\s*([\d.]+)\s+([\d.]+)pt/m.exec(log ?? '')
+  const m = /^AXT-WIDTH ([\d.]+)pt\s*([\d.]+)\s+([\d.]+)pt/m.exec(lastTexLog(log))
   return m ? { wd: Number(m[1]), size: Number(m[2]), columnwidth: Number(m[3]) } : null
 }
 /** what SIZE_PROBE wrote: each size asked, as { size, h } — the size against the body's and the sample's width against
  *  the body's — smallest first, the body's own last; or null */
 export function readSizeProbe(log) {
   const out = []
-  for (const m of (log ?? '').matchAll(/^AXT-SIZE ([\d.]+) ([\d.]+)pt\s*([\d.]+)pt/gm)) {
+  for (const m of lastTexLog(log).matchAll(/^AXT-SIZE ([\d.]+) ([\d.]+)pt\s*([\d.]+)pt/gm)) {
     const size = Number(m[1]), h = Number(m[2]) / Number(m[3])
     if (size > 0 && size < 1 && h > 0) out.push({ size, h })
   }

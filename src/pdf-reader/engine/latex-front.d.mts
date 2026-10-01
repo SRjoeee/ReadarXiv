@@ -14,3 +14,5 @@ export declare function localizeNames(text: string): string
 /** a translation's pieces with its own line breaks: room to break in long code and formulas, a heading's forced break
  *  kept only where it parts a title from its subtitle */
 export declare function lineBreaks<P>(unit: { kind: string; title?: boolean }, pieces: P[]): P[]
+/** a compile's log as its last TeX pass wrote it: the browser compiler's joined log cut to that pass, a native .log as it is */
+export declare const lastTexLog: (log: string | null | undefined) => string
