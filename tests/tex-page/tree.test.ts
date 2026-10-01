@@ -91,6 +91,16 @@ describe('treeFetcher', () => {
     }
   })
 
+  it('a file that failed is not asked again in the same compile (kpathsea looks a file up several times), and is in the next', () => {
+    const s = scripted(0, 0, 200)
+    const tree = treeFetcher({ index, base: '/t/abc/', get: s.get })
+    expect(tree.fetch('cmr10', TFM)).toEqual({ network: true })
+    expect(tree.fetch('cmr10', TFM)).toEqual({ network: true })
+    expect(s.asked).toHaveLength(2)
+    tree.takeFailures()
+    expect(tree.fetch('cmr10', TFM)).toEqual({ bytes, path: 'fonts/tfm/public/cm/cmr10.tfm' })
+  })
+
   it('a retry that succeeds is no failure', () => {
     const s = scripted(0, 200)
     const tree = treeFetcher({ index, base: '/t/abc/', get: s.get })

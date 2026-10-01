@@ -80,7 +80,8 @@ const encodePath = path => path.split('/').map(encodeURIComponent).join('/')
  *  - a name the index lacks is missing, with no request;
  *  - 200 is the file; 404 or 410 is missing (the index and the tree disagree);
  *  - anything else — no answer, a timeout, a server's error, a refusal — is the network's: asked once more, and if it
- *    fails again the name is kept among the failures, which the compile reports, and is not taken for missing.
+ *    fails again the name is kept among the failures, which the compile reports, and is not taken for missing; it is
+ *    not asked again until the failures are taken (the next compile).
  */
 export function treeFetcher({ index, base, get }) {
   let failed = []
@@ -88,6 +89,8 @@ export function treeFetcher({ index, base, get }) {
     fetch(name, format) {
       const path = resolve(index, format, name)
       if (!path) return { missing: true }
+      // failed already in this compile: kpathsea looks a file up several times, and each try may wait for a timeout
+      if (failed.includes(name)) return { network: true }
       for (let attempt = 0; attempt < 2; attempt++) {
         const r = get(base + encodePath(path))
         if (r.status === 200 && r.bytes) return { bytes: r.bytes, path }
