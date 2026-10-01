@@ -295,11 +295,17 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
     if (cuts.length === 0) return { ...plain, marks: { text: segment.text, source: [segment.text.length], ids: [] } }
     const marks = markSentences(segment.text, cuts)
     if (!marks) return plain
-    // **A single item can be over the cap too**: BatchQueue's character cap stops only the *merging*, and an
-    // oversized task is sent all the same (Codex on #137). Over the cap once inserted, nothing is inserted — no alignment is only no highlight, while over the cap is a whole batch failed
-    if (marks.text.length > provider.maxBatchChars) return plain
+    // **Over the cap once inserted, inserted all the same**: BatchQueue's character cap stops only the *merging*, and
+    // a task over it is a batch of its own, sent at once (Codex on #137); no engine on the tags path takes its cap for
+    // a request limit — an LLM's is Read Frog's batching default, Google's a POST body, the built-in translator's one
+    // inference per item. Left unmarked until 2026-10-02 for a failure that does not happen, such a segment lit as its
+    // paragraph (10 of 81 sampled units on the PDF reader with an LLM); its key is set apart (`markedOverCap`)
     return { text: marks.text, source: segment.text, marks }
   }
+  /** whether a segment's request carries markers over its engine's batch cap: sent unmarked before 2026-10-02, its key
+   *  set apart from the entries those requests left (cache/key.ts `markedOverCap`) */
+  const markedOverCap = (provider: TranslationProvider, item: { text: string; marks?: MarkedText }): boolean =>
+    !!item.marks && item.marks.ids.length > 0 && item.text.length > provider.maxBatchChars
 
   /**
    * One prompt per batch, so the terms are the batch's **union**, still in the glossary's own order — the same set of
@@ -480,12 +486,15 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
         return matched.length > 0 ? { ...request.context, glossary: matched } : { ...request.context, glossary: undefined }
       }
 
+      // Each segment as it is sent: the text, its markers (§8.6) — what its key says too
+      const shaped = new Map(request.segments.map(segment => [segment.id, markedItem(provider, cache?.renderPath, segment)]))
+
       // 1. The cache: every key computed at once, one bulk read
       const keys = new Map<string, string>()
       const translated = new Map<string, TranslationOutcome>()
       if (store && cache) {
         const computed = await Promise.all(request.segments.map(segment =>
-          cacheKeyFor({ providerId: provider.cacheId ?? provider.id, model, promptKey: provider.promptKey ?? '', context: contextFor(segment), target: request.target, renderPath: cache.renderPath, text: segment.text, ...(segment.cuts ? { cuts: segment.cuts } : {}) }),
+          cacheKeyFor({ providerId: provider.cacheId ?? provider.id, model, promptKey: provider.promptKey ?? '', context: contextFor(segment), target: request.target, renderPath: cache.renderPath, text: segment.text, ...(segment.cuts ? { cuts: segment.cuts } : {}), ...(markedOverCap(provider, shaped.get(segment.id)!) ? { markedOverCap: true } : {}) }),
         ))
         request.segments.forEach((segment, i) => {
           keys.set(segment.id, computed[i]!)
@@ -523,7 +532,7 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
           id: segment.id,
           // **Inserted here, not at dispatch**: batching measures size by `item.text.length`, and inserted at dispatch a
           // batch right at the cap would exceed it once the markers are in (Codex on #137)
-          ...markedItem(provider, cache?.renderPath, segment),
+          ...shaped.get(segment.id)!,
           // The terms this segment uses; at dispatch the batch's union goes into the prompt (see translateItems)
           terms: matcher ? termsFor(segment) : undefined,
           batchKey,

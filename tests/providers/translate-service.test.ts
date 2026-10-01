@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { translationIdentity, type RenderPath } from '@/cache/key'
+import { cacheKeyFor, translationIdentity, type RenderPath } from '@/cache/key'
 import { BatchCountMismatchError } from '@/providers/request/batch-queue'
 import { attachRequestErrorMeta } from '@/providers/request/retry-policy'
 import type { CachedEntry } from '@/cache/store'
@@ -751,19 +751,53 @@ describe('sentence markers: inserted by the service layer when the engine report
     expect(res.result.segments[0]!.alignment).toEqual({ source: ['Only one sentence here.'.length], target: ['一句译文。'.length] })
   })
 
-  it('when inserting would exceed the engine\'s per-request cap nothing is inserted', async () => {
-    // `BatchQueue`'s character cap only stops **merging**; a single task over it is sent all the same (Codex on #137).
-    // No alignment only means no highlight, while over the cap the whole batch fails
-    let sent = ''
-    const text = `${'x'.repeat(40)}. ${'y'.repeat(40)}.`
+  it('a segment whose marked text is over the engine\'s batch cap is marked all the same, sent alone, and nothing fails', async () => {
+    // `BatchQueue`'s character cap stops only the **merging**: a task over it is a batch of its own, sent at once — no
+    // request fails for it (Codex on #137). Sent unmarked, it lit as its paragraph: on the PDF reader with an LLM (cap
+    // 1 000), 10 of 81 sampled units of more than one sentence (the final review of the highlight)
+    const calls: string[][] = []
+    const long = `${'x'.repeat(40)}. ${'y'.repeat(40)}.`, short = 'One sentence here. Two sentences here.'
     const service = build({
-      getProvider: async () => echoing(t => { sent = t; return '译文' }, { maxBatchChars: text.length + 5 }),
+      getProvider: async () => provider(async ({ segments }) => {
+        calls.push(segments.map(s => s.text))
+        return { segments: segments.map(s => ({ id: s.id, text: s.text.replace(/x+\. /, '甲。').replace(/y+\./, '乙。').replace('One sentence here. ', '一。').replace('Two sentences here.', '二。') })), provider: 'mock' }
+      }, 'mock', { maxBatchChars: long.length + 5 }),
     })
-    await service.translate({
-      request: { segments: [{ id: 'a', text, cuts: [42] }], source: 'en', target: 'zh-CN' },
+    const res = await service.translate({
+      request: { segments: [{ id: 'a', text: short, cuts: [19] }, { id: 'b', text: long, cuts: [42] }], source: 'en', target: 'zh-CN' },
       cache: { paper: 'p', renderPath: 'tags' as RenderPath },
     })
-    expect(sent).toBe(text)
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    // the long one in a request of its own, its marker in it; the short one marked in another
+    expect(calls.length).toBe(2)
+    const alone = calls.find(c => c.some(t => t.includes('xxxx')))!
+    expect(alone.length).toBe(1)
+    expect(alone[0]).toMatch(/<x id="\d+"\/>/)
+    expect(alone[0]!.length).toBeGreaterThan(long.length + 5)
+    expect(res.result.segments.map(s => s.alignment)).toEqual([{ source: [19, 19], target: [2, 2] }, { source: [42, 41], target: [2, 2] }])
+  })
+
+  it('the key of a segment marked over the cap is not the one its unmarked request was cached under; no other key changes', async () => {
+    // Until 2026-10-02 a segment over the cap went unmarked under the key its marked request has now: that entry's
+    // translation has no sentences, and hit, it would keep the paragraph unlit (hard rule 4: the request changed)
+    const long = `${'x'.repeat(40)}. ${'y'.repeat(40)}.`, short = 'One sentence here. Two sentences here.'
+    const identity = { providerId: 'mock', model: '', promptKey: '', target: 'zh-CN', renderPath: 'tags' as RenderPath }
+    const before = { long: await cacheKeyFor({ ...identity, text: long, cuts: [42] }), short: await cacheKeyFor({ ...identity, text: short, cuts: [19] }), whole: await cacheKeyFor({ ...identity, text: long, cuts: [] }) }
+    const { port, reads, writes } = fakePort({ [before.long]: '旧的整段译文' })
+    const service = build({ getProvider: async () => echoing(t => t, { maxBatchChars: long.length + 5 }), cache: port })
+    const res = await service.translate({
+      // c: the same text taken as one sentence — nothing is inserted there, and its request is as it was
+      request: { segments: [{ id: 'a', text: short, cuts: [19] }, { id: 'b', text: long, cuts: [42] }, { id: 'c', text: long, cuts: [] }], source: 'en', target: 'zh-CN' },
+      cache: { paper: 'p', renderPath: 'tags' as RenderPath },
+    })
+    const [shortKey, longKey, wholeKey] = reads[0]!
+    expect([shortKey, wholeKey]).toEqual([before.short, before.whole])
+    expect(longKey).not.toBe(before.long)
+    // the old entry is not served: the long one is translated again, marked, and written under its new key
+    if (!res.ok) return
+    expect(res.result.segments[1]!.text).toBe(long)
+    expect(writes.flat().map(w => w.key)).toContain(longKey)
   })
 
   it('the cut points enter the cache key: the same wire text with different cut points must not hit each other', async () => {
