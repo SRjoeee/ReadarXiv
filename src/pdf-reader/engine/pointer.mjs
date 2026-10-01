@@ -74,8 +74,9 @@ export function pointerPath({ find, light, lit, hold, frame, later, cancel }) {
   return {
     /** the pointer moved over a pane (`where`), to (x, y) on the screen */
     moved(where, x, y) { pointer = { where, x, y }; ask() },
-    /** what is under a still pointer on a pane changed (its layout came): looked at again in the next frame */
-    again(where) { if (pointer?.where === where) ask() },
+    /** what is under a still pointer on a pane changed (its layout came), or on any pane (`where` left out: a scroll,
+     *  which moves the other pane too where it follows): looked at again in the next frame */
+    again(where) { if (pointer && (where === undefined || pointer.where === where)) ask() },
     /** the pointer left a pane */
     left(where) { if (pointer?.where === where) pointer = null; missed() },
     /** what the pointer's last frame found under it, for the probes: a miss is held, so what is lit does not tell */

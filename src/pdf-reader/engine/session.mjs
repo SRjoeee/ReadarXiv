@@ -1322,8 +1322,10 @@ const invalidate = () => { bake(); table = null; lines = null; flow = null; foll
 addEventListener('resize', invalidate)
 
 function attach(side) {
-  // the scroll as the pointer's frame reads it (pointAt), first: read in the event, the layout is the frame's own
-  side.container.addEventListener('scroll', () => { side.scrollX = side.container.scrollLeft; side.scrollY = side.container.scrollTop; syncFrom(side) }, { passive: true })
+  // the scroll as the pointer's frame reads it (pointAt), first: read in the event, the layout is the frame's own; and
+  // what is under a pointer at rest looked at again (a wheel turned under it sends no move: the unit it had left stayed
+  // lit, the review of B1), on either pane, as the other follows
+  side.container.addEventListener('scroll', () => { side.scrollX = side.container.scrollLeft; side.scrollY = side.container.scrollTop; syncFrom(side); pointer.again() }, { passive: true })
   // a new driver: the other side goes on from where it stands, before the new driver's first step is taken; on the
   // compositor, a glide under way ends where it stands, and the follower is bound to the driver
   for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) side.container.addEventListener(type, () => {

@@ -120,6 +120,16 @@ describe('pointerPath: the pointer\'s moves once a frame, a miss held', () => {
     r.path.left('left'); r.path.again('left')
     expect(r.frames.length).toBe(0)
   })
+  it('a still pointer is looked at again whichever pane scrolls (the other follows it): the scroll moves what is under it', () => {
+    let scrolled = 0
+    const r = rig(() => (scrolled ? 8 : 7))
+    r.path.moved('right', 1, 0); r.frame()
+    scrolled = 300
+    r.path.again()
+    expect(r.frames.length).toBe(1)
+    r.frame()
+    expect(r.lights).toEqual([7, 8])
+  })
   it('leaving the pane is a miss, held; nothing lit, nothing held', () => {
     const r = rig(() => 7)
     r.path.left('left')
