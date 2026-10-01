@@ -90,6 +90,12 @@ const union = rs => {
   for (const r of rs) { if (r.x0 < u.x0) u.x0 = r.x0; if (r.y0 < u.y0) u.y0 = r.y0; if (r.x1 > u.x1) u.x1 = r.x1; if (r.y1 > u.y1) u.y1 = r.y1 }
   return u
 }
+/** the first index of a list, ordered so that `ok` is false and then true, where `ok` holds */
+function firstAt(xs, ok) {
+  let lo = 0, hi = xs.length
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (ok(xs[mid])) hi = mid; else lo = mid + 1 }
+  return lo
+}
 const within = (r, g, e = 1) => r.x0 >= g.x0 - e && r.x1 <= g.x1 + e && r.y0 >= g.y0 - e && r.y1 <= g.y1 + e
 const inside = (x, y, r) => x >= r.x0 - 1 && x <= r.x1 + 1 && y >= r.y0 - 1 && y <= r.y1 + 1
 
@@ -103,9 +109,14 @@ export function pageFloats(L, p, regions = [], { rules = [], marks = [] } = {}) 
   const known = (L.floats ??= new Map())
   if (known.has(p)) return known.get(p)
   const g = pageGeometry(L, p), P = L.page[p], { lines, lineOf, owner, k0 } = g.at
-  // each line's owners
-  const owners = new Array(lines.length).fill(null)
-  for (let i = 0; i < owner.length; i++) if (owner[i] !== -1) (owners[lineOf[i]] ??= new Set()).add(owner[i])
+  // each line: whether a unit of running text owns a word of it (a stop for every walk), and the captions that do
+  const running = new Uint8Array(lines.length), capsOn = new Map()
+  for (let i = 0, last = -1, kind; i < owner.length; i++) {
+    const o = owner[i]
+    if (o === -1) continue
+    if (o !== last) { kind = L.kindOf(o); last = o }
+    if (kind === 'caption') { const j = lineOf[i]; (capsOn.get(j) ?? capsOn.set(j, new Set()).get(j)).add(o) } else if (!HELD.has(kind)) running[lineOf[i]] = 1
+  }
   const caps = []
   for (const [id, runs] of g.byId) {
     if (L.kindOf(id) !== 'caption' || !runs.length) continue
@@ -132,11 +143,9 @@ export function pageFloats(L, p, regions = [], { rules = [], marks = [] } = {}) 
   // caption's, `cap`, is a stop for the others' walks), each figure, each mark, each horizontal rule
   const items = []
   lines.forEach((l, i) => {
-    const o = owners[i]
-    let free = true, cap = null
-    if (o) for (const id of o) { const kind = L.kindOf(id); if (kind === 'caption') cap = id; else if (!HELD.has(kind)) free = false }
-    if (free && cap === null && regions.some(r => within(l, r))) return
-    items.push({ i, x0: l.x0, x1: l.x1, y0: l.y0, y1: l.y1, lo: l.lo, hi: l.hi, what: free && cap === null ? 'line' : 'stop', cap })
+    const caps = capsOn.get(i), cap = caps ? caps.values().next().value : null, free = !running[i] && cap === null
+    if (free && regions.length && regions.some(r => within(l, r))) return
+    items.push({ i, x0: l.x0, x1: l.x1, y0: l.y0, y1: l.y1, lo: l.lo, hi: l.hi, what: free ? 'line' : 'stop', cap })
   })
   regions.forEach((r, k) => items.push({ x0: r.x0, x1: r.x1, y0: r.y0, y1: r.y1, lo: r.y0, hi: r.y1, what: 'figure', fig: k }))
   for (const m of marks) items.push({ ...m, lo: m.y0, hi: m.y1, what: 'mark' })
@@ -146,7 +155,7 @@ export function pageFloats(L, p, regions = [], { rules = [], marks = [] } = {}) 
   for (let i = items.length - 1; i >= 0; i--) if (items[i].y0 > frame.y1 + 1 || items[i].y1 < frame.y0 - 1) items.splice(i, 1)
   // in the order the walks meet them: down from the top, up from the foot
   const byTop = [...items].sort((a, b) => b.y1 - a.y1), byFoot = [...items].sort((a, b) => a.y0 - b.y0)
-  const ctx = { byTop, byFoot, figOf, at: { k0, lineOf, owner }, owners, tokens: id => L.anchors.get(id)?.tokens ?? [] }
+  const ctx = { byTop, byFoot, figOf, at: { k0, lineOf, owner }, capsOn, tokens: id => L.anchors.get(id)?.tokens ?? [] }
   // each caption's walks, best first: toward its own figures where it has some; else the one holding its neighbour in
   // the page's stream (TeX sets a float's caption and its body in the order the source has them); else, the stream
   // setting it between two (a caption between two tables, or under a listing), the one under it — a table's caption
@@ -233,13 +242,15 @@ const enough = w => w.got.some(q => q.what === 'figure') || w.got.filter(q => q.
  * neighbour in the page's stream on its side (the line set just after the caption for the walk down, just before it
  * for the walk up)
  */
-function walk(c, dir, { byTop, byFoot, figOf, at, owners, tokens }, skip = null, limit = null) {
+function walk(c, dir, { byTop, byFoot, figOf, at, capsOn, tokens }, skip = null, limit = null) {
   const h = c.h, down = dir < 0, order = down ? byTop : byFoot
   const got = [], rules = [], range = { x0: c.box.x0, x1: c.box.x1 }
+  // the items past the caption's edge on this side: byTop falls by top, byFoot rises by foot
+  const from = down ? firstAt(byTop, q => q.y1 <= c.box.y0 + 1) : firstAt(byFoot, q => q.y0 >= c.box.y1 - 1)
   let pending = [], edge = down ? c.box.y0 : c.box.y1, stop = null, wall = null, reach = FIRST * h, fig = null
   const widen = q => { if (q.x0 < range.x0) range.x0 = q.x0; if (q.x1 > range.x1) range.x1 = q.x1 }
-  for (const q of order) {
-    if (down ? q.y1 > c.box.y0 + 1 : q.y0 < c.box.y1 - 1) continue
+  for (let k = from; k < order.length; k++) {
+    const q = order[k]
     if (q.cap === c.id || overlapX(q, range) <= 0) continue
     // at a figure's edge, as far as a quarter of its height: the space between a grid's rows of images
     const far = fig && (down ? edge >= fig.y0 - 1 : edge <= fig.y1 + 1) ? Math.max(reach, (fig.y1 - fig.y0) * PANELS) : reach
@@ -279,8 +290,10 @@ function walk(c, dir, { byTop, byFoot, figOf, at, owners, tokens }, skip = null,
   }
   // the rules beyond the caption, against it: an algorithm's rule over its caption
   let end = down ? c.box.y1 : c.box.y0
-  for (const q of down ? byFoot : byTop) {
-    if ((down ? q.y0 < c.box.y1 - 1 : q.y1 > c.box.y0 + 1) || q.cap === c.id || overlapX(q, c.box) <= 0) continue
+  const back = down ? byFoot : byTop
+  for (let k = down ? firstAt(byFoot, q => q.y0 >= c.box.y1 - 1) : firstAt(byTop, q => q.y1 <= c.box.y0 + 1); k < back.length; k++) {
+    const q = back[k]
+    if (q.cap === c.id || overlapX(q, c.box) <= 0) continue
     if (q.what !== 'rule' || (down ? q.y0 - end : end - q.y1) > TRAIL * h) break
     rules.push(q)
     end = down ? q.y1 : q.y0
@@ -289,7 +302,7 @@ function walk(c, dir, { byTop, byFoot, figOf, at, owners, tokens }, skip = null,
   const { k0, lineOf, owner } = at, n = owner.length
   const mine = tokens(c.id).filter(k => k >= k0 && k < k0 + n)
   let near = -1
-  if (mine.length) for (let k = down ? mine.at(-1) + 1 : mine[0] - 1; k >= k0 && k < k0 + n; k += down ? 1 : -1) if (!owners[lineOf[k - k0]]?.has(c.id)) { near = lineOf[k - k0]; break }
+  if (mine.length) for (let k = down ? mine.at(-1) + 1 : mine[0] - 1; k >= k0 && k < k0 + n; k += down ? 1 : -1) if (!capsOn.get(lineOf[k - k0])?.has(c.id)) { near = lineOf[k - k0]; break }
   return { dir, got, rules, stop, own: got.some(q => q.what === 'figure' && figOf.get(q.fig) === c.id), adjacent: near >= 0 && got.some(q => q.i === near) }
 }
 
@@ -325,20 +338,24 @@ function split(c, w, d, v, ctx) {
     gaps.push(down ? edge - next : next - edge)
     if (s < shared.length) edge = down ? Math.min(edge, shared[s].y0) : Math.max(edge, shared[s].y1)
   }
+  // a part at s is valid where nothing before it is only d's and nothing from it on only c's
+  const n = shared.length, theirsBefore = new Uint8Array(n + 1), mineAfter = new Uint8Array(n + 1)
+  for (let i = 0; i < n; i++) theirsBefore[i + 1] = theirsBefore[i] || theirsOnly(shared[i]) ? 1 : 0
+  for (let i = n - 1; i >= 0; i--) mineAfter[i] = mineAfter[i + 1] || mineOnly(shared[i]) ? 1 : 0
   let best = -1
-  for (let s = 0; s <= shared.length; s++) if ((best < 0 || gaps[s] > gaps[best]) && !shared.slice(0, s).some(theirsOnly) && !shared.slice(s).some(mineOnly)) best = s
+  for (let s = 0; s <= n; s++) if ((best < 0 || gaps[s] > gaps[best]) && !theirsBefore[s] && !mineAfter[s]) best = s
   if (best < 0) best = gaps.indexOf(Math.max(...gaps))
   return [walk(c, w.dir, ctx, new Set(shared.slice(best))), walk(d, v.dir, ctx, new Set(shared.slice(0, best)))]
 }
 
 /** the lines the page's stream sets next to a caption on a walk's side, through `lines`: from the caption's last token
  *  on (the walk down) or its first one back (up), while each token's line is the caption's own or one of `lines` */
-function nextTo(c, dir, lines, { at: { k0, lineOf, owner }, owners, tokens }) {
+function nextTo(c, dir, lines, { at: { k0, lineOf, owner }, capsOn, tokens }) {
   const out = new Set(), n = owner.length, mine = tokens(c.id).filter(k => k >= k0 && k < k0 + n)
   if (!mine.length) return out
   for (let k = dir < 0 ? mine.at(-1) + 1 : mine[0] - 1; k >= k0 && k < k0 + n; k += dir < 0 ? 1 : -1) {
     const j = lineOf[k - k0]
-    if (owners[j]?.has(c.id)) continue
+    if (capsOn.get(j)?.has(c.id)) continue
     if (!lines.has(j)) break
     out.add(j)
   }
