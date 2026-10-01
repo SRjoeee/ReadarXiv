@@ -1,19 +1,22 @@
 // experiments/pdf-bilingual/spikes/reader-typeset.mjs
 // The typesetting rule through the reader's own path (F2's acceptance, 2026-10-02): for each <lang>/<id>, the reader in
-// Chromium with the extension's build, live against a TeX page (SITE, by default the one at 8071 with TeX Live's files
-// at 8070), the paper from the local corpus, and either
+// Chromium with the extension's build, live against its TeX page (a production build's is our site's,
+// https://tex.readarxiv.org; SITE=<a page on this machine>, with ENDPOINT its TeX Live files for one of protocol 1),
+// the paper from the local corpus — or, EMBEDDED=1, the reader laid over arXiv's own PDF page (arxiv.org/pdf/<id>), the
+// paper from arXiv, as a reader opens it —, and either
 //   - the translation the rule's gate measured (MOCK=1: AXT_DATA/runs/visual-eval/<lang>/<id>/translation.json, given
 //     back unit by unit, as the reader sends each on the tags wire, by an LLM endpoint on this machine), so that the
 //     final can be held against the gate's record for the same translation (records/typeset-gate.json `papers`), or
 //   - the extension's default service, Microsoft (no MOCK), for the times a reader meets.
-// Per paper: when the first preview and the final were on screen (from the decision to translate), the compiles in
-// order, the final's pages and start and end drift against the original — compiled natively in full with its line
+// Per paper, in a fresh profile (a first visit: the TeX page's engine and files fetched too): when the first preview
+// and the final were on screen (from the decision to translate), the compiles in order, the browser's peak memory, the
+// final's pages and start and end drift against the original — compiled natively in full with its line
 // probes and marks, as the gate compiles it — and the final's own text page by page: the share of each page's letters
 // in the target's script (for German, its function words against English ones), so that a page left in English shows.
 // Papers stay on this machine: nothing is written but out/reader-typeset/<build>-<lang>-<id>.json and the final's PDF.
 //   AXT_DATA=<data> MOCK=1 pnpm exec tsx experiments/pdf-bilingual/spikes/reader-typeset.mjs zh/2608.02163 ja/2608.18090 …
 //   BUILD=<another build> TAG=<name> … — another build (today's: one of the commit before the rule), its results named
-import { execFile } from 'node:child_process'
+import { execFile, execSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -33,7 +36,7 @@ import { BUILD, launchWithReader } from './extension.mjs'
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname
 const DATA = process.env.AXT_DATA ?? join(root, 'data'), MOCK = !!process.env.MOCK
-const SITE = process.env.SITE ?? 'http://127.0.0.1:8071', ENDPOINT = process.env.ENDPOINT ?? 'http://localhost:8070'
+const SITE = process.env.SITE ?? null, ENDPOINT = process.env.ENDPOINT ?? 'http://localhost:8070', EMBEDDED = !!process.env.EMBEDDED
 const TAG = process.env.TAG ?? 'rule', OUT = join(root, 'out/reader-typeset')
 const PDFJS = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
 const pdfOf = bytes => getDocument({ data: new Uint8Array(bytes), verbosity: 0, cMapUrl: join(PDFJS, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(PDFJS, 'standard_fonts/') }).promise
@@ -146,6 +149,8 @@ const build = process.env.BUILD ?? BUILD
 const extension = join(tmpdir(), `reader-typeset-ext-${TAG}`)
 copyWithGrants(build, extension, { hostPermissions: ['http://127.0.0.1/*'] })
 const record = JSON.parse(readFileSync(join(root, 'records/typeset-gate.json'), 'utf8'))
+/** the resident memory of this run's browser, every process of it (MB), by its profile's directory name */
+const rssOf = prefix => { try { return Math.round(Number(execSync(`ps -ax -o rss=,command= | grep -F -- "${prefix}" | grep -v grep | awk '{s+=$1} END {print s+0}'`).toString().trim()) / 1024) } catch { return null } }
 mkdirSync(OUT, { recursive: true })
 
 for (const spec of process.argv.slice(2)) {
@@ -163,18 +168,28 @@ for (const spec of process.argv.slice(2)) {
   if (MOCK) await seedService(worker, { id: 'svc-typeset1', name: 'the gate\'s translation', baseURL: `http://127.0.0.1:${mock.address().port}/v1`, model: 'mock' })
   await worker.evaluate(async code => { const { config } = await chrome.storage.local.get('config'); await chrome.storage.local.set({ config: { ...config, targetLanguage: code, fallback: { enabled: false } } }) }, CODE[lang])
   await new Promise(res => setTimeout(res, 500))
-  const page = await context.newPage(), errors = []
+  const page = await context.newPage(), errors = [], memory = []
   page.on('pageerror', e => errors.push(e.message))
-  const src = `http://127.0.0.1:${corpus.address().port}`
-  await page.goto(readerUrl({ paper: id, live: '1', mode: 'bilingual', site: SITE, endpoint: ENDPOINT, src: `${src}/src/${id}`, pdf: `${src}/pdf/${id}` }))
-  await page.waitForFunction(() => window.__reader?.live?.done, null, { timeout: 900000, polling: 500 }).catch(() => {})
-  const live = await page.evaluate(() => ({ events: window.__reader.live.events, failed: window.__reader.live.failed ?? null }))
-  const bytes = await page.evaluate(async () => { const d = await window.__reader.debug?.right?.doc?.getData(); return d ? btoa(Array.from(d, c => String.fromCharCode(c)).join('')) : null })
+  const sampling = setInterval(() => { const mb = rssOf(`reader-typeset-${TAG}-`); if (mb) memory.push(mb) }, 1000)
+  const src = `http://127.0.0.1:${corpus.address().port}`, at = SITE ? { site: SITE, endpoint: ENDPOINT } : {}
+  let reader = page
+  if (EMBEDDED) {
+    // arXiv's PDF page, which the extension lays the reader over; bilingual chosen there, as a reader chooses it
+    await page.goto(`https://arxiv.org/pdf/${id}`, { waitUntil: 'domcontentloaded', timeout: 120000 })
+    reader = await (await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: 60000 })).contentFrame()
+    await reader.waitForFunction(() => window.__reader?.controller, null, { timeout: 60000 })
+    await reader.evaluate(() => window.__reader.controller.setDisplay('bilingual'))
+  } else await page.goto(readerUrl({ paper: id, live: '1', mode: 'bilingual', ...at, src: `${src}/src/${id}`, pdf: `${src}/pdf/${id}` }))
+  await reader.waitForFunction(() => window.__reader?.live?.done, null, { timeout: 900000, polling: 500 }).catch(() => {})
+  clearInterval(sampling)
+  const live = await reader.evaluate(() => ({ events: window.__reader.live.events, failed: window.__reader.live.failed ?? null }))
+  const bytes = await reader.evaluate(async () => { const d = await window.__reader.debug?.right?.doc?.getData(); return d ? btoa(Array.from(d, c => String.fromCharCode(c)).join('')) : null })
   await context.close()
-  const at = name => live.events.find(e => e.event === name)?.t ?? null, from = at('translating')
-  const out = { spec, build: TAG, mock: MOCK, missing: r.missing, llm: { ...llm }, failed: live.failed, errors: errors.slice(0, 5),
-    firstPreview: at('shown preview') != null && from != null ? at('shown preview') - from : null, final: at('shown final') != null && from != null ? at('shown final') - from : null,
-    compiles: live.events.filter(e => ['fonts', 'preview', 'original', 'measure', 'final', 'typeset', 'typeset failed', 'next strategy', 'compile again'].includes(e.event)).map(({ t, event, ok, ms, typeset, missing, measured, strategy, error }) => ({ t, event, ok, ms, typeset, missing, measured, strategy, error })) }
+  const when = name => live.events.find(e => e.event === name)?.t ?? null, from = when('translating')
+  const out = { spec, build: TAG, mock: MOCK, embedded: EMBEDDED, missing: r.missing, llm: { ...llm }, failed: live.failed, errors: errors.slice(0, 5),
+    firstPreview: when('shown preview') != null && from != null ? when('shown preview') - from : null, final: when('shown final') != null && from != null ? when('shown final') - from : null,
+    peakMB: memory.length ? Math.max(...memory) : null,
+    compiles: live.events.filter(e => ['compiler', 'fonts', 'preview', 'original', 'measure', 'final', 'typeset', 'typeset failed', 'next strategy', 'compile again', 'compiler down'].includes(e.event)).map(({ t, event, ok, ms, typeset, missing, measured, strategy, error, own }) => ({ t, event, ok, ms, typeset, missing, measured, strategy, error, own })) }
   if (bytes) {
     const pdf = Buffer.from(bytes, 'base64')
     writeFileSync(join(OUT, `${TAG}-${lang}-${id}.pdf`), pdf)
@@ -185,9 +200,9 @@ for (const spec of process.argv.slice(2)) {
   }
   writeFileSync(join(OUT, `${TAG}-${lang}-${id}.json`), JSON.stringify(out, null, 1))
   const f = x => (x == null ? '-' : x.toFixed(3))
-  console.log(`${spec} [${TAG}] ${out.failed ? `FAILED ${out.failed}` : ''} first preview ${out.firstPreview} ms, final ${out.final} ms; ${out.result ? `pages ${out.result.pages} (of ${out.result.origPages}) start ${f(out.result.start)} end ${f(out.result.end)}` : 'no final'}${out.gate ? `; gate pages ${out.gate.pages} start ${f(out.gate.start)}` : ''}${MOCK ? `; replies missing ${r.missing}, misses ${llm.misses} of ${llm.segments}` : ''}`)
+  console.log(`${spec} [${TAG}] ${out.failed ? `FAILED ${out.failed}` : ''} first preview ${out.firstPreview} ms, final ${out.final} ms, peak ${out.peakMB} MB; ${out.result ? `pages ${out.result.pages} (of ${out.result.origPages}) start ${f(out.result.start)} end ${f(out.result.end)}` : 'no final'}${out.gate ? `; gate pages ${out.gate.pages} start ${f(out.gate.start)}` : ''}${MOCK ? `; replies missing ${r.missing}, misses ${llm.misses} of ${llm.segments}` : ''}`)
   if (out.result) console.log(`  target script per page: ${out.result.script.join(' ')}\n  (the original's:        ${out.result.originalScript.join(' ')})`)
-  console.log(`  compiles: ${out.compiles.map(c => `${c.event}${c.ok === false ? '!' : ''}${c.typeset ? '+rule' : ''}${c.measured ? `(${c.measured})` : ''}${c.missing ? `(${c.missing})` : ''}`).join(' → ')}`)
+  console.log(`  compiles: ${out.compiles.map(c => `${c.event}${c.own ? '(own)' : ''}${c.ok === false ? '!' : ''}${c.typeset ? '+rule' : ''}${c.measured ? `(${c.measured})` : ''}${c.missing ? `(${c.missing})` : ''}@${c.t}${c.ms != null ? `/${c.ms}` : ''}`).join(' → ')}`)
   for (const c of out.compiles.filter(c => c.ok === false)) console.log(`  ${c.event} failed under ${c.strategy}: ${c.error}`)
   if (llm.missed.length) console.log(`  not the gate's (given back as sent): ${llm.missed.map(t => JSON.stringify(t.slice(0, 80))).join(' | ')}`)
 }
