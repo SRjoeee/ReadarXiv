@@ -275,3 +275,26 @@ Errors are leave-one-paper-out. The text predictor was crude (every non-CJK char
     already sits at its floor (Japanese and Korean at the paper's own, the type's 1.01), the references start a page
     later and run past it, and the checklist after its \newpage takes page 13. Nothing but the floor can take it
     back — the owner's call (tracking tightened, a unit's face a little smaller, or the type leaving room below).
+- 2026-10-01, the owner's option A on Flow, even (CJK only, page column "Flow, even (A)", key flow46fp8r5bs95): a unit
+  that runs long past the floor of the leading set at a face down to 0.95 of the type's (flowType `shrink`). Three
+  rounds on the 21 CJK papers:
+  - First, the face from the leading's whole want: it chased where the preview's text stood — a float moved —
+    and Korean 2608.24839 came out a page short; and the preview, set at smaller faces too, was carried back to the
+    full face by the line model, which reads a line saved for every 2 % even where a short paragraph keeps its lines.
+  - Second, from the window's leading alone: the excess the floor left was never taken back, and Korean 2608.18090
+    kept its page more.
+  - Third (on the page): from the flow of the units' own heights — the window's leading, what the floor left taken
+    back, started again at a forced break — never from the preview's places; only the final sets faces.
+
+    | CJK, 21 papers | Pages equal (more / fewer) | Drift median / p90 | Within 0.1 column | Units standing out (leading × face) |
+    |---|---|---|---|---|
+    | Flow, even | 18 (3 / 0) | 0.042 / 0.317 | 78 % | 7 |
+    | Option A | 19 (1 / 1) | 0.040 / 0.233 | 80 % | 16 |
+
+    Better: Japanese and Korean 2608.18090 (their pages), Japanese 2608.15761 (0.086 → 0.021 column). Worse: Japanese
+    and Korean 2608.06701 (0.01 → 0.04), Japanese 2608.21180 (0.028 → 0.064), Korean 2608.15761 (0.086 → 0.124),
+    Japanese 2608.24839 a page short. 501 units set smaller, a third of the CJK units, most by under 3 %: Japanese and
+    Korean types sit at or near their floor. And a face a little smaller saves a whole line more often than the line
+    model allows — 95 lines against 75 in all, twice as often under 1 % (8 against 3.8), 1.4 times at 1–3 %, 1.1 at
+    3–5 % — so the final, which counted on the model, came out early. Japanese types already at their smallest face
+    (0.92) went to 0.87 in places.
