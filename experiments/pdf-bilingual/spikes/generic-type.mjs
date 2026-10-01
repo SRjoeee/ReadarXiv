@@ -36,12 +36,16 @@ export function heightRatio(units, script, type) {
   for (const u of units) { o += u.lo * u.bs; t += heightAt(u, design, type) * type.lead }
   return o ? t / o : 1
 }
-// a unit's predicted height at a type, at leading one: its lines × its size (an alphabet's) × the paper's leading
-const heightAt = (u, design, type) => (design.cjk ? linesAt(u.width(type), u.cap) * u.bs : linesAt(u.width(type) * (type.h ?? type.size), u.cap) * type.size * u.bs)
+// a unit's predicted lines at a type, its face `f` times the type's own: what it fills of a line is that much less
+const linesOf = (u, design, type, f = 1) => (design.cjk ? linesAt(u.width(type) * f, u.cap) : linesAt(u.width(type) * (type.h ?? type.size) * f, u.cap))
+// a unit's predicted height at a type, at leading one: its lines × its size (an alphabet's, and `f`) × the paper's leading
+const heightAt = (u, design, type, f = 1) => linesOf(u, design, type, f) * (design.cjk ? 1 : type.size) * f * u.bs
+/** a unit's predicted height at a type and leading one, its face `f` times the type's own (flowType's shrink) */
+export const heightAtSize = (u, script, type, f = 1) => heightAt(u, DESIGN[script], type, f)
 /** each unit's predicted height at a type and leading one, by its index: what flowLeads takes from a prediction */
 export const unitHeights = (units, script, type) => new Map(units.map(u => [u.i, heightAt(u, DESIGN[script], type)]))
-/** each unit's predicted lines at a type, by its index */
-export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, DESIGN[script].cjk ? linesAt(u.width(type), u.cap) : linesAt(u.width(type) * (type.h ?? type.size), u.cap)]))
+/** each unit's predicted lines at a type, by its index; with `sizes`, each at its own face (flowType's) */
+export const unitLines = (units, script, type, sizes = null) => new Map(units.map(u => [u.i, linesOf(u, DESIGN[script], type, sizes?.get(u.i) ?? 1)]))
 
 /**
  * The leading along the paper, unit by unit: the one that makes the translation as tall as the original over the
@@ -88,10 +92,16 @@ export const unitLines = (units, script, type) => new Map(units.map(u => [u.i, D
  * fraction from the window's, however far behind the text is, so that no paragraph stands out from its neighbours: a
  * jump the preview measured, taken back within the horizon, set Korean 2608.05876's paragraphs after it a quarter
  * looser than the text around them, and the owner preferred the version without it to one nearer the original's places.
+ * `shrink` ({ min, heightAt(i, f) }): a unit that wants a leading below the floor of the range — Japanese and Korean set
+ * no tighter than the paper's own, and a stretch that runs long stays long — is set at a face `f` times the type's,
+ * as little smaller as brings it to the height it wants (heightAt: its height at leading one at that face), never
+ * below `min`, its leading the floor (the owner, 2026-10-01: Korean 2608.18090's sections 7 and 8 ran 0.16 page long
+ * at the floor, its references started a page later, and the checklist after them took a page more). The face's
+ * factor by unit is flowType's `sizes`; what is left after it is taken back as any drift.
  * `heights`: Map(unit index → the translation's height at leading one), from unitHeights or a compile's lines. The
  * leading is × the paper's for CJK, × the size's for an alphabet, as the type's is
  */
-export function flowLeads(units, script, heights, { window = 50, horizon = window, ahead = 0, measured = null, rate = Infinity } = {}) {
+export function flowType(units, script, heights, { window = 50, horizon = window, ahead = 0, measured = null, rate = Infinity, shrink = null } = {}) {
   const design = DESIGN[script]
   const list = units.filter(u => heights.get(u.i) > 0).sort((a, b) => a.i - b.i)
   const bs = [...list.map(u => u.bs)].sort((a, b) => a - b)[list.length >> 1] ?? 12, half = (window * bs) / 2, back = horizon * bs, lead = ahead * bs
@@ -139,7 +149,7 @@ export function flowLeads(units, script, heights, { window = 50, horizon = windo
       offsetAt.set(r.i, current)
     })
   }
-  const out = new Map()
+  const out = new Map(), sizes = new Map()
   let lo = 0, hi = 0, o = 0, t = 0, drift = 0, offset = 0
   for (let k = 0; k < list.length; k++) {
     for (; hi < list.length && mid[hi] <= mid[k] + half; hi++) { o += list[hi].lo * list[hi].bs; t += heights.get(list[hi].i) }
@@ -150,14 +160,27 @@ export function flowLeads(units, script, heights, { window = 50, horizon = windo
     if (breaks.has(i) && accountAt.has(i)) drift = accountAt.get(i)
     if (offsetAt.has(i)) offset = offsetAt.get(i)
     const at = drift + offset, near = toJump.get(i)
-    const x = near != null
-      ? clamp((list[k].lo * list[k].bs - lead * (1 - near / local) - at) / heights.get(i), design.lead)
-      : clamp((o / t) * clamp(back > 0 && back < Infinity ? 1 - (at + (local ? 0 : lead)) / back : 1, [1 - rate, 1 + rate]), design.lead)
+    const want = near != null
+      ? (list[k].lo * list[k].bs - lead * (1 - near / local) - at) / heights.get(i)
+      : (o / t) * clamp(back > 0 && back < Infinity ? 1 - (at + (local ? 0 : lead)) / back : 1, [1 - rate, 1 + rate])
+    const x = clamp(want, design.lead)
+    // below the floor of the leading: the face as little smaller as brings the unit to the height it wants there
+    let h = heights.get(i)
+    if (shrink && want < design.lead[0]) {
+      const goal = (h * want) / design.lead[0]
+      let f = 1
+      while (f - SHRINK_STEP >= shrink.min - 1e-9 && shrink.heightAt(i, f) > goal) f = Math.round((f - SHRINK_STEP) * 1e6) / 1e6
+      if (f < 1) { sizes.set(i, f); h = shrink.heightAt(i, f) }
+    }
     out.set(i, x)
-    drift += heights.get(i) * x - list[k].lo * list[k].bs
+    drift += h * x - list[k].lo * list[k].bs
   }
-  return out
+  return { leads: out, sizes }
 }
+// the steps a unit's face is made smaller by (flowType's shrink): a quarter of a size probe's step
+const SHRINK_STEP = 0.0025
+/** flowType's leading alone: each unit's leading by its index */
+export const flowLeads = (units, script, heights, options) => flowType(units, script, heights, options).leads
 
 // a translation that runs long pushes floats and forced page breaks to later pages (2608.09038 gained two pages when
 // its main text ran a third of a column long); one that runs short leaves white space at a column's end. Of two types

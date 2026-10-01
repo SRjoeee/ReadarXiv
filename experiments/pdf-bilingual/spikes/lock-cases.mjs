@@ -62,9 +62,9 @@ const body = tr => {
   return s
 }
 const doc = (tr, table = '') => `${MARK_DEF}${LINES_TEX}${SYNC_TEX}${tr ? unitLeadTex(1.3) : ''}\\axtsyncpoints{theorem}\n${table}\n\\documentclass[twocolumn]{article}\n\\usepackage{lipsum}\n\\begin{document}\n${body(tr)}\\end{document}\n`
-const tex = (name, src) => {
+const tex = (name, src, engine = 'pdflatex') => {
   writeFileSync(join(dir, `${name}.tex`), src)
-  try { execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'pdflatex', '-interaction=nonstopmode', `${name}.tex`], { stdio: 'ignore' }) } catch {}
+  try { execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', engine, '-interaction=nonstopmode', `${name}.tex`], { stdio: 'ignore' }) } catch {}
   return readFileSync(join(dir, `${name}.log`), 'latin1')
 }
 const targets = readTargets(tex('original', doc(false)))
@@ -171,6 +171,11 @@ check('a unit in the paper\'s \\small once a unit set at 9 pt is over: 0.9 of it
 check('a note that is a unit, in a unit set at the note size: 0.8 of the note\'s own 8 pt, the unit\'s 8 pt after it', ty('NOTE') === '6.4' && ty('BODY') === '8', JSON.stringify([ty('NOTE'), ty('BODY')]))
 check('a unit begun inside one set smaller, the paper\'s size unchanged: 0.9 of the paper\'s 10 pt, not of 9', ty('INBOX') === '9' && ty('OUTBOX') === '9', JSON.stringify([ty('INBOX'), ty('OUTBOX')]))
 check('unit type raises no TeX error', !/^! /m.test(typeLog), (typeLog.match(/^! .*/m) ?? [''])[0])
+// a CJK unit set smaller (flowType's shrink) through the same size: xeCJK's face follows \fontsize, the CJK text in it
+// 0.95 as wide, and the paper's size after it. Characters by code (^^^^6c49): this file stays ASCII
+const cjkUnit = tex('size-cjk', `\\makeatletter\\expandafter\\def\\csname axtsize@7\\endcsname{0.95}\\makeatother${LINES_TEX}${SIZE_TEX}${unitLeadTex(1.3)}\n\\documentclass{article}\n\\usepackage{xeCJK}\n\\setCJKmainfont{FandolSong-Regular.otf}\n\\begin{document}\n\\makeatletter\n\\setbox2\\hbox{^^^^6c49^^^^5b57^^^^6c49^^^^5b57}\\message{^^JCJK-OUT \\the\\wd2^^J}\n\\axtsize{7}\\axtlead{7}\\leavevmode\\setbox2\\hbox{^^^^6c49^^^^5b57^^^^6c49^^^^5b57}\\message{^^JCJK-IN \\the\\wd2^^J}^^^^6c49^^^^5b57.\\par\\message{^^JCJK-AFTER \\f@size^^J}\n\\end{document}\n`, 'xelatex')
+const cjkW = k => Number(cjkUnit.match(new RegExp(`^CJK-${k} ([\\d.]+)pt`, 'm'))?.[1])
+check('a CJK unit set at 0.95: its CJK text 0.95 as wide, the paper\'s 10 pt after it', Math.abs(cjkW('IN') / cjkW('OUT') - 0.95) < 0.002 && cjkUnit.match(/^CJK-AFTER (\S+)/m)?.[1] === '10', `${cjkW('IN')} ${cjkW('OUT')} ${cjkUnit.match(/^CJK-AFTER (\S+)/m)?.[1]} ${(cjkUnit.match(/^! .*/m) ?? [''])[0]}`)
 // a translated table no wider than the wider of the line and its original, the original's counters not counted twice
 const fitBody = [
   `\\begin{minipage}{0.3\\textwidth}\\sbox0{\\axtfit{\\begin{tabular}{p{5cm}p{5cm}}A & B\\end{tabular}}{\\begin{tabular}{p{5cm}p{5cm}}C & D\\end{tabular}}}\\message{^^JFIT narrowbox \\the\\wd0 \\space\\the\\linewidth^^J}\\end{minipage}`,

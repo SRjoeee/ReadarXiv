@@ -73,7 +73,7 @@ function renderPapers() {
     const d = document.createElement('div'); d.className = `paper${e.paper === state.paper ? ' on' : ''}`
     const pages = state.catalog.columns.filter(c => Object.hasOwn(e.pages, c.key)).map(c => `${c.label} ${e.pages[c.key] ?? '×'}`).join(' · ')
     // the columns with numbers, as the page lists them: FIT, the generic variants, the H-rule lock
-    const cols = [['FIT', e.fit], ['Generic', e.generic], ['Flow, first', e.flow], ['Flow', e.flow46fp8], ['Flow, even', e.flow46fp8r5b], ['H rules', e.lockh]].filter(([, x]) => x)
+    const cols = [['FIT', e.fit], ['Generic', e.generic], ['Flow, first', e.flow], ['Flow', e.flow46fp8], ['Flow, even', e.flow46fp8r5b], ['Flow, even (A)', e.flow46fp8r5bs95], ['H rules', e.lockh]].filter(([, x]) => x)
     const line = (label, f) => `<small>${label}: ${cols.map(([n, x]) => `${n} ${f(x)}`).join(' · ')}</small>`
     d.innerHTML = `<b>${e.paper}</b><small>${e.cls}</small><small>pages ${pages}</small>${line('units on their page', x => rate(x.samePage, x.units))}${line('drift, median columns', drift)}${line('blocks within 15 %', sized)}`
     d.onclick = () => openPaper(e.paper)

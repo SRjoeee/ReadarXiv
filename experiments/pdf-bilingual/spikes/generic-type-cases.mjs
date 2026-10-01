@@ -1,7 +1,7 @@
 // Cases for generic-type.mjs: the design table and the solver that finds one set of type per paper from predicted
 // lines (plans/2026-09-30-generic-type.md, step 2). Synthetic units, no TeX. Exits non-zero on a failure.
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/generic-type-cases.mjs
-import { correctUnits, DESIGN, flowLeads, heightRatio, solveType, unitHeights } from './generic-type.mjs'
+import { correctUnits, DESIGN, flowLeads, flowType, heightAtSize, heightRatio, solveType, unitHeights, unitLines } from './generic-type.mjs'
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
@@ -180,5 +180,25 @@ const across = flowLeads(broken, 'Latn', longBefore, { window: 0, horizon: 40, m
 const anchored = flowLeads(broken, 'Latn', longBefore, { window: 0, horizon: 40, measured: { drift: breakDrift, preview: longBefore, snap: 40, breaks: new Set([20]) } })
 check('breaks: read across a forced break, the units after it are set looser', across.get(22) > 1.05, `${across.get(22)}`)
 check('breaks: re-anchored there, every unit after it at its original\'s height, and the median read before it stops at it', broken.every(u => near(longBefore.get(u.i) * anchored.get(u.i), 96, 1e-6)), JSON.stringify([...anchored.values()].slice(16, 24)))
+// `shrink` (the owner, 2026-10-01): a unit the floor of the leading cannot bring back to its original's height —
+// Japanese and Korean set no tighter than the paper's own — set at a face a little smaller, as little as reaches it and
+// no smaller than `min`, its leading the floor. Korean 2608.18090's sections 7 and 8 ran 0.16 page long at the floor,
+// its references started a page later and its checklist took a page more
+const longKo = Array.from({ length: 40 }, (_, i) => ({ lo: 8, bs: 12, cap: 24, i, width: () => 0 }))
+const koHeights = new Map(longKo.map(u => [u.i, u.i >= 10 && u.i < 30 ? 120 : 96]))
+const squared = hs => ({ min: 0.95, heightAt: (i, f) => hs.get(i) * f * f })
+const atFloor = flowType(longKo, 'Kore', koHeights, { window: 0, horizon: 40 })
+const shrunk = flowType(longKo, 'Kore', koHeights, { window: 0, horizon: 40, shrink: squared(koHeights) })
+const lateBy = r => longKo.reduce((d, u) => d + koHeights.get(u.i) * (r.sizes.get(u.i) ?? 1) ** 2 * r.leads.get(u.i) - 96, 0)
+check('shrink: without it, the long stretch at the floor and nothing smaller', atFloor.sizes.size === 0 && near(atFloor.leads.get(15), 1, 1e-9) && flowLeads(longKo, 'Kore', koHeights, { window: 0, horizon: 40 }).get(15) === atFloor.leads.get(15))
+check('shrink: with it, the long stretch smaller down to 0.95, never below, its leading the floor; a unit on its height untouched', near(shrunk.sizes.get(15), 0.95, 1e-9) && [...shrunk.sizes.values()].every(f => f >= 0.95 - 1e-9 && f < 1) && near(shrunk.leads.get(15), 1, 1e-9) && !shrunk.sizes.has(5), JSON.stringify([...shrunk.sizes].slice(0, 4)))
+check('shrink: less left late by the end', lateBy(shrunk) < lateBy(atFloor) - 100, `${lateBy(shrunk)} ${lateBy(atFloor)}`)
+const slight = new Map(longKo.map(u => [u.i, u.i === 5 ? 100 : 96]))
+const nudged = flowType(longKo, 'Kore', slight, { window: 0, horizon: Infinity, shrink: squared(slight) })
+check('shrink: as little smaller as reaches the original\'s height', nudged.sizes.size === 1 && nudged.sizes.get(5) > 0.97 && nudged.sizes.get(5) <= 0.98, JSON.stringify([...nudged.sizes]))
+// a unit's predicted height at a face `f` times the type's, at leading one: more to a line, each line closer
+const wide = { lo: 10, bs: 12, cap: 30, i: 0, width: () => 285 }
+check('height at a size: a CJK unit at 0.95 takes the lines its width × 0.95 fills, each 0.95 as tall', near(heightAtSize(wide, 'Kore', { lead: 1, track: 0, scale: 1 }, 0.95), (285 * 0.95 / 30 + 0.5) * 12 * 0.95, 1e-9) && near(heightAtSize(wide, 'Kore', { lead: 1, track: 0, scale: 1 }, 1), unitHeights([wide], 'Kore', { lead: 1, track: 0, scale: 1 }).get(0), 1e-9))
+check('lines at their sizes: a unit at 0.95 takes 0.95 of its width\'s lines, one without a size its own', near(unitLines([wide], 'Kore', { lead: 1, track: 0, scale: 1 }, new Map([[0, 0.95]])).get(0), 285 * 0.95 / 30 + 0.5, 1e-9) && near(unitLines([wide], 'Kore', { lead: 1, track: 0, scale: 1 }, new Map()).get(0), 285 / 30 + 0.5, 1e-9))
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)

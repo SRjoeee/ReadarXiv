@@ -8,7 +8,7 @@ const GATE = ['2608.02163', '2608.05876', '2608.09746', '2608.12333', '2608.1809
 const EIGHT = ['2608.05876', '2608.18090', '2608.06701', '2608.24839', '2608.02785', '2608.21180', '2608.15761', '2608.06233']
 export const PAPERS = { zh: ['2212.06817', ...GATE], ja: EIGHT, ko: EIGHT, de: EIGHT, ru: EIGHT }
 /** Active review columns, in keyboard order. Source keys stay stable for saved PDFs and flags. */
-export const COLUMNS = [{ key: 'original', label: 'Original' }, { key: 'fit', label: 'FIT' }, { key: 'generic', label: 'Generic' }, { key: 'flow', label: 'Flow, first' }, { key: 'flow46fp8', label: 'Flow' }, { key: 'flow46fp8r5b', label: 'Flow, even' }, { key: 'lockh', label: 'Locked (H rules)' }, { key: 'h', label: 'H' }]
+export const COLUMNS = [{ key: 'original', label: 'Original' }, { key: 'fit', label: 'FIT' }, { key: 'generic', label: 'Generic' }, { key: 'flow', label: 'Flow, first' }, { key: 'flow46fp8', label: 'Flow' }, { key: 'flow46fp8r5b', label: 'Flow, even' }, { key: 'flow46fp8r5bs95', label: 'Flow, even (A)' }, { key: 'lockh', label: 'Locked (H rules)' }, { key: 'h', label: 'H' }]
 /** the fit (lock.mjs fitLeads): the paper's factor on its leading held within [lo, hi] and each unit's own within
  *  1 ± band of it; a script that grows (the alphabets) is first set smaller, to minSize at most */
 export const FIT = { cjk: { lo: 0.9, hi: 1.25, band: 0.08 }, alphabet: { lo: 0.95, hi: 1.1, band: 0.08 }, minSize: 0.93 }
@@ -42,7 +42,7 @@ export function catalogEntry(index) {
   return {
     paper: index.paper, cls: index.cls,
     pages: Object.fromEntries(COLUMNS.filter(c => index.columns.some(x => x.key === c.key)).map(c => [c.key, index.columns.find(x => x.key === c.key).pages ?? null])),
-    lockh: index.numbers?.lockh ?? null, fit: index.numbers?.fit ?? null, generic: index.numbers?.generic ?? null, flow: index.numbers?.flow ?? null, flow46fp8: index.numbers?.flow46fp8 ?? null, flow46fp8r5b: index.numbers?.flow46fp8r5b ?? null,
+    lockh: index.numbers?.lockh ?? null, fit: index.numbers?.fit ?? null, generic: index.numbers?.generic ?? null, flow: index.numbers?.flow ?? null, flow46fp8: index.numbers?.flow46fp8 ?? null, flow46fp8r5b: index.numbers?.flow46fp8r5b ?? null, flow46fp8r5bs95: index.numbers?.flow46fp8r5bs95 ?? null,
     failed: Object.fromEntries(COLUMNS.filter(c => index.failed?.[c.key]).map(c => [c.key, index.failed[c.key]])), flags: index.flags ?? [], untranslated: index.translation?.untranslated ?? 0,
   }
 }
