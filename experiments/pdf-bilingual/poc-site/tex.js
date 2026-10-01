@@ -5,7 +5,7 @@ import { BusyTexRunner, LuaLatex, PdfLatex, XeLatex } from './lib/index.js'
 import build from './build.json' with { type: 'json' }
 import { texPage } from './tex-page.mjs'
 
-const page = texPage({ build, Runner: BusyTexRunner, Engines: { PdfLatex, XeLatex, LuaLatex }, fetch: url => fetch(url), caches })
+const page = texPage({ build, Runner: BusyTexRunner, Engines: { PdfLatex, XeLatex, LuaLatex }, fetch: (url, init) => fetch(url, init), caches })
 addEventListener('message', e => {
   if (!e.origin.startsWith('chrome-extension://')) return
   page.receive(e.data, (data, transfer = []) => e.source.postMessage(data, e.origin, transfer))
