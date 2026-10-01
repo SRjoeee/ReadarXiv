@@ -11,9 +11,10 @@
 // drawn or pointed at, since most pages of a long paper are never looked at in a visit.
 // The look was chosen on a draft (round 1 of the highlight, 2026-10-01): one block per run, padded half the leading
 // above and below and 3 px beside, one outline with 3 px corners. Where a unit's sentences are known on both sides
-// (anchors.mjs sentenceStarts), a sentence instead: its first row from its start, the rows between across the run, its
-// last row to its end with its punctuation, two sentences on one row meeting halfway through the space between them —
-// one outline per run, the hit test the same shapes.
+// (anchors.mjs sentenceStarts), a sentence instead: its first row from its start, the rows between across its unit's
+// text in the column — over a column or a page break too —, its last row to its end with its punctuation, two
+// sentences on one row meeting halfway through the space between them — one outline per run, the hit test the same
+// shapes.
 
 import { inkEdges } from './anchors.mjs'
 
@@ -145,7 +146,27 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
     const w = doc[k], P = page[w.page], e = P && (P.cols[colOf(P, w.x, w.x + w.w)] ?? P.cols.F)
     if (e && Math.abs(w.far - e.x1) < SNAP) r[k] = w.far
   }
-  return { tok, pageStart, page, anchors, kindOf, unitsOn, pagesOf, cache: new Map() }
+  return { tok, pageStart, page, anchors, kindOf, unitsOn, pagesOf, cache: new Map(), indents: new Map() }
+}
+
+/** how far a unit's text stands inside its columns' text edges, on each side (PDF units): the least of its lines' —
+ *  a list's item, a quotation, an indented theorem inside them, a paragraph not —, an indent within SNAP none. Where
+ *  its sentences go on over a column or a page break, they reach its text edge there (unitRuns), whatever the run there
+ *  holds: a display at a page's foot or head is in a paragraph's text, and the space beside it the paragraph's */
+function indentOf(L, id) {
+  let m = L.indents.get(id)
+  if (m) return m
+  let l = Infinity, r = Infinity
+  for (const q of L.anchors.get(id)?.rects ?? []) {
+    const P = L.page[q.page]
+    if (!P) continue
+    const e = P.cols[colOf(P, q.x0, q.x1)] ?? P.cols.F
+    if (q.x0 - e.x0 < l) l = q.x0 - e.x0
+    if (e.x1 - q.x1 < r) r = e.x1 - q.x1
+  }
+  m = { l: l < SNAP ? 0 : l, r: r < SNAP ? 0 : r }
+  L.indents.set(id, m)
+  return m
 }
 
 /** a line's column on a page: on two columns, both where it reaches into both columns' text by more than the
@@ -164,7 +185,8 @@ function colOf(P, x0, x1) {
  * A page's runs, made on the page's first use and kept: { runs, byId, heads, filled } — every run of every unit on the
  * page, and each unit's runs there; and what the geometry took beyond the anchors, which the gate holds to its
  * baseline: the units whose head it took, the words it filled in. A run: { id, page, col, x0, x1, top, bottom, lead,
- * rows: [{ y0, y1, x0, x1 }], mids } in PDF units, `mids` the boundaries between its rows.
+ * rows: [{ y0, y1, x0, x1, r0, r1 }], mids, sx0, sx1 } in PDF units, `mids` the boundaries between its rows, a row's
+ * r0 and r1 how far its sentences reach across (reachOf), sx0 and sx1 the furthest of them and of the run.
  */
 export function pageGeometry(L, p) {
   let g = L.cache.get(p)
@@ -203,7 +225,7 @@ export function pageGeometry(L, p) {
     const o = owner[i], j = lineOf[i]
     if (o !== -1) lineOwner[j] = lineOwner[j] === -1 || lineOwner[j] === o ? o : -2
   }
-  const at = { k0, lines, lineOf, owner, lineOwner, heads: [], filled: 0 }
+  const at = { k0, tok, lines, lineOf, owner, lineOwner, heads: [], filled: 0 }
   const runs = [], byId = new Map()
   for (const [id, toks] of mine) {
     const rs = unitRuns(L, p, at, id, toks)
@@ -275,8 +297,15 @@ function unitRuns(L, p, at, id, toks) {
         if (x.x1 > row.x1) row.x1 = x.x1
         if (l.lo < row.lo) row.lo = l.lo
         if (l.hi > row.hi) row.hi = l.hi
-      } else rows.push({ y0: l.y0, y1: l.y1, x0: x.x0, x1: x.x1, lo: l.lo, hi: l.hi })
+      } else rows.push({ y0: l.y0, y1: l.y1, x0: x.x0, x1: x.x1, lo: l.lo, hi: l.hi, r0: null, r1: null })
       rowOf.set(i, rows.length - 1)
+    }
+    // how far each row's sentences may reach across where they go on from the row before or to the row after (segsOf,
+    // spanStart): to the unit's text edge in the column (indentOf), but on a side where another unit's words stand
+    // on the row — a caption's first line holding a word of the paragraph the float cut (2608.06701) — to its own ink
+    if (!NOT_RUNNING.has(L.kindOf(id))) {
+      const ind = indentOf(L, id), tx0 = e.x0 + ind.l, tx1 = Math.max(tx0, e.x1 - ind.r)
+      for (const row of rows) reachOf(at, id, row, tx0, tx1)
     }
     // runs: the rows cut where another unit's line stands between two of them in the column (a float set inside a
     // paragraph, a footnote), and in a column of two where a line across both does, the unit's own too (a paragraph
@@ -289,6 +318,8 @@ function unitRuns(L, p, at, id, toks) {
       // where its unit's head begins on it, and (below) its tokens and the row each is on: its sentences' rows (segsOf)
       run.head = headAt !== null && rowOf.get(headAt) >= start && rowOf.get(headAt) < r ? head : null
       run.toks = []; run.rowOf = []
+      // its sentences' reach across, the hit test's bounds for them (hitOf)
+      for (const row of run.rows) { if (row.r0 != null && row.r0 < run.sx0) run.sx0 = row.r0; if (row.r1 != null && row.r1 > run.sx1) run.sx1 = row.r1 }
       for (const ln of m.keys()) { const w = rowOf.get(ln); if (w >= start && w < r) lineAt.set(ln, { run, w: w - start }) }
       runs.push(run)
       start = r
@@ -298,6 +329,50 @@ function unitRuns(L, p, at, id, toks) {
   for (const k of ks) { const a = lineAt.get(line(k)); a.run.toks.push(k); a.run.rowOf.push(a.w) }
   // in the order the unit's words come: a column's runs from the top, the columns as the stream meets them
   return runs
+}
+
+/** a row's reach across for its sentences (unitRuns): `r0`, `r1` the unit's text edges, null on a side where another
+ *  unit's words stand on the row (its lines', or theirs on a line it shares), and on both where they stand among its */
+function reachOf(at, id, row, tx0, tx1) {
+  const { k0, lines, owner, lineOwner } = at, { l: inkL, r: inkR } = at.tok
+  row.r0 = tx0; row.r1 = tx1
+  const other = (a, b) => {
+    if (b <= row.x0 + 0.5) row.r0 = null
+    else if (a >= row.x1 - 0.5) row.r1 = null
+    else row.r0 = row.r1 = null
+  }
+  // the page's lines that are some unit's, in bands of BAND units by their foot, made on the page's first row: a scan
+  // of every line for every row cost 60 % more of a page's geometry (2608.08350), a sort of them by their foot 20 %
+  const { js, from, y, h } = at.owned ?? (at.owned = bands(lines, lineOwner))
+  const b0 = Math.max(0, Math.floor((row.y0 - h - y) / BAND)), b1 = Math.min(from.length - 2, Math.floor((row.y1 - y) / BAND))
+  for (let n = from[b0], end = b1 >= b0 ? from[b1 + 1] : n; n < end && (row.r0 !== null || row.r1 !== null); n++) {
+    const j = js[n], o = lineOwner[j], l = lines[j]
+    if (o === id || Math.min(l.y1, row.y1) - Math.max(l.y0, row.y0) <= OVERLAP || l.x1 < tx0 - OVERHANG || l.x0 > tx1 + OVERHANG) continue
+    if (o >= 0) { other(l.x0, l.x1); continue }
+    for (let k = l.k0, end = lines[j + 1]?.k0 ?? k0 + owner.length; k < end; k++) { const w = owner[k - k0]; if (w !== -1 && w !== id) other(inkL[k], inkR[k]) }
+  }
+}
+
+/** the band of a line's foot (reachOf), PDF units */
+const BAND = 8
+/** a page's lines that are some unit's, by the band of their foot: `js` the lines, `from[b]` where band b's begin in it */
+function bands(lines, lineOwner) {
+  let y = Infinity, top = -Infinity, h = 0, n = 0
+  for (let j = 0; j < lines.length; j++) {
+    if (lineOwner[j] === -1) continue
+    const l = lines[j]
+    n++
+    if (l.y0 < y) y = l.y0
+    if (l.y0 > top) top = l.y0
+    if (l.y1 - l.y0 > h) h = l.y1 - l.y0
+  }
+  if (!n) return { js: new Int32Array(0), from: new Int32Array(2), y: 0, h: 0 }
+  const from = new Int32Array(Math.floor((top - y) / BAND) + 2), js = new Int32Array(n)
+  for (let j = 0; j < lines.length; j++) if (lineOwner[j] !== -1) from[Math.floor((lines[j].y0 - y) / BAND) + 1]++
+  for (let b = 1; b < from.length; b++) from[b] += from[b - 1]
+  const at = from.slice()
+  for (let j = 0; j < lines.length; j++) if (lineOwner[j] !== -1) js[at[Math.floor((lines[j].y0 - y) / BAND)]++] = j
+  return { js, from, y, h }
 }
 
 /** whether a line stands between two rows of a run in `col`, one above the other (its middle between them): another
@@ -323,7 +398,7 @@ function runOf(id, page, col, rows, e, lead, clamp) {
   if (Math.abs(x1 - e.x1) < SNAP) x1 = e.x1
   const mids = []
   for (let i = 1; i < rows.length; i++) mids.push(Math.min((rows[i - 1].y0 + rows[i].y1) / 2, i > 1 ? mids[i - 2] : Infinity))
-  return { id, page, col, x0, x1, top: rows[0].y1, bottom: rows.at(-1).y0, hi: rows[0].hi, lo: rows.at(-1).lo, lead, rows, mids }
+  return { id, page, col, x0, x1, top: rows[0].y1, bottom: rows.at(-1).y0, hi: rows[0].hi, lo: rows.at(-1).lo, lead, rows, mids, head: null, toks: null, rowOf: null, sx0: x0, sx1: x1 }
 }
 
 /** a unit's runs on a side, page by page (each page's geometry made on its first use) */
@@ -353,10 +428,12 @@ export function hitOf(L, p, x, y, padX, startsOf = () => null) {
   let best = null, area = Infinity
   for (const run of pageGeometry(L, p).runs) {
     const b = blockOf(run, padX)
-    if (x < b.x0 || x > b.x1 || y < b.y0 || y > b.y1) continue
+    // its sentences may reach past its block across, to its unit's text edge (spanStart)
+    if (x < Math.min(b.x0, run.sx0 - padX) || x > Math.max(b.x1, run.sx1 + padX) || y < b.y0 || y > b.y1) continue
     const a = (b.x1 - b.x0) * (b.y1 - b.y0)
     if (a >= area) continue
     const starts = NOT_RUNNING.has(L.kindOf(run.id)) ? null : startsOf(run.id)
+    if (!starts && (x < b.x0 || x > b.x1)) continue
     let s = -1
     if (starts) {
       // its row (the boundaries between rows are its mids), and the sentence whose span there holds the point
@@ -410,7 +487,15 @@ function segsOf(L, run, starts) {
   // inside the run's extent, both ends: a word past the column's edge and the clamp (an overfull line's) is at the edge
   const inside = x => Math.min(run.x1, Math.max(run.x0, x))
   for (const row of rows) { row.sort((a, b) => a.s - b.s); for (const g of row) { g.x0 = inside(g.x0); g.x1 = inside(g.x1) } }
-  const out = { starts, rows, first, last, fits: true }
+  // the sentence that began before the run (in a run before it in the stream: the column or the page before) and the
+  // one that goes on after it, or -1: their rows here are rows between, their first's start and last's end beyond
+  const ts = L.anchors.get(run.id).tokens, t0 = run.toks[0], t1 = run.toks.at(-1)
+  let s0 = 0, s1 = 0
+  while (s0 < starts.length && starts[s0] <= t0) s0++
+  while (s1 < starts.length && starts[s1] <= t1) s1++
+  const next = ts[lowerBound(ts, t1 + 1)]
+  const from = (s0 > 0 ? starts[s0 - 1] : ts[0]) < t0 ? s0 : -1, on = next !== undefined && (s1 === starts.length || next < starts[s1]) ? s1 : -1
+  const out = { starts, rows, first, last, from, on, fits: true }
   segsMade.set(run, out)
   // whether the shapes hold their words: each word's ink's centre in its own sentence's shape. Not where two lines of
   // text are one row (a tall formula between them, 2608.12502) and a sentence begins on the second: no boundary across
@@ -426,7 +511,7 @@ function segsOf(L, run, starts) {
       while (i < rows.length - 1 && y < ys[i + 1]) i++
       const s = of[n]
       // its own sentence there: on its row's span, or a row inside its sentence's (spanning the run)
-      const own = first[s] < i && i < last[s] ? true : spans[i].some(q => q.s === s && x >= q.x0 - FIT && x <= q.x1 + FIT)
+      const own = (first[s] < i || s === from) && (i < last[s] || s === on) ? true : spans[i].some(q => q.s === s && x >= q.x0 - FIT && x <= q.x1 + FIT)
       if (!own && x >= run.x0 && x <= run.x1) out.fits = false
     }
   }
@@ -450,15 +535,29 @@ export function pageSentences(L, p, startsOf) {
 }
 /**
  * What each sentence on row `i` of a run paints across (PDF units), tiling the row: two sentences meet halfway through
- * the space between them; one that goes on from the row before begins at the run's left edge and one that goes on to
- * the row after ends at its right — padded `padX` beyond the column's text —; a sentence's own start or end at neither
- * is padded `padX` beyond its ink, or is the run's edge within SNAP of it
+ * the space between them; one that goes on from the row before — in the run, or from the run before it in the stream
+ * (the column or the page before) — begins at the unit's text edge in the column, and one that goes on to the row
+ * after ends at it — padded `padX` beyond it —, or beyond the row's ink where that stands past it (an overfull line);
+ * a sentence's own start or end at neither is padded `padX` beyond its ink, or is the edge within SNAP of it. The row's
+ * reach (reachOf): where another unit's words stand on the row on that side, its own ink (the review of B3, I1: a
+ * sentence over a page break was drawn as ending at the display that closed the page and beginning again at the one
+ * that opened the next, and the run's extent, widened by an overfull display, left a 6-unit notch at a row's end)
  */
 function spansOf(g, run, i, padX) {
   return g.rows[i].map((q, t) => ({ s: q.s, x0: spanStart(g, run, i, t, padX), x1: spanEnd(g, run, i, t, padX) }))
 }
-const spanStart = (g, run, i, t, padX) => { const row = g.rows[i], q = row[t]; return t > 0 ? (row[t - 1].x1 + q.x0) / 2 : i > g.first[q.s] || q.x0 - run.x0 < SNAP ? run.x0 - padX : q.x0 - padX }
-const spanEnd = (g, run, i, t, padX) => { const row = g.rows[i], q = row[t]; return t < row.length - 1 ? (q.x1 + row[t + 1].x0) / 2 : i < g.last[q.s] || run.x1 - q.x1 < SNAP ? run.x1 + padX : q.x1 + padX }
+function spanStart(g, run, i, t, padX) {
+  const row = g.rows[i], q = row[t], e = run.rows[i].r0
+  if (t > 0) return (row[t - 1].x1 + q.x0) / 2
+  if (i > g.first[q.s] || q.s === g.from) return Math.min(e ?? q.x0, q.x0) - padX
+  return e != null && q.x0 - e < SNAP ? Math.min(e, q.x0) - padX : q.x0 - padX
+}
+function spanEnd(g, run, i, t, padX) {
+  const row = g.rows[i], q = row[t], e = run.rows[i].r1
+  if (t < row.length - 1) return (q.x1 + row[t + 1].x0) / 2
+  if (i < g.last[q.s] || q.s === g.on) return Math.max(e ?? q.x1, q.x1) + padX
+  return e != null && e - q.x1 < SNAP ? Math.max(e, q.x1) + padX : q.x1 + padX
+}
 /** the sentence whose span on row `i` holds x, or -1: spansOf's, with nothing made (the pointer's frame) */
 function sentenceAt(g, run, i, x, padX) {
   const row = g.rows[i]

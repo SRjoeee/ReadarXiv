@@ -404,6 +404,79 @@ describe('the sentences tile their run, and hold their words, or the unit is lit
   })
 })
 
+describe('a sentence that goes on over a column or a page break: there, it reaches its unit\'s text edge', () => {
+  const px = 2, L = 50 - px, R = 300 + px
+  /** on page p, across the column and beyond, every point in one of the unit's sentence shapes at most and lighting
+   *  that one, and nothing of the unit lit where none is painted */
+  const tiles = (layout: ReturnType<typeof side>, id: number, starts: Int32Array, p: number) => {
+    const runs = runsOf(layout, id).filter(r => r.page === p), shapes = Array.from({ length: starts.length + 1 }, (_, s) => runs.flatMap(run => sentenceOf(layout, run, starts, s, px)))
+    const bad: string[] = []
+    let painted = 0
+    for (let x = 40.25; x < 320; x += 1.5) for (let y = 400.25; y < 790; y += 1.5) {
+      const ins = shapes.flatMap((rs, s) => (rs.some(r => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) ? [s] : []))
+      const hit = hitOf(layout, p, x, y, px, i => (i === id ? starts : null)), mine = hit?.id === id ? hit.s : null
+      if (ins.length) painted++
+      if (ins.length > 1 || (ins.length ? mine !== ins[0] : mine !== null)) bad.push(`${x.toFixed(1)},${y.toFixed(1)}: ${ins} ${mine}`)
+    }
+    return painted ? bad.slice(0, 5) : ['nothing painted']
+  }
+  // a paragraph whose second sentence goes on through a display at the foot of page 1 and one at the head of page 2,
+  // to its full stop on page 2's second line; the units' lines from x0, the column's text from 50 to 300
+  const pages = (x0: number) => [
+    [...prose(760, 20), line('alpha beta gamma delta and words go on', 496, x0), line('a sentence begins here and goes', 484, x0), item('x = y', 150, 466, { eol: true })],
+    [item('i = a', 150, 760, { eol: true }), line('then the end. More words go here', 748, x0), line('and here the unit ends now', 736, x0), ...prose(700, 20)],
+  ]
+
+  it('the rows beside a display at the foot of one page and the head of the next are across the column: no end and new start there', () => {
+    const ps = pages(50), d = docOf(ps), layout = side(ps, [[0, range(at(d, 'alpha'), at(d, 'now'))]])
+    const starts = Int32Array.from([at(d, 'begins'), at(d, 'more')]), startsOf = (i: number) => (i === 0 ? starts : null)
+    const [a, b] = runsOf(layout, 0)
+    expect([a?.page, b?.page]).toEqual([1, 2])
+    // on page 1 its last row, the display's, on to the column's edge; on page 2 its first, the display's, from it
+    expect(r2(nth(sentenceOf(layout, a!, starts, 1, px), 1).x1)).toBe(R)
+    expect(r2(nth(sentenceOf(layout, b!, starts, 1, px)).x0)).toBe(L)
+    // the space beside each display lights the sentence; the shapes tile what they paint, the hit test their own
+    expect(hitOf(layout, 1, 280, 468, px, startsOf)).toMatchObject({ id: 0, s: 1 })
+    expect(hitOf(layout, 2, 60, 762, px, startsOf)).toMatchObject({ id: 0, s: 1 })
+    expect([tiles(layout, 0, starts, 1), tiles(layout, 0, starts, 2)]).toEqual([[], []])
+  })
+
+  it('an indented unit (a list\'s item) reaches its own text edge, not the column\'s', () => {
+    const ps = pages(70), d = docOf(ps), layout = side(ps, [[0, range(at(d, 'alpha'), at(d, 'now'))]])
+    const starts = Int32Array.from([at(d, 'begins'), at(d, 'more')])
+    const [a, b] = runsOf(layout, 0)
+    expect(r2(nth(sentenceOf(layout, a!, starts, 1, px), 1).x1)).toBe(R)
+    expect(r2(nth(sentenceOf(layout, b!, starts, 1, px)).x0)).toBe(70 - px)
+    expect(tiles(layout, 0, starts, 2)).toEqual([])
+  })
+
+  it('not over another unit\'s words on its row: a word of the paragraph on a caption\'s first line keeps to its ink', () => {
+    // the paragraph's sentence goes on from page 1 over a word on the first line of a float's caption, then under it
+    const ps = [
+      [...prose(760, 20), line('alpha beta gamma delta and words go on', 496), line('a sentence begins here and goes on', 484)],
+      [item('w', 50, 760), item('Figure 1: a caption of the float', 70, 760, { width: 230, eol: true }), line('more of the caption here and', 748), line('then the end. Other words go here', 724), line('and here the unit ends now', 712), ...prose(690, 20)],
+    ]
+    const d = docOf(ps), cap = range(at(d, 'figure'), at(d, 'and', at(d, 'caption') + 1))
+    const layout = side(ps, [[0, [...range(at(d, 'alpha'), at(d, 'w')), ...range(at(d, 'then'), at(d, 'now'))]], [1, cap]], new Map([[1, 'caption']]))
+    const starts = Int32Array.from([at(d, 'begins'), at(d, 'other')]), w = nth(runsOf(layout, 0), 1)
+    expect([w.page, w.rows.length]).toEqual([2, 1])
+    expect(nth(sentenceOf(layout, w, starts, 1, px)).x1).toBeCloseTo(inkEdges(d).r[at(d, 'w')]! + px)
+    expect(hitOf(layout, 2, 200, 762, px, i => (i === 0 ? starts : null))).toMatchObject({ id: 1, s: -1 })
+    expect(tiles(layout, 0, starts, 2)).toEqual([])
+  })
+
+  it('an overfull display among the rows between widens its own row alone: a sentence ending at the column\'s edge meets the rows above', () => {
+    // a sentence from the first line's first word over an overfull display (60 to 316, clamped at 306) to a full stop at
+    // the column's edge; the next on the line below
+    const ps = [[...prose(760, 20), line('one two three four five six seven eight', 496), item('x = a + b + c + d', 60, 478, { width: 256, eol: true }), line('and the sentence ends here at its end.', 460), line('Next sentence words here and more', 448), line('and the unit ends here with this', 436)]]
+    const d = docOf(ps), layout = side(ps, [[0, range(at(d, 'one'), at(d, 'this'))]]), run = nth(runsOf(layout, 0))
+    const starts = Int32Array.from([at(d, 'next')])
+    expect(r2(run.x1)).toBe(306)
+    expect(sentenceOf(layout, run, starts, 0, px).map(r => r2(r.x1))).toEqual([R, 308, R])
+    expect(tiles(layout, 0, starts, 1)).toEqual([])
+  })
+})
+
 describe('sentencesFit from the pages made alone: the pointer\'s frame makes no page\'s geometry', () => {
   it('undefined while one of the unit\'s pages has no geometry yet; known once it has; a page\'s sentences made with it', () => {
     // a unit over a page break: its last two lines on page 1, its first two on page 2

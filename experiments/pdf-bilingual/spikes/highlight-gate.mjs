@@ -49,6 +49,9 @@
 //  - rows two sentences share: the one's end and the next's start, no gap and no overlap between them; and the
 //    boundaries that pass through a word's ink (its box as the text layer gives it: a Latin word's an even share of its
 //    item, so a reading, against round 1's 3 of 72 measured on the canvas)
+//  - the pieces of a sentence that goes on over a column or a page break: the one before the break reaching its unit's
+//    text edge on the right there (the furthest the unit's lines reach in the column, inside the column's text edge),
+//    the one after it on the left; short of it where another unit's word stands between them, counted apart
 //  - the starts' cost on each side (findSentences: every unit's, as the reader does with the layout)
 // and on investigator B's ground truth (report-B §2(c, d): data/runs/highlight-gt, the four papers compiled with a
 // named destination at every sentence's start, O2 and T2, and without, O1 and T1), each start found on O1, T1 and
@@ -57,13 +60,15 @@
 // where its word is there — on the same line or not.
 // Fails besides on: a hole inside a sentence's shape, or another sentence lit there; a word outside its unit's
 // sentences but past the column's edge, a head outside its first sentence; a gap or an overlap between two sentences on
-// a row; against the baseline, fewer units aligned per paper, more boundaries through ink, and fewer starts on the
+// a row; a piece short of its unit's text edge over a break; against the baseline, fewer units aligned per paper, more boundaries through ink, and fewer starts on the
 // ground truth's line. Each made to fail once (B3, in the tree, put back
 // after): the head left out of the first sentence (486 heads outside), the boundary at the next word's start instead of
 // the middle of the space (3 498 gaps), a sentence's last row taken across the run (1.8 M holes, 4 M points lighting
 // another sentence, 2 097 overlaps), each start taken at its sentence's last word (the ground truth's lines 23 of 167 on
 // 2608.02785, 2 of 138 on 2608.04322; and 14 holes, a defect it found: 9d449c59), the rows' order rule dropped (616
-// holes, 452 another sentence), the words' fit dropped (15 words outside).
+// holes, 452 another sentence), the words' fit dropped (15 words outside). In B3's first round of review (I1): the
+// sentence that began in a run before or goes on into a run after taken as beginning or ending in the run (28 pieces
+// short of the edge on 2608.02785 and 2608.29181).
 // WRITE_BASELINE=1 records the run as the baseline (counts only).
 // Counts only, no paper text. Pad beside a block: 3 CSS px at 100 % (2.25 PDF units). The browser's half — the pointer,
 // the paint, their costs against another build — is highlight-gate-browser.mjs.
@@ -137,7 +142,7 @@ function kindOf(paper, u) {
 const median = xs => { const s = [...xs].sort((a, b) => a - b); return s[s.length >> 1] ?? null }
 const tally = {}, cost = {}, cuts = [], inkHoles = [], overlaps = [], pastEdge = [], unreachable = []
 /** per paper: the sentences' counts (B3); the holes and words outside listed */
-const sentences = {}, sentenceHoles = [], wordsOutside = [], inkCuts = []
+const sentences = {}, sentenceHoles = [], wordsOutside = [], inkCuts = [], goesOnShort = []
 /** per paper and side: what the geometry took beyond the anchors, held to the baseline exactly */
 const taken = {}
 /** per paper, side and kind: units anchored and lit, for the baseline */
@@ -190,7 +195,7 @@ for (const id of ids) {
     if (sentencesFit(sides.L.layout, i, a) && sentencesFit(sides.R.layout, i, b)) both.set(i, a.length); else { unfit++; if (process.env.UNFIT) console.error(`unfit ${id}#${i} L ${sentencesFit(sides.L.layout, i, a)} R ${sentencesFit(sides.R.layout, i, b)}`) }
   }
   const running = Object.entries(sents).filter(([i]) => !WHOLE.has(kind.get(+i)))
-  const sc = (sentences[id] = { units: running.length, multi: running.filter(([, s]) => s.src.length).length, foundL: running.filter(([i]) => sides.L.starts.has(+i)).length, foundR: running.filter(([i]) => sides.R.starts.has(+i)).length, unfit, aligned: both.size, alignedMulti: [...both.values()].filter(n => n > 0).length, sentences: [...both.values()].reduce((a, n) => a + n + 1, 0), points: 0, holes: 0, otherSentence: 0, smaller: 0, words: 0, wordsOutside: 0, heads: 0, headsOutside: 0, shapes: 0, sharedRows: 0, gaps: 0, overlaps: 0, throughInk: 0 })
+  const sc = (sentences[id] = { units: running.length, multi: running.filter(([, s]) => s.src.length).length, foundL: running.filter(([i]) => sides.L.starts.has(+i)).length, foundR: running.filter(([i]) => sides.R.starts.has(+i)).length, unfit, aligned: both.size, alignedMulti: [...both.values()].filter(n => n > 0).length, sentences: [...both.values()].reduce((a, n) => a + n + 1, 0), points: 0, holes: 0, otherSentence: 0, smaller: 0, words: 0, wordsOutside: 0, heads: 0, headsOutside: 0, shapes: 0, sharedRows: 0, gaps: 0, overlaps: 0, throughInk: 0, goesOn: 0, goesOnShort: 0, goesOnBeside: 0 })
   units.forEach((u, i) => {
     const k = kindOf(paper, u)
     count(k, 'n')
@@ -238,11 +243,41 @@ for (const id of ids) {
     }
     if (lit === 2) count(k, 'both')
   })
-  // sentences: holes inside their shapes, words outside them, the rows two share
+  // sentences: holes inside their shapes, words outside them, the rows two share, the pieces that go on over a break
   for (const S of ['L', 'R']) {
     const { anchors, doc, layout, starts } = sides[S], startsOf = i => (both.has(i) ? starts.get(i) : null), { tok } = layout
+    // each token's unit, the first that has it (pageGeometry's owner)
+    const ownerOf = new Map()
+    for (const [u, a] of anchors) for (const t of a?.tokens ?? []) if (!ownerOf.has(t)) ownerOf.set(t, u)
     for (const [i, n] of both) {
       const st = starts.get(i), runs = runsOf(layout, i), shapes = []
+      // a sentence's pieces in more than one of its unit's runs (over a column or a page break): the piece before the
+      // break reaches the unit's text edge on the right, the piece after it on the left — the furthest its lines reach
+      // in that column, inside its text edge —, but where another unit's word stands between it and the edge on its row
+      const reach = {}
+      for (const q of anchors.get(i).rects) {
+        const cols = layout.page[q.page].cols, c = ['L', 'R', 'F'].find(c => cols[c] && q.x0 >= cols[c].x0 - OVERHANG && q.x1 <= cols[c].x1 + OVERHANG) ?? 'F', e = cols[c]
+        const m = (reach[c] ??= { x0: Infinity, x1: -Infinity })
+        m.x0 = Math.min(m.x0, Math.max(q.x0, e.x0)); m.x1 = Math.max(m.x1, Math.min(q.x1, e.x1))
+      }
+      const pieces = runs.map(run => Array.from({ length: n + 1 }, (_, s) => sentenceOf(layout, run, st, s, PAD)))
+      runs.forEach((run, ri) => {
+        const e = layout.page[run.page].cols[run.col] ?? layout.page[run.page].cols.F, m = reach[run.col] ?? e
+        for (let s = 0; s <= n; s++) {
+          const rs = pieces[ri][s]
+          if (!rs.length) continue
+          for (const [r, edge, dir] of [[rs.at(-1), Math.min(e.x1, m.x1), 1], [rs[0], Math.max(e.x0, m.x0), -1]]) {
+            if (!(dir > 0 ? pieces.slice(ri + 1) : pieces.slice(0, ri)).some(x => x[s].length)) continue
+            sc.goesOn++
+            const end = dir > 0 ? r.x1 - PAD : r.x0 + PAD
+            if (dir > 0 ? end > edge - 0.5 : end < edge + 0.5) continue
+            const beside = run.toks.length && doc.some((w, t) => w.page === run.page && w.y > r.y0 && w.y < r.y1 && ownerOf.has(t) && ownerOf.get(t) !== i && (dir > 0 ? tok.r[t] > end && tok.l[t] < edge + PAD : tok.l[t] < end && tok.r[t] > edge - PAD))
+            if (beside) { sc.goesOnBeside++; continue }
+            sc.goesOnShort++
+            if (goesOnShort.length < 30) goesOnShort.push(`${id}#${i}.${s} ${S} p${run.page} ${dir > 0 ? 'ends' : 'begins'} at ${(dir > 0 ? r.x1 : r.x0).toFixed(1)}, the edge ${edge.toFixed(1)}`)
+          }
+        }
+      })
       for (let s = 0; s <= n; s++) for (const run of runs) {
         const rects = sentenceOf(layout, run, st, s, PAD)
         if (!rects.length) continue
@@ -394,8 +429,8 @@ const takenSum = side => { const o = { heads: {}, filled: 0, cells3em: 0, padOve
 console.log('what the geometry took beyond the anchors, left:', JSON.stringify(takenSum('L')), 'right:', JSON.stringify(takenSum('R')))
 console.log('\ncost, ms (median of', ROUNDS, 'rounds): layout at anchoring; every page\'s geometry; per page; the slowest page; every unit\'s sentences\' starts')
 for (const [k, c] of Object.entries(cost)) console.log(k.padEnd(14), `${c.pages} pp, ${c.tokens} tokens`, `layout ${c.layoutMs}`, `pages ${c.allPagesMs}`, `per page ${c.perPageMs}`, `max ${c.pageMaxMs}`, `starts ${c.startsMs}`)
-const SC = ['units', 'multi', 'foundL', 'foundR', 'unfit', 'aligned', 'alignedMulti', 'sentences', 'points', 'holes', 'otherSentence', 'smaller', 'words', 'wordsOutside', 'heads', 'headsOutside', 'shapes', 'sharedRows', 'gaps', 'overlaps', 'throughInk']
-console.log('\nsentences (running text with the engine\'s sentences): units, more than one; starts found on the left, the right; found on both but shapes that do not hold their words (lit whole); aligned (both), of more than one; sentences; grid points inside their shapes, holes, another sentence of the unit, a smaller unit; words, outside their sentences; heads before a unit\'s first word, outside its first sentence; shapes; rows two sentences share, gaps, overlaps, boundaries through a word')
+const SC = ['units', 'multi', 'foundL', 'foundR', 'unfit', 'aligned', 'alignedMulti', 'sentences', 'points', 'holes', 'otherSentence', 'smaller', 'words', 'wordsOutside', 'heads', 'headsOutside', 'shapes', 'sharedRows', 'gaps', 'overlaps', 'throughInk', 'goesOn', 'goesOnShort', 'goesOnBeside']
+console.log('\nsentences (running text with the engine\'s sentences): units, more than one; starts found on the left, the right; found on both but shapes that do not hold their words (lit whole); aligned (both), of more than one; sentences; grid points inside their shapes, holes, another sentence of the unit, a smaller unit; words, outside their sentences; heads before a unit\'s first word, outside its first sentence; shapes; rows two sentences share, gaps, overlaps, boundaries through a word; pieces of a sentence that goes on over a column or a page break, short of the unit\'s text edge there, beside another unit\'s word')
 console.log(['paper'.padEnd(12), ...SC].join('\t'))
 const ssum = Object.fromEntries(SC.map(c => [c, 0]))
 for (const [id, s] of Object.entries(sentences)) { console.log([id.padEnd(12), ...SC.map(c => s[c])].join('\t')); for (const c of SC) ssum[c] += s[c] }
@@ -403,13 +438,14 @@ console.log(['all'.padEnd(12), ...SC.map(c => ssum[c])].join('\t'))
 if (sentenceHoles.length) console.log('holes inside sentences:', sentenceHoles.slice(0, 12).join('; '))
 if (wordsOutside.length) console.log('words outside their sentences:', wordsOutside.slice(0, 12).join('; '))
 if (inkCuts.length) console.log('boundaries through a word:', inkCuts.join('; '))
+if (goesOnShort.length) console.log('pieces short of the edge over a break:', goesOnShort.join('; '))
 console.log('\nthe ground truth (report-B\'s compiles): starts after the first of units of more than one sentence; found; with a mark for their sentence; on its line')
 for (const [id, t] of Object.entries(truth)) if (t) for (const [S, r] of Object.entries(t)) if (S !== 'pair') console.log(id.padEnd(12), S.padEnd(3), r.starts, r.found, r.withTruth, r.sameLine, `${((100 * r.sameLine) / Math.max(1, r.withTruth)).toFixed(1)} %`)
 console.log('units of more than one sentence (with a mark), their starts all found on arXiv\'s PDF and on our translation:', Object.entries(truth).filter(([, t]) => t).map(([id, t]) => `${id} ${t.pair.both}/${t.pair.multi}`).join(', '))
 // the gate: what must be none, and against the baseline what may not fall (or, for cuts, grow)
 const failures = []
 for (const c of ['unlitAnchored', 'holes', 'inkHoles', 'unreachable', 'fragmentedDisplays', 'overlapping']) if (sum[c] > 0) failures.push(`${c} ${sum[c]}`)
-for (const c of ['holes', 'otherSentence', 'wordsOutside', 'headsOutside', 'gaps', 'overlaps']) if (ssum[c] > 0) failures.push(`sentences: ${c} ${ssum[c]}`)
+for (const c of ['holes', 'otherSentence', 'wordsOutside', 'headsOutside', 'gaps', 'overlaps', 'goesOnShort']) if (ssum[c] > 0) failures.push(`sentences: ${c} ${ssum[c]}`)
 if (!Object.keys(truth).length) failures.push(`no ground truth at ${GT}`)
 if (process.env.WRITE_BASELINE) {
   if (ids.length !== TEN.length || RUNS !== join(root, 'data/runs/highlight-ten')) failures.push('a baseline is recorded on the ten papers\' runs only')
