@@ -101,10 +101,17 @@ export function finalTypesetting(state, preview) {
 
 // the plan tex.mjs typesetting takes: each unit's leading as \axtlead@ takes it — × its own size, so its original's
 // leading over its size — and the sizes: an alphabet's type size (CJK's under CJKutf8) on every translated unit that
-// flows (paragraphs, captions and notes through their marks, a figure's text through its group), the faces a CJK flow set
+// flows (paragraphs, captions and notes through their marks, a figure's text through its group), the faces a CJK flow set.
+// A translated unit the flow could not measure (a display inside it: density.mjs measureUnits) takes the leading the flow
+// set where it stands, the last measured unit's before it: at the paper's type it stood out from its neighbours as the
+// flow moved them — 93 of 4,682 units parted by more than 8 % from the six around them on the gate's 57 papers, 48 so —
+// and ran on where they were set tighter (Chinese 2608.09038, a page)
 function typesettingOf(state, type, leads, faces) {
   const { units, translated, design, strategy, lo, floatsAt } = state, cjk = design.cjk
-  const factors = new Map([...leads].filter(([i]) => lo.get(i)?.size).map(([i, l]) => [i, (l * lo.get(i).bs) / lo.get(i).size]))
+  const factors = new Map(), factor = (i, l) => { if (lo.get(i)?.size) factors.set(i, (l * lo.get(i).bs) / lo.get(i).size) }
+  for (const [i, l] of leads) factor(i, l)
+  let last = null
+  units.forEach((u, i) => { if (leads.has(i)) last = leads.get(i); else if (last != null && translated.has(u)) factor(i, last) })
   const sizes = new Map(faces)
   if (!cjk) units.forEach((u, i) => { if (translated.has(u) && ((u.kind !== 'heading' && u.kind !== 'cell' && u.kind !== 'figure' && u.kind !== 'author' && !u.front) || (u.kind === 'figure' && !u.front))) sizes.set(i, type.size) })
   return typesetting(units, { design, strategy, type, leads: factors, sizes, floatsAt, tableMin: FLOW.tableMin })

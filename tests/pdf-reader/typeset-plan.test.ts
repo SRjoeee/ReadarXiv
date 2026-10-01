@@ -7,10 +7,11 @@ import { finalTypesetting, previewTypesetting } from '@/pdf-reader/engine/typese
 // The rule's two steps on a small paper and the logs and marks its compiles would give: what goes in, what comes out.
 // The numbers the rule reaches on real papers are the gate's (experiments/pdf-bilingual/spikes/typeset-gate.mjs)
 
-type Piece = { t: string; s?: string; tr?: boolean }
+type Piece = { t: string; s?: string; src?: string; tr?: boolean }
 type Unit = { kind: string; pieces: Piece[] }
 const PARAS = 12
-const SOURCE = `\\documentclass{article}\\begin{document}\n${Array.from({ length: PARAS }, (_, k) => `Paragraph ${k} of the paper, ${'with words that run on for a line or two of prose '.repeat(4)}and an end.\n`).join('\n')}\\end{document}\n`
+// the seventh paragraph with a display inside it, which the density model does not measure
+const SOURCE = `\\documentclass{article}\\begin{document}\n${Array.from({ length: PARAS }, (_, k) => `Paragraph ${k} of the paper, ${'with words that run on for a line or two of prose '.repeat(4)}${k === 6 ? 'and a display\\[ x = y \\]after which it ' : ''}and an end.\n`).join('\n')}\\end{document}\n`
 const paper = () => openPaper(new Map([['main.tex', new TextEncoder().encode(SOURCE)]]))
 /** every unit translated: Chinese at about two characters a word, or German a fifth longer than the English */
 function translate(units: Unit[], lang: 'zh' | 'de') {
@@ -52,6 +53,17 @@ describe('a plan for the strategy that sets it', () => {
     expect(tex(translationFiles(zhUtf8.paper, zhUtf8.translated, { strategy: cjkutf8, fonts: null, draft: false, typeset: viaUtf8.typeset }))).toContain('\\axtsize{')
     expect(tex(translationFiles(zhXe.paper, zhXe.translated, { strategy: xe, fonts: null, draft: false, typeset: viaXe.typeset }))).not.toContain('\\axtsize{')
     expect(() => viaXe.typeset?.strategy(cjkutf8)).toThrow()
+  })
+})
+
+describe('the leading of a unit the flow cannot measure', () => {
+  it('is the one the flow set where it stands, not the paper\'s type, which stood out among its neighbours', () => {
+    const given = inputs('de'), plan = previewTypesetting(given), units = given.paper.units as Unit[]
+    const display = units.findIndex(u => u.pieces.some(p => p.t === 'ph' && (p.src ?? '').startsWith('\\[')))
+    const factor = (i: number) => Number(new RegExp(`axtlead@${i}\\\\endcsname\\{([\\d.]+)\\}`).exec(plan.typeset?.head ?? '')?.[1])
+    expect(display).toBeGreaterThan(0)
+    expect(factor(display - 1)).toBeGreaterThan(0)
+    expect(factor(display)).toBe(factor(display - 1))
   })
 })
 
