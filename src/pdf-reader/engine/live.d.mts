@@ -18,6 +18,8 @@ export declare function keptFor(paper: Paper, lang: string): Set<SourceUnit>
 export interface Compiled { ok: boolean; pdf?: Uint8Array | null; aux?: string | null; bbl?: string | null; log?: string; ms?: number; error?: string; network?: string[] }
 /** a compile asked of the TeX page */
 export interface CompileRequest { main: string; engine: string; rerun: boolean; bibtex: boolean | null; overrides: Map<string, Uint8Array> }
+/** the compiler a visit uses, opened when first needed and again after a compile the page failed */
+export declare function compilerKeeper(open: () => Promise<{ compile: (req: CompileRequest) => Promise<Compiled>; close: () => void }>): { ready: () => Promise<void>; compile: (req: CompileRequest) => Promise<Compiled> }
 /** the reader's run: translation as it comes in, the compiles, the final (the options as the reader passes them) */
 export declare function runLive(paper: Paper, options: {
   lang: string

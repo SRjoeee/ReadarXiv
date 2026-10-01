@@ -878,7 +878,10 @@ is only how it meets the rest of the extension.
   `experiments/pdf-bilingual/records/typesetting.md`): each unit's leading, the paper's type and the floats' pages
   planned from our marked original's line probes and marks, which is compiled in full right after the first preview;
   the last preview of the whole translation measures where its text stood, and the final corrects it. Where a plan
-  cannot be made the translation is set as before it.
+  cannot be made the translation is set as before it. The reader speaks the TeX page's protocol 2 and still serves a
+  page of protocol 1: it names the engines and the CJK faces the visit will use, so that the page fetches them ahead;
+  a compile whose files did not all arrive is asked once more, then the run stops as for a network that is down; a
+  failure of the page's own (no log) changes no strategy and leaves no mark.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; headings, captions and cells whole; tables, algorithms and figures whole with their captions (a
@@ -894,13 +897,13 @@ is only how it meets the rest of the extension.
   of time: a slow machine says nothing of the paper) — shows the original with the side-by-side and translation
   displays greyed and a capsule that says so, without why, offering the HTML version where arXiv has one (UI.md
   S-R-17/18). The failure to set it is kept in the store beside the records, by paper version, language,
-  `PIPELINE_VERSION`, `TYPESETTING_VERSION` and the identity whose translation it was (the one a copy is judged by), when the paper's own
+  `PIPELINE_VERSION`, `TYPESETTING_VERSION`, the TeX page's versions and the identity whose translation it was (the one a copy is judged by), when the paper's own
   source set on this machine — otherwise the compiler or its files may have been down, and the next visit tries again
   — and when that one identity made every paragraph it translated: a run a hand-over mixed (a key refused midway, the
   free service finishing) is not kept, since the service that would answer next never translated the whole paper, as a
   copy is current only when every paragraph is. A visit again, once the extension has said which service would
   translate, asks that service and the TeX page for nothing if it is the same one; another service, model or prompt, a
-  new pipeline or typesetting, or a mark kept before the identity was (2026-09-30) tries once more — the failure is the
+  new pipeline, typesetting or TeX page, or a mark kept before the identity was (2026-09-30) tries once more — the failure is the
   translated text's, which they may not repeat (Codex on #306) —, and the settings page's clear forgets it.
 - **Two versions** (`live.mjs`): `PIPELINE_VERSION` for what a unit is and what is sent for it, `TYPESETTING_VERSION`
   for how a compile sets it. A copy of another typesetting is compiled again from its own translation: a unit whole,

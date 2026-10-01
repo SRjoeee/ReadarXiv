@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { type Compiled, openPaper, runLive } from '@/pdf-reader/engine/live.mjs'
+import { type Compiled, compilerKeeper, openPaper, runLive } from '@/pdf-reader/engine/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
 
 // The reader's compiles with the typesetting rule (experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
@@ -164,3 +164,47 @@ describe('a seed taken as it is (ruling 4: a typesetting change never asks the s
     expect(c.calls.some(q => q.kind === 'final')).toBe(true)
   })
 })
+
+// The TeX page's protocol 2 (experiments/pdf-bilingual/poc-site/tex-page.mjs; the S3a report, "what the reader must do",
+// and its review's I5): files a compile could not fetch for a network reason make it not the paper's; a failure of the
+// page's own (an error, no log) says nothing of the paper either
+describe('a compile the network or the page failed', () => {
+  const kinds = (calls: { kind: string; ruled: boolean }[]) => calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`)
+  it('one the network failed is asked once more as it was: no strategy changed, the run goes on', async () => {
+    const t = translator(), n = paper().units.length
+    let failedOnce = false
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() } }), base = c.compile
+    c.compile = async (q: Req) => { const r = await base(q); if (kindOf(q) === 'final' && !failedOnce) { failedOnce = true; return { ...r, ok: false, pdf: null, aux: '\\bibcite{x}{9}', network: ['t/xecjk.sty'] } } return r }
+    const { calls, notes, r } = await run({ compiler: c, translate: t.translate })
+    expect(kinds(calls)).toEqual(['probe', 'preview', 'original', 'preview+rule', 'final+rule', 'final+rule'])
+    expect(notes.filter(([e]) => e === 'next strategy')).toEqual([])
+    expect(notes.filter(([e]) => e === 'compile again').length).toBe(1)
+    expect(r.settled).toBe(true)
+  })
+  it('twice: the run stops as for a network down — nothing set, no strategy changed, nothing to remember', async () => {
+    const t = translator(), n = paper().units.length
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() } }), base = c.compile
+    c.compile = async (q: Req) => { const r = await base(q); return kindOf(q) === 'final' ? { ...r, ok: false, pdf: null, network: ['t/xecjk.sty'] } : r }
+    const { calls, notes, r } = await run({ compiler: c, translate: t.translate })
+    expect(kinds(calls).filter(k => k.startsWith('final'))).toEqual(['final+rule', 'final+rule'])
+    expect(notes.filter(([e]) => e === 'next strategy' || e === 'typeset failed')).toEqual([])
+    expect([r.settled, r.exhausted, r.stopped]).toEqual([false, false, 'network'])
+  })
+  it('the page\'s own failure (an error, no log) changes no strategy and leaves no "cannot typeset": the final once more, then what is shown stays', async () => {
+    const t = translator(), n = paper().units.length
+    const c = compiler(n, { on: k => { if (k === 'original') t.release() } }), base = c.compile
+    c.compile = async (q: Req) => { if (kindOf(q) !== 'final') return base(q); c.calls.push({ kind: 'final', ruled: ruled(q), rerun: q.rerun }); return { ok: false, error: 'compile before init', network: [] } }
+    const { calls, notes, r } = await run({ compiler: c, translate: t.translate })
+    expect(kinds(calls).filter(k => k.startsWith('final'))).toEqual(['final+rule', 'final+rule'])
+    expect(notes.filter(([e]) => e === 'next strategy' || e === 'typeset failed')).toEqual([])
+    expect([r.settled, r.exhausted]).toEqual([false, false])
+  })
+  it('the page\'s own failure throws its frame away: the next compile opens a fresh one', async () => {
+    let opened = 0
+    const keeper = compilerKeeper(async () => { opened++; return { compile: async () => (opened === 1 ? { ok: false, error: 'compile before init' } : { ok: true }), close: () => {} } })
+    await keeper.compile({} as never)
+    const second = await keeper.compile({} as never)
+    expect([opened, second.ok]).toEqual([2, true])
+  })
+})
+

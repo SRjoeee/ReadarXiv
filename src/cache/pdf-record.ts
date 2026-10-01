@@ -91,6 +91,8 @@ export interface Now {
   identity: string
   pipeline: string
   typesetting?: string
+  /** the TeX page's versions, where a mark is judged */
+  page?: string
 }
 
 /** A unit to translate is current when its translation was made, or it was settled, under the identity that would answer now */
@@ -116,6 +118,9 @@ export interface UntypesetMark {
   identity?: string
   /** the typesetting that could not set it; absent in a mark made before the two versions were apart */
   typesetting?: string
+  /** the TeX page's versions it was compiled under (its own, its engine's, its tree's, its index's; '1' for a page of
+   *  protocol 1): a page fixed since may set it */
+  page?: string
 }
 
 /**
@@ -126,7 +131,7 @@ export interface UntypesetMark {
  * reader leaves a mark only for one identity's whole translation (pdf-reader/engine/cache.mjs allTranslatedBy)
  */
 export function stillUntypeset(mark: UntypesetMark | undefined, now: Now): boolean {
-  return mark !== undefined && mark.pipeline === now.pipeline && mark.typesetting === now.typesetting && mark.identity !== undefined && mark.identity === now.identity
+  return mark !== undefined && mark.pipeline === now.pipeline && mark.typesetting === now.typesetting && mark.page === now.page && mark.identity !== undefined && mark.identity === now.identity
 }
 
 /** What a copy is worth, in the order copies are compared: pipeline, typesetting, units current, whole, partial, lost

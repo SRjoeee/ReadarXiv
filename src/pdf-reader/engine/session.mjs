@@ -40,7 +40,7 @@ import { captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pa
 import { hostReady } from './host.mjs'
 import { compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive, TYPESETTING_VERSION } from './live.mjs'
 import { displayEdges, isName, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
-import { verified, VERIFIED } from './scripts.mjs'
+import { CJK, scriptOf, strategiesFor, verified, VERIFIED } from './scripts.mjs'
 import { marksOf as typesetMarksOf } from './typeset/places.mjs'
 import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { unpackSource } from './tar.mjs'
@@ -2099,19 +2099,47 @@ async function live() {
     window.__reader.ready = true
     return p
   }
-  /** our site's TeX page, given the paper's project: { compile, close }, closing the page with its worker (live.mjs
-   *  compilerKeeper opens one when needed, and a fresh one after a compile that did not answer) */
-  const openCompiler = async p => {
+  /** our site's TeX page in a frame, loaded and ready, with its versions (protocol 2's `ready`: the page's, the engine's,
+   *  the tree's and its index's; '1' for a page of protocol 1): kept until a compiler takes it, so that the versions a
+   *  "cannot typeset" mark is judged by cost no second load */
+  let frameP = null
+  const texFrame = () => (frameP ??= (async () => {
     const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
     const ready = waitFor(site, 'ready')
     document.body.append(frame)
-    if (!(await Promise.race([ready.then(() => true), new Promise(r => setTimeout(r, 10000, false))]))) {
+    const said = await Promise.race([ready, new Promise(r => setTimeout(r, 10000, null))])
+    if (!said) {
       frame.remove()
       throw Object.assign(new Error(`The TeX page is not running at ${site}: start it with node spikes/serve-live.mjs`), { event: 'no compiler' })
     }
+    return { frame, version: said.protocol === 2 ? [said.cv, said.eid, said.tid, said.index].join('/') : '1' }
+  })().catch(e => { frameP = null; throw e }))
+  /** the TeX page's versions the compiles were made under: what a "cannot typeset" mark holds for (the S3a review, I5 d) */
+  let compiledUnder = null
+  /**
+   * The TeX page as a compiler, given the paper's project and the visit's language: { compile, close }, closing the page
+   * with its worker (live.mjs compilerKeeper opens one when needed, and a fresh one after a compile the page failed).
+   * Protocol 2's hints (the S3a report): the engines the visit will use — the paper's own (the font probe, the marked
+   * original) and its first strategy's — and the CJK script whose faces that strategy sets, which the page fetches
+   * ahead; a page of protocol 1 reads the `endpoint` instead, and nothing else. An init the page reports failed is no
+   * compiler: the frame goes, and the failure is the network's where the page says so — retried as a network down is
+   */
+  const openCompiler = async (p, lang) => {
+    const { frame, version } = await texFrame()
+    frameP = null
+    const meta = p.paperData.meta, script = scriptOf(lang)
+    let first = null
+    try { first = strategiesFor(meta, lang)[0] } catch {}
+    const engines = [...new Set([meta.compiler === 'latex' ? 'pdflatex' : meta.compiler, first?.engine].filter(Boolean))]
     const initDone = waitFor(site, 'init-done')
-    frame.contentWindow.postMessage({ type: 'init', endpoint }, site)
-    note('compiler', { ms: (await initDone).ms })
+    frame.contentWindow.postMessage({ type: 'init', protocol: 2, engines, fonts: CJK[script] ? [script] : [], endpoint }, site)
+    const done = await initDone
+    if (done.error) {
+      frame.remove()
+      throw Object.assign(new Error(`The TeX page could not start: ${String(done.error).slice(0, 200)}`), { event: 'no compiler', kind: done.network?.length ? 'network' : 'unknown' })
+    }
+    compiledUnder = version
+    note('compiler', { ms: done.ms, version })
     frame.contentWindow.postMessage({ type: 'project', key: paper, files: [...p.files].map(([path, content]) => ({ path, content })) }, site)
     let seq = 0
     const compile = req => new Promise(resolve => {
@@ -2149,7 +2177,11 @@ async function live() {
     // asked for nothing; a new pipeline tries once more (the maintainer, 2026-09-26). Only once the extension has said
     // which service would translate, and only for the same one: the failure was its translation's, which another
     // service, model or prompt may not repeat (Codex on #306)
-    if (!cached && cacheKey && stillUntypeset(await pdfCache.untypeset(cacheKey.digest, cacheKey.lang), { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION })) return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
+    // and only for the TeX page's versions it was made under: a page fixed since (its fonts, its tree, its index) may set
+    // it (the S3a review, I5 d) — read from the page loaded for the compiles to come
+    const mark = !cached && cacheKey ? await pdfCache.untypeset(cacheKey.digest, cacheKey.lang) : undefined
+    const page = mark ? await texFrame().then(f => f.version, () => null) : null
+    if (mark && page && stillUntypeset(mark, { identity: engine.identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page })) return fail('cannot typeset', `${paper} could not be typeset into ${lang} by ${engine.engine} on this machine before: the right side shows the original`)
     // single language first: a language whose typesetting the gate has not verified is not set (scripts.mjs VERIFIED)
     if (!verified(lang)) return fail('not verified', `Typesetting ${lang} is not verified yet (issue #295): the reader sets ${VERIFIED.join(', ')} for now; choose one in the extension's settings`)
     // the decision to translate, the step the controller's phase moves at: a copy on screen is translated again, and
@@ -2161,7 +2193,7 @@ async function live() {
     note('translating')
     let p, compile
     try { p = await (paperP ??= readPaper().catch(e => { paperP = null; throw e })) } catch (e) { return fail(e.event ?? 'fetch failed', e.message ?? String(e), e.kind) }
-    compiler ??= compilerKeeper(() => openCompiler(p))
+    compiler ??= compilerKeeper(() => openCompiler(p, lang))
     try { await compiler.ready() } catch (e) { return fail(e.event ?? 'no compiler', e.message ?? String(e), e.kind) }
     compile = compiler.compile
     const { paperData, units, src, context, hashes } = p
@@ -2212,7 +2244,7 @@ async function live() {
     if (result.exhausted && !result.stopped && !compiledOnce && !cached) {
       if (cacheKey && result.originalOk) {
         const identity = await engine.now().catch(() => engine.identity)
-        if (allTranslatedBy(result.results, identity)) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION })
+        if (allTranslatedBy(result.results, identity) && compiledUnder) await pdfCache.markUntypeset(cacheKey.digest, cacheKey.lang, { identity, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder })
       }
       note('done', result)
       return fail('cannot typeset', `None of the ways of typesetting ${paper} into ${lang} worked: the right side shows the original`)

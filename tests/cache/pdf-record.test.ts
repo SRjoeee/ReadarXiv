@@ -86,6 +86,12 @@ describe('stillUntypeset', () => {
   it('holds under the same pipeline and the same identity', () => expect(stillUntypeset({ pipeline: '2', identity: 'B' }, now)).toBe(true))
   it('not under another identity: another service, model or prompt is asked', () => expect(stillUntypeset({ pipeline: '2', identity: 'A' }, now)).toBe(false))
   it('not under another pipeline: a new one tries once more', () => expect(stillUntypeset({ pipeline: '1', identity: 'B' }, now)).toBe(false))
+  it('not under other versions of the TeX page: a page fixed since may set it (the S3a review, I5 d)', () => {
+    const at = { ...now, typesetting: '2', page: 'c1/e1/t1/i1' }
+    expect(stillUntypeset({ pipeline: '2', identity: 'B', typesetting: '2', page: 'c1/e1/t1/i1' }, at)).toBe(true)
+    expect(stillUntypeset({ pipeline: '2', identity: 'B', typesetting: '2', page: 'c1/e2/t1/i1' }, at)).toBe(false)
+    expect(stillUntypeset({ pipeline: '2', identity: 'B', typesetting: '2' }, at)).toBe(false)
+  })
   it('not under another typesetting: it may set what the last could not', () => {
     const at = { ...now, typesetting: '2' }
     expect(stillUntypeset({ pipeline: '2', identity: 'B', typesetting: '2' }, at)).toBe(true)
