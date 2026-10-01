@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { type Anchor, type DocToken, inkEdges, lineRects, tokenizeDocument } from '@/pdf-reader/engine/anchors.mjs'
-import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit, shapePath } from '@/pdf-reader/engine/highlight.mjs'
+import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from '@/pdf-reader/engine/highlight.mjs'
 
 // What a unit paints on a side and where the pointer lights it (highlight.mjs): the pages given as PDF.js's text items,
 // each unit's tokens as anchorUnits would give them. A page is 600 wide; body text is 10 high on lines 12 apart, its
@@ -401,6 +401,22 @@ describe('the sentences tile their run, and hold their words, or the unit is lit
     expect(sentencesFit(layout, 0, Int32Array.from([at(d, 'then')]))).toBe(false)
     // a sentence that begins on a row of its own fits
     expect(sentencesFit(layout, 0, Int32Array.from([at(d, 'text', first)]))).toBe(true)
+  })
+})
+
+describe('sentencesFit from the pages made alone: the pointer\'s frame makes no page\'s geometry', () => {
+  it('undefined while one of the unit\'s pages has no geometry yet; known once it has; a page\'s sentences made with it', () => {
+    // a unit over a page break: its last two lines on page 1, its first two on page 2
+    const pages = [prose(700, 30), prose(700, 30)]
+    const L = side(pages, [[0, range(8 * 28, 8 * 32 - 1)]])
+    const starts = Int32Array.from([8 * 29 + 3])
+    pageSentences(L, 1, id => (id === 0 ? starts : null))
+    expect(sentencesFit(L, 0, starts, true)).toBeUndefined()
+    pageSentences(L, 2, id => (id === 0 ? starts : null))
+    expect(sentencesFit(L, 0, starts, true)).toBe(true)
+    // and the whole answer makes what it needs
+    const M = side(pages, [[0, range(8 * 28, 8 * 32 - 1)]])
+    expect(sentencesFit(M, 0, starts)).toBe(true)
   })
 })
 

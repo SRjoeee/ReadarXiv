@@ -150,7 +150,7 @@ export function inkEdges(doc) {
     let left = w.x, right = w.x + w.w
     if (it && it !== item) {
       item = it; s = it.str.normalize('NFKC').toLowerCase(); perChar = it.str.length ? it.width / it.str.length : 0; x0 = it.transform[4]
-      cum = shares(it.str, s.length, MONO.has(it)); scale = cum[cum.length - 1] ? it.width / cum[cum.length - 1] : 0
+      cum = shares(it.str, s.length, MONO.has(it)); scale = cum[s.length] ? it.width / cum[s.length] : 0
       raw = it.str.length === s.length ? it.str : null
     }
     if (it && perChar > 0) {
@@ -189,11 +189,14 @@ const widthOf = c => (c >= 32 && c < 127 ? TIMES[c - 32] : isCJKCode(c) || wide(
  * where folding the text (NFKC) changed its length (the places are the folded text's)
  */
 function shares(str, len, mono) {
-  const cum = new Float64Array(len + 1)
+  // one buffer for every item, each item's tokens being worked out before the next item's: no array an item
+  if (shared.length <= len) shared = new Float64Array(Math.max(len + 1, shared.length * 2))
+  const cum = shared
   if (mono || str.length !== len) { for (let i = 1; i <= len; i++) cum[i] = i; return cum }
   for (let i = 0; i < len; i++) cum[i + 1] = cum[i] + widthOf(str.charCodeAt(i))
   return cum
 }
+let shared = new Float64Array(256)
 /** the text items set in a monospaced face (getTextContent's styles), whose characters share its width evenly */
 const MONO = new WeakSet()
 
@@ -754,7 +757,7 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
     // -1), so that its sentences can be found there whenever they are known (sentenceStarts): on the left, a translation
     // that comes in after the side was anchored gives them
     let words
-    if (f.pairs) { words = new Int32Array(f.ws.length).fill(-1); for (const [w, k] of f.pairs) words[w] = k }
+    if (f.pairs) { const ws = (words = new Int32Array(f.ws.length).fill(-1)); f.pairs.forEach((k, w) => { ws[w] = k }) }
     out.set(id, { rects: lineRects(doc, all), coverage: +f.coverage.toFixed(3), tokens: all, bounded: !!f.bounded, ...(words ? { words } : {}) })
   })
   return out

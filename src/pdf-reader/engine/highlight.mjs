@@ -357,12 +357,11 @@ export function hitOf(L, p, x, y, padX, startsOf = () => null) {
     const starts = NOT_RUNNING.has(L.kindOf(run.id)) ? null : startsOf(run.id)
     let s = -1
     if (starts) {
-      const ys = edgesOf(run, padX)
+      // its row (the boundaries between rows are its mids), and the sentence whose span there holds the point
       let i = 0
-      while (i < run.rows.length - 1 && y < ys[i + 1]) i++
-      const span = spansOf(segsOf(L, run, starts), run, i, padX).find(q => x >= q.x0 && x <= q.x1)
-      if (!span) continue
-      s = span.s
+      while (i < run.mids.length && y < run.mids[i]) i++
+      s = sentenceAt(segsOf(L, run, starts), run, i, x, padX)
+      if (s < 0) continue
     }
     area = a; best = { id: run.id, run, s }
   }
@@ -434,9 +433,18 @@ function segsOf(L, run, starts) {
 /** how far a word's ink's centre may stand past its sentence's span (PDF units) */
 const FIT = 0.5
 /** whether a unit is lit by sentence on a side: running text (headings, captions, cells and a figure's text light
- *  whole), and every run's shapes hold their words */
-export function sentencesFit(L, id, starts) {
-  return !NOT_RUNNING.has(L.kindOf(id)) && runsOf(L, id).every(run => segsOf(L, run, starts).fits)
+ *  whole), and every run's shapes hold their words. `made`: from the pages whose geometry is made alone, undefined
+ *  where one of the unit's is not yet — the caller makes them in a task of its own, never in the pointer's frame (a
+ *  unit over two pages, its other page's geometry and every run's sentences made there: 3.6 ms, 2608.29181) */
+export function sentencesFit(L, id, starts, made = false) {
+  if (NOT_RUNNING.has(L.kindOf(id))) return false
+  if (made && (L.pagesOf.get(id) ?? []).some(p => !L.cache.has(p))) return undefined
+  return runsOf(L, id).every(run => segsOf(L, run, starts).fits)
+}
+/** a page's sentences worked out — each run's on it whose unit's starts `startsOf` gives —, as the page is first drawn
+ *  or its unit's starts found: the pointer's frame then reads them made */
+export function pageSentences(L, p, startsOf) {
+  for (const run of pageGeometry(L, p).runs) { const st = startsOf(run.id); if (st) segsOf(L, run, st) }
 }
 /**
  * What each sentence on row `i` of a run paints across (PDF units), tiling the row: two sentences meet halfway through
@@ -445,12 +453,15 @@ export function sentencesFit(L, id, starts) {
  * is padded `padX` beyond its ink, or is the run's edge within SNAP of it
  */
 function spansOf(g, run, i, padX) {
-  const row = g.rows[i], L = run.x0 - padX, R = run.x1 + padX
-  return row.map((q, t) => ({
-    s: q.s,
-    x0: t > 0 ? (row[t - 1].x1 + q.x0) / 2 : i > g.first[q.s] || q.x0 - run.x0 < SNAP ? L : q.x0 - padX,
-    x1: t < row.length - 1 ? (q.x1 + row[t + 1].x0) / 2 : i < g.last[q.s] || run.x1 - q.x1 < SNAP ? R : q.x1 + padX,
-  }))
+  return g.rows[i].map((q, t) => ({ s: q.s, x0: spanStart(g, run, i, t, padX), x1: spanEnd(g, run, i, t, padX) }))
+}
+const spanStart = (g, run, i, t, padX) => { const row = g.rows[i], q = row[t]; return t > 0 ? (row[t - 1].x1 + q.x0) / 2 : i > g.first[q.s] || q.x0 - run.x0 < SNAP ? run.x0 - padX : q.x0 - padX }
+const spanEnd = (g, run, i, t, padX) => { const row = g.rows[i], q = row[t]; return t < row.length - 1 ? (q.x1 + row[t + 1].x0) / 2 : i < g.last[q.s] || run.x1 - q.x1 < SNAP ? run.x1 + padX : q.x1 + padX }
+/** the sentence whose span on row `i` holds x, or -1: spansOf's, with nothing made (the pointer's frame) */
+function sentenceAt(g, run, i, x, padX) {
+  const row = g.rows[i]
+  for (let t = 0; t < row.length; t++) if (x <= spanEnd(g, run, i, t, padX)) return x >= spanStart(g, run, i, t, padX) ? row[t].s : -1
+  return -1
 }
 
 /**
@@ -478,29 +489,41 @@ export function sentenceOf(L, run, starts, s, padX) {
  * than two radii are outlines of their own in the one path (a sentence's first row right of its last)
  */
 export function shapePath(rects, radius) {
-  const pieces = [[rects[0]]]
-  for (let i = 1; i < rects.length; i++) { const a = rects[i - 1], b = rects[i]; if (Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 2 * radius) pieces.at(-1).push(b); else pieces.push([b]) }
-  const f = v => +v.toFixed(2)
   let d = ''
-  for (const p of pieces) {
-    // the corners, clockwise from the top left: down the right side, then up the left
-    const pts = [[p[0].x0, p[0].y0], [p[0].x1, p[0].y0]]
-    for (let i = 0; i < p.length; i++) { pts.push([p[i].x1, p[i].y1]); if (p[i + 1]) pts.push([p[i + 1].x1, p[i].y1]) }
-    pts.push([p.at(-1).x0, p.at(-1).y1])
-    for (let i = p.length - 1; i > 0; i--) { pts.push([p[i].x0, p[i].y0]); pts.push([p[i - 1].x0, p[i].y0]) }
-    // repeated and collinear points dropped: where two rows share an edge there is no corner
-    const q = []
-    for (const pt of pts) if (!q.length || Math.hypot(pt[0] - q.at(-1)[0], pt[1] - q.at(-1)[1]) > 0.01) q.push(pt)
-    if (q.length > 1 && Math.hypot(q[0][0] - q.at(-1)[0], q[0][1] - q.at(-1)[1]) < 0.01) q.pop()
-    const c = q.filter((pt, i) => { const a = q[(i - 1 + q.length) % q.length], b = q[(i + 1) % q.length]; return Math.abs((pt[0] - a[0]) * (b[1] - pt[1]) - (pt[1] - a[1]) * (b[0] - pt[0])) > 0.001 })
-    c.forEach((P, i) => {
-      const A = c[(i - 1 + c.length) % c.length], B = c[(i + 1) % c.length]
-      const la = Math.hypot(A[0] - P[0], A[1] - P[1]), lb = Math.hypot(B[0] - P[0], B[1] - P[1]), r = Math.min(radius, la / 2, lb / 2)
-      d += `${i ? 'L' : 'M'}${f(P[0] + ((A[0] - P[0]) * r) / la)} ${f(P[1] + ((A[1] - P[1]) * r) / la)}Q${f(P[0])} ${f(P[1])} ${f(P[0] + ((B[0] - P[0]) * r) / lb)} ${f(P[1] + ((B[1] - P[1]) * r) / lb)}`
-    })
-    d += 'Z'
+  for (let a = 0, b = 1; b <= rects.length; b++) {
+    if (b < rects.length && Math.min(rects[b - 1].x1, rects[b].x1) - Math.max(rects[b - 1].x0, rects[b].x0) > 2 * radius) continue
+    d += outline(rects, a, b, radius)
+    a = b
   }
   return d
+}
+/** the corners of rects a..b-1, a flat list reused from one outline to the next (the paint makes one or two a light) */
+const cx = [], cy = []
+/** one outline of rects a..b-1: their corners clockwise from the top left — down the right side, then up the left —,
+ *  the repeated and collinear ones dropped (where two rows share an edge there is no corner), each rounded */
+function outline(rects, a, b, radius) {
+  let n = 0
+  const push = (x, y) => { if (n && Math.abs(x - cx[n - 1]) < 0.01 && Math.abs(y - cy[n - 1]) < 0.01) return; cx[n] = x; cy[n] = y; n++ }
+  push(rects[a].x0, rects[a].y0); push(rects[a].x1, rects[a].y0)
+  for (let i = a; i < b; i++) { push(rects[i].x1, rects[i].y1); if (i + 1 < b) push(rects[i + 1].x1, rects[i].y1) }
+  push(rects[b - 1].x0, rects[b - 1].y1)
+  for (let i = b - 1; i > a; i--) { push(rects[i].x0, rects[i].y0); push(rects[i - 1].x0, rects[i].y0) }
+  if (n > 1 && Math.abs(cx[0] - cx[n - 1]) < 0.01 && Math.abs(cy[0] - cy[n - 1]) < 0.01) n--
+  // the corners that turn: a point on the line through its neighbours is none
+  const keep = []
+  for (let i = 0; i < n; i++) {
+    const p = (i - 1 + n) % n, q = (i + 1) % n
+    if (Math.abs((cx[i] - cx[p]) * (cy[q] - cy[i]) - (cy[i] - cy[p]) * (cx[q] - cx[i])) > 0.001) keep.push(i)
+  }
+  const f = v => Math.round(v * 100) / 100
+  let d = ''
+  keep.forEach((i, k) => {
+    const A = keep[(k - 1 + keep.length) % keep.length], B = keep[(k + 1) % keep.length]
+    const ax = cx[A] - cx[i], ay = cy[A] - cy[i], bx = cx[B] - cx[i], by = cy[B] - cy[i]
+    const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by), r = Math.min(radius, la / 2, lb / 2)
+    d += `${k ? 'L' : 'M'}${f(cx[i] + (ax * r) / la)} ${f(cy[i] + (ay * r) / la)}Q${f(cx[i])} ${f(cy[i])} ${f(cx[i] + (bx * r) / lb)} ${f(cy[i] + (by * r) / lb)}`
+  })
+  return `${d}Z`
 }
 
 /**

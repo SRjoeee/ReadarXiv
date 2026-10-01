@@ -19,8 +19,11 @@ export declare function blockOf(run: Run, padX: number): { page: number; x0: num
 export declare function hitOf(layout: Layout | null | undefined, page: number, x: number, y: number, padX: number, startsOf?: (id: number) => Int32Array | null | undefined): { id: number; run: Run; s: number } | null
 /** what sentence `s` of a run's unit paints in the run: a rectangle per row, rows of the same reach as one (PDF units) */
 export declare function sentenceOf(layout: Layout, run: Run, starts: Int32Array, s: number, padX: number): { page: number; x0: number; x1: number; y0: number; y1: number }[]
-/** whether a unit's sentences can be drawn on a side: every run's shapes hold their words */
-export declare function sentencesFit(layout: Layout, id: number, starts: Int32Array): boolean
+/** whether a unit is lit by sentence on a side: running text, every run's shapes holding their words; `made`: from the
+ *  pages whose geometry is made alone, undefined where one is not yet */
+export declare function sentencesFit(layout: Layout, id: number, starts: Int32Array, made?: boolean): boolean | undefined
+/** a page's sentences worked out, each run's whose unit's starts `startsOf` gives */
+export declare function pageSentences(layout: Layout, page: number, startsOf: (id: number) => Int32Array | null | undefined): void
 /** one rounded outline of rectangles stacked from the top (CSS px, y down), as an SVG path */
 export declare function shapePath(rects: { x0: number; x1: number; y0: number; y1: number }[], radius: number): string
 export declare function clickOf(layout: Layout | null | undefined, page: number, x: number, y: number, padX: number): { id: number; line: number; f: number } | null

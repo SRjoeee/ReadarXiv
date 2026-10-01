@@ -30,7 +30,7 @@ import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
-import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
+import { blockOf, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
 import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
@@ -201,14 +201,35 @@ function makeSide(container) {
   // laid out out of sight, is the right side's to the left)
   side.startsOf = id => {
     const o = side === left ? right : left, mine = side.starts?.get(id), theirs = o.starts?.get(id)
-    return mine && theirs && mine.length === theirs.length && fits(side, id, mine) && fits(o, id, theirs) ? mine : null
+    if (!mine || !theirs || mine.length !== theirs.length) return null
+    const a = fits(side, id, mine), b = fits(o, id, theirs)
+    if (a === undefined || b === undefined) { wantFit(id); return null }
+    return a && b ? mine : null
   }
+  /** a page's sentences, by this side's starts alone: what the fit reads (sentencesFit), made as the page is drawn */
+  side.ownStarts = id => side.starts?.get(id) ?? null
   return side
 }
-/** whether a unit's sentences hold its words on a side, by the starts found there: worked out once, when the unit is
- *  first lit or pointed at (its pages' geometry, which the paint makes then too) */
+/** whether a unit's sentences hold its words on a side, by the starts found there: read from its pages' sentences, made
+ *  as each was drawn (pageSentences); where one of its pages on either side has none yet, a task of its own makes them
+ *  and the pointer, a miss meanwhile, looks again (wantFit) — never in its frame */
 const fitted = new WeakMap()
-const fits = (side, id, starts) => { let f = fitted.get(starts); if (f === undefined) { f = !!side.geo && sentencesFit(side.geo, id, starts); fitted.set(starts, f) } return f }
+const fits = (side, id, starts, now = false) => {
+  let f = fitted.get(starts)
+  if (f === undefined && side.geo) { f = sentencesFit(side.geo, id, starts, !now); if (f !== undefined) fitted.set(starts, f) }
+  return side.geo ? f : false
+}
+const fitsWanted = new Set()
+function wantFit(id) {
+  if (fitsWanted.has(id)) return
+  fitsWanted.add(id)
+  if (fitsWanted.size > 1) return
+  setTimeout(() => {
+    for (const u of fitsWanted) for (const s of sides) { const st = s.starts?.get(u); if (st) fits(s, u, st, true) }
+    fitsWanted.clear()
+    pointer.again()
+  })
+}
 const left = makeSide(host.left)
 let right = makeSide(host.right)
 const sides = [left, right]
@@ -319,6 +340,9 @@ function paint(side) {
     const pv = pageView(side, run.page), layer = layerOf(side, run.page)
     if (!layer) continue
     const s = pv.viewport.scale
+    // what the run was drawn as when this was last lit at this scale: put back
+    const kept = drawnFor.get(run)?.get(starts ? lit.s : -1)
+    if (kept && kept.scale === s && kept.starts === starts) { layer.append(kept.el); side.lit.push(kept.el); continue }
     const boxes = (starts ? sentenceOf(side.geo, run, starts, lit.s, PAD / s) : [blockOf(run, PAD / s)]).map(r => toPageBox(side, r))
     if (!boxes.length) continue
     let el
@@ -337,8 +361,15 @@ function paint(side) {
     drawn.set(el, { width: box.width, local })
     layer.append(el)
     side.lit.push(el)
+    ;(drawnFor.get(run) ?? drawnFor.set(run, new Map()).get(run)).set(starts ? lit.s : -1, { scale: s, starts, el })
+    if (++drawnKept > DRAWN_KEPT) { drawnFor = new WeakMap(); drawnKept = 0 }
   }
 }
+/** the elements each run's sentences (and its block, -1) were drawn as, by the run, kept to be put back when lit again
+ *  at the same scale and by the same starts: a sweep lights the same few again and again, and the element made each
+ *  time cost a light more than its block did (round 1: 0.2 against 0.1 ms of script); at most DRAWN_KEPT, then anew */
+let drawnFor = new WeakMap(), drawnKept = 0
+const DRAWN_KEPT = 512
 /** a block's and a shape's corners, in CSS pixels (engine.css .axt-hl) */
 const RADIUS = 3
 const same = (a, b) => a === b || (!!a && !!b && a.id === b.id && a.s === b.s)
@@ -364,7 +395,8 @@ const pointer = pointerPath({
     // a side without its layout yet is a miss, its layout asked for
     if (!side.geo) { wantLayout(side); return null }
     const at = pointAt(side, x, y), hit = at && hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale, side.startsOf)
-    return hit ? { id: hit.id, s: hit.s } : null
+    // a unit whose sentences are not yet worked out on both sides: a miss, until they are (wantFit)
+    return hit && !fitsWanted.has(hit.id) ? { id: hit.id, s: hit.s } : null
   },
   light,
   lit: () => lit != null,
@@ -1391,8 +1423,8 @@ function attach(side) {
   side.eventBus.on('pagerendered', ({ pageNumber }) => {
     if (pageNumber === 1 && !timing[side === left ? 'leftFirstPage' : 'rightFirstPage']) timing[side === left ? 'leftFirstPage' : 'rightFirstPage'] = performance.now() - timing.start
     paint(side)
-    // the page's highlight geometry, on its first drawing (a page never drawn never needs it)
-    if (side.geo) pageGeometry(side.geo, pageNumber)
+    // the page's highlight geometry and its sentences, on its first drawing (a page never drawn never needs it)
+    if (side.geo) pageSentences(side.geo, pageNumber, side.ownStarts)
     // figures laid once per page: kept through a redraw (keepOverlays), scaled with it (pinned); a draft preview's
     // copies of the left's figures are bitmaps drawn for one scale, and are drawn again at another
     const at = side.laid.get(pageNumber)
@@ -1508,6 +1540,8 @@ function findSentences(side) {
     if (st) starts.set(id, st)
   }
   side.starts = starts
+  // the sentences of the pages already drawn (the rest as each is drawn)
+  if (side.geo) for (const p of side.geo.cache.keys()) pageSentences(side.geo, p, side.ownStarts)
   timing[side === left ? 'leftSentences' : 'rightSentences'] = performance.now() - t0
 }
 /** the sides' layouts still to make, one an idle period, none while a side is being anchored: an idle period comes
@@ -1693,6 +1727,9 @@ const harness = () => ({ left, get right() { return right },
   get lit() { return lit?.id ?? null }, get litSentence() { return lit?.s ?? null }, get pointerHit() { return pointer.hit?.id ?? null }, get pointerSentence() { return pointer.hit?.s ?? null },
   /** a unit, or one of its sentences, lit as the pointer would light it */
   light: (id, s = -1) => light(id == null ? null : { id, s }),
+  /** a unit's sentences' starts on the left where it lights by sentence, its fit worked out now on both sides if it was
+   *  not yet (as wantFit's task would), else null */
+  sentenced: id => { for (const s of sides) { const st = s.starts?.get(id); if (st) fits(s, id, st, true) } return left.startsOf(id) },
   /** what is painted, as rectangles in the window's CSS pixels, by side: a shape's rows, a block's one */
   litRects: () => sides.map(sd => sd.lit.flatMap(el => {
     const b = el.getBoundingClientRect(), d = drawn.get(el)
