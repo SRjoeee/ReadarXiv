@@ -32,6 +32,18 @@ export async function seedFrom(record, units) {
 }
 
 /**
+ * A run again's seed: the copy's (seedFrom), with what the visit's last run made over it (runLive's results), so that
+ * only the units still missing are asked again — each with its pieces, its provenance and its sentences, which the run
+ * passes on to what it shows and to the record (a seeded unit without them lit whole, the final review of the
+ * highlight, m3)
+ */
+export function seedAgain(seed, made) {
+  const out = new Map(seed ?? [])
+  for (const [i, r] of made ?? []) if (r.pieces) out.set(i, { pieces: r.pieces, by: r.by, tried: r.tried, state: r.state, ...(r.sentences ? { sentences: r.sentences } : {}) })
+  return out
+}
+
+/**
  * The units a record keeps (src/cache/pdf-record.ts CachedUnit), from a run's results by index: a name kept in the
  * source is `kept`; a unit with no result was not tried, and is `none` with no `tried`, so never current
  */

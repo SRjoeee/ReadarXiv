@@ -32,7 +32,7 @@ import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
 import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
-import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedAgain, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
@@ -2142,9 +2142,8 @@ async function live() {
     compile = compiler.compile
     const { paperData, units, src, context, hashes } = p
     // a run again: what the visit's last run made seeds it, over the copy's, so that only the missing are asked again —
-    // the rest, sent too, the background's cache answers
-    const seed = new Map(p.seed ?? [])
-    for (const [i, r] of made ?? []) if (r.pieces) seed.set(i, { pieces: r.pieces, by: r.by, tried: r.tried, state: r.state })
+    // the rest, sent too, the background's cache answers (cache.mjs seedAgain: with their sentences)
+    const seed = seedAgain(p.seed, made)
     // one replacement at a time, in the order the compiles came in; the final's bytes once compiled
     let swaps = Promise.resolve(), finalPdf = null
     const result = await runLive(paperData, {
