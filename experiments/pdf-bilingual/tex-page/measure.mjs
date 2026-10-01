@@ -16,7 +16,9 @@
 //   pnpm exec tsx experiments/pdf-bilingual/tex-page/measure.mjs --mode=record [--papers=a,b|--limit=n] [--out=name]
 //   pnpm exec tsx experiments/pdf-bilingual/tex-page/measure.mjs --mode=identity --page=new [--out=name]
 // Options: --jobs=probe,orig,de-prev,... (default below), --fontpapers=n (the first n papers also run the other CJK
-// scripts' first previews, for the font manifests), --resume (skip papers already done in that run).
+// scripts' first previews, for the font manifests), --resume (skip papers already done in that run); for identity,
+// --tags=<file> (only these compiles, paper~job a line), --fresh (a frame for each compile), --pipeline=<file> (BusyTeX's
+// pipeline served in place of the build's: a variant measured, as nohalt.mjs's).
 // Compiles: at most 2 at a time, 1 while the machine's load is above 12. Output: out/tex-measure/<name>/ (jobs.jsonl,
 // papers.jsonl, requests.jsonl, opened.jsonl, pdf/). Needs: `node setup.mjs`, texlive-server on :8070 (record, and
 // identity of the old page), `node tex-page/build.mjs` (the new page), Playwright's Chromium.
@@ -43,6 +45,12 @@ const SITE = join(EXP, 'out/tex-site')
 const FILESERVER = 'http://localhost:8070'
 const JOBS = arg('jobs', 'probe,orig,de-prev,de-final,zh-prev,zh-final,zhc-prev').split(',')
 const FONT_JOBS = ['zht-prev', 'ja-prev', 'ko-prev']
+/** --tags=<file>: only these compiles (paper~job, one a line), each paper's in one visit */
+const TAGS = arg('tags', '') ? readFileSync(arg('tags', ''), 'utf8').trim().split('\n').filter(Boolean) : null
+const tagsOf = new Map()
+for (const t of TAGS ?? []) { const [id, job] = t.split('~'); if (!tagsOf.has(id)) tagsOf.set(id, []); tagsOf.get(id).push(job) }
+/** --pipeline=<file>: BusyTeX's pipeline served in place of the build's (a variant to measure, the new page only) */
+const PIPELINE = arg('pipeline', '')
 const FONT_PAPERS = Number(arg('fontpapers', '12'))
 /** the PDFs' dates, fixed (2026-01-01) */
 const EPOCH = '1767225600'
@@ -98,6 +106,7 @@ function siteFile(path) {
   const file = join(SITE, path.slice(1))
   if (!file.startsWith(SITE) || !existsSync(file)) return null
   if (path.endsWith('/busytex_worker.js')) return { body: readFileSync(file, 'utf8') + SNIPPET, type: TYPES['.js'] }
+  if (PIPELINE && path.endsWith('/busytex_pipeline.js')) return { body: readFileSync(PIPELINE), type: TYPES['.js'] }
   return { body: readFileSync(file), type: TYPES[extname(file)] ?? 'application/octet-stream' }
 }
 let root = null
@@ -202,7 +211,7 @@ async function visit(tab, vid, init) {
         let pdfSha = null
         if (r.pdf) pdfSha = await (await fetch(`${harness}/measure/pdf?tag=${encodeURIComponent(c.tag)}`, { method: 'POST', body: r.pdf })).text()
         const log = String(r.log ?? '')
-        return { tag: c.tag, ok: r.ok, ms: r.ms, wallMs, pdfBytes: r.pdf?.byteLength ?? 0, pdfSha, network: r.network, error: r.error, log: c.tag.endsWith('~probe') ? log : null, firstError: log.match(/^(?:\S+:\d+: .*|! .*)$/m)?.[0]?.slice(0, 200) ?? null, logTail: r.ok ? null : log.slice(-1500) }
+        return { tag: c.tag, ok: r.ok, ms: r.ms, wallMs, pdfBytes: r.pdf?.byteLength ?? 0, pdfSha, network: r.network, error: r.error, log: c.tag.endsWith('~probe') ? log : null, firstError: log.match(/^(?:\S+:\d+: .*|! .*)$/m)?.[0]?.slice(0, 200) ?? null, errors: (log.match(/^! /gm) ?? []).length, logTail: r.ok ? null : log.slice(-1500) }
       }, { c, harness: ORIGIN, vid })
       out.results.push(r)
     } finally { running-- }
@@ -215,7 +224,7 @@ async function visit(tab, vid, init) {
 
 const done = new Set(flag('resume') && existsSync(join(OUT, 'papers.jsonl')) ? readFileSync(join(OUT, 'papers.jsonl'), 'utf8').trim().split('\n').map(l => JSON.parse(l).id) : [])
 const all = corpus()
-const chosen = arg('papers', '') ? arg('papers', '').split(',') : all.slice(0, Number(arg('limit', all.length)))
+const chosen = TAGS ? [...tagsOf.keys()] : arg('papers', '') ? arg('papers', '').split(',') : all.slice(0, Number(arg('limit', all.length)))
 const recorded = MODE === 'identity' ? new Map(readFileSync(join(EXP, 'out/tex-measure', arg('fonts', 'record-old'), 'papers.jsonl'), 'utf8').trim().split('\n').map(l => JSON.parse(l)).map(p => [p.id, p.fonts])) : null
 
 const initFor = (meta, names) => (PAGE === 'old' ? { type: 'init', endpoint: FILESERVER } : hintsFor(meta, names))
@@ -247,7 +256,16 @@ async function recordPaper(tab, id, index) {
 }
 
 async function identityPaper(tab, id, index) {
-  const names = [...JOBS, ...(index < FONT_PAPERS ? FONT_JOBS : [])]
+  const names = TAGS ? tagsOf.get(id) : [...JOBS, ...(index < FONT_PAPERS ? FONT_JOBS : [])]
+  // --fresh: a frame for each compile, so that one BusyTeX gave up on does not run beside the next
+  if (flag('fresh') && names.length > 1) {
+    for (const n of names) await identityVisit(tab, id, [n])
+    return
+  }
+  return identityVisit(tab, id, names)
+}
+
+async function identityVisit(tab, id, names) {
   if (!recorded.has(id)) { log('papers.jsonl', { id, skipped: 'not in the record run' }); return }
   const p = await paperJobs(id, names, recorded.get(id))
   if (!p) { log('papers.jsonl', { id, skipped: 'no LaTeX source' }); return }
