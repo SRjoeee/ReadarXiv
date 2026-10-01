@@ -1,8 +1,10 @@
 // The highlight's gate in a real browser (plans/2026-10-01-pdf-highlight.md, B1; the Node half is highlight-gate.mjs):
 // the extension's build, the reader on demo papers, the real pointer.
 //  checks (exit non-zero on a failure), on the build under test:
-//  - no hole: for units lit on both sides, points on a grid inside each band painted: the pointer there finds a unit —
-//    its own, or a smaller one painted over it (a heading run into its paragraph's first line)
+//  - no hole: for units lit on both sides, points on a grid inside each band painted, and 1 px inside each of its edges
+//    and corners (the pads): the pointer there finds a unit — its own, or a smaller one painted over it (a heading run
+//    into its paragraph's first line); 1.5 px outside its sides it does not find the unit. At the load, and again with
+//    the contents panel open, zoomed, the right side replaced (a new compile) and the translation alone
 //  - a miss is held: the pointer moved off every unit keeps what is lit 50 ms, not 250 ms
 //  - both sides painted; the tasks that write the highlight force no layout (a Chrome trace: no Layout inside them)
 //  - where the pointer's path keeps each pane and page (debug.pointAt) is where the layout has them, at 60 points a
@@ -12,6 +14,10 @@
 //  - a wheel turned under a still pointer (no move sent): what is lit after is what a move there would light
 //  - the pointer on a unit's words the moment the reader is ready (its sides' layouts, made in the idle time after, not
 //    yet there most times): no layout made in an animation frame; the unit lit once they come, the pointer still
+//  Each made to fail once (B1's first round of review): the kept places, the first moment and the wheel on 133ae1d1
+//  (113 of 113 points off after the contents panel opened; a layout made in the pointer's frame; the unit the wheel
+//  left behind still lit); the pads on a build whose pointer takes no pad (104 of 156 pad points lit nothing); the
+//  holes and the miss hold on BASE 5957a4be (46 of 672 points; the wash gone at 50 ms)
 //  costs, the build against BASE_BUILD, interleaved (both browsers open, runs alternating):
 //  - a sweep of real pointer moves (220 down each pane, zig-zagging, one a frame) over a spread of formulas, of aligned
 //    displays, and a two-column page: per light — a move that changed what is lit — the script of the task that
@@ -20,12 +26,18 @@
 //  - opening the heaviest paper and a two-column one: the time to ready (text and anchors), the side's layouts
 //    (timing.leftLayout / rightLayout), the long tasks until ready plus 3 s
 //  - a fast scroll (120 wheel steps of 600 px, 16 ms apart) with a unit lit: long tasks
+//  and, against BASE_BUILD, the limits (exit non-zero past one; the rounds pooled): per light, the script's and the
+//  following style and layout's p50 within 0.1 ms of BASE's and p95 within 0.25 ms; no layout forced; the sweeps' long
+//  tasks no more than BASE's and one a round; the fast scroll's long tasks' total within 15 % and 50 ms a round of
+//  BASE's; the open's time to ready and its anchoring, p50, within 3 % and 10 ms of BASE's. Made to fail once (B1's
+//  first round of review): a build whose pointer frame waits 1 ms (script p50 over the limit)
 // The demo papers (made on this machine, never in the repository: arXiv's papers may not be redistributed) are staged
 // into a copy of each build, as extension.mjs does with poc-reader/papers.
 //   node experiments/pdf-bilingual/spikes/highlight-gate-browser.mjs [checks|costs|all]
 //   BUILD=<dir> the build under test (default .output/chrome-mv3), LABEL its name in the output; BASE_BUILD=<dir> the one
 //   to compare with (costs);
-//   PAPERS=<dir> the demo papers (default poc-reader/papers); CHECK=<ids> the papers checked (default 2608.02163);
+//   PAPERS=<dir> the demo papers (default poc-reader/papers); CHECK=<ids> the papers checked (default 2608.02459, the
+//   heaviest, whose layouts are not made yet when the reader is ready, and 2608.06701, two columns);
 //   SWEEP=<id:unit,…> the sweeps' papers and the unit each starts at; OPEN=<ids> the papers opened (either `none`);
 //   ROUNDS=<n>
 //   → out/highlight-gate-browser.json
@@ -40,7 +52,7 @@ const { chromium } = createRequire(REPO)('playwright')
 const what = process.argv[2] ?? 'all'
 const BUILD = process.env.BUILD ?? join(REPO, '.output/chrome-mv3'), BASE = process.env.BASE_BUILD
 const PAPERS = process.env.PAPERS ?? join(root, 'poc-reader/papers')
-const CHECK = (process.env.CHECK ?? '2608.02163').split(',')
+const CHECK = (process.env.CHECK ?? '2608.02459,2608.06701').split(',')
 const list = (v, d) => (v === 'none' ? [] : (v ?? d).split(','))
 const SWEEP = list(process.env.SWEEP, '2608.08350:139,2608.29181:30,2608.06701:17').map(s => s.split(':')).map(([id, unit]) => [id, Number(unit)])
 const OPEN = list(process.env.OPEN, '2608.02459,2608.04322')
@@ -131,7 +143,16 @@ const places = page => page.evaluate(() => {
       const el = document.elementsFromPoint(x, y).map(e => e.closest('.page')).find(e => e && s.container.contains(e))
       const a = d.pointAt(s, x, y)
       const b = el?.getBoundingClientRect()
-      if (!el || x < b.left + el.clientLeft || x > b.right - el.clientLeft || y < b.top + el.clientTop || y > b.bottom - el.clientTop) { if (!el && a) { out.n++; out.bad++ } continue }
+      if (!el || x < b.left + el.clientLeft || x > b.right - el.clientLeft || y < b.top + el.clientTop || y > b.bottom - el.clientTop) {
+        // pointAt finding a page the layout has none at: off unless on the page box's very edge, which hit testing
+        // leaves out at the far sides and pointOn takes in
+        const pb = a && d.pageView(s, a.page).div.getBoundingClientRect()
+        if (!el && a && Math.min(Math.abs(x - pb.left), Math.abs(x - pb.right), Math.abs(y - pb.top), Math.abs(y - pb.bottom)) > 0.5) {
+          out.n++; out.bad++
+          if (out.worst.length < 3) out.worst.push({ side: s === d.left ? 'L' : 'R', noPage: [+x.toFixed(1), +y.toFixed(1)], found: a.page, box: [+pb.left.toFixed(1), +pb.top.toFixed(1), +pb.right.toFixed(1), +pb.bottom.toFixed(1)] })
+        }
+        continue
+      }
       const n = Number(el.dataset.pageNumber), pv = d.pageView(s, n)
       const [px, py] = pv.viewport.convertToPdfPoint(x - b.left - el.clientLeft, y - b.top - el.clientTop)
       out.n++
@@ -168,51 +189,84 @@ async function early(b, paper) {
   await page.close()
   return { id: target.id, geoAtHover: target.geo, ...after }
 }
+/** for each unit: both sides scrolled to it and its bands painted (by the harness, then let go); the real pointer on a
+ *  6 × 4 grid inside each band shown, 1 px inside its four sides' middles and two of its corners (the pads), and 1.5 px
+ *  outside its left and right sides; what the pointer's frame found there (debug.pointerHit: a miss is held, so what is
+ *  lit does not tell) */
+async function painted(page, ids) {
+  const r = { points: 0, holes: 0, other: 0, pads: 0, padHoles: 0, outside: 0, outsideOwn: 0, bothSides: 0, bad: [] }
+  const hitAt = async (x, y) => { await page.mouse.move(x, y); await frames(page); return page.evaluate(() => window.__reader.debug.pointerHit) }
+  for (const id of ids) {
+    await at(page, id)
+    const bands = await page.evaluate(id => {
+      const d = window.__reader.debug
+      d.light(id)
+      const out = [...document.querySelectorAll('.axt-hl')].map(e => { const b = e.getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height, side: e.closest('#left') ? 'L' : 'R' } }).filter(b => b.w > 0)
+      d.light(null)
+      return out
+    }, id)
+    if (new Set(bands.map(x => x.side)).size === 2) r.bothSides++
+    for (const band of bands) {
+      if (band.y < 60 || band.y + band.h > 985) continue
+      for (let i = 0; i < 6; i++) for (let j = 0; j < 4; j++) {
+        const hit = await hitAt(band.x + 1 + ((band.w - 2) * (i + 0.5)) / 6, band.y + 1 + ((band.h - 2) * (j + 0.5)) / 4)
+        r.points++
+        if (hit === null) r.holes++
+        else if (hit !== id) r.other++
+      }
+      const { x, y, w, h } = band
+      for (const [px, py] of [[x + 1, y + h / 2], [x + w - 1, y + h / 2], [x + w / 2, y + 1], [x + w / 2, y + h - 1], [x + 1, y + 1], [x + w - 1, y + h - 1]]) {
+        const hit = await hitAt(px, py)
+        r.pads++
+        if (hit === null) { r.padHoles++; r.bad.push({ id, side: band.side, at: [+(px - x).toFixed(1), +(py - y).toFixed(1)], band: [+w.toFixed(1), +h.toFixed(1)] }) }
+      }
+      for (const px of [x - 1.5, x + w + 1.5]) {
+        r.outside++
+        if ((await hitAt(px, y + h / 2)) === id) r.outsideOwn++
+      }
+    }
+  }
+  return r
+}
 async function checks(b) {
   for (const paper of CHECK) {
     const e = await early(b, paper)
     check(`${b.label} ${paper}: the pointer at the reader's first moment makes no layout in a frame, and lights once they come`, e.madeInFrame === 0 && e.geo.every(Boolean) && e.hit != null && e.lit != null, JSON.stringify(e))
     const page = await open(b, paper)
-    // where the pointer's path keeps the panes and pages, after each of what moves them
-    for (const [what, move] of MOVES) {
-      await move(page)
-      await page.waitForTimeout(900)
-      const p = await places(page)
-      check(`${b.label} ${paper}: the kept places are the layout's after ${what}`, p.n > 0 && p.bad === 0, `${p.bad} of ${p.n} points off${p.worst.length ? ` ${JSON.stringify(p.worst)}` : ''}`)
-    }
-    // units lit on both sides whose first lines are on the first two pages of each side, a dozen
+    // units lit on both sides whose first lines are on the first two pages of each side, a dozen; the bands they paint
+    // and the pads, after what moves the panes or redraws them
     const ids = await page.evaluate(() => {
       const d = window.__reader.debug
       return [...d.left.anchors.keys()].filter(id => { const a = d.left.anchors.get(id), c = d.right.anchors.get(id); return a && c && a.rects[0].page <= 2 && c.rects[0].page <= 2 }).slice(0, 12)
     })
-    let points = 0, holes = 0, other = 0, bothSides = 0
-    for (const id of ids) {
-      await at(page, id)
-      // the bands the unit paints, lit by the harness, then let go
-      const bands = await page.evaluate(id => {
-        const d = window.__reader.debug
-        d.light(id)
-        const out = [...document.querySelectorAll('.axt-hl')].map(e => { const r = e.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height, side: e.closest('#left') ? 'L' : 'R' } })
-        d.light(null)
-        return out
-      }, id)
-      if (new Set(bands.map(x => x.side)).size === 2) bothSides++
-      for (const band of bands) for (let i = 0; i < 6; i++) for (let j = 0; j < 4; j++) {
-        const x = band.x + 1 + ((band.w - 2) * (i + 0.5)) / 6, y = band.y + 1 + ((band.h - 2) * (j + 0.5)) / 4
-        if (y < 50 || y > 990) continue
-        await page.mouse.move(x, y)
-        await frames(page)
-        // what the pointer found: the build's own answer where it has one (a miss is held, so what is lit does not
-        // tell), else what is lit
-        const hit = await page.evaluate(() => { const d = window.__reader.debug; return 'pointerHit' in d ? d.pointerHit : document.querySelector('.axt-hl') ? 'lit' : null })
-        points++
-        if (hit === null) holes++
-        else if (hit !== id && hit !== 'lit') other++
+    const STATES = [
+      ['at the load', ids, async () => {}],
+      ['with the contents open', ids.slice(0, 6), () => page.locator('button[aria-controls="axt-contents"]').click()],
+      ['zoomed', ids.slice(0, 6), async () => { await page.locator('button[aria-controls="axt-contents"]').click(); await page.evaluate(() => window.__reader.controller.zoomBy(1.1)) }],
+      ['with the right side replaced', ids.slice(0, 6), async () => { await page.evaluate(() => window.__reader.controller.zoomTo('page-width')); await page.evaluate(() => window.__reader.debug.swapRight()) }],
+      ['with the translation alone', ids.slice(0, 6), () => page.evaluate(() => window.__reader.controller.setDisplay('translation'))],
+    ]
+    const placesAfterMoves = async () => {
+      for (const [what, move] of MOVES) {
+        await move(page)
+        await page.waitForTimeout(900)
+        const p = await places(page)
+        check(`${b.label} ${paper}: the kept places are the layout's after ${what}`, p.n > 0 && p.bad === 0, `${p.bad} of ${p.n} points off${p.worst.length ? ` ${JSON.stringify(p.worst)}` : ''}`)
       }
     }
-    check(`${b.label} ${paper}: no hole inside what is painted`, holes === 0, `${holes} of ${points} points on ${ids.length} units' bands lit nothing; ${other} lit a smaller unit painted over them`)
-    check(`${b.label} ${paper}: both sides painted`, bothSides === ids.length, `${bothSides} of ${ids.length}`)
-    ;(result.checks ??= {})[`${b.label} ${paper}`] = { units: ids.length, points, holes, other }
+    for (const [state, which, enter] of STATES) {
+      // after the load's: where the pointer's path keeps the panes and pages, after each of what moves them
+      if (state === 'with the contents open') await placesAfterMoves()
+      await enter()
+      await page.waitForTimeout(900)
+      const r = await painted(page, which)
+      check(`${b.label} ${paper}: no hole inside what is painted, ${state}`, r.holes === 0 && r.points > 0, `${r.holes} of ${r.points} points on ${which.length} units' bands lit nothing; ${r.other} lit a smaller unit painted over them`)
+      check(`${b.label} ${paper}: the pads light their unit, and 1.5 px past its sides does not, ${state}`, r.padHoles === 0 && r.outsideOwn === 0 && r.pads > 0, JSON.stringify({ pads: r.pads, padHoles: r.padHoles, outside: r.outside, outsideOwn: r.outsideOwn, first: r.bad[0] }))
+      if (state === 'at the load') check(`${b.label} ${paper}: both sides painted`, r.bothSides === which.length, `${r.bothSides} of ${which.length}`)
+      ;((result.checks ??= {})[`${b.label} ${paper}`] ??= {})[state] = { units: which.length, ...r, bad: r.bad.slice(0, 5) }
+    }
+    await page.evaluate(() => window.__reader.controller.setDisplay('bilingual'))
+    await page.waitForTimeout(900)
     // a miss held: on a unit, then off every unit (the page's margin, a few px in from its edge)
     const off = await page.evaluate(id => { const d = window.__reader.debug, s = d.left, a = s.anchors.get(id), pv = d.pageView(s, a.rects[0].page), pr = pv.div.getBoundingClientRect(); return { x: pr.left + 4, y: pr.top + pr.height / 2 } }, ids[0])
     await at(page, ids[0])
@@ -336,6 +390,23 @@ async function costs(builds) {
   }
   for (const [key, runs] of Object.entries(result.open ?? {})) result.summary[`open ${key}`] = { readyMs: stats(runs.map(r => r.ready)), anchorsMs: stats(runs.map(r => r.anchors)), layoutMs: stats(runs.flatMap(r => [r.leftLayout, r.rightLayout].filter(x => x != null))), longTasks: runs.map(r => r.longTasks) }
   for (const [key, v] of Object.entries(result.summary)) console.log(key, JSON.stringify(v))
+  if (builds.length < 2) return
+  // the limits against BASE
+  const [b, h] = [builds.find(x => x.label === 'base').label, builds.find(x => x.label !== 'base').label]
+  const sum = xs => xs.reduce((a, x) => a + x, 0)
+  const within = (what, head, base, add, times = 1) => check(`${h} against BASE: ${what}`, head != null && base != null && head <= base * times + add, `${head} against ${base} (limit ${base == null ? '?' : +(base * times + add).toFixed(2)})`)
+  for (const [paper] of SWEEP) {
+    const H = result.summary[`sweep ${paper} ${h}`], B = result.summary[`sweep ${paper} ${b}`]
+    for (const f of ['script', 'styleLayout']) { within(`${paper} per light, ${f} p50`, H[f].p50, B[f].p50, 0.1); within(`${paper} per light, ${f} p95`, H[f].p95, B[f].p95, 0.25) }
+    check(`${h} against BASE: ${paper} no layout forced where the highlight is written`, sum(H.forced) === 0, JSON.stringify(H.forced))
+    within(`${paper} the sweeps' long tasks`, sum(H.longTasks.map(x => x.n)), sum(B.longTasks.map(x => x.n)), ROUNDS)
+    within(`${paper} the fast scroll's long tasks, ms`, +sum(H.fastScroll.map(x => x.total)).toFixed(1), +sum(B.fastScroll.map(x => x.total)).toFixed(1), 50 * ROUNDS, 1.15)
+  }
+  for (const paper of OPEN) {
+    const H = result.summary[`open ${paper} ${h}`], B = result.summary[`open ${paper} ${b}`]
+    within(`${paper} the open, ready p50 ms`, H.readyMs.p50, B.readyMs.p50, 10, 1.03)
+    within(`${paper} the open, anchoring p50 ms`, H.anchorsMs.p50, B.anchorsMs.p50, 10, 1.03)
+  }
 }
 
 const head = await launch(BUILD, process.env.LABEL ?? 'head')
