@@ -1495,13 +1495,17 @@ const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
 let anchoring = 0
 /** every unit located on a side: `texts` is the unit's text as that PDF has it; `marks` null = read them from the PDF */
 async function anchorSide(side, texts, marks) {
+  // the units' texts and sentences known at once, before the side's text comes: the other side's sentences are found
+  // from them (findSentences), and its layout may be made before this side's is — on a copy shown or a demo the two are
+  // anchored together, and the pointer over the left asked for its layout while the right was still reading its text:
+  // the left found no sentence, and the paper was lit by paragraph for the visit (the review of B3, C1)
+  side.units = new Map(texts.map(t => [t.id, t]))
   anchoring++
   try { return await anchorOne(side, texts, marks) } finally { anchoring--; makeLayouts() }
 }
 async function anchorOne(side, texts, marks) {
   const pages = await textPages(side.doc)
   const doc = tokenizeDocument(pages)
-  side.units = new Map(texts.map(t => [t.id, t]))
   // the marks it went by, kept on the side: a cached copy keeps the right side's, which cost a second to read from its PDF
   side.marks = marks ?? (await pdfMarks(side.doc))
   const bounds = boundsFromMarks(doc, side.marks)
@@ -1514,13 +1518,16 @@ async function anchorOne(side, texts, marks) {
   side.makeGeo = () => {
     const t0 = performance.now()
     side.geo = layoutOf(doc, views, anchors, id => unitKind.get(id))
-    findSentences(side)
+    // the pages drawn before the layout was made: their geometry now, not in the pointer's frame (the review of B3, 4)
+    for (const pv of side.viewer._pages ?? []) if (pv.renderingState === 3) pageSentences(side.geo, pv.id, side.ownStarts)
     side.makeGeo = null
     layoutsDue.delete(side)
     timing[side === left ? 'leftLayout' : 'rightLayout'] = performance.now() - t0
     // what is lit on it, and what is under a pointer resting on it, now that it has its blocks
     if (lit != null) paint(side)
     pointer.again(side)
+    // its sentences in an idle period of their own, and the left's again when this is the right (or the right to be)
+    wantSentences(side)
   }
   layoutsDue.add(side)
   return bounds.size
@@ -1544,6 +1551,24 @@ function findSentences(side) {
   if (side.geo) for (const p of side.geo.cache.keys()) pageSentences(side.geo, p, side.ownStarts)
   timing[side === left ? 'leftSentences' : 'rightSentences'] = performance.now() - t0
 }
+/** the sides whose sentences are to be found, in an idle period after their layout's (the review of B3, 3: the layout,
+ *  the sentences and the drawn pages' made in one task took 17.6 ms a side on 2608.02459): the left's again after the
+ *  right's, whose units it reads, where the left's layout is made */
+const sentencesDue = new Set()
+function wantSentences(side) {
+  sentencesDue.add(side)
+  if (side !== left && left.geo) sentencesDue.add(left)
+  if (sentencesAsked) return
+  sentencesAsked = true
+  requestIdleCallback(() => {
+    sentencesAsked = false
+    for (const s of sentencesDue) if (s.geo) findSentences(s)
+    sentencesDue.clear()
+    if (lit != null) for (const s of sides) paint(s)
+    pointer.again()
+  })
+}
+let sentencesAsked = false
 /** the sides' layouts still to make, one an idle period, none while a side is being anchored: an idle period comes
  *  while the other side's text is still on its way from PDF.js's worker, and a layout made there held the worker's
  *  answer back (2608.02459: 7.7 ms a side, cold) */
@@ -1692,9 +1717,11 @@ async function replaceRight(url, texts, { draft = false } = {}) {
   old.viewer.setDocument(null)
   old.linkService.setDocument(null)
   old.task.destroy() // the document and its worker-side state; PDF.js 6 destroys through the loading task
-  // the left's sentences are the new translation's: found again where its layout is made (else with it)
+  // the left's sentences are the new translation's: found again where its layout is made (else with it); and what is
+  // under the pointer looked at again — a sentence lit may be one the new translation has not (the review of B3, 8)
   if (left.geo) findSentences(left)
   invalidate(); paint(left); paint(right)
+  pointer.again()
   // the right is a new viewer: its page and page count, not the old one's
   host.emit({ type: 'page', side: 'right', page: right.viewer.currentPageNumber, pages: right.viewer.pagesCount })
   reportOutline()

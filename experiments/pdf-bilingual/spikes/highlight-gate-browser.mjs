@@ -14,6 +14,8 @@
 //  - a wheel turned under a still pointer (no move sent): what is lit after is what a move there would light
 //  - the pointer on a unit's words the moment the reader is ready (its sides' layouts, made in the idle time after, not
 //    yet there most times): no layout made in an animation frame; the unit lit once they come, the pointer still
+//  - the pointer moving over the left pane from the first moment of the load: every side's sentences found, as with the
+//    pointer still (B3's review, C1: made to fail on af6fce33, 06701 0 lit by sentence against 41)
 //  - sentences (B3): where a unit lights by sentence on both sides, what it paints is its sentences' shapes (the first,
 //    a middle and the last, debug.litRects), and the grid and the pads above are the pointer's sentence's
 //    (debug.pointerSentence), 1.5 px past a shape's sides not; round 1's measure of their boundaries on the page's own
@@ -198,6 +200,22 @@ async function early(b, paper) {
   await page.close()
   return { id: target.id, geoAtHover: target.geo, ...after }
 }
+/** the pointer moving over the left pane from the first moment of the load (a reader's hand on the mouse), or still,
+ *  until ready, then 3 s: the units each side found the sentences of, and those lit by sentence (the review of B3, C1:
+ *  the left's layout asked for by the pointer while the right was reading its text found no sentence) */
+async function sentencesAtLoad(b, paper, moving) {
+  const page = await b.context.newPage()
+  page.on('pageerror', e => check(`${b.label} ${paper}: no page error`, false, e.message))
+  await page.goto(b.url({ paper, mode: 'bilingual' }))
+  for (let n = 0; !(await page.evaluate(() => !!window.__reader?.ready).catch(() => false)); n++) {
+    if (moving) await page.mouse.move(200 + ((n * 37) % 500), 200 + ((n * 53) % 600))
+    await page.waitForTimeout(moving ? 8 : 50)
+  }
+  await page.waitForTimeout(3000)
+  const got = await page.evaluate(() => { const d = window.__reader.debug; return { left: d.left.starts?.size ?? 0, right: d.right.starts?.size ?? 0, lit: [...(d.right.starts?.keys() ?? [])].filter(id => d.sentenced(id)).length } })
+  await page.close()
+  return got
+}
 /** what is painted for a unit, as the pointer lights it: its sentences' shapes where it lights by sentence (B3: the
  *  first, a middle one and the last), else its blocks — each a list of rectangles in the window by side, lit by the
  *  harness and let go */
@@ -292,6 +310,8 @@ async function inkCuts(page, ids) {
 }
 async function checks(b) {
   for (const paper of CHECK) {
+    const atRest = await sentencesAtLoad(b, paper, false), moving = await sentencesAtLoad(b, paper, true)
+    check(`${b.label} ${paper}: the pointer moving from the first moment of the load: every side's sentences found, as with it still`, atRest.lit > 0 && JSON.stringify(atRest) === JSON.stringify(moving), JSON.stringify({ still: atRest, moving }))
     const e = await early(b, paper)
     check(`${b.label} ${paper}: the pointer at the reader's first moment makes no layout in a frame, and lights once they come`, e.madeInFrame === 0 && e.geo.every(Boolean) && e.hit != null && e.lit != null, JSON.stringify(e))
     const page = await open(b, paper)
