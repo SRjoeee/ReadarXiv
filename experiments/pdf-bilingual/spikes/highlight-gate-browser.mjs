@@ -233,8 +233,11 @@ async function painted(page, ids) {
         else if (hit.id !== id) r.other++
         else if (!own(hit, band.s)) { r.otherSentence++; if (r.bad.length < 8) r.bad.push({ id, s: band.s, side: band.side, lit: hit.s }) }
       }
-      const { x, y, w, h } = band
-      for (const [px, py] of [[x + 1, y + h / 2], [x + w - 1, y + h / 2], [x + w / 2, y + 1], [x + w / 2, y + h - 1], [x + 1, y + 1], [x + w - 1, y + h - 1]]) {
+      // a sentence's side may meet the next sentence's, where a point a pixel inside it reads the neighbour as soon as
+      // the pointer's kept places are half a unit off (the places' own check allows that: 0.7 px zoomed): 1.5 px inside
+      // a sentence's, as 1.5 px outside below (2608.06701 zoomed, one run in three: a corner read as the sentence above)
+      const { x, y, w, h } = band, e = band.s >= 0 ? 1.5 : 1
+      for (const [px, py] of [[x + e, y + h / 2], [x + w - e, y + h / 2], [x + w / 2, y + e], [x + w / 2, y + h - e], [x + e, y + e], [x + w - e, y + h - e]]) {
         const hit = await hitAt(px, py)
         r.pads++
         if (hit.id === null || (hit.id === id && !own(hit, band.s))) { r.padHoles++; r.bad.push({ id, s: band.s, side: band.side, at: [+(px - x).toFixed(1), +(py - y).toFixed(1)], band: [+w.toFixed(1), +h.toFixed(1)], lit: hit }) }
