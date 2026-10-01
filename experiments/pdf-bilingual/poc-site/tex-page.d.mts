@@ -20,7 +20,10 @@ export interface Build {
     bundles?: Record<string, { url: string; size: number; files: [path: string, offset: number, size: number][] }>
   }
   extra?: string[]
+  /** the origins that may drive the page; none: any extension page */
+  framers?: string[]
 }
+export declare function mayDrive(framers: string[] | undefined, origin: string): boolean
 export declare function texPage(options: {
   build: Build
   // biome-ignore lint/suspicious/noExplicitAny: the runner and its engines are texlyre-busytex's classes, or fakes

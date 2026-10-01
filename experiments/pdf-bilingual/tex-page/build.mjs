@@ -17,7 +17,8 @@
 // beside the corpus), tex-page/measured.json (derive.mjs: which preloaded files each engine's compiles open, and the
 // manifest's keys), Emscripten's file packager (tools/file_packager.py of the version BusyTeX was built with, fetched
 // into out/ once; Python 3).
-//   [REHASH=1] node experiments/pdf-bilingual/tex-page/build.mjs     (REHASH: hash the whole tree again, for publishing)
+//   [REHASH=1] [FRAMERS=<origins>] node experiments/pdf-bilingual/tex-page/build.mjs
+//   REHASH: hash the whole tree again, for publishing; FRAMERS: the origins that may drive the page (build.json)
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -243,6 +244,9 @@ const build = {
   wasm: size('busytex.wasm'),
   engines: { pdflatex: ['common', 'pdftex'], xelatex: ['common', 'xetex'] },
   manifest, extra,
+  // FRAMERS: the origins that may drive the page, comma-separated (the store's extension, the development one
+  // chrome-extension://llohepijpkbbfhjolcichpamiokeecab, https://app.readarxiv.org); unset, on this machine: any extension
+  framers: (process.env.FRAMERS ?? '').split(',').map(o => o.trim()).filter(Boolean),
 }
 const cv = versionOf(JSON.stringify(build), ...readdirSync(pageDir, { recursive: true }).sort().filter(f => statSync(join(pageDir, f)).isFile()).flatMap(f => [f, readFileSync(join(pageDir, f))]))
 writeFileSync(join(pageDir, 'build.json'), JSON.stringify({ cv, page: `/c/${cv}/`, ...build }))

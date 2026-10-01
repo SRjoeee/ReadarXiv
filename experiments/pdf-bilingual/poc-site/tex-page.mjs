@@ -1,7 +1,9 @@
 // The TeX page, framed by the reader (an extension page): BusyTeX in this origin, with its own caches. tex.js wires it
 // to the frame's messages; this module is the protocol, so that it can be tested with fakes.
 //
-// Protocol 2, by postMessage, from extension pages only:
+// Protocol 2, by postMessage, from the framing window only, and only when its origin may drive the page (mayDrive: the
+// origins build.json names — the store's extension, the development one, the web app — or, when it names none, as a
+// build on this machine, any extension page):
 //   ← { type: 'ready', protocol: 2, cv, eid, tid }      on load: the page's, the engine's and the tree's versions
 //   → { type: 'init', protocol: 2, engines, fonts }     hints: the engines the visit will use (pdflatex, xelatex,
 //                                                       lualatex; default the first two) and the scripts whose CJK
@@ -43,6 +45,10 @@
 // written (a full disk) fails nothing, since the bytes in hand go on.
 
 export const PROTOCOL = 2
+
+/** whether a window of `origin` may drive the page: one of `framers` (build.json's, tex-page/build.mjs FRAMERS), or,
+ *  when the build names none, any extension page */
+export const mayDrive = (framers, origin) => (framers?.length ? framers.includes(origin) : origin.startsWith('chrome-extension://'))
 const DEFAULT_ENGINES = ['pdflatex', 'xelatex']
 /** the engine a compile names → BusyTeX's: classic LaTeX and any other name are compiled by pdfLaTeX, as before */
 const ENGINE_OF = { pdflatex: 'pdflatex', latex: 'pdflatex', xelatex: 'xelatex', lualatex: 'lualatex' }

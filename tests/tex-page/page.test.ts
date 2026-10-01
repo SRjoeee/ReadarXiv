@@ -5,7 +5,7 @@
 // page itself runs in a browser in tex-page/measure.mjs and network-check.mjs
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { type Build, texPage } from '../../experiments/pdf-bilingual/poc-site/tex-page.mjs'
+import { type Build, mayDrive, texPage } from '../../experiments/pdf-bilingual/poc-site/tex-page.mjs'
 
 type Msg = Record<string, unknown> & { type?: string }
 
@@ -123,6 +123,24 @@ function page(over: { script?: Record<string, Outcome[]>; caches?: ReturnType<ty
   return { p, send, sent, net, store, bt, slept }
 }
 const zeros = (n: number) => new Uint8Array(n)
+
+describe('mayDrive', () => {
+  it('the origins the build names may drive the page, and no other', () => {
+    const framers = ['chrome-extension://llohepijpkbbfhjolcichpamiokeecab', 'https://app.readarxiv.org']
+    expect(mayDrive(framers, 'chrome-extension://llohepijpkbbfhjolcichpamiokeecab')).toBe(true)
+    expect(mayDrive(framers, 'https://app.readarxiv.org')).toBe(true)
+    expect(mayDrive(framers, 'chrome-extension://aaaabbbbccccddddeeeeffffgggghhhh')).toBe(false)
+    expect(mayDrive(framers, 'https://evil.example')).toBe(false)
+  })
+
+  it('a build that names none (on this machine): any extension page, nothing else', () => {
+    for (const framers of [undefined, []]) {
+      expect(mayDrive(framers, 'chrome-extension://aaaabbbbccccddddeeeeffffgggghhhh')).toBe(true)
+      expect(mayDrive(framers, 'https://evil.example')).toBe(false)
+      expect(mayDrive(framers, 'null')).toBe(false)
+    }
+  })
+})
 
 describe('ready', () => {
   it('says the protocol and the versions of the page, the engine and the tree', () => {
