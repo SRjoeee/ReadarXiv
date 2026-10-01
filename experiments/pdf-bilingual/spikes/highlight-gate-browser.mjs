@@ -28,7 +28,7 @@
 //  Each made to fail once (B4, a build each): the pointer's frame without floatHitOf (147 of 240 points lit nothing, the
 //  cell lit itself); no floats made (20 pages without, none on both sides); figures washed, not outlined (0 of 4
 //  outlined); after the review of B4: figures' captions not washed (a build), no cell to try (FLOATS_N=0), the floats'
-//  failure left the page asked (ad6036f7's build)
+//  failure left the page asked (ad6036f7's build, the figures' stand-in throwing)
 //  costs, the build against BASE_BUILD, interleaved (both browsers open, runs alternating):
 //  - a sweep of real pointer moves (220 down each pane, zig-zagging, one a frame) over a spread of formulas, of aligned
 //    displays, and a two-column page: per light — a move that changed what is lit — the script of the task that
@@ -342,9 +342,10 @@ const floatsOf = page => page.evaluate(() => {
   }
   return out
 })
-/** a page whose operator list fails its floats at its first drawing — a list the floats' code throws on (a drawing
- *  cancelled rejects it before, the same way out) — gets them at its next drawing (a zoom): the page is not left marked
- *  as asked (the review of B4) */
+/** a page whose floats fail at its first drawing — what they are given there making their code throw (a drawing
+ *  cancelled rejects its list, the same way out) — gets them at its next drawing (a zoom): the page is not left marked
+ *  as asked (the review of B4). The figures the floats read come from the side's draft frames where it has them: a
+ *  stand-in there that is no list of figures makes their code throw once */
 async function floatRetry(b, paper) {
   const page = await open(b, paper, { sync: 'off' })
   const r = await page.evaluate(async () => {
@@ -353,21 +354,19 @@ async function floatRetry(b, paper) {
     let p = 0
     for (let n = 1; n <= s.doc.numPages && !p; n++) if (wants(n) && d.pageView(s, n).renderingState === 0 && !d.floatsOn(s, n)) p = n
     if (!p) return { p }
-    // the floats' own request for the page's list (the first made for it) answered with one their code throws on
-    const proto = Object.getPrototypeOf(await s.doc.getPage(p)), real = proto.getOperatorList
     let spoiled = 0
-    proto.getOperatorList = function (...a) { if (this.pageNumber === p && !spoiled) { spoiled++; return Promise.resolve({ fnArray: null, argsArray: null }) } return real.apply(this, a) }
+    s.frames = Promise.resolve({ get: n => { if (n === p) spoiled++; return {} } })
     const wait = async ok => { for (let t = 0; t < 120 && !ok(); t++) await new Promise(r => setTimeout(r, 50)) }
     s.viewer.currentPageNumber = p
     await wait(() => d.pageView(s, p).renderingState === 3)
     await new Promise(r => setTimeout(r, 500))
     const first = !!d.floatsOn(s, p)
-    proto.getOperatorList = real
+    s.frames = null
     window.__reader.controller.zoomBy(1.1)
     await wait(() => d.floatsOn(s, p))
     return { p, spoiled, first, after: !!d.floatsOn(s, p) }
   })
-  check(`${b.label} ${paper}: a page whose operator list failed its floats at its first drawing gets them at its next`, r.p > 0 && r.spoiled === 1 && !r.first && r.after, JSON.stringify(r))
+  check(`${b.label} ${paper}: a page whose floats failed at its first drawing gets them at its next`, r.p > 0 && r.spoiled > 0 && !r.first && r.after, JSON.stringify(r))
   await page.close()
 }
 async function floatChecks(b) {

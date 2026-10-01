@@ -331,6 +331,17 @@ function paintFloat(side) {
   }
   return true
 }
+/**
+ * The operator list a page was just drawn by, where PDF.js still holds it: the display intent's on the page's proxy
+ * (PDF.js 6.3.289's PDFPageProxy._intentStates; tests/pdf-reader/pdfjs-pin.test.ts pins the version). Asking the worker
+ * for the list again had it evaluate the page a second time, and the next page's drawing waited behind it: 130–180 ms
+ * more on 2608.06701's pages 7–8, the review of B4. The floats are the same from either list (the display one is
+ * optimised) on the ten papers' 123 pages with captions. Null where PDF.js has let it go: then it is asked for
+ */
+function drawnList(side, p) {
+  for (const st of pageView(side, p)?.pdfPage?._intentStates?.values() ?? []) if (st.displayReadyCapability && st.operatorList?.lastChunk) return st.operatorList
+  return null
+}
 /** what the pointer lights at a point of a page (pointOn's), floats included: `hit` hitOf's there, or a float whose
  *  painted shape holds the point (floats.mjs floatHitOf: over its caption and its cells, and over a larger block) */
 const withFloats = (side, at, hit) => floatHitOf(side.geo, at.page, at.x, at.y, PAD / at.scale, hit)
@@ -346,9 +357,11 @@ function floatsFor(side, p) {
   const asked = (L.floatsAsked ??= new Set())
   if (asked.has(p)) return
   asked.add(p)
-  const ops = side.doc.getPage(p).then(page => page.getOperatorList({ annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS }))
-  // a draft preview's figures are the frames set where its images go (paintFigures)
-  const figures = side.frames ? side.frames.then(f => f.get(p) ?? []) : regionsOf(side, p)
+  // the list the page was just drawn by, else asked for; a draft preview's figures are the frames set where its images
+  // go (paintFigures)
+  const shown = drawnList(side, p)
+  const ops = shown ? Promise.resolve(shown) : side.doc.getPage(p).then(page => page.getOperatorList({ annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS }))
+  const figures = side.frames ? side.frames.then(f => f.get(p) ?? []) : shown ? ops.then(list => figureRegions(list, pdfjsLib.OPS)) : regionsOf(side, p)
   Promise.all([figures, ops]).then(([regions, list]) => {
     if (side.geo !== L) return
     const t0 = performance.now(), paths = pathsOf(list, pdfjsLib.OPS), t1 = performance.now()
