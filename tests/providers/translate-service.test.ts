@@ -704,32 +704,6 @@ describe('sentence markers: inserted by the service layer when the engine report
     expect(sent).toBe('One sentence here. Two sentences here.')
   })
 
-  it('a caller keeping the translation\'s context (the PDF reader): nothing inserted on an engine that translates each marked sentence apart, and none of the cuts in the key; a one-sentence block still aligned whole; an engine keeping the context marked as before', async () => {
-    let sent = ''
-    const splits = build({ getProvider: async () => echoing(t => { sent = t; return 'Eine Übersetzung.' }, { markersSplitContext: true }) })
-    const res = await splits.translate({ ...twoSentences(['a']), keepContext: true })
-    expect(sent).toBe('One sentence here. Two sentences here.')
-    if (res.ok) expect(res.result.segments[0]!.alignment).toBeUndefined()
-    const one = await splits.translate({ request: { segments: [{ id: 'b', text: 'Only one sentence here.', cuts: [] }], source: 'en', target: 'zh-CN' }, cache: { paper: 'p', renderPath: 'tags' as RenderPath }, keepContext: true })
-    if (one.ok) expect(one.result.segments[0]!.alignment).toEqual({ source: ['Only one sentence here.'.length], target: ['Eine Übersetzung.'.length] })
-    // the HTML page asks nothing of the kind: marked as before
-    await splits.translate(twoSentences(['c']))
-    expect(sent).toMatch(/<x id="\d+"\/>/)
-    // an LLM keeps the context across the markers: marked for the reader too
-    const keeps = build({ getProvider: async () => echoing(t => { sent = t; return t }) })
-    await keeps.translate({ ...twoSentences(['d']), keepContext: true })
-    expect(sent).toMatch(/<x id="\d+"\/>/)
-  })
-
-  it('a block sent unmarked for a caller keeping the context is keyed as one sent without cuts', async () => {
-    const keys: string[] = []
-    const store = { getMany: async (ks: string[]) => { keys.push(...ks); return ks.map(() => undefined) }, set: async () => {} }
-    const service = build({ getProvider: async () => echoing(() => 'Eine Übersetzung.', { markersSplitContext: true }), cache: store as never })
-    await service.translate({ ...twoSentences(['a']), keepContext: true })
-    await service.translate({ request: { segments: [{ id: 'b', text: 'One sentence here. Two sentences here.' }], source: 'en', target: 'zh-CN' }, cache: { paper: 'p', renderPath: 'tags' as RenderPath } })
-    expect(keys[0]).toBe(keys[1])
-  })
-
   it('when the engine reports its own, nothing is inserted', async () => {
     let sent = ''
     const service = build({

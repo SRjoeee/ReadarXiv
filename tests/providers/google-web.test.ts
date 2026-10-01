@@ -13,10 +13,6 @@ const okResponse = (items: string[]) =>
   new Response(JSON.stringify([items, 'en']), { status: 200, headers: { 'Content-Type': 'application/json' } })
 
 describe('createGoogleWebProvider', () => {
-  it('declares that markers between sentences split its context: it translates the text between two of them apart (B3b, measured on the PDF reader\'s units)', () => {
-    expect(createGoogleWebProvider().markersSplitContext).toBe(true)
-  })
-
   it('one request carries every segment, mapped back to ids by index', async () => {
     const fetch = vi.fn(async () => okResponse(['一', '二', '三']))
     const provider = createGoogleWebProvider({ fetch: fetch as unknown as typeof globalThis.fetch })

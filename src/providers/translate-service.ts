@@ -60,13 +60,6 @@ export type TranslateMessageRequest = {
    * the stored configuration does across storage: never logged (hard rule 5)
    */
   candidate?: Service
-  /**
-   * The translation's context kept before its sentences (§8.6): no sentence markers on an engine that translates the
-   * text between two of them apart (`markersSplitContext`, Google), and the call keyed as one sent without cuts — its
-   * blocks of more than one sentence go without an alignment, one of a single sentence is still aligned whole. The PDF
-   * reader asks it: the maintainer's rule that the highlight costs no translation quality. The HTML page does not
-   */
-  keepContext?: boolean
   /** Absent, nothing is cached (the settings page's connection test, say) */
   cache?: {
     paper: string
@@ -457,14 +450,11 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
     return pair
   }
 
-  const translate = async ({ request: asked, providerId, cache, scope, keepContext }: TranslateCall): Promise<TranslateMessageResponse> => {
+  const translate = async ({ request, providerId, cache, scope }: TranslateCall): Promise<TranslateMessageResponse> => {
     /** Nothing of this call goes back: its scope died, or its chain was retired */
     const refusal = (): TranslateMessageResponse => ({ ok: false, error: { kind: 'aborted', message: scope === undefined ? 'cancelled (chain retired)' : `cancelled (scope: ${scope})`, isolatable: false } })
     try {
       const provider = await deps.getProvider(providerId)
-      // a caller keeping the context gets no markers from an engine they would make translate sentence by sentence: its
-      // cuts taken off before the key and the marking (a single sentence's [] stays: aligned whole, nothing inserted)
-      const request = keepContext && provider.markersSplitContext ? { ...asked, segments: asked.segments.map(s => (s.cuts?.length ? { id: s.id, text: s.text } : s)) } : asked
       const model = (await deps.getModel?.()) ?? ''
       const store = cache && deps.cache ? deps.cache : null
       // Who translates this call, on every segment it gives back (types.ts TranslatedSegment.identity). Awaited only

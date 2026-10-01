@@ -88,14 +88,6 @@ export interface TranslationProvider {
    * the LLMs) the service inserts `<x id="N"/>` boundary markers under the `tags` format and takes them off again (`sentence-markers.ts`)
    */
   reportsSentences?: boolean
-  /**
-   * Translates the text between two sentence markers apart (§8.6): marked, a block loses the context across its
-   * sentences, and its wording changes. Google's web endpoint, measured on the PDF reader's units (zh): with markers the
-   * wording changed in 77 of 83 blocks, and of eight read three were worse — "Since" read as temporal, "construction" as
-   * building work. A caller that keeps the translation's context (`keepContext`, the PDF reader) gets no markers from
-   * such an engine
-   */
-  markersSplitContext?: boolean
   /** The prompt fingerprint, entering the cache key (LLM providers only): another prompt must not hit the old translations */
   promptKey?: string
   /**
