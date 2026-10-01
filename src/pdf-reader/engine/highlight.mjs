@@ -207,7 +207,8 @@ export function pageGeometry(L, p) {
     byId.set(id, rs)
     runs.push(...rs)
   }
-  g = { runs, byId, heads: at.heads, filled: at.filled }
+  // `at`: the page's lines and who owns each token, for its floats (floats.mjs)
+  g = { runs, byId, heads: at.heads, filled: at.filled, at }
   L.cache.set(p, g)
   return g
 }
