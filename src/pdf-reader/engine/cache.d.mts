@@ -14,3 +14,10 @@ export declare function sourceHash(u: SourceUnit): Promise<string>
 
 /** whether every unit a run tried came back whole from `identity`, and there is one: when the untypeset mark may be left */
 export declare function allTranslatedBy(results: Map<number, { pieces?: unknown; state?: string; by?: string }>, identity: string): boolean
+
+/** the marked original's readings as a run gives them (live.mjs readingsOf) */
+export interface Readings { log: string; cites: string; marks: import('./typeset/places.mjs').Marks }
+/** the readings as the store keeps them, one per paper, with the left side's marks and the versions that made them */
+export declare function originalRow(readings: Readings, left: [string, unknown][], made: { pipeline: string; typesetting: string; page: string }): import('@/cache/pdf-record').OriginalReadings
+/** a stored original's readings and left marks under these versions, or null */
+export declare function knownOriginal(row: import('@/cache/pdf-record').OriginalReadings | undefined, now: { pipeline: string; typesetting: string; page: string }): { readings: Readings; left: [string, unknown][] } | null

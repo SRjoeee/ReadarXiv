@@ -85,6 +85,26 @@ export interface PdfRecord extends PdfRecordBody {
   openedAt: number
 }
 
+/**
+ * The marked original's readings, one per paper version (its PDF's digest), whatever the language (the F2 review's I3;
+ * the typesetting rule's handoff, "What to cache"): what the rule plans every compile from — the lines of the original's
+ * last TeX pass that are read (each unit's lines, the forced breaks, the document's end, the letters it could not set),
+ * its marks with every page's columns, its citations — and the left side's marks, under the versions that made them: a
+ * run with them compiles no original (pdf-reader/engine/cache.mjs originalRow, knownOriginal)
+ */
+export interface OriginalReadings {
+  pipeline: string
+  typesetting: string
+  /** the TeX page's versions it was compiled under (`Now.page`) */
+  page: string
+  log: string
+  cites: string
+  /** typeset/places.mjs Marks, its Map as entries */
+  marks: { pages: number; width: number; height: number; columns: number[]; marks: [string, unknown][] }
+  /** the left side's mark words: the entries of the Map marksOfPdf gives */
+  left: [string, unknown][]
+}
+
 /** What a copy is judged against: the identity that would answer now, and the reader's PIPELINE_VERSION and
  *  TYPESETTING_VERSION */
 export interface Now {

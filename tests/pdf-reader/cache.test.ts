@@ -3,7 +3,7 @@
 // so it is written only for a translation that one identity made whole — as a copy is current only when every unit is
 // (the final review of Codex 1 on #306)
 import { describe, expect, it } from 'vitest'
-import { allTranslatedBy, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
+import { allTranslatedBy, knownOriginal, originalRow, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
 
 /** a run's results as live.mjs keeps them: index → { pieces, state, by, tried } */
 const results = (...rows: { by?: string; state?: string; pieces?: boolean }[]) =>
@@ -108,5 +108,25 @@ describe('reusable: the seeds a run takes as they are', () => {
   })
   it('never one made by another identity: another service, model or prompt is asked', () => {
     expect(current(reusable(seed(), { identity: 'G', copyWire: true }))).toEqual([2])
+  })
+})
+
+// The marked original's readings, one row per paper version in the store (src/cache/pdf-store.ts `originals`): JSON as
+// stored, taken back only under the versions that made them and with the left side's marks (the F2 review's I3)
+describe('the original\'s readings as stored', () => {
+  const readings = { log: 'AXT-LINES 0 4 12.0pt 10\nAXT-END', cites: '\\bibcite{a}{1}', marks: { pages: 1, width: 612, height: 792, columns: [1], marks: new Map([['0s', { page: 0, x: 72, y: 700 }]]) } }
+  const made = { pipeline: '7', typesetting: '1', page: 'cv/eid/tid/ix' }
+  const left: [string, unknown][] = [['0s', { word: 'Paragraph' }]]
+
+  it('a row is JSON, and taken back as the readings it was made of, with the left side\'s marks', () => {
+    const row = JSON.parse(JSON.stringify(originalRow(readings, left, made)))
+    expect(knownOriginal(row, made)).toEqual({ readings, left })
+  })
+
+  it('none under another pipeline, typesetting or TeX page, without left marks, or with no row', () => {
+    const row = originalRow(readings, left, made)
+    for (const now of [{ ...made, pipeline: '8' }, { ...made, typesetting: '2' }, { ...made, page: '1' }]) expect(knownOriginal(row, now)).toBeNull()
+    expect(knownOriginal(originalRow(readings, [], made), made)).toBeNull()
+    expect(knownOriginal(undefined, made)).toBeNull()
   })
 })

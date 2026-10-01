@@ -3,6 +3,7 @@ import type { inMemory, SourceUnit } from './latex-front.mjs'
 import type { analyze } from './paper-meta.mjs'
 import type { Strategy } from './scripts.mjs'
 import type { Typeset } from './typeset/tex.mjs'
+import type { Readings } from './cache.mjs'
 
 /** a paper's files (path → bytes) → what the pipeline works on */
 export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typeof analyze>; project: { main: string; units: SourceUnit[] }; units: SourceUnit[]; kept: Set<SourceUnit> }
@@ -35,9 +36,13 @@ export declare function runLive(paper: Paper, options: {
   note?: (event: string, data?: Record<string, unknown>) => void
   seed?: Map<number, unknown> | null
   marks?: Map<string, unknown> | null
+  /** the original's readings as a run before gave them (readingsOf), taken with `marks` known: no original compiled */
+  original?: Readings | null
   identity?: string | null
   pipelineCurrent?: boolean
   /** a PDF's unit marks and page columns (typeset/places.mjs marksOf on a PDF.js document of the bytes): with it, the
    *  typesetting rule sets the translation; without, it is set as today */
   readMarks?: ((pdf: Uint8Array) => Promise<import('./typeset/places.mjs').Marks>) | null
-}): Promise<{ settled: boolean; exhausted: boolean; changed: boolean; results: Map<number, unknown>; previews: number; translated: number; units: number; originalOk?: boolean; stopped?: string | null; compiler?: { down: 'network' | 'page'; error: string }; missing?: number }>
+}): Promise<{ settled: boolean; exhausted: boolean; changed: boolean; results: Map<number, unknown>; previews: number; translated: number; units: number; originalOk?: boolean; stopped?: string | null; compiler?: { down: 'network' | 'page'; error: string }; missing?: number; original: Readings | null }>
+/** the marked original as the run and the rule read it: the lines of its last pass that are read, its marks, its citations */
+export declare function readingsOf(o: { log?: string; aux?: string | null }, marks: import('./typeset/places.mjs').Marks): Readings

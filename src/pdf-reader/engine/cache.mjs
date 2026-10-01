@@ -82,6 +82,19 @@ export function unitsOf(units, kept, hashes, results) {
 export const knownMarks = (cached, samePipeline) => (samePipeline && cached?.marks?.length ? new Map(cached.marks) : null)
 
 /**
+ * The marked original's readings (live.mjs readingsOf) as the store keeps them, one per paper (src/cache/pdf-record.ts
+ * OriginalReadings), with the left side's marks, under the versions `made` { pipeline, typesetting, page } that made
+ * them: JSON, the marks' Map as its entries
+ */
+export const originalRow = (readings, left, made) => ({ pipeline: made.pipeline, typesetting: made.typesetting, page: made.page, log: readings.log, cites: readings.cites, marks: { ...readings.marks, marks: [...readings.marks.marks] }, left })
+/**
+ * A stored original's readings and left marks, { readings, left }, where this pipeline (the units the marks name), this
+ * typesetting (the original's TeX, how its PDF is read) and this TeX page made them, and the left side's marks are
+ * there: a run with them compiles no original (live.mjs runLive `original`); else null, and the original is compiled
+ */
+export const knownOriginal = (row, now) => (row && row.pipeline === now.pipeline && row.typesetting === now.typesetting && row.page === now.page && row.left?.length ? { readings: { log: row.log, cites: row.cites, marks: { ...row.marks, marks: new Map(row.marks.marks) } }, left: row.left } : null)
+
+/**
  * What a run writes (REPORT, eighteenth addendum, "Writing"): the whole record when it ended with a final that
  * settled and is on screen (`shown`), since the right side's marks are read from the document shown (Devin on #298);
  * with nothing typeset changed, the units' provenance alone, if it changed, or the left side's marks, if the

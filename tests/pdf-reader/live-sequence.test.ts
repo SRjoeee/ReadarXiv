@@ -268,3 +268,45 @@ describe('a compile the network or the page failed', () => {
   })
 })
 
+
+// The original's readings kept (the F2 review's I3): what the rule and the run read of the marked original, given back by
+// a run, so that a run again in the visit, a revisit and another language compile no original (session.mjs, the
+// store's `originals`, one per paper)
+describe('the original\'s readings, kept', () => {
+  const kinds = (calls: { kind: string; ruled: boolean }[]) => calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`)
+  const ORIGINAL_LOG = (n: number) => `This is pdfTeX, Version 3.14\n(./main.tex\nLaTeX2e <2025-11-01>\nMissing character: There is no ^^c3 in font cmr10!\nOverfull \\hbox (1.2pt too wide) in paragraph at lines 3--4\n${linesLog(n)}Output written on main.pdf (2 pages).\n`
+
+  it('a run gives back what it read of the original: the lines of its last pass that are read, its marks, its citations', async () => {
+    const t = translator(), p = paper(4), n = p.units.length
+    t.release()
+    const c = compiler(n, { log: k => (k === 'original' ? ORIGINAL_LOG(n) : null) })
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, translate: t.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    expect(r.original?.log.split('\n')).toEqual(['Missing character: There is no ^^c3 in font cmr10!', ...Array.from({ length: n }, (_, i) => `AXT-LINES ${i} 4 12.0pt 10`), 'AXT-END'])
+    expect(r.original?.cites).toBe('\\bibcite{a}{1}')
+    expect(r.original?.marks.pages).toBe(MARKS(n).pages)
+  })
+
+  it('given them with the left side\'s marks, a run compiles no original, and every preview is planned from the first', async () => {
+    const p = paper(4), n = p.units.length, first = translator()
+    first.release()
+    const r1 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: first.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const t = translator(), c = compiler(n), own = compiler(n)
+    t.release()
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, compileOriginal: own.compile, translate: t.translate, format: 'markers', marks: new Map([['0s', {}]]), original: r1.original, identity: 'B', readMarks: async () => MARKS(n) })
+    expect(kinds(c.calls)).toEqual(['probe', 'preview+rule', 'final+rule'])
+    expect(own.calls).toEqual([])
+    expect([r.settled, r.originalOk, r.original]).toEqual([true, true, r1.original])
+  })
+
+  it('given them without the left side\'s marks, the original is compiled for those, and its readings are the run\'s', async () => {
+    const p = paper(4), n = p.units.length, first = translator()
+    first.release()
+    const r1 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: first.translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const t = translator(), c = compiler(n), own = compiler(n)
+    t.release()
+    const r = await runLive(p, { lang: 'zh', compile: c.compile, compileOriginal: own.compile, translate: t.translate, format: 'markers', marks: null, original: r1.original, identity: 'B', readMarks: async () => MARKS(n) })
+    expect(kinds(own.calls)).toEqual(['original'])
+    expect(r.original).not.toBe(r1.original)
+    expect(r.original).toEqual(r1.original)
+  })
+})

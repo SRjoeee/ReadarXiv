@@ -65,6 +65,18 @@ const beginDocument = text => text.search(/\\begin\s*\{document\}/)
 const pageFailed = r => !r.ok && !!r.error
 /** why a compile gave no PDF: the first TeX error, or what the compiler said */
 const whyFailed = r => (r.ok ? undefined : ((r.log ?? '').match(/^(?:\S+:\d+: .*|! .*)$/m)?.[0] ?? r.error ?? (r.log ?? '').slice(-300)).slice(0, 300))
+/** the lines of a compile's last TeX pass that the run and the rule read: each unit's lines, the forced breaks and the
+ *  document's end (typeset/tex.mjs readLines, readForced, completeLog), the letters it could not set (lostIn) */
+const READ_LINE = /^(?:AXT-|Missing character: |! LaTeX Error: Unicode character )/
+/**
+ * The marked original as the run and the rule read it: those lines of its log, its marks with every page's columns
+ * (`marks`, readMarks'), its citations (the aux's \bibcite lines, which a draft without them is given: withCites).
+ * Small, and the same whether made now or kept: a run given them compiles no original (`original`; session.mjs keeps
+ * them for the visit and with the paper's records, cache.mjs originalRow)
+ */
+export const readingsOf = (o, marks) => ({ log: lastTexLog(o.log).split('\n').filter(l => READ_LINE.test(l)).join('\n'), marks, cites: citesOf(o.aux) })
+/** an aux's citations, its \bibcite lines */
+const citesOf = aux => (aux ?? '').match(/^\\bibcite\{.*$/gm)?.join('\n') ?? ''
 /** why a compile that gave a PDF is not shown (unsettable): the font that would not load, or the letters it lost */
 const whyUnset = r => (lastTexLog(r.log).match(/^! Font .* not loadable.*$/m)?.[0] ?? `a letter it could not set (${[...lostIn(r.log).keys()].slice(0, 5).join(', ')})`).slice(0, 300)
 
@@ -203,7 +215,9 @@ export const TYPESETTING_VERSION = '1'
  * data)` every step, for the timeline. A translation made again from a cached copy (REPORT, eighteenth addendum):
  * `seed`, index → the old translation { pieces, by, tried, state, current }, fills the run at the start, and one
  * `current` (cache.mjs reusable) is not sent again; `marks`, the left
- * side's marks when known, skips the marked original (but where the typesetting rule needs its readings);
+ * side's marks when known, skips the marked original (but where the typesetting rule needs its readings); `original`,
+ * the original's readings (readingsOf) as a run before gave them, taken with `marks` known: no original is compiled,
+ * and every preview is planned from the first;
  * `identity` is what each unit is tried under; `pipelineCurrent`, whether the copy's compile is this reader's (its
  * pipeline and its typesetting): a seeded run that changes nothing then compiles nothing. Resolves when the final compile is in, with `results` (index → { pieces,
  * state, by, tried, sentences? }), `changed` (anything typeset changed), `settled` (a final that set every letter), `exhausted`
@@ -213,7 +227,7 @@ export const TYPESETTING_VERSION = '1'
  * marksOf on a PDF.js document of the bytes, which it must not take: the reader shows them too): with it the
  * translation is set by the typesetting rule, without as today.
  */
-export async function runLive(paper, { lang, compile, compileOriginal = null, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, identity = null, pipelineCurrent = false, readMarks = null }) {
+export async function runLive(paper, { lang, compile, compileOriginal = null, translate, format = 'markers', rank = i => i, onUpdate, onOriginal, note = () => {}, seed = null, marks = null, original: knownReadings = null, identity = null, pipelineCurrent = false, readMarks = null }) {
   const { units, meta, project } = paper
   const kept = keptFor(paper, lang)
   // the chain: a compile that gives no PDF moves on to the next strategy, which is tried at once
@@ -317,22 +331,26 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
   const missing = () => [...results.values()].filter(r => r.state === 'lost' && !r.pieces).length
 
   let previews = 0
+  /** the original as the rule reads it (readingsOf): its log's lines (each unit's lines, the forced breaks, the
+   *  document's end), its marks with every page's columns, its citations; null until it is in, and where it could not
+   *  be read. Known from a run before only with the left side's marks, which only a compile of it gives otherwise */
+  const known = marks && knownReadings
+  let readings = known ?? null
   const compiles = async () => {
     // 3–5. compiles
     // each unit's text as that compile has it: translated if it was in the snapshot, the source's otherwise; with where its
     // placeholders stood, its displays beyond its marks and the sentences of the translation typeset, for the anchors
     const texts = done => textsShown(units, done, pieces => sentencesBy.get(pieces))
-    let aux = null, bbl = null, originalP = null
-    /** the original as the rule reads it: its log (each unit's lines, the forced breaks, the document's end), its marks
-     *  with every page's columns, its references; null until it is in, and where it could not be read */
-    let readings = null
+    let aux = null, bbl = null
+    // known, the original is what it was: nothing compiled
+    let originalP = known ? Promise.resolve({ ok: true, log: known.log, aux: known.cites }) : null
     /**
      * A draft's references, the original's citations with them where they have none. A first preview runs BibTeX after
      * its one pass, so the preview after it read every citation from an aux that had none yet, set them as "?" and could
      * measure nothing; and a visit whose translation comes quickly has just those two previews. A translation keeps every
      * citation and leaves the bibliography as it is, so the original's labels are the ones its own passes write
      */
-    let originalCites = ''
+    let originalCites = known?.cites ?? ''
     const withCites = a => (!originalCites || /^\\bibcite\{/m.test(a ?? '') ? a : `${a ?? ''}\n${originalCites}`)
     // the marked original, compiled once: the left side's anchors, the characters the paper's own compile could not set,
     // and with the rule every plan's base — so in full, every pass: one pass sets references, citations and the pages they
@@ -341,8 +359,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       note('original', { ok: o.ok, ms: o.ms, error: whyFailed(o) })
       if (o.ok) {
         onOriginal?.({ pdf: o.pdf })
-        originalCites = (o.aux ?? '').match(/^\\bibcite\{.*$/gm)?.join('\n') ?? ''
-        if (readMarks) readings = await readMarks(o.pdf).then(m => ({ log: o.log ?? '', marks: m, aux: o.aux ?? '' }), e => { note('typeset', { missing: `the original's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null })
+        originalCites = citesOf(o.aux)
+        if (readMarks) readings = await readMarks(o.pdf).then(m => readingsOf(o, m), e => { note('typeset', { missing: `the original's marks (${String(e?.message ?? e).slice(0, 120)})` }); return null })
       }
       return o
     }))
@@ -377,8 +395,8 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     /** a compile's references as complete as the original's: its citations defined, and as many entries in its
      *  bibliography (a pass set from an earlier pass's references may lack some, and a bibliography of another length
      *  moves every page after it) */
-    const bibcites = text => (text ?? '').match(/\\bibcite\{/g)?.length ?? 0
-    const referencesWhole = r => !/^(?:LaTeX|Package natbib) Warning: Citation .*undefined/m.test(lastTexLog(r.log)) && bibcites(r.aux) === bibcites(readings?.aux)
+    const bibcites = text => (text ?? '').match(/^\\bibcite\{/gm)?.length ?? 0
+    const referencesWhole = r => !/^(?:LaTeX|Package natbib) Warning: Citation .*undefined/m.test(lastTexLog(r.log)) && bibcites(r.aux) === bibcites(readings?.cites)
     /** the preview that can measure the final: the last of the whole translation, planned, shown */
     let measuring = null
     while (true) {
@@ -414,13 +432,13 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     await mt
     // nothing to show: nothing compiled, not even the marked original; the reader says why (the reader's design, §10.3)
-    if (stopped && !translated.size) return { previews, translated: 0, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing() }
+    if (stopped && !translated.size) return { previews, translated: 0, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), original: readings }
     // a seeded run that changed nothing typeset, on the same pipeline: nothing to compile but the marked original, for a
     // copy that has no marks — else they would never come (Devin on #298)
     if (seed && !changed && pipelineCurrent) {
       if (!marks) await original()
       note('unchanged')
-      return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing() }
+      return { previews, translated: translated.size, units: units.length, results, changed: false, settled: false, exhausted: false, stopped, missing: missing(), original: readings }
     }
     const all = new Map(translated), t0 = Date.now()
     /**
@@ -472,7 +490,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     if (ok) onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
     // marks known come only from a compile of the paper's own source that set (onOriginal)
     const own = marks && !originalP ? null : await original()
-    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing() }
+    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: !!ok, exhausted, originalOk: !own || own.ok, stopped, missing: missing(), original: readings }
   }
   try { return await compiles() } catch (e) {
     if (!e?.compilerDown) throw e
@@ -481,6 +499,6 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     // whole and current is never sent again (cache.mjs reusable), so the retry asks the service for nothing more
     note('compiler down', { why: e.compilerDown, error: e.message })
     await mt
-    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: false, exhausted: false, stopped, compiler: { down: e.compilerDown, error: e.message }, missing: missing() }
+    return { previews, translated: translated.size, units: units.length, results, changed: true, settled: false, exhausted: false, stopped, compiler: { down: e.compilerDown, error: e.message }, missing: missing(), original: readings }
   }
 }

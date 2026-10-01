@@ -32,7 +32,7 @@ import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
 import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
-import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, knownOriginal, originalRow, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
@@ -2040,6 +2040,9 @@ async function live() {
   const digest = await left.doc.getData().then(digestOf).then(d => { note('digest', { startedAt: Math.round(digestAt - timing.start), ms: Math.round(performance.now() - digestAt) }); return d }).catch(() => null)
   const lang0 = config?.targetLanguage ? toBcp47(config.targetLanguage) : null
   cacheKey = digest && lang0 ? { digest, lang: lang0 } : null
+  // the paper's marked original as a run here read it, whatever the language: with it, no run compiles the original
+  // (cache.mjs knownOriginal; the F2 review's I3)
+  const storedOriginal = digest ? pdfCache.original(digest) : Promise.resolve(undefined)
   cached = cacheKey ? await pdfCache.get(digest, lang0) : undefined
   if (cached) {
     note('cache hit', { engine: cached.engine, pipeline: cached.pipeline, typesetting: cached.typesetting })
@@ -2060,8 +2063,8 @@ async function live() {
   }
   // What the visit has had, kept from run to run (the reader's design, §8: a retry asks only for what is missing): the
   // paper's source once read, the compiler once it answers, what the last run made — the next one's seed —, the left
-  // side's marks, and whether a final has been shown
-  let paperP = null, compiler = null, made = null, leftMarks = null, finalShown = false
+  // side's marks and the marked original's readings, and whether a final has been shown
+  let paperP = null, compiler = null, made = null, leftMarks = null, readings = null, finalShown = false
   /** the paper's source, read and anchored: once, kept for a run again; a failure is thrown with the event it is */
   const readPaper = async () => {
     // the original on the right too, replaced as the translation comes in; opened where the original was being read, as
@@ -2217,13 +2220,23 @@ async function live() {
     const seed = reusable(seedAgain(p.seed, made), { identity: engine.identity, copyWire: p.sameUnits && cached?.format === engine.format, made })
     // one replacement at a time, in the order the compiles came in; the final's bytes once compiled
     let swaps = Promise.resolve(), finalPdf = null
+    // the marked original's readings with the left side's marks: this visit's last run's, else the paper's as a run here
+    // stored them, made by this pipeline, typesetting and TeX page — then the run compiles no original (the F2 review's
+    // I3). The left side anchored by those marks, where nothing has anchored it by marks yet
+    const known = (readings && leftMarks?.length ? { readings, left: leftMarks } : null) ?? knownOriginal(await storedOriginal, { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder })
+    let marks = leftMarks ? new Map(leftMarks) : knownMarks(cached, p.sameUnits)
+    if (!marks && known) {
+      leftMarks = known.left
+      marks = new Map(leftMarks)
+      if (p.leftCurrent) swaps = swaps.then(async () => note('left marks', { marks: await anchorLeft(src, new Map(known.left)), kept: true })).catch(e => note('left marks failed', { error: String(e).slice(0, 200) }))
+    }
     const result = await runLive(paperData, {
       lang, compile, compileOriginal, note,
       // the copy's compile current: its pipeline and its typesetting this reader's, or this visit's final on screen
       seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: (p.sameUnits && cached?.typesetting === TYPESETTING_VERSION) || finalShown,
       // the typesetting rule: the translation set as near its original's places as the rule can (live.mjs)
       readMarks: typesetMarksOfPdf,
-      marks: leftMarks ? new Map(leftMarks) : knownMarks(cached, p.sameUnits),
+      marks, original: known?.readings ?? null,
       format: engine.format,
       // with the tags path's sentence cuts (mt.mjs cutsOf), which the service marks (B3b)
       translate: (texts, cuts) => engine.translate(texts, context, cuts),
@@ -2239,6 +2252,7 @@ async function live() {
       onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorLeft(src, marks); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
     }).catch(e => ({ error: e.message ?? String(e), kind: e?.kind }))
     if (result.results) made = result.results
+    if (result.original) readings = result.original
     // the engine's kind kept (engine.mjs EngineError), so that a key refused midway is worded as the popup words it
     if (result.error) return fail('failed', `Could not translate ${paper}: ${result.error}`, result.kind)
     // the TeX page down, twice for one compile: by the network (its files), or by itself (an engine it could not bring
@@ -2275,7 +2289,9 @@ async function live() {
       record.rightMarks = how === 'full' ? [...(right.marks ?? [])] : (cached?.rightMarks ?? [])
       if (pdf) {
         const now = { identity: await engine.now().catch(() => engine.identity), pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION }
-        const written = await pdfCache.put({ ...record, pdf }, now)
+        // the marked original's readings this run made, kept for the paper with whichever copy is stored
+        const original = result.original && result.original !== known?.readings && leftMarks?.length && compiledUnder ? originalRow(result.original, leftMarks, { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, page: compiledUnder }) : undefined
+        const written = await pdfCache.put({ ...record, pdf }, now, original)
         note('cache write', { how, written })
         // what this visit wrote is the copy a run again compares with
         if (written) cached = { ...record, pdf, createdAt: Date.now() }
