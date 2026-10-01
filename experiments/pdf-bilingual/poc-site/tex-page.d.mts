@@ -13,7 +13,12 @@ export interface Build {
   packages: Record<string, number>
   wasm: number
   engines: Record<string, string[]>
-  manifest: { engines: Record<string, Entry[]>; fonts: Record<string, Entry[]> }
+  manifest: {
+    engines: Record<string, Entry[]>
+    fonts: Record<string, Entry[]>
+    /** the engines' files in one object each: 'common' (both engines'), and each engine's own; url: /b/<its version>.bin */
+    bundles?: Record<string, { url: string; size: number; files: [path: string, offset: number, size: number][] }>
+  }
   extra?: string[]
 }
 export declare function texPage(options: {

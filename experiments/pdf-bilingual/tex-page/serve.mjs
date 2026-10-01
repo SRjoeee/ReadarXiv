@@ -64,7 +64,7 @@ export async function serveTexSite({ port = 0, tls = false, today = false, link 
     if (path === '/tex.html') return { file: join(SITE, 'tex.html'), type: TYPES['.html'] }
     const m = new RegExp(`^/t/${tree.tid}/(.+)$`).exec(path)
     if (m && !existsSync(join(SITE, path.slice(1)))) return { file: join(tree.root, m[1]), tree: m[1], immutable: true }
-    if (!/^\/(c|e|t)\//.test(path)) return null
+    if (!/^\/(b|c|e|t)\//.test(path)) return null
     return { file: join(SITE, path.slice(1)), type: TYPES[extname(path)], immutable: true, site: true }
   }
   /** today's page is served as it is today, uncompressed */

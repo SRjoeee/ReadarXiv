@@ -8,8 +8,10 @@
 //   t/<tid>/                the TeX Live tree (served from TEXLIVE_TREE by tex-page/serve.mjs; tree.json says where):
 //                           <tid> is its files' paths and contents alone; its file index (poc-site/tex-tree.mjs)
 //                           beside them as index-<iid>.txt, <iid> the index's own content, named in build.json
-// Every version is a content address of what it holds. A brotli copy (quality 11) of every file under c/, e/ and of
-// the index sits beside it (.br), and of every file the manifest names in out/tex-br/; serve.mjs sends them.
+//   b/<bid>.bin             the manifest's files of the engines, in bundles (both engines', each engine's own): one
+//                           object for each, its version its content's
+// Every version is a content address of what it holds. A brotli copy (quality 11) of every file under b/, c/, e/ and
+// of the index sits beside it (.br), and of every file the manifest names in out/tex-br/; serve.mjs sends them.
 //
 // Inputs: data/busytex-site (setup.mjs), the TeX Live tree texlive-server serves (TEXLIVE_TREE, by default the one
 // beside the corpus), tex-page/measured.json (derive.mjs: which preloaded files each engine's compiles open, and the
@@ -205,6 +207,28 @@ const manifest = {
 const pageDir = join(WORK, 'page')
 rmSync(pageDir, { recursive: true, force: true })
 mkdirSync(join(pageDir, 'lib'), { recursive: true })
+// the engines' common files in bundles, one object each — the files both engines' manifests name, and each engine's
+// own: a first visit asks for a handful of objects, not hundreds (a CDN's request limits and price, the round trips).
+// Each is b/<its content's version>.bin, so that a new page keeps the bundles whose files did not change
+const bundleDir = join(WORK, 'bundles')
+rmSync(bundleDir, { recursive: true, force: true })
+mkdirSync(bundleDir, { recursive: true })
+{
+  const pathsOf = e => new Set((manifest.engines[e] ?? []).map(entry => entry[2]))
+  const P = pathsOf('pdflatex'), X = pathsOf('xelatex')
+  const groups = { common: [...P].filter(p => X.has(p)), pdflatex: [...P].filter(p => !X.has(p)), xelatex: [...X].filter(p => !P.has(p)) }
+  manifest.bundles = {}
+  for (const [name, list] of Object.entries(groups)) {
+    if (!list.length) continue
+    const files = []
+    let offset = 0
+    const parts = list.sort().map(p => { const b = readFileSync(join(TREE, p)); files.push([p, offset, b.length]); offset += b.length; return b })
+    const bytes = Buffer.concat(parts)
+    const bid = versionOf(JSON.stringify(files), bytes)
+    writeFileSync(join(bundleDir, `${bid}.bin`), bytes)
+    manifest.bundles[name] = { url: `/b/${bid}.bin`, size: offset, files }
+  }
+}
 for (const f of ['tex.js', 'tex-page.mjs']) copyFileSync(join(EXP, 'poc-site', f), join(pageDir, f))
 copyFileSync(join(EXP, 'node_modules/texlyre-busytex/dist/index.js'), join(pageDir, 'lib/index.js'))
 const EXTRA = join(EXP, 'data/pk-flat')
@@ -228,13 +252,14 @@ rmSync(OUT, { recursive: true, force: true })
 const place = (from, to) => { mkdirSync(dirname(to), { recursive: true }); execFileSync('cp', ['-R', from, to]) }
 place(pageDir, join(OUT, 'c', cv))
 place(engineDir, join(OUT, 'e', eid))
+place(bundleDir, join(OUT, 'b'))
 mkdirSync(join(OUT, 't', tid), { recursive: true })
 writeFileSync(join(OUT, 't', tid, INDEX), text)
 writeFileSync(join(OUT, 'tex.html'), `<!doctype html><meta charset="utf-8"><title>TeX</title><script type="module" src="/c/${cv}/tex.js"></script>\n`)
 writeFileSync(join(OUT, 'tree.json'), JSON.stringify({ tid, index: INDEX, root: TREE }))
 
 const BR = join(EXP, 'out/tex-br')
-const site = readdirSync(OUT, { recursive: true }).map(f => join(OUT, f)).filter(f => statSync(f).isFile() && /\/(c|e|t)\//.test(f))
+const site = readdirSync(OUT, { recursive: true }).map(f => join(OUT, f)).filter(f => statSync(f).isFile() && /\/(b|c|e|t)\//.test(f))
 const treeFiles = [...new Set([...Object.values(manifest.engines), ...Object.values(manifest.fonts)].flat().map(e => e[2]))]
 const jobs = [...site.map(f => [f, `${f}.br`]), ...treeFiles.map(p => [join(TREE, p), join(BR, 't', tid, `${p}.br`)])]
 for (let i = 0; i < jobs.length; i += 4) await Promise.all(jobs.slice(i, i + 4).map(([f, to]) => brotliTo(f, to)))
@@ -244,5 +269,6 @@ const sum = files => files.reduce((n, f) => n + statSync(f).size, 0)
 const mb = n => `${(n / 1e6).toFixed(2)} MB`
 for (const p of Object.keys(parts)) say(`tl-${p}: ${parts[p].length} files, ${mb(size(`tl-${p}.data`))} raw, ${mb(statSync(join(OUT, 'e', eid, `tl-${p}.data.br`)).size)} brotli`)
 for (const [k, list] of [...Object.entries(manifest.engines), ...Object.entries(manifest.fonts)]) say(`manifest ${k}: ${list.length} entries, ${new Set(list.map(e => e[2])).size} files, ${mb(sum([...new Set(list.map(e => e[2]))].map(p => join(TREE, p))))} raw, ${mb(sum([...new Set(list.map(e => e[2]))].map(p => join(BR, 't', tid, `${p}.br`))))} brotli`)
+for (const [k, b] of Object.entries(manifest.bundles)) say(`bundle ${k} (${b.url}): ${b.files.length} files, ${mb(b.size)} raw, ${mb(statSync(join(OUT, `${b.url.slice(1)}.br`)).size)} brotli`)
 say(`index: ${mb(statSync(join(OUT, 't', tid, INDEX)).size)} raw, ${mb(statSync(join(OUT, 't', tid, `${INDEX}.br`)).size)} brotli`)
 say(`built: c/${cv} e/${eid} t/${tid} in ${relative(process.cwd(), OUT)}`)

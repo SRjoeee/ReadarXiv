@@ -20,11 +20,16 @@ const BUILD: Build = {
   manifest: {
     engines: { pdflatex: [[26, 'article.cls', 'tex/latex/base/article.cls', 10], [26, 'hyperref.sty', 'tex/latex/hyperref/hyperref.sty', 4]], xelatex: [[26, 'fontspec.sty', 'tex/latex/fontspec/fontspec.sty', 20], [26, 'hyperref.sty', 'tex/latex/hyperref/hyperref.sty', 4]] },
     fonts: { Hans: [[47, 'FandolSong-Regular.otf', 'fonts/opentype/public/fandol/FandolSong-Regular.otf', 30]] },
+    bundles: {
+      common: { url: '/b/b0.bin', size: 4, files: [['tex/latex/hyperref/hyperref.sty', 0, 4]] },
+      pdflatex: { url: '/b/b1.bin', size: 10, files: [['tex/latex/base/article.cls', 0, 10]] },
+      xelatex: { url: '/b/b2.bin', size: 20, files: [['tex/latex/fontspec/fontspec.sty', 0, 20]] },
+    },
   },
 }
 const SIZES: Record<string, number> = {
   '/e/e1/busytex.wasm': 1000, '/e/e1/tl-common.data': 100, '/e/e1/tl-pdftex.data': 200, '/e/e1/tl-xetex.data': 300, '/e/e1/tl-rest.data': 400,
-  '/t/t1/tex/latex/base/article.cls': 10, '/t/t1/tex/latex/hyperref/hyperref.sty': 4, '/t/t1/tex/latex/fontspec/fontspec.sty': 20,
+  '/b/b0.bin': 4, '/b/b1.bin': 10, '/b/b2.bin': 20,
   '/t/t1/fonts/opentype/public/fandol/FandolSong-Regular.otf': 30,
 }
 /** one answer of the fake network: the file, a dropped connection, a status (with Retry-After), the wrong length, or a
@@ -142,12 +147,13 @@ describe('init', () => {
     expect(t.bt.made[0]?.worker.sent).toContainEqual({ axt_tree: { base: '/t/t1/', index: INDEX } })
   })
 
-  it('version 2: only the engines hinted, their common files fetched in parallel and handed to BusyTeX before init-done', async () => {
+  it('version 2: only the engines hinted, their common files fetched in bundles and handed to BusyTeX before init-done', async () => {
     const t = page()
     await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'], fonts: [] })
     expect(t.bt.made[0]?.config.preloadDataPackages).toEqual(['/e/e1/tl-common.js', '/e/e1/tl-pdftex.js'])
     expect(t.bt.made[0]?.registered).toEqual([{ name: 'article.cls', format: 26, content: zeros(10) }, { name: 'hyperref.sty', format: 26, content: zeros(4) }])
-    expect(t.net.urls().filter(u => u.startsWith('/t/t1/tex/')).sort()).toEqual(['/t/t1/tex/latex/base/article.cls', '/t/t1/tex/latex/hyperref/hyperref.sty'])
+    expect(t.net.urls().filter(u => u.startsWith('/b/')).sort()).toEqual(['/b/b0.bin', '/b/b1.bin'])
+    expect(t.net.urls().filter(u => u.startsWith('/t/t1/tex/'))).toEqual([])
   })
 
   it('fetches a script\'s fonts only when hinted, and keeps them in Cache Storage under the tree\'s version', async () => {
@@ -190,8 +196,8 @@ describe('init', () => {
     expect(t.sent.findIndex(m => m.type === 'init-done')).toBeGreaterThan(t.sent.findLastIndex(m => m.type === 'progress'))
   })
 
-  it('a common file that cannot be fetched is left for the compile to ask for: init still succeeds', async () => {
-    const t = page({ script: { '/t/t1/tex/latex/base/article.cls': ['drop', 'drop'] } })
+  it('a bundle that cannot be fetched is left for the compile to ask for: init still succeeds', async () => {
+    const t = page({ script: { '/b/b1.bin': ['drop', 'drop'] } })
     await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
     expect(t.sent.find(m => m.type === 'init-done')?.error).toBeUndefined()
     expect(t.bt.made[0]?.registered).toEqual([{ name: 'hyperref.sty', format: 26, content: zeros(4) }])
@@ -212,7 +218,7 @@ describe('init', () => {
   })
 
   it('a server that asks to wait (429 with Retry-After) is waited for, at most 10 s, then asked again', async () => {
-    const t = page({ script: { '/t/t1/tex/latex/hyperref/hyperref.sty': [{ status: 429, retryAfter: 3 }], '/e/e1/busytex.wasm': [{ status: 503, retryAfter: 60 }] } })
+    const t = page({ script: { '/b/b0.bin': [{ status: 429, retryAfter: 3 }], '/e/e1/busytex.wasm': [{ status: 503, retryAfter: 60 }] } })
     await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
     expect(t.sent.find(m => m.type === 'init-done')?.error).toBeUndefined()
     expect(t.slept.sort((a, b) => a - b)).toEqual([3000, 10000])
@@ -291,7 +297,7 @@ describe('compile', () => {
     expect(t.bt.made[0]?.terminated).toBe(true)
     expect(t.bt.made[1]?.config.preloadDataPackages).toEqual(['/e/e1/tl-common.js', '/e/e1/tl-pdftex.js', '/e/e1/tl-xetex.js'])
     expect(t.bt.made[1]?.registered).toEqual(expect.arrayContaining([{ name: 'article.cls', format: 26, content: zeros(10) }, { name: 'fontspec.sty', format: 26, content: zeros(20) }]))
-    expect(t.net.urls()).toContain('/t/t1/tex/latex/fontspec/fontspec.sty')
+    expect(t.net.urls().filter(u => u.startsWith('/b/'))).toEqual(['/b/b0.bin', '/b/b1.bin', '/b/b2.bin'])
     expect(t.sent.slice(said).some(m => m.type === 'progress' && m.phase === 'engine')).toBe(true)
     expect(t.bt.made[1]?.compiles[0]).toMatchObject({ engine: 'xelatex' })
   })

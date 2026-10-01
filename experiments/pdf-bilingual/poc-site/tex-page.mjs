@@ -29,9 +29,10 @@
 //
 // What makes it fast (stage 3, D2): BusyTeX's preloaded tier is split by engine (tl-common, tl-pdftex, tl-xetex,
 // tl-rest: tex-page/build.mjs), and only the hinted engines' parts are loaded; the files most compiles of an engine
-// fetch from the tree (the manifest) are downloaded in parallel at start-up and handed to BusyTeX before the first
-// compile; a request for any other file goes to the tree only when the index (tex-tree.mjs) has the file, so a file
-// the tree lacks costs no request. BusyTeX, its preloads and the fonts are kept in Cache Storage under their
+// fetch from the tree (the manifest) are downloaded at start-up — in a bundle for each engine and one of the files
+// both share (b/, content-addressed), the hinted scripts' CJK faces one by one — and handed to BusyTeX before the
+// first compile; a request for any other file goes to the tree only when the index (tex-tree.mjs) has the file, so a
+// file the tree lacks costs no request. BusyTeX, its preloads and the fonts are kept in Cache Storage under their
 // versions, and the caches of other versions are deleted; everything else is left to the browser's HTTP cache.
 // Compiles run one at a time, in the order they were asked for.
 //
@@ -209,23 +210,33 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
     return new TextDecoder().decode(await download(`${build.tree}${build.index}`, { check }))
   }
 
-  /** the manifest's entries for these engines and scripts, fetched in parallel → [{ name, format, content }]; an entry
-   *  whose file cannot be fetched is left out: the compile asks for it if it needs it */
-  const manifestFiles = async (engines, scripts, progress) => {
-    const plain = [], fonts = []
-    for (const e of new Set(engines.map(engineOf))) plain.push(...(build.manifest.engines[e] ?? []))
-    for (const s of scripts) fonts.push(...(build.manifest.fonts[s] ?? []))
+  /**
+   * The manifest's files for these engines and scripts → [{ name, format, content }]: the engines' from their bundles
+   * (one object each — the files both engines' manifests name, and each engine's own: a handful of requests, not
+   * hundreds; a bundle in `fetched` already is not fetched again, and one fetched now is added), the scripts' faces
+   * each from the tree into Cache Storage. A bundle or a face that cannot be fetched is left out: the compile asks for
+   * its files if it needs them
+   */
+  async function manifestFiles(engines, scripts, progress, fetched = new Set()) {
+    const wanted = [...new Set(engines.map(engineOf))].filter(e => build.manifest.engines[e])
+    const bundles = build.manifest.bundles ?? {}
+    const names = (wanted.length ? ['common', ...wanted] : []).filter(b => bundles[b] && !fetched.has(b))
+    const bytes = new Map() // path → bytes
+    for (const b of names) progress.expect(bundles[b].size)
     const url = path => build.tree + path.split('/').map(encodeURIComponent).join('/')
-    const bytes = new Map()
+    const fonts = scripts.flatMap(s => build.manifest.fonts[s] ?? [])
     const fontUrls = [...new Map(fonts.map(([, , path, size]) => [url(path), size])).entries()]
-    const fontsP = cached(fontUrls, fontCache, progress, true).then(m => { for (const [u, b] of m) bytes.set(u, b) }, () => {})
-    const plainUrls = [...new Map(plain.map(([, , path, size]) => [url(path), size])).entries()].filter(([u]) => !fontUrls.some(([f]) => f === u))
-    for (const [, size] of plainUrls) progress.expect(size)
-    await Promise.all([fontsP, ...plainUrls.map(([u, size]) => download(u, { size, progress }).then(b => { bytes.set(u, b) }, () => {}))])
+    await Promise.all([
+      ...names.map(b => download(bundles[b].url, { size: bundles[b].size, progress }).then(all => {
+        fetched.add(b)
+        for (const [path, offset, size] of bundles[b].files) bytes.set(path, all.subarray(offset, offset + size))
+      }, () => {})),
+      cached(fontUrls, fontCache, progress, true).then(m => { for (const [, , path] of fonts) if (m.has(url(path))) bytes.set(path, m.get(url(path))) }, () => {}),
+    ])
     progress.end()
     const out = []
-    for (const [format, name, path] of [...plain, ...fonts]) {
-      const b = bytes.get(url(path))
+    for (const [format, name, path] of [...wanted.flatMap(e => build.manifest.engines[e]), ...fonts]) {
+      const b = bytes.get(path)
       if (b && !out.some(f => f.name === name && f.format === format)) out.push({ name, format, content: b })
     }
     return out
@@ -258,9 +269,11 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
     const dropped = dropOldCaches().catch(() => {})
     const engineProgress = reporter(reply, 'engine')
     const engineP = cached(engineAssets(packages), engineCache, engineProgress, false).then(() => engineProgress.end())
+    const fetched = new Set()
     shared = {
       index: indexText(),
-      files: manifestFiles(engines, scripts, reporter(reply, 'files')),
+      files: manifestFiles(engines, scripts, reporter(reply, 'files'), fetched),
+      fetched,
       extra: Promise.all((build.extra ?? []).map(async path => ({ path, content: await download(`${build.page}extra/${path}`) }))),
       engines: new Set(engines.map(engineOf)),
     }
@@ -300,7 +313,7 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
     engineProgress.end()
     if (!shared.engines.has(engineOf(engine))) {
       const before = await shared.files
-      const added = await manifestFiles([engine], [], reporter(reply, 'files'))
+      const added = await manifestFiles([engine], [], reporter(reply, 'files'), shared.fetched)
       shared.files = Promise.resolve([...before, ...added.filter(f => !before.some(g => g.name === f.name && g.format === f.format))])
       shared.engines.add(engineOf(engine))
     }
