@@ -88,10 +88,12 @@ export function finalTypesetting(state, preview) {
   const lines = readLines(preview?.log), got = list.filter(u => lines.get(u.i))
   const missing = !completeLog(preview?.log) ? "the preview's log, whole" : !preview?.marks?.marks.size ? "the preview's marks" : !got.length ? 'a unit the preview measured' : null
   if (missing) return { typeset: state.typeset, type, leads: state.leads, faces: new Map(), trace: [], missing }
-  // each unit's height at leading one as the preview set it: its measured lines at the type's size
-  const heights = new Map(got.map(u => [u.i, lines.get(u.i).lines * (cjk ? 1 : type.size) * u.bs])), cu = new Map(list.map(u => [u.i, u]))
+  // each unit's height at leading one as the preview set it: its measured lines of text (a display's three out: lift)
+  // at the type's size
+  const text = u => Math.max(0, lines.get(u.i).lines - (u.lift ?? 0))
+  const heights = new Map(got.map(u => [u.i, text(u) * (cjk ? 1 : type.size) * u.bs])), cu = new Map(list.map(u => [u.i, u]))
   const measured = {
-    drift: drifts(state.original.marks, preview.marks), preview: new Map(got.map(u => [u.i, lines.get(u.i).lines * lines.get(u.i).bs])),
+    drift: drifts(state.original.marks, preview.marks), preview: new Map(got.map(u => [u.i, text(u) * lines.get(u.i).bs])),
     span: FLOW.span, snap: FLOW.snap * (median(got.map(u => u.bs)) ?? 12), breaks: readForced(preview.log),
   }
   const shrink = cjk ? { steps: FLOW.faces, lines: FLOW.faceLines, heightAt: (i, f) => (heights.get(i) * heightAtSize(cu.get(i), design, type, f)) / heightAtSize(cu.get(i), design, type, 1) } : null

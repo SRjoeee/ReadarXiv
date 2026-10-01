@@ -45,7 +45,7 @@ const scalable = ([lo, hi]) => Array.from({ length: Math.round((hi - lo) / 0.005
 const clamp = (x, [lo, hi]) => Math.min(hi, Math.max(lo, x))
 
 // a unit's predicted lines at a type, its face `f` times the type's own: what it fills of a line is that much less
-const linesOf = (u, design, type, f = 1) => (design.cjk ? linesAt(u.width(type) * f, u.cap) : linesAt(u.width(type) * (type.h ?? type.size) * f, u.cap))
+const linesOf = (u, design, type, f = 1) => (design.cjk ? linesAt(u.width(type) * f, u.cap, u.parts) : linesAt(u.width(type) * (type.h ?? type.size) * f, u.cap, u.parts))
 // a unit's predicted height at a type, at leading one: its lines × its size (an alphabet's, and `f`) × the paper's leading
 const heightAt = (u, design, type, f = 1) => linesOf(u, design, type, f) * (design.cjk ? 1 : type.size) * f * u.bs
 

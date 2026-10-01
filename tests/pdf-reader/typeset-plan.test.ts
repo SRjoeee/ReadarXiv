@@ -18,8 +18,10 @@ function translate(units: Unit[], lang: 'zh' | 'de') {
   const text = (s: string) => (lang === 'zh' ? '\u8bba\u6587\u7684\u4e00\u6bb5'.repeat(Math.round(s.length / 12)) : `${s} ${s.slice(0, Math.round(s.length / 5))}`)
   return new Map(units.map(u => [u, u.pieces.map(p => (p.t === 'text' ? { ...p, tr: true, s: text(p.s ?? '') } : p))]))
 }
-/** the original's log: each unit 4 lines at 12 pt on a 10 pt size, and the end of the document */
-const originalLog = (n: number) => `${Array.from({ length: n }, (_, i) => `AXT-LINES ${i} 4 12.0pt 10`).join('\n')}\nAXT-END\n`
+const DISPLAY_UNIT = 6
+/** the original's log: each unit 4 lines at 12 pt on a 10 pt size — the one with a display 8, which \\prevgraf counts as
+ *  three — and the end of the document */
+const originalLog = (n: number) => `${Array.from({ length: n }, (_, i) => `AXT-LINES ${i} ${i === DISPLAY_UNIT ? 8 : 4} 12.0pt 10`).join('\n')}\nAXT-END\n`
 /** the font probe's log: Computer Modern at 10 pt in a 345 pt column, and its sizes below */
 const FONT_LOG = `AXT-FONTS rm=cmr;sf=cmss;tt=cmtt;body=10;\nAXT-WIDTH 1300.0pt 10 345.0pt\n${[0.9, 0.95].map(f => `AXT-SIZE ${f} ${(1300 * f).toFixed(1)}pt 1300.0pt`).join('\n')}\n`
 /** the original's marks: each unit a sixth of a page, in one column */
@@ -56,14 +58,29 @@ describe('a plan for the strategy that sets it', () => {
   })
 })
 
-describe('the leading of a unit the flow cannot measure', () => {
-  it('is the one the flow set where it stands, not the paper\'s type, which stood out among its neighbours', () => {
-    const given = inputs('de'), plan = previewTypesetting(given), units = given.paper.units as Unit[]
-    const display = units.findIndex(u => u.pieces.some(p => p.t === 'ph' && (p.src ?? '').startsWith('\\[')))
-    const factor = (i: number) => Number(new RegExp(`axtlead@${i}\\\\endcsname\\{([\\d.]+)\\}`).exec(plan.typeset?.head ?? '')?.[1])
-    expect(display).toBeGreaterThan(0)
-    expect(factor(display - 1)).toBeGreaterThan(0)
-    expect(factor(display)).toBe(factor(display - 1))
+describe('a unit holding a display', () => {
+  type Listed = { i: number; lo: number; lift: number; parts: number; cap: number; wo: number }
+  const listed = (plan: ReturnType<typeof previewTypesetting>) => (plan.state as unknown as { list: Listed[] }).list
+  it('has the paper\'s display where the cases expect it', () => {
+    expect((paper().units as Unit[])[DISPLAY_UNIT]?.pieces.some(p => p.t === 'ph' && (p.src ?? '').startsWith('\\['))).toBe(true)
+  })
+  it('is measured by its text: the reading less three lines a display, two segments each with its last line, the display out of the width', () => {
+    const plan = previewTypesetting(inputs('de')), unit = listed(plan).find(u => u.i === DISPLAY_UNIT)
+    expect(unit).toMatchObject({ lo: 5, lift: 3, parts: 2 })
+    // its own ruler: the text's width over its lines less half a line a segment
+    expect(unit?.cap).toBeCloseTo((unit?.wo ?? 0) / (5 - 1), 9)
+    // the display is not text: no wider than the paragraph before it, which has the same words but for its own few
+    expect(unit?.wo).toBeLessThan(1.2 * (listed(plan).find(u => u.i === DISPLAY_UNIT - 1)?.wo ?? 0))
+  })
+  it('gets its own leading from the flow, and the final reads its text from the preview as the solve did', () => {
+    const given = inputs('de'), plan = previewTypesetting(given), n = given.paper.units.length
+    expect(plan.typeset?.head).toMatch(new RegExp(`axtlead@${DISPLAY_UNIT}\\\\endcsname`))
+    const fin = finalTypesetting(plan.state, { log: originalLog(n), marks: originalMarks(n) })
+    // the unit moves the text by what its text does, as every other unit: read with its display's three lines it would
+    // stand 3 × 12 pt long
+    const end = new Map(fin.trace.map(s => [s.i, s.end])), step = (i: number) => (end.get(i) ?? Number.NaN) - (end.get(i - 1) ?? Number.NaN)
+    expect(Math.abs(step(DISPLAY_UNIT))).toBeLessThan(2)
+    expect(Math.abs(step(DISPLAY_UNIT) - step(DISPLAY_UNIT - 1))).toBeLessThan(1)
   })
 })
 
