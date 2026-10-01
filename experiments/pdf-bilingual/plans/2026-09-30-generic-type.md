@@ -314,3 +314,11 @@ Errors are leave-one-paper-out. The text predictor was crude (every non-CJK char
   at the forced break (−3 pt) and the final flow foresaw 16 pt, but the final came out 98 pt late — a paragraph moved
   whole to the next page where the preview's had not, which no prediction from the preview sees. The re-solved type
   is not it: the line model foresaw the final's line changes from the type well (21 papers: 71 lines against 96).
+- Option A then read a segment after a forced break as late from where the preview had started it: Japanese
+  2608.18090's preview ran over the break before its checklist, the checklist started a page late, and it was set at
+  95 % though the faces before the break took the page back. A segment now answers for what it runs late itself.
+  CJK, 21 papers: pages equal 19 (2 / 0), drift 0.038 / 0.263, within 81 %, units standing out 8; Japanese 2608.18090's
+  faces 56 → 33 units, its drift 0.033 → 0.016. The rule over all 34 (option A on CJK, Flow, even on German and
+  Russian): pages equal 31 (3 / 0), drift 0.040 / 0.220, within 80 %, blocks 85 %, floats within 30 pt 84 %, units
+  standing out 10 — against the reader's Today at 11 (14 / 9), 0.763 / 1.456, 16 %, 47 %, 27 %. The record of all
+  rules tried and what was learnt: `../records/typesetting.md`.
