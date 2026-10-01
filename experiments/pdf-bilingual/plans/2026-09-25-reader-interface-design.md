@@ -657,3 +657,160 @@ the same thing, its string is reused (marked).
 
 - Jump back (#300), the engine's TypeScript port and #299: the next stage.
 - A service changed while a paper is translating takes effect on the next visit. Decided (maintainer, 2026-09-26), not built: the capsule says so and offers two actions, 「重新加载翻译」 (translate again now) and 「下次生效」 (leave it for the next visit); its sentence is written with the build.
+
+## 17. The highlight
+
+The hover highlight (the reading options' switch, S-P-80) as built on `exp/pdf-highlight` (plan
+`2026-10-01-pdf-highlight.md`, its record at the end): what lights and how it looks, where its shapes come from, and
+what it costs. Every number is from the ten papers of the highlight's investigation (`data/runs/highlight-ten`: arXiv's
+PDF on the left, our Chinese typesetting on the right), investigator B's four papers of the ground truth
+(`data/runs/highlight-gt`) and the demo papers, measured 2026-10-01 unless dated otherwise; the gates that hold them are
+`spikes/highlight-gate.mjs` (Node) and `spikes/highlight-gate-browser.mjs` (a real browser).
+
+### 17.1 What lights
+
+- **The pointer lights; nothing else does.** Hovering a sentence lights it and its translation on both sides; hovering
+  a unit that lights whole lights it whole on both. A click holds nothing — the pin drawn in the draft round was
+  dropped by the maintainer on 2026-10-01 after a test build; a click only levels the two panes by what lies under it
+  (anywhere inside what the highlight paints is its unit's; a float's wash or outline levels by what is around it).
+- **Sentences**, where a unit's sentences are known on both sides; else **the whole unit** (paragraph, theorem,
+  footnote, list item), decided for both sides together — a unit never lights by sentence on one side and whole on the
+  other. A unit of one sentence lights as a sentence shape (its first row from where its text begins).
+- **Whole, whatever their sentences**: headings, captions, table cells and a drawing's text (TikZ labels).
+- **Tables, algorithms and figures** light whole with their captions, on both sides: a table or an algorithm one wash
+  over it to its rules, with its caption; a figure outlined (1.5 px), its caption washed — a wash multiplied into a
+  figure would change its colours. Hovering the float, its caption or one of its cells lights it. A subcaption lights
+  its own panel with it; the main caption lights the whole figure, every panel and subcaption. A float lights by its
+  caption's id, which both sides share; where it is found on one side only, its caption lights alone on the other.
+  A caption's float is a figure on both sides when it is one on either (outlined on both), once both pages are drawn.
+
+### 17.2 Where the sentences come from
+
+- **Microsoft** reports its own sentence lengths for the text it was sent (`sentLen`); the extension's service
+  verifies them, its translation cache keeps them, and the reader's engine passes them on (`engine.mjs`). Nothing is
+  added to the request, and the wording is Microsoft's own.
+- **Google and an LLM** take the tags path's markers (DESIGN §8.6): the reader cuts each unit's wire text into
+  sentences (`mt.mjs cutsOf`: the shared splitter, with a split context that reads the LaTeX placeholders — a citation
+  or a footnote annotates the sentence before it, `\citet` is its sentence's subject, a reference a number, an inline
+  formula a word), the service puts a marker at each cut and reads where they come back. Units that light whole are
+  sent without cuts. Google, zh (2026-10-01): on investigator B's sample 267 of 267 markers back once and in order, 83
+  of 83 running units aligned; on the four full papers 1 239 of 1 239 and 507 of 507. With markers Google translates
+  each sentence apart: its wording changed in 77 of 83 units (median 4.6 % of characters); of eight pairs read, two
+  better, three about even, three worse. The maintainer kept Google by sentence (2026-10-01). An LLM's path is unit
+  tested with a fake model (merged, split or reordered sentences fall back to the paragraph); it is measured only once
+  a key is set in a test build (`spikes/highlight-sentences-tags.mjs`); under its 1 000-character batch cap, 32 of 507
+  units of more than one sentence (6.3 %) would go unmarked and light whole.
+- **Cleaning** (`mt.mjs sentencesOf`): the lengths must partition both texts; a boundary inside a marker, a tag or an
+  entity goes to its end; a boundary that begins no sentence on either side (a trailing marker, a formula alone) is
+  dropped on both together. Each sentence after the first is kept as the offset of its first word in the unit's plain
+  source and in its plain translation — the texts each side is anchored by.
+- **Found on each side** (`anchors.mjs sentenceStarts`, report-B's option X: no new TeX mark): the page token of each
+  sentence's first word, as the unit's own text match inside its marks found it; its second or third word where the
+  first was not found; past that, the unit lights whole. arXiv's PDF has marks only once our marked original is compiled
+  — in a live run when the compiler is first idle after a preview — so a unit there found by its text alone takes its
+  starts where its match covers 80 % of its words or more (B3c): on the ten papers 625 of 738 units of more than one
+  sentence, 1 702 starts, all on the token the marks give; on the ground truth's arXiv PDFs on the mark's line as often
+  as with marks (98.6–100 % against 98.9–100 %). In a live open with Microsoft and nothing cached, the first sentence
+  lit 155 ms after the first preview on 2608.02785 (12.6 s before) and 173 ms on 2608.06701 (20.1 s before).
+- **Held to a ground truth**: investigator B's compiles with a mark at every sentence's start — starts on the mark's
+  line on our original 98.9–100 %, our translation 100 %, arXiv's PDF 98.9–100 % with the marks and 98.6–100 % by text
+  alone. The ten papers: 965 running-text units lit by sentence on both sides, 707 of more than one sentence; B's four
+  papers 451 of 466 units of more than one sentence with every start found on arXiv's PDF and our translation.
+- **The splitter's abbreviations** (shared with the HTML page, DESIGN §8.6): no cut after a case's `v.`, a place's or a
+  title's (`Mt.`, `Mr.`), the label of a numbered part (`Ch.`, `Sect.`, `Eqn.`, `Tab.`, `Alg.`), Latin and dated ones,
+  or any short capitalised label before its number; 16 of 8 015 cuts removed over the fixtures and the reader's units,
+  each false, none added (2026-10-01).
+
+### 17.3 The shapes
+
+- **Runs and rows** (`highlight.mjs`): a unit's tokens on a page, in its lines, by column → its runs, one page and one
+  column each, cut where another unit's line stands between two of its rows (a float set inside a paragraph) and, on a
+  page of two columns, where a full-width line does (revtex's widetext); rows are lines merged where they overlap, so a
+  display's numerator, denominator, limits, scripts and number are one row. What stands between two of a unit's words
+  and is no unit's is its own (an inline formula's pieces), in running text only and never across another unit's line;
+  the words before its first one on its line (a theorem's head, a list's label) too.
+- **The column's text edges** come from every page's long lines, per page size, parity and column, so a page of
+  displays takes the document's measure and a landscape page keeps its own; a run reaches up to 6 units past an edge
+  (an overfull display) and snaps to it within 3. A float's cells keep their ink past the edge.
+- **The ink**: a token's ink is its text item's share by a proportional face's widths (Times-Roman's for ASCII, a full
+  em for CJK — and for dashes and quotation marks in an item mostly CJK — half an em otherwise; an even share in a
+  monospaced face), widened over the marks it sets against itself (an opening bracket, a closing stop; a CJK stop inks
+  half its em) and to the end of an item of marks alone after it. English sentence boundaries through a letter on the
+  canvas: 3 of 166 (61 with an even share).
+- **One outline a shape, 3 px corners**, padded 3 px beside the column's text and half the leading above and below —
+  the lower quartile of the space between a kind's lines on that page (a footnote by a footnote's), and over what hangs
+  past the first and last lines (a script, a denominator).
+- **The sentence shape**: its first row from its start, the rows between across its unit's text in the column, its last
+  row to its end with its punctuation; two sentences on one row meet halfway through the space between them. Over a
+  column or a page break the rows reach the unit's text edge there — the column's edge less the unit's least indent, so a
+  list's item keeps to its own — but not over another unit's words on that row, nor under a float's painted shape; an
+  overfull line sticks out alone, by up to 6 units. Where a unit's shapes cannot hold its words (two lines of text made
+  one row by a tall formula, a glyph hanging into another sentence's row) it lights whole: 13 units of 973 on the ten
+  papers (2026-10-01).
+- **The hit test is the paint**: the same shapes, the smaller unit winning where two overlap (a heading run into its
+  paragraph); a float's shape wins over a larger block, a smaller block over the float. On the ten papers 0 holes in
+  25.1 M points of painted shapes (7–16 % of points lit nothing or a neighbour before), 0 points lit as another sentence
+  of the unit, 0 points of running text taken by a float, and every anchored unit lit (1 829 of 2 553 on both sides).
+- **Floats** (`floats.mjs`), made on a page's first drawing from the operator list it was drawn by (its figures, its
+  rules, its other marks): each figure to its nearest caption only, the one just below first; from each caption a walk
+  away from it over what lies across it — lines no running text owns, figures, marks, rules — stopping at another unit's
+  line, another caption's figure or a gap, and at its own last rule. A float that holds a figure or a drawing (3 % of it
+  marked outside its text) is a figure; one of text and rules a table. Found on the ten papers: figures 46 of 47, tables
+  52 of 52, algorithms 2 of 2.
+
+### 17.4 The pointer's path
+
+- One hit test and one paint per animation frame (`pointer.mjs`); the pointer read before anything is written; no layout
+  read — each pane's and page's place kept when the layout changes (a ResizeObserver, the contents panel's slide, a
+  zoom) and the scroll as its event gives it. A miss keeps what is lit 120 ms (the HTML page's value), so crossing the
+  space between two paragraphs does not blink; a scroll under a still pointer lights what comes under it.
+- A side's layout is made in the idle time once no side is being anchored (or at once in its own task when the pointer
+  needs it first), a page's geometry and its sentences on the page's first drawing, a side's sentences in an idle period
+  of their own after its layout, the left's again after the right's; nothing of a sentence's fit is made in the
+  pointer's frame. A unit whose sentences are known but not yet found, or whose fit is not yet worked out, is a miss
+  meanwhile (25–125 ms after the pointer comes to rest on an open, 2026-10-01), then lights its sentence — never the
+  paragraph first.
+- What a run's sentence was drawn as is kept and put back when it is lit again at the same scale (at most 512), and
+  let go when a page's floats come.
+
+### 17.5 What a copy keeps
+
+- The record keeps each unit's sentences beside its translation (`CachedUnit.sentences`, `{ src, tr }`: the offsets
+  above), additive and optional — no pipeline change; on 2608.02459 +20.7 KB (2.7 %). A copy made before keeps working
+  and lights by paragraph until its paper is translated again. A copy's sentences are used only where they are of their
+  shape and the translation made again from its pieces is the text they were counted in; what the offsets mean rests on
+  `plainSource`, `plainTranslated` and `anchors.mjs tokens` — a change to any is a change of the record.
+
+### 17.6 What it costs (2026-10-01, interleaved against a base build)
+
+The base is `174b5896` — the paragraph blocks of B1, before sentences and floats; B1 against the reader before it
+(`5957a4be`): per light p50 script 0.15–0.17 ms against 0.14–0.19, style and layout 0.28–0.34 against 0.22–0.33, the
+open within noise.
+
+
+- Per light, p50 script 0.129–0.232 ms against the base's 0.147–0.164 in the same runs (a sweep on 08350, 29181,
+  06701); style and layout after it 0.245–0.362 ms against 0.256–0.351; no layout forced where the highlight is
+  written; no long task in a sweep. 2608.06701 sits near its limit (0.232–0.298 against 0.164–0.186, limits 0.26–0.29 across runs): a sweep there
+  lights 44 times, sentences, against the base's 14 blocks.
+- The open: time to ready and anchoring within noise of the base (on a loaded machine paired rounds differ by −395 to
+  +336 ms; in Node, anchoring 90.5 ms cold on 02459's translation, as before the text-only starts).
+- In idle time after the open, 02459's layout 14.9 ms a side (its drawn pages' geometry with it) and its sentences
+  2.4 ms; a page's geometry at its first drawing 0.03–0.17 ms in the browser (B1), the rows' reach adding 6–12 % since;
+  a page's floats 0.3–0.8 ms p50 (up to about 4 ms on a side's first pages), from the operator list it was drawn by —
+  asking the worker for it again had made pages 7–8 of 06701 take 326–387 ms to draw, against 198–224.
+
+### 17.7 Known limits
+
+- A grid of panels in several rows with the subcaptions over their panels pairs them wrongly (each subcaption is read
+  with the panel under it).
+- A float found on one side only lights its caption alone on the other; a plain-word inline diagram marked under 3 % is
+  washed as a table; a caption between two tables takes the one below.
+- An equation number set on its own line below its display (2608.09746 #27) is no unit's and is not lit.
+- A table at a page's head whose first row is single letters over numbers, after a display that closed the page before,
+  is taken by that display's walk: no distance tells them apart (A1, measured: lead walks' first gaps up to 19.6 pt).
+- Two lines of text made one row by a tall formula, with a sentence beginning on the second, light their unit whole (13
+  units on the ten papers).
+- Before our marked original is compiled, units of arXiv's PDF matched under 80 % by their text alone light whole (113
+  of 738 on the ten papers; 29181 38 of 90).
+- A copy made before the highlight lights by paragraph until it is translated again; an LLM's sentences are measured
+  only with a fake model; with Google the markers change the wording (above).
