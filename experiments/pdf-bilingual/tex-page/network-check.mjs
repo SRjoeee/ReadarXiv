@@ -45,7 +45,7 @@ const compile = (id, text, engine = 'pdflatex') => tab.evaluate(async ({ id, tex
   return { ok: r.ok, network: r.network, error: (r.log ?? '').match(/^! .*$/m)?.[0] ?? null }
 }, { id, text, engine })
 const ready = await tab.evaluate(async url => window.texHost.open(url), `${site}/tex.html`)
-check('ready says protocol 2 and the versions', ready.protocol === 2 && !!ready.cv && !!ready.eid && !!ready.tid, ready)
+check('ready says protocol 2, the versions and the index', ready.protocol === 2 && !!ready.cv && !!ready.eid && !!ready.tid && /^index-[0-9a-f]{12}\.txt$/.test(ready.index), ready)
 const init = await tab.evaluate(async () => { const h = window.texHost; h.send({ type: 'init', protocol: 2, engines: ['pdflatex'], fonts: [] }); const d = await h.wait(m => m?.type === 'init-done', 300000); h.send({ type: 'project', key: 'p', files: [] }); return d })
 check('init-done', !init.error, init)
 

@@ -40,6 +40,6 @@ export declare function texPage(options: {
   sleep?: (ms: number) => Promise<void>
   now?: () => number
 }): {
-  ready: { type: 'ready'; protocol: number; cv: string; eid: string; tid: string }
+  ready: { type: 'ready'; protocol: number; cv: string; eid: string; tid: string; index: string }
   receive(msg: Record<string, unknown>, reply: (data: Record<string, unknown> & { type?: string }, transfer?: Transferable[]) => void): Promise<void>
 }

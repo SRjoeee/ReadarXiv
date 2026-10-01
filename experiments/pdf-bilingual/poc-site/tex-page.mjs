@@ -4,7 +4,9 @@
 // Protocol 2, by postMessage, from the framing window only, and only when its origin may drive the page (mayDrive: the
 // origins build.json names — the store's extension, the development one, the web app — or, when it names none, as a
 // build on this machine, any extension page):
-//   ← { type: 'ready', protocol: 2, cv, eid, tid }      on load: the page's, the engine's and the tree's versions
+//   ← { type: 'ready', protocol: 2, cv, eid, tid, index }   on load: the page's, the engine's and the tree's versions,
+//                                                       and the index's name (index-<its version>.txt): a verdict
+//                                                       that a paper cannot be typeset holds for these only
 //   → { type: 'init', protocol: 2, engines, fonts }     hints: the engines the visit will use (pdflatex, xelatex,
 //                                                       lualatex; default the first two) and the scripts whose CJK
 //                                                       faces it will set (Hans, Hant, Jpan, Kore; default none)
@@ -360,7 +362,7 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
   /** a page-side failure in protocol 2's terms: what failed for a network reason, in `network` */
   const failed = e => ({ error: error(e), network: e instanceof NetworkFailure ? [e.what] : [] })
   return {
-    ready: { type: 'ready', protocol: PROTOCOL, cv: build.cv, eid: build.eid, tid: build.tid },
+    ready: { type: 'ready', protocol: PROTOCOL, cv: build.cv, eid: build.eid, tid: build.tid, index: build.index },
     receive(msg, reply) {
       if (msg?.type === 'project') { projects.set(msg.key, new Map(msg.files.map(f => [f.path, f.content]))); return Promise.resolve() }
       if (msg?.type === 'init') return (queue = queue.then(() => init(msg, reply)).then(d => reply(d), e => reply({ type: 'init-done', ...failed(e) })))

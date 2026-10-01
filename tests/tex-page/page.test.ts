@@ -143,8 +143,8 @@ describe('mayDrive', () => {
 })
 
 describe('ready', () => {
-  it('says the protocol and the versions of the page, the engine and the tree', () => {
-    expect(page().p.ready).toEqual({ type: 'ready', protocol: 2, cv: 'c1', eid: 'e1', tid: 't1' })
+  it('says the protocol and the versions of the page, the engine, the tree and its index: what a typesetting verdict holds for', () => {
+    expect(page().p.ready).toEqual({ type: 'ready', protocol: 2, cv: 'c1', eid: 'e1', tid: 't1', index: BUILD.index })
   })
 })
 
