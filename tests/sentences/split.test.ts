@@ -135,6 +135,34 @@ describe('sentence splitting (#105)', () => {
       .toEqual(['The proof is complete. ', '<x id="1"/>, however, is continuous.'])
   })
 
+  it('does not split after a case\'s v., a place\'s or a person\'s title (B3b: Google and the reader cut "Oregon v. Mitchell", "Mt. Rushmore")', () => {
+    expect(sentenceCuts('In Oregon v. Mitchell the Court held so, as in Roe vs. Wade.')).toEqual([])
+    expect(sentenceCuts('They climbed Mt. Rushmore and St. Helens with Mr. Smith, Mrs. Lee, Ms. Ray and Dr. Jones.')).toEqual([])
+  })
+
+  it('does not split after the label of a numbered part: chapter, section, equation, table, appendix, algorithm and the like', () => {
+    expect(sentenceCuts('See Ch. 3, Chap. 4, Sect. 2, Eqn. 5, Tab. 1, App. B, Alg. 2, Ex. 7, Thm. 1, Rem. 2, Obs. 3, Conj. 4 and Prob. 5 for details.')).toEqual([])
+    // and any short capitalised label before its number, listed or not (a period after one ends no sentence there)
+    expect(sentenceCuts('Compare Exer. 5 with Supp. 2 here.')).toEqual([])
+    // a short capitalised word before a capitalised one still ends its sentence
+    expect(parts('It was made in Rome. The city grew.')).toEqual(['It was made in Rome. ', 'The city grew.'])
+  })
+
+  it('does not split after a Latin or a dated abbreviation', () => {
+    expect(sentenceCuts('Take the norm w.r.t. the measure, viz. the uniform one, a.k.a. Lebesgue\'s.')).toEqual([])
+    expect(sentenceCuts('Accessed Jan. 2024 and Sept. 2025 from the Univ. of Tokyo, Dept. of Physics.')).toEqual([])
+  })
+
+  it('lets a.e., i.i.d., a company\'s Inc. or Ltd. and ca. end a sentence where what follows opens one', () => {
+    expect(parts('The limit holds a.e. Moreover the bound is tight.')).toEqual(['The limit holds a.e. ', 'Moreover the bound is tight.'])
+    expect(sentenceCuts('The samples are i.i.d. random variables.')).toEqual([])
+    expect(parts('It was made by Acme Inc. The tool works.')).toEqual(['It was made by Acme Inc. ', 'The tool works.'])
+    expect(sentenceCuts('Acme Inc. is a company, and Foo Ltd. its rival.')).toEqual([])
+    expect(sentenceCuts('Built ca. 1900, it stands.')).toEqual([])
+    // a unit or a subfigure's letter ends its sentence: no single lowercase letter is taken (21.6 h. The …; Fig. 4 b. On …)
+    expect(parts('The run took 21.6 h. The observations followed.')).toEqual(['The run took 21.6 h. ', 'The observations followed.'])
+  })
+
   it('lets an abbreviation that really ends a sentence do so', () => {
     // `etc.` and `al.` can genuinely close a sentence; the rest of the list — numbers, examples,
     // journal names — cannot, so only these two consult what follows (Codex on #126). Restricted

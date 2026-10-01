@@ -27,9 +27,21 @@ import { fromAlpha, type WireFormat } from '@/core/protector'
  * A period after one of these does not end a sentence. Single capitals cover initials (`A. Turing`)
  * and the journal-volume style that produced the only failures measured; the rest are the
  * abbreviations that actually appear in arXiv prose and bibliographies.
+ *
+ * Extended 2026-10-01 (the PDF reader's units, B3b: Google translated "Oregon v. Mitchell" and "Mt.
+ * Rushmore" broken where they were cut), by the same method: over the fixture corpus (1528 blocks
+ * with cuts) and the PDF reader's LaTeX units of thirteen papers (1568), every cut the larger list
+ * removes was read — 16 of 8015, each after a period that ends no sentence (`Oregon v.` ×5, `Mt.`,
+ * `(Alg.`, `w.r.t.`, a table cell's `Tab.` before its number ×8) — and it adds none; two of them on
+ * the HTML page's fixtures. A case's `v.`; places, titles and
+ * people (`Mt.`, `Mr.`, `Jr.`); the labels of numbered parts (`Ch.`, `Sect.`, `Eqn.`, `Tab.`,
+ * `App.`, `Alg.`, `Ex.`, `Rem.`, `Obs.`, `Conj.`, `Prob.`); Latin and dated ones (`viz.`,
+ * `w.r.t.`, `a.k.a.`, `Jan.`, `Sept.`); institutions (`Univ.`, `Dept.`, `Inst.`). No single
+ * lowercase letter but `v`: a unit or a subfigure's letter ends its sentence (`21.6 h. The …`,
+ * `Fig. 4 b. On …`, both in the corpus).
  */
 export const ABBR =
-  /\b(?:[A-Z]|Fig|Figs|Eq|Eqs|Sec|Secs|Ref|Refs|Thm|Def|Lem|Prop|Cor|Rev|Phys|Lett|Nucl|Astron|Astrophys|Mon|Not|Proc|Conf|Int|J|vs|etc|cf|al|approx|resp|Dr|Prof|St|No|Vol|pp|Ed|Eds|Sci|Rep|e\.g|i\.e)\.$/
+  /\b(?:[A-Z]|v|Fig|Figs|Eq|Eqs|Eqn|Eqns|Sec|Secs|Sect|Sects|Ch|Chap|Chaps|Tab|Tabs|App|Apps|Alg|Algs|Ex|Exs|Ref|Refs|Thm|Thms|Def|Defs|Lem|Lems|Prop|Props|Cor|Cors|Rem|Rems|Conj|Obs|Prob|Probs|Rev|Phys|Lett|Nucl|Astron|Astrophys|Mon|Not|Proc|Conf|Int|J|vs|etc|cf|al|approx|resp|viz|ca|c|Dr|Mr|Mrs|Ms|Prof|St|Mt|Jr|No|Nos|Vol|Vols|pp|Ed|Eds|Sci|Rep|Univ|Dept|Inst|Inc|Ltd|Corp|Co|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|e\.g|i\.e|w\.r\.t|a\.k\.a|i\.i\.d|a\.e)\.$/
 
 /**
  * Sentence lengths, in order, summing exactly to `text.length`.
@@ -69,8 +81,17 @@ function idOf(run: string): number | undefined {
 const STRUCTURAL = /^<\/?t(?:\s+id="\d+")?>$/
 const OPENING = /^<t(?:\s+id="\d+")?>$/
 
-/** Abbreviations that genuinely end sentences, so the text after them decides whether to merge */
-export const TERMINAL_ABBR = /\b(?:etc|al)\.$/
+/** Abbreviations that genuinely end sentences, so the text after them decides whether to merge: a
+ *  list's `etc.`, `et al.`, a measure's `a.e.` and `i.i.d.` (`… holds a.e. Moreover …`, in the
+ *  corpus), a company's name, a generation's `Jr.`, and `ca.`, `c.` before a year */
+export const TERMINAL_ABBR = /\b(?:etc|al|a\.e|i\.i\.d|Inc|Ltd|Corp|Co|Jr|ca|c)\.$/
+/**
+ * A short capitalised label before its number ends no sentence there — `Exer. 5`, `Supp. 2`, listed
+ * or not — where a sentence closing on a short capitalised word ("… made in Rome. The …") is followed
+ * by a capital. A merge can only lose a boundary, never put one inside a sentence
+ */
+const LABEL = /\b[A-Z][a-z]{1,4}\.$/
+const NUMBERED = /^\s*\d/
 /**
  * A continuation rather than a new sentence. Lowercase, a number, or an opening bracket: an
  * abbreviation after `etc.` or `al.` opens the next sentence rather than proving the first was
@@ -230,7 +251,7 @@ export function sentenceCuts(text: string, format: WireFormat = 'tags', context:
     // spurious — except for the few that really can end a sentence, where what follows decides.
     // Measured over 2330 fixture blocks: restricted this way it adds exactly one cut, the
     // `… Lie algebras, etc. We refer to …` that prompted it, and no wrong ones (Codex on #126).
-    const merge = prev !== undefined && ABBR.test(tail) && (!TERMINAL_ABBR.test(tail) || CONTINUES.test(segment))
+    const merge = prev !== undefined && ((ABBR.test(tail) && (!TERMINAL_ABBR.test(tail) || CONTINUES.test(segment))) || (LABEL.test(tail) && NUMBERED.test(segment)))
     if (merge) pieces[pieces.length - 1] = prev + segment
     else pieces.push(segment)
   }
