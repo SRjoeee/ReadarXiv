@@ -1,9 +1,9 @@
 import { act, createElement } from 'react'
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { FailureCard } from '@/pdf-reader/ui/FailureCard'
 import { StatusCapsule } from '@/pdf-reader/ui/StatusCapsule'
-import { setLocale } from '@/ui/strings'
+import { R, setLocale } from '@/ui/strings'
 import { mountElement } from '../../ui/render-hook'
 import { fakeController } from './fake-controller'
 import { stubPopovers } from './popover-stub'
@@ -43,6 +43,58 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     // past the closed notice's 160 ms way out
     await act(async () => { await new Promise(r => setTimeout(r, 220)) })
     expect(container.querySelector('[role="status"]')!.textContent).not.toContain('翻译失败')
+  })
+
+  describe('the narrow window\'s words: 5 s of being read, waiting while the pointer is over them or they hold the focus (the maintainer, 2026-10-01)', () => {
+    afterEach(() => { vi.useRealTimers() })
+    /** the capsule mounted reading, the clock faked, then the window made narrow */
+    async function narrow() {
+      const fake = fakeController({ phase: 'ready', display: 'bilingual' })
+      const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+      await act(async () => fake.set({ narrow: true }))
+      const capsule = () => container.querySelector<HTMLElement>('.capsule[data-kind="narrow"]:not([data-out])')
+      const wait = (ms: number) => act(async () => { vi.advanceTimersByTime(ms) })
+      // React reads enter and leave off over and out, and focus and blur off focusin and focusout
+      const fire = (type: string) => act(async () => { capsule()!.dispatchEvent(new MouseEvent(type, { bubbles: true, relatedTarget: document.body })) })
+      const focus = (type: 'focusin' | 'focusout') => act(async () => { capsule()!.dispatchEvent(new FocusEvent(type, { bubbles: true, relatedTarget: null })) })
+      return { capsule, wait, fire, focus }
+    }
+
+    it('leaves after 5 s', async () => {
+      const { capsule, wait } = await narrow()
+      expect(capsule()?.textContent).toBe(R.status.narrow)
+      await wait(4999)
+      expect(capsule()).not.toBeNull()
+      await wait(1)
+      expect(capsule()).toBeNull()
+    })
+
+    it('waits while the pointer is over it, and runs out the rest once the pointer leaves', async () => {
+      const { capsule, wait, fire } = await narrow()
+      await wait(3000)
+      await fire('pointerover')
+      await wait(10000)
+      expect(capsule()).not.toBeNull()
+      await fire('pointerout')
+      await wait(1999)
+      expect(capsule()).not.toBeNull()
+      await wait(1)
+      expect(capsule()).toBeNull()
+    })
+
+    it('waits while it holds the focus, and runs out the rest once the focus goes', async () => {
+      const { capsule, wait, focus } = await narrow()
+      await wait(3000)
+      await focus('focusin')
+      await wait(10000)
+      expect(capsule()).not.toBeNull()
+      await focus('focusout')
+      await wait(1999)
+      expect(capsule()).not.toBeNull()
+      await wait(1)
+      expect(capsule()).toBeNull()
+    })
   })
 
   it('a paper that cannot be had: the sentence, and its HTML version a link opened where the settings say; no close (the maintainer, 2026-09-26)', async () => {

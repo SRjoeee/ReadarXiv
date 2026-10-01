@@ -160,7 +160,9 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
   2026-09-26). When the
   document area is narrower than 840 px, two pages side by side are too small to read: 对照 stays chosen, the translation
   is shown alone, and the capsule says so once, 窗口较窄，暂只显示译文 — the HTML page's rule and wording (S-P-74, 窗口较窄，
-  暂按上下显示). The widths are to be checked by reading at them while building.
+  暂按上下显示). The words stay 5 s of being read: the time stands while the pointer is over the capsule or it holds the
+  focus, and the rest of it runs once neither does (the maintainer, 2026-10-01). The widths are to be checked by
+  reading at them while building.
 
 ## 6. Components
 
