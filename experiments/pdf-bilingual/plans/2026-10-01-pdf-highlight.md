@@ -1,4 +1,4 @@
-# The PDF reader's highlight: sentence level, a clean wash, the pin, whole floats — plan
+# The PDF reader's highlight: sentence level, a clean wash, whole floats — plan
 
 Branch `exp/pdf-highlight` (from `exp/pdf-bilingual` at `a7a2a056`), worktree `.worktrees/exp-pdf`. The work's ledger,
 the two investigations and the anchoring task's brief and report are in
@@ -10,9 +10,9 @@ round, `~/Downloads/readarxiv-test/design/pdf-highlight/round-1/` (`README.md`, 
 
 1. **Sentence level**, falling back to the paragraph where a unit's sentences are not verified on both sides.
    Microsoft's own sentence lengths (`sentLen`) first; the LLM path once it is measured with a key.
-2. **Hover lights as today; a click lights the clicked sentence (or unit) on both sides and holds it** until the
-   pointer lights another; a tap does the same on touch; **a click on empty space lets go**. The held wash looks the same
-   as the hovered one.
+2. **Hover lights, as today.** (Round 1 also drew a pin — a click lighting and holding its target, a click on empty
+   space letting go; the maintainer dropped it on 2026-10-01 after B1's build: no pin. A click only levels the panes, as
+   today.)
 3. **Tables and figures light whole**: a table (and an algorithm) as one wash over it to its rules, with its caption; a
    figure outlined, its caption washed; hovering the float or its caption lights both, on both sides.
 4. **The look** (round 1, as recommended): the sentence shape (first row from its start, the rows between across the
@@ -59,15 +59,11 @@ two limits (running text only; stop at a line holding another unit's words) and 
 refuses (round 1 README, "needs" 6). Acceptance: report-A's hole measure 0 inside painted shapes on the ten papers;
 fragmented display units 0 (one block per page-and-column run); per-light script and style+layout within round 1's
 measured 0.2–0.3 / 0.3–0.5 ms; open time on 02459 not above the base beyond noise; a probe kept in the repository that
-measures these (per-kind lit counts, holes, blocks per run, per-light cost) — the regression gate for B2–B5.
+measures these (per-kind lit counts, holes, blocks per run, per-light cost) — the regression gate for B3–B5.
 
-### B2 — the pin
+### B2 — the pin (dropped)
 
-A click (press and release within 4 px and 600 ms, no selection) lights its target on both sides and holds it; the
-hover lights over it and the hold goes when the pointer lights another; a click on nothing lets go; a tap the same;
-the held wash survives the click's own alignment and PDF.js's redraws (`pagerendered` repaints it); the same look as the
-hover. Keyboard: none asked — say what exists. Acceptance: a browser test of hover, click, click-on-nothing, tap, and
-the held wash after `alignClick`, both sides.
+Dropped by the maintainer on 2026-10-01, before any code: hover alone lights; a click levels the panes as today.
 
 ### B3 — sentence level
 
