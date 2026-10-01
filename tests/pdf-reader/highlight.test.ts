@@ -168,9 +168,15 @@ describe('runsOf: a unit\'s runs, one per page and column, and their rows', () =
   it('a theorem\'s head before its first word, which is no unit\'s, is in its block', () => {
     const pages = [[...prose(740, 20), item('Theorem 1.', 50, 480), item('Every word here is the theorem\'s own', 110, 480, { width: 190, eol: true }), ...prose(468, 10)]]
     const t = at(docOf(pages), 'every')
-    expect(across(nth(nth(runsOf(side(pages, [[0, range(t, t + 7 + 16)]]), 0)).rows))).toEqual([50, 300])
+    const own = side(pages, [[0, range(t, t + 7 + 16)]])
+    expect(across(nth(nth(runsOf(own, 0)).rows))).toEqual([50, 300])
     // after another unit's words on the line, only what follows them: a run-in heading is its own
-    expect(across(nth(nth(runsOf(side(pages, [[0, range(t, t + 7 + 16)], [1, [t - 2]]]), 0)).rows))).toEqual([90, 300])
+    const after = side(pages, [[0, range(t, t + 7 + 16)], [1, [t - 2]]])
+    expect(across(nth(nth(runsOf(after, 0)).rows))).toEqual([90, 300])
+    // the page's geometry says whose head it took (for the gate); a paragraph that starts its line takes none
+    expect([pageGeometry(own, 1).heads, pageGeometry(after, 1).heads]).toEqual([[0], [0]])
+    const next = at(docOf(pages), 'text', t)
+    expect(pageGeometry(side(pages, [[0, range(next, next + 15)]]), 1).heads).toEqual([])
   })
 })
 
@@ -180,14 +186,21 @@ describe('runsOf: what lies between a unit\'s words and is no unit\'s is its own
   const pages = [[...prose(740, 20), item('the last words', 50, 480, { width: 150 }), item('1', 230, 484, { size: 7 }), item('n', 230, 477, { size: 7 }), item('E Tr', 240, 480, { width: 40, eol: true }), line('then the text goes on here', 468), ...prose(456, 10)]]
   const d = docOf(pages), s = at(d, 'the', 160), t = at(d, 'then'), unit = [...range(s, s + 2), ...range(t, t + 5)]
 
+  // and the page's geometry counts the words so taken (for the gate): the fraction's 1 and n, and E Tr
   it('an inline formula `between` refused is taken into its row', () => {
-    expect(across(nth(nth(runsOf(side(pages, [[0, unit]]), 0)).rows))[1]).toBe(280)
+    const L = side(pages, [[0, unit]])
+    expect(across(nth(nth(runsOf(L, 0)).rows))[1]).toBe(280)
+    expect(pageGeometry(L, 1).filled).toBe(4)
   })
   it('not in a caption, whose float would come with it', () => {
-    expect(across(nth(nth(runsOf(side(pages, [[0, unit]], new Map([[0, 'caption']])), 0)).rows))[1]).toBe(200)
+    const L = side(pages, [[0, unit]], new Map([[0, 'caption']]))
+    expect(across(nth(nth(runsOf(L, 0)).rows))[1]).toBe(200)
+    expect(pageGeometry(L, 1).filled).toBe(0)
   })
   it('not where another unit\'s words stand among them', () => {
-    expect(across(nth(nth(runsOf(side(pages, [[0, unit], [1, [at(d, 'tr', s)]]]), 0)).rows))[1]).toBe(200)
+    const L = side(pages, [[0, unit], [1, [at(d, 'tr', s)]]])
+    expect(across(nth(nth(runsOf(L, 0)).rows))[1]).toBe(200)
+    expect(pageGeometry(L, 1).filled).toBe(0)
   })
 })
 

@@ -9,22 +9,34 @@
 //    blocks — a word of the unit that lights nothing, or its neighbour; but for words past every column's text edge
 //    by more than the overhang (an overfull line in the margin or the gutter), which the clamp leaves out by design,
 //    counted apart (pastEdge)
+//  - unreachable: a unit painted on a page where no point of the grid lights it (smaller units over all of it)
 //  - runs: a unit's blocks (one per run) and its pages-and-columns; where a page and column holds more than one of its
 //    runs, a line cut them (a float set inside a paragraph, a full-width display), listed; the units with a display so
 //    cut (fragmented displays); one unit's blocks overlapping on a page (the wash doubled)
+//  - what the geometry takes beyond the anchors, per paper and side (pageGeometry): the units whose head it takes, by
+//    kind (a heading's number, a theorem's head); the words it fills in; the cells whose ink reaches more than 3 em
+//    past a word's box (the marks' carry); and the runs whose pad overlaps another unit's block by over half a unit
+//    (the leading's pads)
 //  - cost: the side's layout when it is anchored (layoutOf), every page's geometry as it is first drawn (pageGeometry),
 //    median of ROUNDS
-// It fails (exit 1) on: an anchored unit not lit; a hole; an ink hole; a fragmented display; one unit's blocks
-// overlapping; a cut not in the baseline; more words past the edge than the baseline's; against the baseline
-// (highlight-gate.baseline.json, per paper, side and kind), fewer units anchored or lit; and when PDF.js's character
-// maps or standard fonts are not beside its module, which left a side's text half read and the gate printing ok (the
-// review of B1: anchors on the right 1 906 → 538).
+// It fails (exit 1) on: an anchored unit not lit; a hole; an ink hole; an unreachable unit; a fragmented display; one
+// unit's blocks overlapping; a cut not in the baseline; more words past the edge than the baseline's; against the
+// baseline (highlight-gate.baseline.json, per paper, side and kind), fewer units anchored or lit, and any change in
+// what the geometry takes (heads, fills, cells' ink, pads' overlaps: a change meant is recorded again); and when
+// PDF.js's character maps or standard fonts are not beside its module, which left a side's text half read and the
+// gate printing ok (the review of B1: anchors on the right 1 906 → 538).
 // Each was made to fail once (B1's first round of review, a copy of the tree each): a baseline count raised by one
 // (lit 52 against 53); CMAPS=/nowhere (stops before reading), and CMAPS at a directory holding the one map looked for
 // (the translation's anchors fall below the baseline); the block's glyph extent dropped (8 ink holes); hitOf without
 // the pad (368 641 holes); a unit in 50 left out of its page's geometry (82 anchored, not lit); interrupted() always
 // true (781 fragmented displays, 1 020 units' blocks overlapping, cuts not in the baseline); each run given twice
-// (3 791 overlapping); the baseline's words past the edge lowered by one.
+// (3 791 overlapping); the baseline's words past the edge lowered by one. Broken the re-review's nine ways (before B2,
+// a copy of the tree each), it fails on seven: smaller-wins inverted (176 unreachable), the marks' carry unlimited
+// (18 cells' ink past 3 em), the head dropped, the fill dropped (heads, fills against the baseline), the median
+// leading and the vertical pads doubled (pads' overlaps; and 9 units' blocks overlapping), floats clamped (an ink
+// hole, 13 words past the edge). The old column rule and the widetext cut dropped change nothing it measures on the
+// ten papers (no widetext there, no run of a two-column page the old rule makes otherwise);
+// tests/pdf-reader/highlight.test.ts fails on both.
 // WRITE_BASELINE=1 records the run as the baseline (counts only).
 // Counts only, no paper text. Pad beside a block: 3 CSS px at 100 % (2.25 PDF units). The browser's half — the pointer,
 // the paint, their costs against another build — is highlight-gate-browser.mjs.
@@ -84,10 +96,12 @@ function kindOf(paper, u) {
 }
 
 const median = xs => { const s = [...xs].sort((a, b) => a - b); return s[s.length >> 1] ?? null }
-const tally = {}, cost = {}, cuts = [], inkHoles = [], overlaps = [], pastEdge = []
+const tally = {}, cost = {}, cuts = [], inkHoles = [], overlaps = [], pastEdge = [], unreachable = []
+/** per paper and side: what the geometry took beyond the anchors, held to the baseline exactly */
+const taken = {}
 /** per paper, side and kind: units anchored and lit, for the baseline */
 const counts = {}
-const count = (key, field, n = 1) => { const t = (tally[key] ??= { n: 0, anchoredL: 0, anchoredR: 0, litL: 0, litR: 0, both: 0, unlitAnchored: 0, points: 0, holes: 0, smaller: 0, inkPoints: 0, inkHoles: 0, pastEdge: 0, runs: 0, pageCols: 0, cut: 0, fragmentedDisplays: 0, overlapping: 0 }); t[field] += n }
+const count = (key, field, n = 1) => { const t = (tally[key] ??= { n: 0, anchoredL: 0, anchoredR: 0, litL: 0, litR: 0, both: 0, unlitAnchored: 0, points: 0, holes: 0, smaller: 0, inkPoints: 0, inkHoles: 0, pastEdge: 0, unreachable: 0, runs: 0, pageCols: 0, cut: 0, fragmentedDisplays: 0, overlapping: 0 }); t[field] += n }
 const inside = (b, x, y) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1
 
 for (const id of ids) {
@@ -137,7 +151,8 @@ for (const id of ids) {
       if (holed) inkHoles.push(`${id}#${i} ${S} ×${holed}`)
       // one unit's blocks overlapping on a page
       if (blocks.some((a, j) => blocks.some((b, m) => m > j && a.page === b.page && Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 0.01 && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 0.01))) { count(k, 'overlapping'); overlaps.push(`${id}#${i} ${S}`) }
-      // holes: every point of every painted block
+      // holes: every point of every painted block; and each page the unit is painted on has a point that lights it
+      const reached = new Set()
       for (const run of runs) {
         const b = blockOf(run, PAD)
         for (let x = b.x0 + STEP / 2; x < b.x1; x += STEP) for (let y = b.y0 + STEP / 2; y < b.y1; y += STEP) {
@@ -145,8 +160,12 @@ for (const id of ids) {
           count(k, 'points')
           if (!hit) count(k, 'holes')
           else if (hit.id !== i) count(k, 'smaller')
+          else reached.add(run.page)
         }
       }
+      for (const p of new Set(runs.map(r => r.page))) if (!reached.has(p)) { count(k, 'unreachable'); unreachable.push(`${id}#${i} ${S} p${p}`) }
+      // a cell whose ink reaches more than 3 em past a word's box: the marks' carry over its row's other cells
+      if (u.kind === 'cell' && (anchors.get(i)?.tokens ?? []).some(t => (tok.r[t] - doc[t].x - doc[t].w) / doc[t].h > 3)) (((taken[id] ??= {})[S] ??= {}).cells3em = (taken[id][S].cells3em ?? 0) + 1)
       // runs per page and column
       const per = new Map()
       for (const run of runs) per.set(`${run.page}${run.col}`, (per.get(`${run.page}${run.col}`) ?? 0) + 1)
@@ -157,10 +176,31 @@ for (const id of ids) {
     }
     if (lit === 2) count(k, 'both')
   })
+  // what the geometry took beyond the anchors, page by page: heads by kind, words filled in; the pads' overlaps
+  for (const S of ['L', 'R']) {
+    const { layout } = sides[S], t = ((taken[id] ??= {})[S] ??= {})
+    t.cells3em ??= 0; t.heads = {}; t.filled = 0; t.padOverlaps = 0
+    for (let p = 1; p < layout.page.length; p++) {
+      const g = pageGeometry(layout, p), blocks = g.runs.map(r => blockOf(r, PAD))
+      for (const h of g.heads) { const kk = kindOf(paper, units[h]); t.heads[kk] = (t.heads[kk] ?? 0) + 1 }
+      t.filled += g.filled
+      g.runs.forEach((r, a) => {
+        let worst = 0
+        g.runs.forEach((q, b) => {
+          if (q.id === r.id) return
+          const A = blocks[a], B = blocks[b]
+          if (A.x1 <= B.x0 || B.x1 <= A.x0) return
+          const o = Math.min(A.y1, B.y1) - Math.max(A.y0, B.y0)
+          if (o > 0 && o < Math.min(A.y1 - A.y0, B.y1 - B.y0) / 2) worst = Math.max(worst, o)
+        })
+        if (worst > 0.5) t.padOverlaps++
+      })
+    }
+  }
   console.error(id, 'done')
 }
 
-const cols = ['n', 'anchoredL', 'litL', 'anchoredR', 'litR', 'both', 'unlitAnchored', 'holes', 'smaller', 'points', 'inkHoles', 'pastEdge', 'inkPoints', 'runs', 'pageCols', 'cut', 'fragmentedDisplays', 'overlapping']
+const cols = ['n', 'anchoredL', 'litL', 'anchoredR', 'litR', 'both', 'unlitAnchored', 'holes', 'smaller', 'points', 'unreachable', 'inkHoles', 'pastEdge', 'inkPoints', 'runs', 'pageCols', 'cut', 'fragmentedDisplays', 'overlapping']
 console.log(['kind'.padEnd(26), ...cols].join('\t'))
 const sum = Object.fromEntries(cols.map(c => [c, 0]))
 for (const [k, t] of Object.entries(tally).sort()) { console.log([k.padEnd(26), ...cols.map(c => t[c])].join('\t')); for (const c of cols) sum[c] += t[c] }
@@ -169,14 +209,17 @@ console.log('\nruns cut by a line (page, column, blocks):', cuts.length, cuts.sl
 console.log('units with ink holes:', inkHoles.length, inkHoles.slice(0, 12).join('; '))
 console.log('units whose blocks overlap on a page:', overlaps.length, overlaps.slice(0, 12).join('; '))
 console.log('words past the column\'s edge + the overhang:', pastEdge.length, pastEdge.slice(0, 12).join('; '))
+console.log('units painted where nothing lights them:', unreachable.length, unreachable.slice(0, 12).join('; '))
+const takenSum = side => { const o = { heads: {}, filled: 0, cells3em: 0, padOverlaps: 0 }; for (const t of Object.values(taken)) { const x = t[side]; if (!x) continue; for (const [kk, n] of Object.entries(x.heads)) o.heads[kk] = (o.heads[kk] ?? 0) + n; o.filled += x.filled; o.cells3em += x.cells3em; o.padOverlaps += x.padOverlaps } return o }
+console.log('what the geometry took beyond the anchors, left:', JSON.stringify(takenSum('L')), 'right:', JSON.stringify(takenSum('R')))
 console.log('\ncost, ms (median of', ROUNDS, 'rounds): layout at anchoring; every page\'s geometry; per page; the slowest page')
 for (const [k, c] of Object.entries(cost)) console.log(k.padEnd(14), `${c.pages} pp, ${c.tokens} tokens`, `layout ${c.layoutMs}`, `pages ${c.allPagesMs}`, `per page ${c.perPageMs}`, `max ${c.pageMaxMs}`)
 // the gate: what must be none, and against the baseline what may not fall (or, for cuts, grow)
 const failures = []
-for (const c of ['unlitAnchored', 'holes', 'inkHoles', 'fragmentedDisplays', 'overlapping']) if (sum[c] > 0) failures.push(`${c} ${sum[c]}`)
+for (const c of ['unlitAnchored', 'holes', 'inkHoles', 'unreachable', 'fragmentedDisplays', 'overlapping']) if (sum[c] > 0) failures.push(`${c} ${sum[c]}`)
 if (process.env.WRITE_BASELINE) {
   if (ids.length !== TEN.length || RUNS !== join(root, 'data/runs/highlight-ten')) failures.push('a baseline is recorded on the ten papers\' runs only')
-  if (!failures.length) writeFileSync(BASELINE, `${JSON.stringify({ note: 'highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge. Counts only', counts, cuts, pastEdge: sum.pastEdge }, null, 1)}\n`)
+  if (!failures.length) writeFileSync(BASELINE, `${JSON.stringify({ note: 'highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors. Counts only', counts, cuts, pastEdge: sum.pastEdge, taken }, null, 1)}\n`)
   console.log(failures.length ? '\nno baseline written: the run fails' : `\nbaseline written: ${BASELINE}`)
 } else if (!existsSync(BASELINE)) failures.push('no baseline (WRITE_BASELINE=1 records one)')
 else {
@@ -188,8 +231,15 @@ else {
   const known = new Set(base.cuts)
   for (const c of cuts) if (!known.has(c)) failures.push(`a cut not in the baseline: ${c}`)
   if (sum.pastEdge > base.pastEdge) failures.push(`words past the column's edge ${sum.pastEdge}, the baseline ${base.pastEdge}`)
+  // what the geometry takes beyond the anchors moves only when meant (and is recorded again then)
+  for (const id of ids) for (const S of ['L', 'R']) {
+    const now = taken[id]?.[S], was = base.taken?.[id]?.[S]
+    if (!was) { failures.push(`${id} ${S}: no baseline of what the geometry takes`); continue }
+    for (const f of ['filled', 'cells3em', 'padOverlaps']) if (now[f] !== was[f]) failures.push(`${id} ${S} ${f} ${now[f]}, the baseline ${was[f]}`)
+    for (const kk of new Set([...Object.keys(now.heads), ...Object.keys(was.heads)])) if ((now.heads[kk] ?? 0) !== (was.heads[kk] ?? 0)) failures.push(`${id} ${S} heads of ${kk} ${now.heads[kk] ?? 0}, the baseline ${was.heads[kk] ?? 0}`)
+  }
 }
 mkdirSync(join(root, 'out'), { recursive: true })
-writeFileSync(join(root, 'out/highlight-gate.json'), JSON.stringify({ ids, tally, cost, cuts, inkHoles, overlaps, counts }, null, 1))
-console.log(failures.length ? `\nFAIL: ${failures.slice(0, 20).join('; ')}${failures.length > 20 ? ` (and ${failures.length - 20} more)` : ''}` : '\nok: every anchored unit lit, no hole, no ink hole, no fragmented display, no unit\'s blocks overlapping, the baseline met')
+writeFileSync(join(root, 'out/highlight-gate.json'), JSON.stringify({ ids, tally, cost, cuts, inkHoles, overlaps, unreachable, counts, taken }, null, 1))
+console.log(failures.length ? `\nFAIL: ${failures.slice(0, 20).join('; ')}${failures.length > 20 ? ` (and ${failures.length - 20} more)` : ''}` : '\nok: every anchored unit lit and reachable, no hole, no ink hole, no fragmented display, no unit\'s blocks overlapping, the baseline met')
 process.exitCode = failures.length ? 1 : 0

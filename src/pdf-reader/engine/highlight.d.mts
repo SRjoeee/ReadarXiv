@@ -10,7 +10,8 @@ export interface Run { id: number; page: number; col: 'F' | 'L' | 'R'; x0: numbe
 export interface Layout { readonly pagesOf: Map<number, number[]> }
 
 export declare function layoutOf(doc: DocToken[], views: number[][], anchors: Map<number, Anchor | null>, kindOf?: (id: number) => string | undefined): Layout
-export declare function pageGeometry(layout: Layout, page: number): { runs: Run[]; byId: Map<number, Run[]> }
+/** a page's runs; the units whose head it took and the words it filled in (for the gate) */
+export declare function pageGeometry(layout: Layout, page: number): { runs: Run[]; byId: Map<number, Run[]>; heads: number[]; filled: number }
 export declare function runsOf(layout: Layout | null | undefined, id: number): Run[]
 export declare function blockOf(run: Run, padX: number): { page: number; x0: number; y0: number; x1: number; y1: number }
 export declare function hitOf(layout: Layout | null | undefined, page: number, x: number, y: number, padX: number): { id: number; run: Run } | null

@@ -158,9 +158,10 @@ function colOf(P, x0, x1) {
 }
 
 /**
- * A page's runs, made on the page's first use and kept: { runs, byId } — every run of every unit on the page, and each
- * unit's runs there. A run: { id, page, col, x0, x1, top, bottom, lead, rows: [{ y0, y1, x0, x1 }], mids } in PDF units,
- * `mids` the boundaries between its rows.
+ * A page's runs, made on the page's first use and kept: { runs, byId, heads, filled } — every run of every unit on the
+ * page, and each unit's runs there; and what the geometry took beyond the anchors, which the gate holds to its
+ * baseline: the units whose head it took, the words it filled in. A run: { id, page, col, x0, x1, top, bottom, lead,
+ * rows: [{ y0, y1, x0, x1 }], mids } in PDF units, `mids` the boundaries between its rows.
  */
 export function pageGeometry(L, p) {
   let g = L.cache.get(p)
@@ -199,20 +200,21 @@ export function pageGeometry(L, p) {
     const o = owner[i], j = lineOf[i]
     if (o !== -1) lineOwner[j] = lineOwner[j] === -1 || lineOwner[j] === o ? o : -2
   }
-  const at = { k0, lines, lineOf, owner, lineOwner }
+  const at = { k0, lines, lineOf, owner, lineOwner, heads: [], filled: 0 }
   const runs = [], byId = new Map()
   for (const [id, toks] of mine) {
     const rs = unitRuns(L, p, at, id, toks)
     byId.set(id, rs)
     runs.push(...rs)
   }
-  g = { runs, byId }
+  g = { runs, byId, heads: at.heads, filled: at.filled }
   L.cache.set(p, g)
   return g
 }
 
 /** a unit's runs on page p, from its tokens there */
-function unitRuns(L, p, { k0, lines, lineOf, owner, lineOwner }, id, toks) {
+function unitRuns(L, p, at, id, toks) {
+  const { k0, lines, lineOf, owner, lineOwner } = at
   const { l: inkL, r: inkR } = L.tok, P = L.page[p]
   const line = k => lineOf[k - k0]
   const lineOk = k => { const o = lineOwner[line(k)]; return o === -1 || o === id }
@@ -230,7 +232,7 @@ function unitRuns(L, p, { k0, lines, lineOf, owner, lineOwner }, id, toks) {
       let foreign = false
       for (let k = a + 1; k < b && !foreign; k++) foreign = owner[k - k0] !== -1 && owner[k - k0] !== id
       if (foreign) continue
-      for (let k = a + 1; k < b; k++) if (owner[k - k0] === -1 && lines[line(k)].col === lines[line(a)].col && lineOk(k)) ks.push(k)
+      for (let k = a + 1; k < b; k++) if (owner[k - k0] === -1 && lines[line(k)].col === lines[line(a)].col && lineOk(k)) { ks.push(k); at.filled++ }
     }
   }
   // the unit's head: the words before its first on its line that are no unit's, after any other unit's there — a
@@ -251,7 +253,7 @@ function unitRuns(L, p, { k0, lines, lineOf, owner, lineOwner }, id, toks) {
     const x = m.get(ln)
     if (x) { if (inkL[k] < x.x0) x.x0 = inkL[k]; if (inkR[k] > x.x1) x.x1 = inkR[k] } else m.set(ln, { x0: inkL[k], x1: inkR[k] })
   }
-  if (head !== null) { const x = byCol.get(lines[line(first)].col)?.get(line(first)); if (x && head < x.x0) x.x0 = head }
+  if (head !== null) { const x = byCol.get(lines[line(first)].col)?.get(line(first)); if (x && head < x.x0) { x.x0 = head; at.heads.push(id) } }
   const runs = []
   for (const [col, m] of byCol) {
     const e = P.cols[col] ?? P.cols.F

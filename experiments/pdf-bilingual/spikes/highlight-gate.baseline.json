@@ -1,5 +1,5 @@
 {
- "note": "highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge. Counts only",
+ "note": "highlight-gate.mjs: per paper, side and kind, units anchored and lit; the runs cut by a line; the words past the column edge; per paper and side, what the geometry took beyond the anchors. Counts only",
  "counts": {
   "2608.02163": {
    "L": {
@@ -922,5 +922,296 @@
   "2608.03063#90 L p6L ×2",
   "2608.06701#227 R p8R ×2"
  ],
- "pastEdge": 6
+ "pastEdge": 6,
+ "taken": {
+  "2608.02163": {
+   "L": {
+    "cells3em": 0,
+    "heads": {
+     "caption": 17,
+     "cell": 34,
+     "paragraph": 10
+    },
+    "filled": 0,
+    "padOverlaps": 20
+   },
+   "R": {
+    "cells3em": 0,
+    "heads": {
+     "caption": 17,
+     "cell": 45
+    },
+    "filled": 0,
+    "padOverlaps": 22
+   }
+  },
+  "2608.02785": {
+   "L": {
+    "cells3em": 0,
+    "heads": {
+     "abstract": 1,
+     "section": 3,
+     "theorem-like body": 21,
+     "caption": 2,
+     "theorem with a display": 5,
+     "footnote": 1
+    },
+    "filled": 82,
+    "padOverlaps": 13
+   },
+   "R": {
+    "cells3em": 0,
+    "heads": {
+     "title": 1,
+     "abstract": 1,
+     "section": 3,
+     "theorem-like body": 21,
+     "caption": 2,
+     "theorem with a display": 5,
+     "footnote": 1
+    },
+    "filled": 53,
+    "padOverlaps": 4
+   }
+  },
+  "2608.02991": {
+   "L": {
+    "cells3em": 0,
+    "heads": {
+     "run-in head": 1,
+     "section": 5,
+     "subsection": 19,
+     "list item": 2,
+     "theorem-like body": 7,
+     "theorem with a display": 28,
+     "subsubsection": 7,
+     "caption": 9,
+     "cell": 6
+    },
+    "filled": 2,
+    "padOverlaps": 6
+   },
+   "R": {
+    "cells3em": 0,
+    "heads": {
+     "run-in head": 1,
+     "section": 5,
+     "subsection": 19,
+     "list item": 2,
+     "theorem-like body": 7,
+     "theorem with a display": 28,
+     "caption": 9,
+     "cell": 6,
+     "subsubsection": 7
+    },
+    "filled": 3,
+    "padOverlaps": 2
+   }
+  },
+  "2608.03063": {
+   "L": {
+    "cells3em": 0,
+    "heads": {
+     "section": 10,
+     "list item": 4,
+     "caption": 18,
+     "subsection": 16,
+     "paragraph": 24,
+     "cell": 12,
+     "footnote": 1
+    },
+    "filled": 8,
+    "padOverlaps": 18
+   },
+   "R": {
+    "cells3em": 0,
+    "heads": {
+     "section": 10,
+     "list item": 4,
+     "caption": 18,
+     "subsection": 16,
+     "paragraph": 26,
+     "cell": 10,
+     "TikZ text": 1
+    },
+    "filled": 3,
+    "padOverlaps": 14
+   }
+  },
+  "2608.06701": {
+   "L": {
+    "cells3em": 0,
+    "heads": {
+     "abstract": 1,
+     "section": 7,
+     "caption": 21,
+     "paragraph": 7,
+     "footnote": 7,
+     "subsection": 5,
+     "subsubsection": 8
+    },
+    "filled": 0,
+    "padOverlaps": 10
+   },
+   "R": {
+    "cells3em": 0,
+    "heads": {
+     "abstract": 1,
+     "section": 7,
+     "caption": 21,
+     "paragraph": 3,
+     "footnote": 7,
+     "subsection": 5,
+     "subsubsection": 8,
+     "cell": 2
+    },
+    "filled": 0,
+    "padOverlaps": 11
+   }
+  },
+  "2608.07683": {
+   "L": {
+    "cells3em": 0,
+    "heads": {
+     "section": 4,
+     "subsection": 10,
+     "theorem with a display": 33,
+     "theorem-like body": 23
+    },
+    "filled": 39,
+    "padOverlaps": 14
+   },
+   "R": {
+    "cells3em": 0,
+    "heads": {
+     "section": 4,
+     "subsection": 10,
+     "theorem with a display": 33,
+     "theorem-like body": 23
+    },
+    "filled": 30,
+    "padOverlaps": 6
+   }
+  },
+  "2608.08350": {
+   "L": {
+    "cells3em": 0,
+    "heads": {
+     "section": 13,
+     "caption": 11,
+     "subsection": 34,
+     "footnote": 6,
+     "run-in head": 18,
+     "paragraph with a display": 6,
+     "paragraph": 2
+    },
+    "filled": 109,
+    "padOverlaps": 19
+   },
+   "R": {
+    "cells3em": 0,
+    "heads": {
+     "section": 13,
+     "caption": 11,
+     "subsection": 34,
+     "footnote": 6,
+     "run-in head": 19,
+     "paragraph with a display": 5
+    },
+    "filled": 136,
+    "padOverlaps": 13
+   }
+  },
+  "2608.09746": {
+   "L": {
+    "cells3em": 0,
+    "heads": {
+     "section": 2,
+     "subsection": 7,
+     "list item": 3,
+     "theorem-like body": 13,
+     "theorem with a display": 6
+    },
+    "filled": 49,
+    "padOverlaps": 0
+   },
+   "R": {
+    "cells3em": 0,
+    "heads": {
+     "section": 2,
+     "subsection": 7,
+     "list item": 3,
+     "theorem-like body": 13,
+     "theorem with a display": 6
+    },
+    "filled": 55,
+    "padOverlaps": 0
+   }
+  },
+  "2608.12502": {
+   "L": {
+    "cells3em": 0,
+    "heads": {
+     "abstract": 1,
+     "paragraph": 8,
+     "section": 5,
+     "list item": 3,
+     "subsection": 22,
+     "subsubsection": 20,
+     "caption": 6,
+     "cell": 6
+    },
+    "filled": 4,
+    "padOverlaps": 3
+   },
+   "R": {
+    "cells3em": 0,
+    "heads": {
+     "abstract": 1,
+     "paragraph": 7,
+     "section": 5,
+     "list item": 3,
+     "subsection": 22,
+     "subsubsection": 20,
+     "caption": 6,
+     "cell": 3,
+     "TikZ text": 1
+    },
+    "filled": 0,
+    "padOverlaps": 16
+   }
+  },
+  "2608.29181": {
+   "L": {
+    "cells3em": 0,
+    "heads": {
+     "section": 5,
+     "subsection": 12,
+     "theorem-like body": 14,
+     "theorem with a display": 46,
+     "paragraph with a display": 1,
+     "paragraph": 3,
+     "caption": 5,
+     "subsubsection": 2
+    },
+    "filled": 232,
+    "padOverlaps": 4
+   },
+   "R": {
+    "cells3em": 0,
+    "heads": {
+     "section": 5,
+     "subsection": 12,
+     "theorem-like body": 15,
+     "theorem with a display": 46,
+     "paragraph with a display": 1,
+     "paragraph": 3,
+     "caption": 5,
+     "subsubsection": 2
+    },
+    "filled": 178,
+    "padOverlaps": 6
+   }
+  }
+ }
 }
