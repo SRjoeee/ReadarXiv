@@ -1341,8 +1341,8 @@
    "throughInk": 10
   },
   "2608.29181": {
-   "aligned": 110,
-   "alignedMulti": 80,
+   "aligned": 109,
+   "alignedMulti": 79,
    "throughInk": 0
   }
  },
@@ -1391,16 +1391,16 @@
   },
   "2608.02459": {
    "O": {
-    "withTruth": 655,
-    "sameLine": 650
+    "withTruth": 653,
+    "sameLine": 649
    },
    "T": {
-    "withTruth": 655,
-    "sameLine": 653
+    "withTruth": 651,
+    "sameLine": 651
    },
    "AX": {
-    "withTruth": 654,
-    "sameLine": 647
+    "withTruth": 646,
+    "sameLine": 641
    }
   }
  }

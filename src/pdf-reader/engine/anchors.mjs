@@ -780,11 +780,13 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
 
 /**
  * Where each of a unit's sentences after the first begins on the page (report-B option X): the page token of its first
- * word, as the unit's own text match inside its marks found it — the sentence's next word it found where it did not find
- * the first, never a word of the next sentence. `anchor` the unit's place (anchorUnits: a unit with marks), `text` the
- * text it was anchored by, `offsets` where each sentence after the first begins in it (mt.mjs sentencesOf: `src` on the
- * left, `tr` on the right). An Int32Array rising, each start after the unit's first token and among its tokens; empty
- * for a unit of one sentence; null where a sentence's start is not found — the unit is lit whole then, on both sides
+ * word, as the unit's own text match inside its marks found it — the sentence's second or third word it found where it
+ * did not find the first, never a word of the next sentence. `anchor` the unit's place (anchorUnits: a unit with marks),
+ * `text` the text it was anchored by, `offsets` where each sentence after the first begins in it (mt.mjs sentencesOf:
+ * `src` on the left, `tr` on the right). An Int32Array rising, each start after the unit's first token and among its
+ * tokens; empty for a unit of one sentence; null where a sentence's start is not found — nor among its next two words
+ * (on the ten papers 9 of 4 230 starts were found late, six by two words and one by eight: a start so late puts the
+ * words before it in the sentence before; the review of B3, minor 6) — the unit is lit whole then, on both sides
  */
 export function sentenceStarts(anchor, text, offsets) {
   const pairs = anchor?.pairs
@@ -792,7 +794,7 @@ export function sentenceStarts(anchor, text, offsets) {
   const at = offsets.map(o => tokens(text.slice(0, o)).length), ts = anchor.tokens, out = new Int32Array(offsets.length)
   const has = k => { let lo = 0, hi = ts.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] < k) lo = m + 1; else hi = m } return ts[lo] === k }
   for (let j = 0; j < at.length; j++) {
-    const end = j + 1 < at.length ? at[j + 1] : tokens(text).length
+    const end = Math.min(at[j] + 1 + LATE, j + 1 < at.length ? at[j + 1] : Infinity)
     let k = -1
     for (let i = at[j]; i < end && k < 0; i++) { const t = pairs.get(i); if (t !== undefined && has(t)) k = t }
     if (k < 0 || k <= (j ? out[j - 1] : ts[0])) return null
@@ -800,4 +802,5 @@ export function sentenceStarts(anchor, text, offsets) {
   }
   return out
 }
-
+/** how many words after a sentence's first its start may be found at */
+const LATE = 2

@@ -493,6 +493,16 @@ describe('sentenceStarts: where each sentence after the first begins on the page
     expect(sentenceStarts(found.get(0), text, [text.indexOf('Delta'), text.indexOf('epsilon')])).toBeNull()
   })
 
+  it('a first word found more than two words late: no sentences, the unit lit whole (the review of B3, minor 6)', () => {
+    // the second sentence's first two words, then its first three, not found on the page
+    const late = (a: string, b: string, c: string) => [page([['Alpha', 'beta', 'gamma.', a, b], [c, 'eta.', 'Theta', 'iota', 'kappa.']])]
+    const two = anchors(late('Deltas', 'epsilons', 'zeta'), [{ id: 0, text }], [[0, 0, 9]])
+    expect([...(sentenceStarts(two.found.get(0), text, [text.indexOf('Delta'), text.indexOf('Theta')]) ?? [])].map(k => two.doc[k]?.t)).toEqual(['zeta', 'theta'])
+    const three = anchors(late('Deltas', 'epsilons', 'zetas'), [{ id: 0, text }], [[0, 0, 9]])
+    expect(three.found.get(0)?.tokens.length).toBeGreaterThan(0)
+    expect(sentenceStarts(three.found.get(0), text, [text.indexOf('Delta'), text.indexOf('Theta')])).toBeNull()
+  })
+
   it('a unit without marks, offsets that do not rise inside the text, or no offsets: none', () => {
     const { found } = anchors(lines(), [{ id: 0, text }], [])
     expect(sentenceStarts(found.get(0), text, [text.indexOf('Delta')])).toBeNull()
