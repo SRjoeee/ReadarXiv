@@ -164,14 +164,26 @@ general, a holdout in the languages the rule serves, and a gate that checks each
   within 30 pt 20 → 18). Results of another TeX image or of other rule files are refused as stale. `DRAFT=1` makes the
   measuring compile as the reader may (one pass, images as frames, today's references) and the final from it: on the
   fresh holdout the same final as a full measuring compile gives, on all 40, once the references went where TeX reads
-  them (a main file in a folder, 2608.12333's, had none in any one-pass compile).
+  them (a main file in a folder, 2608.12333's, had none in any one-pass compile). A second review (2026-10-02) found
+  the per-paper check blind to a shift of every paper by less than its slack (0.029 column passed): each whole set is
+  held to the record's baseline again (pages equal, drift +0.005, shares −1 point, units standing out +0.25 % of the
+  measured units), the draft-measured final is checked as the final (equal on all 109), and a page count that crosses
+  (−1 → +1) fails. The record is rewritten only with an adopted change (the gate's header).
 - **A page's columns are read where its units were set**, not only as the page goes out: revtex's and aastex's grid
   closes at `\end{document}` before the last page goes out, and every such last page read one column. A page now reads
   the most columns of any mark on it and of the page as it went out (a native revtex case). Today's drift moved (round
-  0.731 → 0.738, new language 0.679 → 0.685); the rule's did not.
+  0.731 → 0.738, new language 0.679 → 0.685); the rule's did not. A last page of references alone, after the grid
+  closed, still read one (2608.20847's page 9): the columns are sampled as `\end{document}` begins too, natively and
+  under BusyTeX (`spikes/typeset-busytex-cases.mjs`). aastex631's references close their own grid before the
+  document's end, and 2608.12606's page 20 still reads one; no unit is set there.
 - **A plan sets only what it was made for.** `finalTypesetting` refuses a plan made on another translation than the
   one it sets (the measuring compile must hold the whole translation); a plan given another strategy sets the
-  translation as today, and the wiring is told (`note('typeset refused')`). Neither throws.
+  translation as today, and the wiring is told (`note('typeset refused')`). Neither throws. The same translation is
+  the same pieces in content, not the same arrays: the reader replaces a unit's array whenever a batch answers it, and
+  a seeded run sends every unit again, so a check by identity would have refused the measuring preview's plan.
+- **A forced break before a unit the flow does not measure** (a paragraph holding a display) is taken at the next unit
+  it does: 2608.09038's `\clearpage` before one had left its whole paper one segment (its final changed, not its
+  numbers).
 
 Tried and not taken:
 

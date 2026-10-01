@@ -112,9 +112,10 @@ Natively (Docker, two CPUs), the four compiles of a paper — font probe, origin
 for the preview's plan and 1–4 ms for the final's (German 2608.02785, 96 units).
 
 One compile more than today: font probe, original, measuring compile, final, plus whatever progressive previews the
-reader shows — and the measuring compile can be the last preview, a draft (above). The original was already compiled once per paper. The rule's own computation is pure JavaScript, a few
-milliseconds (above). A third compile when the final still has more pages than the original would recover Korean 2608.18090;
-the owner declined it for now (performance).
+reader shows — and the measuring compile can be the last preview, a draft (above). The original was already compiled
+once per paper. The rule's own computation is pure JavaScript, a few milliseconds (above). A third compile when the
+final still has more pages than the original would recover Korean 2608.18090; the owner declined it for now
+(performance).
 
 What to cache with a paper's record, so that a revisit or a new language compiles nothing extra:
 - the original's line readings (`readLines`), forced breaks (`readForced`), whether its log is whole (`completeLog`)
@@ -127,7 +128,8 @@ What to cache with a paper's record, so that a revisit or a new language compile
 The rule was measured under native TeX Live. In the reader, before relying on it:
 1. Run `typeset-tex-cases.mjs`'s documents through BusyTeX (they use `pdflatex` and `xelatex`, `lipsum`, `booktabs`,
    `adjustbox`, `caption`, `hyperref`, `xeCJK` with FandolSong) and compare the logged values. Every case states the
-   value native TeX gives.
+   value native TeX gives. `typeset-busytex-cases.mjs` does so already for the page columns at the end of a revtex
+   paper, under BusyTeX's pdfTeX and XeTeX in Chromium (with the package server): they agree with native TeX.
 2. Check that the log lines the rule reads reach the reader: `AXT-LINES`, `AXT-FORCED` (written with `\message`, not
    `\typeout`: `\typeout` reads `\prevgraf` as 0), `AXT-END`, `AXT-WIDTH`, `AXT-SIZE` — the readers take the last TeX
    pass of the browser compiler's joined log (`lastTexLog`; read whole, the terminal's echo invented forced breaks) —
@@ -139,11 +141,13 @@ The rule was measured under native TeX Live. In the reader, before relying on it
 ## Acceptance
 
 - `pnpm typecheck && pnpm lint && pnpm test && pnpm build`.
-- `pnpm exec tsx experiments/pdf-bilingual/spikes/typeset-tex-cases.mjs`: all passed (native).
-- `AXT_DATA=<data folder> pnpm exec tsx experiments/pdf-bilingual/spikes/typeset-gate.mjs`: the rule holds its
-  baseline (`records/typeset-gate.json`). The data folder is the experiment's, kept outside git: each paper's source
-  (`corpus/<id>/source.gz`), its translation (`runs/visual-eval/<lang>/<id>/translation.json`) and `metafont/`. The
-  gate's header says how to run part of it, a parameter (`VARY`) or a change (`TAG`) against the baseline. (The
+- `pnpm exec tsx experiments/pdf-bilingual/spikes/typeset-tex-cases.mjs`: all passed (native);
+  `typeset-busytex-cases.mjs`: all passed (BusyTeX).
+- `ASIDE=1 DRAFT=1 AXT_DATA=<data folder> pnpm exec tsx experiments/pdf-bilingual/spikes/typeset-gate.mjs`: every
+  paper and every set holds its record (`records/typeset-gate.json`), the final measured from a draft included; the
+  header says when the record may be rewritten. The data folder is the experiment's, kept outside git: each paper's
+  source (`corpus/<id>/source.gz`), its translation (`runs/visual-eval/<lang>/<id>/translation.json`) and `metafont/`.
+  The gate's header says how to run part of it, a parameter (`VARY`) or a change (`TAG`) against the record. (The
   handed-over equivalence check against `round-34.json`, `typeset-check.mjs`, is superseded by it: 32 of 34 papers
   matched the experiment's record then; German and Korean 2608.15761 were the experiment's own code's result too.)
 - Once wired, the same papers in the reader: the gate's numbers within noise, and no compile slower than today's by
@@ -151,14 +155,35 @@ The rule was measured under native TeX Live. In the reader, before relying on it
 
 ## Limits known
 
-- One paper keeps a page more, and is the one further from its original's pages than today: Chinese 2608.09038 (+1,
-  today 0): its main text ends about a third of a column late, and the references before a `\clearpage` spill onto a
-  page of their own. (Korean 2608.18090 and Russian 2608.06233 are level since the final keeps the preview's type.)
+- Three papers end a page further from their original's count than today — Chinese 2608.09038 (+1, today 0), Korean
+  2608.15016 (+1, today 0; and a page long in Japanese, German and Russian), Japanese 2608.09746 (+1, today 0) — each
+  the untranslated bibliography spilling from a page the original left nearly full (about 6 pt of room in 15016, 45
+  pt in 09038 and 09746). In 09038 and 09746 the main text ends about 190 pt late; the CJK face step set 25 and 19
+  units at 0.95 and still left it late, reaching only the units the flow measures (39 and 50 % of the translated
+  units). In Korean and Japanese 15016 the main text ends 27–30 pt late, under the face step's three lines; in German
+  and Russian a table goes a page late in the measuring compile and the final alike. (Korean 2608.18090 and Russian
+  2608.06233 are level since the final keeps the preview's type.)
+- **Not done; a research item after F2: a segment's end held to the room its original left.** At a forced break or
+  the document's end, take the room the original left on that page as the tolerance, and aim the segment's text and
+  floats to arrive within it from the measuring compile, with every translated unit of the late stretch, display
+  units included (lateness before the boundary costs a page; earliness, blank space at a page's foot). Its two cheaper
+  pieces, measured by the re-review of 2026-10-02 on the gate: **the face where it stands** — a unit the flow does not
+  measure takes the face the flow set where it stands, as it takes the leading (three lines in `typesettingOf`) —
+  changes only the 24 CJK finals that set a face: 2608.09038 +1 → 0 pages, start drift 0.199 → 0.027; Japanese
+  2608.09746 +1 → 0, 0.244 → 0.164; the other 22 level in pages; mean start drift over the 24 0.086 → 0.076; but it
+  fails the gate on 2608.20847, display-heavy (Chinese end drift 0.294 → 0.344, Korean 0.027 → 0.058, Japanese and
+  Korean floats within 30 pt 5 → 3). And **a face-step threshold set by that room** rather than three lines (Korean
+  and Japanese 2608.15016). A float sent a page late (German and Russian 2608.15016) needs a trigger of its own: the
+  hold only keeps floats from going early.
 - One page short: German 2608.15761; and, as today, Chinese 2608.12606 and 2608.24839.
 - Under CJKutf8 the density model is xeCJK's (its glue beside Latin, its punctuation); the final, keeping the preview's
   type, no longer re-solves it from the measured density, and Japanese 2608.06701 there ends at start drift 0.223
   (today 0.436; solved again, 0.040). A width model for CJKutf8 would close it.
-- A page whose layout changes mid-page (revtex's and aastex's grids) is read in the layout it went out in.
+- A page whose layout changes mid-page (revtex's and aastex's grids) is read in the most columns any of its marks, its
+  shipout or the document's end saw: a one-column stretch on a two-column page reads as two. A last page whose grid
+  closed before the document's end with no unit mark on it still reads one: aastex631's two-column references end
+  their grid themselves, and 2608.12606's page 20 reads one column (no unit is set there; it would matter only to a
+  translation that ran a page past it).
 - A short abstract can be set too tall (Japanese and Korean 2608.15761): the front matter takes its neighbours' leading.
 - The macros go on translated units only. A unit left in English keeps the paper's own setting; the flow counts it
   at its original's height.
