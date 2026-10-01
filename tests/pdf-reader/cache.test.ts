@@ -50,23 +50,23 @@ describe('the record keeps the sentences of the translation it keeps', () => {
 
   it('unitsOf: a result\'s sentences with its pieces; none where the result has none, or no pieces', () => {
     const results = new Map<number, unknown>([
-      [0, { pieces: tr('一。二。'), state: 'whole', by: 'ms', tried: 'ms', sentences: { src: [5], tr: [2] } }],
-      [1, { pieces: tr('三。'), state: 'whole', by: 'ms', tried: 'ms' }],
+      [0, { pieces: tr('Eins. Zwei.'), state: 'whole', by: 'ms', tried: 'ms', sentences: { src: [5], tr: [6] } }],
+      [1, { pieces: tr('Drei.'), state: 'whole', by: 'ms', tried: 'ms' }],
       [2, { state: 'lost', tried: 'ms', sentences: { src: [], tr: [] } }],
     ])
     const out = unitsOf(units as never, new Set(), ['a', 'b', 'c'], results)
-    expect(out[0]).toMatchObject({ tr: '一。二。', sentences: { src: [5], tr: [2] } })
+    expect(out[0]).toMatchObject({ tr: 'Eins. Zwei.', sentences: { src: [5], tr: [6] } })
     expect(out[1]).not.toHaveProperty('sentences')
     expect(out[2]).not.toHaveProperty('sentences')
   })
 
   it('seedFrom: a seed carries the sentences of the translation it seeds; a copy made before carries none', async () => {
     const record = { units: [
-      { kind: 'para', src: 'One. Two.', hash: await sourceHash(units[0] as never), pieces: tr('一。二。'), by: 'ms', tried: 'ms', state: 'whole', sentences: { src: [5], tr: [2] } },
-      { kind: 'para', src: 'Three.', hash: await sourceHash(units[1] as never), pieces: tr('三。'), by: 'ms', tried: 'ms', state: 'whole' },
+      { kind: 'para', src: 'One. Two.', hash: await sourceHash(units[0] as never), pieces: tr('Eins. Zwei.'), by: 'ms', tried: 'ms', state: 'whole', sentences: { src: [5], tr: [6] } },
+      { kind: 'para', src: 'Three.', hash: await sourceHash(units[1] as never), pieces: tr('Drei.'), by: 'ms', tried: 'ms', state: 'whole' },
     ] }
     const { seed } = await seedFrom(record as never, units as never)
-    expect(seed.get(0)).toMatchObject({ sentences: { src: [5], tr: [2] } })
+    expect(seed.get(0)).toMatchObject({ sentences: { src: [5], tr: [6] } })
     expect(seed.get(1)).not.toHaveProperty('sentences')
   })
 })
