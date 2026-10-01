@@ -2117,7 +2117,8 @@ async function live() {
     const said = await Promise.race([ready, new Promise(r => setTimeout(r, 10000, null))])
     if (!said) {
       frame.remove()
-      throw Object.assign(new Error(`The TeX page is not running at ${site}: start it with node spikes/serve-live.mjs`), { event: 'no compiler' })
+      // our site's in a production build; one on this machine (http) is started by hand (addresses.mjs TEX_PAGE)
+      throw Object.assign(new Error(`The TeX page at ${site} did not answer${site.startsWith('http:') ? ': start it with node spikes/serve-live.mjs' : ''}`), { event: 'no compiler' })
     }
     return { frame, version: said.protocol === 2 ? [said.cv, said.eid, said.tid, said.index].join('/') : '1' }
   })().catch(e => { frameP = null; throw e }))
