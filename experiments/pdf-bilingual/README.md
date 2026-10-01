@@ -15,9 +15,11 @@ Rules and techniques here are expected to change; what settles is to be refactor
 |---|---|
 | `../../src/pdf-reader/engine/` | The reader's engine, in the extension's source since 2026-09-25 (the extension's page `pdf-reader.html`, `src/entrypoints/pdf-reader/`, hosts it). `live.mjs` is the translation pipeline (viewport-first translation, progressive previews, final compile); `latex-front.mjs` reads and patches the LaTeX source (units, marks, engine shims); `scripts.mjs` is how each writing system is typeset (engine, encoding or faces, line spacing, babel's locale); `anchors.mjs` locates every unit on both PDFs; `engine.mjs` reaches the extension's translation chain; `mt.mjs` puts units into its wire formats and back (and holds the Microsoft client the Node spikes use); `figures.mjs` finds figure text in a PDF; `session.mjs` is the viewers, the sync and the click alignment. |
 | `poc-reader/papers/` | The demo papers, made locally by `spikes/reader-papers.mjs` and never committed; the probes stage them into a copy of the build. |
-| `poc-site/` | "Our site": the TeX page the reader frames, running BusyTeX. |
+| `poc-site/` | "Our site": the TeX page the reader frames, running BusyTeX. `tex-page.mjs` is its protocol (version 2, and version 1 still answered), `tex-tree.mjs` the TeX Live tree's file index, `tex-worker.js` its additions to BusyTeX's worker; `tex.js` wires them. |
+| `tex-page/` | The TeX page made fast to load (stage 3): `build.mjs` builds the site (out/tex-site) — the page, BusyTeX with our patches and its preloaded tier split by engine, the tree's index, the manifest of files fetched ahead — from `measured.json`, which `measure.mjs --mode=record` and `derive.mjs` measure on the corpus; `serve.mjs` serves it as a CDN would (or through a slow link); `measure.mjs --mode=identity`, `speed.mjs`, `fd-check.mjs` and `reader-check.mjs` are its checks. Each file's header says how to run it. |
 | `spikes/` | Measurement and verification scripts; each file's header says what it measures and how to run it. A spike that imports the engine runs with tsx from the repository root (`pnpm exec tsx experiments/pdf-bilingual/spikes/<name>.mjs`), since the engine imports the extension's source by `@/`; the case spikes (`*-cases.mjs`) exit non-zero on a failure. `lang-gate.mjs` is the multi-language gate: run it before and after any change to how a translation is typeset. |
 | `busytex/research.diff` | Our patches to BusyTeX's pipeline and biber drivers. |
+| `busytex/tree.diff` | Our patch to BusyTeX's remote file fetch: the TeX page's index and tree answer it. |
 | `upstream/` | The same fixes as filed upstream, with self-made reproductions. |
 
 ## Setup
@@ -33,9 +35,13 @@ Rules and techniques here are expected to change; what settles is to be refactor
    then copy `data/metafont/tfm` to `texmf-dist/fonts/tfm/axt-metafont/` and restart the server, which indexes at start.
 5. Optional: 600 dpi PK files for METAFONT-only fonts (for example `bbm10`, `bbm7`) generated natively with `mktexpk`,
    in `data/pk-flat` — without them, papers that use such fonts do not compile in the browser (`upstream/`, issue E).
+6. Here: `node tex-page/build.mjs` — the TeX page's site in `out/tex-site`, from the tree of step 4 (`TEXLIVE_TREE`,
+   by default the one beside the corpus). Needs Python 3 and git (it fetches Emscripten's file packager once) and
+   takes about ten minutes the first time (brotli copies, kept in `out/tex-br`).
 
 Run:
-1. `node spikes/serve-live.mjs` here, for our site's TeX page, with the file server of Setup's step 4 running.
+1. `node spikes/serve-live.mjs` here, for our site's TeX page and its tree (Setup's step 6; the file server of step 4
+   is not needed by the page, only by the spikes that run BusyTeX themselves).
 2. At the repository root, `pnpm dev` (or `pnpm build`). Every build of the extension holds the reader.
 3. Load `.output/chrome-mv3-dev` (or `.output/chrome-mv3`) unpacked in Chrome.
 4. Open any arXiv PDF (`arxiv.org/pdf/<id>`). The reader is laid over it, in the display last chosen; a button goes back to the browser's viewer. Its own page is `chrome-extension://<its id>/pdf-reader.html?live=1&paper=<id>`. Until the interface's part of the plan (`plans/2026-09-25-reader-interface.md`, Part 3) the page has no bar: the probes drive it through `window.__reader.controller`.

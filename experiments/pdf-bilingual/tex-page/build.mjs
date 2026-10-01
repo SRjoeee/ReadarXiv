@@ -19,10 +19,9 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
-import { promisify } from 'node:util'
-import { brotliCompress, constants } from 'node:zlib'
 import { indexText, parseIndex, resolve } from '../poc-site/tex-tree.mjs'
-import { slimSets } from './manifest.mjs'
+import { buildManifest, REFERENCE, scannedOnly, slimSets, worth } from './manifest.mjs'
+import { brotliSizes, brotliTo } from './sizes.mjs'
 import { chooseIndex, versionOf, walk } from './tree.mjs'
 
 const HERE = new URL('.', import.meta.url).pathname
@@ -125,11 +124,13 @@ say(`the tree: ${paths.length} files, ${index.size} basenames, ${inBasic.size} a
 
 // ---------------------------------------------------------------- 3. the preloaded tier split by engine
 
-const parts = slimSets(basic, { pdflatex: new Set(measured.slim.pdflatex), xelatex: new Set(measured.slim.xelatex) }, {
-  // XeLaTeX's fontconfig opens every font of the tier the first time a compile looks a font up by name; no compile of
-  // the corpus needs a Type 1 or AFM font that way (identity, S3a report): those stay in the rest. (ICU's data stays
-  // in: XeTeX opens its converters at every start, and stops without them — "cannot read font names")
-  leave: { xelatex: p => p.includes('/fonts/type1/') || p.includes('/fonts/afm/') },
+// what is worth fetching ahead over the reference link (manifest.mjs worth): a file the share of the papers needs
+const keep = worth(REFERENCE)
+const opened = new Set(basic.filter(f => Object.values(measured.opened).some(d => d.shares[f] !== undefined)))
+const basicSizes = await brotliSizes([...opened].map(f => join(BASIC, f)))
+const kept = Object.fromEntries(Object.entries(measured.opened).map(([engine, { shares }]) => [engine, new Set(Object.entries(shares)
+  .filter(([f, share]) => !scannedOnly(engine, f) && basicSizes.has(join(BASIC, f)) && keep(basicSizes.get(join(BASIC, f)), share)).map(([f]) => f))]))
+const parts = slimSets(basic, kept, {
   // the tier's small files the tree does not hold as they are (configuration, maps; not other engines' formats and
   // caches), and its configuration outside the tree: a compile could not fetch them
   always: p => statSync(join(BASIC, p)).size < 256 * 1024 && !/\/texmf-var\/(web2c|luatex-cache)\//.test(p) && (!p.startsWith(DIST) || !inBasic.has(p.slice(DIST.length))),
@@ -176,14 +177,17 @@ const eid = versionOf(...engineFiles.flatMap(f => [f, readFileSync(join(engineDi
 
 // ---------------------------------------------------------------- 5. the page, its build.json
 
-const entry = ([key]) => {
-  const at = key.indexOf('/')
-  const format = Number(key.slice(0, at)), name = key.slice(at + 1), path = resolve(index, format, name)
-  return path ? [format, name, path, statSync(join(TREE, path)).size] : null
+const pathOf = key => { const at = key.indexOf('/'); return resolve(index, Number(key.slice(0, at)), key.slice(at + 1)) }
+const candidates = [...new Set([...Object.values(measured.fetched.groups), ...Object.values(measured.fetched.pooled)].flatMap(d => Object.keys(d.shares)))]
+const treeSizes = await brotliSizes(candidates.map(pathOf).filter(Boolean).map(p => join(TREE, p)))
+const keys = buildManifest(measured.fetched, (key, share) => { const p = pathOf(key); return !!p && keep(treeSizes.get(join(TREE, p)), share) })
+const entry = key => {
+  const at = key.indexOf('/'), format = Number(key.slice(0, at)), name = key.slice(at + 1), path = pathOf(key)
+  return [format, name, path, statSync(join(TREE, path)).size]
 }
 const manifest = {
-  engines: Object.fromEntries(Object.entries(measured.manifest.engines).map(([e, keys]) => [e, keys.map(k => entry([k])).filter(Boolean)])),
-  fonts: Object.fromEntries(Object.entries(measured.manifest.fonts).map(([s, keys]) => [s, keys.map(k => entry([k])).filter(Boolean)])),
+  engines: Object.fromEntries(Object.entries(keys.engines).map(([e, list]) => [e, list.map(entry)])),
+  fonts: Object.fromEntries(Object.entries(keys.fonts).map(([s, list]) => [s, list.map(entry)])),
 }
 const pageDir = join(WORK, 'page')
 rmSync(pageDir, { recursive: true, force: true })
@@ -216,21 +220,11 @@ writeFileSync(join(OUT, 't', tid, 'index.txt'), text)
 writeFileSync(join(OUT, 'tex.html'), `<!doctype html><meta charset="utf-8"><title>TeX</title><script type="module" src="/c/${cv}/tex.js"></script>\n`)
 writeFileSync(join(OUT, 'tree.json'), JSON.stringify({ tid, root: TREE }))
 
-const brotli = promisify(brotliCompress)
 const BR = join(EXP, 'out/tex-br')
-mkdirSync(BR, { recursive: true })
-/** a brotli copy of `file` at `to`, from a cache keyed by the content */
-async function br(file, to) {
-  const bytes = readFileSync(file)
-  const cachedCopy = join(BR, `${sha(bytes)}.br`)
-  if (!existsSync(cachedCopy)) writeFileSync(cachedCopy, await brotli(bytes, { params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length } }))
-  mkdirSync(dirname(to), { recursive: true })
-  copyFileSync(cachedCopy, to)
-}
 const site = readdirSync(OUT, { recursive: true }).map(f => join(OUT, f)).filter(f => statSync(f).isFile() && /\/(c|e|t)\//.test(f))
 const treeFiles = [...new Set([...Object.values(manifest.engines), ...Object.values(manifest.fonts)].flat().map(e => e[2]))]
 const jobs = [...site.map(f => [f, `${f}.br`]), ...treeFiles.map(p => [join(TREE, p), join(BR, 't', tid, `${p}.br`)])]
-for (let i = 0; i < jobs.length; i += 4) await Promise.all(jobs.slice(i, i + 4).map(([f, to]) => br(f, to)))
+for (let i = 0; i < jobs.length; i += 4) await Promise.all(jobs.slice(i, i + 4).map(([f, to]) => brotliTo(f, to)))
 say(`brotli: ${jobs.length} files`)
 
 const sum = files => files.reduce((n, f) => n + statSync(f).size, 0)
