@@ -698,9 +698,15 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   of 83 running units aligned; on the four full papers 1 239 of 1 239 and 507 of 507. With markers Google translates
   each sentence apart: its wording changed in 77 of 83 units (median 4.6 % of characters); of eight pairs read, two
   better, three about even, three worse. The maintainer kept Google by sentence (2026-10-01). An LLM's path is unit
-  tested with a fake model (merged, split or reordered sentences fall back to the paragraph); it is measured only once
-  a key is set in a test build (`spikes/highlight-sentences-tags.mjs`); under its 1 000-character batch cap, 32 of 507
-  units of more than one sentence (6.3 %) would go unmarked and light whole.
+  tested with a fake model (merged, split or reordered sentences fall back to the paragraph) and was measured with the
+  maintainer's key on 2026-10-02 (OpenRouter, `deepseek/deepseek-v4-flash`, Chinese; `spikes/highlight-sentences-tags.mjs`,
+  ENGINE=llm): on the four full papers, units marked directly, 1 227 of 1 233 markers back once and 482 of 502 units
+  of more than one sentence aligned (4 lost a marker, 16 a placeholder); on B's sample 75 of 81 marked directly, and as
+  the reader sends them 68 of 81 — the service left unmarked the 10 whose marked text was over the LLM's 1 000-character
+  batch cap (32 of the full papers' 502). Marked all the same since (`2ae0d235`, DESIGN §8.6): 79 of 81, those over the
+  cap 9 of 10 on their first marked request (one lost a placeholder). Against the same units sent unmarked the text was
+  the same in 3 of 81, a median edit of 10.2 % of its characters — though an LLM's two answers differ without markers
+  too.
 - **Cleaning** (`mt.mjs sentencesOf`): the lengths must partition both texts; a boundary inside a marker, a tag or an
   entity goes to its end; a boundary that begins no sentence on either side (a trailing marker, a formula alone) is
   dropped on both together. Each sentence after the first is kept as the offset of its first word in the unit's plain
@@ -833,4 +839,4 @@ within noise.
 - Before our marked original is compiled, units of arXiv's PDF matched under 80 % by their text alone light whole (113
   of 738 on the ten papers; 29181 38 of 90).
 - A copy made before the highlight lights by paragraph until it is translated again; an LLM's sentences are measured
-  only with a fake model; with Google the markers change the wording (above).
+  on one model (above); with Google the markers change the wording (above).

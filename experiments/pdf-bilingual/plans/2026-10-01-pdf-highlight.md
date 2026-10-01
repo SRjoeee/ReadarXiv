@@ -155,6 +155,11 @@ ledger, briefs, reports and reviews: `.superpowers/sdd/2026-09-30-pdf-highlight/
   keeps its boundary — on the HTML page 148 cuts added in 116 of 1 566 blocks with cuts, each after a formula),
   `78cb2752` (a run again keeps its sentences), `42806b7d` (a click in a sentence's rows is its unit's), `61b33e04`
   (the wheel check needs something under the pointer), and the documents' numbers from one run of each gate.
+- **The LLM measured** (the maintainer's key, OpenRouter `deepseek/deepseek-v4-flash`, 2026-10-02): the four full papers
+  482 of 502 units of more than one sentence aligned, marked directly; B's sample 75 of 81 marked directly but 68 of 81
+  as the reader sends them — `2ae0d235` (a segment over the engine's batch cap is marked all the same, its cache key set
+  apart from the unmarked requests' entries): 79 of 81. The measure reloads the extension in its kept profile
+  (`6c9aa596`: a rebuilt background had gone unrun there).
 
 ### Declined or dropped, and why
 
@@ -174,8 +179,7 @@ ledger, briefs, reports and reviews: `.superpowers/sdd/2026-09-30-pdf-highlight/
 
 ### Later (for #299 or a plan of its own)
 
-- The LLM path measured with a key in a test build (`spikes/highlight-sentences-tags.mjs`, ENGINE=llm); 6.3 % of units
-  over its batch cap go unmarked.
+- The LLM path on other models than the one measured (the reader's design §17.2, 2026-10-02).
 - A1's protector half of the full-stop space (`128a0d30` on `a1/protector-stop-space`, from `next`): a small pull
   request into `next` with the maintainer's yes.
 - The live run's order (our original right after the first preview) and one progress line over the whole run: the Flow
