@@ -64,10 +64,22 @@ for (const [k, list] of Object.entries(sets)) {
 
 // the extension, its background asked as the reader's engine asks it (engine.mjs: a status that binds a scope, then
 // translate calls in the chain's batches)
-const context = await chromium.launchPersistentContext(PROFILE, { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${BUILD}`, `--load-extension=${BUILD}`] })
-let [worker] = context.serviceWorkers()
-if (!worker) worker = await context.waitForEvent('serviceworker')
-const extId = new URL(worker.url()).host
+const launch = async () => {
+  const context = await chromium.launchPersistentContext(PROFILE, { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${BUILD}`, `--load-extension=${BUILD}`] })
+  const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
+  return { context, extId: new URL(worker.url()).host }
+}
+// A kept profile (AXT_PROFILE) runs the service worker it registered, not the build now on disk, until the extension is
+// reloaded: on 2026-10-02 a rebuilt background went unrun, and the LLM's units over its batch cap were measured on the
+// old code (0 of 10 aligned, the cache bypassed; 9 of 10 once reloaded). Reloaded from its settings page, the browser
+// closed and opened again — its pages do not open in the session that reloaded it; its storage untouched
+if (process.env.AXT_PROFILE) {
+  const first = await launch()
+  await (await openOptions(first.context, first.extId)).evaluate(() => chrome.runtime.reload()).catch(() => {})
+  await new Promise(r => setTimeout(r, 2000))
+  await first.context.close()
+}
+const { context, extId } = await launch()
 const page = await openOptions(context, extId)
 if (ENGINE === 'google' && !process.env.AXT_PROFILE) { await chooseBuiltIn(page, 'Google 翻译'); await page.reload() }
 const scope = `axt-b3b-${Date.now()}`
