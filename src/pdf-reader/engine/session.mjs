@@ -31,7 +31,7 @@ import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
 import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf } from './highlight.mjs'
-import { floatHitOf, floatOf, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
+import { captionFor, floatHitOf, floatOf, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from './floats.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
 import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
@@ -579,20 +579,19 @@ async function translateBoxes(boxes) {
 // A figure on a translation page — in arXiv's PDF shown there until the first preview, in a preview, in the final — is
 // one of arXiv's (the left's): its text is read and translated once, there, and every translation shows the same
 // overlay. A draft preview sets a frame where an image goes (live.mjs DRAFT), and the left's figure is drawn over it.
-const overlaps = (a, b) => Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0)
 /** the caption next to a figure's rectangle on a side's page (PDF units): a caption located there whose first line lies
  *  just below the rectangle, else whose last line lies just above it, across its column; the nearest, or null */
 function captionNear(side, page, r) {
-  const col = columnOf(side, page, r)
-  let below = null, above = null
+  // the highlight's floats' rule (floats.mjs captionFor): of captions in a row, the one over the figure (a subfigure's
+  // subcaption, the right one of two minipages' figures), else the nearest
+  const caps = []
   for (const [id, a] of side.anchors) {
     if (!a || unitKind.get(id) !== 'caption') continue
-    const first = a.rects[0], last = a.rects.at(-1), near = 3 * (first.y1 - first.y0) + 24
-    const down = first.page === page && overlaps(first, col) ? r.y0 - first.y1 : NaN, up = last.page === page && overlaps(last, col) ? last.y0 - r.y1 : NaN
-    if (down > -2 && down < near && !(below?.gap <= down)) below = { id, gap: down }
-    if (up > -2 && up < near && !(above?.gap <= up)) above = { id, gap: up }
+    const first = a.rects[0], last = a.rects.at(-1), on = a.rects.filter(q => q.page === page)
+    if (!on.length) continue
+    caps.push({ id, x0: Math.min(...on.map(q => q.x0)), x1: Math.max(...on.map(q => q.x1)), top: first.page === page ? first.y1 : Number.NaN, bottom: last.page === page ? last.y0 : Number.NaN, h: first.y1 - first.y0, col: columnOf(side, page, on[0]) })
   }
-  return (below ?? above)?.id ?? null
+  return captionFor(r, caps)?.id ?? null
 }
 /** rectangles' indices in reading order: rows from the top, each from the left; a rectangle is in a row when it shares
  *  half its height with the row's first */

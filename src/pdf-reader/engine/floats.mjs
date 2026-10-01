@@ -100,6 +100,37 @@ const within = (r, g, e = 1) => r.x0 >= g.x0 - e && r.x1 <= g.x1 + e && r.y0 >= 
 const inside = (x, y, r) => x >= r.x0 - 1 && x <= r.x1 + 1 && y >= r.y0 - 1 && y <= r.y1 + 1
 
 /**
+ * The caption a figure (a rectangle, PDF units) goes to among a page's captions — [{ id, x0, x1, top, bottom, h, col }]:
+ * their extent across, the top of their first line and the foot of their last on the page (NaN where it is on another),
+ * their line's height and their column — or null. Within 3 of the caption's lines + 24 of the figure: one whose own
+ * extent overlaps the figure across before one only sharing its column; just below it before just above it; the
+ * nearest (a figure's own caption before the next float's under it, round 1's 06701 page 6); of captions in a row, as
+ * near (within a unit), the one overlapping it most, then the one whose middle is nearer (subfigures side by side over
+ * their subcaptions, two minipages' figures: each took the first caption of the row, the review of B4). The reader's
+ * captionNear asks the same
+ */
+export function captionFor(r, caps) {
+  let best = null
+  for (const c of caps) {
+    const over = Math.min(r.x1, c.x1) - Math.max(r.x0, c.x0)
+    if (over <= 0 && overlapX(r, c.col) <= 0) continue
+    const near = 3 * c.h + 24, down = r.y0 - c.top, up = c.bottom - r.y1
+    const below = down > -2 && down < near, above = up > -2 && up < near
+    if (!below && !above) continue
+    const k = { across: over > 0 ? 0 : 1, side: below ? 0 : 1, gap: below ? down : up, over, mid: Math.abs((r.x0 + r.x1) / 2 - (c.x0 + c.x1) / 2) }
+    if (!best || nearer(k, best.k)) best = { c, k }
+  }
+  return best?.c ?? null
+}
+const nearer = (k, b) => {
+  if (k.across !== b.across) return k.across < b.across
+  if (k.side !== b.side) return k.side < b.side
+  if (Math.abs(k.gap - b.gap) > 1) return k.gap < b.gap
+  if (k.over !== b.over) return k.over > b.over
+  return k.mid < b.mid
+}
+
+/**
  * A page's floats, made once and kept on the layout: [{ id, page, kind: 'figure' | 'table', region, members, lead }]
  * — `id` the caption's, `region` the float's extent without its caption (PDF units), `members` the units it holds (its
  * cells, a drawing's text), `lead` the caption's half leading (the pad above and below). `regions` the page's figures
@@ -126,26 +157,17 @@ export function pageFloats(L, p, regions = [], { rules = [], marks = [] } = {}) 
     caps.push({ id, runs, box, h: row.y1 - row.y0, lead: runs[0].lead, col: P.cols[side] ?? P.cols.F, side, other: side === 'L' ? P.cols.R : side === 'R' ? P.cols.L : null })
   }
   if (!caps.length) { known.set(p, []); return [] }
-  // each figure to its nearest caption: just below it first, else just above it, across its column
+  // each figure to its caption (captionFor): a subfigure to its subcaption, figures in a row each to the caption under it
+  const near = caps.map(c => ({ id: c.id, x0: c.box.x0, x1: c.box.x1, top: c.box.y1, bottom: c.box.y0, h: c.h, col: c.col }))
   const figOf = new Map()
-  regions.forEach((r, k) => {
-    let below = null, above = null
-    for (const c of caps) {
-      if (overlapX(r, c.col) <= 0) continue
-      const near = 3 * c.h + 24, down = r.y0 - c.box.y1, up = c.box.y0 - r.y1
-      if (down > -2 && down < near && !(below?.gap <= down)) below = { c, gap: down }
-      if (up > -2 && up < near && !(above?.gap <= up)) above = { c, gap: up }
-    }
-    const c = (below ?? above)?.c
-    if (c) figOf.set(k, c.id)
-  })
+  regions.forEach((r, k) => { const c = captionFor(r, near); if (c) figOf.set(k, c.id) })
   // what lies on the page, once for every caption's walk: each line (a free one inside a figure is the figure's; a
   // caption's, `cap`, is a stop for the others' walks), each figure, each mark, each horizontal rule
   const items = []
   lines.forEach((l, i) => {
     const caps = capsOn.get(i), cap = caps ? caps.values().next().value : null, free = !running[i] && cap === null
     if (free && regions.length && regions.some(r => within(l, r))) return
-    items.push({ i, x0: l.x0, x1: l.x1, y0: l.y0, y1: l.y1, lo: l.lo, hi: l.hi, what: free ? 'line' : 'stop', cap })
+    items.push({ i, x0: l.x0, x1: l.x1, y0: l.y0, y1: l.y1, lo: l.lo, hi: l.hi, what: free ? 'line' : 'stop', cap, caps: caps ? [...caps] : null, running: !!running[i] })
   })
   regions.forEach((r, k) => items.push({ x0: r.x0, x1: r.x1, y0: r.y0, y1: r.y1, lo: r.y0, hi: r.y1, what: 'figure', fig: k }))
   for (const m of marks) items.push({ ...m, lo: m.y0, hi: m.y1, what: 'mark' })
@@ -155,7 +177,11 @@ export function pageFloats(L, p, regions = [], { rules = [], marks = [] } = {}) 
   for (let i = items.length - 1; i >= 0; i--) if (items[i].y0 > frame.y1 + 1 || items[i].y1 < frame.y0 - 1) items.splice(i, 1)
   // in the order the walks meet them: down from the top, up from the foot
   const byTop = [...items].sort((a, b) => b.y1 - a.y1), byFoot = [...items].sort((a, b) => a.y0 - b.y0)
-  const ctx = { byTop, byFoot, figOf, at: { k0, lineOf, owner }, capsOn, tokens: id => L.anchors.get(id)?.tokens ?? [] }
+  // each caption's own figures, and its box: a main caption takes the subcaptions over (or under) it with their panels
+  const figsOf = new Map()
+  for (const [k, id] of figOf) (figsOf.get(id) ?? figsOf.set(id, []).get(id)).push(regions[k])
+  const boxOf = new Map(caps.map(c => [c.id, c.box]))
+  const ctx = { byTop, byFoot, figOf, figsOf, boxOf, at: { k0, lineOf, owner }, capsOn, tokens: id => L.anchors.get(id)?.tokens ?? [] }
   // each caption's walks, best first: toward its own figures where it has some; else the one holding its neighbour in
   // the page's stream (TeX sets a float's caption and its body in the order the source has them); else, the stream
   // setting it between two (a caption between two tables, or under a listing), the one under it — a table's caption
@@ -180,29 +206,31 @@ export function pageFloats(L, p, regions = [], { rules = [], marks = [] } = {}) 
   }
   // an item is one float's: the captions with their own figures first, then those with fewer walks to choose from,
   // each taking its best walk that crosses none taken, else its best one up to where another has been
-  const claimed = new Set()
+  // (a main caption shares its parts' items: its subcaptions' and their panels; the subfigures go first)
+  const claimedBy = new Map()
   const out = []
-  const order = [...options].sort(([, a], [, b]) => (b[0].own - a[0].own) || (a.length - b.length))
+  const order = [...options].sort(([, a], [, b]) => (b[0].own - a[0].own) || (a[0].parts.size - b[0].parts.size) || (a.length - b.length))
   for (const [c, ws] of order) {
-    let w = ws.find(w => !w.got.some(q => claimed.has(q)))
-    if (!w) { w = walk(c, ws[0].dir, ctx, claimed); if (!enough(w)) continue }
+    const others = parts => new Set([...claimedBy].filter(([, id]) => !parts.has(id)).map(([q]) => q))
+    let w = ws.find(w => w.got.every(q => !claimedBy.has(q) || w.parts.has(claimedBy.get(q))))
+    if (!w) { w = walk(c, ws[0].dir, ctx, others(ws[0].parts)); if (!enough(w)) continue }
     // no running text inside a float: where its extent holds a line of another's (a box drawn round paragraphs, a line
     // beside the float the walk passed before the float widened to it), it ends before that line
     let region = regionOf(c, w, rules)
     for (let n = 0; n < 3; n++) {
-      const down = w.dir < 0, foreign = byTop.filter(q => q.what === 'stop' && q.cap !== c.id && inside((q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2, region))
+      const down = w.dir < 0, foreign = byTop.filter(q => q.what === 'stop' && !q.caps?.every(id => id === c.id || w.parts.has(id)) && inside((q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2, region))
       if (!foreign.length) break
       const limit = down ? Math.max(...foreign.map(q => q.y1)) : Math.min(...foreign.map(q => q.y0))
-      w = walk(c, w.dir, ctx, claimed, limit)
+      w = walk(c, w.dir, ctx, others(w.parts), limit)
       region = enough(w) ? regionOf(c, w, rules) : null
       if (!region) break
     }
     if (!region) continue
-    for (const q of w.got) claimed.add(q)
+    for (const q of w.got) if (!claimedBy.has(q)) claimedBy.set(q, c.id)
     // what it holds: the cells and a drawing's text inside it
     const members = new Set()
     for (const [id, runs] of g.byId) if (HELD.has(L.kindOf(id)) && runs.every(r => inside((r.x0 + r.x1) / 2, (r.top + r.bottom) / 2, region))) members.add(id)
-    out.push({ id: c.id, page: p, kind: floatKind(w, region), region, members, lead: c.lead })
+    out.push({ id: c.id, page: p, kind: floatKind(w, region), region, members, parts: w.parts, lead: c.lead })
   }
   known.set(p, out)
   return out
@@ -242,20 +270,33 @@ const enough = w => w.got.some(q => q.what === 'figure') || w.got.filter(q => q.
  * neighbour in the page's stream on its side (the line set just after the caption for the walk down, just before it
  * for the walk up)
  */
-function walk(c, dir, { byTop, byFoot, figOf, at, capsOn, tokens }, skip = null, limit = null) {
+function walk(c, dir, { byTop, byFoot, figOf, figsOf, boxOf, at, capsOn, tokens }, skip = null, limit = null) {
   const h = c.h, down = dir < 0, order = down ? byTop : byFoot
-  const got = [], rules = [], range = { x0: c.box.x0, x1: c.box.x1 }
+  const got = [], rules = [], range = { x0: c.box.x0, x1: c.box.x1 }, parts = new Set()
+  // subcaptions in a row, each of its own figures and set between this caption and them (subfigures over their
+  // subcaptions, the main caption under them): this caption's parts, where this caption has no figure of its own and the
+  // walk meets them first, and goes on meeting rows of them (a grid of subfigures). A single caption so met is the next
+  // float's (a figure's caption over a table's)
+  const bare = !figsOf.has(c.id)
+  const partOf = id => bare && figsOf.get(id)?.every(f => (down ? f.y1 <= boxOf.get(id).y0 + 2 : f.y0 >= boxOf.get(id).y1 - 2))
+  const inRow = id => { const b = boxOf.get(id); let n = 0; for (const [j, o] of boxOf) if (j !== id && Math.abs(o.y1 - b.y1) <= 2 && overlapX(o, b) <= 0 && partOf(j)) n++; return n > 0 }
   // the items past the caption's edge on this side: byTop falls by top, byFoot rises by foot
   const from = down ? firstAt(byTop, q => q.y1 <= c.box.y0 + 1) : firstAt(byFoot, q => q.y0 >= c.box.y1 - 1)
   let pending = [], edge = down ? c.box.y0 : c.box.y1, stop = null, wall = null, reach = FIRST * h, fig = null
   const widen = q => { if (q.x0 < range.x0) range.x0 = q.x0; if (q.x1 > range.x1) range.x1 = q.x1 }
   for (let k = from; k < order.length; k++) {
     const q = order[k]
-    if (q.cap === c.id || overlapX(q, range) <= 0) continue
+    if (q.caps?.includes(c.id) || overlapX(q, range) <= 0) continue
     // at a figure's edge, as far as a quarter of its height: the space between a grid's rows of images
     const far = fig && (down ? edge >= fig.y0 - 1 : edge <= fig.y1 + 1) ? Math.max(reach, (fig.y1 - fig.y0) * PANELS) : reach
     if ((down ? edge - q.y1 : q.y0 - edge) > far || (limit !== null && (down ? q.y0 < limit : q.y1 > limit))) break
-    const theirs = q.what === 'figure' && figOf.has(q.fig) && figOf.get(q.fig) !== c.id
+    const theirs = q.what === 'figure' && figOf.has(q.fig) && figOf.get(q.fig) !== c.id && !parts.has(figOf.get(q.fig))
+    if (q.what === 'stop' && q.caps && !q.running && (parts.size || !got.length) && q.caps.every(id => parts.has(id) || (partOf(id) && inRow(id)))) {
+      for (const id of q.caps) parts.add(id)
+      got.push(q); widen(q)
+      edge = down ? Math.min(edge, q.y0) : Math.max(edge, q.y1)
+      continue
+    }
     // on a page of two columns, a line or a mark reaching past what the walk has into the other column's text is not a
     // column float's (a title block across the page over a column's figure, 2608.06701's first page); a rule may (a
     // float across the page of two parts, each with its caption, 2608.02163's tables 3 and 4)
@@ -293,7 +334,7 @@ function walk(c, dir, { byTop, byFoot, figOf, at, capsOn, tokens }, skip = null,
   const back = down ? byFoot : byTop
   for (let k = down ? firstAt(byFoot, q => q.y0 >= c.box.y1 - 1) : firstAt(byTop, q => q.y1 <= c.box.y0 + 1); k < back.length; k++) {
     const q = back[k]
-    if (q.cap === c.id || overlapX(q, c.box) <= 0) continue
+    if (q.caps?.includes(c.id) || overlapX(q, c.box) <= 0) continue
     if (q.what !== 'rule' || (down ? q.y0 - end : end - q.y1) > TRAIL * h) break
     rules.push(q)
     end = down ? q.y1 : q.y0
@@ -303,7 +344,7 @@ function walk(c, dir, { byTop, byFoot, figOf, at, capsOn, tokens }, skip = null,
   const mine = tokens(c.id).filter(k => k >= k0 && k < k0 + n)
   let near = -1
   if (mine.length) for (let k = down ? mine.at(-1) + 1 : mine[0] - 1; k >= k0 && k < k0 + n; k += down ? 1 : -1) if (!capsOn.get(lineOf[k - k0])?.has(c.id)) { near = lineOf[k - k0]; break }
-  return { dir, got, rules, stop, own: got.some(q => q.what === 'figure' && figOf.get(q.fig) === c.id), adjacent: near >= 0 && got.some(q => q.i === near) }
+  return { dir, got, rules, stop, parts, own: got.some(q => q.what === 'figure' && (figOf.get(q.fig) === c.id || parts.has(figOf.get(q.fig)))), adjacent: near >= 0 && got.some(q => q.i === near) }
 }
 
 /**

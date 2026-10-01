@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { type Anchor, type DocToken, lineRects, tokenizeDocument } from '@/pdf-reader/engine/anchors.mjs'
-import { type Box, floatHitOf, floatOf, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from '@/pdf-reader/engine/floats.mjs'
+import { type Box, captionFor, floatHitOf, floatOf, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from '@/pdf-reader/engine/floats.mjs'
 import { blockOf, hitOf, layoutOf, runsOf } from '@/pdf-reader/engine/highlight.mjs'
 
 // A page's floats (floats.mjs): tables, algorithms and figures lit whole with their captions. Pages as PDF.js's text
@@ -277,5 +277,41 @@ describe('pageFloats: where a float ends', () => {
     const dd = docOf(ps)
     const layout = side(ps, [[0, words(dd, 'figure', 'advice')]], { 0: 'caption' })
     expect(pageFloats(layout, 1, [], { marks: [{ x0: 55, y0: 600, x1: 295, y1: 700 }, { x0: 55, y0: 599, x1: 295, y1: 601 }] })).toEqual([])
+  })
+})
+
+describe('pageFloats: figures side by side, subfigures (the review of B4)', () => {
+  const hitter = (layout: ReturnType<typeof side>) => (x: number, y: number) => floatHitOf(layout, 1, x, y, 2, hitOf(layout, 1, x, y, 2))?.id ?? null
+
+  it('two figures side by side, each with its caption under it (two minipages): each its own', () => {
+    const ps = [[...prose(780, 4), line('Figure 3: the left one', 605, 60, 170), line('Figure 4: the right one', 605, 190, 300), ...prose(580, 10)]]
+    const dd = docOf(ps)
+    const layout = side(ps, [[0, words(dd, 'figure', 'one')], [1, words(dd, 'figure', 'one', at(dd, 'one') + 1)]], { 0: 'caption', 1: 'caption' })
+    const fs = pageFloats(layout, 1, [{ x0: 60, y0: 617, x1: 170, y1: 720 }, { x0: 190, y0: 617, x1: 300, y1: 720 }])
+    expect(fs.map(f => [f.id, f.kind, ...r1(f.region)]).sort()).toEqual([[0, 'figure', 60, 617, 170, 720], [1, 'figure', 190, 617, 300, 720]])
+    const hit = hitter(layout)
+    expect([hit(100, 680), hit(250, 680)]).toEqual([0, 1])
+  })
+
+  it('subfigures over their subcaptions, the main caption under them: each subcaption its panel; the main caption the whole figure, panels and subcaptions', () => {
+    const ps = [[...prose(780, 4), line('(a) left one', 605, 80, 150), line('(b) right one', 605, 210, 280), line('Figure 1: both of them', 585, 100, 250), ...prose(560, 10)]]
+    const dd = docOf(ps)
+    const layout = side(ps, [[0, words(dd, 'a', 'one')], [1, words(dd, 'b', 'one')], [2, words(dd, 'figure', 'them')]], { 0: 'caption', 1: 'caption', 2: 'caption' })
+    const fs = pageFloats(layout, 1, [{ x0: 60, y0: 617, x1: 170, y1: 720 }, { x0: 190, y0: 617, x1: 300, y1: 720 }])
+    expect(fs.map(f => [f.id, f.kind, ...r1(f.region)]).sort()).toEqual([[0, 'figure', 60, 617, 170, 720], [1, 'figure', 190, 617, 300, 720], [2, 'figure', 60, 602.8, 300, 720]])
+    // a panel or its subcaption lights the subfigure (the finer, where the source says so), the main caption the whole
+    const hit = hitter(layout)
+    expect([hit(100, 680), hit(250, 680), hit(240, 607), hit(150, 587)]).toEqual([0, 1, 1, 2])
+    // the whole is outlined, its main caption washed
+    const main = fs.find(f => f.id === 2)!
+    expect(floatShapes(layout, main, 2).map(s => s.frame)).toEqual([true, false])
+  })
+
+  it('captionFor: of captions in a row the one over the figure, of captions stacked under it the nearest', () => {
+    const cap = (id: number, x0: number, x1: number, top: number) => ({ id, x0, x1, top, bottom: top - 10, h: 10, col: { x0: 50, x1: 300 } })
+    expect(captionFor({ x0: 190, y0: 617, x1: 300, y1: 720 }, [cap(0, 60, 170, 612), cap(1, 190, 300, 612)])?.id).toBe(1)
+    expect(captionFor({ x0: 60, y0: 617, x1: 170, y1: 720 }, [cap(2, 100, 250, 592), cap(0, 80, 150, 612)])?.id).toBe(0)
+    // a caption only sharing the column goes after one over the figure, however nearer
+    expect(captionFor({ x0: 60, y0: 617, x1: 170, y1: 720 }, [cap(0, 200, 290, 614), cap(1, 70, 160, 600)])?.id).toBe(1)
   })
 })
