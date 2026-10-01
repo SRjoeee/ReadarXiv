@@ -96,7 +96,10 @@
 // data/runs/highlight-ten): per paper arXiv's PDF (data/corpus/<id>/arxiv.pdf), the run's `original-marked.pdf`,
 // `final.pdf` and `final-texts.json` (spikes/live-node.mjs, Microsoft → Chinese), and `pieces/<id>.json`, the pieces
 // the translation was typeset from (for the placeholders' places in its headings); `sentences/<id>.json`, the units'
-// sentences (spikes/highlight-sentences.mjs). The ground truth (research/pdf-bilingual/data/runs/highlight-gt, linked
+// sentences (spikes/highlight-sentences.mjs). 2608.08350's pieces name its footnotes' file as the package holds it
+// (sections/NTK.tex, not ./sections/NTK.tex) since loadProject does (a55998d9): renamed 2026-10-02, and the same as the
+// pieces made again by investigator A's retranslate.mjs from Microsoft's answers, today's (224 of its 332 units) and
+// those kept (220); for the others today's answers are not the run's. The ground truth (research/pdf-bilingual/data/runs/highlight-gt, linked
 // from data/runs/highlight-gt): per paper investigator B's four compiles, its units with its starts (b-units.json), the
 // translation's texts, and `sentences/<id>.json` (highlight-sentences.mjs with FROM=en, from B's Microsoft answers).
 //   pnpm exec tsx experiments/pdf-bilingual/spikes/highlight-gate.mjs [id …]   → out/highlight-gate.json
