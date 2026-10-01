@@ -13,6 +13,9 @@
 .axt-hl-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 .axt-hl { position: absolute; border-radius: 3px; mix-blend-mode: multiply;
   background: color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) var(--axt-hl-mix, 22%), transparent); }
+/* a sentence over rows of different reach: one outline, its path filled with the band's wash (highlight.mjs shapePath) */
+.axt-hl-shape { background: none; border-radius: 0; overflow: visible; }
+.axt-hl-shape > path { fill: color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) var(--axt-hl-mix, 22%), transparent); }
 /* a newer compile being laid out and drawn under the one in view */
 .viewerContainer.axt-incoming { visibility: hidden; }
 /* a figure's place on a translation page, holding the empty <img> the extension's image overlay is anchored to and, over

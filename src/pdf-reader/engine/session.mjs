@@ -29,8 +29,8 @@ import { displayOf, figuresShown, followOf, withDisplay } from '../settings'
 import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
-import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from './anchors.mjs'
-import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf } from './highlight.mjs'
+import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
+import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
 import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
@@ -192,9 +192,14 @@ function makeSide(container) {
   // keeper: the overlays PDF.js removes from a page it draws again, put back (overlay.mjs); laid: each page's figures, by
   // the viewport scale they were laid at
   // geo: the highlight's geometry (highlight.mjs), made after the side is anchored (makeGeo; layoutWanted: asked for at
-  // once, wantLayout); at, scrollX, scrollY: where its pane and
-  // pages are, kept for the pointer (measure); lit: the highlight's elements painted on it
-  return { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), geo: null, makeGeo: null, layoutWanted: false, at: null, scrollX: 0, scrollY: 0, lit: [], figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
+  // once, wantLayout); units: each unit's text as the side was anchored by it (id → { text, sentences? }); starts: where
+  // each unit's sentences after the first begin on it, made with the geometry (findSentences); at, scrollX, scrollY:
+  // where its pane and pages are, kept for the pointer (measure); lit: the highlight's elements painted on it
+  const side = { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), units: new Map(), geo: null, makeGeo: null, layoutWanted: false, starts: null, at: null, scrollX: 0, scrollY: 0, lit: [], figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
+  // a unit's sentences' starts on this side where they are known on both, for the hit test and the paint: else it is
+  // lit whole on both (a translation coming in, laid out out of sight, is the right side's to the left)
+  side.startsOf = id => { const mine = side.starts?.get(id), theirs = (side === left ? right : left).starts?.get(id); return mine && theirs && mine.length === theirs.length ? mine : null }
+  return side
 }
 const left = makeSide(host.left)
 let right = makeSide(host.right)
@@ -269,8 +274,11 @@ function unitTop(side, id) {
 // one page and one column of it — across its rows inside the column's text edges, padded half the leading above and
 // below and PAD beside; a point lights the unit whose block holds it, the smallest where blocks overlap. So a pointer
 // anywhere on what is lit keeps it lit, over a formula as over its words (report-A: 43–50 % of a display unit's wash
-// turned it off). The look is the draft's (round 1 of the highlight, 2026-10-01), multiplied into the page as the HTML
-// page's band is (engine.css)
+// turned it off). Where the unit's sentences are known on both sides (findSentences), its sentences instead: the
+// sentence under the pointer, its first row from its start, the rows between across the run, its last row to its end,
+// one outline per run (the plan of the highlight, B3). The look is the draft's (round 1 of the highlight, 2026-10-01),
+// multiplied into the page as the HTML page's band is (engine.css)
+/** what is lit: { id, s }, a unit's sentence s, or the whole unit where s is -1; null for nothing */
 let lit = null
 /** how many times each of the right side's pages had its figures laid (paintFigures), for the probes */
 const paints = new Map()
@@ -288,24 +296,45 @@ function layerOf(side, page) {
   if (!layer) { layer = document.createElement('div'); layer.className = 'axt-hl-layer'; pv.div.append(layer) }
   return layer
 }
-/** the lit unit's blocks on a side, written only: every number comes from the geometry and the pages' viewports */
+/** what each element painted draws, in its own box's CSS pixels: for the probes (the harness's litRects) */
+const drawn = new WeakMap()
+/** the lit unit's blocks or the lit sentence's shapes on a side, written only: every number comes from the geometry
+ *  and the pages' viewports. One element a run: a block, or a sentence's single row, as a box with rounded corners; a
+ *  sentence over rows of different reach as one outline (an SVG path) */
 function paint(side) {
   for (const el of side.lit) el.remove()
   side.lit = []
   if (lit == null) return
   if (!side.geo) { wantLayout(side); return }
-  for (const run of runsOf(side.geo, lit)) {
+  const starts = lit.s >= 0 ? side.startsOf(lit.id) : null
+  for (const run of runsOf(side.geo, lit.id)) {
     const pv = pageView(side, run.page), layer = layerOf(side, run.page)
     if (!layer) continue
-    const s = pv.viewport.scale, el = document.createElement('div')
-    el.className = 'axt-hl'
+    const s = pv.viewport.scale
+    const boxes = (starts ? sentenceOf(side.geo, run, starts, lit.s, PAD / s) : [blockOf(run, PAD / s)]).map(r => toPageBox(side, r))
+    if (!boxes.length) continue
+    let el
+    const X0 = Math.min(...boxes.map(b => b.left)), Y0 = Math.min(...boxes.map(b => b.top))
+    const local = boxes.map(b => ({ x0: b.left - X0, x1: b.left + b.width - X0, y0: b.top - Y0, y1: b.top + b.height - Y0 }))
+    const box = { left: X0, top: Y0, width: Math.max(...local.map(b => b.x1)), height: Math.max(...local.map(b => b.y1)) }
+    if (boxes.length === 1) { el = document.createElement('div'); el.className = 'axt-hl' } else {
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      el.setAttribute('class', 'axt-hl axt-hl-shape')
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+      path.setAttribute('d', shapePath(local, RADIUS))
+      el.append(path)
+    }
     // scaled with the page while a pinch lasts (overlay.mjs pinned)
-    Object.assign(el.style, pinned(toPageBox(side, blockOf(run, PAD / s)), s))
+    Object.assign(el.style, pinned(box, s))
+    drawn.set(el, local)
     layer.append(el)
     side.lit.push(el)
   }
 }
-function light(id) { if (!config.reading.sentenceHighlight) id = null; if (id === lit) return; lit = id; for (const s of sides) paint(s) }
+/** a block's and a shape's corners, in CSS pixels (engine.css .axt-hl) */
+const RADIUS = 3
+const same = (a, b) => a === b || (!!a && !!b && a.id === b.id && a.s === b.s)
+function light(target) { if (!config.reading.sentenceHighlight) target = null; if (same(target, lit)) return; lit = target; for (const s of sides) paint(s) }
 /** a side's layout wanted now, where the pointer, a paint or a click met the side without one: made in a task of its
  *  own at once, never in the frame or the event that asked (the pointer's frame made both sides' there, 25–48 ms, the
  *  review of B1); when it lands what is lit is painted on it and the pointer looked at again (makeGeo) */
@@ -326,8 +355,8 @@ const pointer = pointerPath({
     if (!config.reading.sentenceHighlight) return null
     // a side without its layout yet is a miss, its layout asked for
     if (!side.geo) { wantLayout(side); return null }
-    const at = pointAt(side, x, y)
-    return (at && hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale)?.id) ?? null
+    const at = pointAt(side, x, y), hit = at && hitOf(side.geo, at.page, at.x, at.y, PAD / at.scale, side.startsOf)
+    return hit ? { id: hit.id, s: hit.s } : null
   },
   light,
   lit: () => lit != null,
@@ -1432,6 +1461,7 @@ async function anchorSide(side, texts, marks) {
 async function anchorOne(side, texts, marks) {
   const pages = await textPages(side.doc)
   const doc = tokenizeDocument(pages)
+  side.units = new Map(texts.map(t => [t.id, t]))
   // the marks it went by, kept on the side: a cached copy keeps the right side's, which cost a second to read from its PDF
   side.marks = marks ?? (await pdfMarks(side.doc))
   const bounds = boundsFromMarks(doc, side.marks)
@@ -1440,9 +1470,11 @@ async function anchorOne(side, texts, marks) {
   // the highlight needs it first (wantLayout): the sides are anchored and shown without waiting for it
   const views = pages.map(p => p.view), anchors = side.anchors
   side.geo = null
+  side.starts = null
   side.makeGeo = () => {
     const t0 = performance.now()
     side.geo = layoutOf(doc, views, anchors, id => unitKind.get(id))
+    findSentences(side)
     side.makeGeo = null
     layoutsDue.delete(side)
     timing[side === left ? 'leftLayout' : 'rightLayout'] = performance.now() - t0
@@ -1452,6 +1484,23 @@ async function anchorOne(side, texts, marks) {
   }
   layoutsDue.add(side)
   return bounds.size
+}
+/**
+ * Where each unit's sentences after the first begin on a side (anchors.mjs sentenceStarts): the sentences of the
+ * translation the right side shows (its units' `sentences`, mt.mjs sentencesOf), their `src` offsets on the left and
+ * `tr` on the right, found in the text the side was anchored by. Made with the side's layout, in idle time, and on the
+ * left again when a new compile replaces the right (replaceRight); a unit lights by sentence only where both sides
+ * found all its starts (makeSide's startsOf)
+ */
+function findSentences(side) {
+  const t0 = performance.now(), on = side === left ? 'src' : 'tr', starts = new Map()
+  for (const [id, u] of (side === left ? right : side).units) {
+    if (!u.sentences) continue
+    const st = sentenceStarts(side.anchors.get(id), side.units.get(id)?.text ?? '', u.sentences[on])
+    if (st) starts.set(id, st)
+  }
+  side.starts = starts
+  timing[side === left ? 'leftSentences' : 'rightSentences'] = performance.now() - t0
 }
 /** the sides' layouts still to make, one an idle period, none while a side is being anchored: an idle period comes
  *  while the other side's text is still on its way from PDF.js's worker, and a layout made there held the worker's
@@ -1601,7 +1650,9 @@ async function replaceRight(url, texts, { draft = false } = {}) {
   old.viewer.setDocument(null)
   old.linkService.setDocument(null)
   old.task.destroy() // the document and its worker-side state; PDF.js 6 destroys through the loading task
-  invalidate(); paint(right)
+  // the left's sentences are the new translation's: found again where its layout is made (else with it)
+  if (left.geo) findSentences(left)
+  invalidate(); paint(left); paint(right)
   // the right is a new viewer: its page and page count, not the old one's
   host.emit({ type: 'page', side: 'right', page: right.viewer.currentPageNumber, pages: right.viewer.pagesCount })
   reportOutline()
@@ -1629,7 +1680,14 @@ async function marksOfPdf(bytes) {
   try { return markWords(tokenizeDocument(await textPages(doc)), await pdfMarks(doc)) } finally { task.destroy() }
 }
 /** the test harness's hooks (spikes/*): the sides, the anchoring's and the sync's helpers, the cache's; getters stay live */
-const harness = () => ({ left, get right() { return right }, get lit() { return lit }, get pointerHit() { return pointer.hit }, pointAt, unitTop, unitDocTop, toPageBox, pageView, light, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
+const harness = () => ({ left, get right() { return right },
+  // what is lit and what the pointer's last frame found: the unit, and its sentence (-1: the whole unit)
+  get lit() { return lit?.id ?? null }, get litSentence() { return lit?.s ?? null }, get pointerHit() { return pointer.hit?.id ?? null }, get pointerSentence() { return pointer.hit?.s ?? null },
+  /** a unit, or one of its sentences, lit as the pointer would light it */
+  light: (id, s = -1) => light(id == null ? null : { id, s }),
+  /** what is painted, as rectangles in the window's CSS pixels, by side: a shape's rows, a block's one */
+  litRects: () => sides.map(sd => sd.lit.flatMap(el => { const b = el.getBoundingClientRect(); return (drawn.get(el) ?? []).map(r => ({ x0: b.left + r.x0, x1: b.left + r.x1, y0: b.top + r.y0, y1: b.top + r.y1 })) })),
+  pointAt, unitTop, unitDocTop, toPageBox, pageView, syncFrom, settle, map, placeOf, scrollFor, setDriver: s => { driver = s }, table: () => table, get readingLine() { return readingLine }, get syncMode() { return syncMode }, get lastAlign() { return lastAlign }, alignClick, regionsOf, regionBox, pageTop, get unitKind() { return unitKind }, shownAt, levelOf, get rightTexts() { return rightTexts }, captionNear, leftFor, figureOf, pdfCache, cached: () => cached, cacheKey: () => cacheKey, figureEntries: () => figureEntries, identityNow: () => theEngine().then(e => e.now()),
   // the right side replaced by a copy of what it shows, as a new compile replaces it (replaceRight)
   paintsOf: n => paints.get(n) ?? 0,
   paperContext: () => paperCtx,
