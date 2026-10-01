@@ -6,9 +6,10 @@
 //  - The tree: BusyTeX's request for a file it did not find in its preloads (busytex.js KPSE_REMOTE.fetch, patched by
 //    busytex/tree.diff to call self.__axtTreeFetch) is answered by the index the page sends ({ axt_tree: { base,
 //    index } }, acknowledged by { axt_tree_ready }), for the program running (the pipeline's command): a file the tree
-//    lacks is missing at once, any other is fetched from the tree, a network failure asked once more. A name whose
-//    answer depends on the program is kept under the program's key too (BusyTeX keeps a file by format and name).
-//  - A compile's network failures are posted ({ axt_network: [names] }) just before its result.
+//    lacks is missing at once, any other is fetched from the tree, a failure (the network's, or a 404 for a file the
+//    index lists) asked once more and never taken for missing. A name whose answer depends on the program is kept
+//    under the program's key too (BusyTeX keeps a file by format and name).
+//  - A compile's network failures are posted ({ axt_network: [the tree's paths] }) just before its result.
 /* global treeFetcher, parseIndex, BusytexPipeline */
 ;(() => {
   const network = self.fetch.bind(self)

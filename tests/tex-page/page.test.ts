@@ -282,9 +282,9 @@ describe('compile', () => {
     const t = page()
     await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
     await t.send({ type: 'project', key: 'p', files: [] })
-    t.bt.failNext(['cmr10'])
+    t.bt.failNext(['fonts/tfm/public/cm/cmr10.tfm'])
     await t.send(compile)
-    expect(t.sent.find(m => m.type === 'compiled')?.network).toEqual(['cmr10'])
+    expect(t.sent.find(m => m.type === 'compiled')?.network).toEqual(['fonts/tfm/public/cm/cmr10.tfm'])
   })
 
   it('an engine whose preload was not hinted: a new BusyTeX with its part and its common files, said in progress, before the old one goes', async () => {

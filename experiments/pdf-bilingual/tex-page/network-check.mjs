@@ -1,5 +1,6 @@
-// The TeX page under network failures, in Chromium: a file of the tree that answers 503 (or not at all) is asked twice
-// and then reported in `compiled.network`, never taken for a file the tree lacks; once the tree answers again, the same
+// The TeX page under network failures, in Chromium: a file of the tree that answers 503 (or not at all, or 404 though
+// the index lists it: an upload not complete) is asked twice and then reported by its path in `compiled.network`,
+// never taken for a file the tree lacks; once the tree answers again, the same
 // compile succeeds with nothing to report. A file the tree lacks is "not found" with no request. Also: a compile
 // whose engine the init did not hint brings BusyTeX up again with it.
 //   node experiments/pdf-bilingual/tex-page/network-check.mjs      (after tex-page/build.mjs)
@@ -11,7 +12,7 @@ import { serveTexSite } from './serve.mjs'
 
 const { chromium } = createRequire(new URL('../../../', import.meta.url).pathname)('playwright')
 const asked = []
-let failing = null // a tree path that fails, and how: 503 or a dropped connection
+let failing = null // a tree path that fails, and how: a status (503, 404) or a dropped connection
 const server = await serveTexSite({ log: row => asked.push(row.path) })
 // the fault: the site's handler is wrapped by listening first
 const handlers = server.listeners('request')
@@ -21,7 +22,7 @@ server.on('request', (req, res) => {
   if (failing && path.endsWith(failing.path)) {
     asked.push(path)
     if (failing.how === 'drop') return req.socket.destroy()
-    res.statusCode = 503
+    res.statusCode = Number(failing.how)
     return res.end()
   }
   for (const h of handlers) h.call(server, req, res)
@@ -54,13 +55,18 @@ asked.length = 0
 failing = { path: '/epigraph.sty', how: '503' }
 const a = await compile(1, doc(pkg))
 const tries = asked.filter(p => p.endsWith('/epigraph.sty')).length
-check('a 503 is asked twice, then reported in network, and the compile fails', !a.ok && a.network?.includes('epigraph.sty') && tries === 2, { ...a, tries })
+const reported = r => r.network?.some(p => p.endsWith('/epigraph.sty'))
+check('a 503 is asked twice, then reported in network, and the compile fails', !a.ok && reported(a) && tries === 2, { ...a, tries })
 failing = { path: '/epigraph.sty', how: 'drop' }
 asked.length = 0
 const b = await compile(2, doc(pkg))
 // (the browser itself may resend a request whose reused connection was dropped: at least the page's two)
 const dropped = asked.filter(p => p.endsWith('/epigraph.sty')).length
-check('a dropped connection the same', !b.ok && b.network?.includes('epigraph.sty') && dropped >= 2, { ...b, tries: dropped })
+check('a dropped connection the same', !b.ok && reported(b) && dropped >= 2, { ...b, tries: dropped })
+failing = { path: '/epigraph.sty', how: '404' }
+asked.length = 0
+const b2 = await compile(21, doc(pkg))
+check('a 404 for a file the index lists the same: the network\'s, not "not found" for good', !b2.ok && reported(b2) && asked.filter(p => p.endsWith('/epigraph.sty')).length === 2, b2)
 failing = null
 asked.length = 0
 const c = await compile(3, doc(pkg))

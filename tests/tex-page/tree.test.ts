@@ -129,14 +129,35 @@ describe('treeFetcher', () => {
     expect(s.asked).toEqual([])
   })
 
-  it('retries a request that failed for a network reason once, and then reports it, never as not found', () => {
+  it('retries a request that failed for a network reason once, and then reports its path, never as not found', () => {
     for (const status of [0, 500, 503, 408, 429]) {
       const s = scripted(status, status)
       const tree = treeFetcher({ index, base: '/t/abc/', get: s.get })
       expect(tree.fetch('cmr10', TFM)).toEqual({ network: true })
       expect(s.asked).toHaveLength(2)
-      expect(tree.failures()).toEqual(['cmr10'])
+      expect(tree.failures()).toEqual(['fonts/tfm/public/cm/cmr10.tfm'])
     }
+  })
+
+  it('a 404 or 410 for a file the index holds is a deployment\'s fault, not TeX\'s verdict: the network\'s, never not found', () => {
+    for (const status of [404, 410]) {
+      const s = scripted(status, status)
+      const tree = treeFetcher({ index, base: '/t/abc/', get: s.get })
+      expect(tree.fetch('cmr10', TFM)).toEqual({ network: true })
+      expect(s.asked).toHaveLength(2)
+      expect(tree.failures()).toEqual(['fonts/tfm/public/cm/cmr10.tfm'])
+    }
+  })
+
+  it('remembers a failure by the file\'s path: the same name asked for another file is asked for', () => {
+    const two = { ...indexOf(['tex/latex/a/x.sty', 'tex/xelatex/b/x.sty']), dependent: new Set(['x.sty']) }
+    let program = 'pdflatex'
+    const asked: string[] = []
+    const tree = treeFetcher({ index: two, base: '/t/abc/', get: url => { asked.push(url); return url.includes('/latex/') ? { status: 0, bytes: null } : { status: 200, bytes } }, program: () => program })
+    expect(tree.fetch('x.sty', TEX)).toEqual({ network: true })
+    program = 'xelatex'
+    expect(tree.fetch('x.sty', TEX)).toEqual({ bytes, path: 'tex/xelatex/b/x.sty' })
+    expect(tree.failures()).toEqual(['tex/latex/a/x.sty'])
   })
 
   it('a file that failed is not asked again in the same compile (kpathsea looks a file up several times), and is in the next', () => {
@@ -156,19 +177,11 @@ describe('treeFetcher', () => {
     expect(tree.failures()).toEqual([])
   })
 
-  it('a 404 from the tree is not found (the index and the tree disagree), with no retry', () => {
-    const s = scripted(404)
-    const tree = treeFetcher({ index, base: '/t/abc/', get: s.get })
-    expect(tree.fetch('cmr10', TFM)).toEqual({ missing: true })
-    expect(s.asked).toHaveLength(1)
-    expect(tree.failures()).toEqual([])
-  })
-
   it('takes the failures of one compile at a time', () => {
     const s = scripted(0, 0)
     const tree = treeFetcher({ index, base: '/t/abc/', get: s.get })
     tree.fetch('cmr10', TFM)
-    expect(tree.takeFailures()).toEqual(['cmr10'])
+    expect(tree.takeFailures()).toEqual(['fonts/tfm/public/cm/cmr10.tfm'])
     expect(tree.failures()).toEqual([])
   })
 

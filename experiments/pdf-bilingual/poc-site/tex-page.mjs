@@ -17,8 +17,9 @@
 //   → { type: 'compile', id, key, main, engine, rerun, bibtex, overrides: [{ path, content }] }
 //   ← { type: 'compiled', id, ok, ms, pdf (transferred), aux, bbl, log, network } | { type: 'compiled', id, ok: false,
 //     error, network }                                  network: the files the compile could not fetch for a network
-//                                                       reason (no answer, a timeout, a server's error), each asked
-//                                                       twice; never a file the tree does not have. error: the page
+//                                                       reason (no answer, a timeout, a server's error, a 404 for a
+//                                                       file the index lists), each asked twice, by the tree's path;
+//                                                       never a file the tree does not have. error: the page
 //                                                       failed, not TeX — no log; network as init-done's (an engine
 //                                                       switch's downloads)
 //   A compile after an init that failed brings BusyTeX up first, with that init's hints. An engine switch brings up a

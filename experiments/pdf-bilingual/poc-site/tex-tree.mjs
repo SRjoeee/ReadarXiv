@@ -116,9 +116,11 @@ const encodePath = path => path.split('/').map(encodeURIComponent).join('/')
  * the network failed), `program()` → the program asking (the pipeline's name for the command running).
  * `fetch(name, format)` → { bytes, path } | { missing: true } | { network: true }:
  *  - a name the index lacks is missing, with no request;
- *  - 200 is the file; 404 or 410 is missing (the index and the tree disagree);
- *  - anything else — no answer, a timeout, a server's error, a refusal — is the network's: asked once more, and if it
- *    fails again the name is kept among the failures, which the compile reports, and is not taken for missing; it is
+ *  - 200 is the file;
+ *  - anything else is the network's — no answer, a timeout, a server's error, a refusal, and a 404 or 410 too: the
+ *    index is built from the tree it is published with, so a file it lists that the tree does not answer is an upload
+ *    that is incomplete or out of order, not a file TeX should be told is not there. Asked once more, and if it fails
+ *    again the file's path is kept among the failures, which the compile reports, and is not taken for missing; it is
  *    not asked again until the failures are taken (the next compile).
  */
 export function treeFetcher({ index, base, get, program = () => '*' }) {
@@ -128,13 +130,12 @@ export function treeFetcher({ index, base, get, program = () => '*' }) {
       const path = resolve(index, format, name, program())
       if (!path) return { missing: true }
       // failed already in this compile: kpathsea looks a file up several times, and each try may wait for a timeout
-      if (failed.includes(name)) return { network: true }
+      if (failed.includes(path)) return { network: true }
       for (let attempt = 0; attempt < 2; attempt++) {
         const r = get(base + encodePath(path))
         if (r.status === 200 && r.bytes) return { bytes: r.bytes, path }
-        if (r.status === 404 || r.status === 410) return { missing: true }
       }
-      if (!failed.includes(name)) failed.push(name)
+      failed.push(path)
       return { network: true }
     },
     /** the key BusyTeX keeps a fetched file under: its name, or its name and the program where the answer depends on
