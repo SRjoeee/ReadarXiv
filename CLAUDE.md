@@ -69,9 +69,9 @@ pnpm fixtures:fetch      # download and verify the fixtures the repository may n
 pnpm fixtures:stats      # rule coverage audit over the fixtures
 pnpm zip                 # the store archive; pnpm icons regenerates the icons
 pnpm tokens              # src/styles/tokens.css from src/shared/tokens.ts; a test fails while the two differ
-pnpm exec tsx experiments/pdf-bilingual/spikes/highlight-gate.mjs     # the PDF reader's highlight in Node: the ten papers' runs and the ground truth (data/runs/highlight-ten, highlight-gt, this machine's); WRITE_BASELINE=1 records a change meant
+pnpm exec tsx experiments/pdf-bilingual/spikes/highlight-gate.mjs     # the PDF reader's highlight in Node, on this machine's data (never in the repository): the ten papers' runs and the ground truth (data/runs/highlight-ten, highlight-gt), their sources and arXiv's PDFs (data/corpus), and the Microsoft answers their sentences are made again from (out/highlight/B3/ms-cache-zh-auto.json, ms-cache-zh-en.json; a set missing fails the gate); WRITE_BASELINE=1 records a change meant
 pnpm exec tsx experiments/pdf-bilingual/spikes/highlight-papers.mjs experiments/pdf-bilingual/out/highlight/papers   # the browser gate's demo papers, their units carrying their sentences
-node experiments/pdf-bilingual/spikes/highlight-gate-browser.mjs checks  # the highlight in a real browser (pnpm build first; PAPERS defaults to those demo papers); costs: BASE_BUILD=<a build to compare with>
+node experiments/pdf-bilingual/spikes/highlight-gate-browser.mjs checks  # the highlight in a real browser (pnpm build first; PAPERS defaults to those demo papers); floats, resting, tokens: those checks alone; costs: BASE_BUILD=<a build to compare with>
 AXT_MEASURE=1 pnpm vitest run tests/perf       # the cost measurements (readings, not assertions)
 AXT_CHROME=<binary> pnpm e2e                   # the e2e suite on a chosen Chrome; probes live in tests/e2e/probes/
 ```

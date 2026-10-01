@@ -148,6 +148,13 @@ ledger, briefs, reports and reviews: `.superpowers/sdd/2026-09-30-pdf-highlight/
   Microsoft: 12.6 s → 155 ms (02785), 20.1 s → 173 ms (06701); text-only starts 1 702, all on the marks' token.
 - **B5 — the documents**: `944087c5` (the reader's design §17), `c277343a` (DESIGN §16), `683dc20f` (CHANGELOG),
   `57fe8ce4` (the gates as commands, the demo papers' maker), and this record.
+- **The final review's fix round** (two lanes over `a7a2a056..346c26fc`; 2026-10-02): `0d62a8b6` (a pointer resting on
+  the right pane follows it through a swap), `9041f4a4` (a lit sentence waits for its sentences, never drawn as its
+  paragraph — through a swap and the left anchored again), `31a557fe` (a side's layout keeps none of its tokens:
+  2608.02459's heap 31.8 → 10.5 MB), `f02a0860` (the splitter: a sentence ending on a formula, a month or a label word
+  keeps its boundary — on the HTML page 148 cuts added in 116 of 1 566 blocks with cuts, each after a formula),
+  `78cb2752` (a run again keeps its sentences), `42806b7d` (a click in a sentence's rows is its unit's), `61b33e04`
+  (the wheel check needs something under the pointer), and the documents' numbers from one run of each gate.
 
 ### Declined or dropped, and why
 
@@ -161,7 +168,7 @@ ledger, briefs, reports and reviews: `.superpowers/sdd/2026-09-30-pdf-highlight/
 - **A rule for the lone equation number** (2608.09746 #27) and **a 16 pt bound on lead walks** (the n-f-g table): no
   general rule tells them apart (the maintainer's rule: general methods only); recorded as known limits.
 - **Merging a small row into the row above** to hold a hanging glyph: measured, fixed neither case and put 31 more
-  boundaries through a word; the unit is lit whole instead (13 units).
+  boundaries through a word; the unit is lit whole instead (13 units then; 12 on the gate of 2026-10-02).
 - **Real glyph widths** from PDF.js's font data: not worth it now; the proportional estimate holds 3 of 166.
 - **06701's per-light cost** (a sweep lights three times as many shapes): left, near its limit.
 

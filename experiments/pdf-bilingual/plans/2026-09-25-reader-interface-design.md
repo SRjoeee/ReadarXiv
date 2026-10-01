@@ -664,8 +664,9 @@ The hover highlight (the reading options' switch, S-P-80) as built on `exp/pdf-h
 `2026-10-01-pdf-highlight.md`, its record at the end): what lights and how it looks, where its shapes come from, and
 what it costs. Every number is from the ten papers of the highlight's investigation (`data/runs/highlight-ten`: arXiv's
 PDF on the left, our Chinese typesetting on the right), investigator B's four papers of the ground truth
-(`data/runs/highlight-gt`) and the demo papers, measured 2026-10-01 unless dated otherwise; the gates that hold them are
-`spikes/highlight-gate.mjs` (Node) and `spikes/highlight-gate-browser.mjs` (a real browser).
+(`data/runs/highlight-gt`) and the demo papers. The counts are one run of the Node gate, `spikes/highlight-gate.mjs`, on
+2026-10-02 at the head of the final review's fix round, and the costs one run of the browser gate's,
+`spikes/highlight-gate-browser.mjs costs`, that day (§17.6); what another probe measured carries its own date.
 
 ### 17.1 What lights
 
@@ -711,15 +712,19 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   starts where its match covers 80 % of its words or more (B3c): on the ten papers 625 of 738 units of more than one
   sentence, 1 702 starts, all on the token the marks give; on the ground truth's arXiv PDFs on the mark's line as often
   as with marks (98.6–100 % against 98.9–100 %). In a live open with Microsoft and nothing cached, the first sentence
-  lit 155 ms after the first preview on 2608.02785 (12.6 s before) and 173 ms on 2608.06701 (20.1 s before).
+  lit 155 ms after the first preview on 2608.02785 (12.6 s before) and 173 ms on 2608.06701 (20.1 s before; B3c,
+  2026-10-01).
 - **Held to a ground truth**: investigator B's compiles with a mark at every sentence's start — starts on the mark's
   line on our original 98.9–100 %, our translation 100 %, arXiv's PDF 98.9–100 % with the marks and 98.6–100 % by text
   alone. The ten papers: 965 running-text units lit by sentence on both sides, 707 of more than one sentence; B's four
   papers 451 of 466 units of more than one sentence with every start found on arXiv's PDF and our translation.
-- **The splitter's abbreviations** (shared with the HTML page, DESIGN §8.6): no cut after a case's `v.`, a place's or a
-  title's (`Mt.`, `Mr.`), the label of a numbered part (`Ch.`, `Sect.`, `Eqn.`, `Tab.`, `Alg.`), Latin and dated ones,
-  or any short capitalised label before its number; 16 of 8 015 cuts removed over the fixtures and the reader's units,
-  each false, none added (2026-10-01).
+- **The splitter's abbreviations** (shared with the HTML page, DESIGN §8.6): no cut after a place's or a title's
+  (`Mt.`, `Mr.`) or a Latin one; after a case's `v.` only behind a capitalised name (`Oregon v. Mitchell`, not `a vertex
+  v.`), after the label of a numbered part (`Ch.`, `Sect.`, `Eqn.`, `Tab.`, `App.`) or a month only before its number,
+  after any short capitalised label only before a number that is no enumerator (`2)`, `2.`); and never after a
+  placeholder's own letter — a sentence ending on a formula keeps its boundary. On the reader's units of twelve papers,
+  against the splitter before 2026-10-01: 6 cuts removed (`Oregon v.` ×5, `Mt.`), each false, none added
+  (2026-10-02); the reader's split context gives a formula as `x`, so the placeholder rule changes nothing there.
 
 ### 17.3 The shapes
 
@@ -736,7 +741,7 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   em for CJK — and for dashes and quotation marks in an item mostly CJK — half an em otherwise; an even share in a
   monospaced face), widened over the marks it sets against itself (an opening bracket, a closing stop; a CJK stop inks
   half its em) and to the end of an item of marks alone after it. English sentence boundaries through a letter on the
-  canvas: 3 of 166 (61 with an even share).
+  canvas: 3 of 166 (61 with an even share; B3's probe, 2026-10-01).
 - **One outline a shape, 3 px corners**, padded 3 px beside the column's text and half the leading above and below —
   the lower quartile of the space between a kind's lines on that page (a footnote by a footnote's), and over what hangs
   past the first and last lines (a script, a denominator).
@@ -745,12 +750,13 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   column or a page break the rows reach the unit's text edge there — the column's edge less the unit's least indent, so a
   list's item keeps to its own — but not over another unit's words on that row, nor under a float's painted shape; an
   overfull line sticks out alone, by up to 6 units. Where a unit's shapes cannot hold its words (two lines of text made
-  one row by a tall formula, a glyph hanging into another sentence's row) it lights whole: 13 units of 973 on the ten
-  papers (2026-10-01).
+  one row by a tall formula, a glyph hanging into another sentence's row) it lights whole: 12 of the 977 units whose
+  starts both sides found, on the ten papers.
 - **The hit test is the paint**: the same shapes, the smaller unit winning where two overlap (a heading run into its
   paragraph); a float's shape wins over a larger block, a smaller block over the float. On the ten papers 0 holes in
-  25.1 M points of painted shapes (7–16 % of points lit nothing or a neighbour before), 0 points lit as another sentence
-  of the unit, 0 points of running text taken by a float, and every anchored unit lit (1 829 of 2 553 on both sides).
+  37.3 M points of painted blocks (7–16 % of points lit nothing or a neighbour before), in 25.3 M of sentence shapes and
+  in 6.2 M of floats' shapes, 0 points lit as another sentence of the unit, 0 points of running text taken by a float,
+  and every anchored unit lit (1 829 of 2 553 on both sides).
 - **Floats** (`floats.mjs`), made on a page's first drawing from the operator list it was drawn by (its figures, its
   rules, its other marks): each figure to its nearest caption only, the one just below first; from each caption a walk
   away from it over what lies across it — lines no running text owns, figures, marks, rules — stopping at another unit's
@@ -781,32 +787,37 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
 ### 17.5 What a copy keeps
 
 - The record keeps each unit's sentences beside its translation (`CachedUnit.sentences`, `{ src, tr }`: the offsets
-  above), additive and optional — no pipeline change; on 2608.02459 +20.7 KB (2.7 %). A copy made before keeps working
-  and lights by paragraph until its paper is translated again. A copy's sentences are used only where they are of their
-  shape and the translation made again from its pieces is the text they were counted in; what the offsets mean rests on
-  `plainSource`, `plainTranslated` and `anchors.mjs tokens` — a change to any is a change of the record.
+  above), additive and optional — no pipeline change; on 2608.02459 +20.7 KB (2.7 %, B3, 2026-10-01). A copy made
+  before keeps working and lights by paragraph until its paper is translated again. A copy's sentences are used only
+  where they are of their shape and the translation made again from its pieces is the text they were counted in; what
+  the offsets mean rests on `plainSource`, `plainTranslated` and `anchors.mjs tokens` — a change to any is a change of
+  the record. A run again (a retry, the network back) seeds itself with what the visit's last run made, sentences and
+  all (`cache.mjs seedAgain`).
 
-### 17.6 What it costs (2026-10-01, interleaved against a base build)
+### 17.6 What it costs (2026-10-02, interleaved against a base build)
 
-The base is `174b5896` — the paragraph blocks of B1, before sentences and floats; B1 against the reader before it
-(`5957a4be`): per light p50 script 0.15–0.17 ms against 0.14–0.19, style and layout 0.28–0.34 against 0.22–0.33, the
-open within noise.
+One run of the browser gate's `costs` (three rounds, pooled) at the head of the final review's fix round against
+`174b5896` — the paragraph blocks of B1, before sentences and floats. B1 against the reader before it (`5957a4be`,
+2026-10-01): per light p50 script 0.15–0.17 ms against 0.14–0.19, style and layout 0.28–0.34 against 0.22–0.33, the open
+within noise.
 
-
-- Per light, p50 script 0.129–0.232 ms against the base's 0.147–0.164 in the same runs (a sweep on 08350, 29181,
-  06701); style and layout after it 0.245–0.362 ms against 0.256–0.351; no layout forced where the highlight is
-  written; no long task in a sweep. 2608.06701 sits near its limit (0.232–0.298 against 0.164–0.186, limits 0.26–0.29 across runs): a sweep there
-  lights 44 times, sentences, against the base's 14 blocks.
-- The open: time to ready and anchoring within noise of the base (on a loaded machine paired rounds differ by −395 to
-  +336 ms; in Node, anchoring 90.5 ms cold on 02459's translation, as before the text-only starts).
-- In idle time after the open, 02459's layout 14.9 ms a side (its drawn pages' geometry with it) and its sentences
-  2.4 ms; a page's geometry at its first drawing 0.03–0.17 ms in the browser (B1), the rows' reach adding 6–12 % since;
-  a page's floats 0.3–0.8 ms p50 (up to about 4 ms on a side's first pages), from the operator list it was drawn by —
-  asking the worker for it again had made pages 7–8 of 06701 take 326–387 ms to draw, against 198–224.
+- Per light (a sweep on 08350, 29181, 06701), p50 script 0.152–0.243 ms against the base's 0.159–0.179, p95
+  0.319–0.427 against 0.291–2.403; style and layout after it p50 0.259–0.393 ms against 0.279–0.366; no layout forced
+  where the highlight is written; no long task in a sweep. 2608.06701 sits near its limit (0.243 against 0.159, the
+  limit 0.26): a sweep there lights 44 times, sentences, against the base's 14 blocks.
+- The open: time to ready and anchoring within noise of the base — 02459 873 and 607 ms against 909 and 615 (p50),
+  04322 537 and 419 against 540 and 429 (on a loaded machine paired rounds have differed by −395 to +336 ms; in Node,
+  anchoring 90.5 ms cold on 02459's translation, B3c, 2026-10-01).
+- In idle time after the open, 02459's layouts 15.1–17.0 ms on the left and 10.1–11.1 ms on the right, each in an
+  idle period of its own with its drawn pages' geometry (the base's paragraph blocks 8.7–9.3 and 7.8–8.3), and its
+  sentences 2.3–2.9 ms a side; a page's geometry at its first drawing 0.03–0.17 ms in the browser (B1, 2026-10-01), the
+  rows' reach adding 6–12 % since; a page's floats 0.3–0.8 ms p50 (up to about 4 ms on a side's first pages; B4,
+  2026-10-01), from the operator list it was drawn by — asking the worker for it again had made pages 7–8 of 06701
+  take 326–387 ms to draw, against 198–224.
 - Memory: a side's layout keeps what a page's geometry needs of its tokens, not the tokens — on 2608.02459, both
   layouts and sentences made and the garbage collected, the heap 10.5 MB; 31.8 MB while an arrow the layout kept held
-  the anchoring's scope and both sides' tokens with it (the final review, 2026-10-01; the browser gate checks the
-  tokens are let go).
+  the anchoring's scope and both sides' tokens with it (the final review; the browser gate checks the tokens are let
+  go).
 
 ### 17.7 Known limits
 
@@ -817,8 +828,8 @@ open within noise.
 - An equation number set on its own line below its display (2608.09746 #27) is no unit's and is not lit.
 - A table at a page's head whose first row is single letters over numbers, after a display that closed the page before,
   is taken by that display's walk: no distance tells them apart (A1, measured: lead walks' first gaps up to 19.6 pt).
-- Two lines of text made one row by a tall formula, with a sentence beginning on the second, light their unit whole (13
-  units on the ten papers).
+- Two lines of text made one row by a tall formula, with a sentence beginning on the second, light their unit whole (12
+  units on the ten papers, with those a hanging glyph makes whole).
 - Before our marked original is compiled, units of arXiv's PDF matched under 80 % by their text alone light whole (113
   of 738 on the ten papers; 29181 38 of 90).
 - A copy made before the highlight lights by paragraph until it is translated again; an LLM's sentences are measured

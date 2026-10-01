@@ -885,7 +885,7 @@ is only how it meets the rest of the extension.
   — on arXiv's PDF before our marked original's marks come — by a text match covering 80 % of the unit's words. The
   record keeps each unit's sentences beside its translation, additively; an older copy lights by paragraph until
   translated again. The geometry, the pointer's path, the costs and the known limits:
-  `experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md` §17 (2026-10-01).
+  `experiments/pdf-bilingual/plans/2026-09-25-reader-interface-design.md` §17.
 - **A paper that cannot be had** — no source, or none of the ways of setting it worked (every one tried, none for want
   of time: a slow machine says nothing of the paper) — shows the original with the side-by-side and translation
   displays greyed and a capsule that says so, without why, offering the HTML version where arXiv has one (UI.md
