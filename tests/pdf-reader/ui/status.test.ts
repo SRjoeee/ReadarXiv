@@ -42,6 +42,15 @@ describe('the states (the reader\'s design, §8)', () => {
     expect(lineOf(at({ phase: 'failed' })).on).toBe(false)
   })
 
+  it('the line moves with the typesetting the final waits for: each compile ended after the translation, the end only with the final (the F2 review\'s M1)', () => {
+    const v = (over: Partial<ReaderState>) => lineOf(at({ phase: 'translating', progress: 1, ...over })).value
+    const steps = [v({ progress: 0.9 }), v({ finishing: 0 }), v({ finishing: 1 }), v({ finishing: 2 }), v({ finishing: 3 }), v({ finishing: 3, shown: 'final' })]
+    for (let k = 1; k < steps.length; k++) expect(steps[k]).toBeGreaterThan(steps[k - 1] as number)
+    expect(steps.at(-2)).toBeLessThan(1)
+    // the translation's end is not near the line's: with a service that answers in seconds the compiles are most of it
+    expect(v({ finishing: 0 })).toBeLessThan(0.7)
+  })
+
   it('counts the paragraphs that failed, with 重试, until closed', () => {
     expect(capsuleOf(at({ phase: 'ready', failedUnits: 3 }), none)).toEqual({ kind: 'notice', text: '3 处翻译失败', action: 'retry' })
     expect(capsuleOf(at({ phase: 'ready', failedUnits: 3 }), { ...none, closed: true })).toBeNull()

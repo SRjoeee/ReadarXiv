@@ -40,14 +40,19 @@ export function spokenOf(state: ReaderState): string {
  * The progress line under the toolbar, all that shows a load or a translation under way (the maintainer, 2026-09-25):
  * one line over the whole process, which never starts again (the maintainer asked why it ran twice, 2026-10-02) — the
  * PDF's download its first stretch when a translation follows it (all of it when the original alone is shown), then
- * the paragraphs translated, and the final's compile its last stretch: every paragraph translated is not yet the end
+ * the paragraphs translated, then the typesetting the final waits for, which moves with each compile that ends — half
+ * the rest at each, since how many are left is not known (the marked original, a measure, a strategy failed), the end
+ * only with the final on screen. That last stretch is half the run's: with a service that answers in seconds, the
+ * compiles are most of the wait, and the line stood at 0.87 for 60–90 % of the process while they ran (the F2
+ * review's M1)
  */
 export interface Line { on: boolean; value: number }
-/** the line's share for the download where a translation follows it, and the final's at the end of the translation's */
-const DOWNLOAD = 0.15, FINAL = 0.15
+/** the line's share for the download where a translation follows it, and the typesetting's of the run's */
+const DOWNLOAD = 0.15, FINAL = 0.5
 export function lineOf(state: ReaderState): Line {
   if (state.phase === 'loading') return { on: true, value: state.loaded * (state.display === 'original' ? 1 : DOWNLOAD) }
-  const run = state.shown === 'final' ? 1 : (1 - FINAL) * state.progress
+  const typeset = state.finishing < 0 ? 0 : 1 - 2 ** -state.finishing
+  const run = state.shown === 'final' ? 1 : (1 - FINAL) * state.progress + FINAL * typeset
   return { on: running(state), value: DOWNLOAD + (1 - DOWNLOAD) * run }
 }
 
