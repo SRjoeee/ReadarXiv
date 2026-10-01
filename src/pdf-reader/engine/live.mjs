@@ -64,6 +64,8 @@ const beginDocument = text => text.search(/\\begin\s*\{document\}/)
 const pageFailed = r => !r.ok && !!r.error
 /** why a compile gave no PDF: the first TeX error, or what the compiler said */
 const whyFailed = r => (r.ok ? undefined : ((r.log ?? '').match(/^(?:\S+:\d+: .*|! .*)$/m)?.[0] ?? r.error ?? (r.log ?? '').slice(-300)).slice(0, 300))
+/** why a compile that gave a PDF is not shown (unsettable): the font that would not load, or the letters it lost */
+const whyUnset = r => (lastTexLog(r.log).match(/^! Font .* not loadable.*$/m)?.[0] ?? `a letter it could not set (${[...lostIn(r.log).keys()].slice(0, 5).join(', ')})`).slice(0, 300)
 
 /**
  * The compiler a visit uses, opened when first needed (`open` → { compile, close }) and again after a failure to open.
@@ -196,8 +198,9 @@ export const TYPESETTING_VERSION = '1'
  * data)` every step, for the timeline. A translation made again from a cached copy (REPORT, eighteenth addendum):
  * `seed`, index → the old translation { pieces, by, tried, state, current }, fills the run at the start, and one
  * `current` (cache.mjs reusable) is not sent again; `marks`, the left
- * side's marks when known, skips the marked original; `identity` is what each unit is tried under; `pipelineCurrent`,
- * whether the seed's pipeline is this one. Resolves when the final compile is in, with `results` (index → { pieces,
+ * side's marks when known, skips the marked original (but where the typesetting rule needs its readings);
+ * `identity` is what each unit is tried under; `pipelineCurrent`, whether the copy's compile is this reader's (its
+ * pipeline and its typesetting): a seeded run that changes nothing then compiles nothing. Resolves when the final compile is in, with `results` (index → { pieces,
  * state, by, tried, sentences? }), `changed` (anything typeset changed), `settled` (a final that set every letter), `exhausted`
  * (every strategy failed to set the final, none for want of time: the paper cannot be had this way) and, with it,
  * `originalOk` (the paper's own source set here, or before: only then is it the translation that cannot be set, rather
@@ -381,7 +384,7 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
         // shown only when it set every letter: a translation with letters missing is not one (Devin on #294); the note says
         // ok for what is shown, and with no strategy left the reader keeps what it has
         const shown = await settled(r)
-        note('preview', { ok: shown, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, typeset: !!plan, error: shown ? undefined : whyFailed(r) ?? 'a letter it could not set' })
+        note('preview', { ok: shown, units: snapshot.size, ms: r.ms, roundTrip: Date.now() - t0, strategy: strategy().name, typeset: !!plan, error: shown ? undefined : whyFailed(r) ?? whyUnset(r) })
         if (shown) {
           previews++
           measuring = plan && whole(snapshot) ? { plan, strategy: strategy().name, r } : null
@@ -439,7 +442,7 @@ export async function runLive(paper, { lang, compile, translate, format = 'marke
     for (;;) {
       r = await ask({ main: project.main, engine: strategy().engine, rerun: true, bibtex: meta.bbl ? false : null, overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: false, aux, bbl, typeset, note }) })
       ok = await settled(r)
-      note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, typeset: !!typeset, undefinedCitations: [...new Set([...(r.log ?? '').matchAll(/^(?:LaTeX|Package natbib) Warning: Citation [`']([^']+)' .*undefined/gm)].map(m => m[1]))].slice(0, 8), error: ok ? undefined : whyFailed(r) ?? 'a letter it could not set' })
+      note('final', { ok, ms: r.ms, roundTrip: Date.now() - t0, previews, strategy: strategy().name, typeset: !!typeset, undefinedCitations: [...new Set([...(r.log ?? '').matchAll(/^(?:LaTeX|Package natbib) Warning: Citation [`']([^']+)' .*undefined/gm)].map(m => m[1]))].slice(0, 8), error: ok ? undefined : whyFailed(r) ?? whyUnset(r) })
       if (ok) break
       // not answered, or the page failed: once more with the same strategy, then what is shown stays — a slow machine or
       // the page's own failure is no reason to change how the paper is set (Part 3's checks: a timed-out preview moved
