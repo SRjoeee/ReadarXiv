@@ -664,7 +664,11 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
   })
   // a display a unit sets before its first words or after its last (latex-front's `lead`, `trail`: its letters) stands
   // outside its marks, which are in running text: it is taken from beyond them, the lines its letters explain — the
-  // leading ones first, so that a unit's trailing walk stops at the display the next unit opens with
+  // leading ones first, so that a unit's trailing walk stops at the display the next unit opens with. Neither walk is
+  // bounded by a float's skip (FLOAT_SKIP): on the 113 papers of the ground truth (recompiled 2026-10-01), the first
+  // line a lead walk takes stands up to 19.6 pt above the unit's first line at a 10 pt body — 5 of 62 over 16 pt, each
+  // a row of the display before it. So a table at a page's head, headed by single letters over rows of digits (which
+  // no letters refuse), is still taken where the display closed the page before (the re-review of A1, n1: open)
   const walk = walker(doc, ms, owner, line)
   const beyond = []
   for (const edge of ['lead', 'trail']) {
