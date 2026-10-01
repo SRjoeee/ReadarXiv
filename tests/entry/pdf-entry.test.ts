@@ -66,6 +66,8 @@ describe('readerWanted: the PDF page and its reader (the reader\'s design, §2)'
   it('reads the hash as the HTML page does, in any capitalisation: the name is written ReadarXiv too (#299, Part 5\'s M4)', () => {
     for (const hash of ['#ReadarXiv', '#READARXIV']) expect(readerWanted({ enabled: false, hash })).toEqual({ open: true, translate: true })
     expect(readerWanted({ enabled: false, hash: '#readarxiv-not' })).toEqual({ open: false, translate: false })
+    // 0.4.0's hash as well, the HTML page's rule whole
+    expect(readerWanted({ enabled: false, hash: '#axt-translate' })).toEqual({ open: true, translate: true })
   })
 })
 

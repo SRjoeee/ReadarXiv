@@ -42,7 +42,8 @@ export function sourceKindOf(contentType: string | null): 'source' | 'pdf-only' 
 /**
  * Whether the PDF page opens the reader (the reader's design, §2): the setting on, or the address asking for it with
  * `#readarxiv` — an explicit request, which also asks for a translation. The hash is read as the HTML page reads it
- * (`startsTranslation`: any capitalisation)
+ * (`startsTranslation`): any capitalisation, and 0.4.0's `#axt-translate` too — no PDF address carried it, and taking
+ * it costs nothing and keeps the one rule
  */
 export function readerWanted({ enabled, hash }: { enabled: boolean; hash: string }): { open: boolean; translate: boolean } {
   const asked = startsTranslation(hash)
