@@ -240,7 +240,7 @@ for (const f of ['tex.js', 'tex-page.mjs']) copyFileSync(join(EXP, 'poc-site', f
 // (LICENSE.TL, LICENSE.CTAN) and each package's own
 {
   const legal = join(pageDir, 'legal')
-  const SOURCE = ['package.json', 'setup.mjs', 'poc-site/tex.js', 'poc-site/tex-page.mjs', 'poc-site/tex-worker.js', 'poc-site/tex-tree.mjs', 'busytex/research.diff', 'busytex/tree.diff', 'tex-page/build.mjs', 'tex-page/tree.mjs', 'tex-page/kpathsea.mjs', 'tex-page/manifest.mjs', 'tex-page/sizes.mjs', 'tex-page/measured.json']
+  const SOURCE = ['package.json', 'setup.mjs', 'spikes/make-metafont.mjs', 'poc-site/tex.js', 'poc-site/tex-page.mjs', 'poc-site/tex-worker.js', 'poc-site/tex-tree.mjs', 'busytex/research.diff', 'busytex/tree.diff', 'tex-page/build.mjs', 'tex-page/tree.mjs', 'tex-page/kpathsea.mjs', 'tex-page/manifest.mjs', 'tex-page/sizes.mjs', 'tex-page/measured.json']
   for (const f of SOURCE) { mkdirSync(dirname(join(legal, 'source', f)), { recursive: true }); copyFileSync(join(EXP, f), join(legal, 'source', f)) }
   copyFileSync(join(EXP, 'node_modules/texlyre-busytex/LICENSE'), join(legal, 'AGPL-3.0.txt'))
   copyFileSync(join(EXP, '../../LICENSE'), join(legal, 'GPL-3.0.txt'))
@@ -261,9 +261,11 @@ source is offered here:
     https://github.com/TeXlyre/texlyre-busytex/releases/tag/assets-v${busytex}, and the sources those were built from
     (busytex-versions.txt: TeX Live 2026, expat, fontconfig, Emscripten).
 
-The TeX Live tree under /t/ is TeX Live 2026's texmf-dist, unmodified, under TeX Live's terms (LICENSE.TL) and CTAN's
+The TeX Live tree under /t/ is TeX Live 2026's texmf-dist, under TeX Live's terms (LICENSE.TL) and CTAN's
 (LICENSE.CTAN), each package under its own licence (its files in the tree say which); TeX Live's sources:
-https://tug.org/texlive/ .
+https://tug.org/texlive/ . One directory is added: fonts/tfm/axt-metafont/, the metrics of LH Cyrillic fonts TeX Live
+does not ship, made by TeX Live's own METAFONT (mktextfm) from the LH fonts' sources in the tree, under their licence
+(the LaTeX Project Public License; source/spikes/make-metafont.mjs makes them).
 `)
 }
 const EXTRA = join(EXP, 'data/pk-flat')
