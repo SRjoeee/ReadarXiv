@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { type Anchor, type DocToken, lineRects, tokenizeDocument } from '@/pdf-reader/engine/anchors.mjs'
-import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, shapePath } from '@/pdf-reader/engine/highlight.mjs'
+import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit, shapePath } from '@/pdf-reader/engine/highlight.mjs'
 
 // What a unit paints on a side and where the pointer lights it (highlight.mjs): the pages given as PDF.js's text items,
 // each unit's tokens as anchorUnits would give them. A page is 600 wide; body text is 10 high on lines 12 apart, its
@@ -343,6 +343,51 @@ describe('sentenceOf, and hitOf with sentences: the sentence shape, and the sent
     expect(rows.map(r => [r2(r.x0) > L, r2(r.x1)])).toEqual([[true, R], [false, R], [false, r2(rows[2]!.x1)]])
     expect(rows[1]!.y1).toBeCloseTo(rn.mids[2]!)
     expect(rows[1]!.y0).toBeCloseTo(rn.mids[5]!)
+  })
+})
+
+describe('the sentences tile their run, and hold their words, or the unit is lit whole', () => {
+  const px = 2
+  /** every point of the run's block in one sentence's shape at most, and lighting that one */
+  const tiles = (layout: ReturnType<typeof side>, id: number, starts: Int32Array) => {
+    const run = nth(runsOf(layout, id)), n = starts.length + 1, shapes = Array.from({ length: n }, (_, s) => sentenceOf(layout, run, starts, s, px))
+    const b = blockOf(run, px), bad: string[] = []
+    for (let x = b.x0 + 0.25; x < b.x1; x += 1.5) for (let y = b.y0 + 0.25; y < b.y1; y += 1.5) {
+      const ins = shapes.flatMap((rs, s) => (rs.some(r => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) ? [s] : []))
+      const hit = hitOf(layout, 1, x, y, px, i => (i === id ? starts : null))
+      // a smaller unit painted over the run (none here) aside, the sentence painted there is the one lit, and nothing of the
+      // unit is lit where none is painted
+      const mine = hit?.id === id ? hit.s : null
+      if (ins.length > 1 || (ins.length ? mine !== ins[0] : mine !== null)) bad.push(`${x.toFixed(1)},${y.toFixed(1)}: ${ins} ${mine}`)
+    }
+    return bad
+  }
+
+  it('a script the text layer gives after its line, a row of its own under the line where the next sentence began, is that sentence\'s: no hole, no overlap', () => {
+    // a line whose third word carries a subscript set low (its own row), given in the stream before the line's fourth
+    // word; the next sentence begins at the line's sixth word
+    // (the lines after it 18 apart, where a script under a line touches neither line, as 2608.08350's did)
+    const pages = [[...prose(740, 20), item('one two three', 50, 480, { width: 75 }), item('ij', 120, 472, { size: 7, width: 10 }), item('four five. Six seven eight', 130, 480, { width: 170, eol: true }), ...prose(462, 1), ...prose(444, 1), ...prose(400, 10)]]
+    const d = docOf(pages), u = range(at(d, 'one'), at(d, 'one') + 24)
+    const layout = side(pages, [[0, u]])
+    const run = nth(runsOf(layout, 0))
+    expect(run.rows.length).toBe(4)
+    const starts = Int32Array.from([at(d, 'six')])
+    expect(tiles(layout, 0, starts)).toEqual([])
+    // the subscript's row is the second sentence's: across the run, under the first sentence's end
+    expect(sentenceOf(layout, run, starts, 1, px).length).toBe(2)
+    expect(sentencesFit(layout, 0, starts)).toBe(true)
+  })
+
+  it('two lines of text one row (a tall formula between them) with a sentence beginning on the second: lit whole', () => {
+    // a line, then a sum's sign tall enough to make it one row with the next line, where the second sentence begins
+    const pages = [[...prose(740, 20), item('first line words here', 50, 480, { width: 250, eol: true }), item('S', 300, 472, { size: 20, width: 8 }), item('second line. Then more', 50, 468, { width: 250, eol: true }), ...prose(456, 2), ...prose(400, 10)]]
+    const d = docOf(pages), first = at(d, 'first'), u = range(first, first + 24)
+    const layout = side(pages, [[0, u]])
+    expect(nth(runsOf(layout, 0)).rows.length).toBe(3)
+    expect(sentencesFit(layout, 0, Int32Array.from([at(d, 'then')]))).toBe(false)
+    // a sentence that begins on a row of its own fits
+    expect(sentencesFit(layout, 0, Int32Array.from([at(d, 'text', first)]))).toBe(true)
   })
 })
 

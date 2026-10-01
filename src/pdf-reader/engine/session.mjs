@@ -30,7 +30,7 @@ import { whenVisible } from '../visible'
 import { contentsOf, outlineOf } from '../outline'
 import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
-import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, shapePath } from './highlight.mjs'
+import { blockOf, clickOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
 import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
@@ -196,11 +196,19 @@ function makeSide(container) {
   // each unit's sentences after the first begin on it, made with the geometry (findSentences); at, scrollX, scrollY:
   // where its pane and pages are, kept for the pointer (measure); lit: the highlight's elements painted on it
   const side = { container, eventBus, linkService, viewer, doc: null, anchors: new Map(), units: new Map(), geo: null, makeGeo: null, layoutWanted: false, starts: null, at: null, scrollX: 0, scrollY: 0, lit: [], figs: new Map(), figGen: new Map(), frames: null, anchored: null, fit: 'page-width', keeper: keepOverlays('.axt-fig, .axt-hl-layer'), laid: new Map() }
-  // a unit's sentences' starts on this side where they are known on both, for the hit test and the paint: else it is
-  // lit whole on both (a translation coming in, laid out out of sight, is the right side's to the left)
-  side.startsOf = id => { const mine = side.starts?.get(id), theirs = (side === left ? right : left).starts?.get(id); return mine && theirs && mine.length === theirs.length ? mine : null }
+  // a unit's sentences' starts on this side where they are known on both and its shapes hold its words on both
+  // (highlight.mjs sentencesFit), for the hit test and the paint: else it is lit whole on both (a translation coming in,
+  // laid out out of sight, is the right side's to the left)
+  side.startsOf = id => {
+    const o = side === left ? right : left, mine = side.starts?.get(id), theirs = o.starts?.get(id)
+    return mine && theirs && mine.length === theirs.length && fits(side, id, mine) && fits(o, id, theirs) ? mine : null
+  }
   return side
 }
+/** whether a unit's sentences hold its words on a side, by the starts found there: worked out once, when the unit is
+ *  first lit or pointed at (its pages' geometry, which the paint makes then too) */
+const fitted = new WeakMap()
+const fits = (side, id, starts) => { let f = fitted.get(starts); if (f === undefined) { f = !!side.geo && sentencesFit(side.geo, id, starts); fitted.set(starts, f) } return f }
 const left = makeSide(host.left)
 let right = makeSide(host.right)
 const sides = [left, right]

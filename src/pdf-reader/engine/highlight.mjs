@@ -376,27 +376,64 @@ const segsMade = new WeakMap()
 /**
  * A run's sentences row by row (`starts`: the page tokens where its unit's sentences after the first begin): on each row
  * each sentence's ink across, from its tokens there — the head before the unit's first word in the first sentence —
- * kept inside the run's extent; and each sentence's first and last row in the run
+ * kept inside the run's extent; and each sentence's first and last row in the run. A token is its sentence's by the
+ * stream's order, but on a row below one where a later sentence has begun it is that later one's: a script or a limit
+ * the text layer gives after the line it hangs from (2608.08350, a subscript under a line where the next sentence began)
+ * would otherwise give a sentence a row inside the next one's, and the sentences would no longer tile the run
  */
 function segsOf(L, run, starts) {
   const made = segsMade.get(run)
   if (made?.starts === starts) return made
   const { l, r } = L.tok, rows = run.rows.map(() => []), first = [], last = []
+  // each token's sentence by the stream's order, then rows from the top, none before the latest begun above it
+  const of = new Int32Array(run.toks.length)
   let s = 0
   while (s < starts.length && starts[s] <= run.toks[0]) s++
-  for (let n = 0; n < run.toks.length; n++) {
-    const k = run.toks[n], w = run.rowOf[n]
-    while (s < starts.length && starts[s] <= k) s++
-    const row = rows[w], g = row.find(q => q.s === s)
-    if (g) { if (l[k] < g.x0) g.x0 = l[k]; if (r[k] > g.x1) g.x1 = r[k] } else row.push({ s, x0: l[k], x1: r[k] })
-    if (first[s] === undefined) first[s] = w
-    last[s] = w
-  }
+  for (let n = 0; n < run.toks.length; n++) { while (s < starts.length && starts[s] <= run.toks[n]) s++; of[n] = s }
+  const byRow = run.rows.map(() => [])
+  for (let n = 0; n < run.toks.length; n++) byRow[run.rowOf[n]].push(n)
+  let floor = 0
+  byRow.forEach((ns, w) => {
+    let top = floor
+    for (const n of ns) {
+      const k = run.toks[n], t = Math.max(of[n], floor), row = rows[w], g = row.find(q => q.s === t)
+      of[n] = t
+      if (g) { if (l[k] < g.x0) g.x0 = l[k]; if (r[k] > g.x1) g.x1 = r[k] } else row.push({ s: t, x0: l[k], x1: r[k] })
+      if (first[t] === undefined) first[t] = w
+      last[t] = w
+      if (t > top) top = t
+    }
+    floor = top
+  })
   if (run.head !== null) { const g = rows[run.rowOf[0]].find(q => q.s === 0); if (g && run.head < g.x0) g.x0 = run.head }
   for (const row of rows) { row.sort((a, b) => a.s - b.s); for (const g of row) { g.x0 = Math.max(g.x0, run.x0); g.x1 = Math.min(g.x1, run.x1) } }
-  const out = { starts, rows, first, last }
+  const out = { starts, rows, first, last, fits: true }
   segsMade.set(run, out)
+  // whether the shapes hold their words: each word's ink's centre in its own sentence's shape. Not where two lines of
+  // text are one row (a tall formula between them, 2608.12502) and a sentence begins on the second: no boundary across
+  // divides them; nor where a glyph hangs past the middle between its row and the next, and the next is another
+  // sentence's or none's there (a display's subscripts over the row of its denominator, 2608.29181). The unit is lit
+  // whole then (sentencesFit). Two sentences' ink may overlap a little on a row — a Latin word's box is an even share
+  // of its text item, a CJK full stop's half em too — and the boundary halfway between still divides their words
+  {
+    const ys = edgesOf(run, 0), spans = rows.map((_, i) => spansOf(out, run, i, 0)), { top, bottom } = L.tok
+    for (let n = 0; n < run.toks.length && out.fits; n++) {
+      const k = run.toks[n], x = (l[k] + r[k]) / 2, y = (top[k] + bottom[k]) / 2
+      let i = 0
+      while (i < rows.length - 1 && y < ys[i + 1]) i++
+      const s = of[n]
+      // its own sentence there: on its row's span, or a row inside its sentence's (spanning the run)
+      const own = first[s] < i && i < last[s] ? true : spans[i].some(q => q.s === s && x >= q.x0 - FIT && x <= q.x1 + FIT)
+      if (!own && x >= run.x0 && x <= run.x1) out.fits = false
+    }
+  }
   return out
+}
+/** how far a word's ink's centre may stand past its sentence's span (PDF units) */
+const FIT = 0.5
+/** whether a unit's sentences can be drawn on a side: every run's rows divide between them and hold their words */
+export function sentencesFit(L, id, starts) {
+  return runsOf(L, id).every(run => segsOf(L, run, starts).fits)
 }
 /**
  * What each sentence on row `i` of a run paints across (PDF units), tiling the row: two sentences meet halfway through
