@@ -2,7 +2,7 @@
 import type { RenderPath } from '@/cache/key'
 import type { ProviderErrorKind } from '@/providers/types'
 
-type Translated = { text: string; by: string | null } | null
+type Translated = { text: string; by: string | null; alignment?: { source: number[]; target: number[] } } | null
 export declare class EngineError extends Error {
   kind: ProviderErrorKind
   partial?: Translated[]

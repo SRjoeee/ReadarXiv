@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { plainSource, plainTranslated, rehydrate, serialize, unitText } from '@/pdf-reader/engine/mt.mjs'
+import { plainSource, plainTranslated, rehydrate, sentencesOf, serialize, translateUnits, unitText } from '@/pdf-reader/engine/mt.mjs'
 
 // A unit's plain text as the PDF shows it, which the reader locates it by (anchors.mjs)
 
@@ -67,5 +67,112 @@ describe('rehydrate: the space the wire set after a full stop is taken off again
     expect(cell.wire).toBe('@a# Avg. @b#')
     const avg = rehydrate('@a# Durchschnitt @b#', cell)
     expect('pieces' in avg && avg.pieces.map(p => (p.t === 'text' ? p.s : p.src)).join('')).toBe('\\textbf{ Durchschnitt}')
+  })
+})
+
+// Sentence level (plans/2026-10-01-pdf-highlight.md, B3): Microsoft's own sentence lengths for the wire the reader sent
+// (sentLen, kept by the extension's service as `alignment`), cleaned into where each sentence after the first begins in
+// the unit's plain source and in its translation's plain text — the texts each side is anchored by
+
+/** an alignment from the sentences as the engine cut them: each side's pieces, joined, are the wire and the reply */
+const cut = (source: string[], target: string[]) => ({ source: source.map(s => s.length), target: target.map(s => s.length) })
+/** the words at the offsets */
+const wordsAt = (text: string, offsets: number[]) => offsets.map(o => text.slice(o).split(/[\s，。,.]/)[0])
+
+describe('sentencesOf: the engine\'s sentences, where each begins in the plain texts the two sides are anchored by', () => {
+  const u = { pieces: [{ t: 'text', s: 'We study flows ' }, { t: 'ph', src: '\\cite{a}' }, { t: 'text', s: '. They converge when ' }, { t: 'ph', src: '$n$' }, { t: 'text', s: ' grows.' }] }
+  const ser = serialize(u)
+  const reply = '我们研究流@a#。当@b#增长时，它们收敛。'
+
+  it('each sentence after the first, as the offset of its first word on either side', () => {
+    expect(ser.wire).toBe('We study flows @a#. They converge when @b# grows.')
+    const back = rehydrate(reply, ser) as { pieces: unknown[] }
+    const s = sentencesOf(u, ser, reply, cut(['We study flows @a#. ', 'They converge when @b# grows.'], ['我们研究流@a#。', '当@b#增长时，它们收敛。']), back.pieces as never)
+    expect(s).toEqual({ src: [17], tr: [7] })
+    expect(wordsAt(plainSource(u), s!.src)).toEqual(['They'])
+    expect(wordsAt(plainTranslated(back.pieces as never), s!.tr)).toEqual(['当'])
+  })
+
+  it('one sentence: verified, and none begins after the first', () => {
+    const back = rehydrate(reply, ser) as { pieces: unknown[] }
+    expect(sentencesOf(u, ser, reply, cut([ser.wire], [reply]), back.pieces as never)).toEqual({ src: [], tr: [] })
+  })
+
+  it('a boundary inside the closing marker at a unit\'s end (`@g|#`, report-B §2(a)) goes to its end, where it begins nothing: dropped on both sides together', () => {
+    const v = { pieces: [{ t: 'text', s: 'It reads ' }, { t: 'ph', src: '$x$' }, { t: 'text', s: '. Then it performs ' }, { t: 'ph', src: '$y$' }] }
+    const w = serialize(v)
+    expect(w.wire).toBe('It reads @a#. Then it performs @b#')
+    const r = '它读取@a#。然后执行@b#'
+    const back = rehydrate(r, w) as { pieces: unknown[] }
+    const s = sentencesOf(v, w, r, cut(['It reads @a#. ', 'Then it performs @b', '#'], ['它读取@a#。', '然后执行@b', '#']), back.pieces as never)
+    expect(wordsAt(plainSource(v), s!.src)).toEqual(['Then'])
+    expect(wordsAt(plainTranslated(back.pieces as never), s!.tr)).toEqual(['然后执行'])
+  })
+
+  it('a boundary inside a marker in the middle goes to the marker\'s end: the next sentence begins after it', () => {
+    const v = { pieces: [{ t: 'text', s: 'Agents fail to follow advice' }, { t: 'ph', src: '\\cite{r}' }, { t: 'text', s: '. Secondary tasks differ.' }] }
+    const w = serialize(v)
+    expect(w.wire).toBe('Agents fail to follow advice @a#. Secondary tasks differ.')
+    const r = '代理未能遵循建议。@a# 次要任务不同。'
+    const back = rehydrate(r, w) as { pieces: unknown[] }
+    const s = sentencesOf(v, w, r, cut(['Agents fail to follow advice @a#. ', 'Secondary tasks differ.'], ['代理未能遵循建议。@', 'a# 次要任务不同。']), back.pieces as never)
+    expect(wordsAt(plainTranslated(back.pieces as never), s!.tr)).toEqual(['次要任务不同'])
+    expect(wordsAt(plainSource(v), s!.src)).toEqual(['Secondary'])
+  })
+
+  it('a sentence with no word on either side (a formula alone) is merged: its boundary dropped on both sides together', () => {
+    const v = { pieces: [{ t: 'text', s: 'Let it be. ' }, { t: 'ph', src: '$x=1$' }, { t: 'text', s: '. So it is.' }] }
+    const w = serialize(v)
+    expect(w.wire).toBe('Let it be. @a#. So it is.')
+    const r = '就这样吧。@a#。确实如此。'
+    const back = rehydrate(r, w) as { pieces: unknown[] }
+    const s = sentencesOf(v, w, r, cut(['Let it be. ', '@a#. ', 'So it is.'], ['就这样吧。', '@a#。', '确实如此。']), back.pieces as never)
+    expect(s!.src).toHaveLength(1)
+    expect(wordsAt(plainSource(v), s!.src)).toEqual(['So'])
+    expect(wordsAt(plainTranslated(back.pieces as never), s!.tr)).toEqual(['确实如此'])
+    // a first sentence with no word: its boundary goes, the formula lit with the sentence after it
+    const f = { pieces: [{ t: 'ph', src: '$x$' }, { t: 'text', s: '. Then y.' }] }
+    const fw = serialize(f)
+    const fr = '@a#。那么 y。'
+    const fb = rehydrate(fr, fw) as { pieces: unknown[] }
+    expect(sentencesOf(f, fw, fr, cut(['@a#. ', 'Then y.'], ['@a#。', '那么 y。']), fb.pieces as never)).toEqual({ src: [], tr: [] })
+  })
+
+  it('the escapes of the wire count as the characters they stand for, and a reply read tolerantly maps too', () => {
+    const v = { pieces: [{ t: 'text', s: 'A&B use @ signs. Then ' }, { t: 'ph', src: '$x$' }, { t: 'text', s: ' holds.' }] }
+    const w = serialize(v)
+    expect(w.wire).toBe('A&amp;B use @@ signs. Then @a# holds.')
+    const r = 'A&amp;B 使用 @@ 符号。然后@a成立。'
+    const back = rehydrate(r, w, true) as { pieces: unknown[] }
+    const s = sentencesOf(v, w, r, cut(['A&amp;B use @@ signs. ', 'Then @a# holds.'], ['A&amp;B 使用 @@ 符号。', '然后@a成立。']), back.pieces as never, true)
+    expect(wordsAt(plainSource(v), s!.src)).toEqual(['Then'])
+    expect(wordsAt(plainTranslated(back.pieces as never), s!.tr)).toEqual(['然后'])
+  })
+
+  it('no alignment, or one that does not partition both texts, or a count that differs: null', () => {
+    const back = rehydrate(reply, ser) as { pieces: unknown[] }
+    expect(sentencesOf(u, ser, reply, undefined, back.pieces as never)).toBeNull()
+    expect(sentencesOf(u, ser, reply, { source: [20, 28], target: [9, 13] }, back.pieces as never)).toBeNull()
+    expect(sentencesOf(u, ser, reply, { source: [20, 29], target: [22] }, back.pieces as never)).toBeNull()
+    // pieces that are not the reply's
+    expect(sentencesOf(u, ser, reply, cut(['We study flows @a#. ', 'They converge when @b# grows.'], ['我们研究流@a#。', '当@b#增长时，它们收敛。']), [{ t: 'text', tr: true, s: '别的' }] as never)).toBeNull()
+  })
+})
+
+describe('translateUnits keeps a whole unit\'s sentences; the runs path and a unit without an alignment have none', () => {
+  const u = { pieces: [{ t: 'text', s: 'We study flows ' }, { t: 'ph', src: '\\cite{a}' }, { t: 'text', s: '. They converge when ' }, { t: 'ph', src: '$n$' }, { t: 'text', s: ' grows.' }] }
+  const v = { pieces: [{ t: 'text', s: 'A second unit, one sentence.' }] }
+
+  it('markers read back: the sentences with the pieces', async () => {
+    const send = async (texts: string[]) => texts.map(t => (t.startsWith('We') ? { text: '我们研究流@a#。当@b#增长时，它们收敛。', by: 'ms', alignment: cut(['We study flows @a#. ', 'They converge when @b# grows.'], ['我们研究流@a#。', '当@b#增长时，它们收敛。']) } : { text: '第二个单元，一句话。', by: 'ms' }))
+    const { results } = await translateUnits([u, v], send)
+    expect(results.get(u)).toMatchObject({ state: 'whole', sentences: { src: [17], tr: [7] } })
+    expect(results.get(v)).not.toHaveProperty('sentences')
+  })
+
+  it('runs: none, whatever the engine reports', async () => {
+    const send = async (texts: string[]) => texts.map(t => ({ text: `译${t}`, by: 'g', alignment: { source: [t.length], target: [t.length + 1] } }))
+    const { results } = await translateUnits([u], send, 'runs')
+    expect(results.get(u)).not.toHaveProperty('sentences')
   })
 })

@@ -2,6 +2,7 @@
 // wire text with its opaque pieces as markers (DESIGN §6: `@a#`, `@@` for a literal @), comes back as pieces again;
 // the engine's slips are forgiven where they are unambiguous, and what still fails goes as runs — each stretch of text
 // between opaque pieces on its own — so that nothing is left untranslated.
+import { tokens } from './anchors.mjs'
 import { latin1Bytes } from './latex-front.mjs'
 import { MIXED } from '@/cache/pdf-record'
 import { fromAlpha, TAG_RE, toAlpha } from '@/core/protector/tokens'
@@ -79,6 +80,92 @@ export function rehydrate(text, { slots, lead, trail, stops }, tolerant = false)
   if (stack.length) return { error: 'pair out of order' }
   if (lead) pieces.unshift({ t: 'text', s: lead }); if (trail) pieces.push({ t: 'text', s: trail })
   return { pieces }
+}
+
+// ---------------------------------------------------------------- sentences (plans/2026-10-01-pdf-highlight.md, B3)
+/** what the wire writes as one thing, a boundary inside which goes to its end: a marker (read tolerantly too, `@b`
+ *  without its `#`), an escaped @, an entity */
+const ATOM = /@@|@[a-z]+#?|&(?:#[xX][0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos|nbsp);/g
+/** where a sentence begins in the reply, while it is read back: a private-use character, which no reply holds (one that
+ *  did would give a sentinel too many, and no sentences) */
+const SENTINEL = '\ue000'
+const WORD = /^[\p{L}\p{N}]/u
+const atomsOf = s => [...s.matchAll(ATOM)].map(m => [m.index, m.index + m[0].length])
+/** a boundary out of the atom it falls inside */
+const outOf = (atoms, c) => { for (const [a, b] of atoms) if (c > a && c < b) return b; return c }
+const cumulative = ls => { const out = []; let at = 0; for (const n of ls.slice(0, -1)) { at += n; out.push(at) } return out }
+/** how many characters that are not white space the source wire writes before `c`: an escaped @ or an entity one, a
+ *  marker none — the placeholder is a space in the plain text */
+function shownBefore(wire, c) {
+  let n = 0, i = 0
+  for (const m of wire.slice(0, c).matchAll(ATOM)) {
+    for (; i < m.index; i++) if (!/\s/.test(wire[i])) n++
+    if (m[0] === '@@' || m[0][0] === '&') n++
+    i = m.index + m[0].length
+  }
+  for (; i < c; i++) if (!/\s/.test(wire[i])) n++
+  return n
+}
+/** the offset in a plain text where its `n`-th character that is no white space has been passed, and its first letter
+ *  or digit from there: where a sentence's first word begins */
+function wordAfter(text, n) {
+  let i = 0
+  for (let seen = 0; i < text.length && seen < n; i++) if (!/\s/.test(text[i])) seen++
+  while (i < text.length && !WORD.test(text.slice(i, i + 2))) i++
+  return i
+}
+const nonSpace = s => s.replace(/\s+/g, '').length
+/** the pieces equal but for the sentinels and white space (the space rehydrate takes off before a stop-marker is not
+ *  taken where a sentinel stands between) */
+const sameBut = (withSentinels, b) => {
+  const bare = s => s.split(SENTINEL).join('').replace(/\s+/g, '')
+  // a sentinel between two markers is a text piece of its own, where the reply has none
+  const a = withSentinels.filter(p => !(p.t === 'text' && !p.s.split(SENTINEL).join('')))
+  return a.length === b.length && a.every((p, k) => (p.t === 'text' && b[k].t === 'text' ? bare(p.s) === bare(b[k].s) : p === b[k]))
+}
+
+/**
+ * A unit's sentences as its engine cut them — Microsoft's own sentence lengths for the wire it was sent (`sentLen`, kept
+ * by the extension's service as the segment's `alignment`, DESIGN §8.6: lengths in the wire's characters, one pair per
+ * sentence, verified to partition both texts) — as where each sentence after the first begins: `src` the offsets of
+ * their first words in the unit's plain source (plainSource, what the left side is anchored by), `tr` in its
+ * translation's (plainTranslated of `pieces`, what the right side is). `text` the engine's reply, `pieces` what it was
+ * read back as (rehydrate, `tolerant` or not). A boundary inside a marker goes to the marker's end — the engine cuts
+ * inside the closing marker at a unit's end (`…@g|#`), and rarely inside one in the middle (report-B §2(a)) — and one
+ * that then begins no sentence on either side (at the end, after its neighbour, or before a sentence with no word: a
+ * formula alone) is dropped on both sides together, the two sentences around it read as one. Null where the lengths do
+ * not partition both texts, or the reply's sentences cannot be read back as `pieces`: the unit is lit whole
+ */
+export function sentencesOf(u, ser, text, alignment, pieces, tolerant = false) {
+  const { source, target } = alignment ?? {}
+  if (!source?.length || source.length !== target?.length) return null
+  if (source.reduce((a, b) => a + b, 0) !== ser.wire.length || target.reduce((a, b) => a + b, 0) !== text.length) return null
+  const plain = plainSource(u), translated = plainTranslated(pieces)
+  if (shownBefore(ser.wire, ser.wire.length) !== nonSpace(plain)) return null
+  const wireAtoms = atomsOf(ser.wire), textAtoms = atomsOf(text)
+  const cs = cumulative(source).map(c => outOf(wireAtoms, c)), ct = cumulative(target).map(c => outOf(textAtoms, c))
+  // the reply with a sentinel where each sentence begins, read back as the pieces were: the sentinels' places in its
+  // plain text are the boundaries'
+  let marked = '', last = 0
+  for (const c of ct) { marked += text.slice(last, c) + SENTINEL; last = c }
+  const back = rehydrate(marked + text.slice(last), ser, tolerant)
+  if (back.error || !sameBut(back.pieces, pieces)) return null
+  const withSentinels = plainTranslated(back.pieces)
+  const tn = []
+  for (let i = 0, n = 0; i < withSentinels.length; i++) { const ch = withSentinels[i]; if (ch === SENTINEL) tn.push(n); else if (!/\s/.test(ch)) n++ }
+  if (tn.length !== ct.length) return null
+  // each pair kept only where both sentences around it hold a word on both sides
+  const words = s => tokens(s).length
+  const total = [words(plain), words(translated)]
+  const out = { src: [], tr: [] }
+  let before = [0, 0]
+  cs.forEach((c, j) => {
+    const at = [wordAfter(plain, shownBefore(ser.wire, c)), wordAfter(translated, tn[j])]
+    const k = [words(plain.slice(0, at[0])), words(translated.slice(0, at[1]))]
+    if (k[0] <= before[0] || k[1] <= before[1] || k[0] >= total[0] || k[1] >= total[1]) return
+    out.src.push(at[0]); out.tr.push(at[1]); before = k
+  })
+  return out
 }
 
 // ---------------------------------------------------------------- tags wire format (DESIGN §6: LLMs)
@@ -193,12 +280,12 @@ export function nameCells(units) {
 
 /**
  * Units → Map unit → translated pieces. `send(texts)` returns the translations of a list of wire texts in `format`
- * (WIRE). What the placeholders cannot bring back, even tolerantly where the format has a tolerant reading, goes again
+ * (WIRE), `{ text, by, alignment? }` (engine.mjs). What the placeholders cannot bring back, even tolerantly where the format has a tolerant reading, goes again
  * as runs; a unit none of whose runs came back is left out (it stays in the source language). `how` counts each way.
  */
 export async function translateUnits(units, send, format = 'markers') {
   const wire = WIRE[format]
-  // unit → { pieces, state, by }: whole (read back strictly or tolerantly, or every run back), partial (some runs back),
+  // unit → { pieces, state, by, sentences? }: whole (read back strictly or tolerantly, or every run back), partial (some runs back),
   // none (the engine could not take it, runs included), lost (a failure of the service; engine.mjs, EngineError's
   // `lost`). `by` is the identity that answered, MIXED when runs of one unit had two (REPORT, eighteenth addendum)
   const results = new Map(), how = { whole: 0, tolerant: 0, runs: 0, untranslated: 0, lost: 0 }, failed = []
@@ -219,10 +306,16 @@ export async function translateUnits(units, send, format = 'markers') {
       if (lost?.has(i)) { how.lost++; results.set(u, { state: 'lost' }); return }
       const got = texts[i]
       if (got == null) { failed.push(u); return }
+      // a whole unit keeps its sentences where the engine reported them (sentencesOf: markers only, where the alignment
+      // is Microsoft's own; the runs below have no wire offsets to hang them on)
+      const whole = (pieces, tolerant) => {
+        const sentences = format === 'markers' && got.alignment ? sentencesOf(u, sers[i], got.text, got.alignment, pieces, tolerant) : null
+        results.set(u, { pieces, state: 'whole', by: got.by, ...(sentences ? { sentences } : {}) })
+      }
       const strict = wire.rehydrate(got.text, sers[i])
-      if (!strict.error) { results.set(u, { pieces: strict.pieces, state: 'whole', by: got.by }); how.whole++; return }
+      if (!strict.error) { whole(strict.pieces, false); how.whole++; return }
       const loose = wire.tolerant?.(got.text, sers[i])
-      if (loose && !loose.error) { results.set(u, { pieces: loose.pieces, state: 'whole', by: got.by }); how.tolerant++; return }
+      if (loose && !loose.error) { whole(loose.pieces, true); how.tolerant++; return }
       failed.push(u)
     })
   } else failed.push(...units)

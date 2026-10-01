@@ -10,3 +10,10 @@ export declare function unitText(pieces: Piece[]): { text: string; gaps?: number
 export declare function serialize(u: { pieces: Piece[] }): { wire: string; slots: Piece[]; lead: string; trail: string; stops?: Set<number> }
 /** the translation → pieces, or why it cannot be used */
 export declare function rehydrate(text: string, ser: ReturnType<typeof serialize>, tolerant?: boolean): { pieces: Piece[] } | { error: string }
+/** where each sentence after the first begins: offsets of its first word in the plain source and in the plain translation */
+export type Sentences = { src: number[]; tr: number[] }
+/** a unit's sentences from its engine's sentence lengths for the wire it was sent (the segment's `alignment`), or null */
+export declare function sentencesOf(u: { pieces: Piece[] }, ser: ReturnType<typeof serialize>, text: string, alignment: { source: number[]; target: number[] } | undefined, pieces: Piece[], tolerant?: boolean): Sentences | null
+type Sent = { text: string; by: string | null; alignment?: { source: number[]; target: number[] } } | null
+/** units → their translations, by unit: pieces, how they came back, the identity that answered, and a whole unit's sentences */
+export declare function translateUnits<U extends { pieces: Piece[] }>(units: U[], send: (texts: string[]) => Promise<Sent[]>, format?: 'markers' | 'tags' | 'runs'): Promise<{ results: Map<U, { pieces?: Piece[]; state: string; by?: string; sentences?: Sentences }>; how: Record<string, number> }>

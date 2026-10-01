@@ -75,8 +75,9 @@ export async function openEngine({ paper }) {
   const target = status.targetLanguage
   const cache = { paper, renderPath: status.renderPath }
   /**
-   * Texts in the chain's wire format → their translations, `{ text, by }` with `by` the identity that translated the
-   * text (the background's TranslatedSegment.identity), null where one did not come back: a text the engine could not
+   * Texts in the chain's wire format → their translations, `{ text, by, alignment? }` with `by` the identity that
+   * translated the text (the background's TranslatedSegment.identity) and `alignment` the engine's sentence lengths
+   * where it reported them, null where one did not come back: a text the engine could not
    * take. A failure not of the texts' making is thrown once every batch has answered (EngineError's `lost`)
    */
   async function translate(texts, context = {}) {
@@ -87,7 +88,10 @@ export async function openEngine({ paper }) {
     const call = async idx => {
       const segments = idx.map(i => ({ id: String(i), text: texts[i] }))
       const res = await transport.translate({ request: { segments, source: 'en', target, ...withContext }, cache, scope })
-      for (const s of res.ok ? res.result.segments : (res.partial ?? [])) out[Number(s.id)] = { text: s.text, by: s.identity ?? null }
+      // the engine's sentence lengths where it reported them and the service verified them (Microsoft's sentLen,
+      // DESIGN §8.6), from a translation made now or one the extension's cache kept with them: the highlight's sentences
+      // (mt.mjs sentencesOf)
+      for (const s of res.ok ? res.result.segments : (res.partial ?? [])) out[Number(s.id)] = { text: s.text, by: s.identity ?? null, ...(s.alignment ? { alignment: s.alignment } : {}) }
       if (res.ok) { serving = res.result.model ? `${res.result.provider} (${res.result.model})` : res.result.provider; return }
       if (isPermanentErrorKind(res.error.kind)) throw new EngineError(res.error.kind, res.error.message)
       // one text the engine cannot take must not sink its batch: halves, as the HTML page's session splits (run.ts)
