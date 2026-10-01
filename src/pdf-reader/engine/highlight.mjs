@@ -406,7 +406,9 @@ function segsOf(L, run, starts) {
     floor = top
   })
   if (run.head !== null) { const g = rows[run.rowOf[0]].find(q => q.s === 0); if (g && run.head < g.x0) g.x0 = run.head }
-  for (const row of rows) { row.sort((a, b) => a.s - b.s); for (const g of row) { g.x0 = Math.max(g.x0, run.x0); g.x1 = Math.min(g.x1, run.x1) } }
+  // inside the run's extent, both ends: a word past the column's edge and the clamp (an overfull line's) is at the edge
+  const inside = x => Math.min(run.x1, Math.max(run.x0, x))
+  for (const row of rows) { row.sort((a, b) => a.s - b.s); for (const g of row) { g.x0 = inside(g.x0); g.x1 = inside(g.x1) } }
   const out = { starts, rows, first, last, fits: true }
   segsMade.set(run, out)
   // whether the shapes hold their words: each word's ink's centre in its own sentence's shape. Not where two lines of

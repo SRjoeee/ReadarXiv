@@ -379,6 +379,16 @@ describe('the sentences tile their run, and hold their words, or the unit is lit
     expect(sentencesFit(layout, 0, starts)).toBe(true)
   })
 
+  it('a sentence that begins with a word past the column\'s edge and the clamp (an overfull line\'s) still tiles the row', () => {
+    // a line overfull by 80 units: its last word, where the next sentence begins, stands past the edge (300) + 6
+    const pages = [[...prose(740, 20), item('the line runs on past its edge. Next', 50, 480, { width: 330, eol: true }), ...prose(468, 2), ...prose(400, 10)]]
+    const d = docOf(pages), u = range(at(d, 'the', 160), at(d, 'the', 160) + 22)
+    const layout = side(pages, [[0, u]])
+    const starts = Int32Array.from([at(d, 'next')])
+    expect(tiles(layout, 0, starts)).toEqual([])
+    for (const s of [0, 1]) for (const r of sentenceOf(layout, nth(runsOf(layout, 0)), starts, s, px)) expect(r.x1).toBeGreaterThanOrEqual(r.x0)
+  })
+
   it('two lines of text one row (a tall formula between them) with a sentence beginning on the second: lit whole', () => {
     // a line, then a sum's sign tall enough to make it one row with the next line, where the second sentence begins
     const pages = [[...prose(740, 20), item('first line words here', 50, 480, { width: 250, eol: true }), item('S', 300, 472, { size: 20, width: 8 }), item('second line. Then more', 50, 468, { width: 250, eol: true }), ...prose(456, 2), ...prose(400, 10)]]
