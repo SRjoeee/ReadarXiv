@@ -1,8 +1,8 @@
 // The background's side of the TeX page's warm-up (src/entrypoints/background/warmup.ts, DESIGN §16): when it asks the
 // offscreen document for one — on install and update once the target language is known, on a change of it, and at a
 // worker's start when the record says the store is not the current language's of the last day — and when it does not:
-// under Save-Data, for a language nothing is typeset in yet, while the TeX page is in use, twice at once, or again
-// within a quarter of an hour of a failure. The document, the lock and storage are fakes; the warm-up itself is
+// under Save-Data, for a language nothing is typeset in yet, while a reader that typesets is open, or again within a
+// quarter of an hour of a failure; and one at a time — the document runs one, and gives way to another language. The document, the lock and storage are fakes; the warm-up itself is
 // tex-warm.test.ts's
 import { describe, expect, it, vi } from 'vitest'
 import { createWarmup, type WarmRecord, type WarmupDeps } from '@/entrypoints/background/warmup'
@@ -17,7 +17,8 @@ function harness(over: Omit<Partial<WarmupDeps>, 'target'> & { record?: WarmReco
   let record: WarmRecord | null = over.record ?? null
   let target = over.target ?? 'cmn'
   let clock = T0
-  let running = false
+  /** the language the document's warm-up runs for */
+  let running: string | null = null
   const started: TexWarmRequest[] = []
   const lines: string[] = []
   const { record: _record, target: _target, ...rest } = over
@@ -25,8 +26,14 @@ function harness(over: Omit<Partial<WarmupDeps>, 'target'> & { record?: WarmReco
     site: SITE,
     target: async () => target,
     saveData: () => false,
-    busy: async () => running,
-    start: vi.fn(async (request: TexWarmRequest) => { started.push(request); running = true; return true }),
+    readerOpen: async () => false,
+    // the document: one warm-up at a time, a new language's in place of the running one (tex-warm.ts, ocr/main.ts)
+    start: vi.fn(async (request: TexWarmRequest) => {
+      if (running === request.lang) return false
+      started.push(request)
+      running = request.lang
+      return true
+    }),
     load: async () => record,
     save: async r => { record = r },
     now: () => clock,
@@ -40,8 +47,8 @@ function harness(over: Omit<Partial<WarmupDeps>, 'target'> & { record?: WarmReco
     now: () => clock,
     tick: (ms: number) => { clock += ms },
     setTarget: (code: string) => { target = code },
-    /** the document's warm-up ends: the lock let go */
-    finish: () => { running = false },
+    /** the document's warm-up ends */
+    finish: () => { running = null },
   }
 }
 
@@ -59,23 +66,31 @@ describe('createWarmup', () => {
     expect(t.started).toEqual([{ site: SITE, lang: 'de' }])
   })
 
-  it('never under Save-Data, never for a language nothing is typeset in yet, never while the TeX page is in use', async () => {
+  it('never under Save-Data, never for a language nothing is typeset in yet, never while a reader that typesets is open', async () => {
     const saving = harness({ saveData: () => true })
     await saving.warmup.trigger('install')
     expect(saving.started).toEqual([])
     const arabic = harness({ target: 'arb' })
     await arabic.warmup.trigger('language')
     expect(arabic.started).toEqual([])
-    const reading = harness({ busy: async () => true })
+    const reading = harness({ readerOpen: async () => true })
     await reading.warmup.trigger('language')
     expect(reading.started).toEqual([])
     expect(reading.record()).toBeNull()
   })
 
-  it('never twice at once: a trigger while one runs is let go', async () => {
+  it('never twice at once: a trigger for the language a warm-up runs for starts nothing more', async () => {
     const t = harness()
     await Promise.all([t.warmup.trigger('install'), t.warmup.trigger('language')])
     expect(t.started).toHaveLength(1)
+  })
+
+  it('a language changed while a warm-up runs: the new one asked for at once, the document giving it the place', async () => {
+    const t = harness()
+    await t.warmup.trigger('install')
+    t.setTarget('deu')
+    await t.warmup.trigger('language')
+    expect(t.started.map(r => r.lang)).toEqual(['zh', 'de'])
   })
 
   it('a worker\'s start before anything was tried waits for the install\'s own trigger', async () => {
@@ -112,14 +127,13 @@ describe('createWarmup', () => {
   it('done: the language, the page\'s versions and the bytes kept; a language changed meanwhile is warmed next', async () => {
     const t = harness()
     await t.warmup.trigger('install')
-    // changed in the settings while the Chinese warm-up ran: that trigger finds the page in use
+    // changed while the Chinese warm-up ran, and its trigger missed (a worker that stopped meanwhile)
     t.setTarget('jpn')
-    await t.warmup.trigger('language')
     expect(t.started).toHaveLength(1)
     t.tick(30_000)
     t.finish()
     await t.warmup.done({ ok: true, lang: 'zh', versions: 'c1/e1/t1/index-1.txt', files: 41, bytes: 37_000_000, ms: 30_000 })
-    expect(t.record()).toMatchObject({ lang: 'zh', versions: 'c1/e1/t1/index-1.txt', at: T0 + 30_000, bytes: 37_000_000 })
+    expect(t.record()).toMatchObject({ lang: 'zh', versions: 'c1/e1/t1/index-1.txt', at: T0 + 30_000, bytes: 37_000_000, ms: 30_000 })
     expect(t.started.map(r => r.lang)).toEqual(['zh', 'ja'])
   })
 

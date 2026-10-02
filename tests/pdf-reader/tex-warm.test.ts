@@ -1,8 +1,8 @@
 // The offscreen document's warm-up (src/entrypoints/ocr/tex-warm.ts): the TeX page framed, asked to warm into the
-// extension's store, its files kept, the frame gone. The page, Cache Storage and the lock manager are fakes here; the
-// warm-up's browser check (experiments/pdf-bilingual/spikes/warm-check.mjs) runs it against the built page
-import { describe, expect, it } from 'vitest'
-import { type TexFrame, warmTexPage } from '@/entrypoints/ocr/tex-warm'
+// extension's store, its files kept, the frame gone. The page, Cache Storage and the lock manager are fakes here; in a
+// browser against the built page it runs in experiments/pdf-bilingual/spikes/reader-typeset.mjs (WARM=1)
+import { describe, expect, it, vi } from 'vitest'
+import { type TexFrame, warmSlot, warmTexPage } from '@/entrypoints/ocr/tex-warm'
 import { LOCK, STORE } from '@/pdf-reader/engine/tex-store.mjs'
 
 const SITE = 'https://tex.readarxiv.org'
@@ -127,5 +127,68 @@ describe('warmTexPage', () => {
     expect(result).toMatchObject({ ok: false, network: ['b0.bin'] })
     expect(c.held()).toContain(`${SITE}/e/old/busytex.wasm`)
     expect(c.held()).toContain(`${SITE}/e/e1/busytex.wasm`)
+  })
+
+  it('stopped (another language is wanted now): given up at once, the frame gone, what came kept, nothing pruned', async () => {
+    const page = texPage({ mute: true }), c = cacheStorage(), stop = new AbortController()
+    const store = await c.caches.open(STORE)
+    await store.put(`${SITE}/e/old/busytex.wasm`, new Response(new Uint8Array([1])))
+    const result = warmTexPage(REQUEST, { frame: page.frame, caches: c.caches, signal: stop.signal })
+    await new Promise(r => setTimeout(r, 5))
+    stop.abort()
+    await expect(result).resolves.toMatchObject({ ok: false, lang: 'zh', error: 'stopped' })
+    expect(page.made[0]?.removed).toBe(true)
+    expect(c.held()).toContain(`${SITE}/e/old/busytex.wasm`)
+  })
+})
+
+describe('warmSlot', () => {
+  /** a warm-up that runs until it is stopped or `finish`ed */
+  function runs() {
+    const log: string[] = []
+    const ends = new Map<string, () => void>()
+    const run = (request: { site: string; lang: string }, signal: AbortSignal) => new Promise<void>(resolve => {
+      log.push(`start ${request.lang}`)
+      const end = (why: string) => { log.push(`${why} ${request.lang}`); resolve() }
+      ends.set(request.lang, () => end('done'))
+      signal.addEventListener('abort', () => end('stopped'), { once: true })
+    })
+    return { log, run, finish: (lang: string) => ends.get(lang)?.() }
+  }
+  const tick = () => new Promise(r => setTimeout(r, 0))
+
+  it('one at a time: a second for the language running is let go; once done, the document may close', async () => {
+    const r = runs(), idle = vi.fn()
+    const slot = warmSlot(r.run, idle)
+    expect(await slot.start({ site: SITE, lang: 'zh' })).toBe(true)
+    expect(await slot.start({ site: SITE, lang: 'zh' })).toBe(false)
+    expect(slot.running).toBe(true)
+    r.finish('zh')
+    await tick()
+    expect(slot.running).toBe(false)
+    expect(idle).toHaveBeenCalledTimes(1)
+    expect(r.log).toEqual(['start zh', 'done zh'])
+  })
+
+  it('another language takes the place of the running one, which is stopped first; the document is not let go between', async () => {
+    const r = runs(), idle = vi.fn()
+    const slot = warmSlot(r.run, idle)
+    await slot.start({ site: SITE, lang: 'zh' })
+    expect(await slot.start({ site: SITE, lang: 'de' })).toBe(true)
+    expect(r.log).toEqual(['start zh', 'stopped zh', 'start de'])
+    expect(idle).not.toHaveBeenCalled()
+    expect(slot.running).toBe(true)
+  })
+
+  it('three in quick turn: the last one alone runs', async () => {
+    const r = runs(), idle = vi.fn()
+    const slot = warmSlot(r.run, idle)
+    await slot.start({ site: SITE, lang: 'zh' })
+    const de = slot.start({ site: SITE, lang: 'de' })
+    const ja = slot.start({ site: SITE, lang: 'ja' })
+    expect(await de).toBe(false)
+    expect(await ja).toBe(true)
+    expect(r.log).toEqual(['start zh', 'stopped zh', 'start ja'])
+    expect(idle).not.toHaveBeenCalled()
   })
 })

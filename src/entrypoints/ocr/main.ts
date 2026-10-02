@@ -8,7 +8,7 @@ import { texHints } from '@/pdf-reader/engine/hints.mjs'
 import { onMessages, sendMessage } from '@/shared/messages'
 import type { TexWarmResult } from '@/shared/tex-warm'
 import type { OcrWorkerReply } from './protocol'
-import { type TexFrame, warmTexPage } from './tex-warm'
+import { type TexFrame, warmSlot, warmTexPage } from './tex-warm'
 
 /** Long enough to read on through a paper's figures without starting again, short enough not to keep 120 MB for a tab left open */
 const IDLE_MS = 60_000
@@ -16,9 +16,18 @@ const IDLE_MS = 60_000
 let worker: Worker | undefined
 let next = 0
 const waiting = new Map<number, (reply: OcrWorkerReply) => void>()
-/** a warm-up of the TeX page runs: the document stays */
-let warming = false
-const closeIfIdle = () => { if (!warming && waiting.size === 0) window.close() }
+/** the TeX page's warm-up (./tex-warm.ts): one at a time; while one runs the document stays, and once done it goes —
+ *  at once when no figure was read here, else after the figures' own minute */
+const warmUp = warmSlot(
+  (request, signal) => warmTexPage({ ...request, ...texHints({ compiler: 'pdflatex' }, request.lang) }, { frame: texFrame, locks: navigator.locks, caches, signal })
+    .catch((e: unknown): TexWarmResult => ({ ok: false, lang: request.lang, error: e instanceof Error ? e.message : String(e) }))
+    .then(result => sendMessage({ type: 'axt:tex-warmed', result }).catch(() => undefined)),
+  () => {
+    if (!worker) closeIfIdle()
+    else if (waiting.size === 0) idle = setTimeout(closeIfIdle, IDLE_MS)
+  },
+)
+const closeIfIdle = () => { if (!warmUp.running && waiting.size === 0) window.close() }
 // Counted from the opening too: a document opened for a figure that then never arrived would otherwise stay for good
 let idle: ReturnType<typeof setTimeout> | undefined = setTimeout(closeIfIdle, IDLE_MS)
 
@@ -67,21 +76,11 @@ onMessages({
       return reply.ok ? { ok: true as const, result: reply.result, warm: reply.warm } : { ok: false as const, kind: reply.kind, message: reply.message }
     })
   },
-  // Answered at once; how it ended is reported apart (axt:tex-warmed), since a warm-up outlasts any answer's wait
+  // Answered at once; how it ended is reported apart (axt:tex-warmed), since a warm-up outlasts any answer's wait. One at
+  // a time: a second for the language running is let go, and one for another language takes the place of the running
+  // one, whose files a reader opened now would otherwise wait for
   'axt:tex-warm': ({ type: _, ...request }) => {
-    if (warming) return Promise.resolve({ started: false })
-    warming = true
     clearTimeout(idle)
-    // the hints a pdfLaTeX paper's visit in that language sends, as the reader makes them
-    void warmTexPage({ ...request, ...texHints({ compiler: 'pdflatex' }, request.lang) }, { frame: texFrame, locks: navigator.locks, caches })
-      .catch((e: unknown): TexWarmResult => ({ ok: false, lang: request.lang, error: e instanceof Error ? e.message : String(e) }))
-      .then(result => sendMessage({ type: 'axt:tex-warmed', result }).catch(() => undefined))
-      .finally(() => {
-        warming = false
-        // no figure read here: nothing to keep; else the figures' own minute
-        if (!worker) closeIfIdle()
-        else if (waiting.size === 0) idle = setTimeout(closeIfIdle, IDLE_MS)
-      })
-    return Promise.resolve({ started: true })
+    return warmUp.start(request).then(started => ({ started }))
   },
 })

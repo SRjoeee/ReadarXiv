@@ -4,9 +4,11 @@
 // versioned, and the warm-up downloads only what the store lacks) — the files a first visit in the target language
 // fetches from the TeX page are downloaded into the extension's store by the offscreen document
 // (entrypoints/ocr/tex-warm.ts), for the reader to hand to its page. Never under Save-Data, never for a language
-// nothing is typeset in yet, never while the page is in use (a reader that typesets is open, or a warm-up runs: the
-// lock), never twice at once; a failure is tried again at the next trigger, a worker's start no sooner than a quarter
-// of an hour later. Nothing a reader sees: the diagnostics log alone says what happened.
+// nothing is typeset in yet, never while a reader that typesets is open (it shares the lock: a warm-up would compete
+// with its compiles for the link); one at a time, the document's to keep — it ignores a second for the language it
+// runs for, and stops one for a language no longer wanted, whose files a reader opened now would otherwise wait for.
+// A failure is tried again at the next trigger, a worker's start no sooner than a quarter of an hour later. Nothing a
+// reader sees: the diagnostics log alone says what happened.
 import { toBcp47 } from '@/config/languages'
 import { verified } from '@/pdf-reader/engine/verified.mjs'
 import type { TexWarmRequest, TexWarmResult } from '@/shared/tex-warm'
@@ -20,7 +22,9 @@ export interface WarmRecord {
   /** the TeX page's versions (cv/eid/tid/index) it was made under */
   versions?: string
   at?: number
+  /** the bytes it downloaded (decoded) and how long it took */
   bytes?: number
+  ms?: number
 }
 
 export interface WarmupDeps {
@@ -30,9 +34,10 @@ export interface WarmupDeps {
   target(): Promise<string>
   /** the browser asks to save data (Save-Data) */
   saveData(): boolean
-  /** the lock is held: a reader that typesets is open, or a warm-up runs */
-  busy(): Promise<boolean>
-  /** the offscreen document asked to warm → whether it started one (it says no while one of its own runs) */
+  /** a reader that typesets is open, or waits to: it shares the lock */
+  readerOpen(): Promise<boolean>
+  /** the offscreen document asked to warm → whether it started one (not while one for that language runs; one for
+   *  another it stops first) */
   start(request: TexWarmRequest): Promise<boolean>
   load(): Promise<WarmRecord | null>
   save(record: WarmRecord): Promise<void>
@@ -61,7 +66,7 @@ export function createWarmup(deps: WarmupDeps) {
       const failedLately = record.tried > (record.at ?? 0) && now - record.tried < RETRY
       if (current || failedLately) return
     }
-    if (await deps.busy()) return say(`${reason}: deferred, the TeX page is in use`)
+    if (await deps.readerOpen()) return say(`${reason}: deferred, a reader that typesets is open`)
     await deps.save({ ...record, tried: now })
     const started = await deps.start({ site: deps.site, lang })
     say(started ? `${reason}: started for ${lang}` : `${reason}: not started, one runs`)
@@ -77,7 +82,7 @@ export function createWarmup(deps: WarmupDeps) {
     async done(result: TexWarmResult): Promise<void> {
       if (!result.ok) return say(`${result.deferred ? 'deferred' : 'failed'} for ${result.lang}: ${result.error}${result.network?.length ? ` (${result.network.join(', ')})` : ''}`)
       const now = deps.now()
-      await deps.save({ tried: now, lang: result.lang, versions: result.versions, at: now, bytes: result.bytes })
+      await deps.save({ tried: now, lang: result.lang, versions: result.versions, at: now, bytes: result.bytes, ms: result.ms })
       say(`done for ${result.lang} under ${result.versions}: ${result.files} files, ${(result.bytes / 1e6).toFixed(1)} MB downloaded in ${(result.ms / 1000).toFixed(1)} s`)
       await trigger('check')
     },

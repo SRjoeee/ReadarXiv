@@ -26,6 +26,8 @@ export interface TexWarmDeps {
   answerMs?: number
   /** how long the page may then be silent — its own downloads give up after 30 s without a byte, twice */
   quietMs?: number
+  /** stops the warm-up: what came is kept, nothing is pruned */
+  signal?: AbortSignal
   now?: () => number
 }
 
@@ -67,6 +69,8 @@ async function warm({ site, lang, engines, fonts }: TexWarmJob, deps: TexWarmDep
       const fail = (error: string, network?: string[]) => { clearTimeout(timer); resolve({ ok: false, lang, error, ...(network?.length ? { network } : {}) }) }
       const within = (ms: number, what: string) => { clearTimeout(timer); timer = setTimeout(() => fail(what), ms) }
       within(answerMs, `the TeX page at ${site} did not answer`)
+      if (deps.signal?.aborted) return fail('stopped')
+      deps.signal?.addEventListener('abort', () => fail('stopped'), { once: true })
       let versions: string | null = null
       /** every file the hints name, as the page asked which the store holds: what the store keeps */
       let named: string[] | null = null
@@ -102,5 +106,42 @@ async function warm({ site, lang, engines, fonts }: TexWarmJob, deps: TexWarmDep
     })
   } finally {
     frame.remove()
+  }
+}
+
+/**
+ * One warm-up at a time in the document: a second for the language running is let go (→ false), and one for another
+ * language takes the place of the running one, which is stopped first — a reader opened now would wait for files no
+ * longer wanted. The place is taken before the stop, so that the document is not let go between the two; `idle` runs
+ * once the last warm-up has ended
+ */
+export function warmSlot(run: (request: TexWarmRequest, signal: AbortSignal) => Promise<unknown>, idle: () => void) {
+  let current: { lang: string; stop: AbortController; done: Promise<void> } | null = null
+  return {
+    get running() { return current !== null },
+    async start(request: TexWarmRequest): Promise<boolean> {
+      if (current?.lang === request.lang) return false
+      const stop = new AbortController()
+      let settle = () => {}
+      const replaced = current
+      const mine = { lang: request.lang, stop, done: new Promise<void>(resolve => { settle = resolve }) }
+      current = mine
+      if (replaced) {
+        replaced.stop.abort()
+        await replaced.done
+      }
+      // another language asked for in turn while this one waited
+      if (stop.signal.aborted) {
+        settle()
+        return false
+      }
+      void run(request, stop.signal).catch(() => undefined).finally(() => {
+        settle()
+        if (current !== mine) return
+        current = null
+        idle()
+      })
+      return true
+    },
   }
 }

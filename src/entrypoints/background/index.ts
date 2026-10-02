@@ -107,8 +107,8 @@ export default defineBackground(() => {
     // design, §4). A clear that lands brings the engine back through the record's own watcher above
     health.configChanged(next, previous)
     void offers.offer()
-    // Another target language: its parts of the TeX page downloaded ahead (./warmup.ts); the first choice, at install,
-    // is the install's own trigger
+    // Another target language: its parts of the TeX page downloaded ahead (./warmup.ts). The first choice, at install,
+    // may come as a change too (from the defaults); the document lets the install's own trigger for it go
     if (previous && next.targetLanguage !== previous.targetLanguage) void warmup.trigger('language')
   })
 
@@ -133,16 +133,16 @@ export default defineBackground(() => {
   /**
    * The TeX page's warm-up (DESIGN §16): the files a first visit in the target language fetches from the page,
    * downloaded ahead into the extension's store by the offscreen document. The record of the last one in local storage;
-   * whether the page is in use, from the lock every reader that typesets shares (pdf-reader/engine/tex-store.mjs)
+   * whether a reader that typesets is open, from the lock every one of them shares (pdf-reader/engine/tex-store.mjs)
    */
   const WARM_KEY = 'axt-tex-warm'
   const warmup = createWarmup({
     site: TEX_PAGE,
     target: async () => (await getConfig()).targetLanguage,
     saveData: () => (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true,
-    busy: async () => {
+    readerOpen: async () => {
       const state = await navigator.locks?.query().catch(() => null)
-      return !!state && [...(state.held ?? []), ...(state.pending ?? [])].some(lock => lock.name === TEX_LOCK)
+      return !!state && [...(state.held ?? []), ...(state.pending ?? [])].some(lock => lock.name === TEX_LOCK && lock.mode === 'shared')
     },
     // sent once more when nobody answered: the document may still be loading its script, or have closed itself
     start: async request => {
