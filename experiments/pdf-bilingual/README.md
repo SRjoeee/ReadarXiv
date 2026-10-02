@@ -21,6 +21,7 @@ Rules and techniques here are expected to change; what settles is to be refactor
 | `busytex/research.diff` | Our patches to BusyTeX's pipeline and biber drivers. |
 | `busytex/tree.diff` | Our patch to BusyTeX's remote file fetch: the TeX page's index and tree answer it. |
 | `busytex/tex-log.diff` | Our patch to the logs a compile returns: biber is no TeX pass, so the pass before it keeps its log (the TeX page's build applies it after `research.diff`). |
+| `busytex/xdvipdfmx.diff` | Our patch to how a XeLaTeX compile's PDF is written: xdvipdfmx at zlib level 6, not its 9 — the same decoded PDF, 0.3–2.5 % larger, and a paper of large PNGs with alpha converted far faster (2608.16117's Chinese final: xdvipdfmx 67 s → 26 s, the whole compile in Chromium 75 s → 37 s). The build applies it last. |
 | `upstream/` | The same fixes as filed upstream, with self-made reproductions. |
 
 ## Setup

@@ -68,7 +68,7 @@ describe.skipIf(!existsSync(SOURCE))('the logs a compile returns', () => {
     expect(logs.map(l => [l.cmd.split(' ')[0], l.log])).toEqual([['pdflatex', ''], ['biber', 'LOG of biber'], ['pdflatex', ''], ['pdflatex', 'LOG of pdflatex']])
   })
 
-  it('a XeLaTeX compile writes its PDF with xdvipdfmx at zlib level 6, not its 9: the same decoded PDF, 2608.16117\'s final 75 s → 37 s (xdvipdfmx-report)', async () => {
+  it('a XeLaTeX compile writes its PDF with xdvipdfmx at zlib level 6, not its 9: the same decoded PDF; 2608.16117\'s Chinese final, xdvipdfmx 67 s → 26 s (the patch\'s figure) of a compile in Chromium 75 s → 37 s (xdvipdfmx-report)', async () => {
     const logs = await compile({ biber: false, rerun: false, driver: 'xetex_bibtex8_dvipdfmx' })
     expect(logs.find(l => l.cmd.startsWith('xdvipdfmx'))?.cmd).toMatch(/^xdvipdfmx -z 6 /)
   })
