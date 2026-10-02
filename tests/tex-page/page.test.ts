@@ -1,8 +1,11 @@
 // The TeX page's protocol (experiments/pdf-bilingual/poc-site/tex-page.mjs), version 2 beside version 1: the reader of
 // today (session.mjs openCompiler) sends { init, endpoint }, a project and compiles, and waits for init-done and
 // compiled; version 2 adds `ready`'s versions, init's hints, progress during first downloads, and the network failures
-// a compile met — the page's own downloads' too, which are retried, timed out and checked. BusyTeX's runner, the network and Cache Storage are fakes here; the
-// page itself runs in a browser in tex-page/measure.mjs and network-check.mjs
+// a compile met — the page's own downloads' too, which are retried, timed out and checked —, the warm-up (download what a
+// first compile would fetch, compile nothing) and the framer's store (an extension keeps the page's files, since the
+// page framed over arXiv has a cache of its own: warm-brief's probe). BusyTeX's runner, the network, Cache Storage and
+// the framer are fakes here; the page itself runs in a browser in tex-page/measure.mjs, network-check.mjs and
+// warm-check.mjs
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { type Build, mayDrive, texPage } from '../../experiments/pdf-bilingual/poc-site/tex-page.mjs'
@@ -69,6 +72,7 @@ function cacheStorage(names: string[] = [], { refuse = false } = {}) {
         s.set(url, new Response(body, { headers: r.headers }))
       },
       delete: async (url: string) => s.delete(url),
+      keys: async () => [...s.keys()].map(url => ({ url })),
     }
   }
   return { stores, caches: { open, keys: async () => [...stores.keys()], delete: async (name: string) => stores.delete(name) } }
@@ -115,16 +119,38 @@ function busytex() {
 }
 
 const digest = async (bytes: Uint8Array) => createHash('sha256').update(bytes).digest()
-function page(over: { script?: Record<string, Outcome[]>; caches?: ReturnType<typeof cacheStorage>; build?: Build } = {}) {
+/**
+ * `framer`: the files the framing extension keeps (its store, by the page's URL), answered to the page's `want` and
+ * added to by its `keep`; `silent`: a framer that never answers
+ */
+function page(over: { script?: Record<string, Outcome[]>; caches?: ReturnType<typeof cacheStorage>; build?: Build; framer?: Map<string, Uint8Array>; silent?: boolean; askMs?: number } = {}) {
   const net = network(over.script)
   const store = over.caches ?? cacheStorage()
   const bt = busytex()
   const sent: Msg[] = []
   const slept: number[] = []
-  const p = texPage({ build: over.build ?? BUILD, Runner: bt.Runner, Engines: bt.Engines, fetch: net.fetch, caches: store.caches, digest, progressEvery: 0, stallMs: 20, sleep: async (ms: number) => { slept.push(ms) } })
-  const send = (msg: Msg) => p.receive(msg, (data: Msg) => { sent.push(data) })
+  const p = texPage({ build: over.build ?? BUILD, Runner: bt.Runner, Engines: bt.Engines, fetch: net.fetch, caches: store.caches, digest, progressEvery: 0, stallMs: 20, askMs: over.askMs, sleep: async (ms: number) => { slept.push(ms) } })
+  const framer = over.framer
+  const send = (msg: Msg) => p.receive(msg, (data: Msg) => {
+    sent.push(data)
+    if (data.type === 'want' && framer && !over.silent) {
+      const files: Record<string, ArrayBuffer | true> = {}
+      for (const url of data.files as string[]) {
+        const b = framer.get(url)
+        if (b) files[url] = data.bytes ? b.slice().buffer : true
+      }
+      queueMicrotask(() => void p.receive({ type: 'have', id: data.id, files }, () => {}))
+    }
+    if (data.type === 'keep' && framer) framer.set(data.url as string, new Uint8Array(data.bytes as ArrayBuffer))
+  })
   return { p, send, sent, net, store, bt, slept }
 }
+const FONT = '/t/t1/fonts/opentype/public/fandol/FandolSong-Regular.otf'
+const INDEX_URL = `/t/t1/${BUILD.index}`
+/** the page's one cache of the files it fetches ahead */
+const kept = (t: { store: ReturnType<typeof cacheStorage> }) => [...(t.store.stores.get('tex-files')?.keys() ?? [])].sort()
+/** every file a pdfLaTeX visit fetches ahead, as the network answers it */
+const PDFLATEX_FILES = (): [string, Uint8Array][] => [['/e/e1/busytex.wasm', zeros(1000)], ['/e/e1/tl-common.data', zeros(100)], ['/e/e1/tl-pdftex.data', zeros(200)], ['/b/b0.bin', zeros(4)], ['/b/b1.bin', zeros(10)], [INDEX_URL, new TextEncoder().encode(INDEX)]]
 const zeros = (n: number) => new Uint8Array(n)
 
 describe('mayDrive', () => {
@@ -159,6 +185,7 @@ describe('init', () => {
     expect(done).toMatchObject({ type: 'init-done', protocol: 2 })
     expect(done?.error).toBeUndefined()
     expect(t.bt.made[0]?.config).toMatchObject({ busytexBasePath: '/e/e1', preloadDataPackages: ['/e/e1/tl-common.js', '/e/e1/tl-pdftex.js', '/e/e1/tl-xetex.js'] })
+    expect(t.sent.some(m => m.type === 'want')).toBe(false)
   })
 
   it('takes no endpoint: the tree is the page\'s own, and its index goes to the worker', async () => {
@@ -186,26 +213,34 @@ describe('init', () => {
     await t.send({ type: 'init', protocol: 2, engines: ['xelatex'], fonts: ['Hans'] })
     expect(t.net.urls()).toContain(font)
     expect(t.bt.made[0]?.registered).toContainEqual({ name: 'FandolSong-Regular.otf', format: 47, content: zeros(30) })
-    expect([...(t.store.stores.get('tex-fonts-t1')?.keys() ?? [])]).toEqual([font])
+    expect(kept(t)).toContain(font)
   })
 
-  it('keeps the engine and its preloads in Cache Storage under the engine\'s version, not in the HTTP cache too; a returning visit fetches neither', async () => {
+  it('keeps every file it fetches ahead — the engine, its preloads, the bundles, the index — in one Cache Storage cache, the engine\'s not in the HTTP cache too; a returning visit fetches none of them', async () => {
     const store = cacheStorage()
     const first = page({ caches: store })
     await first.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
-    expect([...(store.stores.get('tex-engine-e1')?.keys() ?? [])].sort()).toEqual(['/e/e1/busytex.wasm', '/e/e1/tl-common.data', '/e/e1/tl-pdftex.data'])
+    expect(kept(first)).toEqual(PDFLATEX_FILES().map(([url]) => url).sort())
     expect(first.net.asked.filter(a => a.url.startsWith('/e/')).every(a => a.cache === 'no-store')).toBe(true)
-    expect((await (await store.caches.open('tex-engine-e1')).match('/e/e1/busytex.wasm'))?.headers.get('content-type')).toBe('application/wasm')
+    expect((await (await store.caches.open('tex-files')).match('/e/e1/busytex.wasm'))?.headers.get('content-type')).toBe('application/wasm')
     const again = page({ caches: store })
     await again.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
-    expect(again.net.urls().filter(u => u.startsWith('/e/'))).toEqual([])
+    expect(again.net.urls()).toEqual([])
+    expect(again.bt.made[0]?.registered).toEqual(first.bt.made[0]?.registered)
+    expect(again.bt.made[0]?.worker.sent).toContainEqual({ axt_tree: { base: '/t/t1/', index: INDEX } })
   })
 
-  it('deletes the caches of other versions', async () => {
+  it('deletes the caches of other versions, and the files no longer the build\'s', async () => {
     const store = cacheStorage(['tex-engine-old', 'tex-fonts-old', 'unrelated'])
+    const files = await store.caches.open('tex-files')
+    await files.put('/e/old/busytex.wasm', new Response('x'))
+    await files.put(FONT, new Response(zeros(30)))
     const t = page({ caches: store })
     await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
-    expect([...store.stores.keys()].sort()).toEqual(['tex-engine-e1', 'unrelated'])
+    expect([...store.stores.keys()].sort()).toEqual(['tex-files', 'unrelated'])
+    expect(kept(t)).not.toContain('/e/old/busytex.wasm')
+    // another script's faces are still the build's: kept for a visit in that language
+    expect(kept(t)).toContain(FONT)
   })
 
   it('says how far a first visit\'s downloads are, by phase, ending at the whole', async () => {
@@ -258,14 +293,14 @@ describe('init', () => {
     await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
     expect(t.sent.find(m => m.type === 'init-done')).toMatchObject({ type: 'init-done', network: ['busytex.wasm'] })
     expect(t.sent.find(m => m.type === 'init-done')?.error).toContain('busytex.wasm: 7 bytes, not the 1000 the build says')
-    expect(store.stores.get('tex-engine-e1')?.has('/e/e1/busytex.wasm')).toBe(false)
+    expect(store.stores.get('tex-files')?.has('/e/e1/busytex.wasm')).toBe(false)
   })
 
   it('a font of the wrong length is neither kept nor handed to BusyTeX', async () => {
     const t = page({ script: { '/t/t1/fonts/opentype/public/fandol/FandolSong-Regular.otf': [{ length: 29 }, { length: 29 }] } })
     await t.send({ type: 'init', protocol: 2, engines: ['xelatex'], fonts: ['Hans'] })
     expect(t.bt.made[0]?.registered.some(f => (f as { name: string }).name === 'FandolSong-Regular.otf')).toBe(false)
-    expect(t.store.stores.get('tex-fonts-t1')?.size ?? 0).toBe(0)
+    expect(t.store.stores.get('tex-files')?.has('/t/t1/fonts/opentype/public/fandol/FandolSong-Regular.otf')).toBe(false)
   })
 
   it('an index whose bytes are not the ones its name says fails the init as the network\'s', async () => {
@@ -382,5 +417,145 @@ describe('compile', () => {
     const d = t.send({ ...compile, id: 2 })
     await Promise.all([a, b, c, d])
     expect(t.sent.filter(m => m.type === 'init-done' || m.type === 'compiled').map(m => m.type === 'compiled' ? m.id : m.type)).toEqual(['init-done', 1, 2])
+  })
+})
+
+describe('warm', () => {
+  it('downloads what a first compile with these hints would fetch — BusyTeX, the engines\' preloads, their bundles, the index, the script\'s faces — into its cache, and starts no BusyTeX', async () => {
+    const t = page()
+    await t.send({ type: 'warm', protocol: 2, engines: ['xelatex'], fonts: ['Hans'] })
+    expect(t.sent.find(m => m.type === 'warm-done')).toMatchObject({ type: 'warm-done', protocol: 2, files: 7, bytes: 1000 + 100 + 300 + 4 + 20 + INDEX.length + 30 })
+    expect(t.sent.find(m => m.type === 'warm-done')?.error).toBeUndefined()
+    expect(t.bt.made).toHaveLength(0)
+    expect(kept(t)).toEqual(['/b/b0.bin', '/b/b2.bin', '/e/e1/busytex.wasm', '/e/e1/tl-common.data', '/e/e1/tl-xetex.data', FONT, INDEX_URL].sort())
+  })
+
+  it('a visit after it downloads nothing ahead', async () => {
+    const store = cacheStorage()
+    await page({ caches: store }).send({ type: 'warm', protocol: 2, engines: ['pdflatex', 'xelatex'], fonts: ['Hans'] })
+    const t = page({ caches: store })
+    await t.send({ type: 'init', protocol: 2, engines: ['pdflatex', 'xelatex'], fonts: ['Hans'] })
+    expect(t.sent.find(m => m.type === 'init-done')?.error).toBeUndefined()
+    expect(t.net.urls()).toEqual([])
+    expect(t.bt.made[0]?.registered).toContainEqual({ name: 'FandolSong-Regular.otf', format: 47, content: zeros(30) })
+  })
+
+  it('without hints: both engines, no faces, as an init without them', async () => {
+    const t = page()
+    await t.send({ type: 'warm', protocol: 2 })
+    expect(kept(t)).toEqual(['/b/b0.bin', '/b/b1.bin', '/b/b2.bin', '/e/e1/busytex.wasm', '/e/e1/tl-common.data', '/e/e1/tl-pdftex.data', '/e/e1/tl-xetex.data', INDEX_URL].sort())
+  })
+
+  it('a second warm-up downloads nothing', async () => {
+    const store = cacheStorage()
+    await page({ caches: store }).send({ type: 'warm', protocol: 2, engines: ['pdflatex'] })
+    const t = page({ caches: store })
+    await t.send({ type: 'warm', protocol: 2, engines: ['pdflatex'] })
+    expect(t.net.urls()).toEqual([])
+    expect(t.sent.find(m => m.type === 'warm-done')).toMatchObject({ bytes: 0, files: 6 })
+  })
+
+  it('says how far it is, ending at the whole', async () => {
+    const t = page()
+    await t.send({ type: 'warm', protocol: 2, engines: ['pdflatex'] })
+    const progress = t.sent.filter(m => m.type === 'progress')
+    expect(progress.at(-1)).toEqual({ type: 'progress', phase: 'warm', loaded: 1314, total: 1314 })
+    expect(t.sent.findIndex(m => m.type === 'warm-done')).toBeGreaterThan(t.sent.findLastIndex(m => m.type === 'progress'))
+  })
+
+  it('a file that cannot be fetched fails the warm-up as the network\'s; what came is kept', async () => {
+    const t = page({ script: { '/b/b1.bin': ['drop', 'drop'] } })
+    await t.send({ type: 'warm', protocol: 2, engines: ['pdflatex'] })
+    expect(t.sent.find(m => m.type === 'warm-done')).toMatchObject({ type: 'warm-done', network: ['b1.bin'] })
+    expect(t.sent.find(m => m.type === 'warm-done')?.error).toContain('b1.bin')
+    expect(kept(t)).toContain('/e/e1/busytex.wasm')
+    expect(kept(t)).not.toContain('/b/b1.bin')
+  })
+
+  it('an index whose bytes are not its name\'s is not kept, and fails the warm-up', async () => {
+    const t = page({ build: { ...BUILD, index: 'index-000000000000.txt' } })
+    await t.send({ type: 'warm', protocol: 2, engines: ['pdflatex'] })
+    expect(t.sent.find(m => m.type === 'warm-done')).toMatchObject({ network: ['index-000000000000.txt'] })
+    expect(kept(t)).not.toContain('/t/t1/index-000000000000.txt')
+  })
+
+  it('answers in turn with the compiles: a warm-up asked after an init waits for it', async () => {
+    const t = page()
+    const a = t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
+    const b = t.send({ type: 'warm', protocol: 2, engines: ['pdflatex'] })
+    await Promise.all([a, b])
+    expect(t.sent.filter(m => m.type === 'init-done' || m.type === 'warm-done').map(m => m.type)).toEqual(['init-done', 'warm-done'])
+    expect(t.net.urls().filter(u => u === '/e/e1/busytex.wasm')).toHaveLength(1)
+  })
+})
+
+describe('the framer\'s store (store: true): an extension keeps the files, since the page framed over arXiv has a cache of its own', () => {
+  it('a warm-up asks which files the framer holds, downloads only the others, gives each to the framer and keeps none itself', async () => {
+    const framer = new Map([['/e/e1/busytex.wasm', zeros(1000)]])
+    const t = page({ framer })
+    await t.send({ type: 'warm', protocol: 2, engines: ['pdflatex'], fonts: [], store: true })
+    const want = t.sent.find(m => m.type === 'want')
+    expect(want).toMatchObject({ bytes: false })
+    expect([...((want?.files ?? []) as string[])].sort()).toEqual(PDFLATEX_FILES().map(([url]) => url).sort())
+    expect(t.net.urls()).not.toContain('/e/e1/busytex.wasm')
+    expect([...framer.keys()].sort()).toEqual(PDFLATEX_FILES().map(([url]) => url).sort())
+    expect(framer.get(INDEX_URL)).toEqual(new TextEncoder().encode(INDEX))
+    expect(kept(t)).toEqual([])
+    expect(t.sent.find(m => m.type === 'warm-done')).toMatchObject({ type: 'warm-done', files: 6, bytes: 100 + 200 + 4 + 10 + INDEX.length })
+  })
+
+  it('an init takes the files its cache lacks from the framer, keeps them, and downloads only the rest', async () => {
+    const framer = new Map(PDFLATEX_FILES().filter(([url]) => url !== '/e/e1/tl-pdftex.data'))
+    const t = page({ framer })
+    await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'], store: true })
+    expect(t.sent.find(m => m.type === 'want')).toMatchObject({ bytes: true })
+    expect(t.net.urls()).toEqual(['/e/e1/tl-pdftex.data'])
+    expect(t.sent.find(m => m.type === 'init-done')?.error).toBeUndefined()
+    expect(kept(t)).toEqual(PDFLATEX_FILES().map(([url]) => url).sort())
+    expect(t.bt.made[0]?.registered).toEqual([{ name: 'article.cls', format: 26, content: zeros(10) }, { name: 'hyperref.sty', format: 26, content: zeros(4) }])
+    expect(t.bt.made[0]?.worker.sent).toContainEqual({ axt_tree: { base: '/t/t1/', index: INDEX } })
+  })
+
+  it('a handed file of the wrong length, or an index whose bytes are not its name\'s, is downloaded instead', async () => {
+    const framer = new Map(PDFLATEX_FILES())
+    framer.set('/e/e1/tl-common.data', zeros(99))
+    framer.set(INDEX_URL, new TextEncoder().encode('tex/latex/base/\nother.cls'))
+    const t = page({ framer })
+    await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'], store: true })
+    expect(t.net.urls().sort()).toEqual([INDEX_URL, '/e/e1/tl-common.data'].sort())
+    expect(t.bt.made[0]?.worker.sent).toContainEqual({ axt_tree: { base: '/t/t1/', index: INDEX } })
+  })
+
+  it('an init whose cache holds every file asks the framer nothing', async () => {
+    const store = cacheStorage()
+    await page({ caches: store }).send({ type: 'warm', protocol: 2, engines: ['pdflatex'] })
+    const t = page({ caches: store, framer: new Map() })
+    await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'], store: true })
+    expect(t.sent.some(m => m.type === 'want')).toBe(false)
+  })
+
+  it('a framer that does not answer: the page goes on by itself', async () => {
+    const t = page({ framer: new Map(PDFLATEX_FILES()), silent: true, askMs: 5 })
+    await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'], store: true })
+    expect(t.sent.find(m => m.type === 'init-done')?.error).toBeUndefined()
+    expect(t.net.urls()).toContain('/e/e1/busytex.wasm')
+  })
+
+  it('an engine switch takes the added engine\'s files from the framer too', async () => {
+    const framer = new Map<string, Uint8Array>([...PDFLATEX_FILES(), ['/e/e1/tl-xetex.data', zeros(300)], ['/b/b2.bin', zeros(20)]])
+    const t = page({ framer })
+    await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'], store: true })
+    await t.send({ type: 'project', key: 'p', files: [] })
+    await t.send({ type: 'compile', id: 1, key: 'p', main: 'main.tex', engine: 'xelatex', rerun: false, bibtex: false, overrides: [{ path: 'main.tex', content: new Uint8Array([1]) }] })
+    expect(t.net.urls()).toEqual([])
+    expect(t.sent.find(m => m.type === 'compiled')).toMatchObject({ ok: true })
+    expect(t.bt.made[1]?.registered).toContainEqual({ name: 'fontspec.sty', format: 26, content: zeros(20) })
+  })
+
+  it('a have for no question asked is let be', async () => {
+    const t = page()
+    await t.p.receive({ type: 'have', id: 99, files: { '/e/e1/busytex.wasm': new ArrayBuffer(3) } }, () => {})
+    await t.send({ type: 'init', protocol: 2, engines: ['pdflatex'] })
+    expect(t.net.urls()).toContain('/e/e1/busytex.wasm')
   })
 })

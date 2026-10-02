@@ -7,16 +7,24 @@
 //   ← { type: 'ready', protocol: 2, cv, eid, tid, index }   on load: the page's, the engine's and the tree's versions,
 //                                                       and the index's name (index-<its version>.txt): a verdict
 //                                                       that a paper cannot be typeset holds for these only
-//   → { type: 'init', protocol: 2, engines, fonts }     hints: the engines the visit will use (pdflatex, xelatex,
+//   → { type: 'init', protocol: 2, engines, fonts, store }   hints: the engines the visit will use (pdflatex, xelatex,
 //                                                       lualatex; default the first two) and the scripts whose CJK
-//                                                       faces it will set (Hans, Hant, Jpan, Kore; default none)
+//                                                       faces it will set (Hans, Hant, Jpan, Kore; default none).
+//                                                       store: the framer keeps the page's files (below)
 //   ← { type: 'progress', phase, loaded, total }        during downloads, an engine switch's too: 'engine' (BusyTeX
 //                                                       and its preloads), 'files' (the common files, and the fonts
-//                                                       hinted); bytes
+//                                                       hinted), 'warm' (a warm-up's); bytes
 //   ← { type: 'init-done', protocol: 2, ms } | { type: 'init-done', error, network }
 //                                                       error: no compiler. network: the page's own downloads that
 //                                                       failed for a network reason, by file name (empty: the failure
 //                                                       is not the network's)
+//   → { type: 'warm', protocol: 2, engines, fonts, store }   the files a first compile with these hints fetches ahead
+//                                                       (the files init fetches: BusyTeX, the engines' preloads,
+//                                                       their bundles, the index, the scripts' faces) downloaded and
+//                                                       kept — by the page, or with `store` by the framer alone —,
+//                                                       nothing started, nothing compiled
+//   ← { type: 'warm-done', protocol: 2, ms, files, bytes } | { type: 'warm-done', error, network }
+//                                                       files: how many the hints name; bytes: downloaded now
 //   → { type: 'project', key, files: [{ path, content }] }   the package's files, kept for every compile of it
 //   → { type: 'compile', id, key, main, engine, rerun, bibtex, overrides: [{ path, content }] }
 //   ← { type: 'compiled', id, ok, ms, pdf (transferred), aux, bbl, log, network } | { type: 'compiled', id, ok: false,
@@ -28,7 +36,19 @@
 //                                                       switch's downloads)
 //   A compile after an init that failed brings BusyTeX up first, with that init's hints. An engine switch brings up a
 //   new BusyTeX with the added engine's preload and common files before the running one goes, which stays when the new
-//   one cannot be brought up.
+//   one cannot be brought up. Messages are answered in the order they came (a warm-up after an init waits for it).
+// The framer's store (`store: true`): the page framed over arXiv's PDF page has a Cache Storage of its own (the
+// browser partitions it by the top-level site), which a warm-up run anywhere else cannot fill; the extension's own
+// storage is one wherever its pages are. So an extension that frames the page keeps its files and hands them over:
+//   ← { type: 'want', id, files: [url], bytes }          the files the page would download: with `bytes`, those the
+//                                                       framer holds, else only which it holds
+//   → { type: 'have', id, files: { url: ArrayBuffer | true } }   (ArrayBuffers transferred). An init keeps what is
+//                                                       handed in its own cache, checked as a download is; a file
+//                                                       not handed, or wrong, is downloaded. Unanswered for askMs,
+//                                                       the page goes on alone
+//   ← { type: 'keep', url, bytes (transferred) }         a warm-up's file downloaded, for the framer to keep (the page
+//                                                       keeps no copy)
+//   The framer decides when it answers (an extension waits for its own warm-up, so that nothing is downloaded twice).
 // Protocol 1 (the reader of 2026-10-01) is answered too: its init's `endpoint` is ignored — the page reaches its own
 // tree — and it reads none of the new fields.
 //
@@ -37,8 +57,9 @@
 // fetch from the tree (the manifest) are downloaded at start-up — in a bundle for each engine and one of the files
 // both share (b/, content-addressed), the hinted scripts' CJK faces one by one — and handed to BusyTeX before the
 // first compile; a request for any other file goes to the tree only when the index (tex-tree.mjs) has the file, so a
-// file the tree lacks costs no request. BusyTeX, its preloads and the fonts are kept in Cache Storage under their
-// versions, and the caches of other versions are deleted; everything else is left to the browser's HTTP cache.
+// file the tree lacks costs no request. Every file fetched ahead (BusyTeX, its preloads, the bundles, the index, the
+// faces) is kept in one Cache Storage cache, `tex-files`, and a file the build no longer names is deleted from it, as
+// are the caches of older pages; the tree's other files are left to the browser's HTTP cache.
 // Compiles run one at a time, in the order they were asked for.
 //
 // The page's own downloads: each is tried twice (after the server's Retry-After, at most 10 s, when it asks for one),
@@ -57,6 +78,8 @@ const ENGINE_OF = { pdflatex: 'pdflatex', latex: 'pdflatex', xelatex: 'xelatex',
 const engineOf = name => ENGINE_OF[name] ?? 'pdflatex'
 const ENGINE_CLASS = { pdflatex: 'PdfLatex', xelatex: 'XeLatex', lualatex: 'LuaLatex' }
 const CACHE_PREFIX = 'tex-'
+/** the one cache of the files fetched ahead */
+const FILES = `${CACHE_PREFIX}files`
 
 /** a download that failed for a network reason — no answer, a stall, a server's error, the wrong bytes: `what` is
  *  the file, for the answer's `network` */
@@ -73,13 +96,13 @@ const typeOf = url => (url.endsWith('.wasm') ? 'application/wasm' : 'application
 /**
  * `build`: the build's description (build.json: versions, addresses, sizes, manifest); `Runner`, `Engines`:
  * texlyre-busytex's BusyTexRunner and { PdfLatex, XeLatex, LuaLatex }; `fetch`, `caches`, `digest` (SHA-256 of bytes):
- * the browser's. `stallMs`: a download with no byte for that long is given up (and tried once more).
+ * the browser's. `stallMs`: a download with no byte for that long is given up (and tried once more). `askMs`: how long
+ * the framer's store is waited for before the page goes on alone (a safety net: the framer is the extension's own page,
+ * which may wait for its warm-up).
  * → { ready, receive(msg, reply) }: `reply(data, transfer)` answers the sender; receive's promise settles once the
  * message is answered
  */
-export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes => crypto.subtle.digest('SHA-256', bytes), progressEvery = 250, stallMs = 30000, sleep = ms => new Promise(r => setTimeout(r, ms)), now = () => performance.now() }) {
-  const engineCache = `${CACHE_PREFIX}engine-${build.eid}`
-  const fontCache = `${CACHE_PREFIX}fonts-${build.tid}`
+export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes => crypto.subtle.digest('SHA-256', bytes), progressEvery = 250, stallMs = 30000, askMs = 300000, sleep = ms => new Promise(r => setTimeout(r, ms)), now = () => performance.now() }) {
   const order = Object.keys(build.packages)
   const projects = new Map()
   let queue = Promise.resolve()
@@ -176,87 +199,161 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
     throw new NetworkFailure(nameOf(url), failure?.message ?? String(failure))
   }
 
-  /** each [url, size] in Cache Storage `name`: what it holds answers, the rest is downloaded into it (and kept in
-   *  memory as well when `keep`) → Map url → bytes when `keep`. An entry that cannot be written is no failure: the
-   *  bytes in hand go on, and the worker's own fetch falls back to the network */
-  async function cached(items, name, progress, keep) {
+  const urlOf = path => build.tree + path.split('/').map(encodeURIComponent).join('/')
+  const engineAssets = packages => [[`${build.engine}busytex.wasm`, build.wasm], ...packages.map(p => [`${build.engine}tl-${p}.data`, build.packages[p]])]
+  /** the index's bytes, checked against its name (index-<the first 12 hex digits of SHA-256 of its text and a NUL>) */
+  const indexCheck = async bytes => {
+    const expected = /^index-([0-9a-f]{12})\.txt$/.exec(build.index)?.[1]
+    if (!expected) return true
+    const withNul = new Uint8Array(bytes.length + 1)
+    withNul.set(bytes)
+    const hex = [...new Uint8Array(await digest(withNul))].map(b => b.toString(16).padStart(2, '0')).join('')
+    return hex.slice(0, 12) === expected
+  }
+  const enginesOf = engines => [...new Set(engines.map(engineOf))].filter(e => build.manifest.engines[e])
+  const bundleNames = engines => { const wanted = enginesOf(engines), bundles = build.manifest.bundles ?? {}; return (wanted.length ? ['common', ...wanted] : []).filter(b => bundles[b]) }
+  const fontEntries = scripts => scripts.flatMap(s => build.manifest.fonts[s] ?? [])
+
+  /**
+   * The files a visit with these hints fetches ahead → [{ url, size, check, phase, whole }]: BusyTeX and the engines'
+   * preloads ('engine'), the engines' bundles, the index and the scripts' faces ('files'). `whole`: used as bytes (the
+   * rest BusyTeX's worker reads from the cache itself); `check`: the index's own
+   */
+  function filesFor({ engines, scripts }) {
+    const out = engineAssets(packagesFor(engines)).map(([url, size]) => ({ url, size, phase: 'engine', whole: false }))
+    const bundles = build.manifest.bundles ?? {}
+    for (const b of bundleNames(engines)) out.push({ url: bundles[b].url, size: bundles[b].size, phase: 'files', whole: true })
+    out.push({ url: `${build.tree}${build.index}`, size: null, check: indexCheck, phase: 'files', whole: true })
+    for (const [, , path, size] of fontEntries(scripts)) if (!out.some(f => f.url === urlOf(path))) out.push({ url: urlOf(path), size, phase: 'files', whole: true })
+    return out
+  }
+  /** every file the build fetches ahead for some visit: what the cache may hold */
+  const buildFiles = () => new Set(filesFor({ engines: Object.keys(ENGINE_CLASS), scripts: Object.keys(build.manifest.fonts) }).map(f => f.url))
+
+  const openFiles = () => caches.open(FILES).catch(() => null)
+  const pathOf = url => new URL(url, 'https://page.invalid/').pathname
+  /** the caches of older pages deleted, and the files the build no longer names */
+  const dropOld = async () => {
+    for (const name of await caches.keys()) if (name.startsWith(CACHE_PREFIX) && name !== FILES) await caches.delete(name)
+    const cache = await openFiles()
+    if (!cache?.keys) return
+    const named = new Set([...buildFiles()].map(pathOf))
+    for (const { url } of await cache.keys()) if (!named.has(pathOf(url))) await cache.delete(url)
+  }
+  /** a file in hand, kept: with the wasm's own type, whatever the server or the framer said */
+  const put = (cache, url, bytes) => cache?.put(url, new Response(bytes, { headers: { 'content-type': typeOf(url) } })).catch(() => {})
+  /** a file's bytes, as its build says they are: its length, and the index its name */
+  const sound = async (f, bytes) => (f.size == null || bytes.length === f.size) && (!f.check || await f.check(bytes))
+
+  /**
+   * The files from the page's cache, the rest downloaded into it, in parallel → Map url → bytes of the `whole` ones. A
+   * file that cannot be had is the network's failure: thrown (NetworkFailure) unless `failed` collects it. An entry
+   * that cannot be written is no failure: the bytes in hand go on, and the worker's own fetch falls back to the
+   * network. `progressOf(file)`: the reporter its bytes count in (a file of no known size, the index, counts in none);
+   * `tally.bytes`: the bytes downloaded, added to
+   */
+  async function obtain(files, progressOf, failed = null, tally = { bytes: 0 }) {
     const out = new Map()
-    if (!items.length) return out
-    const cache = await caches.open(name).catch(() => null)
-    // no Cache Storage: what is not kept here is left to the worker's own fetch (and the HTTP cache)
-    if (!cache && !keep) return out
+    const cache = await openFiles()
     const missing = []
-    await Promise.all(items.map(async ([url, size]) => {
-      const hit = cache ? await cache.match(url).catch(() => undefined) : undefined
-      if (hit) { if (keep) out.set(url, new Uint8Array(await hit.arrayBuffer())); return }
-      missing.push([url, size])
-      progress.expect(size)
+    await Promise.all(files.map(async f => {
+      const hit = cache ? await cache.match(f.url).catch(() => undefined) : undefined
+      if (!hit) missing.push(f)
+      else if (f.whole) out.set(f.url, new Uint8Array(await hit.arrayBuffer()))
     }))
-    await Promise.all(missing.map(async ([url, size]) => {
-      if (keep || !cache) {
-        const bytes = await download(url, { size, progress })
-        if (cache) await cache.put(url, new Response(bytes, { headers: { 'content-type': typeOf(url) } })).catch(() => {})
-        if (keep) out.set(url, bytes)
-      } else await download(url, { size, progress, sink: { cache } })
+    for (const f of missing) if (f.size != null) progressOf(f).expect(f.size)
+    await Promise.all(missing.map(async f => {
+      const progress = f.size == null ? null : progressOf(f)
+      try {
+        // no Cache Storage: what is not used whole here is left to the worker's own fetch (and the HTTP cache)
+        if (!f.whole && cache) {
+          await download(f.url, { size: f.size, progress, sink: { cache } })
+          tally.bytes += f.size ?? 0
+        } else if (f.whole) {
+          const bytes = await download(f.url, { size: f.size, progress, check: f.check })
+          tally.bytes += bytes.length
+          await put(cache, f.url, bytes)
+          out.set(f.url, bytes)
+        }
+      } catch (e) {
+        if (!failed) throw e
+        failed.push(e instanceof NetworkFailure ? e.what : nameOf(f.url))
+      }
     }))
     return out
   }
 
-  const dropOldCaches = async () => {
-    for (const name of await caches.keys()) if (name.startsWith(CACHE_PREFIX) && name !== engineCache && name !== fontCache) await caches.delete(name)
+  /** a question to the framer's store → its answer's files, {} when it does not answer within askMs */
+  let asked = 0
+  const answers = new Map()
+  const ask = (reply, files, bytes) => new Promise(resolve => {
+    const id = ++asked
+    const timer = setTimeout(() => { answers.delete(id); resolve({}) }, askMs)
+    answers.set(id, files => { clearTimeout(timer); answers.delete(id); resolve(files ?? {}) })
+    reply({ type: 'want', id, files, bytes })
+  })
+  /** the files the page's cache lacks, asked of the framer's store: those it hands over, sound, kept as downloads are */
+  async function handedOver(files, reply) {
+    const cache = await openFiles()
+    if (!cache) return
+    const missing = []
+    for (const f of files) if (!(await cache.match(f.url).catch(() => undefined))) missing.push(f)
+    if (!missing.length) return
+    const handed = await ask(reply, missing.map(f => f.url), true)
+    await Promise.all(missing.map(async f => {
+      const buffer = handed[f.url]
+      if (!(buffer instanceof ArrayBuffer)) return
+      const bytes = new Uint8Array(buffer)
+      if (await sound(f, bytes)) await put(cache, f.url, bytes)
+    }))
   }
 
-  /** the index's text, checked against its name (index-<the first 12 hex digits of SHA-256 of its text and a NUL>) */
-  const indexText = async () => {
-    const expected = /^index-([0-9a-f]{12})\.txt$/.exec(build.index)?.[1]
-    const check = async bytes => {
-      if (!expected) return true
-      const withNul = new Uint8Array(bytes.length + 1)
-      withNul.set(bytes)
-      const hex = [...new Uint8Array(await digest(withNul))].map(b => b.toString(16).padStart(2, '0')).join('')
-      return hex.slice(0, 12) === expected
-    }
-    return new TextDecoder().decode(await download(`${build.tree}${build.index}`, { check }))
-  }
-
-  /**
-   * The manifest's files for these engines and scripts → [{ name, format, content }]: the engines' from their bundles
-   * (one object each — the files both engines' manifests name, and each engine's own: a handful of requests, not
-   * hundreds; a bundle in `fetched` already is not fetched again, and one fetched now is added), the scripts' faces
-   * each from the tree into Cache Storage. A bundle or a face that cannot be fetched is left out: the compile asks for
-   * its files if it needs them
-   */
-  async function manifestFiles(engines, scripts, progress, fetched = new Set()) {
-    const wanted = [...new Set(engines.map(engineOf))].filter(e => build.manifest.engines[e])
+  /** the bundles' and the faces' files for these hints, from the bytes obtained → [{ name, format, content }] */
+  function manifestFiles(engines, scripts, bytesOf) {
     const bundles = build.manifest.bundles ?? {}
-    const names = (wanted.length ? ['common', ...wanted] : []).filter(b => bundles[b] && !fetched.has(b))
     const bytes = new Map() // path → bytes
-    for (const b of names) progress.expect(bundles[b].size)
-    const url = path => build.tree + path.split('/').map(encodeURIComponent).join('/')
-    const fonts = scripts.flatMap(s => build.manifest.fonts[s] ?? [])
-    const fontUrls = [...new Map(fonts.map(([, , path, size]) => [url(path), size])).entries()]
-    await Promise.all([
-      ...names.map(b => download(bundles[b].url, { size: bundles[b].size, progress }).then(all => {
-        fetched.add(b)
-        for (const [path, offset, size] of bundles[b].files) bytes.set(path, all.subarray(offset, offset + size))
-      }, () => {})),
-      cached(fontUrls, fontCache, progress, true).then(m => { for (const [, , path] of fonts) if (m.has(url(path))) bytes.set(path, m.get(url(path))) }, () => {}),
-    ])
-    progress.end()
+    for (const b of bundleNames(engines)) {
+      const all = bytesOf.get(bundles[b].url)
+      if (all) for (const [path, offset, size] of bundles[b].files) bytes.set(path, all.subarray(offset, offset + size))
+    }
+    const fonts = fontEntries(scripts)
+    for (const [, , path] of fonts) if (bytesOf.has(urlOf(path))) bytes.set(path, bytesOf.get(urlOf(path)))
     const out = []
-    for (const [format, name, path] of [...wanted.flatMap(e => build.manifest.engines[e]), ...fonts]) {
+    for (const [format, name, path] of [...enginesOf(engines).flatMap(e => build.manifest.engines[e]), ...fonts]) {
       const b = bytes.get(path)
       if (b && !out.some(f => f.name === name && f.format === format)) out.push({ name, format, content: b })
     }
     return out
   }
 
-  /** BusyTeX with these packages, its index and common files handed over; one that fails to come up is let go */
+  /**
+   * The files for these hints, fetched in parallel → { engine, index, files }, three promises: BusyTeX's and the
+   * preloads in the cache (rejected when one cannot be had), the index's text (likewise; null when `index` is false: an
+   * engine switch has it), and the bundles' and faces' files for BusyTeX — a bundle or a face that cannot be fetched is
+   * left out: the compile asks for its files if it needs them
+   */
+  function obtainFor({ engines, scripts }, reply, { index = true } = {}) {
+    const indexUrl = `${build.tree}${build.index}`
+    const files = filesFor({ engines, scripts })
+    const engine = reporter(reply, 'engine'), common = reporter(reply, 'files')
+    const progressOf = f => (f.phase === 'engine' ? engine : common)
+    const got = {
+      engine: obtain(files.filter(f => f.phase === 'engine'), progressOf).finally(() => engine.end()),
+      index: index ? obtain(files.filter(f => f.url === indexUrl), progressOf).then(m => new TextDecoder().decode(m.get(indexUrl))) : Promise.resolve(null),
+      files: obtain(files.filter(f => f.phase === 'files' && f.url !== indexUrl), progressOf, []).finally(() => common.end()).then(rest => manifestFiles(engines, scripts, rest)),
+    }
+    got.index.catch(() => {})
+    got.files.catch(() => {})
+    return got
+  }
+
+  /** BusyTeX with these packages, its index and common files handed over — those once its worker is up, which they may
+   *  still be downloading meanwhile; one that fails to come up is let go */
   const start = async packages => {
     const runner = new Runner({ busytexBasePath: build.engine.replace(/\/$/, ''), preloadDataPackages: packages.map(p => `${build.engine}tl-${p}.js`) })
     try {
       await runner.initialize(true)
-      const index = await shared.index
+      const { index } = shared
       await new Promise(resolve => {
         const ack = e => { if (e.data?.axt_tree_ready) { runner.worker.removeEventListener('message', ack); resolve() } }
         runner.worker.addEventListener('message', ack)
@@ -270,28 +367,19 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
       throw e
     }
   }
-  const engineAssets = packages => [[`${build.engine}busytex.wasm`, build.wasm], ...packages.map(p => [`${build.engine}tl-${p}.data`, build.packages[p]])]
 
-  /** BusyTeX brought up for these hints: its engine and preloads, the index and the common files, in parallel */
-  async function bringUp({ engines, scripts }, reply) {
-    const packages = packagesFor(engines)
-    const dropped = dropOldCaches().catch(() => {})
-    const engineProgress = reporter(reply, 'engine')
-    const engineP = cached(engineAssets(packages), engineCache, engineProgress, false).then(() => engineProgress.end())
-    const fetched = new Set()
-    shared = {
-      index: indexText(),
-      files: manifestFiles(engines, scripts, reporter(reply, 'files'), fetched),
-      fetched,
-      extra: Promise.all((build.extra ?? []).map(async path => ({ path, content: await download(`${build.page}extra/${path}`) }))),
-      engines: new Set(engines.map(engineOf)),
-    }
-    shared.index.catch(() => {})
-    shared.extra.catch(() => {})
+  /** BusyTeX brought up for these hints: its engine and preloads, the index and the common files, in parallel; from
+   *  the framer's store first when it keeps them */
+  async function bringUp({ engines, scripts, store }, reply) {
+    const dropped = dropOld().catch(() => {})
+    if (store) await handedOver(filesFor({ engines, scripts }), reply)
+    const extra = Promise.all((build.extra ?? []).map(async path => ({ path, content: await download(`${build.page}extra/${path}`) })))
+    extra.catch(() => {})
+    const got = obtainFor({ engines, scripts }, reply)
     try {
-      await engineP
-      await shared.index
-      state = await start(packages)
+      await got.engine
+      shared = { index: await got.index, files: got.files, extra }
+      state = await start(packagesFor(engines))
     } catch (e) {
       shared = null
       throw e
@@ -299,33 +387,70 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
     await dropped
   }
 
+  const hintsOf = msg => {
+    const v2 = msg.protocol >= 2
+    return {
+      engines: v2 && Array.isArray(msg.engines) && msg.engines.length ? msg.engines : DEFAULT_ENGINES,
+      scripts: v2 && Array.isArray(msg.fonts) ? msg.fonts : [],
+      store: v2 && msg.store === true,
+    }
+  }
+
   async function init(msg, reply) {
     if (state) return { type: 'init-done', protocol: PROTOCOL, ms: 0 }
     const t0 = now()
-    const v2 = msg.protocol >= 2
-    hints = {
-      engines: v2 && Array.isArray(msg.engines) && msg.engines.length ? msg.engines : DEFAULT_ENGINES,
-      scripts: v2 && Array.isArray(msg.fonts) ? msg.fonts : [],
-    }
+    hints = hintsOf(msg)
     await bringUp(hints, reply)
     return { type: 'init-done', protocol: PROTOCOL, ms: Math.round(now() - t0) }
   }
 
+  /**
+   * The files a first compile with these hints fetches ahead, downloaded and kept, nothing started: by the page in its
+   * own cache, or with `store` by the framer alone — the page asks which it holds, and gives it the others as they
+   * come. A file that cannot be had fails the warm-up as the network's; what came is kept
+   */
+  async function warm(msg, reply) {
+    const t0 = now()
+    const { engines, scripts, store } = hintsOf(msg)
+    const files = filesFor({ engines, scripts })
+    const progress = reporter(reply, 'warm')
+    const failed = []
+    let bytes = 0
+    if (store) {
+      const held = await ask(reply, files.map(f => f.url), false)
+      const missing = files.filter(f => !held[f.url])
+      for (const f of missing) if (f.size != null) progress.expect(f.size)
+      await Promise.all(missing.map(async f => {
+        try {
+          const b = await download(f.url, { size: f.size, progress: f.size == null ? null : progress, check: f.check })
+          bytes += b.length
+          reply({ type: 'keep', url: f.url, bytes: b.buffer }, [b.buffer])
+        } catch (e) { failed.push(e instanceof NetworkFailure ? e.what : nameOf(f.url)) }
+      }))
+    } else {
+      await dropOld().catch(() => {})
+      const tally = { bytes: 0 }
+      await obtain(files, () => progress, failed, tally)
+      bytes = tally.bytes
+    }
+    progress.end()
+    if (failed.length) return { type: 'warm-done', error: `could not fetch ${failed.join(', ')}`, network: failed }
+    return { type: 'warm-done', protocol: PROTOCOL, ms: Math.round(now() - t0), files: files.length, bytes }
+  }
+
   /** the running BusyTeX has the engine's packages, or a new one is brought up with them added — and with the added
-   *  engine's common files — before the old one goes: a failure leaves the old one running */
+   *  engine's common files, from the framer's store first when it keeps them — before the old one goes: a failure
+   *  leaves the old one running */
   async function ensureEngine(engine, reply) {
     const need = packagesFor([engine])
     if (need.every(p => state.packages.includes(p))) return
     const packages = order.filter(p => need.includes(p) || state.packages.includes(p))
-    const engineProgress = reporter(reply, 'engine')
-    await cached(engineAssets(packages), engineCache, engineProgress, false)
-    engineProgress.end()
-    if (!shared.engines.has(engineOf(engine))) {
-      const before = await shared.files
-      const added = await manifestFiles([engine], [], reporter(reply, 'files'), shared.fetched)
-      shared.files = Promise.resolve([...before, ...added.filter(f => !before.some(g => g.name === f.name && g.format === f.format))])
-      shared.engines.add(engineOf(engine))
-    }
+    const added = { engines: [engine], scripts: [] }
+    if (hints?.store) await handedOver(filesFor(added).filter(f => f.url !== `${build.tree}${build.index}`), reply)
+    const got = obtainFor(added, reply, { index: false })
+    await got.engine
+    const before = await shared.files, files = await got.files
+    shared.files = Promise.resolve([...before, ...files.filter(f => !before.some(g => g.name === f.name && g.format === f.format))])
     const next = await start(packages)
     state.runner.terminate()
     state = next
@@ -333,7 +458,7 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
 
   async function compile(msg, reply) {
     // an init that failed is tried again, with its hints, before the compile
-    if (!state) await bringUp(hints ?? { engines: DEFAULT_ENGINES, scripts: [] }, reply)
+    if (!state) await bringUp(hints ?? { engines: DEFAULT_ENGINES, scripts: [], store: false }, reply)
     await ensureEngine(msg.engine, reply)
     const t0 = now()
     const files = new Map(projects.get(msg.key) ?? [])
@@ -367,6 +492,9 @@ export function texPage({ build, Runner, Engines, fetch, caches, digest = bytes 
     ready: { type: 'ready', protocol: PROTOCOL, cv: build.cv, eid: build.eid, tid: build.tid, index: build.index },
     receive(msg, reply) {
       if (msg?.type === 'project') { projects.set(msg.key, new Map(msg.files.map(f => [f.path, f.content]))); return Promise.resolve() }
+      // the framer's answer, out of turn: the message it answers is waiting for it
+      if (msg?.type === 'have') { answers.get(msg.id)?.(msg.files); return Promise.resolve() }
+      if (msg?.type === 'warm') return (queue = queue.then(() => warm(msg, reply)).then(d => reply(d), e => reply({ type: 'warm-done', ...failed(e) })))
       if (msg?.type === 'init') return (queue = queue.then(() => init(msg, reply)).then(d => reply(d), e => reply({ type: 'init-done', ...failed(e) })))
       if (msg?.type === 'compile') return (queue = queue.then(() => compile(msg, reply)).then(([d, t]) => reply(d, t), e => reply({ type: 'compiled', id: msg.id, ok: false, ...failed(e) })))
       return Promise.resolve()

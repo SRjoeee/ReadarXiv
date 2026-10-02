@@ -37,6 +37,8 @@ export declare function texPage(options: {
   caches: any
   progressEvery?: number
   stallMs?: number
+  /** how long the framer's store is waited for before the page goes on alone */
+  askMs?: number
   sleep?: (ms: number) => Promise<void>
   now?: () => number
 }): {
