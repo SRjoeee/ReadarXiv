@@ -29,13 +29,9 @@ export const scriptOf = lang => new Intl.Locale(lang).maximize().script
 export const authorsTranslated = lang => Boolean(CJK[scriptOf(lang)])
 /** the translation a strategy sets: without the author block's names and places under one that cannot take them */
 export const typesetBy = (translated, strategy) => (strategy.authors === false ? new Map([...translated].filter(([u]) => u.kind !== 'author')) : translated)
-/** The languages whose typesetting the multi-language gate verifies (spikes/lang-gate.mjs). Until #295 takes up the
- *  others, the reader sets these alone: single language first. Compared by language and script, since a tag reaches
- *  here as the extension's language table gives it — zh-TW for Traditional Chinese — and a script can be lost on the
- *  way: Bosnian, Uzbek and Azerbaijani in Cyrillic come as bs, uz and az, which say Latin (Codex on #296) */
-export const VERIFIED = ['zh', 'zh-Hant', 'ja', 'ko', 'de', 'es', 'fr', 'pt', 'ru']
-const languageAndScript = tag => { const l = new Intl.Locale(tag).maximize(); return `${l.language}-${l.script}` }
-export const verified = tag => VERIFIED.some(v => languageAndScript(v) === languageAndScript(tag))
+// the languages the reader typesets, in a module of their own: the background reads them too (its warm-up), and a
+// service worker's bundle cannot carry this module's LaTeX parser
+export { VERIFIED, verified } from './verified.mjs'
 /** the engines whose fonts are 8-bit: an alphabet needs its encoding under them, CJK its CJKutf8 (classic LaTeX, which the
  *  browser compiles with pdfLaTeX, is one: Devin and Codex on #294) */
 const EIGHT_BIT = new Set(['pdflatex', 'latex'])
@@ -241,4 +237,19 @@ export function strategiesFor(meta, lang) {
     ]
   }
   throw new Error(`no typesetting for ${lang} (script ${script}) yet`)
+}
+
+/**
+ * What the TeX page is told a visit will use (its protocol 2 hints): the engines — the paper's own (the font probe, the
+ * marked original) and the first strategy's for the language — and the CJK script whose faces that strategy sets.
+ * `own`: the marked original's compiler, the paper as it is in its own engine alone. The warm-up downloads ahead what a
+ * pdfLaTeX paper's hints name (background/warmup.ts), so that the reader's first visit asks for nothing it has not
+ */
+export function texHints(meta, lang, own = false) {
+  // classic LaTeX is compiled by pdfLaTeX, its own engine and its first strategy's alike
+  const engineOf = name => (name === 'latex' ? 'pdflatex' : name)
+  let first = null
+  try { if (!own) first = strategiesFor(meta, lang)[0] } catch {}
+  const script = scriptOf(lang)
+  return { engines: [...new Set([engineOf(meta.compiler), engineOf(first?.engine)].filter(Boolean))], fonts: !own && CJK[script] ? [script] : [] }
 }

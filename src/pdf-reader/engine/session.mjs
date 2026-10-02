@@ -40,7 +40,8 @@ import { captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pa
 import { hostReady } from './host.mjs'
 import { compilerKeeper, keptFor, openPaper, PIPELINE_VERSION, runLive, TYPESETTING_VERSION } from './live.mjs'
 import { displayEdges, isName, plainSource, sentencesKept, unitText, WIRE } from './mt.mjs'
-import { CJK, scriptOf, strategiesFor, verified, VERIFIED } from './scripts.mjs'
+import { texHints, verified, VERIFIED } from './scripts.mjs'
+import { answerWant, shareLock } from './tex-store.mjs'
 import { marksOf as typesetMarksOf } from './typeset/places.mjs'
 import { flowChain, knots, lineTable, makeMap } from './sync.mjs'
 import { unpackSource } from './tar.mjs'
@@ -2110,7 +2111,23 @@ async function live() {
    *  the tree's and its index's; '1' for a page of protocol 1): kept until a compiler takes it, so that the versions a
    *  "cannot typeset" mark is judged by cost no second load */
   let frameP = null
+  /**
+   * The TeX page in use while this reader typesets (tex-store.mjs): the lock shared, so that no warm-up starts
+   * meanwhile and one running is waited for; and the files a page of ours asks for — those its own cache lacks: over
+   * arXiv's PDF page it has a cache of its own, which the warm-up could not fill — handed from the extension's store
+   */
+  let pageInUse = null
+  const usePage = () => {
+    if (pageInUse) return
+    pageInUse = shareLock()
+    addEventListener('message', e => {
+      if (e.origin !== site || e.data?.type !== 'want' || ![...document.querySelectorAll('iframe')].some(f => f.contentWindow === e.source)) return
+      const page = e.source, id = e.data.id
+      void pageInUse.then(() => answerWant(site, e.data)).then(({ message, transfer }) => page.postMessage(message, site, transfer), () => page.postMessage({ type: 'have', id, files: {} }, site))
+    })
+  }
   const texFrame = () => (frameP ??= (async () => {
+    usePage()
     const frame = Object.assign(document.createElement('iframe'), { src: `${site}/tex.html`, hidden: true })
     const ready = waitFor(site, 'ready', frame)
     document.body.append(frame)
@@ -2127,9 +2144,10 @@ async function live() {
   /**
    * The TeX page as a compiler, given the paper's project and the visit's language: { compile, close }, closing the page
    * with its worker (live.mjs compilerKeeper opens one when needed, and a fresh one after a compile the page failed).
-   * Protocol 2's hints (the S3a report): the engines the visit will use — the paper's own (the font probe, the marked
-   * original) and its first strategy's — and the CJK script whose faces that strategy sets, which the page fetches
-   * ahead; a page of protocol 1 reads the `endpoint` instead, and nothing else. An init the page reports failed is no
+   * Protocol 2's hints (the S3a report; scripts.mjs texHints): the engines the visit will use — the paper's own (the font
+   * probe, the marked original) and its first strategy's — and the CJK script whose faces that strategy sets, which the
+   * page fetches ahead, from the extension's store first (`store`: the warm-up's files, tex-store.mjs); a page of
+   * protocol 1 reads the `endpoint` instead, and nothing else. An init the page reports failed is no
    * compiler: the frame goes, and the failure is retried as a network down is (the S3a report's duties, a). `own`: the
    * marked original's compiler, which sets the paper as it is, in its own engine alone
    */
@@ -2138,12 +2156,8 @@ async function live() {
     const mine = texFrame()
     frameP = null
     const { frame, version } = await mine
-    const meta = p.paperData.meta, script = scriptOf(lang), engine = meta.compiler === 'latex' ? 'pdflatex' : meta.compiler
-    let first = null
-    try { if (!own) first = strategiesFor(meta, lang)[0] } catch {}
-    const engines = [...new Set([engine, first?.engine].filter(Boolean))]
     const initDone = waitFor(site, 'init-done', frame)
-    frame.contentWindow.postMessage({ type: 'init', protocol: 2, engines, fonts: !own && CJK[script] ? [script] : [], endpoint }, site)
+    frame.contentWindow.postMessage({ type: 'init', protocol: 2, ...texHints(p.paperData.meta, lang, own), store: true, endpoint }, site)
     const done = await initDone
     if (done.error) {
       frame.remove()

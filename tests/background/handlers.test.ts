@@ -28,6 +28,7 @@ function harness(over: Partial<HandlerDeps> = {}) {
     lightAction: vi.fn(async () => undefined),
     environment: vi.fn(),
     health: { reject: vi.fn(async () => undefined), clear: vi.fn(async () => false) },
+    warmup: { done: vi.fn(async () => undefined) },
     ...over,
   } as unknown as HandlerDeps
   const handlers = createHandlers(deps)
@@ -307,7 +308,20 @@ describe('the background\'s handlers', () => {
     expect(Object.keys(createHandlers(deps)).sort()).toEqual([
       'axt:cache-clear', 'axt:cache-stats', 'axt:cancel-scope', 'axt:diag', 'axt:diag-export', 'axt:engine-ready',
       'axt:entry-settings', 'axt:ocr', 'axt:open-settings', 'axt:page-usable',
-      'axt:provider-status', 'axt:set-floating-entry', 'axt:toggle', 'axt:toggle-decision', 'axt:translate',
+      'axt:provider-status', 'axt:set-floating-entry', 'axt:tex-warmed', 'axt:toggle', 'axt:toggle-decision', 'axt:translate',
     ])
+  })
+
+  describe('axt:tex-warmed', () => {
+    it('hands the offscreen document\'s report to the warm-up, and a report it could not keep is a line in the log', async () => {
+      const done = vi.fn(async () => undefined)
+      const { send } = harness({ warmup: { done } })
+      const result = { ok: true as const, lang: 'zh', versions: 'c/e/t/i', files: 41, bytes: 1, ms: 1 }
+      await expect(send({ type: 'axt:tex-warmed', result })).resolves.toEqual({ ok: true })
+      expect(done).toHaveBeenCalledWith(result)
+      const failing = harness({ warmup: { done: vi.fn(async () => { throw new Error('storage gone') }) } })
+      await expect(failing.send({ type: 'axt:tex-warmed', result })).resolves.toEqual({ ok: true })
+      expect(failing.lines.some(([, line]) => line.includes('storage gone'))).toBe(true)
+    })
   })
 })
