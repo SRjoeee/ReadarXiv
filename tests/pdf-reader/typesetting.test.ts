@@ -119,6 +119,27 @@ describe('the last compile\'s references, given to the next', () => {
     expect(['arxiv.aux', 'arxiv.bbl'].filter(f => files.has(f))).toEqual(['arxiv.aux', 'arxiv.bbl'])
     expect([...files.keys()].filter(f => /\.(aux|bbl)$/.test(f))).toEqual(['arxiv.aux', 'arxiv.bbl'])
   })
+  it('a draft\'s contents lists, which only a pass\'s end writes from the aux: each list its \\@writefile lines\' text, beside the aux, a line cut short left out; the final\'s passes write their own (the F2 re-review\'s N2)', () => {
+    // a one-pass draft reads its \tableofcontents from <stem>.toc, its \listoffigures from .lof, backref's back
+    // references from .brf, each written at a pass's end from that pass's \@writefile lines; given the aux alone,
+    // every list was set empty
+    const p = openPaper(new Map([['latex/arxiv.tex', new TextEncoder().encode(SOURCE)]]))
+    const aux = [
+      '\\relax',
+      '\\@writefile{toc}{\\contentsline {section}{\\numberline {1}Method}{1}{section.1}\\protected@file@percent }',
+      '\\@writefile{lof}{\\addvspace {10\\p@ }}',
+      '\\@writefile{toc}{\\contentsline {section}{\\numberline {2}Results}{3}{section.2}\\protected@file@percent }',
+      '\\@writefile{lot}{\\contentsline {table}{\\numberline {1}{\\ignorespaces A caption TeX',
+      '\\@writefile{brf}{\\backcite{a}{{1}{1}{section.1}}}',
+      '\\newlabel{s}{{1}{1}}',
+    ].join('\n')
+    const files = (draft: boolean) => translationFiles(p, new Map(), { strategy: first({ ...META, ...p.meta }, 'de'), fonts: null, draft, aux })
+    const text = (f: Map<string, Uint8Array>, path: string) => (f.has(path) ? new TextDecoder().decode(f.get(path)) : null)
+    const draft = files(true)
+    expect(text(draft, 'arxiv.toc')).toBe('\\contentsline {section}{\\numberline {1}Method}{1}{section.1}\\protected@file@percent \n\\contentsline {section}{\\numberline {2}Results}{3}{section.2}\\protected@file@percent \n')
+    expect([text(draft, 'arxiv.lof'), text(draft, 'arxiv.brf'), text(draft, 'arxiv.lot')]).toEqual(['\\addvspace {10\\p@ }\n', '\\backcite{a}{{1}{1}{section.1}}\n', null])
+    expect([...files(false).keys()].filter(f => f.startsWith('arxiv.'))).toEqual(['arxiv.aux'])
+  })
   it('come from the paper itself only when it brings <stem>.bbl where TeX reads it, the root (the re-review of 2026-10-02, N3)', () => {
     const bbl = new TextEncoder().encode('\\begin{thebibliography}{1}\\end{thebibliography}\n')
     const brings = (at: string) => openPaper(new Map([['latex/arxiv.tex', new TextEncoder().encode(SOURCE)], [at, bbl]])).meta.bbl

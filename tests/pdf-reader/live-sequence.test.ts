@@ -402,6 +402,69 @@ describe('the original\'s labels and bibliography, for a draft with none of its 
   })
 })
 
+// The contents lists (the F2 re-review's N2): a one-pass draft reads its \tableofcontents, \listoffigures and
+// \listoftables from the files a pass writes at its end from the aux's \@writefile lines, and was given the aux alone:
+// every list set empty, every unit after it measured early by its height (zh 2608.02459, its contents before 550 of its
+// 555 units: 0.939 of a page's start drift, 0.098 with them). A draft is given the lists of the aux it is given; one
+// that set a list from nothing (LaTeX's "No file main.toc.") is no measure, and a re-set's measure, which has no aux of
+// the translation's, is measured again with its own lists
+describe('the contents lists, for every draft', () => {
+  /** each draft's aux: its contents, its heading translated, numbered by the draft */
+  const OWN = (k: number) => `\\relax\n\\@writefile{toc}{\\contentsline {section}{\\numberline {1}\u8bba\u6587 ${k}}{1}{section.1}\\protected@file@percent }\n\\bibcite{a}{1}\n`
+  const list = (q: Req | undefined, ext: string) => (q?.overrides.get(`main.${ext}`) ? new TextDecoder().decode(q.overrides.get(`main.${ext}`)) : null)
+  /** as TeX does: a draft's aux writes its list, and a draft given no list file says so in its log; every request kept */
+  const withLists = (n: number, answering: Answering = {}, lists = true) => {
+    const c = compiler(n, answering), base = c.compile, given: Req[] = []
+    let drafts = 0
+    c.compile = async (q: Req) => {
+      given.push(q)
+      const r = await base(q)
+      if (!r.ok || kindOf(q) !== 'preview' || !lists) return r
+      return { ...r, aux: OWN(++drafts), log: `${q.overrides.has('main.toc') ? '' : 'No file main.toc.\n'}${r.log}` }
+    }
+    return { ...c, given }
+  }
+  const taken = (p: ReturnType<typeof paper>) => new Map(p.units.map((u, i) => [i, { pieces: u.pieces.map(q => ((q as { t: string }).t === 'text' ? { ...(q as object), tr: true } : q)), state: 'whole', by: 'B', tried: 'B', current: true }]))
+  const reset = (c: ReturnType<typeof withLists>, notes: string[] = []) => {
+    const p = paper(4), n = p.units.length
+    return runLive(p, { lang: 'zh', compile: c.compile, translate: async () => { throw new Error('nothing is sent') }, format: 'markers', marks: new Map(), identity: 'B', seed: taken(p), pipelineCurrent: false, readMarks: async () => MARKS(n), note: (e: string) => notes.push(e) })
+  }
+  const TOC = (k: number) => `\\contentsline {section}{\\numberline {1}\u8bba\u6587 ${k}}{1}{section.1}\\protected@file@percent \n`
+
+  it('a first visit: the first preview has no lists, as it has no aux; every draft after it the lists of the one before; the final writes its own', async () => {
+    const t = translator(), n = paper().units.length
+    const c = withLists(n, { on: k => { if (k === 'original') t.release() } })
+    await run({ compiler: c, translate: t.translate })
+    expect(c.given.filter(q => kindOf(q) === 'preview').map(q => list(q, 'toc'))).toEqual([null, TOC(1)])
+    const final = c.given.find(q => kindOf(q) === 'final')
+    expect([list(final, 'toc'), list(final, 'lof')]).toEqual([null, null])
+  })
+
+  it('a re-set — every unit taken, so no preview — sets its lists from nothing in its measure: measured once more, given its own lists, and the final set from that', async () => {
+    const c = withLists(paper(4).units.length), notes: string[] = []
+    const r = await reset(c, notes)
+    const measures = c.given.filter(q => kindOf(q) === 'preview')
+    expect(measures.map(q => list(q, 'toc'))).toEqual([null, TOC(1)])
+    expect(notes.filter(e => e === 'measure')).toHaveLength(2)
+    expect(r.settled).toBe(true)
+  })
+
+  it('a re-set of a paper whose aux writes no list is measured once', async () => {
+    const c = withLists(paper(4).units.length, {}, false), notes: string[] = []
+    await reset(c, notes)
+    expect(notes.filter(e => e === 'measure')).toHaveLength(1)
+  })
+
+  it('the last preview of the whole translation, had it set a list from nothing, is no measure: a draft measures, given its lists', async () => {
+    const t = translator(), n = paper().units.length
+    let previews = 0
+    const c = withLists(n, { on: k => { if (k === 'original') t.release() }, log: k => (k === 'preview' && ++previews === 2 ? `No file main.toc.\n${linesLog(n)}` : null) })
+    await run({ compiler: c, translate: t.translate })
+    expect(c.calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`)).toEqual(['probe', 'preview', 'original', 'preview+rule', 'preview+rule', 'final+rule'])
+    expect(list(c.given.filter(q => kindOf(q) === 'preview')[2], 'toc')).toBe(TOC(2))
+  })
+})
+
 // Every unit sent and the last batch still out: a preview of part of the translation waits for it, once, as long as the
 // last preview took — the whole translation's would replace it within that time, and only the whole one measures the
 // final (zh 2608.02163 on the protocol-2 page: the last batch came 0.13 s after a preview of 200 of its 337 units began,

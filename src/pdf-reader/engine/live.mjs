@@ -85,6 +85,14 @@ const auxLines = (aux, command) => (aux ?? '').split('\n').filter(l => l.startsW
 const closed = line => { let depth = 0; for (const c of line.replace(/\\./g, '')) if (c === '{') depth++; else if (c === '}' && --depth < 0) return false; return depth === 0 }
 /** a compile's references as a draft is given them: its citations (\bibcite), its labels (\newlabel), its bibliography */
 const referencesOf = o => ({ cites: auxLines(o.aux, 'bibcite'), labels: auxLines(o.aux, 'newlabel'), bbl: o.bbl ?? null })
+/** the lists a pass writes at its end from an aux's \@writefile{<ext>}{<entry>} lines (LaTeX's \enddocument), by
+ *  extension: \tableofcontents's toc, \listoffigures' lof, \listoftables' lot, any list a package keeps so (backref's
+ *  brf) — each line's entry, in order */
+const listsOf = aux => {
+  const out = new Map()
+  for (const [, ext, entry] of auxLines(aux, '@writefile').matchAll(/^\\@writefile\{(\w+)\}\{(.*)\}$/gm)) out.set(ext, `${out.get(ext) ?? ''}${entry}\n`)
+  return out
+}
 /** TeX writes its log in lines of 79 characters at most, a warning about a long key over two: joined again (a line of
  *  79 of its own is joined to the next too, so what is looked for in it is not anchored to a line's start) */
 const unwrapped = log => log.replace(/^(.{79})\n/gm, '$1')
@@ -172,6 +180,11 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   const job = jobName(project.main)
   if (aux) out.set(`${job}.aux`, new TextEncoder().encode(aux))
   if (bbl && !meta.bbl) out.set(`${job}.bbl`, new TextEncoder().encode(bbl))
+  // a draft's one pass sets its contents lists from the files a pass writes them to at its end, from its aux's
+  // \@writefile lines: written from the aux it is given, else every list was set empty and every unit after it measured
+  // early by its height (the F2 re-review's N2: zh 2608.02459, its contents before 550 of its 555 units, 0.939 of a
+  // page's start drift, 0.098 with them). The final's passes write their own, as the original's do
+  if (draft && aux) for (const [ext, entries] of listsOf(aux)) if (!out.has(`${job}.${ext}`)) out.set(`${job}.${ext}`, new TextEncoder().encode(entries))
   return out
 }
 
@@ -218,7 +231,10 @@ export const PIPELINE_VERSION = '7'
 //    re-set's measure (every unit taken, no preview) had neither, and set 2608.08872 two pages long where its first
 //    visit set one —, and a compile that read no bibliography is no measure under biblatex either (runLive's `refs`,
 //    `referencesWhole`); readings kept under 1 have neither
-export const TYPESETTING_VERSION = '2'
+// 3: a draft sets its contents lists from the aux it is given (translationFiles), and a measure that set one from
+//    nothing is measured again with its own (runLive's `listsMissing`) — every draft had set them empty and measured
+//    every unit after them early by their height (zh 2608.02459: 0.939 of a page's start drift, 0.098 now)
+export const TYPESETTING_VERSION = '3'
 
 /**
  * Runs the whole of it. `compile({ main, engine, rerun, bibtex, overrides })` → { ok, pdf, aux, bbl, log, ms };
@@ -422,11 +438,15 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     const whole = snapshot => units.every(u => kept.has(u) || snapshot.has(u))
     /** a compile's references as complete as the original's: a bibliography read, every citation defined, and as many
      *  entries in it (a pass set from an earlier pass's references may lack some, and a bibliography of another length
-     *  moves every page after it). biblatex writes no \bibcite, and its warnings are the kernel's, its keys in plain
-     *  quotes; a one-pass draft under it always asks for biber again and says there were undefined references, which
-     *  says nothing */
-    const bibcites = text => (text ?? '').match(/^\\bibcite\{/gm)?.length ?? 0, noBbl = `No file ${jobName(project.main)}.bbl.`
-    const referencesWhole = r => { const log = unwrapped(lastTexLog(r.log)); return !log.includes(noBbl) && !/(?:LaTeX|Package natbib) Warning: Citation [`'].*undefined/.test(log) && bibcites(r.aux) === bibcites(readings?.cites) }
+     *  moves every page after it), and every contents list it reads (listsMissing). biblatex writes no \bibcite, and its
+     *  warnings are the kernel's, its keys in plain quotes; a one-pass draft under it always asks for biber again and
+     *  says there were undefined references, which says nothing */
+    const bibcites = text => (text ?? '').match(/^\\bibcite\{/gm)?.length ?? 0, noFile = ext => `No file ${jobName(project.main)}.${ext}.`
+    const referencesWhole = r => { const log = unwrapped(lastTexLog(r.log)); return !log.includes(noFile('bbl')) && !/(?:LaTeX|Package natbib) Warning: Citation [`'].*undefined/.test(log) && bibcites(r.aux) === bibcites(readings?.cites) && !listsMissing(r) }
+    /** whether a draft set a contents list from nothing: one its aux writes (listsOf) whose file its pass did not find
+     *  (LaTeX's \@input: "No file <job>.<ext>."), as a draft does that was given no aux of this translation (the F2
+     *  re-review's N2) — the list set empty, every unit after it early by its height */
+    const listsMissing = r => { const log = unwrapped(lastTexLog(r.log)); return [...listsOf(r.aux).keys()].some(ext => log.includes(noFile(ext))) }
     /** the preview that can measure the final: the last of the whole translation, planned, shown */
     let measuring = null
     // a preview of part of the translation held once for the last batch (below), as long as the last preview took
@@ -505,9 +525,22 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
       if (!fin?.typeset || fin.missing === 'a plan of the whole translation') {
         const plan = planFor(all)
         if (!plan) return null
-        const t1 = Date.now()
-        const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt(), overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: true, aux: refs(aux), bbl: bblAt(), typeset: plan.typeset, note }) })
-        note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, error: whyFailed(r) })
+        const measure = async () => {
+          const t1 = Date.now()
+          const r = await ask({ main: project.main, engine: strategy().engine, rerun: false, bibtex: !meta.bbl && !bblAt(), overrides: translationFiles(paper, all, { strategy: strategy(), fonts, draft: true, aux: refs(aux), bbl: bblAt(), typeset: plan.typeset, note }) })
+          note('measure', { ok: r.ok, ms: r.ms, roundTrip: Date.now() - t1, strategy: strategy().name, error: whyFailed(r) })
+          return r
+        }
+        let r = await measure()
+        // one that set a contents list from nothing — a re-set's: every unit taken, no draft of this translation before
+        // it — is measured once more, given its own lists (the F2 re-review's N2). Not the original's lists instead: as
+        // tall as the translation's only where its entries are, and the thesis 2307.16209's figures' long captions made
+        // its re-set three pages short (-5 pages / 2.787 against -2 / 1.493 with its own)
+        if (r.ok && listsMissing(r)) {
+          aux = r.aux
+          if (r.bbl) bbl = r.bbl
+          r = await measure()
+        }
         // BusyTeX gave up: the final from the plan uncorrected, which every input but the measure was there for
         if (timedOut(r)) { passing = true; return plan.typeset }
         // TeX's failure under the rule: the final as today (ruling 6)
