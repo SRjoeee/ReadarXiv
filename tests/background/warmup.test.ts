@@ -181,6 +181,33 @@ describe('createWarmup', () => {
     expect(t.record()?.failures).toBeUndefined()
   })
 
+  it('a try since this language\'s success of the last day that did not succeed — failed, or never reported (its document closed under it) — is tried again after its back-off, not once that success is a day old (Codex and Devin on #311)', async () => {
+    const done: WarmRecord = { tried: T0, lang: 'zh', versions: 'v', at: T0, bytes: 5 }
+    const t = harness({ record: done })
+    t.tick(HOUR)
+    await t.warmup.trigger('update')
+    t.tick(MINUTE)
+    t.finish()
+    await t.warmup.done({ ok: false, lang: 'zh', error: 'could not fetch b0.bin', network: ['b0.bin'] })
+    t.tick(10 * MINUTE)
+    await t.warmup.trigger('check')
+    expect(t.started).toHaveLength(1)
+    t.tick(6 * MINUTE)
+    await t.warmup.trigger('check')
+    expect(t.started).toHaveLength(2)
+    // the update's warm-up cut short with its document, nothing reported
+    const cut = harness({ record: done })
+    cut.tick(HOUR)
+    await cut.warmup.trigger('update')
+    cut.finish()
+    cut.tick(10 * MINUTE)
+    await cut.warmup.trigger('check')
+    expect(cut.started).toHaveLength(1)
+    cut.tick(6 * MINUTE)
+    await cut.warmup.trigger('check')
+    expect(cut.started).toHaveLength(2)
+  })
+
   it('a success reported by a warm-up already replaced does not hide its replacement\'s failure from the back-off (the re-review\'s m3)', async () => {
     let reading = false
     const t = harness({ readerOpen: async () => reading })

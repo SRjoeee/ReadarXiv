@@ -86,9 +86,11 @@ export function createWarmup(deps: WarmupDeps) {
     if (reason === 'check') {
       // never tried: the install's or the update's own trigger comes first, with the language it chose
       if (record?.tried === undefined) return
-      const current = record.lang === lang && record.at !== undefined && now - record.at < DAY
-      const failedLately = record.tried > (record.at ?? 0) && now - record.tried < backOff(record.failures)
-      if (current || failedLately) return
+      // a try since the last success that did not succeed — failed, stopped, or never reported (its document closed
+      // under it) — is what counts, tried again after its back-off however recent that success (Codex on #311); else the
+      // success, while it is the current language's of the last day
+      const since = record.tried > (record.at ?? 0)
+      if (since ? now - record.tried < backOff(record.failures) : record.lang === lang && now - (record.at ?? 0) < DAY) return
     }
     if (await deps.readerOpen()) return note(record, 'reader-open', `${reason}: deferred, a reader that typesets is open`)
     await deps.save({ ...record, tried: now, said: undefined })
