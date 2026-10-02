@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { type Compiled, compilerKeeper, openPaper, runLive } from '@/pdf-reader/engine/live.mjs'
+import { copyTexts, decideWrite, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
+import { type Compiled, compilerKeeper, keptFor, openPaper, runLive } from '@/pdf-reader/engine/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
 
 // The reader's compiles with the typesetting rule (experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
@@ -526,6 +527,61 @@ describe('the author block a strategy sets as the paper has it', () => {
     const result = r.results.get(author) as { pieces?: unknown[]; inSource?: boolean; state: string }
     expect([!!result.pieces, result.state, result.inSource]).toEqual([true, 'whole', true])
     expect((r.results.get(author + 1) as { inSource?: boolean }).inSource).toBeUndefined()
+  })
+})
+
+// The mark is the copy's PDF's (Devin and Codex on #309): a run again that sets no final — every piece typeset as it was,
+// only who made or tried a unit changed — writes the units' provenance over the copy's PDF, which still sets the author
+// block in the source; the mark goes with it, and the copy shown anchors the author on its source. A final that sets the
+// unit again says anew whether it set it in the source
+describe('a copy whose author block was set in the source, run again', () => {
+  const SOURCE = `\\documentclass{article}\\title{A Title of the Paper}\\author{Yousef Radwan\\\\King Abdullah University}\\begin{document}\\maketitle\n${Array.from({ length: 3 }, (_, k) => `Paragraph ${k} of the paper, with words that run on for a line.\n`).join('\n')}\\end{document}\n`
+  const zh = (by: string) => async (texts: string[]) => texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by }))
+  /** xeCJK fails every compile of the translation: CJKutf8 sets it, the author block as the paper has it */
+  const noXeCJK = (n: number) => compiler(n, { fail: (k, q) => k !== 'original' && k !== 'probe' && main(q).includes('xeCJK') })
+  /** the first visit's copy as the store keeps it (JSON), made by `B` under CJKutf8 */
+  const firstVisit = async () => {
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(SOURCE)]])), n = p.units.length
+    const r = await runLive(p, { lang: 'zh', compile: noXeCJK(n).compile, translate: zh('B'), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const hashes = await Promise.all(p.units.map(u => sourceHash(u)))
+    const record = JSON.parse(JSON.stringify({ marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), hashes, r.results) }))
+    return { p, n, hashes, record, author: p.units.findIndex(u => u.kind === 'author') }
+  }
+  type Visit = Awaited<ReturnType<typeof firstVisit>>
+  /** a run again as the reader makes it (session.mjs): the copy's seed, the seeds this identity made taken as they are */
+  const again = async (v: Visit, identity: string, { pipelineCurrent = true, compile = noXeCJK(v.n).compile } = {}) => {
+    const { seed } = await seedFrom(v.record, v.p.units)
+    const r = await runLive(v.p, { lang: 'zh', compile, translate: zh(identity), format: 'markers', marks: new Map(v.record.marks), identity, seed: reusable(seedAgain(seed, null), { identity, copyWire: true }), pipelineCurrent, readMarks: async () => MARKS(v.n) })
+    const units = unitsOf(v.p.units, keptFor(v.p, 'zh'), v.hashes, r.results)
+    return { r, units, how: decideWrite({ result: r, cached: v.record, units, marks: v.record.marks, shown: false }) }
+  }
+
+  it('every unit sent again and answered the same by another identity: a provenance write that keeps the mark, and the author anchored on its source', async () => {
+    const v = await firstVisit()
+    expect(v.record.units[v.author].inSource).toBe(true)
+    const { r, units, how } = await again(v, 'C')
+    expect([r.changed, how]).toEqual([false, 'provenance'])
+    expect(units[v.author]?.inSource).toBe(true)
+    expect(copyTexts(units)[v.author]?.text).toBe(v.record.units[v.author].src)
+  })
+
+  it('the author taken as it is, beside a unit sent again and answered the same: the mark kept', async () => {
+    const v = await firstVisit()
+    const para = v.p.units.findIndex(u => u.kind === 'para')
+    v.record.units[para].by = 'A'
+    const { r, units, how } = await again(v, 'B')
+    expect([r.changed, how]).toEqual([false, 'provenance'])
+    expect(units[v.author]?.inSource).toBe(true)
+    expect(copyTexts(units)[v.author]?.text).toBe(v.record.units[v.author].src)
+  })
+
+  it('a final that sets the author again says anew: translated under xeCJK, the mark gone; in the source under CJKutf8, the mark', async () => {
+    const v = await firstVisit()
+    const set = await again(v, 'B', { pipelineCurrent: false, compile: compiler(v.n).compile })
+    expect([set.r.settled, set.units[v.author]?.inSource]).toEqual([true, undefined])
+    expect(copyTexts(set.units)[v.author]?.text).not.toBe(v.record.units[v.author].src)
+    const source = await again(v, 'B', { pipelineCurrent: false })
+    expect([source.r.settled, source.units[v.author]?.inSource]).toEqual([true, true])
   })
 })
 

@@ -32,7 +32,7 @@ import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
 import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
-import { allTranslatedBy, decideWrite, digestOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { allTranslatedBy, copyTexts, decideWrite, digestOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
@@ -1970,15 +1970,9 @@ async function showCached(record, setContext, note = () => {}) {
     note('shown cached')
     if (readAt) right.viewer.scrollPageIntoView({ pageNumber: readAt.pageNumber, destArray: [null, { name: 'XYZ' }, readAt.left, readAt.top, null], allowNegativeOffset: true })
     headings = record.units.map((u, i) => ({ id: i, src: u.src, depth: u.depth, title: u.title, kind: u.kind })).filter(h => h.kind === 'heading')
-    // the translation's texts made again from the pieces the copy keeps (unitText), which say where their placeholders
-    // stood; the source's from its plain text, which does not. A copy made before its units kept their displays beyond
-    // their marks (displayEdges) is anchored as it was then, and one made before they kept their sentences is lit whole;
-    // their sentences only where of their shape and the text made again is the one they were counted in (the review of
-    // B3, minor 5: a malformed field took the highlight off a side)
-    rightTexts = record.units.map((u, i) => {
-      const t = u.pieces && !u.inSource ? unitText(u.pieces) : { text: u.src }, s = u.pieces && u.tr === t.text ? sentencesKept(u.sentences, u.src, t.text) : null
-      return { id: i, ...t, ...displayEdges(u), ...(s ? { sentences: s } : {}) }
-    })
+    // the translation's texts made again from the pieces the copy keeps, the source's where the final set it in the
+    // source (cache.mjs copyTexts)
+    rightTexts = copyTexts(record.units)
     await Promise.all([
       anchorSide(left, record.units.map((u, i) => ({ id: i, text: u.src, ...displayEdges(u) })), new Map(record.marks)).then(() => note('cached left anchored')),
       anchorSide(right, rightTexts, record.rightMarks?.length ? new Map(record.rightMarks) : undefined).then(() => note('cached right anchored')),

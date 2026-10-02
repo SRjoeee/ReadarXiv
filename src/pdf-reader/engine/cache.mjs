@@ -2,7 +2,7 @@
 // again starts from, the units a record keeps, when a run writes, the figures' keys. The store itself is the
 // extension's (src/cache/pdf-store.ts). Pure but for the hash, so that experiments/pdf-bilingual/spikes/cache-cases.mjs
 // runs it in Node.
-import { displayEdges, plainSource, plainTranslated } from './mt.mjs'
+import { displayEdges, plainSource, plainTranslated, sentencesKept, unitText } from './mt.mjs'
 
 const hex = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('')
 /** SHA-256 hex of bytes: arXiv's PDF, the key of its record */
@@ -13,10 +13,11 @@ export const sourceHash = async u => hex(await crypto.subtle.digest('SHA-256', n
 export const figureKeyOf = texts => JSON.stringify(texts)
 
 /**
- * The seed for this paper's units from a record: index → { pieces, by, tried, state, sentences? } for each unit whose source the
- * record has a translation of, matched by hash. A unit cut differently since has none. Repeated paragraphs (table
- * cells, often) share a hash, and each takes the best translation of their source: whole before partial (Devin on
- * #298). The hashes are kept for the record
+ * The seed for this paper's units from a record: index → { pieces, by, tried, state, sentences?, inSource? } for each unit
+ * whose source the record has a translation of, matched by hash. A unit cut differently since has none. Repeated
+ * paragraphs (table cells, often) share a hash, and each takes the best translation of their source: whole before partial
+ * (Devin on #298). The hashes are kept for the record. `inSource` goes with the translation: the copy's PDF set that
+ * translation in the source, and a run that sets no final keeps that PDF (inSourceOf)
  */
 const rankOf = u => (u.state === 'whole' ? 2 : u.state === 'partial' ? 1 : 0)
 export async function seedFrom(record, units) {
@@ -26,7 +27,7 @@ export async function seedFrom(record, units) {
   const seed = new Map()
   hashes.forEach((h, i) => {
     const u = byHash.get(h)
-    if (u) seed.set(i, { pieces: ownNested(units[i], u.pieces), by: u.by, tried: u.tried, state: u.state, ...(u.sentences ? { sentences: u.sentences } : {}) })
+    if (u) seed.set(i, { pieces: ownNested(units[i], u.pieces), by: u.by, tried: u.tried, state: u.state, ...(u.sentences ? { sentences: u.sentences } : {}), ...inSourceOf(u) })
   })
   return { seed, hashes }
 }
@@ -52,14 +53,23 @@ const ownNested = (unit, pieces) => {
 }
 
 /**
+ * A translation's mark that a final set it in the source (CachedUnit.inSource: the author block under CJKutf8), as a seed
+ * or a run's result carries it (Devin and Codex on #309): the mark is the PDF's, and a run that sets no final writes the
+ * units' provenance over the copy's PDF (decideWrite), which still sets that translation in the source. So it goes with
+ * the translation, from the record to the seed (seedFrom), to the run again's seed (seedAgain) and to the run's results
+ * (live.mjs runLive), and only a final that sets the unit again says anew whether it set it in the source
+ */
+export const inSourceOf = u => (u?.inSource ? { inSource: true } : {})
+
+/**
  * A run again's seed: the copy's (seedFrom), with what the visit's last run made over it (runLive's results), so that
- * only the units still missing are asked again — each with its pieces, its provenance and its sentences, which the run
- * passes on to what it shows and to the record (a seeded unit without them lit whole, the final review of the
- * highlight, m3)
+ * only the units still missing are asked again — each with its pieces, its provenance, its sentences and its mark of a
+ * final that set it in the source, which the run passes on to what it shows and to the record (a seeded unit without
+ * its sentences lit whole, the final review of the highlight, m3)
  */
 export function seedAgain(seed, made) {
   const out = new Map(seed ?? [])
-  for (const [i, r] of made ?? []) if (r.pieces) out.set(i, { pieces: r.pieces, by: r.by, tried: r.tried, state: r.state, ...(r.sentences ? { sentences: r.sentences } : {}) })
+  for (const [i, r] of made ?? []) if (r.pieces) out.set(i, { pieces: r.pieces, by: r.by, tried: r.tried, state: r.state, ...(r.sentences ? { sentences: r.sentences } : {}), ...inSourceOf(r) })
   return out
 }
 
@@ -91,9 +101,22 @@ export function unitsOf(units, kept, hashes, results) {
     if (!r) return { ...base, state: 'none' }
     // the sentences of the translation kept, which say where each sentence begins in `src` and `tr`
     // and a translation the final set in the source (the author block under CJKutf8): kept, but not what the right side shows
-    return { ...base, ...(r.pieces ? { pieces: r.pieces, tr: plainTranslated(r.pieces), ...(r.sentences ? { sentences: r.sentences } : {}) } : {}), ...(r.by !== undefined ? { by: r.by } : {}), tried: r.tried, state: r.state, ...(r.inSource ? { inSource: true } : {}) }
+    return { ...base, ...(r.pieces ? { pieces: r.pieces, tr: plainTranslated(r.pieces), ...(r.sentences ? { sentences: r.sentences } : {}) } : {}), ...(r.by !== undefined ? { by: r.by } : {}), tried: r.tried, state: r.state, ...inSourceOf(r) }
   })
 }
+
+/**
+ * The right side's texts of a stored copy, by unit (session.mjs showCached anchors its PDF by them): a unit's translation
+ * made again from the pieces the copy keeps (unitText), which say where their placeholders stood; its source's plain
+ * text where it has no translation, or where the final set its translation in the source (inSource). A copy made before
+ * its units kept their displays beyond their marks (displayEdges) is anchored as it was then, and one made before they
+ * kept their sentences is lit whole; their sentences only where of their shape and the text made again is the one they
+ * were counted in (the review of B3, minor 5: a malformed field took the highlight off a side)
+ */
+export const copyTexts = units => units.map((u, i) => {
+  const t = u.pieces && !u.inSource ? unitText(u.pieces) : { text: u.src }, s = u.pieces && u.tr === t.text ? sentencesKept(u.sentences, u.src, t.text) : null
+  return { id: i, ...t, ...displayEdges(u), ...(s ? { sentences: s } : {}) }
+})
 
 /**
  * The left side's marks a run can go by instead of compiling the marked original: a copy's, on the same pipeline, and

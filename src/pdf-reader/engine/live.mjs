@@ -272,7 +272,9 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
   // typeset, not of a translation come in while it compiled
   const sentencesBy = new WeakMap()
   const keep = (pieces, sentences) => { if (sentences) sentencesBy.set(pieces, sentences) }
-  const seeded = old => (old ? { pieces: old.pieces, by: old.by, ...(old.sentences ? { sentences: old.sentences } : {}) } : {})
+  // a seed's translation as the run keeps it: with its sentences, and its mark that the copy's final set it in the source
+  // (cache.mjs inSourceOf), which goes with it until a final sets the unit again (Devin and Codex on #309)
+  const seeded = old => (old ? { pieces: old.pieces, by: old.by, ...(old.sentences ? { sentences: old.sentences } : {}), ...(old.inSource ? { inSource: true } : {}) } : {})
   if (seed) for (const [i, s] of seed) { translated.set(units[i], s.pieces); keep(s.pieces, s.sentences) }
   // a seed taken as it is (cache.mjs reusable: whole, by this identity, of the wire sent now) is not sent again: a change
   // to the typesetting alone asks the service for nothing (the evaluation's ruling 4)
@@ -337,10 +339,12 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
         if (!r) continue
         // a new result replaces a seed only when whole; with no seed, anything is better than the source
         if (r.state === 'whole' || (!old && r.pieces)) {
-          if (!old || JSON.stringify(old.pieces) !== JSON.stringify(r.pieces)) changed = fresh = true
+          const same = !!old && JSON.stringify(old.pieces) === JSON.stringify(r.pieces)
+          if (!same) changed = fresh = true
           translated.set(units[i], r.pieces)
           keep(r.pieces, r.sentences)
-          results.set(i, { pieces: r.pieces, state: r.state, by: r.by, tried: identity, ...(r.sentences ? { sentences: r.sentences } : {}) })
+          // the seed's pieces again are typeset as they were: its mark that a final set them in the source stays
+          results.set(i, { pieces: r.pieces, state: r.state, by: r.by, tried: identity, ...(r.sentences ? { sentences: r.sentences } : {}), ...(same && old.inSource ? { inSource: true } : {}) })
         } else results.set(i, { ...seeded(old), state: r.state, tried: identity })
       }
       note('translated', { units: batch.length, how, ms: Date.now() - t0, total: translated.size })
@@ -576,9 +580,15 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     }
     if (ok) {
       onUpdate?.({ pdf: r.pdf, texts: texts(all), translated: all.size, final: true })
-      // the units the final set in the source though translated, for the record: their translation stays the next run's
+      // the units the final set in the source though translated, for the record: their translation stays the next run's.
+      // Said anew for every unit it set, a seed's mark included: it set them all again
       const set = typesetBy(all, strategy())
-      units.forEach((u, i) => { if (all.has(u) && !set.has(u) && results.has(i)) results.set(i, { ...results.get(i), inSource: true }) })
+      units.forEach((u, i) => {
+        const r = results.get(i)
+        if (!r || !all.has(u)) return
+        const { inSource, ...rest } = r
+        results.set(i, set.has(u) ? rest : { ...rest, inSource: true })
+      })
     }
     // marks known come only from a compile of the paper's own source that set (onOriginal)
     const own = marks && !originalP ? null : await original()

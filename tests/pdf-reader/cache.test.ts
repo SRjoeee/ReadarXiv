@@ -53,6 +53,30 @@ describe('a unit the final set in the source', () => {
     const [u] = unitsOf(units, new Set(), ['h'], new Map([[0, { pieces: [{ t: 'text', s: 'tr', tr: true }], state: 'whole', by: 'B', tried: 'B', inSource: true }]]))
     expect([u?.state, !!(u as { pieces?: unknown }).pieces, (u as { inSource?: boolean }).inSource]).toEqual(['whole', true, true])
   })
+
+  // Devin and Codex on #309: the mark is the copy's PDF's, and a run that sets no final keeps that PDF — so the mark
+  // travels with the translation it was made for, through the seed and the run again's seed, until a final sets it again
+  it('seedFrom: the seed carries the mark with the translation it was made for', async () => {
+    const units = [{ kind: 'author', pieces: [{ t: 'text', s: 'Ada Lovelace' }] }, { kind: 'para', pieces: [{ t: 'text', s: 'One.' }] }]
+    const tr = [{ t: 'text', s: 'tr', tr: true }]
+    const record = { units: [
+      { kind: 'author', src: 'Ada Lovelace', hash: await sourceHash(units[0] as never), pieces: tr, by: 'B', tried: 'B', state: 'whole', inSource: true },
+      { kind: 'para', src: 'One.', hash: await sourceHash(units[1] as never), pieces: tr, by: 'B', tried: 'B', state: 'whole' },
+    ] }
+    const { seed } = await seedFrom(record as never, units as never)
+    expect(seed.get(0)).toMatchObject({ inSource: true })
+    expect(seed.get(1)).not.toHaveProperty('inSource')
+  })
+
+  it('seedAgain: the last run\'s mark over the copy\'s, and the copy\'s where the last run made nothing of the unit', () => {
+    const tr = [{ t: 'text', s: 'tr', tr: true }]
+    const copy = new Map<number, unknown>([[0, { pieces: tr, by: 'B', tried: 'B', state: 'whole', inSource: true }], [1, { pieces: tr, by: 'B', tried: 'B', state: 'whole', inSource: true }]])
+    const made = new Map<number, unknown>([[0, { pieces: tr, state: 'whole', by: 'C', tried: 'C' }], [2, { pieces: tr, state: 'whole', by: 'C', tried: 'C', inSource: true }]])
+    const seed = seedAgain(copy as never, made as never)
+    expect(seed.get(0)).not.toHaveProperty('inSource')
+    expect(seed.get(1)).toMatchObject({ inSource: true })
+    expect(seed.get(2)).toMatchObject({ inSource: true })
+  })
 })
 
 describe('the record keeps the sentences of the translation it keeps', () => {
