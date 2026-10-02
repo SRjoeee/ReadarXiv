@@ -4,7 +4,8 @@
 // its pages run (measured in Chrome 145, 153 and 154, partitioning on: .superpowers/sdd/2026-10-01-parallel/
 // warmup-report.md). So the warm-up (entrypoints/ocr/tex-warm.ts) keeps the page's files here, by their address on the
 // page's site, and the reader hands its page those its own cache lacks. One lock keeps the two from downloading a file
-// twice: the warm-up takes it alone and only when it is free, every reader that frames the page shares it while open.
+// twice: the warm-up takes it alone and only when it is free, every reader that frames the page shares it while open;
+// a reader that finds a warm-up holding it asks it to stop (through the background), and takes what the store holds.
 
 /** the Cache Storage cache of the page's files, in the extension's origin */
 export const STORE = 'axt-tex-files'
@@ -14,27 +15,31 @@ export const LOCK = 'axt-tex'
 const keyOf = (site, url) => new URL(url, site).href
 const open = caches => (caches ? caches.open(STORE).catch(() => null) : Promise.resolve(null))
 
-/** the page's `want` answered from the store → { message: its `have`, transfer }: the files held, by their names alone
- *  or, when the page asks for bytes, as ArrayBuffers to transfer */
+/** the page's `want` answered from the store, its files read at once → { message: its `have`, transfer }: the files
+ *  held, by their names alone or, when the page asks for bytes, as ArrayBuffers to transfer */
 export async function answerWant(site, want, caches = globalThis.caches) {
   const store = await open(caches)
   const files = {}, transfer = []
   if (store) {
-    for (const url of want.files ?? []) {
+    const held = await Promise.all((want.files ?? []).map(async url => {
       const hit = await store.match(keyOf(site, url)).catch(() => undefined)
-      if (!hit) continue
-      if (!want.bytes) { files[url] = true; continue }
-      const buffer = await hit.arrayBuffer().catch(() => null)
-      if (buffer) { files[url] = buffer; transfer.push(buffer) }
+      if (!hit) return null
+      return [url, want.bytes ? await hit.arrayBuffer().catch(() => null) : true]
+    }))
+    for (const [url, file] of held.filter(h => h?.[1])) {
+      files[url] = file
+      if (file !== true) transfer.push(file)
     }
   }
   return { message: { type: 'have', id: want.id, files }, transfer }
 }
 
-/** a file the page gives (its `keep`), kept; a store that cannot be written is no failure: the next warm-up asks again */
+/** a file the page gives (its `keep`), kept → whether it was: a store that cannot be written (a full disk) throws
+ *  nothing, and the warm-up stops rather than download what it cannot keep */
 export async function keepFile(site, keep, caches = globalThis.caches) {
   const store = await open(caches)
-  await store?.put(keyOf(site, keep.url), new Response(keep.bytes)).catch(() => {})
+  if (!store) return false
+  return store.put(keyOf(site, keep.url), new Response(keep.bytes)).then(() => true, () => false)
 }
 
 /** the store pruned to these files: another language's faces, an older page's engine go */
@@ -46,10 +51,17 @@ export async function pruneStore(site, urls, caches = globalThis.caches) {
 }
 
 /** a reader's share of the lock, held for the page's life → settles once it is granted: at once, unless a warm-up
- *  holds it, then when that one is done */
-export function shareLock(locks = globalThis.navigator?.locks) {
+ *  holds it — then `busy` is called, which asks the warm-up to stop (it keeps what came), and the share is granted
+ *  once it has: a reader that needs the page now does not wait for files it may not need, on a link that may be slow */
+export function shareLock(locks = globalThis.navigator?.locks, busy = null) {
   if (!locks?.request) return Promise.resolve()
   return new Promise(granted => {
-    locks.request(LOCK, { mode: 'shared' }, () => { granted(); return new Promise(() => {}) }).catch(() => granted())
+    const hold = () => { granted(); return new Promise(() => {}) }
+    locks.request(LOCK, { mode: 'shared', ifAvailable: true }, lock => {
+      if (lock) return hold()
+      busy?.()
+      locks.request(LOCK, { mode: 'shared' }, hold).catch(() => granted())
+      return undefined
+    }).catch(() => granted())
   })
 }

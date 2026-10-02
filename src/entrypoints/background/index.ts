@@ -149,6 +149,8 @@ export default defineBackground(() => {
       const ask = async () => { await offscreen.create(); return sendMessage({ type: 'axt:tex-warm', ...request }).catch(() => undefined) }
       return ((await ask()) ?? (await ask()))?.started === true
     },
+    // no document, no warm-up: nothing opened for it
+    stop: async () => (await offscreen.has().catch(() => false)) && (await sendMessage({ type: 'axt:tex-warm-stop' }).catch(() => undefined))?.stopped === true,
     load: async () => ((await browser.storage.local.get(WARM_KEY))[WARM_KEY] as WarmRecord | undefined) ?? null,
     save: async record => { await browser.storage.local.set({ [WARM_KEY]: record }) },
     now: () => Date.now(),

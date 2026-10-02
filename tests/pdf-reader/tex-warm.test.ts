@@ -4,31 +4,40 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type TexFrame, warmSlot, warmTexPage } from '@/entrypoints/ocr/tex-warm'
 import { LOCK, STORE } from '@/pdf-reader/engine/tex-store.mjs'
+import type { TexWarmResult } from '@/shared/tex-warm'
 
 const SITE = 'https://tex.readarxiv.org'
 const READY = { type: 'ready', protocol: 2, cv: 'c1', eid: 'e1', tid: 't1', index: 'index-0.txt' }
 const FILES = ['/e/e1/busytex.wasm', '/b/b0.bin', '/t/t1/index-0.txt']
 
-function cacheStorage() {
+/** `full`: every write refused (a full disk); `slow`: each write waits for `flush` */
+function cacheStorage({ full = false, slow = false } = {}) {
   const stores = new Map<string, Map<string, Uint8Array>>()
+  const pending: (() => void)[] = []
   const open = async (name: string) => {
     if (!stores.has(name)) stores.set(name, new Map())
     const s = stores.get(name)!
     return {
       match: async (url: string) => (s.has(url) ? new Response(s.get(url)!.slice()) : undefined),
-      put: async (url: string, r: Response) => { s.set(url, new Uint8Array(await r.arrayBuffer())) },
+      put: async (url: string, r: Response) => {
+        const bytes = new Uint8Array(await r.arrayBuffer())
+        if (slow) await new Promise<void>(go => pending.push(go))
+        if (full) throw new DOMException('quota', 'QuotaExceededError')
+        s.set(url, bytes)
+      },
       delete: async (url: string) => s.delete(url),
       keys: async () => [...s.keys()].map(url => ({ url })),
     }
   }
-  return { stores, caches: { open } as unknown as CacheStorage, held: () => [...(stores.get(STORE)?.keys() ?? [])].sort() }
+  return { stores, caches: { open } as unknown as CacheStorage, held: () => [...(stores.get(STORE)?.keys() ?? [])].sort(), flush: () => { for (const go of pending.splice(0)) go() }, writing: () => pending.length }
 }
 
 /**
  * A fake TeX page in a frame: says `ready` (unless `silent`), and to a warm asks which files the store holds, gives the
- * others (`keep`), and says warm-done — or `fails` with the network's files, or falls `mute` after its question
+ * others (`keep`), and says warm-done — or `fails` with the network's files, falls `mute` after its question, or, `endless`,
+ * after giving its files
  */
-function texPage(over: { silent?: boolean; protocol?: number; fails?: string[]; mute?: boolean; ignoresWarm?: boolean } = {}) {
+function texPage(over: { silent?: boolean; protocol?: number; fails?: string[]; mute?: boolean; endless?: boolean; ignoresWarm?: boolean } = {}) {
   const made: { src: string; removed: boolean; got: unknown[] }[] = []
   const frame = (src: string): TexFrame => {
     const rec = { src, removed: false, got: [] as unknown[] }
@@ -46,6 +55,7 @@ function texPage(over: { silent?: boolean; protocol?: number; fails?: string[]; 
         if (m.type === 'have' && !over.mute) {
           for (const url of FILES) if (!m.files?.[url]) say({ type: 'keep', url, bytes: new Uint8Array([7]).buffer })
           say({ type: 'progress', phase: 'warm', loaded: 1, total: 1 })
+          if (over.endless) return
           say(over.fails ? { type: 'warm-done', error: `could not fetch ${over.fails.join(', ')}`, network: over.fails } : { type: 'warm-done', protocol: 2, ms: 5, files: FILES.length, bytes: 3 })
         }
       },
@@ -105,11 +115,41 @@ describe('warmTexPage', () => {
     }
   })
 
-  it('a page of protocol 1 (no warm-up): not tried', async () => {
+  it('a page of protocol 1 (no warm-up): not tried, and said to take none, under its version (the review\'s M3)', async () => {
     const page = texPage({ protocol: 1 })
     const result = await warmTexPage(REQUEST, { frame: page.frame, caches: cacheStorage().caches, answerMs: 1000 })
-    expect(result).toMatchObject({ ok: false })
+    expect(result).toMatchObject({ ok: false, unsupported: true, versions: '1' })
     expect(page.made[0]?.got).toEqual([])
+  })
+
+  it('a page of protocol 2 that does not take the warm-up (one before it): said to take none, under its versions; a page that never answers is not', async () => {
+    const ignores = await warmTexPage(REQUEST, { frame: texPage({ ignoresWarm: true }).frame, caches: cacheStorage().caches, answerMs: 10 })
+    expect(ignores).toMatchObject({ ok: false, unsupported: true, versions: 'c1/e1/t1/index-0.txt' })
+    const silent = await warmTexPage(REQUEST, { frame: texPage({ silent: true }).frame, caches: cacheStorage().caches, answerMs: 10 })
+    expect(silent).toMatchObject({ ok: false })
+    expect(silent).not.toHaveProperty('unsupported')
+  })
+
+  it('a store that cannot keep a file: stopped at once, not done, the frame gone (the review\'s M2: nothing downloaded that cannot be kept)', async () => {
+    const page = texPage({ endless: true })
+    const result = await warmTexPage(REQUEST, { frame: page.frame, caches: cacheStorage({ full: true }).caches, answerMs: 1000, quietMs: 60_000 })
+    expect(result).toMatchObject({ ok: false, lang: 'zh' })
+    expect((result as { error: string }).error).toMatch(/could not keep/)
+    expect(page.made[0]?.removed).toBe(true)
+  })
+
+  it('stopped while a file is being written: the write is finished first, then the lock goes (a reader takes what the store holds)', async () => {
+    const page = texPage({ endless: true }), c = cacheStorage({ slow: true }), stop = new AbortController()
+    let settled = false
+    const result = warmTexPage(REQUEST, { frame: page.frame, caches: c.caches, signal: stop.signal }).then(r => { settled = true; return r })
+    for (let i = 0; i < 20 && !c.writing(); i++) await new Promise(r => setTimeout(r, 0))
+    expect(c.writing()).toBe(1)
+    stop.abort()
+    await new Promise(r => setTimeout(r, 5))
+    expect(settled).toBe(false)
+    for (let i = 0; i < 20 && !settled; i++) { c.flush(); await new Promise(r => setTimeout(r, 0)) }
+    await expect(result).resolves.toMatchObject({ ok: false, stopped: true })
+    expect(c.held()).toEqual(FILES.map(f => `${SITE}${f}`).sort())
   })
 
   it('a page that falls silent midway: given up after quietMs', async () => {
@@ -136,7 +176,7 @@ describe('warmTexPage', () => {
     const result = warmTexPage(REQUEST, { frame: page.frame, caches: c.caches, signal: stop.signal })
     await new Promise(r => setTimeout(r, 5))
     stop.abort()
-    await expect(result).resolves.toMatchObject({ ok: false, lang: 'zh', error: 'stopped' })
+    await expect(result).resolves.toMatchObject({ ok: false, lang: 'zh', error: 'stopped', stopped: true })
     expect(page.made[0]?.removed).toBe(true)
     expect(c.held()).toContain(`${SITE}/e/old/busytex.wasm`)
   })
@@ -147,19 +187,20 @@ describe('warmSlot', () => {
   function runs() {
     const log: string[] = []
     const ends = new Map<string, () => void>()
-    const run = (request: { site: string; lang: string }, signal: AbortSignal) => new Promise<void>(resolve => {
+    const run = (request: { site: string; lang: string }, signal: AbortSignal) => new Promise<TexWarmResult>(resolve => {
       log.push(`start ${request.lang}`)
-      const end = (why: string) => { log.push(`${why} ${request.lang}`); resolve() }
+      const end = (why: string) => { log.push(`${why} ${request.lang}`); resolve(why === 'done' ? { ok: true, lang: request.lang, versions: 'v', files: 1, bytes: 1, ms: 1 } : { ok: false, lang: request.lang, error: 'stopped', stopped: true }) }
       ends.set(request.lang, () => end('done'))
       signal.addEventListener('abort', () => end('stopped'), { once: true })
     })
     return { log, run, finish: (lang: string) => ends.get(lang)?.() }
   }
   const tick = () => new Promise(r => setTimeout(r, 0))
+  const quiet = { report: async () => {} }
 
   it('one at a time: a second for the language running is let go; once done, the document may close', async () => {
     const r = runs(), idle = vi.fn()
-    const slot = warmSlot(r.run, idle)
+    const slot = warmSlot(r.run, { ...quiet, idle })
     expect(await slot.start({ site: SITE, lang: 'zh' })).toBe(true)
     expect(await slot.start({ site: SITE, lang: 'zh' })).toBe(false)
     expect(slot.running).toBe(true)
@@ -172,7 +213,7 @@ describe('warmSlot', () => {
 
   it('another language takes the place of the running one, which is stopped first; the document is not let go between', async () => {
     const r = runs(), idle = vi.fn()
-    const slot = warmSlot(r.run, idle)
+    const slot = warmSlot(r.run, { ...quiet, idle })
     await slot.start({ site: SITE, lang: 'zh' })
     expect(await slot.start({ site: SITE, lang: 'de' })).toBe(true)
     expect(r.log).toEqual(['start zh', 'stopped zh', 'start de'])
@@ -182,7 +223,7 @@ describe('warmSlot', () => {
 
   it('three in quick turn: the last one alone runs', async () => {
     const r = runs(), idle = vi.fn()
-    const slot = warmSlot(r.run, idle)
+    const slot = warmSlot(r.run, { ...quiet, idle })
     await slot.start({ site: SITE, lang: 'zh' })
     const de = slot.start({ site: SITE, lang: 'de' })
     const ja = slot.start({ site: SITE, lang: 'ja' })
@@ -190,5 +231,33 @@ describe('warmSlot', () => {
     expect(await ja).toBe(true)
     expect(r.log).toEqual(['start zh', 'stopped zh', 'start ja'])
     expect(idle).not.toHaveBeenCalled()
+  })
+
+  it('the report goes out once the place is free: a request for another language is not held by the answer to it (the review\'s M1)', async () => {
+    const r = runs(), idle = vi.fn(), reports: TexWarmResult[] = []
+    // the background answers a report only once its own next request to this document — another language — is answered
+    let slot: ReturnType<typeof warmSlot>
+    const report = async (result: TexWarmResult) => { reports.push(result); if (result.ok) await slot.start({ site: SITE, lang: 'de' }) }
+    slot = warmSlot(r.run, { report, idle })
+    await slot.start({ site: SITE, lang: 'zh' })
+    r.finish('zh')
+    for (let i = 0; i < 10; i++) await tick()
+    expect(r.log).toEqual(['start zh', 'done zh', 'start de'])
+    expect(reports.map(x => x.lang)).toEqual(['zh'])
+    expect(slot.running).toBe(true)
+    expect(idle).not.toHaveBeenCalled()
+  })
+
+  it('stop: the running warm-up stops whatever its language (a reader needs the page), and once it has, the document may close', async () => {
+    const r = runs(), idle = vi.fn(), reports: TexWarmResult[] = []
+    const slot = warmSlot(r.run, { report: async x => { reports.push(x) }, idle })
+    expect(slot.stop()).toBe(false)
+    await slot.start({ site: SITE, lang: 'zh' })
+    expect(slot.stop()).toBe(true)
+    await tick()
+    expect(r.log).toEqual(['start zh', 'stopped zh'])
+    expect(slot.running).toBe(false)
+    expect(reports).toMatchObject([{ ok: false, stopped: true }])
+    expect(idle).toHaveBeenCalledTimes(1)
   })
 })

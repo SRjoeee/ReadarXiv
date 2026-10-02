@@ -1,14 +1,16 @@
 // The TeX page's warm-up, decided in the background (DESIGN §16): as early as possible — once the extension is installed
 // or updated and the target language is known, again when that language changes, and at a worker's start when the
-// last warm-up is not the current language's of the last day (how a new page version is noticed: the page's files are
-// versioned, and the warm-up downloads only what the store lacks) — the files a first visit in the target language
-// fetches from the TeX page are downloaded into the extension's store by the offscreen document
-// (entrypoints/ocr/tex-warm.ts), for the reader to hand to its page. Never under Save-Data, never for a language
-// nothing is typeset in yet, never while a reader that typesets is open (it shares the lock: a warm-up would compete
-// with its compiles for the link); one at a time, the document's to keep — it ignores a second for the language it
-// runs for, and stops one for a language no longer wanted, whose files a reader opened now would otherwise wait for.
-// A failure is tried again at the next trigger, a worker's start no sooner than a quarter of an hour later. Nothing a
-// reader sees: the diagnostics log alone says what happened.
+// last warm-up is not the current language's of the last day, or a reader has since seen the page under other
+// versions (how a new page version is noticed: the page's files are versioned, and the warm-up downloads only what the
+// store lacks) — the files a first visit in the target language fetches from the TeX page are downloaded into the
+// extension's store by the offscreen document (entrypoints/ocr/tex-warm.ts), for the reader to hand to its page. Never
+// under Save-Data, never for a language nothing is typeset in yet, never while a reader that typesets is open (it shares
+// the lock: a warm-up would compete with its compiles for the link), and a reader opened during one has it stopped; one
+// at a time, the document's to keep — it ignores a second for the language it runs for, and stops one for a language no
+// longer wanted, whose files a reader opened now would otherwise wait for. A failure is tried again at the next
+// trigger, a worker's start no sooner than a quarter of an hour later, doubled with each failure in a row up to a day (a
+// disk that cannot keep the files); a page that takes no warm-up (one from before it) is asked again a day on. Nothing
+// a reader sees: the diagnostics log alone says what happened, a state that lasts once.
 import { toBcp47 } from '@/config/languages'
 import { verified } from '@/pdf-reader/engine/verified.mjs'
 import type { TexWarmRequest, TexWarmResult } from '@/shared/tex-warm'
@@ -17,7 +19,7 @@ export type WarmReason = 'install' | 'update' | 'language' | 'check'
 
 /** the last warm-up: when one was last tried, and what the last that succeeded kept */
 export interface WarmRecord {
-  tried: number
+  tried?: number
   lang?: string
   /** the TeX page's versions (cv/eid/tid/index) it was made under */
   versions?: string
@@ -25,6 +27,12 @@ export interface WarmRecord {
   /** the bytes it downloaded (decoded) and how long it took */
   bytes?: number
   ms?: number
+  /** failures in a row since the last that succeeded: the back-off's */
+  failures?: number
+  /** the page's versions under which it took no warm-up ('1': a page of protocol 1) */
+  unsupported?: string
+  /** the state last said in the log (a skip under Save-Data, a deferral for a reader), said again only once it changed */
+  said?: string
 }
 
 export interface WarmupDeps {
@@ -39,6 +47,8 @@ export interface WarmupDeps {
   /** the offscreen document asked to warm → whether it started one (not while one for that language runs; one for
    *  another it stops first) */
   start(request: TexWarmRequest): Promise<boolean>
+  /** the document's running warm-up stopped, if there is one → whether one ran */
+  stop(): Promise<boolean>
   load(): Promise<WarmRecord | null>
   save(record: WarmRecord): Promise<void>
   now(): number
@@ -47,44 +57,93 @@ export interface WarmupDeps {
 
 const DAY = 24 * 3600_000
 const RETRY = 15 * 60_000
+/** how long after a try that did not succeed a worker's start tries again: a quarter of an hour, doubled with each
+ *  failure in a row, at most a day */
+const backOff = (failures = 0) => Math.min(RETRY * 2 ** Math.max(0, failures - 1), DAY)
+const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 export function createWarmup(deps: WarmupDeps) {
   let chain: Promise<void> = Promise.resolve()
   const say = (line: string) => deps.log(`[axt] TeX warm-up: ${line}`)
+  /** a state that lasts (a skip, a deferral): said once, and again only after another */
+  const note = async (record: WarmRecord | null, state: string, line: string) => {
+    if (record?.said === state) return
+    await deps.save({ ...record, said: state })
+    say(line)
+  }
 
   async function attempt(reason: WarmReason): Promise<void> {
-    if (deps.saveData()) return say(`${reason}: skipped, the browser asks to save data`)
+    const record = await deps.load()
+    if (deps.saveData()) return note(record, 'save-data', `${reason}: skipped, the browser asks to save data`)
     const lang = toBcp47(await deps.target())
     // the reader typesets no other language yet (scripts.mjs VERIFIED): nothing it would ask for
     if (!verified(lang)) return
-    const record = await deps.load()
     const now = deps.now()
+    // a page that takes no warm-up: asked again a day on, or once a reader has seen it under other versions (seen)
+    if (record?.unsupported !== undefined && now - (record.tried ?? 0) < DAY) return
     if (reason === 'check') {
       // never tried: the install's or the update's own trigger comes first, with the language it chose
-      if (!record) return
+      if (record?.tried === undefined) return
       const current = record.lang === lang && record.at !== undefined && now - record.at < DAY
-      const failedLately = record.tried > (record.at ?? 0) && now - record.tried < RETRY
+      const failedLately = record.tried > (record.at ?? 0) && now - record.tried < backOff(record.failures)
       if (current || failedLately) return
     }
-    if (await deps.readerOpen()) return say(`${reason}: deferred, a reader that typesets is open`)
-    await deps.save({ ...record, tried: now })
+    if (await deps.readerOpen()) return note(record, 'reader-open', `${reason}: deferred, a reader that typesets is open`)
+    await deps.save({ ...record, tried: now, said: undefined })
     const started = await deps.start({ site: deps.site, lang })
     say(started ? `${reason}: started for ${lang}` : `${reason}: not started, one runs`)
   }
 
-  /** one at a time, in the order they came; one that fails is said and the next goes on */
-  const trigger = (reason: WarmReason): Promise<void> =>
-    (chain = chain.then(() => attempt(reason)).catch((e: unknown) => say(`${reason}: ${e instanceof Error ? e.message : String(e)}`)))
+  /** the document's report: a success recorded (and a look again — the language may have changed meanwhile), a page
+   *  that takes no warm-up remembered under its versions, a failure counted; a stop or a deferral is none */
+  async function report(result: TexWarmResult): Promise<void> {
+    const now = deps.now()
+    if (result.ok) {
+      await deps.save({ tried: now, lang: result.lang, versions: result.versions, at: now, bytes: result.bytes, ms: result.ms })
+      say(`done for ${result.lang} under ${result.versions}: ${result.files} files, ${(result.bytes / 1e6).toFixed(1)} MB downloaded in ${(result.ms / 1000).toFixed(1)} s`)
+      // not awaited: this runs in the chain, which the look joins after it
+      void trigger('check')
+      return
+    }
+    if (result.deferred || result.stopped) return say(`${result.deferred ? 'deferred' : 'stopped'} for ${result.lang}: ${result.error}`)
+    const record = await deps.load()
+    if (result.unsupported) {
+      await deps.save({ ...record, unsupported: result.versions ?? '1' })
+      if (record?.unsupported !== result.versions) say(`the TeX page (${result.versions}) takes no warm-up: asked again in a day`)
+      return
+    }
+    const failures = (record?.failures ?? 0) + 1
+    await deps.save({ ...record, failures })
+    say(`failed for ${result.lang} (${failures} in a row; again in ${Math.round(backOff(failures) / 60_000)} min at the earliest): ${result.error}${result.network?.length ? ` (${result.network.join(', ')})` : ''}`)
+  }
+
+  /** a reader saw the page under these versions: a warm-up made under others, or a verdict that the page takes none,
+   *  holds no longer — the next worker's start warms again */
+  async function seen(versions: string): Promise<void> {
+    const record = await deps.load()
+    if (!record) return
+    const stale = record.at !== undefined && record.versions !== undefined && record.versions !== versions
+    const changed = record.unsupported !== undefined && record.unsupported !== versions
+    if (!stale && !changed) return
+    const { at: _at, unsupported: _unsupported, ...rest } = record
+    await deps.save(rest)
+    say(`a reader saw the TeX page under ${versions}: warmed again at the next start`)
+  }
+
+  /** each in turn, after what came before — the record is read and written by one at a time; one that fails is said
+   *  and the next goes on */
+  const run = (what: string, step: () => Promise<void>): Promise<void> =>
+    (chain = chain.then(step).catch((e: unknown) => say(`${what}: ${messageOf(e)}`)))
+  const trigger = (reason: WarmReason): Promise<void> => run(reason, () => attempt(reason))
 
   return {
     trigger,
-    /** the document's report of a warm-up; after one that succeeded, a look again: the language may have changed meanwhile */
-    async done(result: TexWarmResult): Promise<void> {
-      if (!result.ok) return say(`${result.deferred ? 'deferred' : 'failed'} for ${result.lang}: ${result.error}${result.network?.length ? ` (${result.network.join(', ')})` : ''}`)
-      const now = deps.now()
-      await deps.save({ tried: now, lang: result.lang, versions: result.versions, at: now, bytes: result.bytes, ms: result.ms })
-      say(`done for ${result.lang} under ${result.versions}: ${result.files} files, ${(result.bytes / 1e6).toFixed(1)} MB downloaded in ${(result.ms / 1000).toFixed(1)} s`)
-      await trigger('check')
-    },
+    /** the document's report of a warm-up → settles once it and what it set off are done */
+    done: (result: TexWarmResult): Promise<void> => run('report', () => report(result)).then(() => chain),
+    /** the versions a reader's TeX page said (its `ready`) */
+    seen: (versions: string): Promise<void> => run('versions', () => seen(versions)),
+    /** a reader needs the page now (the lock a warm-up holds): the warm-up stops, keeping what came — at once, not in
+     *  turn, since a step in turn may be waiting on the document */
+    giveWay: async (): Promise<void> => { await deps.stop().catch(() => false) },
   }
 }

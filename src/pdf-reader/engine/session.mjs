@@ -2114,13 +2114,17 @@ async function live() {
   let frameP = null
   /**
    * The TeX page in use while this reader typesets (tex-store.mjs): the lock shared, so that no warm-up starts
-   * meanwhile and one running is waited for; and the files a page of ours asks for — those its own cache lacks: over
-   * arXiv's PDF page it has a cache of its own, which the warm-up could not fill — handed from the extension's store
+   * meanwhile, and one running is stopped through the background (it keeps what came) rather than waited for — on a
+   * slow link the page would wait minutes for files it may not need; and the files a page of ours asks for — those its
+   * own cache lacks: over arXiv's PDF page it has a cache of its own, which the warm-up could not fill — handed from the
+   * extension's store
    */
   let pageInUse = null
+  /** the page's versions last told to the background (warmup.ts seen) */
+  let versionTold = null
   const usePage = () => {
     if (pageInUse) return
-    pageInUse = shareLock()
+    pageInUse = shareLock(undefined, () => void sendMessage({ type: 'axt:tex-give-way' }).catch(() => {}))
     addEventListener('message', e => {
       if (e.origin !== site || e.data?.type !== 'want' || ![...document.querySelectorAll('iframe')].some(f => f.contentWindow === e.source)) return
       const page = e.source, id = e.data.id
@@ -2138,7 +2142,13 @@ async function live() {
       // our site's in a production build; one on this machine (http) is started by hand (addresses.mjs TEX_PAGE)
       throw Object.assign(new Error(`The TeX page at ${site} did not answer${site.startsWith('http:') ? ': start it with node spikes/serve-live.mjs' : ''}`), { event: 'no compiler' })
     }
-    return { frame, version: said.protocol === 2 ? [said.cv, said.eid, said.tid, said.index].join('/') : '1' }
+    const version = said.protocol === 2 ? [said.cv, said.eid, said.tid, said.index].join('/') : '1'
+    // told to the background once a visit: a page deployed since the last warm-up is warmed again at the next start
+    if (version !== versionTold) {
+      versionTold = version
+      void sendMessage({ type: 'axt:tex-seen', versions: version }).catch(() => {})
+    }
+    return { frame, version }
   })().catch(e => { frameP = null; throw e }))
   /** the TeX page's versions the compiles were made under: what a "cannot typeset" mark holds for (the S3a review, I5 d) */
   let compiledUnder = null

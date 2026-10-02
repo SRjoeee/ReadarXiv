@@ -28,7 +28,7 @@ function harness(over: Partial<HandlerDeps> = {}) {
     lightAction: vi.fn(async () => undefined),
     environment: vi.fn(),
     health: { reject: vi.fn(async () => undefined), clear: vi.fn(async () => false) },
-    warmup: { done: vi.fn(async () => undefined) },
+    warmup: { done: vi.fn(async () => undefined), seen: vi.fn(async () => undefined), giveWay: vi.fn(async () => undefined) },
     ...over,
   } as unknown as HandlerDeps
   const handlers = createHandlers(deps)
@@ -308,20 +308,29 @@ describe('the background\'s handlers', () => {
     expect(Object.keys(createHandlers(deps)).sort()).toEqual([
       'axt:cache-clear', 'axt:cache-stats', 'axt:cancel-scope', 'axt:diag', 'axt:diag-export', 'axt:engine-ready',
       'axt:entry-settings', 'axt:ocr', 'axt:open-settings', 'axt:page-usable',
-      'axt:provider-status', 'axt:set-floating-entry', 'axt:tex-warmed', 'axt:toggle', 'axt:toggle-decision', 'axt:translate',
+      'axt:provider-status', 'axt:set-floating-entry', 'axt:tex-give-way', 'axt:tex-seen', 'axt:tex-warmed', 'axt:toggle', 'axt:toggle-decision', 'axt:translate',
     ])
   })
 
   describe('axt:tex-warmed', () => {
     it('hands the offscreen document\'s report to the warm-up, and a report it could not keep is a line in the log', async () => {
       const done = vi.fn(async () => undefined)
-      const { send } = harness({ warmup: { done } })
+      const { send } = harness({ warmup: { done, seen: vi.fn(), giveWay: vi.fn() } })
       const result = { ok: true as const, lang: 'zh', versions: 'c/e/t/i', files: 41, bytes: 1, ms: 1 }
       await expect(send({ type: 'axt:tex-warmed', result })).resolves.toEqual({ ok: true })
       expect(done).toHaveBeenCalledWith(result)
-      const failing = harness({ warmup: { done: vi.fn(async () => { throw new Error('storage gone') }) } })
+      const failing = harness({ warmup: { done: vi.fn(async () => { throw new Error('storage gone') }), seen: vi.fn(), giveWay: vi.fn() } })
       await expect(failing.send({ type: 'axt:tex-warmed', result })).resolves.toEqual({ ok: true })
       expect(failing.lines.some(([, line]) => line.includes('storage gone'))).toBe(true)
+    })
+
+    it('the reader\'s: the versions its TeX page said, and that it needs the page now, handed to the warm-up', async () => {
+      const seen = vi.fn(async () => undefined), giveWay = vi.fn(async () => undefined)
+      const { send } = harness({ warmup: { done: vi.fn(), seen, giveWay } })
+      await expect(send({ type: 'axt:tex-seen', versions: 'c/e/t/i' })).resolves.toEqual({ ok: true })
+      expect(seen).toHaveBeenCalledWith('c/e/t/i')
+      await expect(send({ type: 'axt:tex-give-way' })).resolves.toEqual({ ok: true })
+      expect(giveWay).toHaveBeenCalledTimes(1)
     })
   })
 })

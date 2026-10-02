@@ -45,8 +45,9 @@ export interface HandlerDeps {
   environment(): Promise<Omit<DiagnosticsExport, 'entries' | 'exportedAt'>>
   /** The service health record (the redesign's design, §4) */
   health: { reject(id: string): Promise<void>; clear(id: string): Promise<boolean> }
-  /** The TeX page's warm-up (./warmup.ts): told how one ended */
-  warmup: { done(result: TexWarmResult): Promise<void> }
+  /** The TeX page's warm-up (./warmup.ts): told how one ended, which versions a reader's page said, and that a reader
+   *  needs the page now */
+  warmup: { done(result: TexWarmResult): Promise<void>; seen(versions: string): Promise<void>; giveWay(): Promise<void> }
 }
 
 const messageOf = (e: unknown): string => e instanceof Error ? e.message : String(e)
@@ -123,6 +124,9 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
 
     // The offscreen document's report of a TeX page warm-up (./warmup.ts): recorded, nothing answered but receipt
     'axt:tex-warmed': message => deps.warmup.done(message.result).catch(e => diag(`[axt] TeX warm-up: the report was not kept (${messageOf(e)})`)).then(() => ({ ok: true as const })),
+    // The PDF reader's: the versions its TeX page said, and that it needs the page while a warm-up holds it
+    'axt:tex-seen': message => deps.warmup.seen(message.versions).catch(() => undefined).then(() => ({ ok: true as const })),
+    'axt:tex-give-way': () => deps.warmup.giveWay().catch(() => undefined).then(() => ({ ok: true as const })),
 
     'axt:ocr': (message, sender) => {
       // The scope is bound to the sender's tab first: this may be the tab's first message carrying a scope, and unbound,
