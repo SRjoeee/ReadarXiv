@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { copyTexts, decideWrite, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/cache.mjs'
+import { copyTexts, decideWrite, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/cache.mjs'
 import { type Compiled, compilerKeeper, keptFor, openPaper, runLive } from '@/pdf-reader/engine/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/typeset/places.mjs'
 
@@ -463,6 +463,67 @@ describe('the contents lists, for every draft', () => {
     await run({ compiler: c, translate: t.translate })
     expect(c.calls.map(q => `${q.kind}${q.ruled ? '+rule' : ''}`)).toEqual(['probe', 'preview', 'original', 'preview+rule', 'preview+rule', 'final+rule'])
     expect(list(c.given.filter(q => kindOf(q) === 'preview')[2], 'toc')).toBe(TOC(2))
+  })
+})
+
+// A run again after a run whose translation changed but whose final never reached the screen (C1 of PR #309's fix round):
+// the TeX page down for the final, the retry offered. The run again is seeded with that translation (seedAgain), which no
+// PDF sets, and finds nothing changed against it: it wrote it as provenance over the copy's PDF, which sets the old one,
+// labelled current and never set again. It compiles its final instead, and no provenance write keeps a PDF whose text is
+// not the units'
+describe('a run again after a final that never reached the screen', () => {
+  const answer = (word: string, by: string) => async (texts: string[]) => texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, word), by }))
+  /** the TeX page down for every final: asked twice, then the run stops with no compiler */
+  const pageDownForFinals = (n: number) => {
+    const c = compiler(n), base = c.compile
+    c.compile = async (q: Req) => { const r = await base(q); return kindOf(q) === 'final' ? { ...r, ok: false, pdf: null, network: ['t/xecjk.sty'] } : r }
+    return c
+  }
+  /** a copy by B (OLD), then a run by C that answers anew (NEW) and whose final the TeX page was down for */
+  const visit = async () => {
+    const p = paper(3), n = p.units.length
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: answer('OLD', 'B'), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const hashes = await Promise.all(p.units.map(u => sourceHash(u)))
+    const record = JSON.parse(JSON.stringify({ marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), hashes, r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    const r1 = await runLive(p, { lang: 'zh', compile: pageDownForFinals(n).compile, translate: answer('NEW', 'C'), format: 'markers', marks: new Map(record.marks), identity: 'C', seed: reusable(seed, { identity: 'C', copyWire: true }), pipelineCurrent: true, readMarks: async () => MARKS(n) })
+    return { p, n, hashes, record, seed, r1 }
+  }
+  /** the retry, as session.mjs makes it: the last run's results over the copy's seed, and this run's own final shown */
+  const again = async (v: Awaited<ReturnType<typeof visit>>, pipelineCurrent: boolean) => {
+    const made = v.r1.results as never, finals: { id: number; text: string }[][] = []
+    const r = await runLive(v.p, { lang: 'zh', compile: compiler(v.n).compile, translate: answer('NEW', 'C'), format: 'markers', marks: new Map(v.record.marks), identity: 'C', seed: reusable(seedAgain(v.seed, made), { identity: 'C', copyWire: true, made }), pipelineCurrent, readMarks: async () => MARKS(v.n), onUpdate: ({ final, texts }) => { if (final) finals.push(texts as { id: number; text: string }[]) } })
+    const units = unitsOf(v.p.units, keptFor(v.p, 'zh'), v.hashes, r.results)
+    return { r, units, final: finals.at(-1), how: decideWrite({ result: r, cached: v.record, units, marks: v.record.marks, shown: finals.length > 0 }) }
+  }
+
+  it('one that compiles nothing does not write that translation over the copy\'s PDF, which sets the old one', async () => {
+    const v = await visit()
+    expect([v.r1.changed, v.r1.compiler?.down]).toEqual([true, 'network'])
+    // the copy's compile current, as the reader judged it before: nothing compiled
+    const { r, units, how } = await again(v, true)
+    expect(r.changed).toBe(false)
+    expect([v.record.units[0].tr, units[0]?.tr].map(t => t?.split(' ')[0])).toEqual(['OLD', 'NEW'])
+    expect(how).toBeNull()
+  })
+
+  it('the visit holds the translation no PDF sets until a run\'s own final is shown: the run again compiles its final, and the copy written sets what its PDF does', async () => {
+    const v = await visit()
+    const unset = unsetAfter(false, v.r1, false)
+    expect(pipelineCurrentFor({ copy: true, finalShown: false, unset })).toBe(false)
+    const { r, units, final, how } = await again(v, pipelineCurrentFor({ copy: true, finalShown: false, unset }))
+    expect([r.changed, r.settled, how]).toEqual([true, true, 'full'])
+    expect(copyTexts(units).map(t => t.text)).toEqual(final?.map(t => t.text))
+    expect(unsetAfter(unset, r, true)).toBe(false)
+  })
+
+  it('a final an earlier run showed does not answer for a later run\'s translation; a run that changed nothing keeps what the visit held', () => {
+    // run 1 showed its final; run 2 changed and its own did not reach the screen: run 3 compiles
+    const unset = unsetAfter(unsetAfter(false, { changed: true }, true), { changed: true }, false)
+    expect(pipelineCurrentFor({ copy: true, finalShown: true, unset })).toBe(false)
+    expect(unsetAfter(true, { changed: false }, false)).toBe(true)
+    expect(unsetAfter(false, { changed: false }, false)).toBe(false)
+    expect([pipelineCurrentFor({ copy: false, finalShown: true, unset: false }), pipelineCurrentFor({ copy: true, finalShown: false, unset: false }), pipelineCurrentFor({ copy: false, finalShown: false, unset: false })]).toEqual([true, true, false])
   })
 })
 

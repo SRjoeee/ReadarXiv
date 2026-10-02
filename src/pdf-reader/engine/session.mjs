@@ -32,7 +32,7 @@ import { keepOverlays, pinned } from './overlay.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, tokenizeDocument } from './anchors.mjs'
 import { blockOf, bySentence, clickOf, hitOf, layoutOf, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './highlight.mjs'
 import { measurePane, pointerPath, pointOn } from './pointer.mjs'
-import { allTranslatedBy, copyTexts, decideWrite, digestOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, reusable, seedAgain, seedFrom, sourceHash, unitsOf } from './cache.mjs'
+import { allTranslatedBy, copyTexts, decideWrite, digestOf, figureKeyOf, knownMarks, knownOriginal, labelOf, originalRow, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from './cache.mjs'
 import { readerAddresses } from './addresses.mjs'
 import { openEngine, paperContext } from './engine.mjs'
 import { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './figures.mjs'
@@ -2057,8 +2057,9 @@ async function live() {
   }
   // What the visit has had, kept from run to run (the reader's design, §8: a retry asks only for what is missing): the
   // paper's source once read, the compiler once it answers, what the last run made — the next one's seed —, the left
-  // side's marks and the marked original's readings, and whether a final has been shown
-  let paperP = null, compiler = null, made = null, leftMarks = null, readings = null, finalShown = false
+  // side's marks and the marked original's readings, whether a final has been shown, and whether the last runs made a
+  // translation no PDF on hand sets (`unset`: cache.mjs unsetAfter)
+  let paperP = null, compiler = null, made = null, leftMarks = null, readings = null, finalShown = false, unset = false
   /** the paper's source, read and anchored: once, kept for a run again; a failure is thrown with the event it is */
   const readPaper = async () => {
     // the original on the right too, replaced as the translation comes in; opened where the original was being read, as
@@ -2219,8 +2220,9 @@ async function live() {
     // a seed whole, by the identity that answers now and of the wire sent now is taken as it is, never sent again — the
     // copy's when it was made by this pipeline in this wire format (cache.mjs reusable) — and the rest are asked again
     const seed = reusable(seedAgain(p.seed, made), { identity: engine.identity, copyWire: p.sameUnits && cached?.format === engine.format, made })
-    // one replacement at a time, in the order the compiles came in; the final's bytes once compiled
-    let swaps = Promise.resolve(), finalPdf = null
+    // one replacement at a time, in the order the compiles came in; the final's bytes once compiled, and whether this
+    // run's own final reached the screen (`shownNow`): a final an earlier run showed sets an earlier translation
+    let swaps = Promise.resolve(), finalPdf = null, shownNow = false
     // the marked original's readings with the left side's marks: this visit's last run's, else the paper's as a run here
     // stored them, made by this pipeline, typesetting and TeX page — then the run compiles no original (the F2 review's
     // I3). The left side anchored by those marks, where nothing has anchored it by marks yet
@@ -2233,8 +2235,10 @@ async function live() {
     }
     const result = await runLive(paperData, {
       lang, compile, compileOriginal, note,
-      // the copy's compile current: its pipeline and its typesetting this reader's, or this visit's final on screen
-      seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: (p.sameUnits && cached?.typesetting === TYPESETTING_VERSION) || finalShown,
+      // the copy's compile current: its pipeline and its typesetting this reader's, or this visit's final on screen —
+      // and no translation the visit's last runs made that none of them sets (cache.mjs pipelineCurrentFor; C1 of #309's
+      // fix round: a run again after a final the TeX page was down for wrote it over the copy's PDF)
+      seed: seed.size ? seed : null, identity: engine.identity, pipelineCurrent: pipelineCurrentFor({ copy: p.sameUnits && cached?.typesetting === TYPESETTING_VERSION, finalShown, unset }),
       // the typesetting rule: the translation set as near its original's places as the rule can (live.mjs)
       readMarks: typesetMarksOfPdf,
       marks, original: known?.readings ?? null,
@@ -2249,7 +2253,7 @@ async function live() {
         const d = top - (c.scrollTop + c.clientHeight * readingLine)
         return d >= -c.clientHeight * 0.3 ? Math.abs(d) : 2 * Math.abs(d)
       },
-      onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!p.leftCurrent) { p.adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); p.leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); if (final) finalShown = true; note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
+      onUpdate: ({ pdf, texts, translated, final }) => { if (final) finalPdf = pdf; (window.__reader.shownTexts ??= []).push({ final, texts }); swaps = swaps.then(async () => { if (!p.leftCurrent) { p.adoptUnits(); await anchorSide(left, src, leftMarks ? new Map(leftMarks) : new Map()); p.leftCurrent = true } const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })); const r = await replaceRight(url, texts, { draft: !final }); URL.revokeObjectURL(url); if (final) finalShown = shownNow = true; note(final ? 'shown final' : 'shown preview', { translated, swapMs: r.ms, drift: r.drift }) }).catch(e => note('swap failed', { error: String(e).slice(0, 200) })) },
       onOriginal: ({ pdf }) => { swaps = swaps.then(async () => { const marks = await marksOfPdf(pdf); leftMarks = [...marks]; const n = await anchorLeft(src, marks); note('left marks', { marks: n }) }).catch(e => note('left marks failed', { error: String(e).slice(0, 200) })) },
     }).catch(e => ({ error: e.message ?? String(e), kind: e?.kind }))
     if (result.results) made = result.results
@@ -2259,13 +2263,14 @@ async function live() {
     // the TeX page down, twice for one compile: by the network (its files), or by itself (an engine it could not bring
     // up, a compile it gave up on) — no compiler, the retry offered, the network's back retrying by itself (the S3a
     // report's duties, b); nothing written or marked, and what is shown stays
-    if (result.compiler) { await swaps; return fail('no compiler', `Could not typeset ${paper}: ${result.compiler.error}`, result.compiler.down === 'network' ? 'network' : 'unknown') }
+    if (result.compiler) { await swaps; unset = unsetAfter(unset, result, shownNow); return fail('no compiler', `Could not typeset ${paper}: ${result.compiler.error}`, result.compiler.down === 'network' ? 'network' : 'unknown') }
     // the paragraphs the service left in the source, not a sum over batches: a seeded one keeps its old translation
     lost = result.missing ?? lost
     // stopped with nothing on screen translated: the card, with the service's reason (the reader's design, §8)
     if (result.stopped && !result.translated) return fail('failed', `Could not translate ${paper}: ${result.stopped}`, result.stopped)
     stopped = result.stopped ? { event: 'stopped', kind: result.stopped } : null
     await swaps
+    unset = unsetAfter(unset, result, shownNow)
     // every way of setting it tried and failed, a whole translation in hand and nothing on screen (the maintainer,
     // 2026-09-26). Remembered, so that a visit again asks nothing of the service, only when the paper's own source set
     // here: a TeX error from a compiler whose files were not there says nothing of the paper, and is tried again (Codex).
@@ -2284,7 +2289,7 @@ async function live() {
     // changed but what was tried did (cache.mjs decideWrite); nothing else (REPORT, eighteenth addendum, "Writing")
     if (cacheKey) {
       const record = { digest: cacheKey.digest, lang: cacheKey.lang, paper, engine: engine.engine, format: engine.format, pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, context, units: unitsOf(units, keptFor(paperData, lang), hashes, result.results), marks: leftMarks ?? (p.sameUnits ? cached.marks : []), rightMarks: [], figures: [...figureEntries.values()] }
-      const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: finalShown })
+      const how = decideWrite({ result, cached, units: record.units, marks: record.marks, shown: shownNow })
       // labelled by what set its PDF: this run's final, or the copy's own (cache.mjs labelOf)
       const label = labelOf(how, { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, passing: !!result.passing, cached })
       Object.assign(record, label)

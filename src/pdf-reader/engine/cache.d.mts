@@ -12,7 +12,11 @@ export declare function inSourceOf(u: { inSource?: boolean } | null | undefined)
 /** the right side's texts of a stored copy, by unit: its translation, or its source where it has none or the final set it in the source */
 export declare function copyTexts(units: { src: string; pieces?: unknown[]; tr?: string; sentences?: unknown; inSource?: true; lead?: string; trail?: string; inner?: string }[]): { id: number; text: string; gaps?: number[]; lead?: string; trail?: string; inner?: string; sentences?: { src: number[]; tr: number[] } }[]
 /** what a run writes: the whole record, the units' provenance over the copy's PDF, or nothing */
-export declare function decideWrite(options: { result: { changed: boolean; settled: boolean }; cached: { units: { hash: string; state: string; by?: string; tried?: string }[]; marks?: unknown[] } | null | undefined; units: { hash: string; state: string; by?: string; tried?: string }[]; marks: unknown[] | null | undefined; shown: boolean }): 'full' | 'provenance' | null
+export declare function decideWrite(options: { result: { changed: boolean; settled: boolean }; cached: { units: { hash: string; state: string; by?: string; tried?: string; tr?: string; inSource?: true }[]; marks?: unknown[] } | null | undefined; units: { hash: string; state: string; by?: string; tried?: string; tr?: string; inSource?: true }[]; marks: unknown[] | null | undefined; shown: boolean }): 'full' | 'provenance' | null
+/** after a run: whether the visit holds a translation no PDF on hand sets — its runs changed it and none's own final was shown since */
+export declare function unsetAfter(unset: boolean, result: { changed?: boolean } | null | undefined, shown: boolean): boolean
+/** runLive's `pipelineCurrent`: the seed is what the copy's PDF or a final this visit showed sets, and the visit holds nothing unset */
+export declare function pipelineCurrentFor(options: { copy: boolean; finalShown: boolean; unset: boolean }): boolean
 /** the seeds a run takes as they are (`current`): whole, by `identity`, of the wire sent now — the visit's last run's, or the copy's when `copyWire` */
 export declare function reusable<S extends { pieces?: unknown[]; state?: string; by?: string }>(seed: Map<number, S> | null | undefined, options: { identity: string; copyWire: boolean; made?: Map<number, { pieces?: unknown[] }> | null }): Map<number, S & { current: boolean }>
 /** SHA-256 hex of a unit's source pieces */

@@ -871,7 +871,10 @@ is only how it meets the rest of the extension.
   figures' text goes through the same image pipeline and recogniser (§15). A vector figure's labels are read from
   PDF.js's text rather than recognised.
 - **Its store**: the compiled translations (with each unit's sentences, where its engine gave them), one record per paper version and target language, encrypted, in an
-  IndexedDB of their own (`src/cache/pdf-store.ts`), capped at 500 MB with the least recently opened going first. The
+  IndexedDB of their own (`src/cache/pdf-store.ts`), capped at 500 MB with the least recently opened going first. A
+  copy's units always describe its own PDF: a run that typesets nothing writes only who made and tried each unit, and
+  only where every unit's text is the one the stored PDF sets; a run again after a run whose final never reached the
+  screen (the TeX page down) compiles its own final rather than write that run's translation over the old PDF. The
   settings page counts them and clears them (UI.md S-O-73).
 - **Typesetting** runs in a TeX page outside the extension (BusyTeX): our site's, `https://tex.readarxiv.org`, in a
   production build, and one on this machine in development (`addresses.mjs` `TEX_PAGE`, a build setting). No

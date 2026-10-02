@@ -140,18 +140,40 @@ export const knownOriginal = (row, now) => (row && row.pipeline === now.pipeline
 
 /**
  * What a run writes (REPORT, eighteenth addendum, "Writing"): the whole record when it ended with a final that
- * settled and is on screen (`shown`), since the right side's marks are read from the document shown (Devin on #298);
- * with nothing typeset changed, the units' provenance alone, if it changed, or the left side's marks, if the
- * copy had none and this run compiled them; else nothing — a run ended before its final among them
+ * settled and is on screen (`shown`: this run's own final), since the right side's marks are read from the document shown
+ * (Devin on #298); with nothing typeset changed — every unit's text the copy's PDF sets —, the units' provenance alone, if
+ * it changed, or the left side's marks, if the copy had none and this run compiled them; else nothing — a run ended
+ * before its final among them
  */
 export function decideWrite({ result, cached, units, marks, shown }) {
   if (result.changed) return result.settled && shown ? 'full' : null
   if (!cached) return null
   // the units compared as a whole, not by hash: repeated paragraphs share one (Devin on #298)
   const tally = us => us.map(u => `${u.hash}|${u.state}|${u.by}|${u.tried}`).sort().join('\n')
+  // a provenance write keeps the copy's PDF, so only units that set what it sets — the same text, set in the source or
+  // not as there — are written over it: a run that changed nothing against its seed may still hold a translation the
+  // copy's PDF does not set (C1 of #309's fix round: a run again seeded with a last run's translation whose final never
+  // reached the screen wrote it over a PDF that sets the old one, labelled current)
+  const typeset = us => us.map(u => `${u.hash}|${u.tr ?? ''}|${u.inSource ? 1 : 0}`).sort().join('\n')
+  if (typeset(cached.units) !== typeset(units)) return null
   const marksGained = !cached.marks?.length && !!marks?.length
   return tally(cached.units) !== tally(units) || marksGained ? 'provenance' : null
 }
+
+/**
+ * What a visit holds between its runs (C1 of #309's fix round): whether the translation its last runs made is one no PDF
+ * on hand sets. A run whose translation changed (runLive's `changed`) and whose own final did not reach the screen
+ * (`shown`: the TeX page down, a final that did not settle) leaves the next run seeded with that translation
+ * (seedAgain), which it would find unchanged; so it is held until a run's own final is shown — a final an earlier run
+ * showed sets an earlier translation
+ */
+export const unsetAfter = (unset, result, shown) => (unset || !!result?.changed) && !shown
+/**
+ * Whether a seeded run that changes nothing typeset compiles nothing (runLive's `pipelineCurrent`): its seed is what a PDF
+ * on hand sets — the copy's, set by this pipeline and typesetting (`copy`), or a final this visit showed (`finalShown`) —
+ * and the visit holds no translation that none sets (`unset`, unsetAfter)
+ */
+export const pipelineCurrentFor = ({ copy, finalShown, unset }) => !unset && (copy || finalShown)
 
 /**
  * The versions a write labels its record with (`how`, decideWrite's), or null where it writes nothing (the F2 review's
